@@ -1,0 +1,13 @@
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++23
+ColumnLimit: 100
+IndentWidth: 4
+ContinuationIndentWidth: 4
+UseTab: Never
+BreakBeforeBraces: Attach
+NamespaceIndentation: All
+SortIncludes: CaseSensitive
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false

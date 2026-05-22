@@ -1,14 +1,40 @@
-# Binaries
+# Build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Binaries, ROMs, and firmware dumps
 *.bin
 .bin/
+roms/
+firmware/
 
 # Temporary files
 tmp/
+*.tmp
+*.temp
 
 # Log files
 log/
+logs/
 *.log
+
+# Package manager artifacts
+vcpkg_installed/
+.conan/
+conanbuildinfo.*
+conan.lock
+
+# IDE and editor state
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
 
 # Tech sheets
 .techsheets/
-docs/

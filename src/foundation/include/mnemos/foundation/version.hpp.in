@@ -1,0 +1,15 @@
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+namespace mnemos::foundation {
+
+struct version final {
+    static constexpr std::string_view project_name = "@PROJECT_NAME@";
+    static constexpr std::uint32_t major = @PROJECT_VERSION_MAJOR@;
+    static constexpr std::uint32_t minor = @PROJECT_VERSION_MINOR@;
+    static constexpr std::uint32_t patch = @PROJECT_VERSION_PATCH@;
+};
+
+} // namespace mnemos::foundation

@@ -4,7 +4,7 @@ Mnemos is a standalone multi-system emulator framework and developer toolkit. It
 
 ## Status
 
-Mnemos is currently in M0 bootstrap. The repository contains the initial v0.1 planning specs, but the build system, source tree, CI, licenses, and tooling skeleton have not landed yet.
+Mnemos is currently in M0 bootstrap. The repository contains the initial v0.1 planning specs plus the first monorepo scaffold: CMake presets, `src/` tier targets, source hygiene files, CI wiring, documentation indexes, and a foundation smoke test.
 
 The specs are marked `Draft, awaiting review`. Treat them as the current design source of truth, not as automatic approval to implement every milestone.
 
@@ -15,8 +15,25 @@ The specs are marked `Draft, awaiting review`. Treat them as the current design 
 3. `docs/specs/mnemos-todos-v0.1.md`
 4. `AGENTS.md` for Codex-specific contribution rules
 
-## Planned Build Contract
+## Build
 
-The planned M0 toolchain is CMake 3.28+, Ninja, C++23, strict warnings-as-errors, and configure/build/test presets for Windows and Linux. Until `CMakeLists.txt` and `CMakePresets.json` exist, there are no canonical build or test commands to run.
+The M0 toolchain is CMake 3.28+, Ninja, C++23, strict warnings-as-errors, and configure/build/test presets for Windows and Linux.
 
-Generated outputs belong under `out/`. ROMs, firmware dumps, logs, and build artifacts must not be committed.
+Windows MSVC debug:
+
+```powershell
+# Run from a Visual Studio developer PowerShell or command prompt.
+cmake --preset windows-msvc-debug
+cmake --build --preset windows-msvc-debug
+ctest --preset windows-msvc-debug --output-on-failure
+```
+
+Linux GCC debug:
+
+```sh
+cmake --preset linux-gcc-debug
+cmake --build --preset linux-gcc-debug
+ctest --preset linux-gcc-debug --output-on-failure
+```
+
+Generated build outputs belong under `build/`. ROMs, firmware dumps, logs, and build artifacts must not be committed.

@@ -18,6 +18,7 @@
 
 ## Architecture Rules
 
+- Product code lives under `src/`; keep root-level directories for build, docs, tests, tools, and repository infrastructure.
 - Preserve the eight-tier dependency direction: `foundation` -> `chips` -> `topology` -> `manifests` -> `runtime` -> `instrumentation` -> `frontend_sdk` -> `apps`.
 - Lower tiers must not depend on higher tiers. Frontends must use instrumentation surfaces rather than reaching into runtime internals.
 - The runtime core is headless and deterministic. UI, player behavior, and developer tooling are clients of that core.
@@ -37,11 +38,13 @@
 - A task is done only when its acceptance criterion is met and the relevant CI/build/test evidence is available.
 - Prefer Windows-first PowerShell commands, but keep Linux parity in every build-system and source-layout decision.
 - Planned build tooling is CMake 3.28+, Ninja, C++23, strict warnings, and presets. Do not invent ad hoc build commands once presets exist.
-- Keep generated artifacts under `out/`; keep the repository root clean.
+- Keep CMake build trees under `build/`; never commit build outputs.
 - Add ADRs under `docs/adr/` for non-obvious architecture, dependency, license, scheduler, or contract decisions.
+- Do not overgenerate comments. Add comments only when they explain a non-obvious invariant, constraint, or tradeoff.
+- No low-signal generated filler: avoid placeholder prose, broad abstractions, and scaffolding beyond the current milestone's acceptance needs.
 
 ## Current Bootstrap State
 
-- This repository is still in M0 bootstrap. At this point there may be no root `CMakeLists.txt`, `CMakePresets.json`, CI workflow, license files, or source directories.
+- This repository is still in M0 bootstrap. Root CMake presets, `src/` tier placeholder targets, CI wiring, licenses, hooks, ADR seeds, and a foundation smoke test are expected to exist.
 - The current specs live under `docs/specs/`, even though the M0 target layout later calls for `docs/architecture/`. Do not move them unless the user asks for that migration.
-- If `.gitignore` or the tracked documentation layout conflicts with the specs, report the conflict explicitly before broad cleanup.
+- Use the CMake presets in `README.md` for local validation. Windows Ninja builds require a Visual Studio developer environment with `cl` available on `PATH`.
