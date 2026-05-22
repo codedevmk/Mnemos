@@ -29,6 +29,7 @@ if(BUILD_TESTING)
             tests/foundation_smoke_test.cpp
             tests/foundation_log_test.cpp
             tests/foundation_span_ext_test.cpp
+            tests/foundation_thread_test.cpp
             tests/foundation_time_test.cpp
         LIBRARIES mnemos::foundation
     )
