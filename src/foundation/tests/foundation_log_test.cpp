@@ -33,7 +33,8 @@ namespace {
       public:
         explicit capture_sink(bool result = true) noexcept : result_(result) {}
 
-        [[nodiscard]] bool write(const mnemos::foundation::log_record_view& record) noexcept override {
+        [[nodiscard]] bool
+        write(const mnemos::foundation::log_record_view& record) noexcept override {
             last.timestamp = record.timestamp;
             last.level = record.level;
             last.channel.assign(record.channel);

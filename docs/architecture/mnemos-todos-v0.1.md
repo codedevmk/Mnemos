@@ -79,7 +79,7 @@
 
 ### Foundation library
 - [x] Implement `foundation::time` (steady_clock wrappers, frame-time helpers). (this commit: windows-msvc-debug configure/build/test green)
-- [ ] Implement `foundation::log` (leveled, structured, sinks).
+- [ ] Implement `foundation::log` (leveled, structured, sinks). (d00f7e3 + ca8ee77 landed; CI run 26277394028 failing, pending fix before completion)
 - [ ] Implement `foundation::bits` (popcount, clz, byte order, bitfield helpers).
 - [ ] Implement `foundation::span_ext`, `foundation::expected_ext` (light extensions to std).
 - [ ] Implement `foundation::fs` (filesystem facade with platform-safe path handling).
