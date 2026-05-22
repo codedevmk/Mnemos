@@ -89,6 +89,24 @@ TEST_CASE("linear arena rejects invalid requests without consuming storage") {
     CHECK(arena.used() == 0U);
 }
 
+TEST_CASE("linear arena rejects alignment that rounds the cursor past the end") {
+    // Regression: when alignment rounds the cursor beyond `end`, the remaining-space
+    // check must not underflow and hand back out-of-bounds storage. With a 16-aligned
+    // base, filling 17 bytes then requesting alignment 16 rounds to begin+32 > begin+20.
+    alignas(16) std::array<std::byte, 20U> storage{};
+    mnemos::foundation::linear_arena arena{storage};
+
+    const auto filler = arena.allocate(17U, 1U);
+    REQUIRE(filler.has_value());
+
+    const auto rounds_past_end = arena.allocate(4U, 16U);
+
+    REQUIRE_FALSE(rounds_past_end.has_value());
+    CHECK(rounds_past_end.error() == mnemos::foundation::allocator_error::out_of_memory);
+    CHECK(arena.used() <= arena.capacity());
+    CHECK(arena.remaining() <= arena.capacity());
+}
+
 TEST_CASE("linear arena reset reuses storage and preserves peak") {
     std::array<std::byte, 32U> storage{};
     mnemos::foundation::linear_arena arena{storage};

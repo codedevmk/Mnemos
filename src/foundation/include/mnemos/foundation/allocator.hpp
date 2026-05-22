@@ -89,7 +89,7 @@ namespace mnemos::foundation {
             const auto end = begin + capacity_;
             const auto aligned = align_forward(current, alignment);
 
-            if (aligned < current || size > end - aligned) {
+            if (aligned < current || aligned > end || size > end - aligned) {
                 return unexpected(allocator_error::out_of_memory);
             }
 
