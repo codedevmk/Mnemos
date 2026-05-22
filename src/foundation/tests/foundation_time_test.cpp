@@ -2,7 +2,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <type_traits>
+
 using namespace std::chrono_literals;
+
+static_assert(!std::is_default_constructible_v<mnemos::foundation::monotonic_timer>);
+static_assert(!std::is_default_constructible_v<mnemos::foundation::frame_timer>);
 
 TEST_CASE("monotonic timer reports elapsed duration from injected time points") {
     const auto start = mnemos::foundation::steady_time{1s};

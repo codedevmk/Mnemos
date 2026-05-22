@@ -17,18 +17,18 @@ namespace mnemos::foundation {
 
     class monotonic_timer final {
       public:
-        explicit monotonic_timer(steady_time start = steady_clock::now()) noexcept
+        explicit monotonic_timer(steady_time start) noexcept
             : start_(start) {}
 
-        void reset(steady_time now = steady_clock::now()) noexcept { start_ = now; }
+        void reset(steady_time now) noexcept { start_ = now; }
 
         [[nodiscard]] steady_time start_time() const noexcept { return start_; }
 
-        [[nodiscard]] nanoseconds elapsed(steady_time now = steady_clock::now()) const noexcept {
+        [[nodiscard]] nanoseconds elapsed(steady_time now) const noexcept {
             return std::chrono::duration_cast<nanoseconds>(now - start_);
         }
 
-        [[nodiscard]] double elapsed_seconds(steady_time now = steady_clock::now()) const noexcept {
+        [[nodiscard]] double elapsed_seconds(steady_time now) const noexcept {
             return to_seconds(elapsed(now));
         }
 
@@ -38,7 +38,7 @@ namespace mnemos::foundation {
 
     class frame_timer final {
       public:
-        explicit frame_timer(steady_time start = steady_clock::now()) noexcept
+        explicit frame_timer(steady_time start) noexcept
             : last_tick_(start) {}
 
         [[nodiscard]] steady_time last_tick() const noexcept { return last_tick_; }
@@ -47,7 +47,7 @@ namespace mnemos::foundation {
 
         [[nodiscard]] double delta_seconds() const noexcept { return to_seconds(delta_); }
 
-        [[nodiscard]] nanoseconds tick(steady_time now = steady_clock::now()) noexcept {
+        [[nodiscard]] nanoseconds tick(steady_time now) noexcept {
             delta_ = std::chrono::duration_cast<nanoseconds>(now - last_tick_);
             last_tick_ = now;
             return delta_;
