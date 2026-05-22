@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
+#include <utility>
 
 static_assert(!std::is_copy_constructible_v<mnemos::foundation::linear_arena>);
 static_assert(!std::is_copy_assignable_v<mnemos::foundation::linear_arena>);
@@ -124,6 +125,51 @@ TEST_CASE("linear arena reset reuses storage and preserves peak") {
     const auto second = arena.allocate(16U, 8U);
     REQUIRE(second.has_value());
     CHECK(second->data == first->data);
+}
+
+TEST_CASE("linear arena move transfers storage and empties the source") {
+    alignas(16) std::array<std::byte, 64U> storage{};
+    mnemos::foundation::linear_arena source{storage};
+
+    const auto first = source.allocate(8U, 8U);
+    REQUIRE(first.has_value());
+
+    mnemos::foundation::linear_arena moved{std::move(source)};
+
+    CHECK(moved.owns(first->data));
+    CHECK(moved.capacity() == storage.size());
+    CHECK(moved.used() > 0U);
+
+    // The moved-from arena must not still vend the same storage.
+    CHECK_FALSE(source.owns(first->data));
+    CHECK(source.capacity() == 0U);
+    const auto after_move = source.allocate(8U, 8U);
+    REQUIRE_FALSE(after_move.has_value());
+    CHECK(after_move.error() == mnemos::foundation::allocator_error::empty_storage);
+}
+
+TEST_CASE("fixed block pool move transfers storage and empties the source") {
+    alignas(16) std::array<std::byte, 64U> storage{};
+    auto source_result = mnemos::foundation::fixed_block_pool::create(storage, 16U, 16U);
+    REQUIRE(source_result.has_value());
+    auto& source = *source_result;
+
+    const auto block = source.allocate();
+    REQUIRE(block.has_value());
+    const std::size_t capacity = source.capacity();
+
+    mnemos::foundation::fixed_block_pool moved{std::move(source)};
+
+    CHECK(moved.owns(block->data));
+    CHECK(moved.capacity() == capacity);
+    CHECK(moved.used() == 1U);
+
+    // The moved-from pool must not still vend the same storage.
+    CHECK_FALSE(source.owns(block->data));
+    CHECK(source.capacity() == 0U);
+    const auto after_move = source.allocate();
+    REQUIRE_FALSE(after_move.has_value());
+    CHECK(after_move.error() == mnemos::foundation::allocator_error::out_of_memory);
 }
 
 TEST_CASE("fixed block pool creates aligned blocks over caller storage") {

@@ -49,8 +49,23 @@ namespace mnemos::foundation {
 
         linear_arena(const linear_arena&) = delete;
         linear_arena& operator=(const linear_arena&) = delete;
-        linear_arena(linear_arena&&) noexcept = default;
-        linear_arena& operator=(linear_arena&&) noexcept = default;
+
+        linear_arena(linear_arena&& other) noexcept
+            : begin_(other.begin_), capacity_(other.capacity_), offset_(other.offset_),
+              peak_(other.peak_) {
+            other.release();
+        }
+
+        linear_arena& operator=(linear_arena&& other) noexcept {
+            if (this != &other) {
+                begin_ = other.begin_;
+                capacity_ = other.capacity_;
+                offset_ = other.offset_;
+                peak_ = other.peak_;
+                other.release();
+            }
+            return *this;
+        }
 
         [[nodiscard]] std::size_t capacity() const noexcept { return capacity_; }
 
@@ -107,6 +122,13 @@ namespace mnemos::foundation {
         void reset() noexcept { offset_ = 0U; }
 
       private:
+        void release() noexcept {
+            begin_ = nullptr;
+            capacity_ = 0U;
+            offset_ = 0U;
+            peak_ = 0U;
+        }
+
         std::byte* begin_{};
         std::size_t capacity_{};
         std::size_t offset_{};
@@ -119,8 +141,25 @@ namespace mnemos::foundation {
 
         fixed_block_pool(const fixed_block_pool&) = delete;
         fixed_block_pool& operator=(const fixed_block_pool&) = delete;
-        fixed_block_pool(fixed_block_pool&&) noexcept = default;
-        fixed_block_pool& operator=(fixed_block_pool&&) noexcept = default;
+
+        fixed_block_pool(fixed_block_pool&& other) noexcept
+            : begin_(other.begin_), block_size_(other.block_size_), stride_(other.stride_),
+              capacity_(other.capacity_), free_count_(other.free_count_), free_(other.free_) {
+            other.release();
+        }
+
+        fixed_block_pool& operator=(fixed_block_pool&& other) noexcept {
+            if (this != &other) {
+                begin_ = other.begin_;
+                block_size_ = other.block_size_;
+                stride_ = other.stride_;
+                capacity_ = other.capacity_;
+                free_count_ = other.free_count_;
+                free_ = other.free_;
+                other.release();
+            }
+            return *this;
+        }
 
         [[nodiscard]] static expected<fixed_block_pool, allocator_error>
         create(std::span<std::byte> storage, std::size_t block_size,
@@ -234,6 +273,15 @@ namespace mnemos::foundation {
             }
 
             return false;
+        }
+
+        void release() noexcept {
+            begin_ = nullptr;
+            block_size_ = 0U;
+            stride_ = 0U;
+            capacity_ = 0U;
+            free_count_ = 0U;
+            free_ = nullptr;
         }
 
         std::byte* begin_{};
