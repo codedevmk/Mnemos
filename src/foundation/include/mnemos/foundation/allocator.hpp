@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <new>
 #include <span>
-#include <utility>
 
 namespace mnemos::foundation {
 
@@ -164,7 +163,7 @@ namespace mnemos::foundation {
                 pool.free_ = node;
             }
 
-            return std::move(pool);
+            return pool;
         }
 
         [[nodiscard]] std::size_t block_size() const noexcept { return block_size_; }
