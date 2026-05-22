@@ -82,7 +82,7 @@
 - [x] Implement `foundation::log` (leveled, structured, sinks). (d00f7e3 + de38104; CI run 26277600708 green across clang-format and all 6 build/test jobs)
 - [x] Implement `foundation::bits` (popcount, clz, byte order, bitfield helpers). (e0ca6d2 + 8ed9bd7; CI run 26278425815 green across clang-format and all 6 build/test jobs)
 - [x] Implement `foundation::span_ext`, `foundation::expected_ext` (light extensions to std). (1cc1c1d + c5d71b6; CI run 26279089811 green across clang-format and all 6 build/test jobs)
-- [ ] Implement `foundation::fs` (filesystem facade with platform-safe path handling).
+- [x] Implement `foundation::fs` (filesystem facade with platform-safe path handling). (5ecbe01; CI run 26279447600 green across clang-format and all 6 build/test jobs)
 - [ ] Implement `foundation::thread` (jthread wrappers, latches, signals — std-based).
 - [ ] Implement `foundation::allocator` (arena, pool — minimal v0.1 surface).
 - [ ] Implement `foundation::id` (compile-time string IDs / fnv1a hashing for chip IDs).
