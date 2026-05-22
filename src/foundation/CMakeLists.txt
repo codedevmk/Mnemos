@@ -22,7 +22,9 @@ mnemos_declare_tier(NAME mnemos_foundation TIER 1)
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_foundation_smoke_test
-        SOURCES tests/foundation_smoke_test.cpp
+        SOURCES
+            tests/foundation_smoke_test.cpp
+            tests/foundation_time_test.cpp
         LIBRARIES mnemos::foundation
     )
 endif()
