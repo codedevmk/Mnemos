@@ -153,6 +153,15 @@ namespace {
 #endif
     }
 
+    [[nodiscard]] std::FILE* open_binary_read(const std::filesystem::path& path) {
+#if defined(_MSC_VER)
+        std::FILE* stream = nullptr;
+        return fopen_s(&stream, path.string().c_str(), "rb") == 0 ? stream : nullptr;
+#else
+        return std::fopen(path.string().c_str(), "rb");
+#endif
+    }
+
     [[nodiscard]] std::string read_file_contents(const std::filesystem::path& path) {
         std::ifstream stream{path, std::ios::binary};
         std::ostringstream out;
@@ -172,6 +181,7 @@ TEST_CASE("c_file_log_sink writes a complete formatted record") {
         mnemos::foundation::c_file_log_sink sink{stream};
         const std::array fields{
             mnemos::foundation::log_field{.name = "chip", .value = "mos.6510"},
+            mnemos::foundation::log_field{.name = "empty", .value = ""},
         };
         const mnemos::foundation::log_source source{.file = "cpu.cpp", .line = 42U, .function = ""};
         CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{7ns},
@@ -193,8 +203,48 @@ TEST_CASE("c_file_log_sink writes a complete formatted record") {
     const std::string contents = read_file_contents(path);
     std::filesystem::remove(path);
 
-    CHECK(contents.find("[warning] t=7 cpu: irq chip=mos.6510 @cpu.cpp:42\n") != std::string::npos);
+    CHECK(contents.find("[warning] t=7 cpu: irq chip=mos.6510 empty= @cpu.cpp:42\n") !=
+          std::string::npos);
     CHECK(contents.find("[trace] t=0\n") != std::string::npos);
+}
+
+TEST_CASE("c_file_log_sink reports failure for unwritable streams") {
+    // A null stream short-circuits immediately.
+    {
+        mnemos::foundation::c_file_log_sink null_sink{nullptr};
+        CHECK_FALSE(null_sink.write({.timestamp = mnemos::foundation::steady_time{0ns},
+                                     .level = mnemos::foundation::log_level::info,
+                                     .channel = "",
+                                     .message = "",
+                                     .fields = {},
+                                     .source = {}}));
+    }
+
+    // A read-only stream makes every fwrite fail, so the record short-circuits to false.
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "mnemos_log_unwritable_test.log";
+    {
+        std::FILE* created = open_binary_write(path);
+        REQUIRE(created != nullptr);
+        std::fclose(created);
+    }
+    std::FILE* read_only = open_binary_read(path);
+    REQUIRE(read_only != nullptr);
+    {
+        mnemos::foundation::c_file_log_sink sink{read_only};
+        const std::array fields{
+            mnemos::foundation::log_field{.name = "k", .value = "v"},
+        };
+        const mnemos::foundation::log_source source{.file = "f", .line = 1U, .function = ""};
+        CHECK_FALSE(sink.write({.timestamp = mnemos::foundation::steady_time{1ns},
+                                .level = mnemos::foundation::log_level::error,
+                                .channel = "cpu",
+                                .message = "m",
+                                .fields = fields,
+                                .source = source}));
+    }
+    std::fclose(read_only);
+    std::filesystem::remove(path);
 }
 
 TEST_CASE("c_file_log_sink serializes concurrent records into whole lines") {

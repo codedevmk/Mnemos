@@ -148,6 +148,44 @@ TEST_CASE("linear arena move transfers storage and empties the source") {
     CHECK(after_move.error() == mnemos::foundation::allocator_error::empty_storage);
 }
 
+TEST_CASE("linear arena move assignment transfers storage and empties the source") {
+    alignas(16) std::array<std::byte, 64U> storage_a{};
+    alignas(16) std::array<std::byte, 32U> storage_b{};
+    mnemos::foundation::linear_arena source{storage_a};
+    const auto first = source.allocate(8U, 8U);
+    REQUIRE(first.has_value());
+
+    mnemos::foundation::linear_arena target{storage_b};
+    target = std::move(source);
+
+    CHECK(target.owns(first->data));
+    CHECK(target.capacity() == storage_a.size());
+    CHECK_FALSE(source.owns(first->data));
+    CHECK(source.capacity() == 0U);
+}
+
+TEST_CASE("fixed block pool move assignment transfers storage and empties the source") {
+    alignas(16) std::array<std::byte, 64U> storage_a{};
+    alignas(16) std::array<std::byte, 64U> storage_b{};
+    auto source_result = mnemos::foundation::fixed_block_pool::create(storage_a, 16U, 16U);
+    REQUIRE(source_result.has_value());
+    auto& source = *source_result;
+    const auto block = source.allocate();
+    REQUIRE(block.has_value());
+    const std::size_t capacity = source.capacity();
+
+    auto target_result = mnemos::foundation::fixed_block_pool::create(storage_b, 16U, 16U);
+    REQUIRE(target_result.has_value());
+    auto& target = *target_result;
+    target = std::move(source);
+
+    CHECK(target.owns(block->data));
+    CHECK(target.capacity() == capacity);
+    CHECK(target.used() == 1U);
+    CHECK_FALSE(source.owns(block->data));
+    CHECK(source.capacity() == 0U);
+}
+
 TEST_CASE("fixed block pool move transfers storage and empties the source") {
     alignas(16) std::array<std::byte, 64U> storage{};
     auto source_result = mnemos::foundation::fixed_block_pool::create(storage, 16U, 16U);
