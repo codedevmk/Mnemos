@@ -16,6 +16,8 @@ TEST_CASE("span range check rejects overflow-free invalid ranges") {
 TEST_CASE("try subspan returns requested span on valid ranges") {
     std::array<std::uint8_t, 5U> bytes{1U, 2U, 3U, 4U, 5U};
     auto result = mnemos::foundation::try_subspan(std::span{bytes}, 1U, 3U);
+    auto bad_offset = mnemos::foundation::try_subspan(std::span{bytes}, 6U, 0U);
+    auto bad_count = mnemos::foundation::try_subspan(std::span{bytes}, 3U, 3U);
 
     REQUIRE(result.has_value());
     CHECK(result->size() == 3U);
@@ -24,6 +26,11 @@ TEST_CASE("try subspan returns requested span on valid ranges") {
 
     (*result)[1] = 9U;
     CHECK(bytes[2] == 9U);
+
+    REQUIRE_FALSE(bad_offset.has_value());
+    CHECK(bad_offset.error() == mnemos::foundation::span_error::offset_out_of_range);
+    REQUIRE_FALSE(bad_count.has_value());
+    CHECK(bad_count.error() == mnemos::foundation::span_error::count_out_of_range);
 }
 
 TEST_CASE("try subspan reports offset and count failures separately") {

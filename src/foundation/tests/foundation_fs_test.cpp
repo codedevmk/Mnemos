@@ -37,6 +37,18 @@ TEST_CASE("fs rejects child paths that escape the root") {
     CHECK(result.error() == mnemos::foundation::fs_error::path_escape);
 }
 
+TEST_CASE("fs rejects empty root and child paths") {
+    const auto empty_root =
+        mnemos::foundation::try_resolve_child_path({}, std::filesystem::path{"rom.bin"});
+    const auto empty_child =
+        mnemos::foundation::try_resolve_child_path(std::filesystem::path{"library"}, {});
+
+    REQUIRE_FALSE(empty_root.has_value());
+    CHECK(empty_root.error() == mnemos::foundation::fs_error::empty_root);
+    REQUIRE_FALSE(empty_child.has_value());
+    CHECK(empty_child.error() == mnemos::foundation::fs_error::empty_path);
+}
+
 TEST_CASE("fs rejects rooted child paths") {
     const std::filesystem::path absolute = std::filesystem::current_path();
     const auto result =
@@ -44,6 +56,20 @@ TEST_CASE("fs rejects rooted child paths") {
 
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error() == mnemos::foundation::fs_error::rooted_child);
+}
+
+TEST_CASE("fs reports empty status paths before querying filesystem") {
+    const auto result = mnemos::foundation::try_query_path_status({});
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error() == mnemos::foundation::fs_error::empty_path);
+}
+
+TEST_CASE("fs reports regular file status without throwing") {
+    const auto result = mnemos::foundation::try_query_path_status(std::filesystem::path{__FILE__});
+
+    REQUIRE(result.has_value());
+    CHECK(result->kind == mnemos::foundation::path_kind::regular_file);
 }
 
 TEST_CASE("fs reports existing directory status without throwing") {

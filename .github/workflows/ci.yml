@@ -82,3 +82,30 @@ jobs:
       - name: Test
         if: runner.os == 'Linux'
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
+  foundation-coverage:
+    name: foundation-coverage
+    needs: format
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install coverage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm ninja-build
+
+      - name: Configure
+        run: cmake --preset linux-clang-coverage
+
+      - name: Build
+        run: cmake --build --preset linux-clang-coverage
+
+      - name: Measure Foundation branch coverage
+        shell: pwsh
+        run: |
+          ./tools/coverage/measure-foundation-branch-coverage.ps1 `
+            -BuildDir build/linux-clang-coverage `
+            -MinimumBranchCoverage 90.0

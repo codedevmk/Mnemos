@@ -27,8 +27,21 @@ TEST_CASE("allocator alignment validation accepts powers of two only") {
     CHECK_FALSE(mnemos::foundation::is_valid_alignment(12U));
 }
 
+TEST_CASE("memory block exposes valid non empty byte ranges") {
+    std::array<std::byte, 4U> storage{};
+    const mnemos::foundation::memory_block valid{.data = storage.data(), .size = storage.size()};
+    const mnemos::foundation::memory_block no_data{.data = nullptr, .size = storage.size()};
+    const mnemos::foundation::memory_block no_size{.data = storage.data(), .size = 0U};
+
+    CHECK(static_cast<bool>(valid));
+    CHECK(valid.bytes().size() == storage.size());
+    CHECK_FALSE(static_cast<bool>(no_data));
+    CHECK_FALSE(static_cast<bool>(no_size));
+}
+
 TEST_CASE("linear arena allocates aligned blocks from caller storage") {
     alignas(64) std::array<std::byte, 128U> storage{};
+    std::array<std::byte, 4U> external{};
     mnemos::foundation::linear_arena arena{storage};
 
     const auto first = arena.allocate(3U, 16U);
@@ -42,18 +55,31 @@ TEST_CASE("linear arena allocates aligned blocks from caller storage") {
     CHECK(second->size == 8U);
     CHECK(arena.owns(first->data));
     CHECK(arena.owns(second->data));
+    CHECK_FALSE(arena.owns(nullptr));
+    CHECK_FALSE(arena.owns(external.data()));
+    CHECK_FALSE(arena.owns(storage.data() + storage.size()));
     CHECK(arena.used() <= arena.capacity());
+    CHECK(arena.remaining() == arena.capacity() - arena.used());
     CHECK(arena.peak_used() == arena.used());
 }
 
 TEST_CASE("linear arena rejects invalid requests without consuming storage") {
     std::array<std::byte, 16U> storage{};
     mnemos::foundation::linear_arena arena{storage};
+    mnemos::foundation::linear_arena empty_arena{{}};
+    mnemos::foundation::linear_arena zero_capacity_arena{std::span<std::byte>{storage.data(), 0U}};
 
+    const auto empty = empty_arena.allocate(1U);
+    const auto zero_capacity = zero_capacity_arena.allocate(1U);
     const auto zero = arena.allocate(0U);
     const auto bad_alignment = arena.allocate(1U, 3U);
     const auto too_large = arena.allocate(32U);
 
+    CHECK_FALSE(empty_arena.owns(storage.data()));
+    REQUIRE_FALSE(empty.has_value());
+    CHECK(empty.error() == mnemos::foundation::allocator_error::empty_storage);
+    REQUIRE_FALSE(zero_capacity.has_value());
+    CHECK(zero_capacity.error() == mnemos::foundation::allocator_error::empty_storage);
     REQUIRE_FALSE(zero.has_value());
     CHECK(zero.error() == mnemos::foundation::allocator_error::invalid_size);
     REQUIRE_FALSE(bad_alignment.has_value());
@@ -98,7 +124,33 @@ TEST_CASE("fixed block pool creates aligned blocks over caller storage") {
     CHECK(block->size == 16U);
     CHECK(is_aligned(block->data, 16U));
     CHECK(pool.owns(block->data));
+    CHECK_FALSE(pool.owns(nullptr));
+    CHECK_FALSE(pool.owns(block->data + 1U));
+    CHECK_FALSE(pool.owns(storage.data() + storage.size()));
     CHECK(pool.used() == 1U);
+}
+
+TEST_CASE("default fixed block pool owns no storage") {
+    std::array<std::byte, 8U> storage{};
+    mnemos::foundation::fixed_block_pool pool;
+
+    CHECK_FALSE(pool.owns(storage.data()));
+}
+
+TEST_CASE("fixed block pool supports block sizes smaller than free list links") {
+    alignas(16) std::array<std::byte, 64U> storage{};
+    auto pool_result = mnemos::foundation::fixed_block_pool::create(storage, 1U, 8U);
+
+    REQUIRE(pool_result.has_value());
+    auto& pool = *pool_result;
+
+    CHECK(pool.block_size() == 1U);
+    CHECK(pool.capacity() == 8U);
+
+    const auto block = pool.allocate();
+    REQUIRE(block.has_value());
+    CHECK(block->size == 1U);
+    CHECK(pool.owns(block->data));
 }
 
 TEST_CASE("fixed block pool recycles blocks and rejects double free") {
@@ -121,6 +173,29 @@ TEST_CASE("fixed block pool recycles blocks and rejects double free") {
     const auto reused = pool.allocate();
     REQUIRE(reused.has_value());
     CHECK(reused->data == block->data);
+}
+
+TEST_CASE("fixed block pool rejects invalid deallocation requests") {
+    alignas(32) std::array<std::byte, 64U> storage{};
+    std::array<std::byte, 16U> external{};
+    auto pool_result = mnemos::foundation::fixed_block_pool::create(storage, 16U, 16U);
+    REQUIRE(pool_result.has_value());
+    auto& pool = *pool_result;
+
+    const mnemos::foundation::memory_block empty{};
+    const mnemos::foundation::memory_block wrong_size{.data = storage.data(), .size = 8U};
+    const mnemos::foundation::memory_block external_block{.data = external.data(), .size = 16U};
+
+    auto empty_result = pool.deallocate(empty);
+    auto wrong_size_result = pool.deallocate(wrong_size);
+    auto external_result = pool.deallocate(external_block);
+
+    REQUIRE_FALSE(empty_result.has_value());
+    CHECK(empty_result.error() == mnemos::foundation::allocator_error::invalid_block);
+    REQUIRE_FALSE(wrong_size_result.has_value());
+    CHECK(wrong_size_result.error() == mnemos::foundation::allocator_error::invalid_block);
+    REQUIRE_FALSE(external_result.has_value());
+    CHECK(external_result.error() == mnemos::foundation::allocator_error::invalid_pointer);
 }
 
 TEST_CASE("fixed block pool reports exhaustion") {

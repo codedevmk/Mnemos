@@ -37,11 +37,16 @@ TEST_CASE("expected helpers expose errors without throwing") {
 
 TEST_CASE("const expected helpers preserve pointer constness") {
     const mnemos::foundation::expected<int, test_error> result{7};
+    const mnemos::foundation::expected<int, test_error> failure{
+        mnemos::foundation::unexpected(test_error::missing)};
 
     const int* value = mnemos::foundation::value_if(result);
     REQUIRE(value != nullptr);
     CHECK(*value == 7);
     CHECK(mnemos::foundation::error_if(result) == nullptr);
+    CHECK(mnemos::foundation::value_if(failure) == nullptr);
+    REQUIRE(mnemos::foundation::error_if(failure) != nullptr);
+    CHECK(*mnemos::foundation::error_if(failure) == test_error::missing);
 }
 
 TEST_CASE("status alias supports void success and failure") {
@@ -56,4 +61,14 @@ TEST_CASE("status alias supports void success and failure") {
     CHECK_FALSE(failure.has_value());
     REQUIRE(mnemos::foundation::error_if(failure) != nullptr);
     CHECK(*mnemos::foundation::error_if(failure) == test_error::missing);
+}
+
+TEST_CASE("const status helper exposes failure without mutation") {
+    const mnemos::foundation::status<test_error> success{};
+    const mnemos::foundation::status<test_error> failure{
+        mnemos::foundation::unexpected(test_error::invalid)};
+
+    CHECK(mnemos::foundation::error_if(success) == nullptr);
+    REQUIRE(mnemos::foundation::error_if(failure) != nullptr);
+    CHECK(*mnemos::foundation::error_if(failure) == test_error::invalid);
 }

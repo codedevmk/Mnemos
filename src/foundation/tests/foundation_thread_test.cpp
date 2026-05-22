@@ -34,6 +34,14 @@ TEST_CASE("manual reset signal releases waiters and remains signaled") {
     CHECK(signal.wait() == mnemos::foundation::wait_result::signaled);
 }
 
+TEST_CASE("manual reset signal can be reset after construction") {
+    mnemos::foundation::manual_reset_signal signal{true};
+
+    CHECK(signal.is_set());
+    signal.reset();
+    CHECK_FALSE(signal.is_set());
+}
+
 TEST_CASE("manual reset signal reports stop requests") {
     mnemos::foundation::manual_reset_signal signal;
     mnemos::foundation::latch started{1};
@@ -51,6 +59,16 @@ TEST_CASE("manual reset signal reports stop requests") {
     CHECK(result.load() == static_cast<int>(mnemos::foundation::wait_result::stopped));
 }
 
+TEST_CASE("manual reset signal wait for reports signaled and stopped states") {
+    mnemos::foundation::manual_reset_signal signaled{true};
+    mnemos::foundation::manual_reset_signal stopped;
+    mnemos::foundation::stop_source source;
+    source.request_stop();
+
+    CHECK(signaled.wait_for({}, 1ms) == mnemos::foundation::wait_result::signaled);
+    CHECK(stopped.wait_for(source.get_token(), 1s) == mnemos::foundation::wait_result::stopped);
+}
+
 TEST_CASE("manual reset signal reports timeout without changing state") {
     mnemos::foundation::manual_reset_signal signal;
 
@@ -65,6 +83,30 @@ TEST_CASE("auto reset signal consumes the signal after one waiter") {
     CHECK(signal.wait() == mnemos::foundation::wait_result::signaled);
     CHECK_FALSE(signal.is_set());
     CHECK(signal.wait_for({}, 1ms) == mnemos::foundation::wait_result::timeout);
+}
+
+TEST_CASE("auto reset signal can be reset after construction") {
+    mnemos::foundation::auto_reset_signal signal{true};
+
+    CHECK(signal.is_set());
+    signal.reset();
+    CHECK_FALSE(signal.is_set());
+}
+
+TEST_CASE("auto reset signal reports stop requests") {
+    mnemos::foundation::auto_reset_signal signal;
+    mnemos::foundation::stop_source source;
+    source.request_stop();
+
+    CHECK(signal.wait(source.get_token()) == mnemos::foundation::wait_result::stopped);
+    CHECK(signal.wait_for(source.get_token(), 1s) == mnemos::foundation::wait_result::stopped);
+}
+
+TEST_CASE("auto reset signal wait for consumes signaled state") {
+    mnemos::foundation::auto_reset_signal signal{true};
+
+    CHECK(signal.wait_for({}, 1ms) == mnemos::foundation::wait_result::signaled);
+    CHECK_FALSE(signal.is_set());
 }
 
 TEST_CASE("auto reset signal wakes one worker and resets") {

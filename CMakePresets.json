@@ -128,6 +128,21 @@
         "CMAKE_CXX_FLAGS_INIT": "-fsanitize=address -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS_INIT": "-fsanitize=address"
       }
+    },
+    {
+      "name": "linux-clang-coverage",
+      "inherits": "base",
+      "displayName": "Linux Clang Coverage",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "MNEMOS_ENABLE_COVERAGE": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -138,7 +153,8 @@
     { "name": "linux-gcc-release", "configurePreset": "linux-gcc-release" },
     { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" },
     { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
-    { "name": "linux-clang-asan", "configurePreset": "linux-clang-asan" }
+    { "name": "linux-clang-asan", "configurePreset": "linux-clang-asan" },
+    { "name": "linux-clang-coverage", "configurePreset": "linux-clang-coverage" }
   ],
   "testPresets": [
     {
@@ -179,6 +195,11 @@
     {
       "name": "linux-clang-asan",
       "configurePreset": "linux-clang-asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-clang-coverage",
+      "configurePreset": "linux-clang-coverage",
       "output": { "outputOnFailure": true }
     }
   ]
