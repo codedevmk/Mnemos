@@ -17,8 +17,7 @@ namespace mnemos::foundation {
 
     class monotonic_timer final {
       public:
-        explicit monotonic_timer(steady_time start) noexcept
-            : start_(start) {}
+        explicit monotonic_timer(steady_time start) noexcept : start_(start) {}
 
         void reset(steady_time now) noexcept { start_ = now; }
 
@@ -38,8 +37,7 @@ namespace mnemos::foundation {
 
     class frame_timer final {
       public:
-        explicit frame_timer(steady_time start) noexcept
-            : last_tick_(start) {}
+        explicit frame_timer(steady_time start) noexcept : last_tick_(start) {}
 
         [[nodiscard]] steady_time last_tick() const noexcept { return last_tick_; }
 
