@@ -24,8 +24,10 @@ if(BUILD_TESTING)
         mnemos_foundation_smoke_test
         SOURCES
             tests/foundation_bits_test.cpp
+            tests/foundation_expected_ext_test.cpp
             tests/foundation_smoke_test.cpp
             tests/foundation_log_test.cpp
+            tests/foundation_span_ext_test.cpp
             tests/foundation_time_test.cpp
         LIBRARIES mnemos::foundation
     )
