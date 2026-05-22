@@ -116,13 +116,15 @@ namespace mnemos::foundation {
 
     template <unsigned_integer T, std::size_t Offset, std::size_t Width>
     [[nodiscard]] constexpr T bit_field_mask() noexcept {
-        static_assert(Offset <= bit_count_v<T>);
+        static_assert(Offset < bit_count_v<T>);
         static_assert(Width <= bit_count_v<T> - Offset);
         return static_cast<T>(low_bit_mask<T, Width>() << Offset);
     }
 
     template <unsigned_integer T, std::size_t Offset, std::size_t Width>
     [[nodiscard]] constexpr T extract_bits(T value) noexcept {
+        static_assert(Offset < bit_count_v<T>);
+        static_assert(Width <= bit_count_v<T> - Offset);
         return static_cast<T>((value >> Offset) & low_bit_mask<T, Width>());
     }
 
