@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <atomic>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -172,7 +173,7 @@ TEST_CASE("c_file_log_sink writes a complete formatted record") {
         const std::array fields{
             mnemos::foundation::log_field{.name = "chip", .value = "mos.6510"},
         };
-        const mnemos::foundation::log_source source{.file = "cpu.cpp", .line = 42U};
+        const mnemos::foundation::log_source source{.file = "cpu.cpp", .line = 42U, .function = ""};
         CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{7ns},
                           .level = mnemos::foundation::log_level::warning,
                           .channel = "cpu",
@@ -181,7 +182,11 @@ TEST_CASE("c_file_log_sink writes a complete formatted record") {
                           .source = source}));
         // Minimal record exercises the empty channel/message/source branches.
         CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{0ns},
-                          .level = mnemos::foundation::log_level::trace}));
+                          .level = mnemos::foundation::log_level::trace,
+                          .channel = "",
+                          .message = "",
+                          .fields = {},
+                          .source = {}}));
     }
     std::fclose(stream);
 
@@ -201,17 +206,24 @@ TEST_CASE("c_file_log_sink serializes concurrent records into whole lines") {
     constexpr std::size_t thread_count = 8U;
     constexpr std::size_t per_thread = 128U;
 
+    // Catch2 assertion macros are not thread-safe, so workers record success in an atomic and the
+    // result is checked on the main thread after join.
+    std::atomic<std::size_t> written{0U};
     {
         mnemos::foundation::c_file_log_sink sink{stream};
         std::vector<std::thread> threads;
         threads.reserve(thread_count);
         for (std::size_t t = 0U; t < thread_count; ++t) {
-            threads.emplace_back([&sink] {
+            threads.emplace_back([&sink, &written] {
                 for (std::size_t i = 0U; i < per_thread; ++i) {
-                    CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{1ns},
-                                      .level = mnemos::foundation::log_level::info,
-                                      .channel = "cpu",
-                                      .message = "concurrent"}));
+                    if (sink.write({.timestamp = mnemos::foundation::steady_time{1ns},
+                                    .level = mnemos::foundation::log_level::info,
+                                    .channel = "cpu",
+                                    .message = "concurrent",
+                                    .fields = {},
+                                    .source = {}})) {
+                        written.fetch_add(1U, std::memory_order_relaxed);
+                    }
                 }
             });
         }
@@ -220,6 +232,8 @@ TEST_CASE("c_file_log_sink serializes concurrent records into whole lines") {
         }
     }
     std::fclose(stream);
+
+    CHECK(written.load() == thread_count * per_thread);
 
     const std::string contents = read_file_contents(path);
     std::filesystem::remove(path);
