@@ -1,3 +1,5 @@
+add_subdirectory(common)
+
 add_library(mnemos_chips INTERFACE)
 add_library(mnemos::chips ALIAS mnemos_chips)
 
