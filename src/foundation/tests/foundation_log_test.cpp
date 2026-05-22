@@ -3,7 +3,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <vector>
 
@@ -134,4 +139,105 @@ TEST_CASE("logger reports only sinks that accept a record") {
     CHECK(delivered == 1U);
     CHECK(failing_sink.count == 1U);
     CHECK(accepting_sink.count == 1U);
+}
+
+namespace {
+
+    [[nodiscard]] std::FILE* open_binary_write(const std::filesystem::path& path) {
+#if defined(_MSC_VER)
+        std::FILE* stream = nullptr;
+        return fopen_s(&stream, path.string().c_str(), "wb") == 0 ? stream : nullptr;
+#else
+        return std::fopen(path.string().c_str(), "wb");
+#endif
+    }
+
+    [[nodiscard]] std::string read_file_contents(const std::filesystem::path& path) {
+        std::ifstream stream{path, std::ios::binary};
+        std::ostringstream out;
+        out << stream.rdbuf();
+        return out.str();
+    }
+
+} // namespace
+
+TEST_CASE("c_file_log_sink writes a complete formatted record") {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "mnemos_log_format_test.log";
+    std::FILE* stream = open_binary_write(path);
+    REQUIRE(stream != nullptr);
+
+    {
+        mnemos::foundation::c_file_log_sink sink{stream};
+        const std::array fields{
+            mnemos::foundation::log_field{.name = "chip", .value = "mos.6510"},
+        };
+        const mnemos::foundation::log_source source{.file = "cpu.cpp", .line = 42U};
+        CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{7ns},
+                          .level = mnemos::foundation::log_level::warning,
+                          .channel = "cpu",
+                          .message = "irq",
+                          .fields = fields,
+                          .source = source}));
+        // Minimal record exercises the empty channel/message/source branches.
+        CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{0ns},
+                          .level = mnemos::foundation::log_level::trace}));
+    }
+    std::fclose(stream);
+
+    const std::string contents = read_file_contents(path);
+    std::filesystem::remove(path);
+
+    CHECK(contents.find("[warning] t=7 cpu: irq chip=mos.6510 @cpu.cpp:42\n") != std::string::npos);
+    CHECK(contents.find("[trace] t=0\n") != std::string::npos);
+}
+
+TEST_CASE("c_file_log_sink serializes concurrent records into whole lines") {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "mnemos_log_concurrency_test.log";
+    std::FILE* stream = open_binary_write(path);
+    REQUIRE(stream != nullptr);
+
+    constexpr std::size_t thread_count = 8U;
+    constexpr std::size_t per_thread = 128U;
+
+    {
+        mnemos::foundation::c_file_log_sink sink{stream};
+        std::vector<std::thread> threads;
+        threads.reserve(thread_count);
+        for (std::size_t t = 0U; t < thread_count; ++t) {
+            threads.emplace_back([&sink] {
+                for (std::size_t i = 0U; i < per_thread; ++i) {
+                    CHECK(sink.write({.timestamp = mnemos::foundation::steady_time{1ns},
+                                      .level = mnemos::foundation::log_level::info,
+                                      .channel = "cpu",
+                                      .message = "concurrent"}));
+                }
+            });
+        }
+        for (std::thread& thread : threads) {
+            thread.join();
+        }
+    }
+    std::fclose(stream);
+
+    const std::string contents = read_file_contents(path);
+    std::filesystem::remove(path);
+
+    // With per-record locking every line is a complete record beginning with '['.
+    bool all_lines_well_formed = true;
+    std::size_t newlines = 0U;
+    std::size_t line_start = 0U;
+    for (std::size_t i = 0U; i < contents.size(); ++i) {
+        if (contents[i] == '\n') {
+            if (line_start >= contents.size() || contents[line_start] != '[') {
+                all_lines_well_formed = false;
+            }
+            ++newlines;
+            line_start = i + 1U;
+        }
+    }
+
+    CHECK(all_lines_well_formed);
+    CHECK(newlines == thread_count * per_thread);
 }

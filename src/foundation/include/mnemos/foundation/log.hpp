@@ -2,8 +2,10 @@
 
 #include <mnemos/foundation/time.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <mutex>
 #include <span>
 #include <string_view>
 
@@ -79,12 +81,16 @@ namespace mnemos::foundation {
                         log_level minimum_level = log_level::trace) noexcept
             : sinks_(sinks), minimum_level_(minimum_level) {}
 
-        [[nodiscard]] log_level minimum_level() const noexcept { return minimum_level_; }
+        [[nodiscard]] log_level minimum_level() const noexcept {
+            return minimum_level_.load(std::memory_order_relaxed);
+        }
 
-        void set_minimum_level(log_level minimum_level) noexcept { minimum_level_ = minimum_level; }
+        void set_minimum_level(log_level minimum_level) noexcept {
+            minimum_level_.store(minimum_level, std::memory_order_relaxed);
+        }
 
         [[nodiscard]] bool accepts(log_level level) const noexcept {
-            return log_level_enabled(level, minimum_level_);
+            return log_level_enabled(level, minimum_level());
         }
 
         [[nodiscard]] std::size_t write(const log_record_view& record) const noexcept {
@@ -118,7 +124,7 @@ namespace mnemos::foundation {
 
       private:
         std::span<log_sink* const> sinks_;
-        log_level minimum_level_;
+        std::atomic<log_level> minimum_level_;
     };
 
     class c_file_log_sink final : public log_sink {
@@ -131,6 +137,9 @@ namespace mnemos::foundation {
             if (stream_ == nullptr) {
                 return false;
             }
+
+            // Serialize the whole record so concurrent writers cannot interleave fragments.
+            const std::lock_guard<std::mutex> guard(mutex_);
 
             bool ok = write_view("[");
             ok = ok && write_view(log_level_name(record.level));
@@ -182,6 +191,7 @@ namespace mnemos::foundation {
         }
 
         std::FILE* stream_;
+        std::mutex mutex_;
     };
 
     [[nodiscard]] inline c_file_log_sink& stderr_log_sink() noexcept {
