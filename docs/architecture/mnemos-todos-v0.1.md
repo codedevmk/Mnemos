@@ -85,7 +85,7 @@
 - [x] Implement `foundation::fs` (filesystem facade with platform-safe path handling). (5ecbe01; CI run 26279447600 green across clang-format and all 6 build/test jobs)
 - [x] Implement `foundation::thread` (jthread wrappers, latches, signals — std-based). (f04befe; CI run 26279663407 green across clang-format and all 6 build/test jobs)
 - [x] Implement `foundation::allocator` (arena, pool — minimal v0.1 surface). (13cbec5 + ce90a3e; CI run 26280113028 green across clang-format and all 6 build/test jobs)
-- [ ] Implement `foundation::id` (compile-time string IDs / fnv1a hashing for chip IDs).
+- [x] Implement `foundation::id` (compile-time string IDs / fnv1a hashing for chip IDs). (7ac85be; CI run 26280299754 green across clang-format and all 6 build/test jobs)
 - [ ] Unit tests for every module above with ≥ 90 % branch coverage.
 
 ### Chip taxonomy and base interfaces
