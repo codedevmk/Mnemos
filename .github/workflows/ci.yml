@@ -7,8 +7,27 @@ on:
       - master
 
 jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: |
+          git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' \
+            | xargs --no-run-if-empty clang-format --dry-run --Werror
+
   build-test:
     name: ${{ matrix.preset }}
+    needs: format
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

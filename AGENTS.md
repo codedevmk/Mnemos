@@ -3,9 +3,9 @@
 ## First Read
 
 - Read `README.md` first, then review the specs in this order:
-  1. `docs/specs/mnemos-architecture-tds-v0.1.md`
-  2. `docs/specs/mnemos-project-plan-v0.1.md`
-  3. `docs/specs/mnemos-todos-v0.1.md`
+  1. `docs/architecture/mnemos-architecture-tds-v0.1.md`
+  2. `docs/architecture/mnemos-project-plan-v0.1.md`
+  3. `docs/architecture/mnemos-todos-v0.1.md`
 - The v0.1 specs are marked `Draft, awaiting review`. Treat them as the current design source of truth, but do not treat them as blanket approval to implement every tier.
 - If a request asks for implementation before a relevant contract is approved, confirm explicit sign-off or keep the work to review, documentation, or safe M0 repository initialization.
 
@@ -34,7 +34,7 @@
 
 ## Implementation Workflow
 
-- Use `docs/specs/mnemos-todos-v0.1.md` as the task ledger until a tracker supersedes it.
+- Use `docs/architecture/mnemos-todos-v0.1.md` as the task ledger until a tracker supersedes it.
 - A task is done only when its acceptance criterion is met and the relevant CI/build/test evidence is available.
 - Prefer Windows-first PowerShell commands, but keep Linux parity in every build-system and source-layout decision.
 - Planned build tooling is CMake 3.28+, Ninja, C++23, strict warnings, and presets. Do not invent ad hoc build commands once presets exist.
@@ -46,5 +46,5 @@
 ## Current Bootstrap State
 
 - This repository is still in M0 bootstrap. Root CMake presets, `src/` tier placeholder targets, CI wiring, licenses, hooks, ADR seeds, and a foundation smoke test are expected to exist.
-- The current specs live under `docs/specs/`, even though the M0 target layout later calls for `docs/architecture/`. Do not move them unless the user asks for that migration.
+- The canonical specs live under `docs/architecture/` (migrated from the original `docs/specs/` location).
 - Use the CMake presets in `README.md` for local validation. Windows Ninja builds require a Visual Studio developer environment with `cl` available on `PATH`.

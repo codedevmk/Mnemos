@@ -1,5 +1,7 @@
 # Mnemos
 
+[![ci](https://github.com/codedevmk/Mnemos/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/codedevmk/Mnemos/actions/workflows/ci.yml)
+
 Mnemos is a standalone multi-system emulator framework and developer toolkit. Its core thesis is a deterministic, headless runtime with first-class observability, used by both a player frontend and a developer frontend.
 
 ## Status
@@ -10,9 +12,9 @@ The specs are marked `Draft, awaiting review`. Treat them as the current design 
 
 ## Read First
 
-1. `docs/specs/mnemos-architecture-tds-v0.1.md`
-2. `docs/specs/mnemos-project-plan-v0.1.md`
-3. `docs/specs/mnemos-todos-v0.1.md`
+1. `docs/architecture/mnemos-architecture-tds-v0.1.md`
+2. `docs/architecture/mnemos-project-plan-v0.1.md`
+3. `docs/architecture/mnemos-todos-v0.1.md`
 4. `AGENTS.md` for Codex-specific contribution rules
 
 ## Build

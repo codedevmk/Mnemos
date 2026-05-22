@@ -1,7 +1,7 @@
 # Contributing
 
 Mnemos is in M0 bootstrap. Contributions should follow `AGENTS.md`, the
-architecture TDS, and the milestone task ledger under `docs/specs/`.
+architecture TDS, and the milestone task ledger under `docs/architecture/`.
 
 Required local checks once toolchains are available:
 

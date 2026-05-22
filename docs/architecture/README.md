@@ -1,10 +1,9 @@
 # Architecture Docs
 
-The current v0.1 drafts live under `docs/specs/` until the project explicitly
-migrates them into this directory.
+This directory contains the canonical v0.1 architecture drafts.
 
 Reading order:
 
-1. `docs/specs/mnemos-architecture-tds-v0.1.md`
-2. `docs/specs/mnemos-project-plan-v0.1.md`
-3. `docs/specs/mnemos-todos-v0.1.md`
+1. `mnemos-architecture-tds-v0.1.md`
+2. `mnemos-project-plan-v0.1.md`
+3. `mnemos-todos-v0.1.md`

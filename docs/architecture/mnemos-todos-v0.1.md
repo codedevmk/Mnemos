@@ -59,13 +59,13 @@
 - [x] Add `.github/workflows/ci.yml` with matrix: {windows-latest, ubuntu-24.04} × {Debug, Release}.
 - [x] CI runs configure + build + test for each preset.
 - [x] CI fails on any compiler warning.
-- [ ] CI runs `clang-format --dry-run` and fails on diff.
-- [ ] Add CI status badge to `README.md`.
+- [x] CI runs `clang-format --dry-run` and fails on diff.
+- [x] Add CI status badge to `README.md`.
 
 ### Documentation seed
-- [ ] Create `docs/architecture/mnemos-architecture-tds-v0.1.md` (this TDS, committed verbatim).
-- [ ] Create `docs/architecture/mnemos-project-plan-v0.1.md` (this plan, committed verbatim).
-- [ ] Create `docs/architecture/mnemos-todos-v0.1.md` (this file, committed verbatim).
+- [x] Create `docs/architecture/mnemos-architecture-tds-v0.1.md` (this TDS, committed verbatim).
+- [x] Create `docs/architecture/mnemos-project-plan-v0.1.md` (this plan, committed verbatim).
+- [x] Create `docs/architecture/mnemos-todos-v0.1.md` (this file, committed verbatim).
 - [x] Create `docs/adr/0001-monorepo-layout.md` recording the layout decision.
 - [x] Create `docs/adr/0002-cmake-and-toolchain.md` recording build system choices.
 - [x] Create `docs/adr/0003-license-split.md` recording Apache+MIT rationale.
@@ -340,8 +340,8 @@
 ### Documentation
 - [ ] Per-chip `NOTES.md` template adopted from the first chip implementation onward.
 - [ ] Per-system `NOTES.md` template adopted from C64 onward.
-- [ ] `docs/architecture/` index page with reading order.
-- [ ] `docs/adr/` index page with chronological list.
+- [x] `docs/architecture/` index page with reading order.
+- [x] `docs/adr/` index page with chronological list.
 
 ### Tooling
 - [ ] ROM hashing utility (`tools/rom_hasher`) for manifest authoring.
