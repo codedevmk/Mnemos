@@ -51,6 +51,8 @@ namespace mnemos::foundation {
         return path.lexically_normal();
     }
 
+    // Containment is purely lexical: it rejects rooted children and `..` escapes, but does not
+    // resolve symlinks. Do not rely on it as a security sandbox boundary against symlink escapes.
     [[nodiscard]] inline path_result try_resolve_child_path(const fs_path& root,
                                                             const fs_path& child) {
         if (root.empty()) {

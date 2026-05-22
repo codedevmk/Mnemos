@@ -21,7 +21,13 @@ namespace mnemos::foundation {
         E error_;
     };
 
-#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
+// When std::expected is unavailable (older toolchains), a minimal fallback is used. It is an
+// intentional subset, not a drop-in: it supports the foundation accessors (has_value, operator*,
+// operator->, error, plus value_if/error_if). Use those rather than std::expected-only members
+// (value(), and_then(), transform(), ...) so code stays portable across the fallback. Define
+// MNEMOS_FORCE_EXPECTED_FALLBACK to compile and test the fallback even where std::expected exists.
+#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L &&                                \
+    !defined(MNEMOS_FORCE_EXPECTED_FALLBACK)
     template <typename E> [[nodiscard]] constexpr auto unexpected(E&& error) {
         return std::unexpected<std::decay_t<E>>(std::forward<E>(error));
     }
