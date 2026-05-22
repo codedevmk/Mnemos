@@ -26,15 +26,15 @@ TEST_CASE("bit wrappers expose standard unsigned bit operations") {
 }
 
 TEST_CASE("byte order helpers convert between native and fixed orders") {
-    const auto native = mnemos::foundation::native_byte_order();
+    constexpr auto native = mnemos::foundation::native_byte_order();
     CHECK((native == mnemos::foundation::byte_order::little ||
            native == mnemos::foundation::byte_order::big ||
            native == mnemos::foundation::byte_order::mixed));
 
-    if (native == mnemos::foundation::byte_order::little) {
+    if constexpr (native == mnemos::foundation::byte_order::little) {
         CHECK(mnemos::foundation::native_to_little(std::uint16_t{0x1234U}) == 0x1234U);
         CHECK(mnemos::foundation::native_to_big(std::uint16_t{0x1234U}) == 0x3412U);
-    } else if (native == mnemos::foundation::byte_order::big) {
+    } else if constexpr (native == mnemos::foundation::byte_order::big) {
         CHECK(mnemos::foundation::native_to_little(std::uint16_t{0x1234U}) == 0x3412U);
         CHECK(mnemos::foundation::native_to_big(std::uint16_t{0x1234U}) == 0x1234U);
     } else {
