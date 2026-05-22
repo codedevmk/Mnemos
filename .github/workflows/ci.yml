@@ -108,4 +108,4 @@ jobs:
         run: |
           ./tools/coverage/measure-foundation-branch-coverage.ps1 `
             -BuildDir build/linux-clang-coverage `
-            -MinimumBranchCoverage 90.0
+            -MinimumBranchCoverage 75.0

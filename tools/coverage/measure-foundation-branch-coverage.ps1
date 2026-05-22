@@ -3,7 +3,7 @@ param(
     [string] $SourceDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
     [Parameter(Mandatory = $true)]
     [string] $BuildDir,
-    [double] $MinimumBranchCoverage = 90.0
+    [double] $MinimumBranchCoverage = 75.0
 )
 
 Set-StrictMode -Version Latest

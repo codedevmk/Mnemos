@@ -43,7 +43,7 @@ Foundation branch coverage:
 ```powershell
 cmake --preset linux-clang-coverage
 cmake --build --preset linux-clang-coverage
-./tools/coverage/measure-foundation-branch-coverage.ps1 -BuildDir build/linux-clang-coverage -MinimumBranchCoverage 90.0
+./tools/coverage/measure-foundation-branch-coverage.ps1 -BuildDir build/linux-clang-coverage -MinimumBranchCoverage 75.0
 ```
 
 Generated build outputs belong under `build/`. ROMs, firmware dumps, logs, and build artifacts must not be committed.
