@@ -23,6 +23,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_foundation_smoke_test
         SOURCES
+            tests/foundation_bits_test.cpp
             tests/foundation_smoke_test.cpp
             tests/foundation_log_test.cpp
             tests/foundation_time_test.cpp
