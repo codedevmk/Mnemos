@@ -1,0 +1,13 @@
+# Binaries
+*.bin
+.bin/
+
+# Temporary files
+tmp/
+
+# Log files
+log/
+*.log
+
+# Tech sheets
+.techsheets/
