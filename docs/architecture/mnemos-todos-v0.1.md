@@ -71,7 +71,7 @@
 - [x] Create `docs/adr/0003-license-split.md` recording Apache+MIT rationale.
 
 ### Acceptance
-- [ ] A "trivial change" PR (touching one comment) passes the full CI matrix on both platforms with zero warnings.
+- [x] A "trivial change" PR (touching one comment) passes the full CI matrix on both platforms with zero warnings. (fad647b: CI run 26275205022 green across all 7 jobs on windows-latest + ubuntu-24.04, incl. clang-format gate)
 
 ---
 
