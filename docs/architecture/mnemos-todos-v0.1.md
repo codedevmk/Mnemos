@@ -100,10 +100,10 @@
 
 ### MOS 6510 implementation
 - [x] Create `src/chips/cpu/m6510/` library target `mnemos::chips::cpu::m6510`. (72e4a6e; CI run 26320527793 green across clang-format and all 6 build/test jobs)
-- [ ] Implement registers, flags, addressing modes. (registers + status flags done in 72e4a6e; addressing-mode enum defined, per-mode effective-address resolution lands with opcode execution)
-- [ ] Implement all 151 documented opcodes with cycle counts.
+- [x] Implement registers, flags, addressing modes. (250a457; CI run 26321421738 green across clang-format and all 6 build/test jobs)
+- [x] Implement all 151 documented opcodes with cycle counts. (250a457; CI run 26321421738 green across clang-format and all 6 build/test jobs)
 - [ ] Implement all undocumented (illegal) opcodes the C64 software relies on.
-- [ ] Implement decimal mode arithmetic.
+- [x] Implement decimal mode arithmetic. (39eb5fe; CI run 26321421738 green across clang-format and all 6 build/test jobs)
 - [ ] Implement IRQ, NMI, RES handling with correct cycle semantics.
 - [x] Implement the 6510 I/O port at addresses $00/$01. (8bb1bda; CI run 26320828290 green across clang-format and all 6 build/test jobs)
 - [ ] Implement save / load state.
