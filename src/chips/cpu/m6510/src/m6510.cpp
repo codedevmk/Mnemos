@@ -33,8 +33,26 @@ namespace mnemos::chips::cpu {
 
     void m6510::step_one_cycle() {
         if (tcu_ == 0U) {
+            // Interrupts are polled at the instruction boundary (a v0.1
+            // simplification of the real mid-instruction polling; the dedicated
+            // interrupt-timing tests come with the conformance ROMs).
+            const bool take_nmi = nmi_pending_;
+            const bool take_irq = irq_line_ && !flag(status_flag::irq_disable);
+            if (take_nmi || take_irq) {
+                in_interrupt_ = true;
+                interrupt_vector_ = take_nmi ? 0xFFFAU : 0xFFFEU;
+                nmi_pending_ = false;
+                static_cast<void>(read(registers_.pc)); // sequence cycle 1 (dummy)
+                tcu_ = 1U;
+                return;
+            }
             ir_ = read(registers_.pc++); // opcode fetch is cycle 1
             tcu_ = 1U;
+            return;
+        }
+
+        if (in_interrupt_) {
+            step_interrupt();
             return;
         }
 
@@ -1074,6 +1092,43 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    void m6510::step_interrupt() {
+        // Cycles 2-7 of the IRQ/NMI sequence (cycle 1 was the boundary dummy
+        // read). Pushes PC and P (with B clear), then loads the vector and sets I.
+        switch (tcu_) {
+        case 1U:
+            static_cast<void>(read(registers_.pc)); // second dummy read
+            tcu_ = 2U;
+            return;
+        case 2U:
+            push(static_cast<std::uint8_t>(registers_.pc >> 8U)); // PCH
+            tcu_ = 3U;
+            return;
+        case 3U:
+            push(static_cast<std::uint8_t>(registers_.pc & 0xFFU)); // PCL
+            tcu_ = 4U;
+            return;
+        case 4U:
+            push(static_cast<std::uint8_t>((registers_.p & 0xEFU) | 0x20U)); // P, B clear
+            tcu_ = 5U;
+            return;
+        case 5U:
+            operand_ = read(interrupt_vector_); // vector low
+            tcu_ = 6U;
+            return;
+        default: {
+            const auto high = static_cast<std::uint16_t>(
+                read(static_cast<std::uint16_t>(interrupt_vector_ + 1U)));
+            registers_.pc =
+                static_cast<std::uint16_t>(operand_ | static_cast<std::uint16_t>(high << 8U));
+            set_flag(status_flag::irq_disable, true);
+            in_interrupt_ = false;
+            tcu_ = 0U;
+            return;
+        }
+        }
+    }
+
     void m6510::set_nz(std::uint8_t value) noexcept {
         set_flag(status_flag::zero, value == 0U);
         set_flag(status_flag::negative, (value & 0x80U) != 0U);
@@ -1091,6 +1146,9 @@ namespace mnemos::chips::cpu {
         set_flag(status_flag::irq_disable, true);
         set_flag(status_flag::unused, true);
         cycles_ = 0U;
+        tcu_ = 0U;
+        in_interrupt_ = false;
+        nmi_pending_ = false;
 
         if (bus_ != nullptr) {
             const auto low = static_cast<std::uint16_t>(bus_->read8(reset_vector));
@@ -1139,6 +1197,15 @@ namespace mnemos::chips::cpu {
         if (bus_ != nullptr) {
             bus_->write8(address, value);
         }
+    }
+
+    void m6510::set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
+
+    void m6510::set_nmi_line(bool asserted) noexcept {
+        if (asserted && !nmi_line_) {
+            nmi_pending_ = true; // latch on the inactive->active edge
+        }
+        nmi_line_ = asserted;
     }
 
     bool m6510::flag(status_flag bit) const noexcept {

@@ -157,6 +157,12 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint8_t read(std::uint16_t address) noexcept;
         void write(std::uint16_t address, std::uint8_t value) noexcept;
 
+        // Interrupt line inputs (driven by peripherals/the bus, or by tests). IRQ
+        // is level-sensitive and gated by the I flag; NMI latches on the
+        // inactive->active edge and is non-maskable.
+        void set_irq_line(bool asserted) noexcept;
+        void set_nmi_line(bool asserted) noexcept;
+
       private:
         class introspection_surface final : public instrumentation::i_chip_introspection {};
 
@@ -171,6 +177,7 @@ namespace mnemos::chips::cpu {
         void step_rmw(const decoded& entry);
         void step_branch(const decoded& entry);
         void step_jump(const decoded& entry);
+        void step_interrupt();
         [[nodiscard]] std::uint8_t modify_rmw(operation op, std::uint8_t value) noexcept;
         [[nodiscard]] bool branch_taken(operation op) const noexcept;
         void push(std::uint8_t value) noexcept;
@@ -209,6 +216,13 @@ namespace mnemos::chips::cpu {
         std::uint8_t operand_{};
         std::uint8_t ptr_{};
         bool page_cross_{};
+
+        // Interrupt inputs and the in-progress service sequence.
+        bool irq_line_{};
+        bool nmi_line_{};
+        bool nmi_pending_{};
+        bool in_interrupt_{};
+        std::uint16_t interrupt_vector_{};
 
         introspection_surface introspection_{};
     };

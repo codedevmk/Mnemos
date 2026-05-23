@@ -509,6 +509,43 @@ TEST_CASE("BRK vectors through $FFFE and RTI returns") {
     CHECK(sys.cpu.cpu_registers().pc == 0xC002U); // BRK pushed PC + 2
 }
 
+TEST_CASE("IRQ is serviced in 7 cycles when I is clear") {
+    test_system sys;
+    sys.boot(0xC000U, {0x58U, 0xEAU}); // CLI ; NOP
+    sys.bus.memory[0xFFFEU] = 0x00U;   // IRQ/BRK vector -> $E000
+    sys.bus.memory[0xFFFFU] = 0xE0U;
+
+    sys.step_instruction(); // CLI clears I
+    sys.cpu.set_irq_line(true);
+
+    CHECK(sys.step_instruction() == 7U); // IRQ sequence runs instead of NOP
+    CHECK(sys.cpu.cpu_registers().pc == 0xE000U);
+    CHECK(sys.cpu.flag(m6510::status_flag::irq_disable));
+    // Pushed status has B clear and the unused bit set.
+    CHECK((sys.bus.memory[0x01FBU] & 0x10U) == 0U);
+    CHECK((sys.bus.memory[0x01FBU] & 0x20U) != 0U);
+}
+
+TEST_CASE("IRQ is ignored while I is set") {
+    test_system sys;
+    sys.boot(0xC000U, {0xEAU}); // NOP (I set after reset)
+    sys.cpu.set_irq_line(true);
+
+    CHECK(sys.step_instruction() == 2U); // NOP runs; IRQ masked
+    CHECK(sys.cpu.cpu_registers().pc == 0xC001U);
+}
+
+TEST_CASE("NMI is serviced even while I is set") {
+    test_system sys;
+    sys.boot(0xC000U, {0xEAU});
+    sys.bus.memory[0xFFFAU] = 0x00U; // NMI vector -> $F000
+    sys.bus.memory[0xFFFBU] = 0xF0U;
+    sys.cpu.set_nmi_line(true); // inactive->active edge latches NMI
+
+    CHECK(sys.step_instruction() == 7U);
+    CHECK(sys.cpu.cpu_registers().pc == 0xF000U);
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;
