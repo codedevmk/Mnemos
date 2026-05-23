@@ -99,8 +99,8 @@
 - [x] Unit tests for taxonomy + registration. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 
 ### MOS 6510 implementation
-- [ ] Create `src/chips/cpu/m6510/` library target `mnemos::chips::cpu::m6510`.
-- [ ] Implement registers, flags, addressing modes.
+- [x] Create `src/chips/cpu/m6510/` library target `mnemos::chips::cpu::m6510`. (72e4a6e; CI run 26320527793 green across clang-format and all 6 build/test jobs)
+- [ ] Implement registers, flags, addressing modes. (registers + status flags done in 72e4a6e; addressing-mode enum defined, per-mode effective-address resolution lands with opcode execution)
 - [ ] Implement all 151 documented opcodes with cycle counts.
 - [ ] Implement all undocumented (illegal) opcodes the C64 software relies on.
 - [ ] Implement decimal mode arithmetic.
@@ -108,7 +108,7 @@
 - [ ] Implement the 6510 I/O port at addresses $00/$01.
 - [ ] Implement save / load state.
 - [ ] Implement introspection (register snapshot, PC, cycle counter, instruction event tap).
-- [ ] Register factory under `"mos.6510"`.
+- [x] Register factory under `"mos.6510"`. (72e4a6e; CI run 26320527793 green across clang-format and all 6 build/test jobs)
 
 ### Test infrastructure for 6502 family
 - [ ] Vendor or fetch Klaus 2M65 functional test ROM with provenance documented.
