@@ -312,6 +312,50 @@ TEST_CASE("AND, ORA and EOR combine the accumulator") {
     }
 }
 
+TEST_CASE("ADC in decimal mode produces BCD results") {
+    SECTION("09 + 01 = 10") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0x09U, 0x69U, 0x01U}); // LDA #$09 ; ADC #$01
+        sys.cpu.set_flag(m6510::status_flag::decimal, true);
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0x10U);
+        CHECK_FALSE(sys.cpu.flag(m6510::status_flag::carry));
+    }
+    SECTION("99 + 01 = 00 with carry") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0x99U, 0x69U, 0x01U});
+        sys.cpu.set_flag(m6510::status_flag::decimal, true);
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0x00U);
+        CHECK(sys.cpu.flag(m6510::status_flag::carry));
+    }
+}
+
+TEST_CASE("SBC in decimal mode produces BCD results") {
+    SECTION("50 - 25 = 25") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0x50U, 0xE9U, 0x25U}); // LDA #$50 ; SBC #$25
+        sys.cpu.set_flag(m6510::status_flag::decimal, true);
+        sys.cpu.set_flag(m6510::status_flag::carry, true); // no borrow in
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0x25U);
+        CHECK(sys.cpu.flag(m6510::status_flag::carry));
+    }
+    SECTION("00 - 01 = 99 with borrow") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0x00U, 0xE9U, 0x01U});
+        sys.cpu.set_flag(m6510::status_flag::decimal, true);
+        sys.cpu.set_flag(m6510::status_flag::carry, true);
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0x99U);
+        CHECK_FALSE(sys.cpu.flag(m6510::status_flag::carry));
+    }
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;

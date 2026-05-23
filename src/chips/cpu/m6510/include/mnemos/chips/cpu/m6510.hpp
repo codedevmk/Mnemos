@@ -156,6 +156,9 @@ namespace mnemos::chips::cpu {
         void op_sbc(std::uint8_t value) noexcept;
         void op_bit(std::uint8_t value) noexcept;
         void op_compare(std::uint8_t reg, std::uint8_t value) noexcept;
+        void adc_binary(std::uint8_t value) noexcept;
+        void adc_decimal(std::uint8_t value) noexcept;
+        void sbc_decimal(std::uint8_t value) noexcept;
         void set_nz(std::uint8_t value) noexcept;
 
         registers registers_{};

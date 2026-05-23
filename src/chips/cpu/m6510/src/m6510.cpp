@@ -576,6 +576,23 @@ namespace mnemos::chips::cpu {
     }
 
     void m6510::op_adc(std::uint8_t value) noexcept {
+        if (flag(status_flag::decimal)) {
+            adc_decimal(value);
+            return;
+        }
+        adc_binary(value);
+    }
+
+    void m6510::op_sbc(std::uint8_t value) noexcept {
+        if (flag(status_flag::decimal)) {
+            sbc_decimal(value);
+            return;
+        }
+        // Binary subtract is add-with-carry of the one's complement.
+        adc_binary(static_cast<std::uint8_t>(~value));
+    }
+
+    void m6510::adc_binary(std::uint8_t value) noexcept {
         const unsigned carry = flag(status_flag::carry) ? 1U : 0U;
         const unsigned sum = static_cast<unsigned>(registers_.a) + value + carry;
         const auto result = static_cast<std::uint8_t>(sum);
@@ -585,9 +602,54 @@ namespace mnemos::chips::cpu {
         set_nz(result);
     }
 
-    void m6510::op_sbc(std::uint8_t value) noexcept {
-        // Binary subtract is add-with-carry of the one's complement.
-        op_adc(static_cast<std::uint8_t>(~value));
+    void m6510::adc_decimal(std::uint8_t value) noexcept {
+        // NMOS 6502 BCD add (Bruce Clark's algorithm). Z is the binary result;
+        // N and V reflect the intermediate sum before the high-nibble adjust.
+        const unsigned carry = flag(status_flag::carry) ? 1U : 0U;
+        const unsigned a = registers_.a;
+
+        set_flag(status_flag::zero, ((a + value + carry) & 0xFFU) == 0U);
+
+        unsigned low = (a & 0x0FU) + (value & 0x0FU) + carry;
+        if (low >= 0x0AU) {
+            low = ((low + 0x06U) & 0x0FU) + 0x10U;
+        }
+        unsigned sum = (a & 0xF0U) + (value & 0xF0U) + low;
+
+        set_flag(status_flag::negative, (sum & 0x80U) != 0U);
+        set_flag(status_flag::overflow, ((~(a ^ value)) & (a ^ sum) & 0x80U) != 0U);
+
+        if (sum >= 0xA0U) {
+            sum += 0x60U;
+        }
+        set_flag(status_flag::carry, sum >= 0x100U);
+        registers_.a = static_cast<std::uint8_t>(sum & 0xFFU);
+    }
+
+    void m6510::sbc_decimal(std::uint8_t value) noexcept {
+        // NMOS 6502 BCD subtract. The N/V/Z/C flags match binary SBC exactly;
+        // only the accumulator result is decimal-adjusted.
+        const unsigned carry = flag(status_flag::carry) ? 1U : 0U;
+        const unsigned a = registers_.a;
+
+        const unsigned inv = static_cast<std::uint8_t>(~value);
+        const unsigned bin = a + inv + carry;
+        const auto bin_res = static_cast<std::uint8_t>(bin);
+        set_flag(status_flag::carry, bin > 0xFFU);
+        set_flag(status_flag::overflow, ((a ^ bin_res) & (inv ^ bin_res) & 0x80U) != 0U);
+        set_flag(status_flag::zero, bin_res == 0U);
+        set_flag(status_flag::negative, (bin_res & 0x80U) != 0U);
+
+        int low = static_cast<int>(a & 0x0FU) - static_cast<int>(value & 0x0FU) +
+                  static_cast<int>(carry) - 1;
+        if (low < 0) {
+            low = ((low - 0x06) & 0x0F) - 0x10;
+        }
+        int sum = static_cast<int>(a & 0xF0U) - static_cast<int>(value & 0xF0U) + low;
+        if (sum < 0) {
+            sum -= 0x60;
+        }
+        registers_.a = static_cast<std::uint8_t>(static_cast<unsigned>(sum) & 0xFFU);
     }
 
     void m6510::op_bit(std::uint8_t value) noexcept {
