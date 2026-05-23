@@ -405,6 +405,8 @@ namespace mnemos::chips::cpu {
             return registers_.x;
         case operation::sty:
             return registers_.y;
+        case operation::sax: // store A & X (no flags)
+            return static_cast<std::uint8_t>(registers_.a & registers_.x);
         case operation::sta:
         default:
             return registers_.a;
@@ -520,6 +522,39 @@ namespace mnemos::chips::cpu {
         case operation::bit:
             op_bit(operand_);
             return;
+        case operation::lax: // LDA + LDX
+            registers_.a = operand_;
+            registers_.x = operand_;
+            set_nz(operand_);
+            return;
+        case operation::anc: // AND #imm, then copy N into C
+            registers_.a = static_cast<std::uint8_t>(registers_.a & operand_);
+            set_nz(registers_.a);
+            set_flag(status_flag::carry, (registers_.a & 0x80U) != 0U);
+            return;
+        case operation::alr: // AND #imm, then LSR A
+            registers_.a = static_cast<std::uint8_t>(registers_.a & operand_);
+            set_flag(status_flag::carry, (registers_.a & 0x01U) != 0U);
+            registers_.a = static_cast<std::uint8_t>(registers_.a >> 1U);
+            set_nz(registers_.a);
+            return;
+        case operation::arr: { // AND #imm, then ROR A with special C/V
+            registers_.a = static_cast<std::uint8_t>(registers_.a & operand_);
+            const auto carry_in = static_cast<std::uint8_t>(flag(status_flag::carry) ? 0x80U : 0U);
+            registers_.a = static_cast<std::uint8_t>((registers_.a >> 1U) | carry_in);
+            set_nz(registers_.a);
+            set_flag(status_flag::carry, (registers_.a & 0x40U) != 0U);
+            set_flag(status_flag::overflow,
+                     (((registers_.a >> 6U) ^ (registers_.a >> 5U)) & 0x01U) != 0U);
+            return;
+        }
+        case operation::sbx: { // X = (A & X) - imm, sets C like CMP
+            const auto t = static_cast<unsigned>(registers_.a & registers_.x);
+            set_flag(status_flag::carry, t >= operand_);
+            registers_.x = static_cast<std::uint8_t>(t - operand_);
+            set_nz(registers_.x);
+            return;
+        }
         default:
             return;
         }
@@ -741,6 +776,40 @@ namespace mnemos::chips::cpu {
         case operation::dec:
             result = static_cast<std::uint8_t>(value - 1U);
             break;
+        // Combined undocumented RMW ops: do the shift/inc/dec, then an ALU op on A
+        // that sets the N/Z (and, where applicable, C/V) flags.
+        case operation::slo:
+            set_flag(status_flag::carry, (value & 0x80U) != 0U);
+            result = static_cast<std::uint8_t>(value << 1U);
+            op_ora(result);
+            return result;
+        case operation::rla: {
+            const auto old = static_cast<std::uint8_t>(flag(status_flag::carry) ? 1U : 0U);
+            set_flag(status_flag::carry, (value & 0x80U) != 0U);
+            result = static_cast<std::uint8_t>((value << 1U) | old);
+            op_and(result);
+            return result;
+        }
+        case operation::sre:
+            set_flag(status_flag::carry, (value & 0x01U) != 0U);
+            result = static_cast<std::uint8_t>(value >> 1U);
+            op_eor(result);
+            return result;
+        case operation::rra: {
+            const auto old = static_cast<std::uint8_t>(flag(status_flag::carry) ? 0x80U : 0U);
+            set_flag(status_flag::carry, (value & 0x01U) != 0U);
+            result = static_cast<std::uint8_t>((value >> 1U) | old);
+            op_adc(result);
+            return result;
+        }
+        case operation::dcp:
+            result = static_cast<std::uint8_t>(value - 1U);
+            op_compare(registers_.a, result);
+            return result;
+        case operation::isc:
+            result = static_cast<std::uint8_t>(value + 1U);
+            op_sbc(result);
+            return result;
         default:
             break;
         }
@@ -831,6 +900,9 @@ namespace mnemos::chips::cpu {
             }
 
         case addressing_mode::absolute_x:
+        case addressing_mode::absolute_y: {
+            const std::uint8_t index =
+                (entry.mode == addressing_mode::absolute_x) ? registers_.x : registers_.y;
             switch (tcu_) {
             case 1U:
                 ea_ = read(registers_.pc++);
@@ -839,7 +911,7 @@ namespace mnemos::chips::cpu {
             case 2U: {
                 const auto base = static_cast<std::uint16_t>(
                     ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + registers_.x);
+                ea_ = static_cast<std::uint16_t>(base + index);
                 tcu_ = 3U;
                 return;
             }
@@ -855,6 +927,80 @@ namespace mnemos::chips::cpu {
                 write(ea_, operand_);
                 operand_ = modify_rmw(entry.op, operand_);
                 tcu_ = 6U;
+                return;
+            default:
+                write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+        }
+
+        case addressing_mode::indexed_indirect: // (zp,X) — used by illegal RMW ops
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(ptr_));
+                ptr_ = static_cast<std::uint8_t>(ptr_ + registers_.x);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                ea_ = read(ptr_);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ |
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
+                tcu_ = 5U;
+                return;
+            case 5U:
+                operand_ = read(ea_);
+                tcu_ = 6U;
+                return;
+            case 6U:
+                write(ea_, operand_);
+                operand_ = modify_rmw(entry.op, operand_);
+                tcu_ = 7U;
+                return;
+            default:
+                write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::indirect_indexed: // (zp),Y — used by illegal RMW ops
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                ea_ = read(ptr_);
+                tcu_ = 3U;
+                return;
+            case 3U: {
+                const auto base = static_cast<std::uint16_t>(
+                    ea_ |
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
+                ea_ = static_cast<std::uint16_t>(base + registers_.y);
+                tcu_ = 4U;
+                return;
+            }
+            case 4U:
+                static_cast<void>(read(ea_)); // fixup cycle (always paid)
+                tcu_ = 5U;
+                return;
+            case 5U:
+                operand_ = read(ea_);
+                tcu_ = 6U;
+                return;
+            case 6U:
+                write(ea_, operand_);
+                operand_ = modify_rmw(entry.op, operand_);
+                tcu_ = 7U;
                 return;
             default:
                 write(ea_, operand_);

@@ -106,6 +106,19 @@ namespace mnemos::chips::cpu {
             bcs,
             bne,
             beq,
+            // Stable undocumented opcodes the C64 relies on.
+            lax,
+            sax,
+            dcp,
+            isc,
+            slo,
+            rla,
+            sre,
+            rra,
+            anc,
+            alr,
+            arr,
+            sbx,
         };
 
         // How an instruction touches memory; selects the cycle micro-sequence.

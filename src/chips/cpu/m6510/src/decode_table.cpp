@@ -214,6 +214,102 @@ namespace mnemos::chips::cpu {
             table[0xD0U] = decoded{op::bne, mode::relative, kind::relative, false};
             table[0xF0U] = decoded{op::beq, mode::relative, kind::relative, false};
 
+            // ---- Stable undocumented opcodes (illegal = true) ----
+
+            // LAX (LDA + LDX)
+            table[0xA7U] = decoded{op::lax, mode::zero_page, kind::read, true};
+            table[0xB7U] = decoded{op::lax, mode::zero_page_y, kind::read, true};
+            table[0xAFU] = decoded{op::lax, mode::absolute, kind::read, true};
+            table[0xBFU] = decoded{op::lax, mode::absolute_y, kind::read, true};
+            table[0xA3U] = decoded{op::lax, mode::indexed_indirect, kind::read, true};
+            table[0xB3U] = decoded{op::lax, mode::indirect_indexed, kind::read, true};
+
+            // SAX (store A & X)
+            table[0x87U] = decoded{op::sax, mode::zero_page, kind::write, true};
+            table[0x97U] = decoded{op::sax, mode::zero_page_y, kind::write, true};
+            table[0x8FU] = decoded{op::sax, mode::absolute, kind::write, true};
+            table[0x83U] = decoded{op::sax, mode::indexed_indirect, kind::write, true};
+
+            // DCP (DEC + CMP)
+            table[0xC7U] = decoded{op::dcp, mode::zero_page, kind::read_modify_write, true};
+            table[0xD7U] = decoded{op::dcp, mode::zero_page_x, kind::read_modify_write, true};
+            table[0xCFU] = decoded{op::dcp, mode::absolute, kind::read_modify_write, true};
+            table[0xDFU] = decoded{op::dcp, mode::absolute_x, kind::read_modify_write, true};
+            table[0xDBU] = decoded{op::dcp, mode::absolute_y, kind::read_modify_write, true};
+            table[0xC3U] = decoded{op::dcp, mode::indexed_indirect, kind::read_modify_write, true};
+            table[0xD3U] = decoded{op::dcp, mode::indirect_indexed, kind::read_modify_write, true};
+
+            // ISC (INC + SBC)
+            table[0xE7U] = decoded{op::isc, mode::zero_page, kind::read_modify_write, true};
+            table[0xF7U] = decoded{op::isc, mode::zero_page_x, kind::read_modify_write, true};
+            table[0xEFU] = decoded{op::isc, mode::absolute, kind::read_modify_write, true};
+            table[0xFFU] = decoded{op::isc, mode::absolute_x, kind::read_modify_write, true};
+            table[0xFBU] = decoded{op::isc, mode::absolute_y, kind::read_modify_write, true};
+            table[0xE3U] = decoded{op::isc, mode::indexed_indirect, kind::read_modify_write, true};
+            table[0xF3U] = decoded{op::isc, mode::indirect_indexed, kind::read_modify_write, true};
+
+            // SLO (ASL + ORA)
+            table[0x07U] = decoded{op::slo, mode::zero_page, kind::read_modify_write, true};
+            table[0x17U] = decoded{op::slo, mode::zero_page_x, kind::read_modify_write, true};
+            table[0x0FU] = decoded{op::slo, mode::absolute, kind::read_modify_write, true};
+            table[0x1FU] = decoded{op::slo, mode::absolute_x, kind::read_modify_write, true};
+            table[0x1BU] = decoded{op::slo, mode::absolute_y, kind::read_modify_write, true};
+            table[0x03U] = decoded{op::slo, mode::indexed_indirect, kind::read_modify_write, true};
+            table[0x13U] = decoded{op::slo, mode::indirect_indexed, kind::read_modify_write, true};
+
+            // RLA (ROL + AND)
+            table[0x27U] = decoded{op::rla, mode::zero_page, kind::read_modify_write, true};
+            table[0x37U] = decoded{op::rla, mode::zero_page_x, kind::read_modify_write, true};
+            table[0x2FU] = decoded{op::rla, mode::absolute, kind::read_modify_write, true};
+            table[0x3FU] = decoded{op::rla, mode::absolute_x, kind::read_modify_write, true};
+            table[0x3BU] = decoded{op::rla, mode::absolute_y, kind::read_modify_write, true};
+            table[0x23U] = decoded{op::rla, mode::indexed_indirect, kind::read_modify_write, true};
+            table[0x33U] = decoded{op::rla, mode::indirect_indexed, kind::read_modify_write, true};
+
+            // SRE (LSR + EOR)
+            table[0x47U] = decoded{op::sre, mode::zero_page, kind::read_modify_write, true};
+            table[0x57U] = decoded{op::sre, mode::zero_page_x, kind::read_modify_write, true};
+            table[0x4FU] = decoded{op::sre, mode::absolute, kind::read_modify_write, true};
+            table[0x5FU] = decoded{op::sre, mode::absolute_x, kind::read_modify_write, true};
+            table[0x5BU] = decoded{op::sre, mode::absolute_y, kind::read_modify_write, true};
+            table[0x43U] = decoded{op::sre, mode::indexed_indirect, kind::read_modify_write, true};
+            table[0x53U] = decoded{op::sre, mode::indirect_indexed, kind::read_modify_write, true};
+
+            // RRA (ROR + ADC)
+            table[0x67U] = decoded{op::rra, mode::zero_page, kind::read_modify_write, true};
+            table[0x77U] = decoded{op::rra, mode::zero_page_x, kind::read_modify_write, true};
+            table[0x6FU] = decoded{op::rra, mode::absolute, kind::read_modify_write, true};
+            table[0x7FU] = decoded{op::rra, mode::absolute_x, kind::read_modify_write, true};
+            table[0x7BU] = decoded{op::rra, mode::absolute_y, kind::read_modify_write, true};
+            table[0x63U] = decoded{op::rra, mode::indexed_indirect, kind::read_modify_write, true};
+            table[0x73U] = decoded{op::rra, mode::indirect_indexed, kind::read_modify_write, true};
+
+            // Immediate-operand undocumented ALU ops
+            table[0x0BU] = decoded{op::anc, mode::immediate, kind::read, true};
+            table[0x2BU] = decoded{op::anc, mode::immediate, kind::read, true};
+            table[0x4BU] = decoded{op::alr, mode::immediate, kind::read, true};
+            table[0x6BU] = decoded{op::arr, mode::immediate, kind::read, true};
+            table[0xCBU] = decoded{op::sbx, mode::immediate, kind::read, true};
+            table[0xEBU] = decoded{op::sbc, mode::immediate, kind::read, true}; // alias of SBC #
+
+            // Undocumented NOPs (no operation, but consume operand bytes/cycles)
+            for (unsigned code : {0x1AU, 0x3AU, 0x5AU, 0x7AU, 0xDAU, 0xFAU}) {
+                table[code] = decoded{op::nop, mode::implied, kind::implied, true};
+            }
+            for (unsigned code : {0x80U, 0x82U, 0x89U, 0xC2U, 0xE2U}) {
+                table[code] = decoded{op::nop, mode::immediate, kind::read, true};
+            }
+            for (unsigned code : {0x04U, 0x44U, 0x64U}) {
+                table[code] = decoded{op::nop, mode::zero_page, kind::read, true};
+            }
+            for (unsigned code : {0x14U, 0x34U, 0x54U, 0x74U, 0xD4U, 0xF4U}) {
+                table[code] = decoded{op::nop, mode::zero_page_x, kind::read, true};
+            }
+            table[0x0CU] = decoded{op::nop, mode::absolute, kind::read, true};
+            for (unsigned code : {0x1CU, 0x3CU, 0x5CU, 0x7CU, 0xDCU, 0xFCU}) {
+                table[code] = decoded{op::nop, mode::absolute_x, kind::read, true};
+            }
+
             return table;
         }
 

@@ -102,7 +102,7 @@
 - [x] Create `src/chips/cpu/m6510/` library target `mnemos::chips::cpu::m6510`. (72e4a6e; CI run 26320527793 green across clang-format and all 6 build/test jobs)
 - [x] Implement registers, flags, addressing modes. (250a457; CI run 26321421738 green across clang-format and all 6 build/test jobs)
 - [x] Implement all 151 documented opcodes with cycle counts. (250a457; CI run 26321421738 green across clang-format and all 6 build/test jobs)
-- [ ] Implement all undocumented (illegal) opcodes the C64 software relies on.
+- [x] Implement all undocumented (illegal) opcodes the C64 software relies on. (this commit; stable set: LAX/SAX/DCP/ISC/SLO/RLA/SRE/RRA/ANC/ALR/ARR/SBX, SBC alias, and undocumented NOPs. Unstable SHA/SHX/SHY/TAS/LAS/ANE/LXA and JAM/KIL deferred — see src/chips/cpu/m6510/NOTES.md)
 - [x] Implement decimal mode arithmetic. (39eb5fe; CI run 26321421738 green across clang-format and all 6 build/test jobs)
 - [x] Implement IRQ, NMI, RES handling with correct cycle semantics. (this commit; IRQ/NMI are cycle-accurate 7-cycle sequences with masking + NMI edge-latch, RES is functional via reset(); interrupts polled at the instruction boundary — exact mid-instruction timing edge cases validated later by the conformance ROMs)
 - [x] Implement the 6510 I/O port at addresses $00/$01. (8bb1bda; CI run 26320828290 green across clang-format and all 6 build/test jobs)
@@ -338,7 +338,7 @@
 - [ ] Author governance ADRs as new patterns emerge.
 
 ### Documentation
-- [ ] Per-chip `NOTES.md` template adopted from the first chip implementation onward.
+- [x] Per-chip `NOTES.md` template adopted from the first chip implementation onward. (this commit; `src/chips/cpu/m6510/NOTES.md`)
 - [ ] Per-system `NOTES.md` template adopted from C64 onward.
 - [x] `docs/architecture/` index page with reading order.
 - [x] `docs/adr/` index page with chronological list.
