@@ -209,6 +209,109 @@ TEST_CASE("STA (indirect),Y writes through the pointer in 6 cycles") {
     CHECK(sys.bus.memory[0x2104U] == 0xC3U);
 }
 
+TEST_CASE("TAX transfers A to X and sets flags in 2 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x80U, 0xAAU}); // LDA #$80 ; TAX
+
+    sys.step_instruction();
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.cpu.cpu_registers().x == 0x80U);
+    CHECK(sys.cpu.flag(m6510::status_flag::negative));
+}
+
+TEST_CASE("INX wraps $FF to $00 and sets Z") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA2U, 0xFFU, 0xE8U}); // LDX #$FF ; INX
+
+    sys.step_instruction();
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.cpu.cpu_registers().x == 0x00U);
+    CHECK(sys.cpu.flag(m6510::status_flag::zero));
+}
+
+TEST_CASE("PHA then PLA round-trips A through the stack") {
+    test_system sys;
+    // LDA #$42 ; PHA ; LDA #$00 ; PLA
+    sys.boot(0xC000U, {0xA9U, 0x42U, 0x48U, 0xA9U, 0x00U, 0x68U});
+
+    sys.step_instruction();              // LDA #$42
+    CHECK(sys.step_instruction() == 3U); // PHA
+    CHECK(sys.cpu.cpu_registers().sp == 0xFCU);
+    sys.step_instruction();              // LDA #$00
+    CHECK(sys.step_instruction() == 4U); // PLA
+    CHECK(sys.cpu.cpu_registers().a == 0x42U);
+    CHECK(sys.cpu.cpu_registers().sp == 0xFDU);
+}
+
+TEST_CASE("ADC sets overflow and negative without carry") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x50U, 0x69U, 0x50U}); // LDA #$50 ; ADC #$50
+
+    sys.step_instruction();
+    sys.step_instruction();
+    CHECK(sys.cpu.cpu_registers().a == 0xA0U);
+    CHECK(sys.cpu.flag(m6510::status_flag::overflow));
+    CHECK(sys.cpu.flag(m6510::status_flag::negative));
+    CHECK_FALSE(sys.cpu.flag(m6510::status_flag::carry));
+}
+
+TEST_CASE("SBC subtracts the operand and the borrow") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x50U, 0xE9U, 0x0FU}); // LDA #$50 ; SBC #$0F (carry clear -> borrow)
+
+    sys.step_instruction();
+    sys.step_instruction();
+    CHECK(sys.cpu.cpu_registers().a == 0x40U); // $50 - $0F - 1
+    CHECK(sys.cpu.flag(m6510::status_flag::carry));
+}
+
+TEST_CASE("CMP sets carry and zero when equal") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x42U, 0xC9U, 0x42U}); // LDA #$42 ; CMP #$42
+
+    sys.step_instruction();
+    sys.step_instruction();
+    CHECK(sys.cpu.flag(m6510::status_flag::zero));
+    CHECK(sys.cpu.flag(m6510::status_flag::carry));
+    CHECK_FALSE(sys.cpu.flag(m6510::status_flag::negative));
+}
+
+TEST_CASE("BIT takes N and V from the operand bits") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x01U, 0x24U, 0x10U}); // LDA #$01 ; BIT $10
+    sys.bus.memory[0x0010U] = 0xC0U;                 // bit 7 and bit 6 set
+
+    sys.step_instruction();
+    sys.step_instruction();
+    CHECK(sys.cpu.flag(m6510::status_flag::negative));
+    CHECK(sys.cpu.flag(m6510::status_flag::overflow));
+    CHECK(sys.cpu.flag(m6510::status_flag::zero)); // $01 & $C0 == 0
+}
+
+TEST_CASE("AND, ORA and EOR combine the accumulator") {
+    SECTION("AND") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0xF0U, 0x29U, 0x3CU}); // LDA #$F0 ; AND #$3C
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0x30U);
+    }
+    SECTION("ORA") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0xF0U, 0x09U, 0x0FU}); // LDA #$F0 ; ORA #$0F
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0xFFU);
+    }
+    SECTION("EOR") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0xFFU, 0x49U, 0x0FU}); // LDA #$FF ; EOR #$0F
+        sys.step_instruction();
+        sys.step_instruction();
+        CHECK(sys.cpu.cpu_registers().a == 0xF0U);
+    }
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;

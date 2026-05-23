@@ -55,6 +55,98 @@ namespace mnemos::chips::cpu {
             table[0x94U] = decoded{op::sty, mode::zero_page_x, kind::write, false};
             table[0x8CU] = decoded{op::sty, mode::absolute, kind::write, false};
 
+            // Register transfers (implied, 2 cycles)
+            table[0xAAU] = decoded{op::tax, mode::implied, kind::implied, false};
+            table[0xA8U] = decoded{op::tay, mode::implied, kind::implied, false};
+            table[0x8AU] = decoded{op::txa, mode::implied, kind::implied, false};
+            table[0x98U] = decoded{op::tya, mode::implied, kind::implied, false};
+            table[0xBAU] = decoded{op::tsx, mode::implied, kind::implied, false};
+            table[0x9AU] = decoded{op::txs, mode::implied, kind::implied, false};
+
+            // Index register increment/decrement (implied)
+            table[0xE8U] = decoded{op::inx, mode::implied, kind::implied, false};
+            table[0xC8U] = decoded{op::iny, mode::implied, kind::implied, false};
+            table[0xCAU] = decoded{op::dex, mode::implied, kind::implied, false};
+            table[0x88U] = decoded{op::dey, mode::implied, kind::implied, false};
+
+            // Stack
+            table[0x48U] = decoded{op::pha, mode::implied, kind::stack, false};
+            table[0x08U] = decoded{op::php, mode::implied, kind::stack, false};
+            table[0x68U] = decoded{op::pla, mode::implied, kind::stack, false};
+            table[0x28U] = decoded{op::plp, mode::implied, kind::stack, false};
+
+            // AND
+            table[0x29U] = decoded{op::and_, mode::immediate, kind::read, false};
+            table[0x25U] = decoded{op::and_, mode::zero_page, kind::read, false};
+            table[0x35U] = decoded{op::and_, mode::zero_page_x, kind::read, false};
+            table[0x2DU] = decoded{op::and_, mode::absolute, kind::read, false};
+            table[0x3DU] = decoded{op::and_, mode::absolute_x, kind::read, false};
+            table[0x39U] = decoded{op::and_, mode::absolute_y, kind::read, false};
+            table[0x21U] = decoded{op::and_, mode::indexed_indirect, kind::read, false};
+            table[0x31U] = decoded{op::and_, mode::indirect_indexed, kind::read, false};
+
+            // ORA
+            table[0x09U] = decoded{op::ora, mode::immediate, kind::read, false};
+            table[0x05U] = decoded{op::ora, mode::zero_page, kind::read, false};
+            table[0x15U] = decoded{op::ora, mode::zero_page_x, kind::read, false};
+            table[0x0DU] = decoded{op::ora, mode::absolute, kind::read, false};
+            table[0x1DU] = decoded{op::ora, mode::absolute_x, kind::read, false};
+            table[0x19U] = decoded{op::ora, mode::absolute_y, kind::read, false};
+            table[0x01U] = decoded{op::ora, mode::indexed_indirect, kind::read, false};
+            table[0x11U] = decoded{op::ora, mode::indirect_indexed, kind::read, false};
+
+            // EOR
+            table[0x49U] = decoded{op::eor, mode::immediate, kind::read, false};
+            table[0x45U] = decoded{op::eor, mode::zero_page, kind::read, false};
+            table[0x55U] = decoded{op::eor, mode::zero_page_x, kind::read, false};
+            table[0x4DU] = decoded{op::eor, mode::absolute, kind::read, false};
+            table[0x5DU] = decoded{op::eor, mode::absolute_x, kind::read, false};
+            table[0x59U] = decoded{op::eor, mode::absolute_y, kind::read, false};
+            table[0x41U] = decoded{op::eor, mode::indexed_indirect, kind::read, false};
+            table[0x51U] = decoded{op::eor, mode::indirect_indexed, kind::read, false};
+
+            // ADC
+            table[0x69U] = decoded{op::adc, mode::immediate, kind::read, false};
+            table[0x65U] = decoded{op::adc, mode::zero_page, kind::read, false};
+            table[0x75U] = decoded{op::adc, mode::zero_page_x, kind::read, false};
+            table[0x6DU] = decoded{op::adc, mode::absolute, kind::read, false};
+            table[0x7DU] = decoded{op::adc, mode::absolute_x, kind::read, false};
+            table[0x79U] = decoded{op::adc, mode::absolute_y, kind::read, false};
+            table[0x61U] = decoded{op::adc, mode::indexed_indirect, kind::read, false};
+            table[0x71U] = decoded{op::adc, mode::indirect_indexed, kind::read, false};
+
+            // SBC
+            table[0xE9U] = decoded{op::sbc, mode::immediate, kind::read, false};
+            table[0xE5U] = decoded{op::sbc, mode::zero_page, kind::read, false};
+            table[0xF5U] = decoded{op::sbc, mode::zero_page_x, kind::read, false};
+            table[0xEDU] = decoded{op::sbc, mode::absolute, kind::read, false};
+            table[0xFDU] = decoded{op::sbc, mode::absolute_x, kind::read, false};
+            table[0xF9U] = decoded{op::sbc, mode::absolute_y, kind::read, false};
+            table[0xE1U] = decoded{op::sbc, mode::indexed_indirect, kind::read, false};
+            table[0xF1U] = decoded{op::sbc, mode::indirect_indexed, kind::read, false};
+
+            // CMP
+            table[0xC9U] = decoded{op::cmp, mode::immediate, kind::read, false};
+            table[0xC5U] = decoded{op::cmp, mode::zero_page, kind::read, false};
+            table[0xD5U] = decoded{op::cmp, mode::zero_page_x, kind::read, false};
+            table[0xCDU] = decoded{op::cmp, mode::absolute, kind::read, false};
+            table[0xDDU] = decoded{op::cmp, mode::absolute_x, kind::read, false};
+            table[0xD9U] = decoded{op::cmp, mode::absolute_y, kind::read, false};
+            table[0xC1U] = decoded{op::cmp, mode::indexed_indirect, kind::read, false};
+            table[0xD1U] = decoded{op::cmp, mode::indirect_indexed, kind::read, false};
+
+            // CPX / CPY
+            table[0xE0U] = decoded{op::cpx, mode::immediate, kind::read, false};
+            table[0xE4U] = decoded{op::cpx, mode::zero_page, kind::read, false};
+            table[0xECU] = decoded{op::cpx, mode::absolute, kind::read, false};
+            table[0xC0U] = decoded{op::cpy, mode::immediate, kind::read, false};
+            table[0xC4U] = decoded{op::cpy, mode::zero_page, kind::read, false};
+            table[0xCCU] = decoded{op::cpy, mode::absolute, kind::read, false};
+
+            // BIT
+            table[0x24U] = decoded{op::bit, mode::zero_page, kind::read, false};
+            table[0x2CU] = decoded{op::bit, mode::absolute, kind::read, false};
+
             return table;
         }
 

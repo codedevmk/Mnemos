@@ -57,6 +57,29 @@ namespace mnemos::chips::cpu {
             sta,
             stx,
             sty,
+            tax,
+            tay,
+            txa,
+            tya,
+            tsx,
+            txs,
+            inx,
+            iny,
+            dex,
+            dey,
+            pha,
+            php,
+            pla,
+            plp,
+            and_,
+            ora,
+            eor,
+            adc,
+            sbc,
+            cmp,
+            cpx,
+            cpy,
+            bit,
         };
 
         // How an instruction touches memory; selects the cycle micro-sequence.
@@ -118,12 +141,21 @@ namespace mnemos::chips::cpu {
         void step_read(const decoded& entry);
         void step_write(const decoded& entry);
         void step_implied(const decoded& entry);
+        void step_stack(const decoded& entry);
         void execute_read(operation op) noexcept;
         void execute_implied(operation op) noexcept;
         [[nodiscard]] std::uint8_t store_value(operation op) const noexcept;
+        [[nodiscard]] std::uint16_t stack_address() const noexcept;
         void op_lda(std::uint8_t value) noexcept;
         void op_ldx(std::uint8_t value) noexcept;
         void op_ldy(std::uint8_t value) noexcept;
+        void op_and(std::uint8_t value) noexcept;
+        void op_ora(std::uint8_t value) noexcept;
+        void op_eor(std::uint8_t value) noexcept;
+        void op_adc(std::uint8_t value) noexcept;
+        void op_sbc(std::uint8_t value) noexcept;
+        void op_bit(std::uint8_t value) noexcept;
+        void op_compare(std::uint8_t reg, std::uint8_t value) noexcept;
         void set_nz(std::uint8_t value) noexcept;
 
         registers registers_{};

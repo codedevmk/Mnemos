@@ -49,6 +49,9 @@ namespace mnemos::chips::cpu {
         case access_kind::write:
             step_write(entry);
             return;
+        case access_kind::stack:
+            step_stack(entry);
+            return;
         default:
             // Unimplemented access kinds (illegal/jam slots for now) end here;
             // real micro-sequences are added in their own tasks.
@@ -381,6 +384,77 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    std::uint16_t m6510::stack_address() const noexcept {
+        return static_cast<std::uint16_t>(0x0100U | registers_.sp);
+    }
+
+    void m6510::step_stack(const decoded& entry) {
+        switch (entry.op) {
+        case operation::pha:
+            if (tcu_ == 1U) {
+                static_cast<void>(read(registers_.pc)); // dummy read
+                tcu_ = 2U;
+                return;
+            }
+            write(stack_address(), registers_.a);
+            registers_.sp = static_cast<std::uint8_t>(registers_.sp - 1U);
+            tcu_ = 0U;
+            return;
+
+        case operation::php:
+            if (tcu_ == 1U) {
+                static_cast<void>(read(registers_.pc));
+                tcu_ = 2U;
+                return;
+            }
+            // Pushed status has B and the unused bit set.
+            write(stack_address(), static_cast<std::uint8_t>(registers_.p | 0x30U));
+            registers_.sp = static_cast<std::uint8_t>(registers_.sp - 1U);
+            tcu_ = 0U;
+            return;
+
+        case operation::pla:
+            switch (tcu_) {
+            case 1U:
+                static_cast<void>(read(registers_.pc));
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(stack_address())); // dummy read while incrementing SP
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 3U;
+                return;
+            default:
+                registers_.a = read(stack_address());
+                set_nz(registers_.a);
+                tcu_ = 0U;
+                return;
+            }
+
+        case operation::plp:
+            switch (tcu_) {
+            case 1U:
+                static_cast<void>(read(registers_.pc));
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(stack_address()));
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 3U;
+                return;
+            default:
+                // B is dropped and the unused bit forced set in the register copy.
+                registers_.p = static_cast<std::uint8_t>((read(stack_address()) & 0xEFU) | 0x20U);
+                tcu_ = 0U;
+                return;
+            }
+
+        default:
+            tcu_ = 0U;
+            return;
+        }
+    }
+
     void m6510::execute_read(operation op) noexcept {
         switch (op) {
         case operation::lda:
@@ -392,6 +466,33 @@ namespace mnemos::chips::cpu {
         case operation::ldy:
             op_ldy(operand_);
             return;
+        case operation::and_:
+            op_and(operand_);
+            return;
+        case operation::ora:
+            op_ora(operand_);
+            return;
+        case operation::eor:
+            op_eor(operand_);
+            return;
+        case operation::adc:
+            op_adc(operand_);
+            return;
+        case operation::sbc:
+            op_sbc(operand_);
+            return;
+        case operation::cmp:
+            op_compare(registers_.a, operand_);
+            return;
+        case operation::cpx:
+            op_compare(registers_.x, operand_);
+            return;
+        case operation::cpy:
+            op_compare(registers_.y, operand_);
+            return;
+        case operation::bit:
+            op_bit(operand_);
+            return;
         default:
             return;
         }
@@ -399,6 +500,45 @@ namespace mnemos::chips::cpu {
 
     void m6510::execute_implied(operation op) noexcept {
         switch (op) {
+        case operation::tax:
+            registers_.x = registers_.a;
+            set_nz(registers_.x);
+            return;
+        case operation::tay:
+            registers_.y = registers_.a;
+            set_nz(registers_.y);
+            return;
+        case operation::txa:
+            registers_.a = registers_.x;
+            set_nz(registers_.a);
+            return;
+        case operation::tya:
+            registers_.a = registers_.y;
+            set_nz(registers_.a);
+            return;
+        case operation::tsx:
+            registers_.x = registers_.sp;
+            set_nz(registers_.x);
+            return;
+        case operation::txs:
+            registers_.sp = registers_.x; // TXS does not touch flags
+            return;
+        case operation::inx:
+            registers_.x = static_cast<std::uint8_t>(registers_.x + 1U);
+            set_nz(registers_.x);
+            return;
+        case operation::iny:
+            registers_.y = static_cast<std::uint8_t>(registers_.y + 1U);
+            set_nz(registers_.y);
+            return;
+        case operation::dex:
+            registers_.x = static_cast<std::uint8_t>(registers_.x - 1U);
+            set_nz(registers_.x);
+            return;
+        case operation::dey:
+            registers_.y = static_cast<std::uint8_t>(registers_.y - 1U);
+            set_nz(registers_.y);
+            return;
         case operation::nop:
         default:
             return;
@@ -418,6 +558,48 @@ namespace mnemos::chips::cpu {
     void m6510::op_ldy(std::uint8_t value) noexcept {
         registers_.y = value;
         set_nz(value);
+    }
+
+    void m6510::op_and(std::uint8_t value) noexcept {
+        registers_.a = static_cast<std::uint8_t>(registers_.a & value);
+        set_nz(registers_.a);
+    }
+
+    void m6510::op_ora(std::uint8_t value) noexcept {
+        registers_.a = static_cast<std::uint8_t>(registers_.a | value);
+        set_nz(registers_.a);
+    }
+
+    void m6510::op_eor(std::uint8_t value) noexcept {
+        registers_.a = static_cast<std::uint8_t>(registers_.a ^ value);
+        set_nz(registers_.a);
+    }
+
+    void m6510::op_adc(std::uint8_t value) noexcept {
+        const unsigned carry = flag(status_flag::carry) ? 1U : 0U;
+        const unsigned sum = static_cast<unsigned>(registers_.a) + value + carry;
+        const auto result = static_cast<std::uint8_t>(sum);
+        set_flag(status_flag::carry, sum > 0xFFU);
+        set_flag(status_flag::overflow, ((registers_.a ^ result) & (value ^ result) & 0x80U) != 0U);
+        registers_.a = result;
+        set_nz(result);
+    }
+
+    void m6510::op_sbc(std::uint8_t value) noexcept {
+        // Binary subtract is add-with-carry of the one's complement.
+        op_adc(static_cast<std::uint8_t>(~value));
+    }
+
+    void m6510::op_bit(std::uint8_t value) noexcept {
+        set_flag(status_flag::zero, (registers_.a & value) == 0U);
+        set_flag(status_flag::negative, (value & 0x80U) != 0U);
+        set_flag(status_flag::overflow, (value & 0x40U) != 0U);
+    }
+
+    void m6510::op_compare(std::uint8_t reg, std::uint8_t value) noexcept {
+        const auto diff = static_cast<std::uint8_t>(reg - value);
+        set_flag(status_flag::carry, reg >= value);
+        set_nz(diff);
     }
 
     void m6510::set_nz(std::uint8_t value) noexcept {
