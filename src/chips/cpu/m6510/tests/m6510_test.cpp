@@ -356,6 +356,69 @@ TEST_CASE("SBC in decimal mode produces BCD results") {
     }
 }
 
+TEST_CASE("ASL accumulator shifts left and sets carry from bit 7") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x81U, 0x0AU}); // LDA #$81 ; ASL A
+
+    sys.step_instruction();
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.cpu.cpu_registers().a == 0x02U); // $81 << 1
+    CHECK(sys.cpu.flag(m6510::status_flag::carry));
+}
+
+TEST_CASE("ROL accumulator rotates carry into bit 0") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x80U, 0x2AU}); // LDA #$80 ; ROL A
+    sys.cpu.set_flag(m6510::status_flag::carry, true);
+
+    sys.step_instruction();              // LDA #$80
+    CHECK(sys.step_instruction() == 2U); // ROL A
+    CHECK(sys.cpu.cpu_registers().a == 0x01U);
+    CHECK(sys.cpu.flag(m6510::status_flag::carry)); // old bit 7
+}
+
+TEST_CASE("LSR zero page shifts right in 5 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0x46U, 0x20U}); // LSR $20
+    sys.bus.memory[0x0020U] = 0x03U;
+
+    CHECK(sys.step_instruction() == 5U);
+    CHECK(sys.bus.memory[0x0020U] == 0x01U);
+    CHECK(sys.cpu.flag(m6510::status_flag::carry)); // bit 0 was 1
+}
+
+TEST_CASE("INC zero page increments memory in 5 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xE6U, 0x30U}); // INC $30
+    sys.bus.memory[0x0030U] = 0xFFU;
+
+    CHECK(sys.step_instruction() == 5U);
+    CHECK(sys.bus.memory[0x0030U] == 0x00U);
+    CHECK(sys.cpu.flag(m6510::status_flag::zero));
+}
+
+TEST_CASE("DEC absolute decrements memory in 6 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xCEU, 0x00U, 0x40U}); // DEC $4000
+    sys.bus.memory[0x4000U] = 0x01U;
+
+    CHECK(sys.step_instruction() == 6U);
+    CHECK(sys.bus.memory[0x4000U] == 0x00U);
+    CHECK(sys.cpu.flag(m6510::status_flag::zero));
+}
+
+TEST_CASE("ASL absolute,X always takes 7 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA2U, 0x01U, 0x1EU, 0x00U, 0x40U}); // LDX #$01 ; ASL $4000,X
+    sys.bus.memory[0x4001U] = 0x40U;
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 7U);
+    CHECK(sys.bus.memory[0x4001U] == 0x80U);
+    CHECK(sys.cpu.flag(m6510::status_flag::negative));
+    CHECK_FALSE(sys.cpu.flag(m6510::status_flag::carry));
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;

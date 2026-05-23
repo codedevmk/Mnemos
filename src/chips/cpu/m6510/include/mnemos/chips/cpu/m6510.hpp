@@ -80,6 +80,12 @@ namespace mnemos::chips::cpu {
             cpx,
             cpy,
             bit,
+            asl,
+            lsr,
+            rol,
+            ror,
+            inc,
+            dec,
         };
 
         // How an instruction touches memory; selects the cycle micro-sequence.
@@ -142,6 +148,8 @@ namespace mnemos::chips::cpu {
         void step_write(const decoded& entry);
         void step_implied(const decoded& entry);
         void step_stack(const decoded& entry);
+        void step_rmw(const decoded& entry);
+        [[nodiscard]] std::uint8_t modify_rmw(operation op, std::uint8_t value) noexcept;
         void execute_read(operation op) noexcept;
         void execute_implied(operation op) noexcept;
         [[nodiscard]] std::uint8_t store_value(operation op) const noexcept;

@@ -147,6 +147,46 @@ namespace mnemos::chips::cpu {
             table[0x24U] = decoded{op::bit, mode::zero_page, kind::read, false};
             table[0x2CU] = decoded{op::bit, mode::absolute, kind::read, false};
 
+            // ASL
+            table[0x0AU] = decoded{op::asl, mode::accumulator, kind::read_modify_write, false};
+            table[0x06U] = decoded{op::asl, mode::zero_page, kind::read_modify_write, false};
+            table[0x16U] = decoded{op::asl, mode::zero_page_x, kind::read_modify_write, false};
+            table[0x0EU] = decoded{op::asl, mode::absolute, kind::read_modify_write, false};
+            table[0x1EU] = decoded{op::asl, mode::absolute_x, kind::read_modify_write, false};
+
+            // LSR
+            table[0x4AU] = decoded{op::lsr, mode::accumulator, kind::read_modify_write, false};
+            table[0x46U] = decoded{op::lsr, mode::zero_page, kind::read_modify_write, false};
+            table[0x56U] = decoded{op::lsr, mode::zero_page_x, kind::read_modify_write, false};
+            table[0x4EU] = decoded{op::lsr, mode::absolute, kind::read_modify_write, false};
+            table[0x5EU] = decoded{op::lsr, mode::absolute_x, kind::read_modify_write, false};
+
+            // ROL
+            table[0x2AU] = decoded{op::rol, mode::accumulator, kind::read_modify_write, false};
+            table[0x26U] = decoded{op::rol, mode::zero_page, kind::read_modify_write, false};
+            table[0x36U] = decoded{op::rol, mode::zero_page_x, kind::read_modify_write, false};
+            table[0x2EU] = decoded{op::rol, mode::absolute, kind::read_modify_write, false};
+            table[0x3EU] = decoded{op::rol, mode::absolute_x, kind::read_modify_write, false};
+
+            // ROR
+            table[0x6AU] = decoded{op::ror, mode::accumulator, kind::read_modify_write, false};
+            table[0x66U] = decoded{op::ror, mode::zero_page, kind::read_modify_write, false};
+            table[0x76U] = decoded{op::ror, mode::zero_page_x, kind::read_modify_write, false};
+            table[0x6EU] = decoded{op::ror, mode::absolute, kind::read_modify_write, false};
+            table[0x7EU] = decoded{op::ror, mode::absolute_x, kind::read_modify_write, false};
+
+            // INC
+            table[0xE6U] = decoded{op::inc, mode::zero_page, kind::read_modify_write, false};
+            table[0xF6U] = decoded{op::inc, mode::zero_page_x, kind::read_modify_write, false};
+            table[0xEEU] = decoded{op::inc, mode::absolute, kind::read_modify_write, false};
+            table[0xFEU] = decoded{op::inc, mode::absolute_x, kind::read_modify_write, false};
+
+            // DEC
+            table[0xC6U] = decoded{op::dec, mode::zero_page, kind::read_modify_write, false};
+            table[0xD6U] = decoded{op::dec, mode::zero_page_x, kind::read_modify_write, false};
+            table[0xCEU] = decoded{op::dec, mode::absolute, kind::read_modify_write, false};
+            table[0xDEU] = decoded{op::dec, mode::absolute_x, kind::read_modify_write, false};
+
             return table;
         }
 

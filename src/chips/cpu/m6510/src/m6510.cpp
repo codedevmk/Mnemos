@@ -52,6 +52,9 @@ namespace mnemos::chips::cpu {
         case access_kind::stack:
             step_stack(entry);
             return;
+        case access_kind::read_modify_write:
+            step_rmw(entry);
+            return;
         default:
             // Unimplemented access kinds (illegal/jam slots for now) end here;
             // real micro-sequences are added in their own tasks.
@@ -662,6 +665,162 @@ namespace mnemos::chips::cpu {
         const auto diff = static_cast<std::uint8_t>(reg - value);
         set_flag(status_flag::carry, reg >= value);
         set_nz(diff);
+    }
+
+    std::uint8_t m6510::modify_rmw(operation op, std::uint8_t value) noexcept {
+        std::uint8_t result = value;
+        switch (op) {
+        case operation::asl:
+            set_flag(status_flag::carry, (value & 0x80U) != 0U);
+            result = static_cast<std::uint8_t>(value << 1U);
+            break;
+        case operation::lsr:
+            set_flag(status_flag::carry, (value & 0x01U) != 0U);
+            result = static_cast<std::uint8_t>(value >> 1U);
+            break;
+        case operation::rol: {
+            const auto old = static_cast<std::uint8_t>(flag(status_flag::carry) ? 1U : 0U);
+            set_flag(status_flag::carry, (value & 0x80U) != 0U);
+            result = static_cast<std::uint8_t>((value << 1U) | old);
+            break;
+        }
+        case operation::ror: {
+            const auto old = static_cast<std::uint8_t>(flag(status_flag::carry) ? 0x80U : 0U);
+            set_flag(status_flag::carry, (value & 0x01U) != 0U);
+            result = static_cast<std::uint8_t>((value >> 1U) | old);
+            break;
+        }
+        case operation::inc:
+            result = static_cast<std::uint8_t>(value + 1U);
+            break;
+        case operation::dec:
+            result = static_cast<std::uint8_t>(value - 1U);
+            break;
+        default:
+            break;
+        }
+        set_nz(result);
+        return result;
+    }
+
+    void m6510::step_rmw(const decoded& entry) {
+        if (entry.mode == addressing_mode::accumulator) {
+            static_cast<void>(read(registers_.pc)); // dummy read
+            registers_.a = modify_rmw(entry.op, registers_.a);
+            tcu_ = 0U;
+            return;
+        }
+
+        switch (entry.mode) {
+        case addressing_mode::zero_page:
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                operand_ = read(ea_);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                write(ea_, operand_); // dummy write of the original value
+                operand_ = modify_rmw(entry.op, operand_);
+                tcu_ = 4U;
+                return;
+            default:
+                write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::zero_page_x:
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(ptr_));
+                ea_ = static_cast<std::uint8_t>(ptr_ + registers_.x);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                operand_ = read(ea_);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                write(ea_, operand_);
+                operand_ = modify_rmw(entry.op, operand_);
+                tcu_ = 5U;
+                return;
+            default:
+                write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::absolute:
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                tcu_ = 3U;
+                return;
+            case 3U:
+                operand_ = read(ea_);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                write(ea_, operand_);
+                operand_ = modify_rmw(entry.op, operand_);
+                tcu_ = 5U;
+                return;
+            default:
+                write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::absolute_x:
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U: {
+                const auto base = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                ea_ = static_cast<std::uint16_t>(base + registers_.x);
+                tcu_ = 3U;
+                return;
+            }
+            case 3U:
+                static_cast<void>(read(ea_)); // fixup cycle (always paid)
+                tcu_ = 4U;
+                return;
+            case 4U:
+                operand_ = read(ea_);
+                tcu_ = 5U;
+                return;
+            case 5U:
+                write(ea_, operand_);
+                operand_ = modify_rmw(entry.op, operand_);
+                tcu_ = 6U;
+                return;
+            default:
+                write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+
+        default:
+            tcu_ = 0U;
+            return;
+        }
     }
 
     void m6510::set_nz(std::uint8_t value) noexcept {
