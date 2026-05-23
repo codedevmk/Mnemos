@@ -127,16 +127,16 @@
 ## M2 — Chip Library Expansion (C64 Set)
 
 ### VIC-II 6569
-- [ ] Create `src/chips/video/vic_ii_6569/` library target.
-- [ ] Implement raster engine (PAL: 312 lines × 63 cycles).
-- [ ] Implement all graphics modes (standard text, multicolor text, standard bitmap, multicolor bitmap, extended color text).
-- [ ] Implement sprite engine (8 sprites, multicolor, expansion, sprite-sprite/sprite-data collisions).
+- [x] Create `src/chips/video/vic_ii_6569/` library target. (a013df0; ported from Emu per ADR 0006; CI run 26325382940 green across all jobs)
+- [x] Implement raster engine (PAL: 312 lines × 63 cycles). (a013df0; beam tracker + per-cycle video-matrix counters, PAL/NTSC geometry; CI run 26325382940)
+- [ ] Implement all graphics modes (standard text, multicolor text, standard bitmap, multicolor bitmap, extended color text). (mode DECODE done in a013df0; pixel rendering is net-new — not in the Emu core — and still pending)
+- [ ] Implement sprite engine (8 sprites, multicolor, expansion, sprite-sprite/sprite-data collisions). (sprite X/Y latches + collision read-clear done; fetch/compositor/priority/collisions net-new, pending)
 - [ ] Implement border generation (open borders trick must work).
-- [ ] Implement raster IRQ generation.
-- [ ] Implement badline cycle stealing.
-- [ ] Implement MMIO register set ($D000–$D3FF mirrored).
-- [ ] Save / load state.
-- [ ] Introspection: register snapshot, current raster line, current cycle, sprite states.
+- [x] Implement raster IRQ generation. (a013df0; edge-latched raster compare + mask + master + write-1 ack + light-pen source; CI run 26325382940)
+- [x] Implement badline cycle stealing. (a013df0; bad-line condition + BA-low + CPU-read-stall windows; CI run 26325382940)
+- [x] Implement MMIO register set ($D000–$D3FF mirrored). (a013df0; full $D000-$D02E path, $D02F-$D03F read $FF, 64-byte mirror; CI run 26325382940)
+- [ ] Save / load state. (deferred to M3 with the runtime save-state format, as for the m6510)
+- [x] Introspection: register snapshot, current raster line, current cycle, sprite states. (a013df0; register_snapshot + raster_y/raster_x; full sprite-engine states arrive with the sprite compositor)
 
 ### SID 6581
 - [ ] Create `src/chips/audio/sid_6581/` library target.
