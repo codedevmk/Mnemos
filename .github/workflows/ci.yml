@@ -83,6 +83,29 @@ jobs:
         if: runner.os == 'Linux'
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
 
+  sanitizers:
+    name: linux-clang-asan
+    needs: format
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install sanitizer tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm ninja-build
+
+      - name: Configure
+        run: cmake --preset linux-clang-asan
+
+      - name: Build
+        run: cmake --build --preset linux-clang-asan
+
+      - name: Test under ASan + UBSan
+        run: ctest --preset linux-clang-asan --output-on-failure
+
   foundation-coverage:
     name: foundation-coverage
     needs: format
