@@ -89,14 +89,14 @@
 - [x] Unit tests for every module above with ≥ 75 % branch coverage. (1d20324; CI run 26280879101 green across clang-format, foundation coverage, and all 6 build/test jobs)
 
 ### Chip taxonomy and base interfaces
-- [ ] Create `src/chips/common/` library target `mnemos::chips::common`.
-- [ ] Define `chip_class` enum.
-- [ ] Define `chip_metadata`, `reset_kind`, `register_descriptor` types.
-- [ ] Define `i_chip` interface (TDS §8.2).
-- [ ] Define specialized interfaces: `i_cpu`, `i_audio_synth`, `i_video`, `i_bus_controller`, `i_storage`, `i_mapper`, `i_peripheral`.
-- [ ] Define `i_chip_introspection` interface (forward-decl OK; full def in M4).
-- [ ] Implement chip factory registry with static-init registration pattern.
-- [ ] Unit tests for taxonomy + registration.
+- [x] Create `src/chips/common/` library target `mnemos::chips::common`. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define `chip_class` enum. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define `chip_metadata`, `reset_kind`, `register_descriptor` types. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define `i_chip` interface (TDS §8.2). (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define specialized interfaces: `i_cpu`, `i_audio_synth`, `i_video`, `i_bus_controller`, `i_storage`, `i_mapper`, `i_peripheral`. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define `i_chip_introspection` interface (forward-decl OK; full def in M4). (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Implement chip factory registry with static-init registration pattern. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Unit tests for taxonomy + registration. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 
 ### MOS 6510 implementation
 - [ ] Create `src/chips/cpu/m6510/` library target `mnemos::chips::cpu::m6510`.
