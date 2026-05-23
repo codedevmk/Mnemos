@@ -9,3 +9,4 @@ Current records:
 2. `0002-cmake-and-toolchain.md`
 3. `0003-license-split.md`
 4. `0004-chip-contract.md`
+5. `0006-emu-reuse-and-conformance.md`

@@ -183,6 +183,13 @@ namespace mnemos::chips::cpu {
         void set_irq_line(bool asserted) noexcept;
         void set_nmi_line(bool asserted) noexcept;
 
+        // Control surface (debugger / conformance harness). set_registers loads the
+        // full register file and resets the in-progress instruction. The $00/$01
+        // I/O port can be disabled so those addresses behave as plain memory, as
+        // the bare-6502 conformance corpus expects.
+        void set_registers(const registers& values) noexcept;
+        void set_port_enabled(bool enabled) noexcept;
+
       private:
         class introspection_surface final : public instrumentation::i_chip_introspection {};
 
@@ -223,6 +230,7 @@ namespace mnemos::chips::cpu {
         registers registers_{};
         std::uint64_t cycles_{};
         i_bus* bus_{};
+        bool port_enabled_{true};
         std::uint8_t port_ddr_{};
         std::uint8_t port_data_{};
 

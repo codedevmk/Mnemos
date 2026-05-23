@@ -8,11 +8,6 @@
 #include <memory>
 
 namespace mnemos::chips::cpu {
-    namespace {
-        [[nodiscard]] bool crosses_page(std::uint16_t base, std::uint16_t addr) noexcept {
-            return ((base ^ addr) & 0xFF00U) != 0U;
-        }
-    } // namespace
 
     chip_metadata m6510::metadata() const noexcept {
         return {
@@ -164,16 +159,19 @@ namespace mnemos::chips::cpu {
                 tcu_ = 2U;
                 return;
             case 2U: {
-                const auto base = static_cast<std::uint16_t>(
-                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + index);
-                page_cross_ = crosses_page(base, ea_);
+                const auto high = static_cast<std::uint16_t>(read(registers_.pc++));
+                const auto base =
+                    static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+                const unsigned low_sum = (base & 0x00FFU) + index;
+                page_cross_ = low_sum > 0xFFU;
+                ea_ = static_cast<std::uint16_t>((base & 0xFF00U) | (low_sum & 0x00FFU));
                 tcu_ = 3U;
                 return;
             }
             case 3U:
                 if (page_cross_) {
-                    static_cast<void>(read(ea_)); // extra cycle on page crossing
+                    static_cast<void>(read(ea_)); // dummy read at the un-fixed address
+                    ea_ = static_cast<std::uint16_t>(ea_ + 0x0100U);
                     tcu_ = 4U;
                     return;
                 }
@@ -228,17 +226,20 @@ namespace mnemos::chips::cpu {
                 tcu_ = 3U;
                 return;
             case 3U: {
-                const auto base = static_cast<std::uint16_t>(
-                    ea_ |
-                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + registers_.y);
-                page_cross_ = crosses_page(base, ea_);
+                const auto high =
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)));
+                const auto base =
+                    static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+                const unsigned low_sum = (base & 0x00FFU) + registers_.y;
+                page_cross_ = low_sum > 0xFFU;
+                ea_ = static_cast<std::uint16_t>((base & 0xFF00U) | (low_sum & 0x00FFU));
                 tcu_ = 4U;
                 return;
             }
             case 4U:
                 if (page_cross_) {
-                    static_cast<void>(read(ea_));
+                    static_cast<void>(read(ea_)); // dummy read at the un-fixed address
+                    ea_ = static_cast<std::uint16_t>(ea_ + 0x0100U);
                     tcu_ = 5U;
                     return;
                 }
@@ -321,14 +322,20 @@ namespace mnemos::chips::cpu {
                 tcu_ = 2U;
                 return;
             case 2U: {
-                const auto base = static_cast<std::uint16_t>(
-                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + index);
+                const auto high = static_cast<std::uint16_t>(read(registers_.pc++));
+                const auto base =
+                    static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+                const unsigned low_sum = (base & 0x00FFU) + index;
+                page_cross_ = low_sum > 0xFFU;
+                ea_ = static_cast<std::uint16_t>((base & 0xFF00U) | (low_sum & 0x00FFU));
                 tcu_ = 3U;
                 return;
             }
             case 3U:
-                static_cast<void>(read(ea_)); // indexed stores always pay the fixup cycle
+                static_cast<void>(read(ea_)); // dummy read (un-fixed address on carry)
+                if (page_cross_) {
+                    ea_ = static_cast<std::uint16_t>(ea_ + 0x0100U);
+                }
                 tcu_ = 4U;
                 return;
             default:
@@ -376,15 +383,21 @@ namespace mnemos::chips::cpu {
                 tcu_ = 3U;
                 return;
             case 3U: {
-                const auto base = static_cast<std::uint16_t>(
-                    ea_ |
-                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + registers_.y);
+                const auto high =
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)));
+                const auto base =
+                    static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+                const unsigned low_sum = (base & 0x00FFU) + registers_.y;
+                page_cross_ = low_sum > 0xFFU;
+                ea_ = static_cast<std::uint16_t>((base & 0xFF00U) | (low_sum & 0x00FFU));
                 tcu_ = 4U;
                 return;
             }
             case 4U:
-                static_cast<void>(read(ea_)); // always pays the fixup cycle
+                static_cast<void>(read(ea_)); // dummy read (un-fixed address on carry)
+                if (page_cross_) {
+                    ea_ = static_cast<std::uint16_t>(ea_ + 0x0100U);
+                }
                 tcu_ = 5U;
                 return;
             default:
@@ -538,14 +551,34 @@ namespace mnemos::chips::cpu {
             registers_.a = static_cast<std::uint8_t>(registers_.a >> 1U);
             set_nz(registers_.a);
             return;
-        case operation::arr: { // AND #imm, then ROR A with special C/V
-            registers_.a = static_cast<std::uint8_t>(registers_.a & operand_);
+        case operation::arr: { // AND #imm, then a ROR with special C/V (and BCD fixup)
+            const auto value = static_cast<std::uint8_t>(registers_.a & operand_);
             const auto carry_in = static_cast<std::uint8_t>(flag(status_flag::carry) ? 0x80U : 0U);
-            registers_.a = static_cast<std::uint8_t>((registers_.a >> 1U) | carry_in);
-            set_nz(registers_.a);
-            set_flag(status_flag::carry, (registers_.a & 0x40U) != 0U);
-            set_flag(status_flag::overflow,
-                     (((registers_.a >> 6U) ^ (registers_.a >> 5U)) & 0x01U) != 0U);
+            auto result = static_cast<std::uint8_t>((value >> 1U) | carry_in);
+
+            if (flag(status_flag::decimal)) {
+                // NMOS decimal ARR: N/Z/V come from the pre-fixup result, then the
+                // nibbles are BCD-adjusted and carry is decided on the high nibble.
+                set_nz(result);
+                set_flag(status_flag::overflow, ((value ^ result) & 0x40U) != 0U);
+                if (((value & 0x0FU) + (value & 0x01U)) > 0x05U) {
+                    result =
+                        static_cast<std::uint8_t>((result & 0xF0U) | ((result + 0x06U) & 0x0FU));
+                }
+                if (((value & 0xF0U) + (value & 0x10U)) > 0x50U) {
+                    result = static_cast<std::uint8_t>(result + 0x60U);
+                    set_flag(status_flag::carry, true);
+                } else {
+                    set_flag(status_flag::carry, false);
+                }
+                registers_.a = result;
+                return;
+            }
+
+            registers_.a = result;
+            set_nz(result);
+            set_flag(status_flag::carry, (result & 0x40U) != 0U);
+            set_flag(status_flag::overflow, (((result >> 6U) ^ (result >> 5U)) & 0x01U) != 0U);
             return;
         }
         case operation::sbx: { // X = (A & X) - imm, sets C like CMP
@@ -909,14 +942,20 @@ namespace mnemos::chips::cpu {
                 tcu_ = 2U;
                 return;
             case 2U: {
-                const auto base = static_cast<std::uint16_t>(
-                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + index);
+                const auto high = static_cast<std::uint16_t>(read(registers_.pc++));
+                const auto base =
+                    static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+                const unsigned low_sum = (base & 0x00FFU) + index;
+                page_cross_ = low_sum > 0xFFU;
+                ea_ = static_cast<std::uint16_t>((base & 0xFF00U) | (low_sum & 0x00FFU));
                 tcu_ = 3U;
                 return;
             }
             case 3U:
-                static_cast<void>(read(ea_)); // fixup cycle (always paid)
+                static_cast<void>(read(ea_)); // dummy read (un-fixed address on carry)
+                if (page_cross_) {
+                    ea_ = static_cast<std::uint16_t>(ea_ + 0x0100U);
+                }
                 tcu_ = 4U;
                 return;
             case 4U:
@@ -982,15 +1021,21 @@ namespace mnemos::chips::cpu {
                 tcu_ = 3U;
                 return;
             case 3U: {
-                const auto base = static_cast<std::uint16_t>(
-                    ea_ |
-                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
-                ea_ = static_cast<std::uint16_t>(base + registers_.y);
+                const auto high =
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)));
+                const auto base =
+                    static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+                const unsigned low_sum = (base & 0x00FFU) + registers_.y;
+                page_cross_ = low_sum > 0xFFU;
+                ea_ = static_cast<std::uint16_t>((base & 0xFF00U) | (low_sum & 0x00FFU));
                 tcu_ = 4U;
                 return;
             }
             case 4U:
-                static_cast<void>(read(ea_)); // fixup cycle (always paid)
+                static_cast<void>(read(ea_)); // dummy read (un-fixed address on carry)
+                if (page_cross_) {
+                    ea_ = static_cast<std::uint16_t>(ea_ + 0x0100U);
+                }
                 tcu_ = 5U;
                 return;
             case 5U:
@@ -1329,10 +1374,10 @@ namespace mnemos::chips::cpu {
     void m6510::attach_bus(i_bus& bus) noexcept { bus_ = &bus; }
 
     std::uint8_t m6510::read(std::uint16_t address) noexcept {
-        if (address == 0x0000U) {
+        if (port_enabled_ && address == 0x0000U) {
             return port_ddr_;
         }
-        if (address == 0x0001U) {
+        if (port_enabled_ && address == 0x0001U) {
             const auto outputs = static_cast<std::uint8_t>(port_data_ & port_ddr_);
             const auto inputs =
                 static_cast<std::uint8_t>(port_input_pull & static_cast<std::uint8_t>(~port_ddr_));
@@ -1342,11 +1387,11 @@ namespace mnemos::chips::cpu {
     }
 
     void m6510::write(std::uint16_t address, std::uint8_t value) noexcept {
-        if (address == 0x0000U) {
+        if (port_enabled_ && address == 0x0000U) {
             port_ddr_ = value;
             return;
         }
-        if (address == 0x0001U) {
+        if (port_enabled_ && address == 0x0001U) {
             port_data_ = value;
             return;
         }
@@ -1354,6 +1399,14 @@ namespace mnemos::chips::cpu {
             bus_->write8(address, value);
         }
     }
+
+    void m6510::set_registers(const registers& values) noexcept {
+        registers_ = values;
+        tcu_ = 0U;
+        in_interrupt_ = false;
+    }
+
+    void m6510::set_port_enabled(bool enabled) noexcept { port_enabled_ = enabled; }
 
     void m6510::set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
 
