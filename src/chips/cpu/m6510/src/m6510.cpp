@@ -8,6 +8,11 @@
 #include <memory>
 
 namespace mnemos::chips::cpu {
+    namespace {
+        [[nodiscard]] bool crosses_page(std::uint16_t base, std::uint16_t addr) noexcept {
+            return ((base ^ addr) & 0xFF00U) != 0U;
+        }
+    } // namespace
 
     chip_metadata m6510::metadata() const noexcept {
         return {
@@ -41,6 +46,9 @@ namespace mnemos::chips::cpu {
         case access_kind::read:
             step_read(entry);
             return;
+        case access_kind::write:
+            step_write(entry);
+            return;
         default:
             // Unimplemented access kinds (illegal/jam slots for now) end here;
             // real micro-sequences are added in their own tasks.
@@ -62,35 +70,314 @@ namespace mnemos::chips::cpu {
             execute_read(entry.op);
             tcu_ = 0U;
             return;
+
         case addressing_mode::zero_page:
-            if (tcu_ == 1U) {
+            switch (tcu_) {
+            case 1U:
                 ea_ = read(registers_.pc++);
                 tcu_ = 2U;
                 return;
+            default:
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
             }
-            operand_ = read(ea_);
-            execute_read(entry.op);
-            tcu_ = 0U;
-            return;
+
+        case addressing_mode::zero_page_x:
+        case addressing_mode::zero_page_y: {
+            const std::uint8_t index =
+                (entry.mode == addressing_mode::zero_page_x) ? registers_.x : registers_.y;
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(ptr_)); // dummy read at the un-indexed address
+                ea_ = static_cast<std::uint8_t>(ptr_ + index); // wraps within zero page
+                tcu_ = 3U;
+                return;
+            default:
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
+            }
+        }
+
         case addressing_mode::absolute:
-            if (tcu_ == 1U) {
+            switch (tcu_) {
+            case 1U:
                 ea_ = read(registers_.pc++);
                 tcu_ = 2U;
                 return;
+            case 2U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                tcu_ = 3U;
+                return;
+            default:
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
             }
-            if (tcu_ == 2U) {
-                const auto high = static_cast<std::uint16_t>(read(registers_.pc++));
-                ea_ = static_cast<std::uint16_t>(ea_ | static_cast<std::uint16_t>(high << 8U));
+
+        case addressing_mode::absolute_x:
+        case addressing_mode::absolute_y: {
+            const std::uint8_t index =
+                (entry.mode == addressing_mode::absolute_x) ? registers_.x : registers_.y;
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U: {
+                const auto base = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                ea_ = static_cast<std::uint16_t>(base + index);
+                page_cross_ = crosses_page(base, ea_);
                 tcu_ = 3U;
                 return;
             }
-            operand_ = read(ea_);
-            execute_read(entry.op);
-            tcu_ = 0U;
-            return;
+            case 3U:
+                if (page_cross_) {
+                    static_cast<void>(read(ea_)); // extra cycle on page crossing
+                    tcu_ = 4U;
+                    return;
+                }
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
+            default:
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
+            }
+        }
+
+        case addressing_mode::indexed_indirect: // (zp,X)
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(ptr_));
+                ptr_ = static_cast<std::uint8_t>(ptr_ + registers_.x);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                ea_ = read(ptr_);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ |
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
+                tcu_ = 5U;
+                return;
+            default:
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::indirect_indexed: // (zp),Y
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                ea_ = read(ptr_);
+                tcu_ = 3U;
+                return;
+            case 3U: {
+                const auto base = static_cast<std::uint16_t>(
+                    ea_ |
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
+                ea_ = static_cast<std::uint16_t>(base + registers_.y);
+                page_cross_ = crosses_page(base, ea_);
+                tcu_ = 4U;
+                return;
+            }
+            case 4U:
+                if (page_cross_) {
+                    static_cast<void>(read(ea_));
+                    tcu_ = 5U;
+                    return;
+                }
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
+            default:
+                operand_ = read(ea_);
+                execute_read(entry.op);
+                tcu_ = 0U;
+                return;
+            }
+
         default:
             tcu_ = 0U;
             return;
+        }
+    }
+
+    void m6510::step_write(const decoded& entry) {
+        switch (entry.mode) {
+        case addressing_mode::zero_page:
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            default:
+                write(ea_, store_value(entry.op));
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::zero_page_x:
+        case addressing_mode::zero_page_y: {
+            const std::uint8_t index =
+                (entry.mode == addressing_mode::zero_page_x) ? registers_.x : registers_.y;
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(ptr_));
+                ea_ = static_cast<std::uint8_t>(ptr_ + index);
+                tcu_ = 3U;
+                return;
+            default:
+                write(ea_, store_value(entry.op));
+                tcu_ = 0U;
+                return;
+            }
+        }
+
+        case addressing_mode::absolute:
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                tcu_ = 3U;
+                return;
+            default:
+                write(ea_, store_value(entry.op));
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::absolute_x:
+        case addressing_mode::absolute_y: {
+            const std::uint8_t index =
+                (entry.mode == addressing_mode::absolute_x) ? registers_.x : registers_.y;
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U: {
+                const auto base = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                ea_ = static_cast<std::uint16_t>(base + index);
+                tcu_ = 3U;
+                return;
+            }
+            case 3U:
+                static_cast<void>(read(ea_)); // indexed stores always pay the fixup cycle
+                tcu_ = 4U;
+                return;
+            default:
+                write(ea_, store_value(entry.op));
+                tcu_ = 0U;
+                return;
+            }
+        }
+
+        case addressing_mode::indexed_indirect: // (zp,X)
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(ptr_));
+                ptr_ = static_cast<std::uint8_t>(ptr_ + registers_.x);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                ea_ = read(ptr_);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ |
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
+                tcu_ = 5U;
+                return;
+            default:
+                write(ea_, store_value(entry.op));
+                tcu_ = 0U;
+                return;
+            }
+
+        case addressing_mode::indirect_indexed: // (zp),Y
+            switch (tcu_) {
+            case 1U:
+                ptr_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                ea_ = read(ptr_);
+                tcu_ = 3U;
+                return;
+            case 3U: {
+                const auto base = static_cast<std::uint16_t>(
+                    ea_ |
+                    static_cast<std::uint16_t>(read(static_cast<std::uint8_t>(ptr_ + 1U)) << 8U));
+                ea_ = static_cast<std::uint16_t>(base + registers_.y);
+                tcu_ = 4U;
+                return;
+            }
+            case 4U:
+                static_cast<void>(read(ea_)); // always pays the fixup cycle
+                tcu_ = 5U;
+                return;
+            default:
+                write(ea_, store_value(entry.op));
+                tcu_ = 0U;
+                return;
+            }
+
+        default:
+            tcu_ = 0U;
+            return;
+        }
+    }
+
+    std::uint8_t m6510::store_value(operation op) const noexcept {
+        switch (op) {
+        case operation::stx:
+            return registers_.x;
+        case operation::sty:
+            return registers_.y;
+        case operation::sta:
+        default:
+            return registers_.a;
         }
     }
 
@@ -98,6 +385,12 @@ namespace mnemos::chips::cpu {
         switch (op) {
         case operation::lda:
             op_lda(operand_);
+            return;
+        case operation::ldx:
+            op_ldx(operand_);
+            return;
+        case operation::ldy:
+            op_ldy(operand_);
             return;
         default:
             return;
@@ -114,6 +407,16 @@ namespace mnemos::chips::cpu {
 
     void m6510::op_lda(std::uint8_t value) noexcept {
         registers_.a = value;
+        set_nz(value);
+    }
+
+    void m6510::op_ldx(std::uint8_t value) noexcept {
+        registers_.x = value;
+        set_nz(value);
+    }
+
+    void m6510::op_ldy(std::uint8_t value) noexcept {
+        registers_.y = value;
         set_nz(value);
     }
 

@@ -52,6 +52,11 @@ namespace mnemos::chips::cpu {
             kil, // illegal/jam; also the default for undecoded opcodes
             nop,
             lda,
+            ldx,
+            ldy,
+            sta,
+            stx,
+            sty,
         };
 
         // How an instruction touches memory; selects the cycle micro-sequence.
@@ -111,10 +116,14 @@ namespace mnemos::chips::cpu {
 
         void step_one_cycle();
         void step_read(const decoded& entry);
+        void step_write(const decoded& entry);
         void step_implied(const decoded& entry);
         void execute_read(operation op) noexcept;
         void execute_implied(operation op) noexcept;
+        [[nodiscard]] std::uint8_t store_value(operation op) const noexcept;
         void op_lda(std::uint8_t value) noexcept;
+        void op_ldx(std::uint8_t value) noexcept;
+        void op_ldy(std::uint8_t value) noexcept;
         void set_nz(std::uint8_t value) noexcept;
 
         registers registers_{};
@@ -124,12 +133,15 @@ namespace mnemos::chips::cpu {
         std::uint8_t port_data_{};
 
         // Cycle-stepped execution state. tcu_ == 0 marks an instruction boundary;
-        // ir_ holds the opcode being executed; ea_/operand_ are per-instruction
-        // scratch used by the addressing-mode micro-engine.
+        // ir_ holds the opcode being executed; ea_/operand_/ptr_ are per-instruction
+        // scratch used by the addressing-mode micro-engine; page_cross_ records an
+        // indexed-address page crossing so the extra read cycle is taken.
         std::uint8_t ir_{};
         std::uint8_t tcu_{};
         std::uint16_t ea_{};
         std::uint8_t operand_{};
+        std::uint8_t ptr_{};
+        bool page_cross_{};
 
         introspection_surface introspection_{};
     };

@@ -123,6 +123,92 @@ TEST_CASE("LDA absolute takes 4 cycles") {
     CHECK_FALSE(sys.cpu.flag(m6510::status_flag::negative));
 }
 
+TEST_CASE("LDA zero page,X wraps in zero page and takes 4 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA2U, 0x05U, 0xB5U, 0x10U}); // LDX #$05 ; LDA $10,X -> $15
+    sys.bus.memory[0x0015U] = 0x77U;
+
+    CHECK(sys.step_instruction() == 2U); // LDX #
+    CHECK(sys.step_instruction() == 4U); // LDA $10,X
+    CHECK(sys.cpu.cpu_registers().a == 0x77U);
+}
+
+TEST_CASE("LDA absolute,X adds a cycle only on page cross") {
+    SECTION("page cross -> 5 cycles") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA2U, 0x01U, 0xBDU, 0xFFU, 0x12U}); // LDX #$01 ; LDA $12FF,X
+        sys.bus.memory[0x1300U] = 0x5AU;                        // $12FF + 1 = $1300
+
+        CHECK(sys.step_instruction() == 2U);
+        CHECK(sys.step_instruction() == 5U);
+        CHECK(sys.cpu.cpu_registers().a == 0x5AU);
+    }
+    SECTION("no cross -> 4 cycles") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA2U, 0x01U, 0xBDU, 0x00U, 0x12U}); // LDX #$01 ; LDA $1200,X
+        sys.bus.memory[0x1201U] = 0x3CU;
+
+        CHECK(sys.step_instruction() == 2U);
+        CHECK(sys.step_instruction() == 4U);
+        CHECK(sys.cpu.cpu_registers().a == 0x3CU);
+    }
+}
+
+TEST_CASE("LDA (indirect),Y resolves the pointer and adds the cross cycle") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA0U, 0x01U, 0xB1U, 0x40U}); // LDY #$01 ; LDA ($40),Y
+    sys.bus.memory[0x0040U] = 0xFFU;                 // pointer low
+    sys.bus.memory[0x0041U] = 0x12U;                 // pointer high -> base $12FF
+    sys.bus.memory[0x1300U] = 0x9AU;                 // $12FF + 1 = $1300 (cross)
+
+    CHECK(sys.step_instruction() == 2U); // LDY #
+    CHECK(sys.step_instruction() == 6U); // (zp),Y with cross = 5 + 1
+    CHECK(sys.cpu.cpu_registers().a == 0x9AU);
+}
+
+TEST_CASE("LDX zero page,Y reads the indexed zero-page byte") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA0U, 0x03U, 0xB6U, 0x10U}); // LDY #$03 ; LDX $10,Y -> $13
+    sys.bus.memory[0x0013U] = 0x44U;
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 4U);
+    CHECK(sys.cpu.cpu_registers().x == 0x44U);
+}
+
+TEST_CASE("STA zero page writes and takes 3 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0xABU, 0x85U, 0x30U}); // LDA #$AB ; STA $30
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 3U);
+    CHECK(sys.bus.memory[0x0030U] == 0xABU);
+}
+
+TEST_CASE("STA absolute,X always takes 5 cycles") {
+    test_system sys;
+    // LDA #$EE ; LDX #$02 ; STA $2000,X
+    sys.boot(0xC000U, {0xA9U, 0xEEU, 0xA2U, 0x02U, 0x9DU, 0x00U, 0x20U});
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 5U);
+    CHECK(sys.bus.memory[0x2002U] == 0xEEU);
+}
+
+TEST_CASE("STA (indirect),Y writes through the pointer in 6 cycles") {
+    test_system sys;
+    // LDA #$C3 ; LDY #$04 ; STA ($50),Y
+    sys.boot(0xC000U, {0xA9U, 0xC3U, 0xA0U, 0x04U, 0x91U, 0x50U});
+    sys.bus.memory[0x0050U] = 0x00U; // pointer low
+    sys.bus.memory[0x0051U] = 0x21U; // pointer high -> base $2100
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.step_instruction() == 6U);
+    CHECK(sys.bus.memory[0x2104U] == 0xC3U);
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;
