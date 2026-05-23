@@ -637,6 +637,23 @@ TEST_CASE("undocumented NOP abs,X consumes its operand and time") {
     CHECK(sys.cpu.cpu_registers().pc == 0xC005U);
 }
 
+TEST_CASE("m6510 register snapshot reports the register file") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x7FU}); // LDA #$7F
+    sys.step_instruction();
+
+    const auto regs = sys.cpu.register_snapshot();
+    REQUIRE(regs.size() == 6U);
+    CHECK(regs[0].name == "A");
+    CHECK(regs[0].value == 0x7FU);
+    CHECK(regs[0].bit_width == 8U);
+    CHECK(regs[4].name == "P");
+    CHECK(regs[4].format == mnemos::chips::register_value_format::flags);
+    CHECK(regs[5].name == "PC");
+    CHECK(regs[5].value == 0xC002U);
+    CHECK(regs[5].bit_width == 16U);
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;

@@ -2,7 +2,9 @@
 
 #include <mnemos/chips/common/chip.hpp>
 
+#include <array>
 #include <cstdint>
+#include <span>
 
 namespace mnemos::chips::cpu {
 
@@ -162,6 +164,11 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint64_t elapsed_cycles() const noexcept { return cycles_; }
         [[nodiscard]] bool at_instruction_boundary() const noexcept { return tcu_ == 0U; }
 
+        // Introspection: a refreshed snapshot of the register file. The M1
+        // i_chip_introspection interface is intentionally minimal, so the snapshot
+        // lives on the concrete type until the M4 instrumentation tier promotes it.
+        [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
+
         [[nodiscard]] bool flag(status_flag bit) const noexcept;
         void set_flag(status_flag bit, bool value) noexcept;
 
@@ -237,6 +244,7 @@ namespace mnemos::chips::cpu {
         bool in_interrupt_{};
         std::uint16_t interrupt_vector_{};
 
+        std::array<register_descriptor, 6> register_view_{};
         introspection_surface introspection_{};
     };
 

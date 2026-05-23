@@ -1316,6 +1316,16 @@ namespace mnemos::chips::cpu {
         return introspection_;
     }
 
+    std::span<const register_descriptor> m6510::register_snapshot() noexcept {
+        register_view_[0] = {"A", registers_.a, 8U, register_value_format::unsigned_integer};
+        register_view_[1] = {"X", registers_.x, 8U, register_value_format::unsigned_integer};
+        register_view_[2] = {"Y", registers_.y, 8U, register_value_format::unsigned_integer};
+        register_view_[3] = {"SP", registers_.sp, 8U, register_value_format::unsigned_integer};
+        register_view_[4] = {"P", registers_.p, 8U, register_value_format::flags};
+        register_view_[5] = {"PC", registers_.pc, 16U, register_value_format::unsigned_integer};
+        return register_view_;
+    }
+
     void m6510::attach_bus(i_bus& bus) noexcept { bus_ = &bus; }
 
     std::uint8_t m6510::read(std::uint16_t address) noexcept {

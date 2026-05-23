@@ -107,7 +107,7 @@
 - [x] Implement IRQ, NMI, RES handling with correct cycle semantics. (this commit; IRQ/NMI are cycle-accurate 7-cycle sequences with masking + NMI edge-latch, RES is functional via reset(); interrupts polled at the instruction boundary — exact mid-instruction timing edge cases validated later by the conformance ROMs)
 - [x] Implement the 6510 I/O port at addresses $00/$01. (8bb1bda; CI run 26320828290 green across clang-format and all 6 build/test jobs)
 - [ ] Implement save / load state.
-- [ ] Implement introspection (register snapshot, PC, cycle counter, instruction event tap).
+- [x] Implement introspection (register snapshot, PC, cycle counter, instruction event tap). (this commit; register_snapshot()/elapsed_cycles()/cpu_registers() on m6510. The instruction-event tap rides with the M4 instrumentation interface, which is minimal in M1 by design)
 - [x] Register factory under `"mos.6510"`. (72e4a6e; CI run 26320527793 green across clang-format and all 6 build/test jobs)
 
 ### Test infrastructure for 6502 family
