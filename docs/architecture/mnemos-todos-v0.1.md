@@ -105,7 +105,7 @@
 - [ ] Implement all undocumented (illegal) opcodes the C64 software relies on.
 - [ ] Implement decimal mode arithmetic.
 - [ ] Implement IRQ, NMI, RES handling with correct cycle semantics.
-- [ ] Implement the 6510 I/O port at addresses $00/$01.
+- [x] Implement the 6510 I/O port at addresses $00/$01. (8bb1bda; CI run 26320828290 green across clang-format and all 6 build/test jobs)
 - [ ] Implement save / load state.
 - [ ] Implement introspection (register snapshot, PC, cycle counter, instruction event tap).
 - [x] Register factory under `"mos.6510"`. (72e4a6e; CI run 26320527793 green across clang-format and all 6 build/test jobs)
