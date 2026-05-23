@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_cpu_m6510
     src/m6510.cpp
+    src/decode_table.cpp
 )
 add_library(mnemos::chips::cpu::m6510 ALIAS mnemos_chips_cpu_m6510)
 
