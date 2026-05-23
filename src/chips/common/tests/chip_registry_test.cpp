@@ -30,6 +30,8 @@ namespace {
 
         void load_state(mnemos::chips::state_reader&) override {}
 
+        void attach_bus(mnemos::chips::i_bus& bus) noexcept override { bus_ = &bus; }
+
         [[nodiscard]] mnemos::instrumentation::i_chip_introspection&
         introspection() noexcept override {
             return introspection_;
@@ -40,6 +42,7 @@ namespace {
 
       private:
         test_introspection introspection_;
+        mnemos::chips::i_bus* bus_{};
     };
 
     [[nodiscard]] std::unique_ptr<mnemos::chips::i_chip> make_test_cpu() {

@@ -76,6 +76,7 @@ namespace mnemos::chips {
 
     class state_writer;
     class state_reader;
+    class i_bus;
 
     class i_chip {
       public:
@@ -97,6 +98,10 @@ namespace mnemos::chips {
     class i_cpu : public i_chip {
       public:
         static constexpr chip_class static_class = chip_class::cpu;
+
+        // Inject the bus the CPU executes against. Called once at attach time,
+        // before the first tick; the CPU observes but does not own the bus.
+        virtual void attach_bus(i_bus& bus) noexcept = 0;
     };
 
     class i_audio_synth : public i_chip {
