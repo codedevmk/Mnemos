@@ -86,6 +86,26 @@ namespace mnemos::chips::cpu {
             ror,
             inc,
             dec,
+            clc,
+            sec,
+            cli,
+            sei,
+            cld,
+            sed,
+            clv,
+            jmp,
+            jsr,
+            rts,
+            rti,
+            brk,
+            bpl,
+            bmi,
+            bvc,
+            bvs,
+            bcc,
+            bcs,
+            bne,
+            beq,
         };
 
         // How an instruction touches memory; selects the cycle micro-sequence.
@@ -149,7 +169,11 @@ namespace mnemos::chips::cpu {
         void step_implied(const decoded& entry);
         void step_stack(const decoded& entry);
         void step_rmw(const decoded& entry);
+        void step_branch(const decoded& entry);
+        void step_jump(const decoded& entry);
         [[nodiscard]] std::uint8_t modify_rmw(operation op, std::uint8_t value) noexcept;
+        [[nodiscard]] bool branch_taken(operation op) const noexcept;
+        void push(std::uint8_t value) noexcept;
         void execute_read(operation op) noexcept;
         void execute_implied(operation op) noexcept;
         [[nodiscard]] std::uint8_t store_value(operation op) const noexcept;

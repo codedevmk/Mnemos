@@ -55,6 +55,12 @@ namespace mnemos::chips::cpu {
         case access_kind::read_modify_write:
             step_rmw(entry);
             return;
+        case access_kind::relative:
+            step_branch(entry);
+            return;
+        case access_kind::jump:
+            step_jump(entry);
+            return;
         default:
             // Unimplemented access kinds (illegal/jam slots for now) end here;
             // real micro-sequences are added in their own tasks.
@@ -542,6 +548,27 @@ namespace mnemos::chips::cpu {
             registers_.y = static_cast<std::uint8_t>(registers_.y - 1U);
             set_nz(registers_.y);
             return;
+        case operation::clc:
+            set_flag(status_flag::carry, false);
+            return;
+        case operation::sec:
+            set_flag(status_flag::carry, true);
+            return;
+        case operation::cli:
+            set_flag(status_flag::irq_disable, false);
+            return;
+        case operation::sei:
+            set_flag(status_flag::irq_disable, true);
+            return;
+        case operation::cld:
+            set_flag(status_flag::decimal, false);
+            return;
+        case operation::sed:
+            set_flag(status_flag::decimal, true);
+            return;
+        case operation::clv:
+            set_flag(status_flag::overflow, false);
+            return;
         case operation::nop:
         default:
             return;
@@ -813,6 +840,230 @@ namespace mnemos::chips::cpu {
                 return;
             default:
                 write(ea_, operand_);
+                tcu_ = 0U;
+                return;
+            }
+
+        default:
+            tcu_ = 0U;
+            return;
+        }
+    }
+
+    void m6510::push(std::uint8_t value) noexcept {
+        write(stack_address(), value);
+        registers_.sp = static_cast<std::uint8_t>(registers_.sp - 1U);
+    }
+
+    bool m6510::branch_taken(operation op) const noexcept {
+        switch (op) {
+        case operation::bpl:
+            return !flag(status_flag::negative);
+        case operation::bmi:
+            return flag(status_flag::negative);
+        case operation::bvc:
+            return !flag(status_flag::overflow);
+        case operation::bvs:
+            return flag(status_flag::overflow);
+        case operation::bcc:
+            return !flag(status_flag::carry);
+        case operation::bcs:
+            return flag(status_flag::carry);
+        case operation::bne:
+            return !flag(status_flag::zero);
+        case operation::beq:
+            return flag(status_flag::zero);
+        default:
+            return false;
+        }
+    }
+
+    void m6510::step_branch(const decoded& entry) {
+        switch (tcu_) {
+        case 1U:
+            operand_ = read(registers_.pc++); // signed branch offset
+            if (!branch_taken(entry.op)) {
+                tcu_ = 0U; // not taken: 2 cycles
+                return;
+            }
+            tcu_ = 2U;
+            return;
+        case 2U: {
+            static_cast<void>(read(registers_.pc)); // dummy fetch of next opcode
+            const auto offset = static_cast<std::int8_t>(operand_);
+            const std::uint16_t old_pc = registers_.pc;
+            const auto target = static_cast<std::uint16_t>(static_cast<int>(old_pc) + offset);
+            if ((old_pc & 0xFF00U) == (target & 0xFF00U)) {
+                registers_.pc = target;
+                tcu_ = 0U; // same page: 3 cycles
+                return;
+            }
+            // Page crossed: keep the wrong high byte for one more (dummy) cycle.
+            registers_.pc = static_cast<std::uint16_t>((old_pc & 0xFF00U) | (target & 0x00FFU));
+            ea_ = target;
+            tcu_ = 3U;
+            return;
+        }
+        default:
+            static_cast<void>(read(registers_.pc)); // dummy read at the wrong page
+            registers_.pc = ea_;
+            tcu_ = 0U; // page cross: 4 cycles
+            return;
+        }
+    }
+
+    void m6510::step_jump(const decoded& entry) {
+        switch (entry.op) {
+        case operation::jmp:
+            if (entry.mode == addressing_mode::absolute) {
+                switch (tcu_) {
+                case 1U:
+                    operand_ = read(registers_.pc++);
+                    tcu_ = 2U;
+                    return;
+                default:
+                    registers_.pc = static_cast<std::uint16_t>(
+                        operand_ | static_cast<std::uint16_t>(read(registers_.pc) << 8U));
+                    tcu_ = 0U;
+                    return;
+                }
+            }
+            // JMP (indirect), with the page-boundary high-byte bug.
+            switch (tcu_) {
+            case 1U:
+                ea_ = read(registers_.pc++);
+                tcu_ = 2U;
+                return;
+            case 2U:
+                ea_ = static_cast<std::uint16_t>(
+                    ea_ | static_cast<std::uint16_t>(read(registers_.pc++) << 8U));
+                tcu_ = 3U;
+                return;
+            case 3U:
+                operand_ = read(ea_); // target low byte
+                tcu_ = 4U;
+                return;
+            default: {
+                const auto hi_addr =
+                    static_cast<std::uint16_t>((ea_ & 0xFF00U) | ((ea_ + 1U) & 0x00FFU));
+                const auto high = static_cast<std::uint16_t>(read(hi_addr));
+                registers_.pc =
+                    static_cast<std::uint16_t>(operand_ | static_cast<std::uint16_t>(high << 8U));
+                tcu_ = 0U;
+                return;
+            }
+            }
+
+        case operation::jsr:
+            switch (tcu_) {
+            case 1U:
+                operand_ = read(registers_.pc++); // target low byte
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(stack_address())); // internal cycle
+                tcu_ = 3U;
+                return;
+            case 3U:
+                push(static_cast<std::uint8_t>(registers_.pc >> 8U)); // PCH (return - 1)
+                tcu_ = 4U;
+                return;
+            case 4U:
+                push(static_cast<std::uint8_t>(registers_.pc & 0xFFU)); // PCL
+                tcu_ = 5U;
+                return;
+            default: {
+                const auto high = static_cast<std::uint16_t>(read(registers_.pc));
+                registers_.pc =
+                    static_cast<std::uint16_t>(operand_ | static_cast<std::uint16_t>(high << 8U));
+                tcu_ = 0U;
+                return;
+            }
+            }
+
+        case operation::rts:
+            switch (tcu_) {
+            case 1U:
+                static_cast<void>(read(registers_.pc));
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(stack_address()));
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                operand_ = read(stack_address()); // PCL
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                registers_.pc = static_cast<std::uint16_t>(
+                    operand_ | static_cast<std::uint16_t>(read(stack_address()) << 8U)); // PCH
+                tcu_ = 5U;
+                return;
+            default:
+                static_cast<void>(read(registers_.pc));
+                registers_.pc++;
+                tcu_ = 0U;
+                return;
+            }
+
+        case operation::rti:
+            switch (tcu_) {
+            case 1U:
+                static_cast<void>(read(registers_.pc));
+                tcu_ = 2U;
+                return;
+            case 2U:
+                static_cast<void>(read(stack_address()));
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 3U;
+                return;
+            case 3U:
+                registers_.p = static_cast<std::uint8_t>((read(stack_address()) & 0xEFU) | 0x20U);
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 4U;
+                return;
+            case 4U:
+                operand_ = read(stack_address()); // PCL
+                registers_.sp = static_cast<std::uint8_t>(registers_.sp + 1U);
+                tcu_ = 5U;
+                return;
+            default:
+                registers_.pc = static_cast<std::uint16_t>(
+                    operand_ | static_cast<std::uint16_t>(read(stack_address()) << 8U)); // PCH
+                tcu_ = 0U;
+                return;
+            }
+
+        case operation::brk:
+            switch (tcu_) {
+            case 1U:
+                static_cast<void>(read(registers_.pc)); // BRK is a 2-byte instruction
+                registers_.pc++;
+                tcu_ = 2U;
+                return;
+            case 2U:
+                push(static_cast<std::uint8_t>(registers_.pc >> 8U)); // PCH
+                tcu_ = 3U;
+                return;
+            case 3U:
+                push(static_cast<std::uint8_t>(registers_.pc & 0xFFU)); // PCL
+                tcu_ = 4U;
+                return;
+            case 4U:
+                push(static_cast<std::uint8_t>(registers_.p | 0x30U)); // P with B set
+                tcu_ = 5U;
+                return;
+            case 5U:
+                operand_ = read(0xFFFEU); // IRQ/BRK vector low
+                tcu_ = 6U;
+                return;
+            default:
+                registers_.pc = static_cast<std::uint16_t>(
+                    operand_ | static_cast<std::uint16_t>(read(0xFFFFU) << 8U));
+                set_flag(status_flag::irq_disable, true);
                 tcu_ = 0U;
                 return;
             }

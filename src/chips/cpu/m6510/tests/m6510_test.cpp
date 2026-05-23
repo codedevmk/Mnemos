@@ -419,6 +419,96 @@ TEST_CASE("ASL absolute,X always takes 7 cycles") {
     CHECK_FALSE(sys.cpu.flag(m6510::status_flag::carry));
 }
 
+TEST_CASE("SEC sets and CLC clears carry in 2 cycles each") {
+    test_system sys;
+    sys.boot(0xC000U, {0x38U, 0x18U}); // SEC ; CLC
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.cpu.flag(m6510::status_flag::carry));
+    CHECK(sys.step_instruction() == 2U);
+    CHECK_FALSE(sys.cpu.flag(m6510::status_flag::carry));
+}
+
+TEST_CASE("SED sets and CLD clears decimal") {
+    test_system sys;
+    sys.boot(0xC000U, {0xF8U, 0xD8U}); // SED ; CLD
+
+    sys.step_instruction();
+    CHECK(sys.cpu.flag(m6510::status_flag::decimal));
+    sys.step_instruction();
+    CHECK_FALSE(sys.cpu.flag(m6510::status_flag::decimal));
+}
+
+TEST_CASE("BEQ not taken takes 2 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xF0U, 0x05U}); // BEQ +5 ; Z clear after reset -> not taken
+
+    CHECK(sys.step_instruction() == 2U);
+    CHECK(sys.cpu.cpu_registers().pc == 0xC002U);
+}
+
+TEST_CASE("BNE taken without page cross takes 3 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0xD0U, 0x05U}); // BNE +5 ; Z clear -> taken
+
+    CHECK(sys.step_instruction() == 3U);
+    CHECK(sys.cpu.cpu_registers().pc == 0xC007U); // $C002 + 5
+}
+
+TEST_CASE("BNE taken across a page boundary takes 4 cycles") {
+    test_system sys;
+    sys.boot(0xC0FDU, {0xD0U, 0x05U}); // at $C0FD: BNE +5
+
+    CHECK(sys.step_instruction() == 4U);
+    CHECK(sys.cpu.cpu_registers().pc == 0xC104U); // $C0FF + 5
+}
+
+TEST_CASE("JMP absolute sets PC in 3 cycles") {
+    test_system sys;
+    sys.boot(0xC000U, {0x4CU, 0x34U, 0x12U}); // JMP $1234
+
+    CHECK(sys.step_instruction() == 3U);
+    CHECK(sys.cpu.cpu_registers().pc == 0x1234U);
+}
+
+TEST_CASE("JMP indirect reproduces the page-boundary bug") {
+    test_system sys;
+    sys.boot(0xC000U, {0x6CU, 0xFFU, 0x20U}); // JMP ($20FF)
+    sys.bus.memory[0x20FFU] = 0x34U;          // target low
+    sys.bus.memory[0x2000U] = 0x12U;          // high byte fetched from $2000 (the bug)
+    sys.bus.memory[0x2100U] = 0xFFU;          // would-be high byte without the bug
+
+    CHECK(sys.step_instruction() == 5U);
+    CHECK(sys.cpu.cpu_registers().pc == 0x1234U);
+}
+
+TEST_CASE("JSR pushes the return address and RTS restores it") {
+    test_system sys;
+    sys.boot(0xC000U, {0x20U, 0x10U, 0xC0U}); // JSR $C010
+    sys.bus.memory[0xC010U] = 0x60U;          // RTS
+
+    CHECK(sys.step_instruction() == 6U); // JSR
+    CHECK(sys.cpu.cpu_registers().pc == 0xC010U);
+    CHECK(sys.cpu.cpu_registers().sp == 0xFBU);
+    CHECK(sys.step_instruction() == 6U); // RTS
+    CHECK(sys.cpu.cpu_registers().pc == 0xC003U);
+    CHECK(sys.cpu.cpu_registers().sp == 0xFDU);
+}
+
+TEST_CASE("BRK vectors through $FFFE and RTI returns") {
+    test_system sys;
+    sys.boot(0xC000U, {0x00U});      // BRK
+    sys.bus.memory[0xFFFEU] = 0x00U; // IRQ/BRK vector -> $E000
+    sys.bus.memory[0xFFFFU] = 0xE0U;
+    sys.bus.memory[0xE000U] = 0x40U; // RTI
+
+    CHECK(sys.step_instruction() == 7U); // BRK
+    CHECK(sys.cpu.cpu_registers().pc == 0xE000U);
+    CHECK(sys.cpu.flag(m6510::status_flag::irq_disable));
+    CHECK(sys.step_instruction() == 6U);          // RTI
+    CHECK(sys.cpu.cpu_registers().pc == 0xC002U); // BRK pushed PC + 2
+}
+
 TEST_CASE("m6510 status flags set and clear independently") {
     m6510 cpu;
     using status_flag = m6510::status_flag;

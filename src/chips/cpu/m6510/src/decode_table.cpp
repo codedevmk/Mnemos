@@ -187,6 +187,33 @@ namespace mnemos::chips::cpu {
             table[0xCEU] = decoded{op::dec, mode::absolute, kind::read_modify_write, false};
             table[0xDEU] = decoded{op::dec, mode::absolute_x, kind::read_modify_write, false};
 
+            // Flag operations (implied, 2 cycles)
+            table[0x18U] = decoded{op::clc, mode::implied, kind::implied, false};
+            table[0x38U] = decoded{op::sec, mode::implied, kind::implied, false};
+            table[0x58U] = decoded{op::cli, mode::implied, kind::implied, false};
+            table[0x78U] = decoded{op::sei, mode::implied, kind::implied, false};
+            table[0xD8U] = decoded{op::cld, mode::implied, kind::implied, false};
+            table[0xF8U] = decoded{op::sed, mode::implied, kind::implied, false};
+            table[0xB8U] = decoded{op::clv, mode::implied, kind::implied, false};
+
+            // Jumps and subroutine/interrupt control
+            table[0x4CU] = decoded{op::jmp, mode::absolute, kind::jump, false};
+            table[0x6CU] = decoded{op::jmp, mode::indirect, kind::jump, false};
+            table[0x20U] = decoded{op::jsr, mode::absolute, kind::jump, false};
+            table[0x60U] = decoded{op::rts, mode::implied, kind::jump, false};
+            table[0x40U] = decoded{op::rti, mode::implied, kind::jump, false};
+            table[0x00U] = decoded{op::brk, mode::implied, kind::jump, false};
+
+            // Branches (relative)
+            table[0x10U] = decoded{op::bpl, mode::relative, kind::relative, false};
+            table[0x30U] = decoded{op::bmi, mode::relative, kind::relative, false};
+            table[0x50U] = decoded{op::bvc, mode::relative, kind::relative, false};
+            table[0x70U] = decoded{op::bvs, mode::relative, kind::relative, false};
+            table[0x90U] = decoded{op::bcc, mode::relative, kind::relative, false};
+            table[0xB0U] = decoded{op::bcs, mode::relative, kind::relative, false};
+            table[0xD0U] = decoded{op::bne, mode::relative, kind::relative, false};
+            table[0xF0U] = decoded{op::beq, mode::relative, kind::relative, false};
+
             return table;
         }
 
