@@ -16,10 +16,25 @@ namespace mnemos::chips::video {
         constexpr std::uint8_t reg_lpx = 0x13U;
         constexpr std::uint8_t reg_lpy = 0x14U;
         constexpr std::uint8_t reg_scrolx = 0x16U;
+        constexpr std::uint8_t reg_memptr = 0x18U;
         constexpr std::uint8_t reg_vicirq = 0x19U;
         constexpr std::uint8_t reg_irqmsk = 0x1AU;
         constexpr std::uint8_t reg_sscol = 0x1EU;
         constexpr std::uint8_t reg_sbcol = 0x1FU;
+        constexpr std::uint8_t reg_bordercol = 0x20U;
+        constexpr std::uint8_t reg_bgcol0 = 0x21U;
+        constexpr std::uint8_t reg_bgcol1 = 0x22U;
+        constexpr std::uint8_t reg_bgcol2 = 0x23U;
+
+        // Canonical display-window origin in framebuffer coordinates for the common
+        // CSEL=1 / RSEL=1 / default-scroll case (the KERNAL boot screen). The render
+        // model lays the 320x200 display out in logical raster space; exact
+        // cycle->X beam alignment and per-cycle splits are follow-up work.
+        constexpr std::uint16_t display_left = 24U;
+        constexpr std::uint16_t display_top = 51U;
+        constexpr std::uint16_t display_width = 320U;
+        constexpr std::uint16_t display_height = 200U;
+        constexpr std::uint8_t text_columns = 40U;
 
         constexpr std::uint8_t irq_raster = 0x01U;
         constexpr std::uint8_t irq_light_pen = 0x08U;
@@ -73,6 +88,7 @@ namespace mnemos::chips::video {
         vmli_ = 0U;
         display_state_ = false;
         raster_match_active_ = false;
+        frame_index_ = 0U;
         update_irq_registers();
     }
 
@@ -268,6 +284,7 @@ namespace mnemos::chips::video {
     }
 
     void vic_ii_6569::tick(std::uint64_t cycles) {
+        ensure_framebuffer();
         const std::uint16_t cpl = cycles_per_line();
         const std::uint16_t tl = total_lines();
         for (std::uint64_t i = 0; i < cycles; ++i) {
@@ -275,10 +292,13 @@ namespace mnemos::chips::video {
             raster_x_ = static_cast<std::uint16_t>(raster_x_ + 1U);
             if (raster_x_ >= cpl) {
                 raster_x_ = 0U;
+                const std::uint16_t completed_line = raster_y_; // the line just finished
+                render_line(completed_line);
                 raster_y_ = static_cast<std::uint16_t>(raster_y_ + 1U);
                 if (raster_y_ >= tl) {
                     raster_y_ = 0U;
                     den_latched_line_30_ = false;
+                    ++frame_index_; // a full raster has been emitted
                 }
                 update_den_latch();
                 refresh_raster_irq_edge();
@@ -318,6 +338,129 @@ namespace mnemos::chips::video {
             return 63U;
         }
         return rev_ == revision::ntsc_6567r56a ? 64U : 65U;
+    }
+
+    std::uint32_t vic_ii_6569::frame_width() const noexcept {
+        return static_cast<std::uint32_t>(cycles_per_line()) * 8U;
+    }
+
+    std::uint32_t vic_ii_6569::frame_height() const noexcept { return total_lines(); }
+
+    frame_buffer_view vic_ii_6569::framebuffer() const noexcept {
+        return {framebuffer_.data(), fb_width_, fb_height_};
+    }
+
+    void vic_ii_6569::attach_memory(const vic_memory& memory) noexcept { memory_ = memory; }
+
+    void vic_ii_6569::set_bank(std::uint8_t bank) noexcept {
+        bank_ = static_cast<std::uint8_t>(bank & 0x03U);
+    }
+
+    void vic_ii_6569::ensure_framebuffer() {
+        const std::uint32_t w = frame_width();
+        const std::uint32_t h = frame_height();
+        if (fb_width_ == w && fb_height_ == h && !framebuffer_.empty()) {
+            return;
+        }
+        fb_width_ = w;
+        fb_height_ = h;
+        framebuffer_.assign(static_cast<std::size_t>(w) * h, 0U);
+    }
+
+    std::uint8_t vic_ii_6569::fetch(std::uint16_t vic_address) const noexcept {
+        const std::uint16_t rel = static_cast<std::uint16_t>(vic_address & 0x3FFFU);
+        // The character ROM shadows VIC $1000-$1FFF in banks 0 and 2.
+        if ((bank_ == 0U || bank_ == 2U) && rel >= 0x1000U && rel <= 0x1FFFU) {
+            const std::size_t idx = static_cast<std::size_t>(rel - 0x1000U);
+            return idx < memory_.char_rom.size() ? memory_.char_rom[idx] : 0xFFU;
+        }
+        const std::size_t addr = (static_cast<std::size_t>(bank_) * 0x4000U + rel) & 0xFFFFU;
+        return addr < memory_.ram.size() ? memory_.ram[addr] : 0xFFU;
+    }
+
+    void vic_ii_6569::render_line(std::uint16_t y) noexcept {
+        if (y >= fb_height_) {
+            return;
+        }
+        std::uint32_t* row = framebuffer_.data() + static_cast<std::size_t>(y) * fb_width_;
+        const std::uint32_t border =
+            color_rgb888(static_cast<std::uint8_t>(regs_[reg_bordercol] & 0x0FU));
+
+        // Display is shown only when DEN was set by line $30 and we have memory to
+        // fetch from; otherwise the whole line is border.
+        const bool in_display_rows = y >= display_top && y < display_top + display_height;
+        const bool display_active = den_latched_line_30_ && modes_.den && !memory_.ram.empty() &&
+                                    in_display_rows && !modes_.bmm &&
+                                    !modes_.ecm; // bitmap/ECM modes are follow-up work
+
+        if (!display_active) {
+            for (std::uint32_t x = 0; x < fb_width_; ++x) {
+                row[x] = border;
+            }
+            return;
+        }
+
+        const std::uint16_t vm_base =
+            static_cast<std::uint16_t>(((regs_[reg_memptr] >> 4) & 0x0FU) << 10U);
+        const std::uint16_t cb_base =
+            static_cast<std::uint16_t>(((regs_[reg_memptr] >> 1) & 0x07U) << 11U);
+        const std::uint32_t bg0 =
+            color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol0] & 0x0FU));
+        const std::uint32_t bg1 =
+            color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol1] & 0x0FU));
+        const std::uint32_t bg2 =
+            color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol2] & 0x0FU));
+        const std::uint16_t char_row = static_cast<std::uint16_t>(y - display_top);
+        const std::uint16_t text_row = static_cast<std::uint16_t>(char_row / 8U);
+        const std::uint16_t glyph_y = static_cast<std::uint16_t>(char_row % 8U);
+        const std::uint32_t left = display_left;
+        const std::uint32_t right = static_cast<std::uint32_t>(display_left) + display_width;
+
+        for (std::uint32_t x = 0; x < fb_width_; ++x) {
+            if (x < left || x >= right) {
+                row[x] = border;
+                continue;
+            }
+            const std::uint16_t disp_x = static_cast<std::uint16_t>(x - left);
+            const std::uint16_t text_col = static_cast<std::uint16_t>(disp_x / 8U);
+            const std::uint16_t glyph_x = static_cast<std::uint16_t>(disp_x % 8U);
+            const std::uint16_t cell =
+                static_cast<std::uint16_t>(text_row * text_columns + text_col);
+
+            const std::uint8_t code = fetch(static_cast<std::uint16_t>(vm_base + cell));
+            const std::uint8_t color =
+                cell < memory_.color_ram.size()
+                    ? static_cast<std::uint8_t>(memory_.color_ram[cell] & 0x0FU)
+                    : 0U;
+            const std::uint8_t glyph =
+                fetch(static_cast<std::uint16_t>(cb_base + code * 8U + glyph_y));
+
+            if (modes_.mcm && (color & 0x08U) != 0U) {
+                // Multicolour text: bit pairs, each two pixels wide.
+                const std::uint8_t pair =
+                    static_cast<std::uint8_t>((glyph >> (6U - (glyph_x & 0x06U))) & 0x03U);
+                std::uint32_t pixel = bg0;
+                switch (pair) {
+                case 0U:
+                    pixel = bg0;
+                    break;
+                case 1U:
+                    pixel = bg1;
+                    break;
+                case 2U:
+                    pixel = bg2;
+                    break;
+                default:
+                    pixel = color_rgb888(static_cast<std::uint8_t>(color & 0x07U));
+                    break;
+                }
+                row[x] = pixel;
+            } else {
+                // Hi-res text: MSB-first, set bit = foreground colour.
+                const bool set = ((glyph >> (7U - glyph_x)) & 0x01U) != 0U;
+                row[x] = set ? color_rgb888(color) : bg0;
+            }
+        }
     }
 
     bool vic_ii_6569::irq_asserted() const noexcept {

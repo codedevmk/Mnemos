@@ -24,6 +24,14 @@ namespace mnemos::manifests::c64 {
         s->cia2.configure(cia_cfg);
         s->vic.set_revision(chips::video::vic_ii_6569::revision::pal_6569);
 
+        // The VIC fetches glyphs/screen from main RAM + the character ROM, and
+        // colours from colour RAM. Bank 0 is the power-up default (CIA2 port A
+        // floats to $00 -> inverted bank 0); dynamic bank switching is follow-up.
+        s->vic.attach_memory({.ram = std::span<const std::uint8_t>(s->ram),
+                              .char_rom = std::span<const std::uint8_t>(s->chargen_rom),
+                              .color_ram = std::span<const std::uint8_t>(s->color_ram)});
+        s->vic.set_bank(0U);
+
         // The PLA decode reads the live 6510 $01 port each access (bare machine, so
         // /GAME and /EXROM float high — the PLA defaults).
         auto decode = [s](std::uint32_t address) {

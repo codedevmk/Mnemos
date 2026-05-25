@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace mnemos::chips::video {
 
@@ -19,7 +20,19 @@ namespace mnemos::chips::video {
     // SCROLY/SCROLX mode decoders, sprite X/Y latches, and the internal
     // video-matrix address generator (VC/VCBASE/RC/VMLI).
     //
-    // Scanline rendering and the sprite compositor are deferred follow-up work.
+    // The video memory the VIC fetches from: 64K main RAM, the 4K character ROM,
+    // and the 1K colour RAM (low nybble used). The VIC sees a 16K bank of `ram`
+    // selected by set_bank, with the character ROM shadowed at VIC $1000-$1FFF in
+    // banks 0 and 2. Spans are borrowed; the owner outlives the VIC.
+    struct vic_memory final {
+        std::span<const std::uint8_t> ram;       // 64 KiB main memory
+        std::span<const std::uint8_t> char_rom;  // 4 KiB character generator
+        std::span<const std::uint8_t> color_ram; // 1 KiB colour RAM (4-bit)
+    };
+
+    // Sprite compositing, multicolour bitmap, and extended-colour text are
+    // deferred follow-up work; the scanline renderer covers border, hi-res and
+    // multicolour text, and standard bitmap.
     class vic_ii_6569 final : public i_video, public i_mmio {
       public:
         // Silicon revision. Within a video standard only the early NTSC 6567R56A
@@ -59,6 +72,17 @@ namespace mnemos::chips::video {
 
         [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
 
+        // i_video: frame counter + framebuffer view (see base class).
+        [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frame_index_; }
+        [[nodiscard]] frame_buffer_view framebuffer() const noexcept override;
+
+        // Attach the memory the VIC fetches graphics from, and select the 16K bank
+        // (0..3, as driven by the inverted CIA2 port-A low bits). Without attached
+        // memory the renderer fills the whole raster with the border colour.
+        void attach_memory(const vic_memory& memory) noexcept;
+        void set_bank(std::uint8_t bank) noexcept;
+        [[nodiscard]] std::uint8_t bank() const noexcept { return bank_; }
+
         // Machine configuration: selects the line/cycle geometry. Survives reset.
         void set_revision(revision rev) noexcept;
         [[nodiscard]] revision rev() const noexcept { return rev_; }
@@ -95,6 +119,10 @@ namespace mnemos::chips::video {
 
         [[nodiscard]] std::uint16_t total_lines() const noexcept;
         [[nodiscard]] std::uint16_t cycles_per_line() const noexcept;
+
+        // Framebuffer geometry: the full raster (cycles_per_line * 8 by total_lines).
+        [[nodiscard]] std::uint32_t frame_width() const noexcept;
+        [[nodiscard]] std::uint32_t frame_height() const noexcept;
         [[nodiscard]] bool irq_asserted() const noexcept;
         [[nodiscard]] bool bad_line_condition() const noexcept;
         [[nodiscard]] bool ba_low() const noexcept;
@@ -118,6 +146,12 @@ namespace mnemos::chips::video {
         void update_den_latch() noexcept;
         void advance_video_counters(std::uint16_t cycle) noexcept;
 
+        // Scanline renderer. render_line fills framebuffer row `y` from the current
+        // register + memory state; ensure_framebuffer (re)sizes it to the geometry.
+        void ensure_framebuffer();
+        void render_line(std::uint16_t y) noexcept;
+        [[nodiscard]] std::uint8_t fetch(std::uint16_t vic_address) const noexcept;
+
         std::array<std::uint8_t, register_count> regs_{};
         std::array<std::uint16_t, sprite_count> sprite_x_{};
         std::array<std::uint8_t, sprite_count> sprite_y_{};
@@ -137,6 +171,16 @@ namespace mnemos::chips::video {
         bool display_state_{};
 
         bool raster_match_active_{};
+
+        // Frame output.
+        std::vector<std::uint32_t> framebuffer_; // frame_width * frame_height, ARGB-ignored
+        std::uint32_t fb_width_{};
+        std::uint32_t fb_height_{};
+        std::uint64_t frame_index_{};
+
+        // VIC fetch memory (borrowed) and the selected 16K bank.
+        vic_memory memory_{};
+        std::uint8_t bank_{};
 
         std::array<register_descriptor, 5> register_view_{};
         introspection_surface introspection_{};

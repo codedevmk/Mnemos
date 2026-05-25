@@ -109,9 +109,26 @@ namespace mnemos::chips {
         static constexpr chip_class static_class = chip_class::audio_synth;
     };
 
+    // A borrowed, immutable view of a video chip's most recent complete frame.
+    // Pixels are 0x00RRGGBB (alpha unused); row-major, `width` pixels per row.
+    // The view is valid until the next tick that completes a frame.
+    struct frame_buffer_view final {
+        const std::uint32_t* pixels{};
+        std::uint32_t width{};
+        std::uint32_t height{};
+    };
+
     class i_video : public i_chip {
       public:
         static constexpr chip_class static_class = chip_class::video;
+
+        // Monotonic count of completed frames; the runtime detects a frame
+        // boundary by observing this increment.
+        [[nodiscard]] virtual std::uint64_t frame_index() const noexcept = 0;
+
+        // The current framebuffer (see frame_buffer_view). Stable geometry for a
+        // given machine configuration.
+        [[nodiscard]] virtual frame_buffer_view framebuffer() const noexcept = 0;
     };
 
     class i_bus_controller : public i_chip {

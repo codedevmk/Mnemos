@@ -6,7 +6,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <type_traits>
+#include <vector>
 
 namespace {
     using mnemos::chips::video::vic_ii_6569;
@@ -205,4 +207,51 @@ TEST_CASE("vic_ii_6569 register snapshot reports raster + IRQ state") {
     CHECK(regs[0].name == "RASTER_Y");
     CHECK(regs[0].value == 99U);
     CHECK(regs[3].name == "VICIRQ");
+}
+
+TEST_CASE("vic_ii_6569 renders the border colour with no display") {
+    vic_ii_6569 vic;
+    vic.write(0x20U, 0x0EU); // border = light blue
+    vic.tick(63U * 312U);    // one full PAL frame
+
+    const auto fb = vic.framebuffer();
+    REQUIRE(fb.width == 504U);
+    REQUIRE(fb.height == 312U);
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(vic.frame_index() == 1U);
+    // DEN never armed and no memory attached: the whole raster is border.
+    CHECK(fb.pixels[0] == vic_ii_6569::color_rgb888(0x0EU));
+    CHECK(fb.pixels[51U * 504U + 24U] == vic_ii_6569::color_rgb888(0x0EU));
+}
+
+TEST_CASE("vic_ii_6569 renders hi-res text from attached memory") {
+    vic_ii_6569 vic;
+
+    std::vector<std::uint8_t> ram(0x10000U, 0U);
+    std::vector<std::uint8_t> char_rom(0x1000U, 0U);
+    std::vector<std::uint8_t> color_ram(0x0400U, 0U);
+
+    // Screen cell (0,0) -> char code 0; glyph row 0 of code 0 lights the leftmost
+    // pixel only; colour RAM picks white for the foreground.
+    ram[0x0400U] = 0x00U;       // video matrix base $0400 (from $D018=$14), cell 0
+    char_rom[0x0000U] = 0x80U;  // code 0, row 0: bit 7 set
+    color_ram[0x0000U] = 0x01U; // white
+
+    vic.attach_memory({.ram = std::span<const std::uint8_t>(ram),
+                       .char_rom = std::span<const std::uint8_t>(char_rom),
+                       .color_ram = std::span<const std::uint8_t>(color_ram)});
+    vic.set_bank(0U);
+    vic.write(0x11U, 0x1BU); // DEN=1, RSEL=1, YSCROLL=3 (default)
+    vic.write(0x16U, 0x08U); // CSEL=1
+    vic.write(0x18U, 0x14U); // screen $0400, char gen $1000 (char ROM shadow)
+    vic.write(0x20U, 0x0EU); // border light blue
+    vic.write(0x21U, 0x06U); // background blue
+
+    vic.tick(63U * 312U); // render a full frame
+
+    const auto fb = vic.framebuffer();
+    const std::size_t origin = 51U * 504U + 24U;                       // display top-left
+    CHECK(fb.pixels[0] == vic_ii_6569::color_rgb888(0x0EU));           // border
+    CHECK(fb.pixels[origin] == vic_ii_6569::color_rgb888(0x01U));      // glyph bit set -> white
+    CHECK(fb.pixels[origin + 1U] == vic_ii_6569::color_rgb888(0x06U)); // glyph bit clear -> bg
 }

@@ -30,13 +30,27 @@ architecture, not a copy.
 - Internal video-matrix address generator (VC/VCBASE/RC/VMLI, display state).
 - Register-snapshot introspection.
 
-## Deferred (net-new — not in the Emu core either)
+## Renderer (net-new — not in the Emu core)
 
-- Scanline rendering (text / bitmap / MCM / ECM / dual-mode).
+A per-frame scanline renderer now lands pixels into an owned framebuffer
+(`cycles_per_line()*8` x `total_lines()`, 0x00RRGGBB). `render_line` runs as each
+raster line completes inside `tick`; `frame_index()` increments on the raster
+wrap so the runtime can detect frame boundaries; `framebuffer()` returns a
+borrowed `frame_buffer_view`.
+
+The VIC fetches via `attach_memory` (64K RAM + 4K char ROM + 1K colour RAM) and
+`set_bank` (the inverted CIA2 port-A bank select); the character ROM shadows VIC
+$1000-$1FFF in banks 0 and 2. Implemented modes: standard (hi-res) and
+multicolour text + border, gated by the DEN line-$30 latch and CSEL/RSEL
+geometry. The display window uses a canonical CSEL=1/RSEL=1 origin.
+
+## Still deferred (net-new — not in the Emu core either)
+
+- Standard / multicolour bitmap and extended-colour text modes.
+- Cycle-exact beam alignment (cycle->X), open-border / sprite-in-border tricks,
+  mid-line raster splits (renderer currently latches per-line, not per-cycle).
 - Sprite fetch + compositor + priority + sprite-sprite / sprite-data collisions.
-- Border generation (open-border trick), sprite-DMA BA/AEC timing.
-- Bus-side memory fetch (video matrix / char ROM / bitmap) — needs an `i_bus`
-  attachment, as the CPU has, once rendering lands.
+- Sprite-DMA BA/AEC timing; dynamic bank tracking from CIA2 at runtime.
 - Save/load state — deferred to the M3 runtime save-state format.
 
 ## Intentionally omitted from the port
