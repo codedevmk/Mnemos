@@ -40,8 +40,9 @@ namespace mnemos::manifests::c64 {
         cia1_cfg.irq_edge = [refresh_irq](bool) { refresh_irq(); };
         s->cia1.configure(cia1_cfg);
 
-        // The protocol-level drive shares the IEC bus as device 8.
+        // Both drive 8 implementations share the IEC bus; the runner ticks one.
         s->drive8.attach_bus(s->iec);
+        s->drive8_full.attach_bus(s->iec);
 
         chips::bus_controller::cia_6526::config cia2_cfg;
         cia2_cfg.tod_tick_hz = 985'248U;

@@ -5,6 +5,7 @@
 #include <mnemos/chips/common/iec_bus.hpp>
 #include <mnemos/chips/cpu/m6510.hpp>
 #include <mnemos/chips/mapper/c64_pla.hpp>
+#include <mnemos/chips/storage/c1541/full_drive.hpp>
 #include <mnemos/chips/storage/c1541/synthetic_drive.hpp>
 #include <mnemos/chips/video/vic_ii_6569.hpp>
 #include <mnemos/topology/bus.hpp>
@@ -29,9 +30,12 @@ namespace mnemos::manifests::c64 {
         chips::mapper::c64_pla pla;
         topology::bus bus{16U, topology::endianness::little};
 
-        // IEC serial bus (C64 = device 0) and the protocol-level drive 8.
+        // IEC serial bus (C64 = device 0) and drive 8. Both drives share the bus as
+        // device 8; the runner ticks exactly one (the protocol-level synthetic drive
+        // by default, or the cycle-accurate full drive when a DOS ROM is supplied).
         chips::iec_bus iec;
         chips::storage::c1541::synthetic_drive drive8{8U};
+        chips::storage::c1541::full_drive drive8_full{8U};
 
         std::array<std::uint8_t, 0x10000> ram{};
         std::array<std::uint8_t, 0x0400> color_ram{}; // $D800-$DBFF

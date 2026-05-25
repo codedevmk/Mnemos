@@ -63,6 +63,7 @@ namespace mnemos::tools {
                "  --manifest <file>   system manifest (TOML) to boot (required)\n"
                "  --rom-dir <dir>     directory holding the manifest's ROM files\n"
                "  --disk <file>       .d64 disk image to mount on drive 8\n"
+               "  --drive-rom <file>  16K 1541 DOS ROM -> use the cycle-accurate drive 8\n"
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
@@ -92,6 +93,11 @@ namespace mnemos::tools {
                     return false;
                 }
                 out.disk = value;
+            } else if (arg == "--drive-rom") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                out.drive_rom = value;
             } else if (arg == "--frames") {
                 if (!take_value(argc, argv, i, arg, value, err)) {
                     return false;
@@ -224,13 +230,35 @@ namespace mnemos::tools {
         sys->vic.reset(chips::reset_kind::power_on);
         sys->drive8.reset(chips::reset_kind::power_on);
 
+        // Select drive 8: the cycle-accurate full drive when a DOS ROM is supplied,
+        // otherwise the protocol-level synthetic drive. Only the chosen one is ticked.
+        const bool use_full_drive = !options.drive_rom.empty();
+        chips::i_chip* drive = &sys->drive8;
+        if (use_full_drive) {
+            const auto rom = read_file(options.drive_rom);
+            if (!rom) {
+                err << "error: cannot read drive ROM " << options.drive_rom.string() << "\n";
+                return 6;
+            }
+            if (!sys->drive8_full.load_rom(*rom)) {
+                err << "error: " << options.drive_rom.string() << " is not a 16 KiB 1541 DOS ROM\n";
+                return 6;
+            }
+            sys->drive8_full.set_clock_ratio(1'000'000U, 985'248U);
+            sys->drive8_full.reset(chips::reset_kind::power_on);
+            drive = &sys->drive8_full;
+            out << "using the cycle-accurate drive 8 (" << options.drive_rom.string() << ")\n";
+        }
+
         if (!options.disk.empty()) {
             const auto image = read_file(options.disk);
             if (!image) {
                 err << "error: cannot read disk image " << options.disk.string() << "\n";
                 return 6;
             }
-            if (!sys->drive8.mount(*image)) {
+            const bool mounted =
+                use_full_drive ? sys->drive8_full.mount(*image) : sys->drive8.mount(*image);
+            if (!mounted) {
                 err << "error: " << options.disk.string()
                     << " is not a valid .d64 (expected 174848 or 196608 bytes)\n";
                 return 6;
@@ -242,7 +270,7 @@ namespace mnemos::tools {
         // the freshly advanced beam. All C64 chips run at phi2 (divider 1).
         std::vector<runtime::scheduled_chip> chips = {{&sys->vic, 1U},  {&sys->cpu, 1U},
                                                       {&sys->cia1, 1U}, {&sys->cia2, 1U},
-                                                      {&sys->sid, 1U},  {&sys->drive8, 1U}};
+                                                      {&sys->sid, 1U},  {drive, 1U}};
         runtime::scheduler sched(std::move(chips), &sys->vic);
 
         // A save-state view over the assembled machine (chunk ids match the manifest).
@@ -251,9 +279,9 @@ namespace mnemos::tools {
             t.manifest_id = m.id;
             t.manifest_rev = m.revision;
             t.master_cycle = master_cycle;
-            t.chips = {{"cpu", &sys->cpu},      {"video", &sys->vic}, {"audio", &sys->sid},
-                       {"cia1", &sys->cia1},    {"cia2", &sys->cia2}, {"pla", &sys->pla},
-                       {"drive8", &sys->drive8}};
+            t.chips = {{"cpu", &sys->cpu},   {"video", &sys->vic}, {"audio", &sys->sid},
+                       {"cia1", &sys->cia1}, {"cia2", &sys->cia2}, {"pla", &sys->pla},
+                       {"drive8", drive}};
             t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
                         {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};
             return t;
