@@ -71,6 +71,15 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] std::uint8_t port_a_pins() const;
         [[nodiscard]] std::uint8_t port_b_pins() const;
 
+        // The bits each port actively drives (output latch masked by DDR); input
+        // bits read 0. Devices derive driven lines (IEC, stepper, ...) from these.
+        [[nodiscard]] std::uint8_t port_a_output() const noexcept {
+            return static_cast<std::uint8_t>(ora_ & ddra_);
+        }
+        [[nodiscard]] std::uint8_t port_b_output() const noexcept {
+            return static_cast<std::uint8_t>(orb_ & ddrb_);
+        }
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:

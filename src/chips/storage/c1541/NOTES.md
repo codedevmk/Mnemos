@@ -26,10 +26,18 @@ helpers (named PRG, wildcard, directory, wrong-device, save/load). The
 speaks; end-to-end `LOAD` is validated with the C64 KERNAL ROM and is therefore
 **data-gated**, exactly like the golden boot.
 
-## Deferred (full cycle-accurate drive)
+## Full cycle-accurate drive (`full_drive`)
 
-The full 1541 (drive 6502 + two 6522 VIAs + 2 KB RAM + 16 KB DOS ROM + GCR
-bit-stream + head/stepper) is a separate, larger component. In Emu its GCR read
-path was still being debugged, so "parity" tracks that: the synthetic drive is
-the reliable LOAD path; the full drive (for fastloaders / copy protection) is the
-follow-up, built on the `via_6522` chip already in place.
+The full 1541 is now ported: the drive 6502 (the 6510 core with its I/O port
+disabled), two `via_6522` VIAs (VIA1 = IEC, VIA2 = mechanism + GCR head), 2 KB
+RAM, the 16 KB DOS ROM, the `bind_gcr` GCR surface under a stepper head with
+SYNC/byte-ready timing, and the IEC + auto-ATN-ack wiring. Registered as
+`commodore.c1541.full`.
+
+The memory map, VIA port wiring, stepper movement, motor, and head byte/SYNC
+mechanics are unit-tested with a synthetic ROM (the drive boots to its reset
+vector and runs the mechanism). **Running the real DOS ROM is data-gated** (the
+16 KB ROM is copyrighted, never committed — see the C64 ROMS.md pattern), and, as
+in Emu, the GCR *read* path is the part that needs real-ROM validation to prove
+out. The synthetic drive remains the reliable LOAD path; the full drive is for
+fastloaders / copy-protection once the DOS ROM is supplied locally.
