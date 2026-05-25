@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mnemos/chips/common/chip.hpp>
+#include <mnemos/runtime/input.hpp>
 
 #include <cstdint>
 #include <filesystem>
@@ -29,8 +30,29 @@ namespace mnemos::tools {
         // reported as unimplemented rather than silently ignored.
         std::filesystem::path save;
         std::filesystem::path load;
-        std::filesystem::path input_log;
+        std::filesystem::path input_log; // frame-tagged input script replayed during the run
     };
+
+    // Device codes used in the replayed runtime::input_event stream (the input log
+    // is C64-specific): keyboard transitions carry a key code, joysticks carry an
+    // absolute direction mask, paddles carry one axis each.
+    namespace input_device {
+        inline constexpr std::uint8_t keyboard = 0U;    // code = c64_input::key, pressed = state
+        inline constexpr std::uint8_t joystick1 = 1U;   // code = joy_* mask (absolute)
+        inline constexpr std::uint8_t joystick2 = 2U;   // code = joy_* mask (absolute)
+        inline constexpr std::uint8_t paddle1_x = 3U;   // code = POT X (0-255)
+        inline constexpr std::uint8_t paddle1_y = 4U;   // code = POT Y (0-255)
+        inline constexpr std::uint8_t paddle2_x = 5U;   // code = POT X (0-255)
+        inline constexpr std::uint8_t paddle2_y = 6U;   // code = POT Y (0-255)
+        inline constexpr std::uint8_t release_all = 7U; // release every held key
+    } // namespace input_device
+
+    // Parse a text input-log script into a frame-tagged buffer. Each non-blank,
+    // non-comment line is "<frame> <command> [args]" (see the CLI usage / the
+    // tests for the grammar). Returns true on success; on a malformed line writes
+    // a diagnostic to `err` and returns false.
+    [[nodiscard]] bool parse_input_log(std::istream& in, runtime::input_buffer& out,
+                                       std::ostream& err);
 
     // Parse argv into options. Returns true on success; on failure writes a message
     // to `err` and returns false.

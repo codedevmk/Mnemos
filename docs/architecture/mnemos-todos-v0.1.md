@@ -253,7 +253,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 
 ### Headless runtime CLI
 - [x] Create `tools/mnemos_runtime_cli/` executable target. (tier-8 `mnemos_runtime_cli` + shared `mnemos_runtime_cli_core` lib so tests reuse the logic)
-- [x] CLI options: `--manifest`, `--rom-dir`, `--frames`, `--dump-hash`, `--save`, `--load`, `--input-log`. (all parsed; `--save` writes a save state after the run, `--load` restores before it; `--input-log` still deferred)
+- [x] CLI options: `--manifest`, `--rom-dir`, `--frames`, `--dump-hash`, `--save`, `--load`, `--input-log`. (all implemented; `--save` writes a save state after the run, `--load` restores before it. `--input-log` replays a frame-tagged text script — `<frame> press/release <key>`, `joy1/joy2 <dirs|none>`, `paddle1/paddle2 <x> <y>`, `releaseall`, with `#` comments — parsed into a runtime::input_buffer and applied to the C64 keyboard/joystick/paddle at the start of each frame via scheduler::run_frame(). parse_input_log is unit-tested (keys/joystick/paddle/comments + malformed-line rejection) and validated end-to-end through the CLI binary)
 - [x] Outputs framebuffer hash (SHA-256 of RGBA bytes) per frame or at end. (at end via `--dump-hash`; pixels serialised R,G,B,A for a cross-platform-stable hash. Loads the manifest, reads/verifies ROMs from `--rom-dir` — placeholder sha256 -> unverified warning — assembles the C64, runs `--frames`, hashes. Verified deterministic end-to-end with synthetic ROMs.)
 
 ### First golden test
