@@ -88,6 +88,40 @@ namespace mnemos::instrumentation {
 
     std::size_t debugger::watchpoint_count() const noexcept { return watchpoints_.size(); }
 
+    // ----- event subscription -----
+
+    subscription_handle debugger::subscribe(event_filter filter, event_sink& sink) {
+        const subscription_handle handle = next_subscription_++;
+        subscriptions_.push_back({.handle = handle, .filter = filter, .sink = &sink});
+        return handle;
+    }
+
+    bool debugger::unsubscribe(subscription_handle handle) {
+        for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ++it) {
+            if (it->handle == handle) {
+                subscriptions_.erase(it);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void debugger::emit(event_kind kind, breakpoint_id id, std::uint16_t pc) {
+        if (subscriptions_.empty()) {
+            return;
+        }
+        const event e{.kind = kind,
+                      .id = id,
+                      .pc = pc,
+                      .master_cycle = scheduler_.master_cycle(),
+                      .frame_index = scheduler_.frame_index()};
+        for (const auto& s : subscriptions_) {
+            if (s.sink != nullptr && s.filter.selects(kind)) {
+                s.sink->on_event(e);
+            }
+        }
+    }
+
     void debugger::on_bus_access(const topology::access_event& access) {
         if (watchpoints_.empty() || pending_watch_.has_value()) {
             return; // nothing to match, or a hit is already latched for this step
@@ -142,35 +176,44 @@ namespace mnemos::instrumentation {
     stop_event debugger::step_instruction() {
         pending_watch_.reset();
         advance_one_instruction();
+        const std::uint16_t pc = current_pc();
         if (pending_watch_.has_value()) {
+            emit(event_kind::watchpoint, pending_watch_->id, pc);
             return {.reason = halt_reason::watchpoint,
                     .breakpoint = 0U,
                     .watchpoint = pending_watch_->id,
-                    .pc = current_pc(),
+                    .pc = pc,
                     .master_cycle = scheduler_.master_cycle()};
         }
+        emit(event_kind::step, 0U, pc);
         return {.reason = halt_reason::step_complete,
                 .breakpoint = 0U,
                 .watchpoint = 0U,
-                .pc = current_pc(),
+                .pc = pc,
                 .master_cycle = scheduler_.master_cycle()};
     }
 
-    std::uint64_t debugger::step_frame() { return scheduler_.run_frame(); }
+    std::uint64_t debugger::step_frame() {
+        const std::uint64_t frame = scheduler_.run_frame();
+        emit(event_kind::frame, 0U, current_pc());
+        return frame;
+    }
 
     stop_event debugger::run(std::uint64_t max_instructions) {
         for (std::uint64_t n = 0; n < max_instructions; ++n) {
             pending_watch_.reset();
             advance_one_instruction();
+            const std::uint16_t pc = current_pc();
             if (pending_watch_.has_value()) {
+                emit(event_kind::watchpoint, pending_watch_->id, pc);
                 return {.reason = halt_reason::watchpoint,
                         .breakpoint = 0U,
                         .watchpoint = pending_watch_->id,
-                        .pc = current_pc(),
+                        .pc = pc,
                         .master_cycle = scheduler_.master_cycle()};
             }
-            const std::uint16_t pc = current_pc();
             if (const breakpoint_id id = matching_breakpoint(pc); id != 0U) {
+                emit(event_kind::breakpoint, id, pc);
                 return {.reason = halt_reason::breakpoint,
                         .breakpoint = id,
                         .watchpoint = 0U,

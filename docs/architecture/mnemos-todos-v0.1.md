@@ -274,15 +274,18 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 ## M4 — Instrumentation API and Developer Frontend MVP
 
 **Status:** In progress — the debugger foundations (the pure, testable instrumentation
-core) are being built phase by phase ahead of the wire/Vulkan/apps frontend MVP.
-Phase 1 (execution control + PC breakpoints) has landed in the new compiled tier-6
-`mnemos::instrumentation::api` library.
+core) are **complete** in the new compiled tier-6 `mnemos::instrumentation::api`
+library: i_runtime_introspection + a concrete `debugger` with execution control,
+PC breakpoints, memory watchpoints, and event subscription, all unit-tested against
+a real m6510. What remains in M4 is the frontend MVP — the Cap'n Proto wire
+protocol/transport/server, Vulkan + UI toolkit primitives, and `apps::dev` — which
+is much larger and platform-heavy.
 
 - [ ] Promote `i_chip_introspection` from forward decl to full interface. (Phase 1 reads CPU state via injected probes so no chip-contract change was forced yet; a richer i_chip_introspection — register/memory views — lands with the memory-inspection work)
-- [~] Implement `i_runtime_introspection`. (interface + concrete `debugger` landed: master_cycle/frame_index queries, step_instruction / step_frame / run-with-instruction-budget control, and PC breakpoint management. pause/resume for a live frontend thread, watchpoints, and event subscription are the remaining methods, added in later phases)
+- [x] Implement `i_runtime_introspection`. (interface + concrete `debugger`: master_cycle/frame_index queries, step_instruction / step_frame / run-with-instruction-budget control, PC breakpoint + memory watchpoint management, and event subscription. The async pause/resume pair from the TDS sketch is a live-frontend-thread concern that lands with the wire server; the deterministic headless surface is complete)
 - [x] Implement breakpoint engine (PC, memory R/W, conditional). (PC breakpoints with optional per-hit conditions + enable/disable/remove + a stop_event report, checked at instruction boundaries; unit-tested against a real m6510 running a small program)
 - [x] Implement watch engine. (memory read / write / access watchpoints over an address range, with an optional value condition, via a new generic topology::bus access-observer hook the debugger installs — null by default so the hot path is a single branch and the golden boot is unchanged. The hit halts run() at the end of the triggering instruction with a watchpoint stop_event. Unit-tested: write vs read discrimination, value condition, range, and no-bus = never fires)
-- [ ] Implement event subscription with filters. (Phase 3: event_sink + event_filter, breakpoint-hit + step + frame events)
+- [x] Implement event subscription with filters. (event_sink + an event_filter mask over event_kind {breakpoint, watchpoint, step, frame}; subscribe/unsubscribe on the debugger deliver each emitted event — with the id/pc/master_cycle/frame snapshot — to every subscriber whose filter selects its kind. Emitted from run (breakpoint/watchpoint halts), step_instruction (step or watchpoint), and step_frame (frame). Unit-tested: delivery, multi-kind filter, exclusion, unsubscribe)
 - [ ] Author Cap'n Proto schemas under `src/instrumentation/wire/`.
 - [ ] Build-time codegen for C++ wire bindings.
 - [ ] Implement wire transport (named pipe on Windows, domain socket on Linux).

@@ -47,6 +47,67 @@ namespace mnemos::instrumentation {
         bool enabled{true};
     };
 
+    // Push-based time-evolution events (TDS §12). A subscriber filters by an OR of
+    // these bits; the debugger emits one when execution halts on a breakpoint /
+    // watchpoint, after an explicit single step, and after a frame step.
+    enum class event_kind : std::uint8_t {
+        breakpoint = 0x01U,
+        watchpoint = 0x02U,
+        step = 0x04U,
+        frame = 0x08U,
+    };
+
+    // A set of event kinds a subscriber wants. Implicitly built from a single kind
+    // or an OR of kinds, e.g. `event_kind::breakpoint | event_kind::step`.
+    struct event_filter final {
+        std::uint8_t mask{};
+
+        constexpr event_filter() noexcept = default;
+        constexpr event_filter(event_kind kind) noexcept // NOLINT(*-explicit-*): ergonomic
+            : mask(static_cast<std::uint8_t>(kind)) {}
+
+        [[nodiscard]] constexpr bool selects(event_kind kind) const noexcept {
+            return (mask & static_cast<std::uint8_t>(kind)) != 0U;
+        }
+    };
+
+    [[nodiscard]] constexpr event_filter operator|(event_kind a, event_kind b) noexcept {
+        event_filter f;
+        f.mask =
+            static_cast<std::uint8_t>(static_cast<std::uint8_t>(a) | static_cast<std::uint8_t>(b));
+        return f;
+    }
+    [[nodiscard]] constexpr event_filter operator|(event_filter a, event_kind b) noexcept {
+        a.mask = static_cast<std::uint8_t>(a.mask | static_cast<std::uint8_t>(b));
+        return a;
+    }
+
+    inline constexpr event_filter all_events =
+        event_kind::breakpoint | event_kind::watchpoint | event_kind::step | event_kind::frame;
+
+    using subscription_handle = std::uint32_t;
+
+    // A delivered event. `id` is the breakpoint/watchpoint id for those kinds (0
+    // otherwise); pc/master_cycle/frame_index snapshot the machine at the event.
+    struct event final {
+        event_kind kind{};
+        breakpoint_id id{};
+        std::uint16_t pc{};
+        std::uint64_t master_cycle{};
+        std::uint64_t frame_index{};
+    };
+
+    // Receives events matching a subscription's filter. Implementors must outlive
+    // their subscription.
+    class event_sink {
+      public:
+        event_sink() = default;
+        event_sink(const event_sink&) = delete;
+        event_sink& operator=(const event_sink&) = delete;
+        virtual ~event_sink() = default;
+        virtual void on_event(const event& e) = 0;
+    };
+
     // The outcome of run()/step_instruction().
     struct stop_event final {
         halt_reason reason{halt_reason::budget_exhausted};
@@ -93,6 +154,10 @@ namespace mnemos::instrumentation {
         virtual void clear_watchpoints() noexcept = 0;
         [[nodiscard]] virtual std::size_t watchpoint_count() const noexcept = 0;
 
+        // Event subscription: `sink` receives every event whose kind is in `filter`.
+        virtual subscription_handle subscribe(event_filter filter, event_sink& sink) = 0;
+        virtual bool unsubscribe(subscription_handle handle) = 0;
+
         // Advance exactly one CPU instruction (returns reason step_complete).
         virtual stop_event step_instruction() = 0;
         // Advance one video frame; returns the new frame index (no breakpoint
@@ -133,6 +198,9 @@ namespace mnemos::instrumentation {
         void clear_watchpoints() noexcept override;
         [[nodiscard]] std::size_t watchpoint_count() const noexcept override;
 
+        subscription_handle subscribe(event_filter filter, event_sink& sink) override;
+        bool unsubscribe(subscription_handle handle) override;
+
         stop_event step_instruction() override;
         std::uint64_t step_frame() override;
         [[nodiscard]] stop_event run(std::uint64_t max_instructions) override;
@@ -150,6 +218,11 @@ namespace mnemos::instrumentation {
             watchpoint_id id{};
             topology::access_event access{};
         };
+        struct subscription final {
+            subscription_handle handle{};
+            event_filter filter{};
+            event_sink* sink{};
+        };
 
         // Advance the scheduler until the CPU reaches its next instruction boundary.
         void advance_one_instruction();
@@ -158,14 +231,18 @@ namespace mnemos::instrumentation {
         [[nodiscard]] breakpoint_id matching_breakpoint(std::uint16_t pc) const;
         // Bus observer: records the first watchpoint a completed access trips.
         void on_bus_access(const topology::access_event& access);
+        // Deliver an event to every subscription whose filter selects its kind.
+        void emit(event_kind kind, breakpoint_id id, std::uint16_t pc);
 
         runtime::scheduler& scheduler_;
         cpu_probe probe_;
         topology::bus* watch_bus_{};
         std::vector<breakpoint_entry> breakpoints_;
         std::vector<watchpoint_entry> watchpoints_;
+        std::vector<subscription> subscriptions_;
         std::optional<watch_hit> pending_watch_;
         breakpoint_id next_id_{1U};
+        subscription_handle next_subscription_{1U};
     };
 
 } // namespace mnemos::instrumentation

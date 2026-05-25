@@ -191,3 +191,83 @@ TEST_CASE("debugger watchpoints never fire without a bus") {
     CHECK(dbg.watchpoint_count() == 1U);
     CHECK(dbg.run(100U).reason == halt_reason::budget_exhausted);
 }
+
+namespace {
+    using mnemos::instrumentation::event;
+    using mnemos::instrumentation::event_kind;
+
+    struct recording_sink final : mnemos::instrumentation::event_sink {
+        std::vector<event> events;
+        void on_event(const event& e) override { events.push_back(e); }
+    };
+} // namespace
+
+TEST_CASE("debugger delivers filtered events to subscribers") {
+    SECTION("breakpoint + step events reach a matching subscriber") {
+        machine m(bp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe());
+        recording_sink sink;
+        dbg.subscribe(event_kind::breakpoint | event_kind::step, sink);
+
+        const auto id = dbg.add_breakpoint({.address = 0x1004U});
+        (void)dbg.run(100U);
+        REQUIRE(sink.events.size() == 1U);
+        CHECK(sink.events[0].kind == event_kind::breakpoint);
+        CHECK(sink.events[0].id == id);
+        CHECK(sink.events[0].pc == 0x1004U);
+
+        dbg.clear_breakpoints();
+        dbg.step_instruction(); // execute NOP -> a step event
+        REQUIRE(sink.events.size() == 2U);
+        CHECK(sink.events[1].kind == event_kind::step);
+    }
+
+    SECTION("a watchpoint event is delivered") {
+        machine m(wp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe(), &m.bus);
+        recording_sink sink;
+        dbg.subscribe(event_kind::watchpoint, sink);
+        const auto id = dbg.add_watchpoint({.address = 0x2000U, .kind = watch_kind::write});
+        (void)dbg.run(100U);
+        REQUIRE(sink.events.size() == 1U);
+        CHECK(sink.events[0].kind == event_kind::watchpoint);
+        CHECK(sink.events[0].id == id);
+    }
+
+    SECTION("the filter excludes unselected kinds") {
+        machine m(bp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe());
+        recording_sink sink;
+        dbg.subscribe(event_kind::watchpoint, sink); // not breakpoint
+        dbg.add_breakpoint({.address = 0x1004U});
+        (void)dbg.run(100U);
+        CHECK(sink.events.empty()); // breakpoint event filtered out
+    }
+
+    SECTION("unsubscribe stops delivery") {
+        machine m(bp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe());
+        recording_sink sink;
+        const auto handle = dbg.subscribe(mnemos::instrumentation::all_events, sink);
+        REQUIRE(dbg.unsubscribe(handle));
+        CHECK_FALSE(dbg.unsubscribe(handle)); // already gone
+        dbg.add_breakpoint({.address = 0x1004U});
+        (void)dbg.run(100U);
+        CHECK(sink.events.empty());
+    }
+
+    SECTION("step_frame emits a frame event") {
+        machine m(bp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe());
+        recording_sink sink;
+        dbg.subscribe(event_kind::frame, sink);
+        dbg.step_frame();
+        REQUIRE(sink.events.size() == 1U);
+        CHECK(sink.events[0].kind == event_kind::frame);
+    }
+}
