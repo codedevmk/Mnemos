@@ -213,12 +213,12 @@
 - [~] Unit tests for scheduler dispatch, save/load roundtrip, rewind. (scheduler dispatch + dividers + frame stepping + input buffer covered; save/load + rewind land with save-state)
 
 ### Headless runtime CLI
-- [ ] Create `tools/mnemos_runtime_cli/` executable target.
-- [ ] CLI options: `--manifest`, `--rom-dir`, `--frames`, `--dump-hash`, `--save`, `--load`, `--input-log`.
-- [ ] Outputs framebuffer hash (SHA-256 of RGBA bytes) per frame or at end.
+- [x] Create `tools/mnemos_runtime_cli/` executable target. (tier-8 `mnemos_runtime_cli` + shared `mnemos_runtime_cli_core` lib so tests reuse the logic)
+- [x] CLI options: `--manifest`, `--rom-dir`, `--frames`, `--dump-hash`, `--save`, `--load`, `--input-log`. (all parsed; `--save`/`--load`/`--input-log` are accepted and reported as deferred rather than silently ignored)
+- [x] Outputs framebuffer hash (SHA-256 of RGBA bytes) per frame or at end. (at end via `--dump-hash`; pixels serialised R,G,B,A for a cross-platform-stable hash. Loads the manifest, reads/verifies ROMs from `--rom-dir` — placeholder sha256 -> unverified warning — assembles the C64, runs `--frames`, hashes. Verified deterministic end-to-end with synthetic ROMs.)
 
 ### First golden test
-- [ ] Author `tests/golden/c64_basic_boot_test.cpp`.
+- [ ] Author `tests/golden/c64_basic_boot_test.cpp`. (blocked on local C64 ROMs; the CLI + hash pipeline is ready and reproducible, so this is data-gated only)
 - [ ] Boot C64 manifest with no cartridge, run 600 frames (~12 s @ 50 Hz PAL).
 - [ ] Hash framebuffer at frame 600.
 - [ ] Commit the expected hash.

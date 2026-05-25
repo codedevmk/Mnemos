@@ -1,0 +1,1 @@
+add_subdirectory(mnemos_runtime_cli)
