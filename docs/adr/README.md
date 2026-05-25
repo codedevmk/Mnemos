@@ -11,3 +11,6 @@ Current records:
 4. `0004-chip-contract.md`
 5. `0006-emu-reuse-and-conformance.md`
 6. `0007-manifest-toml-dependency.md`
+7. `0008-save-state-and-zstd.md`
+
+(`0005` is reserved for the M3 scheduler-strategy record.)

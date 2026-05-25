@@ -25,6 +25,7 @@ if(BUILD_TESTING)
         SOURCES
             tests/foundation_allocator_test.cpp
             tests/foundation_bits_test.cpp
+            tests/foundation_crc32_test.cpp
             tests/foundation_expected_ext_test.cpp
             tests/foundation_fs_test.cpp
             tests/foundation_id_test.cpp
