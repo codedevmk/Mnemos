@@ -1,6 +1,7 @@
 add_subdirectory(common)
 add_subdirectory(cpu)
 add_subdirectory(video)
+add_subdirectory(mapper)
 
 add_library(mnemos_chips INTERFACE)
 add_library(mnemos::chips ALIAS mnemos_chips)
