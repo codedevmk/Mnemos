@@ -175,13 +175,13 @@
 ## M3 — Topology, Manifest Loader, Runtime, and First Boot
 
 ### Topology library
-- [ ] Create `src/topology/` library target `mnemos::topology`.
-- [ ] Implement `bus` with width, endianness, sorted region table.
-- [ ] Implement region kinds: `ram`, `rom`, `mmio_chip`, `mapper`.
-- [ ] Implement bus read/write fast path with cached resolution.
+- [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
+- [x] Implement `bus` with width, endianness, sorted region table. (7e62c0d)
+- [~] Implement region kinds: `ram`, `rom`, `mmio_chip`, `mapper`. (7e62c0d: ram/rom/mmio done; mapper backing arrives with the mapper-hook slice)
+- [x] Implement bus read/write fast path with cached resolution. (7e62c0d; O(log N) sorted-table resolution. Per-chip cached backing pointer is a later optimization)
 - [ ] Implement mapper hook plumbing.
 - [ ] Implement overlay control (PLA-driven).
-- [ ] Unit tests covering region resolution edge cases (boundary, mirror, overlay precedence).
+- [~] Unit tests covering region resolution edge cases (boundary, mirror, overlay precedence). (7e62c0d: boundary + address-mask mirror covered; overlay precedence lands with the overlay slice)
 
 ### Manifest loader
 - [ ] Create `src/manifests/common/` library target `mnemos::manifests::common`.
