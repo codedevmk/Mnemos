@@ -257,11 +257,10 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Outputs framebuffer hash (SHA-256 of RGBA bytes) per frame or at end. (at end via `--dump-hash`; pixels serialised R,G,B,A for a cross-platform-stable hash. Loads the manifest, reads/verifies ROMs from `--rom-dir` — placeholder sha256 -> unverified warning — assembles the C64, runs `--frames`, hashes. Verified deterministic end-to-end with synthetic ROMs.)
 
 ### First golden test
-- [ ] Author `tests/golden/c64_basic_boot_test.cpp`. (blocked on local C64 ROMs; the CLI + hash pipeline is ready and reproducible, so this is data-gated only)
-- [ ] Boot C64 manifest with no cartridge, run 600 frames (~12 s @ 50 Hz PAL).
-- [ ] Hash framebuffer at frame 600.
-- [ ] Commit the expected hash.
-- [ ] CI runs this on every PR.
+- [x] Author `tests/golden/c64_basic_boot_test.cpp`. (harness landed: locates ROMs from MNEMOS_C64_ROM_DIR (sized filename candidates), boots a cartridge-free C64 mirroring the CLI's reset + scheduler order, renders MNEMOS_C64_BOOT_FRAMES (default 200) frames, and hashes the framebuffer via the shared hash_framebuffer. Self-skips via CTest SKIP_RETURN_CODE 4 when ROMs are absent; with ROMs present it asserts determinism + visible output and prints the hash; with MNEMOS_C64_BOOT_SHA256 set it asserts the golden. tests/ wired into the build under BUILD_TESTING; see tests/golden/README.md)
+- [~] Boot C64 manifest with no cartridge, run frames + hash + assert golden. (mechanics done and validated with synthetic ROMs; capturing/committing the real golden hash + frame count is the data-gated step, performed once real C64 ROMs are available locally)
+- [ ] Commit the expected hash. (data-gated: record MNEMOS_C64_BOOT_SHA256 from a real-ROM run, then bake it into the test/CTest env)
+- [x] CI runs this on every PR. (registered as mnemos_c64_basic_boot_test; runs every job and reports "Skipped" until ROMs are provided)
 
 ### Acceptance
 - [ ] `mnemos_runtime_cli load c64.pal --frames 600 --dump-hash` produces an identical hash on Win+Linux, Debug+Release.

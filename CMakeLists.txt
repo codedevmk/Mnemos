@@ -30,3 +30,9 @@ endif()
 
 add_subdirectory(src)
 add_subdirectory(tools)
+
+# Cross-system tests (golden boot, integration). Added after tools/ so the shared
+# CLI core target they reuse already exists.
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
