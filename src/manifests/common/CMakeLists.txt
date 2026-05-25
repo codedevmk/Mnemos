@@ -12,6 +12,7 @@ endif()
 add_library(
     mnemos_manifests_common
     src/manifest.cpp
+    src/builder.cpp
 )
 add_library(mnemos::manifests::common ALIAS mnemos_manifests_common)
 
@@ -22,17 +23,39 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
-# toml++ is an implementation detail (not exposed in any public header), so it is
-# linked PRIVATE and stays isolated to this tier-4 target (ADR 0007).
-target_link_libraries(mnemos_manifests_common PRIVATE tomlplusplus::tomlplusplus)
+# Public: the builder's headers expose chips + topology types and use foundation
+# (sha256). toml++ is an implementation detail of the parser (PRIVATE, ADR 0007).
+target_link_libraries(
+    mnemos_manifests_common
+    PUBLIC
+        mnemos::foundation
+        mnemos::chips::common
+        mnemos::topology
+    PRIVATE
+        tomlplusplus::tomlplusplus
+)
 
 mnemos_apply_common_target_options(mnemos_manifests_common PUBLIC)
-mnemos_declare_tier(NAME mnemos_manifests_common TIER 4)
+mnemos_declare_tier(
+    NAME mnemos_manifests_common
+    TIER 4
+    DEPENDS mnemos_foundation mnemos_chips_common mnemos_topology
+)
 
 if(BUILD_TESTING)
+    # The builder test creates chips by factory id; the concrete chip libraries are
+    # linked so their static-init factory registrations are available, and the test
+    # makes a runtime reference to each chip type so its translation unit is pulled
+    # in (the registration then runs). A general "instantiate purely by id without
+    # referencing the type" path for apps is handled at the runtime-CLI slice.
     mnemos_add_test(
         mnemos_manifests_common_test
-        SOURCES tests/manifest_test.cpp
-        LIBRARIES mnemos::manifests::common
+        SOURCES
+            tests/manifest_test.cpp
+            tests/builder_test.cpp
+        LIBRARIES
+            mnemos::manifests::common
+            mnemos::chips::cpu::m6510
+            mnemos::chips::bus_controller::cia_6526
     )
 endif()
