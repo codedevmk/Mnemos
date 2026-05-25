@@ -188,8 +188,8 @@
 - [x] FetchContent integration for `tomlplusplus`. (010640b; pinned v3.4.0, PRIVATE to tier 4, ADR 0007)
 - [x] Define `manifest_schema/1` types in C++. (010640b; manifest/clock/chip/bus/region + address_range)
 - [x] Implement TOML parser with strict validation (TDS §10.3). (010640b; toml++ non-throwing + schema/field/range/endianness/rom checks)
-- [ ] Implement manifest-to-component-graph builder (instantiate chips by ID via the factory registry, wire buses).
-- [ ] Implement ROM file loader with SHA-256 verification.
+- [x] Implement manifest-to-component-graph builder (instantiate chips by ID via the factory registry, wire buses). (9da1028; build_system creates chips via create_chip, builds topology buses, allocates RAM, binds MMIO via i_mmio, attaches CPUs; CI run 26388745058)
+- [x] Implement ROM file loader with SHA-256 verification. (9da1028; rom_provider + foundation::sha256 verification with mismatch diagnostics)
 - [x] Surface validation errors with file/line/column. (010640b; diagnostic{message, source, line, column})
 - [x] Unit tests covering each validation rule. (010640b; valid parse, wrong schema, missing id/clock/bus, malformed-TOML position, range + rom requirements)
 
