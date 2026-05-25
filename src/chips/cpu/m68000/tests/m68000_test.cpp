@@ -386,3 +386,78 @@ TEST_CASE("m68000 ADD to memory writes back the result") {
     CHECK(m.bus.read8(0x2001U) == 0x33U);
     (void)r;
 }
+
+TEST_CASE("m68000 ANDI/ORI/EORI immediates") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x0000FFFFU;
+    auto r = run_one(m, {0x0240U, 0x0F0FU}, s); // ANDI.W #$0F0F,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0F0FU);
+
+    s.d[1] = 0x00000000U;
+    r = run_one(m, {0x0001U, 0x0080U}, s); // ORI.B #$80,D1
+    CHECK((r.d[1] & 0xFFU) == 0x80U);
+    CHECK((r.sr & m68000::sr_n) != 0U); // byte bit 7 set
+
+    s.d[2] = 0x12345678U;
+    r = run_one(m, {0x0A82U, 0xFFFFU, 0xFFFFU}, s); // EORI.L #$FFFFFFFF,D2
+    CHECK(r.d[2] == 0xEDCBA987U);
+}
+
+TEST_CASE("m68000 AND/OR/EOR register forms") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x0000FFFFU;
+    auto r = run_one(m, {0xC07CU, 0x0FF0U}, s); // AND.W #$0FF0,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0FF0U);
+
+    s.d[0] = 0x00000000U;
+    r = run_one(m, {0x807CU, 0x1234U}, s); // OR.W #$1234,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x1234U);
+
+    s.d[0] = 0x0000AAAAU;
+    s.d[1] = 0x00005555U;
+    r = run_one(m, {0xB340U}, s); // EOR.W D1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0xFFFFU);
+}
+
+TEST_CASE("m68000 NOT inverts the operand") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00001234U;
+    const auto r = run_one(m, {0x4640U}, s); // NOT.W D0
+    CHECK((r.d[0] & 0xFFFFU) == 0xEDCBU);
+}
+
+TEST_CASE("m68000 static bit ops BTST/BSET") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000004U;                       // bit 2 set
+    auto r = run_one(m, {0x0800U, 0x0002U}, s); // BTST #2,D0
+    CHECK(r.d[0] == 0x00000004U);               // unchanged
+    CHECK((r.sr & m68000::sr_z) == 0U);         // bit was 1 -> Z clear
+
+    s.d[0] = 0x00000000U;
+    r = run_one(m, {0x08C0U, 0x0003U}, s); // BSET #3,D0
+    CHECK(r.d[0] == 0x00000008U);
+    CHECK((r.sr & m68000::sr_z) != 0U); // tested bit was 0 -> Z set
+}
+
+TEST_CASE("m68000 dynamic BCLR clears the selected bit") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x000000FFU;
+    s.d[1] = 0x00000000U;                    // bit number 0
+    const auto r = run_one(m, {0x0380U}, s); // BCLR D1,D0
+    CHECK(r.d[0] == 0x000000FEU);
+    CHECK((r.sr & m68000::sr_z) == 0U); // bit 0 was set -> Z clear
+}
+
+TEST_CASE("m68000 ANDI to CCR masks the condition codes") {
+    machine m;
+    m68000::registers s{};
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_ccr); // all CCR bits set
+    const auto r = run_one(m, {0x023CU, 0x0000U}, s);                 // ANDI.B #0,CCR
+    CHECK((r.sr & m68000::sr_ccr) == 0U);
+    CHECK((r.sr & m68000::sr_s) != 0U); // supervisor bit untouched
+}

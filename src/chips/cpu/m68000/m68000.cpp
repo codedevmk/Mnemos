@@ -623,13 +623,23 @@ namespace mnemos::chips::cpu {
             flags_cmp(sz, src, dst, dst - src);
             return;
         }
-        if (opm < 3) { // CMP <ea>,Dn  (EOR -- opm 4-6 with em != 1 -- is logical, phase 3)
+        if (opm < 3) { // CMP <ea>,Dn
             const op_size sz = static_cast<op_size>(opm);
             const std::uint32_t src = ea_read(em, er, sz);
             const std::uint32_t dst = d_[static_cast<std::size_t>(dn)] & size_mask(sz);
             flags_cmp(sz, src, dst, dst - src);
             if (sz == op_size::longword) {
                 cycles_ += 2;
+            }
+        } else { // EOR Dn,<ea> (opm 4-6, em != 1; CMPM with em == 1 handled above)
+            const op_size sz = static_cast<op_size>(opm - 4);
+            std::uint32_t addr = 0;
+            const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+            const std::uint32_t res = dst ^ (d_[static_cast<std::size_t>(dn)] & size_mask(sz));
+            ea_rmw_write(em, er, sz, res, addr);
+            set_logic_flags(sz, res);
+            if (em == 0 && sz == op_size::longword) {
+                cycles_ += 4;
             }
         }
     }
@@ -657,7 +667,85 @@ namespace mnemos::chips::cpu {
             cycles_ += 34 + 2 * popcount16(static_cast<std::uint16_t>(sv ^ (sv << 1U)));
             return;
         }
-        // AND / ABCD / EXG share group C and arrive in later phases.
+        // AND <ea>,Dn (opm 0-2) or AND Dn,<ea> (opm 4-6, memory only). ABCD/EXG are
+        // register-only (em < 2) and arrive in a later phase.
+        const op_size sz = static_cast<op_size>(opm & 3);
+        const std::uint32_t m = size_mask(sz);
+        if (opm < 3) {
+            const std::uint32_t src = ea_read(em, er, sz);
+            const std::uint32_t res = (d_[static_cast<std::size_t>(dn)] & src) & m;
+            d_[static_cast<std::size_t>(dn)] = (d_[static_cast<std::size_t>(dn)] & ~m) | res;
+            set_logic_flags(sz, res);
+            if (sz == op_size::longword) {
+                cycles_ += (em <= 1 || (em == 7 && er == 4)) ? 4 : 2;
+            }
+        } else if (em >= 2) {
+            std::uint32_t addr = 0;
+            const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+            const std::uint32_t res = (dst & d_[static_cast<std::size_t>(dn)]) & m;
+            ea_rmw_write(em, er, sz, res, addr);
+            set_logic_flags(sz, res);
+        }
+    }
+
+    void m68000::op_or(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
+        // DIVU/DIVS (opm 3/7) and SBCD (opm 4-6, em < 2) land in later phases.
+        if (opm == 3 || opm == 7) {
+            return;
+        }
+        const op_size sz = static_cast<op_size>(opm & 3);
+        const std::uint32_t m = size_mask(sz);
+        if (opm < 3) { // OR <ea>,Dn
+            const std::uint32_t src = ea_read(em, er, sz);
+            const std::uint32_t res = (d_[static_cast<std::size_t>(dn)] | src) & m;
+            d_[static_cast<std::size_t>(dn)] = (d_[static_cast<std::size_t>(dn)] & ~m) | res;
+            set_logic_flags(sz, res);
+            if (sz == op_size::longword) {
+                cycles_ += (em <= 1 || (em == 7 && er == 4)) ? 4 : 2;
+            }
+        } else if (em >= 2) { // OR Dn,<ea>
+            std::uint32_t addr = 0;
+            const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+            const std::uint32_t res = (dst | d_[static_cast<std::size_t>(dn)]) & m;
+            ea_rmw_write(em, er, sz, res, addr);
+            set_logic_flags(sz, res);
+        }
+    }
+
+    void m68000::op_bit(std::uint16_t op, bool dynamic) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7;
+        const int ty = (op >> 6U) & 3; // 0=BTST 1=BCHG 2=BCLR 3=BSET
+        const bool mem = em != 0;
+        unsigned bn = dynamic ? d_[static_cast<std::size_t>((op >> 9U) & 7)]
+                              : static_cast<unsigned>(fetch16() & 0xFFU);
+        bn &= mem ? 7U : 31U;
+        const std::uint32_t bit = 1U << bn;
+        const op_size bs = mem ? op_size::byte : op_size::longword;
+        std::uint32_t addr = 0;
+        std::uint32_t v = mem ? ea_rmw_read(em, er, bs, addr)
+                              : (d_[static_cast<std::size_t>(er)] & size_mask(bs));
+        if ((v & bit) != 0U) {
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
+        } else {
+            sr_ |= sr_z;
+        }
+        if (ty == 0) {
+            return; // BTST: test only, no write-back
+        }
+        if (ty == 1) {
+            v ^= bit; // BCHG
+        } else if (ty == 2) {
+            v &= ~bit; // BCLR
+        } else {
+            v |= bit; // BSET
+        }
+        if (mem) {
+            ea_rmw_write(em, er, bs, v, addr);
+        } else {
+            d_[static_cast<std::size_t>(er)] =
+                (d_[static_cast<std::size_t>(er)] & ~size_mask(bs)) | (v & size_mask(bs));
+        }
     }
 
     void m68000::op_quick(std::uint16_t op) noexcept {
@@ -696,37 +784,86 @@ namespace mnemos::chips::cpu {
     }
 
     void m68000::op_immediate(std::uint16_t op) noexcept {
-        const int op8 = (op >> 8U) & 0xF;
-        // Only ADDI ($06), SUBI ($04), CMPI ($0C) here; ANDI/ORI/EORI + bit ops are
-        // logical (phase 3), so leave them untouched (no operand consumed).
-        if (op8 != 0x06 && op8 != 0x04 && op8 != 0x0C) {
+        const int em = (op >> 3U) & 7;
+        // Bit 8 set: dynamic bit op (BTST/BCHG/BCLR/BSET Dn,<ea>); MOVEP (mode 1)
+        // is deferred to a later phase.
+        if ((op & 0x0100U) != 0U) {
+            if (em == 1) {
+                return; // MOVEP
+            }
+            op_bit(op, true);
             return;
         }
+        const int sub = (op >> 9U) & 7;
+        if (sub == 4) { // static bit op (#imm bit number)
+            op_bit(op, false);
+            return;
+        }
+        if (sub == 7) {
+            return; // MOVES (68010+) -- unsupported on the 68000
+        }
+        // Immediate ALU: ORI(0)/ANDI(1)/SUBI(2)/ADDI(3)/EORI(5)/CMPI(6).
         const op_size sz = static_cast<op_size>((op >> 6U) & 3);
         if (static_cast<int>(sz) == 3) {
             return;
         }
-        const int em = (op >> 3U) & 7, er = op & 7;
+        const int er = op & 7;
         std::uint32_t imm =
             sz == op_size::longword ? fetch32() : static_cast<std::uint32_t>(fetch16());
         if (sz == op_size::byte) {
             imm &= 0xFFU;
         }
-        if (op8 == 0x0C) { // CMPI
+        // ORI/ANDI/EORI #imm,CCR (byte). The SR (word) forms need the supervisor
+        // machinery + the privilege trap, so they land with the exception phase.
+        if ((op & 0x3FU) == 0x3CU) {
+            if (sz == op_size::byte) {
+                const auto ccr = static_cast<std::uint16_t>(imm & sr_ccr);
+                if (sub == 0) {
+                    sr_ |= ccr; // ORI CCR
+                } else if (sub == 1) {
+                    sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (sr_ & ccr)); // ANDI CCR
+                } else if (sub == 5) {
+                    sr_ ^= ccr; // EORI CCR
+                }
+            }
+            return;
+        }
+        if (sub == 6) { // CMPI
             const std::uint32_t dst = ea_read(em, er, sz);
             flags_cmp(sz, imm, dst, dst - imm);
             return;
         }
         std::uint32_t addr = 0;
         const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
-        if (op8 == 0x06) { // ADDI
-            const std::uint32_t r = dst + imm;
-            ea_rmw_write(em, er, sz, r, addr);
-            flags_add(sz, imm, dst, r);
-        } else { // SUBI
-            const std::uint32_t r = dst - imm;
-            ea_rmw_write(em, er, sz, r, addr);
-            flags_sub(sz, imm, dst, r);
+        std::uint32_t res{};
+        switch (sub) {
+        case 0: // ORI
+            res = dst | imm;
+            ea_rmw_write(em, er, sz, res, addr);
+            set_logic_flags(sz, res);
+            break;
+        case 1: // ANDI
+            res = dst & imm;
+            ea_rmw_write(em, er, sz, res, addr);
+            set_logic_flags(sz, res);
+            break;
+        case 2: // SUBI
+            res = dst - imm;
+            ea_rmw_write(em, er, sz, res, addr);
+            flags_sub(sz, imm, dst, res);
+            break;
+        case 3: // ADDI
+            res = dst + imm;
+            ea_rmw_write(em, er, sz, res, addr);
+            flags_add(sz, imm, dst, res);
+            break;
+        case 5: // EORI
+            res = dst ^ imm;
+            ea_rmw_write(em, er, sz, res, addr);
+            set_logic_flags(sz, res);
+            break;
+        default:
+            break;
         }
     }
 
@@ -786,6 +923,16 @@ namespace mnemos::chips::cpu {
                 return;
             }
             break;
+        case 0x6: // NOT
+            if (static_cast<int>(sz) != 3) {
+                std::uint32_t addr = 0;
+                const std::uint32_t v = ea_rmw_read(em, er, sz, addr);
+                const std::uint32_t r = ~v & size_mask(sz);
+                ea_rmw_write(em, er, sz, r, addr);
+                set_logic_flags(sz, r);
+                return;
+            }
+            break;
         case 0xA: // TST (TAS, size field 3, is deferred)
             if (static_cast<int>(sz) != 3) {
                 const std::uint32_t v = ea_read(em, er, sz);
@@ -802,7 +949,7 @@ namespace mnemos::chips::cpu {
 
     void m68000::exec(std::uint16_t op) {
         switch (op >> 12U) {
-        case 0x0: // ADDI / SUBI / CMPI (other group-0 ops arrive later)
+        case 0x0: // immediates (ORI/ANDI/SUBI/ADDI/EORI/CMPI) + bit ops
             op_immediate(op);
             break;
         case 0x1: // MOVE.B
@@ -810,7 +957,7 @@ namespace mnemos::chips::cpu {
         case 0x3: // MOVE.W
             op_move(op);
             break;
-        case 0x4: // NOP / EXT / NEGX / CLR / NEG / TST (rest of group 4 later)
+        case 0x4: // NOP / EXT / NEGX / CLR / NEG / NOT / TST (rest of group 4 later)
             op_group4(op);
             break;
         case 0x5: // ADDQ / SUBQ (Scc / DBcc later)
@@ -827,15 +974,18 @@ namespace mnemos::chips::cpu {
         case 0xB: // CMP / CMPA / CMPM
             op_cmp(op);
             break;
-        case 0xC: // MULU / MULS (AND / ABCD / EXG later)
+        case 0x8: // OR (DIVU/DIVS, SBCD later)
+            op_or(op);
+            break;
+        case 0xC: // AND / MULU / MULS (ABCD / EXG later)
             op_mul(op);
             break;
         case 0xD: // ADD / ADDA / ADDX
             op_add(op);
             break;
         default:
-            // Groups 6 (Bcc), 8 (OR/DIV/SBCD), A/F (line traps), E (shifts) arrive
-            // in later phases -- a 4-cycle no-op until then.
+            // Groups 6 (Bcc), A/F (line traps), E (shifts) arrive in later phases --
+            // a 4-cycle no-op until then.
             break;
         }
     }

@@ -137,13 +137,15 @@ namespace mnemos::chips::cpu {
         void exec(std::uint16_t op);
         void op_move(std::uint16_t op);
         void op_moveq(std::uint16_t op) noexcept;
-        void op_add(std::uint16_t op) noexcept;       // group D: ADD/ADDA/ADDX
-        void op_sub(std::uint16_t op) noexcept;       // group 9: SUB/SUBA/SUBX
-        void op_cmp(std::uint16_t op) noexcept;       // group B: CMP/CMPA/CMPM
-        void op_mul(std::uint16_t op) noexcept;       // group C: MULU/MULS
-        void op_quick(std::uint16_t op) noexcept;     // group 5: ADDQ/SUBQ
-        void op_immediate(std::uint16_t op) noexcept; // group 0: ADDI/SUBI/CMPI
-        void op_group4(std::uint16_t op) noexcept;    // group 4: NOP/EXT/NEGX/CLR/NEG/TST
+        void op_add(std::uint16_t op) noexcept;               // group D: ADD/ADDA/ADDX
+        void op_sub(std::uint16_t op) noexcept;               // group 9: SUB/SUBA/SUBX
+        void op_cmp(std::uint16_t op) noexcept;               // group B: CMP/CMPA/CMPM
+        void op_mul(std::uint16_t op) noexcept;               // group C: MULU/MULS
+        void op_quick(std::uint16_t op) noexcept;             // group 5: ADDQ/SUBQ
+        void op_immediate(std::uint16_t op) noexcept;         // group 0: immediates + bit ops
+        void op_bit(std::uint16_t op, bool dynamic) noexcept; // BTST/BCHG/BCLR/BSET
+        void op_or(std::uint16_t op) noexcept;                // group 8: OR (DIV/SBCD later)
+        void op_group4(std::uint16_t op) noexcept; // group 4: NOP/EXT/NEGX/CLR/NEG/NOT/TST
 
         std::array<std::uint32_t, 8> d_{};
         std::array<std::uint32_t, 8> a_{};
