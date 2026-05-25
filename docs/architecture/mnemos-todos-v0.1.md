@@ -228,6 +228,8 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Full cycle-accurate 1541 (6502 + 2x 6522 VIA + GCR) and the MOS 6522 VIA chip. (B9; via_6522 + chips::storage::c1541::{gcr, disk_bind, full_drive} — drive 6502 (port-disabled m6510) + 2x VIA + 2K RAM + 16K DOS ROM + GCR head/stepper/SYNC + IEC auto-ATN-ack. Memory map / VIA wiring / mechanism unit-tested with a synthetic ROM; real DOS ROM is data-gated and the GCR read path tracks Emu's unfinished state)
 - [ ] System-level SID variant / NTSC region / dual-SID selection + an NTSC manifest. (B10; chips support it, assembly hardcodes PAL + single 6581)
 - [ ] 6510 unstable illegal opcodes (SHA/SHX/SHY/TAS/LAS/ANE/LXA) + `$01` bit 6/7 floating-gate fade. (B11; rarely needed)
+- [ ] RS-232 / userport modem (CIA2 PA2 TXD + userport, Emu `c64_modem.c`). (B12; genuine userport peripheral, surfaced by the re-review; not covered by B1-B11. Niche — low priority)
+- [ ] Cartridge I/O-2 ($DF00) open-bus "last byte" latch. (B13; distinct from B4's VIC floating bus — the cartridge-port stale byte fastloaders/protection probe; lands with B5 cartridge support)
 
 ### Runtime library
 - [x] Create `src/runtime/` library target `mnemos::runtime`. (compiled tier-5 static lib)
