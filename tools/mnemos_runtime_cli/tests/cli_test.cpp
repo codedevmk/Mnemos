@@ -6,7 +6,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
+#include <string>
 #include <vector>
 
 using mnemos::tools::cli_options;
@@ -23,6 +26,27 @@ namespace {
     int parse(std::vector<const char*> argv, cli_options& out, std::ostream& err) {
         return parse_args(static_cast<int>(argv.size()), argv.data(), out, err) ? 1 : 0;
     }
+
+    // Write bytes to a temp file and return its path (binary, embedded NULs safe).
+    std::filesystem::path write_temp(const std::string& name, const std::string& content) {
+        const auto path = std::filesystem::temp_directory_path() / name;
+        std::ofstream f(path, std::ios::binary);
+        f.write(content.data(), static_cast<std::streamsize>(content.size()));
+        return path;
+    }
+
+    // A minimal valid Sega manifest (the cartridge is supplied separately).
+    const std::string sms_manifest = "[manifest]\n"
+                                     "schema = \"mnemos-manifest/1\"\n"
+                                     "id = \"sega.sms.ntsc\"\n"
+                                     "family = \"sega\"\n"
+                                     "revision = 1\n"
+                                     "[clock]\n"
+                                     "master_hz = 3579545\n"
+                                     "[[bus]]\n"
+                                     "id = \"main\"\n"
+                                     "address_bits = 16\n"
+                                     "endianness = \"little\"\n";
 } // namespace
 
 TEST_CASE("parse_args reads the full option set") {
@@ -137,6 +161,46 @@ TEST_CASE("run validates arguments before touching hardware") {
         CHECK(run(opts, out, err) == 2);
         CHECK_FALSE(err.str().empty());
     }
+}
+
+TEST_CASE("run boots the SMS from a sega manifest and a cartridge", "[sms]") {
+    const auto manifest = write_temp("mnemos_sms_cli_test.toml", sms_manifest);
+    // A 16 KiB cartridge whose entry is a JR-to-self spin loop.
+    std::string cart(0x4000U, '\0');
+    cart[0] = static_cast<char>(0x18); // JR
+    cart[1] = static_cast<char>(0xFE); // -2 -> spin
+    const auto rom = write_temp("mnemos_sms_cli_test.sms", cart);
+
+    cli_options opts;
+    opts.manifest = manifest;
+    opts.cart = rom;
+    opts.frames = 1U;
+    opts.dump_hash = true;
+
+    std::ostringstream out1;
+    std::ostringstream err1;
+    REQUIRE(run(opts, out1, err1) == 0);
+    CHECK(out1.str().find("frame 1 ") != std::string::npos);
+
+    // The run is deterministic: a second pass produces byte-identical output.
+    std::ostringstream out2;
+    std::ostringstream err2;
+    REQUIRE(run(opts, out2, err2) == 0);
+    CHECK(out1.str() == out2.str());
+
+    std::filesystem::remove(manifest);
+    std::filesystem::remove(rom);
+}
+
+TEST_CASE("the SMS runner requires a cartridge", "[sms]") {
+    const auto manifest = write_temp("mnemos_sms_cli_nocart.toml", sms_manifest);
+    cli_options opts;
+    opts.manifest = manifest; // no --cart
+    std::ostringstream out;
+    std::ostringstream err;
+    CHECK(run(opts, out, err) == 4);
+    CHECK_FALSE(err.str().empty());
+    std::filesystem::remove(manifest);
 }
 
 TEST_CASE("parse_input_log reads keys, joysticks, paddles and comments") {

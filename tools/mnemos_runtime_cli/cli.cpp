@@ -5,6 +5,7 @@
 #include "save_state.hpp"
 #include "scheduler.hpp"
 #include "sha256.hpp"
+#include "sms_system.hpp"
 
 #include <charconv>
 #include <fstream>
@@ -293,11 +294,13 @@ namespace mnemos::tools {
     void print_usage(std::ostream& out) {
         out << "mnemos_runtime_cli - headless deterministic runner\n\n"
                "usage: mnemos_runtime_cli --manifest <file> [options]\n\n"
+               "The manifest's family selects the machine: 'commodore' (C64) or\n"
+               "'sega' (Master System). For the SMS, pass the game with --cart.\n\n"
                "  --manifest <file>   system manifest (TOML) to boot (required)\n"
-               "  --rom-dir <dir>     directory holding the manifest's ROM files\n"
-               "  --disk <file>       .d64 disk image to mount on drive 8\n"
-               "  --drive-rom <file>  16K 1541 DOS ROM -> use the cycle-accurate drive 8\n"
-               "  --cart <file>       .crt cartridge image to insert\n"
+               "  --rom-dir <dir>     directory holding the manifest's ROM files (C64)\n"
+               "  --disk <file>       .d64 disk image to mount on drive 8 (C64)\n"
+               "  --drive-rom <file>  16K 1541 DOS ROM -> use the cycle-accurate drive 8 (C64)\n"
+               "  --cart <file>       cartridge to insert (.crt for C64, .sms for the SMS)\n"
                "  --tape <file>       .tap datasette image (PLAY auto-pressed)\n"
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --sid <6581|8580>   select the SID revision (default 6581)\n"
@@ -437,6 +440,54 @@ namespace mnemos::tools {
         return foundation::sha256(bytes).hex();
     }
 
+    namespace {
+        // Sega Master System run path. The cartridge image comes from --cart (it is
+        // the game, not a fixed system ROM), the region from the manifest id. The
+        // VDP drives frame boundaries; all SMS chips run at the Z80 clock (divider 1)
+        // and the mapper is memory-mapped rather than scheduled.
+        int run_sms(const manifests::manifest& m, const cli_options& options, std::ostream& out,
+                    std::ostream& err) {
+            if (options.cart.empty()) {
+                err << "error: the SMS runner needs a cartridge (--cart <file.sms>)\n";
+                return 4;
+            }
+            auto cart = read_file(options.cart);
+            if (!cart) {
+                err << "error: cannot read cartridge " << options.cart.string() << "\n";
+                return 6;
+            }
+            if (!options.input_log.empty()) {
+                err << "warning: --input-log is C64-only; ignored for the SMS\n";
+            }
+            if (!options.save.empty() || !options.load.empty()) {
+                err << "warning: SMS save/load state is not wired up yet; ignored\n";
+            }
+
+            manifests::sms::sms_config cfg;
+            if (m.id.find("pal") != std::string::npos) {
+                cfg.video_region = manifests::sms::sms_config::region::pal;
+            }
+
+            auto sys = manifests::sms::assemble_sms(std::move(*cart), cfg);
+            out << "inserted cartridge " << options.cart.string() << "\n";
+
+            std::vector<runtime::scheduled_chip> chips = {
+                {&sys->vdp, 1U}, {&sys->cpu, 1U}, {&sys->psg, 1U}};
+            runtime::scheduler sched(std::move(chips), &sys->vdp);
+
+            sched.run_frames(options.frames);
+
+            if (options.dump_hash) {
+                out << "frame " << sched.frame_index() << " "
+                    << hash_framebuffer(sys->vdp.framebuffer()) << "\n";
+            } else {
+                out << "ran " << options.frames << " frame(s); frame_index=" << sched.frame_index()
+                    << "\n";
+            }
+            return 0;
+        }
+    } // namespace
+
     int run(const cli_options& options, std::ostream& out, std::ostream& err) {
         if (options.help) {
             print_usage(out);
@@ -468,9 +519,14 @@ namespace mnemos::tools {
             return 2;
         }
         const manifests::manifest& m = *loaded.value;
+        // The Sega Master System has its own (simpler) run path; the C64 falls
+        // through to the rest of this function.
+        if (m.family == "sega") {
+            return run_sms(m, options, out, err);
+        }
         if (m.family != "commodore") {
             err << "error: unsupported system family '" << m.family
-                << "' (only the Commodore 64 is wired up)\n";
+                << "' (only the Commodore 64 and Sega Master System are wired up)\n";
             return 3;
         }
 

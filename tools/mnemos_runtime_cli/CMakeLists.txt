@@ -15,6 +15,7 @@ target_link_libraries(
         mnemos::foundation
         mnemos::manifests
         mnemos::manifests::c64
+        mnemos::manifests::sms
         mnemos::runtime
 )
 

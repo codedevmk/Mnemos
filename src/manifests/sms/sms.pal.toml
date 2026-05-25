@@ -1,0 +1,58 @@
+# Sega Master System (PAL) — Mnemos system manifest (schema mnemos-manifest/1).
+#
+# The PAL counterpart of sms.ntsc.toml: the slightly slower PAL Z80 master clock
+# and a 313-line VDP frame (the runner reads the region from this id). The
+# cartridge is supplied with --cart; see sms.ntsc.toml for the rationale.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.pal"
+display_name = "Sega Master System (PAL)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# PAL Z80 master clock; VDP + PSG ticked at the same rate (divider 1).
+master_hz               = 3546893
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "sega.sms_mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+[[bus.region]]
+name    = "cartridge"
+range   = "0x0000-0xBFFF"
+backing = "mapper"
+
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xDFFF"
+backing = "ram"
+size    = 8192

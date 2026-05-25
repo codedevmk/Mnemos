@@ -1,0 +1,60 @@
+# Sega Master System (NTSC) — Mnemos system manifest (schema mnemos-manifest/1).
+#
+# Identifies the machine for the headless runner; the cartridge image is supplied
+# at run time with --cart (it is the game, not a fixed system ROM), so this
+# manifest declares no rom-backed regions. The runner derives the region (NTSC vs
+# PAL) from this manifest's id. The concrete memory map + I/O routing live in
+# manifests::sms::assemble_sms.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.ntsc"
+display_name = "Sega Master System (NTSC)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# Z80 master clock; the VDP and PSG are ticked at the same rate (divider 1).
+master_hz               = 3579545
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "sega.sms_mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+[[bus.region]]
+name    = "cartridge"
+range   = "0x0000-0xBFFF"
+backing = "mapper"
+
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xDFFF"
+backing = "ram"
+size    = 8192
