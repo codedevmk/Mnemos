@@ -179,9 +179,9 @@
 - [x] Implement `bus` with width, endianness, sorted region table. (7e62c0d)
 - [~] Implement region kinds: `ram`, `rom`, `mmio_chip`, `mapper`. (7e62c0d: ram/rom/mmio done; mapper backing arrives with the mapper-hook slice)
 - [x] Implement bus read/write fast path with cached resolution. (7e62c0d; O(log N) sorted-table resolution. Per-chip cached backing pointer is a later optimization)
-- [ ] Implement mapper hook plumbing.
-- [ ] Implement overlay control (PLA-driven).
-- [~] Unit tests covering region resolution edge cases (boundary, mirror, overlay precedence). (7e62c0d: boundary + address-mask mirror covered; overlay precedence lands with the overlay slice)
+- [ ] Implement mapper hook plumbing. (cartridge mappers — deferred until a cart is needed; the no-cart C64 boot does not use one. The overlay predicate mechanism can host a mapper view when added.)
+- [x] Implement overlay control (PLA-driven). (d88a651; region priority + per-access active predicate — ROM read-overlays with write-fallthrough, I/O overlays; the C64 shell drives the predicates from c64_pla. CI run 26387620584)
+- [x] Unit tests covering region resolution edge cases (boundary, mirror, overlay precedence). (7e62c0d boundary + mirror; d88a651 overlay precedence with ROM/IO banking)
 
 ### Manifest loader
 - [ ] Create `src/manifests/common/` library target `mnemos::manifests::common`.
