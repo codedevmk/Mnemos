@@ -76,7 +76,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "llvm-profdata merge failed with exit code $LASTEXITCODE"
 }
 
-$foundationHeaders = Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'src/foundation/include') -Recurse -File -Filter '*.hpp'
+$foundationHeaders = Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'src/foundation') -Recurse -File -Filter '*.hpp'
 $coverageJson = & $llvmCov export -summary-only -format=text $testBinary.FullName "-instr-profile=$profileData" @($foundationHeaders.FullName)
 if ($LASTEXITCODE -ne 0) {
     throw "llvm-cov export failed with exit code $LASTEXITCODE"
