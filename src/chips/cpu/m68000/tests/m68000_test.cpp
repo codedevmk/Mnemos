@@ -461,3 +461,75 @@ TEST_CASE("m68000 ANDI to CCR masks the condition codes") {
     CHECK((r.sr & m68000::sr_ccr) == 0U);
     CHECK((r.sr & m68000::sr_s) != 0U); // supervisor bit untouched
 }
+
+TEST_CASE("m68000 LSL/LSR set carry+extend and zero") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00008000U;
+    auto r = run_one(m, {0xE348U}, s); // LSL.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0000U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+    CHECK((r.sr & m68000::sr_x) != 0U);
+    CHECK((r.sr & m68000::sr_z) != 0U);
+
+    s.d[0] = 0x00000001U;
+    r = run_one(m, {0xE248U}, s); // LSR.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0000U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+    CHECK((r.sr & m68000::sr_z) != 0U);
+}
+
+TEST_CASE("m68000 ASR preserves the sign bit") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00008000U;
+    const auto r = run_one(m, {0xE240U}, s); // ASR.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0xC000U);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+    CHECK((r.sr & m68000::sr_c) == 0U);
+}
+
+TEST_CASE("m68000 ROL/ROR rotate and set carry from the wrapped bit") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00008000U;
+    auto r = run_one(m, {0xE358U}, s); // ROL.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0001U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+
+    s.d[0] = 0x00000001U;
+    r = run_one(m, {0xE258U}, s); // ROR.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x8000U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+}
+
+TEST_CASE("m68000 ROXL rotates through the extend bit") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000000U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_x); // X set
+    const auto r = run_one(m, {0xE350U}, s);                        // ROXL.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0001U);                           // X rotated into bit 0
+    CHECK((r.sr & m68000::sr_c) == 0U);                             // nothing shifted out
+    CHECK((r.sr & m68000::sr_x) == 0U);
+}
+
+TEST_CASE("m68000 ASL.L with the shift count in a register") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000001U;
+    s.d[1] = 0x00000004U;                    // count = 4
+    const auto r = run_one(m, {0xE3A0U}, s); // ASL.L D1,D0
+    CHECK(r.d[0] == 0x00000010U);
+}
+
+TEST_CASE("m68000 memory shift operates on a word in memory") {
+    machine m;
+    m.w16(0x2000U, 0x0002U);
+    m68000::registers s{};
+    s.a[0] = 0x00002000U;
+    const auto r = run_one(m, {0xE2D0U}, s); // LSR (A0)
+    CHECK(m.bus.read8(0x2000U) == 0x00U);
+    CHECK(m.bus.read8(0x2001U) == 0x01U); // 0x0002 >> 1 = 0x0001
+    (void)r;
+}

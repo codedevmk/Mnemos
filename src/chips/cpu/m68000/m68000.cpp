@@ -947,6 +947,208 @@ namespace mnemos::chips::cpu {
         // in later phases.
     }
 
+    void m68000::op_shift(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7;
+        const op_size size_field = static_cast<op_size>((op >> 6U) & 3);
+
+        // Memory shift: size field == 3 -> a word memory operand shifted by one.
+        if (static_cast<int>(size_field) == 3) {
+            const int ty = (op >> 9U) & 3;
+            const bool left = (op & 0x0100U) != 0U;
+            constexpr std::uint32_t msb = 0x8000U;
+            std::uint32_t addr = 0;
+            const std::uint32_t v = ea_rmw_read(em, er, op_size::word, addr);
+            std::uint32_t r = v;
+            switch (ty) {
+            case 0: // ASL / ASR
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_x | sr_v));
+                if (left) {
+                    if ((v & msb) != 0U) {
+                        sr_ |= sr_c | sr_x;
+                    }
+                    r = (v << 1U) & 0xFFFFU;
+                    if (((r ^ v) & msb) != 0U) {
+                        sr_ |= sr_v;
+                    }
+                } else {
+                    if ((v & 1U) != 0U) {
+                        sr_ |= sr_c | sr_x;
+                    }
+                    r = (v >> 1U) | (v & msb);
+                }
+                break;
+            case 1: // LSL / LSR
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_x | sr_v));
+                if (left) {
+                    if ((v & msb) != 0U) {
+                        sr_ |= sr_c | sr_x;
+                    }
+                    r = (v << 1U) & 0xFFFFU;
+                } else {
+                    if ((v & 1U) != 0U) {
+                        sr_ |= sr_c | sr_x;
+                    }
+                    r = v >> 1U;
+                }
+                break;
+            case 2: { // ROXL / ROXR
+                const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_v));
+                if (left) {
+                    const bool carry = (v & msb) != 0U;
+                    r = ((v << 1U) | x) & 0xFFFFU;
+                    sr_ = static_cast<std::uint16_t>(carry ? (sr_ | sr_c | sr_x) : (sr_ & ~sr_x));
+                } else {
+                    const bool carry = (v & 1U) != 0U;
+                    r = (v >> 1U) | (x != 0U ? msb : 0U);
+                    sr_ = static_cast<std::uint16_t>(carry ? (sr_ | sr_c | sr_x) : (sr_ & ~sr_x));
+                }
+                break;
+            }
+            default: // 3: ROL / ROR
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_v));
+                if (left) {
+                    const std::uint32_t carry = (v & msb) != 0U ? 1U : 0U;
+                    r = ((v << 1U) | carry) & 0xFFFFU;
+                    if (carry != 0U) {
+                        sr_ |= sr_c;
+                    }
+                } else {
+                    const std::uint32_t carry = v & 1U;
+                    r = (v >> 1U) | (carry << 15U);
+                    if (carry != 0U) {
+                        sr_ |= sr_c;
+                    }
+                }
+                break;
+            }
+            ea_rmw_write(em, er, op_size::word, r, addr);
+            sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z));
+            if ((r & 0xFFFFU) == 0U) {
+                sr_ |= sr_z;
+            }
+            if ((r & msb) != 0U) {
+                sr_ |= sr_n;
+            }
+            return;
+        }
+
+        // Register shift / rotate.
+        const int count_reg = (op >> 9U) & 7;
+        const bool left = (op & 0x0100U) != 0U;
+        const int ty = (op >> 3U) & 3;
+        const auto dn = static_cast<std::size_t>(op & 7);
+        const bool count_in_reg = (op & 0x0020U) != 0U;
+        const op_size sz = size_field;
+        const int count = count_in_reg
+                              ? static_cast<int>(d_[static_cast<std::size_t>(count_reg)] & 63U)
+                              : (count_reg != 0 ? count_reg : 8);
+        const std::uint32_t v = d_[dn] & size_mask(sz);
+        const std::uint32_t msb = size_sign_bit(sz);
+        const std::uint32_t m = size_mask(sz);
+        const int bits = 8 * size_bytes(sz);
+        std::uint32_t r = v;
+
+        sr_ = static_cast<std::uint16_t>(sr_ & ~sr_v);
+        if (count == 0) {
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_c);
+            if (ty == 2 && (sr_ & sr_x) != 0U) {
+                sr_ |= sr_c; // ROXL/ROXR by 0 copies X into C
+            }
+        } else {
+            switch (ty) {
+            case 0: // ASL / ASR
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_x));
+                if (left) {
+                    for (int i = 0; i < count; ++i) {
+                        const std::uint32_t prev = r;
+                        sr_ = static_cast<std::uint16_t>((r & msb) != 0U ? (sr_ | sr_c | sr_x)
+                                                                         : (sr_ & ~(sr_c | sr_x)));
+                        r = (r << 1U) & m;
+                        if (((r ^ prev) & msb) != 0U) {
+                            sr_ |= sr_v;
+                        }
+                    }
+                } else if (count >= bits) {
+                    if ((v & msb) != 0U) {
+                        r = m;
+                        if (count == bits) {
+                            sr_ |= sr_c | sr_x;
+                        }
+                    } else {
+                        r = 0U;
+                    }
+                } else {
+                    const std::uint32_t sign = (v & msb) != 0U ? msb : 0U;
+                    for (int i = 0; i < count; ++i) {
+                        sr_ = static_cast<std::uint16_t>((r & 1U) != 0U ? (sr_ | sr_c | sr_x)
+                                                                        : (sr_ & ~(sr_c | sr_x)));
+                        r = (r >> 1U) | sign;
+                    }
+                }
+                break;
+            case 1: // LSL / LSR
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_x));
+                for (int i = 0; i < count; ++i) {
+                    if (left) {
+                        sr_ = static_cast<std::uint16_t>((r & msb) != 0U ? (sr_ | sr_c | sr_x)
+                                                                         : (sr_ & ~(sr_c | sr_x)));
+                        r = (r << 1U) & m;
+                    } else {
+                        sr_ = static_cast<std::uint16_t>((r & 1U) != 0U ? (sr_ | sr_c | sr_x)
+                                                                        : (sr_ & ~(sr_c | sr_x)));
+                        r >>= 1U;
+                    }
+                }
+                break;
+            case 2: { // ROXL / ROXR (rotate through X)
+                std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+                for (int i = 0; i < count; ++i) {
+                    if (left) {
+                        const std::uint32_t out = (r & msb) != 0U ? 1U : 0U;
+                        r = ((r << 1U) | x) & m;
+                        x = out;
+                    } else {
+                        const std::uint32_t out = r & 1U;
+                        r = (r >> 1U) | (x != 0U ? msb : 0U);
+                        x = out;
+                    }
+                }
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_c | sr_x));
+                if (x != 0U) {
+                    sr_ |= sr_c | sr_x;
+                }
+                break;
+            }
+            default: { // 3: ROL / ROR
+                const int sh = count % bits;
+                sr_ = static_cast<std::uint16_t>(sr_ & ~sr_c);
+                if (sh == 0) {
+                    r = v;
+                } else if (left) {
+                    r = ((v << sh) | (v >> (bits - sh))) & m;
+                } else {
+                    r = ((v >> sh) | (v << (bits - sh))) & m;
+                }
+                if (left ? ((r & 1U) != 0U) : ((r & msb) != 0U)) {
+                    sr_ |= sr_c;
+                }
+                break;
+            }
+            }
+        }
+
+        d_[dn] = (d_[dn] & ~m) | (r & m);
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z));
+        if ((r & m) == 0U) {
+            sr_ |= sr_z;
+        }
+        if ((r & msb) != 0U) {
+            sr_ |= sr_n;
+        }
+        cycles_ += (sz == op_size::longword ? 4 : 2) + 2 * count;
+    }
+
     void m68000::exec(std::uint16_t op) {
         switch (op >> 12U) {
         case 0x0: // immediates (ORI/ANDI/SUBI/ADDI/EORI/CMPI) + bit ops
@@ -983,9 +1185,12 @@ namespace mnemos::chips::cpu {
         case 0xD: // ADD / ADDA / ADDX
             op_add(op);
             break;
+        case 0xE: // ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR
+            op_shift(op);
+            break;
         default:
-            // Groups 6 (Bcc), A/F (line traps), E (shifts) arrive in later phases --
-            // a 4-cycle no-op until then.
+            // Groups 6 (Bcc), A/F (line traps) arrive in later phases -- a 4-cycle
+            // no-op until then.
             break;
         }
     }

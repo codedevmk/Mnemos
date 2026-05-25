@@ -380,9 +380,13 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   functional core + 14 EA modes + MOVE family + flags + state, 11 tests. phase 2:
   integer arithmetic — ADD/ADDA/ADDX, SUB/SUBA/SUBX, CMP/CMPA/CMPM, ADDQ/SUBQ,
   ADDI/SUBI/CMPI, MULU/MULS, NEG/NEGX/CLR/EXT/TST, with the full X/V/C flag model
-  (flags_add/sub/cmp/addx/subx); 13 more tests (24 total). Later phases: logical/
-  shift/bit, control flow + the exception framework (which also brings DIVU/DIVS,
-  CHK, TRAPV), BCD/misc, cycle-accurate prefetch, then the Emu conformance vectors)
+  (flags_add/sub/cmp/addx/subx); 13 more tests (24 total). phase 3: logical/shift/
+  bit — AND/OR/EOR/NOT + ANDI/ORI/EORI(+CCR) + BTST/BCHG/BCLR/BSET (3a), then the
+  full shift/rotate family ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR in register, immediate
+  and memory forms (3b), 13 more tests (37 total). Later phases: control flow + the
+  exception framework (which also brings DIVU/DIVS, CHK, TRAPV, MOVE-to/from-SR),
+  BCD/misc (ABCD/SBCD/MOVEM/LEA/etc.), cycle-accurate prefetch, then the Emu
+  conformance vectors)
 - [ ] Implement `chips::audio::ym2612`.
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).
