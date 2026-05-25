@@ -116,7 +116,8 @@ namespace mnemos::chips::peripheral {
             // Status: report size (>128K sets bit 4); reading clears the latches.
             const std::uint8_t size_bit = ram_.size() > (128U * 1024U) ? 0x10U : 0x00U;
             const std::uint8_t value = static_cast<std::uint8_t>(status_ | size_bit);
-            status_ = static_cast<std::uint8_t>(status_ & ~(status_irq | status_end | status_fault));
+            status_ =
+                static_cast<std::uint8_t>(status_ & ~(status_irq | status_end | status_fault));
             return value;
         }
         case 0x01U:
@@ -130,7 +131,8 @@ namespace mnemos::chips::peripheral {
         case 0x05U:
             return static_cast<std::uint8_t>((reu_addr_ >> 8U) & 0xFFU);
         case 0x06U:
-            return static_cast<std::uint8_t>(((reu_addr_ >> 16U) & 0x07U) | 0xF8U); // unused high = 1
+            return static_cast<std::uint8_t>(((reu_addr_ >> 16U) & 0x07U) |
+                                             0xF8U); // unused high = 1
         case 0x07U:
             return static_cast<std::uint8_t>(length_ & 0xFFU);
         case 0x08U:
@@ -165,7 +167,8 @@ namespace mnemos::chips::peripheral {
             reu_addr_ = (reu_addr_ & 0xFF00FFU) | (static_cast<std::uint32_t>(value) << 8U);
             return;
         case 0x06U:
-            reu_addr_ = (reu_addr_ & 0x00FFFFU) | (static_cast<std::uint32_t>(value & 0x07U) << 16U);
+            reu_addr_ =
+                (reu_addr_ & 0x00FFFFU) | (static_cast<std::uint32_t>(value & 0x07U) << 16U);
             return;
         case 0x07U:
             length_ = static_cast<std::uint16_t>((length_ & 0xFF00U) | value);
@@ -212,9 +215,9 @@ namespace mnemos::chips::peripheral {
     instrumentation::i_chip_introspection& reu::introspection() noexcept { return introspection_; }
 
     namespace {
-        [[maybe_unused]] const auto reu_registration = register_factory(
-            "commodore.1750", chip_class::peripheral,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<reu>(); });
+        [[maybe_unused]] const auto reu_registration =
+            register_factory("commodore.1750", chip_class::peripheral,
+                             []() -> std::unique_ptr<i_chip> { return std::make_unique<reu>(); });
     } // namespace
 
 } // namespace mnemos::chips::peripheral

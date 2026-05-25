@@ -87,11 +87,11 @@ TEST_CASE("reu verify flags a fault on mismatch") {
     unit.attach_bus(bus);
     bus.memory[0x4000U] = 0xEEU;
     unit.poke(0U, 0xEEU);
-    run(unit, 0x4000U, 0U, 1U, 0x03U); // verify, match
+    run(unit, 0x4000U, 0U, 1U, 0x03U);            // verify, match
     CHECK((unit.mmio_read(0x00U) & 0x20U) == 0U); // no fault
 
-    unit.poke(0U, 0x01U);              // now differs
-    run(unit, 0x4000U, 0U, 1U, 0x03U); // verify, mismatch
+    unit.poke(0U, 0x01U);                         // now differs
+    run(unit, 0x4000U, 0U, 1U, 0x03U);            // verify, mismatch
     CHECK((unit.mmio_read(0x00U) & 0x20U) != 0U); // fault latched
 }
 
