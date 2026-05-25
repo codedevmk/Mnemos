@@ -50,8 +50,12 @@ geometry. The display window uses a canonical CSEL=1/RSEL=1 origin.
 - Cycle-exact beam alignment (cycle->X), open-border / sprite-in-border tricks,
   mid-line raster splits (renderer currently latches per-line, not per-cycle).
 - Sprite fetch + compositor + priority + sprite-sprite / sprite-data collisions.
-- Sprite-DMA BA/AEC timing; dynamic bank tracking from CIA2 at runtime.
+- Sprite-DMA BA/AEC timing.
 - Save/load state — deferred to the M3 runtime save-state format.
+
+The /IRQ output now drives an edge callback (`set_irq_callback`) and the C64
+shell ORs it with CIA1 into the 6510 /IRQ; the 16K fetch bank tracks CIA2 port A
+at runtime (`set_bank` from the CIA2 port-A callback).
 
 ## Intentionally omitted from the port
 

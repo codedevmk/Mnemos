@@ -255,3 +255,26 @@ TEST_CASE("vic_ii_6569 renders hi-res text from attached memory") {
     CHECK(fb.pixels[origin] == vic_ii_6569::color_rgb888(0x01U));      // glyph bit set -> white
     CHECK(fb.pixels[origin + 1U] == vic_ii_6569::color_rgb888(0x06U)); // glyph bit clear -> bg
 }
+
+TEST_CASE("vic_ii_6569 fires the IRQ callback on raster assert and acknowledge") {
+    vic_ii_6569 vic;
+    bool line = false;
+    int edges = 0;
+    vic.set_irq_callback([&](bool asserted) {
+        line = asserted;
+        ++edges;
+    });
+
+    vic.write(0x1AU, 0x01U); // enable the raster IRQ source in the mask
+    vic.write(0x12U, 0x40U); // compare line 64
+    CHECK_FALSE(line);
+
+    vic.set_raster(0x40U); // beam reaches the compare line -> /IRQ asserts
+    CHECK(line);
+    CHECK(vic.irq_asserted());
+    CHECK(edges == 1);
+
+    vic.write(0x19U, 0x01U); // write-1 acknowledge -> /IRQ releases
+    CHECK_FALSE(line);
+    CHECK(edges == 2);
+}

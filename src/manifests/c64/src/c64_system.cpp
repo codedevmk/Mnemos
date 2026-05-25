@@ -16,21 +16,41 @@ namespace mnemos::manifests::c64 {
         s->kernal_rom = std::move(kernal_rom);
         s->chargen_rom = std::move(chargen_rom);
 
-        // PAL φ2 with a 50 Hz TOD source for both CIAs.
-        chips::bus_controller::cia_6526::config cia_cfg;
-        cia_cfg.tod_tick_hz = 985'248U;
-        cia_cfg.tod_src_hz = 50U;
-        s->cia1.configure(cia_cfg);
-        s->cia2.configure(cia_cfg);
         s->vic.set_revision(chips::video::vic_ii_6569::revision::pal_6569);
 
         // The VIC fetches glyphs/screen from main RAM + the character ROM, and
-        // colours from colour RAM. Bank 0 is the power-up default (CIA2 port A
-        // floats to $00 -> inverted bank 0); dynamic bank switching is follow-up.
+        // colours from colour RAM.
         s->vic.attach_memory({.ram = std::span<const std::uint8_t>(s->ram),
                               .char_rom = std::span<const std::uint8_t>(s->chargen_rom),
                               .color_ram = std::span<const std::uint8_t>(s->color_ram)});
-        s->vic.set_bank(0U);
+        s->vic.set_bank(0U); // CIA2 port A floats to $00 -> bank 0 until the OS sets it
+
+        // Interrupt wiring. The 6510 /IRQ line is the OR of the VIC raster IRQ and
+        // the CIA1 timer/flag IRQ; CIA2 drives /NMI. Each source pushes the live
+        // combined level so the machine is fully wired without a per-cycle poll.
+        const auto refresh_irq = [s]() {
+            s->cpu.set_irq_line(s->vic.irq_asserted() || s->cia1.irq_asserted());
+        };
+        s->vic.set_irq_callback([refresh_irq](bool) { refresh_irq(); });
+
+        // PAL φ2 with a 50 Hz TOD source for both CIAs.
+        chips::bus_controller::cia_6526::config cia1_cfg;
+        cia1_cfg.tod_tick_hz = 985'248U;
+        cia1_cfg.tod_src_hz = 50U;
+        cia1_cfg.irq_edge = [refresh_irq](bool) { refresh_irq(); };
+        s->cia1.configure(cia1_cfg);
+
+        chips::bus_controller::cia_6526::config cia2_cfg;
+        cia2_cfg.tod_tick_hz = 985'248U;
+        cia2_cfg.tod_src_hz = 50U;
+        cia2_cfg.irq_edge = [s](bool asserted) { s->cpu.set_nmi_line(asserted); };
+        // CIA2 port A bits 0-1 (inverted) select the VIC's 16K bank. Use the
+        // composed pin level, not the latch the callback reports, so input pins
+        // pull high (bank 0) before the OS drives them.
+        cia2_cfg.write_port_a = [s](std::uint8_t) {
+            s->vic.set_bank(static_cast<std::uint8_t>((~s->cia2.port_a_pins()) & 0x03U));
+        };
+        s->cia2.configure(cia2_cfg);
 
         // The PLA decode reads the live 6510 $01 port each access (bare machine, so
         // /GAME and /EXROM float high — the PLA defaults).

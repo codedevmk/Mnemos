@@ -89,6 +89,7 @@ namespace mnemos::chips::video {
         display_state_ = false;
         raster_match_active_ = false;
         frame_index_ = 0U;
+        irq_last_ = false;
         update_irq_registers();
     }
 
@@ -144,6 +145,14 @@ namespace mnemos::chips::video {
         const std::uint8_t master = ((sources & mask) != 0U) ? irq_master : 0U;
         regs_[reg_vicirq] = static_cast<std::uint8_t>(sources | master);
         regs_[reg_irqmsk] = mask;
+
+        const bool asserted = master != 0U;
+        if (asserted != irq_last_) {
+            irq_last_ = asserted;
+            if (irq_callback_) {
+                irq_callback_(asserted);
+            }
+        }
     }
 
     void vic_ii_6569::latch_irq_source(std::uint8_t source) noexcept {

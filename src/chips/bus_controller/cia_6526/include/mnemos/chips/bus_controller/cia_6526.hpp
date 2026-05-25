@@ -73,6 +73,12 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] bool irq_asserted() const noexcept { return irq_out_; }
         [[nodiscard]] std::uint8_t pb_timer_bits() const noexcept;
 
+        // The live pin-level value of port A: output bits from the latch (masked by
+        // DDRA), input bits from the read callback or pulled high. The C64 derives
+        // the VIC bank from CIA2's PA0-1 this way (the write_port_a callback only
+        // reports the output latch, not the composed pins).
+        [[nodiscard]] std::uint8_t port_a_pins() const;
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:

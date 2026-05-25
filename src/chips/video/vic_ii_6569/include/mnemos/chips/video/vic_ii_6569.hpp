@@ -4,7 +4,9 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace mnemos::chips::video {
@@ -103,6 +105,12 @@ namespace mnemos::chips::video {
         // Beam scheduler: advance by `cycles` VIC cycles (63/line PAL, 65 NTSC).
         // (tick is the i_chip entry point and forwards here.)
 
+        // Fired whenever the /IRQ output transitions (level). The C64 wiring ORs
+        // this with the CIA1 /IRQ into the 6510 IRQ line. Unset by default.
+        void set_irq_callback(std::function<void(bool asserted)> callback) noexcept {
+            irq_callback_ = std::move(callback);
+        }
+
         void trigger_light_pen(std::uint16_t x, std::uint16_t y) noexcept;
         void set_raster(std::uint16_t line) noexcept; // test/debug: jump the beam
 
@@ -171,6 +179,10 @@ namespace mnemos::chips::video {
         bool display_state_{};
 
         bool raster_match_active_{};
+
+        // /IRQ output edge tracking + sink.
+        std::function<void(bool)> irq_callback_{};
+        bool irq_last_{};
 
         // Frame output.
         std::vector<std::uint32_t> framebuffer_; // frame_width * frame_height, ARGB-ignored

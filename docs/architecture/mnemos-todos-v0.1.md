@@ -199,6 +199,21 @@
 - [x] Document ROM acquisition and SHA-256s in `src/manifests/c64/ROMS.md`. (acquisition, per-file hash commands, placeholder-sha256 policy; tests use pattern-filled buffers, no copyrighted data)
 - [x] Note: ROM files themselves are NOT committed; CI obtains them from a configured source. (`.gitignore` ignores `*.bin`/`roms/`; manifest sha256 fields are placeholders pinned locally per ROMS.md)
 
+### C64 system wiring & peripherals (from the Emu C64 gap review)
+The C64 chips are individually well-ported; these are system-level wiring/peripheral
+gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
+- [x] Route VIC + CIA1 /IRQ into the 6510 /IRQ and CIA2 into /NMI. (B1; assemble_c64 ORs vic.irq_asserted()|cia1 via edge callbacks into set_irq_line, CIA2 -> set_nmi_line; the single biggest correctness blocker — without it no IRQ-driven program runs)
+- [x] Track the VIC 16K bank from CIA2 port A at runtime. (B3; CIA2 write_port_a -> vic.set_bank((~port_a_pins())&3))
+- [ ] Keyboard matrix + joystick wiring (CIA1 PRA/PRB callbacks) and paddle/POT mux to SID. (B2; needed for any interactive use; runtime input_buffer exists but isn't bound to CIA1)
+- [ ] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4)
+- [ ] Cartridge support: `.crt` loader + generic 8K/16K/Ultimax + Ocean/Magic Desk + EasyFlash; drive `/GAME`//EXROM into the PLA. (B5; partially adjacent to M3 "mapper hook plumbing")
+- [ ] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; `i_storage` slot reserved, `src/chips/storage` still a README — kept parked per direction)
+- [ ] Datasette: 1530 `.tap` v0/v1 pulse playback -> CIA1 /FLAG. (B7; small, self-contained)
+- [ ] REU (1700/1764/1750) `$DF00` DMA controller. (B8)
+- [ ] Full cycle-accurate 1541 (6502 + 2x 6522 VIA + GCR) and the MOS 6522 VIA chip. (B9; high effort, parked — synthetic drive covers most cases)
+- [ ] System-level SID variant / NTSC region / dual-SID selection + an NTSC manifest. (B10; chips support it, assembly hardcodes PAL + single 6581)
+- [ ] 6510 unstable illegal opcodes (SHA/SHX/SHY/TAS/LAS/ANE/LXA) + `$01` bit 6/7 floating-gate fade. (B11; rarely needed)
+
 ### Runtime library
 - [x] Create `src/runtime/` library target `mnemos::runtime`. (compiled tier-5 static lib)
 - [x] Implement master clock with divider table. (scheduler tracks the master cycle; each chip carries a master->chip divider)

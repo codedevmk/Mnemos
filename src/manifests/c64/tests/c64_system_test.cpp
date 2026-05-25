@@ -71,3 +71,55 @@ TEST_CASE("the 6510 $01 port drives PLA banking", "[c64][banking]") {
         CHECK(bus.read8(0xD800U) == 0x0AU);
     }
 }
+
+TEST_CASE("assemble_c64 wires the VIC raster IRQ into the 6510", "[c64][irq]") {
+    auto sys = make_c64();
+    auto& cpu = sys->cpu;
+    auto& vic = sys->vic;
+    cpu.reset(reset_kind::power_on);
+
+    // All-RAM banking so we control the IRQ vector at $FFFE/$FFFF.
+    cpu.write(0x0000U, 0x2FU);
+    cpu.write(0x0001U, 0x30U);
+
+    // Main loop JMP $1000; IRQ handler JMP $4000; IRQ vector -> $4000.
+    sys->ram[0x1000] = 0x4CU;
+    sys->ram[0x1001] = 0x00U;
+    sys->ram[0x1002] = 0x10U;
+    sys->ram[0x4000] = 0x4CU;
+    sys->ram[0x4001] = 0x00U;
+    sys->ram[0x4002] = 0x40U;
+    sys->ram[0xFFFE] = 0x00U;
+    sys->ram[0xFFFF] = 0x40U;
+
+    mnemos::chips::cpu::m6510::registers regs{};
+    regs.pc = 0x1000U;
+    regs.sp = 0xFFU;
+    regs.p = 0x20U; // I flag clear: IRQs enabled
+    cpu.set_registers(regs);
+
+    vic.write(0x1AU, 0x01U); // enable raster IRQ
+    vic.write(0x12U, 0x05U); // compare at line 5
+
+    for (int i = 0; i < 4000 && cpu.cpu_registers().pc != 0x4000U; ++i) {
+        vic.tick(1U);
+        cpu.tick(1U);
+    }
+
+    const auto& r = cpu.cpu_registers();
+    CHECK(r.pc == 0x4000U);     // vectored into the IRQ handler
+    CHECK((r.p & 0x04U) != 0U); // I set while servicing
+    CHECK(r.sp == 0xFCU);       // pushed PCH, PCL, P
+}
+
+TEST_CASE("assemble_c64 tracks the VIC bank from CIA2 port A", "[c64][vic]") {
+    auto sys = make_c64();
+    CHECK(sys->vic.bank() == 0U); // power-up default (port A floats high)
+
+    sys->cia2.write(0x02U, 0x03U); // DDRA: bits 0-1 are outputs
+    sys->cia2.write(0x00U, 0x02U); // PRA = %10 -> bank = ~%10 & 3 = 1
+    CHECK(sys->vic.bank() == 1U);
+
+    sys->cia2.write(0x00U, 0x00U); // PRA = %00 -> bank 3
+    CHECK(sys->vic.bank() == 3U);
+}
