@@ -790,7 +790,7 @@ namespace mnemos::chips::bus_controller {
         cnt_prev_ = reader.boolean();
     }
 
-    instrumentation::i_chip_introspection& cia_6526::introspection() noexcept {
+    instrumentation::ichip_introspection& cia_6526::introspection() noexcept {
         return introspection_;
     }
 
@@ -805,7 +805,7 @@ namespace mnemos::chips::bus_controller {
     namespace {
         [[maybe_unused]] const auto cia_6526_registration = register_factory(
             "mos.6526", chip_class::bus_controller,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<cia_6526>(); });
+            []() -> std::unique_ptr<ichip> { return std::make_unique<cia_6526>(); });
     } // namespace
 
 } // namespace mnemos::chips::bus_controller

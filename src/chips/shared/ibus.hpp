@@ -11,12 +11,12 @@ namespace mnemos::chips {
     // keeps the foundation -> chips -> topology direction intact (see ADR 0004).
     // Addresses are 32-bit so the same contract serves wider CPUs; 8-bit parts
     // pass their 16-bit addresses widened to 32 bits.
-    class i_bus {
+    class ibus {
       public:
-        i_bus() = default;
-        i_bus(const i_bus&) = delete;
-        i_bus& operator=(const i_bus&) = delete;
-        virtual ~i_bus() = default;
+        ibus() = default;
+        ibus(const ibus&) = delete;
+        ibus& operator=(const ibus&) = delete;
+        virtual ~ibus() = default;
 
         [[nodiscard]] virtual std::uint8_t read8(std::uint32_t address) = 0;
         virtual void write8(std::uint32_t address, std::uint8_t value) = 0;

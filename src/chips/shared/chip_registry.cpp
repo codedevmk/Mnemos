@@ -100,7 +100,7 @@ namespace mnemos::chips {
         return nullptr;
     }
 
-    std::unique_ptr<i_chip> create_chip(std::string_view canonical_id) {
+    std::unique_ptr<ichip> create_chip(std::string_view canonical_id) {
         const chip_factory_descriptor* descriptor = find_factory(canonical_id);
         if (descriptor == nullptr || descriptor->create == nullptr) {
             return nullptr;

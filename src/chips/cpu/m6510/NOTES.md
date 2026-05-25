@@ -26,7 +26,7 @@ test ROMs; no emulator source is copied (see `AGENTS.md` §Dependency Policy).
   `{operation, addressing_mode, access_kind, illegal}`; per-`access_kind` micro
   engines walk the standard cycle pattern and invoke small operation handlers.
 - **Memory access:** `read`/`write` intercept the $00/$01 DDR/port latches
-  (input pins read the default pull) before delegating to the attached `i_bus`.
+  (input pins read the default pull) before delegating to the attached `ibus`.
 
 ## Coverage and known simplifications (v0.1)
 

@@ -12,10 +12,10 @@ namespace {
 
     using namespace mnemos;
 
-    struct introspection_stub final : instrumentation::i_chip_introspection {};
+    struct introspection_stub final : instrumentation::ichip_introspection {};
 
     // A chip whose entire state is one 32-bit value.
-    struct stateful_chip final : chips::i_chip {
+    struct stateful_chip final : chips::ichip {
         std::uint32_t value{};
 
         [[nodiscard]] chips::chip_metadata metadata() const noexcept override { return {}; }
@@ -23,7 +23,7 @@ namespace {
         void reset(chips::reset_kind) override { value = 0U; }
         void save_state(chips::state_writer& w) const override { w.u32(value); }
         void load_state(chips::state_reader& r) override { value = r.u32(); }
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override {
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
             return intro_;
         }
 

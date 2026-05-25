@@ -34,10 +34,10 @@ namespace mnemos::chips::peripheral {
     //
     // The core is transport-agnostic and I/O-free, so it is fully deterministic
     // and unit-tested. The bit-level CIA-2 userport bridge (rs232) and the live
-    // TCP backend are separate pieces. As an i_peripheral the modem is ticked by
+    // TCP backend are separate pieces. As an iperipheral the modem is ticked by
     // the scheduler: tick advances the escape-guard timer (one guard tick per
     // guard_divider cycles) and pumps the link via poll().
-    class modem final : public i_peripheral {
+    class modem final : public iperipheral {
       public:
         enum class mode : std::uint8_t { command, online };
 
@@ -89,7 +89,7 @@ namespace mnemos::chips::peripheral {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // A byte travelled from the C64 (DTE) to the modem (DCE).
         void dte_write(std::uint8_t byte);
@@ -108,7 +108,7 @@ namespace mnemos::chips::peripheral {
         }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         void out_push(std::uint8_t b) noexcept;
         void out_push_str(const char* s) noexcept;

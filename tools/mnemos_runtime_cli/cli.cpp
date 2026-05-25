@@ -634,7 +634,7 @@ namespace mnemos::tools {
         // Select drive 8: the cycle-accurate full drive when a DOS ROM is supplied,
         // otherwise the protocol-level synthetic drive. Only the chosen one is ticked.
         const bool use_full_drive = !options.drive_rom.empty();
-        chips::i_chip* drive = &sys->drive8;
+        chips::ichip* drive = &sys->drive8;
         if (use_full_drive) {
             const auto rom = read_file(options.drive_rom);
             if (!rom) {

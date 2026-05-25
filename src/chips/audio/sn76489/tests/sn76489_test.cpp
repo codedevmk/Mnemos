@@ -15,7 +15,7 @@ namespace {
     using reset_kind = mnemos::chips::reset_kind;
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_audio_synth, sn76489>);
+static_assert(std::is_base_of_v<mnemos::chips::iaudio_synth, sn76489>);
 static_assert(sn76489::static_class == mnemos::chips::chip_class::audio_synth);
 
 TEST_CASE("sn76489 reports identity and registers under ti.sn76489") {

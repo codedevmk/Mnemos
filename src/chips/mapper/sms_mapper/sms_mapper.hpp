@@ -28,7 +28,7 @@ namespace mnemos::chips::mapper {
     //
     // The mapper has no clocked behaviour, so tick() is a no-op; only the registers
     // and cart RAM are saved.
-    class sms_mapper final : public i_mapper {
+    class sms_mapper final : public imapper {
       public:
         static constexpr int cart_ram_size = 32 * 1024; // two 16 KiB banks
         static constexpr int rom_page_size = 0x4000;    // 16 KiB
@@ -45,7 +45,7 @@ namespace mnemos::chips::mapper {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Attach the cartridge ROM image. The span is borrowed and must outlive the
         // mapper; banking simply drops unmapped high address bits on smaller images.
@@ -74,7 +74,7 @@ namespace mnemos::chips::mapper {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         // Resolve a 16 KiB ROM page + in-page offset to a byte, wrapping the page
         // index modulo the image's page count (real carts drop the unmapped high

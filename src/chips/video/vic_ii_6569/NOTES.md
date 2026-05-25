@@ -6,7 +6,7 @@ default; NTSC 6567 geometry is selectable via `set_revision`.
 ## Provenance
 
 Ported from the Emu reference core (`Emu/Emu/chips/vic2/`), relicensed into Mnemos
-per ADR 0006. The port is a re-review into the Mnemos tier / C++23 / `i_video`
+per ADR 0006. The port is a re-review into the Mnemos tier / C++23 / `ivideo`
 architecture, not a copy.
 
 ## Behavioral references

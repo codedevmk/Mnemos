@@ -452,7 +452,7 @@ namespace mnemos::chips::cpu {
         elapsed_ = reader.u64();
     }
 
-    instrumentation::i_chip_introspection& m68000::introspection() noexcept {
+    instrumentation::ichip_introspection& m68000::introspection() noexcept {
         return introspection_;
     }
 
@@ -475,9 +475,8 @@ namespace mnemos::chips::cpu {
 
     namespace {
         [[maybe_unused]] const auto m68000_registration =
-            register_factory("motorola.68000", chip_class::cpu, []() -> std::unique_ptr<i_chip> {
-                return std::make_unique<m68000>();
-            });
+            register_factory("motorola.68000", chip_class::cpu,
+                             []() -> std::unique_ptr<ichip> { return std::make_unique<m68000>(); });
     } // namespace
 
 } // namespace mnemos::chips::cpu

@@ -49,7 +49,7 @@ namespace {
     };
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_cpu, m68000>);
+static_assert(std::is_base_of_v<mnemos::chips::icpu, m68000>);
 static_assert(m68000::static_class == mnemos::chips::chip_class::cpu);
 
 TEST_CASE("m68000 reports identity and registers under motorola.68000") {

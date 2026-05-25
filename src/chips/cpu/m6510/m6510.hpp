@@ -18,7 +18,7 @@ namespace mnemos::chips::cpu {
     // attachment. Opcode execution, cycle-accurate interrupts, the $00/$01 I/O
     // port, save/load state, and the introspection surface land in the following
     // M1 tasks; the stubs below mark exactly where.
-    class m6510 final : public i_cpu {
+    class m6510 final : public icpu {
       public:
         // Bit positions within the P (processor status) register.
         enum class status_flag : std::uint8_t {
@@ -165,16 +165,16 @@ namespace mnemos::chips::cpu {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        void attach_bus(i_bus& bus) noexcept override;
+        void attach_bus(ibus& bus) noexcept override;
 
         [[nodiscard]] const registers& cpu_registers() const noexcept { return registers_; }
         [[nodiscard]] std::uint64_t elapsed_cycles() const noexcept { return cycles_; }
         [[nodiscard]] bool at_instruction_boundary() const noexcept { return tcu_ == 0U; }
 
         // Introspection: a refreshed snapshot of the register file. The M1
-        // i_chip_introspection interface is intentionally minimal, so the snapshot
+        // ichip_introspection interface is intentionally minimal, so the snapshot
         // lives on the concrete type until the M4 instrumentation tier promotes it.
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -205,7 +205,7 @@ namespace mnemos::chips::cpu {
         void set_port_enabled(bool enabled) noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         // Pins configured as inputs read high through the default pull.
         static constexpr std::uint8_t port_input_pull = 0xFFU;
@@ -243,7 +243,7 @@ namespace mnemos::chips::cpu {
 
         registers registers_{};
         std::uint64_t cycles_{};
-        i_bus* bus_{};
+        ibus* bus_{};
         bool port_enabled_{true};
         std::uint8_t port_ddr_{};
         std::uint8_t port_data_{};

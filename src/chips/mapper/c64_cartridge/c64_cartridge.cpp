@@ -221,14 +221,14 @@ namespace mnemos::chips::mapper {
         reader.bytes(std::span<std::uint8_t>(ef_ram_));
     }
 
-    instrumentation::i_chip_introspection& c64_cartridge::introspection() noexcept {
+    instrumentation::ichip_introspection& c64_cartridge::introspection() noexcept {
         return introspection_;
     }
 
     namespace {
         [[maybe_unused]] const auto c64_cartridge_registration = register_factory(
             "commodore.cartridge", chip_class::mapper,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<c64_cartridge>(); });
+            []() -> std::unique_ptr<ichip> { return std::make_unique<c64_cartridge>(); });
     } // namespace
 
 } // namespace mnemos::chips::mapper

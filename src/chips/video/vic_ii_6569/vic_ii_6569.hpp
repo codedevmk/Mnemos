@@ -38,7 +38,7 @@ namespace mnemos::chips::video {
     // priority, and sprite-sprite / sprite-data collisions with their IRQ sources).
     // Only strictly cycle-exact beam timing (per-cycle X splits, open-border
     // tricks) is deferred follow-up work.
-    class vic_ii_6569 final : public i_video, public i_mmio {
+    class vic_ii_6569 final : public ivideo, public immio {
       public:
         // Silicon revision. Within a video standard only the early NTSC 6567R56A
         // changes CPU-visible geometry (64 cycles x 262 lines vs the 6567R8's
@@ -75,9 +75,9 @@ namespace mnemos::chips::video {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        // i_video: frame counter + framebuffer view (see base class).
+        // ivideo: frame counter + framebuffer view (see base class).
         [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frame_index_; }
         [[nodiscard]] frame_buffer_view framebuffer() const noexcept override;
 
@@ -106,7 +106,7 @@ namespace mnemos::chips::video {
         }
 
         // Beam scheduler: advance by `cycles` VIC cycles (63/line PAL, 65 NTSC).
-        // (tick is the i_chip entry point and forwards here.)
+        // (tick is the ichip entry point and forwards here.)
 
         // Fired whenever the /IRQ output transitions (level). The C64 wiring ORs
         // this with the CIA1 /IRQ into the 6510 IRQ line. Unset by default.
@@ -150,7 +150,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         [[nodiscard]] std::uint8_t current_irq_sources() const noexcept;
         void decode_modes() noexcept;

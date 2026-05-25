@@ -20,7 +20,7 @@ namespace mnemos::chips::bus_controller {
     // The C64's 1541 disk drive uses two of these (VIA1 = IEC serial port, VIA2 =
     // disk mechanism + GCR byte). CA2/CB2 *output* modes are not modelled — the
     // 1541 never drives them — only their input-edge IFR side.
-    class via_6522 final : public i_bus_controller, public i_mmio {
+    class via_6522 final : public ibus_controller, public immio {
       public:
         // Host wiring. Ports are read live through callbacks (input pins sampled at
         // access time unless input latching is enabled); output callbacks fire when
@@ -42,7 +42,7 @@ namespace mnemos::chips::bus_controller {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Apply host wiring. Re-initialises chip state (like power-on).
         void configure(config cfg);
@@ -83,7 +83,7 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         struct timer1 final {
             std::uint16_t counter{0xFFFFU};

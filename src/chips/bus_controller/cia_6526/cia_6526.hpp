@@ -18,7 +18,7 @@ namespace mnemos::chips::bus_controller {
     // SP/CNT pins, and the NMOS edge-triggered interrupt control with a 1-φ2 /IRQ
     // propagation delay. tick() advances one φ2 cycle; all time-domain behaviour
     // evolves on tick, never on register access.
-    class cia_6526 final : public i_bus_controller, public i_mmio {
+    class cia_6526 final : public ibus_controller, public immio {
       public:
         enum class revision : std::uint8_t {
             nmos_6526, // edge-triggered IR (breadbin default)
@@ -48,7 +48,7 @@ namespace mnemos::chips::bus_controller {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Apply host wiring + TOD rates. Re-initialises chip state (like power-on).
         void configure(config cfg);
@@ -90,7 +90,7 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         struct timer_state final {
             std::uint16_t counter{};

@@ -92,9 +92,9 @@
 - [x] Create `src/chips/common/` library target `mnemos::chips::common`. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 - [x] Define `chip_class` enum. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 - [x] Define `chip_metadata`, `reset_kind`, `register_descriptor` types. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
-- [x] Define `i_chip` interface (TDS §8.2). (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
-- [x] Define specialized interfaces: `i_cpu`, `i_audio_synth`, `i_video`, `i_bus_controller`, `i_storage`, `i_mapper`, `i_peripheral`. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
-- [x] Define `i_chip_introspection` interface (forward-decl OK; full def in M4). (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define `ichip` interface (TDS §8.2). (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define specialized interfaces: `icpu`, `iaudio_synth`, `ivideo`, `ibus_controller`, `istorage`, `imapper`, `iperipheral`. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
+- [x] Define `ichip_introspection` interface (forward-decl OK; full def in M4). (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 - [x] Implement chip factory registry with static-init registration pattern. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 - [x] Unit tests for taxonomy + registration. (e5e7fe3; CI run 26284448382 green across clang-format and all 6 build/test jobs)
 
@@ -199,7 +199,7 @@ golden boot test, data-gated on local C64 ROMs — the CLI + framebuffer-hash
 pipeline is ready.
 
 ### Topology library
-- [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
+- [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::ibus; CI run 26387396049 green)
 - [x] Implement `bus` with width, endianness, sorted region table. (7e62c0d)
 - [~] Implement region kinds: `ram`, `rom`, `mmio_chip`, `mapper`. (7e62c0d: ram/rom/mmio done; mapper backing arrives with the mapper-hook slice)
 - [x] Implement bus read/write fast path with cached resolution. (7e62c0d; O(log N) sorted-table resolution. Per-chip cached backing pointer is a later optimization)
@@ -212,7 +212,7 @@ pipeline is ready.
 - [x] FetchContent integration for `tomlplusplus`. (010640b; pinned v3.4.0, PRIVATE to tier 4, ADR 0007)
 - [x] Define `manifest_schema/1` types in C++. (010640b; manifest/clock/chip/bus/region + address_range)
 - [x] Implement TOML parser with strict validation (TDS §10.3). (010640b; toml++ non-throwing + schema/field/range/endianness/rom checks)
-- [x] Implement manifest-to-component-graph builder (instantiate chips by ID via the factory registry, wire buses). (9da1028; build_system creates chips via create_chip, builds topology buses, allocates RAM, binds MMIO via i_mmio, attaches CPUs; CI run 26388745058)
+- [x] Implement manifest-to-component-graph builder (instantiate chips by ID via the factory registry, wire buses). (9da1028; build_system creates chips via create_chip, builds topology buses, allocates RAM, binds MMIO via immio, attaches CPUs; CI run 26388745058)
 - [x] Implement ROM file loader with SHA-256 verification. (9da1028; rom_provider + foundation::sha256 verification with mismatch diagnostics)
 - [x] Surface validation errors with file/line/column. (010640b; diagnostic{message, source, line, column})
 - [x] Unit tests covering each validation rule. (010640b; valid parse, wrong schema, missing id/clock/bus, malformed-TOML position, range + rom requirements)
@@ -245,7 +245,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Implement master clock with divider table. (scheduler tracks the master cycle; each chip carries a master->chip divider)
 - [x] Implement fixed-divider scheduler dispatching per-chip ticks. (scheduler dispatches tick() per cycle in chip order, with a lockstep fast path when all dividers are 1; TDS §11.2)
 - [x] Implement frame-tagged input buffer. (input_buffer keeps events sorted by frame for deterministic replay; CIA1 keyboard/joystick wiring is follow-up)
-- [x] Implement frame boundary detection and signaling. (run_frame / run_frames advance until the designated i_video frame_index increments)
+- [x] Implement frame boundary detection and signaling. (run_frame / run_frames advance until the designated ivideo frame_index increments)
 - [x] Implement save state with header + per-chip chunks (TDS §15). (runtime::write_save_state / read_save_state: MNMS header + per-chip + per-memory chunks; per-chip save_state/load_state implemented for all 5 C64 chips; unknown chunks skipped for forward-compat)
 - [x] FetchContent integration for `zstd`. (ADR 0008; pinned v1.5.6, SOURCE_SUBDIR build/cmake, libzstd_static linked PRIVATE into tier-5 runtime)
 - [x] Implement save state compression (zstd) and decompression. (level-3 frame around the chunk body)
@@ -275,14 +275,14 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 
 **Status:** In progress — the debugger foundations (the pure, testable instrumentation
 core) are **complete** in the new compiled tier-6 `mnemos::instrumentation::api`
-library: i_runtime_introspection + a concrete `debugger` with execution control,
+library: iruntime_introspection + a concrete `debugger` with execution control,
 PC breakpoints, memory watchpoints, and event subscription, all unit-tested against
 a real m6510. What remains in M4 is the frontend MVP — the Cap'n Proto wire
 protocol/transport/server, Vulkan + UI toolkit primitives, and `apps::dev` — which
 is much larger and platform-heavy.
 
-- [ ] Promote `i_chip_introspection` from forward decl to full interface. (Phase 1 reads CPU state via injected probes so no chip-contract change was forced yet; a richer i_chip_introspection — register/memory views — lands with the memory-inspection work)
-- [x] Implement `i_runtime_introspection`. (interface + concrete `debugger`: master_cycle/frame_index queries, step_instruction / step_frame / run-with-instruction-budget control, PC breakpoint + memory watchpoint management, and event subscription. The async pause/resume pair from the TDS sketch is a live-frontend-thread concern that lands with the wire server; the deterministic headless surface is complete)
+- [ ] Promote `ichip_introspection` from forward decl to full interface. (Phase 1 reads CPU state via injected probes so no chip-contract change was forced yet; a richer ichip_introspection — register/memory views — lands with the memory-inspection work)
+- [x] Implement `iruntime_introspection`. (interface + concrete `debugger`: master_cycle/frame_index queries, step_instruction / step_frame / run-with-instruction-budget control, PC breakpoint + memory watchpoint management, and event subscription. The async pause/resume pair from the TDS sketch is a live-frontend-thread concern that lands with the wire server; the deterministic headless surface is complete)
 - [x] Implement breakpoint engine (PC, memory R/W, conditional). (PC breakpoints with optional per-hit conditions + enable/disable/remove + a stop_event report, checked at instruction boundaries; unit-tested against a real m6510 running a small program)
 - [x] Implement watch engine. (memory read / write / access watchpoints over an address range, with an optional value condition, via a new generic topology::bus access-observer hook the debugger installs — null by default so the hot path is a single branch and the golden boot is unchanged. The hit halts run() at the end of the triggering instruction with a watchpoint stop_event. Unit-tested: write vs read discrimination, value condition, range, and no-bus = never fires)
 - [x] Implement event subscription with filters. (event_sink + an event_filter mask over event_kind {breakpoint, watchpoint, step, frame}; subscribe/unsubscribe on the debugger deliver each emitted event — with the id/pc/master_cycle/frame snapshot — to every subscriber whose filter selects its kind. Emitted from run (breakpoint/watchpoint halts), step_instruction (step or watchpoint), and step_frame (frame). Unit-tested: delivery, multi-kind filter, exclusion, unsubscribe)
@@ -316,15 +316,15 @@ is much larger and platform-heavy.
 landed, `manifests::sms::assemble_sms` wires them into a **bootable SMS**, and the
 headless CLI now **runs SMS carts** (`--manifest sms.{ntsc,pal}.toml --cart game.sms
 --frames N --dump-hash`) through the master-clock scheduler with a deterministic
-framebuffer hash. The whole stack fit with **zero changes to i_cpu / i_bus / any
+framebuffer hash. The whole stack fit with **zero changes to icpu / ibus / any
 lower-tier contract**. The data-gated harnesses (SMS golden frames, Z80 ZEXALL) are
 in place and validated; flipping them to a hard pass needs local copyrighted data.
 Both SMS mappers (Sega + Codemasters) are implemented. What's left for M6 is purely
 data-gated (commercial-ROM goldens, the real ZEXALL run) — the code is complete.
 
-- [~] Implement `chips::cpu::z80` (full undocumented behavior; passes ZEXALL). (chips::cpu::z80, ported from the Emu reference per ADR 0006 and improved: the per-T-state wait machinery dropped, the non-portable anonymous-union register pairs replaced with portable 16-bit members + inline half accessors. Complete instruction set — 256 unprefixed + CB + ED (block transfer / block I/O / 16-bit arith) + DD/FD (IX/IY) + DDCB/FDCB, the common undocumented opcodes (SLL, IX/IY halves) and the full flag model incl. the XF/YF bits. Memory via i_bus; the separate Z80 I/O space via injected port callbacks; NMI + IM0/1/2; instruction-stepped with a catch-up tick(); save/load + register_snapshot; factory "zilog.z80". 16 unit tests across LD/ALU/INC/16-bit/JP/CALL+RET/PUSH+POP/CB/ED-LDIR/DD/IN+OUT/NMI/IM1/tick. ZEXALL/ZEXDOC conformance now has a data-gated harness — src/chips/cpu/z80/tests/z80_zexall_test.cpp runs a .com exerciser in a minimal CP/M environment (TPA load at $0100, BDOS fn 2/9 console stub trapped at $0005, warm-boot exit at $0000) and asserts no "ERROR"; SKIP_RETURN_CODE 4 without MNEMOS_Z80_ZEX_ROM. The harness is validated end-to-end with a synthetic .com; running the real exerciser to flip this to [x] is local/data-gated)
+- [~] Implement `chips::cpu::z80` (full undocumented behavior; passes ZEXALL). (chips::cpu::z80, ported from the Emu reference per ADR 0006 and improved: the per-T-state wait machinery dropped, the non-portable anonymous-union register pairs replaced with portable 16-bit members + inline half accessors. Complete instruction set — 256 unprefixed + CB + ED (block transfer / block I/O / 16-bit arith) + DD/FD (IX/IY) + DDCB/FDCB, the common undocumented opcodes (SLL, IX/IY halves) and the full flag model incl. the XF/YF bits. Memory via ibus; the separate Z80 I/O space via injected port callbacks; NMI + IM0/1/2; instruction-stepped with a catch-up tick(); save/load + register_snapshot; factory "zilog.z80". 16 unit tests across LD/ALU/INC/16-bit/JP/CALL+RET/PUSH+POP/CB/ED-LDIR/DD/IN+OUT/NMI/IM1/tick. ZEXALL/ZEXDOC conformance now has a data-gated harness — src/chips/cpu/z80/tests/z80_zexall_test.cpp runs a .com exerciser in a minimal CP/M environment (TPA load at $0100, BDOS fn 2/9 console stub trapped at $0005, warm-boot exit at $0000) and asserts no "ERROR"; SKIP_RETURN_CODE 4 without MNEMOS_Z80_ZEX_ROM. The harness is validated end-to-end with a synthetic .com; running the real exerciser to flip this to [x] is local/data-gated)
 - [x] Implement `chips::audio::sn76489`. (chips::audio::sn76489, ported from the Emu reference: 3 square-tone channels + 1 LFSR noise channel, the -2 dB/step attenuation table, the latch/data write port, white/periodic noise with the positive-edge LFSR clock, and an optional 1-pole analog low-pass. step() emits one mono sample; tick() drives it through the chip's internal /16 prescaler. save/load + register_snapshot; factory "ti.sn76489". 8 unit tests (silence on reset, latch tone/volume, square wave at peak, attenuation level, LFSR reset, tick divider, state round-trip). Shared with the Genesis PSG (M8))
-- [x] Implement `chips::video::sms_vdp`. (chips::video::sms_vdp, ported from the Emu reference: Mode-4 scanline renderer — 32x28 name table with per-tile priority/palette/flip, 4bpp planar tiles, full-screen H/V scroll with the row/column locks, 64 sprites (8x8 / 8x16, optional zoom, 8-per-line limit with the overflow + collision status flags), left-column blanking. The two-byte control-port command protocol (VRAM read/write, register write, CRAM write), the buffered data-port read, V/H counters, and the line + frame interrupts via a callback. CRAM (--BBGGRR) renders into an 0x00RRGGBB framebuffer; as an i_video frame source it ticks per Z80 cycle (228/line) and bumps frame_index per frame. i_mmio (data/ctrl), save/load; factory "sega.sms_vdp". 8 unit tests (identity, reset geometry, register write, buffered VRAM r/w, a Mode-4 tile render, the frame IRQ + status-read clear, frame-index advance, state round-trip))
+- [x] Implement `chips::video::sms_vdp`. (chips::video::sms_vdp, ported from the Emu reference: Mode-4 scanline renderer — 32x28 name table with per-tile priority/palette/flip, 4bpp planar tiles, full-screen H/V scroll with the row/column locks, 64 sprites (8x8 / 8x16, optional zoom, 8-per-line limit with the overflow + collision status flags), left-column blanking. The two-byte control-port command protocol (VRAM read/write, register write, CRAM write), the buffered data-port read, V/H counters, and the line + frame interrupts via a callback. CRAM (--BBGGRR) renders into an 0x00RRGGBB framebuffer; as an ivideo frame source it ticks per Z80 cycle (228/line) and bumps frame_index per frame. immio (data/ctrl), save/load; factory "sega.sms_vdp". 8 unit tests (identity, reset geometry, register write, buffered VRAM r/w, a Mode-4 tile render, the frame IRQ + status-read clear, frame-index advance, state round-trip))
 - [x] Implement SMS mapper (Sega mapper, Codemasters mapper). (chips::mapper::sms_mapper, ported from the Emu reference per ADR 0006 and improved: span-based borrowed ROM, std::array cart RAM, no debug-event coupling. The Sega mapper — three 16 KiB ROM slots (slot 0's first 1 KiB fixed to physical page 0), the optional 16 KiB on-cart RAM window at slot 2 with a bank-select bit, page wrap modulo the image page count, and the four control registers at $FFFC-$FFFF (fully decoded — the $DFFC-$DFFF RAM mirror is ignored). cpu_read/cpu_write for the $0000-$BFFF banked window + write_register for the register window; save/load (registers + cart RAM) + register_snapshot (CTRL/PAGE0-2); factory "sega.sms_mapper". 8 unit tests. The Codemasters mapper is a separate chip (chips::mapper::codemasters_mapper, factory "codemasters.mapper"): three fully-banked 16 KiB slots with page registers in ROM space ($0000/$4000/$8000), no fixed first 1 KiB, power-on pages 0/1/0, and the Ernie-Els-Golf 8 KiB cart RAM mapped at $A000-$BFFF when bit 7 of the $4000 write is set. Spec from SMS Power cross-checked against the reference emulator (absent from the Emu reference). 7 unit tests (identity+factory, 0/1/0 power-on, three-slot banking with offset preserved, whole-slot-0 banking, page wrap, cart RAM enable/read-write/disable, state round-trip))
 - [x] Author `manifests/sms/` (NTSC + PAL). (manifests::sms::assemble_sms wires the Z80 + SMS VDP + SN76489 + Sega mapper into a bootable machine. Memory map: $0000-$BFFF banked ROM/cart-RAM via the mapper, $C000-$DFFF 8 KiB work RAM mirrored to $E000-$FFFF, with the $FFFC-$FFFF mapper-register overlay writing through to RAM. Z80 I/O routing: $00-$3F open-bus reads / $3F I/O-control latch writes, $40-$7F V/H counters (read) + PSG (write), $80-$BF VDP data/ctrl, $C0-$FF joypad ports $DC/$DD with the active-low pin + TH/TR nationalisation model. The VDP /INT line is ORed into the Z80 IRQ; SP is set to $DFF0 to emulate the post-BIOS hand-off. sms_config selects NTSC (262 lines) vs PAL (313). 7 system tests (boot Z80->RAM, region, mapper banking through the bus, VDP OUT, PSG OUT, joypad IN, and an end-to-end frame-IRQ ISR run). assemble_sms auto-selects the cartridge mapper: the
   Codemasters checksum header ($7FE6 word + $7FE8 complement == $10000) picks the
@@ -346,7 +346,7 @@ data-gated (commercial-ROM goldens, the real ZEXALL run) — the code is complet
   4 → CTest "Skipped" without a ROM; with one it checks non-uniform output + cold-boot
   determinism + the golden hash. Validated end-to-end locally with a crafted cart;
   the commercial-ROM goldens themselves stay data-gated)
-- [x] Confirm zero contract changes from M1–M3; if any, raise ADR. (the Z80 fit i_cpu/i_chip/i_bus and the factory/tier model unchanged — the separate I/O space is handled with injected port callbacks, no contract change. No ADR needed)
+- [x] Confirm zero contract changes from M1–M3; if any, raise ADR. (the Z80 fit icpu/ichip/ibus and the factory/tier model unchanged — the separate I/O space is handled with injected port callbacks, no contract change. No ADR needed)
 
 ---
 
@@ -368,8 +368,8 @@ data-gated (commercial-ROM goldens, the real ZEXALL run) — the code is complet
 
 **Status:** Started. The 68000 CPU is being ported from the Emu reference (ADR 0006)
 phase by phase, each a tested green commit: **phase 1 (done)** is the functional core
-— chip contract (i_cpu, factory "motorola.68000"), the full register model (D0-7/A0-7/
-PC/SR/USP/SSP, 68000 CCR layout), big-endian 24-bit bus access over i_bus, all 14
+— chip contract (icpu, factory "motorola.68000"), the full register model (D0-7/A0-7/
+PC/SR/USP/SSP, 68000 CCR layout), big-endian 24-bit bus access over ibus, all 14
 addressing modes, the MOVE/MOVEA/MOVEQ family with the N/Z/V/C flag model, and 4-clock-
 per-bus-cycle timing; instruction-stepped with a catch-up tick(). Remaining phases:
 arithmetic (ADD/SUB/CMP/MUL/DIV), logical/shift/bit, control flow + the exception

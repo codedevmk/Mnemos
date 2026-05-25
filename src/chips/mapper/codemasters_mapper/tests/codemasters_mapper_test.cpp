@@ -27,7 +27,7 @@ namespace {
     }
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_mapper, codemasters_mapper>);
+static_assert(std::is_base_of_v<mnemos::chips::imapper, codemasters_mapper>);
 static_assert(codemasters_mapper::static_class == mnemos::chips::chip_class::mapper);
 
 TEST_CASE("codemasters_mapper reports identity and registers under codemasters.mapper") {

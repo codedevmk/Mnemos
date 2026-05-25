@@ -16,7 +16,7 @@ namespace mnemos::chips::mapper {
     // window ($DE00-$DFFF) for bank switching. It also drives the /GAME and /EXROM
     // lines the PLA decodes. Supported hardware types: generic 8K/16K/ultimax,
     // Ocean (5), Magic Desk (19), and EasyFlash (32). Ported per ADR 0006.
-    class c64_cartridge final : public i_mapper, public i_mmio {
+    class c64_cartridge final : public imapper, public immio {
       public:
         enum class hardware : std::uint16_t {
             generic = 0U,
@@ -37,7 +37,7 @@ namespace mnemos::chips::mapper {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // I/O-1/I/O-2 ($DE00-$DFFF): bank switching + EasyFlash control/RAM.
         [[nodiscard]] std::uint8_t mmio_read(std::uint16_t offset) override;
@@ -61,7 +61,7 @@ namespace mnemos::chips::mapper {
         [[nodiscard]] bool exrom() const noexcept { return exrom_; }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         hardware type_{hardware::generic};
         bool inserted_{};

@@ -212,12 +212,12 @@ namespace mnemos::chips::peripheral {
         }
     }
 
-    instrumentation::i_chip_introspection& reu::introspection() noexcept { return introspection_; }
+    instrumentation::ichip_introspection& reu::introspection() noexcept { return introspection_; }
 
     namespace {
         [[maybe_unused]] const auto reu_registration =
             register_factory("commodore.1750", chip_class::peripheral,
-                             []() -> std::unique_ptr<i_chip> { return std::make_unique<reu>(); });
+                             []() -> std::unique_ptr<ichip> { return std::make_unique<reu>(); });
     } // namespace
 
 } // namespace mnemos::chips::peripheral

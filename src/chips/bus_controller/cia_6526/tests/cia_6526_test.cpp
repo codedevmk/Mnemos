@@ -14,7 +14,7 @@ namespace {
     using mnemos::chips::bus_controller::cia_6526;
 }
 
-static_assert(std::is_base_of_v<mnemos::chips::i_bus_controller, cia_6526>);
+static_assert(std::is_base_of_v<mnemos::chips::ibus_controller, cia_6526>);
 static_assert(cia_6526::static_class == mnemos::chips::chip_class::bus_controller);
 
 TEST_CASE("cia_6526 reports identity and registers under mos.6526") {
@@ -153,10 +153,10 @@ TEST_CASE("cia_6526 reset returns timers to the 0xFFFF latch") {
     CHECK(cia.read(0x05U) == 0xFFU);
 }
 
-TEST_CASE("cia_6526 is reachable through i_mmio") {
+TEST_CASE("cia_6526 is reachable through immio") {
     auto chip = mnemos::chips::create_chip("mos.6526");
     REQUIRE(chip != nullptr);
-    auto* mmio = dynamic_cast<mnemos::chips::i_mmio*>(chip.get());
+    auto* mmio = dynamic_cast<mnemos::chips::immio*>(chip.get());
     REQUIRE(mmio != nullptr);
     mmio->mmio_write(0x02U, 0xFFU); // DDRA
     CHECK(mmio->mmio_read(0x02U) == 0xFFU);

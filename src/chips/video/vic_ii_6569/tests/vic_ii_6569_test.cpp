@@ -15,7 +15,7 @@ namespace {
     using status = mnemos::chips::reset_kind;
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_video, vic_ii_6569>);
+static_assert(std::is_base_of_v<mnemos::chips::ivideo, vic_ii_6569>);
 static_assert(vic_ii_6569::static_class == mnemos::chips::chip_class::video);
 
 TEST_CASE("vic_ii_6569 reports its identity and registers under mos.6569") {
@@ -208,9 +208,9 @@ TEST_CASE("vic_ii_6569 reset clears runtime state but keeps the revision") {
     CHECK(vic.cycles_per_line() == 65U);
 }
 
-TEST_CASE("vic_ii_6569 exposes its registers through i_mmio") {
+TEST_CASE("vic_ii_6569 exposes its registers through immio") {
     vic_ii_6569 vic;
-    mnemos::chips::i_mmio& mmio = vic;
+    mnemos::chips::immio& mmio = vic;
     mmio.mmio_write(0x21U, 0x0EU);         // background colour 0 (4-bit register)
     CHECK(mmio.mmio_read(0x21U) == 0xFEU); // high nibble reads 1
     CHECK(vic.read(0x21U) == 0xFEU);
@@ -218,7 +218,7 @@ TEST_CASE("vic_ii_6569 exposes its registers through i_mmio") {
 
     auto chip = mnemos::chips::create_chip("mos.6569");
     REQUIRE(chip != nullptr);
-    CHECK(dynamic_cast<mnemos::chips::i_mmio*>(chip.get()) != nullptr);
+    CHECK(dynamic_cast<mnemos::chips::immio*>(chip.get()) != nullptr);
 }
 
 TEST_CASE("vic_ii_6569 register snapshot reports raster + IRQ state") {

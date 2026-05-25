@@ -292,7 +292,7 @@ Tooling — manifest validator, dev frontend, scheduler — reasons about chips 
 
 ### 8.2 Base Interface
 
-All chips implement `i_chip`. Specialized interfaces (`i_cpu`, `i_audio_synth`, `i_video`, etc.) inherit from `i_chip` and add class-specific contracts.
+All chips implement `ichip`. Specialized interfaces (`icpu`, `iaudio_synth`, `ivideo`, etc.) inherit from `ichip` and add class-specific contracts.
 
 ```cpp
 namespace mnemos::chips {
@@ -307,9 +307,9 @@ struct chip_metadata {
 
 enum class reset_kind : std::uint8_t { power_on, hard, soft };
 
-class i_chip {
+class ichip {
 public:
-    virtual ~i_chip() = default;
+    virtual ~ichip() = default;
 
     virtual chip_metadata metadata() const noexcept = 0;
     virtual void          tick(std::uint64_t cycles) = 0;
@@ -318,7 +318,7 @@ public:
     virtual void save_state(state_writer&) const = 0;
     virtual void load_state(state_reader&) = 0;
 
-    virtual instrumentation::i_chip_introspection& introspection() noexcept = 0;
+    virtual instrumentation::ichip_introspection& introspection() noexcept = 0;
 };
 
 } // namespace mnemos::chips
@@ -335,9 +335,9 @@ public:
 Chips attach to buses; they do not own them. The bus is provided by tier 3 (topology).
 
 ```cpp
-class i_bus {
+class ibus {
 public:
-    virtual ~i_bus() = default;
+    virtual ~ibus() = default;
     virtual std::uint8_t  read8 (std::uint32_t addr) = 0;
     virtual void          write8(std::uint32_t addr, std::uint8_t value) = 0;
     virtual std::uint16_t read16(std::uint32_t addr) { /* default = 2 × read8 */ }
@@ -346,7 +346,7 @@ public:
 };
 ```
 
-CPUs hold an `i_bus*` injected at attach time. Width specializations (16/32) are provided so the SH-2 and 68000 don't byte-walk every fetch.
+CPUs hold an `ibus*` injected at attach time. Width specializations (16/32) are provided so the SH-2 and 68000 don't byte-walk every fetch.
 
 ### 8.5 Introspection Surface
 
@@ -390,7 +390,7 @@ Resolution is O(log N) via a sorted region table; hot-path lookups for chips wit
 
 ### 9.2 Mapper Infrastructure
 
-Mappers are first-class chips of class `mapper`. Cartridge mappers (C64 cartridges, NES MMCs, Genesis SSF2, etc.) implement the same `i_chip` interface and present a bus-shaped view to the parent bus.
+Mappers are first-class chips of class `mapper`. Cartridge mappers (C64 cartridges, NES MMCs, Genesis SSF2, etc.) implement the same `ichip` interface and present a bus-shaped view to the parent bus.
 
 ### 9.3 MMIO Mediation
 
@@ -564,14 +564,14 @@ Rewind cost is bounded by ring size and per-frame state delta size. v0.1 stores 
 
 ### 12.1 In-Process API
 
-Every chip exposes `i_chip_introspection`. The runtime exposes `i_runtime_introspection`. Both surfaces are pull-based for state queries and push-based (event subscription) for time-evolution events.
+Every chip exposes `ichip_introspection`. The runtime exposes `iruntime_introspection`. Both surfaces are pull-based for state queries and push-based (event subscription) for time-evolution events.
 
 ```cpp
 namespace mnemos::instrumentation {
 
-class i_runtime_introspection {
+class iruntime_introspection {
 public:
-    virtual ~i_runtime_introspection() = default;
+    virtual ~iruntime_introspection() = default;
 
     virtual std::uint64_t master_cycle() const noexcept = 0;
     virtual std::uint64_t frame_index() const noexcept = 0;

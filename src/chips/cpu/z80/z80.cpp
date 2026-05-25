@@ -1512,7 +1512,7 @@ namespace mnemos::chips::cpu {
         elapsed_ = reader.u64();
     }
 
-    instrumentation::i_chip_introspection& z80::introspection() noexcept { return introspection_; }
+    instrumentation::ichip_introspection& z80::introspection() noexcept { return introspection_; }
 
     std::span<const register_descriptor> z80::register_snapshot() noexcept {
         using fmt = register_value_format;
@@ -1538,7 +1538,7 @@ namespace mnemos::chips::cpu {
     namespace {
         [[maybe_unused]] const auto z80_registration =
             register_factory("zilog.z80", chip_class::cpu,
-                             []() -> std::unique_ptr<i_chip> { return std::make_unique<z80>(); });
+                             []() -> std::unique_ptr<ichip> { return std::make_unique<z80>(); });
     } // namespace
 
 } // namespace mnemos::chips::cpu

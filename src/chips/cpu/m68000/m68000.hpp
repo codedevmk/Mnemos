@@ -25,9 +25,9 @@ namespace mnemos::chips::cpu {
     //
     // Instruction-stepped like the Z80: step_instruction() runs one instruction and
     // returns its cycle cost; tick(cycles) catches up by running whole instructions.
-    // Memory is the attached i_bus (byte-addressed; 16/32-bit accesses are assembled
+    // Memory is the attached ibus (byte-addressed; 16/32-bit accesses are assembled
     // big-endian).
-    class m68000 final : public i_cpu {
+    class m68000 final : public icpu {
       public:
         // Status-register bits (68000 CCR layout: note N is bit 3, not bit 7).
         static constexpr std::uint16_t sr_c = 1U << 0U;   // carry
@@ -62,10 +62,10 @@ namespace mnemos::chips::cpu {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        // i_cpu: the memory address space the CPU executes against.
-        void attach_bus(i_bus& bus) noexcept override { bus_ = &bus; }
+        // icpu: the memory address space the CPU executes against.
+        void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }
 
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();
@@ -82,7 +82,7 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         enum class op_size : std::uint8_t { byte, word, longword };
 
@@ -138,7 +138,7 @@ namespace mnemos::chips::cpu {
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
         std::uint64_t elapsed_{};   // total cycles executed
 
-        i_bus* bus_{};
+        ibus* bus_{};
 
         std::array<register_descriptor, 20> register_view_{};
         introspection_surface introspection_{};

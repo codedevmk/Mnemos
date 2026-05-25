@@ -15,7 +15,7 @@ namespace {
     using env_phase = sid_6581::env_phase;
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_audio_synth, sid_6581>);
+static_assert(std::is_base_of_v<mnemos::chips::iaudio_synth, sid_6581>);
 static_assert(sid_6581::static_class == mnemos::chips::chip_class::audio_synth);
 
 TEST_CASE("sid_6581 reports identity and registers under mos.6581") {
@@ -145,10 +145,10 @@ TEST_CASE("sid_6581 reset clears voices but keeps the variant") {
     CHECK(sid.chip_variant() == sid_6581::variant::mos_8580);
 }
 
-TEST_CASE("sid_6581 is reachable through i_mmio") {
+TEST_CASE("sid_6581 is reachable through immio") {
     auto chip = mnemos::chips::create_chip("mos.6581");
     REQUIRE(chip != nullptr);
-    auto* mmio = dynamic_cast<mnemos::chips::i_mmio*>(chip.get());
+    auto* mmio = dynamic_cast<mnemos::chips::immio*>(chip.get());
     REQUIRE(mmio != nullptr);
     mmio->mmio_write(0x00U, 0xABU);         // voice register (write-only)
     CHECK(mmio->mmio_read(0x00U) == 0xFFU); // write-only floats high

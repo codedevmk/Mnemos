@@ -115,12 +115,12 @@ TEST_CASE("bus overlay: an active I/O region wins reads and writes over RAM") {
     CHECK(b.read8(0xD400U) == 0x99U);
 }
 
-TEST_CASE("bus is usable through the chips::i_bus interface") {
+TEST_CASE("bus is usable through the chips::ibus interface") {
     std::array<std::uint8_t, 0x10> ram{};
     bus b(16U);
     b.map_ram(0x0000U, ram);
 
-    mnemos::chips::i_bus& as_bus = b;
+    mnemos::chips::ibus& as_bus = b;
     as_bus.write8(0x0003U, 0x42U);
     CHECK(as_bus.read8(0x0003U) == 0x42U);
 }

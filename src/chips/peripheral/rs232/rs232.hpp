@@ -25,7 +25,7 @@ namespace mnemos::chips::peripheral {
     // (the C64 sets it via a CIA timer the KERNAL programs from the baud rate;
     // matching that programmed rate end-to-end is data-gated on the KERNAL ROM).
     // Framing is the common 8N1; data/stop bit counts are configurable.
-    class rs232 final : public i_peripheral {
+    class rs232 final : public iperipheral {
       public:
         static constexpr std::uint32_t default_cycles_per_bit = 104U; // ~9600 baud @ ~1 MHz
 
@@ -38,7 +38,7 @@ namespace mnemos::chips::peripheral {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Baud / framing. cycles_per_bit must be >= 2 so a bit has a centre.
         void set_cycles_per_bit(std::uint32_t cycles) noexcept {
@@ -74,7 +74,7 @@ namespace mnemos::chips::peripheral {
         [[nodiscard]] bool receiving() const noexcept { return rx_active_; }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         void step_capture() noexcept; // sample TXD -> byte (from the C64)
         void step_generate();         // byte -> shift RXD (to the C64)

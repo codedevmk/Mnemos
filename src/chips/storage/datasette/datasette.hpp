@@ -16,7 +16,7 @@ namespace mnemos::chips::storage {
     // counts down each pulse and, at its end, asserts the CIA1 /FLAG line (one
     // negative edge). It also drives the cassette-sense line (low while a key is
     // held). Read-only playback: write (.tap recording) is out of scope.
-    class datasette final : public i_storage {
+    class datasette final : public istorage {
       public:
         struct config final {
             std::function<bool()> motor_on;      // C64 $01 bit 5 low -> motor running
@@ -37,7 +37,7 @@ namespace mnemos::chips::storage {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         void configure(config cfg);
         [[nodiscard]] bool load_tap(std::span<const std::uint8_t> tap);
@@ -50,7 +50,7 @@ namespace mnemos::chips::storage {
         [[nodiscard]] bool at_end() const noexcept { return pos_ >= data_.size(); }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         [[nodiscard]] std::uint32_t next_pulse_cycles();
         void update_sense();

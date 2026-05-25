@@ -130,12 +130,12 @@ namespace mnemos::instrumentation {
     // surface covers master-cycle / frame queries, instruction + frame stepping,
     // and PC breakpoints; memory watchpoints and event subscription layer on in
     // later phases.
-    class i_runtime_introspection {
+    class iruntime_introspection {
       public:
-        i_runtime_introspection() = default;
-        i_runtime_introspection(const i_runtime_introspection&) = delete;
-        i_runtime_introspection& operator=(const i_runtime_introspection&) = delete;
-        virtual ~i_runtime_introspection() = default;
+        iruntime_introspection() = default;
+        iruntime_introspection(const iruntime_introspection&) = delete;
+        iruntime_introspection& operator=(const iruntime_introspection&) = delete;
+        virtual ~iruntime_introspection() = default;
 
         [[nodiscard]] virtual std::uint64_t master_cycle() const noexcept = 0;
         [[nodiscard]] virtual std::uint64_t frame_index() const noexcept = 0;
@@ -170,7 +170,7 @@ namespace mnemos::instrumentation {
     // Concrete debugger: drives a scheduler one master cycle at a time and checks
     // PC breakpoints at instruction boundaries. The scheduler and the probe targets
     // must outlive the debugger.
-    class debugger final : public i_runtime_introspection {
+    class debugger final : public iruntime_introspection {
       public:
         // `watch_bus` is optional; supply it to enable memory watchpoints. The
         // scheduler, probe targets, and bus must all outlive the debugger.

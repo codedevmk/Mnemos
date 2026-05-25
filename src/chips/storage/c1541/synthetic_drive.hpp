@@ -22,7 +22,7 @@ namespace mnemos::chips::storage::c1541 {
     //
     // The command + channel-serving logic is exercised directly via the debug_*
     // helpers; tick() drives the bit-level IEC handshake the real KERNAL speaks.
-    class synthetic_drive final : public i_storage {
+    class synthetic_drive final : public istorage {
       public:
         static constexpr std::uint8_t default_device = 8U;
         static constexpr std::uint8_t channel_count = 16U;
@@ -36,7 +36,7 @@ namespace mnemos::chips::storage::c1541 {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Wiring + media.
         void attach_bus(iec_bus& bus) noexcept { bus_ = &bus; }
@@ -55,7 +55,7 @@ namespace mnemos::chips::storage::c1541 {
         [[nodiscard]] std::optional<std::uint8_t> debug_pull_byte(); // next TALK byte
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         struct channel final {
             std::vector<std::uint8_t> data;

@@ -99,7 +99,7 @@ namespace mnemos::chips::mapper {
         reader.bytes(cart_ram_);
     }
 
-    instrumentation::i_chip_introspection& codemasters_mapper::introspection() noexcept {
+    instrumentation::ichip_introspection& codemasters_mapper::introspection() noexcept {
         return introspection_;
     }
 
@@ -114,7 +114,7 @@ namespace mnemos::chips::mapper {
     namespace {
         [[maybe_unused]] const auto codemasters_mapper_registration = register_factory(
             "codemasters.mapper", chip_class::mapper,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<codemasters_mapper>(); });
+            []() -> std::unique_ptr<ichip> { return std::make_unique<codemasters_mapper>(); });
     } // namespace
 
 } // namespace mnemos::chips::mapper

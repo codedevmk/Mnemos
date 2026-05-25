@@ -14,7 +14,7 @@ namespace {
 
     using mnemos::chips::peripheral::reu;
 
-    class flat_ram final : public mnemos::chips::i_bus {
+    class flat_ram final : public mnemos::chips::ibus {
       public:
         std::array<std::uint8_t, 0x10000U> memory{};
         [[nodiscard]] std::uint8_t read8(std::uint32_t a) override { return memory[a & 0xFFFFU]; }

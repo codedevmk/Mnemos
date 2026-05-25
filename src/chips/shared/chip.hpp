@@ -5,12 +5,12 @@
 #include <string_view>
 
 namespace mnemos::instrumentation {
-    class i_chip_introspection {
+    class ichip_introspection {
       public:
-        i_chip_introspection() = default;
-        i_chip_introspection(const i_chip_introspection&) = delete;
-        i_chip_introspection& operator=(const i_chip_introspection&) = delete;
-        virtual ~i_chip_introspection() = default;
+        ichip_introspection() = default;
+        ichip_introspection(const ichip_introspection&) = delete;
+        ichip_introspection& operator=(const ichip_introspection&) = delete;
+        virtual ~ichip_introspection() = default;
     };
 } // namespace mnemos::instrumentation
 
@@ -76,14 +76,14 @@ namespace mnemos::chips {
 
     class state_writer;
     class state_reader;
-    class i_bus;
+    class ibus;
 
-    class i_chip {
+    class ichip {
       public:
-        i_chip() = default;
-        i_chip(const i_chip&) = delete;
-        i_chip& operator=(const i_chip&) = delete;
-        virtual ~i_chip() = default;
+        ichip() = default;
+        ichip(const ichip&) = delete;
+        ichip& operator=(const ichip&) = delete;
+        virtual ~ichip() = default;
 
         [[nodiscard]] virtual chip_metadata metadata() const noexcept = 0;
         virtual void tick(std::uint64_t cycles) = 0;
@@ -92,19 +92,19 @@ namespace mnemos::chips {
         virtual void save_state(state_writer& writer) const = 0;
         virtual void load_state(state_reader& reader) = 0;
 
-        [[nodiscard]] virtual instrumentation::i_chip_introspection& introspection() noexcept = 0;
+        [[nodiscard]] virtual instrumentation::ichip_introspection& introspection() noexcept = 0;
     };
 
-    class i_cpu : public i_chip {
+    class icpu : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::cpu;
 
         // Inject the bus the CPU executes against. Called once at attach time,
         // before the first tick; the CPU observes but does not own the bus.
-        virtual void attach_bus(i_bus& bus) noexcept = 0;
+        virtual void attach_bus(ibus& bus) noexcept = 0;
     };
 
-    class i_audio_synth : public i_chip {
+    class iaudio_synth : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::audio_synth;
     };
@@ -118,7 +118,7 @@ namespace mnemos::chips {
         std::uint32_t height{};
     };
 
-    class i_video : public i_chip {
+    class ivideo : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::video;
 
@@ -131,22 +131,22 @@ namespace mnemos::chips {
         [[nodiscard]] virtual frame_buffer_view framebuffer() const noexcept = 0;
     };
 
-    class i_bus_controller : public i_chip {
+    class ibus_controller : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::bus_controller;
     };
 
-    class i_storage : public i_chip {
+    class istorage : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::storage;
     };
 
-    class i_mapper : public i_chip {
+    class imapper : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::mapper;
     };
 
-    class i_peripheral : public i_chip {
+    class iperipheral : public ichip {
       public:
         static constexpr chip_class static_class = chip_class::peripheral;
     };
@@ -154,12 +154,12 @@ namespace mnemos::chips {
     // Memory-mapped register access. A chip that exposes an MMIO window mixes this
     // in alongside its class interface; the topology bus routes reads/writes in the
     // chip's mapped range to these, passing the offset from the region base.
-    class i_mmio {
+    class immio {
       public:
-        i_mmio() = default;
-        i_mmio(const i_mmio&) = delete;
-        i_mmio& operator=(const i_mmio&) = delete;
-        virtual ~i_mmio() = default;
+        immio() = default;
+        immio(const immio&) = delete;
+        immio& operator=(const immio&) = delete;
+        virtual ~immio() = default;
 
         [[nodiscard]] virtual std::uint8_t mmio_read(std::uint16_t offset) = 0;
         virtual void mmio_write(std::uint16_t offset, std::uint8_t value) = 0;

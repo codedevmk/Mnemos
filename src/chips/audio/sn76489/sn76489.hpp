@@ -19,7 +19,7 @@ namespace mnemos::chips::audio {
     // tick(cycles) drives step() through an internal /16 prescaler so the chip can
     // be clocked at the system rate. An optional 1-pole low-pass models the analog
     // output RC (off by default).
-    class sn76489 final : public i_audio_synth {
+    class sn76489 final : public iaudio_synth {
       public:
         static constexpr int channel_count = 4;
         static constexpr int default_clock_divider = 16;
@@ -33,7 +33,7 @@ namespace mnemos::chips::audio {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Write a byte to the PSG data port (the SMS routes Z80 OUT ($7F) here).
         void write(std::uint8_t value) noexcept;
@@ -61,7 +61,7 @@ namespace mnemos::chips::audio {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         std::array<std::uint16_t, 3> tone_{};    // 10-bit tone period registers
         std::array<std::uint16_t, 4> counter_{}; // internal countdown timers

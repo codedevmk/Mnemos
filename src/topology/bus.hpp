@@ -22,7 +22,7 @@ namespace mnemos::topology {
     };
 
     // A typed address space (TDS §9): a width, an endianness, and a table of
-    // regions backed by RAM, ROM, or an MMIO chip. Implements chips::i_bus so a
+    // regions backed by RAM, ROM, or an MMIO chip. Implements chips::ibus so a
     // CPU attaches directly to it.
     //
     // Regions may overlap. Each carries a priority and an optional "active"
@@ -32,7 +32,7 @@ namespace mnemos::topology {
     // underneath), I/O overlays active for both, all gated by the PLA decode the
     // system supplies through the predicate. With no overlapping regions and no
     // predicates this degenerates to a plain disjoint memory map.
-    class bus final : public chips::i_bus {
+    class bus final : public chips::ibus {
       public:
         using read_handler = std::function<std::uint8_t(std::uint32_t address)>;
         using write_handler = std::function<void(std::uint32_t address, std::uint8_t value)>;
@@ -58,7 +58,7 @@ namespace mnemos::topology {
         void map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                       write_handler on_write, int priority = 0, active_predicate active = {});
 
-        // i_bus: unmapped reads return 0xFF (open bus); unmapped writes are dropped.
+        // ibus: unmapped reads return 0xFF (open bus); unmapped writes are dropped.
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
         void write8(std::uint32_t address, std::uint8_t value) override;
 

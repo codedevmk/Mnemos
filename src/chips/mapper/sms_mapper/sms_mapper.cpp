@@ -117,7 +117,7 @@ namespace mnemos::chips::mapper {
         reader.bytes(cart_ram_);
     }
 
-    instrumentation::i_chip_introspection& sms_mapper::introspection() noexcept {
+    instrumentation::ichip_introspection& sms_mapper::introspection() noexcept {
         return introspection_;
     }
 
@@ -130,9 +130,10 @@ namespace mnemos::chips::mapper {
     }
 
     namespace {
-        [[maybe_unused]] const auto sms_mapper_registration = register_factory(
-            "sega.sms_mapper", chip_class::mapper,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<sms_mapper>(); });
+        [[maybe_unused]] const auto sms_mapper_registration =
+            register_factory("sega.sms_mapper", chip_class::mapper, []() -> std::unique_ptr<ichip> {
+                return std::make_unique<sms_mapper>();
+            });
     } // namespace
 
 } // namespace mnemos::chips::mapper

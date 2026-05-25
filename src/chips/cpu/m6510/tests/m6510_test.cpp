@@ -17,7 +17,7 @@ namespace {
 
     using mnemos::chips::cpu::m6510;
 
-    class flat_ram final : public mnemos::chips::i_bus {
+    class flat_ram final : public mnemos::chips::ibus {
       public:
         std::array<std::uint8_t, 0x10000U> memory{};
 
@@ -59,7 +59,7 @@ namespace {
 
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_cpu, m6510>);
+static_assert(std::is_base_of_v<mnemos::chips::icpu, m6510>);
 static_assert(m6510::static_class == mnemos::chips::chip_class::cpu);
 
 TEST_CASE("m6510 reports its identity") {
@@ -704,7 +704,7 @@ TEST_CASE("m6510 registers under its canonical id") {
     REQUIRE(descriptor != nullptr);
     CHECK(descriptor->klass == mnemos::chips::chip_class::cpu);
 
-    std::unique_ptr<mnemos::chips::i_chip> chip = mnemos::chips::create_chip("mos.6510");
+    std::unique_ptr<mnemos::chips::ichip> chip = mnemos::chips::create_chip("mos.6510");
     REQUIRE(chip != nullptr);
     CHECK(chip->metadata().part_number == "6510");
     CHECK(chip->metadata().klass == mnemos::chips::chip_class::cpu);

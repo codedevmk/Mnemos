@@ -11,7 +11,7 @@
 
 namespace mnemos::chips {
 
-    using chip_factory_fn = std::unique_ptr<i_chip> (*)();
+    using chip_factory_fn = std::unique_ptr<ichip> (*)();
 
     enum class chip_registry_error : std::uint8_t {
         none,
@@ -62,7 +62,7 @@ namespace mnemos::chips {
     [[nodiscard]] factory_registration register_factory(std::string_view canonical_id,
                                                         chip_class klass, chip_factory_fn create);
 
-    [[nodiscard]] std::unique_ptr<i_chip> create_chip(std::string_view canonical_id);
+    [[nodiscard]] std::unique_ptr<ichip> create_chip(std::string_view canonical_id);
 
     [[nodiscard]] std::span<const chip_factory_descriptor> registered_factories() noexcept;
 

@@ -488,7 +488,7 @@ namespace mnemos::chips::bus_controller {
         irq_out_ = reader.boolean();
     }
 
-    instrumentation::i_chip_introspection& via_6522::introspection() noexcept {
+    instrumentation::ichip_introspection& via_6522::introspection() noexcept {
         return introspection_;
     }
 
@@ -503,7 +503,7 @@ namespace mnemos::chips::bus_controller {
     namespace {
         [[maybe_unused]] const auto via_6522_registration = register_factory(
             "mos.6522", chip_class::bus_controller,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<via_6522>(); });
+            []() -> std::unique_ptr<ichip> { return std::make_unique<via_6522>(); });
     } // namespace
 
 } // namespace mnemos::chips::bus_controller

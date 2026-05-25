@@ -221,7 +221,7 @@ namespace mnemos::chips::audio {
         last_sample_ = static_cast<std::int16_t>(reader.u16());
     }
 
-    instrumentation::i_chip_introspection& sn76489::introspection() noexcept {
+    instrumentation::ichip_introspection& sn76489::introspection() noexcept {
         return introspection_;
     }
 
@@ -240,9 +240,10 @@ namespace mnemos::chips::audio {
     }
 
     namespace {
-        [[maybe_unused]] const auto sn76489_registration = register_factory(
-            "ti.sn76489", chip_class::audio_synth,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<sn76489>(); });
+        [[maybe_unused]] const auto sn76489_registration =
+            register_factory("ti.sn76489", chip_class::audio_synth, []() -> std::unique_ptr<ichip> {
+                return std::make_unique<sn76489>();
+            });
     } // namespace
 
 } // namespace mnemos::chips::audio

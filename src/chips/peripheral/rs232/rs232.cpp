@@ -142,14 +142,12 @@ namespace mnemos::chips::peripheral {
         tx_shift_ = reader.u8();
     }
 
-    instrumentation::i_chip_introspection& rs232::introspection() noexcept {
-        return introspection_;
-    }
+    instrumentation::ichip_introspection& rs232::introspection() noexcept { return introspection_; }
 
     namespace {
         [[maybe_unused]] const auto rs232_registration =
             register_factory("commodore.rs232", chip_class::peripheral,
-                             []() -> std::unique_ptr<i_chip> { return std::make_unique<rs232>(); });
+                             []() -> std::unique_ptr<ichip> { return std::make_unique<rs232>(); });
     } // namespace
 
 } // namespace mnemos::chips::peripheral

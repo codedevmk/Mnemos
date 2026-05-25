@@ -18,9 +18,9 @@ namespace mnemos::chips::video {
     // command protocol, the V/H counters, and the line + frame interrupts.
     //
     // 16 KiB VRAM + 32-entry CRAM (--BBGGRR). The scanline renderer fills an
-    // 0x00RRGGBB framebuffer. As an i_video frame source the VDP is ticked per Z80
+    // 0x00RRGGBB framebuffer. As an ivideo frame source the VDP is ticked per Z80
     // cycle (228 per scanline); frame_index increments once per rendered frame.
-    class sms_vdp final : public i_video, public i_mmio {
+    class sms_vdp final : public ivideo, public immio {
       public:
         static constexpr int fb_width = 256;
         static constexpr int fb_height = 240;
@@ -40,9 +40,9 @@ namespace mnemos::chips::video {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        // i_video.
+        // ivideo.
         [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frame_index_; }
         [[nodiscard]] frame_buffer_view framebuffer() const noexcept override;
 
@@ -54,7 +54,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint8_t vcounter() const noexcept;
         [[nodiscard]] std::uint8_t hcounter() const noexcept;
 
-        // i_mmio convenience: even offset = data ($BE), odd = control ($BF).
+        // immio convenience: even offset = data ($BE), odd = control ($BF).
         [[nodiscard]] std::uint8_t mmio_read(std::uint16_t offset) override {
             return (offset & 1U) != 0U ? ctrl_read() : data_read();
         }
@@ -86,7 +86,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] int scanline() const noexcept { return scanline_; }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         void begin_scanline() noexcept;             // render the current scanline if visible
         [[nodiscard]] bool run_scanline() noexcept; // advance + interrupts; returns IRQ edge

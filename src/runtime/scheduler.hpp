@@ -11,7 +11,7 @@ namespace mnemos::runtime {
     // advance it by exactly one chip cycle. A divider of 1 means the chip ticks
     // every master cycle (lockstep with the master clock).
     struct scheduled_chip final {
-        chips::i_chip* chip{};
+        chips::ichip* chip{};
         std::uint32_t divider{1U};
     };
 
@@ -29,7 +29,7 @@ namespace mnemos::runtime {
     // the scheduler itself stays rendering-agnostic.
     class scheduler final {
       public:
-        scheduler(std::vector<scheduled_chip> chips, chips::i_video* frame_source) noexcept;
+        scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept;
 
         // Advance the master clock by `cycles`, dispatching due chip ticks.
         void run_master_cycles(std::uint64_t cycles);
@@ -43,12 +43,12 @@ namespace mnemos::runtime {
 
         [[nodiscard]] std::uint64_t master_cycle() const noexcept { return master_cycle_; }
         [[nodiscard]] std::uint64_t frame_index() const noexcept;
-        [[nodiscard]] chips::i_video* frame_source() const noexcept { return frame_source_; }
+        [[nodiscard]] chips::ivideo* frame_source() const noexcept { return frame_source_; }
 
       private:
         std::vector<scheduled_chip> chips_;
         std::vector<std::uint32_t> accumulator_; // per-chip master cycles since last tick
-        chips::i_video* frame_source_{};
+        chips::ivideo* frame_source_{};
         std::uint64_t master_cycle_{};
         bool uniform_lockstep_{}; // every divider == 1: tick all chips together
     };

@@ -264,14 +264,14 @@ namespace mnemos::chips::storage::c1541 {
         under_atn_ = reader.boolean();
     }
 
-    instrumentation::i_chip_introspection& synthetic_drive::introspection() noexcept {
+    instrumentation::ichip_introspection& synthetic_drive::introspection() noexcept {
         return introspection_;
     }
 
     namespace {
         [[maybe_unused]] const auto c1541_registration = register_factory(
             "commodore.c1541", chip_class::storage,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<synthetic_drive>(); });
+            []() -> std::unique_ptr<ichip> { return std::make_unique<synthetic_drive>(); });
     } // namespace
 
 } // namespace mnemos::chips::storage::c1541

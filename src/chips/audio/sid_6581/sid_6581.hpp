@@ -15,7 +15,7 @@ namespace mnemos::chips::audio {
     // with combined-waveform AND, ring modulation, and hard sync), an ADSR
     // envelope generator, a multi-mode state-variable filter, OSC3/ENV3 readback,
     // and a mixed signed-16-bit sample output. tick() advances one φ2 cycle.
-    class sid_6581 final : public i_audio_synth, public i_mmio {
+    class sid_6581 final : public iaudio_synth, public immio {
       public:
         enum class variant : std::uint8_t { mos_6581, mos_8580 };
 
@@ -34,7 +34,7 @@ namespace mnemos::chips::audio {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Machine configuration (survives reset).
         void set_variant(variant v) noexcept { variant_ = v; }
@@ -67,7 +67,7 @@ namespace mnemos::chips::audio {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         struct voice_state final {
             std::uint16_t frequency{};

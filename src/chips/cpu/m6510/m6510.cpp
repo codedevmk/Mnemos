@@ -1445,9 +1445,7 @@ namespace mnemos::chips::cpu {
         interrupt_vector_ = reader.u16();
     }
 
-    instrumentation::i_chip_introspection& m6510::introspection() noexcept {
-        return introspection_;
-    }
+    instrumentation::ichip_introspection& m6510::introspection() noexcept { return introspection_; }
 
     std::span<const register_descriptor> m6510::register_snapshot() noexcept {
         register_view_[0] = {"A", registers_.a, 8U, register_value_format::unsigned_integer};
@@ -1459,7 +1457,7 @@ namespace mnemos::chips::cpu {
         return register_view_;
     }
 
-    void m6510::attach_bus(i_bus& bus) noexcept { bus_ = &bus; }
+    void m6510::attach_bus(ibus& bus) noexcept { bus_ = &bus; }
 
     std::uint8_t m6510::read(std::uint16_t address) noexcept {
         if (port_enabled_ && address == 0x0000U) {
@@ -1556,7 +1554,7 @@ namespace mnemos::chips::cpu {
     namespace {
         [[maybe_unused]] const auto m6510_registration =
             register_factory("mos.6510", chip_class::cpu,
-                             []() -> std::unique_ptr<i_chip> { return std::make_unique<m6510>(); });
+                             []() -> std::unique_ptr<ichip> { return std::make_unique<m6510>(); });
     } // namespace
 
 } // namespace mnemos::chips::cpu

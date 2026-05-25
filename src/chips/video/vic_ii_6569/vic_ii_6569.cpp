@@ -758,7 +758,7 @@ namespace mnemos::chips::video {
         refresh_raster_compare();
     }
 
-    instrumentation::i_chip_introspection& vic_ii_6569::introspection() noexcept {
+    instrumentation::ichip_introspection& vic_ii_6569::introspection() noexcept {
         return introspection_;
     }
 
@@ -774,7 +774,7 @@ namespace mnemos::chips::video {
 
     namespace {
         [[maybe_unused]] const auto vic_ii_6569_registration =
-            register_factory("mos.6569", chip_class::video, []() -> std::unique_ptr<i_chip> {
+            register_factory("mos.6569", chip_class::video, []() -> std::unique_ptr<ichip> {
                 return std::make_unique<vic_ii_6569>();
             });
     } // namespace

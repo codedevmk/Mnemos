@@ -14,7 +14,7 @@ namespace mnemos::chips::mapper {
     // logic inputs — the CPU-port bits LORAM/HIRAM/CHAREN plus the cartridge
     // /GAME and /EXROM lines — select one chip-select output per region of CPU
     // (or VIC-II) address space. No clocked state, so tick() is a no-op.
-    class c64_pla final : public i_mapper {
+    class c64_pla final : public imapper {
       public:
         enum class region : std::uint8_t {
             ram,
@@ -36,7 +36,7 @@ namespace mnemos::chips::mapper {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Inputs. CPU-port bits mirror the low 3 bits of the 6510 $0001 port;
         // /GAME and /EXROM float high (true) on a bare machine with no cartridge.
@@ -61,7 +61,7 @@ namespace mnemos::chips::mapper {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         [[nodiscard]] region decode_a000_bfff() const noexcept;
         [[nodiscard]] region decode_d000_dfff() const noexcept;

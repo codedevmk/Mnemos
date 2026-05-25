@@ -632,7 +632,7 @@ namespace mnemos::chips::audio {
         env3_ = reader.u8();
     }
 
-    instrumentation::i_chip_introspection& sid_6581::introspection() noexcept {
+    instrumentation::ichip_introspection& sid_6581::introspection() noexcept {
         return introspection_;
     }
 
@@ -649,7 +649,7 @@ namespace mnemos::chips::audio {
 
     namespace {
         [[maybe_unused]] const auto sid_6581_registration =
-            register_factory("mos.6581", chip_class::audio_synth, []() -> std::unique_ptr<i_chip> {
+            register_factory("mos.6581", chip_class::audio_synth, []() -> std::unique_ptr<ichip> {
                 return std::make_unique<sid_6581>();
             });
     } // namespace

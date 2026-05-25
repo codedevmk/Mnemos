@@ -15,7 +15,7 @@ namespace mnemos::runtime {
 
     struct save_chip final {
         std::string id; // chunk id (the manifest chip id)
-        chips::i_chip* chip{};
+        chips::ichip* chip{};
     };
 
     struct save_memory final {

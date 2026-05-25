@@ -148,7 +148,7 @@ namespace mnemos::chips::mapper {
         exrom_ = reader.boolean();
     }
 
-    instrumentation::i_chip_introspection& c64_pla::introspection() noexcept {
+    instrumentation::ichip_introspection& c64_pla::introspection() noexcept {
         return introspection_;
     }
 
@@ -164,7 +164,7 @@ namespace mnemos::chips::mapper {
 
     namespace {
         [[maybe_unused]] const auto c64_pla_registration =
-            register_factory("mos.906114", chip_class::mapper, []() -> std::unique_ptr<i_chip> {
+            register_factory("mos.906114", chip_class::mapper, []() -> std::unique_ptr<ichip> {
                 return std::make_unique<c64_pla>();
             });
     } // namespace

@@ -24,13 +24,13 @@ namespace mnemos::manifests {
     // The instantiated machine: chips created from the manifest, the buses they
     // attach to, and the owned RAM/ROM storage the bus regions point into.
     struct system_graph final {
-        std::vector<std::unique_ptr<chips::i_chip>> chips;
+        std::vector<std::unique_ptr<chips::ichip>> chips;
         std::vector<std::unique_ptr<topology::bus>> buses;
         std::vector<std::unique_ptr<std::vector<std::uint8_t>>> memory;
-        std::unordered_map<std::string, chips::i_chip*> chip_by_id;
+        std::unordered_map<std::string, chips::ichip*> chip_by_id;
         std::unordered_map<std::string, topology::bus*> bus_by_id;
 
-        [[nodiscard]] chips::i_chip* chip(std::string_view id) const;
+        [[nodiscard]] chips::ichip* chip(std::string_view id) const;
         [[nodiscard]] topology::bus* bus(std::string_view id) const;
     };
 

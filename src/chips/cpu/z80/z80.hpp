@@ -20,9 +20,9 @@ namespace mnemos::chips::cpu {
     // The Z80 is instruction-stepped: step_instruction() executes exactly one
     // instruction and returns its cycle cost. tick(cycles) catches up by running
     // whole instructions until the requested cycles are consumed. Memory is the
-    // attached i_bus; the Z80's separate 64K I/O space (IN/OUT) routes through
+    // attached ibus; the Z80's separate 64K I/O space (IN/OUT) routes through
     // injected port callbacks (unset -> reads 0xFF, writes dropped).
-    class z80 final : public i_cpu {
+    class z80 final : public icpu {
       public:
         // F-register flag bits.
         static constexpr std::uint8_t flag_c = 0x01U; // carry
@@ -68,10 +68,10 @@ namespace mnemos::chips::cpu {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        // i_cpu: the memory address space the CPU reads/writes.
-        void attach_bus(i_bus& bus) noexcept override { bus_ = &bus; }
+        // icpu: the memory address space the CPU reads/writes.
+        void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }
 
         // The separate Z80 I/O space (IN/OUT). Optional; unset ports read 0xFF.
         void set_port_in(port_in_fn handler) noexcept { port_in_ = std::move(handler); }
@@ -94,7 +94,7 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         // ---- 8-bit halves of the 16-bit pair registers (little-endian pairs) ----
         [[nodiscard]] std::uint8_t a() const noexcept {
@@ -214,7 +214,7 @@ namespace mnemos::chips::cpu {
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
         std::uint64_t elapsed_{};   // total cycles executed
 
-        i_bus* bus_{};
+        ibus* bus_{};
         port_in_fn port_in_{};
         port_out_fn port_out_{};
 

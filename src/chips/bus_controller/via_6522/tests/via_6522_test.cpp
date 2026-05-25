@@ -13,7 +13,7 @@ namespace {
     using mnemos::chips::bus_controller::via_6522;
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_bus_controller, via_6522>);
+static_assert(std::is_base_of_v<mnemos::chips::ibus_controller, via_6522>);
 
 TEST_CASE("via_6522 reports identity and registers under mos.6522") {
     const via_6522 via;

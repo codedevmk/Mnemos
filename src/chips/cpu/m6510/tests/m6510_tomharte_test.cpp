@@ -33,7 +33,7 @@ namespace {
 
     using mnemos::chips::cpu::m6510;
 
-    class recording_bus final : public mnemos::chips::i_bus {
+    class recording_bus final : public mnemos::chips::ibus {
       public:
         std::array<std::uint8_t, 0x10000U> memory{};
 

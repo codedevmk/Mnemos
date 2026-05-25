@@ -8,9 +8,9 @@
 
 namespace {
 
-    class test_introspection final : public mnemos::instrumentation::i_chip_introspection {};
+    class test_introspection final : public mnemos::instrumentation::ichip_introspection {};
 
-    class test_cpu final : public mnemos::chips::i_cpu {
+    class test_cpu final : public mnemos::chips::icpu {
       public:
         [[nodiscard]] mnemos::chips::chip_metadata metadata() const noexcept override {
             return {
@@ -30,9 +30,9 @@ namespace {
 
         void load_state(mnemos::chips::state_reader&) override {}
 
-        void attach_bus(mnemos::chips::i_bus& bus) noexcept override { bus_ = &bus; }
+        void attach_bus(mnemos::chips::ibus& bus) noexcept override { bus_ = &bus; }
 
-        [[nodiscard]] mnemos::instrumentation::i_chip_introspection&
+        [[nodiscard]] mnemos::instrumentation::ichip_introspection&
         introspection() noexcept override {
             return introspection_;
         }
@@ -42,10 +42,10 @@ namespace {
 
       private:
         test_introspection introspection_;
-        mnemos::chips::i_bus* bus_{};
+        mnemos::chips::ibus* bus_{};
     };
 
-    [[nodiscard]] std::unique_ptr<mnemos::chips::i_chip> make_test_cpu() {
+    [[nodiscard]] std::unique_ptr<mnemos::chips::ichip> make_test_cpu() {
         return std::make_unique<test_cpu>();
     }
 
@@ -53,8 +53,8 @@ namespace {
 
 static_assert(std::is_trivially_copyable_v<mnemos::chips::chip_metadata>);
 static_assert(std::is_trivially_copyable_v<mnemos::chips::register_descriptor>);
-static_assert(std::is_base_of_v<mnemos::chips::i_chip, mnemos::chips::i_cpu>);
-static_assert(mnemos::chips::i_cpu::static_class == mnemos::chips::chip_class::cpu);
+static_assert(std::is_base_of_v<mnemos::chips::ichip, mnemos::chips::icpu>);
+static_assert(mnemos::chips::icpu::static_class == mnemos::chips::chip_class::cpu);
 
 TEST_CASE("chip taxonomy names are stable") {
     using mnemos::chips::chip_class;
@@ -107,7 +107,7 @@ TEST_CASE("chip factory registry registers and creates chips by canonical id") {
     REQUIRE(descriptor != nullptr);
     CHECK(descriptor->canonical_id == "test.cpu");
 
-    std::unique_ptr<mnemos::chips::i_chip> chip = mnemos::chips::create_chip("test.cpu");
+    std::unique_ptr<mnemos::chips::ichip> chip = mnemos::chips::create_chip("test.cpu");
     REQUIRE(chip != nullptr);
     CHECK(chip->metadata().klass == mnemos::chips::chip_class::cpu);
 }

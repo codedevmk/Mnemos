@@ -26,7 +26,7 @@ namespace mnemos::chips::mapper {
     //
     // The mapper has no clocked behaviour, so tick() is a no-op; only the page
     // registers, the RAM-enable latch, and the cart RAM are saved.
-    class codemasters_mapper final : public i_mapper {
+    class codemasters_mapper final : public imapper {
       public:
         static constexpr int cart_ram_size = 8 * 1024;        // $A000-$BFFF
         static constexpr int rom_page_size = 0x4000;          // 16 KiB
@@ -42,7 +42,7 @@ namespace mnemos::chips::mapper {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Attach the cartridge ROM image (borrowed; must outlive the mapper).
         void attach_rom(std::span<const std::uint8_t> rom) noexcept { rom_ = rom; }
@@ -61,7 +61,7 @@ namespace mnemos::chips::mapper {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         [[nodiscard]] std::uint8_t rom_read_page(std::uint8_t page,
                                                  std::uint16_t offset) const noexcept;

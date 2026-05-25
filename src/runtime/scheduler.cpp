@@ -4,7 +4,7 @@
 
 namespace mnemos::runtime {
 
-    scheduler::scheduler(std::vector<scheduled_chip> chips, chips::i_video* frame_source) noexcept
+    scheduler::scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept
         : chips_(std::move(chips)), accumulator_(chips_.size(), 0U), frame_source_(frame_source) {
         uniform_lockstep_ = !chips_.empty();
         for (const auto& sc : chips_) {

@@ -132,14 +132,15 @@ namespace mnemos::chips::storage {
         update_sense();
     }
 
-    instrumentation::i_chip_introspection& datasette::introspection() noexcept {
+    instrumentation::ichip_introspection& datasette::introspection() noexcept {
         return introspection_;
     }
 
     namespace {
-        [[maybe_unused]] const auto datasette_registration = register_factory(
-            "commodore.1530", chip_class::storage,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<datasette>(); });
+        [[maybe_unused]] const auto datasette_registration =
+            register_factory("commodore.1530", chip_class::storage, []() -> std::unique_ptr<ichip> {
+                return std::make_unique<datasette>();
+            });
     } // namespace
 
 } // namespace mnemos::chips::storage

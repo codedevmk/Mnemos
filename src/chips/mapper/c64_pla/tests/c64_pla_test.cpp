@@ -14,7 +14,7 @@ namespace {
     using region = c64_pla::region;
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_mapper, c64_pla>);
+static_assert(std::is_base_of_v<mnemos::chips::imapper, c64_pla>);
 static_assert(c64_pla::static_class == mnemos::chips::chip_class::mapper);
 
 TEST_CASE("c64_pla reports identity and registers under mos.906114") {

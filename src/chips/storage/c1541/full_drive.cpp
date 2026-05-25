@@ -259,14 +259,14 @@ namespace mnemos::chips::storage::c1541 {
         ratio_acc_ = reader.u64();
     }
 
-    instrumentation::i_chip_introspection& full_drive::introspection() noexcept {
+    instrumentation::ichip_introspection& full_drive::introspection() noexcept {
         return introspection_;
     }
 
     namespace {
         [[maybe_unused]] const auto full_drive_registration = register_factory(
             "commodore.c1541.full", chip_class::storage,
-            []() -> std::unique_ptr<i_chip> { return std::make_unique<full_drive>(); });
+            []() -> std::unique_ptr<ichip> { return std::make_unique<full_drive>(); });
     } // namespace
 
 } // namespace mnemos::chips::storage::c1541

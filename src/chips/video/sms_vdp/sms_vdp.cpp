@@ -463,13 +463,13 @@ namespace mnemos::chips::video {
         irq_last_ = irq_asserted();
     }
 
-    instrumentation::i_chip_introspection& sms_vdp::introspection() noexcept {
+    instrumentation::ichip_introspection& sms_vdp::introspection() noexcept {
         return introspection_;
     }
 
     namespace {
         [[maybe_unused]] const auto sms_vdp_registration =
-            register_factory("sega.sms_vdp", chip_class::video, []() -> std::unique_ptr<i_chip> {
+            register_factory("sega.sms_vdp", chip_class::video, []() -> std::unique_ptr<ichip> {
                 return std::make_unique<sms_vdp>();
             });
     } // namespace

@@ -16,7 +16,7 @@ namespace mnemos::chips::peripheral {
     // the expansion RAM. Ported per ADR 0006. The transfer is modelled as immediate
     // (the real REU steals bus cycles); the /IRQ-on-completion line is reflected in
     // the status register but not yet wired to the CPU.
-    class reu final : public i_peripheral, public i_mmio {
+    class reu final : public iperipheral, public immio {
       public:
         enum class model : std::uint8_t { ram_128k, ram_256k, ram_512k };
         [[nodiscard]] static std::size_t ram_bytes(model m) noexcept;
@@ -30,13 +30,13 @@ namespace mnemos::chips::peripheral {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // I/O-2 register window ($DF00-$DFFF); the 11 registers mirror every $20.
         [[nodiscard]] std::uint8_t mmio_read(std::uint16_t offset) override;
         void mmio_write(std::uint16_t offset, std::uint8_t value) override;
 
-        void attach_bus(i_bus& bus) noexcept { bus_ = &bus; }
+        void attach_bus(ibus& bus) noexcept { bus_ = &bus; }
         // Re-size the expansion RAM to a model (clears it); use before first run.
         void set_model(model m) { ram_.assign(ram_bytes(m), 0U); }
         [[nodiscard]] std::size_t ram_size() const noexcept { return ram_.size(); }
@@ -52,11 +52,11 @@ namespace mnemos::chips::peripheral {
         [[nodiscard]] bool irq_asserted() const noexcept { return (status_ & 0x80U) != 0U; }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         void execute(std::uint8_t command);
 
-        i_bus* bus_{};
+        ibus* bus_{};
         std::vector<std::uint8_t> ram_;
 
         std::uint8_t status_{};         // $DF00 (bits 7 IRQ / 6 end-of-block / 5 fault)

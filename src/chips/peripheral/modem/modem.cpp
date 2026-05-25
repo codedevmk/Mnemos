@@ -492,9 +492,7 @@ namespace mnemos::chips::peripheral {
         accum_ = reader.u64();
     }
 
-    instrumentation::i_chip_introspection& modem::introspection() noexcept {
-        return introspection_;
-    }
+    instrumentation::ichip_introspection& modem::introspection() noexcept { return introspection_; }
 
     // ----- loopback transport -----
 
@@ -530,7 +528,7 @@ namespace mnemos::chips::peripheral {
     namespace {
         [[maybe_unused]] const auto modem_registration =
             register_factory("generic.hayes_modem", chip_class::peripheral,
-                             []() -> std::unique_ptr<i_chip> { return std::make_unique<modem>(); });
+                             []() -> std::unique_ptr<ichip> { return std::make_unique<modem>(); });
     } // namespace
 
 } // namespace mnemos::chips::peripheral

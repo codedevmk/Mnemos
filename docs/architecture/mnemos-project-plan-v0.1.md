@@ -62,7 +62,7 @@ Eleven milestones, M0 through M10. Each milestone has a hard exit criterion. No 
 
 **Scope:**
 - **Foundation library:** allocators, containers (or thin wrappers around stdlib), time, bit manipulation, logging, filesystem facade, threading facade, byte order helpers, span/expected utilities.
-- **`chips::common`** with the class taxonomy (`chip_class`), base interfaces (`i_chip`, `i_cpu`, `i_audio_synth`, `i_video`, `i_bus_controller`, `i_storage`, `i_mapper`), and the chip factory registry.
+- **`chips::common`** with the class taxonomy (`chip_class`), base interfaces (`ichip`, `icpu`, `iaudio_synth`, `ivideo`, `ibus_controller`, `istorage`, `imapper`), and the chip factory registry.
 - **`chips::cpu::m6510`** — full instruction set including all documented and illegal opcodes, full addressing modes, cycle-accurate timing, interrupt handling.
 - **6502 test ROM suite integrated:** Klaus 2M65 functional test, decimal mode tests, undocumented opcode tests.
 - **Golden-cycle traces** for a small set of programs verified against a known-good reference.
@@ -116,7 +116,7 @@ Eleven milestones, M0 through M10. Each milestone has a hard exit criterion. No 
 **Goal:** The dev frontend can attach to a running C64, inspect state, set breakpoints, and step.
 
 **Scope:**
-- **`instrumentation`** library: `i_runtime_introspection`, event subscription, breakpoint engine, watch engine.
+- **`instrumentation`** library: `iruntime_introspection`, event subscription, breakpoint engine, watch engine.
 - **Cap'n Proto wire schemas** (`src/instrumentation/wire/*.capnp`) for state queries, event streams, control commands.
 - **Wire transport:** local domain socket / named pipe server in-process; client library generated.
 - **`apps::dev` MVP** with frontend SDK primitives:

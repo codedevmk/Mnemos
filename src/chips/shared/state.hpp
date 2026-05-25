@@ -4,7 +4,7 @@
 #include <span>
 #include <vector>
 
-// Concrete serialisation for the i_chip save_state / load_state hooks (ADR 0008).
+// Concrete serialisation for the ichip save_state / load_state hooks (ADR 0008).
 // Primitives are encoded little-endian so a state written on one platform reloads
 // bit-identically on another. The reader is bounds-checked: an underrun flips the
 // ok() flag and yields zero/empty instead of reading out of bounds, so a caller

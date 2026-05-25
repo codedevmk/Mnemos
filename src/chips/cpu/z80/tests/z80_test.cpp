@@ -34,7 +34,7 @@ namespace {
     };
 } // namespace
 
-static_assert(std::is_base_of_v<mnemos::chips::i_cpu, z80>);
+static_assert(std::is_base_of_v<mnemos::chips::icpu, z80>);
 static_assert(z80::static_class == mnemos::chips::chip_class::cpu);
 
 TEST_CASE("z80 reports identity and registers under zilog.z80") {

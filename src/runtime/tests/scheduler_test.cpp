@@ -11,10 +11,10 @@ namespace {
 
     using namespace mnemos;
 
-    struct introspection_stub final : instrumentation::i_chip_introspection {};
+    struct introspection_stub final : instrumentation::ichip_introspection {};
 
     // Counts the cycles it is ticked with; everything else is a no-op stub.
-    struct counting_chip : chips::i_chip {
+    struct counting_chip : chips::ichip {
         std::uint64_t ticks{};
 
         [[nodiscard]] chips::chip_metadata metadata() const noexcept override { return {}; }
@@ -22,7 +22,7 @@ namespace {
         void reset(chips::reset_kind) override {}
         void save_state(chips::state_writer&) const override {}
         void load_state(chips::state_reader&) override {}
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override {
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
             return intro_;
         }
 
@@ -31,7 +31,7 @@ namespace {
     };
 
     // A video chip that completes a frame every `period` ticks.
-    struct fake_video final : chips::i_video {
+    struct fake_video final : chips::ivideo {
         std::uint32_t period{1U};
         std::uint64_t frames{};
         std::uint32_t counter{};
@@ -47,7 +47,7 @@ namespace {
         void reset(chips::reset_kind) override {}
         void save_state(chips::state_writer&) const override {}
         void load_state(chips::state_reader&) override {}
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override {
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
             return intro_;
         }
         [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frames; }

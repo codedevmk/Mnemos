@@ -8,7 +8,7 @@
 
 namespace mnemos::manifests {
 
-    chips::i_chip* system_graph::chip(std::string_view id) const {
+    chips::ichip* system_graph::chip(std::string_view id) const {
         const auto it = chip_by_id.find(std::string{id});
         return it != chip_by_id.end() ? it->second : nullptr;
     }
@@ -94,7 +94,7 @@ namespace mnemos::manifests {
                 report("chip '" + cd.id + "': unknown or unregistered type '" + cd.type + "'");
                 continue;
             }
-            chips::i_chip* raw = chip.get();
+            chips::ichip* raw = chip.get();
             graph.chip_by_id.emplace(cd.id, raw);
             graph.chips.push_back(std::move(chip));
 
@@ -104,12 +104,12 @@ namespace mnemos::manifests {
                 continue;
             }
 
-            if (auto* cpu = dynamic_cast<chips::i_cpu*>(raw)) {
+            if (auto* cpu = dynamic_cast<chips::icpu*>(raw)) {
                 cpu->attach_bus(*attached);
             }
 
             if (cd.mmio_range) {
-                auto* mmio = dynamic_cast<chips::i_mmio*>(raw);
+                auto* mmio = dynamic_cast<chips::immio*>(raw);
                 if (mmio == nullptr) {
                     report("chip '" + cd.id + "' has an mmio_range but is not MMIO-capable");
                 } else {

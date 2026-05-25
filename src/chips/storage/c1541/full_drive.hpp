@@ -25,7 +25,7 @@ namespace mnemos::chips::storage::c1541 {
     // like the C64 golden boot; and, as in Emu, the GCR read path is the hard part
     // still being proven. The memory map, VIA port wiring, stepper, and head
     // byte/SYNC mechanics are unit-tested with a synthetic ROM.
-    class full_drive final : public i_storage {
+    class full_drive final : public istorage {
       public:
         static constexpr std::uint16_t ram_size = 0x800U;
         static constexpr std::uint32_t rom_size = 0x4000U;
@@ -40,7 +40,7 @@ namespace mnemos::chips::storage::c1541 {
         void save_state(state_writer& writer) const override;
         void load_state(state_reader& reader) override;
 
-        [[nodiscard]] instrumentation::i_chip_introspection& introspection() noexcept override;
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         void attach_bus(iec_bus& bus) noexcept;
         [[nodiscard]] bool load_rom(std::span<const std::uint8_t> rom); // exactly 16 KiB
@@ -61,10 +61,10 @@ namespace mnemos::chips::storage::c1541 {
         [[nodiscard]] cpu::m6510& cpu() noexcept { return cpu_; }
 
       private:
-        class introspection_surface final : public instrumentation::i_chip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {};
 
         // The drive's private 16-bit address space (RAM mirror / VIA1 / VIA2 / ROM).
-        class drive_bus final : public i_bus {
+        class drive_bus final : public ibus {
           public:
             explicit drive_bus(full_drive& owner) noexcept : owner_(owner) {}
             [[nodiscard]] std::uint8_t read8(std::uint32_t address) override {
