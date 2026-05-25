@@ -1,0 +1,91 @@
+# Commodore 64 (NTSC) — Mnemos system manifest (schema mnemos-manifest/1).
+#
+# The NTSC counterpart of c64.pal.toml: a 6567 VIC-II (65 cycles x 263 lines),
+# the ~1.0227 MHz NTSC phi2, and a 60 Hz mains TOD. The runner derives the region
+# from this manifest's id. Same ROM files + placeholder-sha256 policy (see ROMS.md);
+# ROM images are never committed.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "commodore.c64.ntsc"
+display_name = "Commodore 64 (NTSC)"
+family       = "commodore"
+revision     = 1
+
+[clock]
+master_hz               = 14318181
+master_to_cpu_divider   = 14
+master_to_video_divider = 4
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "mos.6510"
+attached_bus = "main"
+
+[[chip]]
+id           = "video"
+type         = "mos.6567"
+attached_bus = "main"
+mmio_range   = "0xD000-0xD3FF"
+
+[[chip]]
+id           = "audio"
+type         = "mos.6581"
+attached_bus = "main"
+mmio_range   = "0xD400-0xD7FF"
+
+[[chip]]
+id           = "cia1"
+type         = "mos.6526"
+attached_bus = "main"
+mmio_range   = "0xDC00-0xDCFF"
+
+[[chip]]
+id           = "cia2"
+type         = "mos.6526"
+attached_bus = "main"
+mmio_range   = "0xDD00-0xDDFF"
+
+[[chip]]
+id           = "pla"
+type         = "mos.906114"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+[[bus.region]]
+name    = "ram"
+range   = "0x0000-0xFFFF"
+backing = "ram"
+size    = 65536
+
+[[bus.region]]
+name    = "basic_rom"
+range   = "0xA000-0xBFFF"
+backing = "rom"
+file    = "roms/basic.901226-01.bin"
+sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
+overlay = true
+
+[[bus.region]]
+name    = "kernal_rom"
+range   = "0xE000-0xFFFF"
+backing = "rom"
+file    = "roms/kernal.901227-03.bin"
+sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
+overlay = true
+
+[[bus.region]]
+name    = "char_rom"
+range   = "0xD000-0xDFFF"
+backing = "rom"
+file    = "roms/character.901225-01.bin"
+sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
+overlay = true

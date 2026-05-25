@@ -66,6 +66,8 @@ namespace mnemos::tools {
                "  --drive-rom <file>  16K 1541 DOS ROM -> use the cycle-accurate drive 8\n"
                "  --cart <file>       .crt cartridge image to insert\n"
                "  --frames <n>        number of frames to run (default 1)\n"
+               "  --sid <6581|8580>   select the SID revision (default 6581)\n"
+               "  --dual-sid          add a second SID at $D420 (stereo)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
                "  --load <file>       load a save state before the run\n"
@@ -120,6 +122,20 @@ namespace mnemos::tools {
                 out.frames = frames;
             } else if (arg == "--dump-hash") {
                 out.dump_hash = true;
+            } else if (arg == "--dual-sid") {
+                out.dual_sid = true;
+            } else if (arg == "--sid") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                if (value == "8580") {
+                    out.sid_8580 = true;
+                } else if (value == "6581") {
+                    out.sid_8580 = false;
+                } else {
+                    err << "error: --sid expects 6581 or 8580, got '" << value << "'\n";
+                    return false;
+                }
             } else if (arg == "--save") {
                 if (!take_value(argc, argv, i, arg, value, err)) {
                     return false;
@@ -227,8 +243,19 @@ namespace mnemos::tools {
             return 4;
         }
 
-        auto sys =
-            manifests::c64::assemble_c64(std::move(basic), std::move(kernal), std::move(chargen));
+        // Region comes from the manifest (the NTSC manifest's id); SID revision and
+        // stereo are CLI selections.
+        manifests::c64::c64_config cfg;
+        if (m.id.find("ntsc") != std::string::npos) {
+            cfg.video_region = manifests::c64::c64_config::region::ntsc;
+        }
+        if (options.sid_8580) {
+            cfg.sid_variant = chips::audio::sid_6581::variant::mos_8580;
+        }
+        cfg.dual_sid = options.dual_sid;
+
+        auto sys = manifests::c64::assemble_c64(std::move(basic), std::move(kernal),
+                                                std::move(chargen), cfg);
 
         // Insert the cartridge before reset so an ultimax/16K cart's vectors apply.
         if (!options.cart.empty()) {
@@ -248,6 +275,7 @@ namespace mnemos::tools {
         sys->cia1.reset(chips::reset_kind::power_on);
         sys->cia2.reset(chips::reset_kind::power_on);
         sys->sid.reset(chips::reset_kind::power_on);
+        sys->sid2.reset(chips::reset_kind::power_on);
         sys->vic.reset(chips::reset_kind::power_on);
         sys->drive8.reset(chips::reset_kind::power_on);
 
@@ -292,6 +320,9 @@ namespace mnemos::tools {
         std::vector<runtime::scheduled_chip> chips = {{&sys->vic, 1U},  {&sys->cpu, 1U},
                                                       {&sys->cia1, 1U}, {&sys->cia2, 1U},
                                                       {&sys->sid, 1U},  {drive, 1U}};
+        if (cfg.dual_sid) {
+            chips.push_back({&sys->sid2, 1U});
+        }
         runtime::scheduler sched(std::move(chips), &sys->vic);
 
         // A save-state view over the assembled machine (chunk ids match the manifest).
@@ -303,6 +334,9 @@ namespace mnemos::tools {
             t.chips = {{"cpu", &sys->cpu},   {"video", &sys->vic}, {"audio", &sys->sid},
                        {"cia1", &sys->cia1}, {"cia2", &sys->cia2}, {"pla", &sys->pla},
                        {"cart", &sys->cart}, {"drive8", drive}};
+            if (cfg.dual_sid) {
+                t.chips.push_back({"audio2", &sys->sid2});
+            }
             t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
                         {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};
             return t;

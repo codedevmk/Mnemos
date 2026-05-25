@@ -18,6 +18,8 @@ namespace mnemos::tools {
         std::filesystem::path cart;      // optional .crt cartridge
         std::uint64_t frames{1U};
         bool dump_hash{false};
+        bool sid_8580{false}; // use the 8580 SID instead of the 6581
+        bool dual_sid{false}; // add a second SID at $D420
         bool help{false};
         // Deferred (save-state work): present so the flags are accepted and clearly
         // reported as unimplemented rather than silently ignored.

@@ -19,6 +19,15 @@
 
 namespace mnemos::manifests::c64 {
 
+    // Machine configuration knobs resolved at assembly time.
+    struct c64_config final {
+        enum class region : std::uint8_t { pal, ntsc };
+
+        region video_region{region::pal};
+        chips::audio::sid_6581::variant sid_variant{chips::audio::sid_6581::variant::mos_6581};
+        bool dual_sid{false}; // a second SID at $D420 (stereo)
+    };
+
     // A fully wired Commodore 64: the six chips, 64K RAM + 1K colour RAM, the three
     // ROM images, and the main bus with PLA-driven banking. Heap-allocated and
     // never moved after assembly, because the bus regions hold spans into the
@@ -27,6 +36,7 @@ namespace mnemos::manifests::c64 {
         chips::cpu::m6510 cpu;
         chips::video::vic_ii_6569 vic;
         chips::audio::sid_6581 sid;
+        chips::audio::sid_6581 sid2; // second SID at $D420, mapped only when dual_sid
         chips::bus_controller::cia_6526 cia1;
         chips::bus_controller::cia_6526 cia2;
         chips::mapper::c64_pla pla;
@@ -56,6 +66,7 @@ namespace mnemos::manifests::c64 {
     // (see ROMS.md); pass zero-filled images to exercise the banking without ROMs.
     [[nodiscard]] std::unique_ptr<c64_system> assemble_c64(std::vector<std::uint8_t> basic_rom,
                                                            std::vector<std::uint8_t> kernal_rom,
-                                                           std::vector<std::uint8_t> chargen_rom);
+                                                           std::vector<std::uint8_t> chargen_rom,
+                                                           const c64_config& config = {});
 
 } // namespace mnemos::manifests::c64

@@ -9,14 +9,26 @@ namespace mnemos::manifests::c64 {
 
     std::unique_ptr<c64_system> assemble_c64(std::vector<std::uint8_t> basic_rom,
                                              std::vector<std::uint8_t> kernal_rom,
-                                             std::vector<std::uint8_t> chargen_rom) {
+                                             std::vector<std::uint8_t> chargen_rom,
+                                             const c64_config& config) {
         auto sys = std::make_unique<c64_system>();
         c64_system* s = sys.get();
         s->basic_rom = std::move(basic_rom);
         s->kernal_rom = std::move(kernal_rom);
         s->chargen_rom = std::move(chargen_rom);
 
-        s->vic.set_revision(chips::video::vic_ii_6569::revision::pal_6569);
+        // Region: VIC geometry, phi2 rate, and the mains TOD frequency.
+        const bool ntsc = config.video_region == c64_config::region::ntsc;
+        s->vic.set_revision(ntsc ? chips::video::vic_ii_6569::revision::ntsc_6567r8
+                                 : chips::video::vic_ii_6569::revision::pal_6569);
+        const std::uint32_t phi2_hz = ntsc ? 1'022'727U : 985'248U;
+        const std::uint32_t tod_hz = ntsc ? 60U : 50U;
+
+        // SID variant + sample rate (both SIDs share the region clock).
+        s->sid.set_variant(config.sid_variant);
+        s->sid.set_sample_rate(static_cast<std::int32_t>(phi2_hz));
+        s->sid2.set_variant(config.sid_variant);
+        s->sid2.set_sample_rate(static_cast<std::int32_t>(phi2_hz));
 
         // The VIC fetches glyphs/screen from main RAM + the character ROM, and
         // colours from colour RAM.
@@ -33,10 +45,10 @@ namespace mnemos::manifests::c64 {
         };
         s->vic.set_irq_callback([refresh_irq](bool) { refresh_irq(); });
 
-        // PAL φ2 with a 50 Hz TOD source for both CIAs.
+        // φ2 + mains TOD source for both CIAs (region-dependent).
         chips::bus_controller::cia_6526::config cia1_cfg;
-        cia1_cfg.tod_tick_hz = 985'248U;
-        cia1_cfg.tod_src_hz = 50U;
+        cia1_cfg.tod_tick_hz = phi2_hz;
+        cia1_cfg.tod_src_hz = tod_hz;
         cia1_cfg.irq_edge = [refresh_irq](bool) { refresh_irq(); };
         // Keyboard + joystick 2 on port A (columns / joy2), keyboard + joystick 1
         // on port B (rows / joy1), resolved against the live driven strobes.
@@ -61,8 +73,8 @@ namespace mnemos::manifests::c64 {
         s->drive8_full.attach_bus(s->iec);
 
         chips::bus_controller::cia_6526::config cia2_cfg;
-        cia2_cfg.tod_tick_hz = 985'248U;
-        cia2_cfg.tod_src_hz = 50U;
+        cia2_cfg.tod_tick_hz = phi2_hz;
+        cia2_cfg.tod_src_hz = tod_hz;
         cia2_cfg.irq_edge = [s](bool asserted) { s->cpu.set_nmi_line(asserted); };
         // CIA2 port A: bits 0-1 (inverted) select the VIC's 16K bank; bits 3/4/5
         // drive the IEC ATN/CLK/DATA out lines (a driven 1 pulls the line low, via
@@ -178,6 +190,19 @@ namespace mnemos::manifests::c64 {
                 s->sid.mmio_write(static_cast<std::uint16_t>(a - 0xD400U), v);
             },
             2, io_active);
+        // Optional second SID at $D420 (stereo): a higher-priority 32-byte overlay so
+        // $D420-$D43F routes to SID 2 while the rest of the window mirrors SID 1.
+        if (config.dual_sid) {
+            s->bus.map_mmio(
+                0xD420U, 0x20U,
+                [s](std::uint32_t a) {
+                    return s->sid2.mmio_read(static_cast<std::uint16_t>(a - 0xD420U));
+                },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->sid2.mmio_write(static_cast<std::uint16_t>(a - 0xD420U), v);
+                },
+                3, io_active);
+        }
         s->bus.map_ram(0xD800U, std::span<std::uint8_t>(s->color_ram), 2, io_active); // colour RAM
         s->bus.map_mmio(
             0xDC00U, 0x100U,

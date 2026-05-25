@@ -212,3 +212,44 @@ TEST_CASE("assemble_c64 maps an inserted cartridge's ROML at $8000", "[c64][cart
     CHECK(sys->bus.read8(0x8000U) == 0x4CU); // cartridge ROML, decoded by the PLA
     CHECK(sys->bus.read8(0x8001U) == 0x00U);
 }
+
+TEST_CASE("assemble_c64 honours the NTSC region config", "[c64][region]") {
+    using mnemos::manifests::c64::assemble_c64;
+    using mnemos::manifests::c64::c64_config;
+    auto sys = assemble_c64(
+        std::vector<std::uint8_t>(0x2000U, 0U), std::vector<std::uint8_t>(0x2000U, 0U),
+        std::vector<std::uint8_t>(0x1000U, 0U), {.video_region = c64_config::region::ntsc});
+    CHECK_FALSE(sys->vic.is_pal());
+    CHECK(sys->vic.cycles_per_line() == 65U);
+    CHECK(sys->vic.total_lines() == 263U);
+}
+
+TEST_CASE("assemble_c64 selects the SID variant", "[c64][sid]") {
+    using mnemos::manifests::c64::assemble_c64;
+    using mnemos::manifests::c64::c64_config;
+    using variant = mnemos::chips::audio::sid_6581::variant;
+    auto sys =
+        assemble_c64(std::vector<std::uint8_t>(0x2000U, 0U), std::vector<std::uint8_t>(0x2000U, 0U),
+                     std::vector<std::uint8_t>(0x1000U, 0U), {.sid_variant = variant::mos_8580});
+    CHECK(sys->sid.chip_variant() == variant::mos_8580);
+    CHECK(sys->sid2.chip_variant() == variant::mos_8580);
+}
+
+TEST_CASE("assemble_c64 maps a second SID at $D420 when dual", "[c64][sid]") {
+    using mnemos::manifests::c64::assemble_c64;
+    using mnemos::manifests::c64::c64_config;
+    auto sys =
+        assemble_c64(std::vector<std::uint8_t>(0x2000U, 0U), std::vector<std::uint8_t>(0x2000U, 0U),
+                     std::vector<std::uint8_t>(0x1000U, 0U), {.dual_sid = true});
+    sys->cpu.reset(reset_kind::power_on); // $01 = $FF -> I/O visible
+
+    // Distinct voice-1 frequencies routed to each SID via the bus.
+    sys->bus.write8(0xD400U, 0x00U); // SID 1 freq lo
+    sys->bus.write8(0xD401U, 0x10U); // SID 1 freq hi -> $1000
+    sys->bus.write8(0xD420U, 0x00U); // SID 2 freq lo
+    sys->bus.write8(0xD421U, 0x20U); // SID 2 freq hi -> $2000
+    sys->sid.tick(1U);
+    sys->sid2.tick(1U);
+    CHECK(sys->sid.voice_phase(0U) == 0x1000U);
+    CHECK(sys->sid2.voice_phase(0U) == 0x2000U); // $D420 reached SID 2, not SID 1
+}
