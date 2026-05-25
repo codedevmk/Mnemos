@@ -181,6 +181,22 @@ namespace mnemos::manifests::c64 {
                 return s->cart.inserted() && decode(address) == region::io;
             });
 
+        // RAM Expansion Unit at I/O-2 ($DF00-$DFFF), above the cartridge window.
+        s->reu_unit.attach_bus(s->bus);
+        if (config.reu) {
+            s->reu_unit.set_model(config.reu_model);
+            s->bus.map_mmio(
+                0xDF00U, 0x100U,
+                [s](std::uint32_t a) {
+                    return s->reu_unit.mmio_read(static_cast<std::uint16_t>(a - 0xDF00U));
+                },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->reu_unit.mmio_write(static_cast<std::uint16_t>(a - 0xDF00U), v);
+                },
+                3,
+                [decode, s](std::uint32_t address, bool) { return decode(address) == region::io; });
+        }
+
         // I/O space ($D000-$DFFF) — active only when the PLA selects I/O.
         s->bus.map_mmio(
             0xD000U, 0x400U,

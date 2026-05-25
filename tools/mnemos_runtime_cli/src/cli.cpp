@@ -69,6 +69,7 @@ namespace mnemos::tools {
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --sid <6581|8580>   select the SID revision (default 6581)\n"
                "  --dual-sid          add a second SID at $D420 (stereo)\n"
+               "  --reu <128|256|512> add a RAM Expansion Unit at $DF00 (KiB)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
                "  --load <file>       load a save state before the run\n"
@@ -126,6 +127,20 @@ namespace mnemos::tools {
                     return false;
                 }
                 out.frames = frames;
+            } else if (arg == "--reu") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                if (value == "128") {
+                    out.reu_kib = 128U;
+                } else if (value == "256") {
+                    out.reu_kib = 256U;
+                } else if (value == "512") {
+                    out.reu_kib = 512U;
+                } else {
+                    err << "error: --reu expects 128, 256 or 512, got '" << value << "'\n";
+                    return false;
+                }
             } else if (arg == "--dump-hash") {
                 out.dump_hash = true;
             } else if (arg == "--dual-sid") {
@@ -259,6 +274,12 @@ namespace mnemos::tools {
             cfg.sid_variant = chips::audio::sid_6581::variant::mos_8580;
         }
         cfg.dual_sid = options.dual_sid;
+        if (options.reu_kib != 0U) {
+            cfg.reu = true;
+            cfg.reu_model = options.reu_kib == 128U   ? chips::peripheral::reu::model::ram_128k
+                            : options.reu_kib == 256U ? chips::peripheral::reu::model::ram_256k
+                                                      : chips::peripheral::reu::model::ram_512k;
+        }
 
         auto sys = manifests::c64::assemble_c64(std::move(basic), std::move(kernal),
                                                 std::move(chargen), cfg);
@@ -357,6 +378,9 @@ namespace mnemos::tools {
                        {"cart", &sys->cart}, {"tape", &sys->tape}, {"drive8", drive}};
             if (cfg.dual_sid) {
                 t.chips.push_back({"audio2", &sys->sid2});
+            }
+            if (cfg.reu) {
+                t.chips.push_back({"reu", &sys->reu_unit});
             }
             t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
                         {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};

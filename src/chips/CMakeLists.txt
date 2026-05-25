@@ -5,6 +5,7 @@ add_subdirectory(mapper)
 add_subdirectory(bus_controller)
 add_subdirectory(audio)
 add_subdirectory(storage)
+add_subdirectory(peripheral)
 
 add_library(mnemos_chips INTERFACE)
 add_library(mnemos::chips ALIAS mnemos_chips)

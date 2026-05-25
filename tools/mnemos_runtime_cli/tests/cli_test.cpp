@@ -31,6 +31,19 @@ TEST_CASE("parse_args reads the full option set") {
     CHECK_FALSE(opts.help);
 }
 
+TEST_CASE("parse_args reads the REU size") {
+    cli_options opts;
+    std::ostringstream err;
+    REQUIRE(parse({"cli", "--manifest", "c64.toml", "--reu", "256"}, opts, err) == 1);
+    CHECK(opts.reu_kib == 256U);
+
+    cli_options bad;
+    std::ostringstream berr;
+    CHECK(parse({"cli", "--reu", "64"}, bad, berr) == 0);
+    CHECK_FALSE(berr.str().empty());
+    CHECK(bad.reu_kib == 0U); // default: no REU
+}
+
 TEST_CASE("parse_args rejects bad input") {
     SECTION("unknown flag") {
         cli_options opts;

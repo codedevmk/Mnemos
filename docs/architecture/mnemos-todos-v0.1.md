@@ -186,9 +186,12 @@ save-state (zstd container + CRC32 + rewind ring), the headless CLI, the fully
 wired C64 (IRQ/NMI routing, dynamic VIC bank, IEC bus), and the complete 1541 —
 both the protocol-level synthetic drive and the cycle-accurate full drive (6502 +
 2x 6522 VIA + GCR), selectable via `--drive-rom` (B6 + B9 done), plus the C64
-keyboard/joystick/paddle input (B2) and ADR 0005 (scheduler strategy). The only
-remaining item is the first golden boot test, data-gated on local C64 ROMs — the
-CLI + framebuffer-hash pipeline is ready.
+keyboard/joystick/paddle input (B2), cartridges (B5), the datasette (B7), the
+REU (B8), region/SID/dual-SID selection (B10), the unstable opcodes + `$01` fade
+(B11), and ADR 0005 (scheduler strategy). Of the Emu-gap B-list only B4 (VIC
+open-bus reads), B12 (RS-232 userport modem), and B13 (cartridge I/O-2 latch)
+remain — all niche. The one milestone gap is the first golden boot test, data-gated
+on local C64 ROMs — the CLI + framebuffer-hash pipeline is ready.
 
 ### Topology library
 - [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
@@ -225,7 +228,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Cartridge support: `.crt` loader + generic 8K/16K/Ultimax + Ocean/Magic Desk + EasyFlash; drive `/GAME`//EXROM into the PLA. (B5; chips::mapper::c64_cartridge parses .crt + banks ROML/ROMH + I/O bank-switching; assemble_c64 maps ROML $8000 / ROMH $A000+$E000 / cart I/O $DE00 gated by the PLA, and feeds the cart's /GAME//EXROM into the decode; CLI --cart. The cart I/O-2 open-bus latch is the separate B13)
 - [x] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; chips::iec_bus + chips::storage::c1541::{d64_image, synthetic_drive} + CIA2 IEC wiring in assemble_c64 + CLI --disk. Command/serving logic unit-tested; the bit-level handshake is ROM-gated like the golden boot)
 - [x] Datasette: 1530 `.tap` v0/v1 pulse playback -> CIA1 /FLAG. (B7; chips::storage::datasette parses .tap v0/v1, counts down each pulse and pulses CIA1 /FLAG; motor from $01 bit5, cassette sense on $01 bit4 via the new m6510 set_port_input. Wired in assemble_c64; CLI --tape auto-presses PLAY. Unit + integration tested)
-- [ ] REU (1700/1764/1750) `$DF00` DMA controller. (B8)
+- [x] REU (1700/1764/1750) `$DF00` DMA controller. (B8; chips::peripheral::reu — 128/256/512 KiB expansion RAM, the $DF00 register file (status/command/C64+REU address/length/IRQ-mask/address-control) and stash/fetch/swap/verify DMA with optional fixed-address and autoload. Wired into assemble_c64 as a $DF00 I/O-2 overlay (priority above the cartridge window) gated on c64_config::reu; CLI --reu <128|256|512>; included in the save state when enabled. The completion IRQ is status-poll only — the /IRQ line is not yet wired to the CPU (follow-up). Unit + C64 integration tested)
 - [x] Full cycle-accurate 1541 (6502 + 2x 6522 VIA + GCR) and the MOS 6522 VIA chip. (B9; via_6522 + chips::storage::c1541::{gcr, disk_bind, full_drive} — drive 6502 (port-disabled m6510) + 2x VIA + 2K RAM + 16K DOS ROM + GCR head/stepper/SYNC + IEC auto-ATN-ack. Memory map / VIA wiring / mechanism unit-tested with a synthetic ROM; real DOS ROM is data-gated and the GCR read path tracks Emu's unfinished state)
 - [x] System-level SID variant / NTSC region / dual-SID selection + an NTSC manifest. (B10; assemble_c64 takes a c64_config — region sets VIC revision + phi2 + mains TOD, sid_variant picks 6581/8580, dual_sid maps a second SID at $D420 (priority overlay over the SID mirror). c64.ntsc.toml added; CLI derives region from the manifest id and takes --sid/--dual-sid. Verified PAL vs NTSC produce different frame hashes)
 - [x] 6510 unstable illegal opcodes (SHA/SHX/SHY/TAS/LAS/ANE/LXA) + `$01` bit 6/7 floating-gate fade. (B11; decoded + executed deterministically — ANE/LXA with a fixed magic ($EE), SHA/SHX/SHY/TAS store source & (high+1), TAS sets SP=A&X, LAS = mem & SP; the $01 bits 6,7 fade to 0 after switching to input. Page-cross address corruption not modelled. Unit-tested)

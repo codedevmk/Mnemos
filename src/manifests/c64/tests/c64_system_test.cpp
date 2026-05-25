@@ -255,6 +255,48 @@ TEST_CASE("assemble_c64 maps a second SID at $D420 when dual", "[c64][sid]") {
     CHECK(sys->sid2.voice_phase(0U) == 0x2000U); // $D420 reached SID 2, not SID 1
 }
 
+TEST_CASE("assemble_c64 maps the REU at $DF00 and DMAs through the bus", "[c64][reu]") {
+    using mnemos::manifests::c64::assemble_c64;
+    using mnemos::manifests::c64::c64_config;
+    auto sys =
+        assemble_c64(std::vector<std::uint8_t>(0x2000U, 0U), std::vector<std::uint8_t>(0x2000U, 0U),
+                     std::vector<std::uint8_t>(0x1000U, 0U), {.reu = true});
+    sys->cpu.reset(reset_kind::power_on); // $01 = $3F -> I/O (so $DF00) visible
+
+    // A marker byte in screen RAM, then stash one byte C64 $0400 -> REU $000000.
+    sys->bus.write8(0x0400U, 0x5AU);
+    sys->bus.write8(0xDF02U, 0x00U); // C64 address lo
+    sys->bus.write8(0xDF03U, 0x04U); // C64 address hi -> $0400
+    sys->bus.write8(0xDF04U, 0x00U); // REU address lo
+    sys->bus.write8(0xDF05U, 0x00U); // REU address mid
+    sys->bus.write8(0xDF06U, 0x00U); // REU address bank
+    sys->bus.write8(0xDF07U, 0x01U); // length lo
+    sys->bus.write8(0xDF08U, 0x00U); // length hi -> 1 byte
+    sys->bus.write8(0xDF01U, 0x90U); // command: execute | stash (type 0)
+    CHECK(sys->reu_unit.peek(0U) == 0x5AU);
+
+    // Clobber the C64 byte, then fetch it back from the REU (type 1).
+    sys->bus.write8(0x0400U, 0x00U);
+    sys->bus.write8(0xDF02U, 0x00U);
+    sys->bus.write8(0xDF03U, 0x04U);
+    sys->bus.write8(0xDF04U, 0x00U);
+    sys->bus.write8(0xDF05U, 0x00U);
+    sys->bus.write8(0xDF06U, 0x00U);
+    sys->bus.write8(0xDF07U, 0x01U);
+    sys->bus.write8(0xDF08U, 0x00U);
+    sys->bus.write8(0xDF01U, 0x91U); // command: execute | fetch (type 1)
+    CHECK(sys->bus.read8(0x0400U) == 0x5AU);
+}
+
+TEST_CASE("assemble_c64 leaves $DF00 unmapped without --reu", "[c64][reu]") {
+    auto sys = make_c64();
+    sys->cpu.reset(reset_kind::power_on);
+    // No REU and no cartridge: $DF00 is open I/O, not the REU status register.
+    CHECK(sys->reu_unit.ram_size() == 128U * 1024U); // member default, never resized
+    sys->bus.write8(0xDF01U, 0x90U);                 // would trigger a DMA if it were mapped
+    CHECK(sys->reu_unit.peek(0U) == 0x00U);          // nothing was stashed
+}
+
 TEST_CASE("assemble_c64 drives the cassette sense from the datasette", "[c64][tape]") {
     auto sys = make_c64();
     sys->cpu.reset(reset_kind::power_on); // DDR all input -> $01 bit 4 reads the pin

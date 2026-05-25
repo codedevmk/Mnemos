@@ -24,6 +24,7 @@ target_link_libraries(
         mnemos::chips::bus_controller::cia_6526
         mnemos::chips::mapper::c64_pla
         mnemos::chips::mapper::c64_cartridge
+        mnemos::chips::peripheral::reu
         mnemos::chips::storage::c1541
         mnemos::chips::storage::datasette
 )
