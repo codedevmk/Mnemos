@@ -151,14 +151,14 @@
 - [ ] Reference: at least one published SID emulation note set documented in `src/chips/audio/sid_6581/NOTES.md`.
 
 ### CIA 6526
-- [ ] Create `src/chips/bus_controller/cia_6526/` library target.
-- [ ] Implement two parallel ports (A and B).
-- [ ] Implement two timers (A and B) with all modes (one-shot, continuous, cascaded).
-- [ ] Implement TOD clock.
-- [ ] Implement serial shift register.
-- [ ] Implement IRQ generation and mask.
-- [ ] Save / load state.
-- [ ] Unit tests covering timer mode transitions.
+- [x] Create `src/chips/bus_controller/cia_6526/` library target. (91172fb; ported from Emu per ADR 0006; CI run 26386882167 green across all jobs)
+- [x] Implement two parallel ports (A and B). (91172fb; DDR + live host callbacks + PB6/PB7 timer output)
+- [x] Implement two timers (A and B) with all modes (one-shot, continuous, cascaded). (91172fb; incl. force-load + start-delay pipelines, φ2/CNT/TA-cascade input modes)
+- [x] Implement TOD clock. (91172fb; 50/60 Hz divider, BCD with AM/PM, alarm, latched read, write freeze)
+- [x] Implement serial shift register. (91172fb; input + output modes with SDR-complete IRQ)
+- [x] Implement IRQ generation and mask. (91172fb; NMOS edge-triggered IR flip-flop + 1-φ2 pin delay + read-clear)
+- [ ] Save / load state. (deferred to M3 with the runtime save-state format)
+- [x] Unit tests covering timer mode transitions. (91172fb; continuous/one-shot/cascade + NMOS imr edge + TOD/alarm/SDR; full Lorenz-suite validation is M3 system integration)
 
 ### C64 PLA (memory banking)
 - [x] Create `src/chips/mapper/c64_pla/` library target. (76acf1f; ported from Emu per ADR 0006; CI run 26386496106 green across all jobs)
