@@ -686,3 +686,91 @@ TEST_CASE("m68000 LINK and UNLK manage a stack frame") {
     CHECK(r.a[6] == 0x12345678U); // restored
     CHECK(r.a[7] == 0x00003000U); // SP restored
 }
+
+TEST_CASE("m68000 DIVU and DIVS produce quotient + remainder") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x0000000AU;                       // 10
+    auto r = run_one(m, {0x80FCU, 0x0003U}, s); // DIVU.W #3,D0
+    CHECK(r.d[0] == 0x00010003U);               // remainder 1 (hi), quotient 3 (lo)
+
+    s.d[0] = 0x0000000AU;
+    r = run_one(m, {0x81FCU, 0xFFFDU}, s); // DIVS.W #-3,D0
+    CHECK(r.d[0] == 0x0001FFFDU);          // remainder 1, quotient -3
+    CHECK((r.sr & m68000::sr_n) != 0U);
+}
+
+TEST_CASE("m68000 DIVU by zero traps through vector 5") {
+    machine m;
+    m.w32(0x0014U, 0x00007000U); // div-by-zero vector (5)
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.d[0] = 0x12345678U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x80FCU, 0x0000U}); // DIVU.W #0,D0
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x00007000U);
+    CHECK(m.cpu.cpu_registers().a[7] == 0x00002FFAU); // exception frame pushed
+}
+
+TEST_CASE("m68000 CHK passes in range and traps out of range") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000005U;
+    auto r = run_one(m, {0x41BCU, 0x000AU}, s); // CHK #10,D0 (0 <= 5 <= 10)
+    CHECK(r.pc == 0x1004U);                     // no trap: fell through
+
+    machine m2;
+    m2.w32(0x0018U, 0x00008000U); // CHK vector (6)
+    m68000::registers s2{};
+    s2.sr = m68000::sr_s;
+    s2.a[7] = 0x00003000U;
+    s2.d[0] = 0x00000014U; // 20 > 10
+    s2.pc = 0x1000U;
+    m2.cpu.set_registers(s2);
+    m2.load(0x1000U, {0x41BCU, 0x000AU}); // CHK #10,D0
+    m2.cpu.step_instruction();
+    CHECK(m2.cpu.cpu_registers().pc == 0x00008000U); // trapped
+}
+
+TEST_CASE("m68000 MOVE from SR and to CCR") {
+    machine m;
+    m68000::registers s{};
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_z);
+    auto r = run_one(m, {0x40C0U}, s); // MOVE SR,D0
+    CHECK((r.d[0] & 0xFFFFU) == static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_z));
+
+    s = m68000::registers{};
+    s.d[0] = 0x0000001FU;
+    r = run_one(m, {0x44C0U}, s); // MOVE D0,CCR
+    CHECK((r.sr & m68000::sr_ccr) == m68000::sr_ccr);
+}
+
+TEST_CASE("m68000 MOVE to SR and ORI to SR are privileged writes") {
+    machine m;
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.d[0] = 0x2700U;                  // S + IPM 7
+    auto r = run_one(m, {0x46C0U}, s); // MOVE D0,SR
+    CHECK(r.sr == 0x2700U);
+
+    s = m68000::registers{};
+    s.sr = m68000::sr_s;                       // S, IPM 0
+    r = run_one(m, {0x007CU, 0x0700U}, s);     // ORI #$0700,SR
+    CHECK((r.sr & m68000::sr_ipm) == 0x0700U); // IPM raised to 7
+
+    // In user mode the SR write traps (privilege).
+    machine m2;
+    m2.w32(0x0020U, 0x00006000U); // privilege vector (8)
+    m68000::registers u{};
+    u.sr = 0U; // user
+    u.a[7] = 0x00003000U;
+    u.ssp = 0x00004000U;
+    u.pc = 0x1000U;
+    m2.cpu.set_registers(u);
+    m2.load(0x1000U, {0x46C0U}); // MOVE D0,SR in user mode
+    m2.cpu.step_instruction();
+    CHECK(m2.cpu.cpu_registers().pc == 0x00006000U);
+}

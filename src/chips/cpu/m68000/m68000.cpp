@@ -11,17 +11,67 @@
 namespace mnemos::chips::cpu {
 
     namespace {
-        // Exception vector numbers (the address is vector * 4). The ones not yet
-        // raised in this phase (illegal, div-by-zero, CHK) come online with the
-        // trapping-arithmetic slice.
-        [[maybe_unused]] constexpr int vec_illegal = 4;
-        [[maybe_unused]] constexpr int vec_divzero = 5;
-        [[maybe_unused]] constexpr int vec_chk = 6;
+        // Exception vector numbers (the address is vector * 4).
+        [[maybe_unused]] constexpr int vec_illegal = 4; // illegal opcodes -> later phase
+        constexpr int vec_divzero = 5;
+        constexpr int vec_chk = 6;
         constexpr int vec_trapv = 7;
         constexpr int vec_privilege = 8;
         constexpr int vec_trace = 9;
         constexpr int vec_trap0 = 32;
         constexpr int vec_autovector_base = 24; // autovector level n is 24 + n
+
+        // Data-dependent DIVU/DIVS internal cycle counts (Jorge Cwik's algorithm, as
+        // used by WinUAE) -- the idle clocks the handler adds on top of the prefetch.
+        int divu_cycles(std::uint32_t dividend, std::uint16_t divisor) {
+            if ((dividend >> 16U) >= divisor) {
+                return 5 * 2 - 4;
+            }
+            int mcycles = 38;
+            const std::uint32_t hdivisor = static_cast<std::uint32_t>(divisor) << 16U;
+            for (int i = 0; i < 15; ++i) {
+                const std::uint32_t temp = dividend;
+                dividend <<= 1U;
+                if (static_cast<std::int32_t>(temp) < 0) {
+                    dividend -= hdivisor;
+                } else {
+                    mcycles += 2;
+                    if (dividend >= hdivisor) {
+                        dividend -= hdivisor;
+                        --mcycles;
+                    }
+                }
+            }
+            return mcycles * 2 - 4;
+        }
+
+        int divs_cycles(std::int32_t dividend, std::int16_t divisor) {
+            int mcycles = 6;
+            if (dividend < 0) {
+                ++mcycles;
+            }
+            const std::uint32_t adividend = dividend >= 0
+                                                ? static_cast<std::uint32_t>(dividend)
+                                                : (0U - static_cast<std::uint32_t>(dividend));
+            const std::uint16_t adivisor =
+                divisor >= 0 ? static_cast<std::uint16_t>(divisor)
+                             : static_cast<std::uint16_t>(-static_cast<int>(divisor));
+            if ((adividend >> 16U) >= adivisor) {
+                return (mcycles + 2) * 2 - 4;
+            }
+            std::uint32_t aquot = adividend / adivisor;
+            mcycles += 55;
+            if (divisor >= 0) {
+                mcycles += dividend >= 0 ? -1 : 1;
+            }
+            for (int i = 0; i < 15; ++i) {
+                if (static_cast<std::int16_t>(static_cast<std::uint16_t>(aquot)) >= 0) {
+                    ++mcycles;
+                }
+                aquot <<= 1U;
+            }
+            return mcycles * 2 - 4;
+        }
     } // namespace
 
     chip_metadata m68000::metadata() const noexcept {
@@ -704,10 +754,63 @@ namespace mnemos::chips::cpu {
 
     void m68000::op_or(std::uint16_t op) noexcept {
         const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
-        // DIVU/DIVS (opm 3/7) and SBCD (opm 4-6, em < 2) land in later phases.
-        if (opm == 3 || opm == 7) {
+        const auto dni = static_cast<std::size_t>(dn);
+        if (opm == 3) { // DIVU.W <ea>,Dn
+            const auto divisor = static_cast<std::uint16_t>(ea_read(em, er, op_size::word));
+            if (divisor == 0U) {
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
+                raise_exception(vec_divzero, inst_addr_);
+                return;
+            }
+            const std::uint32_t dividend = d_[dni];
+            const std::uint32_t q = dividend / divisor;
+            const std::uint32_t rem = dividend % divisor;
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_c);
+            if (q > 0xFFFFU) {
+                sr_ |= sr_v; // overflow: result undefined, operand unchanged
+            } else {
+                cycles_ += divu_cycles(dividend, divisor);
+                d_[dni] = (rem << 16U) | (q & 0xFFFFU);
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v));
+                if ((q & 0x8000U) != 0U) {
+                    sr_ |= sr_n;
+                }
+                if (q == 0U) {
+                    sr_ |= sr_z;
+                }
+            }
             return;
         }
+        if (opm == 7) { // DIVS.W <ea>,Dn
+            const auto divisor = static_cast<std::int16_t>(
+                static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
+            if (divisor == 0) {
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
+                raise_exception(vec_divzero, inst_addr_);
+                return;
+            }
+            const auto dividend = static_cast<std::int32_t>(d_[dni]);
+            const std::int64_t q64 = static_cast<std::int64_t>(dividend) / divisor;
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_c);
+            if (q64 < -32768 || q64 > 32767) {
+                sr_ |= sr_v;
+            } else {
+                cycles_ += divs_cycles(dividend, divisor);
+                const auto q = static_cast<std::int32_t>(q64);
+                const std::int32_t rem = dividend % divisor;
+                d_[dni] = (static_cast<std::uint32_t>(static_cast<std::uint16_t>(rem)) << 16U) |
+                          static_cast<std::uint16_t>(q);
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v));
+                if ((static_cast<std::uint16_t>(q) & 0x8000U) != 0U) {
+                    sr_ |= sr_n;
+                }
+                if (q == 0) {
+                    sr_ |= sr_z;
+                }
+            }
+            return;
+        }
+        // SBCD (opm 4-6, em < 2) lands in a later phase.
         const op_size sz = static_cast<op_size>(opm & 3);
         const std::uint32_t m = size_mask(sz);
         if (opm < 3) { // OR <ea>,Dn
@@ -831,7 +934,7 @@ namespace mnemos::chips::cpu {
         // ORI/ANDI/EORI #imm,CCR (byte). The SR (word) forms need the supervisor
         // machinery + the privilege trap, so they land with the exception phase.
         if ((op & 0x3FU) == 0x3CU) {
-            if (sz == op_size::byte) {
+            if (sz == op_size::byte) { // ORI/ANDI/EORI to CCR
                 const auto ccr = static_cast<std::uint16_t>(imm & sr_ccr);
                 if (sub == 0) {
                     sr_ |= ccr; // ORI CCR
@@ -839,6 +942,19 @@ namespace mnemos::chips::cpu {
                     sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (sr_ & ccr)); // ANDI CCR
                 } else if (sub == 5) {
                     sr_ ^= ccr; // EORI CCR
+                }
+            } else { // ORI/ANDI/EORI to SR (word, privileged)
+                if ((sr_ & sr_s) == 0U) {
+                    raise_exception(vec_privilege, inst_addr_);
+                    return;
+                }
+                const auto v = static_cast<std::uint16_t>(imm);
+                if (sub == 0) {
+                    write_sr(static_cast<std::uint16_t>(sr_ | v)); // ORI SR
+                } else if (sub == 1) {
+                    write_sr(static_cast<std::uint16_t>(sr_ & v)); // ANDI SR
+                } else if (sub == 5) {
+                    write_sr(static_cast<std::uint16_t>(sr_ ^ v)); // EORI SR
                 }
             }
             return;
@@ -957,6 +1073,49 @@ namespace mnemos::chips::cpu {
             break;
         default:
             break;
+        }
+
+        // CHK <ea>,Dn -- word bound check; traps if Dn < 0 or Dn > bound.
+        if ((op & 0xF1C0U) == 0x4180U) {
+            const int dn = (op >> 9U) & 7;
+            const auto bound = static_cast<std::int16_t>(
+                static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
+            const auto value = static_cast<std::int16_t>(
+                static_cast<std::uint16_t>(d_[static_cast<std::size_t>(dn)]));
+            if (value > bound) {
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
+                if (value < 0) {
+                    sr_ |= sr_n;
+                }
+                raise_exception(vec_chk, pc_);
+            } else if (value < 0) {
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
+                sr_ |= sr_n;
+                raise_exception(vec_chk, pc_);
+            } else {
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_z | sr_v | sr_c)); // in range: no trap
+            }
+            return;
+        }
+        // MOVE from SR -> <ea> (word). Not privileged on the 68000.
+        if ((op & 0xFFC0U) == 0x40C0U) {
+            ea_write(em, er, op_size::word, sr_);
+            return;
+        }
+        // MOVE to CCR <- <ea> (word, low byte).
+        if ((op & 0xFFC0U) == 0x44C0U) {
+            const auto v = static_cast<std::uint16_t>(ea_read(em, er, op_size::word));
+            sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (v & sr_ccr));
+            return;
+        }
+        // MOVE to SR <- <ea> (word, privileged).
+        if ((op & 0xFFC0U) == 0x46C0U) {
+            if ((sr_ & sr_s) == 0U) {
+                raise_exception(vec_privilege, inst_addr_);
+                return;
+            }
+            write_sr(static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
+            return;
         }
 
         // ---- control flow + system ops ($4Exx) ----
