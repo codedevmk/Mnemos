@@ -38,3 +38,7 @@ conan.lock
 
 # Tech sheets
 .techsheets/
+
+# Coverage profiling artifacts
+*.profraw
+*.profdata
