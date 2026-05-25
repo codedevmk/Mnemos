@@ -96,7 +96,7 @@ namespace mnemos::chips::storage::c1541 {
             }
             return;
         }
-        if (command >= cmd_open && command <= 0xFFU) { // OPEN file
+        if (command >= cmd_open) { // OPEN file ($F0-$FF)
             if (listen_addressed_) {
                 open_pending_ = true;
                 open_sa_ = low;
