@@ -194,7 +194,7 @@ namespace mnemos::manifests::c64 {
                     s->reu_unit.mmio_write(static_cast<std::uint16_t>(a - 0xDF00U), v);
                 },
                 3,
-                [decode, s](std::uint32_t address, bool) { return decode(address) == region::io; });
+                [decode](std::uint32_t address, bool) { return decode(address) == region::io; });
         }
 
         // I/O space ($D000-$DFFF) — active only when the PLA selects I/O.
