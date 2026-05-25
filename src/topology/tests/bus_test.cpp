@@ -70,6 +70,51 @@ TEST_CASE("bus masks addresses to its width") {
     CHECK(b.read8(0x0005U) == 0x99U);
 }
 
+TEST_CASE("bus overlay: a ROM read-overlay shadows RAM but writes fall through") {
+    std::array<std::uint8_t, 0x10000> ram{};
+    std::array<std::uint8_t, 0x2000> basic{};
+    basic[0] = 0xAAU;
+    bool banked = true;
+
+    bus b(16U);
+    b.map_ram(0x0000U, ram, 0); // base layer, always active
+    // ROM overlay active only on reads while banked (C64 BASIC behaviour).
+    b.map_rom(0xA000U, std::span<const std::uint8_t>(basic), 1,
+              [&](std::uint32_t, bool is_write) { return banked && !is_write; });
+
+    CHECK(b.read8(0xA000U) == 0xAAU); // read sees BASIC ROM
+    b.write8(0xA000U, 0x55U);         // write falls through to RAM underneath
+    CHECK(ram[0xA000U] == 0x55U);
+    CHECK(b.read8(0xA000U) == 0xAAU); // read still sees ROM, not the RAM write
+
+    banked = false;
+    CHECK(b.read8(0xA000U) == 0x55U); // unbanked: RAM is visible again
+}
+
+TEST_CASE("bus overlay: an active I/O region wins reads and writes over RAM") {
+    std::array<std::uint8_t, 0x10000> ram{};
+    bool io_enabled = true;
+    std::uint8_t io_reg = 0x5AU;
+    std::uint8_t io_last = 0U;
+
+    bus b(16U);
+    b.map_ram(0x0000U, ram, 0);
+    b.map_mmio(
+        0xD400U, 0x400U, [&](std::uint32_t) -> std::uint8_t { return io_reg; },
+        [&](std::uint32_t, std::uint8_t v) { io_last = v; }, 2,
+        [&](std::uint32_t, bool) { return io_enabled; });
+
+    CHECK(b.read8(0xD400U) == 0x5AU);
+    b.write8(0xD400U, 0x77U);
+    CHECK(io_last == 0x77U);
+    CHECK(ram[0xD400U] == 0x00U); // RAM untouched while I/O is active
+
+    io_enabled = false;
+    b.write8(0xD400U, 0x99U);
+    CHECK(ram[0xD400U] == 0x99U); // now the write lands in RAM
+    CHECK(b.read8(0xD400U) == 0x99U);
+}
+
 TEST_CASE("bus is usable through the chips::i_bus interface") {
     std::array<std::uint8_t, 0x10> ram{};
     bus b(16U);

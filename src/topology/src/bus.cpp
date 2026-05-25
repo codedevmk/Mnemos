@@ -1,6 +1,5 @@
 #include <mnemos/topology/bus.hpp>
 
-#include <algorithm>
 #include <utility>
 
 namespace mnemos::topology {
@@ -17,57 +16,65 @@ namespace mnemos::topology {
     bus::bus(unsigned address_bits, endianness endian)
         : address_bits_(address_bits), endian_(endian), address_mask_(mask_for(address_bits)) {}
 
-    void bus::insert_region(region r) {
-        const auto pos = std::ranges::upper_bound(regions_, r.start, {}, &region::start);
-        regions_.insert(pos, std::move(r));
-    }
-
-    void bus::map_ram(std::uint32_t start, std::span<std::uint8_t> storage) {
+    void bus::map_ram(std::uint32_t start, std::span<std::uint8_t> storage, int priority,
+                      active_predicate active) {
         region r;
         r.start = start;
         r.end = static_cast<std::uint32_t>(start + storage.size() - 1U);
         r.backing = kind::ram;
+        r.priority = priority;
         r.ram = storage;
-        insert_region(std::move(r));
+        r.active = std::move(active);
+        regions_.push_back(std::move(r));
     }
 
-    void bus::map_rom(std::uint32_t start, std::span<const std::uint8_t> storage) {
+    void bus::map_rom(std::uint32_t start, std::span<const std::uint8_t> storage, int priority,
+                      active_predicate active) {
         region r;
         r.start = start;
         r.end = static_cast<std::uint32_t>(start + storage.size() - 1U);
         r.backing = kind::rom;
+        r.priority = priority;
         r.rom = storage;
-        insert_region(std::move(r));
+        r.active = std::move(active);
+        regions_.push_back(std::move(r));
     }
 
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
-                       write_handler on_write) {
+                       write_handler on_write, int priority, active_predicate active) {
         region r;
         r.start = start;
         r.end = start + size - 1U;
         r.backing = kind::mmio;
+        r.priority = priority;
         r.on_read = std::move(on_read);
         r.on_write = std::move(on_write);
-        insert_region(std::move(r));
+        r.active = std::move(active);
+        regions_.push_back(std::move(r));
     }
 
-    const bus::region* bus::resolve(std::uint32_t address) const noexcept {
-        // First region whose start is greater than the address; step back to the
-        // candidate whose range may contain it.
-        const auto it = std::ranges::upper_bound(regions_, address, {}, &region::start);
-        if (it == regions_.begin()) {
-            return nullptr;
+    const bus::region* bus::resolve(std::uint32_t address, bool is_write) const noexcept {
+        // Highest-priority region that covers the address and is active for this
+        // access. (Region counts are tiny; a linear scan is fine for v0.1. Cached
+        // per-chip resolution is a later optimisation.)
+        const region* best = nullptr;
+        for (const region& r : regions_) {
+            if (address < r.start || address > r.end) {
+                continue;
+            }
+            if (r.active && !r.active(address, is_write)) {
+                continue;
+            }
+            if (best == nullptr || r.priority > best->priority) {
+                best = &r;
+            }
         }
-        const region& candidate = *(it - 1);
-        if (address <= candidate.end) {
-            return &candidate;
-        }
-        return nullptr;
+        return best;
     }
 
     std::uint8_t bus::read8(std::uint32_t address) {
         const std::uint32_t addr = address & address_mask_;
-        const region* r = resolve(addr);
+        const region* r = resolve(addr, false);
         if (r == nullptr) {
             return 0xFFU; // open bus
         }
@@ -84,7 +91,7 @@ namespace mnemos::topology {
 
     void bus::write8(std::uint32_t address, std::uint8_t value) {
         const std::uint32_t addr = address & address_mask_;
-        const region* r = resolve(addr);
+        const region* r = resolve(addr, true);
         if (r == nullptr) {
             return; // unmapped write dropped
         }
