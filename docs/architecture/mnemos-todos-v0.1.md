@@ -163,7 +163,7 @@
 ### C64 PLA (memory banking)
 - [x] Create `src/chips/mapper/c64_pla/` library target. (76acf1f; ported from Emu per ADR 0006; CI run 26386496106 green across all jobs)
 - [x] Implement LORAM/HIRAM/CHAREN/GAME/EXROM decoding to the 14-state banking table. (76acf1f; decode_cpu_address/decode_vic_address across standard/8K/16K/ultimax; CI run 26386496106)
-- [ ] Wire to bus region overlay control. (deferred to M3 topology — the bus consumes decode_cpu_address/decode_vic_address to switch region overlays)
+- [x] Wire to bus region overlay control. (src/manifests/c64 — assemble_c64 maps RAM/BASIC/KERNAL/CHARGEN/I-O overlays whose active predicates call decode_cpu_address with the live 6510 $01 port; c64_system_test exercises every bank state)
 
 ### Acceptance
 - [~] Each chip's unit tests pass in CI. (VIC-II, SID, CIA, PLA all green; M2 not fully complete — VIC-II rendering/sprites/border still pending)
@@ -194,10 +194,10 @@
 - [x] Unit tests covering each validation rule. (010640b; valid parse, wrong schema, missing id/clock/bus, malformed-TOML position, range + rom requirements)
 
 ### C64 manifest
-- [ ] Create `src/manifests/c64/` directory.
-- [ ] Author `c64.pal.toml` per TDS §10.2.
-- [ ] Document ROM acquisition and SHA-256s in `src/manifests/c64/ROMS.md`.
-- [ ] Note: ROM files themselves are NOT committed; CI obtains them from a configured source.
+- [x] Create `src/manifests/c64/` directory. (tier-4 `mnemos::manifests::c64`: c64_system assembler + concrete-chip wiring, sidestepping factory-id static-init stripping)
+- [x] Author `c64.pal.toml` per TDS §10.2. (chip `type` ids mos.6510/6569/6581/6526/906114; clock dividers; RAM + three ROM overlay regions)
+- [x] Document ROM acquisition and SHA-256s in `src/manifests/c64/ROMS.md`. (acquisition, per-file hash commands, placeholder-sha256 policy; tests use pattern-filled buffers, no copyrighted data)
+- [x] Note: ROM files themselves are NOT committed; CI obtains them from a configured source. (`.gitignore` ignores `*.bin`/`roms/`; manifest sha256 fields are placeholders pinned locally per ROMS.md)
 
 ### Runtime library
 - [ ] Create `src/runtime/` library target `mnemos::runtime`.

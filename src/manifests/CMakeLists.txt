@@ -1,4 +1,5 @@
 add_subdirectory(common)
+add_subdirectory(c64)
 
 add_library(mnemos_manifests INTERFACE)
 add_library(mnemos::manifests ALIAS mnemos_manifests)
