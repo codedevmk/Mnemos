@@ -20,7 +20,7 @@ namespace mnemos::chips::video {
     // video-matrix address generator (VC/VCBASE/RC/VMLI).
     //
     // Scanline rendering and the sprite compositor are deferred follow-up work.
-    class vic_ii_6569 final : public i_video {
+    class vic_ii_6569 final : public i_video, public i_mmio {
       public:
         // Silicon revision. Within a video standard only the early NTSC 6567R56A
         // changes CPU-visible geometry (64 cycles x 262 lines vs the 6567R8's
@@ -68,6 +68,13 @@ namespace mnemos::chips::video {
         // non-const: reading the collision latches ($D01E/$D01F) clears them.
         [[nodiscard]] std::uint8_t read(std::uint8_t address) noexcept;
         void write(std::uint8_t address, std::uint8_t value) noexcept;
+
+        [[nodiscard]] std::uint8_t mmio_read(std::uint16_t offset) override {
+            return read(static_cast<std::uint8_t>(offset));
+        }
+        void mmio_write(std::uint16_t offset, std::uint8_t value) override {
+            write(static_cast<std::uint8_t>(offset), value);
+        }
 
         // Beam scheduler: advance by `cycles` VIC cycles (63/line PAL, 65 NTSC).
         // (tick is the i_chip entry point and forwards here.)

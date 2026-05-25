@@ -151,6 +151,15 @@ TEST_CASE("cia_6526 reset returns timers to the 0xFFFF latch") {
     CHECK(cia.read(0x05U) == 0xFFU);
 }
 
+TEST_CASE("cia_6526 is reachable through i_mmio") {
+    auto chip = mnemos::chips::create_chip("mos.6526");
+    REQUIRE(chip != nullptr);
+    auto* mmio = dynamic_cast<mnemos::chips::i_mmio*>(chip.get());
+    REQUIRE(mmio != nullptr);
+    mmio->mmio_write(0x02U, 0xFFU); // DDRA
+    CHECK(mmio->mmio_read(0x02U) == 0xFFU);
+}
+
 TEST_CASE("cia_6526 register snapshot reports timers and interrupt state") {
     cia_6526 cia;
     const auto regs = cia.register_snapshot();

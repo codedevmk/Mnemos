@@ -134,4 +134,18 @@ namespace mnemos::chips {
         static constexpr chip_class static_class = chip_class::peripheral;
     };
 
+    // Memory-mapped register access. A chip that exposes an MMIO window mixes this
+    // in alongside its class interface; the topology bus routes reads/writes in the
+    // chip's mapped range to these, passing the offset from the region base.
+    class i_mmio {
+      public:
+        i_mmio() = default;
+        i_mmio(const i_mmio&) = delete;
+        i_mmio& operator=(const i_mmio&) = delete;
+        virtual ~i_mmio() = default;
+
+        [[nodiscard]] virtual std::uint8_t mmio_read(std::uint16_t offset) = 0;
+        virtual void mmio_write(std::uint16_t offset, std::uint8_t value) = 0;
+    };
+
 } // namespace mnemos::chips

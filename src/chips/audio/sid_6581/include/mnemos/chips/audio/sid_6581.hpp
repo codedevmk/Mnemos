@@ -15,7 +15,7 @@ namespace mnemos::chips::audio {
     // with combined-waveform AND, ring modulation, and hard sync), an ADSR
     // envelope generator, a multi-mode state-variable filter, OSC3/ENV3 readback,
     // and a mixed signed-16-bit sample output. tick() advances one φ2 cycle.
-    class sid_6581 final : public i_audio_synth {
+    class sid_6581 final : public i_audio_synth, public i_mmio {
       public:
         enum class variant : std::uint8_t { mos_6581, mos_8580 };
 
@@ -44,6 +44,13 @@ namespace mnemos::chips::audio {
         // Register access; addr masked to 5 bits (the 32-byte alias in $D400-$D7FF).
         [[nodiscard]] std::uint8_t read(std::uint8_t address) const noexcept;
         void write(std::uint8_t address, std::uint8_t value) noexcept;
+
+        [[nodiscard]] std::uint8_t mmio_read(std::uint16_t offset) override {
+            return read(static_cast<std::uint8_t>(offset));
+        }
+        void mmio_write(std::uint16_t offset, std::uint8_t value) override {
+            write(static_cast<std::uint8_t>(offset), value);
+        }
 
         void set_paddle_x(std::uint8_t value) noexcept;
         void set_paddle_y(std::uint8_t value) noexcept;

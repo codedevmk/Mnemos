@@ -143,6 +143,15 @@ TEST_CASE("sid_6581 reset clears voices but keeps the variant") {
     CHECK(sid.chip_variant() == sid_6581::variant::mos_8580);
 }
 
+TEST_CASE("sid_6581 is reachable through i_mmio") {
+    auto chip = mnemos::chips::create_chip("mos.6581");
+    REQUIRE(chip != nullptr);
+    auto* mmio = dynamic_cast<mnemos::chips::i_mmio*>(chip.get());
+    REQUIRE(mmio != nullptr);
+    mmio->mmio_write(0x00U, 0xABU);         // voice register (write-only)
+    CHECK(mmio->mmio_read(0x00U) == 0xFFU); // write-only floats high
+}
+
 TEST_CASE("sid_6581 register snapshot reports envelopes and volume") {
     sid_6581 sid;
     const auto regs = sid.register_snapshot();

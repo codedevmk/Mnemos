@@ -184,6 +184,19 @@ TEST_CASE("vic_ii_6569 reset clears runtime state but keeps the revision") {
     CHECK(vic.cycles_per_line() == 65U);
 }
 
+TEST_CASE("vic_ii_6569 exposes its registers through i_mmio") {
+    vic_ii_6569 vic;
+    mnemos::chips::i_mmio& mmio = vic;
+    mmio.mmio_write(0x21U, 0x0EU); // background colour 0
+    CHECK(mmio.mmio_read(0x21U) == 0x0EU);
+    CHECK(vic.read(0x21U) == 0x0EU);
+    CHECK(mmio.mmio_read(0x61U) == 0x0EU); // mirror within the 1KB window
+
+    auto chip = mnemos::chips::create_chip("mos.6569");
+    REQUIRE(chip != nullptr);
+    CHECK(dynamic_cast<mnemos::chips::i_mmio*>(chip.get()) != nullptr);
+}
+
 TEST_CASE("vic_ii_6569 register snapshot reports raster + IRQ state") {
     vic_ii_6569 vic;
     vic.set_raster(99U);

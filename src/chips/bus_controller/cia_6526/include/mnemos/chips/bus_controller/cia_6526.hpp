@@ -18,7 +18,7 @@ namespace mnemos::chips::bus_controller {
     // SP/CNT pins, and the NMOS edge-triggered interrupt control with a 1-φ2 /IRQ
     // propagation delay. tick() advances one φ2 cycle; all time-domain behaviour
     // evolves on tick, never on register access.
-    class cia_6526 final : public i_bus_controller {
+    class cia_6526 final : public i_bus_controller, public i_mmio {
       public:
         enum class revision : std::uint8_t {
             nmos_6526, // edge-triggered IR (breadbin default)
@@ -57,6 +57,13 @@ namespace mnemos::chips::bus_controller {
         // ICR read clears its latch, and reading TOD HR latches the digits.
         [[nodiscard]] std::uint8_t read(std::uint8_t address);
         void write(std::uint8_t address, std::uint8_t value);
+
+        [[nodiscard]] std::uint8_t mmio_read(std::uint16_t offset) override {
+            return read(static_cast<std::uint8_t>(offset));
+        }
+        void mmio_write(std::uint16_t offset, std::uint8_t value) override {
+            write(static_cast<std::uint8_t>(offset), value);
+        }
 
         // External pin events.
         void flag_edge();              // FLAG negative edge
