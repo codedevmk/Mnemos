@@ -10,3 +10,4 @@ Current records:
 3. `0003-license-split.md`
 4. `0004-chip-contract.md`
 5. `0006-emu-reuse-and-conformance.md`
+6. `0007-manifest-toml-dependency.md`

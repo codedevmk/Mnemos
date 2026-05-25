@@ -1,13 +1,9 @@
+add_subdirectory(common)
+
 add_library(mnemos_manifests INTERFACE)
 add_library(mnemos::manifests ALIAS mnemos_manifests)
 
-target_link_libraries(
-    mnemos_manifests
-    INTERFACE
-        mnemos::foundation
-        mnemos::chips
-        mnemos::topology
-)
+target_link_libraries(mnemos_manifests INTERFACE mnemos::manifests::common)
 
 mnemos_apply_common_target_options(mnemos_manifests INTERFACE)
 mnemos_declare_tier(
