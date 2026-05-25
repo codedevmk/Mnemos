@@ -155,3 +155,19 @@ TEST_CASE("assemble_c64 reads the keyboard through CIA1", "[c64][input]") {
     sys->cia1.write(0x00U, 0xFBU);         // select a different column (2)
     CHECK(sys->cia1.read(0x01U) == 0xFFU); // key not in that column
 }
+
+TEST_CASE("assemble_c64 routes the paddle mux to the SID POTs", "[c64][input]") {
+    auto sys = make_c64();
+    sys->input.set_paddle(1U, 0x11U, 0x22U); // control port 1
+    sys->input.set_paddle(2U, 0x33U, 0x44U); // control port 2
+
+    sys->cia1.write(0x02U, 0xC0U); // DDRA: bits 6,7 output (mux select)
+
+    sys->cia1.write(0x00U, 0x80U);        // PRA bit 7 -> control port 1
+    CHECK(sys->sid.read(0x19U) == 0x11U); // POTX = port-1 X
+    CHECK(sys->sid.read(0x1AU) == 0x22U); // POTY = port-1 Y
+
+    sys->cia1.write(0x00U, 0x40U); // PRA bit 6 -> control port 2
+    CHECK(sys->sid.read(0x19U) == 0x33U);
+    CHECK(sys->sid.read(0x1AU) == 0x44U);
+}

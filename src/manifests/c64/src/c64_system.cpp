@@ -42,6 +42,18 @@ namespace mnemos::manifests::c64 {
         // on port B (rows / joy1), resolved against the live driven strobes.
         cia1_cfg.read_port_a = [s]() { return s->input.read_columns(s->cia1.port_b_output()); };
         cia1_cfg.read_port_b = [s]() { return s->input.read_rows(s->cia1.port_a_output()); };
+        // Paddle/POT mux: CIA1 PRA bit 7 routes control-port 1's paddles to the SID
+        // POTX/POTY, bit 6 routes control-port 2's.
+        cia1_cfg.write_port_a = [s](std::uint8_t) {
+            const std::uint8_t mux = static_cast<std::uint8_t>(s->cia1.port_a_output() & 0xC0U);
+            if (mux == 0x80U) {
+                s->sid.set_paddle_x(s->input.paddle_x(1U));
+                s->sid.set_paddle_y(s->input.paddle_y(1U));
+            } else if (mux == 0x40U) {
+                s->sid.set_paddle_x(s->input.paddle_x(2U));
+                s->sid.set_paddle_y(s->input.paddle_y(2U));
+            }
+        };
         s->cia1.configure(cia1_cfg);
 
         // Both drive 8 implementations share the IEC bus; the runner ticks one.

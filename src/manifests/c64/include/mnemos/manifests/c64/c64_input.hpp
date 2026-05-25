@@ -42,6 +42,12 @@ namespace mnemos::manifests::c64 {
         // Set joystick `port` (1 or 2) to the given direction/fire bitmask.
         void set_joystick(std::uint8_t port, std::uint8_t mask) noexcept;
 
+        // Paddle / POT positions (0..255) for control port 1 or 2. CIA1 PRA bits
+        // 6-7 select which port's pair is routed to the SID POTX/POTY.
+        void set_paddle(std::uint8_t port, std::uint8_t x, std::uint8_t y) noexcept;
+        [[nodiscard]] std::uint8_t paddle_x(std::uint8_t port) const noexcept;
+        [[nodiscard]] std::uint8_t paddle_y(std::uint8_t port) const noexcept;
+
         // CIA1 read resolution. read_rows is PRB given the PRA column strobe;
         // read_columns is PRA given the PRB row strobe. Both are active-low and
         // fold in the matching joystick.
@@ -49,9 +55,11 @@ namespace mnemos::manifests::c64 {
         [[nodiscard]] std::uint8_t read_columns(std::uint8_t row_strobe) const noexcept;
 
       private:
-        std::array<std::uint8_t, 8> matrix_{}; // matrix_[column] bit `row` = pressed
-        std::uint8_t joy1_{};                  // PRB bits 0-4 (active-low overlay)
-        std::uint8_t joy2_{};                  // PRA bits 0-4
+        std::array<std::uint8_t, 8> matrix_{};   // matrix_[column] bit `row` = pressed
+        std::uint8_t joy1_{};                    // PRB bits 0-4 (active-low overlay)
+        std::uint8_t joy2_{};                    // PRA bits 0-4
+        std::array<std::uint8_t, 2> paddle_x_{}; // [0] = port 1, [1] = port 2
+        std::array<std::uint8_t, 2> paddle_y_{};
     };
 
 } // namespace mnemos::manifests::c64

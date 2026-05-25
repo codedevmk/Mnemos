@@ -22,6 +22,21 @@ namespace mnemos::manifests::c64 {
         }
     }
 
+    void c64_input::set_paddle(std::uint8_t port, std::uint8_t x, std::uint8_t y) noexcept {
+        if (port == 1U || port == 2U) {
+            paddle_x_[port - 1U] = x;
+            paddle_y_[port - 1U] = y;
+        }
+    }
+
+    std::uint8_t c64_input::paddle_x(std::uint8_t port) const noexcept {
+        return (port == 1U || port == 2U) ? paddle_x_[port - 1U] : 0U;
+    }
+
+    std::uint8_t c64_input::paddle_y(std::uint8_t port) const noexcept {
+        return (port == 1U || port == 2U) ? paddle_y_[port - 1U] : 0U;
+    }
+
     std::uint8_t c64_input::read_rows(std::uint8_t column_strobe) const noexcept {
         std::uint8_t rows = 0xFFU;
         for (std::uint8_t column = 0; column < 8U; ++column) {
