@@ -161,9 +161,9 @@
 - [ ] Unit tests covering timer mode transitions.
 
 ### C64 PLA (memory banking)
-- [ ] Create `src/chips/mapper/c64_pla/` library target.
-- [ ] Implement LORAM/HIRAM/CHAREN/GAME/EXROM decoding to the 14-state banking table.
-- [ ] Wire to bus region overlay control.
+- [x] Create `src/chips/mapper/c64_pla/` library target. (76acf1f; ported from Emu per ADR 0006; CI run 26386496106 green across all jobs)
+- [x] Implement LORAM/HIRAM/CHAREN/GAME/EXROM decoding to the 14-state banking table. (76acf1f; decode_cpu_address/decode_vic_address across standard/8K/16K/ultimax; CI run 26386496106)
+- [ ] Wire to bus region overlay control. (deferred to M3 topology — the bus consumes decode_cpu_address/decode_vic_address to switch region overlays)
 
 ### Acceptance
 - [ ] Each chip's unit tests pass in CI.
