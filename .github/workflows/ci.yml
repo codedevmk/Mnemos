@@ -15,10 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Pin clang-format to the exact version used locally so the gate never
+      # diverges from developer machines (the apt package floats and disagrees).
       - name: Install clang-format
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format
+        run: pip install "clang-format==21.1.2"
 
       - name: Check formatting
         run: |
