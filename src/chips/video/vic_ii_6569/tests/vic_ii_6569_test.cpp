@@ -256,6 +256,27 @@ TEST_CASE("vic_ii_6569 renders hi-res text from attached memory") {
     CHECK(fb.pixels[origin + 1U] == vic_ii_6569::color_rgb888(0x06U)); // glyph bit clear -> bg
 }
 
+TEST_CASE("vic_ii_6569 latches the last fetched byte for the floating bus") {
+    vic_ii_6569 vic;
+    CHECK(vic.last_fetched_byte() == 0xFFU); // floats high until the first fetch
+
+    // Fill every byte the VIC pulls off the main bus (video matrix + character
+    // data) with one value, so the latch is deterministic whatever the last
+    // access was. Colour RAM rides a separate nibble bus and is not latched.
+    std::vector<std::uint8_t> ram(0x10000U, 0x5AU);
+    std::vector<std::uint8_t> char_rom(0x1000U, 0x5AU);
+    std::vector<std::uint8_t> color_ram(0x0400U, 0x00U);
+    vic.attach_memory({.ram = std::span<const std::uint8_t>(ram),
+                       .char_rom = std::span<const std::uint8_t>(char_rom),
+                       .color_ram = std::span<const std::uint8_t>(color_ram)});
+    vic.set_bank(0U);
+    vic.write(0x11U, 0x1BU); // DEN=1 -> the display fetches run
+    vic.write(0x18U, 0x14U); // screen $0400, char gen $1000 (char-ROM shadow)
+
+    vic.tick(63U * 312U); // a full PAL frame drives the fetches
+    CHECK(vic.last_fetched_byte() == 0x5AU);
+}
+
 TEST_CASE("vic_ii_6569 fires the IRQ callback on raster assert and acknowledge") {
     vic_ii_6569 vic;
     bool line = false;

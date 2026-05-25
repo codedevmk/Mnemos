@@ -188,10 +188,12 @@ both the protocol-level synthetic drive and the cycle-accurate full drive (6502 
 2x 6522 VIA + GCR), selectable via `--drive-rom` (B6 + B9 done), plus the C64
 keyboard/joystick/paddle input (B2), cartridges (B5), the datasette (B7), the
 REU (B8), region/SID/dual-SID selection (B10), the unstable opcodes + `$01` fade
-(B11), and ADR 0005 (scheduler strategy). Of the Emu-gap B-list only B4 (VIC
-open-bus reads), B12 (RS-232 userport modem), and B13 (cartridge I/O-2 latch)
-remain — all niche. The one milestone gap is the first golden boot test, data-gated
-on local C64 ROMs — the CLI + framebuffer-hash pipeline is ready.
+(B11), the cartridge/expansion-port open-bus latch (B13), and ADR 0005 (scheduler
+strategy). Of the Emu-gap B-list only B4 (cycle-exact VIC open-bus/sprite-fetch
+reads — B13 already covers the expansion-port floating bus) and B12 (RS-232
+userport modem) remain — both niche. The one milestone gap is the first golden
+boot test, data-gated on local C64 ROMs — the CLI + framebuffer-hash pipeline is
+ready.
 
 ### Topology library
 - [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
@@ -224,7 +226,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Route VIC + CIA1 /IRQ into the 6510 /IRQ and CIA2 into /NMI. (B1; assemble_c64 ORs vic.irq_asserted()|cia1 via edge callbacks into set_irq_line, CIA2 -> set_nmi_line; the single biggest correctness blocker — without it no IRQ-driven program runs)
 - [x] Track the VIC 16K bank from CIA2 port A at runtime. (B3; CIA2 write_port_a -> vic.set_bank((~port_a_pins())&3))
 - [x] Keyboard matrix + joystick wiring (CIA1 PRA/PRB callbacks) and paddle/POT mux to SID. (B2; c64_input models the 8x8 matrix + both joysticks + both paddle pairs, wired into CIA1 PRA/PRB in assemble_c64; the paddle mux (CIA1 PRA bit7->port1, bit6->port2) routes the selected pair to SID POTX/POTY ($D419/$D41A). Matrix scan, joystick overlay, and paddle mux all unit + integration tested. Feeding the frame-tagged input_buffer / a frontend into c64_input is a runner/frontend concern, not chip wiring)
-- [ ] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4)
+- [ ] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4; the expansion-port floating bus at $DE00-$DFFF is done under B13 via vic_ii_6569::last_fetched_byte(); what remains is the cycle-exact VIC-internal open bus — the $D000-window register gaps ($D02F-$D03F currently read $FF) and per-cycle sprite/idle fetch values — which needs the cycle-exact beam the scanline renderer does not yet model)
 - [x] Cartridge support: `.crt` loader + generic 8K/16K/Ultimax + Ocean/Magic Desk + EasyFlash; drive `/GAME`//EXROM into the PLA. (B5; chips::mapper::c64_cartridge parses .crt + banks ROML/ROMH + I/O bank-switching; assemble_c64 maps ROML $8000 / ROMH $A000+$E000 / cart I/O $DE00 gated by the PLA, and feeds the cart's /GAME//EXROM into the decode; CLI --cart. The cart I/O-2 open-bus latch is the separate B13)
 - [x] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; chips::iec_bus + chips::storage::c1541::{d64_image, synthetic_drive} + CIA2 IEC wiring in assemble_c64 + CLI --disk. Command/serving logic unit-tested; the bit-level handshake is ROM-gated like the golden boot)
 - [x] Datasette: 1530 `.tap` v0/v1 pulse playback -> CIA1 /FLAG. (B7; chips::storage::datasette parses .tap v0/v1, counts down each pulse and pulses CIA1 /FLAG; motor from $01 bit5, cassette sense on $01 bit4 via the new m6510 set_port_input. Wired in assemble_c64; CLI --tape auto-presses PLAY. Unit + integration tested)
@@ -233,7 +235,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] System-level SID variant / NTSC region / dual-SID selection + an NTSC manifest. (B10; assemble_c64 takes a c64_config — region sets VIC revision + phi2 + mains TOD, sid_variant picks 6581/8580, dual_sid maps a second SID at $D420 (priority overlay over the SID mirror). c64.ntsc.toml added; CLI derives region from the manifest id and takes --sid/--dual-sid. Verified PAL vs NTSC produce different frame hashes)
 - [x] 6510 unstable illegal opcodes (SHA/SHX/SHY/TAS/LAS/ANE/LXA) + `$01` bit 6/7 floating-gate fade. (B11; decoded + executed deterministically — ANE/LXA with a fixed magic ($EE), SHA/SHX/SHY/TAS store source & (high+1), TAS sets SP=A&X, LAS = mem & SP; the $01 bits 6,7 fade to 0 after switching to input. Page-cross address corruption not modelled. Unit-tested)
 - [ ] RS-232 / userport modem (CIA2 PA2 TXD + userport, Emu `c64_modem.c`). (B12; genuine userport peripheral, surfaced by the re-review; not covered by B1-B11. Niche — low priority)
-- [ ] Cartridge I/O-2 ($DF00) open-bus "last byte" latch. (B13; distinct from B4's VIC floating bus — the cartridge-port stale byte fastloaders/protection probe; lands with B5 cartridge support)
+- [x] Cartridge I/O-2 ($DF00) open-bus "last byte" latch. (B13; the VIC-II now latches the last byte it fetched off the main bus (vic_ii_6569::last_fetched_byte(), $FF until the first fetch, saved in the VIC state). assemble_c64 maps an open I/O-1/I/O-2 overlay at $DE00-$DFFF — priority 1, above base RAM but below the cartridge (2) and REU (3) — so in I/O mode with no cart/REU a read returns that floating-bus byte (the stale value fastloaders/protection probe) and the no-op write keeps the PLA-deselected RAM from being clobbered; an inserted cart still answers $FF for addresses it does not decode, matching Emu's vic_last_fetch model. VIC unit + C64 integration tested (open bus overrides RAM, mirrors the live latch, yields to cart/REU). Sub-cycle exactness is bounded by the scanline renderer, as with B4)
 
 ### Runtime library
 - [x] Create `src/runtime/` library target `mnemos::runtime`. (compiled tier-5 static lib)

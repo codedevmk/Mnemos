@@ -196,6 +196,16 @@ namespace mnemos::manifests::c64 {
                 3, [decode](std::uint32_t address, bool) { return decode(address) == region::io; });
         }
 
+        // Open I/O-1/I/O-2 ($DE00-$DFFF): with no cartridge or REU driving these
+        // expansion-port lines, the data bus floats and a read returns the last byte
+        // the VIC-II fetched (the stale value fastloaders/copy-protection probe),
+        // not a clean $FF or the PLA-deselected RAM underneath. Priority 1 sits
+        // above base RAM but below the cartridge (2) and REU (3); the no-op write
+        // keeps the underlying RAM from being clobbered through the I/O window.
+        s->bus.map_mmio(
+            0xDE00U, 0x200U, [s](std::uint32_t) { return s->vic.last_fetched_byte(); },
+            [](std::uint32_t, std::uint8_t) {}, 1, io_active);
+
         // I/O space ($D000-$DFFF) — active only when the PLA selects I/O.
         s->bus.map_mmio(
             0xD000U, 0x400U,

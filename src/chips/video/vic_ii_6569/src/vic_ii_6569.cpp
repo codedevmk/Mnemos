@@ -379,13 +379,17 @@ namespace mnemos::chips::video {
 
     std::uint8_t vic_ii_6569::fetch(std::uint16_t vic_address) const noexcept {
         const std::uint16_t rel = static_cast<std::uint16_t>(vic_address & 0x3FFFU);
+        std::uint8_t value;
         // The character ROM shadows VIC $1000-$1FFF in banks 0 and 2.
         if ((bank_ == 0U || bank_ == 2U) && rel >= 0x1000U && rel <= 0x1FFFU) {
             const std::size_t idx = static_cast<std::size_t>(rel - 0x1000U);
-            return idx < memory_.char_rom.size() ? memory_.char_rom[idx] : 0xFFU;
+            value = idx < memory_.char_rom.size() ? memory_.char_rom[idx] : 0xFFU;
+        } else {
+            const std::size_t addr = (static_cast<std::size_t>(bank_) * 0x4000U + rel) & 0xFFFFU;
+            value = addr < memory_.ram.size() ? memory_.ram[addr] : 0xFFU;
         }
-        const std::size_t addr = (static_cast<std::size_t>(bank_) * 0x4000U + rel) & 0xFFFFU;
-        return addr < memory_.ram.size() ? memory_.ram[addr] : 0xFFU;
+        last_fetch_ = value; // floating-bus latch for open expansion-port I/O reads
+        return value;
     }
 
     void vic_ii_6569::render_line(std::uint16_t y) noexcept {
@@ -507,6 +511,7 @@ namespace mnemos::chips::video {
         writer.boolean(irq_last_);
         writer.u64(frame_index_);
         writer.u8(bank_);
+        writer.u8(last_fetch_); // floating-bus latch (open I/O-2 reads)
         // Borrowed memory, the IRQ callback, and the framebuffer are wiring/output,
         // not state: the framebuffer re-renders on the next tick.
     }
@@ -526,6 +531,7 @@ namespace mnemos::chips::video {
         irq_last_ = reader.boolean();
         frame_index_ = reader.u64();
         bank_ = static_cast<std::uint8_t>(reader.u8() & 0x03U);
+        last_fetch_ = reader.u8();
 
         // Rebuild the register-derived views (no callback side effects).
         decode_modes();

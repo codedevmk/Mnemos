@@ -297,6 +297,89 @@ TEST_CASE("assemble_c64 leaves $DF00 unmapped without --reu", "[c64][reu]") {
     CHECK(sys->reu_unit.peek(0U) == 0x00U);          // nothing was stashed
 }
 
+TEST_CASE("assemble_c64 returns the VIC floating-bus byte for open I/O-2", "[c64][openbus]") {
+    auto sys = make_c64();
+    sys->cpu.reset(reset_kind::power_on); // $01 = $3F -> I/O ($DE00-$DFFF) visible
+
+    // Distinct bytes in the RAM that physically underlies $DE00 / $DF00.
+    sys->ram[0xDE00] = 0x42U;
+    sys->ram[0xDF00] = 0x99U;
+
+    // No cartridge, no REU: an open expansion-port read returns the VIC's last
+    // fetch (0xFF before any render), not the PLA-deselected RAM underneath.
+    CHECK(sys->bus.read8(0xDE00U) == sys->vic.last_fetched_byte());
+    CHECK(sys->bus.read8(0xDF00U) == sys->vic.last_fetched_byte());
+    CHECK(sys->bus.read8(0xDE00U) == 0xFFU); // latch default
+    CHECK(sys->bus.read8(0xDE00U) != 0x42U); // RAM is shadowed by the open I/O window
+    CHECK(sys->bus.read8(0xDF00U) != 0x99U);
+}
+
+TEST_CASE("assemble_c64 open I/O-2 mirrors the live VIC fetch latch", "[c64][openbus]") {
+    auto sys = make_c64();
+    sys->ram.fill(0xAAU);                 // everything the VIC fetches off the bus
+    sys->cpu.reset(reset_kind::power_on); // $01 = $3F -> I/O visible
+    sys->vic.write(0x11U, 0x1BU);         // DEN=1: arm the display fetches
+    sys->vic.write(0x18U, 0x14U);         // screen $0400, char gen $1000
+    sys->vic.tick(63U * 312U);            // a full PAL frame drives the fetches
+
+    REQUIRE(sys->vic.last_fetched_byte() != 0xFFU); // the latch went live
+    CHECK(sys->bus.read8(0xDE00U) == sys->vic.last_fetched_byte());
+    CHECK(sys->bus.read8(0xDF00U) == sys->vic.last_fetched_byte());
+}
+
+TEST_CASE("assemble_c64 open I/O-2 yields to the cartridge and REU", "[c64][openbus]") {
+    using mnemos::manifests::c64::assemble_c64;
+    using mnemos::manifests::c64::c64_config;
+
+    SECTION("an inserted cartridge drives I/O-2 (0xFF) over the open bus") {
+        auto sys = make_c64();
+        // Minimal 8K generic .crt (EXROM low, GAME high) so cart.inserted() is true.
+        std::vector<std::uint8_t> crt;
+        const char* magic = "C64 CARTRIDGE   ";
+        crt.insert(crt.end(), magic, magic + 16);
+        const auto be32 = [&](std::uint32_t x) {
+            crt.push_back(static_cast<std::uint8_t>(x >> 24U));
+            crt.push_back(static_cast<std::uint8_t>((x >> 16U) & 0xFFU));
+            crt.push_back(static_cast<std::uint8_t>((x >> 8U) & 0xFFU));
+            crt.push_back(static_cast<std::uint8_t>(x & 0xFFU));
+        };
+        const auto be16 = [&](std::uint16_t x) {
+            crt.push_back(static_cast<std::uint8_t>(x >> 8U));
+            crt.push_back(static_cast<std::uint8_t>(x & 0xFFU));
+        };
+        be32(0x40U);
+        be16(0x0100U);
+        be16(0U);
+        crt.push_back(0U);
+        crt.push_back(1U);
+        crt.insert(crt.end(), 6U + 32U, 0U);
+        const char* cm = "CHIP";
+        crt.insert(crt.end(), cm, cm + 4);
+        be32(0x10U + 0x2000U);
+        be16(0U);
+        be16(0U);
+        be16(0x8000U);
+        be16(0x2000U);
+        crt.insert(crt.end(), 0x2000U, 0U);
+        REQUIRE(sys->cart.load_crt(crt));
+        sys->cpu.reset(reset_kind::power_on);
+
+        // The cartridge claims the whole $DE00-$DFFF window; a generic cart that
+        // does not decode the address answers 0xFF, not the floating-bus byte.
+        CHECK(sys->bus.read8(0xDF00U) == 0xFFU);
+    }
+
+    SECTION("the REU drives I/O-2 over the open bus") {
+        auto sys = assemble_c64(std::vector<std::uint8_t>(0x2000U, 0U),
+                                std::vector<std::uint8_t>(0x2000U, 0U),
+                                std::vector<std::uint8_t>(0x1000U, 0U), {.reu = true});
+        sys->cpu.reset(reset_kind::power_on);
+        // $DF00 is the REU status register, which reports the size bit (512K -> 0x10),
+        // proving the REU answers $DF00 ahead of the open-bus overlay.
+        CHECK(sys->bus.read8(0xDF00U) == 0x10U);
+    }
+}
+
 TEST_CASE("assemble_c64 drives the cassette sense from the datasette", "[c64][tape]") {
     auto sys = make_c64();
     sys->cpu.reset(reset_kind::power_on); // DDR all input -> $01 bit 4 reads the pin

@@ -114,6 +114,12 @@ namespace mnemos::chips::video {
         void trigger_light_pen(std::uint16_t x, std::uint16_t y) noexcept;
         void set_raster(std::uint16_t line) noexcept; // test/debug: jump the beam
 
+        // The last byte the VIC fetched off the shared bus. A CPU read of an open
+        // expansion-port I/O address ($DE00-$DFFF with no cartridge or REU driving
+        // it) returns this floating-bus value rather than a clean $FF — the stale
+        // byte fastloaders and copy-protection probe. $FF until the first fetch.
+        [[nodiscard]] std::uint8_t last_fetched_byte() const noexcept { return last_fetch_; }
+
         [[nodiscard]] std::uint16_t raster_y() const noexcept { return raster_y_; }
         [[nodiscard]] std::uint16_t raster_x() const noexcept { return raster_x_; }
         [[nodiscard]] std::uint16_t raster_compare() const noexcept { return raster_compare_; }
@@ -193,6 +199,11 @@ namespace mnemos::chips::video {
         // VIC fetch memory (borrowed) and the selected 16K bank.
         vic_memory memory_{};
         std::uint8_t bank_{};
+
+        // Floating-bus latch: the last byte fetch() pulled off the bus, exposed via
+        // last_fetched_byte() for open expansion-port I/O reads. Mutable because the
+        // latch is a hardware side effect of a logically const fetch.
+        mutable std::uint8_t last_fetch_{0xFFU};
 
         std::array<register_descriptor, 5> register_view_{};
         introspection_surface introspection_{};
