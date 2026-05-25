@@ -1,11 +1,13 @@
 #include <mnemos/chips/mapper/c64_pla.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 namespace {
     using mnemos::chips::mapper::c64_pla;
@@ -115,4 +117,29 @@ TEST_CASE("c64_pla register snapshot packs the five input bits") {
     CHECK(regs[0].name == "CONFIG");
     // bit0 LORAM=1, bit2 CHAREN=1, bit4 EXROM=1 -> 0b10101 = 0x15
     CHECK(regs[0].value == 0x15U);
+}
+
+TEST_CASE("c64_pla save/load round-trips") {
+    c64_pla a;
+    a.set_cpu_port(false, true, false);
+    a.set_cart_lines(false, true);
+
+    std::vector<std::uint8_t> buf1;
+    mnemos::chips::state_writer w(buf1);
+    a.save_state(w);
+
+    c64_pla b;
+    mnemos::chips::state_reader r(buf1);
+    b.load_state(r);
+    CHECK(r.ok());
+    CHECK_FALSE(b.loram());
+    CHECK(b.hiram());
+    CHECK_FALSE(b.charen());
+    CHECK_FALSE(b.game());
+    CHECK(b.exrom());
+
+    std::vector<std::uint8_t> buf2;
+    mnemos::chips::state_writer w2(buf2);
+    b.save_state(w2);
+    CHECK(buf1 == buf2);
 }

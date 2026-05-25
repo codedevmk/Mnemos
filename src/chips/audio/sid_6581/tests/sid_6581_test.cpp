@@ -1,12 +1,14 @@
 #include <mnemos/chips/audio/sid_6581.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 namespace {
     using mnemos::chips::audio::sid_6581;
@@ -158,4 +160,28 @@ TEST_CASE("sid_6581 register snapshot reports envelopes and volume") {
     REQUIRE(regs.size() == 4U);
     CHECK(regs[0].name == "V1_ENV");
     CHECK(regs[3].name == "VOL");
+}
+
+TEST_CASE("sid_6581 save/load round-trips") {
+    sid_6581 a;
+    a.write(0x00U, 0x34U); // voice 1 freq lo
+    a.write(0x01U, 0x12U); // voice 1 freq hi
+    a.write(0x04U, 0x11U); // voice 1 control: gate + triangle
+    a.write(0x18U, 0x1FU); // volume + filter
+    a.tick(200U);
+    (void)a.sample();
+
+    std::vector<std::uint8_t> buf1;
+    mnemos::chips::state_writer w(buf1);
+    a.save_state(w);
+
+    sid_6581 b;
+    mnemos::chips::state_reader r(buf1);
+    b.load_state(r);
+    CHECK(r.ok());
+
+    std::vector<std::uint8_t> buf2;
+    mnemos::chips::state_writer w2(buf2);
+    b.save_state(w2);
+    CHECK(buf1 == buf2);
 }

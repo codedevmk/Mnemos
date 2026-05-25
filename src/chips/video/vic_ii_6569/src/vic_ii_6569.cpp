@@ -1,6 +1,7 @@
 #include <mnemos/chips/video/vic_ii_6569.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <memory>
 
@@ -491,12 +492,46 @@ namespace mnemos::chips::video {
         return k_palette[color_index & 0x0FU];
     }
 
-    void vic_ii_6569::save_state(state_writer& /*writer*/) const {
-        // Serialization lands with the M3 runtime save-state format.
+    void vic_ii_6569::save_state(state_writer& writer) const {
+        writer.u8(static_cast<std::uint8_t>(rev_));
+        writer.bytes(std::span<const std::uint8_t>(regs_));
+        writer.u16(raster_x_);
+        writer.u16(raster_y_);
+        writer.boolean(den_latched_line_30_);
+        writer.u16(vc_);
+        writer.u16(vcbase_);
+        writer.u8(rc_);
+        writer.u8(vmli_);
+        writer.boolean(display_state_);
+        writer.boolean(raster_match_active_);
+        writer.boolean(irq_last_);
+        writer.u64(frame_index_);
+        writer.u8(bank_);
+        // Borrowed memory, the IRQ callback, and the framebuffer are wiring/output,
+        // not state: the framebuffer re-renders on the next tick.
     }
 
-    void vic_ii_6569::load_state(state_reader& /*reader*/) {
-        // Deserialization lands with the M3 runtime save-state format.
+    void vic_ii_6569::load_state(state_reader& reader) {
+        set_revision(static_cast<revision>(reader.u8())); // keeps is_pal_ coherent
+        reader.bytes(std::span<std::uint8_t>(regs_));
+        raster_x_ = reader.u16();
+        raster_y_ = reader.u16();
+        den_latched_line_30_ = reader.boolean();
+        vc_ = reader.u16();
+        vcbase_ = reader.u16();
+        rc_ = reader.u8();
+        vmli_ = reader.u8();
+        display_state_ = reader.boolean();
+        raster_match_active_ = reader.boolean();
+        irq_last_ = reader.boolean();
+        frame_index_ = reader.u64();
+        bank_ = static_cast<std::uint8_t>(reader.u8() & 0x03U);
+
+        // Rebuild the register-derived views (no callback side effects).
+        decode_modes();
+        refresh_sprite_x();
+        refresh_sprite_y();
+        refresh_raster_compare();
     }
 
     instrumentation::i_chip_introspection& vic_ii_6569::introspection() noexcept {

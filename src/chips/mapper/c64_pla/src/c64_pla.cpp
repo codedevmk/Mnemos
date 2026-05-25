@@ -1,6 +1,7 @@
 #include <mnemos/chips/mapper/c64_pla.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <memory>
 
@@ -131,12 +132,20 @@ namespace mnemos::chips::mapper {
         return region::ram;
     }
 
-    void c64_pla::save_state(state_writer& /*writer*/) const {
-        // Serialization lands with the M3 runtime save-state format.
+    void c64_pla::save_state(state_writer& writer) const {
+        writer.boolean(loram_);
+        writer.boolean(hiram_);
+        writer.boolean(charen_);
+        writer.boolean(game_);
+        writer.boolean(exrom_);
     }
 
-    void c64_pla::load_state(state_reader& /*reader*/) {
-        // Deserialization lands with the M3 runtime save-state format.
+    void c64_pla::load_state(state_reader& reader) {
+        loram_ = reader.boolean();
+        hiram_ = reader.boolean();
+        charen_ = reader.boolean();
+        game_ = reader.boolean();
+        exrom_ = reader.boolean();
     }
 
     instrumentation::i_chip_introspection& c64_pla::introspection() noexcept {

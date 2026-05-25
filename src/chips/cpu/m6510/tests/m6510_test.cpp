@@ -2,6 +2,7 @@
 
 #include <mnemos/chips/common/bus.hpp>
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -10,6 +11,7 @@
 #include <initializer_list>
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 namespace {
 
@@ -706,4 +708,36 @@ TEST_CASE("m6510 registers under its canonical id") {
     REQUIRE(chip != nullptr);
     CHECK(chip->metadata().part_number == "6510");
     CHECK(chip->metadata().klass == mnemos::chips::chip_class::cpu);
+}
+
+TEST_CASE("m6510 save/load round-trips") {
+    m6510 a;
+    a.reset(mnemos::chips::reset_kind::power_on);
+    m6510::registers regs{};
+    regs.a = 0x11U;
+    regs.x = 0x22U;
+    regs.y = 0x33U;
+    regs.sp = 0x44U;
+    regs.p = 0x75U;
+    regs.pc = 0x6789U;
+    a.set_registers(regs);
+    a.write(0x00U, 0x2FU);
+    a.write(0x01U, 0x37U);
+
+    std::vector<std::uint8_t> buf1;
+    mnemos::chips::state_writer w(buf1);
+    a.save_state(w);
+
+    m6510 b;
+    mnemos::chips::state_reader r(buf1);
+    b.load_state(r);
+    CHECK(r.ok());
+    CHECK(b.cpu_registers().a == 0x11U);
+    CHECK(b.cpu_registers().pc == 0x6789U);
+    CHECK(b.cpu_registers().sp == 0x44U);
+
+    std::vector<std::uint8_t> buf2;
+    mnemos::chips::state_writer w2(buf2);
+    b.save_state(w2);
+    CHECK(buf1 == buf2);
 }

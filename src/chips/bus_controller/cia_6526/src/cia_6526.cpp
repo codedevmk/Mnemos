@@ -1,6 +1,7 @@
 #include <mnemos/chips/bus_controller/cia_6526.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <memory>
 #include <utility>
@@ -656,12 +657,129 @@ namespace mnemos::chips::bus_controller {
         return v;
     }
 
-    void cia_6526::save_state(state_writer& /*writer*/) const {
-        // Serialization lands with the M3 runtime save-state format.
+    void cia_6526::save_state(state_writer& writer) const {
+        const auto write_timer = [&writer](const timer_state& t) {
+            writer.u16(t.counter);
+            writer.u16(t.latch);
+            writer.u8(t.cr);
+            writer.boolean(t.running);
+            writer.boolean(t.pulsing_pb);
+            writer.boolean(t.toggle_pb);
+            writer.boolean(t.underflow);
+            writer.u8(t.force_load_phase);
+            writer.u8(t.start_delay);
+        };
+
+        writer.u8(pra_out_);
+        writer.u8(prb_out_);
+        writer.u8(ddra_);
+        writer.u8(ddrb_);
+        write_timer(timer_a_);
+        write_timer(timer_b_);
+
+        // TOD.
+        writer.u8(tod_.ten);
+        writer.u8(tod_.sec);
+        writer.u8(tod_.min);
+        writer.u8(tod_.hr);
+        writer.u8(tod_.alm_ten);
+        writer.u8(tod_.alm_sec);
+        writer.u8(tod_.alm_min);
+        writer.u8(tod_.alm_hr);
+        writer.u8(tod_.ltch_ten);
+        writer.u8(tod_.ltch_sec);
+        writer.u8(tod_.ltch_min);
+        writer.u8(tod_.ltch_hr);
+        writer.boolean(tod_.latched);
+        writer.boolean(tod_.write_frozen);
+        writer.u8(tod_.wr_ten);
+        writer.u8(tod_.wr_sec);
+        writer.u8(tod_.wr_min);
+        writer.u8(tod_.wr_hr);
+        writer.u32(tod_.divider);
+        writer.u32(tod_.divider_reload);
+        writer.u32(tod_.src_hz);
+        writer.u32(tod_.phase);
+        writer.u32(tod_.phase_reload);
+
+        // Shift register.
+        writer.u8(sdr_.shift_reg);
+        writer.u8(sdr_.sdr_write);
+        writer.boolean(sdr_.output_mode);
+        writer.boolean(sdr_.shifting);
+        writer.u8(sdr_.bit_count);
+        writer.boolean(sdr_.sp_level);
+        writer.boolean(sdr_.cnt_prev);
+        writer.boolean(sdr_.pending_load);
+
+        // Interrupt control + pins.
+        writer.u8(icr_latch_);
+        writer.u8(imr_);
+        writer.boolean(irq_line_);
+        writer.boolean(irq_out_);
+        writer.boolean(flag_prev_);
+        writer.boolean(cnt_prev_);
     }
 
-    void cia_6526::load_state(state_reader& /*reader*/) {
-        // Deserialization lands with the M3 runtime save-state format.
+    void cia_6526::load_state(state_reader& reader) {
+        const auto read_timer = [&reader](timer_state& t) {
+            t.counter = reader.u16();
+            t.latch = reader.u16();
+            t.cr = reader.u8();
+            t.running = reader.boolean();
+            t.pulsing_pb = reader.boolean();
+            t.toggle_pb = reader.boolean();
+            t.underflow = reader.boolean();
+            t.force_load_phase = reader.u8();
+            t.start_delay = reader.u8();
+        };
+
+        pra_out_ = reader.u8();
+        prb_out_ = reader.u8();
+        ddra_ = reader.u8();
+        ddrb_ = reader.u8();
+        read_timer(timer_a_);
+        read_timer(timer_b_);
+
+        tod_.ten = reader.u8();
+        tod_.sec = reader.u8();
+        tod_.min = reader.u8();
+        tod_.hr = reader.u8();
+        tod_.alm_ten = reader.u8();
+        tod_.alm_sec = reader.u8();
+        tod_.alm_min = reader.u8();
+        tod_.alm_hr = reader.u8();
+        tod_.ltch_ten = reader.u8();
+        tod_.ltch_sec = reader.u8();
+        tod_.ltch_min = reader.u8();
+        tod_.ltch_hr = reader.u8();
+        tod_.latched = reader.boolean();
+        tod_.write_frozen = reader.boolean();
+        tod_.wr_ten = reader.u8();
+        tod_.wr_sec = reader.u8();
+        tod_.wr_min = reader.u8();
+        tod_.wr_hr = reader.u8();
+        tod_.divider = reader.u32();
+        tod_.divider_reload = reader.u32();
+        tod_.src_hz = reader.u32();
+        tod_.phase = reader.u32();
+        tod_.phase_reload = reader.u32();
+
+        sdr_.shift_reg = reader.u8();
+        sdr_.sdr_write = reader.u8();
+        sdr_.output_mode = reader.boolean();
+        sdr_.shifting = reader.boolean();
+        sdr_.bit_count = reader.u8();
+        sdr_.sp_level = reader.boolean();
+        sdr_.cnt_prev = reader.boolean();
+        sdr_.pending_load = reader.boolean();
+
+        icr_latch_ = reader.u8();
+        imr_ = reader.u8();
+        irq_line_ = reader.boolean();
+        irq_out_ = reader.boolean();
+        flag_prev_ = reader.boolean();
+        cnt_prev_ = reader.boolean();
     }
 
     instrumentation::i_chip_introspection& cia_6526::introspection() noexcept {

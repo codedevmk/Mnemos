@@ -1,12 +1,14 @@
 #include <mnemos/chips/bus_controller/cia_6526.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 namespace {
     using mnemos::chips::bus_controller::cia_6526;
@@ -167,4 +169,28 @@ TEST_CASE("cia_6526 register snapshot reports timers and interrupt state") {
     CHECK(regs[0].name == "TA");
     CHECK(regs[0].value == 0xFFFFU);
     CHECK(regs[2].name == "ICR");
+}
+
+TEST_CASE("cia_6526 save/load round-trips") {
+    cia_6526 a;
+    a.write(0x02U, 0xFFU); // DDRA all output
+    a.write(0x00U, 0xA5U); // PRA
+    a.write(0x04U, 0x00U); // timer A latch lo
+    a.write(0x05U, 0x10U); // timer A latch hi
+    a.write(0x0EU, 0x01U); // start timer A
+    a.tick(123U);
+
+    std::vector<std::uint8_t> buf1;
+    mnemos::chips::state_writer w(buf1);
+    a.save_state(w);
+
+    cia_6526 b;
+    mnemos::chips::state_reader r(buf1);
+    b.load_state(r);
+    CHECK(r.ok());
+
+    std::vector<std::uint8_t> buf2;
+    mnemos::chips::state_writer w2(buf2);
+    b.save_state(w2);
+    CHECK(buf1 == buf2);
 }

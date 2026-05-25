@@ -1,6 +1,7 @@
 #include <mnemos/chips/audio/sid_6581.hpp>
 
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <array>
 #include <cstdint>
@@ -561,12 +562,74 @@ namespace mnemos::chips::audio {
         return static_cast<std::int16_t>(scaled);
     }
 
-    void sid_6581::save_state(state_writer& /*writer*/) const {
-        // Serialization lands with the M3 runtime save-state format.
+    void sid_6581::save_state(state_writer& writer) const {
+        writer.u8(static_cast<std::uint8_t>(variant_));
+        writer.bytes(std::span<const std::uint8_t>(regs_));
+        for (const voice_state& v : voices_) {
+            writer.u16(v.frequency);
+            writer.u16(v.pulse_width);
+            writer.u8(v.control);
+            writer.u8(v.attack);
+            writer.u8(v.decay);
+            writer.u8(v.sustain);
+            writer.u8(v.release);
+            writer.u8(static_cast<std::uint8_t>(v.phase));
+            writer.u8(v.envelope);
+            writer.boolean(v.gate_prev);
+            writer.u16(v.rate_counter);
+            writer.u8(v.exp_counter);
+            writer.u8(v.exp_period);
+            writer.u32(v.accumulator);
+            writer.u32(v.accumulator_prev);
+            writer.u32(v.noise_lfsr);
+        }
+        writer.u16(filter_cutoff_);
+        writer.u8(filter_resonance_);
+        writer.u8(filter_route_);
+        writer.u8(filter_mode_);
+        writer.u8(volume_);
+        writer.u32(static_cast<std::uint32_t>(filter_lp_));
+        writer.u32(static_cast<std::uint32_t>(filter_bp_));
+        writer.u32(static_cast<std::uint32_t>(sample_rate_hz_));
+        writer.u8(potx_);
+        writer.u8(poty_);
+        writer.u8(osc3_);
+        writer.u8(env3_);
     }
 
-    void sid_6581::load_state(state_reader& /*reader*/) {
-        // Deserialization lands with the M3 runtime save-state format.
+    void sid_6581::load_state(state_reader& reader) {
+        variant_ = static_cast<variant>(reader.u8());
+        reader.bytes(std::span<std::uint8_t>(regs_));
+        for (voice_state& v : voices_) {
+            v.frequency = reader.u16();
+            v.pulse_width = reader.u16();
+            v.control = reader.u8();
+            v.attack = reader.u8();
+            v.decay = reader.u8();
+            v.sustain = reader.u8();
+            v.release = reader.u8();
+            v.phase = static_cast<env_phase>(reader.u8());
+            v.envelope = reader.u8();
+            v.gate_prev = reader.boolean();
+            v.rate_counter = reader.u16();
+            v.exp_counter = reader.u8();
+            v.exp_period = reader.u8();
+            v.accumulator = reader.u32();
+            v.accumulator_prev = reader.u32();
+            v.noise_lfsr = reader.u32();
+        }
+        filter_cutoff_ = reader.u16();
+        filter_resonance_ = reader.u8();
+        filter_route_ = reader.u8();
+        filter_mode_ = reader.u8();
+        volume_ = reader.u8();
+        filter_lp_ = static_cast<std::int32_t>(reader.u32());
+        filter_bp_ = static_cast<std::int32_t>(reader.u32());
+        sample_rate_hz_ = static_cast<std::int32_t>(reader.u32());
+        potx_ = reader.u8();
+        poty_ = reader.u8();
+        osc3_ = reader.u8();
+        env3_ = reader.u8();
     }
 
     instrumentation::i_chip_introspection& sid_6581::introspection() noexcept {

@@ -4,6 +4,7 @@
 
 #include <mnemos/chips/common/bus.hpp>
 #include <mnemos/chips/common/chip_registry.hpp>
+#include <mnemos/chips/common/state.hpp>
 
 #include <memory>
 
@@ -1349,12 +1350,53 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    void m6510::save_state(state_writer& /*writer*/) const {
-        // Serialization lands with the M1 save/load-state task.
+    void m6510::save_state(state_writer& writer) const {
+        writer.u8(registers_.a);
+        writer.u8(registers_.x);
+        writer.u8(registers_.y);
+        writer.u8(registers_.sp);
+        writer.u8(registers_.p);
+        writer.u16(registers_.pc);
+        writer.u64(cycles_);
+        writer.boolean(port_enabled_);
+        writer.u8(port_ddr_);
+        writer.u8(port_data_);
+        // In-progress instruction + interrupt sequencing.
+        writer.u8(ir_);
+        writer.u8(tcu_);
+        writer.u16(ea_);
+        writer.u8(operand_);
+        writer.u8(ptr_);
+        writer.boolean(page_cross_);
+        writer.boolean(irq_line_);
+        writer.boolean(nmi_line_);
+        writer.boolean(nmi_pending_);
+        writer.boolean(in_interrupt_);
+        writer.u16(interrupt_vector_);
     }
 
-    void m6510::load_state(state_reader& /*reader*/) {
-        // Deserialization lands with the M1 save/load-state task.
+    void m6510::load_state(state_reader& reader) {
+        registers_.a = reader.u8();
+        registers_.x = reader.u8();
+        registers_.y = reader.u8();
+        registers_.sp = reader.u8();
+        registers_.p = reader.u8();
+        registers_.pc = reader.u16();
+        cycles_ = reader.u64();
+        port_enabled_ = reader.boolean();
+        port_ddr_ = reader.u8();
+        port_data_ = reader.u8();
+        ir_ = reader.u8();
+        tcu_ = reader.u8();
+        ea_ = reader.u16();
+        operand_ = reader.u8();
+        ptr_ = reader.u8();
+        page_cross_ = reader.boolean();
+        irq_line_ = reader.boolean();
+        nmi_line_ = reader.boolean();
+        nmi_pending_ = reader.boolean();
+        in_interrupt_ = reader.boolean();
+        interrupt_vector_ = reader.u16();
     }
 
     instrumentation::i_chip_introspection& m6510::introspection() noexcept {
