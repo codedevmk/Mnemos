@@ -184,14 +184,14 @@
 - [x] Unit tests covering region resolution edge cases (boundary, mirror, overlay precedence). (7e62c0d boundary + mirror; d88a651 overlay precedence with ROM/IO banking)
 
 ### Manifest loader
-- [ ] Create `src/manifests/common/` library target `mnemos::manifests::common`.
-- [ ] FetchContent integration for `tomlplusplus`.
-- [ ] Define `manifest_schema/1` types in C++.
-- [ ] Implement TOML parser with strict validation (TDS §10.3).
+- [x] Create `src/manifests/common/` library target `mnemos::manifests::common`. (010640b; CI run 26387908879 green)
+- [x] FetchContent integration for `tomlplusplus`. (010640b; pinned v3.4.0, PRIVATE to tier 4, ADR 0007)
+- [x] Define `manifest_schema/1` types in C++. (010640b; manifest/clock/chip/bus/region + address_range)
+- [x] Implement TOML parser with strict validation (TDS §10.3). (010640b; toml++ non-throwing + schema/field/range/endianness/rom checks)
 - [ ] Implement manifest-to-component-graph builder (instantiate chips by ID via the factory registry, wire buses).
 - [ ] Implement ROM file loader with SHA-256 verification.
-- [ ] Surface validation errors with file/line/column.
-- [ ] Unit tests covering each validation rule.
+- [x] Surface validation errors with file/line/column. (010640b; diagnostic{message, source, line, column})
+- [x] Unit tests covering each validation rule. (010640b; valid parse, wrong schema, missing id/clock/bus, malformed-TOML position, range + rom requirements)
 
 ### C64 manifest
 - [ ] Create `src/manifests/c64/` directory.
