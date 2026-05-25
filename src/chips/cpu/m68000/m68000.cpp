@@ -7,6 +7,7 @@
 #include <array>
 #include <memory>
 #include <string_view>
+#include <utility>
 
 namespace mnemos::chips::cpu {
 
@@ -20,6 +21,14 @@ namespace mnemos::chips::cpu {
         constexpr int vec_trace = 9;
         constexpr int vec_trap0 = 32;
         constexpr int vec_autovector_base = 24; // autovector level n is 24 + n
+
+        // MOVEM register-list mask. The register index i maps 0-7 -> D0-D7, 8-15 ->
+        // A0-A7. In predecrement mode the mask bit order is reversed (bit 0 = A7).
+        constexpr bool movem_has(std::uint16_t mask, int i, bool predec) {
+            return ((mask >> (predec ? (15 - i) : i)) & 1U) != 0U;
+        }
+        constexpr bool reg_is_addr(int i) { return i >= 8; }
+        constexpr std::size_t reg_num(int i) { return static_cast<std::size_t>(i & 7); }
 
         // Data-dependent DIVU/DIVS internal cycle counts (Jorge Cwik's algorithm, as
         // used by WinUAE) -- the idle clocks the handler adds on top of the prefetch.
@@ -490,6 +499,80 @@ namespace mnemos::chips::cpu {
         return n;
     }
 
+    std::uint8_t m68000::bcd_add(std::uint8_t dst, std::uint8_t src) noexcept {
+        const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+        std::uint32_t result = static_cast<std::uint32_t>(src) + dst + x;
+        bool carry = false;
+        bool overflow = false;
+        if (((static_cast<std::uint32_t>(src) ^ dst ^ result) & 0x10U) != 0U ||
+            (result & 0x0FU) >= 0x0AU) {
+            const std::uint32_t prev = result;
+            result += 0x06U;
+            if (((~prev & result) & 0x80U) != 0U) {
+                overflow = true;
+            }
+        }
+        if (result >= 0xA0U) {
+            const std::uint32_t prev = result;
+            result += 0x60U;
+            carry = true;
+            if (((~prev & result) & 0x80U) != 0U) {
+                overflow = true;
+            }
+        }
+        const auto r = static_cast<std::uint8_t>(result);
+        sr_ = static_cast<std::uint16_t>(carry ? (sr_ | sr_c | sr_x) : (sr_ & ~(sr_c | sr_x)));
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_v));
+        if (overflow) {
+            sr_ |= sr_v;
+        }
+        if ((r & 0x80U) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (r != 0U) {
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
+        }
+        return r;
+    }
+
+    std::uint8_t m68000::bcd_sub(std::uint8_t dst, std::uint8_t src) noexcept {
+        const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+        std::uint32_t result = static_cast<std::uint32_t>(dst) - src - x;
+        bool carry = false;
+        bool overflow = false;
+        const bool adjust_lo = ((static_cast<std::uint32_t>(dst) ^ src ^ result) & 0x10U) != 0U;
+        const bool adjust_hi = (result & 0x100U) != 0U;
+        if (adjust_lo) {
+            const std::uint32_t prev = result;
+            result -= 0x06U;
+            carry = ((~prev & result) & 0x80U) != 0U;
+            if (((prev & ~result) & 0x80U) != 0U) {
+                overflow = true;
+            }
+        }
+        if (adjust_hi) {
+            const std::uint32_t prev = result;
+            result -= 0x60U;
+            carry = true;
+            if (((prev & ~result) & 0x80U) != 0U) {
+                overflow = true;
+            }
+        }
+        const auto r = static_cast<std::uint8_t>(result);
+        sr_ = static_cast<std::uint16_t>(carry ? (sr_ | sr_c | sr_x) : (sr_ & ~(sr_c | sr_x)));
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_v));
+        if (overflow) {
+            sr_ |= sr_v;
+        }
+        if ((r & 0x80U) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (r != 0U) {
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
+        }
+        return r;
+    }
+
     void m68000::set_logic_flags(op_size s, std::uint32_t value) noexcept {
         const bool negative = (value & size_sign_bit(s)) != 0U;
         const bool zero = (value & size_mask(s)) == 0U;
@@ -710,6 +793,41 @@ namespace mnemos::chips::cpu {
 
     void m68000::op_mul(std::uint16_t op) noexcept {
         const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
+        const auto dni = static_cast<std::size_t>(dn);
+        const auto eri = static_cast<std::size_t>(er);
+        if ((op & 0xF1F0U) == 0xC100U) { // ABCD
+            const bool mem = (op & 8U) != 0U;
+            std::uint8_t src{};
+            std::uint8_t dst{};
+            if (mem) {
+                a_[eri] -= (er == 7) ? 2U : 1U;
+                src = read8(a_[eri]);
+                a_[dni] -= (dn == 7) ? 2U : 1U;
+                dst = read8(a_[dni]);
+            } else {
+                src = static_cast<std::uint8_t>(d_[eri]);
+                dst = static_cast<std::uint8_t>(d_[dni]);
+            }
+            const std::uint8_t r = bcd_add(dst, src);
+            if (mem) {
+                write8(a_[dni], r);
+            } else {
+                d_[dni] = (d_[dni] & 0xFFFFFF00U) | r;
+            }
+            return;
+        }
+        if ((op & 0xF1F8U) == 0xC140U) { // EXG Dx,Dy
+            std::swap(d_[dni], d_[eri]);
+            return;
+        }
+        if ((op & 0xF1F8U) == 0xC148U) { // EXG Ax,Ay
+            std::swap(a_[dni], a_[eri]);
+            return;
+        }
+        if ((op & 0xF1F8U) == 0xC188U) { // EXG Dx,Ay
+            std::swap(d_[dni], a_[eri]);
+            return;
+        }
         if (opm == 3) { // MULU
             const auto src = static_cast<std::uint16_t>(ea_read(em, er, op_size::word));
             const std::uint32_t r =
@@ -810,7 +928,28 @@ namespace mnemos::chips::cpu {
             }
             return;
         }
-        // SBCD (opm 4-6, em < 2) lands in a later phase.
+        if ((op & 0xF1F0U) == 0x8100U) { // SBCD
+            const bool mem = (op & 8U) != 0U;
+            const auto eri = static_cast<std::size_t>(er);
+            std::uint8_t src{};
+            std::uint8_t dst{};
+            if (mem) {
+                a_[eri] -= (er == 7) ? 2U : 1U;
+                src = read8(a_[eri]);
+                a_[dni] -= (dn == 7) ? 2U : 1U;
+                dst = read8(a_[dni]);
+            } else {
+                src = static_cast<std::uint8_t>(d_[eri]);
+                dst = static_cast<std::uint8_t>(d_[dni]);
+            }
+            const std::uint8_t r = bcd_sub(dst, src);
+            if (mem) {
+                write8(a_[dni], r);
+            } else {
+                d_[dni] = (d_[dni] & 0xFFFFFF00U) | r;
+            }
+            return;
+        }
         const op_size sz = static_cast<op_size>(opm & 3);
         const std::uint32_t m = size_mask(sz);
         if (opm < 3) { // OR <ea>,Dn
@@ -1064,15 +1203,124 @@ namespace mnemos::chips::cpu {
                 return;
             }
             break;
-        case 0xA: // TST (TAS, size field 3, is deferred)
+        case 0xA: // TST, or TAS when the size field is 3 ($4AC0)
             if (static_cast<int>(sz) != 3) {
                 const std::uint32_t v = ea_read(em, er, sz);
                 set_logic_flags(sz, v);
                 return;
             }
+            if ((op & 0xFFC0U) == 0x4AC0U) { // TAS <ea>.B: test, then set bit 7
+                std::uint32_t addr = 0;
+                const auto v = static_cast<std::uint8_t>(ea_rmw_read(em, er, op_size::byte, addr));
+                set_logic_flags(op_size::byte, v);
+                ea_rmw_write(em, er, op_size::byte, static_cast<std::uint8_t>(v | 0x80U), addr);
+                return;
+            }
             break;
         default:
             break;
+        }
+
+        // LEA <ea>,An -- load the effective address (control modes only).
+        if ((op & 0xF1C0U) == 0x41C0U) {
+            a_[static_cast<std::size_t>((op >> 9U) & 7)] =
+                ea_address(em, er, op_size::longword, false);
+            return;
+        }
+        // NBCD <ea>.B -- BCD negate (0 - operand - X).
+        if ((op & 0xFFC0U) == 0x4800U) {
+            std::uint32_t addr = 0;
+            const auto d = static_cast<std::uint8_t>(ea_rmw_read(em, er, op_size::byte, addr));
+            const std::uint8_t r = bcd_sub(0U, d);
+            ea_rmw_write(em, er, op_size::byte, r, addr);
+            return;
+        }
+        // SWAP Dn -- exchange the register halves.
+        if ((op & 0xFFF8U) == 0x4840U) {
+            const auto dn = static_cast<std::size_t>(op & 7);
+            d_[dn] = (d_[dn] >> 16U) | (d_[dn] << 16U);
+            set_logic_flags(op_size::longword, d_[dn]);
+            return;
+        }
+        // PEA <ea> -- push the effective address.
+        if ((op & 0xFFC0U) == 0x4840U && em >= 2) {
+            push32(ea_address(em, er, op_size::longword, false));
+            return;
+        }
+        // MOVEM <list>,<ea> / <ea>,<list> -- register-list transfer.
+        if ((op & 0xFB80U) == 0x4880U && em >= 2) {
+            const bool to_memory = (op & 0x0400U) == 0U;
+            const op_size movem_sz = (op & 0x0040U) != 0U ? op_size::longword : op_size::word;
+            const std::uint16_t mask = fetch16();
+            if (to_memory && em == 4) { // register -> memory, predecrement -(An)
+                const std::uint32_t initial = a_[static_cast<std::size_t>(er)];
+                std::uint32_t a = initial;
+                for (int i = 15; i >= 0; --i) {
+                    if (!movem_has(mask, i, true)) {
+                        continue;
+                    }
+                    std::uint32_t val = reg_is_addr(i) ? (reg_num(i) == static_cast<std::size_t>(er)
+                                                              ? initial
+                                                              : a_[reg_num(i)])
+                                                       : d_[reg_num(i)];
+                    if (movem_sz == op_size::longword) {
+                        a -= 2U;
+                        write16(a, static_cast<std::uint16_t>(val));
+                        a -= 2U;
+                        write16(a, static_cast<std::uint16_t>(val >> 16U));
+                    } else {
+                        a -= 2U;
+                        write16(a, static_cast<std::uint16_t>(val));
+                    }
+                }
+                a_[static_cast<std::size_t>(er)] = a;
+            } else if (to_memory) { // register -> memory, other control modes
+                std::uint32_t a = ea_address(em, er, op_size::longword, false);
+                for (int i = 0; i < 16; ++i) {
+                    if (!movem_has(mask, i, false)) {
+                        continue;
+                    }
+                    const std::uint32_t val = reg_is_addr(i) ? a_[reg_num(i)] : d_[reg_num(i)];
+                    if (movem_sz == op_size::longword) {
+                        write16(a, static_cast<std::uint16_t>(val >> 16U));
+                        a += 2U;
+                        write16(a, static_cast<std::uint16_t>(val));
+                        a += 2U;
+                    } else {
+                        write16(a, static_cast<std::uint16_t>(val));
+                        a += 2U;
+                    }
+                }
+            } else { // memory -> register
+                std::uint32_t a = em == 3 ? a_[static_cast<std::size_t>(er)]
+                                          : ea_address(em, er, op_size::longword, false);
+                for (int i = 0; i < 16; ++i) {
+                    if (!movem_has(mask, i, false)) {
+                        continue;
+                    }
+                    std::uint32_t v{};
+                    if (movem_sz == op_size::longword) {
+                        const std::uint16_t hi = read16(a);
+                        a += 2U;
+                        const std::uint16_t lo = read16(a);
+                        a += 2U;
+                        v = (static_cast<std::uint32_t>(hi) << 16U) | lo;
+                    } else {
+                        v = static_cast<std::uint32_t>(
+                            sign_extend(read16(a), op_size::word)); // word loads sign-extend
+                        a += 2U;
+                    }
+                    if (reg_is_addr(i)) {
+                        a_[reg_num(i)] = v;
+                    } else {
+                        d_[reg_num(i)] = v;
+                    }
+                }
+                if (em == 3) {
+                    a_[static_cast<std::size_t>(er)] = a; // postincrement leaves An past the block
+                }
+            }
+            return;
         }
 
         // CHK <ea>,Dn -- word bound check; traps if Dn < 0 or Dn > bound.

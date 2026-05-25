@@ -393,9 +393,12 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   tests (46 total). phase 4b: the trapping arithmetic DIVU/DIVS (with the data-
   dependent cycle model + the divide-by-zero trap) and CHK, plus MOVE-to/from-SR/CCR
   and the ORI/ANDI/EORI-to-SR word forms (all privilege-gated); 7 more tests (51
-  total). Remaining: BCD + misc (ABCD/SBCD/NBCD, MOVEM/MOVEP, LEA/PEA/LINK done/SWAP/
-  EXG/TAS), the cycle-accurate two-word prefetch + address/bus-error frames, then the
-  Emu 743-check conformance vectors
+  total). phase 5: BCD + misc — ABCD/SBCD/NBCD (shared packed-BCD add/sub helpers),
+  SWAP, EXG (Dn/An/Dn-An), PEA, LEA, TAS, and MOVEM (register-list transfer, both
+  directions incl. -(An)/(An)+ with the predec mask order); 9 more tests (58 total).
+  The instruction set is now essentially complete (MOVEP is the lone niche op left).
+  Remaining: MOVEP, the cycle-accurate two-word prefetch + address/bus-error frames,
+  then the Emu 743-check conformance vectors (phase 6)
 - [ ] Implement `chips::audio::ym2612`.
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).

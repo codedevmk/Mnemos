@@ -774,3 +774,95 @@ TEST_CASE("m68000 MOVE to SR and ORI to SR are privileged writes") {
     m2.cpu.step_instruction();
     CHECK(m2.cpu.cpu_registers().pc == 0x00006000U);
 }
+
+TEST_CASE("m68000 ABCD / SBCD / NBCD packed-decimal math") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000019U;              // BCD 19
+    s.d[1] = 0x00000008U;              // BCD 8
+    auto r = run_one(m, {0xC101U}, s); // ABCD D1,D0 -> 27
+    CHECK((r.d[0] & 0xFFU) == 0x27U);
+
+    r = run_one(m, {0x8101U}, s); // SBCD D1,D0 -> 11
+    CHECK((r.d[0] & 0xFFU) == 0x11U);
+
+    s = m68000::registers{};
+    s.d[0] = 0x00000001U;
+    r = run_one(m, {0x4800U}, s); // NBCD D0 -> 99 with borrow
+    CHECK((r.d[0] & 0xFFU) == 0x99U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+}
+
+TEST_CASE("m68000 SWAP exchanges the register halves") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x12345678U;
+    const auto r = run_one(m, {0x4840U}, s); // SWAP D0
+    CHECK(r.d[0] == 0x56781234U);
+}
+
+TEST_CASE("m68000 EXG exchanges two registers") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x0000AAAAU;
+    s.d[1] = 0x0000BBBBU;
+    auto r = run_one(m, {0xC141U}, s); // EXG D0,D1
+    CHECK(r.d[0] == 0x0000BBBBU);
+    CHECK(r.d[1] == 0x0000AAAAU);
+
+    s = m68000::registers{};
+    s.d[0] = 0x11111111U;
+    s.a[1] = 0x22222222U;
+    r = run_one(m, {0xC189U}, s); // EXG D0,A1
+    CHECK(r.d[0] == 0x22222222U);
+    CHECK(r.a[1] == 0x11111111U);
+}
+
+TEST_CASE("m68000 LEA loads the effective address") {
+    machine m;
+    m68000::registers s{};
+    s.a[0] = 0x00001000U;
+    const auto r = run_one(m, {0x43E8U, 0x0004U}, s); // LEA (4,A0),A1
+    CHECK(r.a[1] == 0x00001004U);
+}
+
+TEST_CASE("m68000 PEA pushes the effective address") {
+    machine m;
+    m68000::registers s{};
+    s.a[0] = 0x00002000U;
+    s.a[7] = 0x00003000U;
+    const auto r = run_one(m, {0x4850U}, s); // PEA (A0)
+    CHECK(r.a[7] == 0x00002FFCU);
+    CHECK(m.bus.read8(0x2FFEU) == 0x20U); // pushed $00002000
+    CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+}
+
+TEST_CASE("m68000 TAS tests and sets bit 7") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000000U;
+    const auto r = run_one(m, {0x4AC0U}, s); // TAS D0
+    CHECK((r.d[0] & 0xFFU) == 0x80U);
+    CHECK((r.sr & m68000::sr_z) != 0U); // the original (0) was tested
+}
+
+TEST_CASE("m68000 MOVEM round-trips registers through the stack") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0xAAAA0000U;
+    s.d[1] = 0xBBBB1111U;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x48E7U, 0xC000U}); // MOVEM.L D0/D1,-(A7)
+    m.cpu.step_instruction();
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.a[7] == 0x00002FF8U); // two longwords pushed
+
+    m.load(r.pc, {0x4CDFU, 0x000CU}); // MOVEM.L (A7)+,D2/D3
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.d[2] == 0xAAAA0000U); // restored from D0
+    CHECK(r.d[3] == 0xBBBB1111U); // restored from D1
+    CHECK(r.a[7] == 0x00003000U); // stack balanced
+}

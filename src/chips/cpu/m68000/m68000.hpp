@@ -136,6 +136,10 @@ namespace mnemos::chips::cpu {
         void flags_addx(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t x) noexcept;
         void flags_subx(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t x) noexcept;
         [[nodiscard]] static int popcount16(std::uint16_t v) noexcept;
+        // Packed-BCD add/sub with X propagation (shared by ABCD/SBCD/NBCD); sets the
+        // C/X/N/V flags and only clears Z (multi-precision), returning the BCD byte.
+        [[nodiscard]] std::uint8_t bcd_add(std::uint8_t dst, std::uint8_t src) noexcept;
+        [[nodiscard]] std::uint8_t bcd_sub(std::uint8_t dst, std::uint8_t src) noexcept;
 
         // ---- decode + instruction handlers ----
         void exec(std::uint16_t op);
