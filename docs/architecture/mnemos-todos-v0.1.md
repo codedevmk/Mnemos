@@ -366,7 +366,19 @@ data-gated (commercial-ROM goldens, the real ZEXALL run) — the code is complet
 
 ## M8 — Sega Genesis
 
-- [ ] Implement `chips::cpu::m68000` (full, passes available test suites).
+**Status:** Started. The 68000 CPU is being ported from the Emu reference (ADR 0006)
+phase by phase, each a tested green commit: **phase 1 (done)** is the functional core
+— chip contract (i_cpu, factory "motorola.68000"), the full register model (D0-7/A0-7/
+PC/SR/USP/SSP, 68000 CCR layout), big-endian 24-bit bus access over i_bus, all 14
+addressing modes, the MOVE/MOVEA/MOVEQ family with the N/Z/V/C flag model, and 4-clock-
+per-bus-cycle timing; instruction-stepped with a catch-up tick(). Remaining phases:
+arithmetic (ADD/SUB/CMP/MUL/DIV), logical/shift/bit, control flow + the exception
+framework (the cycle-accurate prefetch pipeline + address/bus errors + traps +
+interrupts), BCD/misc, then the Emu 743-check conformance vectors.
+
+- [~] Implement `chips::cpu::m68000` (full, passes available test suites). (phase 1:
+  functional core + 14 EA modes + MOVE family + flags + state; 11 unit tests. Later
+  phases add the rest of the instruction set, cycle-accurate prefetch, and exceptions)
 - [ ] Implement `chips::audio::ym2612`.
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).
