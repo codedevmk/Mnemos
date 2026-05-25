@@ -11,11 +11,131 @@
 namespace mnemos::chips::audio {
     namespace {
         // The YM2612 numbers its operator registers in "slot" order S1,S2,S3,S4 but
-        // wires them internally as S1,S3,S2,S4 -- every per-operator ($30-$9F) and
-        // key-on ($28) access is remapped through this table. Matches Nuked-OPN2.
+        // wires them internally as M1,C1,M2,C2 = S1,S3,S2,S4 -- every per-operator
+        // ($30-$9F), key-on ($28), and channel-3 special-mode ($A8) access is remapped
+        // through this table. Matches Nuked-OPN2 / MAME / the reference emulator.
         constexpr std::array<int, 4> op_map = {0, 2, 1, 3};
 
         constexpr double pi = 3.14159265358979323846;
+
+        // DT1 detune table (YM2608 Application Manual), indexed [kcode & 31][detune & 3].
+        // Hardware-exact values shared by MAME, BlastEm, and Nuked-OPN2.
+        constexpr std::uint8_t dt1_table[32][4] = {
+            {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 1, 2, 2},
+            {0, 1, 2, 3},   {0, 1, 2, 3},   {0, 1, 2, 3},   {0, 1, 2, 4},   {0, 1, 3, 4},
+            {0, 1, 3, 4},   {0, 1, 3, 5},   {0, 2, 4, 5},   {0, 2, 4, 6},   {0, 2, 4, 6},
+            {0, 2, 5, 7},   {0, 2, 5, 8},   {0, 3, 6, 8},   {0, 3, 6, 9},   {0, 3, 7, 10},
+            {0, 4, 8, 11},  {0, 4, 8, 12},  {0, 4, 9, 13},  {0, 5, 10, 14}, {0, 5, 11, 16},
+            {0, 6, 12, 17}, {0, 6, 13, 19}, {0, 7, 14, 20}, {0, 8, 16, 22}, {0, 8, 16, 22},
+            {0, 8, 16, 22}, {0, 8, 16, 22},
+        };
+
+        // LFO: samples between 7-bit counter ticks, indexed by the LFO frequency field.
+        constexpr std::array<std::uint8_t, 8> lfo_divider_table = {108, 77, 71, 67, 62, 44, 8, 5};
+
+        // Vibrato depth, indexed by PMS and the folded 3-bit LFO FM phase.
+        constexpr std::uint8_t lfo_pm_table[8][8] = {
+            {0, 0, 0, 0, 0, 0, 0, 0},       {0, 0, 0, 0, 4, 4, 4, 4},
+            {0, 0, 0, 4, 4, 4, 8, 8},       {0, 0, 4, 4, 8, 8, 12, 12},
+            {0, 0, 4, 8, 8, 8, 12, 16},     {0, 0, 8, 12, 16, 16, 20, 24},
+            {0, 0, 16, 24, 32, 32, 40, 48}, {0, 0, 32, 48, 64, 64, 80, 96},
+        };
+
+        // Envelope-rate increment pattern (Nemesis's hardware tests via MAME / the reference),
+        // indexed eg_pattern[eg_rate_select[rate]][(eg_cnt >> shift) & 7].
+        constexpr std::uint8_t eg_pattern[19][8] = {
+            {0, 1, 0, 1, 0, 1, 0, 1}, {0, 1, 0, 1, 1, 1, 0, 1}, {0, 1, 1, 1, 0, 1, 1, 1},
+            {0, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 2, 1, 1, 1, 2},
+            {1, 2, 1, 2, 1, 2, 1, 2}, {1, 2, 2, 2, 1, 2, 2, 2}, {2, 2, 2, 2, 2, 2, 2, 2},
+            {2, 2, 2, 4, 2, 2, 2, 4}, {2, 4, 2, 4, 2, 4, 2, 4}, {2, 4, 4, 4, 2, 4, 4, 4},
+            {4, 4, 4, 4, 4, 4, 4, 4}, {4, 4, 4, 8, 4, 4, 4, 8}, {4, 8, 4, 8, 4, 8, 4, 8},
+            {4, 8, 8, 8, 4, 8, 8, 8}, {8, 8, 8, 8, 8, 8, 8, 8}, {16, 16, 16, 16, 16, 16, 16, 16},
+            {0, 0, 0, 0, 0, 0, 0, 0},
+        };
+
+        constexpr std::array<std::uint8_t, 64> eg_rate_select = {
+            18, 18, 2, 3, 0, 1, 2, 3, 0, 1, 2,  3,  0,  1,  2,  3,  0,  1,  2,  3,  0, 1,
+            2,  3,  0, 1, 2, 3, 0, 1, 2, 3, 0,  1,  2,  3,  0,  1,  2,  3,  0,  1,  2, 3,
+            0,  1,  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 16, 16, 16,
+        };
+
+        // Log-sine (first quadrant folded across all four) and exp tables, built once
+        // at static init. sin_table: 10-bit phase -> 12-bit log-sin. exp_table:
+        // 2^(13 - i/256) -- converts the summed log attenuation back to linear.
+        const std::array<std::uint16_t, 1024> sin_table = [] {
+            std::array<std::uint16_t, 1024> t{};
+            for (std::size_t i = 0; i < 256; ++i) {
+                const double phase = (static_cast<double>(i) + 0.5) / 256.0 * (pi / 2.0);
+                double s = std::sin(phase);
+                if (s < 0.000001) {
+                    s = 0.000001;
+                }
+                auto v = static_cast<std::uint16_t>(-std::log2(s) * 256.0 + 0.5);
+                if (v > 0x0FFFU) {
+                    v = 0x0FFFU;
+                }
+                t[i] = v;
+            }
+            for (std::size_t i = 0; i < 256; ++i) {
+                t[256 + i] = t[255 - i]; // Q2 mirror
+                t[512 + i] = t[i];       // Q3 (sign handled separately)
+                t[768 + i] = t[255 - i]; // Q4 mirror
+            }
+            return t;
+        }();
+
+        const std::array<std::uint16_t, 1024> exp_table = [] {
+            std::array<std::uint16_t, 1024> t{};
+            for (std::size_t i = 0; i < 1024; ++i) {
+                const double e = std::pow(2.0, 13.0 - static_cast<double>(i) / 256.0);
+                t[i] = static_cast<std::uint16_t>(e + 0.5);
+            }
+            return t;
+        }();
+
+        // Hardware key-code: a full 5-bit KCODE from BLOCK + the top FNUM bits.
+        [[nodiscard]] std::uint8_t ym_kcode(std::uint8_t block, std::uint16_t fnum) noexcept {
+            const auto f11 = static_cast<unsigned>((fnum >> 10) & 1U);
+            const auto f10 = static_cast<unsigned>((fnum >> 9) & 1U);
+            const auto f9 = static_cast<unsigned>((fnum >> 8) & 1U);
+            const auto f8 = static_cast<unsigned>((fnum >> 7) & 1U);
+            const unsigned n3 = (f11 & (f10 | f9 | f8)) | ((f11 ^ 1U) & f10 & f9 & f8);
+            const unsigned note = (f11 << 1U) | n3;
+            return static_cast<std::uint8_t>(((static_cast<unsigned>(block) & 7U) << 2U) | note);
+        }
+
+        [[nodiscard]] std::uint8_t eg_step_for(std::uint8_t rate, std::uint32_t eg_cnt) noexcept {
+            return eg_pattern[eg_rate_select[rate & 0x3FU]][eg_cnt & 7U];
+        }
+
+        // EG counter right-shift for an effective rate: shift = 11 - (rate>>2) for
+        // rates 0-47, 0 for 48-63 (the pattern then runs at full eg-clock rate).
+        [[nodiscard]] std::uint8_t eg_rate_shift(std::uint8_t rate) noexcept {
+            return (rate < 48U) ? static_cast<std::uint8_t>(11U - (rate >> 2U)) : std::uint8_t{0};
+        }
+
+        // One EG increment for a rate at the current counter (0 when this clock is
+        // gated out by the rate's shift).
+        [[nodiscard]] std::uint8_t eg_get_inc(std::uint8_t rate, std::uint32_t eg_cnt) noexcept {
+            const std::uint8_t shift = eg_rate_shift(rate);
+            if (shift > 0U && (eg_cnt & ((1U << shift) - 1U)) != 0U) {
+                return 0U;
+            }
+            return eg_step_for(rate, eg_cnt >> shift);
+        }
+
+        // Effective rate = base*2 + key-scaled key-code, clamped to 63.
+        [[nodiscard]] int calc_rate(std::uint8_t base_rate, std::uint8_t kc,
+                                    std::uint8_t key_scale) noexcept {
+            if (base_rate == 0U) {
+                return 0;
+            }
+            int rate = base_rate * 2 + (kc >> (3U - key_scale));
+            if (rate > 63) {
+                rate = 63;
+            }
+            return rate;
+        }
     } // namespace
 
     chip_metadata ym2612::metadata() const noexcept {
@@ -32,8 +152,9 @@ namespace mnemos::chips::audio {
         if (!op.key_on) {
             op.key_on = true;
             op.phase = eg_phase::attack;
-            op.eg_level = 0x3FFU; // start silent; the attack ramps up (phase 2)
+            op.eg_level = 0x3FFU; // start silent; the attack ramps up
             op.pg_phase = 0U;     // restart the phase generator on key-on
+            op.ssg_inv = false;
         }
     }
 
@@ -64,6 +185,11 @@ namespace mnemos::chips::audio {
             case 0x22: // LFO enable + frequency
                 lfo_enable_ = ((value >> 3U) & 1U) != 0U;
                 lfo_freq_ = static_cast<std::uint8_t>(value & 7U);
+                if (!lfo_enable_) {
+                    lfo_counter_ = 0U;
+                    lfo_phase_ = 0U;
+                    lfo_divider_ = 0U;
+                }
                 break;
             case 0x24: // Timer A MSB (high 8 of 10 bits)
                 timer_a_load_ = static_cast<std::uint16_t>(
@@ -137,6 +263,7 @@ namespace mnemos::chips::audio {
             case 0x30: // DT1 / MUL
                 op.detune = static_cast<std::uint8_t>((value >> 4U) & 7U);
                 op.multiply = static_cast<std::uint8_t>(value & 0x0FU);
+                update_channel_freq(ch_idx);
                 break;
             case 0x40: // TL (total level)
                 op.total_level = static_cast<std::uint8_t>(value & 0x7FU);
@@ -179,6 +306,7 @@ namespace mnemos::chips::audio {
                 ch.fnum = static_cast<std::uint16_t>(
                     (static_cast<std::uint16_t>(ch.fnum_hi_latch & 0x07U) << 8U) | value);
                 ch.block = ch.block_latch;
+                update_channel_freq(ch_idx);
                 break;
             case 0xA4: // Frequency MSB + block -- latch only, applied on the next $A0
                 ch.fnum_hi_latch = static_cast<std::uint8_t>(value & 0x07U);
@@ -191,6 +319,9 @@ namespace mnemos::chips::audio {
                         (static_cast<std::uint16_t>(ch3_fnum_hi_latch_[slot] & 0x07U) << 8U) |
                         value);
                     ch3_block_[slot] = ch3_block_latch_[slot];
+                    if (ch3_mode_ != 0U) {
+                        update_channel_freq(2);
+                    }
                 }
                 break;
             case 0xAC: // Ch3 special-mode freq MSB -- latch only, applied on $A8
@@ -290,20 +421,444 @@ namespace mnemos::chips::audio {
         }
     }
 
-    ym2612::stereo_sample ym2612::step() noexcept {
-        // Phase 1: no FM synthesis yet -- the chip is silent. The output still runs
-        // through the analog low-pass so the filter state stays well-defined.
-        std::int32_t left = 0;
-        std::int32_t right = 0;
-        if (lp_alpha_q15_ != 0) {
-            lp_state_l_ += (lp_alpha_q15_ * (left - lp_state_l_)) >> 15;
-            lp_state_r_ += (lp_alpha_q15_ * (right - lp_state_r_)) >> 15;
-            left = lp_state_l_;
-            right = lp_state_r_;
+    // ------------------------------------------------------------------------
+    //  FM synthesis core
+    // ------------------------------------------------------------------------
+
+    std::uint32_t ym2612::calc_phase_inc_value(const operator_state& op, std::uint16_t fnum,
+                                               std::uint8_t block, std::uint8_t kc,
+                                               bool extra_precision) noexcept {
+        std::uint32_t inc = extra_precision ? ((static_cast<std::uint32_t>(fnum) << block) >> 2U)
+                                            : ((static_cast<std::uint32_t>(fnum) << block) >> 1U);
+        if (op.multiply == 0U) {
+            inc >>= 1U; // multiply field 0 means x0.5
+        } else {
+            inc *= static_cast<std::uint32_t>(op.multiply);
         }
-        last_left_ = static_cast<std::int16_t>(left);
-        last_right_ = static_cast<std::int16_t>(right);
+        const std::uint8_t dt = op.detune & 3U;
+        if (dt != 0U) {
+            const auto delta = static_cast<std::int32_t>(dt1_table[kc & 31U][dt]);
+            const auto signed_inc = static_cast<std::int32_t>(inc);
+            inc = static_cast<std::uint32_t>((op.detune & 4U) != 0U ? signed_inc - delta
+                                                                    : signed_inc + delta);
+        }
+        return inc & 0xFFFFFU;
+    }
+
+    std::uint32_t ym2612::calc_lfo_phase_inc(const operator_state& op, std::uint16_t fnum,
+                                             std::uint8_t block, std::uint8_t kc, std::uint8_t pms,
+                                             std::uint8_t lfo_counter) noexcept {
+        if (pms == 0U) {
+            return op.pg_increment;
+        }
+        const std::uint8_t lfo_high = static_cast<std::uint8_t>(lfo_counter >> 2U);
+        const std::uint8_t lfo_idx = (lfo_high & 0x08U) == 0U
+                                         ? static_cast<std::uint8_t>(lfo_high & 0x07U)
+                                         : static_cast<std::uint8_t>(7U - (lfo_high & 0x07U));
+        const auto multiplier = static_cast<std::uint16_t>(lfo_pm_table[pms][lfo_idx]);
+        std::uint16_t delta = 0U;
+        for (unsigned bit = 4; bit <= 10; ++bit) {
+            if ((fnum & (1U << bit)) != 0U) {
+                delta = static_cast<std::uint16_t>(delta + (multiplier >> (10U - bit)));
+            }
+        }
+        auto fm_fnum = static_cast<std::uint16_t>(fnum << 1U);
+        if ((lfo_high & 0x10U) != 0U) {
+            fm_fnum = static_cast<std::uint16_t>((fm_fnum - delta) & 0x0FFFU);
+        } else {
+            fm_fnum = static_cast<std::uint16_t>((fm_fnum + delta) & 0x0FFFU);
+        }
+        return calc_phase_inc_value(op, fm_fnum, block, kc, true);
+    }
+
+    bool ym2612::ssg_output_inverted(const operator_state& op) noexcept {
+        if ((op.ssg_eg & 0x08U) == 0U || !op.key_on) {
+            return false;
+        }
+        return op.ssg_inv != ((op.ssg_eg & 0x04U) != 0U);
+    }
+
+    std::uint16_t ym2612::ssg_eg_inc(const operator_state& op, std::uint8_t inc) noexcept {
+        if ((op.ssg_eg & 0x08U) == 0U) {
+            return inc;
+        }
+        if (op.eg_level >= 0x200U) {
+            return 0U;
+        }
+        return static_cast<std::uint16_t>(inc << 2U);
+    }
+
+    void ym2612::ssg_boundary_step(operator_state& op) noexcept {
+        if ((op.ssg_eg & 0x08U) == 0U || op.eg_level < 0x200U) {
+            return;
+        }
+        const bool hold = (op.ssg_eg & 0x01U) != 0U;
+        const bool alternate = (op.ssg_eg & 0x02U) != 0U;
+        if (alternate) {
+            op.ssg_inv = hold ? true : !op.ssg_inv;
+        }
+        if (!alternate && !hold) {
+            op.pg_phase = 0U;
+        }
+        if (!op.key_on) {
+            op.eg_level = 0x3FFU;
+            op.phase = eg_phase::off;
+            return;
+        }
+        if (!hold) {
+            op.phase = eg_phase::attack;
+            op.eg_level = 1023U;
+            return;
+        }
+        if (op.phase != eg_phase::attack && !ssg_output_inverted(op)) {
+            op.eg_level = 0x3FFU;
+        }
+    }
+
+    void ym2612::eg_step(operator_state& op, std::uint8_t kc, std::uint32_t eg_cnt) noexcept {
+        ssg_boundary_step(op);
+
+        switch (op.phase) {
+        case eg_phase::attack: {
+            const int rate = calc_rate(op.attack_rate, kc, op.key_scale);
+            if (rate >= 62) {
+                op.eg_level = 0U; // instant attack
+                op.phase = eg_phase::decay;
+                return;
+            }
+            if (rate > 0 && op.eg_level > 0U) {
+                const std::uint8_t inc = eg_get_inc(static_cast<std::uint8_t>(rate), eg_cnt);
+                if (inc != 0U) {
+                    // Hardware exponential convergence: level += (~level * inc) >> 4.
+                    const auto level = static_cast<std::int32_t>(op.eg_level);
+                    op.eg_level = static_cast<std::uint16_t>(
+                        level + (((~level) * static_cast<std::int32_t>(inc)) >> 4));
+                    if (static_cast<std::int16_t>(op.eg_level) <= 0) {
+                        op.eg_level = 0U;
+                        op.phase = eg_phase::decay;
+                    }
+                }
+            }
+            break;
+        }
+        case eg_phase::decay: {
+            const int rate = calc_rate(op.decay_rate, kc, op.key_scale);
+            const std::uint16_t sl_threshold =
+                (op.sustain_level == 15U) ? 1023U
+                                          : static_cast<std::uint16_t>(op.sustain_level * 32U);
+            if (rate > 0) {
+                const std::uint16_t inc = ssg_eg_inc(
+                    op, eg_get_inc(static_cast<std::uint8_t>(rate < 63 ? rate : 63), eg_cnt));
+                op.eg_level = static_cast<std::uint16_t>(op.eg_level + inc);
+            }
+            if (op.eg_level >= sl_threshold) {
+                op.eg_level = sl_threshold;
+                op.phase = eg_phase::sustain;
+            }
+            if (op.eg_level > 1023U) {
+                op.eg_level = 1023U;
+            }
+            break;
+        }
+        case eg_phase::sustain: {
+            const int rate = calc_rate(op.sustain_rate, kc, op.key_scale);
+            if (rate > 0) {
+                const std::uint16_t inc = ssg_eg_inc(
+                    op, eg_get_inc(static_cast<std::uint8_t>(rate < 63 ? rate : 63), eg_cnt));
+                op.eg_level = static_cast<std::uint16_t>(op.eg_level + inc);
+            }
+            if (op.eg_level > 1023U) {
+                op.eg_level = 1023U;
+            }
+            break;
+        }
+        case eg_phase::release: {
+            const int rate =
+                calc_rate(static_cast<std::uint8_t>(op.release_rate * 2U + 1U), kc, op.key_scale);
+            if (rate > 0) {
+                const std::uint16_t inc = ssg_eg_inc(
+                    op, eg_get_inc(static_cast<std::uint8_t>(rate < 63 ? rate : 63), eg_cnt));
+                op.eg_level = static_cast<std::uint16_t>(op.eg_level + inc);
+            }
+            if (op.eg_level >= 1023U) {
+                op.eg_level = 1023U;
+                op.phase = eg_phase::off;
+            }
+            break;
+        }
+        case eg_phase::off:
+            op.eg_level = 1023U;
+            break;
+        }
+    }
+
+    std::int32_t ym2612::op_calc(operator_state& op, std::int32_t modulation,
+                                 std::uint32_t am_offset) noexcept {
+        std::uint16_t eg = op.eg_level;
+        if (ssg_output_inverted(op)) {
+            eg = static_cast<std::uint16_t>((0x200U - eg) & 0x3FFU);
+        }
+        std::uint32_t atten = (static_cast<std::uint32_t>(op.total_level) << 3U) + eg;
+        if (op.am_enable) {
+            atten += am_offset;
+        }
+        if (atten >= 1024U) {
+            return 0; // fully silent
+        }
+        std::uint32_t phase = (op.pg_phase >> 10U) & 0x3FFU;
+        phase = (phase + (static_cast<std::uint32_t>((modulation >> 1) & 0x3FF))) & 0x3FFU;
+        const std::uint16_t log_sin = sin_table[phase & 0x3FFU];
+        const std::uint32_t total_log = log_sin + (atten << 2U);
+        if (total_log >= 4096U) {
+            return 0;
+        }
+        // exp_table spans 4 octaves per 1024-block, so the octave shift is x4.
+        std::int32_t linear = exp_table[total_log & 0x3FFU] >> ((total_log >> 10U) << 2U);
+        if (phase >= 512U) {
+            linear = -linear; // second half of the sine is negative
+        }
+        return linear;
+    }
+
+    void ym2612::update_channel_freq(int ch_idx) noexcept {
+        channel_state& ch = ch_[static_cast<std::size_t>(ch_idx)];
+        const std::uint8_t kc = ym_kcode(ch.block, ch.fnum);
+        for (int i = 0; i < operator_count; ++i) {
+            std::uint16_t fn = ch.fnum;
+            std::uint8_t bl = ch.block;
+            std::uint8_t op_kc = kc;
+            if (ch_idx == 2 && ch3_mode_ != 0U && i < 3) {
+                const auto slot = static_cast<std::size_t>(op_map[static_cast<std::size_t>(i)]);
+                fn = ch3_fnum_[slot];
+                bl = ch3_block_[slot];
+                op_kc = ym_kcode(bl, fn);
+            }
+            auto& op = ch.op[static_cast<std::size_t>(i)];
+            op.pg_increment = calc_phase_inc_value(op, fn, bl, op_kc, false);
+        }
+    }
+
+    void ym2612::lfo_tick() noexcept {
+        if (!lfo_enable_) {
+            lfo_counter_ = 0U;
+            lfo_phase_ = 0U;
+            lfo_divider_ = 0U;
+            return;
+        }
+        ++lfo_divider_;
+        if (lfo_divider_ >= lfo_divider_table[lfo_freq_]) {
+            lfo_divider_ = 0U;
+            lfo_counter_ = static_cast<std::uint8_t>((lfo_counter_ + 1U) & 0x7FU);
+        }
+        lfo_phase_ = lfo_counter_;
+    }
+
+    std::uint32_t ym2612::lfo_am_offset(std::uint8_t ams) const noexcept {
+        if (ams == 0U) {
+            return 0U;
+        }
+        std::uint32_t lfo_am = (lfo_counter_ & 0x40U) == 0U
+                                   ? (0x3FU - (static_cast<std::uint32_t>(lfo_counter_) & 0x3FU))
+                                   : (static_cast<std::uint32_t>(lfo_counter_) & 0x3FU);
+        lfo_am <<= 1U;
+        switch (ams) {
+        case 1:
+            return lfo_am >> 3U;
+        case 2:
+            return lfo_am >> 1U;
+        default:
+            return lfo_am;
+        }
+    }
+
+    std::int32_t ym2612::channel_calc(int ch_idx, std::uint32_t am_offset) noexcept {
+        channel_state& ch = ch_[static_cast<std::size_t>(ch_idx)];
+        auto& op = ch.op;
+        const std::uint8_t kc = ym_kcode(ch.block, ch.fnum);
+
+        // Feedback on operator 0. op_calc applies modulation>>1 to all inputs, so the
+        // feedback is pre-shifted left 1 to give a net (prev+cur) >> (10 - FB).
+        std::int32_t fb = 0;
+        if (ch.feedback > 0U) {
+            fb = ((op[0].prev_output + op[0].output) >> (10 - ch.feedback)) << 1;
+        }
+
+        // Advance every operator's phase (with PM vibrato).
+        for (int i = 0; i < operator_count; ++i) {
+            std::uint16_t fn = ch.fnum;
+            std::uint8_t bl = ch.block;
+            std::uint8_t op_kc = kc;
+            if (ch_idx == 2 && ch3_mode_ != 0U && i < 3) {
+                const auto slot = static_cast<std::size_t>(op_map[static_cast<std::size_t>(i)]);
+                fn = ch3_fnum_[slot];
+                bl = ch3_block_[slot];
+                op_kc = ym_kcode(bl, fn);
+            }
+            auto& o = op[static_cast<std::size_t>(i)];
+            const std::uint32_t inc = calc_lfo_phase_inc(o, fn, bl, op_kc, ch.pms, lfo_counter_);
+            o.pg_phase = (o.pg_phase + inc) & 0xFFFFFU;
+        }
+
+        const std::int32_t m1 = op_calc(op[0], fb, am_offset);
+        op[0].prev_output = op[0].output;
+        op[0].output = m1;
+
+        std::int32_t c1 = 0;
+        std::int32_t m2 = 0;
+        std::int32_t c2 = 0;
+        std::int32_t out = 0;
+        switch (ch.algorithm) {
+        case 0: // M1->C1->M2->C2 | C2
+            c1 = op_calc(op[1], m1, am_offset);
+            m2 = op_calc(op[2], c1, am_offset);
+            c2 = op_calc(op[3], m2, am_offset);
+            out = c2;
+            break;
+        case 1: // (M1+C1)->M2->C2 | C2
+            c1 = op_calc(op[1], 0, am_offset);
+            m2 = op_calc(op[2], m1 + c1, am_offset);
+            c2 = op_calc(op[3], m2, am_offset);
+            out = c2;
+            break;
+        case 2: // (C1 + M1->M2)->C2 | C2
+            c1 = op_calc(op[1], 0, am_offset);
+            m2 = op_calc(op[2], m1, am_offset);
+            c2 = op_calc(op[3], c1 + m2, am_offset);
+            out = c2;
+            break;
+        case 3: // (M1->C1 + M2)->C2 | C2
+            c1 = op_calc(op[1], m1, am_offset);
+            m2 = op_calc(op[2], 0, am_offset);
+            c2 = op_calc(op[3], c1 + m2, am_offset);
+            out = c2;
+            break;
+        case 4: // M1->C1, M2->C2 | C1+C2
+            c1 = op_calc(op[1], m1, am_offset);
+            m2 = op_calc(op[2], 0, am_offset);
+            c2 = op_calc(op[3], m2, am_offset);
+            out = c1 + c2;
+            break;
+        case 5: // M1->(C1+M2+C2) | C1+M2+C2
+            c1 = op_calc(op[1], m1, am_offset);
+            m2 = op_calc(op[2], m1, am_offset);
+            c2 = op_calc(op[3], m1, am_offset);
+            out = c1 + m2 + c2;
+            break;
+        case 6: // M1->C1, M2, C2 | C1+M2+C2
+            c1 = op_calc(op[1], m1, am_offset);
+            m2 = op_calc(op[2], 0, am_offset);
+            c2 = op_calc(op[3], 0, am_offset);
+            out = c1 + m2 + c2;
+            break;
+        case 7: // M1, C1, M2, C2 | M1+C1+M2+C2
+            c1 = op_calc(op[1], 0, am_offset);
+            m2 = op_calc(op[2], 0, am_offset);
+            c2 = op_calc(op[3], 0, am_offset);
+            out = m1 + c1 + m2 + c2;
+            break;
+        default:
+            out = 0;
+            break;
+        }
+        return out;
+    }
+
+    namespace {
+        // Analog-amp-style hyperbolic soft clip: identity below |T|, asymptotic to the
+        // int16 limit above it (avoids hard-clip tearing on hot mixes).
+        [[nodiscard]] std::int32_t soft_clip(std::int32_t v) noexcept {
+            constexpr std::int32_t t = 25000;
+            constexpr std::int32_t r = 32767 - t;
+            if (v > t) {
+                const std::int32_t e = v - t;
+                return t + static_cast<std::int32_t>((static_cast<std::int64_t>(r) * e) / (e + r));
+            }
+            if (v < -t) {
+                const std::int32_t e = -t - v;
+                return -t - static_cast<std::int32_t>((static_cast<std::int64_t>(r) * e) / (e + r));
+            }
+            return v;
+        }
+    } // namespace
+
+    ym2612::stereo_sample ym2612::step() noexcept {
+        std::int32_t left_acc = 0;
+        std::int32_t right_acc = 0;
+
+        // CSM: a Timer A overflow keyed CH3 on last sample; key it off now.
+        if (csm_key_pending_) {
+            for (auto& op : ch_[2].op) {
+                eg_key_off(op);
+            }
+            csm_key_pending_ = false;
+        }
+
+        lfo_tick();
+
+        // The envelope generator advances once per 3 FM samples (hardware-verified).
+        // The 12-bit EG clock skips the all-zero value, so it wraps to 1.
+        bool eg_advance = false;
+        if (++eg_timer_ >= 3U) {
+            eg_timer_ = 0U;
+            if (++eg_clock_ >= 4096U) {
+                eg_clock_ = 1U;
+            }
+            eg_advance = true;
+        }
+
+        for (int i = 0; i < channel_count; ++i) {
+            channel_state& ch = ch_[static_cast<std::size_t>(i)];
+            if (eg_advance) {
+                const std::uint8_t kc = ym_kcode(ch.block, ch.fnum);
+                for (int j = 0; j < operator_count; ++j) {
+                    std::uint8_t op_kc = kc;
+                    if (i == 2 && ch3_mode_ != 0U && j < 3) {
+                        const auto slot =
+                            static_cast<std::size_t>(op_map[static_cast<std::size_t>(j)]);
+                        op_kc = ym_kcode(ch3_block_[slot], ch3_fnum_[slot]);
+                    }
+                    eg_step(ch.op[static_cast<std::size_t>(j)], op_kc, eg_clock_);
+                }
+            }
+
+            // Always run channel_calc so phases advance every sample; ch6 overrides
+            // with the DAC value when enabled (centred on 128, scaled to the FM range).
+            const std::int32_t fm_out = channel_calc(i, lfo_am_offset(ch.ams));
+            const std::int32_t out = (i == 5 && dac_enable_)
+                                         ? ((static_cast<std::int32_t>(dac_data_) - 128) << 6)
+                                         : fm_out;
+            if (ch.left) {
+                left_acc += out;
+            }
+            if (ch.right) {
+                right_acc += out;
+            }
+        }
+
+        left_acc = soft_clip(left_acc);
+        right_acc = soft_clip(right_acc);
+        left_acc = std::clamp(left_acc, -32768, 32767);
+        right_acc = std::clamp(right_acc, -32768, 32767);
+
+        if (lp_alpha_q15_ != 0) {
+            lp_state_l_ += (lp_alpha_q15_ * (left_acc - lp_state_l_)) >> 15;
+            lp_state_r_ += (lp_alpha_q15_ * (right_acc - lp_state_r_)) >> 15;
+            left_acc = lp_state_l_;
+            right_acc = lp_state_r_;
+        }
+
+        last_left_ = static_cast<std::int16_t>(left_acc);
+        last_right_ = static_cast<std::int16_t>(right_acc);
         return {last_left_, last_right_};
+    }
+
+    void ym2612::update(std::span<std::int16_t> out) noexcept {
+        const std::size_t frames = out.size() / 2U;
+        for (std::size_t s = 0; s < frames; ++s) {
+            const stereo_sample sample = step();
+            out[s * 2U + 0U] = sample.left;
+            out[s * 2U + 1U] = sample.right;
+        }
     }
 
     void ym2612::set_lowpass_cutoff_hz(int sample_rate_hz, int cutoff_hz) noexcept {
@@ -340,6 +895,13 @@ namespace mnemos::chips::audio {
         const std::int32_t saved_alpha = lp_alpha_q15_;
 
         ch_ = {};
+        // Power-on default: every channel routes to both speakers (operators stay at
+        // eg_level 1023 / EG_OFF via the operator_state member initializers, so the
+        // chip is silent until a voice is programmed and keyed on).
+        for (auto& ch : ch_) {
+            ch.left = true;
+            ch.right = true;
+        }
         ch3_fnum_ = {};
         ch3_block_ = {};
         ch3_fnum_hi_latch_ = {};
@@ -349,6 +911,11 @@ namespace mnemos::chips::audio {
         dac_data_ = 0U;
         lfo_enable_ = false;
         lfo_freq_ = 0U;
+        lfo_counter_ = 0U;
+        lfo_phase_ = 0U;
+        lfo_divider_ = 0U;
+        eg_timer_ = 0U;
+        eg_clock_ = 0U;
         timer_a_load_ = 0U;
         timer_a_cnt_ = 0U;
         timer_b_load_ = 0U;
@@ -392,6 +959,9 @@ namespace mnemos::chips::audio {
                 writer.u32(op.pg_phase);
                 writer.u32(op.pg_increment);
                 writer.u16(op.eg_level);
+                writer.u32(static_cast<std::uint32_t>(op.output));
+                writer.u32(static_cast<std::uint32_t>(op.prev_output));
+                writer.boolean(op.ssg_inv);
             }
             writer.u16(ch.fnum);
             writer.u8(ch.block);
@@ -415,6 +985,11 @@ namespace mnemos::chips::audio {
         writer.u8(dac_data_);
         writer.boolean(lfo_enable_);
         writer.u8(lfo_freq_);
+        writer.u8(lfo_counter_);
+        writer.u8(lfo_phase_);
+        writer.u8(lfo_divider_);
+        writer.u8(eg_timer_);
+        writer.u32(eg_clock_);
         writer.u16(timer_a_load_);
         writer.u16(timer_a_cnt_);
         writer.u8(timer_b_load_);
@@ -458,6 +1033,9 @@ namespace mnemos::chips::audio {
                 op.pg_phase = reader.u32();
                 op.pg_increment = reader.u32();
                 op.eg_level = reader.u16();
+                op.output = static_cast<std::int32_t>(reader.u32());
+                op.prev_output = static_cast<std::int32_t>(reader.u32());
+                op.ssg_inv = reader.boolean();
             }
             ch.fnum = reader.u16();
             ch.block = reader.u8();
@@ -481,6 +1059,11 @@ namespace mnemos::chips::audio {
         dac_data_ = reader.u8();
         lfo_enable_ = reader.boolean();
         lfo_freq_ = reader.u8();
+        lfo_counter_ = reader.u8();
+        lfo_phase_ = reader.u8();
+        lfo_divider_ = reader.u8();
+        eg_timer_ = reader.u8();
+        eg_clock_ = reader.u32();
         timer_a_load_ = reader.u16();
         timer_a_cnt_ = reader.u16();
         timer_b_load_ = reader.u8();

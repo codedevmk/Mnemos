@@ -14,17 +14,23 @@ namespace mnemos::chips::audio {
     // (8-bit PCM), two programmable timers, and stereo panning. Ported from the Emu
     // reference core (ADR 0006).
     //
-    // Built in phases. THIS phase is the control plane: the full register file (every
-    // $20-$B6 register decoded into the operator/channel parameter state), the two
-    // timers (Timer A 10-bit / Timer B 8-bit with the chip-accurate master-clock
-    // cadence, overflow flags, and the status register), the channel-6 DAC, the
-    // LFO/key-on latches, stereo routing, and save/load. The FM tone generation
-    // (phase + envelope + algorithm mixing into stereo samples) arrives in phase 2;
-    // until then the sample output is silence.
+    // The control plane: the full register file (every $20-$B6 register decoded into
+    // the operator/channel parameter state), the two timers (Timer A 10-bit / Timer B
+    // 8-bit with the chip-accurate master-clock cadence, overflow flags, and the
+    // status register), the channel-6 DAC, the LFO/key-on latches, stereo routing,
+    // and save/load.
+    //
+    // The synthesis core: the phase generator (fnum/block/detune/multiply with LFO
+    // vibrato), the per-operator envelope generator (attack/decay/sustain/release with
+    // key-scaling and SSG-EG), the eight FM algorithms with operator-0 feedback, LFO
+    // tremolo, and the log-sine/exp output pipeline -- mixed per channel, soft-clipped,
+    // and run through the analog low-pass into stereo samples. Built from the canonical
+    // Nuked-OPN2 / MAME / the reference emulator model (hardware-verified tables).
     //
     // tick(cycles) advances the timer prescalers by that many YM master clocks; games
-    // poll read_status() for timer overflow. write() takes the two-port address/data
-    // protocol the 68000 and Z80 drive.
+    // poll read_status() for timer overflow. step()/update() render audio (one stereo
+    // sample per 1008 master clocks). write() takes the two-port address/data protocol
+    // the 68000 and Z80 drive.
     class ym2612 final : public iaudio_synth {
       public:
         static constexpr int channel_count = 6;
@@ -63,9 +69,12 @@ namespace mnemos::chips::audio {
         bool tick_timers_master(std::uint32_t master_clocks) noexcept;
 
         // Generate one stereo output sample (the chip emits one sample every 144
-        // master clocks). Phase 1 produces silence -- the FM tone generation lands
-        // in phase 2; until then this exists so the audio path has its shape.
+        // master clocks): advances the LFO and envelope generators, runs all six
+        // channels' FM algorithms (channel 6 may be the DAC), soft-clips the mix,
+        // and applies the analog low-pass.
         [[nodiscard]] stereo_sample step() noexcept;
+        // Render out.size()/2 interleaved stereo frames (L,R,L,R,...).
+        void update(std::span<std::int16_t> out) noexcept;
         [[nodiscard]] stereo_sample last_sample() const noexcept {
             return {last_left_, last_right_};
         }
@@ -106,10 +115,13 @@ namespace mnemos::chips::audio {
             std::uint8_t ssg_eg{};
             bool key_on{};
             eg_phase phase{eg_phase::off};
-            // Synthesis state (driven by phase 2; saved for completeness).
-            std::uint32_t pg_phase{};
-            std::uint32_t pg_increment{};
-            std::uint16_t eg_level{0x3FFU};
+            // Synthesis state.
+            std::uint32_t pg_phase{};       // 20-bit phase accumulator
+            std::uint32_t pg_increment{};   // per-sample phase delta (from freq/detune/mul)
+            std::uint16_t eg_level{0x3FFU}; // envelope attenuation (0=loud, 1023=silent)
+            std::int32_t output{};          // last operator output (feedback source)
+            std::int32_t prev_output{};     // output one sample earlier (feedback source)
+            bool ssg_inv{};                 // SSG-EG inversion latch
         };
 
         struct channel_state final {
@@ -132,6 +144,29 @@ namespace mnemos::chips::audio {
         static void eg_key_on(operator_state& op) noexcept;
         static void eg_key_off(operator_state& op) noexcept;
 
+        // ---- FM synthesis (phase 2) ----
+        // Recompute every operator's phase increment for a channel from its current
+        // frequency/detune/multiply (and the channel-3 per-operator frequencies).
+        void update_channel_freq(int ch_idx) noexcept;
+        // Mix one channel's operators per its FM algorithm for the current sample.
+        [[nodiscard]] std::int32_t channel_calc(int ch_idx, std::uint32_t am_offset) noexcept;
+        void lfo_tick() noexcept;
+        [[nodiscard]] std::uint32_t lfo_am_offset(std::uint8_t ams) const noexcept;
+        [[nodiscard]] static std::uint32_t calc_phase_inc_value(const operator_state& op,
+                                                                std::uint16_t fnum,
+                                                                std::uint8_t block, std::uint8_t kc,
+                                                                bool extra_precision) noexcept;
+        [[nodiscard]] static std::uint32_t
+        calc_lfo_phase_inc(const operator_state& op, std::uint16_t fnum, std::uint8_t block,
+                           std::uint8_t kc, std::uint8_t pms, std::uint8_t lfo_counter) noexcept;
+        [[nodiscard]] static bool ssg_output_inverted(const operator_state& op) noexcept;
+        [[nodiscard]] static std::uint16_t ssg_eg_inc(const operator_state& op,
+                                                      std::uint8_t inc) noexcept;
+        static void ssg_boundary_step(operator_state& op) noexcept;
+        static void eg_step(operator_state& op, std::uint8_t kc, std::uint32_t eg_cnt) noexcept;
+        [[nodiscard]] static std::int32_t op_calc(operator_state& op, std::int32_t modulation,
+                                                  std::uint32_t am_offset) noexcept;
+
         std::array<channel_state, channel_count> ch_{};
 
         std::array<std::uint16_t, 4> ch3_fnum_{};
@@ -145,6 +180,12 @@ namespace mnemos::chips::audio {
 
         bool lfo_enable_{};
         std::uint8_t lfo_freq_{};
+        std::uint8_t lfo_counter_{}; // 7-bit LFO step counter
+        std::uint8_t lfo_phase_{};
+        std::uint8_t lfo_divider_{}; // sub-counter gating lfo_counter_ steps
+
+        std::uint8_t eg_timer_{};  // /3 prescaler: EG advances once per 3 samples
+        std::uint32_t eg_clock_{}; // 12-bit envelope-generator clock
 
         std::uint16_t timer_a_load_{};
         std::uint16_t timer_a_cnt_{};

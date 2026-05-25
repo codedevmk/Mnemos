@@ -403,16 +403,23 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   in turn unlock the prefetch/cycle-exact Emu/ProcessorTests conformance vectors (the
   functional core's PC is the logical next-instruction address, not the prefetch-ahead
   value those vectors check, so that harness waits on the prefetch refactor))
-- [~] Implement `chips::audio::ym2612`. (phase 1 DONE — the control plane: chip
-  contract (iaudio_synth, factory "yamaha.ym2612"), the full $20-$B6 register file
-  decoded into the 6-channel/4-operator parameter state (the S1,S3,S2,S4 slot remap,
-  the A4/A0 frequency-latch protocol, the channel-3 per-operator freq mode, key-on/off,
-  feedback/algorithm, stereo + LFO sensitivity), the two timers (Timer A 10-bit at 1008
-  master clocks, Timer B 8-bit at 16128, overflow flags + status + IRQ + the $27
-  reset/run/enable bits + CSM force-key), the channel-6 DAC, the analog-output low-pass,
-  and save/load; 12 tests / 48 assertions, all green. FM tone generation (phase + ADSR
-  envelope + SSG-EG + algorithm mixing into stereo samples) is phase 2 — until then
-  step() outputs silence)
+- [x] Implement `chips::audio::ym2612`. (DONE in two phases.
+  Phase 1 — the control plane: chip contract (iaudio_synth, factory "yamaha.ym2612"),
+  the full $20-$B6 register file decoded into the 6-channel/4-operator parameter state
+  (the S1,S3,S2,S4 slot remap, the A4/A0 frequency-latch protocol, the channel-3
+  per-operator freq mode, key-on/off, feedback/algorithm, stereo + LFO sensitivity),
+  the two timers (Timer A 10-bit at 1008 master clocks, Timer B 8-bit at 16128, overflow
+  flags + status + IRQ + the $27 reset/run/enable bits + CSM force-key), the channel-6
+  DAC, the analog-output low-pass, and save/load.
+  Phase 2 — the FM synthesis core: the phase generator (fnum/block + hardware DT1 detune
+  + multiply, LFO vibrato), the per-operator envelope generator (attack/decay/sustain/
+  release with key-scaling + SSG-EG, hardware eg_pattern/eg_rate_select tables, /3 EG
+  clock), the 8 FM algorithms with operator-0 feedback, LFO tremolo, the log-sine/exp
+  output pipeline, per-channel mixing with the channel-6 DAC override, hyperbolic
+  soft-clip, and the stereo low-pass; step()/update() render audio. Built from the
+  canonical Nuked-OPN2 / MAME / the reference emulator model. 18 tests / 61 assertions, green;
+  full ctest suite green (32 tests). Deferred accuracy: cycle-exact per-operator update
+  ordering vs the conformance vectors awaits a real Genesis ROM to validate against)
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).
 - [ ] Implement `chips::video::vdp_315_5313` (Genesis VDP).
