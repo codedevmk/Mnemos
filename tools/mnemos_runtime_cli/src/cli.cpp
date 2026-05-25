@@ -64,6 +64,7 @@ namespace mnemos::tools {
                "  --rom-dir <dir>     directory holding the manifest's ROM files\n"
                "  --disk <file>       .d64 disk image to mount on drive 8\n"
                "  --drive-rom <file>  16K 1541 DOS ROM -> use the cycle-accurate drive 8\n"
+               "  --cart <file>       .crt cartridge image to insert\n"
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
@@ -98,6 +99,11 @@ namespace mnemos::tools {
                     return false;
                 }
                 out.drive_rom = value;
+            } else if (arg == "--cart") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                out.cart = value;
             } else if (arg == "--frames") {
                 if (!take_value(argc, argv, i, arg, value, err)) {
                     return false;
@@ -223,6 +229,21 @@ namespace mnemos::tools {
 
         auto sys =
             manifests::c64::assemble_c64(std::move(basic), std::move(kernal), std::move(chargen));
+
+        // Insert the cartridge before reset so an ultimax/16K cart's vectors apply.
+        if (!options.cart.empty()) {
+            const auto crt = read_file(options.cart);
+            if (!crt) {
+                err << "error: cannot read cartridge " << options.cart.string() << "\n";
+                return 6;
+            }
+            if (!sys->cart.load_crt(*crt)) {
+                err << "error: " << options.cart.string() << " is not a valid .crt\n";
+                return 6;
+            }
+            out << "inserted cartridge " << options.cart.string() << "\n";
+        }
+
         sys->cpu.reset(chips::reset_kind::power_on);
         sys->cia1.reset(chips::reset_kind::power_on);
         sys->cia2.reset(chips::reset_kind::power_on);
@@ -281,7 +302,7 @@ namespace mnemos::tools {
             t.master_cycle = master_cycle;
             t.chips = {{"cpu", &sys->cpu},   {"video", &sys->vic}, {"audio", &sys->sid},
                        {"cia1", &sys->cia1}, {"cia2", &sys->cia2}, {"pla", &sys->pla},
-                       {"drive8", drive}};
+                       {"cart", &sys->cart}, {"drive8", drive}};
             t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
                         {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};
             return t;

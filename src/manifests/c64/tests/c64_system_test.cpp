@@ -171,3 +171,44 @@ TEST_CASE("assemble_c64 routes the paddle mux to the SID POTs", "[c64][input]") 
     CHECK(sys->sid.read(0x19U) == 0x33U);
     CHECK(sys->sid.read(0x1AU) == 0x44U);
 }
+
+TEST_CASE("assemble_c64 maps an inserted cartridge's ROML at $8000", "[c64][cart]") {
+    auto sys = make_c64();
+
+    // Minimal 8K generic .crt: EXROM low (asserted), GAME high; ROML[0] = 0x4C.
+    std::vector<std::uint8_t> crt;
+    const char* magic = "C64 CARTRIDGE   ";
+    crt.insert(crt.end(), magic, magic + 16);
+    const auto be32 = [&](std::uint32_t x) {
+        crt.push_back(static_cast<std::uint8_t>(x >> 24U));
+        crt.push_back(static_cast<std::uint8_t>((x >> 16U) & 0xFFU));
+        crt.push_back(static_cast<std::uint8_t>((x >> 8U) & 0xFFU));
+        crt.push_back(static_cast<std::uint8_t>(x & 0xFFU));
+    };
+    const auto be16 = [&](std::uint16_t x) {
+        crt.push_back(static_cast<std::uint8_t>(x >> 8U));
+        crt.push_back(static_cast<std::uint8_t>(x & 0xFFU));
+    };
+    be32(0x40U);
+    be16(0x0100U);
+    be16(0U);          // generic
+    crt.push_back(0U); // EXROM low
+    crt.push_back(1U); // GAME high
+    crt.insert(crt.end(), 6U + 32U, 0U);
+    const char* cm = "CHIP";
+    crt.insert(crt.end(), cm, cm + 4);
+    be32(0x10U + 0x2000U);
+    be16(0U);
+    be16(0U);
+    be16(0x8000U);
+    be16(0x2000U);
+    std::vector<std::uint8_t> rom(0x2000U, 0U);
+    rom[0] = 0x4CU;
+    crt.insert(crt.end(), rom.begin(), rom.end());
+
+    REQUIRE(sys->cart.load_crt(crt));
+    sys->cpu.reset(reset_kind::power_on);
+
+    CHECK(sys->bus.read8(0x8000U) == 0x4CU); // cartridge ROML, decoded by the PLA
+    CHECK(sys->bus.read8(0x8001U) == 0x00U);
+}

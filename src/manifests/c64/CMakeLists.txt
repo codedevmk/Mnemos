@@ -23,6 +23,7 @@ target_link_libraries(
         mnemos::chips::audio::sid_6581
         mnemos::chips::bus_controller::cia_6526
         mnemos::chips::mapper::c64_pla
+        mnemos::chips::mapper::c64_cartridge
         mnemos::chips::storage::c1541
 )
 

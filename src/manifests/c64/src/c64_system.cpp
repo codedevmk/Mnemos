@@ -92,11 +92,12 @@ namespace mnemos::manifests::c64 {
         };
         s->cia2.configure(cia2_cfg);
 
-        // The PLA decode reads the live 6510 $01 port each access (bare machine, so
-        // /GAME and /EXROM float high — the PLA defaults).
+        // The PLA decode reads the live 6510 $01 port and the live cartridge /GAME
+        // and /EXROM lines each access (no cart -> both float high -> PLA defaults).
         auto decode = [s](std::uint32_t address) {
             const std::uint8_t port = s->cpu.read(0x0001U);
             s->pla.set_cpu_port((port & 0x01U) != 0U, (port & 0x02U) != 0U, (port & 0x04U) != 0U);
+            s->pla.set_cart_lines(s->cart.game(), s->cart.exrom());
             return s->pla.decode_cpu_address(static_cast<std::uint16_t>(address));
         };
         auto rom_overlay = [decode](region target) {
@@ -106,6 +107,12 @@ namespace mnemos::manifests::c64 {
         };
         auto io_active = [decode](std::uint32_t address, bool) {
             return decode(address) == region::io;
+        };
+        // Cartridge ROML/ROMH read-overlays (write-through to RAM), gated by the PLA.
+        auto cart_overlay = [decode, s](region target) {
+            return [decode, s, target](std::uint32_t address, bool is_write) {
+                return !is_write && s->cart.inserted() && decode(address) == target;
+            };
         };
 
         // Base RAM under everything.
@@ -118,6 +125,39 @@ namespace mnemos::manifests::c64 {
                        rom_overlay(region::kernal));
         s->bus.map_rom(0xD000U, std::span<const std::uint8_t>(s->chargen_rom), 1,
                        rom_overlay(region::chargen));
+
+        // Cartridge ROML ($8000) and ROMH ($A000 in 16K, $E000 in ultimax) banked
+        // through the cartridge, plus its I/O-1/I/O-2 window at $DE00-$DFFF.
+        s->bus.map_mmio(
+            0x8000U, 0x2000U,
+            [s](std::uint32_t a) {
+                return s->cart.read_roml(static_cast<std::uint16_t>(a - 0x8000U));
+            },
+            [](std::uint32_t, std::uint8_t) {}, 1, cart_overlay(region::roml));
+        s->bus.map_mmio(
+            0xA000U, 0x2000U,
+            [s](std::uint32_t a) {
+                return s->cart.read_romh(static_cast<std::uint16_t>(a - 0xA000U));
+            },
+            [](std::uint32_t, std::uint8_t) {}, 2, cart_overlay(region::romh));
+        s->bus.map_mmio(
+            0xE000U, 0x2000U,
+            [s](std::uint32_t a) {
+                return s->cart.read_romh(static_cast<std::uint16_t>(a - 0xE000U));
+            },
+            [](std::uint32_t, std::uint8_t) {}, 2, cart_overlay(region::romh));
+        s->bus.map_mmio(
+            0xDE00U, 0x200U,
+            [s](std::uint32_t a) {
+                return s->cart.mmio_read(static_cast<std::uint16_t>(a - 0xDE00U));
+            },
+            [s](std::uint32_t a, std::uint8_t v) {
+                s->cart.mmio_write(static_cast<std::uint16_t>(a - 0xDE00U), v);
+            },
+            2,
+            [decode, s](std::uint32_t address, bool) {
+                return s->cart.inserted() && decode(address) == region::io;
+            });
 
         // I/O space ($D000-$DFFF) — active only when the PLA selects I/O.
         s->bus.map_mmio(
