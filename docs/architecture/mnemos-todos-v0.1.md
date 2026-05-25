@@ -332,7 +332,14 @@ conformance (data-gated), and the Codemasters mapper.
   sms.ntsc.toml / sms.pal.toml; --dump-hash emits the deterministic framebuffer
   SHA-256. CLI tests: a sega manifest + cart runs 1 frame with a stable hash across
   two passes, and a missing --cart errors. save/load + input-log stay C64-only for now)
-- [ ] Golden frame tests for known commercial SMS ROMs.
+- [~] Golden frame tests for known commercial SMS ROMs. (tests/golden/sms_boot_test.cpp:
+  a self-skipping golden-boot harness mirroring the C64 one — assembles the SMS from
+  a .sms cart, runs N frames through the {VDP,CPU,PSG} scheduler, and asserts the
+  framebuffer SHA-256. Env: MNEMOS_SMS_ROM (cart path), MNEMOS_SMS_REGION (ntsc/pal),
+  MNEMOS_SMS_BOOT_FRAMES (default 200), MNEMOS_SMS_BOOT_SHA256 (golden). SKIP_RETURN_CODE
+  4 → CTest "Skipped" without a ROM; with one it checks non-uniform output + cold-boot
+  determinism + the golden hash. Validated end-to-end locally with a crafted cart;
+  the commercial-ROM goldens themselves stay data-gated)
 - [x] Confirm zero contract changes from M1–M3; if any, raise ADR. (the Z80 fit i_cpu/i_chip/i_bus and the factory/tier model unchanged — the separate I/O space is handled with injected port callbacks, no contract change. No ADR needed)
 
 ---
