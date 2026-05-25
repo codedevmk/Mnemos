@@ -65,6 +65,7 @@ namespace mnemos::tools {
                "  --disk <file>       .d64 disk image to mount on drive 8\n"
                "  --drive-rom <file>  16K 1541 DOS ROM -> use the cycle-accurate drive 8\n"
                "  --cart <file>       .crt cartridge image to insert\n"
+               "  --tape <file>       .tap datasette image (PLAY auto-pressed)\n"
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --sid <6581|8580>   select the SID revision (default 6581)\n"
                "  --dual-sid          add a second SID at $D420 (stereo)\n"
@@ -106,6 +107,11 @@ namespace mnemos::tools {
                     return false;
                 }
                 out.cart = value;
+            } else if (arg == "--tape") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                out.tape = value;
             } else if (arg == "--frames") {
                 if (!take_value(argc, argv, i, arg, value, err)) {
                     return false;
@@ -278,6 +284,21 @@ namespace mnemos::tools {
         sys->sid2.reset(chips::reset_kind::power_on);
         sys->vic.reset(chips::reset_kind::power_on);
         sys->drive8.reset(chips::reset_kind::power_on);
+        sys->tape.reset(chips::reset_kind::power_on);
+
+        if (!options.tape.empty()) {
+            const auto image = read_file(options.tape);
+            if (!image) {
+                err << "error: cannot read tape image " << options.tape.string() << "\n";
+                return 6;
+            }
+            if (!sys->tape.load_tap(*image)) {
+                err << "error: " << options.tape.string() << " is not a valid .tap\n";
+                return 6;
+            }
+            sys->tape.set_play(true); // auto-press PLAY
+            out << "loaded tape " << options.tape.string() << " (PLAY pressed)\n";
+        }
 
         // Select drive 8: the cycle-accurate full drive when a DOS ROM is supplied,
         // otherwise the protocol-level synthetic drive. Only the chosen one is ticked.
@@ -317,9 +338,9 @@ namespace mnemos::tools {
 
         // The VIC drives frame boundaries; list it before the CPU so the CPU reads
         // the freshly advanced beam. All C64 chips run at phi2 (divider 1).
-        std::vector<runtime::scheduled_chip> chips = {{&sys->vic, 1U},  {&sys->cpu, 1U},
-                                                      {&sys->cia1, 1U}, {&sys->cia2, 1U},
-                                                      {&sys->sid, 1U},  {drive, 1U}};
+        std::vector<runtime::scheduled_chip> chips = {
+            {&sys->vic, 1U}, {&sys->cpu, 1U}, {&sys->cia1, 1U}, {&sys->cia2, 1U},
+            {&sys->sid, 1U}, {drive, 1U},     {&sys->tape, 1U}};
         if (cfg.dual_sid) {
             chips.push_back({&sys->sid2, 1U});
         }
@@ -333,7 +354,7 @@ namespace mnemos::tools {
             t.master_cycle = master_cycle;
             t.chips = {{"cpu", &sys->cpu},   {"video", &sys->vic}, {"audio", &sys->sid},
                        {"cia1", &sys->cia1}, {"cia2", &sys->cia2}, {"pla", &sys->pla},
-                       {"cart", &sys->cart}, {"drive8", drive}};
+                       {"cart", &sys->cart}, {"tape", &sys->tape}, {"drive8", drive}};
             if (cfg.dual_sid) {
                 t.chips.push_back({"audio2", &sys->sid2});
             }

@@ -25,6 +25,7 @@ target_link_libraries(
         mnemos::chips::mapper::c64_pla
         mnemos::chips::mapper::c64_cartridge
         mnemos::chips::storage::c1541
+        mnemos::chips::storage::datasette
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_c64 PUBLIC)

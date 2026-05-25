@@ -68,6 +68,16 @@ namespace mnemos::manifests::c64 {
         };
         s->cia1.configure(cia1_cfg);
 
+        // Datasette: motor from $01 bit 5 (low = on), pulses CIA1 /FLAG, and drives
+        // the cassette-sense on $01 bit 4 (low while a key is held).
+        chips::storage::datasette::config tape_cfg;
+        tape_cfg.motor_on = [s]() { return (s->cpu.read(0x0001U) & 0x20U) == 0U; };
+        tape_cfg.flag_pulse = [s]() { s->cia1.flag_edge(); };
+        tape_cfg.set_sense = [s](bool held) {
+            s->cpu.set_port_input(held ? 0xEFU : 0xFFU); // bit 4 low = key held
+        };
+        s->tape.configure(tape_cfg);
+
         // Both drive 8 implementations share the IEC bus; the runner ticks one.
         s->drive8.attach_bus(s->iec);
         s->drive8_full.attach_bus(s->iec);

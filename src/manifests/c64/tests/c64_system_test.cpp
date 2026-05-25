@@ -254,3 +254,13 @@ TEST_CASE("assemble_c64 maps a second SID at $D420 when dual", "[c64][sid]") {
     CHECK(sys->sid.voice_phase(0U) == 0x1000U);
     CHECK(sys->sid2.voice_phase(0U) == 0x2000U); // $D420 reached SID 2, not SID 1
 }
+
+TEST_CASE("assemble_c64 drives the cassette sense from the datasette", "[c64][tape]") {
+    auto sys = make_c64();
+    sys->cpu.reset(reset_kind::power_on); // DDR all input -> $01 bit 4 reads the pin
+
+    sys->tape.set_play(true);
+    CHECK((sys->cpu.read(0x0001U) & 0x10U) == 0U); // PLAY held -> sense low
+    sys->tape.set_play(false);
+    CHECK((sys->cpu.read(0x0001U) & 0x10U) != 0U); // released -> sense high
+}

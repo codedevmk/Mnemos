@@ -16,6 +16,7 @@ namespace mnemos::tools {
         std::filesystem::path disk;      // optional .d64 mounted on drive 8
         std::filesystem::path drive_rom; // optional 16K 1541 DOS ROM -> cycle-accurate drive
         std::filesystem::path cart;      // optional .crt cartridge
+        std::filesystem::path tape;      // optional .tap datasette image
         std::uint64_t frames{1U};
         bool dump_hash{false};
         bool sid_8580{false}; // use the 8580 SID instead of the 6581

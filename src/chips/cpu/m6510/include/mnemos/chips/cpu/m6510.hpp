@@ -192,6 +192,11 @@ namespace mnemos::chips::cpu {
         void set_irq_line(bool asserted) noexcept;
         void set_nmi_line(bool asserted) noexcept;
 
+        // External value on the $00/$01 I/O-port pins. Bits configured as inputs
+        // read from here (default all-high pull-ups); a peripheral such as the C64
+        // datasette drives e.g. the cassette-sense line (bit 4) this way.
+        void set_port_input(std::uint8_t value) noexcept;
+
         // Control surface (debugger / conformance harness). set_registers loads the
         // full register file and resets the in-progress instruction. The $00/$01
         // I/O port can be disabled so those addresses behave as plain memory, as
@@ -242,6 +247,7 @@ namespace mnemos::chips::cpu {
         bool port_enabled_{true};
         std::uint8_t port_ddr_{};
         std::uint8_t port_data_{};
+        std::uint8_t port_input_{0xFFU}; // external value on input pins (pull-up default)
 
         // NMOS floating-gate fade for the unconnected port bits 6 and 7 (C64): once
         // driven as output then switched to input, the pin holds its last value for

@@ -1397,6 +1397,7 @@ namespace mnemos::chips::cpu {
         writer.boolean(port_enabled_);
         writer.u8(port_ddr_);
         writer.u8(port_data_);
+        writer.u8(port_input_);
         writer.u64(port_fade_cycle_[0]);
         writer.u64(port_fade_cycle_[1]);
         writer.boolean(port_fade_value_[0]);
@@ -1426,6 +1427,7 @@ namespace mnemos::chips::cpu {
         port_enabled_ = reader.boolean();
         port_ddr_ = reader.u8();
         port_data_ = reader.u8();
+        port_input_ = reader.u8();
         port_fade_cycle_[0] = reader.u64();
         port_fade_cycle_[1] = reader.u64();
         port_fade_value_[0] = reader.boolean();
@@ -1466,7 +1468,7 @@ namespace mnemos::chips::cpu {
         if (port_enabled_ && address == 0x0001U) {
             const auto outputs = static_cast<std::uint8_t>(port_data_ & port_ddr_);
             auto inputs =
-                static_cast<std::uint8_t>(port_input_pull & static_cast<std::uint8_t>(~port_ddr_));
+                static_cast<std::uint8_t>(port_input_ & static_cast<std::uint8_t>(~port_ddr_));
             // Bits 6/7 are unconnected: as inputs they read the fading charge (last
             // driven value, decaying to 0), not the pull-up.
             for (unsigned b = 6U; b <= 7U; ++b) {
@@ -1524,6 +1526,8 @@ namespace mnemos::chips::cpu {
     }
 
     void m6510::set_port_enabled(bool enabled) noexcept { port_enabled_ = enabled; }
+
+    void m6510::set_port_input(std::uint8_t value) noexcept { port_input_ = value; }
 
     void m6510::set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
 
