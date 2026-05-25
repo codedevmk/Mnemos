@@ -1,7 +1,7 @@
-#include <mnemos/tools/cli.hpp>
+#include "cli.hpp"
 
-#include <mnemos/manifests/c64/c64_input.hpp>
-#include <mnemos/runtime/input.hpp>
+#include "c64_input.hpp"
+#include "input.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -1,4 +1,4 @@
-#include <mnemos/runtime/rewind.hpp>
+#include "rewind.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

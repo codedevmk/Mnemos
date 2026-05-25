@@ -1,4 +1,4 @@
-#include <mnemos/foundation/sha256.hpp>
+#include "sha256.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

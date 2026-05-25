@@ -1,4 +1,4 @@
-#include <mnemos/chips/storage/c1541/gcr.hpp>
+#include "gcr.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

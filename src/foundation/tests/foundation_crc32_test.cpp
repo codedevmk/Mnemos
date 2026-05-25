@@ -1,4 +1,4 @@
-#include <mnemos/foundation/crc32.hpp>
+#include "crc32.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

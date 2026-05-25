@@ -1,6 +1,6 @@
-#include <mnemos/topology/bus.hpp>
+#include "bus.hpp"
 
-#include <mnemos/chips/common/bus.hpp>
+#include "ibus.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

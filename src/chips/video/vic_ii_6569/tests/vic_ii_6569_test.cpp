@@ -1,6 +1,6 @@
-#include <mnemos/chips/video/vic_ii_6569.hpp>
+#include "vic_ii_6569.hpp"
 
-#include <mnemos/chips/common/chip_registry.hpp>
+#include "chip_registry.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

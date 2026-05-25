@@ -1,7 +1,7 @@
-#include <mnemos/chips/cpu/z80.hpp>
+#include "z80.hpp"
 
-#include <mnemos/chips/common/chip_registry.hpp>
-#include <mnemos/topology/bus.hpp>
+#include "bus.hpp"
+#include "chip_registry.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

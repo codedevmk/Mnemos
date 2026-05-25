@@ -1,4 +1,4 @@
-#include <mnemos/foundation/span_ext.hpp>
+#include "span_ext.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

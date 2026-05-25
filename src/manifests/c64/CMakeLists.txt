@@ -1,14 +1,14 @@
 add_library(
     mnemos_manifests_c64
-    src/c64_system.cpp
-    src/c64_input.cpp
+    c64_system.cpp
+    c64_input.cpp
 )
 add_library(mnemos::manifests::c64 ALIAS mnemos_manifests_c64)
 
 target_include_directories(
     mnemos_manifests_c64
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
@@ -35,7 +35,7 @@ mnemos_apply_common_target_options(mnemos_manifests_c64 PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_c64
     TIER 4
-    DEPENDS mnemos_topology mnemos_chips_common mnemos_foundation
+    DEPENDS mnemos_topology mnemos_chips_shared mnemos_foundation
 )
 
 if(BUILD_TESTING)

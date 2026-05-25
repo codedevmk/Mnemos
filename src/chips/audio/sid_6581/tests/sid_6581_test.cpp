@@ -1,7 +1,7 @@
-#include <mnemos/chips/audio/sid_6581.hpp>
+#include "sid_6581.hpp"
 
-#include <mnemos/chips/common/chip_registry.hpp>
-#include <mnemos/chips/common/state.hpp>
+#include "chip_registry.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

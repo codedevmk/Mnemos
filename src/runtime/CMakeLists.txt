@@ -18,17 +18,17 @@ endif()
 
 add_library(
     mnemos_runtime
-    src/scheduler.cpp
-    src/input.cpp
-    src/save_state.cpp
-    src/rewind.cpp
+    scheduler.cpp
+    input.cpp
+    save_state.cpp
+    rewind.cpp
 )
 add_library(mnemos::runtime ALIAS mnemos_runtime)
 
 target_include_directories(
     mnemos_runtime
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 

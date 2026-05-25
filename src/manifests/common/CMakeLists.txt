@@ -11,15 +11,15 @@ endif()
 
 add_library(
     mnemos_manifests_common
-    src/manifest.cpp
-    src/builder.cpp
+    manifest.cpp
+    builder.cpp
 )
 add_library(mnemos::manifests::common ALIAS mnemos_manifests_common)
 
 target_include_directories(
     mnemos_manifests_common
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
@@ -29,7 +29,7 @@ target_link_libraries(
     mnemos_manifests_common
     PUBLIC
         mnemos::foundation
-        mnemos::chips::common
+        mnemos::chips::shared
         mnemos::topology
     PRIVATE
         tomlplusplus::tomlplusplus
@@ -39,7 +39,7 @@ mnemos_apply_common_target_options(mnemos_manifests_common PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_common
     TIER 4
-    DEPENDS mnemos_foundation mnemos_chips_common mnemos_topology
+    DEPENDS mnemos_foundation mnemos_chips_shared mnemos_topology
 )
 
 if(BUILD_TESTING)

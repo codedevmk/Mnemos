@@ -1,17 +1,17 @@
 add_library(
     mnemos_chips_audio_sid_6581
-    src/sid_6581.cpp
+    sid_6581.cpp
 )
 add_library(mnemos::chips::audio::sid_6581 ALIAS mnemos_chips_audio_sid_6581)
 
 target_include_directories(
     mnemos_chips_audio_sid_6581
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
-target_link_libraries(mnemos_chips_audio_sid_6581 PUBLIC mnemos::chips::common)
+target_link_libraries(mnemos_chips_audio_sid_6581 PUBLIC mnemos::chips::shared)
 
 mnemos_apply_common_target_options(mnemos_chips_audio_sid_6581 PUBLIC)
 mnemos_declare_tier(NAME mnemos_chips_audio_sid_6581 TIER 2 DEPENDS mnemos_foundation)

@@ -3,16 +3,16 @@ add_library(mnemos::foundation ALIAS mnemos_foundation)
 
 # version.hpp is generated from the single CMake project version to avoid drift.
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/mnemos/foundation/version.hpp.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/include/mnemos/foundation/version.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/version.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/version.hpp"
     @ONLY
 )
 
 target_include_directories(
     mnemos_foundation
     INTERFACE
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 

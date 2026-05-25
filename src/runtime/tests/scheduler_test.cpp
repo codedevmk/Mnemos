@@ -1,6 +1,6 @@
-#include <mnemos/runtime/scheduler.hpp>
+#include "scheduler.hpp"
 
-#include <mnemos/chips/common/chip.hpp>
+#include "chip.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

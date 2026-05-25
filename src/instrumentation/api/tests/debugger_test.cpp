@@ -1,8 +1,8 @@
-#include <mnemos/instrumentation/debugger.hpp>
+#include "debugger.hpp"
 
-#include <mnemos/chips/cpu/m6510.hpp>
-#include <mnemos/runtime/scheduler.hpp>
-#include <mnemos/topology/bus.hpp>
+#include "bus.hpp"
+#include "m6510.hpp"
+#include "scheduler.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

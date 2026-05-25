@@ -1,4 +1,4 @@
-#include <mnemos/foundation/bits.hpp>
+#include "bits.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

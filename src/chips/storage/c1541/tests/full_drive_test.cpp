@@ -1,8 +1,8 @@
-#include <mnemos/chips/storage/c1541/full_drive.hpp>
+#include "full_drive.hpp"
 
-#include <mnemos/chips/common/chip_registry.hpp>
-#include <mnemos/chips/common/state.hpp>
-#include <mnemos/chips/storage/c1541/d64_image.hpp>
+#include "chip_registry.hpp"
+#include "d64_image.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

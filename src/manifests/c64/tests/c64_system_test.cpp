@@ -1,4 +1,4 @@
-#include <mnemos/manifests/c64/c64_system.hpp>
+#include "c64_system.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

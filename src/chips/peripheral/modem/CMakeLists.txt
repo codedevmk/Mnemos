@@ -1,18 +1,18 @@
 add_library(
     mnemos_chips_peripheral_modem
-    src/modem.cpp
-    src/tcp_transport.cpp
+    modem.cpp
+    tcp_transport.cpp
 )
 add_library(mnemos::chips::peripheral::modem ALIAS mnemos_chips_peripheral_modem)
 
 target_include_directories(
     mnemos_chips_peripheral_modem
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
-target_link_libraries(mnemos_chips_peripheral_modem PUBLIC mnemos::chips::common)
+target_link_libraries(mnemos_chips_peripheral_modem PUBLIC mnemos::chips::shared)
 
 # The live TCP transport needs the Winsock library on Windows.
 if(WIN32)

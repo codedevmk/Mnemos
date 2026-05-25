@@ -1,7 +1,7 @@
-#include <mnemos/chips/storage/c1541/disk_bind.hpp>
+#include "disk_bind.hpp"
 
-#include <mnemos/chips/storage/c1541/d64_image.hpp>
-#include <mnemos/chips/storage/c1541/gcr.hpp>
+#include "d64_image.hpp"
+#include "gcr.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -1,7 +1,7 @@
-#include <mnemos/runtime/save_state.hpp>
+#include "save_state.hpp"
 
-#include <mnemos/chips/common/chip.hpp>
-#include <mnemos/chips/common/state.hpp>
+#include "chip.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

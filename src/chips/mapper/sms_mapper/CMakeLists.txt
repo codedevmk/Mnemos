@@ -1,17 +1,17 @@
 add_library(
     mnemos_chips_mapper_sms_mapper
-    src/sms_mapper.cpp
+    sms_mapper.cpp
 )
 add_library(mnemos::chips::mapper::sms_mapper ALIAS mnemos_chips_mapper_sms_mapper)
 
 target_include_directories(
     mnemos_chips_mapper_sms_mapper
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
-target_link_libraries(mnemos_chips_mapper_sms_mapper PUBLIC mnemos::chips::common)
+target_link_libraries(mnemos_chips_mapper_sms_mapper PUBLIC mnemos::chips::shared)
 
 mnemos_apply_common_target_options(mnemos_chips_mapper_sms_mapper PUBLIC)
 mnemos_declare_tier(NAME mnemos_chips_mapper_sms_mapper TIER 2 DEPENDS mnemos_foundation)

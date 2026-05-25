@@ -1,10 +1,10 @@
-#include <mnemos/manifests/builder.hpp>
+#include "builder.hpp"
 
-#include <mnemos/manifests/manifest.hpp>
+#include "manifest.hpp"
 
-#include <mnemos/chips/bus_controller/cia_6526.hpp>
-#include <mnemos/chips/cpu/m6510.hpp>
-#include <mnemos/foundation/sha256.hpp>
+#include "cia_6526.hpp"
+#include "m6510.hpp"
+#include "sha256.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

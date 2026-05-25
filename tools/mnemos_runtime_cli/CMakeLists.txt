@@ -1,11 +1,11 @@
 # CLI logic as a small library so the executable and the tests share it.
-add_library(mnemos_runtime_cli_core src/cli.cpp)
+add_library(mnemos_runtime_cli_core cli.cpp)
 add_library(mnemos::tools::runtime_cli ALIAS mnemos_runtime_cli_core)
 
 target_include_directories(
     mnemos_runtime_cli_core
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
@@ -25,7 +25,7 @@ mnemos_declare_tier(
     DEPENDS mnemos_foundation mnemos_manifests mnemos_runtime
 )
 
-add_executable(mnemos_runtime_cli src/main.cpp)
+add_executable(mnemos_runtime_cli main.cpp)
 target_link_libraries(mnemos_runtime_cli PRIVATE mnemos_runtime_cli_core)
 mnemos_apply_common_target_options(mnemos_runtime_cli PRIVATE)
 

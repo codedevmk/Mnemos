@@ -1,13 +1,13 @@
 add_library(
     mnemos_instrumentation_api
-    src/debugger.cpp
+    debugger.cpp
 )
 add_library(mnemos::instrumentation::api ALIAS mnemos_instrumentation_api)
 
 target_include_directories(
     mnemos_instrumentation_api
     PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 

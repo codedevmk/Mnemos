@@ -1,4 +1,4 @@
-#include <mnemos/foundation/thread.hpp>
+#include "thread.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

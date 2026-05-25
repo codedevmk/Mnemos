@@ -1,4 +1,4 @@
-#include <mnemos/runtime/input.hpp>
+#include "input.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

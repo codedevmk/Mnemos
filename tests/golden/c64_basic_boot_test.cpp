@@ -18,10 +18,10 @@
 //
 //   mnemos_runtime_cli --manifest <c64.pal.toml> --rom-dir <dir> --frames N --dump-hash
 
-#include <mnemos/foundation/sha256.hpp>
-#include <mnemos/manifests/c64/c64_system.hpp>
-#include <mnemos/runtime/scheduler.hpp>
-#include <mnemos/tools/cli.hpp>
+#include "c64_system.hpp"
+#include "cli.hpp"
+#include "scheduler.hpp"
+#include "sha256.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

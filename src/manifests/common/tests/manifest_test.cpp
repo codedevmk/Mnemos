@@ -1,4 +1,4 @@
-#include <mnemos/manifests/manifest.hpp>
+#include "manifest.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

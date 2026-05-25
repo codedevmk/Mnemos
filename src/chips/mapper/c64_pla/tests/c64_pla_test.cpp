@@ -1,7 +1,7 @@
-#include <mnemos/chips/mapper/c64_pla.hpp>
+#include "c64_pla.hpp"
 
-#include <mnemos/chips/common/chip_registry.hpp>
-#include <mnemos/chips/common/state.hpp>
+#include "chip_registry.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

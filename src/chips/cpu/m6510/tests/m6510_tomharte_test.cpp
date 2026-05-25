@@ -13,9 +13,9 @@
 // not implement for v0.1 (JAM/KIL and the unstable illegals) are skipped; see
 // src/chips/cpu/m6510/NOTES.md.
 
-#include <mnemos/chips/cpu/m6510.hpp>
+#include "m6510.hpp"
 
-#include <mnemos/chips/common/bus.hpp>
+#include "ibus.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>

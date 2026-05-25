@@ -1,8 +1,8 @@
-#include <mnemos/chips/cpu/m6510.hpp>
+#include "m6510.hpp"
 
-#include <mnemos/chips/common/bus.hpp>
-#include <mnemos/chips/common/chip_registry.hpp>
-#include <mnemos/chips/common/state.hpp>
+#include "chip_registry.hpp"
+#include "ibus.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

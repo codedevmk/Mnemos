@@ -1,4 +1,4 @@
-#include <mnemos/foundation/fs.hpp>
+#include "fs.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

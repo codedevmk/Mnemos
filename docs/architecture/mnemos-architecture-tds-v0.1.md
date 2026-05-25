@@ -101,12 +101,11 @@ mnemos/
 │   └── schemas/                   # Manifest schemas, save-state spec, wire protocol
 ├── extern/                        # FetchContent notes and approved third-party policy
 ├── src/                           # Product source code
-│   ├── foundation/                # Tier 1
-│   │   ├── include/mnemos/foundation/
-│   │   ├── src/
+│   ├── foundation/                # Tier 1 (each module is flat: see note below)
+│   │   ├── *.hpp                  # public headers at the module root
 │   │   └── tests/
 │   ├── chips/                     # Tier 2
-│   │   ├── common/                # Class taxonomy, base interfaces, registration
+│   │   ├── shared/                # Class taxonomy, base interfaces (ibus.hpp), registration
 │   │   ├── cpu/
 │   │   │   ├── m6510/
 │   │   │   ├── m6502/
@@ -159,7 +158,19 @@ mnemos/
 └── README.md
 ```
 
-### 5.1 Hygiene Rules (Day-Zero, Enforced by CI)
+### 5.1 Module Layout Convention
+
+Each module is self-contained and **flat**: its public headers and implementation
+sources live directly at the module root (no nested `include/mnemos/...` tree), with
+unit tests under `tests/`. CMake exposes the module root as the target's public
+include directory, so headers are included by **basename in quotes** —
+`#include "ibus.hpp"`, `#include "z80.hpp"` — both within a module and across modules
+(the dependency graph propagates each linked module's root onto the include path).
+Because there is no path qualifier, **every header filename MUST be globally unique**
+across the repository (this is why the bus *interface* is `ibus.hpp` while the
+topology *implementation* is `bus.hpp`).
+
+### 5.1.1 Hygiene Rules (Day-Zero, Enforced by CI)
 
 - All build artifacts MUST go under `build/`. The root directory MUST stay clean.
 - All test logs MUST go under `build/logs/` or the active preset's build tree.

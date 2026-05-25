@@ -1,4 +1,4 @@
-#include <mnemos/chips/storage/c1541/d64_image.hpp>
+#include "d64_image.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
