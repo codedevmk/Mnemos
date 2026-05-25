@@ -32,6 +32,7 @@ namespace mnemos::chips::video {
         constexpr std::uint8_t reg_bgcol0 = 0x21U;
         constexpr std::uint8_t reg_bgcol1 = 0x22U;
         constexpr std::uint8_t reg_bgcol2 = 0x23U;
+        constexpr std::uint8_t reg_bgcol3 = 0x24U; // ECM background colour 3
         constexpr std::uint8_t reg_spmc0 = 0x25U;  // shared sprite multicolour 0
         constexpr std::uint8_t reg_spmc1 = 0x26U;  // shared sprite multicolour 1
         constexpr std::uint8_t reg_sp0col = 0x27U; // sprite 0 colour ($D027..$D02E)
@@ -428,9 +429,8 @@ namespace mnemos::chips::video {
         // Display is shown only when DEN was set by line $30 and we have memory to
         // fetch from; otherwise the whole line is border.
         const bool in_display_rows = y >= display_top && y < display_top + display_height;
-        const bool display_active = den_latched_line_30_ && modes_.den && !memory_.ram.empty() &&
-                                    in_display_rows && !modes_.bmm &&
-                                    !modes_.ecm; // bitmap/ECM modes are follow-up work
+        const bool display_active =
+            den_latched_line_30_ && modes_.den && !memory_.ram.empty() && in_display_rows;
 
         if (!display_active) {
             for (std::uint32_t x = 0; x < fb_width_; ++x) {
@@ -445,15 +445,24 @@ namespace mnemos::chips::video {
             static_cast<std::uint16_t>(((regs_[reg_memptr] >> 4) & 0x0FU) << 10U);
         const std::uint16_t cb_base =
             static_cast<std::uint16_t>(((regs_[reg_memptr] >> 1) & 0x07U) << 11U);
+        // Bitmap modes take the 8K bitmap base from CB13 (bit 3 of $D018).
+        const std::uint16_t bm_base = (regs_[reg_memptr] & 0x08U) != 0U ? 0x2000U : 0x0000U;
         const std::uint32_t bg0 =
             color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol0] & 0x0FU));
         const std::uint32_t bg1 =
             color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol1] & 0x0FU));
         const std::uint32_t bg2 =
             color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol2] & 0x0FU));
+        const std::uint32_t bg3 =
+            color_rgb888(static_cast<std::uint8_t>(regs_[reg_bgcol3] & 0x0FU));
         const std::uint16_t char_row = static_cast<std::uint16_t>(y - display_top);
         const std::uint16_t text_row = static_cast<std::uint16_t>(char_row / 8U);
         const std::uint16_t glyph_y = static_cast<std::uint16_t>(char_row % 8U);
+        const bool ecm = modes_.ecm;
+        const bool bmm = modes_.bmm;
+        const bool mcm = modes_.mcm;
+        const bool invalid = ecm && (bmm || mcm); // ECM with BMM/MCM displays black
+        const std::uint32_t black = color_rgb888(0U);
         const std::uint32_t left = display_left;
         const std::uint32_t right = static_cast<std::uint32_t>(display_left) + display_width;
 
@@ -469,19 +478,61 @@ namespace mnemos::chips::video {
             const std::uint16_t cell =
                 static_cast<std::uint16_t>(text_row * text_columns + text_col);
 
-            const std::uint8_t code = fetch(static_cast<std::uint16_t>(vm_base + cell));
-            const std::uint8_t color =
+            const std::uint8_t scr = fetch(static_cast<std::uint16_t>(vm_base + cell));
+            const std::uint8_t cram =
                 cell < memory_.color_ram.size()
                     ? static_cast<std::uint8_t>(memory_.color_ram[cell] & 0x0FU)
                     : 0U;
-            const std::uint8_t glyph =
-                fetch(static_cast<std::uint16_t>(cb_base + code * 8U + glyph_y));
 
-            if (modes_.mcm && (color & 0x08U) != 0U) {
+            std::uint32_t pixel = black;
+            bool foreground = false;
+
+            if (invalid) {
+                pixel = black; // collisions still suppressed under an invalid mode
+            } else if (bmm) {
+                const std::uint8_t gfx =
+                    fetch(static_cast<std::uint16_t>(bm_base + cell * 8U + glyph_y));
+                if (mcm) {
+                    // Multicolour bitmap: 00=bg0, 01=scr hi, 10=scr lo, 11=colour RAM.
+                    const auto pair =
+                        static_cast<std::uint8_t>((gfx >> (6U - (glyph_x & 0x06U))) & 0x03U);
+                    switch (pair) {
+                    case 0U:
+                        pixel = bg0;
+                        break;
+                    case 1U:
+                        pixel = color_rgb888(static_cast<std::uint8_t>(scr >> 4U));
+                        break;
+                    case 2U:
+                        pixel = color_rgb888(static_cast<std::uint8_t>(scr & 0x0FU));
+                        break;
+                    default:
+                        pixel = color_rgb888(cram);
+                        break;
+                    }
+                    foreground = (pair & 0x02U) != 0U;
+                } else {
+                    // Standard bitmap: set bit -> scr hi nibble, clear -> scr lo nibble.
+                    foreground = ((gfx >> (7U - glyph_x)) & 0x01U) != 0U;
+                    pixel = foreground ? color_rgb888(static_cast<std::uint8_t>(scr >> 4U))
+                                       : color_rgb888(static_cast<std::uint8_t>(scr & 0x0FU));
+                }
+            } else if (ecm) {
+                // Extended-colour text: code bits 6-7 pick 1 of 4 backgrounds; only
+                // the low 6 bits index the glyph.
+                const std::uint8_t glyph =
+                    fetch(static_cast<std::uint16_t>(cb_base + (scr & 0x3FU) * 8U + glyph_y));
+                foreground = ((glyph >> (7U - glyph_x)) & 0x01U) != 0U;
+                const std::uint8_t bg_index = static_cast<std::uint8_t>(scr >> 6U);
+                const std::uint32_t bg =
+                    bg_index == 0U ? bg0 : (bg_index == 1U ? bg1 : (bg_index == 2U ? bg2 : bg3));
+                pixel = foreground ? color_rgb888(cram) : bg;
+            } else if (mcm && (cram & 0x08U) != 0U) {
                 // Multicolour text: bit pairs, each two pixels wide.
-                const std::uint8_t pair =
+                const std::uint8_t glyph =
+                    fetch(static_cast<std::uint16_t>(cb_base + scr * 8U + glyph_y));
+                const auto pair =
                     static_cast<std::uint8_t>((glyph >> (6U - (glyph_x & 0x06U))) & 0x03U);
-                std::uint32_t pixel = bg0;
                 switch (pair) {
                 case 0U:
                     pixel = bg0;
@@ -493,18 +544,20 @@ namespace mnemos::chips::video {
                     pixel = bg2;
                     break;
                 default:
-                    pixel = color_rgb888(static_cast<std::uint8_t>(color & 0x07U));
+                    pixel = color_rgb888(static_cast<std::uint8_t>(cram & 0x07U));
                     break;
                 }
-                row[x] = pixel;
-                // Pairs %10 and %11 are foreground (sprite priority + collisions).
-                fg_mask_[x] = (pair & 0x02U) != 0U ? 1U : 0U;
+                foreground = (pair & 0x02U) != 0U;
             } else {
                 // Hi-res text: MSB-first, set bit = foreground colour.
-                const bool set = ((glyph >> (7U - glyph_x)) & 0x01U) != 0U;
-                row[x] = set ? color_rgb888(color) : bg0;
-                fg_mask_[x] = set ? 1U : 0U;
+                const std::uint8_t glyph =
+                    fetch(static_cast<std::uint16_t>(cb_base + scr * 8U + glyph_y));
+                foreground = ((glyph >> (7U - glyph_x)) & 0x01U) != 0U;
+                pixel = foreground ? color_rgb888(cram) : bg0;
             }
+
+            row[x] = pixel;
+            fg_mask_[x] = foreground ? 1U : 0U;
         }
 
         render_sprites(y, row);

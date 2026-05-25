@@ -505,3 +505,52 @@ TEST_CASE("vic_ii_6569 detects sprite-data collisions") {
     CHECK(fx.vic.read(0x1FU) == 0x01U); // sprite 0 hit foreground graphics
     CHECK(fx.vic.read(0x1FU) == 0x00U); // read-clear
 }
+
+TEST_CASE("vic_ii_6569 renders standard bitmap mode") {
+    sprite_fixture fx;
+    fx.ram[0x0400U] = 0x1AU; // cell colours: hi nibble 1 (set), lo nibble A (clear)
+    fx.ram[0x2000U] = 0x80U; // bitmap cell 0 row 0: leftmost pixel set
+
+    fx.vic.write(0x11U, 0x3BU); // DEN + BMM + RSEL
+    fx.vic.write(0x16U, 0x08U); // CSEL
+    fx.vic.write(0x18U, 0x18U); // screen $0400, bitmap base $2000
+    fx.vic.tick(frame);
+
+    CHECK(fx.pixel(24U, 51U) == vic_ii_6569::color_rgb888(0x01U)); // set bit -> hi nibble
+    CHECK(fx.pixel(25U, 51U) == vic_ii_6569::color_rgb888(0x0AU)); // clear bit -> lo nibble
+}
+
+TEST_CASE("vic_ii_6569 renders multicolour bitmap mode") {
+    sprite_fixture fx;
+    fx.ram[0x0400U] = 0x1AU;       // scr hi nibble 1, lo nibble A
+    fx.color_ram[0x0000U] = 0x05U; // colour RAM (pair 11)
+    fx.ram[0x2000U] = 0x1BU;       // pairs (MSB first): 00, 01, 10, 11
+
+    fx.vic.write(0x11U, 0x3BU); // DEN + BMM + RSEL
+    fx.vic.write(0x16U, 0x18U); // MCM + CSEL
+    fx.vic.write(0x18U, 0x18U); // screen $0400, bitmap base $2000
+    fx.vic.write(0x21U, 0x06U); // background colour 0
+    fx.vic.tick(frame);
+
+    CHECK(fx.pixel(24U, 51U) == vic_ii_6569::color_rgb888(0x06U)); // 00 -> bg0
+    CHECK(fx.pixel(26U, 51U) == vic_ii_6569::color_rgb888(0x01U)); // 01 -> scr hi nibble
+    CHECK(fx.pixel(28U, 51U) == vic_ii_6569::color_rgb888(0x0AU)); // 10 -> scr lo nibble
+    CHECK(fx.pixel(30U, 51U) == vic_ii_6569::color_rgb888(0x05U)); // 11 -> colour RAM
+}
+
+TEST_CASE("vic_ii_6569 renders extended-colour text mode") {
+    sprite_fixture fx;
+    fx.ram[0x0400U] = 0x41U;       // code 1 with background-select bits = 01
+    fx.ram[0x2008U] = 0x80U;       // char base $2000, glyph 1 row 0
+    fx.color_ram[0x0000U] = 0x03U; // foreground colour
+
+    fx.vic.write(0x11U, 0x5BU); // DEN + ECM + RSEL
+    fx.vic.write(0x16U, 0x08U); // CSEL
+    fx.vic.write(0x18U, 0x18U); // screen $0400, char gen $2000
+    fx.vic.write(0x21U, 0x02U); // bg0 (distinct from bg1)
+    fx.vic.write(0x22U, 0x09U); // bg1 (selected by code bits 6-7 = 01)
+    fx.vic.tick(frame);
+
+    CHECK(fx.pixel(24U, 51U) == vic_ii_6569::color_rgb888(0x03U)); // set bit -> colour RAM
+    CHECK(fx.pixel(25U, 51U) == vic_ii_6569::color_rgb888(0x09U)); // clear bit -> bg1
+}

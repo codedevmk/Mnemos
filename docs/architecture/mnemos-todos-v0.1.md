@@ -128,15 +128,16 @@
 
 **Status:** Substantially complete. All five C64 chips (6510, VIC-II, SID, CIA, PLA)
 are implemented and unit-tested; the VIC-II scanline renderer covers standard +
-multicolour text + border + the full 8-sprite engine (multicolour, X/Y expansion,
-priority, and sprite-sprite / sprite-data collisions). Per-chip save/load landed
-with the M3 save-state format. Remaining: the bitmap + extended-colour-text
-display modes, and SID register-trace validation against a known tune.
+multicolour text + bitmap (hi-res + multicolour) + extended-colour text + border +
+the full 8-sprite engine (multicolour, X/Y expansion, priority, and sprite-sprite /
+sprite-data collisions) — all five display modes. Per-chip save/load landed with
+the M3 save-state format. Remaining: SID register-trace validation against a known
+tune, and strictly cycle-exact VIC beam timing (tracked with B4).
 
 ### VIC-II 6569
 - [x] Create `src/chips/video/vic_ii_6569/` library target. (a013df0; ported from Emu per ADR 0006; CI run 26325382940 green across all jobs)
 - [x] Implement raster engine (PAL: 312 lines × 63 cycles). (a013df0; beam tracker + per-cycle video-matrix counters, PAL/NTSC geometry; CI run 26325382940)
-- [~] Implement all graphics modes (standard text, multicolor text, standard bitmap, multicolor bitmap, extended color text). (mode DECODE done in a013df0; scanline renderer now emits standard + multicolour text into a per-frame framebuffer fetched from attached RAM/char-ROM/colour-RAM; standard/multicolour bitmap + ECM + cycle-exact beam alignment still pending)
+- [x] Implement all graphics modes (standard text, multicolor text, standard bitmap, multicolor bitmap, extended color text). (render_line dispatches all five valid modes from the ECM/BMM/MCM bits — hi-res + multicolour text, standard bitmap (screen-RAM nibble colours), multicolour bitmap (bg0/screen-hi/screen-lo/colour-RAM), and extended-colour text (code bits 6-7 pick bg0-3); the ECM+BMM/ECM+MCM invalid combos display black. Each mode feeds the sprite foreground mask. Unit-tested per mode. Only strictly cycle-exact beam/X alignment and per-cycle splits remain, tracked with B4)
 - [x] Implement sprite engine (8 sprites, multicolor, expansion, sprite-sprite/sprite-data collisions). (render_sprites composites all 8 MOBs onto each scanline after the background: sprite-pointer + 63-byte data fetch, hi-res (24px) and multicolour (12 dots) pixels, X/Y expansion, per-sprite + shared multicolour colours, and sprite-background priority resolved against a per-pixel foreground mask the background renderer now emits. Sprite-sprite ($D01E) and sprite-data ($D01F) collisions accumulate per frame and raise the IMMC ($04) / IMBC ($02) IRQ sources on the first collision after each read-clear. 7 unit tests (position, disabled, multicolour, X+Y expand, priority front/behind, both collision types). Sub-cycle beam-exact sprite/idle fetch values remain bounded by the scanline renderer, as noted under B4)
 - [~] Implement border generation (open borders trick must work). (display-window vs border decided per pixel from DEN latch + CSEL/RSEL geometry; the open-border / sprite-in-border tricks need cycle-exact beam state and are pending)
 - [x] Implement raster IRQ generation. (a013df0; edge-latched raster compare + mask + master + write-1 ack + light-pen source; CI run 26325382940)

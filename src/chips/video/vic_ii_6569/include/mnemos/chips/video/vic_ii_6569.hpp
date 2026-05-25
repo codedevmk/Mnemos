@@ -32,10 +32,12 @@ namespace mnemos::chips::video {
         std::span<const std::uint8_t> color_ram; // 1 KiB colour RAM (4-bit)
     };
 
-    // The scanline renderer covers the border, hi-res + multicolour text, and the
-    // full 8-sprite engine (multicolour, X/Y expansion, sprite-background priority,
-    // and sprite-sprite / sprite-data collisions with their IRQ sources). The
-    // bitmap and extended-colour-text display modes are deferred follow-up work.
+    // The scanline renderer covers all five display modes (hi-res + multicolour
+    // text, standard + multicolour bitmap, extended-colour text), the border, and
+    // the full 8-sprite engine (multicolour, X/Y expansion, sprite-background
+    // priority, and sprite-sprite / sprite-data collisions with their IRQ sources).
+    // Only strictly cycle-exact beam timing (per-cycle X splits, open-border
+    // tricks) is deferred follow-up work.
     class vic_ii_6569 final : public i_video, public i_mmio {
       public:
         // Silicon revision. Within a video standard only the early NTSC 6567R56A
