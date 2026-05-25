@@ -273,13 +273,16 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 
 ## M4 — Instrumentation API and Developer Frontend MVP
 
-(Scoping-level items; expand at milestone start.)
+**Status:** In progress — the debugger foundations (the pure, testable instrumentation
+core) are being built phase by phase ahead of the wire/Vulkan/apps frontend MVP.
+Phase 1 (execution control + PC breakpoints) has landed in the new compiled tier-6
+`mnemos::instrumentation::api` library.
 
-- [ ] Promote `i_chip_introspection` from forward decl to full interface.
-- [ ] Implement `i_runtime_introspection`.
-- [ ] Implement breakpoint engine (PC, memory R/W, conditional).
-- [ ] Implement watch engine.
-- [ ] Implement event subscription with filters.
+- [ ] Promote `i_chip_introspection` from forward decl to full interface. (Phase 1 reads CPU state via injected probes so no chip-contract change was forced yet; a richer i_chip_introspection — register/memory views — lands with the memory-inspection work)
+- [~] Implement `i_runtime_introspection`. (interface + concrete `debugger` landed: master_cycle/frame_index queries, step_instruction / step_frame / run-with-instruction-budget control, and PC breakpoint management. pause/resume for a live frontend thread, watchpoints, and event subscription are the remaining methods, added in later phases)
+- [~] Implement breakpoint engine (PC, memory R/W, conditional). (PC breakpoints with optional per-hit conditions + enable/disable/remove + a stop_event report, checked at instruction boundaries while driving the scheduler one master cycle at a time; unit-tested against a real m6510 running a small program. Memory R/W watchpoints are Phase 2)
+- [ ] Implement watch engine. (Phase 2: memory read/write/access watchpoints; needs a generic bus access-observer hook on topology::bus)
+- [ ] Implement event subscription with filters. (Phase 3: event_sink + event_filter, breakpoint-hit + step events)
 - [ ] Author Cap'n Proto schemas under `src/instrumentation/wire/`.
 - [ ] Build-time codegen for C++ wire bindings.
 - [ ] Implement wire transport (named pipe on Windows, domain socket on Linux).

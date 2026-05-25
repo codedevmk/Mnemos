@@ -17,3 +17,6 @@ mnemos_declare_tier(
     TIER 6
     DEPENDS mnemos_foundation mnemos_chips mnemos_topology mnemos_manifests mnemos_runtime
 )
+
+# Compiled tier-6 observability components (debugger / breakpoint engine, ...).
+add_subdirectory(api)
