@@ -1,7 +1,27 @@
+include(FetchContent)
+
+# zstd for save-state compression (ADR 0008), linked privately into the runtime.
+if(NOT TARGET libzstd_static)
+    set(ZSTD_BUILD_PROGRAMS OFF CACHE INTERNAL "")
+    set(ZSTD_BUILD_SHARED OFF CACHE INTERNAL "")
+    set(ZSTD_BUILD_STATIC ON CACHE INTERNAL "")
+    set(ZSTD_BUILD_TESTS OFF CACHE INTERNAL "")
+    set(ZSTD_LEGACY_SUPPORT OFF CACHE INTERNAL "")
+    FetchContent_Declare(
+        zstd
+        GIT_REPOSITORY https://github.com/facebook/zstd.git
+        GIT_TAG v1.5.6
+        SOURCE_SUBDIR build/cmake
+    )
+    FetchContent_MakeAvailable(zstd)
+endif()
+
 add_library(
     mnemos_runtime
     src/scheduler.cpp
     src/input.cpp
+    src/save_state.cpp
+    src/rewind.cpp
 )
 add_library(mnemos::runtime ALIAS mnemos_runtime)
 
@@ -19,6 +39,8 @@ target_link_libraries(
         mnemos::chips
         mnemos::topology
         mnemos::manifests
+    PRIVATE
+        libzstd_static
 )
 
 mnemos_apply_common_target_options(mnemos_runtime PUBLIC)
@@ -34,6 +56,8 @@ if(BUILD_TESTING)
         SOURCES
             tests/scheduler_test.cpp
             tests/input_test.cpp
+            tests/save_state_test.cpp
+            tests/rewind_test.cpp
         LIBRARIES mnemos::runtime
     )
 endif()

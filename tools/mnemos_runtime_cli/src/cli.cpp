@@ -3,6 +3,7 @@
 #include <mnemos/foundation/sha256.hpp>
 #include <mnemos/manifests/c64/c64_system.hpp>
 #include <mnemos/manifests/manifest.hpp>
+#include <mnemos/runtime/save_state.hpp>
 #include <mnemos/runtime/scheduler.hpp>
 
 #include <charconv>
@@ -10,6 +11,7 @@
 #include <iterator>
 #include <optional>
 #include <ostream>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -26,6 +28,16 @@ namespace mnemos::tools {
             }
             return std::vector<std::uint8_t>((std::istreambuf_iterator<char>(in)),
                                              std::istreambuf_iterator<char>());
+        }
+
+        bool write_file(const std::filesystem::path& path, std::span<const std::uint8_t> bytes) {
+            std::ofstream out(path, std::ios::binary);
+            if (!out) {
+                return false;
+            }
+            out.write(reinterpret_cast<const char*>(bytes.data()),
+                      static_cast<std::streamsize>(bytes.size()));
+            return static_cast<bool>(out);
         }
 
         // An all-zero sha256 is the "unverified placeholder" sentinel (see ROMS.md).
@@ -52,8 +64,8 @@ namespace mnemos::tools {
                "  --rom-dir <dir>     directory holding the manifest's ROM files\n"
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
-               "  --save <file>       (deferred) write a save state\n"
-               "  --load <file>       (deferred) load a save state\n"
+               "  --save <file>       write a save state after the run\n"
+               "  --load <file>       load a save state before the run\n"
                "  --input-log <file>  (deferred) replay a frame-tagged input log\n"
                "  -h, --help          show this help\n";
     }
@@ -136,9 +148,8 @@ namespace mnemos::tools {
             err << "error: --manifest is required\n";
             return 2;
         }
-        if (!options.save.empty() || !options.load.empty() || !options.input_log.empty()) {
-            err << "error: --save/--load/--input-log are not implemented yet "
-                   "(save-state work is deferred)\n";
+        if (!options.input_log.empty()) {
+            err << "error: --input-log is not implemented yet\n";
             return 7;
         }
 
@@ -211,7 +222,47 @@ namespace mnemos::tools {
         std::vector<runtime::scheduled_chip> chips = {
             {&sys->vic, 1U}, {&sys->cpu, 1U}, {&sys->cia1, 1U}, {&sys->cia2, 1U}, {&sys->sid, 1U}};
         runtime::scheduler sched(std::move(chips), &sys->vic);
+
+        // A save-state view over the assembled machine (chunk ids match the manifest).
+        const auto build_target = [&](std::uint64_t master_cycle) {
+            runtime::save_target t;
+            t.manifest_id = m.id;
+            t.manifest_rev = m.revision;
+            t.master_cycle = master_cycle;
+            t.chips = {{"cpu", &sys->cpu},   {"video", &sys->vic}, {"audio", &sys->sid},
+                       {"cia1", &sys->cia1}, {"cia2", &sys->cia2}, {"pla", &sys->pla}};
+            t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
+                        {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};
+            return t;
+        };
+
+        if (!options.load.empty()) {
+            const auto bytes = read_file(options.load);
+            if (!bytes) {
+                err << "error: cannot read save state " << options.load.string() << "\n";
+                return 8;
+            }
+            const runtime::load_result lr = runtime::read_save_state(*bytes, build_target(0U));
+            if (!lr.ok()) {
+                err << "error: failed to load save state (status " << static_cast<int>(lr.status)
+                    << ")\n";
+                return 8;
+            }
+            out << "loaded save state at master cycle " << lr.master_cycle << "\n";
+        }
+
         sched.run_frames(options.frames);
+
+        if (!options.save.empty()) {
+            const std::vector<std::uint8_t> bytes =
+                runtime::write_save_state(build_target(sched.master_cycle()));
+            if (!write_file(options.save, bytes)) {
+                err << "error: cannot write save state " << options.save.string() << "\n";
+                return 8;
+            }
+            out << "wrote save state (" << bytes.size() << " bytes) to " << options.save.string()
+                << "\n";
+        }
 
         if (options.dump_hash) {
             out << "frame " << sched.frame_index() << " "

@@ -84,10 +84,10 @@ TEST_CASE("run validates arguments before touching hardware") {
         cli_options opts;
         CHECK(run(opts, out, err) == 2);
     }
-    SECTION("deferred flags are reported, not ignored") {
+    SECTION("the deferred --input-log flag is reported, not ignored") {
         cli_options opts;
         opts.manifest = "whatever.toml";
-        opts.save = "state.bin";
+        opts.input_log = "log.bin";
         CHECK(run(opts, out, err) == 7);
     }
     SECTION("a manifest that cannot be opened is an error") {

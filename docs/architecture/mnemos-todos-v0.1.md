@@ -220,16 +220,16 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Implement fixed-divider scheduler dispatching per-chip ticks. (scheduler dispatches tick() per cycle in chip order, with a lockstep fast path when all dividers are 1; TDS §11.2)
 - [x] Implement frame-tagged input buffer. (input_buffer keeps events sorted by frame for deterministic replay; CIA1 keyboard/joystick wiring is follow-up)
 - [x] Implement frame boundary detection and signaling. (run_frame / run_frames advance until the designated i_video frame_index increments)
-- [ ] Implement save state with header + per-chip chunks (TDS §15). (deferred — needs the zstd ADR below; depends on per-chip save_state being filled in)
-- [ ] FetchContent integration for `zstd`. (deferred — requires a new ADR for the zstd dependency, like ADR 0006/0007 for json/toml)
-- [ ] Implement save state compression (zstd) and decompression. (deferred with zstd)
-- [ ] Implement CRC32 trailing checksum. (deferred with save-state)
-- [ ] Implement rewind ring (configurable depth, default 600 frames). (deferred with save-state)
-- [~] Unit tests for scheduler dispatch, save/load roundtrip, rewind. (scheduler dispatch + dividers + frame stepping + input buffer covered; save/load + rewind land with save-state)
+- [x] Implement save state with header + per-chip chunks (TDS §15). (runtime::write_save_state / read_save_state: MNMS header + per-chip + per-memory chunks; per-chip save_state/load_state implemented for all 5 C64 chips; unknown chunks skipped for forward-compat)
+- [x] FetchContent integration for `zstd`. (ADR 0008; pinned v1.5.6, SOURCE_SUBDIR build/cmake, libzstd_static linked PRIVATE into tier-5 runtime)
+- [x] Implement save state compression (zstd) and decompression. (level-3 frame around the chunk body)
+- [x] Implement CRC32 trailing checksum. (foundation::crc32 over header+compressed body, verified on load)
+- [x] Implement rewind ring (configurable depth, default 600 frames). (runtime::rewind_ring; full states, at_or_before seek, oldest-evict)
+- [x] Unit tests for scheduler dispatch, save/load roundtrip, rewind. (scheduler dispatch/dividers/frames + input buffer + save_state round-trip/corruption/mismatch/unknown-chunk + rewind seek/evict/clear; per-chip save/load round-trips in each chip's test)
 
 ### Headless runtime CLI
 - [x] Create `tools/mnemos_runtime_cli/` executable target. (tier-8 `mnemos_runtime_cli` + shared `mnemos_runtime_cli_core` lib so tests reuse the logic)
-- [x] CLI options: `--manifest`, `--rom-dir`, `--frames`, `--dump-hash`, `--save`, `--load`, `--input-log`. (all parsed; `--save`/`--load`/`--input-log` are accepted and reported as deferred rather than silently ignored)
+- [x] CLI options: `--manifest`, `--rom-dir`, `--frames`, `--dump-hash`, `--save`, `--load`, `--input-log`. (all parsed; `--save` writes a save state after the run, `--load` restores before it; `--input-log` still deferred)
 - [x] Outputs framebuffer hash (SHA-256 of RGBA bytes) per frame or at end. (at end via `--dump-hash`; pixels serialised R,G,B,A for a cross-platform-stable hash. Loads the manifest, reads/verifies ROMs from `--rom-dir` — placeholder sha256 -> unverified warning — assembles the C64, runs `--frames`, hashes. Verified deterministic end-to-end with synthetic ROMs.)
 
 ### First golden test
@@ -241,7 +241,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 
 ### Acceptance
 - [ ] `mnemos_runtime_cli load c64.pal --frames 600 --dump-hash` produces an identical hash on Win+Linux, Debug+Release.
-- [ ] Save → load → continue produces an identical hash trajectory from the load point onward.
+- [x] Save → load → continue produces an identical hash trajectory from the load point onward. (verified via the CLI: load@frame 3 + 3 frames matches a straight 6-frame run; master cycle restored)
 - [ ] ADR `docs/adr/0005-scheduler-strategy.md` records the fixed-divider choice and its limitations.
 
 ---
