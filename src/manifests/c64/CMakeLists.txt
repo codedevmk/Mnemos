@@ -1,6 +1,7 @@
 add_library(
     mnemos_manifests_c64
     src/c64_system.cpp
+    src/c64_input.cpp
 )
 add_library(mnemos::manifests::c64 ALIAS mnemos_manifests_c64)
 

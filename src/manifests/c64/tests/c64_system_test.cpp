@@ -123,3 +123,35 @@ TEST_CASE("assemble_c64 tracks the VIC bank from CIA2 port A", "[c64][vic]") {
     sys->cia2.write(0x00U, 0x00U); // PRA = %00 -> bank 3
     CHECK(sys->vic.bank() == 3U);
 }
+
+TEST_CASE("c64_input resolves the keyboard matrix and joysticks", "[c64][input]") {
+    using key = mnemos::manifests::c64::c64_input::key;
+    mnemos::manifests::c64::c64_input input;
+
+    input.press(key::a); // column 1, row 2
+    // Column 1 selected (its strobe bit low) reveals row 2 low on PRB.
+    CHECK(input.read_rows(0xFDU) == 0xFBU); // ~(1<<1) strobe -> bit2 clear
+    CHECK(input.read_rows(0xFFU) == 0xFFU); // no column selected -> nothing
+    input.release(key::a);
+    CHECK(input.read_rows(0xFDU) == 0xFFU);
+
+    // Joystick 2 (PRA bits 0-4) overlays the column read.
+    input.set_joystick(2U, mnemos::manifests::c64::c64_input::joy_fire |
+                               mnemos::manifests::c64::c64_input::joy_left);
+    CHECK(input.read_columns(0xFFU) == 0xEBU); // ~(0x10 | 0x04)
+}
+
+TEST_CASE("assemble_c64 reads the keyboard through CIA1", "[c64][input]") {
+    using key = mnemos::manifests::c64::c64_input::key;
+    auto sys = make_c64();
+    sys->input.press(key::a); // column 1, row 2
+
+    // Drive PRA as the column strobe, read the rows on PRB.
+    sys->cia1.write(0x02U, 0xFFU);         // DDRA = output (columns)
+    sys->cia1.write(0x03U, 0x00U);         // DDRB = input (rows)
+    sys->cia1.write(0x00U, 0xFDU);         // PRA: pull column 1 low
+    CHECK(sys->cia1.read(0x01U) == 0xFBU); // PRB row 2 reads low
+
+    sys->cia1.write(0x00U, 0xFBU);         // select a different column (2)
+    CHECK(sys->cia1.read(0x01U) == 0xFFU); // key not in that column
+}

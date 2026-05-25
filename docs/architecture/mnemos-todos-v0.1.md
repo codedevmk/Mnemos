@@ -219,7 +219,7 @@ The C64 chips are individually well-ported; these are system-level wiring/periph
 gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Route VIC + CIA1 /IRQ into the 6510 /IRQ and CIA2 into /NMI. (B1; assemble_c64 ORs vic.irq_asserted()|cia1 via edge callbacks into set_irq_line, CIA2 -> set_nmi_line; the single biggest correctness blocker — without it no IRQ-driven program runs)
 - [x] Track the VIC 16K bank from CIA2 port A at runtime. (B3; CIA2 write_port_a -> vic.set_bank((~port_a_pins())&3))
-- [ ] Keyboard matrix + joystick wiring (CIA1 PRA/PRB callbacks) and paddle/POT mux to SID. (B2; needed for any interactive use; runtime input_buffer exists but isn't bound to CIA1)
+- [~] Keyboard matrix + joystick wiring (CIA1 PRA/PRB callbacks) and paddle/POT mux to SID. (B2; the 8x8 keyboard matrix + both joysticks are modelled in c64_input and wired into CIA1 PRA/PRB in assemble_c64 — matrix scan + joystick overlay unit + integration tested. Remaining: the paddle/POT mux to SID $D419/$D41A, and feeding the frame-tagged input_buffer / a frontend into c64_input)
 - [ ] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4)
 - [ ] Cartridge support: `.crt` loader + generic 8K/16K/Ultimax + Ocean/Magic Desk + EasyFlash; drive `/GAME`//EXROM into the PLA. (B5; partially adjacent to M3 "mapper hook plumbing")
 - [x] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; chips::iec_bus + chips::storage::c1541::{d64_image, synthetic_drive} + CIA2 IEC wiring in assemble_c64 + CLI --disk. Command/serving logic unit-tested; the bit-level handshake is ROM-gated like the golden boot)

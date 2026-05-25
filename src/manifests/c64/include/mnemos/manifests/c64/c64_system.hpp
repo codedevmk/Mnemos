@@ -8,6 +8,7 @@
 #include <mnemos/chips/storage/c1541/full_drive.hpp>
 #include <mnemos/chips/storage/c1541/synthetic_drive.hpp>
 #include <mnemos/chips/video/vic_ii_6569.hpp>
+#include <mnemos/manifests/c64/c64_input.hpp>
 #include <mnemos/topology/bus.hpp>
 
 #include <array>
@@ -36,6 +37,9 @@ namespace mnemos::manifests::c64 {
         chips::iec_bus iec;
         chips::storage::c1541::synthetic_drive drive8{8U};
         chips::storage::c1541::full_drive drive8_full{8U};
+
+        // Keyboard matrix + joysticks, read through CIA1 ports A/B.
+        c64_input input;
 
         std::array<std::uint8_t, 0x10000> ram{};
         std::array<std::uint8_t, 0x0400> color_ram{}; // $D800-$DBFF

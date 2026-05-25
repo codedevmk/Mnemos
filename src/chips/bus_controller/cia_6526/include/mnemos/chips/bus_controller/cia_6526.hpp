@@ -83,6 +83,9 @@ namespace mnemos::chips::bus_controller {
         // read 0. The C64 derives the IEC ATN/CLK/DATA out lines from CIA2 PA3-5
         // this way, so floating (input) pins never pull the bus.
         [[nodiscard]] std::uint8_t port_a_output() const noexcept;
+        // The bits port B actively drives (output latch masked by DDRB). The C64
+        // keyboard scan reads the matrix against CIA1's driven row/column strobes.
+        [[nodiscard]] std::uint8_t port_b_output() const noexcept;
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 

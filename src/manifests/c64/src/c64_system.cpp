@@ -38,6 +38,10 @@ namespace mnemos::manifests::c64 {
         cia1_cfg.tod_tick_hz = 985'248U;
         cia1_cfg.tod_src_hz = 50U;
         cia1_cfg.irq_edge = [refresh_irq](bool) { refresh_irq(); };
+        // Keyboard + joystick 2 on port A (columns / joy2), keyboard + joystick 1
+        // on port B (rows / joy1), resolved against the live driven strobes.
+        cia1_cfg.read_port_a = [s]() { return s->input.read_columns(s->cia1.port_b_output()); };
+        cia1_cfg.read_port_b = [s]() { return s->input.read_rows(s->cia1.port_a_output()); };
         s->cia1.configure(cia1_cfg);
 
         // Both drive 8 implementations share the IEC bus; the runner ticks one.
