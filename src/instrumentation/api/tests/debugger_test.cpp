@@ -12,33 +12,26 @@
 
 namespace {
     using mnemos::chips::cpu::m6510;
-    using mnemos::instrumentation::breakpoint_spec;
     using mnemos::instrumentation::cpu_probe;
     using mnemos::instrumentation::debugger;
     using mnemos::instrumentation::halt_reason;
+    using mnemos::instrumentation::watch_kind;
+    using mnemos::topology::access_event;
     using reset_kind = mnemos::chips::reset_kind;
 
-    // A minimal 6510 machine: 64K RAM with a tiny program and a reset vector.
-    //   $1000: LDA #$01   (A9 01)
-    //   $1002: LDX #$02   (A2 02)
-    //   $1004: NOP        (EA)
-    //   $1005: JMP $1005  (4C 05 10)  -- self loop
+    // A 6510 machine: 64K RAM holding a program at `origin`, with the reset vector
+    // pointed at it. The bus is exposed so the debugger can observe accesses.
     struct machine final {
         std::array<std::uint8_t, 0x10000> ram{};
         mnemos::topology::bus bus{16U, mnemos::topology::endianness::little};
         m6510 cpu;
 
-        machine() {
-            ram[0x1000] = 0xA9;
-            ram[0x1001] = 0x01;
-            ram[0x1002] = 0xA2;
-            ram[0x1003] = 0x02;
-            ram[0x1004] = 0xEA;
-            ram[0x1005] = 0x4C;
-            ram[0x1006] = 0x05;
-            ram[0x1007] = 0x10;
-            ram[0xFFFC] = 0x00; // reset vector low
-            ram[0xFFFD] = 0x10; // reset vector high -> $1000
+        machine(std::span<const std::uint8_t> program, std::uint16_t origin) {
+            for (std::size_t i = 0; i < program.size(); ++i) {
+                ram[origin + i] = program[i];
+            }
+            ram[0xFFFC] = static_cast<std::uint8_t>(origin & 0xFFU);
+            ram[0xFFFD] = static_cast<std::uint8_t>(origin >> 8U);
             bus.map_ram(0x0000U, std::span<std::uint8_t>(ram), 0);
             cpu.attach_bus(bus);
             cpu.reset(reset_kind::power_on);
@@ -49,10 +42,18 @@ namespace {
                     .at_instruction_boundary = [this]() { return cpu.at_instruction_boundary(); }};
         }
     };
+
+    // LDA #$01; LDX #$02; NOP ($1004); JMP $1005 (self loop at $1005).
+    constexpr std::array<std::uint8_t, 8> bp_program = {0xA9U, 0x01U, 0xA2U, 0x02U,
+                                                        0xEAU, 0x4CU, 0x05U, 0x10U};
+
+    // LDA #$42; STA $2000 ($1002); LDA $2000 ($1005); JMP $1008 (self loop).
+    constexpr std::array<std::uint8_t, 11> wp_program = {0xA9U, 0x42U, 0x8DU, 0x00U, 0x20U, 0xADU,
+                                                         0x00U, 0x20U, 0x4CU, 0x08U, 0x10U};
 } // namespace
 
 TEST_CASE("debugger runs to a PC breakpoint") {
-    machine m;
+    machine m(bp_program, 0x1000U);
     mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
     debugger dbg(sched, m.probe());
 
@@ -67,14 +68,14 @@ TEST_CASE("debugger runs to a PC breakpoint") {
 }
 
 TEST_CASE("debugger steps one instruction at a time") {
-    machine m;
+    machine m(bp_program, 0x1000U);
     mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
     debugger dbg(sched, m.probe());
 
-    // Anchor at a known boundary via a breakpoint, then single-step deterministically.
     dbg.add_breakpoint({.address = 0x1004U});
     REQUIRE(dbg.run(100U).pc == 0x1004U);
     dbg.clear_breakpoints();
+
     const auto a = dbg.step_instruction(); // execute NOP at $1004
     CHECK(a.reason == halt_reason::step_complete);
     CHECK(a.pc == 0x1005U);
@@ -84,7 +85,7 @@ TEST_CASE("debugger steps one instruction at a time") {
 
 TEST_CASE("debugger honours a breakpoint condition") {
     SECTION("condition true -> fires") {
-        machine m;
+        machine m(bp_program, 0x1000U);
         mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
         debugger dbg(sched, m.probe());
         dbg.add_breakpoint(
@@ -94,7 +95,7 @@ TEST_CASE("debugger honours a breakpoint condition") {
         CHECK(ev.pc == 0x1005U);
     }
     SECTION("condition false -> never fires") {
-        machine m;
+        machine m(bp_program, 0x1000U);
         mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
         debugger dbg(sched, m.probe());
         dbg.add_breakpoint({.address = 0x1005U, .condition = []() { return false; }});
@@ -104,7 +105,7 @@ TEST_CASE("debugger honours a breakpoint condition") {
 }
 
 TEST_CASE("debugger disables and removes breakpoints") {
-    machine m;
+    machine m(bp_program, 0x1000U);
     mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
     debugger dbg(sched, m.probe());
 
@@ -124,7 +125,7 @@ TEST_CASE("debugger disables and removes breakpoints") {
 }
 
 TEST_CASE("debugger reports scheduler progress") {
-    machine m;
+    machine m(bp_program, 0x1000U);
     mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
     debugger dbg(sched, m.probe());
 
@@ -133,4 +134,60 @@ TEST_CASE("debugger reports scheduler progress") {
     CHECK(dbg.master_cycle() > 0U);
     CHECK(dbg.frame_index() == 0U); // no frame source attached
     CHECK(dbg.step_frame() == 0U);  // no frame source -> no-op
+}
+
+TEST_CASE("debugger stops on a memory write watchpoint") {
+    machine m(wp_program, 0x1000U);
+    mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+    debugger dbg(sched, m.probe(), &m.bus);
+
+    const auto id = dbg.add_watchpoint({.address = 0x2000U, .kind = watch_kind::write});
+    const auto ev = dbg.run(100U);
+
+    CHECK(ev.reason == halt_reason::watchpoint);
+    CHECK(ev.watchpoint == id);
+    CHECK(ev.pc == 0x1005U);       // stopped after the STA at $1002
+    CHECK(m.ram[0x2000] == 0x42U); // the write itself completed
+}
+
+TEST_CASE("debugger distinguishes read from write watchpoints") {
+    machine m(wp_program, 0x1000U);
+    mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+    debugger dbg(sched, m.probe(), &m.bus);
+
+    // A read watchpoint ignores the STA write and fires on the LDA $2000 at $1005.
+    dbg.add_watchpoint({.address = 0x2000U, .kind = watch_kind::read});
+    const auto ev = dbg.run(100U);
+    CHECK(ev.reason == halt_reason::watchpoint);
+    CHECK(ev.pc == 0x1008U); // stopped after the LDA at $1005
+}
+
+TEST_CASE("debugger watchpoints honour value conditions and ranges") {
+    SECTION("value condition gates the hit") {
+        machine m(wp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe(), &m.bus);
+        dbg.add_watchpoint({.address = 0x2000U,
+                            .kind = watch_kind::write,
+                            .condition = [](const access_event& a) { return a.value == 0x99U; }});
+        CHECK(dbg.run(100U).reason == halt_reason::budget_exhausted); // only $42 is ever written
+    }
+    SECTION("a range watchpoint covers the address") {
+        machine m(wp_program, 0x1000U);
+        mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+        debugger dbg(sched, m.probe(), &m.bus);
+        // [$1FF0, $2010) covers the $2000 write.
+        dbg.add_watchpoint({.address = 0x1FF0U, .length = 0x20U, .kind = watch_kind::access});
+        CHECK(dbg.run(100U).reason == halt_reason::watchpoint);
+    }
+}
+
+TEST_CASE("debugger watchpoints never fire without a bus") {
+    machine m(wp_program, 0x1000U);
+    mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
+    debugger dbg(sched, m.probe()); // no watch bus supplied
+
+    dbg.add_watchpoint({.address = 0x2000U, .kind = watch_kind::access});
+    CHECK(dbg.watchpoint_count() == 1U);
+    CHECK(dbg.run(100U).reason == halt_reason::budget_exhausted);
 }

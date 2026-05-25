@@ -11,14 +11,15 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
-# Tier 6: observes the runtime (tier 5) by injection; never the reverse.
-target_link_libraries(mnemos_instrumentation_api PUBLIC mnemos::runtime)
+# Tier 6: observes the runtime (tier 5) + bus (tier 3) by injection, never the
+# reverse.
+target_link_libraries(mnemos_instrumentation_api PUBLIC mnemos::runtime mnemos::topology)
 
 mnemos_apply_common_target_options(mnemos_instrumentation_api PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_instrumentation_api
     TIER 6
-    DEPENDS mnemos_foundation mnemos_runtime
+    DEPENDS mnemos_foundation mnemos_topology mnemos_runtime
 )
 
 if(BUILD_TESTING)

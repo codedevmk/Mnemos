@@ -6,12 +6,25 @@
 
 namespace mnemos::instrumentation {
 
-    debugger::debugger(runtime::scheduler& scheduler, cpu_probe probe)
-        : scheduler_(scheduler), probe_(std::move(probe)) {}
+    debugger::debugger(runtime::scheduler& scheduler, cpu_probe probe, topology::bus* watch_bus)
+        : scheduler_(scheduler), probe_(std::move(probe)), watch_bus_(watch_bus) {
+        if (watch_bus_ != nullptr) {
+            watch_bus_->set_access_observer(
+                [this](const topology::access_event& e) { on_bus_access(e); });
+        }
+    }
+
+    debugger::~debugger() {
+        if (watch_bus_ != nullptr) {
+            watch_bus_->set_access_observer({}); // never leave a dangling observer
+        }
+    }
 
     std::uint64_t debugger::master_cycle() const noexcept { return scheduler_.master_cycle(); }
 
     std::uint64_t debugger::frame_index() const noexcept { return scheduler_.frame_index(); }
+
+    // ----- breakpoints -----
 
     breakpoint_id debugger::add_breakpoint(breakpoint_spec spec) {
         const breakpoint_id id = next_id_++;
@@ -43,6 +56,66 @@ namespace mnemos::instrumentation {
 
     std::size_t debugger::breakpoint_count() const noexcept { return breakpoints_.size(); }
 
+    // ----- watchpoints -----
+
+    watchpoint_id debugger::add_watchpoint(watchpoint_spec spec) {
+        const watchpoint_id id = next_id_++;
+        watchpoints_.push_back({.id = id, .spec = std::move(spec)});
+        return id;
+    }
+
+    bool debugger::remove_watchpoint(watchpoint_id id) {
+        for (auto it = watchpoints_.begin(); it != watchpoints_.end(); ++it) {
+            if (it->id == id) {
+                watchpoints_.erase(it);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool debugger::set_watchpoint_enabled(watchpoint_id id, bool enabled) {
+        for (auto& e : watchpoints_) {
+            if (e.id == id) {
+                e.spec.enabled = enabled;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void debugger::clear_watchpoints() noexcept { watchpoints_.clear(); }
+
+    std::size_t debugger::watchpoint_count() const noexcept { return watchpoints_.size(); }
+
+    void debugger::on_bus_access(const topology::access_event& access) {
+        if (watchpoints_.empty() || pending_watch_.has_value()) {
+            return; // nothing to match, or a hit is already latched for this step
+        }
+        for (const auto& e : watchpoints_) {
+            if (!e.spec.enabled) {
+                continue;
+            }
+            const bool kind_ok = e.spec.kind == watch_kind::access ||
+                                 (e.spec.kind == watch_kind::write && access.write) ||
+                                 (e.spec.kind == watch_kind::read && !access.write);
+            if (!kind_ok) {
+                continue;
+            }
+            const std::uint32_t end = e.spec.address + e.spec.length;
+            if (access.address < e.spec.address || access.address >= end) {
+                continue;
+            }
+            if (e.spec.condition && !e.spec.condition(access)) {
+                continue;
+            }
+            pending_watch_ = watch_hit{.id = e.id, .access = access};
+            return;
+        }
+    }
+
+    // ----- execution control -----
+
     std::uint16_t debugger::current_pc() const {
         return probe_.program_counter ? probe_.program_counter() : 0U;
     }
@@ -67,9 +140,18 @@ namespace mnemos::instrumentation {
     }
 
     stop_event debugger::step_instruction() {
+        pending_watch_.reset();
         advance_one_instruction();
+        if (pending_watch_.has_value()) {
+            return {.reason = halt_reason::watchpoint,
+                    .breakpoint = 0U,
+                    .watchpoint = pending_watch_->id,
+                    .pc = current_pc(),
+                    .master_cycle = scheduler_.master_cycle()};
+        }
         return {.reason = halt_reason::step_complete,
                 .breakpoint = 0U,
+                .watchpoint = 0U,
                 .pc = current_pc(),
                 .master_cycle = scheduler_.master_cycle()};
     }
@@ -78,17 +160,27 @@ namespace mnemos::instrumentation {
 
     stop_event debugger::run(std::uint64_t max_instructions) {
         for (std::uint64_t n = 0; n < max_instructions; ++n) {
+            pending_watch_.reset();
             advance_one_instruction();
+            if (pending_watch_.has_value()) {
+                return {.reason = halt_reason::watchpoint,
+                        .breakpoint = 0U,
+                        .watchpoint = pending_watch_->id,
+                        .pc = current_pc(),
+                        .master_cycle = scheduler_.master_cycle()};
+            }
             const std::uint16_t pc = current_pc();
             if (const breakpoint_id id = matching_breakpoint(pc); id != 0U) {
                 return {.reason = halt_reason::breakpoint,
                         .breakpoint = id,
+                        .watchpoint = 0U,
                         .pc = pc,
                         .master_cycle = scheduler_.master_cycle()};
             }
         }
         return {.reason = halt_reason::budget_exhausted,
                 .breakpoint = 0U,
+                .watchpoint = 0U,
                 .pc = current_pc(),
                 .master_cycle = scheduler_.master_cycle()};
     }

@@ -12,6 +12,15 @@ namespace mnemos::topology {
 
     enum class endianness : std::uint8_t { little, big };
 
+    // A single completed bus access, delivered to an access observer. `value` is the
+    // byte read or written; `write` distinguishes the two. Used by the tier-6
+    // instrumentation layer for memory watchpoints (the bus itself stays oblivious).
+    struct access_event final {
+        std::uint32_t address{};
+        std::uint8_t value{};
+        bool write{};
+    };
+
     // A typed address space (TDS §9): a width, an endianness, and a table of
     // regions backed by RAM, ROM, or an MMIO chip. Implements chips::i_bus so a
     // CPU attaches directly to it.
@@ -53,6 +62,13 @@ namespace mnemos::topology {
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
         void write8(std::uint32_t address, std::uint8_t value) override;
 
+        // Optional observer invoked after every completed read/write (the value is
+        // the byte transferred). Null by default — a single null check on the hot
+        // path when unset. The instrumentation layer installs one for watchpoints;
+        // pass {} to clear it.
+        using access_observer = std::function<void(const access_event&)>;
+        void set_access_observer(access_observer observer) { observer_ = std::move(observer); }
+
       private:
         enum class kind : std::uint8_t { ram, rom, mmio };
 
@@ -74,6 +90,7 @@ namespace mnemos::topology {
         endianness endian_{endianness::little};
         std::uint32_t address_mask_{0xFFFFU};
         std::vector<region> regions_;
+        access_observer observer_{};
     };
 
 } // namespace mnemos::topology

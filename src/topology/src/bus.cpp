@@ -75,37 +75,46 @@ namespace mnemos::topology {
     std::uint8_t bus::read8(std::uint32_t address) {
         const std::uint32_t addr = address & address_mask_;
         const region* r = resolve(addr, false);
-        if (r == nullptr) {
-            return 0xFFU; // open bus
+        std::uint8_t value = 0xFFU; // open bus default
+        if (r != nullptr) {
+            switch (r->backing) {
+            case kind::ram:
+                value = r->ram[addr - r->start];
+                break;
+            case kind::rom:
+                value = r->rom[addr - r->start];
+                break;
+            case kind::mmio:
+                value = r->on_read ? r->on_read(addr) : 0xFFU;
+                break;
+            }
         }
-        switch (r->backing) {
-        case kind::ram:
-            return r->ram[addr - r->start];
-        case kind::rom:
-            return r->rom[addr - r->start];
-        case kind::mmio:
-            return r->on_read ? r->on_read(addr) : 0xFFU;
+        if (observer_) {
+            observer_({.address = addr, .value = value, .write = false});
         }
-        return 0xFFU;
+        return value;
     }
 
     void bus::write8(std::uint32_t address, std::uint8_t value) {
         const std::uint32_t addr = address & address_mask_;
         const region* r = resolve(addr, true);
-        if (r == nullptr) {
-            return; // unmapped write dropped
-        }
-        switch (r->backing) {
-        case kind::ram:
-            r->ram[addr - r->start] = value;
-            return;
-        case kind::rom:
-            return; // ROM ignores writes
-        case kind::mmio:
-            if (r->on_write) {
-                r->on_write(addr, value);
+        if (r != nullptr) {
+            switch (r->backing) {
+            case kind::ram:
+                r->ram[addr - r->start] = value;
+                break;
+            case kind::rom:
+                break; // ROM ignores writes
+            case kind::mmio:
+                if (r->on_write) {
+                    r->on_write(addr, value);
+                }
+                break;
             }
-            return;
+        }
+        // Report the attempted write (even if dropped/ROM) so watchpoints see it.
+        if (observer_) {
+            observer_({.address = addr, .value = value, .write = true});
         }
     }
 

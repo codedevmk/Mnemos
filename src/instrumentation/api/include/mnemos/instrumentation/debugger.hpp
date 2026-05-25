@@ -1,7 +1,10 @@
 #pragma once
 
+#include <mnemos/topology/bus.hpp>
+
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace mnemos::runtime {
@@ -11,12 +14,28 @@ namespace mnemos::runtime {
 namespace mnemos::instrumentation {
 
     using breakpoint_id = std::uint32_t;
+    using watchpoint_id = std::uint32_t; // shares the monotonic id space with breakpoints
 
     // Why a run/step stopped.
     enum class halt_reason : std::uint8_t {
         budget_exhausted, // ran the requested number of instructions without a hit
         breakpoint,       // a PC breakpoint matched
+        watchpoint,       // a memory watchpoint matched
         step_complete,    // an explicit single step finished
+    };
+
+    // Which kind of bus access a watchpoint triggers on.
+    enum class watch_kind : std::uint8_t { read, write, access };
+
+    // A memory watchpoint over the inclusive range [address, address + length). The
+    // optional condition receives the triggering access (address/value/write) so the
+    // caller can gate on a value; an empty condition is unconditional.
+    struct watchpoint_spec final {
+        std::uint32_t address{};
+        std::uint32_t length{1U};
+        watch_kind kind{watch_kind::write};
+        std::function<bool(const topology::access_event&)> condition{};
+        bool enabled{true};
     };
 
     // A program-counter breakpoint: fire when the CPU is about to execute
@@ -32,6 +51,7 @@ namespace mnemos::instrumentation {
     struct stop_event final {
         halt_reason reason{halt_reason::budget_exhausted};
         breakpoint_id breakpoint{}; // meaningful only when reason == breakpoint
+        watchpoint_id watchpoint{}; // meaningful only when reason == watchpoint
         std::uint16_t pc{};         // the next instruction's address
         std::uint64_t master_cycle{};
     };
@@ -65,6 +85,14 @@ namespace mnemos::instrumentation {
         virtual void clear_breakpoints() noexcept = 0;
         [[nodiscard]] virtual std::size_t breakpoint_count() const noexcept = 0;
 
+        // Memory watchpoints (require a bus to observe; otherwise add_watchpoint
+        // still records the spec but it can never fire).
+        virtual watchpoint_id add_watchpoint(watchpoint_spec spec) = 0;
+        virtual bool remove_watchpoint(watchpoint_id id) = 0;
+        virtual bool set_watchpoint_enabled(watchpoint_id id, bool enabled) = 0;
+        virtual void clear_watchpoints() noexcept = 0;
+        [[nodiscard]] virtual std::size_t watchpoint_count() const noexcept = 0;
+
         // Advance exactly one CPU instruction (returns reason step_complete).
         virtual stop_event step_instruction() = 0;
         // Advance one video frame; returns the new frame index (no breakpoint
@@ -79,7 +107,16 @@ namespace mnemos::instrumentation {
     // must outlive the debugger.
     class debugger final : public i_runtime_introspection {
       public:
-        debugger(runtime::scheduler& scheduler, cpu_probe probe);
+        // `watch_bus` is optional; supply it to enable memory watchpoints. The
+        // scheduler, probe targets, and bus must all outlive the debugger.
+        debugger(runtime::scheduler& scheduler, cpu_probe probe,
+                 topology::bus* watch_bus = nullptr);
+        ~debugger() override;
+
+        debugger(const debugger&) = delete;
+        debugger& operator=(const debugger&) = delete;
+        debugger(debugger&&) = delete;
+        debugger& operator=(debugger&&) = delete;
 
         [[nodiscard]] std::uint64_t master_cycle() const noexcept override;
         [[nodiscard]] std::uint64_t frame_index() const noexcept override;
@@ -90,14 +127,28 @@ namespace mnemos::instrumentation {
         void clear_breakpoints() noexcept override;
         [[nodiscard]] std::size_t breakpoint_count() const noexcept override;
 
+        watchpoint_id add_watchpoint(watchpoint_spec spec) override;
+        bool remove_watchpoint(watchpoint_id id) override;
+        bool set_watchpoint_enabled(watchpoint_id id, bool enabled) override;
+        void clear_watchpoints() noexcept override;
+        [[nodiscard]] std::size_t watchpoint_count() const noexcept override;
+
         stop_event step_instruction() override;
         std::uint64_t step_frame() override;
         [[nodiscard]] stop_event run(std::uint64_t max_instructions) override;
 
       private:
-        struct entry final {
+        struct breakpoint_entry final {
             breakpoint_id id{};
             breakpoint_spec spec{};
+        };
+        struct watchpoint_entry final {
+            watchpoint_id id{};
+            watchpoint_spec spec{};
+        };
+        struct watch_hit final {
+            watchpoint_id id{};
+            topology::access_event access{};
         };
 
         // Advance the scheduler until the CPU reaches its next instruction boundary.
@@ -105,10 +156,15 @@ namespace mnemos::instrumentation {
         [[nodiscard]] std::uint16_t current_pc() const;
         // The id of the first enabled, matching breakpoint at `pc`, or 0 for none.
         [[nodiscard]] breakpoint_id matching_breakpoint(std::uint16_t pc) const;
+        // Bus observer: records the first watchpoint a completed access trips.
+        void on_bus_access(const topology::access_event& access);
 
         runtime::scheduler& scheduler_;
         cpu_probe probe_;
-        std::vector<entry> breakpoints_;
+        topology::bus* watch_bus_{};
+        std::vector<breakpoint_entry> breakpoints_;
+        std::vector<watchpoint_entry> watchpoints_;
+        std::optional<watch_hit> pending_watch_;
         breakpoint_id next_id_{1U};
     };
 

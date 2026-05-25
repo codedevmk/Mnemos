@@ -280,9 +280,9 @@ Phase 1 (execution control + PC breakpoints) has landed in the new compiled tier
 
 - [ ] Promote `i_chip_introspection` from forward decl to full interface. (Phase 1 reads CPU state via injected probes so no chip-contract change was forced yet; a richer i_chip_introspection — register/memory views — lands with the memory-inspection work)
 - [~] Implement `i_runtime_introspection`. (interface + concrete `debugger` landed: master_cycle/frame_index queries, step_instruction / step_frame / run-with-instruction-budget control, and PC breakpoint management. pause/resume for a live frontend thread, watchpoints, and event subscription are the remaining methods, added in later phases)
-- [~] Implement breakpoint engine (PC, memory R/W, conditional). (PC breakpoints with optional per-hit conditions + enable/disable/remove + a stop_event report, checked at instruction boundaries while driving the scheduler one master cycle at a time; unit-tested against a real m6510 running a small program. Memory R/W watchpoints are Phase 2)
-- [ ] Implement watch engine. (Phase 2: memory read/write/access watchpoints; needs a generic bus access-observer hook on topology::bus)
-- [ ] Implement event subscription with filters. (Phase 3: event_sink + event_filter, breakpoint-hit + step events)
+- [x] Implement breakpoint engine (PC, memory R/W, conditional). (PC breakpoints with optional per-hit conditions + enable/disable/remove + a stop_event report, checked at instruction boundaries; unit-tested against a real m6510 running a small program)
+- [x] Implement watch engine. (memory read / write / access watchpoints over an address range, with an optional value condition, via a new generic topology::bus access-observer hook the debugger installs — null by default so the hot path is a single branch and the golden boot is unchanged. The hit halts run() at the end of the triggering instruction with a watchpoint stop_event. Unit-tested: write vs read discrimination, value condition, range, and no-bus = never fires)
+- [ ] Implement event subscription with filters. (Phase 3: event_sink + event_filter, breakpoint-hit + step + frame events)
 - [ ] Author Cap'n Proto schemas under `src/instrumentation/wire/`.
 - [ ] Build-time codegen for C++ wire bindings.
 - [ ] Implement wire transport (named pipe on Windows, domain socket on Linux).
