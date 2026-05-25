@@ -185,9 +185,10 @@ loader + system builder, the runtime scheduler + frame-tagged input, full
 save-state (zstd container + CRC32 + rewind ring), the headless CLI, the fully
 wired C64 (IRQ/NMI routing, dynamic VIC bank, IEC bus), and the complete 1541 —
 both the protocol-level synthetic drive and the cycle-accurate full drive (6502 +
-2x 6522 VIA + GCR), selectable via `--drive-rom` (B6 + B9 done). Remaining: the
-first golden boot test (data-gated on local C64 ROMs — the CLI + framebuffer-hash
-pipeline is ready) and ADR 0005 (scheduler strategy).
+2x 6522 VIA + GCR), selectable via `--drive-rom` (B6 + B9 done), plus the C64
+keyboard/joystick/paddle input (B2) and ADR 0005 (scheduler strategy). The only
+remaining item is the first golden boot test, data-gated on local C64 ROMs — the
+CLI + framebuffer-hash pipeline is ready.
 
 ### Topology library
 - [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
@@ -259,7 +260,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 ### Acceptance
 - [ ] `mnemos_runtime_cli load c64.pal --frames 600 --dump-hash` produces an identical hash on Win+Linux, Debug+Release.
 - [x] Save → load → continue produces an identical hash trajectory from the load point onward. (verified via the CLI: load@frame 3 + 3 frames matches a straight 6-frame run; master cycle restored)
-- [ ] ADR `docs/adr/0005-scheduler-strategy.md` records the fixed-divider choice and its limitations.
+- [x] ADR `docs/adr/0005-scheduler-strategy.md` records the fixed-divider choice and its limitations. (records the fixed-divider master-clock model, lockstep fast path, rendering-agnostic frame detection, and the v0.1 limitations: no sub-cycle bus arbitration / static ratios only)
 
 ---
 
