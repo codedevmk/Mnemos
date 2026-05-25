@@ -396,9 +396,13 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   total). phase 5: BCD + misc — ABCD/SBCD/NBCD (shared packed-BCD add/sub helpers),
   SWAP, EXG (Dn/An/Dn-An), PEA, LEA, TAS, and MOVEM (register-list transfer, both
   directions incl. -(An)/(An)+ with the predec mask order); 9 more tests (58 total).
-  The instruction set is now essentially complete (MOVEP is the lone niche op left).
-  Remaining: MOVEP, the cycle-accurate two-word prefetch + address/bus-error frames,
-  then the Emu 743-check conformance vectors (phase 6)
+  phase 6: MOVEP (Dn<->(d16,An) byte-scatter) + BTST Dn,#imm — completing the
+  instruction set; 3 more tests (60 total). The 68000 now decodes every opcode and is
+  FUNCTIONALLY COMPLETE. The only remaining work is accuracy, not coverage: the
+  cycle-accurate two-word prefetch pipeline + address/bus-error group-0 frames, which
+  in turn unlock the prefetch/cycle-exact Emu/ProcessorTests conformance vectors (the
+  functional core's PC is the logical next-instruction address, not the prefetch-ahead
+  value those vectors check, so that harness waits on the prefetch refactor))
 - [ ] Implement `chips::audio::ym2612`.
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).

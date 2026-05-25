@@ -866,3 +866,35 @@ TEST_CASE("m68000 MOVEM round-trips registers through the stack") {
     CHECK(r.d[3] == 0xBBBB1111U); // restored from D1
     CHECK(r.a[7] == 0x00003000U); // stack balanced
 }
+
+TEST_CASE("m68000 MOVEP scatters and gathers bytes at even addresses") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00001234U;
+    s.a[0] = 0x00002000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x0188U, 0x0000U}); // MOVEP.W D0,(0,A0)
+    m.cpu.step_instruction();
+    CHECK(m.bus.read8(0x2000U) == 0x12U); // high byte at the base
+    CHECK(m.bus.read8(0x2002U) == 0x34U); // low byte two bytes on
+    CHECK(m.bus.read8(0x2001U) == 0x00U); // odd byte untouched
+
+    m.load(0x1006U, {0x0308U, 0x0000U}); // MOVEP.W (0,A0),D1
+    m.set_pc(0x1006U);
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().d[1] & 0xFFFFU) == 0x1234U);
+}
+
+TEST_CASE("m68000 MOVEP.L writes four bytes with a 2-byte stride") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x12345678U;
+    s.a[0] = 0x00002000U;
+    const auto r = run_one(m, {0x01C8U, 0x0000U}, s); // MOVEP.L D0,(0,A0)
+    CHECK(m.bus.read8(0x2000U) == 0x12U);
+    CHECK(m.bus.read8(0x2002U) == 0x34U);
+    CHECK(m.bus.read8(0x2004U) == 0x56U);
+    CHECK(m.bus.read8(0x2006U) == 0x78U);
+    (void)r;
+}

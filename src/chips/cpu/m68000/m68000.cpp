@@ -1004,6 +1004,34 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    void m68000::op_movep(std::uint16_t op) noexcept {
+        const auto dn = static_cast<std::size_t>((op >> 9U) & 7);
+        const auto an = static_cast<std::size_t>(op & 7);
+        const auto disp = static_cast<std::int16_t>(fetch16());
+        const std::uint32_t a =
+            a_[an] + static_cast<std::uint32_t>(static_cast<std::int32_t>(disp));
+        const bool to_memory = (op & 0x80U) != 0U;
+        const bool is_long = (op & 0x40U) != 0U;
+        if (to_memory) {
+            if (is_long) {
+                write8(a, static_cast<std::uint8_t>(d_[dn] >> 24U));
+                write8(a + 2U, static_cast<std::uint8_t>(d_[dn] >> 16U));
+                write8(a + 4U, static_cast<std::uint8_t>(d_[dn] >> 8U));
+                write8(a + 6U, static_cast<std::uint8_t>(d_[dn]));
+            } else {
+                write8(a, static_cast<std::uint8_t>(d_[dn] >> 8U));
+                write8(a + 2U, static_cast<std::uint8_t>(d_[dn]));
+            }
+        } else if (is_long) {
+            d_[dn] = (static_cast<std::uint32_t>(read8(a)) << 24U) |
+                     (static_cast<std::uint32_t>(read8(a + 2U)) << 16U) |
+                     (static_cast<std::uint32_t>(read8(a + 4U)) << 8U) | read8(a + 6U);
+        } else {
+            d_[dn] = (d_[dn] & 0xFFFF0000U) | (static_cast<std::uint32_t>(read8(a)) << 8U) |
+                     read8(a + 2U);
+        }
+    }
+
     void m68000::op_quick(std::uint16_t op) noexcept {
         const int em = (op >> 3U) & 7, er = op & 7;
         int data = (op >> 9U) & 7;
@@ -1041,12 +1069,24 @@ namespace mnemos::chips::cpu {
     }
 
     void m68000::op_immediate(std::uint16_t op) noexcept {
-        const int em = (op >> 3U) & 7;
-        // Bit 8 set: dynamic bit op (BTST/BCHG/BCLR/BSET Dn,<ea>); MOVEP (mode 1)
-        // is deferred to a later phase.
+        const int em = (op >> 3U) & 7, er = op & 7;
+        // Bit 8 set: dynamic bit op (BTST/BCHG/BCLR/BSET Dn,<ea>), MOVEP (mode 1),
+        // or BTST Dn,#imm (the immediate operand form).
         if ((op & 0x0100U) != 0U) {
+            const int ty = (op >> 6U) & 3;
+            if (em == 7 && er == 4 && ty == 0) { // BTST Dn,#imm
+                const unsigned bn = d_[static_cast<std::size_t>((op >> 9U) & 7)] & 7U;
+                const auto v = static_cast<std::uint8_t>(fetch16() & 0xFFU);
+                if (((v >> bn) & 1U) != 0U) {
+                    sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
+                } else {
+                    sr_ |= sr_z;
+                }
+                return;
+            }
             if (em == 1) {
-                return; // MOVEP
+                op_movep(op);
+                return;
             }
             op_bit(op, true);
             return;
@@ -1064,7 +1104,6 @@ namespace mnemos::chips::cpu {
         if (static_cast<int>(sz) == 3) {
             return;
         }
-        const int er = op & 7;
         std::uint32_t imm =
             sz == op_size::longword ? fetch32() : static_cast<std::uint32_t>(fetch16());
         if (sz == op_size::byte) {

@@ -152,6 +152,7 @@ namespace mnemos::chips::cpu {
         void op_quick(std::uint16_t op) noexcept;             // group 5: ADDQ/SUBQ
         void op_immediate(std::uint16_t op) noexcept;         // group 0: immediates + bit ops
         void op_bit(std::uint16_t op, bool dynamic) noexcept; // BTST/BCHG/BCLR/BSET
+        void op_movep(std::uint16_t op) noexcept;             // MOVEP Dn<->(d16,An)
         void op_or(std::uint16_t op) noexcept;                // group 8: OR (DIV/SBCD later)
         void op_group4(std::uint16_t op) noexcept;   // group 4: NOP/EXT/NEGX/CLR/NEG/NOT/TST + ctrl
         void op_shift(std::uint16_t op) noexcept;    // group E: ASL/ASR/LSL/LSR/RO[X]L/RO[X]R
