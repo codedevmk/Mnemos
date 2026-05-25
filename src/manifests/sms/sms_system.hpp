@@ -1,10 +1,11 @@
 #pragma once
 
-#include "bus.hpp"        // topology bus
-#include "sms_mapper.hpp" // mapper
-#include "sms_vdp.hpp"    // video
-#include "sn76489.hpp"    // audio (PSG)
-#include "z80.hpp"        // cpu
+#include "bus.hpp"                // topology bus
+#include "codemasters_mapper.hpp" // Codemasters mapper
+#include "sms_mapper.hpp"         // Sega mapper
+#include "sms_vdp.hpp"            // video
+#include "sn76489.hpp"            // audio (PSG)
+#include "z80.hpp"                // cpu
 
 #include <array>
 #include <cstddef>
@@ -28,7 +29,12 @@ namespace mnemos::manifests::sms {
     // Machine configuration resolved at assembly time.
     struct sms_config final {
         enum class region : std::uint8_t { ntsc, pal };
+        // Cartridge mapper: `automatic` picks Sega vs Codemasters from the cart
+        // header (the Codemasters checksum at $7FE6/$7FE8); the others force one.
+        enum class mapper : std::uint8_t { automatic, sega, codemasters };
+
         region video_region{region::ntsc};
+        mapper cartridge_mapper{mapper::automatic};
     };
 
     // A fully wired Sega Master System: the Z80, the VDP, the SN76489 PSG, the Sega
@@ -39,7 +45,12 @@ namespace mnemos::manifests::sms {
         chips::cpu::z80 cpu;
         chips::video::sms_vdp vdp;
         chips::audio::sn76489 psg;
+        // Both mappers are members; assembly wires exactly one into the bus based on
+        // the cart (the Sega mapper pages through $FFFC-$FFFF, the Codemasters mapper
+        // through ROM-space writes). codemasters_active records which one is live.
         chips::mapper::sms_mapper mapper;
+        chips::mapper::codemasters_mapper codies;
+        bool codemasters_active{};
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x2000> ram{}; // 8 KiB, mirrored $C000 / $E000

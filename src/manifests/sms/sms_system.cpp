@@ -6,6 +6,21 @@
 namespace mnemos::manifests::sms {
 
     namespace {
+        // A Codemasters cart carries its own checksum header (the Sega BIOS routine
+        // can't validate it through the different mapper): the 16-bit word at $7FE6
+        // plus the complement word at $7FE8 sum to $10000. That doubles as the mapper
+        // signature (SMS Power). Used only when the config leaves the mapper on auto.
+        bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept {
+            if (rom.size() < 0x8000U) {
+                return false;
+            }
+            const auto word = [&](std::size_t off) {
+                return static_cast<std::uint32_t>(rom[off]) |
+                       (static_cast<std::uint32_t>(rom[off + 1U]) << 8U);
+            };
+            return (word(0x7FE6U) + word(0x7FE8U)) == 0x10000U;
+        }
+
         // Active-low pin level: a pressed button drives its pin to 0.
         constexpr std::uint8_t pin(bool pressed) noexcept { return pressed ? 0U : 1U; }
 
@@ -74,32 +89,65 @@ namespace mnemos::manifests::sms {
         // Region: NTSC = 262 scanlines, PAL = 313.
         s->vdp.set_pal(config.video_region == sms_config::region::pal);
 
-        // The Sega mapper banks the borrowed cartridge image.
-        s->mapper.attach_rom(std::span<const std::uint8_t>(s->rom));
+        // Pick the cartridge mapper: forced by config, otherwise auto-detected from
+        // the cart's Codemasters checksum header.
+        bool use_codies = false;
+        switch (config.cartridge_mapper) {
+        case sms_config::mapper::sega:
+            use_codies = false;
+            break;
+        case sms_config::mapper::codemasters:
+            use_codies = true;
+            break;
+        case sms_config::mapper::automatic:
+        default:
+            use_codies = detect_codemasters(std::span<const std::uint8_t>(s->rom));
+            break;
+        }
+        s->codemasters_active = use_codies;
 
         // --- Z80 memory map (16-bit address space) ---
-        // $0000-$BFFF: three ROM slots + optional cart RAM, via the mapper.
-        s->bus.map_mmio(
-            0x0000U, 0xC000U,
-            [s](std::uint32_t a) { return s->mapper.cpu_read(static_cast<std::uint16_t>(a)); },
-            [s](std::uint32_t a, std::uint8_t v) {
-                s->mapper.cpu_write(static_cast<std::uint16_t>(a), v);
-            },
-            0);
         // $C000-$DFFF: 8 KiB system RAM, mirrored at $E000-$FFFF (the same storage).
-        s->bus.map_ram(0xC000U, std::span<std::uint8_t>(s->ram), 0);
-        s->bus.map_ram(0xE000U, std::span<std::uint8_t>(s->ram), 0);
-        // The mapper control registers overlap the top of the RAM mirror: a write
-        // both lands in RAM (games read $FFFC-$FFFF back as ordinary work RAM) and
-        // updates the mapper; reads return the RAM byte. Priority 1 wins over RAM.
-        s->bus.map_mmio(
-            chips::mapper::sms_mapper::register_base, 0x4U,
-            [s](std::uint32_t a) { return s->ram[a & 0x1FFFU]; },
-            [s](std::uint32_t a, std::uint8_t v) {
-                s->ram[a & 0x1FFFU] = v;
-                s->mapper.write_register(static_cast<std::uint16_t>(a), v);
-            },
-            1);
+        const std::span<std::uint8_t> work_ram(s->ram);
+
+        if (use_codies) {
+            // Codemasters: $0000-$BFFF is three ROM slots plus the $A000-$BFFF cart-RAM
+            // window. The page registers live in ROM space, so writes route to the
+            // mapper as well (there is no $FFFC-$FFFF register overlay).
+            s->codies.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) { return s->codies.cpu_read(static_cast<std::uint16_t>(a)); },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->codies.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
+        } else {
+            // Sega: $0000-$BFFF is the banked ROM / optional cart RAM via the mapper.
+            s->mapper.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) { return s->mapper.cpu_read(static_cast<std::uint16_t>(a)); },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->mapper.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
+            // The mapper control registers overlap the top of the RAM mirror: a write
+            // both lands in RAM (games read $FFFC-$FFFF back as ordinary work RAM) and
+            // updates the mapper; reads return the RAM byte. Priority 1 wins over RAM.
+            s->bus.map_mmio(
+                chips::mapper::sms_mapper::register_base, 0x4U,
+                [s](std::uint32_t a) { return s->ram[a & 0x1FFFU]; },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->ram[a & 0x1FFFU] = v;
+                    s->mapper.write_register(static_cast<std::uint16_t>(a), v);
+                },
+                1);
+        }
 
         // --- Z80 I/O ports (separate 64K IN/OUT space) ---
         s->cpu.set_port_in([s](std::uint16_t port) -> std::uint8_t {

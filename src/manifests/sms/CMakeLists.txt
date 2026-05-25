@@ -20,6 +20,7 @@ target_link_libraries(
         mnemos::chips::video::sms_vdp
         mnemos::chips::audio::sn76489
         mnemos::chips::mapper::sms_mapper
+        mnemos::chips::mapper::codemasters_mapper
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_sms PUBLIC)

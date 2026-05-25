@@ -14,6 +14,21 @@ namespace {
     std::vector<std::uint8_t> blank_rom(std::size_t size = 0x4000U) {
         return std::vector<std::uint8_t>(size, 0U);
     }
+
+    // A 32 KiB cart carrying a valid Codemasters checksum header (word at $7FE6 plus
+    // the complement word at $7FE8 == $10000), so auto-detection picks Codemasters.
+    // Page 0 ($0000-$3FFF) reads 0, page 1 ($4000-$7FFF) reads 1.
+    std::vector<std::uint8_t> codies_rom() {
+        std::vector<std::uint8_t> rom(0x8000U, 0U);
+        for (std::size_t i = 0x4000U; i < 0x8000U; ++i) {
+            rom[i] = 1U;
+        }
+        rom[0x7FE6U] = 0x34U; // checksum $1234
+        rom[0x7FE7U] = 0x12U;
+        rom[0x7FE8U] = 0xCCU; // complement $EDCC -> $1234 + $EDCC == $10000
+        rom[0x7FE9U] = 0xEDU;
+        return rom;
+    }
 } // namespace
 
 TEST_CASE("assemble_sms boots the Z80 from cartridge ROM into work RAM", "[sms][boot]") {
@@ -52,6 +67,35 @@ TEST_CASE("assemble_sms banks ROM slots through the mapper registers", "[sms][ma
     CHECK(sys->mapper.page(0) == 0x01U);
     CHECK(sys->bus.read8(0x0410U) == 0x77U); // slot 0 now reads page 1
     CHECK(sys->bus.read8(0xFFFDU) == 0x01U); // the register write also lands in work RAM
+}
+
+TEST_CASE("assemble_sms auto-detects the Codemasters mapper from the header", "[sms][mapper]") {
+    auto sys = assemble_sms(codies_rom());
+    REQUIRE(sys->codemasters_active);
+
+    // Codemasters pages through ROM-space writes (no $FFFC registers).
+    CHECK(sys->bus.read8(0x0000U) == 0U); // slot 0 default page 0
+    CHECK(sys->bus.read8(0x8000U) == 0U); // slot 2 default page 0
+
+    sys->bus.write8(0x8000U, 1U); // page slot 2 -> page 1
+    CHECK(sys->bus.read8(0x8000U) == 1U);
+    sys->bus.write8(0x0000U, 1U); // page slot 0 -> page 1 (no fixed first 1 KiB)
+    CHECK(sys->bus.read8(0x0000U) == 1U);
+}
+
+TEST_CASE("assemble_sms defaults to the Sega mapper without a Codemasters header",
+          "[sms][mapper]") {
+    auto sys = assemble_sms(blank_rom(0x8000U));
+    CHECK_FALSE(sys->codemasters_active);
+}
+
+TEST_CASE("assemble_sms honours a forced mapper choice", "[sms][mapper]") {
+    auto forced_sega = assemble_sms(codies_rom(), {.cartridge_mapper = sms_config::mapper::sega});
+    CHECK_FALSE(forced_sega->codemasters_active); // header ignored when forced
+
+    auto forced_codies =
+        assemble_sms(blank_rom(0x8000U), {.cartridge_mapper = sms_config::mapper::codemasters});
+    CHECK(forced_codies->codemasters_active);
 }
 
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {

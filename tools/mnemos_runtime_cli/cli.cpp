@@ -469,7 +469,8 @@ namespace mnemos::tools {
             }
 
             auto sys = manifests::sms::assemble_sms(std::move(*cart), cfg);
-            out << "inserted cartridge " << options.cart.string() << "\n";
+            out << "inserted cartridge " << options.cart.string()
+                << " (mapper: " << (sys->codemasters_active ? "codemasters" : "sega") << ")\n";
 
             std::vector<runtime::scheduled_chip> chips = {
                 {&sys->vdp, 1U}, {&sys->cpu, 1U}, {&sys->psg, 1U}};
