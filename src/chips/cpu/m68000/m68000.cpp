@@ -264,7 +264,167 @@ namespace mnemos::chips::cpu {
         write_sized(ea_address(mode, reg, s, true), s, value);
     }
 
+    // ---- read-modify-write EA (resolve the address once) ----
+
+    std::uint32_t m68000::ea_rmw_read(int mode, int reg, op_size s, std::uint32_t& addr) noexcept {
+        const auto r = static_cast<std::size_t>(reg);
+        if (mode == 0) {
+            addr = 0;
+            return d_[r] & size_mask(s);
+        }
+        if (mode == 1) {
+            addr = 0;
+            return a_[r] & size_mask(s);
+        }
+        addr = ea_address(mode, reg, s, true);
+        return read_sized(addr, s);
+    }
+
+    void m68000::ea_rmw_write(int mode, int reg, op_size s, std::uint32_t value,
+                              std::uint32_t addr) noexcept {
+        const auto r = static_cast<std::size_t>(reg);
+        const std::uint32_t mask = size_mask(s);
+        value &= mask;
+        if (mode == 0) {
+            d_[r] = (d_[r] & ~mask) | value;
+            return;
+        }
+        if (mode == 1) {
+            a_[r] = value;
+            return;
+        }
+        write_sized(addr, s, value);
+    }
+
     // ---- flags ----
+
+    void m68000::flags_add(op_size s, std::uint32_t src, std::uint32_t dst,
+                           std::uint32_t r) noexcept {
+        const std::uint32_t m = size_mask(s);
+        const std::uint32_t b = size_sign_bit(s);
+        src &= m;
+        dst &= m;
+        r &= m;
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_x | sr_n | sr_z | sr_v | sr_c));
+        if (r == 0U) {
+            sr_ |= sr_z;
+        }
+        if ((r & b) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (((src ^ r) & (dst ^ r) & b) != 0U) {
+            sr_ |= sr_v;
+        }
+        if (static_cast<std::uint64_t>(src) + dst > m) {
+            sr_ |= sr_c | sr_x;
+        }
+    }
+
+    void m68000::flags_sub(op_size s, std::uint32_t src, std::uint32_t dst,
+                           std::uint32_t r) noexcept {
+        const std::uint32_t m = size_mask(s);
+        const std::uint32_t b = size_sign_bit(s);
+        src &= m;
+        dst &= m;
+        r &= m;
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_x | sr_n | sr_z | sr_v | sr_c));
+        if (r == 0U) {
+            sr_ |= sr_z;
+        }
+        if ((r & b) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (((src ^ dst) & (r ^ dst) & b) != 0U) {
+            sr_ |= sr_v;
+        }
+        if (src > dst) {
+            sr_ |= sr_c | sr_x;
+        }
+    }
+
+    void m68000::flags_cmp(op_size s, std::uint32_t src, std::uint32_t dst,
+                           std::uint32_t r) noexcept {
+        const std::uint32_t m = size_mask(s);
+        const std::uint32_t b = size_sign_bit(s);
+        src &= m;
+        dst &= m;
+        r &= m;
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c)); // CMP leaves X
+        if (r == 0U) {
+            sr_ |= sr_z;
+        }
+        if ((r & b) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (((src ^ dst) & (r ^ dst) & b) != 0U) {
+            sr_ |= sr_v;
+        }
+        if (src > dst) {
+            sr_ |= sr_c;
+        }
+    }
+
+    void m68000::flags_addx(op_size s, std::uint32_t src, std::uint32_t dst,
+                            std::uint32_t x) noexcept {
+        const std::uint32_t m = size_mask(s);
+        const std::uint32_t b = size_sign_bit(s);
+        src &= m;
+        dst &= m;
+        const std::uint64_t f = static_cast<std::uint64_t>(src) + dst + x;
+        const auto r = static_cast<std::uint32_t>(f) & m;
+        const auto prev_z = static_cast<std::uint16_t>(sr_ & sr_z);
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_x | sr_n | sr_z | sr_v | sr_c));
+        if ((r & b) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (((src ^ r) & (dst ^ r) & b) != 0U) {
+            sr_ |= sr_v;
+        }
+        if (f > m) {
+            sr_ |= sr_c | sr_x;
+        }
+        // ADDX only ever clears Z, never sets it (multi-precision semantics).
+        if (r != 0U) {
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
+        } else {
+            sr_ |= prev_z;
+        }
+    }
+
+    void m68000::flags_subx(op_size s, std::uint32_t src, std::uint32_t dst,
+                            std::uint32_t x) noexcept {
+        const std::uint32_t m = size_mask(s);
+        const std::uint32_t b = size_sign_bit(s);
+        src &= m;
+        dst &= m;
+        const std::uint64_t borrow = static_cast<std::uint64_t>(src) + x;
+        const std::uint32_t r = (dst - src - x) & m;
+        const auto prev_z = static_cast<std::uint16_t>(sr_ & sr_z);
+        sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_x | sr_n | sr_z | sr_v | sr_c));
+        if ((r & b) != 0U) {
+            sr_ |= sr_n;
+        }
+        if (((src ^ dst) & (r ^ dst) & b) != 0U) {
+            sr_ |= sr_v;
+        }
+        if (borrow > dst) {
+            sr_ |= sr_c | sr_x;
+        }
+        if (r != 0U) {
+            sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
+        } else {
+            sr_ |= prev_z;
+        }
+    }
+
+    int m68000::popcount16(std::uint16_t v) noexcept {
+        int n = 0;
+        while (v != 0U) {
+            v = static_cast<std::uint16_t>(v & (v - 1U));
+            ++n;
+        }
+        return n;
+    }
 
     void m68000::set_logic_flags(op_size s, std::uint32_t value) noexcept {
         const bool negative = (value & size_sign_bit(s)) != 0U;
@@ -320,23 +480,362 @@ namespace mnemos::chips::cpu {
         set_logic_flags(op_size::longword, value);
     }
 
+    void m68000::op_add(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
+        if (opm >= 4 && opm <= 6 && (em == 0 || em == 1)) { // ADDX
+            const op_size sz = static_cast<op_size>(opm - 4);
+            const std::uint32_t m = size_mask(sz);
+            const bool mem = em == 1;
+            std::uint32_t src{};
+            std::uint32_t dst{};
+            if (mem) {
+                a_[static_cast<std::size_t>(er)] -=
+                    static_cast<std::uint32_t>(ea_increment(er, sz));
+                src = read_sized(a_[static_cast<std::size_t>(er)], sz);
+                a_[static_cast<std::size_t>(dn)] -=
+                    static_cast<std::uint32_t>(ea_increment(dn, sz));
+                dst = read_sized(a_[static_cast<std::size_t>(dn)], sz);
+                cycles_ += 2;
+            } else {
+                src = d_[static_cast<std::size_t>(er)] & m;
+                dst = d_[static_cast<std::size_t>(dn)] & m;
+                if (sz == op_size::longword) {
+                    cycles_ += 4;
+                }
+            }
+            const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+            const std::uint32_t r = (dst + src + x) & m;
+            flags_addx(sz, src, dst, x);
+            if (mem) {
+                write_sized(a_[static_cast<std::size_t>(dn)], sz, r);
+            } else {
+                d_[static_cast<std::size_t>(dn)] = (d_[static_cast<std::size_t>(dn)] & ~m) | r;
+            }
+            return;
+        }
+        if (opm == 3 || opm == 7) { // ADDA
+            const op_size sz = opm == 3 ? op_size::word : op_size::longword;
+            a_[static_cast<std::size_t>(dn)] +=
+                static_cast<std::uint32_t>(sign_extend(ea_read(em, er, sz), sz));
+            cycles_ += opm == 3 ? 4 : ((em <= 1 || (em == 7 && er == 4)) ? 4 : 2);
+            return;
+        }
+        const op_size sz = static_cast<op_size>(opm & 3);
+        const std::uint32_t m = size_mask(sz);
+        if (opm < 3) { // ADD <ea>,Dn
+            const std::uint32_t src = ea_read(em, er, sz);
+            const std::uint32_t dst = d_[static_cast<std::size_t>(dn)] & m;
+            const std::uint32_t r = dst + src;
+            d_[static_cast<std::size_t>(dn)] = (d_[static_cast<std::size_t>(dn)] & ~m) | (r & m);
+            flags_add(sz, src, dst, r);
+            if (sz == op_size::longword) {
+                cycles_ += (em <= 1 || (em == 7 && er == 4)) ? 4 : 2;
+            }
+        } else { // ADD Dn,<ea>
+            std::uint32_t addr = 0;
+            const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+            const std::uint32_t src = d_[static_cast<std::size_t>(dn)] & m;
+            const std::uint32_t r = dst + src;
+            ea_rmw_write(em, er, sz, r, addr);
+            flags_add(sz, src, dst, r);
+        }
+    }
+
+    void m68000::op_sub(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
+        if (opm >= 4 && opm <= 6 && (em == 0 || em == 1)) { // SUBX
+            const op_size sz = static_cast<op_size>(opm - 4);
+            const std::uint32_t m = size_mask(sz);
+            const bool mem = em == 1;
+            std::uint32_t src{};
+            std::uint32_t dst{};
+            if (mem) {
+                a_[static_cast<std::size_t>(er)] -=
+                    static_cast<std::uint32_t>(ea_increment(er, sz));
+                src = read_sized(a_[static_cast<std::size_t>(er)], sz);
+                a_[static_cast<std::size_t>(dn)] -=
+                    static_cast<std::uint32_t>(ea_increment(dn, sz));
+                dst = read_sized(a_[static_cast<std::size_t>(dn)], sz);
+                cycles_ += 2;
+            } else {
+                src = d_[static_cast<std::size_t>(er)] & m;
+                dst = d_[static_cast<std::size_t>(dn)] & m;
+                if (sz == op_size::longword) {
+                    cycles_ += 4;
+                }
+            }
+            const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+            const std::uint32_t r = (dst - src - x) & m;
+            flags_subx(sz, src, dst, x);
+            if (mem) {
+                write_sized(a_[static_cast<std::size_t>(dn)], sz, r);
+            } else {
+                d_[static_cast<std::size_t>(dn)] = (d_[static_cast<std::size_t>(dn)] & ~m) | r;
+            }
+            return;
+        }
+        if (opm == 3 || opm == 7) { // SUBA
+            const op_size sz = opm == 3 ? op_size::word : op_size::longword;
+            a_[static_cast<std::size_t>(dn)] -=
+                static_cast<std::uint32_t>(sign_extend(ea_read(em, er, sz), sz));
+            cycles_ += opm == 3 ? 4 : ((em <= 1 || (em == 7 && er == 4)) ? 4 : 2);
+            return;
+        }
+        const op_size sz = static_cast<op_size>(opm & 3);
+        const std::uint32_t m = size_mask(sz);
+        if (opm < 3) { // SUB <ea>,Dn
+            const std::uint32_t src = ea_read(em, er, sz);
+            const std::uint32_t dst = d_[static_cast<std::size_t>(dn)] & m;
+            const std::uint32_t r = dst - src;
+            d_[static_cast<std::size_t>(dn)] = (d_[static_cast<std::size_t>(dn)] & ~m) | (r & m);
+            flags_sub(sz, src, dst, r);
+            if (sz == op_size::longword) {
+                cycles_ += (em <= 1 || (em == 7 && er == 4)) ? 4 : 2;
+            }
+        } else { // SUB Dn,<ea>
+            std::uint32_t addr = 0;
+            const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+            const std::uint32_t src = d_[static_cast<std::size_t>(dn)] & m;
+            const std::uint32_t r = dst - src;
+            ea_rmw_write(em, er, sz, r, addr);
+            flags_sub(sz, src, dst, r);
+        }
+    }
+
+    void m68000::op_cmp(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
+        if (opm == 3 || opm == 7) { // CMPA (compares the full 32-bit address register)
+            const op_size sz = opm == 3 ? op_size::word : op_size::longword;
+            const std::int32_t src = sign_extend(ea_read(em, er, sz), sz);
+            const std::uint32_t r = static_cast<std::uint32_t>(
+                static_cast<std::int32_t>(a_[static_cast<std::size_t>(dn)]) - src);
+            flags_cmp(op_size::longword, static_cast<std::uint32_t>(src),
+                      a_[static_cast<std::size_t>(dn)], r);
+            cycles_ += 2;
+            return;
+        }
+        if (opm >= 4 && em == 1) { // CMPM (Ay)+,(Ax)+
+            const op_size sz = static_cast<op_size>(opm - 4);
+            const std::uint32_t src = read_sized(a_[static_cast<std::size_t>(er)], sz);
+            a_[static_cast<std::size_t>(er)] += static_cast<std::uint32_t>(ea_increment(er, sz));
+            const std::uint32_t dst = read_sized(a_[static_cast<std::size_t>(dn)], sz);
+            a_[static_cast<std::size_t>(dn)] += static_cast<std::uint32_t>(ea_increment(dn, sz));
+            flags_cmp(sz, src, dst, dst - src);
+            return;
+        }
+        if (opm < 3) { // CMP <ea>,Dn  (EOR -- opm 4-6 with em != 1 -- is logical, phase 3)
+            const op_size sz = static_cast<op_size>(opm);
+            const std::uint32_t src = ea_read(em, er, sz);
+            const std::uint32_t dst = d_[static_cast<std::size_t>(dn)] & size_mask(sz);
+            flags_cmp(sz, src, dst, dst - src);
+            if (sz == op_size::longword) {
+                cycles_ += 2;
+            }
+        }
+    }
+
+    void m68000::op_mul(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7, dn = (op >> 9U) & 7, opm = (op >> 6U) & 7;
+        if (opm == 3) { // MULU
+            const auto src = static_cast<std::uint16_t>(ea_read(em, er, op_size::word));
+            const std::uint32_t r =
+                (d_[static_cast<std::size_t>(dn)] & 0xFFFFU) * static_cast<std::uint32_t>(src);
+            d_[static_cast<std::size_t>(dn)] = r;
+            set_logic_flags(op_size::longword, r);
+            cycles_ += 34 + 2 * popcount16(src);
+            return;
+        }
+        if (opm == 7) { // MULS
+            const auto src = static_cast<std::int16_t>(
+                static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
+            const std::int32_t r = static_cast<std::int32_t>(static_cast<std::int16_t>(
+                                       d_[static_cast<std::size_t>(dn)] & 0xFFFFU)) *
+                                   src;
+            d_[static_cast<std::size_t>(dn)] = static_cast<std::uint32_t>(r);
+            set_logic_flags(op_size::longword, static_cast<std::uint32_t>(r));
+            const auto sv = static_cast<std::uint16_t>(src);
+            cycles_ += 34 + 2 * popcount16(static_cast<std::uint16_t>(sv ^ (sv << 1U)));
+            return;
+        }
+        // AND / ABCD / EXG share group C and arrive in later phases.
+    }
+
+    void m68000::op_quick(std::uint16_t op) noexcept {
+        const int em = (op >> 3U) & 7, er = op & 7;
+        int data = (op >> 9U) & 7;
+        if (data == 0) {
+            data = 8;
+        }
+        const op_size sz = static_cast<op_size>((op >> 6U) & 3);
+        if (static_cast<int>(sz) == 3) {
+            return; // Scc / DBcc -- control flow, phase 4
+        }
+        if (em == 1) { // ADDQ/SUBQ An: full 32-bit, no flags
+            if ((op & 0x0100U) != 0U) {
+                a_[static_cast<std::size_t>(er)] -= static_cast<std::uint32_t>(data);
+            } else {
+                a_[static_cast<std::size_t>(er)] += static_cast<std::uint32_t>(data);
+            }
+            cycles_ += sz == op_size::longword ? 2 : 4;
+            return;
+        }
+        std::uint32_t addr = 0;
+        const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+        std::uint32_t res{};
+        if ((op & 0x0100U) != 0U) {
+            res = dst - static_cast<std::uint32_t>(data);
+            flags_sub(sz, static_cast<std::uint32_t>(data), dst, res);
+        } else {
+            res = dst + static_cast<std::uint32_t>(data);
+            flags_add(sz, static_cast<std::uint32_t>(data), dst, res);
+        }
+        ea_rmw_write(em, er, sz, res, addr);
+        if (em == 0 && sz == op_size::longword) {
+            cycles_ += 4;
+        }
+    }
+
+    void m68000::op_immediate(std::uint16_t op) noexcept {
+        const int op8 = (op >> 8U) & 0xF;
+        // Only ADDI ($06), SUBI ($04), CMPI ($0C) here; ANDI/ORI/EORI + bit ops are
+        // logical (phase 3), so leave them untouched (no operand consumed).
+        if (op8 != 0x06 && op8 != 0x04 && op8 != 0x0C) {
+            return;
+        }
+        const op_size sz = static_cast<op_size>((op >> 6U) & 3);
+        if (static_cast<int>(sz) == 3) {
+            return;
+        }
+        const int em = (op >> 3U) & 7, er = op & 7;
+        std::uint32_t imm =
+            sz == op_size::longword ? fetch32() : static_cast<std::uint32_t>(fetch16());
+        if (sz == op_size::byte) {
+            imm &= 0xFFU;
+        }
+        if (op8 == 0x0C) { // CMPI
+            const std::uint32_t dst = ea_read(em, er, sz);
+            flags_cmp(sz, imm, dst, dst - imm);
+            return;
+        }
+        std::uint32_t addr = 0;
+        const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
+        if (op8 == 0x06) { // ADDI
+            const std::uint32_t r = dst + imm;
+            ea_rmw_write(em, er, sz, r, addr);
+            flags_add(sz, imm, dst, r);
+        } else { // SUBI
+            const std::uint32_t r = dst - imm;
+            ea_rmw_write(em, er, sz, r, addr);
+            flags_sub(sz, imm, dst, r);
+        }
+    }
+
+    void m68000::op_group4(std::uint16_t op) noexcept {
+        if (op == 0x4E71U) {
+            return; // NOP
+        }
+        if ((op & 0xFFB8U) == 0x4880U) { // EXT
+            const auto dn = static_cast<std::size_t>(op & 7);
+            if ((op & 0x0040U) != 0U) { // EXT.L: word -> long
+                d_[dn] = static_cast<std::uint32_t>(sign_extend(d_[dn] & 0xFFFFU, op_size::word));
+                set_logic_flags(op_size::longword, d_[dn]);
+            } else { // EXT.W: byte -> word
+                const std::uint32_t w =
+                    static_cast<std::uint32_t>(sign_extend(d_[dn] & 0xFFU, op_size::byte)) &
+                    0xFFFFU;
+                d_[dn] = (d_[dn] & 0xFFFF0000U) | w;
+                set_logic_flags(op_size::word, w);
+            }
+            return;
+        }
+        const op_size sz = static_cast<op_size>((op >> 6U) & 3);
+        const int em = (op >> 3U) & 7, er = op & 7;
+        switch ((op >> 8U) & 0xF) {
+        case 0x0: // NEGX
+            if (static_cast<int>(sz) != 3) {
+                std::uint32_t addr = 0;
+                const std::uint32_t d = ea_rmw_read(em, er, sz, addr);
+                const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
+                const std::uint32_t r = (0U - d - x) & size_mask(sz);
+                ea_rmw_write(em, er, sz, r, addr);
+                flags_subx(sz, d, 0U, x);
+                return;
+            }
+            break;
+        case 0x2: // CLR (reads before writing on real hardware)
+            if (static_cast<int>(sz) != 3) {
+                std::uint32_t addr = 0;
+                if (em >= 2) {
+                    (void)ea_rmw_read(em, er, sz, addr);
+                    ea_rmw_write(em, er, sz, 0U, addr);
+                } else {
+                    d_[static_cast<std::size_t>(er)] &= ~size_mask(sz);
+                }
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_v | sr_c));
+                sr_ |= sr_z;
+                return;
+            }
+            break;
+        case 0x4: // NEG
+            if (static_cast<int>(sz) != 3) {
+                std::uint32_t addr = 0;
+                const std::uint32_t d = ea_rmw_read(em, er, sz, addr);
+                const std::uint32_t r = (0U - d) & size_mask(sz);
+                ea_rmw_write(em, er, sz, r, addr);
+                flags_sub(sz, d, 0U, r);
+                return;
+            }
+            break;
+        case 0xA: // TST (TAS, size field 3, is deferred)
+            if (static_cast<int>(sz) != 3) {
+                const std::uint32_t v = ea_read(em, er, sz);
+                set_logic_flags(sz, v);
+                return;
+            }
+            break;
+        default:
+            break;
+        }
+        // NOT, SWAP, PEA, LEA, JMP, JSR, MOVEM, MOVE-to/from-SR/CCR, TRAP, etc. land
+        // in later phases.
+    }
+
     void m68000::exec(std::uint16_t op) {
         switch (op >> 12U) {
+        case 0x0: // ADDI / SUBI / CMPI (other group-0 ops arrive later)
+            op_immediate(op);
+            break;
         case 0x1: // MOVE.B
         case 0x2: // MOVE.L
         case 0x3: // MOVE.W
             op_move(op);
+            break;
+        case 0x4: // NOP / EXT / NEGX / CLR / NEG / TST (rest of group 4 later)
+            op_group4(op);
+            break;
+        case 0x5: // ADDQ / SUBQ (Scc / DBcc later)
+            op_quick(op);
             break;
         case 0x7: // MOVEQ (bit 8 must be 0)
             if ((op & 0x0100U) == 0U) {
                 op_moveq(op);
             }
             break;
-        case 0x4:
-            // NOP ($4E71). The rest of group 4 arrives in later phases.
+        case 0x9: // SUB / SUBA / SUBX
+            op_sub(op);
+            break;
+        case 0xB: // CMP / CMPA / CMPM
+            op_cmp(op);
+            break;
+        case 0xC: // MULU / MULS (AND / ABCD / EXG later)
+            op_mul(op);
+            break;
+        case 0xD: // ADD / ADDA / ADDX
+            op_add(op);
             break;
         default:
-            // Not yet decoded -- a 4-cycle no-op until the relevant phase lands.
+            // Groups 6 (Bcc), 8 (OR/DIV/SBCD), A/F (line traps), E (shifts) arrive
+            // in later phases -- a 4-cycle no-op until then.
             break;
         }
     }

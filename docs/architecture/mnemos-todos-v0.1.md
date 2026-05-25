@@ -377,8 +377,12 @@ framework (the cycle-accurate prefetch pipeline + address/bus errors + traps +
 interrupts), BCD/misc, then the Emu 743-check conformance vectors.
 
 - [~] Implement `chips::cpu::m68000` (full, passes available test suites). (phase 1:
-  functional core + 14 EA modes + MOVE family + flags + state; 11 unit tests. Later
-  phases add the rest of the instruction set, cycle-accurate prefetch, and exceptions)
+  functional core + 14 EA modes + MOVE family + flags + state, 11 tests. phase 2:
+  integer arithmetic — ADD/ADDA/ADDX, SUB/SUBA/SUBX, CMP/CMPA/CMPM, ADDQ/SUBQ,
+  ADDI/SUBI/CMPI, MULU/MULS, NEG/NEGX/CLR/EXT/TST, with the full X/V/C flag model
+  (flags_add/sub/cmp/addx/subx); 13 more tests (24 total). Later phases: logical/
+  shift/bit, control flow + the exception framework (which also brings DIVU/DIVS,
+  CHK, TRAPV), BCD/misc, cycle-accurate prefetch, then the Emu conformance vectors)
 - [ ] Implement `chips::audio::ym2612`.
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).

@@ -226,3 +226,163 @@ TEST_CASE("m68000 round-trips its register state") {
     CHECK(rr.usp == r.usp);
     CHECK(rr.ssp == r.ssp);
 }
+
+namespace {
+    // Run a single instruction made of `words` at $1000 with D/A registers seeded,
+    // and return the resulting register file.
+    m68000::registers run_one(machine& m, std::initializer_list<std::uint16_t> words,
+                              const m68000::registers& seed) {
+        m.cpu.set_registers(seed);
+        m.load(0x1000U, words);
+        m.set_pc(0x1000U);
+        m.cpu.step_instruction();
+        return m.cpu.cpu_registers();
+    }
+} // namespace
+
+TEST_CASE("m68000 ADD sets carry, extend and zero on word overflow") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x0000FFFFU;
+    const auto r = run_one(m, {0x0640U, 0x0001U}, s); // ADDI.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0x0000U);
+    CHECK((r.sr & m68000::sr_z) != 0U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+    CHECK((r.sr & m68000::sr_x) != 0U);
+    CHECK((r.sr & m68000::sr_v) == 0U);
+}
+
+TEST_CASE("m68000 ADD.L between data registers") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000010U;
+    s.d[1] = 0x00000020U;
+    const auto r = run_one(m, {0xD281U}, s); // ADD.L D1,D0  -> D1 dest? check
+    // ADD <ea>,Dn with dn=1, ea=D1(mode0 reg1): 0xD281 = ADD.L D1,D1? decode:
+    // 1101 dn=001 opm=010(.L) mode=000 reg=001 -> ADD.L D1,D1 = 0x20+0x20.
+    CHECK(r.d[1] == 0x00000040U);
+}
+
+TEST_CASE("m68000 SUBI sets the borrow/extend flags") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000000U;
+    const auto r = run_one(m, {0x0440U, 0x0001U}, s); // SUBI.W #1,D0
+    CHECK((r.d[0] & 0xFFFFU) == 0xFFFFU);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+    CHECK((r.sr & m68000::sr_x) != 0U);
+}
+
+TEST_CASE("m68000 CMPI sets Z on equality and leaves operands intact") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000042U;
+    const auto r = run_one(m, {0x0C40U, 0x0042U}, s); // CMPI.W #$42,D0
+    CHECK(r.d[0] == 0x00000042U);                     // unchanged
+    CHECK((r.sr & m68000::sr_z) != 0U);
+    CHECK((r.sr & m68000::sr_c) == 0U);
+}
+
+TEST_CASE("m68000 ADDQ and SUBQ") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x0000000AU;
+    s.d[2] = 0x00000005U;
+    auto r = run_one(m, {0x5680U}, s); // ADDQ.L #3,D0
+    CHECK(r.d[0] == 0x0000000DU);
+    r = run_one(m, {0x5342U}, s); // SUBQ.W #1,D2
+    CHECK((r.d[2] & 0xFFFFU) == 0x0004U);
+}
+
+TEST_CASE("m68000 ADDQ to an address register skips the flags and is full-width") {
+    machine m;
+    m68000::registers s{};
+    s.a[0] = 0x00001000U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_ccr);
+    const auto r = run_one(m, {0x5288U}, s); // ADDQ.L #1,A0
+    CHECK(r.a[0] == 0x00001001U);
+    CHECK((r.sr & m68000::sr_ccr) == m68000::sr_ccr); // flags untouched
+}
+
+TEST_CASE("m68000 MULU and MULS") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000004U;
+    s.d[1] = 0x00000003U;
+    auto r = run_one(m, {0xC0FCU, 0x0003U}, s); // MULU #3,D0
+    CHECK(r.d[0] == 0x0000000CU);
+
+    r = run_one(m, {0xC3FCU, 0xFFFEU}, s); // MULS #-2,D1
+    CHECK(r.d[1] == 0xFFFFFFFAU);          // 3 * -2 = -6
+    CHECK((r.sr & m68000::sr_n) != 0U);
+}
+
+TEST_CASE("m68000 NEG and NEGX") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000001U;
+    auto r = run_one(m, {0x4440U}, s); // NEG.W D0
+    CHECK((r.d[0] & 0xFFFFU) == 0xFFFFU);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+
+    s.d[0] = 0x00000000U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_x); // X set
+    r = run_one(m, {0x4000U}, s);                                   // NEGX.B D0  (0 - 0 - X)
+    CHECK((r.d[0] & 0xFFU) == 0xFFU);
+}
+
+TEST_CASE("m68000 CLR zeroes the operand and sets Z") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x12345678U;
+    const auto r = run_one(m, {0x4280U}, s); // CLR.L D0
+    CHECK(r.d[0] == 0x00000000U);
+    CHECK((r.sr & m68000::sr_z) != 0U);
+}
+
+TEST_CASE("m68000 EXT sign-extends byte->word and word->long") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000080U;
+    auto r = run_one(m, {0x4880U}, s); // EXT.W D0
+    CHECK((r.d[0] & 0xFFFFU) == 0xFF80U);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+
+    s.d[1] = 0x00008000U;
+    r = run_one(m, {0x48C1U}, s); // EXT.L D1
+    CHECK(r.d[1] == 0xFFFF8000U);
+}
+
+TEST_CASE("m68000 TST sets N/Z from the operand and clears V/C") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000000U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_v | m68000::sr_c);
+    const auto r = run_one(m, {0x4A40U}, s); // TST.W D0
+    CHECK((r.sr & m68000::sr_z) != 0U);
+    CHECK((r.sr & m68000::sr_v) == 0U);
+    CHECK((r.sr & m68000::sr_c) == 0U);
+}
+
+TEST_CASE("m68000 ADDX adds with the extend flag") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000001U;
+    s.d[1] = 0x00000002U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_x);
+    const auto r = run_one(m, {0xD300U}, s); // ADDX.B D0,D1  -> 2 + 1 + X(1)
+    CHECK((r.d[1] & 0xFFU) == 0x04U);
+}
+
+TEST_CASE("m68000 ADD to memory writes back the result") {
+    machine m;
+    m.w16(0x2000U, 0x1111U);
+    m68000::registers s{};
+    s.d[0] = 0x00002222U;
+    s.a[0] = 0x00002000U;
+    const auto r = run_one(m, {0xD150U}, s); // ADD.W D0,(A0)
+    CHECK(m.bus.read8(0x2000U) == 0x33U);    // 0x1111 + 0x2222 = 0x3333 (big-endian hi byte)
+    CHECK(m.bus.read8(0x2001U) == 0x33U);
+    (void)r;
+}

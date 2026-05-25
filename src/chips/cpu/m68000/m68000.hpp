@@ -118,11 +118,32 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint32_t ea_read(int mode, int reg, op_size s) noexcept;
         void ea_write(int mode, int reg, op_size s, std::uint32_t value) noexcept;
 
-        // ---- flags / decode ----
+        // ---- read-modify-write EA (resolve the address once) ----
+        [[nodiscard]] std::uint32_t ea_rmw_read(int mode, int reg, op_size s,
+                                                std::uint32_t& addr) noexcept;
+        void ea_rmw_write(int mode, int reg, op_size s, std::uint32_t value,
+                          std::uint32_t addr) noexcept;
+
+        // ---- flags ----
         void set_logic_flags(op_size s, std::uint32_t value) noexcept;
+        void flags_add(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t r) noexcept;
+        void flags_sub(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t r) noexcept;
+        void flags_cmp(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t r) noexcept;
+        void flags_addx(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t x) noexcept;
+        void flags_subx(op_size s, std::uint32_t src, std::uint32_t dst, std::uint32_t x) noexcept;
+        [[nodiscard]] static int popcount16(std::uint16_t v) noexcept;
+
+        // ---- decode + instruction handlers ----
         void exec(std::uint16_t op);
         void op_move(std::uint16_t op);
         void op_moveq(std::uint16_t op) noexcept;
+        void op_add(std::uint16_t op) noexcept;       // group D: ADD/ADDA/ADDX
+        void op_sub(std::uint16_t op) noexcept;       // group 9: SUB/SUBA/SUBX
+        void op_cmp(std::uint16_t op) noexcept;       // group B: CMP/CMPA/CMPM
+        void op_mul(std::uint16_t op) noexcept;       // group C: MULU/MULS
+        void op_quick(std::uint16_t op) noexcept;     // group 5: ADDQ/SUBQ
+        void op_immediate(std::uint16_t op) noexcept; // group 0: ADDI/SUBI/CMPI
+        void op_group4(std::uint16_t op) noexcept;    // group 4: NOP/EXT/NEGX/CLR/NEG/TST
 
         std::array<std::uint32_t, 8> d_{};
         std::array<std::uint32_t, 8> a_{};
