@@ -121,6 +121,15 @@ namespace mnemos::chips::cpu {
             alr,
             arr,
             sbx,
+            // Unstable undocumented opcodes (analog-dependent on real silicon;
+            // modelled deterministically — see m6510.cpp).
+            ane, // (A | magic) & X & imm
+            lxa, // A = X = (A | magic) & imm
+            las, // A = X = SP = mem & SP
+            sha, // store A & X & (addr_high + 1)
+            shx, // store X & (addr_high + 1)
+            shy, // store Y & (addr_high + 1)
+            tas, // SP = A & X; store SP & (addr_high + 1)
         };
 
         // How an instruction touches memory; selects the cycle micro-sequence.
@@ -233,6 +242,13 @@ namespace mnemos::chips::cpu {
         bool port_enabled_{true};
         std::uint8_t port_ddr_{};
         std::uint8_t port_data_{};
+
+        // NMOS floating-gate fade for the unconnected port bits 6 and 7 (C64): once
+        // driven as output then switched to input, the pin holds its last value for
+        // ~port_falloff_cycles, then reads 0. Index 0 = bit 6, 1 = bit 7.
+        static constexpr std::uint64_t port_falloff_cycles = 350'000U;
+        std::array<std::uint64_t, 2> port_fade_cycle_{};
+        std::array<bool, 2> port_fade_value_{};
 
         // Cycle-stepped execution state. tcu_ == 0 marks an instruction boundary;
         // ir_ holds the opcode being executed; ea_/operand_/ptr_ are per-instruction

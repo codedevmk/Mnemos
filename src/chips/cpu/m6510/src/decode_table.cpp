@@ -292,6 +292,16 @@ namespace mnemos::chips::cpu {
             table[0xCBU] = decoded{op::sbx, mode::immediate, kind::read, true};
             table[0xEBU] = decoded{op::sbc, mode::immediate, kind::read, true}; // alias of SBC #
 
+            // Unstable undocumented opcodes.
+            table[0x8BU] = decoded{op::ane, mode::immediate, kind::read, true};
+            table[0xABU] = decoded{op::lxa, mode::immediate, kind::read, true};
+            table[0xBBU] = decoded{op::las, mode::absolute_y, kind::read, true};
+            table[0x9FU] = decoded{op::sha, mode::absolute_y, kind::write, true};
+            table[0x93U] = decoded{op::sha, mode::indirect_indexed, kind::write, true};
+            table[0x9EU] = decoded{op::shx, mode::absolute_y, kind::write, true};
+            table[0x9CU] = decoded{op::shy, mode::absolute_x, kind::write, true};
+            table[0x9BU] = decoded{op::tas, mode::absolute_y, kind::write, true};
+
             // Undocumented NOPs (no operation, but consume operand bytes/cycles)
             for (unsigned code : {0x1AU, 0x3AU, 0x5AU, 0x7AU, 0xDAU, 0xFAU}) {
                 table[code] = decoded{op::nop, mode::implied, kind::implied, true};

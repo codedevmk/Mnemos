@@ -683,9 +683,9 @@ TEST_CASE("m6510 $00/$01 I/O port latches output bits") {
 
     CHECK(sys.cpu.read(0x0000U) == 0x2FU);
     // Output bits read back from the latch: data & ddr = $37 & $2F = $27.
-    // Input bits read the default pull (high): pull & ~ddr = $FF & $D0 = $D0.
-    // Result = $27 | $D0 = $F7.
-    CHECK(sys.cpu.read(0x0001U) == 0xF7U);
+    // Input bit 4 reads the pull-up (high) -> $10. The unconnected bits 6,7 read
+    // their floating-gate charge, which is 0 here (never driven high). Result $37.
+    CHECK(sys.cpu.read(0x0001U) == 0x37U);
 }
 
 TEST_CASE("m6510 passes non-port addresses through to the bus") {
@@ -740,4 +740,88 @@ TEST_CASE("m6510 save/load round-trips") {
     mnemos::chips::state_writer w2(buf2);
     b.save_state(w2);
     CHECK(buf1 == buf2);
+}
+
+TEST_CASE("ANE applies the unstable magic constant") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x00U, 0xA2U, 0xFFU, 0x8BU, 0xFFU}); // LDA #0; LDX #$FF; ANE #$FF
+    sys.step_instruction();
+    sys.step_instruction();
+    sys.step_instruction();
+    CHECK(sys.cpu.cpu_registers().a == 0xEEU); // (0 | $EE) & $FF & $FF
+}
+
+TEST_CASE("LXA loads A and X through the unstable magic") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA9U, 0x0FU, 0xABU, 0xFFU}); // LDA #$0F; LXA #$FF
+    sys.step_instruction();
+    sys.step_instruction();
+    CHECK(sys.cpu.cpu_registers().a == 0xEFU); // ($0F | $EE) & $FF
+    CHECK(sys.cpu.cpu_registers().x == 0xEFU);
+}
+
+TEST_CASE("LAS ANDs memory with SP into A/X/SP") {
+    test_system sys;
+    sys.boot(0xC000U, {0xA2U, 0xF0U, 0x9AU, 0xA0U, 0x00U, 0xBBU, 0x34U, 0x12U});
+    sys.bus.memory[0x1234U] = 0x3CU;
+    sys.step_instruction();                    // LDX #$F0
+    sys.step_instruction();                    // TXS
+    sys.step_instruction();                    // LDY #$00
+    sys.step_instruction();                    // LAS $1234,Y
+    CHECK(sys.cpu.cpu_registers().a == 0x30U); // $3C & $F0
+    CHECK(sys.cpu.cpu_registers().x == 0x30U);
+    CHECK(sys.cpu.cpu_registers().sp == 0x30U);
+}
+
+TEST_CASE("SHA/SHX/SHY/TAS store the source ANDed with (high+1)") {
+    SECTION("SHA $1234,Y") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0xFFU, 0xA2U, 0xFFU, 0xA0U, 0x00U, 0x9FU, 0x34U, 0x12U});
+        for (int i = 0; i < 4; ++i) {
+            sys.step_instruction();
+        }
+        CHECK(sys.bus.memory[0x1234U] == 0x13U); // $FF & ($12 + 1)
+    }
+    SECTION("SHX $1234,Y") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA2U, 0xFFU, 0xA0U, 0x00U, 0x9EU, 0x34U, 0x12U});
+        for (int i = 0; i < 3; ++i) {
+            sys.step_instruction();
+        }
+        CHECK(sys.bus.memory[0x1234U] == 0x13U);
+    }
+    SECTION("SHY $1234,X") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA0U, 0xFFU, 0xA2U, 0x00U, 0x9CU, 0x34U, 0x12U});
+        for (int i = 0; i < 3; ++i) {
+            sys.step_instruction();
+        }
+        CHECK(sys.bus.memory[0x1234U] == 0x13U);
+    }
+    SECTION("TAS $1234,Y sets SP and stores") {
+        test_system sys;
+        sys.boot(0xC000U, {0xA9U, 0xFFU, 0xA2U, 0x0FU, 0xA0U, 0x00U, 0x9BU, 0x34U, 0x12U});
+        for (int i = 0; i < 4; ++i) {
+            sys.step_instruction();
+        }
+        CHECK(sys.cpu.cpu_registers().sp == 0x0FU); // SP = A & X
+        CHECK(sys.bus.memory[0x1234U] == 0x03U);    // $0F & $13
+    }
+}
+
+TEST_CASE("the 6510 port bits 6/7 fade to 0 after switching to input") {
+    test_system sys;
+    for (std::uint8_t& byte : sys.bus.memory) {
+        byte = 0xEAU; // NOP everywhere so ticking just advances cycles
+    }
+    sys.boot(0xC000U, {});
+    sys.cpu.write(0x00U, 0xC0U); // DDR: bits 6,7 output
+    sys.cpu.write(0x01U, 0xC0U); // drive them high
+    CHECK((sys.cpu.read(0x01U) & 0xC0U) == 0xC0U);
+
+    sys.cpu.write(0x00U, 0x00U);                   // switch to input -> latch the charge
+    CHECK((sys.cpu.read(0x01U) & 0xC0U) == 0xC0U); // still charged
+
+    sys.cpu.tick(400000U);                         // run past the fall-off window
+    CHECK((sys.cpu.read(0x01U) & 0xC0U) == 0x00U); // decayed
 }

@@ -27,9 +27,10 @@ TEST_CASE("assemble_c64 banks BASIC, KERNAL, and I/O by default", "[c64][banking
     auto sys = make_c64();
     sys->cpu.reset(reset_kind::power_on);
 
-    // After power-on the $00/$01 port DDR is all-input, so $01 reads $FF:
-    // LORAM=HIRAM=CHAREN=1 — the standard power-up banking.
-    REQUIRE(sys->cpu.read(0x0001U) == 0xFFU);
+    // After power-on the port DDR is all-input: bits 0-5 read the pull-up (high),
+    // and the unconnected bits 6,7 read their floating-gate charge (0). So $01
+    // reads $3F with LORAM=HIRAM=CHAREN=1 — the standard power-up banking.
+    REQUIRE(sys->cpu.read(0x0001U) == 0x3FU);
     CHECK(sys->bus.read8(0xA000U) == basic_fill);  // BASIC ROM
     CHECK(sys->bus.read8(0xE000U) == kernal_fill); // KERNAL ROM
 }

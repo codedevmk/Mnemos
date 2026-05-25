@@ -36,10 +36,15 @@ test ROMs; no emulator source is copied (see `AGENTS.md` §Dependency Policy).
 - **Stable undocumented opcodes implemented:** LAX, SAX, DCP, ISC, SLO, RLA,
   SRE, RRA, ANC, ALR, ARR, SBX, the SBC ($EB) alias, and the undocumented NOPs
   (implied / #imm / zp / zp,X / abs / abs,X).
-- **Not yet implemented (unstable / rarely relied upon):** SHA/SHX/SHY, TAS,
-  LAS, ANE/XAA, LXA, and the JAM/KIL opcodes. These decode as illegal/unhandled
-  and end the instruction; they are out of scope for v0.1 and can be added if a
-  target program needs them.
+- **Unstable undocumented opcodes** (SHA/SHX/SHY, TAS, LAS, ANE/XAA, LXA) are
+  implemented with the conventional deterministic model: ANE/LXA use a fixed
+  "magic" constant ($EE); SHA/SHX/SHY/TAS store the source ANDed with
+  (target-high + 1); TAS also sets SP = A & X; LAS ANDs memory with SP. The
+  page-cross address corruption these exhibit on real silicon is not modelled.
+  JAM/KIL still decode as illegal and end the instruction.
+- **Port floating-gate fade:** the unconnected $01 bits 6 and 7, once driven as
+  outputs then switched to inputs, hold their last value for ~port_falloff_cycles
+  then read 0 (the NMOS capacitive decay); bits 0-5 read the pull-up as before.
 - **Interrupts** are polled at the instruction boundary (a simplification of the
   real mid-instruction polling). IRQ/NMI run the cycle-accurate 7-cycle sequence;
   RES is functional via `reset()`. Exact interrupt-timing edge cases will be

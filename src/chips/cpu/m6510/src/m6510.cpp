@@ -9,6 +9,11 @@
 #include <memory>
 
 namespace mnemos::chips::cpu {
+    namespace {
+        // The "magic" constant for the unstable ANE/LXA opcodes. On real NMOS silicon
+        // the result depends on analog effects; emulators pick a fixed constant.
+        constexpr std::uint8_t unstable_magic = 0xEEU;
+    } // namespace
 
     chip_metadata m6510::metadata() const noexcept {
         return {
@@ -340,6 +345,9 @@ namespace mnemos::chips::cpu {
                 tcu_ = 4U;
                 return;
             default:
+                if (entry.op == operation::tas) { // TAS sets SP = A & X before storing
+                    registers_.sp = static_cast<std::uint8_t>(registers_.a & registers_.x);
+                }
                 write(ea_, store_value(entry.op));
                 tcu_ = 0U;
                 return;
@@ -414,6 +422,8 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t m6510::store_value(operation op) const noexcept {
+        // The unstable SHA/SHX/SHY/TAS stores AND the source with (target high + 1).
+        const auto high_plus_1 = static_cast<std::uint8_t>(((ea_ >> 8U) + 1U) & 0xFFU);
         switch (op) {
         case operation::stx:
             return registers_.x;
@@ -421,6 +431,14 @@ namespace mnemos::chips::cpu {
             return registers_.y;
         case operation::sax: // store A & X (no flags)
             return static_cast<std::uint8_t>(registers_.a & registers_.x);
+        case operation::sha:
+            return static_cast<std::uint8_t>(registers_.a & registers_.x & high_plus_1);
+        case operation::shx:
+            return static_cast<std::uint8_t>(registers_.x & high_plus_1);
+        case operation::shy:
+            return static_cast<std::uint8_t>(registers_.y & high_plus_1);
+        case operation::tas: // SP was set to A & X in step_write before the store
+            return static_cast<std::uint8_t>(registers_.sp & high_plus_1);
         case operation::sta:
         default:
             return registers_.a;
@@ -589,6 +607,22 @@ namespace mnemos::chips::cpu {
             set_nz(registers_.x);
             return;
         }
+        case operation::ane: // (A | magic) & X & imm
+            registers_.a = static_cast<std::uint8_t>((registers_.a | unstable_magic) &
+                                                     registers_.x & operand_);
+            set_nz(registers_.a);
+            return;
+        case operation::lxa: // A = X = (A | magic) & imm
+            registers_.a = static_cast<std::uint8_t>((registers_.a | unstable_magic) & operand_);
+            registers_.x = registers_.a;
+            set_nz(registers_.a);
+            return;
+        case operation::las: // A = X = SP = mem & SP
+            registers_.sp = static_cast<std::uint8_t>(operand_ & registers_.sp);
+            registers_.a = registers_.sp;
+            registers_.x = registers_.sp;
+            set_nz(registers_.sp);
+            return;
         default:
             return;
         }
@@ -1341,6 +1375,8 @@ namespace mnemos::chips::cpu {
         tcu_ = 0U;
         in_interrupt_ = false;
         nmi_pending_ = false;
+        port_fade_cycle_ = {};
+        port_fade_value_ = {};
 
         if (bus_ != nullptr) {
             const auto low = static_cast<std::uint16_t>(bus_->read8(reset_vector));
@@ -1361,6 +1397,10 @@ namespace mnemos::chips::cpu {
         writer.boolean(port_enabled_);
         writer.u8(port_ddr_);
         writer.u8(port_data_);
+        writer.u64(port_fade_cycle_[0]);
+        writer.u64(port_fade_cycle_[1]);
+        writer.boolean(port_fade_value_[0]);
+        writer.boolean(port_fade_value_[1]);
         // In-progress instruction + interrupt sequencing.
         writer.u8(ir_);
         writer.u8(tcu_);
@@ -1386,6 +1426,10 @@ namespace mnemos::chips::cpu {
         port_enabled_ = reader.boolean();
         port_ddr_ = reader.u8();
         port_data_ = reader.u8();
+        port_fade_cycle_[0] = reader.u64();
+        port_fade_cycle_[1] = reader.u64();
+        port_fade_value_[0] = reader.boolean();
+        port_fade_value_[1] = reader.boolean();
         ir_ = reader.u8();
         tcu_ = reader.u8();
         ea_ = reader.u16();
@@ -1421,8 +1465,21 @@ namespace mnemos::chips::cpu {
         }
         if (port_enabled_ && address == 0x0001U) {
             const auto outputs = static_cast<std::uint8_t>(port_data_ & port_ddr_);
-            const auto inputs =
+            auto inputs =
                 static_cast<std::uint8_t>(port_input_pull & static_cast<std::uint8_t>(~port_ddr_));
+            // Bits 6/7 are unconnected: as inputs they read the fading charge (last
+            // driven value, decaying to 0), not the pull-up.
+            for (unsigned b = 6U; b <= 7U; ++b) {
+                const auto bit = static_cast<std::uint8_t>(1U << b);
+                if ((port_ddr_ & bit) != 0U) {
+                    continue; // driven as output
+                }
+                inputs = static_cast<std::uint8_t>(inputs & ~bit);
+                const std::size_t i = b - 6U;
+                if (port_fade_value_[i] && (cycles_ - port_fade_cycle_[i]) < port_falloff_cycles) {
+                    inputs = static_cast<std::uint8_t>(inputs | bit);
+                }
+            }
             return static_cast<std::uint8_t>(outputs | inputs);
         }
         return bus_ != nullptr ? bus_->read8(address) : static_cast<std::uint8_t>(0U);
@@ -1431,10 +1488,28 @@ namespace mnemos::chips::cpu {
     void m6510::write(std::uint16_t address, std::uint8_t value) noexcept {
         if (port_enabled_ && address == 0x0000U) {
             port_ddr_ = value;
+            // A bit switched to input latches the current driven charge to fade from.
+            for (unsigned b = 6U; b <= 7U; ++b) {
+                const auto bit = static_cast<std::uint8_t>(1U << b);
+                if ((value & bit) == 0U) {
+                    const std::size_t i = b - 6U;
+                    port_fade_value_[i] = (port_data_ & bit) != 0U;
+                    port_fade_cycle_[i] = cycles_;
+                }
+            }
             return;
         }
         if (port_enabled_ && address == 0x0001U) {
             port_data_ = value;
+            // While a bit is an output it (re)charges the pin to the written value.
+            for (unsigned b = 6U; b <= 7U; ++b) {
+                const auto bit = static_cast<std::uint8_t>(1U << b);
+                if ((port_ddr_ & bit) != 0U) {
+                    const std::size_t i = b - 6U;
+                    port_fade_value_[i] = (value & bit) != 0U;
+                    port_fade_cycle_[i] = cycles_;
+                }
+            }
             return;
         }
         if (bus_ != nullptr) {
