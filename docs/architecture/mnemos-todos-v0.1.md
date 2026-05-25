@@ -139,16 +139,16 @@
 - [x] Introspection: register snapshot, current raster line, current cycle, sprite states. (a013df0; register_snapshot + raster_y/raster_x; full sprite-engine states arrive with the sprite compositor)
 
 ### SID 6581
-- [ ] Create `src/chips/audio/sid_6581/` library target.
-- [ ] Implement register interface ($D400–$D7FF mirrored).
-- [ ] Implement three voices with ADSR.
-- [ ] Implement waveform generators (triangle, sawtooth, pulse, noise, combined).
-- [ ] Implement filter (resonance + cutoff; v0.1 acceptable as "audible and stable", quality refinement is its own task).
-- [ ] Implement ring modulation and sync.
-- [ ] Implement read-back of OSC3 and ENV3.
-- [ ] Save / load state.
-- [ ] Introspection: register snapshot, voice states, filter state.
-- [ ] Reference: at least one published SID emulation note set documented in `src/chips/audio/sid_6581/NOTES.md`.
+- [x] Create `src/chips/audio/sid_6581/` library target. (a7dc3f8; ported from Emu per ADR 0006; CI run 26387148559 green across all jobs)
+- [x] Implement register interface ($D400–$D7FF mirrored). (a7dc3f8; 32-byte alias, write-only/read-only classes)
+- [x] Implement three voices with ADSR. (a7dc3f8; datasheet rate table + exponential decay/release divider, gate re-trigger)
+- [x] Implement waveform generators (triangle, sawtooth, pulse, noise, combined). (a7dc3f8; 23-bit noise LFSR, combined-AND, 8580 partial-restore)
+- [x] Implement filter (resonance + cutoff; v0.1 acceptable as "audible and stable", quality refinement is its own task). (a7dc3f8; state-variable LP/BP/HP, per-variant range)
+- [x] Implement ring modulation and sync. (a7dc3f8)
+- [x] Implement read-back of OSC3 and ENV3. (a7dc3f8)
+- [ ] Save / load state. (deferred to M3 with the runtime save-state format)
+- [x] Introspection: register snapshot, voice states, filter state. (a7dc3f8; envelope/volume snapshot + waveform_output/voice_phase/envelope accessors)
+- [x] Reference: at least one published SID emulation note set documented in `src/chips/audio/sid_6581/NOTES.md`. (a7dc3f8; MOS 6581 datasheet + Yannes interview per Emu PROVENANCE)
 
 ### CIA 6526
 - [x] Create `src/chips/bus_controller/cia_6526/` library target. (91172fb; ported from Emu per ADR 0006; CI run 26386882167 green across all jobs)
@@ -166,9 +166,9 @@
 - [ ] Wire to bus region overlay control. (deferred to M3 topology — the bus consumes decode_cpu_address/decode_vic_address to switch region overlays)
 
 ### Acceptance
-- [ ] Each chip's unit tests pass in CI.
-- [ ] SID register interface validated against a reference register trace from at least one known SID tune.
-- [ ] No regressions in M1's 6510 tests.
+- [~] Each chip's unit tests pass in CI. (VIC-II, SID, CIA, PLA all green; M2 not fully complete — VIC-II rendering/sprites/border still pending)
+- [ ] SID register interface validated against a reference register trace from at least one known SID tune. (deferred to M3 C64 integration — needs a player + trace)
+- [x] No regressions in M1's 6510 tests. (m6510 suite green in CI run 26387148559 alongside the new chips)
 
 ---
 
