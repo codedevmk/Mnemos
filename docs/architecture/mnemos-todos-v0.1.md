@@ -1,7 +1,7 @@
 # Mnemos — Todos
 
 **Version:** 0.1 (initial draft)
-**Status:** Draft, awaiting review
+**Status:** In progress — M0 and M1 complete; M2 substantially complete; M3 core complete (the first golden boot is the only gap, data-gated on local C64 ROMs).
 **Companion documents:** `mnemos-architecture-tds-v0.1.md`, `mnemos-project-plan-v0.1.md`
 
 ---
@@ -126,6 +126,12 @@
 
 ## M2 — Chip Library Expansion (C64 Set)
 
+**Status:** Substantially complete. All five C64 chips (6510, VIC-II, SID, CIA, PLA)
+are implemented and unit-tested; the VIC-II scanline renderer covers standard +
+multicolour text + border (bitmap/ECM and the sprite engine remain). Per-chip
+save/load landed with the M3 save-state format. Remaining: SID register-trace
+validation against a known tune, and the deferred VIC graphics modes/sprites.
+
 ### VIC-II 6569
 - [x] Create `src/chips/video/vic_ii_6569/` library target. (a013df0; ported from Emu per ADR 0006; CI run 26325382940 green across all jobs)
 - [x] Implement raster engine (PAL: 312 lines × 63 cycles). (a013df0; beam tracker + per-cycle video-matrix counters, PAL/NTSC geometry; CI run 26325382940)
@@ -173,6 +179,15 @@
 ---
 
 ## M3 — Topology, Manifest Loader, Runtime, and First Boot
+
+**Status:** Core complete and CI-green. Done: the topology bus, the manifest
+loader + system builder, the runtime scheduler + frame-tagged input, full
+save-state (zstd container + CRC32 + rewind ring), the headless CLI, the fully
+wired C64 (IRQ/NMI routing, dynamic VIC bank, IEC bus), and the complete 1541 —
+both the protocol-level synthetic drive and the cycle-accurate full drive (6502 +
+2x 6522 VIA + GCR), selectable via `--drive-rom` (B6 + B9 done). Remaining: the
+first golden boot test (data-gated on local C64 ROMs — the CLI + framebuffer-hash
+pipeline is ready) and ADR 0005 (scheduler strategy).
 
 ### Topology library
 - [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
