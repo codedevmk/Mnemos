@@ -386,7 +386,12 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   and memory forms (3b), 13 more tests (37 total). Later phases: control flow + the
   exception framework (which also brings DIVU/DIVS, CHK, TRAPV, MOVE-to/from-SR),
   BCD/misc (ABCD/SBCD/MOVEM/LEA/etc.), cycle-accurate prefetch, then the Emu
-  conformance vectors)
+  conformance vectors). phase 4a: control flow + the exception core — Bcc/BRA/BSR,
+  DBcc/Scc, JMP/JSR/RTS/RTR/RTE, TRAP/TRAPV, LINK/UNLK, MOVE-USP, STOP/RESET
+  (privileged), set_supervisor/write_sr + USP/SSP banking, the 6-byte exception frame
+  + autovectored 7-level interrupt dispatch + trace + privilege violations; 12 more
+  tests (46 total). 4b will add the trapping arithmetic (DIVU/DIVS/CHK) + MOVE-to/
+  from-SR/CCR; later: BCD/misc, cycle-accurate prefetch, then the conformance vectors
 - [ ] Implement `chips::audio::ym2612`.
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).

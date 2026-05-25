@@ -10,6 +10,20 @@
 
 namespace mnemos::chips::cpu {
 
+    namespace {
+        // Exception vector numbers (the address is vector * 4). The ones not yet
+        // raised in this phase (illegal, div-by-zero, CHK) come online with the
+        // trapping-arithmetic slice.
+        [[maybe_unused]] constexpr int vec_illegal = 4;
+        [[maybe_unused]] constexpr int vec_divzero = 5;
+        [[maybe_unused]] constexpr int vec_chk = 6;
+        constexpr int vec_trapv = 7;
+        constexpr int vec_privilege = 8;
+        constexpr int vec_trace = 9;
+        constexpr int vec_trap0 = 32;
+        constexpr int vec_autovector_base = 24; // autovector level n is 24 + n
+    } // namespace
+
     chip_metadata m68000::metadata() const noexcept {
         return {
             .manufacturer = "Motorola",
@@ -756,7 +770,8 @@ namespace mnemos::chips::cpu {
         }
         const op_size sz = static_cast<op_size>((op >> 6U) & 3);
         if (static_cast<int>(sz) == 3) {
-            return; // Scc / DBcc -- control flow, phase 4
+            op_dbcc_scc(op); // size field 3 in group 5 is DBcc / Scc
+            return;
         }
         if (em == 1) { // ADDQ/SUBQ An: full 32-bit, no flags
             if ((op & 0x0100U) != 0U) {
@@ -943,8 +958,248 @@ namespace mnemos::chips::cpu {
         default:
             break;
         }
-        // NOT, SWAP, PEA, LEA, JMP, JSR, MOVEM, MOVE-to/from-SR/CCR, TRAP, etc. land
-        // in later phases.
+
+        // ---- control flow + system ops ($4Exx) ----
+        if ((op & 0xFFF0U) == 0x4E40U) { // TRAP #n
+            raise_exception(vec_trap0 + (op & 0xFU), pc_);
+            return;
+        }
+        if ((op & 0xFFF8U) == 0x4E50U) { // LINK An,#disp
+            const auto an = static_cast<std::size_t>(op & 7);
+            const auto disp = static_cast<std::int16_t>(fetch16());
+            std::uint32_t saved = a_[an];
+            if ((op & 7) == 7) {
+                saved -= 4U; // LINK A7 pushes the post-push SP
+            }
+            push32(saved);
+            a_[an] = a_[7];
+            a_[7] += static_cast<std::uint32_t>(static_cast<std::int32_t>(disp));
+            return;
+        }
+        if ((op & 0xFFF8U) == 0x4E58U) { // UNLK An
+            const auto an = static_cast<std::size_t>(op & 7);
+            a_[7] = a_[an];
+            a_[an] = pop32();
+            return;
+        }
+        if ((op & 0xFFF0U) == 0x4E60U) { // MOVE USP (privileged)
+            if ((sr_ & sr_s) == 0U) {
+                raise_exception(vec_privilege, inst_addr_);
+                return;
+            }
+            const auto an = static_cast<std::size_t>(op & 7);
+            if ((op & 8U) != 0U) {
+                a_[an] = usp_;
+            } else {
+                usp_ = a_[an];
+            }
+            return;
+        }
+        switch (op) {
+        case 0x4E70U: // RESET (privileged) -- no external peripherals in the core
+            if ((sr_ & sr_s) == 0U) {
+                raise_exception(vec_privilege, inst_addr_);
+            }
+            return;
+        case 0x4E71U: // NOP
+            return;
+        case 0x4E72U: // STOP #imm (privileged)
+            if ((sr_ & sr_s) == 0U) {
+                raise_exception(vec_privilege, inst_addr_);
+                return;
+            }
+            write_sr(fetch16());
+            stopped_ = true;
+            return;
+        case 0x4E73U: { // RTE (privileged)
+            if ((sr_ & sr_s) == 0U) {
+                raise_exception(vec_privilege, inst_addr_);
+                return;
+            }
+            const std::uint16_t s = pop16();
+            pc_ = pop32();
+            write_sr(s);
+            return;
+        }
+        case 0x4E75U: // RTS
+            pc_ = pop32();
+            return;
+        case 0x4E76U: // TRAPV
+            if ((sr_ & sr_v) != 0U) {
+                raise_exception(vec_trapv, pc_);
+            }
+            return;
+        case 0x4E77U: { // RTR
+            const std::uint16_t ccr = pop16();
+            sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (ccr & sr_ccr));
+            pc_ = pop32();
+            return;
+        }
+        default:
+            break;
+        }
+        if ((op & 0xFFC0U) == 0x4E80U) { // JSR <ea>
+            const std::uint32_t target = ea_address(em, er, op_size::longword, false);
+            push32(pc_);
+            pc_ = target;
+            return;
+        }
+        if ((op & 0xFFC0U) == 0x4EC0U) { // JMP <ea>
+            pc_ = ea_address(em, er, op_size::longword, false);
+            return;
+        }
+        // NBCD/SWAP/PEA/LEA/MOVEM/MOVE-to-from-SR/CCR/CHK land in later phases.
+    }
+
+    // ---- supervisor state, stack, exceptions ----
+
+    void m68000::set_supervisor(bool supervisor) noexcept {
+        const bool was = (sr_ & sr_s) != 0U;
+        if (was == supervisor) {
+            return;
+        }
+        if (was) { // leaving supervisor: bank out SSP, bank in USP
+            ssp_ = a_[7];
+            a_[7] = usp_;
+        } else { // entering supervisor
+            usp_ = a_[7];
+            a_[7] = ssp_;
+        }
+        sr_ = static_cast<std::uint16_t>(supervisor ? (sr_ | sr_s) : (sr_ & ~sr_s));
+    }
+
+    void m68000::write_sr(std::uint16_t value) noexcept {
+        set_supervisor((value & sr_s) != 0U);
+        sr_ = static_cast<std::uint16_t>(value & 0xA71FU); // T, S, IPM, CCR are the live bits
+    }
+
+    void m68000::push16(std::uint16_t value) noexcept {
+        a_[7] -= 2U;
+        write16(a_[7], value);
+    }
+    void m68000::push32(std::uint32_t value) noexcept {
+        a_[7] -= 4U;
+        write32(a_[7], value);
+    }
+    std::uint16_t m68000::pop16() noexcept {
+        const std::uint16_t v = read16(a_[7]);
+        a_[7] += 2U;
+        return v;
+    }
+    std::uint32_t m68000::pop32() noexcept {
+        const std::uint32_t v = read32(a_[7]);
+        a_[7] += 4U;
+        return v;
+    }
+
+    void m68000::raise_exception(int vector, std::uint32_t exc_pc) noexcept {
+        const std::uint16_t old_sr = sr_;
+        set_supervisor(true);
+        sr_ = static_cast<std::uint16_t>(sr_ & ~sr_t);
+        push32(exc_pc);
+        push16(old_sr);
+        pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+    }
+
+    void m68000::process_interrupt() noexcept {
+        const int level = irq_level_;
+        const std::uint16_t old_sr = sr_;
+        set_supervisor(true);
+        sr_ = static_cast<std::uint16_t>(sr_ & ~sr_t);
+        sr_ =
+            static_cast<std::uint16_t>((sr_ & ~sr_ipm) | (static_cast<std::uint16_t>(level) << 8U));
+        push32(pc_);
+        push16(old_sr);
+        pc_ = read32(static_cast<std::uint32_t>(vec_autovector_base + level) * 4U);
+        stopped_ = false;
+    }
+
+    bool m68000::test_cc(int cc) const noexcept {
+        const bool c = (sr_ & sr_c) != 0U;
+        const bool v = (sr_ & sr_v) != 0U;
+        const bool z = (sr_ & sr_z) != 0U;
+        const bool n = (sr_ & sr_n) != 0U;
+        switch (cc & 0xF) {
+        case 0x0:
+            return true; // T
+        case 0x1:
+            return false; // F
+        case 0x2:
+            return !c && !z; // HI
+        case 0x3:
+            return c || z; // LS
+        case 0x4:
+            return !c; // CC/HS
+        case 0x5:
+            return c; // CS/LO
+        case 0x6:
+            return !z; // NE
+        case 0x7:
+            return z; // EQ
+        case 0x8:
+            return !v; // VC
+        case 0x9:
+            return v; // VS
+        case 0xA:
+            return !n; // PL
+        case 0xB:
+            return n; // MI
+        case 0xC:
+            return n == v; // GE
+        case 0xD:
+            return n != v; // LT
+        case 0xE:
+            return !z && (n == v); // GT
+        default:
+            return z || (n != v); // LE
+        }
+    }
+
+    void m68000::op_branch(std::uint16_t op) noexcept {
+        const int cc = (op >> 8U) & 0xF;
+        const auto d8 = static_cast<std::int8_t>(static_cast<std::uint8_t>(op & 0xFFU));
+        const std::uint32_t base = pc_;
+        const std::int32_t disp = d8 == 0 ? static_cast<std::int16_t>(fetch16()) : d8;
+        const std::uint32_t target =
+            static_cast<std::uint32_t>(static_cast<std::int32_t>(base) + disp);
+        if (cc == 1) { // BSR
+            push32(pc_);
+            pc_ = target;
+        } else if (cc == 0 || test_cc(cc)) { // BRA or Bcc taken
+            pc_ = target;
+            cycles_ += 2;
+        } else { // Bcc not taken
+            cycles_ += 4;
+        }
+    }
+
+    void m68000::op_dbcc_scc(std::uint16_t op) noexcept {
+        const int cc = (op >> 8U) & 0xF;
+        const int em = (op >> 3U) & 7, er = op & 7;
+        if (em == 1) { // DBcc Dn,#disp (2-word)
+            const auto disp = static_cast<std::int16_t>(fetch16());
+            const std::uint32_t target =
+                static_cast<std::uint32_t>(static_cast<std::int32_t>(pc_ - 2U) + disp);
+            if (!test_cc(cc)) {
+                const auto cnt =
+                    static_cast<std::uint16_t>((d_[static_cast<std::size_t>(er)] & 0xFFFFU) - 1U);
+                d_[static_cast<std::size_t>(er)] =
+                    (d_[static_cast<std::size_t>(er)] & 0xFFFF0000U) | cnt;
+                if (cnt != 0xFFFFU) {
+                    pc_ = target;
+                }
+            }
+            return;
+        }
+        // Scc <ea> (1-word)
+        const std::uint8_t v = test_cc(cc) ? 0xFFU : 0x00U;
+        if (em >= 2) {
+            std::uint32_t addr = 0;
+            (void)ea_rmw_read(em, er, op_size::byte, addr);
+            ea_rmw_write(em, er, op_size::byte, v, addr);
+        } else {
+            d_[static_cast<std::size_t>(er)] = (d_[static_cast<std::size_t>(er)] & ~0xFFU) | v;
+        }
     }
 
     void m68000::op_shift(std::uint16_t op) noexcept {
@@ -1185,11 +1440,14 @@ namespace mnemos::chips::cpu {
         case 0xD: // ADD / ADDA / ADDX
             op_add(op);
             break;
+        case 0x6: // Bcc / BRA / BSR
+            op_branch(op);
+            break;
         case 0xE: // ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR
             op_shift(op);
             break;
         default:
-            // Groups 6 (Bcc), A/F (line traps) arrive in later phases -- a 4-cycle
+            // Groups A/F (line-A/line-F traps) arrive in a later phase -- a 4-cycle
             // no-op until then.
             break;
         }
@@ -1199,11 +1457,36 @@ namespace mnemos::chips::cpu {
 
     int m68000::step_instruction() {
         cycles_ = 0;
+
+        // Interrupt dispatch. Level 7 is edge-triggered (NMI); the others are
+        // accepted when the request level exceeds the SR interrupt-priority mask.
+        if (irq_level_ > 0) {
+            const int ipm = (sr_ >> 8U) & 7;
+            const bool fire = irq_level_ == 7 ? prev_irq_level_ < 7 : irq_level_ > ipm;
+            if (fire) {
+                prev_irq_level_ = irq_level_;
+                process_interrupt();
+                if (cycles_ < 4) {
+                    cycles_ = 4;
+                }
+                elapsed_ += static_cast<std::uint64_t>(cycles_);
+                return cycles_;
+            }
+        }
+
         if (halted_ || stopped_) {
             return 4;
         }
+
+        const std::uint16_t pre_sr = sr_;
+        inst_addr_ = pc_;
         const std::uint16_t op = fetch16();
         exec(op);
+
+        // Trace: if T was set entering the instruction, take the trace exception.
+        if ((pre_sr & sr_t) != 0U && !halted_) {
+            raise_exception(vec_trace, pc_);
+        }
         if (cycles_ < 4) {
             cycles_ = 4;
         }
@@ -1225,6 +1508,8 @@ namespace mnemos::chips::cpu {
         usp_ = 0U;
         ssp_ = 0U;
         irq_level_ = 0;
+        prev_irq_level_ = 0;
+        inst_addr_ = 0U;
         stopped_ = false;
         halted_ = false;
         cycles_ = 0;
@@ -1244,6 +1529,7 @@ namespace mnemos::chips::cpu {
     }
 
     void m68000::set_irq_level(int level) noexcept {
+        prev_irq_level_ = irq_level_; // remember the old level so step() sees the NMI edge
         irq_level_ = level < 0 ? 0 : (level > 7 ? 7 : level);
         if (irq_level_ > 0) {
             stopped_ = false;
@@ -1282,6 +1568,7 @@ namespace mnemos::chips::cpu {
         writer.u32(usp_);
         writer.u32(ssp_);
         writer.u8(static_cast<std::uint8_t>(irq_level_));
+        writer.u8(static_cast<std::uint8_t>(prev_irq_level_));
         writer.boolean(stopped_);
         writer.boolean(halted_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
@@ -1300,6 +1587,7 @@ namespace mnemos::chips::cpu {
         usp_ = reader.u32();
         ssp_ = reader.u32();
         irq_level_ = reader.u8();
+        prev_irq_level_ = reader.u8();
         stopped_ = reader.boolean();
         halted_ = reader.boolean();
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());

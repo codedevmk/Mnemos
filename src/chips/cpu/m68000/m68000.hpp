@@ -15,12 +15,16 @@ namespace mnemos::chips::cpu {
     // registers, a supervisor/user split (USP/SSP), and a status register with the
     // 68000 CCR layout (C/V/Z/N/X). The foundation of the Genesis/Mega Drive (M8).
     //
-    // Built in phases. THIS phase is a functional core: the 14 addressing modes, the
-    // MOVE / MOVEA / MOVEQ family with the correct flag model, and per-bus-cycle
-    // timing (4 clocks per word access) -- enough to establish the chip contract and
-    // the addressing-mode machinery. The remaining instruction groups, the
-    // cycle-accurate two-word prefetch pipeline, and the full exception framework
-    // (address/bus errors, traps, interrupts) arrive in later phases; opcodes not yet
+    // Built in phases. Implemented so far: all 14 addressing modes; MOVE/MOVEA/MOVEQ;
+    // the integer arithmetic set (ADD/SUB/CMP families, ADDQ/SUBQ, ADDI/SUBI/CMPI,
+    // MULU/MULS, NEG/NEGX/CLR/EXT/TST); the logicals (AND/OR/EOR/NOT, the immediate
+    // and CCR forms) and bit ops; the shift/rotate family; and control flow plus the
+    // exception core (Bcc/DBcc/Scc/BSR/BRA/JMP/JSR/RTS/RTR/RTE/TRAP/TRAPV/LINK/UNLK/
+    // STOP/RESET, privilege checks, the 7-level autovectored interrupt dispatch, and
+    // trace). Cycle counts are 4 clocks per bus access plus the documented internal
+    // idles. Still to come: the trapping arithmetic (DIVU/DIVS/CHK), MOVE-to/from-SR,
+    // BCD + the remaining misc ops (MOVEM/SWAP/PEA/...), the cycle-accurate two-word
+    // prefetch pipeline, and the address/bus-error group-0 frames. Opcodes not yet
     // decoded execute as 4-cycle no-ops.
     //
     // Instruction-stepped like the Z80: step_instruction() runs one instruction and
@@ -145,8 +149,21 @@ namespace mnemos::chips::cpu {
         void op_immediate(std::uint16_t op) noexcept;         // group 0: immediates + bit ops
         void op_bit(std::uint16_t op, bool dynamic) noexcept; // BTST/BCHG/BCLR/BSET
         void op_or(std::uint16_t op) noexcept;                // group 8: OR (DIV/SBCD later)
-        void op_group4(std::uint16_t op) noexcept; // group 4: NOP/EXT/NEGX/CLR/NEG/NOT/TST
-        void op_shift(std::uint16_t op) noexcept;  // group E: ASL/ASR/LSL/LSR/RO[X]L/RO[X]R
+        void op_group4(std::uint16_t op) noexcept;   // group 4: NOP/EXT/NEGX/CLR/NEG/NOT/TST + ctrl
+        void op_shift(std::uint16_t op) noexcept;    // group E: ASL/ASR/LSL/LSR/RO[X]L/RO[X]R
+        void op_branch(std::uint16_t op) noexcept;   // group 6: Bcc/BRA/BSR
+        void op_dbcc_scc(std::uint16_t op) noexcept; // group 5 (size 3): DBcc/Scc
+
+        // ---- supervisor state, stack, exceptions ----
+        void set_supervisor(bool supervisor) noexcept; // swap USP/SSP on a mode change
+        void write_sr(std::uint16_t value) noexcept;
+        void push16(std::uint16_t value) noexcept;
+        void push32(std::uint32_t value) noexcept;
+        [[nodiscard]] std::uint16_t pop16() noexcept;
+        [[nodiscard]] std::uint32_t pop32() noexcept;
+        void raise_exception(int vector, std::uint32_t exc_pc) noexcept;
+        void process_interrupt() noexcept;
+        [[nodiscard]] bool test_cc(int cc) const noexcept;
 
         std::array<std::uint32_t, 8> d_{};
         std::array<std::uint32_t, 8> a_{};
@@ -154,7 +171,9 @@ namespace mnemos::chips::cpu {
         std::uint16_t sr_{};
         std::uint32_t usp_{};
         std::uint32_t ssp_{};
+        std::uint32_t inst_addr_{}; // address of the instruction in flight (for exception frames)
         int irq_level_{};
+        int prev_irq_level_{}; // for the level-7 (NMI) edge
         bool stopped_{};
         bool halted_{};
 

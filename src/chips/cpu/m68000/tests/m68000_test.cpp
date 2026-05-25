@@ -533,3 +533,156 @@ TEST_CASE("m68000 memory shift operates on a word in memory") {
     CHECK(m.bus.read8(0x2001U) == 0x01U); // 0x0002 >> 1 = 0x0001
     (void)r;
 }
+
+TEST_CASE("m68000 BRA and conditional Bcc") {
+    machine m;
+    m68000::registers s{};
+    auto r = run_one(m, {0x6004U}, s); // BRA.B +4 -> ($1002)+4
+    CHECK(r.pc == 0x1006U);
+
+    s.sr = m68000::sr_z;
+    r = run_one(m, {0x6704U}, s); // BEQ.B +4, Z set -> taken
+    CHECK(r.pc == 0x1006U);
+
+    s.sr = 0U;
+    r = run_one(m, {0x6704U}, s); // BEQ.B +4, Z clear -> not taken
+    CHECK(r.pc == 0x1002U);
+}
+
+TEST_CASE("m68000 BSR pushes the return address") {
+    machine m;
+    m68000::registers s{};
+    s.a[7] = 0x00003000U;
+    const auto r = run_one(m, {0x6104U}, s); // BSR.B +4
+    CHECK(r.pc == 0x1006U);
+    CHECK(r.a[7] == 0x00002FFCU);         // SP -= 4
+    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // return address $00001002, big-endian
+    CHECK(m.bus.read8(0x2FFFU) == 0x02U);
+}
+
+TEST_CASE("m68000 JSR then RTS returns to the caller") {
+    machine m;
+    m68000::registers s{};
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x4EB8U, 0x2000U}); // JSR ($2000).W
+    m.load(0x2000U, {0x4E75U});          // RTS
+    m.cpu.step_instruction();            // JSR
+    CHECK(m.cpu.cpu_registers().pc == 0x2000U);
+    m.cpu.step_instruction();                   // RTS
+    CHECK(m.cpu.cpu_registers().pc == 0x1004U); // instruction after the JSR
+    CHECK(m.cpu.cpu_registers().a[7] == 0x00003000U);
+}
+
+TEST_CASE("m68000 DBF loops until the counter underflows") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x00000002U;
+    auto r = run_one(m, {0x51C8U, 0xFFFEU}, s); // DBF D0,-2
+    CHECK((r.d[0] & 0xFFFFU) == 0x0001U);
+    CHECK(r.pc == 0x1000U); // branched back
+
+    s.d[0] = 0x00000000U;
+    r = run_one(m, {0x51C8U, 0xFFFEU}, s); // DBF D0,-2 with D0 == 0
+    CHECK((r.d[0] & 0xFFFFU) == 0xFFFFU);  // underflowed
+    CHECK(r.pc == 0x1004U);                // fell through
+}
+
+TEST_CASE("m68000 Scc writes a boolean byte") {
+    machine m;
+    m68000::registers s{};
+    s.sr = m68000::sr_z;
+    auto r = run_one(m, {0x57C0U}, s); // SEQ D0, Z set -> 0xFF
+    CHECK((r.d[0] & 0xFFU) == 0xFFU);
+    s.sr = 0U;
+    r = run_one(m, {0x57C0U}, s); // SEQ D0, Z clear -> 0x00
+    CHECK((r.d[0] & 0xFFU) == 0x00U);
+}
+
+TEST_CASE("m68000 TRAP vectors through the exception table") {
+    machine m;
+    m.w32(0x0080U, 0x00004000U); // vector 32 (TRAP #0) -> $4000
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x4E40U}); // TRAP #0
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FFAU);         // pushed PC (4) + SR (2)
+    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // stacked return PC $1002
+    CHECK(m.bus.read8(0x2FFFU) == 0x02U);
+}
+
+TEST_CASE("m68000 RTE restores SR and PC from the stack frame") {
+    machine m;
+    m.w16(0x2FFAU, 0x2000U);     // saved SR (S set)
+    m.w32(0x2FFCU, 0x00001234U); // saved PC
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00002FFAU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x4E73U}); // RTE
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00001234U);
+    CHECK((r.sr & m68000::sr_s) != 0U);
+    CHECK(r.a[7] == 0x00003000U);
+}
+
+TEST_CASE("m68000 services an autovectored interrupt") {
+    machine m;
+    m.w32(0x0070U, 0x00005000U); // autovector level 4 = vector 28 -> $5000
+    m68000::registers s{};
+    s.sr = m68000::sr_s; // IPM = 0, so a level-4 request is accepted
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.cpu.set_irq_level(4);
+    m.cpu.step_instruction(); // takes the interrupt instead of executing
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00005000U);
+    CHECK(((r.sr >> 8U) & 7U) == 4U); // IPM raised to the accepted level
+    CHECK(r.a[7] == 0x00002FFAU);
+}
+
+TEST_CASE("m68000 traps a privileged instruction executed in user mode") {
+    machine m;
+    m.w32(0x0020U, 0x00006000U); // privilege-violation vector (8) -> $6000
+    m68000::registers s{};
+    s.sr = 0U; // user mode
+    s.a[7] = 0x00003000U;
+    s.ssp = 0x00004000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x4E72U, 0x2000U}); // STOP #$2000 (privileged)
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00006000U);
+    CHECK((r.sr & m68000::sr_s) != 0U); // now supervisor
+    CHECK(r.a[7] == 0x00003FFAU);       // pushed onto SSP ($4000 - 6)
+}
+
+TEST_CASE("m68000 LINK and UNLK manage a stack frame") {
+    machine m;
+    m68000::registers s{};
+    s.a[6] = 0x12345678U;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x4E56U, 0xFFFCU}); // LINK A6,#-4
+    m.cpu.step_instruction();
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.a[6] == 0x00002FFCU); // A6 = SP after the push
+    CHECK(r.a[7] == 0x00002FF8U); // SP -= 4 (frame) after pushing old A6
+
+    m.load(r.pc, {0x4E5EU}); // UNLK A6
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.a[6] == 0x12345678U); // restored
+    CHECK(r.a[7] == 0x00003000U); // SP restored
+}
