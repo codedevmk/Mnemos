@@ -318,8 +318,7 @@ lower-tier contract**. The SN76489 PSG, the SMS VDP, the mappers, the manifests,
 and the golden tests follow.
 
 - [~] Implement `chips::cpu::z80` (full undocumented behavior; passes ZEXALL). (chips::cpu::z80, ported from the Emu reference per ADR 0006 and improved: the per-T-state wait machinery dropped, the non-portable anonymous-union register pairs replaced with portable 16-bit members + inline half accessors. Complete instruction set — 256 unprefixed + CB + ED (block transfer / block I/O / 16-bit arith) + DD/FD (IX/IY) + DDCB/FDCB, the common undocumented opcodes (SLL, IX/IY halves) and the full flag model incl. the XF/YF bits. Memory via i_bus; the separate Z80 I/O space via injected port callbacks; NMI + IM0/1/2; instruction-stepped with a catch-up tick(); save/load + register_snapshot; factory "zilog.z80". 16 unit tests across LD/ALU/INC/16-bit/JP/CALL+RET/PUSH+POP/CB/ED-LDIR/DD/IN+OUT/NMI/IM1/tick. The remaining piece is ZEXALL/fuse conformance — data-gated, a follow-up like the m6510 TomHarte corpus)
-- [ ] Implement `chips::audio::sn76489`.
-- [ ] Implement `chips::video::sms_vdp`.
+- [x] Implement `chips::audio::sn76489`. (chips::audio::sn76489, ported from the Emu reference: 3 square-tone channels + 1 LFSR noise channel, the -2 dB/step attenuation table, the latch/data write port, white/periodic noise with the positive-edge LFSR clock, and an optional 1-pole analog low-pass. step() emits one mono sample; tick() drives it through the chip's internal /16 prescaler. save/load + register_snapshot; factory "ti.sn76489". 8 unit tests (silence on reset, latch tone/volume, square wave at peak, attenuation level, LFSR reset, tick divider, state round-trip). Shared with the Genesis PSG (M8))
 - [ ] Implement SMS mapper (Sega mapper, Codemasters mapper).
 - [ ] Author `manifests/sms/` (NTSC + PAL).
 - [ ] Golden frame tests for known commercial SMS ROMs.
