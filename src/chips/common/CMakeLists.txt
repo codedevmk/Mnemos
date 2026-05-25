@@ -23,6 +23,7 @@ if(BUILD_TESTING)
         SOURCES
             tests/chip_registry_test.cpp
             tests/state_test.cpp
+            tests/iec_bus_test.cpp
         LIBRARIES mnemos::chips::common
     )
 endif()
