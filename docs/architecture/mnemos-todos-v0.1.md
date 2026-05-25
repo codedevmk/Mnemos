@@ -312,13 +312,18 @@ is much larger and platform-heavy.
 
 ## M6 — Sega Master System
 
-- [ ] Implement `chips::cpu::z80` (full undocumented behavior; passes ZEXALL).
+**Status:** In progress — the Z80 CPU has landed, proving the chip contract
+generalizes beyond the 6502 family with **zero changes to i_cpu / i_bus / any
+lower-tier contract**. The SN76489 PSG, the SMS VDP, the mappers, the manifests,
+and the golden tests follow.
+
+- [~] Implement `chips::cpu::z80` (full undocumented behavior; passes ZEXALL). (chips::cpu::z80, ported from the Emu reference per ADR 0006 and improved: the per-T-state wait machinery dropped, the non-portable anonymous-union register pairs replaced with portable 16-bit members + inline half accessors. Complete instruction set — 256 unprefixed + CB + ED (block transfer / block I/O / 16-bit arith) + DD/FD (IX/IY) + DDCB/FDCB, the common undocumented opcodes (SLL, IX/IY halves) and the full flag model incl. the XF/YF bits. Memory via i_bus; the separate Z80 I/O space via injected port callbacks; NMI + IM0/1/2; instruction-stepped with a catch-up tick(); save/load + register_snapshot; factory "zilog.z80". 16 unit tests across LD/ALU/INC/16-bit/JP/CALL+RET/PUSH+POP/CB/ED-LDIR/DD/IN+OUT/NMI/IM1/tick. The remaining piece is ZEXALL/fuse conformance — data-gated, a follow-up like the m6510 TomHarte corpus)
 - [ ] Implement `chips::audio::sn76489`.
 - [ ] Implement `chips::video::sms_vdp`.
 - [ ] Implement SMS mapper (Sega mapper, Codemasters mapper).
 - [ ] Author `manifests/sms/` (NTSC + PAL).
 - [ ] Golden frame tests for known commercial SMS ROMs.
-- [ ] Confirm zero contract changes from M1–M3; if any, raise ADR.
+- [x] Confirm zero contract changes from M1–M3; if any, raise ADR. (the Z80 fit i_cpu/i_chip/i_bus and the factory/tier model unchanged — the separate I/O space is handled with injected port callbacks, no contract change. No ADR needed)
 
 ---
 
