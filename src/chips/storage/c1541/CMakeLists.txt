@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_storage_c1541
     src/d64_image.cpp
+    src/synthetic_drive.cpp
 )
 add_library(mnemos::chips::storage::c1541 ALIAS mnemos_chips_storage_c1541)
 
@@ -19,7 +20,9 @@ mnemos_declare_tier(NAME mnemos_chips_storage_c1541 TIER 2 DEPENDS mnemos_founda
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_storage_c1541_test
-        SOURCES tests/d64_image_test.cpp
+        SOURCES
+            tests/d64_image_test.cpp
+            tests/synthetic_drive_test.cpp
         LIBRARIES mnemos::chips::storage::c1541
     )
 endif()
