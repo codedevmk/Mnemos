@@ -189,11 +189,11 @@ both the protocol-level synthetic drive and the cycle-accurate full drive (6502 
 keyboard/joystick/paddle input (B2), cartridges (B5), the datasette (B7), the
 REU (B8), region/SID/dual-SID selection (B10), the unstable opcodes + `$01` fade
 (B11), the cartridge/expansion-port open-bus latch (B13), and ADR 0005 (scheduler
-strategy). Of the Emu-gap B-list only B4 (cycle-exact VIC open-bus/sprite-fetch
-reads — B13 already covers the expansion-port floating bus) and B12 (RS-232
-userport modem) remain — both niche. The one milestone gap is the first golden
-boot test, data-gated on local C64 ROMs — the CLI + framebuffer-hash pipeline is
-ready.
+strategy), and the RS-232 userport modem (B12). Of the Emu-gap B-list only B4
+(cycle-exact VIC open-bus/sprite-fetch reads — B13 already covers the
+expansion-port floating bus) remains, and it is niche. The one milestone gap is
+the first golden boot test, data-gated on local C64 ROMs — the CLI +
+framebuffer-hash pipeline is ready.
 
 ### Topology library
 - [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
@@ -234,7 +234,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Full cycle-accurate 1541 (6502 + 2x 6522 VIA + GCR) and the MOS 6522 VIA chip. (B9; via_6522 + chips::storage::c1541::{gcr, disk_bind, full_drive} — drive 6502 (port-disabled m6510) + 2x VIA + 2K RAM + 16K DOS ROM + GCR head/stepper/SYNC + IEC auto-ATN-ack. Memory map / VIA wiring / mechanism unit-tested with a synthetic ROM; real DOS ROM is data-gated and the GCR read path tracks Emu's unfinished state)
 - [x] System-level SID variant / NTSC region / dual-SID selection + an NTSC manifest. (B10; assemble_c64 takes a c64_config — region sets VIC revision + phi2 + mains TOD, sid_variant picks 6581/8580, dual_sid maps a second SID at $D420 (priority overlay over the SID mirror). c64.ntsc.toml added; CLI derives region from the manifest id and takes --sid/--dual-sid. Verified PAL vs NTSC produce different frame hashes)
 - [x] 6510 unstable illegal opcodes (SHA/SHX/SHY/TAS/LAS/ANE/LXA) + `$01` bit 6/7 floating-gate fade. (B11; decoded + executed deterministically — ANE/LXA with a fixed magic ($EE), SHA/SHX/SHY/TAS store source & (high+1), TAS sets SP=A&X, LAS = mem & SP; the $01 bits 6,7 fade to 0 after switching to input. Page-cross address corruption not modelled. Unit-tested)
-- [ ] RS-232 / userport modem (CIA2 PA2 TXD + userport, Emu `c64_modem.c`). (B12; genuine userport peripheral, surfaced by the re-review; not covered by B1-B11. Niche — low priority)
+- [x] RS-232 / userport modem (CIA2 PA2 TXD + userport, Emu `c64_modem.c`). (B12; full bridge in four parts. chips::peripheral::modem ports Emu's Hayes "AT" core (command/online modes, dial, +++ escape, S-registers, result codes) behind a pluggable modem_transport — loopback + a live tcp_transport (Winsock/BSD sockets). chips::peripheral::rs232 is the bit-level userport UART (TXD sampling, RXD shifting, /FLAG start-bit, configurable baud). assemble_c64 wires them to CIA2 (PA2=TXD, PB0=RXD, /FLAG, byte sink/source); CLI --modem (loopback) / --dial host:port (TCP, auto-ATDT). modem + UART unit-tested in isolation and integration-tested through CIA2; the tcp_transport is compiled on all platforms but not dialed in CI, and matching the KERNAL's programmed baud end-to-end is data-gated on the ROM)
 - [x] Cartridge I/O-2 ($DF00) open-bus "last byte" latch. (B13; the VIC-II now latches the last byte it fetched off the main bus (vic_ii_6569::last_fetched_byte(), $FF until the first fetch, saved in the VIC state). assemble_c64 maps an open I/O-1/I/O-2 overlay at $DE00-$DFFF — priority 1, above base RAM but below the cartridge (2) and REU (3) — so in I/O mode with no cart/REU a read returns that floating-bus byte (the stale value fastloaders/protection probe) and the no-op write keeps the PLA-deselected RAM from being clobbered; an inserted cart still answers $FF for addresses it does not decode, matching Emu's vic_last_fetch model. VIC unit + C64 integration tested (open bus overrides RAM, mirrors the live latch, yields to cart/REU). Sub-cycle exactness is bounded by the scanline renderer, as with B4)
 
 ### Runtime library

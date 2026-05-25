@@ -71,6 +71,7 @@ namespace mnemos::tools {
                "  --dual-sid          add a second SID at $D420 (stereo)\n"
                "  --reu <128|256|512> add a RAM Expansion Unit at $DF00 (KiB)\n"
                "  --modem             attach an RS-232 userport modem (loopback)\n"
+               "  --dial <host[:port]> attach the modem and dial host over TCP\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
                "  --load <file>       load a save state before the run\n"
@@ -143,6 +144,12 @@ namespace mnemos::tools {
                     return false;
                 }
             } else if (arg == "--modem") {
+                out.modem = true;
+            } else if (arg == "--dial") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                out.dial = value;
                 out.modem = true;
             } else if (arg == "--dump-hash") {
                 out.dump_hash = true;
@@ -369,16 +376,33 @@ namespace mnemos::tools {
         if (cfg.dual_sid) {
             chips.push_back({&sys->sid2, 1U});
         }
-        // RS-232 userport modem: a loopback backend echoes whatever the C64 sends.
-        // The UART samples/shifts the serial lines each cycle; the modem advances
-        // its escape-guard timer and pumps the link.
+        // RS-232 userport modem: --dial uses a live TCP backend, otherwise a
+        // loopback echoes whatever the C64 sends. The UART samples/shifts the
+        // serial lines each cycle; the modem advances its guard timer + pumps the
+        // link. The transport must outlive the scheduler run.
         chips::peripheral::loopback_transport modem_loop;
+        chips::peripheral::tcp_transport modem_tcp;
         if (cfg.modem) {
-            sys->modem_unit.set_transport(&modem_loop);
+            if (!options.dial.empty()) {
+                sys->modem_unit.set_transport(&modem_tcp);
+            } else {
+                sys->modem_unit.set_transport(&modem_loop);
+            }
             chips.push_back({&sys->rs232_unit, 1U});
             chips.push_back({&sys->modem_unit, 1U});
         }
         runtime::scheduler sched(std::move(chips), &sys->vic);
+
+        // Auto-issue the dial as if the C64 typed it (the headless runner has no
+        // KERNAL terminal). The modem connects via the TCP transport; peer bytes
+        // surface to the C64 over the next frames.
+        if (cfg.modem && !options.dial.empty()) {
+            const std::string at = "ATDT " + options.dial + "\r";
+            for (const char c : at) {
+                sys->modem_unit.dte_write(static_cast<std::uint8_t>(c));
+            }
+            out << "dialing " << options.dial << " ...\n";
+        }
 
         // A save-state view over the assembled machine (chunk ids match the manifest).
         const auto build_target = [&](std::uint64_t master_cycle) {

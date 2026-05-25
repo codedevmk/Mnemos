@@ -56,6 +56,14 @@ TEST_CASE("parse_args recognises the modem flag") {
     CHECK_FALSE(off.modem);
 }
 
+TEST_CASE("parse_args reads --dial and implies the modem") {
+    cli_options opts;
+    std::ostringstream err;
+    REQUIRE(parse({"cli", "--manifest", "c64.toml", "--dial", "bbs.host:6400"}, opts, err) == 1);
+    CHECK(opts.dial == "bbs.host:6400");
+    CHECK(opts.modem); // --dial implies --modem
+}
+
 TEST_CASE("parse_args rejects bad input") {
     SECTION("unknown flag") {
         cli_options opts;

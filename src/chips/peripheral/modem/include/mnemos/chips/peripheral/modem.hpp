@@ -169,4 +169,29 @@ namespace mnemos::chips::peripheral {
         std::string queue_; // sent bytes waiting to be echoed back
     };
 
+    // A live TCP backend so the modem can dial real Telnet/BBS hosts. It opens a
+    // blocking connect, then switches the socket to non-blocking so recv() returns
+    // immediately with whatever is buffered (0 = nothing right now). Platform
+    // sockets (Winsock on Windows, BSD sockets elsewhere); it touches the network,
+    // so it is compiled on every platform but not exercised by CI.
+    class tcp_transport final : public modem_transport {
+      public:
+        tcp_transport() = default;
+        ~tcp_transport() override;
+        tcp_transport(const tcp_transport&) = delete;
+        tcp_transport& operator=(const tcp_transport&) = delete;
+        tcp_transport(tcp_transport&&) = delete;
+        tcp_transport& operator=(tcp_transport&&) = delete;
+
+        [[nodiscard]] bool connect(const std::string& host, std::uint16_t port) override;
+        void disconnect() override;
+        int send(const std::uint8_t* data, int len) override;
+        int recv(std::uint8_t* out, int max) override;
+        [[nodiscard]] bool is_connected() const override { return connected_; }
+
+      private:
+        std::intptr_t fd_{-1}; // SOCKET (Windows) / int fd (POSIX); -1 = none
+        bool connected_{};
+    };
+
 } // namespace mnemos::chips::peripheral

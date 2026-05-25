@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_peripheral_modem
     src/modem.cpp
+    src/tcp_transport.cpp
 )
 add_library(mnemos::chips::peripheral::modem ALIAS mnemos_chips_peripheral_modem)
 
@@ -12,6 +13,11 @@ target_include_directories(
 )
 
 target_link_libraries(mnemos_chips_peripheral_modem PUBLIC mnemos::chips::common)
+
+# The live TCP transport needs the Winsock library on Windows.
+if(WIN32)
+    target_link_libraries(mnemos_chips_peripheral_modem PUBLIC ws2_32)
+endif()
 
 mnemos_apply_common_target_options(mnemos_chips_peripheral_modem PUBLIC)
 mnemos_declare_tier(NAME mnemos_chips_peripheral_modem TIER 2 DEPENDS mnemos_foundation)

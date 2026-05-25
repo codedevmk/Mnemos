@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -295,6 +296,21 @@ TEST_CASE("modem round-trips its state", "[modem]") {
     }
     CHECK(buf.find("AT") == std::string::npos); // echo stayed off after restore
     CHECK(buf[0] == '0');                       // numeric result preserved
+}
+
+TEST_CASE("tcp_transport is safe before any connection", "[modem]") {
+    // Network-free checks only: CI never dials a real host. This verifies the
+    // socket backend links and behaves sanely while disconnected.
+    mnemos::chips::peripheral::tcp_transport tcp;
+    CHECK_FALSE(tcp.is_connected());
+
+    std::array<std::uint8_t, 4> buf{};
+    CHECK(tcp.recv(buf.data(), static_cast<int>(buf.size())) == 0); // nothing to read
+    const std::uint8_t byte = 0x41U;
+    CHECK(tcp.send(&byte, 1) == 0);    // dropped while disconnected
+    CHECK_FALSE(tcp.connect("", 80U)); // empty host never dials
+    tcp.disconnect();                  // idempotent / safe
+    CHECK_FALSE(tcp.is_connected());
 }
 
 TEST_CASE("modem registers under generic.hayes_modem", "[modem]") {
