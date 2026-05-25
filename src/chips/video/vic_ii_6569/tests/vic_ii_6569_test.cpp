@@ -37,15 +37,37 @@ TEST_CASE("vic_ii_6569 reports its identity and registers under mos.6569") {
 TEST_CASE("vic_ii_6569 register window mirrors and unused range reads 0xFF") {
     vic_ii_6569 vic;
 
-    vic.write(0x21U, 0x05U); // background colour 0
-    CHECK(vic.read(0x21U) == 0x05U);
-    CHECK(vic.read(0x61U) == 0x05U); // $D061 mirrors $D021 (address & 0x3F)
+    vic.write(0x21U, 0x05U);         // background colour 0 (4-bit register)
+    CHECK(vic.read(0x21U) == 0xF5U); // high nibble of a colour register reads 1
+    CHECK(vic.read(0x61U) == 0xF5U); // $D061 mirrors $D021 (address & 0x3F)
 
     // $D02F..$D03F decode to all-ones.
     CHECK(vic.read(0x2FU) == 0xFFU);
     CHECK(vic.read(0x3FU) == 0xFFU);
     vic.write(0x2FU, 0x12U); // dropped
     CHECK(vic.read(0x2FU) == 0xFFU);
+}
+
+TEST_CASE("vic_ii_6569 reads unused register bits as 1") {
+    vic_ii_6569 vic;
+
+    // Control register 2 ($D016): bits 6,7 are unused and read 1.
+    vic.write(0x16U, 0x08U);
+    CHECK(vic.read(0x16U) == 0xC8U);
+
+    // Memory pointers ($D018): bit 0 is unused and reads 1.
+    vic.write(0x18U, 0x14U);
+    CHECK(vic.read(0x18U) == 0x15U);
+
+    // Every colour register $D020-$D02E is 4-bit; the high nibble reads 1.
+    for (std::uint8_t reg = 0x20U; reg <= 0x2EU; ++reg) {
+        vic.write(reg, 0x0AU);
+        CHECK(vic.read(reg) == 0xFAU);
+    }
+
+    // Fully-used registers are unaffected (e.g. sprite enable $D015).
+    vic.write(0x15U, 0x5AU);
+    CHECK(vic.read(0x15U) == 0x5AU);
 }
 
 TEST_CASE("vic_ii_6569 decodes SCROLY and SCROLX mode bits") {
@@ -181,18 +203,18 @@ TEST_CASE("vic_ii_6569 reset clears runtime state but keeps the revision") {
 
     vic.reset(status::hard);
     CHECK(vic.raster_y() == 0U);
-    CHECK(vic.read(0x21U) == 0x00U);
-    CHECK_FALSE(vic.is_pal()); // revision survives reset
+    CHECK(vic.read(0x21U) == 0xF0U); // cleared register, high nibble still reads 1
+    CHECK_FALSE(vic.is_pal());       // revision survives reset
     CHECK(vic.cycles_per_line() == 65U);
 }
 
 TEST_CASE("vic_ii_6569 exposes its registers through i_mmio") {
     vic_ii_6569 vic;
     mnemos::chips::i_mmio& mmio = vic;
-    mmio.mmio_write(0x21U, 0x0EU); // background colour 0
-    CHECK(mmio.mmio_read(0x21U) == 0x0EU);
-    CHECK(vic.read(0x21U) == 0x0EU);
-    CHECK(mmio.mmio_read(0x61U) == 0x0EU); // mirror within the 1KB window
+    mmio.mmio_write(0x21U, 0x0EU);         // background colour 0 (4-bit register)
+    CHECK(mmio.mmio_read(0x21U) == 0xFEU); // high nibble reads 1
+    CHECK(vic.read(0x21U) == 0xFEU);
+    CHECK(mmio.mmio_read(0x61U) == 0xFEU); // mirror within the 1KB window
 
     auto chip = mnemos::chips::create_chip("mos.6569");
     REQUIRE(chip != nullptr);

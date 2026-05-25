@@ -189,11 +189,12 @@ both the protocol-level synthetic drive and the cycle-accurate full drive (6502 
 keyboard/joystick/paddle input (B2), cartridges (B5), the datasette (B7), the
 REU (B8), region/SID/dual-SID selection (B10), the unstable opcodes + `$01` fade
 (B11), the cartridge/expansion-port open-bus latch (B13), and ADR 0005 (scheduler
-strategy), and the RS-232 userport modem (B12). Of the Emu-gap B-list only B4
-(cycle-exact VIC open-bus/sprite-fetch reads — B13 already covers the
-expansion-port floating bus) remains, and it is niche. The one milestone gap is
-the first golden boot test, data-gated on local C64 ROMs — the CLI +
-framebuffer-hash pipeline is ready.
+strategy), the RS-232 userport modem (B12), and the VIC open-bus reads (B4). The
+entire Emu-gap B-list (B1-B13) is now closed; the only residual is strictly
+cycle-exact per-cycle VIC data-bus values, which ride with the deferred
+sprite/bitmap engine rather than a gap item. The one milestone gap is the first
+golden boot test, data-gated on local C64 ROMs — the CLI + framebuffer-hash
+pipeline is ready.
 
 ### Topology library
 - [x] Create `src/topology/` library target `mnemos::topology`. (7e62c0d; tier-3 library implementing chips::i_bus; CI run 26387396049 green)
@@ -226,7 +227,7 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [x] Route VIC + CIA1 /IRQ into the 6510 /IRQ and CIA2 into /NMI. (B1; assemble_c64 ORs vic.irq_asserted()|cia1 via edge callbacks into set_irq_line, CIA2 -> set_nmi_line; the single biggest correctness blocker — without it no IRQ-driven program runs)
 - [x] Track the VIC 16K bank from CIA2 port A at runtime. (B3; CIA2 write_port_a -> vic.set_bank((~port_a_pins())&3))
 - [x] Keyboard matrix + joystick wiring (CIA1 PRA/PRB callbacks) and paddle/POT mux to SID. (B2; c64_input models the 8x8 matrix + both joysticks + both paddle pairs, wired into CIA1 PRA/PRB in assemble_c64; the paddle mux (CIA1 PRA bit7->port1, bit6->port2) routes the selected pair to SID POTX/POTY ($D419/$D41A). Matrix scan, joystick overlay, and paddle mux all unit + integration tested. Feeding the frame-tagged input_buffer / a frontend into c64_input is a runner/frontend concern, not chip wiring)
-- [ ] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4; the expansion-port floating bus at $DE00-$DFFF is done under B13 via vic_ii_6569::last_fetched_byte(); what remains is the cycle-exact VIC-internal open bus — the $D000-window register gaps ($D02F-$D03F currently read $FF) and per-cycle sprite/idle fetch values — which needs the cycle-exact beam the scanline renderer does not yet model)
+- [x] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4; the expansion-port floating bus at $DE00-$DFFF is done under B13 via vic_ii_6569::last_fetched_byte(). The VIC register-window open bus is now complete: reads of the unused register bits return 1 as the silicon does — $D016 | $C0, $D018 | $01, the 4-bit colour registers $D020-$D02E | $F0 (joining the already-modelled $D019/$D01A high bits and the $D02F-$D03F = $FF aliases). The Mnemos VIC is more accurate here than the Emu reference, whose read path left those bits unmasked. The only residual is the strictly cycle-exact per-cycle data-bus value (e.g. the exact sprite/idle fetch byte visible to a mid-fetch read), which needs the cycle-exact beam the scanline renderer does not model — tracked with the deferred sprite/bitmap engine, not as a separate gap)
 - [x] Cartridge support: `.crt` loader + generic 8K/16K/Ultimax + Ocean/Magic Desk + EasyFlash; drive `/GAME`//EXROM into the PLA. (B5; chips::mapper::c64_cartridge parses .crt + banks ROML/ROMH + I/O bank-switching; assemble_c64 maps ROML $8000 / ROMH $A000+$E000 / cart I/O $DE00 gated by the PLA, and feeds the cart's /GAME//EXROM into the decode; CLI --cart. The cart I/O-2 open-bus latch is the separate B13)
 - [x] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; chips::iec_bus + chips::storage::c1541::{d64_image, synthetic_drive} + CIA2 IEC wiring in assemble_c64 + CLI --disk. Command/serving logic unit-tested; the bit-level handshake is ROM-gated like the golden boot)
 - [x] Datasette: 1530 `.tap` v0/v1 pulse playback -> CIA1 /FLAG. (B7; chips::storage::datasette parses .tap v0/v1, counts down each pulse and pulses CIA1 /FLAG; motor from $01 bit5, cassette sense on $01 bit4 via the new m6510 set_port_input. Wired in assemble_c64; CLI --tape auto-presses PLAY. Unit + integration tested)

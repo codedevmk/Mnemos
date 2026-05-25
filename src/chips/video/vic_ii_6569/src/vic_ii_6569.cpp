@@ -237,7 +237,17 @@ namespace mnemos::chips::video {
             regs_[reg_sbcol] = 0U;
             return value;
         }
+        case reg_scrolx:
+            // Control register 2: bits 6,7 are unused and read 1.
+            return static_cast<std::uint8_t>(0xC0U | regs_[reg_scrolx]);
+        case reg_memptr:
+            // Memory pointers: bit 0 is unused and reads 1.
+            return static_cast<std::uint8_t>(0x01U | regs_[reg_memptr]);
         default:
+            // $D020-$D02E are 4-bit colour registers; their high nibble reads 1.
+            if (reg >= reg_bordercol) {
+                return static_cast<std::uint8_t>(0xF0U | regs_[reg]);
+            }
             return regs_[reg];
         }
     }

@@ -64,9 +64,10 @@ TEST_CASE("the 6510 $01 port drives PLA banking", "[c64][banking]") {
         cpu.write(0x0001U, 0x37U); // LORAM=HIRAM=CHAREN=1
 
         // VIC background-colour register ($D021) round-trips through the chip
-        // rather than returning the char-ROM fill byte.
+        // rather than returning the char-ROM fill byte. It is a 4-bit register, so
+        // the high nibble reads back as 1 ($0E -> $FE).
         bus.write8(0xD021U, 0x0EU);
-        CHECK(bus.read8(0xD021U) == 0x0EU);
+        CHECK(bus.read8(0xD021U) == 0xFEU);
 
         // Colour RAM is plain RAM living inside the I/O window ($D800-$DBFF).
         bus.write8(0xD800U, 0x0AU);
