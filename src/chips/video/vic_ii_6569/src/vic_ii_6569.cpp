@@ -3,6 +3,7 @@
 #include <mnemos/chips/common/chip_registry.hpp>
 #include <mnemos/chips/common/state.hpp>
 
+#include <algorithm>
 #include <memory>
 
 namespace mnemos::chips::video {
@@ -16,16 +17,24 @@ namespace mnemos::chips::video {
         constexpr std::uint8_t reg_raster = 0x12U;
         constexpr std::uint8_t reg_lpx = 0x13U;
         constexpr std::uint8_t reg_lpy = 0x14U;
+        constexpr std::uint8_t reg_spena = 0x15U; // sprite enable
         constexpr std::uint8_t reg_scrolx = 0x16U;
+        constexpr std::uint8_t reg_ypand = 0x17U; // sprite Y expansion
         constexpr std::uint8_t reg_memptr = 0x18U;
         constexpr std::uint8_t reg_vicirq = 0x19U;
         constexpr std::uint8_t reg_irqmsk = 0x1AU;
+        constexpr std::uint8_t reg_spbgpri = 0x1BU; // sprite-background priority
+        constexpr std::uint8_t reg_spmc = 0x1CU;    // sprite multicolour enable
+        constexpr std::uint8_t reg_xpand = 0x1DU;   // sprite X expansion
         constexpr std::uint8_t reg_sscol = 0x1EU;
         constexpr std::uint8_t reg_sbcol = 0x1FU;
         constexpr std::uint8_t reg_bordercol = 0x20U;
         constexpr std::uint8_t reg_bgcol0 = 0x21U;
         constexpr std::uint8_t reg_bgcol1 = 0x22U;
         constexpr std::uint8_t reg_bgcol2 = 0x23U;
+        constexpr std::uint8_t reg_spmc0 = 0x25U;  // shared sprite multicolour 0
+        constexpr std::uint8_t reg_spmc1 = 0x26U;  // shared sprite multicolour 1
+        constexpr std::uint8_t reg_sp0col = 0x27U; // sprite 0 colour ($D027..$D02E)
 
         // Canonical display-window origin in framebuffer coordinates for the common
         // CSEL=1 / RSEL=1 / default-scroll case (the KERNAL boot screen). The render
@@ -38,6 +47,8 @@ namespace mnemos::chips::video {
         constexpr std::uint8_t text_columns = 40U;
 
         constexpr std::uint8_t irq_raster = 0x01U;
+        constexpr std::uint8_t irq_sprite_bg = 0x02U;     // IMBC: sprite-data collision
+        constexpr std::uint8_t irq_sprite_sprite = 0x04U; // IMMC: sprite-sprite collision
         constexpr std::uint8_t irq_light_pen = 0x08U;
         constexpr std::uint8_t irq_sources = 0x0FU;
         constexpr std::uint8_t irq_master = 0x80U;
@@ -385,6 +396,10 @@ namespace mnemos::chips::video {
         fb_width_ = w;
         fb_height_ = h;
         framebuffer_.assign(static_cast<std::size_t>(w) * h, 0U);
+        fg_mask_.assign(w, 0U);
+        spr_cover_.assign(w, 0U);
+        spr_owner_.assign(w, 0xFFU);
+        spr_color_.assign(w, 0U);
     }
 
     std::uint8_t vic_ii_6569::fetch(std::uint16_t vic_address) const noexcept {
@@ -420,7 +435,9 @@ namespace mnemos::chips::video {
         if (!display_active) {
             for (std::uint32_t x = 0; x < fb_width_; ++x) {
                 row[x] = border;
+                fg_mask_[x] = 0U; // border / blank: nothing for sprites to collide with
             }
+            render_sprites(y, row); // sprites still display over a blank/border line
             return;
         }
 
@@ -443,6 +460,7 @@ namespace mnemos::chips::video {
         for (std::uint32_t x = 0; x < fb_width_; ++x) {
             if (x < left || x >= right) {
                 row[x] = border;
+                fg_mask_[x] = 0U;
                 continue;
             }
             const std::uint16_t disp_x = static_cast<std::uint16_t>(x - left);
@@ -479,10 +497,147 @@ namespace mnemos::chips::video {
                     break;
                 }
                 row[x] = pixel;
+                // Pairs %10 and %11 are foreground (sprite priority + collisions).
+                fg_mask_[x] = (pair & 0x02U) != 0U ? 1U : 0U;
             } else {
                 // Hi-res text: MSB-first, set bit = foreground colour.
                 const bool set = ((glyph >> (7U - glyph_x)) & 0x01U) != 0U;
                 row[x] = set ? color_rgb888(color) : bg0;
+                fg_mask_[x] = set ? 1U : 0U;
+            }
+        }
+
+        render_sprites(y, row);
+    }
+
+    void vic_ii_6569::render_sprites(std::uint16_t y, std::uint32_t* row) noexcept {
+        const std::uint8_t enable = regs_[reg_spena];
+        if (enable == 0U) {
+            return;
+        }
+
+        const std::uint8_t expand_x = regs_[reg_xpand];
+        const std::uint8_t expand_y = regs_[reg_ypand];
+        const std::uint8_t multicolor = regs_[reg_spmc];
+        const std::uint8_t bg_priority = regs_[reg_spbgpri];
+        const std::uint16_t vm_base =
+            static_cast<std::uint16_t>(((regs_[reg_memptr] >> 4) & 0x0FU) << 10U);
+        const std::uint32_t mc0 = color_rgb888(static_cast<std::uint8_t>(regs_[reg_spmc0] & 0x0FU));
+        const std::uint32_t mc1 = color_rgb888(static_cast<std::uint8_t>(regs_[reg_spmc1] & 0x0FU));
+
+        // Clear the per-pixel scratch (only the columns we may touch — the whole row).
+        std::fill(spr_cover_.begin(), spr_cover_.end(), std::uint8_t{0U});
+        std::fill(spr_owner_.begin(), spr_owner_.end(), std::uint8_t{0xFFU});
+
+        // Record a sprite pixel: accumulate coverage, and keep the front-most
+        // (lowest-index) sprite as the owner of the visible colour.
+        const auto plot = [&](std::uint8_t index, std::uint16_t x, std::uint32_t color) {
+            if (x >= fb_width_) {
+                return;
+            }
+            spr_cover_[x] = static_cast<std::uint8_t>(spr_cover_[x] | (1U << index));
+            if (spr_owner_[x] == 0xFFU) {
+                spr_owner_[x] = index;
+                spr_color_[x] = color;
+            }
+        };
+
+        for (std::uint8_t i = 0; i < sprite_count; ++i) {
+            if ((enable & (1U << i)) == 0U) {
+                continue;
+            }
+            const bool ey = (expand_y & (1U << i)) != 0U;
+            const std::uint16_t top = sprite_y_[i];
+            const std::uint16_t height = ey ? 42U : 21U;
+            if (y < top || y >= top + height) {
+                continue;
+            }
+            std::uint16_t sprite_row = static_cast<std::uint16_t>(y - top);
+            if (ey) {
+                sprite_row = static_cast<std::uint16_t>(sprite_row / 2U); // 0..20
+            }
+
+            const std::uint8_t pointer = fetch(static_cast<std::uint16_t>(vm_base + 0x03F8U + i));
+            const std::uint16_t base = static_cast<std::uint16_t>(pointer * 64U + sprite_row * 3U);
+            // 24 data bits for the row, MSB = leftmost pixel.
+            const std::uint32_t bits =
+                (static_cast<std::uint32_t>(fetch(base)) << 16U) |
+                (static_cast<std::uint32_t>(fetch(static_cast<std::uint16_t>(base + 1U))) << 8U) |
+                static_cast<std::uint32_t>(fetch(static_cast<std::uint16_t>(base + 2U)));
+            const bool ex = (expand_x & (1U << i)) != 0U;
+            const bool mc = (multicolor & (1U << i)) != 0U;
+            const std::uint32_t sprite_col =
+                color_rgb888(static_cast<std::uint8_t>(regs_[reg_sp0col + i] & 0x0FU));
+            const std::uint16_t sx = sprite_x_[i];
+
+            if (mc) {
+                // 12 multicolour dots, each 2 (or 4 if X-expanded) framebuffer pixels.
+                const std::uint16_t dot_w = ex ? 4U : 2U;
+                for (std::uint8_t p = 0; p < 12U; ++p) {
+                    const auto pair = static_cast<std::uint8_t>((bits >> (22U - p * 2U)) & 0x03U);
+                    if (pair == 0U) {
+                        continue; // transparent
+                    }
+                    const std::uint32_t color = pair == 1U ? mc0 : (pair == 2U ? sprite_col : mc1);
+                    const auto startx = static_cast<std::uint16_t>(sx + p * dot_w);
+                    for (std::uint16_t dx = 0; dx < dot_w; ++dx) {
+                        plot(i, static_cast<std::uint16_t>(startx + dx), color);
+                    }
+                }
+            } else {
+                // 24 hi-res pixels, each 1 (or 2 if X-expanded) framebuffer pixels.
+                const std::uint16_t dot_w = ex ? 2U : 1U;
+                for (std::uint8_t p = 0; p < 24U; ++p) {
+                    if (((bits >> (23U - p)) & 1U) == 0U) {
+                        continue; // transparent
+                    }
+                    const auto startx = static_cast<std::uint16_t>(sx + p * dot_w);
+                    for (std::uint16_t dx = 0; dx < dot_w; ++dx) {
+                        plot(i, static_cast<std::uint16_t>(startx + dx), sprite_col);
+                    }
+                }
+            }
+        }
+
+        // Composite + collisions in one pass over the row.
+        std::uint8_t sprite_sprite = 0U; // sprites that overlapped another sprite
+        std::uint8_t sprite_data = 0U;   // sprites that overlapped foreground graphics
+        for (std::uint32_t x = 0; x < fb_width_; ++x) {
+            const std::uint8_t cover = spr_cover_[x];
+            if (cover == 0U) {
+                continue;
+            }
+            // More than one sprite here -> sprite-sprite collision for all of them.
+            if ((cover & static_cast<std::uint8_t>(cover - 1U)) != 0U) {
+                sprite_sprite = static_cast<std::uint8_t>(sprite_sprite | cover);
+            }
+            // Over a foreground graphics pixel -> sprite-data collision (any sprite,
+            // independent of priority).
+            if (fg_mask_[x] != 0U) {
+                sprite_data = static_cast<std::uint8_t>(sprite_data | cover);
+            }
+            // The front-most sprite shows unless it is behind a foreground pixel.
+            const std::uint8_t owner = spr_owner_[x];
+            const bool behind = (bg_priority & (1U << owner)) != 0U;
+            if (!(behind && fg_mask_[x] != 0U)) {
+                row[x] = spr_color_[x];
+            }
+        }
+
+        // Accumulate the collision latches; the IRQ source fires on the first
+        // collision after each latch was last cleared (read).
+        if (sprite_sprite != 0U) {
+            const bool was_clear = regs_[reg_sscol] == 0U;
+            regs_[reg_sscol] = static_cast<std::uint8_t>(regs_[reg_sscol] | sprite_sprite);
+            if (was_clear) {
+                latch_irq_source(irq_sprite_sprite);
+            }
+        }
+        if (sprite_data != 0U) {
+            const bool was_clear = regs_[reg_sbcol] == 0U;
+            regs_[reg_sbcol] = static_cast<std::uint8_t>(regs_[reg_sbcol] | sprite_data);
+            if (was_clear) {
+                latch_irq_source(irq_sprite_bg);
             }
         }
     }

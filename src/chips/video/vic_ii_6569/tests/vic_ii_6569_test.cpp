@@ -321,3 +321,187 @@ TEST_CASE("vic_ii_6569 fires the IRQ callback on raster assert and acknowledge")
     CHECK_FALSE(line);
     CHECK(edges == 2);
 }
+
+namespace {
+    // A VIC plus its fetch memory, kept alive together for the sprite tests. The
+    // spans the VIC borrows point into these vectors.
+    struct sprite_fixture final {
+        vic_ii_6569 vic;
+        std::vector<std::uint8_t> ram = std::vector<std::uint8_t>(0x10000U, 0U);
+        std::vector<std::uint8_t> char_rom = std::vector<std::uint8_t>(0x1000U, 0U);
+        std::vector<std::uint8_t> color_ram = std::vector<std::uint8_t>(0x0400U, 0U);
+
+        sprite_fixture() {
+            vic.attach_memory({.ram = std::span<const std::uint8_t>(ram),
+                               .char_rom = std::span<const std::uint8_t>(char_rom),
+                               .color_ram = std::span<const std::uint8_t>(color_ram)});
+            vic.set_bank(0U);
+        }
+        // Point sprite `i` at data block `pointer` (data at pointer*64), via the
+        // sprite pointer at the default video-matrix base ($0000 + $3F8 + i).
+        void set_pointer(std::uint8_t i, std::uint8_t pointer) { ram[0x03F8U + i] = pointer; }
+        std::uint32_t pixel(std::uint16_t x, std::uint16_t y) {
+            return vic.framebuffer().pixels[static_cast<std::size_t>(y) * 504U + x];
+        }
+    };
+
+    constexpr std::uint32_t frame = 63U * 312U;
+} // namespace
+
+TEST_CASE("vic_ii_6569 renders a hi-res sprite at its position") {
+    sprite_fixture fx;
+    fx.set_pointer(0U, 0x80U); // sprite 0 data at $2000
+    fx.ram[0x2000U] = 0x80U;   // row 0: only the leftmost pixel set
+
+    fx.vic.write(0x15U, 0x01U); // enable sprite 0
+    fx.vic.write(0x27U, 0x07U); // sprite 0 colour = yellow
+    fx.vic.write(0x00U, 100U);  // sprite 0 X = 100
+    fx.vic.write(0x01U, 60U);   // sprite 0 Y = 60 (raster line 60)
+    fx.vic.tick(frame);
+
+    CHECK(fx.pixel(100U, 60U) == vic_ii_6569::color_rgb888(0x07U)); // the lit pixel
+    CHECK(fx.pixel(101U, 60U) != vic_ii_6569::color_rgb888(0x07U)); // next is transparent
+    CHECK(fx.pixel(100U, 81U) != vic_ii_6569::color_rgb888(0x07U)); // line below the 21-row sprite
+}
+
+TEST_CASE("vic_ii_6569 disabled sprites do not draw") {
+    sprite_fixture fx;
+    fx.set_pointer(0U, 0x80U);
+    fx.ram[0x2000U] = 0xFFU;    // a full row, but...
+    fx.vic.write(0x15U, 0x00U); // ...sprite 0 disabled
+    fx.vic.write(0x27U, 0x07U);
+    fx.vic.write(0x00U, 100U);
+    fx.vic.write(0x01U, 60U);
+    fx.vic.tick(frame);
+    CHECK(fx.pixel(100U, 60U) != vic_ii_6569::color_rgb888(0x07U));
+}
+
+TEST_CASE("vic_ii_6569 renders a multicolour sprite") {
+    sprite_fixture fx;
+    fx.set_pointer(0U, 0x80U);
+    fx.ram[0x2000U] = 0x6CU; // pairs (MSB first): 01,10,11,00
+
+    fx.vic.write(0x15U, 0x01U); // enable sprite 0
+    fx.vic.write(0x1CU, 0x01U); // sprite 0 multicolour
+    fx.vic.write(0x25U, 0x01U); // shared MC0 = white
+    fx.vic.write(0x26U, 0x02U); // shared MC1 = red
+    fx.vic.write(0x27U, 0x07U); // sprite 0 colour = yellow
+    fx.vic.write(0x00U, 100U);
+    fx.vic.write(0x01U, 60U);
+    fx.vic.tick(frame);
+
+    CHECK(fx.pixel(100U, 60U) == vic_ii_6569::color_rgb888(0x01U)); // pair 01 -> MC0
+    CHECK(fx.pixel(101U, 60U) == vic_ii_6569::color_rgb888(0x01U)); // dots are 2 px wide
+    CHECK(fx.pixel(102U, 60U) == vic_ii_6569::color_rgb888(0x07U)); // pair 10 -> sprite colour
+    CHECK(fx.pixel(104U, 60U) == vic_ii_6569::color_rgb888(0x02U)); // pair 11 -> MC1
+    CHECK(fx.pixel(106U, 60U) != vic_ii_6569::color_rgb888(0x01U)); // pair 00 -> transparent
+}
+
+TEST_CASE("vic_ii_6569 expands sprites in X and Y") {
+    SECTION("X expansion doubles pixel width") {
+        sprite_fixture fx;
+        fx.set_pointer(0U, 0x80U);
+        fx.ram[0x2000U] = 0x80U;    // leftmost pixel
+        fx.vic.write(0x15U, 0x01U); // enable
+        fx.vic.write(0x1DU, 0x01U); // sprite 0 X-expand
+        fx.vic.write(0x27U, 0x07U);
+        fx.vic.write(0x00U, 100U);
+        fx.vic.write(0x01U, 60U);
+        fx.vic.tick(frame);
+        CHECK(fx.pixel(100U, 60U) == vic_ii_6569::color_rgb888(0x07U));
+        CHECK(fx.pixel(101U, 60U) == vic_ii_6569::color_rgb888(0x07U)); // doubled
+        CHECK(fx.pixel(102U, 60U) != vic_ii_6569::color_rgb888(0x07U));
+    }
+    SECTION("Y expansion doubles row height") {
+        sprite_fixture fx;
+        fx.set_pointer(0U, 0x80U);
+        fx.ram[0x2000U] = 0x80U;    // sprite row 0
+        fx.vic.write(0x15U, 0x01U); // enable
+        fx.vic.write(0x17U, 0x01U); // sprite 0 Y-expand
+        fx.vic.write(0x27U, 0x07U);
+        fx.vic.write(0x00U, 100U);
+        fx.vic.write(0x01U, 60U);
+        fx.vic.tick(frame);
+        CHECK(fx.pixel(100U, 60U) == vic_ii_6569::color_rgb888(0x07U)); // row 0, line 0
+        CHECK(fx.pixel(100U, 61U) == vic_ii_6569::color_rgb888(0x07U)); // row 0 doubled
+    }
+}
+
+TEST_CASE("vic_ii_6569 honours sprite-background priority") {
+    sprite_fixture fx;
+    // Hi-res text: cell 0 = char code 1; glyph row 0 lights the leftmost pixel,
+    // which lands at the display origin (framebuffer x 24, y 51).
+    fx.ram[0x0400U] = 0x01U;       // screen base $0400 (from $D018=$18), cell 0
+    fx.ram[0x2008U] = 0x80U;       // char base $2000, code 1 row 0
+    fx.color_ram[0x0000U] = 0x0AU; // cell 0 foreground colour
+    // Sprite 0 over that same pixel.
+    fx.ram[0x07F8U] = 0x90U; // sprite pointer (vm base $0400 + $3F8)
+    fx.ram[0x2400U] = 0x80U; // sprite data row 0: leftmost pixel
+
+    fx.vic.write(0x11U, 0x1BU); // DEN=1, RSEL=1
+    fx.vic.write(0x16U, 0x08U); // CSEL=1
+    fx.vic.write(0x18U, 0x18U); // screen $0400, char gen $2000 (RAM)
+    fx.vic.write(0x15U, 0x01U); // enable sprite 0
+    fx.vic.write(0x27U, 0x02U); // sprite colour = red
+    fx.vic.write(0x00U, 24U);   // sprite X = 24 (display left)
+    fx.vic.write(0x01U, 51U);   // sprite Y = 51 (display top)
+
+    SECTION("sprite behind a foreground pixel is hidden") {
+        fx.vic.write(0x1BU, 0x01U); // sprite 0 behind the background
+        fx.vic.tick(frame);
+        CHECK(fx.pixel(24U, 51U) == vic_ii_6569::color_rgb888(0x0AU)); // char wins
+    }
+    SECTION("sprite in front of the background shows") {
+        fx.vic.write(0x1BU, 0x00U); // sprite 0 in front
+        fx.vic.tick(frame);
+        CHECK(fx.pixel(24U, 51U) == vic_ii_6569::color_rgb888(0x02U)); // sprite wins
+    }
+}
+
+TEST_CASE("vic_ii_6569 detects sprite-sprite collisions") {
+    sprite_fixture fx;
+    fx.set_pointer(0U, 0x80U);
+    fx.ram[0x2000U] = 0x80U; // sprite 0 data ($2000): leftmost pixel
+    fx.set_pointer(1U, 0x81U);
+    fx.ram[0x2040U] = 0x80U; // sprite 1 data ($2040): leftmost pixel
+
+    fx.vic.write(0x15U, 0x03U); // enable sprites 0 and 1
+    fx.vic.write(0x27U, 0x07U); // colours
+    fx.vic.write(0x28U, 0x02U);
+    fx.vic.write(0x00U, 100U); // both sprites at the same spot
+    fx.vic.write(0x01U, 60U);
+    fx.vic.write(0x02U, 100U);
+    fx.vic.write(0x03U, 60U);
+    fx.vic.write(0x1AU, 0x04U); // enable the sprite-sprite (IMMC) IRQ
+    fx.vic.tick(frame);
+
+    CHECK(fx.vic.irq_asserted());
+    CHECK(fx.vic.read(0x1EU) == 0x03U); // both sprites flagged
+    CHECK(fx.vic.read(0x1EU) == 0x00U); // reading the latch clears it
+    // No foreground background under the sprites (DEN off) -> no data collision.
+    CHECK(fx.vic.read(0x1FU) == 0x00U);
+}
+
+TEST_CASE("vic_ii_6569 detects sprite-data collisions") {
+    sprite_fixture fx;
+    // A foreground char pixel at the display origin (framebuffer 24,51).
+    fx.ram[0x0400U] = 0x01U;
+    fx.ram[0x2008U] = 0x80U;
+    fx.color_ram[0x0000U] = 0x0AU;
+    fx.ram[0x07F8U] = 0x90U; // sprite 0 pointer (vm base $0400 + $3F8)
+    fx.ram[0x2400U] = 0x80U; // sprite 0 data row 0
+
+    fx.vic.write(0x11U, 0x1BU); // DEN=1, RSEL=1
+    fx.vic.write(0x16U, 0x08U); // CSEL=1
+    fx.vic.write(0x18U, 0x18U); // screen $0400, char gen $2000 (RAM)
+    fx.vic.write(0x15U, 0x01U); // enable sprite 0
+    fx.vic.write(0x27U, 0x02U); // sprite colour
+    fx.vic.write(0x00U, 24U);   // sprite over the foreground pixel
+    fx.vic.write(0x01U, 51U);
+    fx.vic.write(0x1AU, 0x02U); // enable the sprite-data (IMBC) IRQ
+    fx.vic.tick(frame);
+
+    CHECK(fx.vic.irq_asserted());
+    CHECK(fx.vic.read(0x1FU) == 0x01U); // sprite 0 hit foreground graphics
+    CHECK(fx.vic.read(0x1FU) == 0x00U); // read-clear
+}

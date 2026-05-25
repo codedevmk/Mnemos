@@ -32,9 +32,10 @@ namespace mnemos::chips::video {
         std::span<const std::uint8_t> color_ram; // 1 KiB colour RAM (4-bit)
     };
 
-    // Sprite compositing, multicolour bitmap, and extended-colour text are
-    // deferred follow-up work; the scanline renderer covers border, hi-res and
-    // multicolour text, and standard bitmap.
+    // The scanline renderer covers the border, hi-res + multicolour text, and the
+    // full 8-sprite engine (multicolour, X/Y expansion, sprite-background priority,
+    // and sprite-sprite / sprite-data collisions with their IRQ sources). The
+    // bitmap and extended-colour-text display modes are deferred follow-up work.
     class vic_ii_6569 final : public i_video, public i_mmio {
       public:
         // Silicon revision. Within a video standard only the early NTSC 6567R56A
@@ -164,6 +165,10 @@ namespace mnemos::chips::video {
         // register + memory state; ensure_framebuffer (re)sizes it to the geometry.
         void ensure_framebuffer();
         void render_line(std::uint16_t y) noexcept;
+        // Composite the 8 sprites onto an already-rendered background row, honouring
+        // expansion, multicolour, sprite-vs-background priority, and (phase B)
+        // collisions. Reads fg_mask_ (the row's foreground bits).
+        void render_sprites(std::uint16_t y, std::uint32_t* row) noexcept;
         [[nodiscard]] std::uint8_t fetch(std::uint16_t vic_address) const noexcept;
 
         std::array<std::uint8_t, register_count> regs_{};
@@ -195,6 +200,14 @@ namespace mnemos::chips::video {
         std::uint32_t fb_width_{};
         std::uint32_t fb_height_{};
         std::uint64_t frame_index_{};
+
+        // Per-row sprite compositor scratch (sized to fb_width_, reused each line):
+        // the background foreground mask and, per pixel, which sprites cover it, the
+        // front-most (lowest-index) owner and its colour. Transient render state.
+        std::vector<std::uint8_t> fg_mask_;    // 1 = background foreground pixel
+        std::vector<std::uint8_t> spr_cover_;  // bitmask of sprites covering this pixel
+        std::vector<std::uint8_t> spr_owner_;  // front-most sprite index (0xFF = none)
+        std::vector<std::uint32_t> spr_color_; // front-most sprite's pixel colour
 
         // VIC fetch memory (borrowed) and the selected 16K bank.
         vic_memory memory_{};
