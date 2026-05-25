@@ -28,6 +28,7 @@ if(BUILD_TESTING)
             tests/foundation_expected_ext_test.cpp
             tests/foundation_fs_test.cpp
             tests/foundation_id_test.cpp
+            tests/foundation_sha256_test.cpp
             tests/foundation_smoke_test.cpp
             tests/foundation_log_test.cpp
             tests/foundation_span_ext_test.cpp
