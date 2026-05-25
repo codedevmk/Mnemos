@@ -40,15 +40,38 @@ namespace mnemos::manifests::c64 {
         cia1_cfg.irq_edge = [refresh_irq](bool) { refresh_irq(); };
         s->cia1.configure(cia1_cfg);
 
+        // The protocol-level drive shares the IEC bus as device 8.
+        s->drive8.attach_bus(s->iec);
+
         chips::bus_controller::cia_6526::config cia2_cfg;
         cia2_cfg.tod_tick_hz = 985'248U;
         cia2_cfg.tod_src_hz = 50U;
         cia2_cfg.irq_edge = [s](bool asserted) { s->cpu.set_nmi_line(asserted); };
-        // CIA2 port A bits 0-1 (inverted) select the VIC's 16K bank. Use the
-        // composed pin level, not the latch the callback reports, so input pins
-        // pull high (bank 0) before the OS drives them.
+        // CIA2 port A: bits 0-1 (inverted) select the VIC's 16K bank; bits 3/4/5
+        // drive the IEC ATN/CLK/DATA out lines (a driven 1 pulls the line low, via
+        // the 7406 inverter). The callback receives the composed pin level.
         cia2_cfg.write_port_a = [s](std::uint8_t) {
+            using line = chips::iec_bus::line;
+            // Bank from the composed pins (input bits pull high -> bank 0 at idle).
             s->vic.set_bank(static_cast<std::uint8_t>((~s->cia2.port_a_pins()) & 0x03U));
+            // IEC out from the actively driven bits only, so floating pins do not
+            // pull the bus (a driven 1 pulls the line low via the 7406 inverter).
+            const std::uint8_t out = s->cia2.port_a_output();
+            s->iec.set_driver(0U, line::atn, (out & 0x08U) != 0U);
+            s->iec.set_driver(0U, line::clk, (out & 0x10U) != 0U);
+            s->iec.set_driver(0U, line::data, (out & 0x20U) != 0U);
+        };
+        // CIA2 port A bits 6/7 read the IEC CLK/DATA in lines (set = released).
+        cia2_cfg.read_port_a = [s]() -> std::uint8_t {
+            using line = chips::iec_bus::line;
+            std::uint8_t value = 0xFFU;
+            if (s->iec.asserted(line::clk)) {
+                value = static_cast<std::uint8_t>(value & ~0x40U);
+            }
+            if (s->iec.asserted(line::data)) {
+                value = static_cast<std::uint8_t>(value & ~0x80U);
+            }
+            return value;
         };
         s->cia2.configure(cia2_cfg);
 

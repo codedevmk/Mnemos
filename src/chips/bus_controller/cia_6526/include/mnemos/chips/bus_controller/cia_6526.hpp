@@ -79,6 +79,11 @@ namespace mnemos::chips::bus_controller {
         // reports the output latch, not the composed pins).
         [[nodiscard]] std::uint8_t port_a_pins() const;
 
+        // The bits port A actively drives (output latch masked by DDRA); input bits
+        // read 0. The C64 derives the IEC ATN/CLK/DATA out lines from CIA2 PA3-5
+        // this way, so floating (input) pins never pull the bus.
+        [[nodiscard]] std::uint8_t port_a_output() const noexcept;
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:

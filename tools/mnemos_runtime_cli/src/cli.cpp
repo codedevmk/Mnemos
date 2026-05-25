@@ -62,6 +62,7 @@ namespace mnemos::tools {
                "usage: mnemos_runtime_cli --manifest <file> [options]\n\n"
                "  --manifest <file>   system manifest (TOML) to boot (required)\n"
                "  --rom-dir <dir>     directory holding the manifest's ROM files\n"
+               "  --disk <file>       .d64 disk image to mount on drive 8\n"
                "  --frames <n>        number of frames to run (default 1)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
@@ -86,6 +87,11 @@ namespace mnemos::tools {
                     return false;
                 }
                 out.rom_dir = value;
+            } else if (arg == "--disk") {
+                if (!take_value(argc, argv, i, arg, value, err)) {
+                    return false;
+                }
+                out.disk = value;
             } else if (arg == "--frames") {
                 if (!take_value(argc, argv, i, arg, value, err)) {
                     return false;
@@ -216,11 +222,27 @@ namespace mnemos::tools {
         sys->cia2.reset(chips::reset_kind::power_on);
         sys->sid.reset(chips::reset_kind::power_on);
         sys->vic.reset(chips::reset_kind::power_on);
+        sys->drive8.reset(chips::reset_kind::power_on);
+
+        if (!options.disk.empty()) {
+            const auto image = read_file(options.disk);
+            if (!image) {
+                err << "error: cannot read disk image " << options.disk.string() << "\n";
+                return 6;
+            }
+            if (!sys->drive8.mount(*image)) {
+                err << "error: " << options.disk.string()
+                    << " is not a valid .d64 (expected 174848 or 196608 bytes)\n";
+                return 6;
+            }
+            out << "mounted " << options.disk.string() << " on drive 8\n";
+        }
 
         // The VIC drives frame boundaries; list it before the CPU so the CPU reads
         // the freshly advanced beam. All C64 chips run at phi2 (divider 1).
-        std::vector<runtime::scheduled_chip> chips = {
-            {&sys->vic, 1U}, {&sys->cpu, 1U}, {&sys->cia1, 1U}, {&sys->cia2, 1U}, {&sys->sid, 1U}};
+        std::vector<runtime::scheduled_chip> chips = {{&sys->vic, 1U},  {&sys->cpu, 1U},
+                                                      {&sys->cia1, 1U}, {&sys->cia2, 1U},
+                                                      {&sys->sid, 1U},  {&sys->drive8, 1U}};
         runtime::scheduler sched(std::move(chips), &sys->vic);
 
         // A save-state view over the assembled machine (chunk ids match the manifest).
@@ -229,8 +251,9 @@ namespace mnemos::tools {
             t.manifest_id = m.id;
             t.manifest_rev = m.revision;
             t.master_cycle = master_cycle;
-            t.chips = {{"cpu", &sys->cpu},   {"video", &sys->vic}, {"audio", &sys->sid},
-                       {"cia1", &sys->cia1}, {"cia2", &sys->cia2}, {"pla", &sys->pla}};
+            t.chips = {{"cpu", &sys->cpu},      {"video", &sys->vic}, {"audio", &sys->sid},
+                       {"cia1", &sys->cia1},    {"cia2", &sys->cia2}, {"pla", &sys->pla},
+                       {"drive8", &sys->drive8}};
             t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
                         {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};
             return t;

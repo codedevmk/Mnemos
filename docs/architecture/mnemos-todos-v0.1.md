@@ -207,10 +207,10 @@ gaps the Emu review surfaced (Emu = `C:\Users\mkrol\source\repos\Emu`).
 - [ ] Keyboard matrix + joystick wiring (CIA1 PRA/PRB callbacks) and paddle/POT mux to SID. (B2; needed for any interactive use; runtime input_buffer exists but isn't bound to CIA1)
 - [ ] VIC floating-bus / open-bus read semantics (unmapped I/O returns last VIC fetch). (B4)
 - [ ] Cartridge support: `.crt` loader + generic 8K/16K/Ultimax + Ocean/Magic Desk + EasyFlash; drive `/GAME`//EXROM into the PLA. (B5; partially adjacent to M3 "mapper hook plumbing")
-- [ ] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; `i_storage` slot reserved, `src/chips/storage` still a README — kept parked per direction)
+- [x] Disk: IEC serial bus + synthetic 1541 (devices 8-11) + `.d64` reader for protocol-level LOAD. (B6; chips::iec_bus + chips::storage::c1541::{d64_image, synthetic_drive} + CIA2 IEC wiring in assemble_c64 + CLI --disk. Command/serving logic unit-tested; the bit-level handshake is ROM-gated like the golden boot)
 - [ ] Datasette: 1530 `.tap` v0/v1 pulse playback -> CIA1 /FLAG. (B7; small, self-contained)
 - [ ] REU (1700/1764/1750) `$DF00` DMA controller. (B8)
-- [ ] Full cycle-accurate 1541 (6502 + 2x 6522 VIA + GCR) and the MOS 6522 VIA chip. (B9; high effort, parked — synthetic drive covers most cases)
+- [~] Full cycle-accurate 1541 (6502 + 2x 6522 VIA + GCR) and the MOS 6522 VIA chip. (B9; the MOS 6522 VIA — chips::bus_controller::via_6522 — is done; the full drive (drive 6502 + 2x VIA + 2K RAM + DOS ROM + GCR/head) is the remaining piece, built on it)
 - [ ] System-level SID variant / NTSC region / dual-SID selection + an NTSC manifest. (B10; chips support it, assembly hardcodes PAL + single 6581)
 - [ ] 6510 unstable illegal opcodes (SHA/SHX/SHY/TAS/LAS/ANE/LXA) + `$01` bit 6/7 floating-gate fade. (B11; rarely needed)
 

@@ -2,8 +2,10 @@
 
 #include <mnemos/chips/audio/sid_6581.hpp>
 #include <mnemos/chips/bus_controller/cia_6526.hpp>
+#include <mnemos/chips/common/iec_bus.hpp>
 #include <mnemos/chips/cpu/m6510.hpp>
 #include <mnemos/chips/mapper/c64_pla.hpp>
+#include <mnemos/chips/storage/c1541/synthetic_drive.hpp>
 #include <mnemos/chips/video/vic_ii_6569.hpp>
 #include <mnemos/topology/bus.hpp>
 
@@ -26,6 +28,10 @@ namespace mnemos::manifests::c64 {
         chips::bus_controller::cia_6526 cia2;
         chips::mapper::c64_pla pla;
         topology::bus bus{16U, topology::endianness::little};
+
+        // IEC serial bus (C64 = device 0) and the protocol-level drive 8.
+        chips::iec_bus iec;
+        chips::storage::c1541::synthetic_drive drive8{8U};
 
         std::array<std::uint8_t, 0x10000> ram{};
         std::array<std::uint8_t, 0x0400> color_ram{}; // $D800-$DBFF

@@ -208,6 +208,10 @@ namespace mnemos::chips::bus_controller {
                                          (pins & static_cast<std::uint8_t>(~ddra_)));
     }
 
+    std::uint8_t cia_6526::port_a_output() const noexcept {
+        return static_cast<std::uint8_t>(pra_out_ & ddra_);
+    }
+
     std::uint8_t cia_6526::read_pb_live() {
         const std::uint8_t pins = cfg_.read_port_b ? cfg_.read_port_b() : 0xFFU;
         const std::uint8_t latched = port_b_driven();

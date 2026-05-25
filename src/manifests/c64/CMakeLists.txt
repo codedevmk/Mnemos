@@ -22,6 +22,7 @@ target_link_libraries(
         mnemos::chips::audio::sid_6581
         mnemos::chips::bus_controller::cia_6526
         mnemos::chips::mapper::c64_pla
+        mnemos::chips::storage::c1541
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_c64 PUBLIC)
