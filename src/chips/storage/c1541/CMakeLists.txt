@@ -2,6 +2,7 @@ add_library(
     mnemos_chips_storage_c1541
     src/d64_image.cpp
     src/synthetic_drive.cpp
+    src/disk_bind.cpp
 )
 add_library(mnemos::chips::storage::c1541 ALIAS mnemos_chips_storage_c1541)
 
@@ -23,6 +24,8 @@ if(BUILD_TESTING)
         SOURCES
             tests/d64_image_test.cpp
             tests/synthetic_drive_test.cpp
+            tests/gcr_test.cpp
+            tests/disk_bind_test.cpp
         LIBRARIES mnemos::chips::storage::c1541
     )
 endif()
