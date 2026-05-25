@@ -44,6 +44,18 @@ TEST_CASE("parse_args reads the REU size") {
     CHECK(bad.reu_kib == 0U); // default: no REU
 }
 
+TEST_CASE("parse_args recognises the modem flag") {
+    cli_options opts;
+    std::ostringstream err;
+    REQUIRE(parse({"cli", "--manifest", "c64.toml", "--modem"}, opts, err) == 1);
+    CHECK(opts.modem);
+
+    cli_options off;
+    std::ostringstream err2;
+    REQUIRE(parse({"cli", "--manifest", "c64.toml"}, off, err2) == 1);
+    CHECK_FALSE(off.modem);
+}
+
 TEST_CASE("parse_args rejects bad input") {
     SECTION("unknown flag") {
         cli_options opts;

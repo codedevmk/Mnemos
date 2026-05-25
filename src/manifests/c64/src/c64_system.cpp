@@ -99,6 +99,8 @@ namespace mnemos::manifests::c64 {
             s->iec.set_driver(0U, line::atn, (out & 0x08U) != 0U);
             s->iec.set_driver(0U, line::clk, (out & 0x10U) != 0U);
             s->iec.set_driver(0U, line::data, (out & 0x20U) != 0U);
+            // Userport RS-232 TXD is PA2 (high = mark/idle); feed the UART the pin.
+            s->rs232_unit.set_txd((s->cia2.port_a_pins() & 0x04U) != 0U);
         };
         // CIA2 port A bits 6/7 read the IEC CLK/DATA in lines (set = released).
         cia2_cfg.read_port_a = [s]() -> std::uint8_t {
@@ -112,7 +114,31 @@ namespace mnemos::manifests::c64 {
             }
             return value;
         };
+        // CIA2 port B is the userport: bit 0 reads the RS-232 RXD line (driven by
+        // the UART; mark/idle = high). The remaining userport inputs idle high.
+        cia2_cfg.read_port_b = [s]() -> std::uint8_t {
+            std::uint8_t value = 0xFFU;
+            if (!s->rs232_unit.rxd()) { // space pulls RXD (PB0) low
+                value = static_cast<std::uint8_t>(value & ~0x01U);
+            }
+            return value;
+        };
         s->cia2.configure(cia2_cfg);
+
+        // Userport RS-232 modem wiring. The UART bridges the CIA2 serial pins to
+        // the byte-level modem: captured TXD bytes drive the modem's DTE input,
+        // queued DCE bytes are shifted back out on RXD, and each RXD start bit
+        // pulses CIA2 /FLAG. The baud (cycles per bit) follows the configured rate;
+        // matching the rate the KERNAL programs into a CIA timer is ROM-gated.
+        {
+            const std::uint32_t baud = config.rs232_baud == 0U ? 1200U : config.rs232_baud;
+            s->rs232_unit.set_cycles_per_bit(phi2_hz / baud);
+            s->modem_unit.set_guard_divider(phi2_hz / tod_hz);
+            s->rs232_unit.set_byte_sink([s](std::uint8_t b) { s->modem_unit.dte_write(b); });
+            s->rs232_unit.set_byte_source(
+                [s](std::uint8_t& out) { return s->modem_unit.dte_read(out); });
+            s->rs232_unit.set_flag_sink([s]() { s->cia2.flag_edge(); });
+        }
 
         // The PLA decode reads the live 6510 $01 port and the live cartridge /GAME
         // and /EXROM lines each access (no cart -> both float high -> PLA defaults).

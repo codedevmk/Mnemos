@@ -6,7 +6,9 @@
 #include <mnemos/chips/cpu/m6510.hpp>
 #include <mnemos/chips/mapper/c64_cartridge.hpp>
 #include <mnemos/chips/mapper/c64_pla.hpp>
+#include <mnemos/chips/peripheral/modem.hpp>
 #include <mnemos/chips/peripheral/reu.hpp>
+#include <mnemos/chips/peripheral/rs232.hpp>
 #include <mnemos/chips/storage/c1541/full_drive.hpp>
 #include <mnemos/chips/storage/c1541/synthetic_drive.hpp>
 #include <mnemos/chips/storage/datasette.hpp>
@@ -30,6 +32,8 @@ namespace mnemos::manifests::c64 {
         bool dual_sid{false}; // a second SID at $D420 (stereo)
         bool reu{false};      // a RAM Expansion Unit at $DF00
         chips::peripheral::reu::model reu_model{chips::peripheral::reu::model::ram_512k};
+        bool modem{false};               // an RS-232 userport modem (CIA2 PA2/PB0//FLAG)
+        std::uint32_t rs232_baud{1200U}; // userport RS-232 baud (cycles/bit = phi2/baud)
     };
 
     // A fully wired Commodore 64: the six chips, 64K RAM + 1K colour RAM, the three
@@ -59,6 +63,13 @@ namespace mnemos::manifests::c64 {
 
         // RAM Expansion Unit at $DF00, mapped only when c64_config::reu is set.
         chips::peripheral::reu reu_unit{chips::peripheral::reu::model::ram_128k};
+
+        // Userport RS-232 modem: the bit-level UART bridges CIA2 PA2 (TXD) / PB0
+        // (RXD) / /FLAG to the byte-level Hayes modem core. The modem's transport
+        // (loopback / TCP) is installed by the frontend. Wired to CIA2 always; the
+        // frontend only ticks them when c64_config::modem is set.
+        chips::peripheral::rs232 rs232_unit;
+        chips::peripheral::modem modem_unit;
 
         // Datasette: pulses CIA1 /FLAG, motor from $01 bit 5, sense on $01 bit 4.
         chips::storage::datasette tape;

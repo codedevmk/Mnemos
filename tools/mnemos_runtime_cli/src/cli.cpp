@@ -70,6 +70,7 @@ namespace mnemos::tools {
                "  --sid <6581|8580>   select the SID revision (default 6581)\n"
                "  --dual-sid          add a second SID at $D420 (stereo)\n"
                "  --reu <128|256|512> add a RAM Expansion Unit at $DF00 (KiB)\n"
+               "  --modem             attach an RS-232 userport modem (loopback)\n"
                "  --dump-hash         print the SHA-256 of the final framebuffer\n"
                "  --save <file>       write a save state after the run\n"
                "  --load <file>       load a save state before the run\n"
@@ -141,6 +142,8 @@ namespace mnemos::tools {
                     err << "error: --reu expects 128, 256 or 512, got '" << value << "'\n";
                     return false;
                 }
+            } else if (arg == "--modem") {
+                out.modem = true;
             } else if (arg == "--dump-hash") {
                 out.dump_hash = true;
             } else if (arg == "--dual-sid") {
@@ -280,6 +283,7 @@ namespace mnemos::tools {
                             : options.reu_kib == 256U ? chips::peripheral::reu::model::ram_256k
                                                       : chips::peripheral::reu::model::ram_512k;
         }
+        cfg.modem = options.modem;
 
         auto sys = manifests::c64::assemble_c64(std::move(basic), std::move(kernal),
                                                 std::move(chargen), cfg);
@@ -365,6 +369,15 @@ namespace mnemos::tools {
         if (cfg.dual_sid) {
             chips.push_back({&sys->sid2, 1U});
         }
+        // RS-232 userport modem: a loopback backend echoes whatever the C64 sends.
+        // The UART samples/shifts the serial lines each cycle; the modem advances
+        // its escape-guard timer and pumps the link.
+        chips::peripheral::loopback_transport modem_loop;
+        if (cfg.modem) {
+            sys->modem_unit.set_transport(&modem_loop);
+            chips.push_back({&sys->rs232_unit, 1U});
+            chips.push_back({&sys->modem_unit, 1U});
+        }
         runtime::scheduler sched(std::move(chips), &sys->vic);
 
         // A save-state view over the assembled machine (chunk ids match the manifest).
@@ -381,6 +394,10 @@ namespace mnemos::tools {
             }
             if (cfg.reu) {
                 t.chips.push_back({"reu", &sys->reu_unit});
+            }
+            if (cfg.modem) {
+                t.chips.push_back({"rs232", &sys->rs232_unit});
+                t.chips.push_back({"modem", &sys->modem_unit});
             }
             t.memory = {{"ram", std::span<std::uint8_t>(sys->ram)},
                         {"color_ram", std::span<std::uint8_t>(sys->color_ram)}};

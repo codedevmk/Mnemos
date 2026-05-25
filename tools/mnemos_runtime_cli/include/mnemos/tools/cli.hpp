@@ -19,6 +19,7 @@ namespace mnemos::tools {
         std::filesystem::path tape;      // optional .tap datasette image
         std::uint64_t frames{1U};
         std::uint32_t reu_kib{0U}; // RAM Expansion Unit size in KiB (0 = none; 128/256/512)
+        bool modem{false};         // attach the RS-232 userport modem
         bool dump_hash{false};
         bool sid_8580{false}; // use the 8580 SID instead of the 6581
         bool dual_sid{false}; // add a second SID at $D420

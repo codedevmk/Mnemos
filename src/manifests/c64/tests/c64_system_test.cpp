@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace {
@@ -378,6 +379,70 @@ TEST_CASE("assemble_c64 open I/O-2 yields to the cartridge and REU", "[c64][open
         // proving the REU answers $DF00 ahead of the open-bus overlay.
         CHECK(sys->bus.read8(0xDF00U) == 0x10U);
     }
+}
+
+TEST_CASE("assemble_c64 wires the RS-232 userport modem to CIA2", "[c64][modem]") {
+    auto sys = make_c64();
+    sys->cpu.reset(reset_kind::power_on);
+    sys->cia2.reset(reset_kind::power_on);
+    sys->rs232_unit.set_cycles_per_bit(8U); // a short bit time for the test
+
+    SECTION("PB0 reads the RXD line and PA2 drives TXD") {
+        // RXD idles at mark, so CIA2 PB0 reads high.
+        CHECK((sys->cia2.read(0x01U) & 0x01U) != 0U);
+
+        // Drive PA2 (TXD) low as an output: the start bit reaches the UART.
+        sys->cia2.write(0x02U, 0x04U); // DDRA bit 2 = output
+        sys->cia2.write(0x00U, 0x00U); // PRA bit 2 = 0 (space / start bit)
+        sys->rs232_unit.tick(12U);     // past the start-bit detection
+        CHECK(sys->rs232_unit.receiving());
+    }
+
+    SECTION("a modem reply shifts out on RXD and pulses /FLAG") {
+        // The C64 'sent' AT to the modem (modelled by feeding its DTE input); the
+        // modem queues the echo + OK for the C64.
+        for (const char c : std::string("AT\r")) {
+            sys->modem_unit.dte_write(static_cast<std::uint8_t>(c));
+        }
+        REQUIRE(sys->modem_unit.dte_available() > 0);
+
+        (void)sys->cia2.read(0x0DU); // clear any pending ICR latch
+
+        // Ticking the UART pulls the first queued byte and begins a start bit,
+        // which pulses CIA2 /FLAG and pulls RXD (PB0) low.
+        sys->rs232_unit.tick(2U);
+        CHECK(sys->rs232_unit.transmitting());
+        CHECK((sys->cia2.read(0x0DU) & 0x10U) != 0U); // ICR FLAG latched
+    }
+}
+
+TEST_CASE("assemble_c64 relays a byte C64->modem->C64 through the userport", "[c64][modem]") {
+    auto sys = make_c64();
+    sys->cpu.reset(reset_kind::power_on);
+    sys->cia2.reset(reset_kind::power_on);
+    sys->rs232_unit.set_cycles_per_bit(8U);
+    // Disconnect the UART's transmit drain so the modem's echo stays observable in
+    // its DTE queue (otherwise the UART immediately pulls it to shift back on RXD).
+    sys->rs232_unit.set_byte_source([](std::uint8_t&) { return false; });
+
+    // Bit-bang one byte out of CIA2 PA2 (TXD) into the UART, which hands it to the
+    // modem. With echo on (default) the modem queues it straight back for the C64.
+    sys->cia2.write(0x02U, 0x04U); // DDRA bit 2 = output (TXD)
+    const auto drive_txd = [&](bool mark) {
+        sys->cia2.write(0x00U, mark ? 0x04U : 0x00U); // PRA bit 2
+        sys->rs232_unit.tick(8U);                     // one bit time
+    };
+    constexpr std::uint8_t value = 0x41U; // 'A'
+    drive_txd(true);                      // idle
+    drive_txd(false);                     // start bit
+    for (int bit = 0; bit < 8; ++bit) {
+        drive_txd(((value >> bit) & 1U) != 0U);
+    }
+    drive_txd(true); // stop bit
+    drive_txd(true); // idle so the stop-bit centre is sampled
+
+    // The modem echoed 'A' into its DCE->DTE queue; the UART can now shift it back.
+    CHECK(sys->modem_unit.dte_available() > 0);
 }
 
 TEST_CASE("assemble_c64 drives the cassette sense from the datasette", "[c64][tape]") {
