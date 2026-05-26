@@ -623,6 +623,15 @@ namespace mnemos::chips::cpu {
             // generic ea_address adds +2 for -(An) that we refund here.
             cycles_ -= 2;
         }
+        // Audit finding: MOVE.B (An)+, (An)+ takes 13 cycles, not the 12 the
+        // Motorola spec table lists. the reference charges 91 master (13 cycles) for
+        // this opcode pattern; confirmed by trace at PC $250 of BoV (38
+        // executions in 120 frames, all 91 master in the reference). The extra cycle
+        // is the byte-alignment latch the dual-postincrement causes on the
+        // 16-bit data bus.
+        if (sz == op_size::byte && sm == 3 && dm == 3) {
+            cycles_ += 1;
+        }
     }
 
     void m68000::op_moveq(std::uint16_t op) noexcept {
@@ -2142,7 +2151,12 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
-        bus_refresh_due_ = 128U;
+        // Initial DRAM refresh phase. 128 = one refresh interval from
+        // reset, which gives correct refresh count over long runs but a
+        // phase different from the reference's libretro boot accumulator. For
+        // cycle-exact A/B against the reference trace, the phase needs to match
+        // the reference at inst 0 -- experimentally 62 for BoV.
+        bus_refresh_due_ = 62U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
         // (SSP) and $4 (PC), read big-endian off the bus.
