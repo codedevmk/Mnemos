@@ -420,13 +420,12 @@ int main(int argc, char* argv[]) {
                          static_cast<unsigned>(vdp.vint_fired_count()),
                          static_cast<unsigned>(vdp.vint_drain_count()),
                          static_cast<unsigned>(vdp.vint_enabled_at_drain_count()));
-            // Diagnostic: scheduler's master clock vs CPU's executed cycles.
-            // A non-zero diff means the CPU is "behind" the master clock (its
-            // cycle_debt has gone negative without being recovered) -- in
-            // practice tracks how many master cycles are spent in CPU paths
-            // that consume cycle_debt but don't add to elapsed_.
+            // Diagnostic: master clock vs CPU's executed cycles. The diff is
+            // master cycles where the CPU was gated off (= DMA stall via the
+            // cpu_runnable predicate in genesis_system.hpp:116). Matches
+            // the reference's `m68k.cycles = dma_endCycles` semantics.
             std::fprintf(stderr,
-                         "[sched] master=%llu cpu_elapsed*7=%llu diff_master=%lld diff_frames=%.3f\n",
+                         "[sched] master=%llu cpu_elapsed*7=%llu dma_stall_master=%lld (%.2f frames)\n",
                          static_cast<unsigned long long>(genesis_for_trace->scheduler().master_cycle()),
                          static_cast<unsigned long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7),
                          static_cast<long long>(genesis_for_trace->scheduler().master_cycle()) -

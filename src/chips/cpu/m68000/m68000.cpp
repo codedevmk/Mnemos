@@ -2167,6 +2167,13 @@ namespace mnemos::chips::cpu {
 
         if (halted_ || stopped_) {
             last_cycle_sources_ = cycle_sources_;
+            // STOP/HALT: return a single bus-cycle's worth of time without
+            // executing. Account it in elapsed_ so the CPU clock stays in
+            // step with the master clock (matches the reference's m68k_run where
+            // CPU_STOPPED sets m68k.cycles = end_of_frame target before
+            // returning).
+            cycles_ = 4;
+            elapsed_ += 4U;
             return 4;
         }
 
