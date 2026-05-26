@@ -543,12 +543,12 @@ namespace mnemos::chips::video {
             if (px < 0) {
                 px += hsz_px;
             }
-            // Genesis VDP V scroll convention: the VSRAM value is the plane Y
-            // shown at the TOP of the visible area; the rendered line then walks
-            // DOWN from there. Equivalently, `py = (vscroll + source_line) mod
-            // plane`. NOTE: hardware tests are unanimous on the sign here -- the
-            // value is the offset INTO the plane, not subtracted from the
-            // visible line. Keep the addition.
+            // Genesis VDP V scroll convention: visible_line N shows plane row
+            // (vscroll + N) mod plane_height. Empirically verified against the
+            // Blades of Vengeance title screen and EA splash, both of which
+            // break with subtraction. (The Blades credits screen still
+            // mis-positions because of a separate plane-data placement issue;
+            // see VDP credits-screen bug for the investigation.)
             int py = (vscroll + source_line) % vsz_px;
             if (py < 0) {
                 py += vsz_px;
