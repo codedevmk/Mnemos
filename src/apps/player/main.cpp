@@ -193,6 +193,19 @@ namespace {
 
     enum class system_family { genesis, sms };
 
+    // Strip the directory + extension off a ROM path so what we surface in
+    // the status overlay reads like a title rather than a filesystem path.
+    // No further "cleanup" (underscore-to-space, region-tag stripping etc.) --
+    // we don't want to silently re-interpret what the user named their file.
+    [[nodiscard]] std::string clean_rom_name(const std::string& path) {
+        const auto slash = path.find_last_of("/\\");
+        const auto begin = slash == std::string::npos ? 0U : slash + 1U;
+        const auto dot = path.find_last_of('.');
+        const auto end =
+            (dot == std::string::npos || dot < begin) ? path.size() : dot;
+        return path.substr(begin, end - begin);
+    }
+
     // .sms / .sg -> SMS; everything else (.md, .gen, .smd, .bin, .68k, none) -> Genesis.
     [[nodiscard]] system_family detect_family(const std::string& path) noexcept {
         const auto dot = path.find_last_of('.');
@@ -272,14 +285,15 @@ int main(int argc, char* argv[]) {
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
 
+        std::string display_name = clean_rom_name(*rom_path);
         if (family == system_family::sms) {
             using mnemos::manifests::sms::sms_config;
             system = std::make_unique<mnemos::apps::player::adapters::sms::sms_adapter>(
-                std::move(*bytes), sms_config{.video_region = video});
+                std::move(*bytes), sms_config{.video_region = video}, std::move(display_name));
         } else {
             using mnemos::manifests::genesis::genesis_config;
             system = std::make_unique<mnemos::apps::player::adapters::genesis::genesis_adapter>(
-                std::move(*bytes), genesis_config{.video_region = video});
+                std::move(*bytes), genesis_config{.video_region = video}, std::move(display_name));
         }
     }
 

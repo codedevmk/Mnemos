@@ -90,15 +90,26 @@ namespace mnemos::apps::player::adapters::sms {
     } // namespace
 
     sms_adapter::sms_adapter(std::vector<std::uint8_t> rom,
-                             const manifests::sms::sms_config& config)
+                             const manifests::sms::sms_config& config,
+                             std::string display_name)
         : sys_(manifests::sms::assemble_sms(std::move(rom), config)),
           scheduler_(build_schedule(*sys_), &sys_->vdp),
-          fps_x1000_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)]) {
+          target_fps_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)] /
+                      1000.0) {
         sys_->psg.enable_audio_capture(true);
+
+        // Publish the static description once, post-init.
+        spec_.push_back({.label = "System", .value = "Master System"});
+        spec_.push_back({.label = "Region",
+                         .value = config.video_region == mnemos::video_region::pal ? "PAL"
+                                                                                   : "NTSC"});
+        if (!display_name.empty()) {
+            spec_.push_back({.label = "Cart", .value = std::move(display_name)});
+        }
     }
 
     frontend_sdk::video_region sms_adapter::region() const noexcept {
-        return {fps_x1000_};
+        return {static_cast<std::uint32_t>(target_fps_ * 1000.0 + 0.5)};
     }
 
     chips::frame_buffer_view sms_adapter::current_frame() const noexcept {
@@ -133,9 +144,8 @@ namespace mnemos::apps::player::adapters::sms {
         sys_->psg.drain_samples(psg_buf_.data(), psg_count);
 
         // Accumulate the fractional sample so the long-term output rate is
-        // exact even when (kOutputRate * 1000 / fps_x1000_) is not an integer.
-        const double exact =
-            (static_cast<double>(kOutputRate) * 1000.0 / fps_x1000_) + audio_frac_;
+        // exact even when (kOutputRate / target_fps_) is not an integer.
+        const double exact = (static_cast<double>(kOutputRate) / target_fps_) + audio_frac_;
         int dst_pairs = static_cast<int>(exact);
         if (dst_pairs <= 0) {
             dst_pairs = 1;

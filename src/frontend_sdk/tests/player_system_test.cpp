@@ -14,11 +14,21 @@ namespace {
     using mnemos::frontend_sdk::audio_chunk;
     using mnemos::frontend_sdk::controller_state;
     using mnemos::frontend_sdk::player_system;
+    using mnemos::frontend_sdk::spec_field;
     using mnemos::frontend_sdk::video_region;
 
     class stub_player final : public player_system {
       public:
+        stub_player() {
+            spec_.push_back({.label = "System", .value = "Stub"});
+            spec_.push_back({.label = "Region", .value = "NTSC"});
+        }
+
         [[nodiscard]] video_region region() const noexcept override { return {60000U}; }
+
+        [[nodiscard]] const std::vector<spec_field>& system_spec() const noexcept override {
+            return spec_;
+        }
 
         [[nodiscard]] mnemos::chips::frame_buffer_view current_frame() const noexcept override {
             return {.pixels = pixels_.data(), .width = 2U, .height = 2U};
@@ -45,6 +55,7 @@ namespace {
         std::uint64_t frames_{};
         int last_port_{-1};
         controller_state last_input_{};
+        std::vector<spec_field> spec_{};
     };
 
 } // namespace
@@ -79,4 +90,15 @@ TEST_CASE("player_system stub fulfils the interface contract") {
     CHECK(audio.sample_rate == 44100U);
     CHECK(audio.samples[0] == 1234);
     CHECK(audio.samples[1] == -1234);
+
+    // The spec publisher hands back a borrowed view of the cached vector;
+    // its contents stay stable across calls.
+    const auto& spec_a = p.system_spec();
+    const auto& spec_b = p.system_spec();
+    REQUIRE(spec_a.size() == 2U);
+    CHECK(spec_a[0].label == "System");
+    CHECK(spec_a[0].value == "Stub");
+    CHECK(spec_a[1].label == "Region");
+    CHECK(spec_a[1].value == "NTSC");
+    CHECK(&spec_a == &spec_b);
 }

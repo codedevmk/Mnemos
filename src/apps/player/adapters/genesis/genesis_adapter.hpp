@@ -25,6 +25,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace mnemos::apps::player::adapters::genesis {
@@ -33,11 +34,18 @@ namespace mnemos::apps::player::adapters::genesis {
       public:
         // Build an adapter around a moved-in cartridge image. The 68000 boots
         // from the ROM's reset vectors. `config.video_region` selects 60 Hz
-        // NTSC vs 50 Hz PAL pacing.
-        genesis_adapter(std::vector<std::uint8_t> rom,
-                        const manifests::genesis::genesis_config& config = {});
+        // NTSC vs 50 Hz PAL pacing. `display_name` is a presentation-layer
+        // label the player surfaces in its status overlay (typically the
+        // cart filename, cleaned). Empty = no cart row in the spec.
+        explicit genesis_adapter(std::vector<std::uint8_t> rom,
+                                 const manifests::genesis::genesis_config& config = {},
+                                 std::string display_name = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override;
+        [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
+        system_spec() const noexcept override {
+            return spec_;
+        }
         [[nodiscard]] chips::frame_buffer_view current_frame() const noexcept override;
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
@@ -52,8 +60,17 @@ namespace mnemos::apps::player::adapters::genesis {
         std::unique_ptr<manifests::genesis::genesis_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
-        std::uint32_t fps_x1000_;
+        // Frame rate the scheduler paces against (Hz). NTSC = 60, PAL = 50;
+        // the SDK's video_region carries this scaled by 1000 so it fits an
+        // integer, but the adapter keeps the natural unit for its audio
+        // resampler math.
+        double target_fps_;
         std::uint64_t frames_stepped_{};
+
+        // Pull-once status spec the player surfaces in its overlay. Filled
+        // by the constructor at end of init (after the system is assembled,
+        // before any frame steps) and never mutated thereafter.
+        std::vector<frontend_sdk::spec_field> spec_{};
 
         // Reusable scratch buffers for drain_audio() so we don't reallocate
         // every frame. fm_buf_ holds the FM chip's drained interleaved-

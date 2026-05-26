@@ -22,6 +22,8 @@
 #include "peripheral.hpp" // for mnemos::peripheral::controller_state
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace mnemos::frontend_sdk {
 
@@ -48,6 +50,17 @@ namespace mnemos::frontend_sdk {
         std::uint32_t sample_rate{};
     };
 
+    // One labelled value the adapter publishes for the frontend's status
+    // overlay. Both fields are opaque text -- each manifest picks the fields
+    // that make sense for its hardware. Genesis publishes
+    // System/Region/Cart; a future C64 adapter would publish
+    // System/Region/Media/Title; an arcade-board adapter might publish
+    // System/Board/Game. The frontend renders whatever it gets in order.
+    struct spec_field final {
+        std::string label;
+        std::string value;
+    };
+
     // A bootable, frame-steppable, presentable, input-consuming system. The
     // windowed player owns one of these and drives it; everything system-
     // specific lives behind this interface.
@@ -57,6 +70,14 @@ namespace mnemos::frontend_sdk {
 
         // Video timing for vsync pacing in the frontend.
         [[nodiscard]] virtual video_region region() const noexcept = 0;
+
+        // Ordered set of name/value pairs the adapter wants visible in the
+        // frontend's status overlay (system identity, region, loaded media,
+        // ...). The adapter publishes this once after init (cart loaded or
+        // empty-cart boot, same lifecycle either way) and the contents do
+        // not change for the session, so callers pull a borrowed view of
+        // the cached vector rather than rebuilding per call.
+        [[nodiscard]] virtual const std::vector<spec_field>& system_spec() const noexcept = 0;
 
         // The most-recently-completed framebuffer. Pixel format and lifetime
         // follow chips::frame_buffer_view (0x00RRGGBB, valid until the next

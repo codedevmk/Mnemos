@@ -152,16 +152,27 @@ namespace mnemos::apps::player::adapters::genesis {
     } // namespace
 
     genesis_adapter::genesis_adapter(std::vector<std::uint8_t> rom,
-                                     const manifests::genesis::genesis_config& config)
+                                     const manifests::genesis::genesis_config& config,
+                                     std::string display_name)
         : sys_(manifests::genesis::assemble_genesis(std::move(rom), config)),
           scheduler_(build_schedule(*sys_), &sys_->vdp),
-          fps_x1000_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)]) {
+          target_fps_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)] /
+                      1000.0) {
         sys_->fm.enable_audio_capture(true);
         sys_->psg.enable_audio_capture(true);
+
+        // Publish the static description once, post-init.
+        spec_.push_back({.label = "System", .value = "Genesis"});
+        spec_.push_back({.label = "Region",
+                         .value = config.video_region == mnemos::video_region::pal ? "PAL"
+                                                                                   : "NTSC"});
+        if (!display_name.empty()) {
+            spec_.push_back({.label = "Cart", .value = std::move(display_name)});
+        }
     }
 
     frontend_sdk::video_region genesis_adapter::region() const noexcept {
-        return {fps_x1000_};
+        return {static_cast<std::uint32_t>(target_fps_ * 1000.0 + 0.5)};
     }
 
     chips::frame_buffer_view genesis_adapter::current_frame() const noexcept {
@@ -209,9 +220,8 @@ namespace mnemos::apps::player::adapters::genesis {
             psg_buf_.clear();
         }
         // Accumulate the fractional sample so the long-term output rate is
-        // exact even when (kOutputRate * 1000 / fps_x1000_) is not an integer.
-        const double exact =
-            (static_cast<double>(kOutputRate) * 1000.0 / fps_x1000_) + audio_frac_;
+        // exact even when (kOutputRate / target_fps_) is not an integer.
+        const double exact = (static_cast<double>(kOutputRate) / target_fps_) + audio_frac_;
         int dst_pairs = static_cast<int>(exact);
         if (dst_pairs <= 0) {
             dst_pairs = 1;
