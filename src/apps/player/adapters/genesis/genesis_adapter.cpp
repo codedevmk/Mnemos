@@ -179,12 +179,16 @@ namespace mnemos::apps::player::adapters::genesis {
             return;
         }
         ports_[static_cast<std::size_t>(port)] = state;
-        // Genesis pad bitmask (active-high) for $A10003 / $A10005.
-        const std::uint8_t pad =
-            (state.up ? 0x01U : 0U) | (state.down ? 0x02U : 0U) |
-            (state.left ? 0x04U : 0U) | (state.right ? 0x08U : 0U) |
-            (state.a ? 0x10U : 0U) | (state.b ? 0x20U : 0U) | (state.c ? 0x40U : 0U) |
-            (state.start ? 0x80U : 0U);
+        // Genesis pad bitmask (active-high). Bits 0..7 are the 3-button base
+        // (U, D, L, R, A, B, C, Start); bits 8..11 are the 6-button extras
+        // (Z, Y, X, Mode) exposed by the extended TH-pulse protocol.
+        const std::uint16_t pad = static_cast<std::uint16_t>(
+            (state.up    ? 0x001U : 0U) | (state.down  ? 0x002U : 0U) |
+            (state.left  ? 0x004U : 0U) | (state.right ? 0x008U : 0U) |
+            (state.a     ? 0x010U : 0U) | (state.b     ? 0x020U : 0U) |
+            (state.c     ? 0x040U : 0U) | (state.start ? 0x080U : 0U) |
+            (state.z     ? 0x100U : 0U) | (state.y     ? 0x200U : 0U) |
+            (state.x     ? 0x400U : 0U) | (state.mode  ? 0x800U : 0U));
         sys_->set_pad(port, pad);
     }
 

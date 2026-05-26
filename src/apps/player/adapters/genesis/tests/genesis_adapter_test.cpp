@@ -143,6 +143,51 @@ TEST_CASE("genesis_adapter routes controller_state through the system pad protoc
     CHECK(sys.read_pad_port(0) == 0x77U);
 }
 
+TEST_CASE("genesis_adapter 6-button extended-read protocol") {
+    using namespace mnemos::manifests::genesis;
+    genesis_adapter adapter(tiny_rom());
+    auto& sys = adapter.system();
+
+    // Press the extended buttons (X/Y/Z + Mode) so phase 7 has visible state.
+    mnemos::frontend_sdk::controller_state s{};
+    s.x = true;
+    s.y = true;
+    s.z = true;
+    s.mode = true;
+    adapter.apply_input(0, s);
+
+    // Start fresh: V-blank reset puts phase at 0.
+    sys.pad_reset_phases();
+    sys.pad_th[0] = false;
+
+    // The protocol pulses TH high/low; each transition advances the phase.
+    // Walk all 8 phases and check the bytes the 68K would observe.
+    auto pulse = [&](bool th) {
+        sys.pad_write_th(0, th);
+        return sys.read_pad_port(0);
+    };
+
+    // Phase 1 (TH=1): standard CBRLDU bank, no buttons pressed -> 0x7F.
+    CHECK(pulse(true) == 0x7FU);
+    // Phase 2 (TH=0): standard SA00DU bank -> 0x33 (no presses).
+    CHECK(pulse(false) == 0x33U);
+    // Phase 3 (TH=1): still standard CBRLDU.
+    CHECK(pulse(true) == 0x7FU);
+    // Phase 4 (TH=0): still standard SA00DU.
+    CHECK(pulse(false) == 0x33U);
+    // Phase 5 (TH=1): still standard.
+    CHECK(pulse(true) == 0x7FU);
+    // Phase 6 (TH=0): 6-button id -- bits 3..0 must all be 0 (dpad zeroed).
+    //   Bits 5/4 still S/A idle (=1); bits 3..0 = 0000. Byte = 0x30.
+    CHECK(pulse(false) == 0x30U);
+    // Phase 7 (TH=1): extended bank C B Mode X Y Z. We pressed all four
+    //   extended buttons, so bits 3..0 (Mode/X/Y/Z) are 0; bits 5/4 (C/B)
+    //   are idle (=1). Byte = 0b01110000 = 0x70.
+    CHECK(pulse(true) == 0x70U);
+    // Phase 0 (wrap): back to standard SA00DU.
+    CHECK(pulse(false) == 0x33U);
+}
+
 // Cart-byte -> video_region resolution is now exercised end-to-end in the
 // shared cross-family test in adapters/common/tests/region_test.cpp:
 // parse_genesis_market() + default_video_for() compose into the same flow

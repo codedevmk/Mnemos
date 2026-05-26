@@ -516,8 +516,10 @@ int main(int argc, char* argv[]) {
         // Keyboard + gamepad OR'd into the same controller_state so the user
         // can switch input mid-session. Adapters ignore buttons their hardware
         // doesn't have.
-        //   Keyboard: arrows = dpad, Z = A, X = B, C = C, Enter = Start.
-        //   Gamepad : dpad + left stick = dpad, S/E/W = A/B/C, Start = Start.
+        //   Keyboard: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z (Genesis
+        //             6-button extras), Enter = Start, LShift = Mode.
+        //   Gamepad : dpad + left stick = dpad, South/East/West = A/B/C,
+        //             North = X, L1/R1 = Y/Z, Start/Back = Start/Mode.
         {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             mnemos::frontend_sdk::controller_state pad{};
@@ -528,7 +530,11 @@ int main(int argc, char* argv[]) {
             pad.a = keys[SDL_SCANCODE_Z];
             pad.b = keys[SDL_SCANCODE_X];
             pad.c = keys[SDL_SCANCODE_C];
+            pad.x = keys[SDL_SCANCODE_A];
+            pad.y = keys[SDL_SCANCODE_S];
+            pad.z = keys[SDL_SCANCODE_D];
             pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
+            pad.mode = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
             if (gamepad != nullptr) {
                 constexpr Sint16 kAxisThreshold = 16384; // ~half deflection
                 const auto lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
@@ -544,7 +550,11 @@ int main(int argc, char* argv[]) {
                 pad.a |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
                 pad.b |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST);
                 pad.c |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);
+                pad.x |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_NORTH);
+                pad.y |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+                pad.z |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
                 pad.start |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_START);
+                pad.mode |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_BACK);
             }
             if (system) {
                 system->apply_input(0, pad);

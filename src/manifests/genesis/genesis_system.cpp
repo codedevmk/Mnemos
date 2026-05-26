@@ -104,11 +104,13 @@ namespace mnemos::manifests::genesis {
             },
             [s](std::uint32_t a, std::uint8_t v) {
                 const std::uint32_t off = a & 0x1FU;
-                // Bit 6 of a data-port write is the TH select line.
+                // Bit 6 of a data-port write is the TH select line. Routing
+                // through pad_write_th advances the 6-button phase counter
+                // on each transition.
                 if (off == 0x03) {
-                    s->pad_th[0] = (v & 0x40U) != 0U;
+                    s->pad_write_th(0, (v & 0x40U) != 0U);
                 } else if (off == 0x05) {
-                    s->pad_th[1] = (v & 0x40U) != 0U;
+                    s->pad_write_th(1, (v & 0x40U) != 0U);
                 }
                 // Echo every write back (read-only $A10001 excepted).
                 if (off != 0x01) {
@@ -210,6 +212,10 @@ namespace mnemos::manifests::genesis {
             s->z80.set_irq_line(in_vblank);
             if (in_vblank) {
                 ++s->frame_index;
+                // The 6-button pad's phase counter resets on its ~1.5ms
+                // timeout in real hardware; per-frame reset at V-blank entry
+                // matches the typical poll-once-per-frame pattern games use.
+                s->pad_reset_phases();
             }
         });
         // Genesis quirk: the bus controller drops the TAS write phase on a
