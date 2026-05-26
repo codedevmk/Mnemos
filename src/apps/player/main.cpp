@@ -408,6 +408,8 @@ int main(int argc, char* argv[]) {
     bool logged_dims = false;
     int dump_index = 0;
     bool dump_requested = false;
+    bool paused = false;
+    bool fullscreen = false;
 
     // Open whichever gamepad is currently plugged in for port 0, and watch
     // for hot-plug events to swap if a different controller arrives. Keyboard
@@ -439,6 +441,13 @@ int main(int argc, char* argv[]) {
                     running = false;
                 } else if (event.key.key == SDLK_F12) {
                     dump_requested = true;
+                } else if (event.key.key == SDLK_F11) {
+                    fullscreen = !fullscreen;
+                    SDL_SetWindowFullscreen(window, fullscreen);
+                } else if (event.key.key == SDLK_P) {
+                    paused = !paused;
+                    std::fprintf(stderr, "[mnemos_player] %s\n", paused ? "paused" : "resumed");
+                    std::fflush(stderr);
                 }
                 break;
             case SDL_EVENT_GAMEPAD_ADDED:
@@ -506,10 +515,15 @@ int main(int argc, char* argv[]) {
         }
 
         // Drive emulation: exactly one video frame per present (vsync paces us).
+        // While paused we skip step_one_frame() but keep rendering the last
+        // framebuffer + accepting input, so the user can move the window or
+        // toggle fullscreen / unpause without the emulator advancing.
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
         if (system) {
-            system->step_one_frame();
+            if (!paused) {
+                system->step_one_frame();
+            }
             const auto fb = system->current_frame();
             src_w = fb.width;
             src_h = fb.height;
