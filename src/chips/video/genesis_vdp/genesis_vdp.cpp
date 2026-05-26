@@ -213,18 +213,41 @@ namespace mnemos::chips::video {
                     // Mirror the reference's vdp_reg_w register-1 handling
                     // (the reference:1727-1743): if the V-int-enable bit
                     // flipped ON while a VINT is latched in the VDP, raise
-                    // the CPU IRQ NOW. Without this, the IRQ is held back
-                    // until the NEXT V-blank line, which is what caused
-                    // the BoV f=115 cliff (BoV's boot loop has V-int
-                    // disabled across many frames; the VBL transitions
-                    // latch vint_happened_=true, then BoV enables V-int
-                    // mid-frame and expects the pending VINT to fire
-                    // immediately).
+                    // the CPU IRQ -- but with a one-instruction LATENCY
+                    // matching the reference's m68k_set_irq_delay (the reference:222).
+                    //
+                    // The game's MOVE that enabled V-int is still in flight
+                    // when we get here; the reference completes it, executes ONE
+                    // MORE instruction, then takes the IRQ. So the saved
+                    // PC on the IRQ stack frame is the PC AFTER that extra
+                    // instruction, not the PC right after the MOVE. This
+                    // matters for BoV: $115A is MOVE.W to VDP control (the
+                    // V-int enable write); $1162 is BSR.W $22E4 (the next
+                    // instruction). the reference takes IRQ with saved PC = $22E4
+                    // (post-BSR), so the ISR's RTE returns there.
                     const bool new_vint_en = (reg_[1] & 0x20U) != 0U;
                     const bool old_vint_en = (old & 0x20U) != 0U;
                     if (!old_vint_en && new_vint_en && vint_happened_) {
-                        vblank_pending_ = true;
-                        refresh_irq();
+                        if (delayed_irq_callback_) {
+                            // Take the the reference m68k_set_irq_delay path: the
+                            // CPU runs one more instruction before raising
+                            // irq_level_=6, so the saved PC matches the reference.
+                            // We do NOT set vblank_pending_ here because
+                            // that would cause the next refresh_irq() to
+                            // race the delayed-IRQ mechanism and raise the
+                            // CPU IRQ immediately. The CPU's
+                            // schedule_delayed_irq sets irq_level_ directly
+                            // when the delay completes; vblank_pending_
+                            // stays as-is until the next regular VBL or
+                            // an IACK.
+                            delayed_irq_callback_(6);
+                        } else {
+                            // Fallback: no CPU support for delayed IRQ
+                            // (used by VDP unit tests). Raise immediately
+                            // via the normal pending_irq_level() path.
+                            vblank_pending_ = true;
+                            refresh_irq();
+                        }
                     }
                 }
             }
@@ -1090,12 +1113,9 @@ namespace mnemos::chips::video {
     }
 
     void genesis_vdp::acknowledge_irq(int level) noexcept {
-        // The IACK cycle clears the interrupt request AND the VDP-side
-        // VINT/HINT pending latch. Matches the reference's vdp_68k_irq_ack
-        // (the reference:1500-1518): for VINT it clears vint_pending AND the
-        // status bit 0x80. This is what makes a re-enable of V-int after
-        // an IACK NOT refire the IRQ -- the pending latch has been
-        // consumed.
+        // The IACK cycle clears the pending latch on the level just accepted
+        // (matches the reference vdp_68k_irq_ack, the reference:1500-1518: for VINT
+        // it clears vint_pending and status bit 0x80).
         if (level >= 6) {
             vblank_pending_ = false;
             vint_happened_ = false;
@@ -1104,6 +1124,15 @@ namespace mnemos::chips::video {
         } else if (level >= 2) {
             ext_pending_ = false;
         }
+        // IACK deasserts the IRQ line at this level. Pretend last_irq_level_
+        // matched the level being acked so refresh_irq's "if changed" guard
+        // fires (sending cpu.set_irq_level(<new>) ). The schedule_delayed_irq
+        // path raises CPU's irq_level_ directly without going through
+        // refresh_irq, so VDP's last_irq_level_ would have stayed 0 even
+        // though CPU's irq_level_ was 6 -- without this hint, the IACK
+        // clears VDP state but cpu's irq_level_ stays 6 → infinite IRQ
+        // loop (BoV f=115 second cliff).
+        last_irq_level_ = level;
         refresh_irq();
     }
 

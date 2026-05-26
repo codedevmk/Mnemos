@@ -135,6 +135,25 @@ namespace mnemos::chips::cpu {
             z80_bus_latency_enabled_ = enabled;
         }
 
+        // Schedule an IRQ to fire ONE INSTRUCTION later than the normal
+        // boundary. This mirrors the reference's m68k_set_irq_delay (the reference:222)
+        // and is the canonical Genesis V-int-enable-via-MOVE.W behaviour:
+        // when reg[1] V-int bit is flipped on while a VINT is latched in
+        // the VDP, the reference finishes the MOVE, executes ONE MORE instruction,
+        // and ONLY THEN raises the IRQ. The saved PC on the IRQ stack is
+        // therefore the PC after that extra instruction (e.g. BoV's
+        // BSR.W $22E4 at $1162 → saved PC = $22E4 not $1162).
+        //
+        // Implementation: VDP calls this from its register-1 write path.
+        // The CPU then runs the in-flight + one more step_instruction
+        // without taking the IRQ, then sets irq_level_ at the end so the
+        // step AFTER that fires the exception. See genesis_vdp.cpp where
+        // schedule_delayed_irq is wired up.
+        void schedule_delayed_irq(int level) noexcept {
+            delayed_irq_level_ = level < 0 ? 0 : (level > 7 ? 7 : level);
+            delayed_irq_counter_ = 2; // current step + 1 more step
+        }
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
@@ -253,6 +272,14 @@ namespace mnemos::chips::cpu {
 
         // Genesis $A00000-$A0FFFF access latency (see set_z80_bus_latency_enabled).
         bool z80_bus_latency_enabled_{false};
+
+        // the reference m68k_set_irq_delay state (see schedule_delayed_irq above).
+        // delayed_irq_counter_ counts step_instruction() invocations until
+        // the IRQ should be raised: while > 0 the CPU runs normally without
+        // taking the delayed IRQ; on reaching 0, irq_level_ is set to
+        // delayed_irq_level_.
+        int delayed_irq_level_{};
+        int delayed_irq_counter_{};
 
         // Cycle-source accumulator for the instruction in flight; snapshotted
         // to last_cycle_sources_ at the end of each step_instruction().

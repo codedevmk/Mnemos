@@ -85,6 +85,14 @@ namespace mnemos::chips::video {
         void set_irq_callback(std::function<void(int level)> cb) noexcept {
             irq_callback_ = std::move(cb);
         }
+        // the reference-style one-instruction-delayed IRQ raise (m68k_set_irq_delay).
+        // Set by the Genesis manifest; the VDP calls this when a V-int-enable
+        // register write needs the IRQ to fire AFTER one more CPU
+        // instruction, so the saved PC on the IRQ stack matches the reference
+        // (the post-extra-instruction PC, not the post-MOVE PC).
+        void set_delayed_irq_callback(std::function<void(int level)> cb) noexcept {
+            delayed_irq_callback_ = std::move(cb);
+        }
         // Invoked whenever the in_vblank state changes (rising edge true, falling
         // false). The Genesis system wires this to the Z80's IRQ line, which tracks
         // vblank on real hardware.
@@ -325,6 +333,7 @@ namespace mnemos::chips::video {
         // Host hooks.
         std::function<std::uint16_t(std::uint32_t)> dma_read_{};
         std::function<void(int)> irq_callback_{};
+        std::function<void(int)> delayed_irq_callback_{};
         std::function<void(bool)> vblank_callback_{};
         int last_irq_level_{};
         bool last_in_vblank_{};

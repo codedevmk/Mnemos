@@ -207,6 +207,13 @@ namespace mnemos::manifests::genesis {
         });
 
         s->vdp.set_irq_callback([s](int level) { s->cpu.set_irq_level(level); });
+        // the reference-style 1-instruction IRQ delay for V-int-enable-via-MOVE.W
+        // writes (see genesis_vdp.cpp set_delayed_irq_callback / m68000.hpp
+        // schedule_delayed_irq). Without this, BoV took IRQ at PC=$1162
+        // (right after the enabling MOVE.W); the reference takes it after the BSR.W
+        // at $1162 finishes, with saved PC = $22E4.
+        s->vdp.set_delayed_irq_callback(
+            [s](int level) { s->cpu.schedule_delayed_irq(level); });
         // The 68K IACK clears the VDP IRQ request (many V-blank handlers rely
         // on this instead of acking via the status read).
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });

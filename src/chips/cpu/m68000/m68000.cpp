@@ -2195,6 +2195,21 @@ namespace mnemos::chips::cpu {
         }
         elapsed_ += static_cast<std::uint64_t>(cycles_);
         last_cycle_sources_ = cycle_sources_;
+
+        // the reference m68k_set_irq_delay: a V-int-enable-via-MOVE.W flip schedules
+        // the VINT IRQ for ONE INSTRUCTION later than the normal boundary
+        // (the reference:222-247). The counter is 2 when scheduled (set inside
+        // the instruction that triggers it), decrements at the end of each
+        // step_instruction, and only when it hits 0 do we raise irq_level_.
+        // Net effect: the inst that schedules it + ONE MORE inst run
+        // without taking the IRQ; the inst AFTER fires the exception.
+        if (delayed_irq_counter_ > 0) {
+            --delayed_irq_counter_;
+            if (delayed_irq_counter_ == 0) {
+                set_irq_level(delayed_irq_level_);
+                delayed_irq_level_ = 0;
+            }
+        }
         return cycles_;
     }
 
@@ -2213,6 +2228,8 @@ namespace mnemos::chips::cpu {
         ssp_ = 0U;
         irq_level_ = 0;
         prev_irq_level_ = 0;
+        delayed_irq_level_ = 0;
+        delayed_irq_counter_ = 0;
         inst_addr_ = 0U;
         stopped_ = false;
         halted_ = false;
