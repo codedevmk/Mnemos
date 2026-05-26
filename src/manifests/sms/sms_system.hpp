@@ -2,6 +2,7 @@
 
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
+#include "peripheral.hpp"         // peripheral::device (controller ports)
 #include "region.hpp"             // mnemos::video_region (shared)
 #include "sms_mapper.hpp"         // Sega mapper
 #include "sms_vdp.hpp"            // video
@@ -15,17 +16,6 @@
 #include <vector>
 
 namespace mnemos::manifests::sms {
-
-    // Joypad buttons, one byte per controller; a set bit means pressed. The port
-    // read inverts these to the SMS's active-low pin levels.
-    namespace pad_button {
-        inline constexpr std::uint8_t up = 0x01U;
-        inline constexpr std::uint8_t down = 0x02U;
-        inline constexpr std::uint8_t left = 0x04U;
-        inline constexpr std::uint8_t right = 0x08U;
-        inline constexpr std::uint8_t button_1 = 0x10U;
-        inline constexpr std::uint8_t button_2 = 0x20U;
-    } // namespace pad_button
 
     struct sms_config final {
         // automatic picks Sega vs Codemasters from the cart's Codemasters
@@ -55,16 +45,27 @@ namespace mnemos::manifests::sms {
         std::array<std::uint8_t, 0x2000> ram{}; // 8 KiB, mirrored $C000 / $E000
         std::vector<std::uint8_t> rom;          // cartridge image (borrowed by the mapper)
 
-        // Controller state (active-high here; the port read inverts to active-low).
-        std::array<std::uint8_t, 2> pad{};
+        // Controller ports 1/2. Each holds the peripheral the host attached
+        // (typically an SMS Control Pad; future: Light Phaser, Sports Pad,
+        // Sega Mouse, ...). The $DC / $DD port reads multiplex bits from
+        // both attached devices' 6-pin input bytes plus the I/O control
+        // overlays at $3F.
+        std::array<std::unique_ptr<peripheral::device>, 2> ports{};
+
         std::uint8_t io_ctrl{0xFFU}; // I/O control latch (port $3F): TH/TR direction + level
         bool reset_pressed{};
 
-        void set_pad(int port, std::uint8_t buttons) noexcept {
+        void attach(int port, std::unique_ptr<peripheral::device> dev) noexcept {
             if (port >= 0 && port < 2) {
-                pad[static_cast<std::size_t>(port)] = buttons;
+                ports[static_cast<std::size_t>(port)] = std::move(dev);
             }
         }
+
+        [[nodiscard]] peripheral::device* port_device(int port) noexcept {
+            return (port >= 0 && port < 2) ? ports[static_cast<std::size_t>(port)].get()
+                                           : nullptr;
+        }
+
         void set_reset_button(bool pressed) noexcept { reset_pressed = pressed; }
     };
 

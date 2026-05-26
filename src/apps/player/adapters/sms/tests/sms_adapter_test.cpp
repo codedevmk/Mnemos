@@ -85,30 +85,31 @@ TEST_CASE("sms_adapter selects PAL pacing when configured") {
     CHECK(adapter.region().frames_per_second_x1000 == 50000U);
 }
 
-TEST_CASE("sms_adapter routes controller_state through the system pad bits") {
-    using namespace mnemos::manifests::sms;
+TEST_CASE("sms_adapter routes controller_state through the attached pad") {
     sms_adapter adapter(tiny_rom());
     auto& sys = adapter.system();
 
-    // Idle.
+    // Idle: pad's 6 input pins all idle (active-low byte = 0x3F in low bits,
+    // 0xC0 in the two high bits the pad doesn't drive) -> 0xFF.
     mnemos::frontend_sdk::controller_state idle{};
     adapter.apply_input(0, idle);
-    CHECK(sys.pad[0] == 0U);
+    REQUIRE(sys.port_device(0) != nullptr);
+    CHECK(sys.port_device(0)->read_data() == 0xFFU);
 
-    // Press dpad up + button 1.
+    // Press dpad up + A -> Button 1. Up clears bit 0; Button 1 clears bit 4.
     mnemos::frontend_sdk::controller_state combo{};
     combo.up = true;
     combo.a = true;
     adapter.apply_input(0, combo);
-    CHECK(sys.pad[0] == (pad_button::up | pad_button::button_1));
+    CHECK(sys.port_device(0)->read_data() == 0xEEU);
 
-    // Port 1 routes independently.
+    // Port 1 routes independently. Right + B -> Button 2.
     mnemos::frontend_sdk::controller_state right_b2{};
     right_b2.right = true;
     right_b2.b = true;
     adapter.apply_input(1, right_b2);
-    CHECK(sys.pad[1] == (pad_button::right | pad_button::button_2));
-    CHECK(sys.pad[0] == (pad_button::up | pad_button::button_1)); // unchanged
+    CHECK(sys.port_device(1)->read_data() == 0xD7U);
+    CHECK(sys.port_device(0)->read_data() == 0xEEU); // unchanged
 }
 
 // Cart-byte -> video_region resolution is exercised end-to-end in

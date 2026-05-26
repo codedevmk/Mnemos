@@ -2,6 +2,7 @@ add_library(
     mnemos_peripheral_input
     mk1650.cpp
     mk1653.cpp
+    mk3020.cpp
 )
 add_library(mnemos::peripheral::input ALIAS mnemos_peripheral_input)
 
@@ -34,6 +35,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_peripheral_input_mk1653_test
         SOURCES tests/mk1653_test.cpp
+        LIBRARIES mnemos::peripheral::input
+    )
+    mnemos_add_test(
+        mnemos_peripheral_input_mk3020_test
+        SOURCES tests/mk3020_test.cpp
         LIBRARIES mnemos::peripheral::input
     )
 endif()

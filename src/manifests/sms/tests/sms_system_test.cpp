@@ -8,7 +8,6 @@
 namespace {
     using mnemos::manifests::sms::assemble_sms;
     using mnemos::manifests::sms::sms_config;
-    namespace pad_button = mnemos::manifests::sms::pad_button;
 
     // A one-page (16 KiB) zero-filled cartridge image to poke a test program into.
     std::vector<std::uint8_t> blank_rom(std::size_t size = 0x4000U) {
@@ -142,9 +141,13 @@ TEST_CASE("assemble_sms reads the joypads on ports $DC/$DD", "[sms][input]") {
     rom[4] = 0xC0U;
 
     auto sys = assemble_sms(std::move(rom));
-    sys->set_pad(0, pad_button::up); // player 1 up held
-    sys->cpu.step_instruction();     // IN A,($DC)
-    sys->cpu.step_instruction();     // LD ($C000),A
+    mnemos::peripheral::controller_state held{};
+    held.up = true;
+    if (auto* dev = sys->port_device(0)) {
+        dev->apply_state(held); // player 1 up held
+    }
+    sys->cpu.step_instruction(); // IN A,($DC)
+    sys->cpu.step_instruction(); // LD ($C000),A
 
     const std::uint8_t v = sys->bus.read8(0xC000U);
     CHECK((v & 0x01U) == 0U); // up pressed -> bit 0 active-low

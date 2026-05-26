@@ -22,13 +22,19 @@ target_link_libraries(
         mnemos::chips::audio::sn76489
         mnemos::chips::mapper::sms_mapper
         mnemos::chips::mapper::codemasters_mapper
+        mnemos::peripheral::input
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_sms PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_sms
     TIER 4
-    DEPENDS mnemos_topology mnemos_chips_shared mnemos_foundation
+    DEPENDS
+        mnemos_topology
+        mnemos_chips_shared
+        mnemos_foundation
+        mnemos_peripheral_common
+        mnemos_peripheral_input
 )
 
 if(BUILD_TESTING)

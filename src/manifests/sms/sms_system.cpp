@@ -1,5 +1,8 @@
 #include "sms_system.hpp"
 
+#include "mk3020.hpp" // default controller-port peripheral (Master System Control Pad)
+
+#include <memory>
 #include <span>
 #include <utility>
 
@@ -10,7 +13,6 @@ namespace mnemos::manifests::sms {
         // can't validate it through the different mapper): the 16-bit word at $7FE6
         // plus the complement word at $7FE8 sum to $10000. That doubles as the mapper
         // signature (community-documented header convention; see THIRD-PARTY.md).
-        // Used only when the config leaves the mapper on auto.
         bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept {
             if (rom.size() < 0x8000U) {
                 return false;
@@ -22,13 +24,9 @@ namespace mnemos::manifests::sms {
             return (word(0x7FE6U) + word(0x7FE8U)) == 0x10000U;
         }
 
-        // Active-low pin level: a pressed button drives its pin to 0.
-        constexpr std::uint8_t pin(bool pressed) noexcept { return pressed ? 0U : 1U; }
-
-        // The I/O control latch ($3F) selects, per controller port, whether the TR/TH
-        // pins are inputs (read the controller) or outputs (read back the driven
-        // level). Bits: 0/1 = port-0 TR/TH direction, 2/3 = port-1, 4/5 = port-0
-        // TR/TH output level, 6/7 = port-1.
+        // I/O control latch ($3F) bit layout: 0/1 = port-0 TR/TH direction
+        // (1 = input), 2/3 = port-1, 4/5 = port-0 TR/TH output level, 6/7 =
+        // port-1 output level.
         bool tr_is_input(const sms_system* s, int port) noexcept {
             return (s->io_ctrl & (1U << static_cast<unsigned>(port * 2))) != 0U;
         }
@@ -44,40 +42,44 @@ namespace mnemos::manifests::sms {
                                              1U);
         }
 
-        unsigned bit(std::uint8_t value, unsigned shift) noexcept {
-            return static_cast<unsigned>(value) << shift;
+        // Active-low input byte from an attached peripheral (or 0xFF if the
+        // socket is empty -- pull-up = idle high).
+        std::uint8_t port_input(const sms_system* s, int port) noexcept {
+            const auto& dev = s->ports[static_cast<std::size_t>(port)];
+            return dev ? dev->read_data() : 0xFFU;
         }
 
-        // Port $DC: P1 directions + buttons, P1 TR (button 2 or driven level), P2 up/down.
+        // $DC byte: P1's 6 input pins in bits 0..5, P2's Up/Down in bits 6..7.
+        // The pad's Button 2 line at bit 5 is overridden by tr_output when TR
+        // is configured as a host-driven output for that port.
         std::uint8_t read_pad_dc(const sms_system* s) noexcept {
-            const std::uint8_t p1 = s->pad[0];
-            const std::uint8_t p2 = s->pad[1];
-            unsigned v =
-                bit(pin((p1 & pad_button::up) != 0U), 0) |
-                bit(pin((p1 & pad_button::down) != 0U), 1) |
-                bit(pin((p1 & pad_button::left) != 0U), 2) |
-                bit(pin((p1 & pad_button::right) != 0U), 3) |
-                bit(pin((p1 & pad_button::button_1) != 0U), 4) |
-                bit(tr_is_input(s, 0) ? pin((p1 & pad_button::button_2) != 0U) : tr_output(s, 0),
-                    5) |
-                bit(pin((p2 & pad_button::up) != 0U), 6) |
-                bit(pin((p2 & pad_button::down) != 0U), 7);
-            return static_cast<std::uint8_t>(v);
+            const std::uint8_t p1 = port_input(s, 0);
+            const std::uint8_t p2 = port_input(s, 1);
+            std::uint8_t v = static_cast<std::uint8_t>(p1 & 0x1FU); // U/D/L/R/B1
+            const std::uint8_t b2 = tr_is_input(s, 0) ? static_cast<std::uint8_t>((p1 >> 5U) & 1U)
+                                                      : tr_output(s, 0);
+            v |= static_cast<std::uint8_t>(b2 << 5U);
+            v |= static_cast<std::uint8_t>(((p2 >> 0U) & 1U) << 6U); // P2 Up
+            v |= static_cast<std::uint8_t>(((p2 >> 1U) & 1U) << 7U); // P2 Down
+            return v;
         }
 
-        // Port $DD: P2 directions + buttons, P2 TR, the reset button, and the TH pins.
+        // $DD byte: P2's L/R/B1/B2 in bits 0..3, reset at bit 4, bit 5 idles
+        // high, bits 6/7 carry the TH pin levels (pad input or driven output).
         std::uint8_t read_pad_dd(const sms_system* s) noexcept {
-            const std::uint8_t p2 = s->pad[1];
-            unsigned v =
-                bit(pin((p2 & pad_button::left) != 0U), 0) |
-                bit(pin((p2 & pad_button::right) != 0U), 1) |
-                bit(pin((p2 & pad_button::button_1) != 0U), 2) |
-                bit(tr_is_input(s, 1) ? pin((p2 & pad_button::button_2) != 0U) : tr_output(s, 1),
-                    3) |
-                bit(pin(s->reset_pressed), 4) | bit(1U, 5) |
-                bit(th_is_input(s, 0) ? 1U : th_output(s, 0), 6) |
-                bit(th_is_input(s, 1) ? 1U : th_output(s, 1), 7);
-            return static_cast<std::uint8_t>(v);
+            const std::uint8_t p2 = port_input(s, 1);
+            std::uint8_t v = 0U;
+            v |= static_cast<std::uint8_t>(((p2 >> 2U) & 1U) << 0U); // Left
+            v |= static_cast<std::uint8_t>(((p2 >> 3U) & 1U) << 1U); // Right
+            v |= static_cast<std::uint8_t>(((p2 >> 4U) & 1U) << 2U); // Button 1
+            const std::uint8_t b2 = tr_is_input(s, 1) ? static_cast<std::uint8_t>((p2 >> 5U) & 1U)
+                                                      : tr_output(s, 1);
+            v |= static_cast<std::uint8_t>(b2 << 3U);
+            v |= static_cast<std::uint8_t>((s->reset_pressed ? 0U : 1U) << 4U);
+            v |= static_cast<std::uint8_t>(1U << 5U);
+            v |= static_cast<std::uint8_t>((th_is_input(s, 0) ? 1U : th_output(s, 0)) << 6U);
+            v |= static_cast<std::uint8_t>((th_is_input(s, 1) ? 1U : th_output(s, 1)) << 7U);
+            return v;
         }
     } // namespace
 
@@ -199,6 +201,12 @@ namespace mnemos::manifests::sms {
         auto regs = s->cpu.cpu_registers();
         regs.sp = 0xDFF0U;
         s->cpu.set_registers(regs);
+
+        // Default-plug an MK-3020 Master System Control Pad into both
+        // sockets. Adapters can swap for other input peripherals later
+        // (Light Phaser, Sports Pad, Sega Mouse).
+        s->attach(0, std::make_unique<peripheral::input::mk3020>());
+        s->attach(1, std::make_unique<peripheral::input::mk3020>());
 
         return sys;
     }

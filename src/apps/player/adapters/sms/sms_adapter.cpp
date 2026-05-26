@@ -116,14 +116,12 @@ namespace mnemos::apps::player::adapters::sms {
             return;
         }
         ports_[static_cast<std::size_t>(port)] = state;
-        // SMS pad: D-pad + button_1 (A) + button_2 (B). Start / pause is a
-        // separate hardware line not yet surfaced.
-        using namespace manifests::sms::pad_button;
-        const std::uint8_t pad =
-            static_cast<std::uint8_t>((state.up ? up : 0U) | (state.down ? down : 0U) |
-                                      (state.left ? left : 0U) | (state.right ? right : 0U) |
-                                      (state.a ? button_1 : 0U) | (state.b ? button_2 : 0U));
-        sys_->set_pad(port, pad);
+        // Push the system-agnostic input to whichever device is plugged
+        // into this port (default: SMS Control Pad); the device picks the
+        // controller_state fields its hardware exposes.
+        if (auto* dev = sys_->port_device(port)) {
+            dev->apply_state(state);
+        }
     }
 
     frontend_sdk::audio_chunk sms_adapter::drain_audio() noexcept {
