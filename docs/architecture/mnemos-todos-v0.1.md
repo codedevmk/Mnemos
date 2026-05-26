@@ -492,8 +492,15 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   command was decoded, but real hardware only asserts busy once the data-port write actually
   starts the fill. Games like Columns 3 defensively poll dma_busy after the command and
   deadlocked. Fix: keep dma_fill_pending=true but leave dma_busy=false on the FILL trigger.
-  **Local Genesis boot rate jumped from 1/10 to 7/10 commercial ROMs** in a quick sweep
-  (the remaining 3 hangs are different bugs))
+  **Local Genesis boot rate jumped from 1/10 to 7/10 commercial ROMs** in a quick sweep.
+  TWO MORE SYSTEMIC FIXES landed against the Emu reference: (a) VDP vblank-state
+  callback wired to the Z80 INT line (matches sync_z80_irq_line); (b) optional 68000
+  TAS write-back callback; the manifest installs a no-op for the Sega Genesis bus
+  controller's TAS-write quirk (matches m68k_tas_cb). **Boot rate now 44/50 = 88%** in
+  a random 50-ROM sweep (USA commercial, seed 42). 36/36 ctest still green. Remaining
+  6 hangs each have distinct patterns -- individual game / Z80-sync bugs. 98% target
+  needs more systemic fixes: candidates are active-display DMA pacing, FIFO timing
+  accuracy, mid-line CRAM/VSRAM deferral)
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---
