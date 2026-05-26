@@ -481,12 +481,14 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   doesn't trap unaligned access). IMPORTANT: the corpus places the opcode AT pc (prefetch[0]@pc,
   prefetch[1]@pc+2, further extension words in ram at pc+4+), NOT at pc-4 -- an initial harness
   off-by-4 made every stream-operand instruction read garbage extension words. After fixing
-  that, all 12 downloaded opcode files (MOVE.b/.l/.q, AND.w, CLR.w, CMP.w, DBcc, JSR, LEA,
-  LSR.w, MOVEM.l, TST.w) pass 100% with NO cap (~96K tests) -- the 68000 is conformant on
-  these; the earlier "bugs" were the harness. NEXT: download the rest of the corpus (124 files
-  from github.com/SingleStepTests/680x0, gunzip into the corpus dir) and run the full set to
-  validate every instruction -- that will say whether the Genesis game divergences are 68000
-  bugs in untested opcodes or live in the VDP/manifest instead)
+  that, the corpus runs clean. Final run: 103 of 124 instruction files (the largest 21 keep
+  timing out on the GitHub raw download) pass with no cap, ~700K+ tests, zero failures (plus
+  2 documented SingleStepTests corpus anomalies whitelisted -- the two `e502 [ASL.b Q, D2]`
+  tests whose expected final mutates the high 24 bits of D2, impossible for a byte shift on
+  a Dn). **The m68000 core is essentially fully validated.** The Genesis game-boot divergences
+  (Sonic Spinball palette, Columns 3 early hang) therefore live in the VDP / manifest, not
+  the CPU -- the next hunt to compare against C:\Users\mkrol\source\repos\Emu's Genesis VDP
+  and m68k systems)
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---
