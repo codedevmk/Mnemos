@@ -42,3 +42,7 @@ conan.lock
 # Coverage profiling artifacts
 *.profraw
 *.profdata
+
+# Local, machine-specific ROM / test-corpus paths for the data-gated tests
+# (points at copyrighted material that must never be committed).
+scripts/local-roms.ps1

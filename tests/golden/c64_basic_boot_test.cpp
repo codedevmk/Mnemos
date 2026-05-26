@@ -142,9 +142,10 @@ TEST_CASE("c64 boots to a deterministic golden framebuffer", "[golden][c64]") {
     const fs::path dir(*rom_dir);
     auto basic = load_rom(dir, {"basic.901226-01.bin", "basic.bin", "basic"}, 0x2000U);
     auto kernal = load_rom(dir, {"kernal.901227-03.bin", "kernal.bin", "kernal"}, 0x2000U);
-    auto chargen = load_rom(
-        dir, {"character.901225-01.bin", "chargen.901225-01.bin", "chargen.bin", "char.bin"},
-        0x1000U);
+    auto chargen = load_rom(dir,
+                            {"character.901225-01.bin", "characters.901225-01.bin",
+                             "chargen.901225-01.bin", "chargen.bin", "characters.bin", "char.bin"},
+                            0x1000U);
     if (!basic || !kernal || !chargen) {
         SKIP("MNEMOS_C64_ROM_DIR=" << dir.string()
                                    << " is missing a correctly-sized BASIC (8K) / KERNAL (8K) / "
