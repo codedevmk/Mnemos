@@ -121,6 +121,9 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint16_t vsram(int idx) const noexcept;
         [[nodiscard]] int scanline() const noexcept { return scanline_; }
         [[nodiscard]] bool dma_busy() const noexcept { return dma_busy_; }
+        [[nodiscard]] bool dma_fill_pending() const noexcept { return dma_fill_pending_; }
+        [[nodiscard]] std::uint8_t cmd_code() const noexcept { return cmd_code_; }
+        [[nodiscard]] std::uint32_t cmd_addr() const noexcept { return cmd_addr_; }
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:

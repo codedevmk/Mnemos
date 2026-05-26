@@ -224,8 +224,11 @@ namespace mnemos::chips::video {
             const int type = dma_type();
             if (type == 2) {
                 // VRAM fill: wait for the data-port write that supplies the value.
+                // DMA-busy is NOT asserted yet -- the fill is merely pending; real
+                // hardware only asserts busy once the data-port write actually starts
+                // the fill. Games (e.g. Columns 3) defensively poll dma_busy after the
+                // command and would deadlock if we claimed busy here.
                 dma_fill_pending_ = true;
-                dma_busy_ = true;
             } else if (type == 3) {
                 // VRAM copy (runs immediately in this functional model).
                 std::uint16_t len = dma_length();

@@ -488,7 +488,12 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   a Dn). **The m68000 core is essentially fully validated.** The Genesis game-boot divergences
   (Sonic Spinball palette, Columns 3 early hang) therefore live in the VDP / manifest, not
   the CPU -- the next hunt to compare against C:\Users\mkrol\source\repos\Emu's Genesis VDP
-  and m68k systems)
+  and m68k systems. FIRST VDP FIX: the VDP was asserting dma_busy the moment a FILL DMA
+  command was decoded, but real hardware only asserts busy once the data-port write actually
+  starts the fill. Games like Columns 3 defensively poll dma_busy after the command and
+  deadlocked. Fix: keep dma_fill_pending=true but leave dma_busy=false on the FILL trigger.
+  **Local Genesis boot rate jumped from 1/10 to 7/10 commercial ROMs** in a quick sweep
+  (the remaining 3 hangs are different bugs))
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---
