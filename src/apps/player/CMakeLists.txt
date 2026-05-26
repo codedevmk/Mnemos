@@ -10,6 +10,16 @@ mnemos_fetch_sdl3()
 add_subdirectory(adapters/genesis)
 add_subdirectory(adapters/sms)
 
+# Shared bitmap-font overlay helpers, kept in their own static lib so the
+# unit test can link against the same code the player binary uses.
+add_library(mnemos_apps_player_text_overlay STATIC text_overlay.cpp)
+add_library(mnemos::apps::player::text_overlay ALIAS mnemos_apps_player_text_overlay)
+target_include_directories(
+    mnemos_apps_player_text_overlay PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
+mnemos_apply_common_target_options(mnemos_apps_player_text_overlay PUBLIC)
+
 add_executable(mnemos_player main.cpp)
 
 target_link_libraries(
@@ -19,6 +29,7 @@ target_link_libraries(
         mnemos::frontend_sdk
         mnemos::apps::player::genesis_adapter
         mnemos::apps::player::sms_adapter
+        mnemos::apps::player::text_overlay
 )
 
 # SDL3 headers trip /W4 /WX in some configs; mark them SYSTEM so warnings in
@@ -29,3 +40,11 @@ if(_sdl3_include_dirs)
 endif()
 
 mnemos_apply_common_target_options(mnemos_player PRIVATE)
+
+if(BUILD_TESTING)
+    mnemos_add_test(
+        mnemos_apps_player_text_overlay_test
+        SOURCES tests/text_overlay_test.cpp
+        LIBRARIES mnemos::apps::player::text_overlay
+    )
+endif()
