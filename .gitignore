@@ -11,6 +11,11 @@ compile_commands.json
 roms/
 firmware/
 
+# Framebuffer / VRAM dumps from the headless --screenshot path
+# and the reference_runner A/B harness. Scratch artefacts only.
+*.ppm
+diverge_scratch/
+
 # Temporary files
 tmp/
 *.tmp
