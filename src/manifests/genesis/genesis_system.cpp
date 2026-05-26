@@ -1,9 +1,68 @@
 #include "genesis_system.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <span>
 #include <utility>
 
 namespace mnemos::manifests::genesis {
+
+    namespace {
+        // MSVC flags std::getenv as deprecated (security-hardened CRT prefers
+        // _dupenv_s). The watcher is opt-in debug-only and doesn't store the
+        // returned pointer past the immediate parse, so the use is safe.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+        // ---- Optional WRAM-write watcher, gated by env vars. -------------------
+        // Activate with MNEMOS_WRAM_WATCH=1. Default range is the $E8E0..$E910
+        // block that opened the Blades-of-Vengeance divergence at frame 89-90;
+        // override with MNEMOS_WRAM_WATCH_LO / _HI (hex, no $). Frame gating via
+        // MNEMOS_WRAM_WATCH_F_LO / _F_HI (decimal, inclusive). Logs one stderr
+        // line per write that lands in [LO,HI] during [F_LO,F_HI]:
+        //   "[wram] f=N pc=$XXXXXX [$YYYYYY]=ZZ"
+        // PC is sampled after the CPU's bus-write step -- it's the next-instruction
+        // PC, not the writing instruction itself, but that's still close enough
+        // to identify the routine via the ROM disassembly.
+        struct watch_cfg {
+            bool enabled{};
+            std::uint32_t lo{0xE8E0U};
+            std::uint32_t hi{0xE910U};
+            std::uint64_t f_lo{0U};
+            std::uint64_t f_hi{~std::uint64_t{0}};
+        };
+
+        [[nodiscard]] std::uint32_t parse_hex_env(const char* name, std::uint32_t fallback) {
+            const char* v = std::getenv(name);
+            if (v == nullptr || *v == '\0') {
+                return fallback;
+            }
+            return static_cast<std::uint32_t>(std::strtoul(v, nullptr, 16));
+        }
+        [[nodiscard]] std::uint64_t parse_dec_env(const char* name, std::uint64_t fallback) {
+            const char* v = std::getenv(name);
+            if (v == nullptr || *v == '\0') {
+                return fallback;
+            }
+            return std::strtoull(v, nullptr, 10);
+        }
+        [[nodiscard]] watch_cfg load_watch_cfg() {
+            watch_cfg cfg;
+            const char* en = std::getenv("MNEMOS_WRAM_WATCH");
+            cfg.enabled = en != nullptr && en[0] != '\0' && en[0] != '0';
+            cfg.lo = parse_hex_env("MNEMOS_WRAM_WATCH_LO", cfg.lo);
+            cfg.hi = parse_hex_env("MNEMOS_WRAM_WATCH_HI", cfg.hi);
+            cfg.f_lo = parse_dec_env("MNEMOS_WRAM_WATCH_F_LO", cfg.f_lo);
+            cfg.f_hi = parse_dec_env("MNEMOS_WRAM_WATCH_F_HI", cfg.f_hi);
+            return cfg;
+        }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    } // namespace
+
 
     std::unique_ptr<genesis_system> assemble_genesis(std::vector<std::uint8_t> rom,
                                                      const genesis_config& config) {
@@ -38,13 +97,21 @@ namespace mnemos::manifests::genesis {
             0);
 
         // --- $A10000-$A1001F: controller I/O + version register. ---
-        // $A10001 = version. $A10003/$A10005 = controller 1/2 data port (read
-        // returns the button state in the bank selected by the most-recently
-        // written TH bit; CPU writes here latch TH for that port).
+        // $A10001 = version (read-only). $A10003/$A10005/$A10007 = data ports
+        // A/B/C (read returns the connected pad's button state in the bank
+        // selected by the most-recently written TH bit). $A10009/$A1000B/
+        // $A1000D = control registers for the same three ports; the rest are
+        // serial-port registers we don't model. All non-version bytes default
+        // to 0 after a hardware reset -- crucially, a TST.L $A10008 at the
+        // ROM's reset entry must read 0, NOT 0xFF, or the boot path branches
+        // wrong (we observed Blades stuck in the wrong boot routine at PC
+        // \$0696 instead of advancing to \$9606 as on real hardware / the reference,
+        // task #28).
         s->bus.map_mmio(
             0xA10000U, 0x20U,
             [s](std::uint32_t a) -> std::uint8_t {
-                switch (a & 0x1FU) {
+                const std::uint32_t off = a & 0x1FU;
+                switch (off) {
                 case 0x01:
                     return s->version_register;
                 case 0x03:
@@ -52,22 +119,28 @@ namespace mnemos::manifests::genesis {
                 case 0x05:
                     return s->read_pad_port(1);
                 default:
-                    return 0xFFU;
+                    // Control/serial regs + open-bus even bytes. We store the
+                    // last value the 68K wrote and echo it back; uninitialised
+                    // bytes therefore read as 0, matching reset state.
+                    return s->io_regs[off];
                 }
             },
             [s](std::uint32_t a, std::uint8_t v) {
+                const std::uint32_t off = a & 0x1FU;
                 // Bit 6 of the data port write selects the controller bank
                 // (TH=high reads B/C/L/R, TH=low reads A/Start). We latch it
                 // per port; bits 0-5 are output-only pad lines we don't drive.
-                switch (a & 0x1FU) {
-                case 0x03:
+                if (off == 0x03) {
                     s->pad_th[0] = (v & 0x40U) != 0U;
-                    break;
-                case 0x05:
+                } else if (off == 0x05) {
                     s->pad_th[1] = (v & 0x40U) != 0U;
-                    break;
-                default:
-                    break;
+                }
+                // Always store the byte so reads return what was written
+                // (including the control regs $A10009/$A1000B used by the
+                // boot-time port-init check above). The version register at
+                // $A10001 is read-only so the write is ignored.
+                if (off != 0x01) {
+                    s->io_regs[off] = v;
                 }
             },
             0);
@@ -138,9 +211,25 @@ namespace mnemos::manifests::genesis {
             0);
 
         // --- $E00000-$FFFFFF: 68K work RAM (64 KiB, mirrored every 64 KiB). ---
+        // The write lambda also routes to the env-gated WRAM watcher when active;
+        // the watcher cost is one compare + one bool test when disabled, which we
+        // accept for the diagnostic utility (see load_watch_cfg above for usage).
+        const watch_cfg watch = load_watch_cfg();
         s->bus.map_mmio(
             0xE00000U, 0x200000U, [s](std::uint32_t a) { return s->work_ram[a & 0xFFFFU]; },
-            [s](std::uint32_t a, std::uint8_t v) { s->work_ram[a & 0xFFFFU] = v; }, 0);
+            [s, watch](std::uint32_t a, std::uint8_t v) {
+                const std::uint32_t wa = a & 0xFFFFU;
+                s->work_ram[wa] = v;
+                if (watch.enabled && wa >= watch.lo && wa <= watch.hi &&
+                    s->frame_index >= watch.f_lo && s->frame_index <= watch.f_hi) {
+                    const auto pc = s->cpu.cpu_registers().pc;
+                    std::fprintf(stderr, "[wram] f=%llu pc=$%06X [$%04X]=%02X\n",
+                                 static_cast<unsigned long long>(s->frame_index),
+                                 static_cast<unsigned>(pc & 0xFFFFFFU),
+                                 static_cast<unsigned>(wa), static_cast<unsigned>(v));
+                }
+            },
+            0);
 
         // --- VDP DMA reads a big-endian word from 68K address space. ---
         s->vdp.set_dma_read([s](std::uint32_t addr) -> std::uint16_t {
@@ -155,8 +244,14 @@ namespace mnemos::manifests::genesis {
         // handlers rely on this rather than reading the VDP status to ack).
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });
         // The Genesis Z80 INT line tracks the VDP's in_vblank state on real hardware
-        // -- sound drivers tick from it.
-        s->vdp.set_vblank_callback([s](bool in_vblank) { s->z80.set_irq_line(in_vblank); });
+        // -- sound drivers tick from it. The same edge bumps the V-blank-relative
+        // frame counter consumed by the optional WRAM-write watcher.
+        s->vdp.set_vblank_callback([s](bool in_vblank) {
+            s->z80.set_irq_line(in_vblank);
+            if (in_vblank) {
+                ++s->frame_index;
+            }
+        });
         // Genesis quirk: the bus controller ignores the TAS write phase to any
         // memory operand, so TAS .B <ea> on Genesis does the test but never writes
         // bit 7 back. An empty callback expresses "drop the write" without losing

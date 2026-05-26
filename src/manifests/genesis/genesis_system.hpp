@@ -108,6 +108,13 @@ namespace mnemos::manifests::genesis {
 
         std::uint8_t version_register{}; // $A10001 region/version readback
 
+        // I/O sub-controller registers ($A10000-$A1001F, byte-addressable).
+        // Layout: 0x01=version (read-only), 0x03/0x05/0x07 = data A/B/C (read
+        // via read_pad_port), 0x09/0x0B/0x0D = control A/B/C, 0x0F-0x1F =
+        // serial regs. All bytes default to 0 after a hardware reset; the
+        // ROM's TST on these at boot relies on it (#28 root cause).
+        std::array<std::uint8_t, 0x20> io_regs{};
+
         // 16-bit coalescing latches for the VDP ports: a 68000 word access arrives as
         // an even byte (high) then an odd byte (low); the VDP sees one whole word.
         std::uint8_t vdp_write_high{};
@@ -136,6 +143,11 @@ namespace mnemos::manifests::genesis {
             return !sys->vdp.dma_stall_active();
         }
         predicate_gated_chip cpu_gate{cpu, &cpu_runnable, this};
+
+        // Free-running V-blank counter (one tick per real V-blank entry); the
+        // optional WRAM-write watcher (MNEMOS_WRAM_WATCH env) consults this to
+        // frame-gate its logs. Not part of the architectural state, not saved.
+        std::uint64_t frame_index{};
 
         // Controller state, active-high (a set bit = pressed). Bit layout:
         //   0=Up  1=Down  2=Left  3=Right  4=A  5=B  6=C  7=Start
