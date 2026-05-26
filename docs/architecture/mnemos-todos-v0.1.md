@@ -472,8 +472,17 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   set_irq_ack_callback (invoked in process_interrupt) + genesis_vdp::acknowledge_irq, wired in
   the manifest. Result: Aerobiz Supersonic now boots to a rendered frame; Sonic Spinball went
   0 -> 13K VRAM words. REMAINING divergences to chase against the reference: Sonic loads tiles
-  but no CRAM/palette (still blank); Columns 3 hangs very early (pc=$0588, reset SR) -- likely
-  more 68000 instruction bugs (the conformance suite is still gated on the prefetch refactor))
+  but no CRAM/palette (still blank); Columns 3 hangs very early (pc=$0588, reset SR) -- more
+  68000 instruction bugs, now findable via the conformance harness below)
+- [~] 68000 conformance: tests/.../m68000_singlestep_test against the SingleStepTests 680x0
+  corpus (MNEMOS_M68000_TESTS_DIR, data-gated/skips in CI). Instruction-stepped relaxed
+  compare (D/A/USP/SSP/SR/RAM, not the prefetch-coupled PC/queue/cycles); filters group-0
+  (address/bus-error) cases by detecting a vector to the $08/$0C handler (the functional core
+  doesn't trap unaligned access -- ~10.5K/35K of the sampled cases). First run (12 common
+  opcode files, 3000/file): after filtering, real failures concentrated in JSR even-target,
+  MOVEM.l, MOVE.b/.l, LEA, and PC-relative/absolute EA modes -- the likely roots of the game
+  divergences. NEXT: fix these per-mnemonic (MNEMOS_M68000_ONLY + MNEMOS_M68000_DUMP), then
+  finish downloading the corpus (124 files from github.com/SingleStepTests/680x0))
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---

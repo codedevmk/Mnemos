@@ -36,8 +36,10 @@ if (Test-Path $localConfig) {
 $vars = @(
     @{ Name = "MNEMOS_SMS_ROM";            Test = "sms_boot_test" },
     @{ Name = "MNEMOS_C64_ROM_DIR";        Test = "c64_basic_boot_test" },
+    @{ Name = "MNEMOS_GENESIS_ROM";        Test = "genesis_boot_test" },
     @{ Name = "MNEMOS_Z80_ZEX_ROM";        Test = "z80_zexall_test" },
-    @{ Name = "MNEMOS_M6510_TOMHARTE_DIR"; Test = "m6510_tomharte_test" }
+    @{ Name = "MNEMOS_M6510_TOMHARTE_DIR"; Test = "m6510_tomharte_test" },
+    @{ Name = "MNEMOS_M68000_TESTS_DIR";   Test = "m68000_singlestep_test" }
 )
 foreach ($v in $vars) {
     $value = [Environment]::GetEnvironmentVariable($v.Name)
@@ -54,5 +56,6 @@ if (-not (Test-Path $testDir)) {
 }
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
-ctest --test-dir $testDir --output-on-failure -R "tomharte|zexall|c64_basic_boot|sms_boot"
+ctest --test-dir $testDir --output-on-failure `
+    -R "tomharte|zexall|c64_basic_boot|sms_boot|genesis_boot|m68000_singlestep"
 exit $LASTEXITCODE
