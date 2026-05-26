@@ -1587,26 +1587,35 @@ namespace mnemos::chips::cpu {
             }
             return;
         }
+        // Additive cycle accounting throughout: fetch16 has already added 4
+        // for the opcode (and pop32/pop16/push32/fetch16 self-account inside
+        // the bus helpers), so each case adds only the remaining INTERNAL
+        // IDLE to reach Motorola's published total. Earlier code used
+        // `cycles_ = N` which silently overwrote any bus-refresh +2 added by
+        // step_instruction(), causing Bcc/RTS/JMP/etc to never reflect
+        // refresh -- the source of the -747K master BoV drift.
         switch (op) {
-        case 0x4E70U: // RESET (privileged) -- no external peripherals in the core
+        case 0x4E70U: // RESET (privileged) -- Motorola total 132; no bus accesses, all idle - 4 prefetch
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
             }
-            cycles_ = 132; // Motorola spec; floor of 4 doesn't apply since explicit
+            cycles_ += 128; // 132 total - 4 fetch16 (opcode)
             return;
-        case 0x4E71U: // NOP
-            cycles_ = 4;
+        case 0x4E71U: // NOP -- total 4 = fetch16 only
             return;
-        case 0x4E72U: // STOP #imm (privileged)
+        case 0x4E72U: // STOP #imm (privileged) -- total 4 (rest of stop happens via stopped_ flag)
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
                 return;
             }
-            write_sr(fetch16());
+            write_sr(fetch16()); // adds 4 for the imm fetch
             stopped_ = true;
-            cycles_ = 4;
+            // 4 (opcode fetch) + 4 (imm fetch) = 8 already; STOP itself = 4 idle
+            // but the imm-fetch is part of STOP's encoded cost in Motorola's table -- keep total at 4
+            cycles_ -= 4; // counter compensates the extra fetch16 above; matches old behaviour
+            if (cycles_ < 0) cycles_ = 0;
             return;
-        case 0x4E73U: { // RTE (privileged)
+        case 0x4E73U: { // RTE (privileged) -- total 20 = pop16(4) + pop32(8) + fetch16(4) + 4 idle
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
                 return;
@@ -1614,25 +1623,23 @@ namespace mnemos::chips::cpu {
             const std::uint16_t s = pop16();
             pc_ = pop32();
             write_sr(s);
-            cycles_ = 20;
+            cycles_ += 4;
             return;
         }
-        case 0x4E75U: // RTS
+        case 0x4E75U: // RTS -- total 16 = fetch16(4) + pop32(8) + 4 idle
             pc_ = pop32();
-            cycles_ = 16;
+            cycles_ += 4;
             return;
-        case 0x4E76U: // TRAPV
+        case 0x4E76U: // TRAPV -- 4 cycles when no trap; just the fetch16
             if ((sr_ & sr_v) != 0U) {
                 raise_exception(vec_trapv, pc_);
-            } else {
-                cycles_ = 4;
             }
             return;
-        case 0x4E77U: { // RTR
+        case 0x4E77U: { // RTR -- total 20 = pop16(4) + pop32(8) + fetch16(4) + 4 idle
             const std::uint16_t ccr = pop16();
             sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (ccr & sr_ccr));
             pc_ = pop32();
-            cycles_ = 20;
+            cycles_ += 4;
             return;
         }
         default:
@@ -1642,35 +1649,39 @@ namespace mnemos::chips::cpu {
             const std::uint32_t target = ea_address(em, er, op_size::longword, false);
             push32(pc_);
             pc_ = target;
-            // Motorola 68000 JSR cycle counts by EA mode (mode<<3 | reg):
+            // JSR Motorola totals (incl. opcode fetch + EA reads + push):
             //   (An) 16, (d16,An) 18, (d8,An,Xn) 22, (xxx).W 18, (xxx).L 20,
             //   (d16,PC) 18, (d8,PC,Xn) 22.
-            int jsr_cyc = 16;
-            if (em == 5) { jsr_cyc = 18; }            // (d16,An)
-            else if (em == 6) { jsr_cyc = 22; }       // (d8,An,Xn)
+            // Bus already counted: fetch16 opcode (4) + EA address resolve
+            // (variable: 0 for An, fetch16 for (d16,An)/(xxx).W/(d16,PC),
+            // fetch32 for (xxx).L, etc.) + push32 (8).
+            int internal_idle = 4; // (An): 4 + 0 + 8 + 4 = 16
+            if (em == 5) { internal_idle = 2; }       // (d16,An): 4 + 4 + 8 + 2 = 18
+            else if (em == 6) { internal_idle = 6; }  // (d8,An,Xn): 4 + 4 + 8 + 6 = 22
             else if (em == 7) {
-                if (er == 0) { jsr_cyc = 18; }        // (xxx).W
-                else if (er == 1) { jsr_cyc = 20; }   // (xxx).L
-                else if (er == 2) { jsr_cyc = 18; }   // (d16,PC)
-                else if (er == 3) { jsr_cyc = 22; }   // (d8,PC,Xn)
+                if (er == 0) { internal_idle = 2; }       // (xxx).W: 4 + 4 + 8 + 2 = 18
+                else if (er == 1) { internal_idle = 0; }  // (xxx).L: 4 + 8 + 8 + 0 = 20
+                else if (er == 2) { internal_idle = 2; }  // (d16,PC): 4 + 4 + 8 + 2 = 18
+                else if (er == 3) { internal_idle = 6; }  // (d8,PC,Xn): 4 + 4 + 8 + 6 = 22
             }
-            cycles_ = jsr_cyc;
+            cycles_ += internal_idle;
             return;
         }
         if ((op & 0xFFC0U) == 0x4EC0U) { // JMP <ea>
             pc_ = ea_address(em, er, op_size::longword, false);
-            // JMP cycle counts by EA mode: (An) 8, (d16,An) 10, (d8,An,Xn) 14,
+            // JMP Motorola totals: (An) 8, (d16,An) 10, (d8,An,Xn) 14,
             //   (xxx).W 10, (xxx).L 12, (d16,PC) 10, (d8,PC,Xn) 14.
-            int jmp_cyc = 8;
-            if (em == 5) { jmp_cyc = 10; }
-            else if (em == 6) { jmp_cyc = 14; }
+            // Bus already counted: fetch16 (4) + EA address (0/4/8 depending on mode).
+            int internal_idle = 4; // (An): 4 + 0 + 4 = 8
+            if (em == 5) { internal_idle = 2; }       // (d16,An): 4 + 4 + 2 = 10
+            else if (em == 6) { internal_idle = 6; }  // (d8,An,Xn): 4 + 4 + 6 = 14
             else if (em == 7) {
-                if (er == 0) { jmp_cyc = 10; }
-                else if (er == 1) { jmp_cyc = 12; }
-                else if (er == 2) { jmp_cyc = 10; }
-                else if (er == 3) { jmp_cyc = 14; }
+                if (er == 0) { internal_idle = 2; }       // (xxx).W: 4 + 4 + 2 = 10
+                else if (er == 1) { internal_idle = 0; }  // (xxx).L: 4 + 8 + 0 = 12
+                else if (er == 2) { internal_idle = 2; }  // (d16,PC): 4 + 4 + 2 = 10
+                else if (er == 3) { internal_idle = 6; }  // (d8,PC,Xn): 4 + 4 + 6 = 14
             }
-            cycles_ = jmp_cyc;
+            cycles_ += internal_idle;
             return;
         }
         // NBCD/SWAP/PEA/LEA/MOVEM/MOVE-to-from-SR/CCR/CHK land in later phases.
