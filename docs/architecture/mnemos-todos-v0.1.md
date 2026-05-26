@@ -422,7 +422,22 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   ordering vs the conformance vectors awaits a real Genesis ROM to validate against)
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).
-- [ ] Implement `chips::video::vdp_315_5313` (Genesis VDP).
+- [~] Implement `chips::video::genesis_vdp` (Genesis VDP, Sega 315-5313). (phase 1
+  DONE — the control plane: ivideo+immio contract, factory "sega.315_5313", 64KB VRAM
+  + 64-entry CRAM (9-bit, $0EEE mask) + 40-entry VSRAM (11-bit) with the byte-swap/odd-
+  address quirks, all 24 registers with the mode-4 upper-register lockout, the two-word
+  command-port protocol (CD code + address, auto-increment, read-prefetch buffer with
+  CRAM/VSRAM/byte open-bus mixing), the DMA engine (68K->VRAM transfer via a host
+  read callback, VRAM fill, VRAM copy with the source-bank-wrap rules), the H/V counter
+  readback (hardware cycle2hc32/cycle2hc40 tables ported as data), the status register,
+  and the scanline-accurate timing + interrupt engine (tick()-driven, 3420 master
+  clocks/line, VINT6/HINT4/EXT2 with the H-int line counter, status-read ack, level
+  callback); 12 tests / 32 assertions, full ctest green (33 tests). Deferred to a later
+  accuracy pass (validatable only against ROM/timing suites): the cycle-exact FIFO
+  service timing + open-bus mix-FIFO, active-display DMA pacing, mid-line CRAM/VSRAM
+  pending-write deferral, and sub-line H-counter sampling. Phase 2 = the pixel renderer
+  (Scroll A/B, Window, 80 sprites with link traversal + per-line limits, priority,
+  shadow/highlight) into the framebuffer)
 - [ ] Implement Genesis cartridge mappers (SSF2, EEPROM-backed, etc.).
 - [ ] Author `manifests/genesis/` (NTSC + PAL).
 - [ ] Golden frame tests for known commercial Genesis ROMs.
