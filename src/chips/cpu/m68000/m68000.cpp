@@ -1739,12 +1739,21 @@ namespace mnemos::chips::cpu {
         if (irq_ack_) {
             irq_ack_(level); // IACK cycle: let the device clear its interrupt request
         }
-        // 68000 autovectored interrupt total = 44 cycles (Motorola spec, also
-        // m68ki_exception_cycle_table entries 24-31 in the reference emulator). The
-        // bus accesses above (push32 = 8, push16 = 4, read32 = 8) account
-        // for 20 cycles; the remaining 24 are internal latency the M68000
-        // imposes before the first handler-instruction prefetch.
-        cycles_ += 24;
+        // 68000 autovectored interrupt total cost is cycle-dependent in
+        // the reference emulator (the reference:1387 m68ki_cycle_interrupts):
+        //   {50, 59, 58, 57, 56, 55, 54, 53, 52, 51} CPU cycles
+        // indexed by (m68k.cycles / MUL) % 10. (the reference's reads/writes during
+        // IRQ entry don't add cycles, so the entire entry cost is this
+        // table value.) Mnemos's bus helpers DO add cycles -- push32 = 8,
+        // push16 = 4, read32 = 8 = 20 total -- so the remaining internal
+        // idle is (table - 20).
+        //
+        // The index uses elapsed_ (cycle count BEFORE this instruction)
+        // since the reference evaluates the table at the end of the entry but its
+        // m68k.cycles hasn't been incremented by the (zero-cost) bus
+        // accesses, matching the value at IRQ-entry start.
+        constexpr int irq_idle[10] = {30, 39, 38, 37, 36, 35, 34, 33, 32, 31};
+        cycles_ += irq_idle[static_cast<std::size_t>(elapsed_ % 10U)];
     }
 
     bool m68000::test_cc(int cc) const noexcept {
@@ -2178,11 +2187,19 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
-        // Initial DRAM refresh phase. 128 = one refresh interval from
-        // reset, which gives correct refresh count over long runs but a
-        // phase different from the reference's libretro boot accumulator. For
-        // cycle-exact A/B against the reference trace, the phase needs to match
-        // the reference at inst 0 -- experimentally 62 for BoV.
+        // Initial DRAM refresh phase. Semantically, the reference's m68k_pulse_reset
+        // sets m68k.cycles = 280 master (= 40 CPU cycles for the reset
+        // exception) and refresh_cycles = 896 master (= 128 CPU cycles),
+        // so its first refresh fires 88 CPU cycles into execution. Setting
+        // this to 88 here is the matched value -- but on the BoV trace it
+        // measures slightly *worse* than 62 (88.34% -> 87.95% cycle-exact),
+        // because the global refresh cadence is also misaligned by other
+        // (still-unidentified) cycle-accounting differences, and 62
+        // happens to opportunistically align more refresh events with
+        // the reference's positions. Keeping 62 until the upstream cause of the
+        // refresh-attribution drift at $1B9C/$1B4A is found and fixed,
+        // at which point this should be reset to 88 (the semantically
+        // correct value).
         bus_refresh_due_ = 62U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
