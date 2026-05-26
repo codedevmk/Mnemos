@@ -8,14 +8,12 @@ namespace mnemos::manifests::genesis {
 
     namespace {
 
-        // Letter -> (market bit, dominant market when this is the only letter).
-        // The bit values match the cart's hex-bitfield encoding: bit 0 = Japan,
-        // bit 2 = USA, bit 3 = Europe. 'K' (Korea) routes to Japan-NTSC.
         struct letter_entry final {
             char letter;
             std::uint8_t bit;
         };
 
+        // Letters route into the hex bitfield (J=1, U=4, E=8). K -> Japan.
         constexpr std::array<letter_entry, 4> letter_table = {{
             {'J', 0x01U},
             {'U', 0x04U},
@@ -23,9 +21,6 @@ namespace mnemos::manifests::genesis {
             {'K', 0x01U},
         }};
 
-        // Map an accumulated market-bitfield to the categorical enum.
-        // Multi-bit results collapse to `multi_region`; the user policy
-        // (default_video_for) then decides the video standard.
         [[nodiscard]] constexpr mnemos::market market_from_bits(std::uint8_t bits) noexcept {
             const int set = static_cast<int>(((bits & 0x01U) != 0U)) +
                             static_cast<int>(((bits & 0x04U) != 0U)) +
@@ -45,9 +40,7 @@ namespace mnemos::manifests::genesis {
             return mnemos::market::europe;
         }
 
-        // Process one byte of the country field, accumulating market bits.
-        // Letter checks short-circuit the hex parse so ASCII 'E' is only the
-        // Europe letter -- never re-interpreted as hex 0xE.
+        // Letters resolve first so ASCII 'E' is the Europe letter, not hex 0xE.
         [[nodiscard]] std::uint8_t bits_for_byte(std::uint8_t raw) noexcept {
             const auto c = static_cast<char>(std::toupper(static_cast<unsigned char>(raw)));
             for (const auto& entry : letter_table) {
@@ -55,7 +48,6 @@ namespace mnemos::manifests::genesis {
                     return entry.bit;
                 }
             }
-            // Hex bitfield: a low-byte binary value or an ASCII hex digit.
             if (raw < 16U) {
                 return raw;
             }

@@ -52,7 +52,7 @@ namespace mnemos::apps::player::adapters::genesis {
         std::unique_ptr<manifests::genesis::genesis_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
-        mnemos::video_region region_{mnemos::video_region::ntsc};
+        std::uint32_t fps_x1000_{60'000U};
         std::uint64_t frames_stepped_{};
 
         // Reusable scratch buffers for drain_audio() so we don't reallocate

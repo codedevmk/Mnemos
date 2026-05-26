@@ -16,9 +16,6 @@
 
 namespace mnemos::manifests::genesis {
 
-    // Machine configuration resolved at assembly time. The video_region member
-    // uses the project-wide mnemos::video_region enum so the manifest, adapter,
-    // and frontend never need to translate between equivalent local copies.
     struct genesis_config final {
         mnemos::video_region video_region{mnemos::video_region::ntsc};
     };

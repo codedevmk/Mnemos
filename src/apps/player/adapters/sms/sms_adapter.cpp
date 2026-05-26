@@ -8,10 +8,9 @@ namespace mnemos::apps::player::adapters::sms {
 
     namespace {
 
-        // The SMS chip dividers. Scheduler ticks count Z80 cycles (one VDP
-        // scanline = 228 Z80 cycles). VDP first so the raster the Z80 then
-        // samples is up to date; PSG runs at the same rate as the Z80 and
-        // applies its own /16 internal divider for the audio step rate.
+        // Scheduler ticks count Z80 cycles. VDP first: it drives the raster
+        // the Z80 then samples. PSG ticks at the Z80 rate and applies its own
+        // /16 internal divider.
         std::vector<runtime::scheduled_chip>
         build_schedule(manifests::sms::sms_system& sys) {
             return {
@@ -21,19 +20,8 @@ namespace mnemos::apps::player::adapters::sms {
             };
         }
 
-        // ============================================================
-        //  PSG resample -> 48 kHz stereo
-        // ------------------------------------------------------------
-        // The PSG sample rate is the Z80 clock divided by 16 (~223 kHz
-        // NTSC, ~222 kHz PAL). We always downsample to a fixed 48 kHz
-        // output and duplicate the mono channel into both stereo lanes,
-        // because letting SDL_AudioStream resample from arbitrary chip
-        // rates produced audible artifacts in the Genesis adapter.
-        // ============================================================
         constexpr int kMixerGainShift = 12;
         constexpr int kMixerGainOne = 1 << kMixerGainShift;
-        // PSG is the only sound source on a stock SMS, so we send it through at
-        // unity gain after the resample (no FM bias like the Genesis mixer).
         constexpr int kGainPsg = kMixerGainOne;
         constexpr std::uint32_t kOutputRate = 48000U;
 
@@ -53,10 +41,7 @@ namespace mnemos::apps::player::adapters::sms {
             return scaled / kMixerGainOne;
         }
 
-        // Box-average a slice of the input into one output sample. Used when
-        // downsampling (output rate < input rate). Same algorithm the Genesis
-        // adapter uses; pulled out into a free function so both adapters can
-        // share it once we factor it into a common header.
+        // Box-average [start, end) of src into one output sample.
         [[nodiscard]] inline int sample_box(const std::int16_t* src, int src_count, double start,
                                             double end) noexcept {
             if (!src || src_count <= 0) {
@@ -108,15 +93,12 @@ namespace mnemos::apps::player::adapters::sms {
                              const manifests::sms::sms_config& config)
         : sys_(manifests::sms::assemble_sms(std::move(rom), config)),
           scheduler_(build_schedule(*sys_), &sys_->vdp),
-          region_(config.video_region) {
-        // Turn on PSG audio capture so drain_audio has samples to mix.
+          fps_x1000_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)]) {
         sys_->psg.enable_audio_capture(true);
     }
 
     frontend_sdk::video_region sms_adapter::region() const noexcept {
-        // The video standard's nominal frame rate is system-agnostic; the
-        // shared region module owns the constants so every adapter agrees.
-        return {mnemos::frames_per_second_x1000(region_)};
+        return {fps_x1000_};
     }
 
     chips::frame_buffer_view sms_adapter::current_frame() const noexcept {
@@ -134,11 +116,8 @@ namespace mnemos::apps::player::adapters::sms {
             return;
         }
         ports_[static_cast<std::size_t>(port)] = state;
-        // SMS controllers have 6 logical inputs: D-pad + button 1 (= A) +
-        // button 2 (= B). There is no Start button on a stock SMS pad (the
-        // console's pause is a separate hardware line we don't surface yet).
-        // Map the system-agnostic controller_state onto the manifest's
-        // active-high pad bitmask.
+        // SMS pad: D-pad + button_1 (A) + button_2 (B). Start / pause is a
+        // separate hardware line not yet surfaced.
         using namespace manifests::sms::pad_button;
         const std::uint8_t pad =
             static_cast<std::uint8_t>((state.up ? up : 0U) | (state.down ? down : 0U) |
@@ -155,10 +134,10 @@ namespace mnemos::apps::player::adapters::sms {
         psg_buf_.resize(psg_count);
         sys_->psg.drain_samples(psg_buf_.data(), psg_count);
 
-        // Output sample count this frame at 48 kHz, accumulating the
-        // fractional remainder so the long-term rate is exact.
-        const double fps = mnemos::frames_per_second(region_);
-        const double exact = static_cast<double>(kOutputRate) / fps + audio_frac_;
+        // Accumulate the fractional sample so the long-term output rate is
+        // exact even when (kOutputRate * 1000 / fps_x1000_) is not an integer.
+        const double exact =
+            (static_cast<double>(kOutputRate) * 1000.0 / fps_x1000_) + audio_frac_;
         int dst_pairs = static_cast<int>(exact);
         if (dst_pairs <= 0) {
             dst_pairs = 1;

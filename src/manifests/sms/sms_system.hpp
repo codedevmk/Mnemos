@@ -27,13 +27,9 @@ namespace mnemos::manifests::sms {
         inline constexpr std::uint8_t button_2 = 0x20U;
     } // namespace pad_button
 
-    // Machine configuration resolved at assembly time. The video_region member
-    // uses the project-wide mnemos::video_region enum (defined in
-    // chips/shared/region.hpp) so the manifest, adapter, and frontend never
-    // translate between equivalent local copies.
     struct sms_config final {
-        // Cartridge mapper: `automatic` picks Sega vs Codemasters from the cart
-        // header (the Codemasters checksum at $7FE6/$7FE8); the others force one.
+        // automatic picks Sega vs Codemasters from the cart's Codemasters
+        // checksum at $7FE6/$7FE8; the others force one.
         enum class mapper : std::uint8_t { automatic, sega, codemasters };
 
         mnemos::video_region video_region{mnemos::video_region::ntsc};

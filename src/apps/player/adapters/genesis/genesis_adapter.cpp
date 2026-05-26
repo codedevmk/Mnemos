@@ -9,11 +9,8 @@ namespace mnemos::apps::player::adapters::genesis {
 
     namespace {
 
-        // The Genesis chip dividers, in scheduler dispatch order. The VDP comes
-        // first because it advances the raster the 68000 then samples; the
-        // gated Z80 runs only while it owns its bus, and the 68000 runs
-        // through cpu_gate so DMA stalls keep it off the bus (matches real
-        // hardware -- see manifests/genesis/genesis_system.hpp).
+        // VDP first: it drives the raster the 68000 then samples. cpu_gate /
+        // z80_gate let the 68K and Z80 stall on DMA / BUSREQ.
         std::vector<runtime::scheduled_chip>
         build_schedule(manifests::genesis::genesis_system& sys) {
             return {
@@ -25,21 +22,11 @@ namespace mnemos::apps::player::adapters::genesis {
             };
         }
 
-        // ============================================================
-        //  Audio resample + mix
-        // ------------------------------------------------------------
-        // Ported from C:\Users\mkrol\source\repos\Emu\Emu\frontends\cli\
-        // play_common.c. Box-average for downsampling, linear for
-        // upsampling, both source rates resampled into the SAME output
-        // rate (48 kHz fixed), gains applied at constant ratios so a PSG
-        // keying on doesn't duck the FM. SDL_AudioStream's built-in
-        // resampler from arbitrary chip rates produced audible artifacts.
-        // ============================================================
         constexpr int kMixerGainShift = 12;
         constexpr int kMixerGainOne = 1 << kMixerGainShift;
-        // 3:1 (~9.5 dB) FM bias, the reference's default for non-CD games.
-        constexpr int kGainFm = 3072;  // ~3/4
-        constexpr int kGainPsg = 1024; // ~1/4
+        // 3:1 (~9.5 dB) FM bias.
+        constexpr int kGainFm = 3072;
+        constexpr int kGainPsg = 1024;
         constexpr std::uint32_t kOutputRate = 48000U;
 
         [[nodiscard]] inline std::int16_t clip_i16(int v) noexcept {
@@ -168,18 +155,13 @@ namespace mnemos::apps::player::adapters::genesis {
                                      const manifests::genesis::genesis_config& config)
         : sys_(manifests::genesis::assemble_genesis(std::move(rom), config)),
           scheduler_(build_schedule(*sys_), &sys_->vdp),
-          region_(config.video_region) {
-        // Turn on per-chip audio capture so drain_audio() has samples to mix.
-        // Headless callers that don't care about audio still pay only the
-        // per-tick push cost; drain_audio is opt-in via the player.
+          fps_x1000_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)]) {
         sys_->fm.enable_audio_capture(true);
         sys_->psg.enable_audio_capture(true);
     }
 
     frontend_sdk::video_region genesis_adapter::region() const noexcept {
-        // The video standard's nominal frame rate is system-agnostic; the
-        // shared region module owns the constants so every adapter agrees.
-        return {mnemos::frames_per_second_x1000(region_)};
+        return {fps_x1000_};
     }
 
     chips::frame_buffer_view genesis_adapter::current_frame() const noexcept {
@@ -197,12 +179,7 @@ namespace mnemos::apps::player::adapters::genesis {
             return;
         }
         ports_[static_cast<std::size_t>(port)] = state;
-        // Translate the system-agnostic controller_state into the Genesis pad
-        // bitmask the system's $A10003/$A10005 read handler consumes. The
-        // adapter is the right place for this translation: the genesis_system
-        // doesn't know about frontend_sdk types (tier-4 manifest can't depend
-        // on tier-7 frontend_sdk), and the frontend_sdk doesn't know about
-        // system-specific button layouts.
+        // Genesis pad bitmask (active-high) for $A10003 / $A10005.
         const std::uint8_t pad =
             (state.up ? 0x01U : 0U) | (state.down ? 0x02U : 0U) |
             (state.left ? 0x04U : 0U) | (state.right ? 0x08U : 0U) |
@@ -213,17 +190,13 @@ namespace mnemos::apps::player::adapters::genesis {
 
     frontend_sdk::audio_chunk genesis_adapter::drain_audio() noexcept {
         // Drain both chip queues, resample each from its native rate into a
-        // fixed-rate 48 kHz output buffer (mixed), return that. Matches the
-        // reference implementation's approach -- letting SDL_AudioStream
-        // resample arbitrary chip rates produced audible artifacts and a
-        // gradually-growing queue (the chip rates aren't exact integer
-        // multiples of the device rate).
+        // fixed 48 kHz stereo output (SDL_AudioStream's built-in resampler from
+        // the raw chip rates produced audible artifacts + a growing queue).
         const std::size_t fm_count = sys_->fm.pending_samples();
         const std::size_t psg_count = sys_->psg.pending_samples();
         if (fm_count == 0U && psg_count == 0U) {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
         }
-        // Drain into scratch buffers (FM interleaved L,R; PSG mono).
         if (fm_count > 0U) {
             fm_buf_.resize(fm_count * 2U);
             sys_->fm.drain_samples(fm_buf_.data(), fm_count);
@@ -236,11 +209,10 @@ namespace mnemos::apps::player::adapters::genesis {
         } else {
             psg_buf_.clear();
         }
-        // Target sample count for this frame at 48 kHz output. Accumulate
-        // fractional samples so the long-term rate is exact even when
-        // (kOutputRate / fps) isn't integer.
-        const double fps = mnemos::frames_per_second(region_);
-        const double exact = static_cast<double>(kOutputRate) / fps + audio_frac_;
+        // Accumulate the fractional sample so the long-term output rate is
+        // exact even when (kOutputRate * 1000 / fps_x1000_) is not an integer.
+        const double exact =
+            (static_cast<double>(kOutputRate) * 1000.0 / fps_x1000_) + audio_frac_;
         int dst_pairs = static_cast<int>(exact);
         if (dst_pairs <= 0) {
             dst_pairs = 1;
