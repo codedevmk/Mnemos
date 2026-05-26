@@ -446,7 +446,18 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   (Scroll A/B, Window, 80 sprites with link traversal + per-line limits, priority,
   shadow/highlight) into the framebuffer)
 - [ ] Implement Genesis cartridge mappers (SSF2, EEPROM-backed, etc.).
-- [ ] Author `manifests/genesis/` (NTSC + PAL).
+- [~] Author `manifests/genesis/` (NTSC + PAL). (phase 1 DONE — the 68000 side:
+  assemble_genesis wires the full memory map (ROM $000000-$3FFFFF, Z80 RAM $A00000,
+  YM2612 $A04000, controller I/O + version register $A10000, Z80 bus-req/reset
+  $A11100/$A11200, the VDP $C00000 with 16-bit even/odd byte-pair coalescing for the
+  two-word command protocol, the SN76489 PSG at $C00011, and 64KB work RAM mirrored
+  $E00000-$FFFFFF), the VDP V/H-blank IRQ into the 68000 IPL, VDP DMA reading big-endian
+  words from 68K space, and boots from the ROM reset vectors; NTSC/PAL region select.
+  5 tests / 16 assertions (boot vectors, a hand-assembled boot program exercising work
+  RAM + the coalesced VDP path + the VINT handler end-to-end, A-bank device routing,
+  DMA-from-68K, PAL); full ctest green (34). Phase 2: bring the Z80 sound CPU online
+  with bus arbitration + the dual-CPU schedule + the full audio mix, and the 3/6-button
+  controller protocol)
 - [ ] Golden frame tests for known commercial Genesis ROMs.
 - [ ] Validate dual-CPU scheduling correctness.
 

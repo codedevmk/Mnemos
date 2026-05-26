@@ -1,5 +1,6 @@
 add_subdirectory(common)
 add_subdirectory(c64)
+add_subdirectory(genesis)
 add_subdirectory(sms)
 
 add_library(mnemos_manifests INTERFACE)
