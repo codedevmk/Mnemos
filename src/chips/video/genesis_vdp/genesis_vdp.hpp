@@ -156,6 +156,8 @@ namespace mnemos::chips::video {
         // Diagnostic: number of rising-edge VINT fires (vblank_pending_ flipped
         // from false to true). Used to confirm IRQ-raise behaviour vs the reference.
         [[nodiscard]] std::uint32_t vint_fired_count() const noexcept { return vint_fired_count_; }
+        [[nodiscard]] std::uint32_t vint_drain_count() const noexcept { return vint_drain_count_; }
+        [[nodiscard]] std::uint32_t vint_enabled_at_drain_count() const noexcept { return vint_enabled_at_drain_count_; }
 
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {};
@@ -292,8 +294,10 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::int64_t
         estimate_dma_stall_cycles(std::uint32_t length_units, int dma_type) const noexcept;
 
-        // Diagnostic counter (see vint_fired_count() accessor above).
+        // Diagnostic counters (see accessors above).
         std::uint32_t vint_fired_count_{};
+        std::uint32_t vint_drain_count_{};
+        std::uint32_t vint_enabled_at_drain_count_{};
 
         // Timing / position.
         int scanline_{};

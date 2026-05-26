@@ -1042,7 +1042,9 @@ namespace mnemos::chips::video {
             vint_pending_delay_master_ -= static_cast<std::int64_t>(cycles);
             if (vint_pending_delay_master_ <= 0) {
                 vint_pending_delay_master_ = -1;
+                ++vint_drain_count_; // diagnostic
                 if (vint_enabled()) {
+                    ++vint_enabled_at_drain_count_; // diagnostic
                     if (!vblank_pending_) {
                         ++vint_fired_count_; // diagnostic: count rising edges
                     }

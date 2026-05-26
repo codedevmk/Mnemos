@@ -2264,7 +2264,7 @@ namespace mnemos::chips::cpu {
     }
 
     void m68000::set_irq_level(int level) noexcept {
-        prev_irq_level_ = irq_level_; // remember the old level so step() sees the NMI edge
+        prev_irq_level_ = irq_level_;
         irq_level_ = level < 0 ? 0 : (level > 7 ? 7 : level);
         if (irq_level_ > 0) {
             stopped_ = false;

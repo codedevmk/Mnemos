@@ -416,8 +416,25 @@ int main(int argc, char* argv[]) {
                          (vdp.reg(4) & 0x07) << 13);
             std::fprintf(stderr, "[vdp] vsram[0..3]: %04X %04X %04X %04X  (plane A col 0/1, B col 0/1)\n",
                          vdp.vsram(0), vdp.vsram(1), vdp.vsram(2), vdp.vsram(3));
-            std::fprintf(stderr, "[vdp] vint_fired_count = %u\n",
-                         static_cast<unsigned>(vdp.vint_fired_count()));
+            std::fprintf(stderr, "[vdp] vint_fired=%u  drain=%u  enabled_at_drain=%u\n",
+                         static_cast<unsigned>(vdp.vint_fired_count()),
+                         static_cast<unsigned>(vdp.vint_drain_count()),
+                         static_cast<unsigned>(vdp.vint_enabled_at_drain_count()));
+            // Diagnostic: scheduler's master clock vs CPU's executed cycles.
+            // A non-zero diff means the CPU is "behind" the master clock (its
+            // cycle_debt has gone negative without being recovered) -- in
+            // practice tracks how many master cycles are spent in CPU paths
+            // that consume cycle_debt but don't add to elapsed_.
+            std::fprintf(stderr,
+                         "[sched] master=%llu cpu_elapsed*7=%llu diff_master=%lld diff_frames=%.3f\n",
+                         static_cast<unsigned long long>(genesis_for_trace->scheduler().master_cycle()),
+                         static_cast<unsigned long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7),
+                         static_cast<long long>(genesis_for_trace->scheduler().master_cycle()) -
+                             static_cast<long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7),
+                         static_cast<double>(
+                             static_cast<long long>(genesis_for_trace->scheduler().master_cycle()) -
+                             static_cast<long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7)) /
+                             896040.0);
             std::fflush(stderr);
         }
         return 0;
