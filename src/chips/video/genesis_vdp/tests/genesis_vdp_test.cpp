@@ -29,6 +29,28 @@ namespace {
         v.write16(0x04, first);
         v.write16(0x04, second);
     }
+
+    // Write a run of words to VRAM at `addr` (assumes M5 + auto-increment 2 are set).
+    void write_vram(genesis_vdp& v, std::uint32_t addr,
+                    std::initializer_list<std::uint16_t> words) {
+        set_command(v, addr, 0x01);
+        for (const auto w : words) {
+            v.write16(0x00, w);
+        }
+    }
+
+    void write_cram(genesis_vdp& v, int idx, std::uint16_t color) {
+        set_command(v, static_cast<std::uint32_t>(idx) << 1U, 0x03);
+        v.write16(0x00, color);
+    }
+
+    // A solid 8x8 tile of colour index 1 (every nibble = 1).
+    constexpr std::initializer_list<std::uint16_t> solid_tile_1 = {
+        0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111,
+        0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111};
+
+    constexpr std::uint32_t rgb_red = 0x00FF0000U;
+    constexpr std::uint32_t rgb_green = 0x0000FF00U;
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::ivideo, genesis_vdp>);
@@ -197,4 +219,49 @@ TEST_CASE("genesis_vdp round-trips its state") {
     CHECK(restored.vram16(0x1000) == 0xCAFE);
     CHECK(restored.scanline() == vdp.scanline());
     CHECK(restored.reg(15) == 0x02);
+}
+
+TEST_CASE("genesis_vdp renders a plane-A tile") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x44);                 // M5 + display enable
+    set_reg(vdp, 15, 0x02);                // auto-increment 2
+    set_reg(vdp, 2, 0x30);                 // plane A name table = 0xC000
+    set_reg(vdp, 4, 0x07);                 // plane B name table = 0xE000 (kept clear)
+    write_vram(vdp, 0x0020, solid_tile_1); // tile 1 = solid colour index 1
+    write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) -> tile 1, palette 0
+    write_cram(vdp, 1, 0x000E);            // palette colour 1 = max red
+
+    vdp.tick(genesis_vdp::master_clocks_per_line); // render scanline 0
+    const auto fb = vdp.framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == rgb_red);
+}
+
+TEST_CASE("genesis_vdp fills the backdrop when display is disabled") {
+    genesis_vdp vdp;
+    write_cram(vdp, 0, 0x00E0); // backdrop (index 0) = max green
+    // Display stays disabled (reg1 bit6 clear at power-on).
+    vdp.tick(genesis_vdp::master_clocks_per_line);
+    const auto fb = vdp.framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == rgb_green);
+}
+
+TEST_CASE("genesis_vdp renders a sprite over the planes") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x44);                 // M5 + display enable
+    set_reg(vdp, 15, 0x02);                // auto-increment 2
+    set_reg(vdp, 2, 0x30);                 // plane A 0xC000 (transparent)
+    set_reg(vdp, 4, 0x07);                 // plane B 0xE000 (transparent)
+    set_reg(vdp, 5, 0x68);                 // sprite attribute table = 0xD000
+    write_vram(vdp, 0x0020, solid_tile_1); // tile 1 = solid colour index 1
+    // Sprite 0: Y=0 (w0=128), 1x1 cell + link 0 (w1=0), tile 1 high-priority
+    // (w2=0x8001), X=0 (w3=128).
+    write_vram(vdp, 0xD000, {0x0080, 0x0000, 0x8001, 0x0080});
+    write_cram(vdp, 1, 0x000E); // colour 1 = max red
+
+    vdp.tick(genesis_vdp::master_clocks_per_line);
+    const auto fb = vdp.framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == rgb_red);
 }

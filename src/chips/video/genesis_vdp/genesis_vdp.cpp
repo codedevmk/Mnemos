@@ -19,6 +19,15 @@ namespace mnemos::chips::video {
         [[nodiscard]] constexpr bool is_read_target(int code_low) noexcept {
             return code_low == 0 || code_low == 4 || code_low == 8 || code_low == 0x0C;
         }
+
+        // Scroll-plane size in cells (R16 HSZ/VSZ; 0b10 is invalid -> treat as 64).
+        [[nodiscard]] constexpr int scroll_size(int sz_bits) noexcept {
+            constexpr std::array<int, 4> sizes = {32, 64, 64, 128};
+            return sizes[static_cast<std::size_t>(sz_bits) & 3U];
+        }
+
+        // 3-bit CRAM component -> 8-bit, matching the common Genesis palette curve.
+        constexpr std::array<std::uint8_t, 8> color_lut = {0, 36, 73, 109, 146, 182, 219, 255};
     } // namespace
 
     chip_metadata genesis_vdp::metadata() const noexcept {
@@ -426,6 +435,405 @@ namespace mnemos::chips::video {
     }
 
     // ------------------------------------------------------------------------
+    //  Rendering
+    // ------------------------------------------------------------------------
+
+    int genesis_vdp::hsize_cells() const noexcept { return scroll_size(reg_[16] & 0x03); }
+    int genesis_vdp::vsize_cells() const noexcept { return scroll_size((reg_[16] >> 4U) & 0x03); }
+
+    int genesis_vdp::display_line_for_field(int line) const noexcept {
+        return interlace_enabled() ? line * 2 + (odd_frame_ ? 1 : 0) : line;
+    }
+
+    int genesis_vdp::source_line_for_field(int line) const noexcept {
+        if (!interlace_enabled()) {
+            return line;
+        }
+        const int display_line = display_line_for_field(line);
+        // Interlace-1 repeats the same 8x8 data on both fields; interlace-2 consumes
+        // true 8x16 rows.
+        return interlace_mode2() ? display_line : (display_line >> 1);
+    }
+
+    std::uint32_t genesis_vdp::cram_to_rgb(std::uint16_t cram_value, std::uint8_t shade) noexcept {
+        int cr = (cram_value >> 1U) & 7;
+        int cg = (cram_value >> 5U) & 7;
+        int cb = (cram_value >> 9U) & 7;
+        if (shade == shade_shadow) {
+            cr >>= 1;
+            cg >>= 1;
+            cb >>= 1;
+        } else if (shade == shade_highlight) {
+            cr = (cr << 1) > 7 ? 7 : (cr << 1);
+            cg = (cg << 1) > 7 ? 7 : (cg << 1);
+            cb = (cb << 1) > 7 ? 7 : (cb << 1);
+        }
+        return (static_cast<std::uint32_t>(color_lut[static_cast<std::size_t>(cr)]) << 16U) |
+               (static_cast<std::uint32_t>(color_lut[static_cast<std::size_t>(cg)]) << 8U) |
+               static_cast<std::uint32_t>(color_lut[static_cast<std::size_t>(cb)]);
+    }
+
+    void genesis_vdp::fetch_pattern_row(int tile_idx, int row, bool hflip, bool interlace2,
+                                        std::uint8_t* pix) const noexcept {
+        const std::uint32_t addr = interlace2 ? static_cast<std::uint32_t>(tile_idx & ~1) * 32U +
+                                                    static_cast<std::uint32_t>(row & 15) * 4U
+                                              : static_cast<std::uint32_t>(tile_idx) * 32U +
+                                                    static_cast<std::uint32_t>(row & 7) * 4U;
+        const std::array<std::uint8_t, 4> bytes = {
+            vram_[(addr + 0U) & 0xFFFFU], vram_[(addr + 1U) & 0xFFFFU],
+            vram_[(addr + 2U) & 0xFFFFU], vram_[(addr + 3U) & 0xFFFFU]};
+        for (int x = 0; x < 8; ++x) {
+            const int src_x = hflip ? (7 - x) : x;
+            const std::uint8_t packed = bytes[static_cast<std::size_t>(src_x >> 1)];
+            pix[x] =
+                static_cast<std::uint8_t>((src_x & 1) == 0 ? (packed >> 4U) : (packed & 0x0FU));
+        }
+    }
+
+    void genesis_vdp::render_scroll_plane(std::uint32_t nt_base, int line, bool is_plane_a,
+                                          std::uint8_t* linebuf) const noexcept {
+        const bool il2 = interlace_mode2();
+        const int source_line = source_line_for_field(line);
+        const int screen_w = visible_width();
+        const int hsz_cells = hsize_cells();
+        const int hsz_px = hsz_cells * 8;
+        const int vsz_px = vsize_cells() * (il2 ? 16 : 8);
+
+        int hscr_offset = 0;
+        switch (hscroll_mode()) {
+        case 2:
+            hscr_offset = (source_line & ~7) * 4; // per 8-line cell
+            break;
+        case 3:
+            hscr_offset = source_line * 4; // per line
+            break;
+        default:
+            hscr_offset = 0; // full-screen
+            break;
+        }
+        const std::uint32_t hscr_addr = hscroll_base() + static_cast<std::uint32_t>(hscr_offset);
+        int hscroll = is_plane_a ? static_cast<std::int16_t>(vram_read16(hscr_addr))
+                                 : static_cast<std::int16_t>(vram_read16(hscr_addr + 2U));
+        hscroll = -hscroll; // register shifts right; we offset the lookup left
+
+        for (int col = 0; col < screen_w; ++col) {
+            int vscroll = 0;
+            if (vscroll_per_column()) {
+                int idx = (col >> 4) * 2 + (is_plane_a ? 0 : 1); // per 2 cells (16 px)
+                if (idx < 0 || idx >= vsram_entries) {
+                    idx = is_plane_a ? 0 : 1;
+                }
+                vscroll = vsram_[static_cast<std::size_t>(idx)];
+            } else {
+                vscroll = vsram_[is_plane_a ? 0U : 1U];
+            }
+
+            int px = (col + hscroll) % hsz_px;
+            if (px < 0) {
+                px += hsz_px;
+            }
+            int py = (source_line + vscroll) % vsz_px;
+            if (py < 0) {
+                py += vsz_px;
+            }
+
+            const int cell_x = px >> 3;
+            const int cell_y = py >> (il2 ? 4 : 3);
+            const int fine_x = px & 7;
+            const int fine_y = py & (il2 ? 15 : 7);
+
+            const std::uint32_t nt_offset =
+                static_cast<std::uint32_t>(cell_y * hsz_cells + cell_x) * 2U;
+            const std::uint16_t nt = vram_read16(nt_base + nt_offset);
+            const int tile = nt & 0x7FF;
+            const bool hf = ((nt >> 11U) & 1U) != 0U;
+            const bool vf = ((nt >> 12U) & 1U) != 0U;
+            const int pal = (nt >> 13U) & 3;
+            const bool pri = ((nt >> 15U) & 1U) != 0U;
+
+            const int row = vf ? ((il2 ? 15 : 7) - fine_y) : fine_y;
+            std::array<std::uint8_t, 8> pix{};
+            fetch_pattern_row(tile, row, hf, il2, pix.data());
+            const std::uint8_t color = pix[static_cast<std::size_t>(fine_x)];
+            linebuf[static_cast<std::size_t>(col)] =
+                static_cast<std::uint8_t>((pal * 16 + color) | (pri ? pix_priority : 0));
+        }
+    }
+
+    void genesis_vdp::render_window(int line, std::uint8_t* linebuf) const noexcept {
+        const bool il2 = interlace_mode2();
+        const int source_line = source_line_for_field(line);
+        const int screen_w = visible_width();
+        const int screen_cells = screen_w >> 3;
+        const std::uint32_t nt_base = ntw_base();
+        const int nt_pitch = h40_mode() ? 64 : 32;
+
+        const int win_h_cell = (reg_[17] & 0x1FU) * 2; // 2-cell granularity
+        const int win_v_cell = reg_[18] & 0x1F;
+        const bool win_right = (reg_[17] & 0x80U) != 0U;
+        const bool win_down = (reg_[18] & 0x80U) != 0U;
+
+        const int cell_row = source_line >> (il2 ? 4 : 3);
+        const int fine_y = source_line & (il2 ? 15 : 7);
+
+        for (int cell_x = 0; cell_x < screen_cells; ++cell_x) {
+            const bool in_win_h = win_right ? (cell_x >= win_h_cell) : (cell_x < win_h_cell);
+            const bool in_win_v = win_down ? (cell_row >= win_v_cell) : (cell_row < win_v_cell);
+            if (!(in_win_h && in_win_v)) {
+                continue;
+            }
+
+            const std::uint32_t nt_offset =
+                static_cast<std::uint32_t>(cell_row * nt_pitch + cell_x) * 2U;
+            const std::uint16_t nt = vram_read16(nt_base + nt_offset);
+            const int tile = nt & 0x7FF;
+            const bool hf = ((nt >> 11U) & 1U) != 0U;
+            const bool vf = ((nt >> 12U) & 1U) != 0U;
+            const int pal = (nt >> 13U) & 3;
+            const bool pri = ((nt >> 15U) & 1U) != 0U;
+
+            const int row = vf ? ((il2 ? 15 : 7) - fine_y) : fine_y;
+            std::array<std::uint8_t, 8> pix{};
+            fetch_pattern_row(tile, row, hf, il2, pix.data());
+
+            const int base_x = cell_x * 8;
+            for (int p = 0; p < 8; ++p) {
+                const int x = base_x + p;
+                if (x < screen_w) {
+                    linebuf[static_cast<std::size_t>(x)] = static_cast<std::uint8_t>(
+                        (pal * 16 + pix[static_cast<std::size_t>(p)]) | (pri ? pix_priority : 0));
+                }
+            }
+        }
+    }
+
+    void genesis_vdp::render_sprites(int line, std::uint8_t* linebuf,
+                                     std::uint8_t* shade) noexcept {
+        const bool il2 = interlace_mode2();
+        const bool il = interlace_enabled();
+        const int display_line = display_line_for_field(line);
+        const int screen_w = visible_width();
+        const int max_sprites_per_line = h40_mode() ? 20 : 16;
+        const int max_pixels_per_line = screen_w;
+        const std::uint32_t sat = sat_base();
+
+        int sprites_on_line = 0;
+        int pixels_on_line = 0;
+        int link = 0;
+        bool mask_active = false;
+        bool stop_render = false;
+
+        std::array<std::uint8_t, fb_width> spr_buf{};
+        std::array<std::uint8_t, fb_width> spr_taken{};
+
+        for (int s = 0; s < sprites_max; ++s) {
+            const std::uint32_t sat_addr = sat + static_cast<std::uint32_t>(link) * 8U;
+            const std::uint16_t w0 = vram_read16(sat_addr + 0U);
+            const std::uint16_t w1 = vram_read16(sat_addr + 2U);
+            const std::uint16_t w2 = vram_read16(sat_addr + 4U);
+            const std::uint16_t w3 = vram_read16(sat_addr + 6U);
+
+            const int spr_y = (w0 & 0x03FF) - 128;
+            const int spr_h = ((w1 >> 8U) & 3) + 1;  // height in cells
+            const int spr_w = ((w1 >> 10U) & 3) + 1; // width in cells
+            const int next = w1 & 0x7F;
+
+            const int tile = w2 & 0x07FF;
+            const bool hf = ((w2 >> 11U) & 1U) != 0U;
+            const bool vf = ((w2 >> 12U) & 1U) != 0U;
+            const int pal = (w2 >> 13U) & 3;
+            const bool pri = ((w2 >> 15U) & 1U) != 0U;
+
+            const int raw_x = w3 & 0x03FF;
+            const int spr_x = raw_x - 128;
+            const int spr_h_px = spr_h * (il ? 16 : 8);
+
+            if (display_line >= spr_y && display_line < spr_y + spr_h_px) {
+                bool render_masked = mask_active;
+
+                ++sprites_on_line;
+                if (sprites_on_line > max_sprites_per_line) {
+                    sprite_overflow_ = true;
+                    break;
+                }
+
+                // Raw X=0 masks the rest of the line once another sprite is present.
+                if (raw_x == 0 && sprites_on_line > 1) {
+                    render_masked = true;
+                    mask_active = true;
+                }
+
+                int row_in_sprite = display_line - spr_y;
+                if (vf) {
+                    row_in_sprite = spr_h_px - 1 - row_in_sprite;
+                }
+                const int source_row =
+                    il2 ? row_in_sprite : (il ? (row_in_sprite >> 1) : row_in_sprite);
+                const int cell_row = source_row >> (il2 ? 4 : 3);
+                const int fine_row = source_row & (il2 ? 15 : 7);
+
+                for (int cx = 0; cx < spr_w; ++cx) {
+                    const int actual_cx = hf ? (spr_w - 1 - cx) : cx;
+                    // Patterns are column-major within a sprite.
+                    const int cell_tile = tile + actual_cx * spr_h + cell_row;
+                    std::array<std::uint8_t, 8> pix{};
+                    fetch_pattern_row(cell_tile, fine_row, hf, il2, pix.data());
+
+                    for (int p = 0; p < 8; ++p) {
+                        const int x = spr_x + cx * 8 + p;
+                        if (x < 0 || x >= screen_w) {
+                            continue;
+                        }
+                        if (pix[static_cast<std::size_t>(p)] == 0) {
+                            continue; // transparent
+                        }
+
+                        ++pixels_on_line;
+                        if (pixels_on_line > max_pixels_per_line) {
+                            sprite_overflow_ = true;
+                            stop_render = true;
+                            break;
+                        }
+                        if (render_masked) {
+                            continue;
+                        }
+
+                        const auto xi = static_cast<std::size_t>(x);
+                        if (spr_taken[xi] != 0) {
+                            sprite_collision_ = true;
+                            continue;
+                        }
+                        spr_taken[xi] = 1;
+
+                        const std::uint8_t color = pix[static_cast<std::size_t>(p)];
+                        const bool special_highlight = sh_enabled() && pal == 3 && color == 14;
+                        const bool special_shadow = sh_enabled() && pal == 3 && color == 15;
+                        const bool bg_pri = (linebuf[xi] & pix_priority) != 0;
+                        const bool bg_opaque = (linebuf[xi] & 0x0F) != 0;
+                        const bool sprite_visible = pri || !bg_pri || !bg_opaque;
+
+                        if (special_highlight || special_shadow) {
+                            if (sprite_visible && (linebuf[xi] & pix_source_sprite) == 0) {
+                                shade[xi] = special_highlight
+                                                ? (shade[xi] == shade_shadow ? shade_normal
+                                                                             : shade_highlight)
+                                                : (shade[xi] == shade_highlight ? shade_normal
+                                                                                : shade_shadow);
+                            }
+                            continue;
+                        }
+
+                        spr_buf[xi] = static_cast<std::uint8_t>(
+                            (pal * 16 + color) | (pri ? pix_priority : 0) | pix_source_sprite);
+                    }
+                    if (stop_render) {
+                        break;
+                    }
+                }
+                if (stop_render) {
+                    break;
+                }
+            }
+
+            link = next;
+            if (link == 0) {
+                break;
+            }
+        }
+
+        // Merge sprites over the planes using priority rules.
+        for (int x = 0; x < screen_w; ++x) {
+            const auto xi = static_cast<std::size_t>(x);
+            if (spr_buf[xi] == 0) {
+                continue;
+            }
+            const bool spr_pri = (spr_buf[xi] & pix_priority) != 0;
+            const bool bg_pri = (linebuf[xi] & pix_priority) != 0;
+            const bool bg_opaque = (linebuf[xi] & 0x0F) != 0;
+            if (spr_pri || !bg_pri || !bg_opaque) {
+                linebuf[xi] = spr_buf[xi];
+                if (!sh_enabled() || spr_pri || shade[xi] != shade_shadow) {
+                    shade[xi] = shade_normal;
+                }
+            }
+        }
+    }
+
+    void genesis_vdp::fill_line_background(int display_line) noexcept {
+        const std::uint32_t rgb =
+            cram_to_rgb(cram_[static_cast<std::size_t>(bg_index()) & 0x3FU], shade_normal);
+        const std::size_t base = static_cast<std::size_t>(display_line) * fb_width;
+        for (int x = 0; x < fb_width; ++x) {
+            framebuffer_[base + static_cast<std::size_t>(x)] = rgb;
+        }
+    }
+
+    void genesis_vdp::render_scanline(int line) noexcept {
+        const int display_line = display_line_for_field(line);
+        const int screen_w = visible_width();
+
+        std::array<std::uint8_t, fb_width> plane_b{};
+        std::array<std::uint8_t, fb_width> plane_a{};
+        render_scroll_plane(ntb_base(), line, false, plane_b.data());
+        render_scroll_plane(nta_base(), line, true, plane_a.data());
+        render_window(line, plane_a.data());
+
+        std::array<std::uint8_t, fb_width> composited{};
+        std::array<std::uint8_t, fb_width> shade{};
+        const auto bg = static_cast<std::uint8_t>(bg_index());
+        for (int x = 0; x < screen_w; ++x) {
+            const auto xi = static_cast<std::size_t>(x);
+            const bool a_opaque = (plane_a[xi] & 0x0F) != 0;
+            const bool b_opaque = (plane_b[xi] & 0x0F) != 0;
+            const bool a_pri = (plane_a[xi] & pix_priority) != 0;
+            const bool b_pri = (plane_b[xi] & pix_priority) != 0;
+            shade[xi] = shade_normal;
+
+            if (a_pri && a_opaque) {
+                composited[xi] = plane_a[xi];
+            } else if (b_pri && b_opaque) {
+                composited[xi] = plane_b[xi];
+            } else if (a_opaque) {
+                composited[xi] = plane_a[xi];
+                if (sh_enabled()) {
+                    shade[xi] = shade_shadow;
+                }
+            } else if (b_opaque) {
+                composited[xi] = plane_b[xi];
+            } else {
+                composited[xi] = bg;
+            }
+        }
+
+        render_sprites(line, composited.data(), shade.data());
+
+        const std::size_t fb_base = static_cast<std::size_t>(display_line) * fb_width;
+        for (int x = 0; x < screen_w; ++x) {
+            const auto xi = static_cast<std::size_t>(x);
+            const std::uint16_t color = cram_[composited[xi] & 0x3FU];
+            framebuffer_[fb_base + xi] = cram_to_rgb(color, shade[xi]);
+        }
+
+        // Blank the leftmost 8 pixels (R0 bit 5).
+        if (blank_left()) {
+            const std::uint32_t bgc =
+                cram_to_rgb(cram_[static_cast<std::size_t>(bg_index()) & 0x3FU], shade_normal);
+            for (int x = 0; x < 8 && x < screen_w; ++x) {
+                framebuffer_[fb_base + static_cast<std::size_t>(x)] = bgc;
+            }
+        }
+
+        // Fill the H32 right margin (256-319) with the backdrop.
+        if (screen_w < fb_width) {
+            const std::uint32_t bgc =
+                cram_to_rgb(cram_[static_cast<std::size_t>(bg_index()) & 0x3FU], shade_normal);
+            for (int x = screen_w; x < fb_width; ++x) {
+                framebuffer_[fb_base + static_cast<std::size_t>(x)] = bgc;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------
     //  Timing + interrupts
     // ------------------------------------------------------------------------
 
@@ -438,7 +846,11 @@ namespace mnemos::chips::video {
 
         if (scanline_ < visible_h) {
             in_vblank_ = false;
-            // Rendering happens here in phase 2; the framebuffer stays blank for now.
+            if (display_enabled()) {
+                render_scanline(scanline_);
+            } else {
+                fill_line_background(display_line_for_field(scanline_));
+            }
             in_hblank_ = true;
             hcounter_ = visible_w;
             if (hint_counter_ <= 0) {

@@ -137,6 +137,35 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t dma_source() const noexcept;
         [[nodiscard]] int dma_type() const noexcept { return (reg_[23] >> 6U) & 0x03; }
 
+        // ---- rendering register decode ----
+        [[nodiscard]] std::uint32_t nta_base() const noexcept {
+            return (static_cast<std::uint32_t>(reg_[2]) & 0x38U) << 10U;
+        }
+        [[nodiscard]] std::uint32_t ntb_base() const noexcept {
+            return (static_cast<std::uint32_t>(reg_[4]) & 0x07U) << 13U;
+        }
+        [[nodiscard]] std::uint32_t ntw_base() const noexcept {
+            return (static_cast<std::uint32_t>(reg_[3]) & 0x3EU) << 10U;
+        }
+        [[nodiscard]] std::uint32_t sat_base() const noexcept {
+            return (static_cast<std::uint32_t>(reg_[5]) & 0x7FU) << 9U;
+        }
+        [[nodiscard]] std::uint32_t hscroll_base() const noexcept {
+            return (static_cast<std::uint32_t>(reg_[13]) & 0x3FU) << 10U;
+        }
+        [[nodiscard]] int bg_index() const noexcept {
+            return ((reg_[7] >> 4U) & 0x03) * 16 + (reg_[7] & 0x0F);
+        }
+        [[nodiscard]] bool blank_left() const noexcept { return (reg_[0] & 0x20U) != 0U; }
+        [[nodiscard]] bool sh_enabled() const noexcept { return (reg_[12] & 0x08U) != 0U; }
+        [[nodiscard]] int hscroll_mode() const noexcept { return reg_[11] & 0x03; }
+        [[nodiscard]] bool vscroll_per_column() const noexcept { return (reg_[11] & 0x04U) != 0U; }
+        [[nodiscard]] int hsize_cells() const noexcept;
+        [[nodiscard]] int vsize_cells() const noexcept;
+        [[nodiscard]] bool interlace_mode2() const noexcept { return interlace_field() == 3; }
+        [[nodiscard]] int display_line_for_field(int line) const noexcept;
+        [[nodiscard]] int source_line_for_field(int line) const noexcept;
+
         // ---- memory access primitives ----
         [[nodiscard]] std::uint16_t vram_read16(std::uint32_t addr) const noexcept;
         void vram_write16(std::uint32_t addr, std::uint16_t value) noexcept;
@@ -159,6 +188,27 @@ namespace mnemos::chips::video {
         // ---- timing + interrupts ----
         void run_scanline() noexcept;
         void refresh_irq() noexcept;
+
+        // ---- rendering (phase 2) ----
+        // Pixel line-buffer markers: bits 5-0 = CRAM index, bit 6 = priority,
+        // bit 7 = "sourced from a sprite" (for shadow/highlight rules).
+        static constexpr std::uint8_t pix_priority = 0x40;
+        static constexpr std::uint8_t pix_source_sprite = 0x80;
+        // Shade levels for shadow/highlight.
+        static constexpr std::uint8_t shade_shadow = 0;
+        static constexpr std::uint8_t shade_normal = 1;
+        static constexpr std::uint8_t shade_highlight = 2;
+
+        void fetch_pattern_row(int tile_idx, int row, bool hflip, bool interlace2,
+                               std::uint8_t* pix) const noexcept;
+        void render_scroll_plane(std::uint32_t nt_base, int line, bool is_plane_a,
+                                 std::uint8_t* linebuf) const noexcept;
+        void render_window(int line, std::uint8_t* linebuf) const noexcept;
+        void render_sprites(int line, std::uint8_t* linebuf, std::uint8_t* shade) noexcept;
+        void render_scanline(int line) noexcept;
+        void fill_line_background(int display_line) noexcept;
+        [[nodiscard]] static std::uint32_t cram_to_rgb(std::uint16_t cram_value,
+                                                       std::uint8_t shade) noexcept;
 
         // Memory.
         std::array<std::uint8_t, vram_size> vram_{};

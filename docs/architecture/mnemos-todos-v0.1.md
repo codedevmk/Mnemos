@@ -422,8 +422,15 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   ordering vs the conformance vectors awaits a real Genesis ROM to validate against)
 - [ ] Verify reuse of `chips::audio::sn76489` (Genesis PSG).
 - [ ] Verify reuse of `chips::cpu::z80` (Genesis sound CPU).
-- [~] Implement `chips::video::genesis_vdp` (Genesis VDP, Sega 315-5313). (phase 1
-  DONE — the control plane: ivideo+immio contract, factory "sega.315_5313", 64KB VRAM
+- [x] Implement `chips::video::genesis_vdp` (Genesis VDP, Sega 315-5313). DONE in two
+  phases. Phase 2 added the pixel renderer: 8x8 4bpp pattern decode (incl. interlace-2
+  8x16), Scroll A/B planes (full/cell/line H-scroll + full/2-cell V-scroll, plane
+  sizes, flip/priority/palette per cell), the Window layer, 80 sprites (link-list
+  traversal, per-line sprite + pixel limits with overflow flag, X=0 masking, collision,
+  column-major tile layout), the plane/sprite priority composite, shadow/highlight, and
+  CRAM->0x00RRGGBB output into the framebuffer (display-disabled backdrop fill, blank-
+  left-8, H32 right margin); 15 tests / 38 assertions (plane tile, backdrop, sprite),
+  full ctest green (33). Phase 1 was the control plane: ivideo+immio contract, factory "sega.315_5313", 64KB VRAM
   + 64-entry CRAM (9-bit, $0EEE mask) + 40-entry VSRAM (11-bit) with the byte-swap/odd-
   address quirks, all 24 registers with the mode-4 upper-register lockout, the two-word
   command-port protocol (CD code + address, auto-increment, read-prefetch buffer with
