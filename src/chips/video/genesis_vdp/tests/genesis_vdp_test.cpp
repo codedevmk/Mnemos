@@ -192,6 +192,39 @@ TEST_CASE("genesis_vdp raises the H-blank interrupt on the H-int counter") {
     CHECK(vdp.pending_irq_level() == 4);
 }
 
+TEST_CASE("genesis_vdp HINT counter is reloaded (not decremented) during V-blank") {
+    // On real hardware, the HINT counter decrements through active display + once
+    // on the first V-blank line, then is *reloaded* from R10 each remaining V-blank
+    // line (no firing). A naive decrement-everywhere implementation fires spurious
+    // HINTs during V-blank whenever R10 < V-blank-line-count, throwing off games
+    // that drive raster effects / line counters off HINT (Blades of Vengeance
+    // credits is one such case). Regression for #28.
+    genesis_vdp vdp;
+    int hint_count = 0;
+    vdp.set_irq_callback([&](int level) {
+        if (level == 4) {
+            ++hint_count;
+        }
+        vdp.acknowledge_irq(level); // drain so we count *each* assertion
+    });
+    set_reg(vdp, 1, 0x40);  // display enable, no V-int
+    set_reg(vdp, 0, 0x10);  // H-int enable
+    set_reg(vdp, 10, 20);   // HINT every 21 active lines
+
+    // Drive line-by-line so refresh_irq runs between each scanline (the test
+    // counts level-rising edges, so we must drain HINT each line via the
+    // acknowledge in the callback). With R10=20: across the 224 active lines
+    // the counter underflows ~10 times. On the V-blank entry line it underflows
+    // once more if the counter reached 0 there, so 10-11 total. During the 38
+    // remaining V-blank lines the reference reloads R10 each line and does NOT fire.
+    // With the bug, those 38 lines decrement and fire ~38/21 = 1-2 extra HINTs.
+    for (int line = 0; line < 262; ++line) {
+        vdp.tick(genesis_vdp::master_clocks_per_line);
+    }
+    CHECK(hint_count >= 10);
+    CHECK(hint_count <= 11); // no extra spurious HINTs from V-blank decrement
+}
+
 TEST_CASE("genesis_vdp advances the V counter readback") {
     genesis_vdp vdp;
     CHECK((vdp.read16(0x08) >> 8U) == 0U); // V counter 0 at power-on line

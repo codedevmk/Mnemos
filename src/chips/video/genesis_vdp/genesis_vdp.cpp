@@ -899,16 +899,16 @@ namespace mnemos::chips::video {
                 --hint_counter_;
             }
         } else {
+            // V-blank lines past the entry line: the HINT counter is RELOADED from
+            // R10 each line and does not fire. (Per the reference vdp.c: decrement runs only
+            // through the active display + the first V-blank line; afterwards the
+            // counter is held at R10 until the next frame's line 0 resumes
+            // decrementing.) Without this, games that drive raster effects off
+            // HINT with R10 < V-blank-lines see spurious extra interrupts each
+            // frame -- Blades of Vengeance's credits is one such case (#28).
             in_hblank_ = true;
             hcounter_ = visible_w;
-            if (hint_counter_ <= 0) {
-                hint_counter_ = reg_[10];
-                if (hint_enabled()) {
-                    hblank_pending_ = true;
-                }
-            } else {
-                --hint_counter_;
-            }
+            hint_counter_ = reg_[10];
         }
 
         ++scanline_;
