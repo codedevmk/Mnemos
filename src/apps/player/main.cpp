@@ -298,6 +298,20 @@ int main(int argc, char* argv[]) {
                 std::fprintf(stderr, "[mnemos_player] wrote %s (full plane A)\n",
                              plane_path.c_str());
             }
+            // Dump VRAM (64KB) as binary so we can diff byte-for-byte against
+            // the reference emulator's VRAM at the same point.
+            const std::string vram_path = screenshot->path + ".vram.bin";
+            std::ofstream vout(vram_path, std::ios::binary);
+            if (vout) {
+                for (std::uint32_t a = 0; a < 0x10000U; a += 2) {
+                    const std::uint16_t w = vdp.vram16(a);
+                    const char bytes[2] = {static_cast<char>(w >> 8),
+                                           static_cast<char>(w & 0xFF)};
+                    vout.write(bytes, 2);
+                }
+                std::fprintf(stderr, "[mnemos_player] wrote %s (64KB VRAM)\n",
+                             vram_path.c_str());
+            }
             std::fprintf(stderr, "[vdp] regs:");
             for (int i = 0; i < 24; ++i) {
                 std::fprintf(stderr, " %02d=%02X", i, vdp.reg(i));
