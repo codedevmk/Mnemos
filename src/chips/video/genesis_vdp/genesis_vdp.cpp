@@ -209,6 +209,24 @@ namespace mnemos::chips::video {
                         hv_latched_ = false;
                     }
                 }
+                if (reg == 1 && !masked) {
+                    // Mirror the reference's vdp_reg_w register-1 handling
+                    // (the reference:1727-1743): if the V-int-enable bit
+                    // flipped ON while a VINT is latched in the VDP, raise
+                    // the CPU IRQ NOW. Without this, the IRQ is held back
+                    // until the NEXT V-blank line, which is what caused
+                    // the BoV f=115 cliff (BoV's boot loop has V-int
+                    // disabled across many frames; the VBL transitions
+                    // latch vint_happened_=true, then BoV enables V-int
+                    // mid-frame and expects the pending VINT to fire
+                    // immediately).
+                    const bool new_vint_en = (reg_[1] & 0x20U) != 0U;
+                    const bool old_vint_en = (old & 0x20U) != 0U;
+                    if (!old_vint_en && new_vint_en && vint_happened_) {
+                        vblank_pending_ = true;
+                        refresh_irq();
+                    }
+                }
             }
             cmd_code_ = static_cast<std::uint8_t>((cmd_code_ & 0x3CU) | ((value >> 14U) & 0x03U));
             return;
@@ -407,14 +425,20 @@ namespace mnemos::chips::video {
             s |= (1U << 0U);
         }
 
-        // Reading status acknowledges the latched VDP interrupt sources.
+        // Per the reference's vdp_68k_ctrl_r (the reference:1249-1253), reading the
+        // status register clears ONLY the cmd_pending flag and the
+        // sprite-overflow / sprite-collision status bits. It does NOT clear
+        // vint_happened (the status's VINT bit) or vblank_pending / hblank_pending
+        // (the CPU-facing IRQ-pending flags). Those are cleared by the CPU's
+        // IACK cycle (vdp_68k_irq_ack at the reference:1500). Mnemos used to
+        // clear all three here, which dropped the pending VINT whenever the
+        // game polled the status -- causing the BoV f=115 cliff (BoV reads
+        // status as part of its boot loop with IRQ masked; the pending VINT
+        // was dropped, and BoV had to wait one more frame for VINT to refire
+        // after IPM was lowered, taking the IRQ one frame later than the reference).
         cmd_pending_ = false;
-        vint_happened_ = false;
-        vblank_pending_ = false;
-        hblank_pending_ = false;
         sprite_overflow_ = false;
         sprite_collision_ = false;
-        refresh_irq();
         return s;
     }
 
@@ -899,18 +923,14 @@ namespace mnemos::chips::video {
                 --hint_counter_;
             }
         } else if (scanline_ == visible_h) {
-            in_vblank_ = true;
-            vint_happened_ = true;
-            odd_frame_ = interlace_enabled() ? !odd_frame_ : false;
+            // First VBL line. The VBL-entry state (in_vblank_, vint_happened_,
+            // VINT delay, odd_frame_ flip, frame_index_++) was set at the
+            // scanline-becomes-visible_h transition below, BEFORE this line's
+            // 3420 master cycles accumulated -- so VINT fires at master 788
+            // of this line (matching the reference system_frame_gen vint_cycle), not
+            // at master 788 *after* this line completed.
             in_hblank_ = true;
             hcounter_ = visible_w;
-            if (vint_enabled()) {
-                // Delay VINT-pending by the the reference VINT_HxxxxMCYCLE constant:
-                // the VBLANK status bit is visible now (in_vblank_), but
-                // the IRQ doesn't assert until 770/788 master cycles into
-                // this line. The countdown drains in tick() each cycle.
-                vint_pending_delay_master_ = h40_mode() ? 788 : 770;
-            }
             if (hint_counter_ <= 0) {
                 hint_counter_ = reg_[10];
                 if (hint_enabled()) {
@@ -934,7 +954,33 @@ namespace mnemos::chips::video {
         if (scanline_ >= total_scanlines_) {
             scanline_ = 0;
             hint_counter_ = reg_[10];
-            ++frame_index_; // a full field/frame has been scanned
+        }
+
+        // the reference-aligned frame boundary + VBL entry. system_frame_gen begins
+        // each frame with the VBL line (mcycles_vdp = 0 at line 357, then
+        // m68k_run(vint_cycle = 788) at line 492 raises VINT). Mnemos
+        // historically incremented frame_index_ at the scanline wrap (= end
+        // of all VBL lines), which meant the VINT fired 766,080 master
+        // cycles LATER per frame than the reference -- visible as the BoV f=115
+        // cliff (Mnemos's VDP didn't reach the VINT cycle until ~9000
+        // instructions after the reference took the IRQ). Setting up VBL state at
+        // the TRANSITION (when the post-increment scanline_ becomes
+        // visible_h) puts the VINT delay countdown at master 0 of the VBL
+        // line so the IRQ fires at master 788 -- matching the reference exactly.
+        if (scanline_ == visible_h) {
+            in_vblank_ = true;
+            vint_happened_ = true;
+            odd_frame_ = interlace_enabled() ? !odd_frame_ : false;
+            // Always start the VINT delay -- the vint_enabled() gate is
+            // applied at drain-completion in tick() (matching the reference's
+            // system_frame_gen line 503: vint_cycle delay runs UNCONDITIONALLY,
+            // then `if (reg[1] & 0x20) m68k_set_irq(6)` checks at the END).
+            // If we gate here, games that enable V-int within the 788-cycle
+            // delay window get their first VINT skipped (1-frame offset
+            // vs the reference -- this was the residual cause of the BoV cliff after
+            // VBL-first reset).
+            vint_pending_delay_master_ = h40_mode() ? 788 : 770;
+            ++frame_index_; // one full frame scanned (visible_h..total-1 + 0..visible_h-1)
         }
 
         vcounter_ = vcounter_readback(scanline_, odd_frame_);
@@ -974,6 +1020,9 @@ namespace mnemos::chips::video {
             if (vint_pending_delay_master_ <= 0) {
                 vint_pending_delay_master_ = -1;
                 if (vint_enabled()) {
+                    if (!vblank_pending_) {
+                        ++vint_fired_count_; // diagnostic: count rising edges
+                    }
                     vblank_pending_ = true;
                 }
             }
@@ -1041,10 +1090,15 @@ namespace mnemos::chips::video {
     }
 
     void genesis_vdp::acknowledge_irq(int level) noexcept {
-        // The IACK cycle clears the interrupt *request* at this level; the status flag
-        // (vint_happened) is a separate latch cleared only by a status read.
+        // The IACK cycle clears the interrupt request AND the VDP-side
+        // VINT/HINT pending latch. Matches the reference's vdp_68k_irq_ack
+        // (the reference:1500-1518): for VINT it clears vint_pending AND the
+        // status bit 0x80. This is what makes a re-enable of V-int after
+        // an IACK NOT refire the IRQ -- the pending latch has been
+        // consumed.
         if (level >= 6) {
             vblank_pending_ = false;
+            vint_happened_ = false;
         } else if (level >= 4) {
             hblank_pending_ = false;
         } else if (level >= 2) {
@@ -1084,9 +1138,18 @@ namespace mnemos::chips::video {
         dma_stall_master_cycles_ = 0;
 
         total_scanlines_ = pal_mode_ ? scanlines_pal : scanlines_ntsc;
-        scanline_ = 0;
+        // the reference-aligned frame phase: system_frame_gen starts each frame with
+        // the VBL line (mcycles_vdp = 0 at the start of VBL). To match this
+        // exactly the scanline counter is initialised to field_height() and
+        // the VINT delay is primed so the first VINT fires at master 770/788
+        // from reset -- not at master ~767K after a full active display has
+        // scrolled past (which was the source of the BoV f=115 cliff: VINT
+        // was firing in the wrong frame relative to the reference, causing the CPU
+        // to miss the IRQ at the f=115 boundary). The frame_index_++ now
+        // also moves to the scanline-becomes-visible_h transition below.
+        scanline_ = field_height();
         hcounter_ = visible_width() / 2;
-        vcounter_ = vcounter_readback(0, false);
+        vcounter_ = vcounter_readback(scanline_, false);
         odd_frame_ = false;
         hint_counter_ = 0;
         hv_latched_ = false;
@@ -1094,10 +1157,12 @@ namespace mnemos::chips::video {
         line_accumulator_ = 0;
 
         vint_happened_ = false;
-        vint_pending_delay_master_ = -1;
+        // Prime the VINT-pending delay -- fires VINT at master 770 (H32 reset
+        // default) / 788 (H40) of the first frame, matching the reference.
+        vint_pending_delay_master_ = h40_mode() ? 788 : 770;
         sprite_overflow_ = false;
         sprite_collision_ = false;
-        in_vblank_ = true; // start in vblank until the first frame
+        in_vblank_ = true; // start at the VBL entry line
         in_hblank_ = false;
         vblank_pending_ = false;
         hblank_pending_ = false;

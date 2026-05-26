@@ -416,6 +416,8 @@ int main(int argc, char* argv[]) {
                          (vdp.reg(4) & 0x07) << 13);
             std::fprintf(stderr, "[vdp] vsram[0..3]: %04X %04X %04X %04X  (plane A col 0/1, B col 0/1)\n",
                          vdp.vsram(0), vdp.vsram(1), vdp.vsram(2), vdp.vsram(3));
+            std::fprintf(stderr, "[vdp] vint_fired_count = %u\n",
+                         static_cast<unsigned>(vdp.vint_fired_count()));
             std::fflush(stderr);
         }
         return 0;

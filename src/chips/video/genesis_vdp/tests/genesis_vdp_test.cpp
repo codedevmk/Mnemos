@@ -173,11 +173,26 @@ TEST_CASE("genesis_vdp raises the V-blank interrupt") {
     vdp.set_irq_callback([&irq_seen](int level) { irq_seen = level; });
     set_reg(vdp, 1, 0x60); // display enable + V-int enable
 
-    vdp.tick(225U * genesis_vdp::master_clocks_per_line); // through scanline 224 (vblank start)
+    // After the reference-aligned reset the VDP is at the VBL entry line; the first
+    // tick of `vbl_lines * mc` drains the prepared VINT delay (770 master)
+    // and raises the IRQ. We don't need to advance through a full
+    // active display first, but a single scanline-worth gets us safely past
+    // the 770-master drain window.
+    vdp.tick(genesis_vdp::master_clocks_per_line);
     CHECK(vdp.pending_irq_level() == 6);
     CHECK(irq_seen == 6);
 
-    (void)vdp.read16(0x04); // status read acknowledges the V-int
+    // Status read DOES NOT clear the CPU-facing IRQ pending (per the reference
+    // vdp_68k_ctrl_r at the reference:1249-1253 -- only cmd_pending, SOVR
+    // and SCOL are cleared on status read). Only the IACK cycle
+    // (acknowledge_irq) clears vblank_pending_.
+    (void)vdp.read16(0x04);
+    CHECK(vdp.pending_irq_level() == 6); // still pending
+    CHECK(irq_seen == 6);
+
+    // The IACK callback (driven by the CPU when accepting the IRQ) is what
+    // clears the pending bit.
+    vdp.acknowledge_irq(6);
     CHECK(vdp.pending_irq_level() == 0);
     CHECK(irq_seen == 0);
 }
@@ -225,10 +240,14 @@ TEST_CASE("genesis_vdp HINT counter is held at R10 during V-blank") {
 
 TEST_CASE("genesis_vdp advances the V counter readback") {
     genesis_vdp vdp;
-    CHECK((vdp.read16(0x08) >> 8U) == 0U); // V counter 0 at power-on line
+    // the reference-aligned reset starts at the VBL entry line (= field_height(),
+    // 224 for default H40 mode 5). After 10 scanline ticks, V counter has
+    // advanced to 234. Matches the reference's v_counter = bitmap.viewport.h at
+    // frame start (system.c:489).
+    CHECK((vdp.read16(0x08) >> 8U) == 224U); // power-on at VBL entry line
     vdp.tick(10U * genesis_vdp::master_clocks_per_line);
-    CHECK((vdp.read16(0x08) >> 8U) == 10U);
-    CHECK(vdp.mmio_read(0x08) == 10U); // immio byte path agrees
+    CHECK((vdp.read16(0x08) >> 8U) == 234U);
+    CHECK(vdp.mmio_read(0x08) == 234U); // mmio byte path agrees
 }
 
 TEST_CASE("genesis_vdp round-trips its state") {
@@ -252,6 +271,15 @@ TEST_CASE("genesis_vdp round-trips its state") {
     CHECK(restored.reg(15) == 0x02);
 }
 
+    // After the reference-aligned reset the VDP is at the VBL entry line, so the
+    // first 38 (NTSC mode 5 default = 262 - 224 lines) ticks advance through
+    // V-blank without rendering. tick_to_active_line() advances past those
+    // so the first subsequent tick(master_clocks_per_line) renders scanline 0.
+    static void tick_to_active_line(genesis_vdp& vdp) {
+        constexpr std::uint64_t vbl_lines = 38;
+        vdp.tick(vbl_lines * genesis_vdp::master_clocks_per_line);
+    }
+
 TEST_CASE("genesis_vdp renders a plane-A tile") {
     genesis_vdp vdp;
     set_reg(vdp, 1, 0x44);                 // M5 + display enable
@@ -262,6 +290,7 @@ TEST_CASE("genesis_vdp renders a plane-A tile") {
     write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) -> tile 1, palette 0
     write_cram(vdp, 1, 0x000E);            // palette colour 1 = max red
 
+    tick_to_active_line(vdp);
     vdp.tick(genesis_vdp::master_clocks_per_line); // render scanline 0
     const auto fb = vdp.framebuffer();
     REQUIRE(fb.pixels != nullptr);
@@ -272,6 +301,7 @@ TEST_CASE("genesis_vdp fills the backdrop when display is disabled") {
     genesis_vdp vdp;
     write_cram(vdp, 0, 0x00E0); // backdrop (index 0) = max green
     // Display stays disabled (reg1 bit6 clear at power-on).
+    tick_to_active_line(vdp);
     vdp.tick(genesis_vdp::master_clocks_per_line);
     const auto fb = vdp.framebuffer();
     REQUIRE(fb.pixels != nullptr);
@@ -291,6 +321,7 @@ TEST_CASE("genesis_vdp renders a sprite over the planes") {
     write_vram(vdp, 0xD000, {0x0080, 0x0000, 0x8001, 0x0080});
     write_cram(vdp, 1, 0x000E); // colour 1 = max red
 
+    tick_to_active_line(vdp);
     vdp.tick(genesis_vdp::master_clocks_per_line);
     const auto fb = vdp.framebuffer();
     REQUIRE(fb.pixels != nullptr);

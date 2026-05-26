@@ -145,6 +145,10 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t cmd_addr() const noexcept { return cmd_addr_; }
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
+        // Diagnostic: number of rising-edge VINT fires (vblank_pending_ flipped
+        // from false to true). Used to confirm IRQ-raise behaviour vs the reference.
+        [[nodiscard]] std::uint32_t vint_fired_count() const noexcept { return vint_fired_count_; }
+
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {};
 
@@ -279,6 +283,9 @@ namespace mnemos::chips::video {
         // Added to dma_stall_master_cycles_ at DMA dispatch.
         [[nodiscard]] std::int64_t
         estimate_dma_stall_cycles(std::uint32_t length_units, int dma_type) const noexcept;
+
+        // Diagnostic counter (see vint_fired_count() accessor above).
+        std::uint32_t vint_fired_count_{};
 
         // Timing / position.
         int scanline_{};
