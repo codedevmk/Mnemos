@@ -427,15 +427,23 @@ namespace mnemos::tools {
     }
 
     std::string hash_framebuffer(const chips::frame_buffer_view& fb) {
+        // Hash only the *visible* pixels (width x height), iterating rows by
+        // the storage stride so stale tail pixels of mode-switched chips
+        // (e.g. Genesis H32) do not contaminate the digest.
+        const std::uint32_t stride = fb.effective_stride();
         const std::size_t count = static_cast<std::size_t>(fb.width) * fb.height;
         std::vector<std::uint8_t> bytes;
         bytes.reserve(count * 4U);
-        for (std::size_t i = 0; i < count; ++i) {
-            const std::uint32_t p = fb.pixels != nullptr ? fb.pixels[i] : 0U;
-            bytes.push_back(static_cast<std::uint8_t>((p >> 16U) & 0xFFU)); // R
-            bytes.push_back(static_cast<std::uint8_t>((p >> 8U) & 0xFFU));  // G
-            bytes.push_back(static_cast<std::uint8_t>(p & 0xFFU));          // B
-            bytes.push_back(0xFFU);                                         // A (opaque)
+        for (std::uint32_t y = 0; y < fb.height; ++y) {
+            const std::uint32_t* row =
+                fb.pixels != nullptr ? fb.pixels + static_cast<std::size_t>(y) * stride : nullptr;
+            for (std::uint32_t x = 0; x < fb.width; ++x) {
+                const std::uint32_t p = row != nullptr ? row[x] : 0U;
+                bytes.push_back(static_cast<std::uint8_t>((p >> 16U) & 0xFFU)); // R
+                bytes.push_back(static_cast<std::uint8_t>((p >> 8U) & 0xFFU));  // G
+                bytes.push_back(static_cast<std::uint8_t>(p & 0xFFU));          // B
+                bytes.push_back(0xFFU);                                         // A (opaque)
+            }
         }
         return foundation::sha256(bytes).hex();
     }

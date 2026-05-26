@@ -29,8 +29,14 @@
 
 namespace {
 
-    constexpr int kInitialWindowWidth = 960;
-    constexpr int kInitialWindowHeight = 720;
+    // Initial window logical size. The Genesis worst-case visible frame is
+    // 320x240 (PAL V30 or NTSC V30) -- at integer-scale 4 that is 1280x960
+    // physical pixels, which fits comfortably on a 1080p monitor. SDL gives
+    // us a DPI-aware swapchain, so on a 125%/150% scaled display we get a
+    // bigger physical pixel grid and the integer-letterbox math still picks
+    // the largest N that fits.
+    constexpr int kInitialWindowWidth = 1280;
+    constexpr int kInitialWindowHeight = 960;
 
     // Max framebuffer the Genesis VDP can produce (PAL interlace-2 worst case).
     // The streaming texture is sized for the max; per-frame uploads only touch
@@ -108,8 +114,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    SDL_Window* window = SDL_CreateWindow("Mnemos Player", kInitialWindowWidth,
-                                          kInitialWindowHeight, SDL_WINDOW_RESIZABLE);
+    SDL_Window* window =
+        SDL_CreateWindow("Mnemos Player", kInitialWindowWidth, kInitialWindowHeight,
+                         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (window == nullptr) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
@@ -176,6 +183,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    bool logged_dims = false;
+
     bool running = true;
     while (running) {
         SDL_Event event;
@@ -202,13 +211,27 @@ int main(int argc, char* argv[]) {
             const auto fb = system->current_frame();
             src_w = fb.width;
             src_h = fb.height;
+            const std::uint32_t src_stride = fb.effective_stride();
 
             if (fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
-                // Copy framebuffer into the transfer buffer (row-major, no padding).
+                // Copy framebuffer into the transfer buffer as a packed src_w*src_h
+                // image: when stride > width (mode-switched chips like Genesis VDP
+                // in H32 mode), iterate rows and copy only the visible prefix so the
+                // stale tail of each storage row does not bleed into the texture.
                 void* mapped = SDL_MapGPUTransferBuffer(device, xfer, true);
                 if (mapped != nullptr) {
-                    SDL_memcpy(mapped, fb.pixels,
-                               static_cast<size_t>(src_w) * src_h * sizeof(std::uint32_t));
+                    if (src_stride == src_w) {
+                        SDL_memcpy(mapped, fb.pixels,
+                                   static_cast<size_t>(src_w) * src_h * sizeof(std::uint32_t));
+                    } else {
+                        auto* dst_row = static_cast<std::uint32_t*>(mapped);
+                        const std::uint32_t* src_row = fb.pixels;
+                        for (std::uint32_t y = 0; y < src_h; ++y) {
+                            SDL_memcpy(dst_row, src_row, src_w * sizeof(std::uint32_t));
+                            dst_row += src_w;
+                            src_row += src_stride;
+                        }
+                    }
                     SDL_UnmapGPUTransferBuffer(device, xfer);
                 }
             }
@@ -257,6 +280,35 @@ int main(int argc, char* argv[]) {
         if (system && src_w > 0U && src_h > 0U) {
             const auto rect = integer_letterbox(static_cast<int>(swap_w), static_cast<int>(swap_h),
                                                 static_cast<int>(src_w), static_cast<int>(src_h));
+            // Log first frame, and any later frame whose dims change (game mode
+            // switches between V28/V30 etc).
+            static std::uint32_t last_w = 0U;
+            static std::uint32_t last_h = 0U;
+            if (!logged_dims || src_w != last_w || src_h != last_h) {
+                std::fprintf(stderr,
+                             "[mnemos_player] swapchain=%ux%u  src=%ux%u  "
+                             "dst=%dx%d at (%d,%d) (scale %d)\n",
+                             swap_w, swap_h, src_w, src_h, rect.w, rect.h, rect.x, rect.y,
+                             src_w > 0U ? rect.w / static_cast<int>(src_w) : 0);
+                std::fflush(stderr);
+                logged_dims = true;
+                last_w = src_w;
+                last_h = src_h;
+            }
+            // First clear the entire swapchain in its own render pass, then blit
+            // the source into the letterbox dst rect with LOAD (preserve clear).
+            // Doing the clear separately from the blit avoids any ambiguity about
+            // whether BlitInfo's load_op = CLEAR clears the WHOLE destination or
+            // only the dst region -- some backends treat the two differently.
+            {
+                SDL_GPUColorTargetInfo target{};
+                target.texture = swap;
+                target.load_op = SDL_GPU_LOADOP_CLEAR;
+                target.store_op = SDL_GPU_STOREOP_STORE;
+                target.clear_color = {0.0F, 0.0F, 0.0F, 1.0F};
+                SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &target, 1, nullptr);
+                SDL_EndGPURenderPass(rp);
+            }
             SDL_GPUBlitInfo blit{};
             blit.source.texture = tex;
             blit.source.x = 0;
@@ -268,8 +320,7 @@ int main(int argc, char* argv[]) {
             blit.destination.y = static_cast<Uint32>(rect.y);
             blit.destination.w = static_cast<Uint32>(rect.w);
             blit.destination.h = static_cast<Uint32>(rect.h);
-            blit.load_op = SDL_GPU_LOADOP_CLEAR;
-            blit.clear_color = {0.0F, 0.0F, 0.0F, 1.0F};
+            blit.load_op = SDL_GPU_LOADOP_LOAD; // preserve the explicit clear
             blit.filter = SDL_GPU_FILTER_NEAREST;
             SDL_BlitGPUTexture(cmd, &blit);
         } else {

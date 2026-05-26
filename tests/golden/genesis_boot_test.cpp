@@ -79,13 +79,17 @@ namespace {
     }
 
     bool framebuffer_is_uniform(const mnemos::chips::frame_buffer_view& fb) {
-        const std::size_t count = static_cast<std::size_t>(fb.width) * fb.height;
-        if (fb.pixels == nullptr || count == 0U) {
+        if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
             return true;
         }
-        for (std::size_t i = 1; i < count; ++i) {
-            if (fb.pixels[i] != fb.pixels[0]) {
-                return false;
+        const std::uint32_t stride = fb.effective_stride();
+        const std::uint32_t first = fb.pixels[0];
+        for (std::uint32_t y = 0; y < fb.height; ++y) {
+            const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
+            for (std::uint32_t x = 0; x < fb.width; ++x) {
+                if (row[x] != first) {
+                    return false;
+                }
             }
         }
         return true;

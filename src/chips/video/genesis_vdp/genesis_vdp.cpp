@@ -46,7 +46,15 @@ namespace mnemos::chips::video {
 
     int genesis_vdp::visible_width() const noexcept { return h40_mode() ? 320 : 256; }
 
-    int genesis_vdp::field_height() const noexcept { return (v30_mode() && pal_mode_) ? 240 : 224; }
+    int genesis_vdp::field_height() const noexcept {
+        // V30 enables 240 visible scanlines per field. On real hardware V30 is
+        // only fully supported on PAL (NTSC garbles the bottom 16 lines on
+        // a CRT), but many games enable V30 on NTSC for non-gameplay screens
+        // (credits, intros) and the VDP still renders all 240 lines into the
+        // framebuffer. We honour that so the emulated frame matches what the
+        // game wrote -- the bottom 16 rows are no worse than on hardware.
+        return v30_mode() ? 240 : 224;
+    }
 
     int genesis_vdp::visible_height() const noexcept {
         return interlace_enabled() ? field_height() * 2 : field_height();
@@ -1019,10 +1027,17 @@ namespace mnemos::chips::video {
     }
 
     frame_buffer_view genesis_vdp::framebuffer() const noexcept {
+        // The framebuffer storage is always fb_width pixels per row (320, sized
+        // for the worst-case H40 + interlace), but the *visible* width depends
+        // on the active mode -- H32 renders only 256 columns and leaves the
+        // remaining 64 columns untouched (containing whatever the previous
+        // mode left there). Report the visible width as `width` and the
+        // storage pitch as `stride` so consumers don't display the stale tail.
         return {
             .pixels = framebuffer_.data(),
-            .width = static_cast<std::uint32_t>(fb_width),
+            .width = static_cast<std::uint32_t>(visible_width()),
             .height = static_cast<std::uint32_t>(visible_height()),
+            .stride = static_cast<std::uint32_t>(fb_width),
         };
     }
 
