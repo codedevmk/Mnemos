@@ -814,18 +814,22 @@ namespace mnemos::chips::cpu {
             } else {
                 d_[dni] = (d_[dni] & 0xFFFFFF00U) | r;
             }
+            cycles_ += 2; // Motorola: Dn=6 (4+2), -(An)=18 (4+4+4+4+2)
             return;
         }
         if ((op & 0xF1F8U) == 0xC140U) { // EXG Dx,Dy
             std::swap(d_[dni], d_[eri]);
+            cycles_ += 2; // Motorola EXG = 6 cycles (4 opcode + 2 internal)
             return;
         }
         if ((op & 0xF1F8U) == 0xC148U) { // EXG Ax,Ay
             std::swap(a_[dni], a_[eri]);
+            cycles_ += 2;
             return;
         }
         if ((op & 0xF1F8U) == 0xC188U) { // EXG Dx,Ay
             std::swap(d_[dni], a_[eri]);
+            cycles_ += 2;
             return;
         }
         if (opm == 3) { // MULU
@@ -948,6 +952,7 @@ namespace mnemos::chips::cpu {
             } else {
                 d_[dni] = (d_[dni] & 0xFFFFFF00U) | r;
             }
+            cycles_ += 2; // Motorola: SBCD Dn=6, -(An)=18 (same pattern as ABCD)
             return;
         }
         const op_size sz = static_cast<op_size>(opm & 3);
@@ -1135,6 +1140,9 @@ namespace mnemos::chips::cpu {
                     write_sr(static_cast<std::uint16_t>(sr_ ^ v)); // EORI SR
                 }
             }
+            // Motorola: ORI/ANDI/EORI to CCR or SR all = 20 cycles base.
+            // Bus model already counts 4 (opcode) + 4 (imm fetch) = 8. Add 12.
+            cycles_ += 12;
             return;
         }
         if (sub == 6) { // CMPI
@@ -1598,6 +1606,13 @@ namespace mnemos::chips::cpu {
         push32(exc_pc);
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+        // Motorola 68000 internal-exception entry = 34 cycles (TRAP, TRAPV,
+        // CHK trap, illegal, divzero, privilege). The bus model above counts
+        // push32 + push16 + read32 = 20; add the remaining 10 of internal
+        // microcode + idle cycles. The opcode-fetch cycles for the triggering
+        // instruction are counted by the caller's own fetch16, so this is the
+        // exception-entry-only cost, applied uniformly.
+        cycles_ += 10;
     }
 
     void m68000::process_interrupt() noexcept {
