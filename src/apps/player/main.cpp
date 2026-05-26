@@ -1,25 +1,17 @@
-// Mnemos windowed player.
-//
-// Commit 4 wires SDL_GPU framebuffer presentation. The player accepts
-//   --rom <path-to-cartridge.md|.bin|.gen>
-// to boot the Genesis adapter and present its VDP framebuffer at integer
-// scale (3x by default; 960x720 window for a 320x240 PAL frame). Without
-// --rom the window opens to a dim clear color so the SDL3 / SDL_GPU bring-
-// up is observable on its own.
-//
-// Audio + input still off (commits 5-7). Hold ESC or close the window to
-// quit.
+// SDL3 windowed player. Boots whichever player_system adapter the ROM's file
+// extension selects (Genesis / SMS), presents its framebuffer at integer scale,
+// streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
 #include "chip.hpp"
 #include "genesis_adapter.hpp"
-#include "genesis_region.hpp" // manifest: parse_market for Genesis carts
+#include "genesis_region.hpp"
 #include "genesis_vdp.hpp"
 #include "player_system.hpp"
-#include "region.hpp" // chips/shared: video_region, market, default_video_for
+#include "region.hpp"
 #include "sms_adapter.hpp"
-#include "sms_region.hpp" // manifest: parse_market for SMS carts
+#include "sms_region.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -37,18 +29,12 @@
 
 namespace {
 
-    // Initial window logical size. The Genesis worst-case visible frame is
-    // 320x240 (PAL V30 or NTSC V30) -- at integer-scale 4 that is 1280x960
-    // physical pixels, which fits comfortably on a 1080p monitor. SDL gives
-    // us a DPI-aware swapchain, so on a 125%/150% scaled display we get a
-    // bigger physical pixel grid and the integer-letterbox math still picks
-    // the largest N that fits.
     constexpr int kInitialWindowWidth = 1280;
     constexpr int kInitialWindowHeight = 960;
 
-    // Max framebuffer the Genesis VDP can produce (PAL interlace-2 worst case).
-    // The streaming texture is sized for the max; per-frame uploads only touch
-    // the active width x height region the adapter reports.
+    // Streaming texture is sized for the worst-case Genesis VDP frame
+    // (320x240 V30, x2 for interlace); per-frame uploads only touch the
+    // active subregion the adapter reports.
     constexpr std::uint32_t kMaxFbWidth = 320U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
 
@@ -62,8 +48,6 @@ namespace {
         return std::nullopt;
     }
 
-    // --region pal|ntsc|auto (default: auto). Returns empty optional for "auto"
-    // (the adapter detects from the ROM header); explicit values override.
     enum class region_override {
         auto_detect,
         ntsc,
@@ -86,10 +70,8 @@ namespace {
         return region_override::auto_detect;
     }
 
-    // --screenshot <path.ppm> --frames N: run N video frames headlessly (no window,
-    // no GPU init) and dump the resulting VDP framebuffer as a PPM. The pair is
-    // designed for offline iteration on rendering bugs without needing a human
-    // to press a hotkey at the right moment.
+    // --screenshot <path.ppm> --frames N: headless run, dump the resulting
+    // VDP framebuffer as PPM, exit.
     struct screenshot_request final {
         std::string path;
         std::uint64_t frames{};
@@ -112,8 +94,7 @@ namespace {
         return std::nullopt;
     }
 
-    // Decode a Genesis CRAM entry (9-bit BGR, 3 bits per channel) to 0x00RRGGBB
-    // using the standard intensity LUT for normal brightness.
+    // Genesis CRAM entry (9-bit BGR, 3 bits per channel) -> 0x00RRGGBB.
     std::uint32_t cram_entry_to_rgb(std::uint16_t cram_word) {
         constexpr std::array<std::uint8_t, 8> lut = {0, 36, 73, 109, 146, 182, 219, 255};
         const std::uint8_t r = lut[(cram_word >> 1) & 0x7];
@@ -123,8 +104,6 @@ namespace {
                static_cast<std::uint32_t>(b);
     }
 
-    // Render the entire plane A of a Genesis VDP (ignoring scroll, window,
-    // sprites) into a PPM. Diagnostic for debugging plane-data placement.
     int scroll_size_cells(int sz_bits) {
         constexpr int sizes[4] = {32, 64, 64, 128};
         return sizes[sz_bits & 3];
@@ -212,22 +191,10 @@ namespace {
                                          std::istreambuf_iterator<char>());
     }
 
-    // Pick the system family from the ROM filename. Each Sega family uses a
-    // distinct cartridge extension, so the routing is unambiguous from the
-    // path alone -- no need to peek at the file contents.
-    //
-    //   .md / .gen / .smd / .68k        -> Genesis / Mega Drive
-    //   .sms / .sg                      -> Sega Master System / SG-1000
-    //   .bin                            -> Genesis (default; .bin is shared
-    //                                     across families but most Sega .bin
-    //                                     dumps in the wild are Genesis)
-    //
-    // Future families (.gg Game Gear, .32x, .iso/.cue Sega CD, .nes, .sfc/.smc
-    // SNES, ...) slot in here as their adapters land.
     enum class system_family { genesis, sms };
 
+    // .sms / .sg -> SMS; everything else (.md, .gen, .smd, .bin, .68k, none) -> Genesis.
     [[nodiscard]] system_family detect_family(const std::string& path) noexcept {
-        // Last '.' to end-of-string, lowercased.
         const auto dot = path.find_last_of('.');
         if (dot == std::string::npos) {
             return system_family::genesis;
@@ -239,14 +206,9 @@ namespace {
         if (ext == "sms" || ext == "sg") {
             return system_family::sms;
         }
-        // .md / .gen / .smd / .68k / .bin / unknown -> Genesis.
         return system_family::genesis;
     }
 
-    // Largest integer N such that an N-times scaled source fits inside the
-    // window without cropping. Centred destination rect; the area outside
-    // the rect is left at the previous swapchain clear (we LOAD-clear each
-    // present so it stays a solid black letterbox).
     struct dst_rect {
         int x{}, y{}, w{}, h{};
     };
@@ -278,16 +240,7 @@ int main(int argc, char* argv[]) {
     const auto region_arg = parse_region_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
 
-    // Build the player_system upfront so a bad ROM fails before we open a
-    // window. With no --rom we just open the window and idle. The family is
-    // picked from the ROM file's extension; each adapter reads the cart-side
-    // MARKET field via the shared parser in adapters/common/region.hpp and
-    // applies the project's default_video_for() policy, which the user can
-    // override via --region.
-    //
-    // Resolve the user override + a cart-derived default into a single
-    // video_region (so the per-family branch below is only the manifest type
-    // selection -- not a duplicated region-resolution conversation).
+    // --region overrides whichever default the cart-byte parser hands back.
     const auto resolve_video = [&](mnemos::video_region cart_default) {
         switch (region_arg) {
         case region_override::pal:
@@ -330,9 +283,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Headless screenshot path: step the requested number of frames, dump the
-    // framebuffer, exit. No window, no GPU. Designed so we can iterate on
-    // rendering bugs offline without driving the UI by hand.
+    // Headless path: step --frames, dump PPM, exit. No window, no GPU.
     if (screenshot) {
         if (!system) {
             std::fprintf(stderr, "--screenshot requires --rom\n");
@@ -350,21 +301,16 @@ int main(int argc, char* argv[]) {
                      screenshot->path.c_str(), fb.width, fb.height,
                      static_cast<unsigned long long>(screenshot->frames));
 
-        // VDP state dump (Genesis-specific). Helps diagnose scroll/plane bugs
-        // when paired with the framebuffer PPM.
+        // Genesis-specific diagnostic dump: plane A + VRAM + 68K work RAM.
         auto* genesis = dynamic_cast<mnemos::apps::player::adapters::genesis::genesis_adapter*>(
             system.get());
         if (genesis != nullptr) {
             const auto& vdp = genesis->system().vdp;
-            // Always dump the full plane A alongside the visible-window PPM
-            // so we can see what's actually in VRAM (independent of scroll).
             const std::string plane_path = screenshot->path + ".plane_a.ppm";
             if (dump_plane_a_ppm(vdp, plane_path)) {
                 std::fprintf(stderr, "[mnemos_player] wrote %s (full plane A)\n",
                              plane_path.c_str());
             }
-            // Dump VRAM (64KB) as binary so it can be diffed byte-for-byte
-            // against an external reference at the same point.
             const std::string vram_path = screenshot->path + ".vram.bin";
             std::ofstream vout(vram_path, std::ios::binary);
             if (vout) {
@@ -377,9 +323,6 @@ int main(int argc, char* argv[]) {
                 std::fprintf(stderr, "[mnemos_player] wrote %s (64KB VRAM)\n",
                              vram_path.c_str());
             }
-            // 68K work RAM (64KB at $E00000-$FFFFFF, mirrored). Flat byte
-            // layout so an external reference's work-RAM image can be diffed
-            // directly with memcmp.
             const std::string wram_path = screenshot->path + ".wram.bin";
             std::ofstream wout(wram_path, std::ios::binary);
             if (wout) {
@@ -422,10 +365,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // SDL_GPU device: D3D12 on Windows by default, with the other backends
-    // available as fallback. SPIRV/DXIL/MSL flags here advertise the shader
-    // formats we COULD provide -- we never actually create a shader, only use
-    // SDL_BlitGPUTexture, but the flags are required at device creation.
+    // We never create a shader (only SDL_BlitGPUTexture), but the format
+    // flags are required at device creation.
     SDL_GPUDevice* device = SDL_CreateGPUDevice(
         SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL, true,
         nullptr);
@@ -443,9 +384,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Streaming texture: full max-Genesis size, sampled with NEAREST so the
-    // integer-scale upscale stays crisp. The framebuffer bytes the VDP hands
-    // us are 0x00RRGGBB little-endian -> BGRA8 byte order.
+    // Adapter framebuffers are 0x00RRGGBB little-endian -> BGRA8 byte order.
     SDL_GPUTextureCreateInfo tex_ci{};
     tex_ci.type = SDL_GPU_TEXTURETYPE_2D;
     tex_ci.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
@@ -465,9 +404,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Transfer buffer the framebuffer upload streams through. One per frame
-    // is overkill; we keep a single persistent one and cycle it (the SDL_GPU
-    // upload API supports per-call cycle when the resource is in flight).
+    // One persistent transfer buffer, cycled per upload.
     SDL_GPUTransferBufferCreateInfo xfer_ci{};
     xfer_ci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     xfer_ci.size = kMaxFbWidth * kMaxFbHeight * 4U;
@@ -488,23 +425,17 @@ int main(int argc, char* argv[]) {
     bool paused = false;
     bool fullscreen = false;
 
-    // Pace the loop at the GAME's native frame rate (e.g. 50 Hz for a PAL
-    // cart), not vsync. If display is 60 Hz vsync and the game is 50 Hz PAL,
-    // running step_one_frame() at display rate would over-clock the game by
-    // 1.2x; audio production then outpaces SDL's consumption (we declared
-    // the chip's native rate) and the queue grows until playback is audibly
-    // late/choppy. Software-pacing on Uint64 high-res ticks fixes both the
-    // audio drift and the gameplay speed.
+    // Software-pace the loop at the game's native frame rate; pacing against
+    // vsync would over- or under-clock games whose rate doesn't match the
+    // display, drifting both gameplay speed and audio queue depth.
     const double target_fps =
         system ? system->region().frames_per_second_x1000 / 1000.0 : 60.0;
     const Uint64 perf_freq = SDL_GetPerformanceFrequency();
     const double frame_ticks = static_cast<double>(perf_freq) / target_fps;
     Uint64 next_frame_at = SDL_GetPerformanceCounter();
 
-    // Open an audio stream once we know the system's native sample rate.
-    // Genesis NTSC = ~53267 Hz, PAL = ~52781 Hz; SDL resamples to the device's
-    // rate transparently. Stereo s16 throughout. We push samples per frame
-    // from the adapter; SDL pulls them at the device's pace.
+    // The adapter reports its native stereo s16 sample rate via drain_audio();
+    // SDL_AudioStream resamples to the device rate.
     SDL_AudioStream* audio_stream = nullptr;
     if (system) {
         const auto chunk = system->drain_audio(); // probe for sample rate
@@ -524,9 +455,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Open whichever gamepad is currently plugged in for port 0, and watch
-    // for hot-plug events to swap if a different controller arrives. Keyboard
-    // input is always sampled too -- both feed the same controller_state.
     SDL_Gamepad* gamepad = nullptr;
     {
         int count = 0;
@@ -585,15 +513,11 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Build the per-frame controller_state for port 0 from both inputs
-        // available: the keyboard (always sampled) and any attached gamepad
-        // (analog stick + dpad + face buttons), OR'd together so the player
-        // can switch between them mid-session without rebinding.
-        //   Keyboard: Arrows = D-pad, Z = A, X = B, C = C, Enter = Start
-        //   Gamepad : DPad+left stick = D-pad, South = A, East = B, West = C,
-        //             Start = Start, Back = Select (when 6-button lands)
-        // Adapters that don't expose all of these (SMS, C64, ...) ignore the
-        // extras.
+        // Keyboard + gamepad OR'd into the same controller_state so the user
+        // can switch input mid-session. Adapters ignore buttons their hardware
+        // doesn't have.
+        //   Keyboard: arrows = dpad, Z = A, X = B, C = C, Enter = Start.
+        //   Gamepad : dpad + left stick = dpad, S/E/W = A/B/C, Start = Start.
         {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             mnemos::frontend_sdk::controller_state pad{};
@@ -648,8 +572,6 @@ int main(int argc, char* argv[]) {
         if (system) {
             if (frame_due) {
                 system->step_one_frame();
-                // Drain audio the frame produced and feed it to SDL_AudioStream,
-                // which buffers + resamples to the device rate transparently.
                 if (audio_stream != nullptr) {
                     const auto audio = system->drain_audio();
                     if (audio.samples != nullptr && audio.frame_count > 0U) {
@@ -664,10 +586,7 @@ int main(int argc, char* argv[]) {
             src_h = fb.height;
             const std::uint32_t src_stride = fb.effective_stride();
 
-            // F12: dump the raw VDP framebuffer to a PPM file we can inspect.
-            // The PPM captures *exactly* what the chip wrote (width x height,
-            // ignoring stride padding), so we can see what's in source rows
-            // without any presentation transform applied.
+            // F12: dump the raw framebuffer as PPM (width x height, no stride).
             if (dump_requested && fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
                 char path[64];
                 std::snprintf(path, sizeof(path), "mnemos_player_frame_%03d.ppm", dump_index++);
@@ -691,10 +610,9 @@ int main(int argc, char* argv[]) {
             }
 
             if (fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
-                // Copy framebuffer into the transfer buffer as a packed src_w*src_h
-                // image: when stride > width (mode-switched chips like Genesis VDP
-                // in H32 mode), iterate rows and copy only the visible prefix so the
-                // stale tail of each storage row does not bleed into the texture.
+                // Copy framebuffer into the transfer buffer as a packed
+                // src_w*src_h image. When stride > width (H32 mode etc.) the
+                // per-row copy avoids bleeding the stale stride tail.
                 void* mapped = SDL_MapGPUTransferBuffer(device, xfer, true);
                 if (mapped != nullptr) {
                     if (src_stride == src_w) {
@@ -721,7 +639,6 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        // Stream this frame's pixels into the streaming texture.
         if (system && src_w > 0U && src_h > 0U) {
             SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(cmd);
             SDL_GPUTextureTransferInfo src{};
@@ -740,8 +657,7 @@ int main(int argc, char* argv[]) {
             SDL_EndGPUCopyPass(copy_pass);
         }
 
-        // Acquire the swapchain texture (may be nullptr if the window is hidden
-        // or being resized -- skip presenting that frame cleanly).
+        // Swapchain texture may be null while hidden / resizing; skip the frame.
         SDL_GPUTexture* swap = nullptr;
         Uint32 swap_w = 0;
         Uint32 swap_h = 0;
@@ -757,8 +673,7 @@ int main(int argc, char* argv[]) {
         if (system && src_w > 0U && src_h > 0U) {
             const auto rect = integer_letterbox(static_cast<int>(swap_w), static_cast<int>(swap_h),
                                                 static_cast<int>(src_w), static_cast<int>(src_h));
-            // Log first frame, and any later frame whose dims change (game mode
-            // switches between V28/V30 etc).
+            // Log on first frame + any dim change (V28 <-> V30 etc.).
             static std::uint32_t last_w = 0U;
             static std::uint32_t last_h = 0U;
             if (!logged_dims || src_w != last_w || src_h != last_h) {
@@ -772,11 +687,9 @@ int main(int argc, char* argv[]) {
                 last_w = src_w;
                 last_h = src_h;
             }
-            // First clear the entire swapchain in its own render pass, then blit
-            // the source into the letterbox dst rect with LOAD (preserve clear).
-            // Doing the clear separately from the blit avoids any ambiguity about
-            // whether BlitInfo's load_op = CLEAR clears the WHOLE destination or
-            // only the dst region -- some backends treat the two differently.
+            // Clear the whole swapchain in its own pass, then blit with LOAD.
+            // Some backends scope BlitInfo's CLEAR to the dst region rather
+            // than the whole target, so the separate clear avoids that.
             {
                 SDL_GPUColorTargetInfo target{};
                 target.texture = swap;
@@ -801,7 +714,7 @@ int main(int argc, char* argv[]) {
             blit.filter = SDL_GPU_FILTER_NEAREST;
             SDL_BlitGPUTexture(cmd, &blit);
         } else {
-            // No system: just clear so the user sees a window in a known state.
+            // No system loaded: clear to a known background.
             SDL_GPUColorTargetInfo target{};
             target.texture = swap;
             target.load_op = SDL_GPU_LOADOP_CLEAR;

@@ -31,7 +31,7 @@ namespace mnemos::apps::player::adapters::sms {
         std::unique_ptr<manifests::sms::sms_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
-        std::uint32_t fps_x1000_{60'000U};
+        std::uint32_t fps_x1000_;
         std::uint64_t frames_stepped_{};
 
         std::vector<std::int16_t> psg_buf_{};

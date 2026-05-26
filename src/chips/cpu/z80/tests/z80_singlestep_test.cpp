@@ -1,20 +1,7 @@
-// Allow std::getenv on MSVC (test-only; reads a corpus-path env var).
 #define _CRT_SECURE_NO_WARNINGS
 
-// Z80 per-cycle conformance harness.
-//
-// Validates the z80 core against a public per-instruction Z80 test corpus
-// (see THIRD-PARTY.md): each test fixes an initial CPU + RAM state and an I/O
-// access list, runs exactly one instruction, and checks the final CPU + RAM
-// state and the exact per-cycle bus trace (memory accesses + I/O accesses).
-//
-// Complements the CP/M exerciser (z80_conformance_test.cpp), which verifies
-// functional correctness via CRC but says nothing about cycle accuracy: this
-// harness pins the cycle count and bus access order per instruction.
-//
-// The corpus is large and never committed; the test is data-gated and SKIPs
-// unless MNEMOS_Z80_TESTS_DIR points at a directory of per-instruction JSON
-// files.
+// Per-cycle Z80 conformance against a public per-instruction JSON corpus.
+// Data-gated by MNEMOS_Z80_TESTS_DIR (see THIRD-PARTY.md).
 
 #include "z80.hpp"
 
@@ -61,18 +48,9 @@ namespace {
         }
     };
 
-    // Classify a corpus pin-state marker. The corpus represents each cycle as
-    // [addr, value, marker]; marker formats vary across corpus versions, but the
-    // operations of interest are identified by their pin signature:
-    //   m + r   -> memory read
-    //   m + w   -> memory write
-    //   i + r   -> I/O read
-    //   i + w   -> I/O write
-    //   anything else (typically all dashes / nulls) -> internal T-state
-    //
-    // We accept both lowercase letter codes (e.g. "mr--", "iorq_rd") and the
-    // underscored "mreq_rd" / "iorq_wr" form. Anything we don't classify is
-    // treated as an internal cycle and skipped during the trace compare.
+    // Corpus pin-state marker classifier. Accepts the common format variants
+    // ("mr--", "mreq_rd", "iorq_wr", ...) by letter-substring; unrecognised
+    // markers map to `internal` and are skipped during the trace compare.
     enum class cycle_kind : std::uint8_t { internal, mem_read, mem_write, io_read, io_write };
 
     [[nodiscard]] cycle_kind classify(const std::string& marker) {
@@ -107,7 +85,6 @@ namespace {
         return cycle_kind::internal;
     }
 
-    // ---- corpus state -> z80::registers ------------------------------------
     [[nodiscard]] std::uint16_t pair(const nlohmann::json& node, const char* hi,
                                      const char* lo) {
         return static_cast<std::uint16_t>(
@@ -124,8 +101,7 @@ namespace {
         r.hl = pair(node, "h", "l");
         r.ix = node.at("ix").get<std::uint16_t>();
         r.iy = node.at("iy").get<std::uint16_t>();
-        // Shadow regs in the corpus are stored as 16-bit `af_`, `bc_`, `de_`,
-        // `hl_` (with trailing underscore). Some forks use `af'`/`bc'`/etc.
+        // Corpus stores shadow regs as `af_` etc.; some forks use `af'`.
         const auto get16 = [&](const char* underscored, const char* primed) {
             if (node.contains(underscored)) {
                 return node.at(underscored).get<std::uint16_t>();
@@ -147,9 +123,6 @@ namespace {
         return r;
     }
 
-    // Run one corpus file; returns {passed, failed} for that file and records
-    // up to a few example failure names so the user can grep the file with the
-    // problematic case.
     std::pair<std::size_t, std::size_t> run_file(const std::filesystem::path& path,
                                                  std::vector<std::string>& failures) {
         std::size_t passed = 0;
@@ -161,21 +134,13 @@ namespace {
         z80 cpu;
         cpu.attach_bus(bus);
 
-        // Route I/O through the same trace buffer as memory accesses. The bus
-        // and the port hooks share `trace` because the corpus interleaves
-        // memory and I/O cycles within a single instruction's bus log.
-        cpu.set_port_in([&](std::uint16_t port) -> std::uint8_t {
-            const std::uint8_t v = 0xFFU; // value provided by the corpus, but
-                                          // the trace compare reads from cycles[]
-            bus.trace.push_back({port, v, recording_bus::access::kind::io_read});
-            return v;
-        });
+        // I/O accesses fold into the same trace as memory accesses; the corpus
+        // interleaves them within a single instruction's bus log.
         cpu.set_port_out([&](std::uint16_t port, std::uint8_t value) {
             bus.trace.push_back({port, value, recording_bus::access::kind::io_write});
         });
 
         for (const auto& test : doc) {
-            // Load initial state.
             const auto initial_regs = read_state(test.at("initial"));
             for (const auto& cell : test.at("initial").at("ram")) {
                 bus.memory[cell.at(0).get<std::uint16_t>()] = cell.at(1).get<std::uint8_t>();
@@ -183,9 +148,8 @@ namespace {
             cpu.set_registers(initial_regs);
             bus.trace.clear();
 
-            // Patch I/O reads to return the corpus-specified value at each
-            // access. The corpus `ports` array lists every I/O access in
-            // order; we walk it whenever the running CPU performs an "in".
+            // Walk the corpus' "ports" list in order on each IN to return the
+            // value the test expects.
             std::size_t port_in_idx = 0;
             const auto& ports = test.contains("ports") ? test.at("ports") : nlohmann::json::array();
             cpu.set_port_in([&](std::uint16_t port) -> std::uint8_t {
@@ -203,12 +167,9 @@ namespace {
                 return value;
             });
 
-            // Execute exactly one instruction.
             cpu.step_instruction();
 
             bool ok = true;
-
-            // Final register state.
             const auto expected = read_state(test.at("final"));
             const auto r = cpu.cpu_registers();
             ok = ok && r.pc == expected.pc && r.sp == expected.sp && r.af == expected.af &&
@@ -218,7 +179,6 @@ namespace {
                  r.i == expected.i && r.r == expected.r && r.im == expected.im &&
                  r.iff1 == expected.iff1 && r.iff2 == expected.iff2;
 
-            // Final RAM cells the corpus calls out.
             for (const auto& cell : test.at("final").at("ram")) {
                 if (bus.memory[cell.at(0).get<std::uint16_t>()] !=
                     cell.at(1).get<std::uint8_t>()) {
@@ -226,10 +186,9 @@ namespace {
                 }
             }
 
-            // Per-cycle bus trace. The corpus enumerates every T-cycle,
-            // including ones where the CPU's bus is idle; our trace only
-            // contains actual memory + I/O accesses, so we walk the corpus
-            // skipping idle cycles and match in order.
+            // The corpus enumerates every T-cycle including idle ones; our
+            // trace only records actual bus accesses, so we skip `internal`
+            // cycles while walking the corpus list.
             std::size_t trace_idx = 0;
             for (const auto& corpus_cycle : test.at("cycles")) {
                 const std::string marker =
