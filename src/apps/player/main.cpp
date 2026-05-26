@@ -411,6 +411,19 @@ int main(int argc, char* argv[]) {
     bool paused = false;
     bool fullscreen = false;
 
+    // Pace the loop at the GAME's native frame rate (e.g. 50 Hz for a PAL
+    // cart), not vsync. If display is 60 Hz vsync and the game is 50 Hz PAL,
+    // running step_one_frame() at display rate would over-clock the game by
+    // 1.2x; audio production then outpaces SDL's consumption (we declared
+    // the chip's native rate) and the queue grows until playback is audibly
+    // late/choppy. Software-pacing on Uint64 high-res ticks fixes both the
+    // audio drift and the gameplay speed.
+    const double target_fps =
+        system ? system->region().frames_per_second_x1000 / 1000.0 : 60.0;
+    const Uint64 perf_freq = SDL_GetPerformanceFrequency();
+    const double frame_ticks = static_cast<double>(perf_freq) / target_fps;
+    Uint64 next_frame_at = SDL_GetPerformanceCounter();
+
     // Open an audio stream once we know the system's native sample rate.
     // Genesis NTSC = ~53267 Hz, PAL = ~52781 Hz; SDL resamples to the device's
     // rate transparently. Stereo s16 throughout. We push samples per frame
@@ -537,14 +550,26 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Drive emulation: exactly one video frame per present (vsync paces us).
-        // While paused we skip step_one_frame() but keep rendering the last
-        // framebuffer + accepting input, so the user can move the window or
-        // toggle fullscreen / unpause without the emulator advancing.
+        // Drive emulation: step a game frame only when the wall-clock pacer
+        // says it's due. On a 60 Hz display vsync running a 50 Hz PAL cart,
+        // this means roughly every 6th render frame skips step_one_frame()
+        // and just re-presents the same VDP framebuffer -- keeping the game
+        // and its audio at the right rate. While paused we skip stepping
+        // entirely but keep rendering / accepting input.
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
+        const Uint64 now_ticks = SDL_GetPerformanceCounter();
+        const bool frame_due = !paused && now_ticks >= next_frame_at;
+        if (frame_due) {
+            next_frame_at += static_cast<Uint64>(frame_ticks);
+            // If we drifted far behind (e.g. window dragged), don't try to
+            // catch up infinitely -- skip ahead.
+            if (now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
+                next_frame_at = now_ticks + static_cast<Uint64>(frame_ticks);
+            }
+        }
         if (system) {
-            if (!paused) {
+            if (frame_due) {
                 system->step_one_frame();
                 // Drain audio the frame produced and feed it to SDL_AudioStream,
                 // which buffers + resamples to the device rate transparently.
