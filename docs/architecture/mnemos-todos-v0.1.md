@@ -478,11 +478,15 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   corpus (MNEMOS_M68000_TESTS_DIR, data-gated/skips in CI). Instruction-stepped relaxed
   compare (D/A/USP/SSP/SR/RAM, not the prefetch-coupled PC/queue/cycles); filters group-0
   (address/bus-error) cases by detecting a vector to the $08/$0C handler (the functional core
-  doesn't trap unaligned access -- ~10.5K/35K of the sampled cases). First run (12 common
-  opcode files, 3000/file): after filtering, real failures concentrated in JSR even-target,
-  MOVEM.l, MOVE.b/.l, LEA, and PC-relative/absolute EA modes -- the likely roots of the game
-  divergences. NEXT: fix these per-mnemonic (MNEMOS_M68000_ONLY + MNEMOS_M68000_DUMP), then
-  finish downloading the corpus (124 files from github.com/SingleStepTests/680x0))
+  doesn't trap unaligned access). IMPORTANT: the corpus places the opcode AT pc (prefetch[0]@pc,
+  prefetch[1]@pc+2, further extension words in ram at pc+4+), NOT at pc-4 -- an initial harness
+  off-by-4 made every stream-operand instruction read garbage extension words. After fixing
+  that, all 12 downloaded opcode files (MOVE.b/.l/.q, AND.w, CLR.w, CMP.w, DBcc, JSR, LEA,
+  LSR.w, MOVEM.l, TST.w) pass 100% with NO cap (~96K tests) -- the 68000 is conformant on
+  these; the earlier "bugs" were the harness. NEXT: download the rest of the corpus (124 files
+  from github.com/SingleStepTests/680x0, gunzip into the corpus dir) and run the full set to
+  validate every instruction -- that will say whether the Genesis game divergences are 68000
+  bugs in untested opcodes or live in the VDP/manifest instead)
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---

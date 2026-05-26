@@ -73,9 +73,9 @@ namespace {
         r.sr = node.at("sr").get<std::uint16_t>();
         const bool supervisor = (r.sr & m68000::sr_s) != 0U;
         r.a[7] = supervisor ? r.ssp : r.usp; // a7 is the active stack pointer
-        // The opcode is in the prefetch queue: prefetch[0] is at pc-4, prefetch[1]
-        // at pc-2; the instruction stream beyond that comes from the ram array.
-        r.pc = node.at("pc").get<std::uint32_t>() - 4U;
+        // The opcode sits at pc: prefetch[0] is the word at pc, prefetch[1] the word
+        // at pc+2; any further extension words come from the ram array (pc+4 onward).
+        r.pc = node.at("pc").get<std::uint32_t>();
         cpu.set_registers(r);
     }
 
@@ -113,15 +113,16 @@ namespace {
 
             const auto& init = test.at("initial");
             bus.memory.clear();
-            // Opcode + first extension word from the prefetch queue.
+            // Opcode word at pc, the next word at pc+2 (the prefetch queue); further
+            // extension words come from the ram array below.
             const auto pc = init.at("pc").get<std::uint32_t>();
             const auto prefetch = init.at("prefetch");
             const auto w0 = prefetch.at(0).get<std::uint16_t>();
             const auto w1 = prefetch.at(1).get<std::uint16_t>();
-            bus.memory[(pc - 4U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w0 >> 8U);
-            bus.memory[(pc - 3U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w0);
-            bus.memory[(pc - 2U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w1 >> 8U);
-            bus.memory[(pc - 1U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w1);
+            bus.memory[pc & 0xFFFFFFU] = static_cast<std::uint8_t>(w0 >> 8U);
+            bus.memory[(pc + 1U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w0);
+            bus.memory[(pc + 2U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w1 >> 8U);
+            bus.memory[(pc + 3U) & 0xFFFFFFU] = static_cast<std::uint8_t>(w1);
             for (const auto& cell : init.at("ram")) {
                 bus.memory[cell.at(0).get<std::uint32_t>() & 0xFFFFFFU] =
                     cell.at(1).get<std::uint8_t>();
