@@ -83,3 +83,41 @@ TEST_CASE("genesis_adapter selects PAL pacing when configured") {
     genesis_adapter adapter(tiny_rom(), {.video_region = genesis_config::region::pal});
     CHECK(adapter.region().frames_per_second_x1000 == 50000U);
 }
+
+TEST_CASE("detect_region honours the cartridge header region field") {
+    using mnemos::apps::player::adapters::genesis::detect_region;
+
+    auto rom_with_region = [](const char* code) {
+        auto rom = tiny_rom();
+        rom.resize(0x200, 0x20U); // pad with spaces so $1F0..$1F2 are addressable
+        for (std::size_t i = 0; i < 3; ++i) {
+            rom[0x1F0 + i] = code[i] != '\0' ? static_cast<std::uint8_t>(code[i]) : 0x20U;
+        }
+        return rom;
+    };
+
+    // Pure regions.
+    CHECK(detect_region(rom_with_region("J  ")) == genesis_config::region::ntsc);
+    CHECK(detect_region(rom_with_region("U  ")) == genesis_config::region::ntsc);
+    CHECK(detect_region(rom_with_region("E  ")) == genesis_config::region::pal);
+
+    // Multi-region: Europe present -> PAL (parity with reference behaviour).
+    CHECK(detect_region(rom_with_region("UE ")) == genesis_config::region::pal);
+    CHECK(detect_region(rom_with_region("EJU")) == genesis_config::region::pal);
+    CHECK(detect_region(rom_with_region("JE ")) == genesis_config::region::pal);
+
+    // Multi-region without Europe -> NTSC.
+    CHECK(detect_region(rom_with_region("JU ")) == genesis_config::region::ntsc);
+
+    // No region info at all -> safe default NTSC.
+    CHECK(detect_region(rom_with_region("   ")) == genesis_config::region::ntsc);
+
+    // Hex-bitfield region byte: bit 2 = Europe.
+    CHECK(detect_region(rom_with_region("4  ")) == genesis_config::region::pal); // bit 2 set
+    CHECK(detect_region(rom_with_region("F  ")) == genesis_config::region::pal); // all bits
+    CHECK(detect_region(rom_with_region("3  ")) == genesis_config::region::ntsc); // J+U only
+
+    // Truncated ROM -> safe default NTSC.
+    std::vector<std::uint8_t> short_rom{0x00U, 0x01U, 0x02U};
+    CHECK(detect_region(short_rom) == genesis_config::region::ntsc);
+}

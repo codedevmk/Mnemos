@@ -54,6 +54,30 @@ namespace {
         return std::nullopt;
     }
 
+    // --region pal|ntsc|auto (default: auto). Returns empty optional for "auto"
+    // (the adapter detects from the ROM header); explicit values override.
+    enum class region_override {
+        auto_detect,
+        ntsc,
+        pal,
+    };
+
+    region_override parse_region_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            const std::string a = argv[i];
+            if (a == "--region") {
+                const std::string v = argv[i + 1];
+                if (v == "pal" || v == "PAL") {
+                    return region_override::pal;
+                }
+                if (v == "ntsc" || v == "NTSC") {
+                    return region_override::ntsc;
+                }
+            }
+        }
+        return region_override::auto_detect;
+    }
+
     std::optional<std::vector<std::uint8_t>> read_file(const std::string& path) {
         std::ifstream in(path, std::ios::binary);
         if (!in) {
@@ -95,6 +119,7 @@ namespace {
 
 int main(int argc, char* argv[]) {
     const auto rom_path = parse_rom_arg(argc, argv);
+    const auto region_arg = parse_region_arg(argc, argv);
 
     // Build the player_system upfront so a bad ROM fails before we open a
     // window. With no --rom we just open the window and idle.
@@ -105,8 +130,18 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_path->c_str());
             return 1;
         }
-        system = std::make_unique<
-            mnemos::apps::player::adapters::genesis::genesis_adapter>(std::move(*bytes));
+        using mnemos::manifests::genesis::genesis_config;
+        const auto detected = mnemos::apps::player::adapters::genesis::detect_region(*bytes);
+        const auto region = region_arg == region_override::pal    ? genesis_config::region::pal
+                            : region_arg == region_override::ntsc ? genesis_config::region::ntsc
+                                                                  : detected;
+        std::fprintf(stderr, "[mnemos_player] region: %s (%s)\n",
+                     region == genesis_config::region::pal ? "PAL" : "NTSC",
+                     region_arg == region_override::auto_detect ? "auto-detected"
+                                                                : "explicit --region");
+        std::fflush(stderr);
+        system = std::make_unique<mnemos::apps::player::adapters::genesis::genesis_adapter>(
+            std::move(*bytes), genesis_config{.video_region = region});
     }
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {

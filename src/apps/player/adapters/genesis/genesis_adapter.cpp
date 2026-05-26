@@ -1,8 +1,52 @@
 #include "genesis_adapter.hpp"
 
+#include <cctype>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::genesis {
+
+    manifests::genesis::genesis_config::region
+    detect_region(std::span<const std::uint8_t> rom) noexcept {
+        using region = manifests::genesis::genesis_config::region;
+        if (rom.size() < 0x200) {
+            return region::ntsc;
+        }
+        bool has_e = false;
+        bool has_non_e = false;
+        for (std::size_t i = 0x1F0; i < 0x1F3; ++i) {
+            const auto raw = rom[i];
+            const auto c = static_cast<char>(std::toupper(static_cast<unsigned char>(raw)));
+            // ASCII region letters.
+            if (c == 'E') {
+                has_e = true;
+            } else if (c == 'J' || c == 'U') {
+                has_non_e = true;
+            }
+            // Hex-bitfield region byte (newer carts): bit 2 = Europe, bit 0 = Japan,
+            // bit 1 = USA. Accept 0-9 / A-F as either char or raw byte.
+            int hex = -1;
+            if (c >= '0' && c <= '9') {
+                hex = c - '0';
+            } else if (c >= 'A' && c <= 'F') {
+                hex = 10 + (c - 'A');
+            } else if (raw <= 0x0FU) {
+                hex = static_cast<int>(raw);
+            }
+            if (hex >= 0) {
+                if ((hex & 0x04) != 0) {
+                    has_e = true;
+                }
+                if ((hex & 0x03) != 0) {
+                    has_non_e = true;
+                }
+            }
+        }
+        // Favor PAL when Europe is supported -- PAL-only display features
+        // (V30, full vertical border budget) are then rendered the way the
+        // cart's PAL-aware screens were authored for. Pure J/U carts stay
+        // NTSC.
+        return has_e ? region::pal : (has_non_e ? region::ntsc : region::ntsc);
+    }
 
     namespace {
 
