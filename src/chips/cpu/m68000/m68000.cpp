@@ -888,10 +888,12 @@ namespace mnemos::chips::cpu {
             const std::uint32_t q = dividend / divisor;
             const std::uint32_t rem = dividend % divisor;
             sr_ = static_cast<std::uint16_t>(sr_ & ~sr_c);
+            // Both overflow and successful-division paths cost cycles; the
+            // overflow shortcut still runs the early-exit micro-sequence.
+            cycles_ += divu_cycles(dividend, divisor);
             if (q > 0xFFFFU) {
-                sr_ |= sr_v; // overflow: result undefined, operand unchanged
+                sr_ |= sr_v;
             } else {
-                cycles_ += divu_cycles(dividend, divisor);
                 d_[dni] = (rem << 16U) | (q & 0xFFFFU);
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v));
                 if ((q & 0x8000U) != 0U) {
@@ -914,7 +916,12 @@ namespace mnemos::chips::cpu {
             const auto dividend = static_cast<std::int32_t>(d_[dni]);
             const std::int64_t q64 = static_cast<std::int64_t>(dividend) / divisor;
             sr_ = static_cast<std::uint16_t>(sr_ & ~sr_c);
-            if (q64 < -32768 || q64 > 32767) {
+            const bool overflow = q64 < -32768 || q64 > 32767;
+            if (overflow) {
+                // The cycle accounting cares about the actual signed-overflow
+                // condition (which divs_cycles' simpler `>>16` test undercatches).
+                int mcyc = 6 + (dividend < 0 ? 1 : 0);
+                cycles_ += (mcyc + 2) * 2 - 4;
                 sr_ |= sr_v;
             } else {
                 cycles_ += divs_cycles(dividend, divisor);
@@ -1212,6 +1219,9 @@ namespace mnemos::chips::cpu {
                 const std::uint32_t x = (sr_ & sr_x) != 0U ? 1U : 0U;
                 const std::uint32_t r = (0U - d - x) & size_mask(sz);
                 ea_rmw_write(em, er, sz, r, addr);
+                if (em == 0 && sz == op_size::longword) {
+                    cycles_ += 2; // .l on Dn: 2 extra internal cycles
+                }
                 flags_subx(sz, d, 0U, x);
                 return;
             }
@@ -1224,6 +1234,9 @@ namespace mnemos::chips::cpu {
                     ea_rmw_write(em, er, sz, 0U, addr);
                 } else {
                     d_[static_cast<std::size_t>(er)] &= ~size_mask(sz);
+                    if (sz == op_size::longword) {
+                        cycles_ += 2;
+                    }
                 }
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_v | sr_c));
                 sr_ |= sr_z;
@@ -1236,6 +1249,9 @@ namespace mnemos::chips::cpu {
                 const std::uint32_t d = ea_rmw_read(em, er, sz, addr);
                 const std::uint32_t r = (0U - d) & size_mask(sz);
                 ea_rmw_write(em, er, sz, r, addr);
+                if (em == 0 && sz == op_size::longword) {
+                    cycles_ += 2;
+                }
                 flags_sub(sz, d, 0U, r);
                 return;
             }
@@ -1246,6 +1262,9 @@ namespace mnemos::chips::cpu {
                 const std::uint32_t v = ea_rmw_read(em, er, sz, addr);
                 const std::uint32_t r = ~v & size_mask(sz);
                 ea_rmw_write(em, er, sz, r, addr);
+                if (em == 0 && sz == op_size::longword) {
+                    cycles_ += 2;
+                }
                 set_logic_flags(sz, r);
                 return;
             }
@@ -1260,12 +1279,17 @@ namespace mnemos::chips::cpu {
                 std::uint32_t addr = 0;
                 const auto v = static_cast<std::uint8_t>(ea_rmw_read(em, er, op_size::byte, addr));
                 set_logic_flags(op_size::byte, v);
-                // Genesis quirk: the host can suppress the write-back for a memory
-                // operand (em != 0 == not Dn) -- real Sega Genesis ignores TAS writes.
                 if (em != 0 && tas_callback_) {
+                    // Genesis bus controller drops the write phase; the lock
+                    // still costs the 2 extra cycles a real RMW would.
                     tas_callback_(addr);
                 } else {
                     ea_rmw_write(em, er, op_size::byte, static_cast<std::uint8_t>(v | 0x80U), addr);
+                }
+                // Memory operand: the locked RMW holds AS across read+write,
+                // costing 2 cycles on top of separate-read-and-write bus time.
+                if (em != 0) {
+                    cycles_ += 2;
                 }
                 return;
             }
@@ -1275,9 +1299,14 @@ namespace mnemos::chips::cpu {
         }
 
         // LEA <ea>,An -- load the effective address (control modes only).
+        // The 68000 charges 2 extra cycles for LEA's brief-extension index
+        // decode that the generic ea_address path doesn't account for.
         if ((op & 0xF1C0U) == 0x41C0U) {
             a_[static_cast<std::size_t>((op >> 9U) & 7)] =
                 ea_address(em, er, op_size::longword, false);
+            if (em == 6 || (em == 7 && er == 3)) {
+                cycles_ += 2;
+            }
             return;
         }
         // NBCD <ea>.B -- BCD negate (0 - operand - X).
@@ -1286,6 +1315,9 @@ namespace mnemos::chips::cpu {
             const auto d = static_cast<std::uint8_t>(ea_rmw_read(em, er, op_size::byte, addr));
             const std::uint8_t r = bcd_sub(0U, d);
             ea_rmw_write(em, er, op_size::byte, r, addr);
+            if (em == 0) {
+                cycles_ += 2; // NBCD Dn: 2 extra internal cycles
+            }
             return;
         }
         // SWAP Dn -- exchange the register halves.
@@ -1295,9 +1327,13 @@ namespace mnemos::chips::cpu {
             set_logic_flags(op_size::longword, d_[dn]);
             return;
         }
-        // PEA <ea> -- push the effective address.
+        // PEA <ea> -- push the effective address. Same indexed-mode +2 quirk
+        // as LEA.
         if ((op & 0xFFC0U) == 0x4840U && em >= 2) {
             push32(ea_address(em, er, op_size::longword, false));
+            if (em == 6 || (em == 7 && er == 3)) {
+                cycles_ += 2;
+            }
             return;
         }
         // MOVEM <list>,<ea> / <ea>,<list> -- register-list transfer.
@@ -1372,6 +1408,10 @@ namespace mnemos::chips::cpu {
                 if (em == 3) {
                     a_[static_cast<std::size_t>(er)] = a; // postincrement leaves An past the block
                 }
+                // The 68000's MOVEM-from-memory does one extra word read past
+                // the last register (a documented bus quirk); model the 4
+                // cycles without touching memory.
+                cycles_ += 4;
             }
             return;
         }
@@ -1383,6 +1423,7 @@ namespace mnemos::chips::cpu {
                 static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
             const auto value = static_cast<std::int16_t>(
                 static_cast<std::uint16_t>(d_[static_cast<std::size_t>(dn)]));
+            const bool trap = value > bound || value < 0;
             if (value > bound) {
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
                 if (value < 0) {
@@ -1394,13 +1435,12 @@ namespace mnemos::chips::cpu {
                 sr_ |= sr_n;
                 raise_exception(vec_chk, pc_);
             } else {
-                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_z | sr_v | sr_c)); // in range: no trap
+                sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_z | sr_v | sr_c));
             }
-            // Motorola: CHK no-trap = 10 + EA; trap path adds the standard
-            // exception cost. The opcode fetch already counts 4; add the
-            // remaining 6 of the no-trap base. raise_exception accounts for
-            // the trap-path cost separately.
-            cycles_ += 6;
+            // CHK no-trap = 10 + EA (opcode 4 + 6 here). Trap path completes
+            // 4 of those internal cycles before transferring to the exception
+            // entry, which raise_exception accounts for separately.
+            cycles_ += trap ? 4 : 6;
             return;
         }
         // MOVE from SR -> <ea> (word). Not privileged on the 68000. Motorola:
