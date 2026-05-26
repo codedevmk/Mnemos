@@ -1,15 +1,20 @@
 include(MnemosFetchSDL3)
 mnemos_fetch_sdl3()
 
+# Per-system adapters that bridge a manifest to the frontend_sdk::player_system
+# interface. Each adapter is its own concrete library so the player exec can
+# pick which systems it supports, and so adapters can be unit-tested in
+# isolation. Currently: Genesis. SMS, C64, 32X, Sega CD slot in alongside.
+add_subdirectory(adapters/genesis)
+
 add_executable(mnemos_player main.cpp)
 
-# SDL3 headers and our own player-tool sources only; the player_system
-# interface comes from the frontend_sdk tier and concrete system adapters
-# are linked in as their manifests land (Commit 3 onwards).
 target_link_libraries(
     mnemos_player
     PRIVATE
         SDL3::SDL3-static
+        mnemos::frontend_sdk
+        mnemos::apps::player::genesis_adapter
 )
 
 # SDL3 headers trip /W4 /WX in some configs; mark them SYSTEM so warnings in
