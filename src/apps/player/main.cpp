@@ -331,16 +331,25 @@ int main(int argc, char* argv[]) {
             const std::string trace_path = screenshot->path + ".68k_trace.csv";
             trace_out.open(trace_path);
             if (trace_out) {
-                trace_out << "frame,inst,pc,cycles\n";
+                // The last 3 columns are markers for the PREVIOUS instruction
+                // (they describe what just happened to produce this row's
+                // cycles value). r=bus_refresh fired, z=Z80-bus access count,
+                // i=IRQ entered. Used to localise cycle-accounting drift
+                // against the reference without having to guess from raw deltas.
+                trace_out << "frame,inst,pc,cycles,r,z,i\n";
                 auto* cpu_ptr = &genesis_for_trace->system().cpu;
                 cpu_ptr->set_trace_callback(
                     [&trace_out, &trace_frame, &trace_inst, cpu_ptr](std::uint32_t pc) {
-                        char buf[80];
-                        std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu\n",
+                        const auto& src = cpu_ptr->last_cycle_sources();
+                        char buf[96];
+                        std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu,%u,%u,%u\n",
                                       static_cast<unsigned long long>(trace_frame),
                                       static_cast<unsigned long long>(trace_inst),
                                       pc,
-                                      static_cast<unsigned long long>(cpu_ptr->elapsed_cycles()));
+                                      static_cast<unsigned long long>(cpu_ptr->elapsed_cycles()),
+                                      static_cast<unsigned>(src.refresh_fired),
+                                      static_cast<unsigned>(src.z80_bus_accesses),
+                                      static_cast<unsigned>(src.irq_entered));
                         trace_out << buf;
                         ++trace_inst;
                     });

@@ -109,6 +109,23 @@ namespace mnemos::chips::cpu {
             trace_callback_ = std::move(callback);
         }
 
+        // Cycle-source tags for the LAST completed instruction. Lets a tracer
+        // decompose each instruction's cycle cost into its contributing pieces
+        // (refresh? Z80 bus latency? IRQ entry?) to localise cycle-accounting
+        // drift vs the reference emulator without having to guess from raw deltas.
+        // Populated at the END of step_instruction() with the just-completed
+        // instruction's events. So when a tracer fires its trace_callback at
+        // the START of instruction N (per the the reference HOOK_M68K_E convention),
+        // last_cycle_sources() describes instruction N-1.
+        struct cycle_sources final {
+            std::uint8_t refresh_fired{};   // 0 or 1 (only fires at most once per inst)
+            std::uint8_t z80_bus_accesses{};// count of $A0xxxx accesses
+            std::uint8_t irq_entered{};     // 0 or 1
+        };
+        [[nodiscard]] const cycle_sources& last_cycle_sources() const noexcept {
+            return last_cycle_sources_;
+        }
+
         // Genesis Z80-bus access latency. When enabled, every cycle-accounted
         // bus access into $A00000-$A0FFFF costs an extra 1 CPU cycle (7 master
         // cycles). This matches the reference emulator's core/the reference z80_read_byte/
@@ -236,6 +253,11 @@ namespace mnemos::chips::cpu {
 
         // Genesis $A00000-$A0FFFF access latency (see set_z80_bus_latency_enabled).
         bool z80_bus_latency_enabled_{false};
+
+        // Cycle-source accumulator for the instruction in flight; snapshotted
+        // to last_cycle_sources_ at the end of each step_instruction().
+        cycle_sources cycle_sources_{};
+        cycle_sources last_cycle_sources_{};
 
         ibus* bus_{};
 

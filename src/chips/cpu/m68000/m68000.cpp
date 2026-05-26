@@ -177,6 +177,7 @@ namespace mnemos::chips::cpu {
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
+            ++cycle_sources_.z80_bus_accesses;
         }
         return rd8(a);
     }
@@ -184,6 +185,7 @@ namespace mnemos::chips::cpu {
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
+            ++cycle_sources_.z80_bus_accesses;
         }
         return rd16(a);
     }
@@ -192,9 +194,11 @@ namespace mnemos::chips::cpu {
         if (z80_bus_latency_enabled_) {
             if (is_z80_bus_addr(a)) {
                 cycles_ += 1;
+                ++cycle_sources_.z80_bus_accesses;
             }
             if (is_z80_bus_addr(a + 2U)) {
                 cycles_ += 1;
+                ++cycle_sources_.z80_bus_accesses;
             }
         }
         return (static_cast<std::uint32_t>(rd16(a)) << 16U) | rd16(a + 2U);
@@ -203,6 +207,7 @@ namespace mnemos::chips::cpu {
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
+            ++cycle_sources_.z80_bus_accesses;
         }
         wr8(a, v);
     }
@@ -210,6 +215,7 @@ namespace mnemos::chips::cpu {
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
+            ++cycle_sources_.z80_bus_accesses;
         }
         wr16(a, v);
     }
@@ -218,9 +224,11 @@ namespace mnemos::chips::cpu {
         if (z80_bus_latency_enabled_) {
             if (is_z80_bus_addr(a)) {
                 cycles_ += 1;
+                ++cycle_sources_.z80_bus_accesses;
             }
             if (is_z80_bus_addr(a + 2U)) {
                 cycles_ += 1;
+                ++cycle_sources_.z80_bus_accesses;
             }
         }
         wr16(a, static_cast<std::uint16_t>(v >> 16U));
@@ -2119,6 +2127,7 @@ namespace mnemos::chips::cpu {
 
     int m68000::step_instruction() {
         cycles_ = 0;
+        cycle_sources_ = {};
 
         // Interrupt dispatch. Level 7 is edge-triggered (NMI); the others are
         // accepted when the request level exceeds the SR interrupt-priority mask.
@@ -2127,16 +2136,19 @@ namespace mnemos::chips::cpu {
             const bool fire = irq_level_ == 7 ? prev_irq_level_ < 7 : irq_level_ > ipm;
             if (fire) {
                 prev_irq_level_ = irq_level_;
+                cycle_sources_.irq_entered = 1U;
                 process_interrupt();
                 if (cycles_ < 4) {
                     cycles_ = 4;
                 }
                 elapsed_ += static_cast<std::uint64_t>(cycles_);
+                last_cycle_sources_ = cycle_sources_;
                 return cycles_;
             }
         }
 
         if (halted_ || stopped_) {
+            last_cycle_sources_ = cycle_sources_;
             return 4;
         }
 
@@ -2145,6 +2157,7 @@ namespace mnemos::chips::cpu {
         if (elapsed_ >= bus_refresh_due_) {
             cycles_ += 2;
             bus_refresh_due_ = elapsed_ + 128U;
+            cycle_sources_.refresh_fired = 1U;
         }
 
         const std::uint16_t pre_sr = sr_;
@@ -2163,6 +2176,7 @@ namespace mnemos::chips::cpu {
             cycles_ = 4;
         }
         elapsed_ += static_cast<std::uint64_t>(cycles_);
+        last_cycle_sources_ = cycle_sources_;
         return cycles_;
     }
 
