@@ -617,6 +617,12 @@ namespace mnemos::chips::cpu {
         }
         set_logic_flags(sz, v);
         ea_write(dm, dr, sz, v);
+        if (dm == 4) {
+            // MOVE -(An) destination doesn't pay the predec-calc penalty
+            // (it overlaps with the source fetch in the bus pipeline); the
+            // generic ea_address adds +2 for -(An) that we refund here.
+            cycles_ -= 2;
+        }
     }
 
     void m68000::op_moveq(std::uint16_t op) noexcept {
@@ -997,6 +1003,22 @@ namespace mnemos::chips::cpu {
             sr_ = static_cast<std::uint16_t>(sr_ & ~sr_z);
         } else {
             sr_ |= sr_z;
+        }
+        // Dn destination cycle table (on top of the 4-cycle opcode fetch and,
+        // for static ops, the immediate-word fetch):
+        //   BTST  Dn,Dn  : +2
+        //   BCHG  Dn,Dn  : +2  (+2 if bit >= 16)
+        //   BSET  Dn,Dn  : +2  (+2 if bit >= 16)
+        //   BCLR  Dn,Dn  : +4  (+2 if bit >= 16)
+        if (!mem) {
+            int extra = 2;
+            if (ty == 2) {
+                extra += 2; // BCLR base
+            }
+            if (ty != 0 && (bn & 31U) >= 16U) {
+                extra += 2; // high-bit penalty (BCHG/BCLR/BSET only)
+            }
+            cycles_ += extra;
         }
         if (ty == 0) {
             return; // BTST: test only, no write-back
@@ -1423,24 +1445,25 @@ namespace mnemos::chips::cpu {
                 static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
             const auto value = static_cast<std::int16_t>(
                 static_cast<std::uint16_t>(d_[static_cast<std::size_t>(dn)]));
-            const bool trap = value > bound || value < 0;
+            // The two trap conditions diverge in cycle cost: value > bound
+            // detects after 4 internal cycles, value < 0 takes 6 (it has to
+            // observe the sign before testing the bound). No-trap = 6.
             if (value > bound) {
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
                 if (value < 0) {
                     sr_ |= sr_n;
                 }
+                cycles_ += 4;
                 raise_exception(vec_chk, pc_);
             } else if (value < 0) {
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_n | sr_z | sr_v | sr_c));
                 sr_ |= sr_n;
+                cycles_ += 6;
                 raise_exception(vec_chk, pc_);
             } else {
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_z | sr_v | sr_c));
+                cycles_ += 6;
             }
-            // CHK no-trap = 10 + EA (opcode 4 + 6 here). Trap path completes
-            // 4 of those internal cycles before transferring to the exception
-            // entry, which raise_exception accounts for separately.
-            cycles_ += trap ? 4 : 6;
             return;
         }
         // MOVE from SR -> <ea> (word). Not privileged on the 68000. Motorola:
