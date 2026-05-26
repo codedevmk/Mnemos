@@ -500,7 +500,12 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   a random 50-ROM sweep (USA commercial, seed 42). 36/36 ctest still green. Remaining
   6 hangs each have distinct patterns -- individual game / Z80-sync bugs. 98% target
   needs more systemic fixes: candidates are active-display DMA pacing, FIFO timing
-  accuracy, mid-line CRAM/VSRAM deferral)
+  accuracy, mid-line CRAM/VSRAM deferral. NOTE: the local ROM library was reorganised
+  mid-2026; the genesis ROMs now live at C:\emu\sega\genesis\roms\md\<region>\*.md
+  (older bin/<region>/*.bin layout is gone). Re-sweep against the new .md library:
+  36/50 = 72% at 180 frames, 41/50 = 82% at 400 frames (several hangs were just slow
+  boots). Remaining hangs each have distinct stuck states; one branched into the
+  cartridge header at pc=0x194 (Tanzer). 36/36 ctest still green)
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---
