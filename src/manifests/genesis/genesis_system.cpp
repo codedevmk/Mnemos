@@ -38,22 +38,37 @@ namespace mnemos::manifests::genesis {
             0);
 
         // --- $A10000-$A1001F: controller I/O + version register. ---
+        // $A10001 = version. $A10003/$A10005 = controller 1/2 data port (read
+        // returns the button state in the bank selected by the most-recently
+        // written TH bit; CPU writes here latch TH for that port).
         s->bus.map_mmio(
             0xA10000U, 0x20U,
             [s](std::uint32_t a) -> std::uint8_t {
                 switch (a & 0x1FU) {
                 case 0x01:
                     return s->version_register;
-                case 0x03: // controller 1 data (idle: nothing pressed)
-                case 0x05: // controller 2 data
-                    return 0x7FU;
+                case 0x03:
+                    return s->read_pad_port(0);
+                case 0x05:
+                    return s->read_pad_port(1);
                 default:
                     return 0xFFU;
                 }
             },
-            [](std::uint32_t /*a*/, std::uint8_t /*v*/) {
-                // Controller direction/data latches: full 3/6-button protocol is the
-                // next phase; writes are accepted and dropped for now.
+            [s](std::uint32_t a, std::uint8_t v) {
+                // Bit 6 of the data port write selects the controller bank
+                // (TH=high reads B/C/L/R, TH=low reads A/Start). We latch it
+                // per port; bits 0-5 are output-only pad lines we don't drive.
+                switch (a & 0x1FU) {
+                case 0x03:
+                    s->pad_th[0] = (v & 0x40U) != 0U;
+                    break;
+                case 0x05:
+                    s->pad_th[1] = (v & 0x40U) != 0U;
+                    break;
+                default:
+                    break;
+                }
             },
             0);
 

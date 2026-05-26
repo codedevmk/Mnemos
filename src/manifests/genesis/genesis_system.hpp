@@ -94,14 +94,52 @@ namespace mnemos::manifests::genesis {
         // Scheduler view of the Z80, advanced only while z80_running (see gated_chip).
         gated_chip z80_gate{z80, z80_running};
 
-        // Controller state, active-high (a set bit = pressed); the port read converts
-        // to the active-low pad lines. Full 3/6-button protocol is the next phase.
+        // Controller state, active-high (a set bit = pressed). Bit layout:
+        //   0=Up  1=Down  2=Left  3=Right  4=A  5=B  6=C  7=Start
+        // The $A1000{3,5} read handler converts to the active-low Genesis pad
+        // wire protocol; bit 6 of the CPU-written byte at the same address is
+        // the TH (select) line that toggles between the (U/D/L/R/B/C) and
+        // (U/D/A/Start) button banks. `pad_th[]` latches the most-recent TH
+        // write per port so the read returns the right bank.
         std::array<std::uint8_t, 2> pad{};
+        std::array<bool, 2> pad_th{{true, true}}; // TH defaults high on reset
 
         void set_pad(int port, std::uint8_t buttons) noexcept {
             if (port >= 0 && port < 2) {
                 pad[static_cast<std::size_t>(port)] = buttons;
             }
+        }
+
+        // Encode the current pad state as the byte the 68000 reads at
+        // $A10003/$A10005 for the given port. Matches the standard Sega 3-button
+        // pad protocol: when TH is high the bank is U/D/L/R/B/C; when TH is low
+        // it's U/D/-/-/A/Start (left/right read as if pressed so games can
+        // detect a 3-button vs 6-button pad).
+        [[nodiscard]] std::uint8_t read_pad_port(int port) const noexcept {
+            if (port < 0 || port >= 2) {
+                return 0xFFU;
+            }
+            const auto bits = pad[static_cast<std::size_t>(port)];
+            const bool th = pad_th[static_cast<std::size_t>(port)];
+            const auto inv = [&](std::uint8_t mask) -> std::uint8_t {
+                return (bits & mask) ? 0U : 1U; // active-high pad -> active-low wire
+            };
+            std::uint8_t out = th ? 0x40U : 0x00U;
+            if (th) {
+                out |= inv(0x01U) << 0; // Up
+                out |= inv(0x02U) << 1; // Down
+                out |= inv(0x04U) << 2; // Left
+                out |= inv(0x08U) << 3; // Right
+                out |= inv(0x20U) << 4; // B
+                out |= inv(0x40U) << 5; // C
+            } else {
+                out |= inv(0x01U) << 0; // Up
+                out |= inv(0x02U) << 1; // Down
+                // bits 2,3 always 0 (so a 3-button pad is identifiable: L+R both "pressed")
+                out |= inv(0x10U) << 4; // A
+                out |= inv(0x80U) << 5; // Start
+            }
+            return out;
         }
     };
 

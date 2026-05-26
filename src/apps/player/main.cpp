@@ -429,6 +429,27 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Sample the keyboard, build a controller_state for port 0, hand it to
+        // the system before stepping the frame. Mapping (Genesis 3-button pad):
+        //   Arrows = D-pad   Z = A   X = B   C = C   Enter = Start
+        // Adapters that don't expose all of these (SMS, C64, ...) ignore the
+        // extras when this lands.
+        {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            mnemos::frontend_sdk::controller_state pad{};
+            pad.up = keys[SDL_SCANCODE_UP];
+            pad.down = keys[SDL_SCANCODE_DOWN];
+            pad.left = keys[SDL_SCANCODE_LEFT];
+            pad.right = keys[SDL_SCANCODE_RIGHT];
+            pad.a = keys[SDL_SCANCODE_Z];
+            pad.b = keys[SDL_SCANCODE_X];
+            pad.c = keys[SDL_SCANCODE_C];
+            pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
+            if (system) {
+                system->apply_input(0, pad);
+            }
+        }
+
         // Drive emulation: exactly one video frame per present (vsync paces us).
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;

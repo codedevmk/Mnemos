@@ -58,8 +58,18 @@ namespace mnemos::apps::player::adapters::genesis {
             return;
         }
         ports_[static_cast<std::size_t>(port)] = state;
-        // Commit 5 wires this into the genesis_system controller MMIO; for now
-        // the state is recorded but not surfaced on the bus.
+        // Translate the system-agnostic controller_state into the Genesis pad
+        // bitmask the system's $A10003/$A10005 read handler consumes. The
+        // adapter is the right place for this translation: the genesis_system
+        // doesn't know about frontend_sdk types (tier-4 manifest can't depend
+        // on tier-7 frontend_sdk), and the frontend_sdk doesn't know about
+        // system-specific button layouts.
+        const std::uint8_t pad =
+            (state.up ? 0x01U : 0U) | (state.down ? 0x02U : 0U) |
+            (state.left ? 0x04U : 0U) | (state.right ? 0x08U : 0U) |
+            (state.a ? 0x10U : 0U) | (state.b ? 0x20U : 0U) | (state.c ? 0x40U : 0U) |
+            (state.start ? 0x80U : 0U);
+        sys_->set_pad(port, pad);
     }
 
     frontend_sdk::audio_chunk genesis_adapter::drain_audio() noexcept {

@@ -84,6 +84,50 @@ TEST_CASE("genesis_adapter selects PAL pacing when configured") {
     CHECK(adapter.region().frames_per_second_x1000 == 50000U);
 }
 
+TEST_CASE("genesis_adapter routes controller_state through the system pad protocol") {
+    using namespace mnemos::manifests::genesis;
+    genesis_adapter adapter(tiny_rom());
+    auto& sys = adapter.system();
+
+    // Idle (no buttons pressed). On a 3-button Genesis pad with TH=high
+    // (default), all buttons read as active-low '1' bits, so the byte is
+    // 0x40 | 0x3F = 0x7F (bit 6 = TH high reflection, bits 0-5 = no buttons).
+    mnemos::frontend_sdk::controller_state idle{};
+    adapter.apply_input(0, idle);
+    sys.pad_th[0] = true;
+    CHECK(sys.read_pad_port(0) == 0x7FU);
+
+    // Press Start. With TH high, Start isn't visible (bank shows B/C/dpad).
+    // The byte must still report all other bits idle.
+    mnemos::frontend_sdk::controller_state with_start{};
+    with_start.start = true;
+    adapter.apply_input(0, with_start);
+    sys.pad_th[0] = true;
+    CHECK(sys.read_pad_port(0) == 0x7FU); // TH high -> Start invisible
+
+    // Toggle TH low. Start now visible at bit 5; bits 2,3 always 0 so a
+    // 3-button pad is identifiable (left+right always "pressed" in this bank).
+    sys.pad_th[0] = false;
+    // Expected byte: TH=0 (no 0x40), Start press clears bit 5, bits 2/3 = 0.
+    // Idle for U/D/A: bits 0,1,4 = 1. So byte = 0b00010011 = 0x13.
+    CHECK(sys.read_pad_port(0) == 0x13U);
+
+    // Press D-pad Right + button A with TH low.
+    mnemos::frontend_sdk::controller_state combo{};
+    combo.right = true;
+    combo.a = true;
+    adapter.apply_input(0, combo);
+    sys.pad_th[0] = false;
+    // TH low: bits 2,3 = 0 (L/R show as pressed regardless); A clears bit 4.
+    // U/D idle (bits 0,1 = 1); Start idle (bit 5 = 1). Byte = 0b00100011 = 0x23.
+    CHECK(sys.read_pad_port(0) == 0x23U);
+
+    // Same combo with TH high: now Right is visible at bit 3 (cleared).
+    sys.pad_th[0] = true;
+    // Bits: 0=U(1), 1=D(1), 2=L(1), 3=R(0 pressed), 4=B(1), 5=C(1), 6=TH(1) = 0x77.
+    CHECK(sys.read_pad_port(0) == 0x77U);
+}
+
 TEST_CASE("detect_region honours the cartridge header region field") {
     using mnemos::apps::player::adapters::genesis::detect_region;
 
