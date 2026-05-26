@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdio>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::genesis {
@@ -19,12 +20,14 @@ namespace mnemos::apps::player::adapters::genesis {
 
         // The Genesis chip dividers, in scheduler dispatch order. The VDP comes
         // first because it advances the raster the 68000 then samples; the
-        // gated Z80 runs only while it owns its bus (see manifests/genesis).
+        // gated Z80 runs only while it owns its bus, and the 68000 runs
+        // through cpu_gate so DMA stalls keep it off the bus (matches real
+        // hardware -- see manifests/genesis/genesis_system.hpp).
         std::vector<runtime::scheduled_chip>
         build_schedule(manifests::genesis::genesis_system& sys) {
             return {
                 {&sys.vdp, 1U},
-                {&sys.cpu, 7U},
+                {&sys.cpu_gate, 7U},
                 {&sys.z80_gate, 15U},
                 {&sys.fm, 7U},
                 {&sys.psg, 15U},

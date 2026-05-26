@@ -47,6 +47,37 @@ namespace mnemos::manifests::genesis {
         const bool* gate_;
     };
 
+    // Like gated_chip but the gate is a callable evaluated per tick. The
+    // Genesis uses this to stall the 68000 while the VDP's DMA stall debt
+    // is being drained -- the 68K only ticks when the VDP says the bus is
+    // free. Captures a thin function pointer rather than a std::function so
+    // every scheduler tick stays tiny.
+    class predicate_gated_chip final : public chips::ichip {
+      public:
+        using predicate_fn = bool (*)(void* user) noexcept;
+        predicate_gated_chip(chips::ichip& inner, predicate_fn fn, void* user) noexcept
+            : inner_(&inner), fn_(fn), user_(user) {}
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override {
+            return inner_->metadata();
+        }
+        void tick(std::uint64_t cycles) override {
+            if (fn_(user_)) {
+                inner_->tick(cycles);
+            }
+        }
+        void reset(chips::reset_kind kind) override { inner_->reset(kind); }
+        void save_state(chips::state_writer& writer) const override { inner_->save_state(writer); }
+        void load_state(chips::state_reader& reader) override { inner_->load_state(reader); }
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return inner_->introspection();
+        }
+
+      private:
+        chips::ichip* inner_;
+        predicate_fn fn_;
+        void* user_;
+    };
+
     // A wired Sega Genesis / Mega Drive: the 68000 main CPU, the VDP, the YM2612 FM
     // and SN76489 PSG, the Z80 sound CPU, 64 KiB of 68K work RAM, 8 KiB of Z80 RAM,
     // and the 68000 24-bit big-endian bus. Heap-allocated and never moved after
@@ -93,6 +124,18 @@ namespace mnemos::manifests::genesis {
 
         // Scheduler view of the Z80, advanced only while z80_running (see gated_chip).
         gated_chip z80_gate{z80, z80_running};
+
+        // Scheduler view of the 68000, advanced only while the VDP isn't
+        // holding the bus for DMA. Without this gate the 68K runs through
+        // DMA in zero emulated time and the game's per-frame work budget
+        // grows -- visible as the Blades-of-Vengeance credits screen
+        // pulling its tile-data DMA ~36 frames earlier than real hardware
+        // (background-agent investigation, tracked as task #28).
+        static bool cpu_runnable(void* user) noexcept {
+            const auto* sys = static_cast<const genesis_system*>(user);
+            return !sys->vdp.dma_stall_active();
+        }
+        predicate_gated_chip cpu_gate{cpu, &cpu_runnable, this};
 
         // Controller state, active-high (a set bit = pressed). Bit layout:
         //   0=Up  1=Down  2=Left  3=Right  4=A  5=B  6=C  7=Start

@@ -127,6 +127,19 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint16_t vsram(int idx) const noexcept;
         [[nodiscard]] int scanline() const noexcept { return scanline_; }
         [[nodiscard]] bool dma_busy() const noexcept { return dma_busy_; }
+
+        // Real hardware stalls the 68000 while VDP DMA holds the bus. Mnemos
+        // executes DMA payloads synchronously inside the control / data-port
+        // write, so the chip's data is correct -- but to keep the 68K's wall-
+        // clock work-per-frame budget right (which game code depends on for
+        // timer-driven progress), the VDP estimates the DMA's master-clock
+        // cost and asks the host scheduler to stop the 68K until that budget
+        // is consumed. `dma_stall_master_cycles_` is the remaining stall debt;
+        // `tick(cycles)` drains it. The Genesis manifest reads this via a
+        // gated_chip around the 68K (see genesis_system.cpp).
+        [[nodiscard]] bool dma_stall_active() const noexcept {
+            return dma_stall_master_cycles_ > 0;
+        }
         [[nodiscard]] bool dma_fill_pending() const noexcept { return dma_fill_pending_; }
         [[nodiscard]] std::uint8_t cmd_code() const noexcept { return cmd_code_; }
         [[nodiscard]] std::uint32_t cmd_addr() const noexcept { return cmd_addr_; }
@@ -244,6 +257,19 @@ namespace mnemos::chips::video {
         std::uint16_t dma_fill_word_{};
         std::uint32_t dma_source_{};
         bool dma_busy_{};
+        // Remaining master-clock cycles the VDP's DMA is conceptually still
+        // holding the bus. Decremented in tick(); when > 0, the host gates
+        // the 68000 off. Approximation: per-word cost depends on display
+        // mode (active vs blanked) -- ~16 master clocks/word in vblank /
+        // display-disabled (where the DMA owns the bus), ~205 master
+        // clocks/word in active display (DMA only gets 16 slots/H40 line).
+        std::int64_t dma_stall_master_cycles_{};
+
+        // Estimate the master-clock cost of a DMA of `length_words` based on
+        // the current display state (vblank or display-disabled vs active).
+        // Added to dma_stall_master_cycles_ at DMA dispatch.
+        [[nodiscard]] std::int64_t
+        estimate_dma_stall_cycles(std::uint32_t length_words) const noexcept;
 
         // Timing / position.
         int scanline_{};
