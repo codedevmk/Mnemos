@@ -3,6 +3,7 @@
 #include "region.hpp" // shared sega16 region detector
 
 #include <algorithm>
+#include <cstddef>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::genesis {
@@ -28,6 +29,143 @@ namespace mnemos::apps::player::adapters::genesis {
                 {&sys.fm, 7U},
                 {&sys.psg, 15U},
             };
+        }
+
+        // ============================================================
+        //  Audio resample + mix
+        // ------------------------------------------------------------
+        // Ported from C:\Users\mkrol\source\repos\Emu\Emu\frontends\cli\
+        // play_common.c. Box-average for downsampling, linear for
+        // upsampling, both source rates resampled into the SAME output
+        // rate (48 kHz fixed), gains applied at constant ratios so a PSG
+        // keying on doesn't duck the FM. SDL_AudioStream's built-in
+        // resampler from arbitrary chip rates produced audible artifacts.
+        // ============================================================
+        constexpr int kMixerGainShift = 12;
+        constexpr int kMixerGainOne = 1 << kMixerGainShift;
+        // 3:1 (~9.5 dB) FM bias, the reference's default for non-CD games.
+        constexpr int kGainFm = 3072;  // ~3/4
+        constexpr int kGainPsg = 1024; // ~1/4
+        constexpr std::uint32_t kOutputRate = 48000U;
+
+        [[nodiscard]] inline std::int16_t clip_i16(int v) noexcept {
+            if (v > 32767) {
+                return 32767;
+            }
+            if (v < -32768) {
+                return -32768;
+            }
+            return static_cast<std::int16_t>(v);
+        }
+
+        [[nodiscard]] inline int scale_q12(int sample, int gain_q12) noexcept {
+            int scaled = sample * gain_q12;
+            scaled += scaled >= 0 ? (kMixerGainOne / 2) : -(kMixerGainOne / 2);
+            return scaled / kMixerGainOne;
+        }
+
+        [[nodiscard]] inline int sample_channel_linear(const std::int16_t* src, int stride,
+                                                       int channel, int src_count,
+                                                       double pos) noexcept {
+            if (!src || src_count <= 0) {
+                return 0;
+            }
+            if (src_count == 1 || pos <= 0.0) {
+                return src[channel];
+            }
+            int left_index = static_cast<int>(pos);
+            if (left_index >= src_count - 1) {
+                return src[(src_count - 1) * stride + channel];
+            }
+            int right_index = left_index + 1;
+            double frac = pos - static_cast<double>(left_index);
+            double a = static_cast<double>(src[left_index * stride + channel]);
+            double b = static_cast<double>(src[right_index * stride + channel]);
+            return static_cast<int>(a + (b - a) * frac);
+        }
+
+        [[nodiscard]] inline int sample_channel_box(const std::int16_t* src, int stride,
+                                                    int channel, int src_count, double start,
+                                                    double end) noexcept {
+            if (!src || src_count <= 0) {
+                return 0;
+            }
+            if (end <= start) {
+                return sample_channel_linear(src, stride, channel, src_count, start);
+            }
+            if (start < 0.0) {
+                start = 0.0;
+            }
+            if (end > static_cast<double>(src_count)) {
+                end = static_cast<double>(src_count);
+            }
+            int first = static_cast<int>(start);
+            int last = static_cast<int>(end);
+            if (last >= src_count) {
+                last = src_count - 1;
+            }
+            double accum = 0.0;
+            double total = 0.0;
+            for (int i = first; i <= last; ++i) {
+                double seg_start = start > static_cast<double>(i) ? start : static_cast<double>(i);
+                double seg_end = end < static_cast<double>(i + 1) ? end : static_cast<double>(i + 1);
+                double w = seg_end - seg_start;
+                if (w <= 0.0) {
+                    continue;
+                }
+                accum += static_cast<double>(src[i * stride + channel]) * w;
+                total += w;
+            }
+            if (total <= 0.0) {
+                return sample_channel_linear(src, stride, channel, src_count, start);
+            }
+            return static_cast<int>(accum / total);
+        }
+
+        // Mix FM (stereo) + PSG (mono) into dst at dst_count samples, both
+        // resampled from their respective source rates to the same target.
+        void mix_genesis(const std::int16_t* fm_stereo, int fm_count,
+                         const std::int16_t* psg_mono, int psg_count, std::int16_t* dst_stereo,
+                         int dst_count) noexcept {
+            if (!dst_stereo || dst_count <= 0) {
+                return;
+            }
+            if ((!fm_stereo || fm_count <= 0) && (!psg_mono || psg_count <= 0)) {
+                std::fill_n(dst_stereo, dst_count * 2, std::int16_t{0});
+                return;
+            }
+            const double fm_scale =
+                fm_count > 0 ? static_cast<double>(fm_count) / static_cast<double>(dst_count) : 0.0;
+            const double psg_scale = psg_count > 0
+                                       ? static_cast<double>(psg_count) / static_cast<double>(dst_count)
+                                       : 0.0;
+            for (int i = 0; i < dst_count; ++i) {
+                int left = 0;
+                int right = 0;
+                int psg = 0;
+                if (fm_count > 0) {
+                    if (fm_scale > 1.0) {
+                        left = sample_channel_box(fm_stereo, 2, 0, fm_count, fm_scale * i,
+                                                  fm_scale * (i + 1));
+                        right = sample_channel_box(fm_stereo, 2, 1, fm_count, fm_scale * i,
+                                                   fm_scale * (i + 1));
+                    } else {
+                        left = sample_channel_linear(fm_stereo, 2, 0, fm_count, fm_scale * i);
+                        right = sample_channel_linear(fm_stereo, 2, 1, fm_count, fm_scale * i);
+                    }
+                }
+                if (psg_count > 0) {
+                    if (psg_scale > 1.0) {
+                        psg = sample_channel_box(psg_mono, 1, 0, psg_count, psg_scale * i,
+                                                 psg_scale * (i + 1));
+                    } else {
+                        psg = sample_channel_linear(psg_mono, 1, 0, psg_count, psg_scale * i);
+                    }
+                }
+                dst_stereo[i * 2 + 0] = clip_i16(scale_q12(left, kGainFm) + scale_q12(psg, kGainPsg));
+                dst_stereo[i * 2 + 1] =
+                    clip_i16(scale_q12(right, kGainFm) + scale_q12(psg, kGainPsg));
+            }
         }
 
     } // namespace
@@ -80,55 +218,48 @@ namespace mnemos::apps::player::adapters::genesis {
     }
 
     frontend_sdk::audio_chunk genesis_adapter::drain_audio() noexcept {
-        // Drain whatever stereo samples the FM has queued since the last call.
-        // The PSG runs much faster (master/15/16 ~ 223 kHz vs FM ~53 kHz);
-        // for this first cut we mix it in by averaging its samples per-FM-
-        // sample window and adding (scaled) to both channels. Fine for
-        // playable audio; cleaner resampling is a polish pass.
-        const std::size_t fm_pairs = sys_->fm.pending_samples();
-        if (fm_pairs == 0U) {
-            return {.samples = nullptr, .frame_count = 0U, .sample_rate = ym_sample_rate()};
+        // Drain both chip queues, resample each from its native rate into a
+        // fixed-rate 48 kHz output buffer (mixed), return that. Matches the
+        // reference implementation's approach -- letting SDL_AudioStream
+        // resample arbitrary chip rates produced audible artifacts and a
+        // gradually-growing queue (the chip rates aren't exact integer
+        // multiples of the device rate).
+        const std::size_t fm_count = sys_->fm.pending_samples();
+        const std::size_t psg_count = sys_->psg.pending_samples();
+        if (fm_count == 0U && psg_count == 0U) {
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
         }
-        mix_buf_.resize(fm_pairs * 2U);
-        sys_->fm.drain_samples(mix_buf_.data(), fm_pairs);
+        // Drain into scratch buffers (FM interleaved L,R; PSG mono).
+        if (fm_count > 0U) {
+            fm_buf_.resize(fm_count * 2U);
+            sys_->fm.drain_samples(fm_buf_.data(), fm_count);
+        } else {
+            fm_buf_.clear();
+        }
+        if (psg_count > 0U) {
+            psg_buf_.resize(psg_count);
+            sys_->psg.drain_samples(psg_buf_.data(), psg_count);
+        } else {
+            psg_buf_.clear();
+        }
+        // Target sample count for this frame at 48 kHz output. Accumulate
+        // fractional samples so the long-term rate is exact even when
+        // (kOutputRate / fps) isn't integer.
+        const double fps = region_ == manifests::genesis::genesis_config::region::pal ? 50.0 : 60.0;
+        const double exact = static_cast<double>(kOutputRate) / fps + audio_frac_;
+        int dst_pairs = static_cast<int>(exact);
+        if (dst_pairs <= 0) {
+            dst_pairs = 1;
+        }
+        audio_frac_ = exact - static_cast<double>(dst_pairs);
 
-        const std::size_t psg_avail = sys_->psg.pending_samples();
-        if (psg_avail > 0U) {
-            psg_buf_.resize(psg_avail);
-            sys_->psg.drain_samples(psg_buf_.data(), psg_avail);
-            // Map psg_avail psg samples uniformly onto fm_pairs windows. For
-            // each FM pair, average the corresponding PSG window and add at
-            // ~half gain to both channels (PSG is mono).
-            const std::size_t window = std::max<std::size_t>(1U, psg_avail / fm_pairs);
-            std::size_t psg_idx = 0;
-            for (std::size_t i = 0; i < fm_pairs; ++i) {
-                std::int32_t acc = 0;
-                std::size_t cnt = 0;
-                for (; cnt < window && psg_idx < psg_avail; ++cnt, ++psg_idx) {
-                    acc += psg_buf_[psg_idx];
-                }
-                if (cnt == 0U) {
-                    break;
-                }
-                const std::int32_t avg = (acc / static_cast<std::int32_t>(cnt)) / 2;
-                auto& l = mix_buf_[i * 2U + 0U];
-                auto& r = mix_buf_[i * 2U + 1U];
-                const std::int32_t lm = static_cast<std::int32_t>(l) + avg;
-                const std::int32_t rm = static_cast<std::int32_t>(r) + avg;
-                l = static_cast<std::int16_t>(std::clamp(lm, -32768, 32767));
-                r = static_cast<std::int16_t>(std::clamp(rm, -32768, 32767));
-            }
-        }
+        mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
+        mix_genesis(fm_count > 0U ? fm_buf_.data() : nullptr, static_cast<int>(fm_count),
+                    psg_count > 0U ? psg_buf_.data() : nullptr, static_cast<int>(psg_count),
+                    mix_buf_.data(), dst_pairs);
         return {.samples = mix_buf_.data(),
-                .frame_count = static_cast<std::uint32_t>(fm_pairs),
-                .sample_rate = ym_sample_rate()};
-    }
-
-    std::uint32_t genesis_adapter::ym_sample_rate() const noexcept {
-        // YM2612 sample = master/7/144 = master/1008. NTSC master 53.693175 MHz
-        // -> ~53267 Hz. PAL master 53.203424 MHz -> ~52781 Hz. SDL_AudioStream
-        // resamples to the device rate, so this just needs to be the truth.
-        return region_ == manifests::genesis::genesis_config::region::pal ? 52781U : 53267U;
+                .frame_count = static_cast<std::uint32_t>(dst_pairs),
+                .sample_rate = kOutputRate};
     }
 
 } // namespace mnemos::apps::player::adapters::genesis

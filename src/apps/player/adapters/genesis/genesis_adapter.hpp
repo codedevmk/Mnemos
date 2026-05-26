@@ -57,8 +57,6 @@ namespace mnemos::apps::player::adapters::genesis {
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
-        [[nodiscard]] std::uint32_t ym_sample_rate() const noexcept;
-
         std::unique_ptr<manifests::genesis::genesis_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
@@ -67,10 +65,16 @@ namespace mnemos::apps::player::adapters::genesis {
         std::uint64_t frames_stepped_{};
 
         // Reusable scratch buffers for drain_audio() so we don't reallocate
-        // every frame. mix_buf_ is interleaved L,R,L,R,... at the FM rate;
-        // psg_buf_ is mono at the PSG rate, decimated/mixed into mix_buf_.
-        std::vector<std::int16_t> mix_buf_{};
+        // every frame. fm_buf_ holds the FM chip's drained interleaved-
+        // stereo samples at the FM native rate; psg_buf_ holds the PSG's
+        // mono samples at the much-higher PSG rate; mix_buf_ is the output
+        // (interleaved stereo @ the fixed 48 kHz rate) the host queues to
+        // its audio device. audio_frac_ accumulates the fractional samples
+        // that 48 kHz / (50|60) Hz produces so the long-term rate is exact.
+        std::vector<std::int16_t> fm_buf_{};
         std::vector<std::int16_t> psg_buf_{};
+        std::vector<std::int16_t> mix_buf_{};
+        double audio_frac_{0.0};
     };
 
 } // namespace mnemos::apps::player::adapters::genesis

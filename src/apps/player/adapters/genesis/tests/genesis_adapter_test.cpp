@@ -73,23 +73,24 @@ TEST_CASE("genesis_adapter ignores out-of-range input ports") {
     SUCCEED();
 }
 
-TEST_CASE("genesis_adapter drain_audio reports the YM sample rate and produces samples") {
+TEST_CASE("genesis_adapter drain_audio resamples to 48 kHz output") {
     genesis_adapter adapter(tiny_rom());
-    // Before stepping, no samples queued but the adapter still reports its
-    // native YM rate so the player can open SDL_AudioStream upfront.
+    // Before stepping, no samples queued but the adapter still reports the
+    // fixed 48 kHz output rate so the player can open SDL_AudioStream upfront.
     auto audio = adapter.drain_audio();
     CHECK(audio.frame_count == 0U);
-    CHECK(audio.sample_rate == 53267U); // NTSC default
+    CHECK(audio.sample_rate == 48000U);
 
-    // Stepping a frame produces ~888 NTSC stereo samples (53267 / 60).
+    // Stepping one NTSC frame produces a frame's-worth of 48 kHz samples
+    // (48000 / 60 = 800; allow +-2 for fractional accumulator rounding).
     adapter.step_one_frame();
     audio = adapter.drain_audio();
-    CHECK(audio.sample_rate == 53267U);
-    CHECK(audio.frame_count > 800U);
-    CHECK(audio.frame_count < 1000U);
+    CHECK(audio.sample_rate == 48000U);
+    CHECK(audio.frame_count >= 798U);
+    CHECK(audio.frame_count <= 802U);
     REQUIRE(audio.samples != nullptr);
 
-    // Second drain of the same frame returns nothing (samples consumed).
+    // Second drain of the same frame returns nothing (chip queues consumed).
     audio = adapter.drain_audio();
     CHECK(audio.frame_count == 0U);
 }
