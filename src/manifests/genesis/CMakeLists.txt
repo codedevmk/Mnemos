@@ -12,7 +12,8 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
-# The Genesis assembler instantiates the concrete chips directly, so it links them.
+# The Genesis assembler instantiates the concrete chips directly + plugs the
+# default controller-port peripherals, so it links all of them.
 target_link_libraries(
     mnemos_manifests_genesis
     PUBLIC
@@ -22,13 +23,19 @@ target_link_libraries(
         mnemos::chips::video::genesis_vdp
         mnemos::chips::audio::ym2612
         mnemos::chips::audio::sn76489
+        mnemos::peripheral::input
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_genesis PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_genesis
     TIER 4
-    DEPENDS mnemos_topology mnemos_chips_shared mnemos_foundation
+    DEPENDS
+        mnemos_topology
+        mnemos_chips_shared
+        mnemos_foundation
+        mnemos_peripheral_common
+        mnemos_peripheral_input
 )
 
 if(BUILD_TESTING)

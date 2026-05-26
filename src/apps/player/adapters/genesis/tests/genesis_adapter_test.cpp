@@ -99,93 +99,26 @@ TEST_CASE("genesis_adapter selects PAL pacing when configured") {
     CHECK(adapter.region().frames_per_second_x1000 == 50000U);
 }
 
-TEST_CASE("genesis_adapter routes controller_state through the system pad protocol") {
-    using namespace mnemos::manifests::genesis;
+// Per-pad protocol tests (3-button MK-1650 + 6-button MK-1653) now live with
+// each device under src/peripheral/input/tests/. The adapter-level test below
+// just verifies controller_state -> pad-bits routing end-to-end.
+
+TEST_CASE("genesis_adapter routes controller_state into the attached pad") {
     genesis_adapter adapter(tiny_rom());
-    auto& sys = adapter.system();
 
-    // Idle (no buttons pressed). On a 3-button Genesis pad with TH=high
-    // (default), all buttons read as active-low '1' bits, so the byte is
-    // 0x40 | 0x3F = 0x7F (bit 6 = TH high reflection, bits 0-5 = no buttons).
-    mnemos::frontend_sdk::controller_state idle{};
-    adapter.apply_input(0, idle);
-    sys.pad_th[0] = true;
-    CHECK(sys.read_pad_port(0) == 0x7FU);
-
-    // Press Start. With TH high, Start isn't visible (bank shows B/C/dpad).
-    // The byte must still report all other bits idle.
-    mnemos::frontend_sdk::controller_state with_start{};
-    with_start.start = true;
-    adapter.apply_input(0, with_start);
-    sys.pad_th[0] = true;
-    CHECK(sys.read_pad_port(0) == 0x7FU); // TH high -> Start invisible
-
-    // Toggle TH low. Start now visible at bit 5; bits 2,3 always 0 so a
-    // 3-button pad is identifiable (left+right always "pressed" in this bank).
-    sys.pad_th[0] = false;
-    // Expected byte: TH=0 (no 0x40), Start press clears bit 5, bits 2/3 = 0.
-    // Idle for U/D/A: bits 0,1,4 = 1. So byte = 0b00010011 = 0x13.
-    CHECK(sys.read_pad_port(0) == 0x13U);
-
-    // Press D-pad Right + button A with TH low.
     mnemos::frontend_sdk::controller_state combo{};
     combo.right = true;
     combo.a = true;
     adapter.apply_input(0, combo);
-    sys.pad_th[0] = false;
-    // TH low: bits 2,3 = 0 (L/R show as pressed regardless); A clears bit 4.
-    // U/D idle (bits 0,1 = 1); Start idle (bit 5 = 1). Byte = 0b00100011 = 0x23.
-    CHECK(sys.read_pad_port(0) == 0x23U);
 
-    // Same combo with TH high: now Right is visible at bit 3 (cleared).
-    sys.pad_th[0] = true;
-    // Bits: 0=U(1), 1=D(1), 2=L(1), 3=R(0 pressed), 4=B(1), 5=C(1), 6=TH(1) = 0x77.
-    CHECK(sys.read_pad_port(0) == 0x77U);
-}
-
-TEST_CASE("genesis_adapter 6-button extended-read protocol") {
-    using namespace mnemos::manifests::genesis;
-    genesis_adapter adapter(tiny_rom());
-    auto& sys = adapter.system();
-
-    // Press the extended buttons (X/Y/Z + Mode) so phase 7 has visible state.
-    mnemos::frontend_sdk::controller_state s{};
-    s.x = true;
-    s.y = true;
-    s.z = true;
-    s.mode = true;
-    adapter.apply_input(0, s);
-
-    // Start fresh: V-blank reset puts phase at 0.
-    sys.pad_reset_phases();
-    sys.pad_th[0] = false;
-
-    // The protocol pulses TH high/low; each transition advances the phase.
-    // Walk all 8 phases and check the bytes the 68K would observe.
-    auto pulse = [&](bool th) {
-        sys.pad_write_th(0, th);
-        return sys.read_pad_port(0);
-    };
-
-    // Phase 1 (TH=1): standard CBRLDU bank, no buttons pressed -> 0x7F.
-    CHECK(pulse(true) == 0x7FU);
-    // Phase 2 (TH=0): standard SA00DU bank -> 0x33 (no presses).
-    CHECK(pulse(false) == 0x33U);
-    // Phase 3 (TH=1): still standard CBRLDU.
-    CHECK(pulse(true) == 0x7FU);
-    // Phase 4 (TH=0): still standard SA00DU.
-    CHECK(pulse(false) == 0x33U);
-    // Phase 5 (TH=1): still standard.
-    CHECK(pulse(true) == 0x7FU);
-    // Phase 6 (TH=0): 6-button id -- bits 3..0 must all be 0 (dpad zeroed).
-    //   Bits 5/4 still S/A idle (=1); bits 3..0 = 0000. Byte = 0x30.
-    CHECK(pulse(false) == 0x30U);
-    // Phase 7 (TH=1): extended bank C B Mode X Y Z. We pressed all four
-    //   extended buttons, so bits 3..0 (Mode/X/Y/Z) are 0; bits 5/4 (C/B)
-    //   are idle (=1). Byte = 0b01110000 = 0x70.
-    CHECK(pulse(true) == 0x70U);
-    // Phase 0 (wrap): back to standard SA00DU.
-    CHECK(pulse(false) == 0x33U);
+    // Default attachment is a 6-button pad (MK-1653) at phase 0; the next
+    // CPU write of TH=1 advances to phase 1, where the read byte exposes
+    // CBRLDU. With Right + A pressed at TH=1, Right clears bit 3.
+    auto* dev = adapter.system().port_device(0);
+    REQUIRE(dev != nullptr);
+    dev->write_data(0x40U); // TH = 1 -> phase 1
+    // Bits: 0=U(1), 1=D(1), 2=L(1), 3=R(0 pressed), 4=B(1), 5=C(1), 6=TH=1.
+    CHECK(dev->read_data() == 0x77U);
 }
 
 // Cart-byte -> video_region resolution is now exercised end-to-end in the

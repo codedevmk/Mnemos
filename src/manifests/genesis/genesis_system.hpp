@@ -3,6 +3,7 @@
 #include "bus.hpp"         // topology bus
 #include "genesis_vdp.hpp" // video
 #include "m68000.hpp"      // main cpu
+#include "peripheral.hpp"  // peripheral::device (controller ports)
 #include "region.hpp"      // mnemos::video_region (shared)
 #include "sn76489.hpp"     // audio (PSG)
 #include "ym2612.hpp"      // audio (FM)
@@ -122,84 +123,29 @@ namespace mnemos::manifests::genesis {
         // (MNEMOS_WRAM_WATCH). Not part of the architectural state.
         std::uint64_t frame_index{};
 
-        // Active-high pad state. 12 buttons total: the 3-button base (bits
-        // 0..7 = U, D, L, R, A, B, C, Start) plus the 6-button extras at
-        // bits 8..11 = Z, Y, X, Mode. read_pad_port() returns the active-low
-        // wire byte the 68K reads at $A10003/$A10005.
-        std::array<std::uint16_t, 2> pad{};
-        std::array<bool, 2> pad_th{{true, true}};
+        // Controller ports 1/2. Each holds whichever peripheral the host
+        // attached (3-button pad, 6-button pad, lightgun, mouse, multitap,
+        // ...). The MMIO at $A10003/$A10005 routes byte reads + writes
+        // through these; V-blank callbacks the per-device on_vblank() hook.
+        std::array<std::unique_ptr<peripheral::device>, 2> ports{};
 
-        // 6-button extended-read state machine. Each TH-bit transition (in
-        // either direction) advances pad_phase modulo 8. Phase 6 (read at
-        // TH=0) returns the 6-button signature (S A 0 0 0 0). Phase 7 (read
-        // at TH=1) returns C B Mode X Y Z. All other phases behave as a
-        // 3-button pad. The phase counter resets to 0 on each V-blank entry,
-        // matching real hardware's ~1.5ms timeout for the common case of
-        // games that poll the pad once per frame.
-        std::array<std::uint8_t, 2> pad_phase{};
-
-        void set_pad(int port, std::uint16_t buttons) noexcept {
+        void attach(int port, std::unique_ptr<peripheral::device> dev) noexcept {
             if (port >= 0 && port < 2) {
-                pad[static_cast<std::size_t>(port)] = buttons;
+                ports[static_cast<std::size_t>(port)] = std::move(dev);
             }
         }
 
-        // Called from the $A10003/$A10005 write handler when the CPU updates
-        // the TH select line; transitions advance the 6-button phase.
-        void pad_write_th(int port, bool new_th) noexcept {
-            if (port < 0 || port >= 2) {
-                return;
-            }
-            auto& th = pad_th[static_cast<std::size_t>(port)];
-            if (th != new_th) {
-                th = new_th;
-                auto& phase = pad_phase[static_cast<std::size_t>(port)];
-                phase = static_cast<std::uint8_t>((phase + 1U) & 7U);
-            }
+        [[nodiscard]] peripheral::device* port_device(int port) noexcept {
+            return (port >= 0 && port < 2) ? ports[static_cast<std::size_t>(port)].get()
+                                           : nullptr;
         }
-
-        void pad_reset_phases() noexcept { pad_phase = {0U, 0U}; }
 
         [[nodiscard]] std::uint8_t read_pad_port(int port) const noexcept {
             if (port < 0 || port >= 2) {
                 return 0xFFU;
             }
-            const auto bits = pad[static_cast<std::size_t>(port)];
-            const bool th = pad_th[static_cast<std::size_t>(port)];
-            const std::uint8_t phase = pad_phase[static_cast<std::size_t>(port)];
-            const auto inv = [&](std::uint16_t mask) -> std::uint8_t {
-                return (bits & mask) ? 0U : 1U;
-            };
-            std::uint8_t out = th ? 0x40U : 0x00U;
-            if (th) {
-                if (phase == 7U) {
-                    // 6-button extended bank: C B Mode X Y Z.
-                    out |= inv(0x0100U) << 0; // Z
-                    out |= inv(0x0200U) << 1; // Y
-                    out |= inv(0x0400U) << 2; // X
-                    out |= inv(0x0800U) << 3; // Mode
-                    out |= inv(0x0020U) << 4; // B
-                    out |= inv(0x0040U) << 5; // C
-                } else {
-                    out |= inv(0x0001U) << 0; // Up
-                    out |= inv(0x0002U) << 1; // Down
-                    out |= inv(0x0004U) << 2; // Left
-                    out |= inv(0x0008U) << 3; // Right
-                    out |= inv(0x0020U) << 4; // B
-                    out |= inv(0x0040U) << 5; // C
-                }
-            } else {
-                out |= inv(0x0010U) << 4; // A
-                out |= inv(0x0080U) << 5; // Start
-                if (phase == 6U) {
-                    // 6-button id bank: bits 3..0 all 0 (no dpad echo).
-                } else {
-                    out |= inv(0x0001U) << 0; // Up
-                    out |= inv(0x0002U) << 1; // Down
-                    // bits 2,3 stay 0 -- 3-button pad signature
-                }
-            }
-            return out;
+            const auto& dev = ports[static_cast<std::size_t>(port)];
+            return dev ? dev->read_data() : 0x7FU;
         }
     };
 

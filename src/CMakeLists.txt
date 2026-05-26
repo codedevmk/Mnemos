@@ -1,5 +1,6 @@
 add_subdirectory(foundation)
 add_subdirectory(chips)
+add_subdirectory(peripheral)
 add_subdirectory(topology)
 add_subdirectory(manifests)
 add_subdirectory(runtime)

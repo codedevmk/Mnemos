@@ -14,13 +14,18 @@ target_link_libraries(
         mnemos::foundation
         mnemos::chips::shared
         mnemos::instrumentation
+        mnemos::peripheral::common
 )
 
 mnemos_apply_common_target_options(mnemos_frontend_sdk INTERFACE)
 mnemos_declare_tier(
     NAME mnemos_frontend_sdk
     TIER 7
-    DEPENDS mnemos_foundation mnemos_chips_shared mnemos_instrumentation
+    DEPENDS
+        mnemos_foundation
+        mnemos_chips_shared
+        mnemos_instrumentation
+        mnemos_peripheral_common
 )
 
 if(BUILD_TESTING)

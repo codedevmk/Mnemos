@@ -19,6 +19,7 @@ target_link_libraries(
     PUBLIC
         mnemos::frontend_sdk
         mnemos::manifests::genesis
+        mnemos::peripheral::input
         mnemos::runtime
 )
 
@@ -29,6 +30,7 @@ mnemos_declare_tier(
     DEPENDS
         mnemos_frontend_sdk
         mnemos_manifests_genesis
+        mnemos_peripheral_input
         mnemos_runtime
 )
 

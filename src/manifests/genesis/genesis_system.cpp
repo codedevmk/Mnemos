@@ -1,8 +1,11 @@
 #include "genesis_system.hpp"
 
+#include "mk1653.hpp" // default controller-port peripheral
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <span>
 #include <utility>
 
@@ -104,13 +107,12 @@ namespace mnemos::manifests::genesis {
             },
             [s](std::uint32_t a, std::uint8_t v) {
                 const std::uint32_t off = a & 0x1FU;
-                // Bit 6 of a data-port write is the TH select line. Routing
-                // through pad_write_th advances the 6-button phase counter
-                // on each transition.
-                if (off == 0x03) {
-                    s->pad_write_th(0, (v & 0x40U) != 0U);
-                } else if (off == 0x05) {
-                    s->pad_write_th(1, (v & 0x40U) != 0U);
+                // Route data-port writes to whichever peripheral is plugged
+                // into that controller socket.
+                if (off == 0x03 && s->ports[0]) {
+                    s->ports[0]->write_data(v);
+                } else if (off == 0x05 && s->ports[1]) {
+                    s->ports[1]->write_data(v);
                 }
                 // Echo every write back (read-only $A10001 excepted).
                 if (off != 0x01) {
@@ -212,10 +214,13 @@ namespace mnemos::manifests::genesis {
             s->z80.set_irq_line(in_vblank);
             if (in_vblank) {
                 ++s->frame_index;
-                // The 6-button pad's phase counter resets on its ~1.5ms
-                // timeout in real hardware; per-frame reset at V-blank entry
-                // matches the typical poll-once-per-frame pattern games use.
-                s->pad_reset_phases();
+                // Per-frame timeout hook for devices with stateful protocols
+                // (the 6-button pad's phase counter, future analog devices).
+                for (auto& p : s->ports) {
+                    if (p) {
+                        p->on_vblank();
+                    }
+                }
             }
         });
         // Genesis quirk: the bus controller drops the TAS write phase on a
@@ -271,6 +276,12 @@ namespace mnemos::manifests::genesis {
 
         s->cpu.attach_bus(s->bus);
         s->cpu.reset(chips::reset_kind::power_on); // loads SSP/PC from the ROM vectors
+
+        // Default-plug a 6-button arcade pad (MK-1653) into both controller
+        // sockets. Adapters can swap them after assembly for lightguns,
+        // mice, multi-taps, or the original MK-1650 3-button pad.
+        s->attach(0, std::make_unique<peripheral::input::mk1653>());
+        s->attach(1, std::make_unique<peripheral::input::mk1653>());
 
         return sys;
     }

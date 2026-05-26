@@ -18,7 +18,8 @@
 //     adapter declares (the frontend hands them to SDL_AudioStream which
 //     resamples to the device rate).
 
-#include "chip.hpp" // for mnemos::chips::frame_buffer_view
+#include "chip.hpp"       // for mnemos::chips::frame_buffer_view
+#include "peripheral.hpp" // for mnemos::peripheral::controller_state
 
 #include <cstdint>
 
@@ -31,26 +32,11 @@ namespace mnemos::frontend_sdk {
         std::uint32_t frames_per_second_x1000{60000U};
     };
 
-    // System-agnostic controller state. The union covers the buttons any of
-    // the v0.1 / v0.2 target systems exposes; adapters ignore buttons that
-    // do not exist on their hardware (e.g. the SMS adapter ignores `c`/
-    // `x`/`y`/`z`/`mode`, the C64 joystick adapter only consumes the dpad
-    // + `a` as fire).
-    struct controller_state final {
-        bool up{};
-        bool down{};
-        bool left{};
-        bool right{};
-        bool start{};
-        bool select{};
-        bool a{};
-        bool b{};
-        bool c{};
-        bool x{};
-        bool y{};
-        bool z{};
-        bool mode{};
-    };
+    // System-agnostic controller state; the canonical definition lives in
+    // peripheral/common so devices (tier 2) and frontends (tier 7) can both
+    // reference it without a tier inversion. Re-exported here so existing
+    // frontend_sdk callers don't have to change.
+    using controller_state = mnemos::peripheral::controller_state;
 
     // A borrowed view of a stereo s16 audio chunk. `samples` is interleaved
     // L,R,L,R,... and points at `frame_count` (L,R) pairs at `sample_rate`
