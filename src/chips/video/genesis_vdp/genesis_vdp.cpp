@@ -5,6 +5,7 @@
 #include "state.hpp"
 
 #include <cstddef>
+#include <cstdio>
 #include <memory>
 
 namespace mnemos::chips::video {
@@ -250,7 +251,15 @@ namespace mnemos::chips::video {
                     dma_copy_step();
                 }
                 dma_busy_ = false;
-                // VRAM copy = dma_type 3 in the reference terms.
+                // VRAM copy = dma_type 3 in the reference terms. NOTE: the
+                // theoretically-correct the reference behaviour is "don't stall the
+                // 68K, only hold the dma_busy status bit for the duration"
+                // -- see the [[blades-divergence-state]] memory and the
+                // 2026-05-26 trace investigation. That fix makes BoV's
+                // f=115 divergence visibly *worse*, not better, which means
+                // there's another cycle-accounting bug elsewhere that the
+                // old over-stall accidentally compensated for. Keeping the
+                // legacy stall here until the compensating bug is found.
                 dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 3);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
@@ -271,7 +280,9 @@ namespace mnemos::chips::video {
                 }
                 dma_busy_ = false;
                 // 68K -> VDP: dma_type = 0 if target is CRAM/VSRAM (code 3/5),
-                //              dma_type = 1 if target is VRAM (code 1).
+                //              dma_type = 1 if target is VRAM (code 1). Both
+                // hold the 68K off the bus for the DMA's duration -- that's
+                // what dma_stall_master_cycles_ models.
                 const int code_low = cmd_code_ & 0x0F;
                 const int dma_type = (code_low & 0x06) ? 0 : 1;
                 dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, dma_type);
@@ -335,7 +346,11 @@ namespace mnemos::chips::video {
             }
             const std::uint32_t fill_src = dma_src_advance(dma_source() << 1U, len * 2U) >> 1U;
             dma_busy_ = false;
-            // VRAM fill = dma_type 2 in the reference terms.
+            // VRAM fill = dma_type 2. Same caveat as the VRAM-copy branch
+            // above: the reference-correct = "no stall, timed busy", but on BoV that
+            // exposes a compensating bug elsewhere. Legacy stall kept until
+            // the cycle drift is properly diagnosed via the lockstep tracer
+            // we now have (see [[blades-divergence-state]]).
             dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 2);
             reg_[19] = 0U;
             reg_[20] = 0U;
@@ -972,6 +987,15 @@ namespace mnemos::chips::video {
                 dma_stall_master_cycles_ = 0;
             }
         }
+        // Drain the DMA-busy *status bit* timer (independent: VRAM fill/copy
+        // hold busy=1 for the DMA duration but don't lock the 68K).
+        if (dma_busy_master_cycles_ > 0) {
+            dma_busy_master_cycles_ -= static_cast<std::int64_t>(cycles);
+            if (dma_busy_master_cycles_ <= 0) {
+                dma_busy_master_cycles_ = 0;
+                dma_busy_ = false;
+            }
+        }
         refresh_irq();
     }
 
@@ -1056,6 +1080,8 @@ namespace mnemos::chips::video {
         dma_fill_word_ = 0;
         dma_source_ = 0;
         dma_busy_ = false;
+        dma_busy_master_cycles_ = 0;
+        dma_stall_master_cycles_ = 0;
 
         total_scanlines_ = pal_mode_ ? scanlines_pal : scanlines_ntsc;
         scanline_ = 0;

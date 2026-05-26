@@ -101,6 +101,14 @@ namespace mnemos::chips::cpu {
             tas_callback_ = std::move(callback);
         }
 
+        // Per-instruction trace hook (diagnostic; off by default). Fired with
+        // the instruction's PC before any decode -- equivalent to the reference's
+        // HOOK_M68K_E. Used by the player's --screenshot trace dump for
+        // cycle-drift A/B against the reference. Unset = no trace overhead.
+        void set_trace_callback(std::function<void(std::uint32_t pc)> callback) noexcept {
+            trace_callback_ = std::move(callback);
+        }
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
@@ -199,6 +207,7 @@ namespace mnemos::chips::cpu {
         int prev_irq_level_{}; // for the level-7 (NMI) edge
         std::function<void(int)> irq_ack_{};
         std::function<void(std::uint32_t)> tas_callback_{};
+        std::function<void(std::uint32_t)> trace_callback_{};
         bool stopped_{};
         bool halted_{};
 

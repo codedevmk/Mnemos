@@ -318,32 +318,38 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "--screenshot requires --rom\n");
             return 1;
         }
-        // Per-frame 68K state trace, sibling artefact to the .ppm. Used by
-        // cycle-drift A/B against the reference -- we don't have the reference's per-frame
-        // 68K state via libretro, but pairing this with the wram dump
-        // (which already captures the low byte of the last JSR's return
-        // address) makes the divergence frame and its 68K position
-        // observable.
+        // Per-instruction 68K trace, sibling .68k_trace.csv to the .ppm.
+        // Same schema as our patched reference_runner emits (frame,inst,pc) so a
+        // plain `diff` against the the reference trace surfaces the first diverging
+        // instruction for the BoV cycle-drift hunt.
         auto* genesis_for_trace =
             dynamic_cast<mnemos::apps::player::adapters::genesis::genesis_adapter*>(system.get());
         std::ofstream trace_out;
+        std::uint64_t trace_frame = 0;
+        std::uint64_t trace_inst = 0;
         if (genesis_for_trace != nullptr) {
             const std::string trace_path = screenshot->path + ".68k_trace.csv";
             trace_out.open(trace_path);
             if (trace_out) {
-                trace_out << "frame,elapsed_cycles,pc,sp,d0,a0\n";
+                trace_out << "frame,inst,pc\n";
+                genesis_for_trace->system().cpu.set_trace_callback(
+                    [&trace_out, &trace_frame, &trace_inst](std::uint32_t pc) {
+                        char buf[64];
+                        std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X\n",
+                                      static_cast<unsigned long long>(trace_frame),
+                                      static_cast<unsigned long long>(trace_inst),
+                                      pc);
+                        trace_out << buf;
+                        ++trace_inst;
+                    });
             }
         }
         for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
+            trace_frame = i + 1U;
             system->step_one_frame();
-            if (trace_out && genesis_for_trace != nullptr) {
-                const auto regs = genesis_for_trace->system().cpu.cpu_registers();
-                const std::uint64_t cycles =
-                    genesis_for_trace->system().cpu.elapsed_cycles();
-                trace_out << (i + 1U) << ',' << cycles << ','
-                          << std::hex << regs.pc << ',' << regs.a[7] << ','
-                          << regs.d[0] << ',' << regs.a[0] << std::dec << '\n';
-            }
+        }
+        if (genesis_for_trace != nullptr) {
+            genesis_for_trace->system().cpu.set_trace_callback({});
         }
         const auto fb = system->current_frame();
         if (!dump_framebuffer_ppm(fb, screenshot->path)) {

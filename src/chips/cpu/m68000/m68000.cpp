@@ -2091,6 +2091,9 @@ namespace mnemos::chips::cpu {
 
         const std::uint16_t pre_sr = sr_;
         inst_addr_ = pc_;
+        if (trace_callback_) {
+            trace_callback_(pc_);
+        }
         const std::uint16_t op = fetch16();
         exec(op);
 

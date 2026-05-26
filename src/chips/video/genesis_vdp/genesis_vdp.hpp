@@ -259,11 +259,16 @@ namespace mnemos::chips::video {
         bool dma_busy_{};
         // Remaining master-clock cycles the VDP's DMA is conceptually still
         // holding the bus. Decremented in tick(); when > 0, the host gates
-        // the 68000 off. Approximation: per-word cost depends on display
-        // mode (active vs blanked) -- ~16 master clocks/word in vblank /
-        // display-disabled (where the DMA owns the bus), ~205 master
-        // clocks/word in active display (DMA only gets 16 slots/H40 line).
+        // the 68000 off. ONLY set for 68K-bus DMAs (dma_type 0 and 1 in the reference
+        // terms: 68K->CRAM/VSRAM and 68K->VRAM). VRAM fill and VRAM copy
+        // (types 2 and 3) don't touch the 68K bus -- they run in parallel
+        // with the CPU on real hardware -- so they don't stall it.
         std::int64_t dma_stall_master_cycles_{};
+        // Remaining master-clock cycles the DMA-busy *status bit* should
+        // stay set. Independent from dma_stall_master_cycles_ because VRAM
+        // fill/copy keep busy=1 (so a polling loop spins) without locking
+        // the 68K out. Decremented in tick(); when 0, dma_busy_ flips back.
+        std::int64_t dma_busy_master_cycles_{};
 
         // Master-clock cost of a DMA of `length_units` units against the
         // current display state. `dma_type` follows the reference's convention:
