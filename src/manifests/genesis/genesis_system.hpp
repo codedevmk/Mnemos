@@ -21,29 +21,59 @@ namespace mnemos::manifests::genesis {
         region video_region{region::ntsc};
     };
 
+    // Wraps a chip so the scheduler only advances it while `gate` is true. The Genesis
+    // uses this for the Z80 sound CPU, which the 68000 halts via BUSREQ / RESET.
+    class gated_chip final : public chips::ichip {
+      public:
+        gated_chip(chips::ichip& inner, const bool& gate) noexcept : inner_(&inner), gate_(&gate) {}
+
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override {
+            return inner_->metadata();
+        }
+        void tick(std::uint64_t cycles) override {
+            if (*gate_) {
+                inner_->tick(cycles);
+            }
+        }
+        void reset(chips::reset_kind kind) override { inner_->reset(kind); }
+        void save_state(chips::state_writer& writer) const override { inner_->save_state(writer); }
+        void load_state(chips::state_reader& reader) override { inner_->load_state(reader); }
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return inner_->introspection();
+        }
+
+      private:
+        chips::ichip* inner_;
+        const bool* gate_;
+    };
+
     // A wired Sega Genesis / Mega Drive: the 68000 main CPU, the VDP, the YM2612 FM
     // and SN76489 PSG, the Z80 sound CPU, 64 KiB of 68K work RAM, 8 KiB of Z80 RAM,
     // and the 68000 24-bit big-endian bus. Heap-allocated and never moved after
     // assembly, because the bus regions hold spans into the members and the MMIO/IRQ
     // callbacks capture `this`.
     //
-    // THIS phase wires the 68000 side: the full memory map (ROM, work RAM, the Z80
-    // bank with Z80 RAM + YM2612, the I/O + Z80-control region, and the VDP), the VDP
-    // V/H-blank IRQ into the 68000 IPL, VDP DMA reading from 68K space, and the PSG.
-    // The Z80 sound CPU is present and 68K-accessible but is held off the schedule
-    // (the 68000 owns the bus); bringing the Z80 online with bus arbitration and the
-    // full audio mix is the next phase.
+    // The 68000 side: the full memory map (ROM, work RAM, the A-bank with Z80 RAM +
+    // YM2612, the I/O + Z80-control region, and the VDP), the VDP V/H-blank IRQ into
+    // the 68000 IPL, VDP DMA reading from 68K space, and the PSG.
+    //
+    // The Z80 sound side: its own bus (Z80 RAM, the YM2612 at $4000, the PSG at $7F11,
+    // the $6000 bank register, and the $8000-$FFFF banked window into 68K space), plus
+    // BUSREQ/RESET arbitration so the 68000 can halt the Z80 and share the A-bank. The
+    // Z80 is scheduled through z80_gate, which advances it only while it owns its bus.
+    // Combining the YM2612 + PSG into mixed audio output is the next phase.
     struct genesis_system final {
         chips::cpu::m68000 cpu;
-        chips::cpu::z80 z80; // present + 68K-accessible; not yet scheduled
+        chips::cpu::z80 z80;
         chips::video::genesis_vdp vdp;
         chips::audio::ym2612 fm;
         chips::audio::sn76489 psg;
-        topology::bus bus{24U, topology::endianness::big};
+        topology::bus bus{24U, topology::endianness::big};        // 68000 main bus
+        topology::bus z80_bus{16U, topology::endianness::little}; // Z80 sound bus
 
         std::array<std::uint8_t, 0x10000> work_ram{}; // 64 KiB, mirrored $E00000-$FFFFFF
-        std::array<std::uint8_t, 0x2000> z80_ram{};   // 8 KiB at $A00000
-        std::vector<std::uint8_t> rom;                // cartridge image (borrowed by the bus)
+        std::array<std::uint8_t, 0x2000> z80_ram{};   // 8 KiB, Z80 $0000 / 68K $A00000
+        std::vector<std::uint8_t> rom;                // cartridge image (borrowed by the buses)
 
         std::uint8_t version_register{}; // $A10001 region/version readback
 
@@ -52,10 +82,17 @@ namespace mnemos::manifests::genesis {
         std::uint8_t vdp_write_high{};
         std::uint8_t vdp_read_low{};
 
-        // Z80 control latches (the Z80 is dormant this phase; reads report "bus
-        // granted to the 68000" so wait loops fall through).
+        // Z80 sound-CPU arbitration. The 68000 holds the Z80 via RESET ($A11200) and
+        // BUSREQ ($A11100); the Z80 runs only while reset is released and the bus is
+        // not requested. z80_bank is the 9-bit register that maps the Z80 $8000-$FFFF
+        // window onto 68K address space ((bank << 15) | offset).
         bool z80_bus_requested{};
         bool z80_reset_released{};
+        bool z80_running{};
+        std::uint16_t z80_bank{};
+
+        // Scheduler view of the Z80, advanced only while z80_running (see gated_chip).
+        gated_chip z80_gate{z80, z80_running};
 
         // Controller state, active-high (a set bit = pressed); the port read converts
         // to the active-low pad lines. Full 3/6-button protocol is the next phase.

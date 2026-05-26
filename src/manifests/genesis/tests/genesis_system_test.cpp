@@ -132,3 +132,60 @@ TEST_CASE("genesis selects the PAL region") {
     auto sys = assemble_genesis(make_rom(), {.video_region = genesis_config::region::pal});
     CHECK((sys->bus.read8(0xA10001U) & 0x40U) != 0U); // PAL bit set in the version register
 }
+
+TEST_CASE("genesis Z80 runs only when the 68000 releases it") {
+    auto sys = assemble_genesis(make_rom());
+    // Tiny Z80 program in sound RAM: INC ($1000) then spin.
+    sys->z80_ram[0] = 0x21; // LD HL,$1000
+    sys->z80_ram[1] = 0x00;
+    sys->z80_ram[2] = 0x10;
+    sys->z80_ram[3] = 0x34; // INC (HL)
+    sys->z80_ram[4] = 0x18; // JR -2
+    sys->z80_ram[5] = 0xFE;
+
+    // Held in reset at power-on: the gate blocks execution.
+    CHECK_FALSE(sys->z80_running);
+    sys->z80_gate.tick(200U);
+    CHECK(sys->z80_ram[0x1000] == 0x00);
+
+    // The 68000 releases the Z80 ($A11200 bit0 = 1) -> it runs.
+    sys->bus.write8(0xA11200U, 0x01);
+    CHECK(sys->z80_running);
+    sys->z80_gate.tick(200U);
+    CHECK(sys->z80_ram[0x1000] == 0x01);
+
+    // BUSREQ ($A11100 bit0 = 1) halts it again and reports the bus taken.
+    sys->bus.write8(0xA11100U, 0x01);
+    CHECK_FALSE(sys->z80_running);
+    CHECK(sys->bus.read8(0xA11100U) == 0x00U); // bus granted to the 68000
+}
+
+TEST_CASE("genesis Z80 bank window reaches 68K address space") {
+    auto sys = assemble_genesis(make_rom());
+
+    // Bank 0: the $8000 window maps onto 68K $000000 (the cartridge ROM).
+    sys->z80_bank = 0;
+    CHECK(sys->z80_bus.read8(0x8007U) == 0x08U); // 68K $000007 = ROM[7] (PC low byte)
+
+    // The bank register is a 9-bit shift register, LSB first.
+    sys->z80_bank = 0;
+    sys->z80_bus.write8(0x6000U, 0x01);
+    CHECK(sys->z80_bank == 0x100U);
+    sys->z80_bus.write8(0x6000U, 0x00);
+    CHECK(sys->z80_bank == 0x080U);
+}
+
+TEST_CASE("genesis Z80 bus routes RAM, YM2612, and PSG") {
+    auto sys = assemble_genesis(make_rom());
+
+    sys->z80_bus.write8(0x0010U, 0x5A);
+    CHECK(sys->z80_ram[0x10] == 0x5A);
+    CHECK(sys->z80_bus.read8(0x2010U) == 0x5A); // RAM mirror
+
+    sys->z80_bus.write8(0x4000U, 0x22); // YM2612 latch reg $22
+    sys->z80_bus.write8(0x4001U, 0x08); // data -> LFO enable
+    CHECK(sys->fm.lfo_enabled());
+
+    sys->z80_bus.write8(0x7F11U, 0x90); // PSG: channel-0 volume = 0
+    CHECK(sys->psg.volume(0) == 0x00U);
+}

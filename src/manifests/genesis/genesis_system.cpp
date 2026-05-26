@@ -57,16 +57,39 @@ namespace mnemos::manifests::genesis {
             },
             0);
 
-        // --- $A11100 Z80 bus request, $A11200 Z80 reset. ---
-        // The Z80 is dormant this phase: report the bus as granted to the 68000 (bit0
-        // clear) so "wait for bus" loops fall through.
+        // --- $A11100 Z80 BUSREQ: the 68000 requests the Z80 bus to share the A-bank. ---
+        // A read reports bit0 = 1 while the Z80 still holds its bus (request not yet
+        // granted); games spin until it clears. The relevant bit is in the high byte
+        // (even address) of the word access.
         s->bus.map_mmio(
-            0xA11100U, 0x2U, [](std::uint32_t /*a*/) -> std::uint8_t { return 0x00U; },
-            [s](std::uint32_t /*a*/, std::uint8_t v) { s->z80_bus_requested = (v & 0x01U) != 0U; },
+            0xA11100U, 0x2U,
+            [s](std::uint32_t a) -> std::uint8_t {
+                return (a & 1U) == 0U ? static_cast<std::uint8_t>(s->z80_running ? 0x01U : 0x00U)
+                                      : 0x00U;
+            },
+            [s](std::uint32_t a, std::uint8_t v) {
+                if ((a & 1U) == 0U) {
+                    s->z80_bus_requested = (v & 0x01U) != 0U;
+                    s->z80_running = s->z80_reset_released && !s->z80_bus_requested;
+                }
+            },
             0);
+
+        // --- $A11200 Z80 RESET: bit0 0 = held in reset, 1 = released. ---
         s->bus.map_mmio(
             0xA11200U, 0x2U, [](std::uint32_t /*a*/) -> std::uint8_t { return 0x00U; },
-            [s](std::uint32_t /*a*/, std::uint8_t v) { s->z80_reset_released = (v & 0x01U) != 0U; },
+            [s](std::uint32_t a, std::uint8_t v) {
+                if ((a & 1U) != 0U) {
+                    return;
+                }
+                const bool released = (v & 0x01U) != 0U;
+                if (!released && s->z80_reset_released) {
+                    s->z80.reset(
+                        chips::reset_kind::power_on); // falling edge holds the Z80 at reset
+                }
+                s->z80_reset_released = released;
+                s->z80_running = s->z80_reset_released && !s->z80_bus_requested;
+            },
             0);
 
         // --- $C00000-$C0001F: VDP ports (16-bit) + the SN76489 PSG at $C00011. ---
@@ -113,6 +136,53 @@ namespace mnemos::manifests::genesis {
 
         // --- VDP V/H-blank interrupt drives the 68000 IPL pins. ---
         s->vdp.set_irq_callback([s](int level) { s->cpu.set_irq_level(level); });
+
+        // --- Z80 sound bus ($0000-$FFFF, little-endian). ---
+        // $0000-$3FFF: Z80 RAM (8 KiB, mirrored).
+        s->z80_bus.map_mmio(
+            0x0000U, 0x4000U, [s](std::uint32_t a) { return s->z80_ram[a & 0x1FFFU]; },
+            [s](std::uint32_t a, std::uint8_t v) { s->z80_ram[a & 0x1FFFU] = v; }, 0);
+        // $4000-$5FFF: YM2612 (the same chip the 68000 sees at $A04000).
+        s->z80_bus.map_mmio(
+            0x4000U, 0x2000U, [s](std::uint32_t /*a*/) { return s->fm.read_status(); },
+            [s](std::uint32_t a, std::uint8_t v) {
+                s->fm.write(static_cast<int>((a >> 1U) & 1U), (a & 1U) != 0U, v);
+            },
+            0);
+        // $6000-$60FF: bank register. Each write shifts its bit 0 into bit 8 of the
+        // 9-bit bank that addresses the $8000 window.
+        s->z80_bus.map_mmio(
+            0x6000U, 0x100U, [](std::uint32_t /*a*/) -> std::uint8_t { return 0xFFU; },
+            [s](std::uint32_t /*a*/, std::uint8_t v) {
+                s->z80_bank =
+                    static_cast<std::uint16_t>(((s->z80_bank >> 1U) | ((v & 1U) << 8U)) & 0x1FFU);
+            },
+            0);
+        // $7F00-$7FFF: the SN76489 PSG at $7F11 (same chip as the 68000's $C00011).
+        s->z80_bus.map_mmio(
+            0x7F00U, 0x100U, [](std::uint32_t /*a*/) -> std::uint8_t { return 0xFFU; },
+            [s](std::uint32_t a, std::uint8_t v) {
+                if ((a & 0xFFU) == 0x11U) {
+                    s->psg.write(v);
+                }
+            },
+            0);
+        // $8000-$FFFF: banked 32 KiB window into 68K address space.
+        s->z80_bus.map_mmio(
+            0x8000U, 0x8000U,
+            [s](std::uint32_t a) -> std::uint8_t {
+                const std::uint32_t addr =
+                    ((static_cast<std::uint32_t>(s->z80_bank) << 15U) | (a & 0x7FFFU)) & 0xFFFFFFU;
+                return s->bus.read8(addr);
+            },
+            [s](std::uint32_t a, std::uint8_t v) {
+                const std::uint32_t addr =
+                    ((static_cast<std::uint32_t>(s->z80_bank) << 15U) | (a & 0x7FFFU)) & 0xFFFFFFU;
+                s->bus.write8(addr, v);
+            },
+            0);
+        s->z80.attach_bus(s->z80_bus);
+        s->z80.reset(chips::reset_kind::power_on); // held here until the 68000 releases RESET
 
         // --- CPU bus + boot from the ROM reset vectors. ---
         s->cpu.attach_bus(s->bus);

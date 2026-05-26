@@ -455,9 +455,15 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   words from 68K space, and boots from the ROM reset vectors; NTSC/PAL region select.
   5 tests / 16 assertions (boot vectors, a hand-assembled boot program exercising work
   RAM + the coalesced VDP path + the VINT handler end-to-end, A-bank device routing,
-  DMA-from-68K, PAL); full ctest green (34). Phase 2: bring the Z80 sound CPU online
-  with bus arbitration + the dual-CPU schedule + the full audio mix, and the 3/6-button
-  controller protocol)
+  DMA-from-68K, PAL); full ctest green (34).
+  Phase 2 DONE — the Z80 sound subsystem: its own little-endian bus (Z80 RAM mirrored,
+  the YM2612 at $4000, the PSG at $7F11, the $6000 9-bit shift bank register, and the
+  $8000-$FFFF banked window into 68K space), BUSREQ/RESET arbitration ($A11100/$A11200)
+  with the Z80 reset on the falling edge and the bus-grant readback, and a gated_chip
+  adapter that advances the Z80 in the scheduler only while it owns its bus; 8 tests /
+  29 assertions (arbitration gating, the 68K bank window, Z80-bus device routing). Phase
+  3: combine YM2612 + PSG into mixed stereo audio output, and the 3/6-button controller
+  protocol)
 - [ ] Golden frame tests for known commercial Genesis ROMs.
 - [ ] Validate dual-CPU scheduling correctness.
 
