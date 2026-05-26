@@ -78,7 +78,7 @@ namespace {
     // Assemble a fresh SMS and render `frames` frames, mirroring the headless CLI's
     // assemble + scheduler order so the hash matches `mnemos_runtime_cli --dump-hash`.
     std::unique_ptr<sms_system> boot(const std::vector<std::uint8_t>& cart,
-                                     sms_config::region region, std::uint64_t frames) {
+                                     mnemos::video_region region, std::uint64_t frames) {
         auto sys = assemble_sms(cart, {.video_region = region});
         // The VDP drives frame boundaries; all SMS chips run at the Z80 clock.
         std::vector<mnemos::runtime::scheduled_chip> chips = {
@@ -113,10 +113,10 @@ TEST_CASE("sms boots to a deterministic golden framebuffer", "[golden][sms]") {
         SKIP("MNEMOS_SMS_ROM=" << *rom_path << " could not be read as a cartridge image");
     }
 
-    auto region = sms_config::region::ntsc;
+    auto region = mnemos::video_region::ntsc;
     if (const auto region_env = get_env("MNEMOS_SMS_REGION");
         region_env && (*region_env == "pal" || *region_env == "PAL")) {
-        region = sms_config::region::pal;
+        region = mnemos::video_region::pal;
     }
 
     std::uint64_t frames = 200U;
@@ -129,7 +129,7 @@ TEST_CASE("sms boots to a deterministic golden framebuffer", "[golden][sms]") {
 
     // Record which cartridge the golden is tied to.
     INFO("cartridge sha256: " << sha_hex(*cart));
-    INFO("region: " << (region == sms_config::region::pal ? "pal" : "ntsc"));
+    INFO("region: " << (region == mnemos::video_region::pal ? "pal" : "ntsc"));
     INFO("frames rendered: " << frames);
 
     auto sys = boot(*cart, region, frames);

@@ -68,7 +68,7 @@ namespace mnemos::manifests::genesis {
         genesis_system* s = sys.get();
         s->rom = std::move(rom);
 
-        const bool pal = config.video_region == genesis_config::region::pal;
+        const bool pal = config.video_region == mnemos::video_region::pal;
         s->vdp.set_pal(pal);
 
         // Region/version readback ($A10001): bit7 = overseas (export), bit6 = PAL,

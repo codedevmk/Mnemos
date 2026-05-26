@@ -14,12 +14,17 @@
 
 #include "chip.hpp"
 #include "genesis_adapter.hpp"
+#include "genesis_region.hpp" // manifest: parse_market for Genesis carts
 #include "genesis_vdp.hpp"
 #include "player_system.hpp"
+#include "region.hpp" // chips/shared: video_region, market, default_video_for
+#include "sms_adapter.hpp"
+#include "sms_region.hpp" // manifest: parse_market for SMS carts
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -207,6 +212,37 @@ namespace {
                                          std::istreambuf_iterator<char>());
     }
 
+    // Pick the system family from the ROM filename. Each Sega family uses a
+    // distinct cartridge extension, so the routing is unambiguous from the
+    // path alone -- no need to peek at the file contents.
+    //
+    //   .md / .gen / .smd / .68k        -> Genesis / Mega Drive
+    //   .sms / .sg                      -> Sega Master System / SG-1000
+    //   .bin                            -> Genesis (default; .bin is shared
+    //                                     across families but most Sega .bin
+    //                                     dumps in the wild are Genesis)
+    //
+    // Future families (.gg Game Gear, .32x, .iso/.cue Sega CD, .nes, .sfc/.smc
+    // SNES, ...) slot in here as their adapters land.
+    enum class system_family { genesis, sms };
+
+    [[nodiscard]] system_family detect_family(const std::string& path) noexcept {
+        // Last '.' to end-of-string, lowercased.
+        const auto dot = path.find_last_of('.');
+        if (dot == std::string::npos) {
+            return system_family::genesis;
+        }
+        std::string ext = path.substr(dot + 1);
+        for (char& c : ext) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        if (ext == "sms" || ext == "sg") {
+            return system_family::sms;
+        }
+        // .md / .gen / .smd / .68k / .bin / unknown -> Genesis.
+        return system_family::genesis;
+    }
+
     // Largest integer N such that an N-times scaled source fits inside the
     // window without cropping. Centred destination rect; the area outside
     // the rect is left at the previous swapchain clear (we LOAD-clear each
@@ -243,7 +279,29 @@ int main(int argc, char* argv[]) {
     const auto screenshot = parse_screenshot_args(argc, argv);
 
     // Build the player_system upfront so a bad ROM fails before we open a
-    // window. With no --rom we just open the window and idle.
+    // window. With no --rom we just open the window and idle. The family is
+    // picked from the ROM file's extension; each adapter reads the cart-side
+    // MARKET field via the shared parser in adapters/common/region.hpp and
+    // applies the project's default_video_for() policy, which the user can
+    // override via --region.
+    //
+    // Resolve the user override + a cart-derived default into a single
+    // video_region (so the per-family branch below is only the manifest type
+    // selection -- not a duplicated region-resolution conversation).
+    const auto resolve_video = [&](mnemos::video_region cart_default) {
+        switch (region_arg) {
+        case region_override::pal:
+            return mnemos::video_region::pal;
+        case region_override::ntsc:
+            return mnemos::video_region::ntsc;
+        case region_override::auto_detect:
+        default:
+            return cart_default;
+        }
+    };
+    const char* region_source = region_arg == region_override::auto_detect ? "auto-detected"
+                                                                           : "explicit --region";
+
     std::unique_ptr<mnemos::frontend_sdk::player_system> system;
     if (rom_path) {
         auto bytes = read_file(*rom_path);
@@ -251,18 +309,25 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_path->c_str());
             return 1;
         }
-        using mnemos::manifests::genesis::genesis_config;
-        const auto detected = mnemos::apps::player::adapters::genesis::detect_region(*bytes);
-        const auto region = region_arg == region_override::pal    ? genesis_config::region::pal
-                            : region_arg == region_override::ntsc ? genesis_config::region::ntsc
-                                                                  : detected;
-        std::fprintf(stderr, "[mnemos_player] region: %s (%s)\n",
-                     region == genesis_config::region::pal ? "PAL" : "NTSC",
-                     region_arg == region_override::auto_detect ? "auto-detected"
-                                                                : "explicit --region");
+        const auto family = detect_family(*rom_path);
+        const char* family_name = family == system_family::sms ? "SMS" : "Genesis";
+        const auto market = family == system_family::sms
+                                ? mnemos::manifests::sms::parse_market(*bytes)
+                                : mnemos::manifests::genesis::parse_market(*bytes);
+        const auto video = resolve_video(mnemos::default_video_for(market));
+        std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_name,
+                     video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
-        system = std::make_unique<mnemos::apps::player::adapters::genesis::genesis_adapter>(
-            std::move(*bytes), genesis_config{.video_region = region});
+
+        if (family == system_family::sms) {
+            using mnemos::manifests::sms::sms_config;
+            system = std::make_unique<mnemos::apps::player::adapters::sms::sms_adapter>(
+                std::move(*bytes), sms_config{.video_region = video});
+        } else {
+            using mnemos::manifests::genesis::genesis_config;
+            system = std::make_unique<mnemos::apps::player::adapters::genesis::genesis_adapter>(
+                std::move(*bytes), genesis_config{.video_region = video});
+        }
     }
 
     // Headless screenshot path: step the requested number of frames, dump the

@@ -88,7 +88,7 @@ namespace mnemos::manifests::sms {
         s->rom = std::move(rom);
 
         // Region: NTSC = 262 scanlines, PAL = 313.
-        s->vdp.set_pal(config.video_region == sms_config::region::pal);
+        s->vdp.set_pal(config.video_region == mnemos::video_region::pal);
 
         // Pick the cartridge mapper: forced by config, otherwise auto-detected from
         // the cart's Codemasters checksum header.

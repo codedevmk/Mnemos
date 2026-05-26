@@ -3,6 +3,7 @@
 #include "bus.hpp"         // topology bus
 #include "genesis_vdp.hpp" // video
 #include "m68000.hpp"      // main cpu
+#include "region.hpp"      // mnemos::video_region (shared)
 #include "sn76489.hpp"     // audio (PSG)
 #include "ym2612.hpp"      // audio (FM)
 #include "z80.hpp"         // sound cpu
@@ -15,10 +16,11 @@
 
 namespace mnemos::manifests::genesis {
 
-    // Machine configuration resolved at assembly time.
+    // Machine configuration resolved at assembly time. The video_region member
+    // uses the project-wide mnemos::video_region enum so the manifest, adapter,
+    // and frontend never need to translate between equivalent local copies.
     struct genesis_config final {
-        enum class region : std::uint8_t { ntsc, pal };
-        region video_region{region::ntsc};
+        mnemos::video_region video_region{mnemos::video_region::ntsc};
     };
 
     // Wraps a chip so the scheduler only advances it while `gate` is true. The Genesis

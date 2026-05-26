@@ -50,9 +50,9 @@ TEST_CASE("assemble_sms boots the Z80 from cartridge ROM into work RAM", "[sms][
 }
 
 TEST_CASE("assemble_sms honours the region config", "[sms][region]") {
-    auto ntsc = assemble_sms(blank_rom(), {.video_region = sms_config::region::ntsc});
+    auto ntsc = assemble_sms(blank_rom(), {.video_region = mnemos::video_region::ntsc});
     CHECK_FALSE(ntsc->vdp.is_pal());
-    auto pal = assemble_sms(blank_rom(), {.video_region = sms_config::region::pal});
+    auto pal = assemble_sms(blank_rom(), {.video_region = mnemos::video_region::pal});
     CHECK(pal->vdp.is_pal());
 }
 

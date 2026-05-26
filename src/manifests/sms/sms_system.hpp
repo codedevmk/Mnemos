@@ -2,6 +2,7 @@
 
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
+#include "region.hpp"             // mnemos::video_region (shared)
 #include "sms_mapper.hpp"         // Sega mapper
 #include "sms_vdp.hpp"            // video
 #include "sn76489.hpp"            // audio (PSG)
@@ -26,14 +27,16 @@ namespace mnemos::manifests::sms {
         inline constexpr std::uint8_t button_2 = 0x20U;
     } // namespace pad_button
 
-    // Machine configuration resolved at assembly time.
+    // Machine configuration resolved at assembly time. The video_region member
+    // uses the project-wide mnemos::video_region enum (defined in
+    // chips/shared/region.hpp) so the manifest, adapter, and frontend never
+    // translate between equivalent local copies.
     struct sms_config final {
-        enum class region : std::uint8_t { ntsc, pal };
         // Cartridge mapper: `automatic` picks Sega vs Codemasters from the cart
         // header (the Codemasters checksum at $7FE6/$7FE8); the others force one.
         enum class mapper : std::uint8_t { automatic, sega, codemasters };
 
-        region video_region{region::ntsc};
+        mnemos::video_region video_region{mnemos::video_region::ntsc};
         mapper cartridge_mapper{mapper::automatic};
     };
 

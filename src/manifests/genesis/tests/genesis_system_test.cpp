@@ -129,7 +129,7 @@ TEST_CASE("genesis VDP DMA reads from 68K address space") {
 }
 
 TEST_CASE("genesis selects the PAL region") {
-    auto sys = assemble_genesis(make_rom(), {.video_region = genesis_config::region::pal});
+    auto sys = assemble_genesis(make_rom(), {.video_region = mnemos::video_region::pal});
     CHECK((sys->bus.read8(0xA10001U) & 0x40U) != 0U); // PAL bit set in the version register
 }
 

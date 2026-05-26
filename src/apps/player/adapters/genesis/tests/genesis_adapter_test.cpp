@@ -15,7 +15,6 @@
 namespace {
 
     using mnemos::apps::player::adapters::genesis::genesis_adapter;
-    using mnemos::manifests::genesis::genesis_config;
 
     // Minimal 68000 boot: SSP, PC at $0008, MOVE.W #$2000,SR then BRA.S *
     // (the system just powers on and spins; the VDP still raster-times frames).
@@ -42,7 +41,7 @@ namespace {
 } // namespace
 
 TEST_CASE("genesis_adapter advances frames and reports region") {
-    genesis_adapter adapter(tiny_rom(), {.video_region = genesis_config::region::ntsc});
+    genesis_adapter adapter(tiny_rom(), {.video_region = mnemos::video_region::ntsc});
 
     CHECK(adapter.region().frames_per_second_x1000 == 60000U);
     CHECK(adapter.frames_stepped() == 0U);
@@ -96,7 +95,7 @@ TEST_CASE("genesis_adapter drain_audio resamples to 48 kHz output") {
 }
 
 TEST_CASE("genesis_adapter selects PAL pacing when configured") {
-    genesis_adapter adapter(tiny_rom(), {.video_region = genesis_config::region::pal});
+    genesis_adapter adapter(tiny_rom(), {.video_region = mnemos::video_region::pal});
     CHECK(adapter.region().frames_per_second_x1000 == 50000U);
 }
 
@@ -144,41 +143,7 @@ TEST_CASE("genesis_adapter routes controller_state through the system pad protoc
     CHECK(sys.read_pad_port(0) == 0x77U);
 }
 
-TEST_CASE("detect_region honours the cartridge header region field") {
-    using mnemos::apps::player::adapters::genesis::detect_region;
-
-    auto rom_with_region = [](const char* code) {
-        auto rom = tiny_rom();
-        rom.resize(0x200, 0x20U); // pad with spaces so $1F0..$1F2 are addressable
-        for (std::size_t i = 0; i < 3; ++i) {
-            rom[0x1F0 + i] = code[i] != '\0' ? static_cast<std::uint8_t>(code[i]) : 0x20U;
-        }
-        return rom;
-    };
-
-    // Pure regions.
-    CHECK(detect_region(rom_with_region("J  ")) == genesis_config::region::ntsc);
-    CHECK(detect_region(rom_with_region("U  ")) == genesis_config::region::ntsc);
-    CHECK(detect_region(rom_with_region("E  ")) == genesis_config::region::pal);
-
-    // Multi-region: USA wins over Europe in the country-byte priority.
-    CHECK(detect_region(rom_with_region("UE ")) == genesis_config::region::ntsc);
-    CHECK(detect_region(rom_with_region("EJU")) == genesis_config::region::ntsc);
-    CHECK(detect_region(rom_with_region("JE ")) == genesis_config::region::ntsc); // J wins over E
-
-    // Multi-region without Europe -> NTSC.
-    CHECK(detect_region(rom_with_region("JU ")) == genesis_config::region::ntsc);
-
-    // No region info at all -> safe default NTSC.
-    CHECK(detect_region(rom_with_region("   ")) == genesis_config::region::ntsc);
-
-    // Hex-bitfield region byte: real Genesis bits are J=1, U=4, E=8.
-    CHECK(detect_region(rom_with_region("8  ")) == genesis_config::region::pal);  // E only
-    CHECK(detect_region(rom_with_region("4  ")) == genesis_config::region::ntsc); // U only
-    CHECK(detect_region(rom_with_region("F  ")) == genesis_config::region::ntsc); // J+U+E (U wins)
-    CHECK(detect_region(rom_with_region("3  ")) == genesis_config::region::ntsc); // J+U
-
-    // Truncated ROM -> safe default NTSC.
-    std::vector<std::uint8_t> short_rom{0x00U, 0x01U, 0x02U};
-    CHECK(detect_region(short_rom) == genesis_config::region::ntsc);
-}
+// Cart-byte -> video_region resolution is now exercised end-to-end in the
+// shared cross-family test in adapters/common/tests/region_test.cpp:
+// parse_genesis_market() + default_video_for() compose into the same flow
+// the player does; the adapter just passes the resolved video_region through.

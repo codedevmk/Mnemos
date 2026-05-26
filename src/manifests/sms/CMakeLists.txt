@@ -1,6 +1,7 @@
 add_library(
     mnemos_manifests_sms
     sms_system.cpp
+    sms_region.cpp
 )
 add_library(mnemos::manifests::sms ALIAS mnemos_manifests_sms)
 
@@ -34,6 +35,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_sms_test
         SOURCES tests/sms_system_test.cpp
+        LIBRARIES mnemos::manifests::sms
+    )
+    mnemos_add_test(
+        mnemos_manifests_sms_region_test
+        SOURCES tests/sms_region_test.cpp
         LIBRARIES mnemos::manifests::sms
     )
 endif()

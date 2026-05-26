@@ -473,7 +473,7 @@ namespace mnemos::tools {
 
             manifests::sms::sms_config cfg;
             if (m.id.find("pal") != std::string::npos) {
-                cfg.video_region = manifests::sms::sms_config::region::pal;
+                cfg.video_region = mnemos::video_region::pal;
             }
 
             auto sys = manifests::sms::assemble_sms(std::move(*cart), cfg);

@@ -19,23 +19,15 @@
 
 #include "genesis_system.hpp"
 #include "player_system.hpp"
+#include "region.hpp" // chips/shared: video_region
 #include "scheduler.hpp"
 
 #include <array>
 #include <cstdint>
 #include <memory>
-#include <span>
 #include <vector>
 
 namespace mnemos::apps::player::adapters::genesis {
-
-    // Detect NTSC vs PAL from the Genesis ROM header. Thin Genesis-flavoured
-    // wrapper over the shared Sega 16-bit detector (Mega Drive / 32X / Sega CD
-    // share this header format -- see adapters/common/region.hpp). Returns the
-    // Genesis manifest's region enum so callers can construct a genesis_config
-    // directly.
-    [[nodiscard]] manifests::genesis::genesis_config::region
-    detect_region(std::span<const std::uint8_t> rom) noexcept;
 
     class genesis_adapter final : public frontend_sdk::player_system {
       public:
@@ -60,8 +52,7 @@ namespace mnemos::apps::player::adapters::genesis {
         std::unique_ptr<manifests::genesis::genesis_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
-        manifests::genesis::genesis_config::region region_{
-            manifests::genesis::genesis_config::region::ntsc};
+        mnemos::video_region region_{mnemos::video_region::ntsc};
         std::uint64_t frames_stepped_{};
 
         // Reusable scratch buffers for drain_audio() so we don't reallocate

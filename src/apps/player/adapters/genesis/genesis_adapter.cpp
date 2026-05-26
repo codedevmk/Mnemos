@@ -1,20 +1,11 @@
 #include "genesis_adapter.hpp"
 
-#include "region.hpp" // shared sega16 region detector
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::genesis {
-
-    manifests::genesis::genesis_config::region
-    detect_region(std::span<const std::uint8_t> rom) noexcept {
-        using genesis_region = manifests::genesis::genesis_config::region;
-        return detect_sega16_region(rom) == video_region::pal ? genesis_region::pal
-                                                              : genesis_region::ntsc;
-    }
 
     namespace {
 
@@ -186,9 +177,9 @@ namespace mnemos::apps::player::adapters::genesis {
     }
 
     frontend_sdk::video_region genesis_adapter::region() const noexcept {
-        // NTSC Genesis runs at ~59.922 Hz; PAL at 49.701 Hz. We pace against
-        // the standard whole-fps for now; tighter pinning is follow-up work.
-        return {region_ == manifests::genesis::genesis_config::region::pal ? 50000U : 60000U};
+        // The video standard's nominal frame rate is system-agnostic; the
+        // shared region module owns the constants so every adapter agrees.
+        return {mnemos::frames_per_second_x1000(region_)};
     }
 
     chips::frame_buffer_view genesis_adapter::current_frame() const noexcept {
@@ -248,7 +239,7 @@ namespace mnemos::apps::player::adapters::genesis {
         // Target sample count for this frame at 48 kHz output. Accumulate
         // fractional samples so the long-term rate is exact even when
         // (kOutputRate / fps) isn't integer.
-        const double fps = region_ == manifests::genesis::genesis_config::region::pal ? 50.0 : 60.0;
+        const double fps = mnemos::frames_per_second(region_);
         const double exact = static_cast<double>(kOutputRate) / fps + audio_frac_;
         int dst_pairs = static_cast<int>(exact);
         if (dst_pairs <= 0) {

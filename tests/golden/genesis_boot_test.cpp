@@ -66,7 +66,7 @@ namespace {
     // Assemble a fresh Genesis and render `frames` frames on the master-clock schedule
     // (VDP /1, 68000 /7, Z80 /15, YM2612 /7, PSG /15); the VDP drives frame boundaries.
     std::unique_ptr<genesis_system> boot(std::vector<std::uint8_t> cart,
-                                         genesis_config::region region, std::uint64_t frames) {
+                                         mnemos::video_region region, std::uint64_t frames) {
         auto sys = assemble_genesis(std::move(cart), {.video_region = region});
         std::vector<mnemos::runtime::scheduled_chip> chips = {{&sys->vdp, 1U},
                                                               {&sys->cpu, 7U},
@@ -107,10 +107,10 @@ TEST_CASE("genesis boots to a deterministic golden framebuffer", "[golden][genes
         SKIP("MNEMOS_GENESIS_ROM=" << *rom_path << " could not be read as a cartridge image");
     }
 
-    auto region = genesis_config::region::ntsc;
+    auto region = mnemos::video_region::ntsc;
     if (const auto region_env = get_env("MNEMOS_GENESIS_REGION");
         region_env && (*region_env == "pal" || *region_env == "PAL")) {
-        region = genesis_config::region::pal;
+        region = mnemos::video_region::pal;
     }
 
     std::uint64_t frames = 120U;
@@ -121,7 +121,7 @@ TEST_CASE("genesis boots to a deterministic golden framebuffer", "[golden][genes
         }
     }
 
-    INFO("region: " << (region == genesis_config::region::pal ? "pal" : "ntsc"));
+    INFO("region: " << (region == mnemos::video_region::pal ? "pal" : "ntsc"));
     INFO("frames rendered: " << frames);
 
     auto sys = boot(*cart, region, frames);

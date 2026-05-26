@@ -2,7 +2,10 @@
 
 `mnemos_player` is the user-facing windowed frontend. It is **system-agnostic**:
 it drives any `mnemos::frontend_sdk::player_system` implementation, so the same
-binary will boot Genesis, SMS, C64, 32X, Sega CD, etc. as those adapters land.
+binary boots any wired-in system. Currently supported: **Genesis / Mega Drive**
+(`.md`, `.gen`, `.smd`, `.bin`) and **Sega Master System** (`.sms`, `.sg`); the
+family is picked from the ROM file extension. C64, 32X, Sega CD, SNES, NES slot
+in alongside as those adapters land.
 
 ## Stack
 
