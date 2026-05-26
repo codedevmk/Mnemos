@@ -3,7 +3,10 @@
 #include "chip_registry.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <iterator>
 #include <memory>
 
 namespace mnemos::chips::audio {
@@ -126,9 +129,23 @@ namespace mnemos::chips::audio {
         for (std::uint64_t i = 0; i < cycles; ++i) {
             if (++prescaler_ >= clock_divider_) {
                 prescaler_ = 0;
-                (void)step();
+                const auto s = step();
+                if (audio_capture_) {
+                    sample_queue_.push_back(s);
+                }
             }
         }
+    }
+
+    std::size_t sn76489::drain_samples(std::int16_t* out, std::size_t max_samples) noexcept {
+        const std::size_t n = std::min(sample_queue_.size(), max_samples);
+        if (n == 0U) {
+            return 0U;
+        }
+        std::memcpy(out, sample_queue_.data(), n * sizeof(std::int16_t));
+        sample_queue_.erase(sample_queue_.begin(),
+                            sample_queue_.begin() + static_cast<std::ptrdiff_t>(n));
+        return n;
     }
 
     void sn76489::set_lowpass_cutoff_hz(int sample_rate_hz, int cutoff_hz) noexcept {

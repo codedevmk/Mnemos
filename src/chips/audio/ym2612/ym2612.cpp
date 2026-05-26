@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
+#include <iterator>
 #include <memory>
 
 namespace mnemos::chips::audio {
@@ -412,13 +414,50 @@ namespace mnemos::chips::audio {
     }
 
     void ym2612::tick(std::uint64_t cycles) {
-        // Drive the timer prescalers in master clocks. Chunked so a 64-bit cycle
-        // count can't overflow the 32-bit accumulator entry point.
-        while (cycles > 0U) {
-            const auto chunk = static_cast<std::uint32_t>(std::min<std::uint64_t>(cycles, 0xFFFFU));
+        // Drive the timer prescalers. The scheduler passes CHIP cycles (one
+        // chip cycle = 7 master clocks on Genesis, set via the chip's divider
+        // in the scheduled_chip entry), but tick_timers_master() expects
+        // master clocks -- so scale up by the Genesis YM divider here. This
+        // is the same /7 that makes the chip clock master/7 in the first
+        // place. Without it the Timer A/B periods (1008 / 16128 master clocks)
+        // are reached 7x too slowly: music driver IRQs fire ~7x rarer, music
+        // tempo crawls, timer-driven game logic drifts.
+        const std::uint64_t total = cycles;
+        const std::uint64_t master = cycles * 7U;
+        std::uint64_t remaining = master;
+        while (remaining > 0U) {
+            const auto chunk =
+                static_cast<std::uint32_t>(std::min<std::uint64_t>(remaining, 0xFFFFU));
             (void)tick_timers_master(chunk);
-            cycles -= chunk;
+            remaining -= chunk;
         }
+        // Audio capture: emit a stereo sample every 1008 master clocks. We do
+        // this after the timer tick so the audio sees the same end-of-chunk
+        // state the timers do. The runtime calls tick() with small `cycles`
+        // each scheduler step (the YM divider is /7, so cycles is usually 7
+        // or a small multiple), so on average each tick() produces 0-1
+        // samples; bursts queue and drain pulls them.
+        if (audio_capture_) {
+            sample_accum_ += static_cast<std::uint32_t>(total);
+            while (sample_accum_ >= chip_cycles_per_sample) {
+                sample_accum_ -= chip_cycles_per_sample;
+                const auto s = step();
+                sample_queue_.push_back(s.left);
+                sample_queue_.push_back(s.right);
+            }
+        }
+    }
+
+    std::size_t ym2612::drain_samples(std::int16_t* out, std::size_t max_pairs) noexcept {
+        const std::size_t avail_pairs = sample_queue_.size() / 2U;
+        const std::size_t n = std::min(avail_pairs, max_pairs);
+        if (n == 0U) {
+            return 0U;
+        }
+        std::memcpy(out, sample_queue_.data(), n * 2U * sizeof(std::int16_t));
+        sample_queue_.erase(sample_queue_.begin(),
+                            sample_queue_.begin() + static_cast<std::ptrdiff_t>(n * 2U));
+        return n;
     }
 
     // ------------------------------------------------------------------------

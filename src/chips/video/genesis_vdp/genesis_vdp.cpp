@@ -46,7 +46,15 @@ namespace mnemos::chips::video {
 
     int genesis_vdp::visible_width() const noexcept { return h40_mode() ? 320 : 256; }
 
-    int genesis_vdp::field_height() const noexcept { return (v30_mode() && pal_mode_) ? 240 : 224; }
+    int genesis_vdp::field_height() const noexcept {
+        // V30 enables 240 visible scanlines per field. On real hardware V30 is
+        // only fully supported on PAL (NTSC garbles the bottom 16 lines on
+        // a CRT), but many games enable V30 on NTSC for non-gameplay screens
+        // (credits, intros) and the VDP still renders all 240 lines into the
+        // framebuffer. We honour that so the emulated frame matches what the
+        // game wrote -- the bottom 16 rows are no worse than on hardware.
+        return v30_mode() ? 240 : 224;
+    }
 
     int genesis_vdp::visible_height() const noexcept {
         return interlace_enabled() ? field_height() * 2 : field_height();
@@ -242,6 +250,7 @@ namespace mnemos::chips::video {
                     dma_copy_step();
                 }
                 dma_busy_ = false;
+                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
                 reg_[21] = static_cast<std::uint8_t>(dma_source_);
@@ -260,6 +269,7 @@ namespace mnemos::chips::video {
                     dma_transfer_step(word);
                 }
                 dma_busy_ = false;
+                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
                 const std::uint32_t new_src = src >> 1U;
@@ -320,6 +330,7 @@ namespace mnemos::chips::video {
             }
             const std::uint32_t fill_src = dma_src_advance(dma_source() << 1U, len * 2U) >> 1U;
             dma_busy_ = false;
+            dma_stall_master_cycles_ += estimate_dma_stall_cycles(len);
             reg_[19] = 0U;
             reg_[20] = 0U;
             reg_[21] = static_cast<std::uint8_t>(fill_src);
@@ -535,7 +546,13 @@ namespace mnemos::chips::video {
             if (px < 0) {
                 px += hsz_px;
             }
-            int py = (source_line + vscroll) % vsz_px;
+            // Genesis VDP V scroll convention: visible_line N shows plane row
+            // (vscroll + N) mod plane_height. Empirically verified against the
+            // Blades of Vengeance title screen and EA splash, both of which
+            // break with subtraction. (The Blades credits screen still
+            // mis-positions because of a separate plane-data placement issue;
+            // see VDP credits-screen bug for the investigation.)
+            int py = (vscroll + source_line) % vsz_px;
             if (py < 0) {
                 py += vsz_px;
             }
@@ -930,7 +947,33 @@ namespace mnemos::chips::video {
             line_accumulator_ -= master_clocks_per_line;
             run_scanline();
         }
+        // Drain any pending DMA stall debt; while > 0 the genesis_system gates
+        // the 68000 off so the bus appears held to the CPU during DMA, matching
+        // real hardware's behaviour.
+        if (dma_stall_master_cycles_ > 0) {
+            dma_stall_master_cycles_ -= static_cast<std::int64_t>(cycles);
+            if (dma_stall_master_cycles_ < 0) {
+                dma_stall_master_cycles_ = 0;
+            }
+        }
         refresh_irq();
+    }
+
+    std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_words) const noexcept {
+        // Per-word master-clock cost: in vblank or display-disabled the VDP
+        // hands the bus to DMA fully (~16 master clocks/word -- one slot every
+        // memory cycle). In active display, DMA shares with sprite/tile fetches
+        // and gets only ~16 slots/H40 line (=18 H32), which works out to ~205
+        // (H40) / ~213 (H32) master clocks per word. We pick the per-line slot
+        // budget based on display state at the moment the DMA fires; that's
+        // accurate enough to keep the 68K's frame budget in the right ballpark
+        // (background-agent measured the absence of any stall causes Blades
+        // to run ~36 frames ahead of real hardware by the credits screen).
+        const bool active = !in_vblank_ && display_enabled();
+        if (!active) {
+            return static_cast<std::int64_t>(length_words) * 16;
+        }
+        return static_cast<std::int64_t>(length_words) * (h40_mode() ? 205 : 213);
     }
 
     int genesis_vdp::pending_irq_level() const noexcept {
@@ -1019,10 +1062,17 @@ namespace mnemos::chips::video {
     }
 
     frame_buffer_view genesis_vdp::framebuffer() const noexcept {
+        // The framebuffer storage is always fb_width pixels per row (320, sized
+        // for the worst-case H40 + interlace), but the *visible* width depends
+        // on the active mode -- H32 renders only 256 columns and leaves the
+        // remaining 64 columns untouched (containing whatever the previous
+        // mode left there). Report the visible width as `width` and the
+        // storage pitch as `stride` so consumers don't display the stale tail.
         return {
             .pixels = framebuffer_.data(),
-            .width = static_cast<std::uint32_t>(fb_width),
+            .width = static_cast<std::uint32_t>(visible_width()),
             .height = static_cast<std::uint32_t>(visible_height()),
+            .stride = static_cast<std::uint32_t>(fb_width),
         };
     }
 

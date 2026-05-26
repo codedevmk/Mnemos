@@ -25,8 +25,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <cstdlib> // std::abs
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -97,6 +99,14 @@ namespace {
         std::size_t passed = 0;
         std::size_t failed = 0;
         std::size_t skipped = 0; // group-0 (address/bus error) cases, not yet modelled
+        // Per-file cycle-count drift vs the corpus's `length` field (= Motorola
+        // bus cycles). Tracked but does NOT fail the test, only reported, so
+        // we can find the worst offenders without breaking the existing
+        // state-correctness signal.
+        std::int64_t cycle_diff_sum = 0;  // sum of (mine - corpus) over passing tests
+        std::int64_t cycle_diff_abs = 0;  // sum of abs(mine - corpus)
+        std::size_t cycle_compared = 0;
+        std::size_t cycle_mismatches = 0;
     };
 
     file_result run_file(const std::filesystem::path& path, std::size_t max_tests,
@@ -153,16 +163,44 @@ namespace {
             const std::uint32_t addr_error_handler = longword_at(0x0CU);
 
             load_registers(init, cpu);
-            (void)cpu.step_instruction();
+            const int actual_cycles = cpu.step_instruction();
 
             const auto& fin = test.at("final");
             // Skip cases the corpus resolves via an address/bus-error trap (vector to
             // the group-0 handler) -- not modelled by the instruction-stepped core.
+            // Done BEFORE the cycle compare so those cases (where the corpus's
+            // 'length' includes ~50 cycles of exception entry we don't pay) don't
+            // pollute the per-mnemonic drift metric.
             const auto final_pc = fin.at("pc").get<std::uint32_t>();
             if ((addr_error_handler != 0U && final_pc == addr_error_handler) ||
                 (bus_error_handler != 0U && final_pc == bus_error_handler)) {
                 ++result.skipped;
                 continue;
+            }
+
+            // Compare against the corpus's `length` field (Motorola bus cycle
+            // count). Tracked only for non-trap cases so the metric isn't
+            // dominated by exception-entry costs we don't model.
+            if (test.contains("length")) {
+                const int expected_cycles = test.at("length").get<int>();
+                const std::int64_t diff =
+                    static_cast<std::int64_t>(actual_cycles) - expected_cycles;
+                result.cycle_diff_sum += diff;
+                result.cycle_diff_abs += std::abs(diff);
+                ++result.cycle_compared;
+                if (diff != 0) {
+                    ++result.cycle_mismatches;
+                    // Dump first cycle mismatch per file when requested.
+                    static int dumped_cyc = 0;
+                    if (std::getenv("MNEMOS_M68000_CYCLE_DUMP") != nullptr && dumped_cyc < 5) {
+                        std::cerr << "[cyc] " << path.filename().string()
+                                  << " case=" << test.at("name").get<std::string>()
+                                  << " mine=" << actual_cycles
+                                  << " expected=" << expected_cycles
+                                  << " diff=" << diff << "\n";
+                        ++dumped_cyc;
+                    }
+                }
             }
             const auto r = cpu.cpu_registers();
             const bool fsuper = (fin.at("sr").get<std::uint16_t>() & m68000::sr_s) != 0U;
@@ -258,6 +296,20 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
     std::vector<std::string> failures;
     std::string tally;
 
+    // Per-mnemonic cycle-drift accumulator; rebuilt by run_file and aggregated
+    // across all files so we can rank which mnemonics differ most from the
+    // corpus's `length` field (= Motorola bus cycles). Used to find the
+    // sources of per-instruction CPU timing drift that show up at the
+    // multi-frame level (see task #28 / Blades credits investigation).
+    struct mnem_stats {
+        std::string name;
+        std::int64_t diff_sum = 0;
+        std::int64_t diff_abs = 0;
+        std::size_t compared = 0;
+        std::size_t mismatches = 0;
+    };
+    std::vector<mnem_stats> per_mnem;
+
     for (const auto& entry : std::filesystem::directory_iterator(dir)) {
         if (entry.path().extension() != ".json") {
             continue;
@@ -273,14 +325,50 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
         if (result.failed > 0U) {
             tally += " " + entry.path().stem().string() + "=" + std::to_string(result.failed);
         }
+        per_mnem.push_back({entry.path().stem().string(), result.cycle_diff_sum,
+                             result.cycle_diff_abs, result.cycle_compared,
+                             result.cycle_mismatches});
     }
+
+    // Rank mnemonics by total absolute cycle drift -- the worst offenders are
+    // the ones most likely to make a game like Blades of Vengeance pull a DMA
+    // 36 frames earlier than real hardware (task #28).
+    std::sort(per_mnem.begin(), per_mnem.end(),
+              [](const mnem_stats& a, const mnem_stats& b) { return a.diff_abs > b.diff_abs; });
+    std::string cycle_report = "\ntop cycle drift (mine - corpus):\n";
+    std::int64_t total_diff_sum = 0;
+    std::int64_t total_diff_abs = 0;
+    std::size_t total_compared = 0;
+    std::size_t total_mismatches = 0;
+    for (std::size_t i = 0; i < per_mnem.size() && i < 25U; ++i) {
+        const auto& s = per_mnem[i];
+        if (s.compared == 0U) {
+            continue;
+        }
+        cycle_report += "  " + s.name + ": ";
+        cycle_report += "n=" + std::to_string(s.mismatches) + "/" + std::to_string(s.compared);
+        cycle_report += " sum_diff=" + std::to_string(s.diff_sum);
+        cycle_report += " abs_sum=" + std::to_string(s.diff_abs);
+        cycle_report += "\n";
+    }
+    for (const auto& s : per_mnem) {
+        total_diff_sum += s.diff_sum;
+        total_diff_abs += s.diff_abs;
+        total_compared += s.compared;
+        total_mismatches += s.mismatches;
+    }
+    cycle_report += "totals: " + std::to_string(total_mismatches) + "/" +
+                     std::to_string(total_compared) + " mismatch, sum=" +
+                     std::to_string(total_diff_sum) + " abs=" + std::to_string(total_diff_abs);
+    std::cerr << cycle_report << "\n";
 
     std::string detail;
     for (const std::string& failure : failures) {
         detail += "\n  " + failure;
     }
     INFO("files=" << files << " passed=" << passed << " failed=" << failed << " skipped(group0)="
-                  << skipped << "\nper-file failures:" << tally << "\nexamples:" << detail);
+                  << skipped << "\nper-file failures:" << tally << "\nexamples:" << detail
+                  << cycle_report);
     CHECK(files > 0U);
     CHECK(failed == 0U);
 }

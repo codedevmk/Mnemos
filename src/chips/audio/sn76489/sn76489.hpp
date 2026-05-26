@@ -3,8 +3,10 @@
 #include "chip.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace mnemos::chips::audio {
 
@@ -59,6 +61,17 @@ namespace mnemos::chips::audio {
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
+        // Real-time audio sink (mirror of the YM2612 capture API). When
+        // enabled, tick() appends every step()'s mono sample to an internal
+        // queue; the host drains it with drain_samples(). Sample rate is the
+        // chip's input-clock / clock_divider (default 16) -- for Genesis PSG
+        // driven at master/15 that's ~223 kHz, much faster than the YM rate;
+        // the adapter is responsible for any downsampling before mixing.
+        void enable_audio_capture(bool on) noexcept { audio_capture_ = on; }
+        [[nodiscard]] bool audio_capture_enabled() const noexcept { return audio_capture_; }
+        [[nodiscard]] std::size_t pending_samples() const noexcept { return sample_queue_.size(); }
+        std::size_t drain_samples(std::int16_t* out, std::size_t max_samples) noexcept;
+
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {};
 
@@ -78,6 +91,9 @@ namespace mnemos::chips::audio {
         int clock_divider_{default_clock_divider};
         int prescaler_{};
         std::int16_t last_sample_{};
+
+        bool audio_capture_{};
+        std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 9> register_view_{};
         introspection_surface introspection_{};

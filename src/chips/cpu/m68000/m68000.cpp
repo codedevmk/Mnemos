@@ -814,18 +814,22 @@ namespace mnemos::chips::cpu {
             } else {
                 d_[dni] = (d_[dni] & 0xFFFFFF00U) | r;
             }
+            cycles_ += 2; // Motorola: Dn=6 (4+2), -(An)=18 (4+4+4+4+2)
             return;
         }
         if ((op & 0xF1F8U) == 0xC140U) { // EXG Dx,Dy
             std::swap(d_[dni], d_[eri]);
+            cycles_ += 2; // Motorola EXG = 6 cycles (4 opcode + 2 internal)
             return;
         }
         if ((op & 0xF1F8U) == 0xC148U) { // EXG Ax,Ay
             std::swap(a_[dni], a_[eri]);
+            cycles_ += 2;
             return;
         }
         if ((op & 0xF1F8U) == 0xC188U) { // EXG Dx,Ay
             std::swap(d_[dni], a_[eri]);
+            cycles_ += 2;
             return;
         }
         if (opm == 3) { // MULU
@@ -948,6 +952,7 @@ namespace mnemos::chips::cpu {
             } else {
                 d_[dni] = (d_[dni] & 0xFFFFFF00U) | r;
             }
+            cycles_ += 2; // Motorola: SBCD Dn=6, -(An)=18 (same pattern as ABCD)
             return;
         }
         const op_size sz = static_cast<op_size>(opm & 3);
@@ -1135,6 +1140,9 @@ namespace mnemos::chips::cpu {
                     write_sr(static_cast<std::uint16_t>(sr_ ^ v)); // EORI SR
                 }
             }
+            // Motorola: ORI/ANDI/EORI to CCR or SR all = 20 cycles base.
+            // Bus model already counts 4 (opcode) + 4 (imm fetch) = 8. Add 12.
+            cycles_ += 12;
             return;
         }
         if (sub == 6) { // CMPI
@@ -1388,26 +1396,40 @@ namespace mnemos::chips::cpu {
             } else {
                 sr_ = static_cast<std::uint16_t>(sr_ & ~(sr_z | sr_v | sr_c)); // in range: no trap
             }
+            // Motorola: CHK no-trap = 10 + EA; trap path adds the standard
+            // exception cost. The opcode fetch already counts 4; add the
+            // remaining 6 of the no-trap base. raise_exception accounts for
+            // the trap-path cost separately.
+            cycles_ += 6;
             return;
         }
-        // MOVE from SR -> <ea> (word). Not privileged on the 68000.
+        // MOVE from SR -> <ea> (word). Not privileged on the 68000. Motorola:
+        // Dn = 6, mem = 8 + EAwrite -- the mem path performs an internal read
+        // before the write, so it's 4 cycles more than a plain write.
         if ((op & 0xFFC0U) == 0x40C0U) {
+            if (em != 0 && em != 1) {
+                cycles_ += 4; // internal-read overhead before the destination write
+            } else {
+                cycles_ += 2; // Dn / An: 6 - 4 opcode bus = 2
+            }
             ea_write(em, er, op_size::word, sr_);
             return;
         }
-        // MOVE to CCR <- <ea> (word, low byte).
+        // MOVE to CCR <- <ea> (word, low byte). 12 + EAread; +8 over bus model.
         if ((op & 0xFFC0U) == 0x44C0U) {
             const auto v = static_cast<std::uint16_t>(ea_read(em, er, op_size::word));
             sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (v & sr_ccr));
+            cycles_ += 8;
             return;
         }
-        // MOVE to SR <- <ea> (word, privileged).
+        // MOVE to SR <- <ea> (word, privileged). 12 + EAread; +8 over bus.
         if ((op & 0xFFC0U) == 0x46C0U) {
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
                 return;
             }
             write_sr(static_cast<std::uint16_t>(ea_read(em, er, op_size::word)));
+            cycles_ += 8;
             return;
         }
 
@@ -1452,8 +1474,10 @@ namespace mnemos::chips::cpu {
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
             }
+            cycles_ = 132; // Motorola spec; floor of 4 doesn't apply since explicit
             return;
         case 0x4E71U: // NOP
+            cycles_ = 4;
             return;
         case 0x4E72U: // STOP #imm (privileged)
             if ((sr_ & sr_s) == 0U) {
@@ -1462,6 +1486,7 @@ namespace mnemos::chips::cpu {
             }
             write_sr(fetch16());
             stopped_ = true;
+            cycles_ = 4;
             return;
         case 0x4E73U: { // RTE (privileged)
             if ((sr_ & sr_s) == 0U) {
@@ -1471,20 +1496,25 @@ namespace mnemos::chips::cpu {
             const std::uint16_t s = pop16();
             pc_ = pop32();
             write_sr(s);
+            cycles_ = 20;
             return;
         }
         case 0x4E75U: // RTS
             pc_ = pop32();
+            cycles_ = 16;
             return;
         case 0x4E76U: // TRAPV
             if ((sr_ & sr_v) != 0U) {
                 raise_exception(vec_trapv, pc_);
+            } else {
+                cycles_ = 4;
             }
             return;
         case 0x4E77U: { // RTR
             const std::uint16_t ccr = pop16();
             sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (ccr & sr_ccr));
             pc_ = pop32();
+            cycles_ = 20;
             return;
         }
         default:
@@ -1494,10 +1524,35 @@ namespace mnemos::chips::cpu {
             const std::uint32_t target = ea_address(em, er, op_size::longword, false);
             push32(pc_);
             pc_ = target;
+            // Motorola 68000 JSR cycle counts by EA mode (mode<<3 | reg):
+            //   (An) 16, (d16,An) 18, (d8,An,Xn) 22, (xxx).W 18, (xxx).L 20,
+            //   (d16,PC) 18, (d8,PC,Xn) 22.
+            int jsr_cyc = 16;
+            if (em == 5) { jsr_cyc = 18; }            // (d16,An)
+            else if (em == 6) { jsr_cyc = 22; }       // (d8,An,Xn)
+            else if (em == 7) {
+                if (er == 0) { jsr_cyc = 18; }        // (xxx).W
+                else if (er == 1) { jsr_cyc = 20; }   // (xxx).L
+                else if (er == 2) { jsr_cyc = 18; }   // (d16,PC)
+                else if (er == 3) { jsr_cyc = 22; }   // (d8,PC,Xn)
+            }
+            cycles_ = jsr_cyc;
             return;
         }
         if ((op & 0xFFC0U) == 0x4EC0U) { // JMP <ea>
             pc_ = ea_address(em, er, op_size::longword, false);
+            // JMP cycle counts by EA mode: (An) 8, (d16,An) 10, (d8,An,Xn) 14,
+            //   (xxx).W 10, (xxx).L 12, (d16,PC) 10, (d8,PC,Xn) 14.
+            int jmp_cyc = 8;
+            if (em == 5) { jmp_cyc = 10; }
+            else if (em == 6) { jmp_cyc = 14; }
+            else if (em == 7) {
+                if (er == 0) { jmp_cyc = 10; }
+                else if (er == 1) { jmp_cyc = 12; }
+                else if (er == 2) { jmp_cyc = 10; }
+                else if (er == 3) { jmp_cyc = 14; }
+            }
+            cycles_ = jmp_cyc;
             return;
         }
         // NBCD/SWAP/PEA/LEA/MOVEM/MOVE-to-from-SR/CCR/CHK land in later phases.
@@ -1551,6 +1606,13 @@ namespace mnemos::chips::cpu {
         push32(exc_pc);
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+        // Motorola 68000 internal-exception entry = 34 cycles (TRAP, TRAPV,
+        // CHK trap, illegal, divzero, privilege). The bus model above counts
+        // push32 + push16 + read32 = 20; add the remaining 10 of internal
+        // microcode + idle cycles. The opcode-fetch cycles for the triggering
+        // instruction are counted by the caller's own fetch16, so this is the
+        // exception-entry-only cost, applied uniformly.
+        cycles_ += 10;
     }
 
     void m68000::process_interrupt() noexcept {
@@ -1620,11 +1682,12 @@ namespace mnemos::chips::cpu {
         if (cc == 1) { // BSR
             push32(pc_);
             pc_ = target;
+            cycles_ = 18; // BSR.S and BSR.W both 18 cycles per Motorola spec
         } else if (cc == 0 || test_cc(cc)) { // BRA or Bcc taken
             pc_ = target;
-            cycles_ += 2;
+            cycles_ = 10; // BRA / Bcc taken
         } else { // Bcc not taken
-            cycles_ += 4;
+            cycles_ = (d8 == 0) ? 12 : 8; // word displacement 12, byte 8
         }
     }
 
@@ -1635,25 +1698,44 @@ namespace mnemos::chips::cpu {
             const auto disp = static_cast<std::int16_t>(fetch16());
             const std::uint32_t target =
                 static_cast<std::uint32_t>(static_cast<std::int32_t>(pc_ - 2U) + disp);
-            if (!test_cc(cc)) {
+            // Motorola DBcc:
+            //   cc true                       -> 12 cycles (no branch, no count)
+            //   cc false, branch taken        -> 10 cycles
+            //   cc false, counter expired -1  -> 14 cycles (fall through)
+            // My existing bus model already counts: opcode 4 + disp fetch 4 = 8.
+            // Add the remaining internal cycles per case.
+            if (test_cc(cc)) {
+                cycles_ += 4; // 12 - 8 bus
+            } else {
                 const auto cnt =
                     static_cast<std::uint16_t>((d_[static_cast<std::size_t>(er)] & 0xFFFFU) - 1U);
                 d_[static_cast<std::size_t>(er)] =
                     (d_[static_cast<std::size_t>(er)] & 0xFFFF0000U) | cnt;
                 if (cnt != 0xFFFFU) {
                     pc_ = target;
+                    cycles_ += 2; // 10 - 8 bus
+                } else {
+                    cycles_ += 6; // 14 - 8 bus (one extra prefetch when falling through)
                 }
             }
             return;
         }
-        // Scc <ea> (1-word)
-        const std::uint8_t v = test_cc(cc) ? 0xFFU : 0x00U;
+        // Scc <ea> (1-word). Motorola:
+        //   Scc Dn: 4 (cc false) / 6 (cc true)
+        //   Scc <mem>: 8 + EA (cc false) / 8 + EA (cc true), both include the
+        //              internal read-modify cycle before the write.
+        const bool cc_true = test_cc(cc);
+        const std::uint8_t v = cc_true ? 0xFFU : 0x00U;
         if (em >= 2) {
             std::uint32_t addr = 0;
             (void)ea_rmw_read(em, er, op_size::byte, addr);
             ea_rmw_write(em, er, op_size::byte, v, addr);
+            // Bus already counts opcode 4 + EA fetch + read 4 + write 4. The
+            // remainder of Motorola's 8 + EA matches the EA cost we already
+            // counted, no extra internal.
         } else {
             d_[static_cast<std::size_t>(er)] = (d_[static_cast<std::size_t>(er)] & ~0xFFU) | v;
+            cycles_ += cc_true ? 2 : 0; // 6 - 4 opcode for true; 4 - 4 = 0 for false
         }
     }
 

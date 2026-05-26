@@ -110,12 +110,22 @@ namespace mnemos::chips {
     };
 
     // A borrowed, immutable view of a video chip's most recent complete frame.
-    // Pixels are 0x00RRGGBB (alpha unused); row-major, `width` pixels per row.
-    // The view is valid until the next tick that completes a frame.
+    // Pixels are 0x00RRGGBB (alpha unused), row-major. `width` is the count of
+    // *visible* pixels per row; `stride` is the storage pitch in pixels, >=
+    // width, used when the framebuffer is sized for a worst-case mode but the
+    // active mode renders fewer columns (e.g. Genesis H32 mode: visible width
+    // 256 but the storage row is 320 pixels wide). Iterate rows as
+    // `pixels + row * effective_stride()` and read the first `width` pixels of
+    // each row. The view is valid until the next tick that completes a frame.
     struct frame_buffer_view final {
         const std::uint32_t* pixels{};
         std::uint32_t width{};
         std::uint32_t height{};
+        std::uint32_t stride{}; // pixels per row in storage; 0 = packed (== width)
+
+        [[nodiscard]] constexpr std::uint32_t effective_stride() const noexcept {
+            return stride != 0U ? stride : width;
+        }
     };
 
     class ivideo : public ichip {

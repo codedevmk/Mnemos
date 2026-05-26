@@ -47,6 +47,37 @@ namespace mnemos::manifests::genesis {
         const bool* gate_;
     };
 
+    // Like gated_chip but the gate is a callable evaluated per tick. The
+    // Genesis uses this to stall the 68000 while the VDP's DMA stall debt
+    // is being drained -- the 68K only ticks when the VDP says the bus is
+    // free. Captures a thin function pointer rather than a std::function so
+    // every scheduler tick stays tiny.
+    class predicate_gated_chip final : public chips::ichip {
+      public:
+        using predicate_fn = bool (*)(void* user) noexcept;
+        predicate_gated_chip(chips::ichip& inner, predicate_fn fn, void* user) noexcept
+            : inner_(&inner), fn_(fn), user_(user) {}
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override {
+            return inner_->metadata();
+        }
+        void tick(std::uint64_t cycles) override {
+            if (fn_(user_)) {
+                inner_->tick(cycles);
+            }
+        }
+        void reset(chips::reset_kind kind) override { inner_->reset(kind); }
+        void save_state(chips::state_writer& writer) const override { inner_->save_state(writer); }
+        void load_state(chips::state_reader& reader) override { inner_->load_state(reader); }
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return inner_->introspection();
+        }
+
+      private:
+        chips::ichip* inner_;
+        predicate_fn fn_;
+        void* user_;
+    };
+
     // A wired Sega Genesis / Mega Drive: the 68000 main CPU, the VDP, the YM2612 FM
     // and SN76489 PSG, the Z80 sound CPU, 64 KiB of 68K work RAM, 8 KiB of Z80 RAM,
     // and the 68000 24-bit big-endian bus. Heap-allocated and never moved after
@@ -94,14 +125,64 @@ namespace mnemos::manifests::genesis {
         // Scheduler view of the Z80, advanced only while z80_running (see gated_chip).
         gated_chip z80_gate{z80, z80_running};
 
-        // Controller state, active-high (a set bit = pressed); the port read converts
-        // to the active-low pad lines. Full 3/6-button protocol is the next phase.
+        // Scheduler view of the 68000, advanced only while the VDP isn't
+        // holding the bus for DMA. Without this gate the 68K runs through
+        // DMA in zero emulated time and the game's per-frame work budget
+        // grows -- visible as the Blades-of-Vengeance credits screen
+        // pulling its tile-data DMA ~36 frames earlier than real hardware
+        // (background-agent investigation, tracked as task #28).
+        static bool cpu_runnable(void* user) noexcept {
+            const auto* sys = static_cast<const genesis_system*>(user);
+            return !sys->vdp.dma_stall_active();
+        }
+        predicate_gated_chip cpu_gate{cpu, &cpu_runnable, this};
+
+        // Controller state, active-high (a set bit = pressed). Bit layout:
+        //   0=Up  1=Down  2=Left  3=Right  4=A  5=B  6=C  7=Start
+        // The $A1000{3,5} read handler converts to the active-low Genesis pad
+        // wire protocol; bit 6 of the CPU-written byte at the same address is
+        // the TH (select) line that toggles between the (U/D/L/R/B/C) and
+        // (U/D/A/Start) button banks. `pad_th[]` latches the most-recent TH
+        // write per port so the read returns the right bank.
         std::array<std::uint8_t, 2> pad{};
+        std::array<bool, 2> pad_th{{true, true}}; // TH defaults high on reset
 
         void set_pad(int port, std::uint8_t buttons) noexcept {
             if (port >= 0 && port < 2) {
                 pad[static_cast<std::size_t>(port)] = buttons;
             }
+        }
+
+        // Encode the current pad state as the byte the 68000 reads at
+        // $A10003/$A10005 for the given port. Matches the standard Sega 3-button
+        // pad protocol: when TH is high the bank is U/D/L/R/B/C; when TH is low
+        // it's U/D/-/-/A/Start (left/right read as if pressed so games can
+        // detect a 3-button vs 6-button pad).
+        [[nodiscard]] std::uint8_t read_pad_port(int port) const noexcept {
+            if (port < 0 || port >= 2) {
+                return 0xFFU;
+            }
+            const auto bits = pad[static_cast<std::size_t>(port)];
+            const bool th = pad_th[static_cast<std::size_t>(port)];
+            const auto inv = [&](std::uint8_t mask) -> std::uint8_t {
+                return (bits & mask) ? 0U : 1U; // active-high pad -> active-low wire
+            };
+            std::uint8_t out = th ? 0x40U : 0x00U;
+            if (th) {
+                out |= inv(0x01U) << 0; // Up
+                out |= inv(0x02U) << 1; // Down
+                out |= inv(0x04U) << 2; // Left
+                out |= inv(0x08U) << 3; // Right
+                out |= inv(0x20U) << 4; // B
+                out |= inv(0x40U) << 5; // C
+            } else {
+                out |= inv(0x01U) << 0; // Up
+                out |= inv(0x02U) << 1; // Down
+                // bits 2,3 always 0 (so a 3-button pad is identifiable: L+R both "pressed")
+                out |= inv(0x10U) << 4; // A
+                out |= inv(0x80U) << 5; // Start
+            }
+            return out;
         }
     };
 
