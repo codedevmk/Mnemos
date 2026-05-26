@@ -331,7 +331,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
@@ -409,6 +409,23 @@ int main(int argc, char* argv[]) {
     int dump_index = 0;
     bool dump_requested = false;
 
+    // Open whichever gamepad is currently plugged in for port 0, and watch
+    // for hot-plug events to swap if a different controller arrives. Keyboard
+    // input is always sampled too -- both feed the same controller_state.
+    SDL_Gamepad* gamepad = nullptr;
+    {
+        int count = 0;
+        SDL_JoystickID* ids = SDL_GetGamepads(&count);
+        if (ids != nullptr && count > 0) {
+            gamepad = SDL_OpenGamepad(ids[0]);
+            if (gamepad != nullptr) {
+                std::fprintf(stderr, "[mnemos_player] gamepad attached: %s\n",
+                             SDL_GetGamepadName(gamepad));
+            }
+            SDL_free(ids);
+        }
+    }
+
     bool running = true;
     while (running) {
         SDL_Event event;
@@ -424,16 +441,37 @@ int main(int argc, char* argv[]) {
                     dump_requested = true;
                 }
                 break;
+            case SDL_EVENT_GAMEPAD_ADDED:
+                if (gamepad == nullptr) {
+                    gamepad = SDL_OpenGamepad(event.gdevice.which);
+                    if (gamepad != nullptr) {
+                        std::fprintf(stderr, "[mnemos_player] gamepad attached: %s\n",
+                                     SDL_GetGamepadName(gamepad));
+                    }
+                }
+                break;
+            case SDL_EVENT_GAMEPAD_REMOVED:
+                if (gamepad != nullptr &&
+                    SDL_GetJoystickID(SDL_GetGamepadJoystick(gamepad)) == event.gdevice.which) {
+                    SDL_CloseGamepad(gamepad);
+                    gamepad = nullptr;
+                    std::fprintf(stderr, "[mnemos_player] gamepad removed\n");
+                }
+                break;
             default:
                 break;
             }
         }
 
-        // Sample the keyboard, build a controller_state for port 0, hand it to
-        // the system before stepping the frame. Mapping (Genesis 3-button pad):
-        //   Arrows = D-pad   Z = A   X = B   C = C   Enter = Start
+        // Build the per-frame controller_state for port 0 from both inputs
+        // available: the keyboard (always sampled) and any attached gamepad
+        // (analog stick + dpad + face buttons), OR'd together so the player
+        // can switch between them mid-session without rebinding.
+        //   Keyboard: Arrows = D-pad, Z = A, X = B, C = C, Enter = Start
+        //   Gamepad : DPad+left stick = D-pad, South = A, East = B, West = C,
+        //             Start = Start, Back = Select (when 6-button lands)
         // Adapters that don't expose all of these (SMS, C64, ...) ignore the
-        // extras when this lands.
+        // extras.
         {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             mnemos::frontend_sdk::controller_state pad{};
@@ -445,6 +483,23 @@ int main(int argc, char* argv[]) {
             pad.b = keys[SDL_SCANCODE_X];
             pad.c = keys[SDL_SCANCODE_C];
             pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
+            if (gamepad != nullptr) {
+                constexpr Sint16 kAxisThreshold = 16384; // ~half deflection
+                const auto lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+                const auto ly = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+                pad.up |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) ||
+                         ly < -kAxisThreshold;
+                pad.down |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) ||
+                           ly > kAxisThreshold;
+                pad.left |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ||
+                           lx < -kAxisThreshold;
+                pad.right |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
+                            lx > kAxisThreshold;
+                pad.a |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
+                pad.b |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST);
+                pad.c |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);
+                pad.start |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_START);
+            }
             if (system) {
                 system->apply_input(0, pad);
             }
@@ -610,6 +665,9 @@ int main(int argc, char* argv[]) {
         SDL_SubmitGPUCommandBuffer(cmd);
     }
 
+    if (gamepad != nullptr) {
+        SDL_CloseGamepad(gamepad);
+    }
     SDL_ReleaseGPUTransferBuffer(device, xfer);
     SDL_ReleaseGPUTexture(device, tex);
     SDL_ReleaseWindowFromGPUDevice(device, window);
