@@ -960,20 +960,30 @@ namespace mnemos::chips::video {
     }
 
     std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_words) const noexcept {
-        // Per-word master-clock cost: in vblank or display-disabled the VDP
-        // hands the bus to DMA fully (~16 master clocks/word -- one slot every
-        // memory cycle). In active display, DMA shares with sprite/tile fetches
-        // and gets only ~16 slots/H40 line (=18 H32), which works out to ~205
-        // (H40) / ~213 (H32) master clocks per word. We pick the per-line slot
-        // budget based on display state at the moment the DMA fires; that's
-        // accurate enough to keep the 68K's frame budget in the right ballpark
-        // (background-agent measured the absence of any stall causes Blades
-        // to run ~36 frames ahead of real hardware by the credits screen).
-        const bool active = !in_vblank_ && display_enabled();
-        if (!active) {
-            return static_cast<std::int64_t>(length_words) * 16;
+        // Per-word master-clock cost, derived from the reference emulator's dma_timing[]
+        // table (the reference: slots-per-line per display mode). One slot = one
+        // byte transfer, so one DMA word = 2 slots:
+        //   per_word_master = 2 * MCYCLES_PER_LINE(3420) / slots_per_line
+        //
+        //   slots/line:    H32   H40
+        //   active disp.:   16    18      ->  H32: 427.5, H40: 380   master clk/word
+        //   blank disp. :  166   204      ->  H32:  41.2, H40:  33.5 master clk/word
+        //   display off :  161   198      ->  H32:  42.5, H40:  34.5 master clk/word
+        //
+        // The prior values (16 inactive, 205/213 active) were ~half what they
+        // should be and inverted the H40/H32 ordering for active display, which
+        // gave the 68K an over-large per-frame work budget during DMA-heavy
+        // sequences (Blades credits: ~7 frames of phase lag at f120).
+        const bool blanking = in_vblank_ || !display_enabled();
+        if (blanking) {
+            // V-blank and display-off behave the same (full bus to DMA, modulo
+            // the slot count); pick the slot count by display-disabled if the
+            // display is off, else by V-blank. They differ only slightly so the
+            // simpler choice (always V-blank slots when blanking) is within the
+            // measurement noise of this estimator.
+            return static_cast<std::int64_t>(length_words) * (h40_mode() ? 34 : 41);
         }
-        return static_cast<std::int64_t>(length_words) * (h40_mode() ? 205 : 213);
+        return static_cast<std::int64_t>(length_words) * (h40_mode() ? 380 : 428);
     }
 
     int genesis_vdp::pending_irq_level() const noexcept {
