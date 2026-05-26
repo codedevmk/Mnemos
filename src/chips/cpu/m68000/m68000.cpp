@@ -1812,15 +1812,22 @@ namespace mnemos::chips::cpu {
         const std::int32_t disp = d8 == 0 ? static_cast<std::int16_t>(fetch16()) : d8;
         const std::uint32_t target =
             static_cast<std::uint32_t>(static_cast<std::int32_t>(base) + disp);
-        if (cc == 1) { // BSR
-            push32(pc_);
+        // Additive cycle accounting: the calling step_instruction has
+        // already added fetch16(4) for the opcode, plus possibly +2 if bus
+        // refresh fired this instruction; the word-displacement branch above
+        // adds another fetch16(4) for the displacement. We add ONLY the
+        // handler's internal idle (and push32 for BSR) here, so refresh and
+        // prefetch costs aren't overwritten -- matches the reference where refresh
+        // adds +14 master independently of the instruction's table cost.
+        if (cc == 1) { // BSR (Motorola total = 18 cycles)
+            push32(pc_);                          // adds 8 cycles
             pc_ = target;
-            cycles_ = 18; // BSR.S and BSR.W both 18 cycles per Motorola spec
-        } else if (cc == 0 || test_cc(cc)) { // BRA or Bcc taken
+            cycles_ += (d8 == 0) ? 2 : 6;         // .W: 4+4+8+2=18 ; .S: 4+8+6=18
+        } else if (cc == 0 || test_cc(cc)) {      // BRA / Bcc taken (= 10)
             pc_ = target;
-            cycles_ = 10; // BRA / Bcc taken
-        } else { // Bcc not taken
-            cycles_ = (d8 == 0) ? 12 : 8; // word displacement 12, byte 8
+            cycles_ += (d8 == 0) ? 2 : 6;         // .W: 4+4+2=10 ; .S: 4+6=10
+        } else {                                  // Bcc not taken
+            cycles_ += 4;                         // .W: 4+4+4=12 ; .S: 4+4=8
         }
     }
 
