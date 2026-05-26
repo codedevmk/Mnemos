@@ -165,28 +165,64 @@ namespace mnemos::chips::cpu {
 
     // ---- cycle-accounted accesses (one bus cycle = 4 clocks) ----
 
+    // Genesis Z80-bus access latency. When enabled, +1 CPU cycle per access
+    // into the $A00000-$A0FFFF region (Z80 RAM, YM2612, VDP-via-Z80-bus, etc).
+    // Matches the reference's `m68k.cycles += 1 * 7` in core/the reference (z80_read_byte
+    // line 144 / z80_write_byte line 179). See set_z80_bus_latency_enabled().
+    static constexpr bool is_z80_bus_addr(std::uint32_t a) noexcept {
+        return (a & 0xFF0000U) == 0xA00000U;
+    }
+
     std::uint8_t m68000::read8(std::uint32_t a) noexcept {
         cycles_ += 4;
+        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
+            cycles_ += 1;
+        }
         return rd8(a);
     }
     std::uint16_t m68000::read16(std::uint32_t a) noexcept {
         cycles_ += 4;
+        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
+            cycles_ += 1;
+        }
         return rd16(a);
     }
     std::uint32_t m68000::read32(std::uint32_t a) noexcept {
         cycles_ += 8;
+        if (z80_bus_latency_enabled_) {
+            if (is_z80_bus_addr(a)) {
+                cycles_ += 1;
+            }
+            if (is_z80_bus_addr(a + 2U)) {
+                cycles_ += 1;
+            }
+        }
         return (static_cast<std::uint32_t>(rd16(a)) << 16U) | rd16(a + 2U);
     }
     void m68000::write8(std::uint32_t a, std::uint8_t v) noexcept {
         cycles_ += 4;
+        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
+            cycles_ += 1;
+        }
         wr8(a, v);
     }
     void m68000::write16(std::uint32_t a, std::uint16_t v) noexcept {
         cycles_ += 4;
+        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
+            cycles_ += 1;
+        }
         wr16(a, v);
     }
     void m68000::write32(std::uint32_t a, std::uint32_t v) noexcept {
         cycles_ += 8;
+        if (z80_bus_latency_enabled_) {
+            if (is_z80_bus_addr(a)) {
+                cycles_ += 1;
+            }
+            if (is_z80_bus_addr(a + 2U)) {
+                cycles_ += 1;
+            }
+        }
         wr16(a, static_cast<std::uint16_t>(v >> 16U));
         wr16(a + 2U, static_cast<std::uint16_t>(v));
     }
@@ -622,15 +658,6 @@ namespace mnemos::chips::cpu {
             // (it overlaps with the source fetch in the bus pipeline); the
             // generic ea_address adds +2 for -(An) that we refund here.
             cycles_ -= 2;
-        }
-        // Audit finding: MOVE.B (An)+, (An)+ takes 13 cycles, not the 12 the
-        // Motorola spec table lists. the reference charges 91 master (13 cycles) for
-        // this opcode pattern; confirmed by trace at PC $250 of BoV (38
-        // executions in 120 frames, all 91 master in the reference). The extra cycle
-        // is the byte-alignment latch the dual-postincrement causes on the
-        // 16-bit data bus.
-        if (sz == op_size::byte && sm == 3 && dm == 3) {
-            cycles_ += 1;
         }
     }
 

@@ -227,6 +227,12 @@ namespace mnemos::manifests::genesis {
         // memory operand. Empty callback = drop, preserving flag side-effects.
         s->cpu.set_tas_callback([](std::uint32_t /*addr*/) {});
 
+        // 68K access into the Z80 bus area ($A00000-$A0FFFF -- Z80 RAM,
+        // YM2612 ports, PSG-via-bus, VDP-via-bus) costs an extra 1 CPU cycle
+        // (7 master cycles) per access. Matches the reference emulator core/the reference
+        // z80_read_byte/z80_write_byte (`m68k.cycles += 1 * 7`).
+        s->cpu.set_z80_bus_latency_enabled(true);
+
         // Z80 sound bus ($0000-$FFFF, little-endian).
         // $0000-$3FFF: Z80 RAM (8 KiB, mirrored).
         s->z80_bus.map_mmio(

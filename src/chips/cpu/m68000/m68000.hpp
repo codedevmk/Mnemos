@@ -109,6 +109,15 @@ namespace mnemos::chips::cpu {
             trace_callback_ = std::move(callback);
         }
 
+        // Genesis Z80-bus access latency. When enabled, every cycle-accounted
+        // bus access into $A00000-$A0FFFF costs an extra 1 CPU cycle (7 master
+        // cycles). This matches the reference emulator's core/the reference z80_read_byte/
+        // z80_write_byte which add `m68k.cycles += 1 * 7` per access. The
+        // Genesis manifest enables this; other m68000 systems leave it off.
+        void set_z80_bus_latency_enabled(bool enabled) noexcept {
+            z80_bus_latency_enabled_ = enabled;
+        }
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
@@ -224,6 +233,9 @@ namespace mnemos::chips::cpu {
         // counts that was causing BoV's inner-loop PC to drift across an
         // IRQ instruction boundary by frame ~115.
         std::uint64_t bus_refresh_due_{128U};
+
+        // Genesis $A00000-$A0FFFF access latency (see set_z80_bus_latency_enabled).
+        bool z80_bus_latency_enabled_{false};
 
         ibus* bus_{};
 
