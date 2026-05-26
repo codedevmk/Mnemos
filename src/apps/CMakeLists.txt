@@ -16,3 +16,7 @@ mnemos_declare_tier(
     TIER 8
     DEPENDS mnemos_foundation mnemos_runtime mnemos_instrumentation mnemos_frontend_sdk
 )
+
+# The SDL3-backed windowed player. System-agnostic: it drives any
+# mnemos::frontend_sdk::player_system implementation (Genesis, SMS, C64, ...).
+add_subdirectory(player)
