@@ -156,6 +156,7 @@ namespace mnemos::apps::player::adapters::genesis {
                                      std::string display_name)
         : sys_(manifests::genesis::assemble_genesis(std::move(rom), config)),
           scheduler_(build_schedule(*sys_), &sys_->vdp),
+          region_(config.video_region),
           target_fps_(mnemos::fps_x1000[static_cast<std::size_t>(config.video_region)] /
                       1000.0) {
         sys_->fm.enable_audio_capture(true);
@@ -172,7 +173,7 @@ namespace mnemos::apps::player::adapters::genesis {
     }
 
     frontend_sdk::video_region genesis_adapter::region() const noexcept {
-        return {static_cast<std::uint32_t>(target_fps_ * 1000.0 + 0.5)};
+        return {mnemos::fps_x1000[static_cast<std::size_t>(region_)]};
     }
 
     chips::frame_buffer_view genesis_adapter::current_frame() const noexcept {

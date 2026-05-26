@@ -37,10 +37,10 @@ namespace mnemos::apps::player::adapters::sms {
         std::unique_ptr<manifests::sms::sms_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
-        // Scheduler-pacing target frame rate (Hz). NTSC = 60, PAL = 50.
-        // Kept in natural units so the audio resampler math reads
-        // dimensionally; the SDK's video_region scales by 1000 at the
-        // region() boundary.
+        // Video standard the adapter was built for. region() returns the
+        // SDK's constant milli-Hz value for that standard; no float math.
+        mnemos::video_region region_;
+        // Same value in natural Hz, precomputed for the audio resampler.
         double target_fps_;
         std::uint64_t frames_stepped_{};
 

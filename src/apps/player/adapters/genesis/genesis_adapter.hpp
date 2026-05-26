@@ -60,10 +60,12 @@ namespace mnemos::apps::player::adapters::genesis {
         std::unique_ptr<manifests::genesis::genesis_system> sys_;
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
-        // Frame rate the scheduler paces against (Hz). NTSC = 60, PAL = 50;
-        // the SDK's video_region carries this scaled by 1000 so it fits an
-        // integer, but the adapter keeps the natural unit for its audio
-        // resampler math.
+        // Video standard the adapter was built for. region() looks the
+        // milli-Hz value up from the SDK's constant fps_x1000 table; no
+        // float round-trip.
+        mnemos::video_region region_;
+        // Same value as a double in natural Hz, cached for the audio
+        // resampler so it doesn't redo the lookup per drain.
         double target_fps_;
         std::uint64_t frames_stepped_{};
 
