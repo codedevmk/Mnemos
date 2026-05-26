@@ -32,21 +32,27 @@ TEST_CASE("detect_sega16_region: pure-region carts") {
     CHECK(detect_sega16_region(rom_with_region_code("E  ")) == video_region::pal);
 }
 
-TEST_CASE("detect_sega16_region: multi-region carts prefer PAL when Europe present") {
-    CHECK(detect_sega16_region(rom_with_region_code("UE ")) == video_region::pal);
-    CHECK(detect_sega16_region(rom_with_region_code("JE ")) == video_region::pal);
-    CHECK(detect_sega16_region(rom_with_region_code("EJU")) == video_region::pal);
+TEST_CASE("detect_sega16_region: multi-region carts prefer NTSC (match the reference default)") {
+    // Multi-region carts (e.g. \"UE\", \"JUE\") run at NTSC -- 60Hz is the
+    // common reference frame rate, the game's timing budgets are usually tuned
+    // to it, and the reference picks NTSC for these. Only force PAL when Europe is the
+    // *only* declared region.
+    CHECK(detect_sega16_region(rom_with_region_code("UE ")) == video_region::ntsc);
+    CHECK(detect_sega16_region(rom_with_region_code("JE ")) == video_region::ntsc);
+    CHECK(detect_sega16_region(rom_with_region_code("EJU")) == video_region::ntsc);
 
     // No Europe -> NTSC even when multi-region.
     CHECK(detect_sega16_region(rom_with_region_code("JU ")) == video_region::ntsc);
 }
 
 TEST_CASE("detect_sega16_region: hex-bitfield region byte") {
-    // bit 0=J, bit 1=U, bit 2=E.
-    CHECK(detect_sega16_region(rom_with_region_code("4  ")) == video_region::pal);  // E only
-    CHECK(detect_sega16_region(rom_with_region_code("F  ")) == video_region::pal);  // J+U+E+extra
-    CHECK(detect_sega16_region(rom_with_region_code("3  ")) == video_region::ntsc); // J+U
+    // Actual Genesis country bit layout (per the reference get_region):
+    //   bit 0 = Japan-NTSC, bit 2 = USA, bit 3 = Europe.
+    CHECK(detect_sega16_region(rom_with_region_code("8  ")) == video_region::pal);  // E only
+    CHECK(detect_sega16_region(rom_with_region_code("4  ")) == video_region::ntsc); // U only
     CHECK(detect_sega16_region(rom_with_region_code("1  ")) == video_region::ntsc); // J only
+    CHECK(detect_sega16_region(rom_with_region_code("F  ")) == video_region::ntsc); // J+U+E (U wins)
+    CHECK(detect_sega16_region(rom_with_region_code("C  ")) == video_region::ntsc); // U+E (U wins)
 }
 
 TEST_CASE("detect_sega16_region: edge cases") {

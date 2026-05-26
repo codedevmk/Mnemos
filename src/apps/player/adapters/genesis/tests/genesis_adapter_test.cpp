@@ -161,10 +161,10 @@ TEST_CASE("detect_region honours the cartridge header region field") {
     CHECK(detect_region(rom_with_region("U  ")) == genesis_config::region::ntsc);
     CHECK(detect_region(rom_with_region("E  ")) == genesis_config::region::pal);
 
-    // Multi-region: Europe present -> PAL (parity with reference behaviour).
-    CHECK(detect_region(rom_with_region("UE ")) == genesis_config::region::pal);
-    CHECK(detect_region(rom_with_region("EJU")) == genesis_config::region::pal);
-    CHECK(detect_region(rom_with_region("JE ")) == genesis_config::region::pal);
+    // Multi-region: USA wins over Europe (matches the reference get_region priority).
+    CHECK(detect_region(rom_with_region("UE ")) == genesis_config::region::ntsc);
+    CHECK(detect_region(rom_with_region("EJU")) == genesis_config::region::ntsc);
+    CHECK(detect_region(rom_with_region("JE ")) == genesis_config::region::ntsc); // J wins over E
 
     // Multi-region without Europe -> NTSC.
     CHECK(detect_region(rom_with_region("JU ")) == genesis_config::region::ntsc);
@@ -172,10 +172,11 @@ TEST_CASE("detect_region honours the cartridge header region field") {
     // No region info at all -> safe default NTSC.
     CHECK(detect_region(rom_with_region("   ")) == genesis_config::region::ntsc);
 
-    // Hex-bitfield region byte: bit 2 = Europe.
-    CHECK(detect_region(rom_with_region("4  ")) == genesis_config::region::pal); // bit 2 set
-    CHECK(detect_region(rom_with_region("F  ")) == genesis_config::region::pal); // all bits
-    CHECK(detect_region(rom_with_region("3  ")) == genesis_config::region::ntsc); // J+U only
+    // Hex-bitfield region byte: real Genesis bits are J=1, U=4, E=8.
+    CHECK(detect_region(rom_with_region("8  ")) == genesis_config::region::pal);  // E only
+    CHECK(detect_region(rom_with_region("4  ")) == genesis_config::region::ntsc); // U only
+    CHECK(detect_region(rom_with_region("F  ")) == genesis_config::region::ntsc); // J+U+E (U wins)
+    CHECK(detect_region(rom_with_region("3  ")) == genesis_config::region::ntsc); // J+U
 
     // Truncated ROM -> safe default NTSC.
     std::vector<std::uint8_t> short_rom{0x00U, 0x01U, 0x02U};
