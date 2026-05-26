@@ -312,6 +312,18 @@ int main(int argc, char* argv[]) {
                 std::fprintf(stderr, "[mnemos_player] wrote %s (64KB VRAM)\n",
                              vram_path.c_str());
             }
+            // 68K work RAM (64KB at $E00000-$FFFFFF, mirrored). Byte-identical
+            // layout to the reference's RETRO_MEMORY_SYSTEM_RAM buffer, so a direct
+            // memcmp against reference_runner's .wram.bin is meaningful.
+            const std::string wram_path = screenshot->path + ".wram.bin";
+            std::ofstream wout(wram_path, std::ios::binary);
+            if (wout) {
+                const auto& ram = genesis->system().work_ram;
+                wout.write(reinterpret_cast<const char*>(ram.data()),
+                           static_cast<std::streamsize>(ram.size()));
+                std::fprintf(stderr, "[mnemos_player] wrote %s (64KB 68K work RAM)\n",
+                             wram_path.c_str());
+            }
             std::fprintf(stderr, "[vdp] regs:");
             for (int i = 0; i < 24; ++i) {
                 std::fprintf(stderr, " %02d=%02X", i, vdp.reg(i));
