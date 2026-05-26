@@ -914,6 +914,14 @@ namespace mnemos::chips::video {
                 irq_callback_(level);
             }
         }
+        // The Genesis Z80's INT line tracks vblank on real hardware; the manifest
+        // wires set_vblank_callback to s->z80.set_irq_line so sound drivers tick.
+        if (in_vblank_ != last_in_vblank_) {
+            last_in_vblank_ = in_vblank_;
+            if (vblank_callback_) {
+                vblank_callback_(in_vblank_);
+            }
+        }
     }
 
     void genesis_vdp::tick(std::uint64_t cycles) {

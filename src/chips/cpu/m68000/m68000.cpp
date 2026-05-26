@@ -1252,7 +1252,13 @@ namespace mnemos::chips::cpu {
                 std::uint32_t addr = 0;
                 const auto v = static_cast<std::uint8_t>(ea_rmw_read(em, er, op_size::byte, addr));
                 set_logic_flags(op_size::byte, v);
-                ea_rmw_write(em, er, op_size::byte, static_cast<std::uint8_t>(v | 0x80U), addr);
+                // Genesis quirk: the host can suppress the write-back for a memory
+                // operand (em != 0 == not Dn) -- real Sega Genesis ignores TAS writes.
+                if (em != 0 && tas_callback_) {
+                    tas_callback_(addr);
+                } else {
+                    ea_rmw_write(em, er, op_size::byte, static_cast<std::uint8_t>(v | 0x80U), addr);
+                }
                 return;
             }
             break;

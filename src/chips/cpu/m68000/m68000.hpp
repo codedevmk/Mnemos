@@ -92,6 +92,15 @@ namespace mnemos::chips::cpu {
             irq_ack_ = std::move(callback);
         }
 
+        // TAS write-back suppression hook. When set, TAS <ea>.B with a MEMORY operand
+        // calls this with the effective address INSTEAD of writing bit 7 back. (Real
+        // 68000 does the write; the Sega Genesis's bus controller ignores the TAS
+        // write phase, so the manifest installs a no-op here to match that quirk and
+        // unblock games that rely on it.) Unset = default 68000 write behaviour.
+        void set_tas_callback(std::function<void(std::uint32_t addr)> callback) noexcept {
+            tas_callback_ = std::move(callback);
+        }
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
@@ -189,6 +198,7 @@ namespace mnemos::chips::cpu {
         int irq_level_{};
         int prev_irq_level_{}; // for the level-7 (NMI) edge
         std::function<void(int)> irq_ack_{};
+        std::function<void(std::uint32_t)> tas_callback_{};
         bool stopped_{};
         bool halted_{};
 

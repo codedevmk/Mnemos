@@ -86,6 +86,13 @@ namespace mnemos::chips::video {
         void set_irq_callback(std::function<void(int level)> cb) noexcept {
             irq_callback_ = std::move(cb);
         }
+        // Invoked whenever the in_vblank state changes (rising edge true, falling
+        // false). The Genesis system wires this to the Z80's IRQ line, which tracks
+        // vblank on real hardware.
+        void set_vblank_callback(std::function<void(bool in_vblank)> cb) noexcept {
+            vblank_callback_ = std::move(cb);
+        }
+        [[nodiscard]] bool in_vblank() const noexcept { return in_vblank_; }
         void set_pal(bool pal) noexcept;
 
         // External (level-2) interrupt edge (light-gun TH falling edge, etc.). Gated
@@ -268,7 +275,9 @@ namespace mnemos::chips::video {
         // Host hooks.
         std::function<std::uint16_t(std::uint32_t)> dma_read_{};
         std::function<void(int)> irq_callback_{};
+        std::function<void(bool)> vblank_callback_{};
         int last_irq_level_{};
+        bool last_in_vblank_{};
 
         std::array<register_descriptor, 16> register_view_{};
         introspection_surface introspection_{};

@@ -139,6 +139,14 @@ namespace mnemos::manifests::genesis {
         // The 68000 IACK cycle clears the VDP's interrupt request (many games' V-blank
         // handlers rely on this rather than reading the VDP status to ack).
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });
+        // The Genesis Z80 INT line tracks the VDP's in_vblank state on real hardware
+        // -- sound drivers tick from it.
+        s->vdp.set_vblank_callback([s](bool in_vblank) { s->z80.set_irq_line(in_vblank); });
+        // Genesis quirk: the bus controller ignores the TAS write phase to any
+        // memory operand, so TAS .B <ea> on Genesis does the test but never writes
+        // bit 7 back. An empty callback expresses "drop the write" without losing
+        // the flag-side effects.
+        s->cpu.set_tas_callback([](std::uint32_t /*addr*/) {});
 
         // --- Z80 sound bus ($0000-$FFFF, little-endian). ---
         // $0000-$3FFF: Z80 RAM (8 KiB, mirrored).
