@@ -543,7 +543,13 @@ namespace mnemos::chips::video {
             if (px < 0) {
                 px += hsz_px;
             }
-            int py = (source_line + vscroll) % vsz_px;
+            // Genesis VDP V scroll convention: the VSRAM value is the plane Y
+            // shown at the TOP of the visible area; the rendered line then walks
+            // DOWN from there. Equivalently, `py = (vscroll + source_line) mod
+            // plane`. NOTE: hardware tests are unanimous on the sign here -- the
+            // value is the offset INTO the plane, not subtracted from the
+            // visible line. Keep the addition.
+            int py = (vscroll + source_line) % vsz_px;
             if (py < 0) {
                 py += vsz_px;
             }

@@ -12,6 +12,7 @@
 
 #define SDL_MAIN_HANDLED
 
+#include "chip.hpp"
 #include "genesis_adapter.hpp"
 #include "player_system.hpp"
 
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -78,6 +80,56 @@ namespace {
         return region_override::auto_detect;
     }
 
+    // --screenshot <path.ppm> --frames N: run N video frames headlessly (no window,
+    // no GPU init) and dump the resulting VDP framebuffer as a PPM. The pair is
+    // designed for offline iteration on rendering bugs without needing a human
+    // to press a hotkey at the right moment.
+    struct screenshot_request final {
+        std::string path;
+        std::uint64_t frames{};
+    };
+
+    std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]) {
+        std::optional<std::string> path;
+        std::optional<std::uint64_t> frames;
+        for (int i = 1; i < argc - 1; ++i) {
+            const std::string a = argv[i];
+            if (a == "--screenshot") {
+                path = std::string{argv[i + 1]};
+            } else if (a == "--frames") {
+                frames = std::strtoull(argv[i + 1], nullptr, 10);
+            }
+        }
+        if (path && frames) {
+            return screenshot_request{*path, *frames};
+        }
+        return std::nullopt;
+    }
+
+    bool dump_framebuffer_ppm(const mnemos::chips::frame_buffer_view& fb,
+                              const std::string& path) {
+        if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
+            return false;
+        }
+        std::ofstream out(path, std::ios::binary);
+        if (!out) {
+            return false;
+        }
+        const std::uint32_t stride = fb.effective_stride();
+        out << "P6\n" << fb.width << " " << fb.height << "\n255\n";
+        for (std::uint32_t y = 0; y < fb.height; ++y) {
+            const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
+            for (std::uint32_t x = 0; x < fb.width; ++x) {
+                const std::uint32_t p = row[x];
+                const char rgb[3] = {static_cast<char>((p >> 16U) & 0xFFU),
+                                     static_cast<char>((p >> 8U) & 0xFFU),
+                                     static_cast<char>(p & 0xFFU)};
+                out.write(rgb, 3);
+            }
+        }
+        return out.good();
+    }
+
     std::optional<std::vector<std::uint8_t>> read_file(const std::string& path) {
         std::ifstream in(path, std::ios::binary);
         if (!in) {
@@ -120,6 +172,7 @@ namespace {
 int main(int argc, char* argv[]) {
     const auto rom_path = parse_rom_arg(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
+    const auto screenshot = parse_screenshot_args(argc, argv);
 
     // Build the player_system upfront so a bad ROM fails before we open a
     // window. With no --rom we just open the window and idle.
@@ -142,6 +195,51 @@ int main(int argc, char* argv[]) {
         std::fflush(stderr);
         system = std::make_unique<mnemos::apps::player::adapters::genesis::genesis_adapter>(
             std::move(*bytes), genesis_config{.video_region = region});
+    }
+
+    // Headless screenshot path: step the requested number of frames, dump the
+    // framebuffer, exit. No window, no GPU. Designed so we can iterate on
+    // rendering bugs offline without driving the UI by hand.
+    if (screenshot) {
+        if (!system) {
+            std::fprintf(stderr, "--screenshot requires --rom\n");
+            return 1;
+        }
+        for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
+            system->step_one_frame();
+        }
+        const auto fb = system->current_frame();
+        if (!dump_framebuffer_ppm(fb, screenshot->path)) {
+            std::fprintf(stderr, "could not write screenshot: %s\n", screenshot->path.c_str());
+            return 1;
+        }
+        std::fprintf(stderr, "[mnemos_player] wrote %s (%ux%u after %llu frames)\n",
+                     screenshot->path.c_str(), fb.width, fb.height,
+                     static_cast<unsigned long long>(screenshot->frames));
+
+        // VDP state dump (Genesis-specific). Helps diagnose scroll/plane bugs
+        // when paired with the framebuffer PPM.
+        auto* genesis = dynamic_cast<mnemos::apps::player::adapters::genesis::genesis_adapter*>(
+            system.get());
+        if (genesis != nullptr) {
+            const auto& vdp = genesis->system().vdp;
+            std::fprintf(stderr, "[vdp] regs:");
+            for (int i = 0; i < 24; ++i) {
+                std::fprintf(stderr, " %02d=%02X", i, vdp.reg(i));
+            }
+            std::fprintf(stderr, "\n[vdp] reg10/16 plane-size: HSZ=%d VSZ=%d  "
+                                 "vscroll-mode=%s  hscroll-mode=R0Bbits01=%d\n",
+                         vdp.reg(16) & 0x03, (vdp.reg(16) >> 4) & 0x03,
+                         (vdp.reg(11) & 0x04) ? "per-2-cells" : "full-plane",
+                         vdp.reg(11) & 0x03);
+            std::fprintf(stderr, "[vdp] hscroll-base=$%04X   nameA=$%04X  nameB=$%04X\n",
+                         (vdp.reg(13) & 0x3F) << 10, (vdp.reg(2) & 0x38) << 10,
+                         (vdp.reg(4) & 0x07) << 13);
+            std::fprintf(stderr, "[vdp] vsram[0..3]: %04X %04X %04X %04X  (plane A col 0/1, B col 0/1)\n",
+                         vdp.vsram(0), vdp.vsram(1), vdp.vsram(2), vdp.vsram(3));
+            std::fflush(stderr);
+        }
+        return 0;
     }
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -219,6 +317,8 @@ int main(int argc, char* argv[]) {
     }
 
     bool logged_dims = false;
+    int dump_index = 0;
+    bool dump_requested = false;
 
     bool running = true;
     while (running) {
@@ -231,6 +331,8 @@ int main(int argc, char* argv[]) {
             case SDL_EVENT_KEY_DOWN:
                 if (event.key.key == SDLK_ESCAPE) {
                     running = false;
+                } else if (event.key.key == SDLK_F12) {
+                    dump_requested = true;
                 }
                 break;
             default:
@@ -247,6 +349,32 @@ int main(int argc, char* argv[]) {
             src_w = fb.width;
             src_h = fb.height;
             const std::uint32_t src_stride = fb.effective_stride();
+
+            // F12: dump the raw VDP framebuffer to a PPM file we can inspect.
+            // The PPM captures *exactly* what the chip wrote (width x height,
+            // ignoring stride padding), so we can see what's in source rows
+            // without any presentation transform applied.
+            if (dump_requested && fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
+                char path[64];
+                std::snprintf(path, sizeof(path), "mnemos_player_frame_%03d.ppm", dump_index++);
+                std::ofstream out(path, std::ios::binary);
+                if (out) {
+                    out << "P6\n" << src_w << " " << src_h << "\n255\n";
+                    for (std::uint32_t y = 0; y < src_h; ++y) {
+                        const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * src_stride;
+                        for (std::uint32_t x = 0; x < src_w; ++x) {
+                            const std::uint32_t p = row[x];
+                            const char rgb[3] = {static_cast<char>((p >> 16U) & 0xFFU),
+                                                 static_cast<char>((p >> 8U) & 0xFFU),
+                                                 static_cast<char>(p & 0xFFU)};
+                            out.write(rgb, 3);
+                        }
+                    }
+                    std::fprintf(stderr, "[mnemos_player] dumped %s (%ux%u)\n", path, src_w, src_h);
+                    std::fflush(stderr);
+                }
+                dump_requested = false;
+            }
 
             if (fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
                 // Copy framebuffer into the transfer buffer as a packed src_w*src_h
