@@ -289,6 +289,15 @@ namespace mnemos::chips::video {
 
         // Status + interrupt flags.
         bool vint_happened_{};
+
+        // Master-cycle countdown until VINT pending fires. Real hardware (and
+        // the reference emulator) sets the VBLANK *status flag* at the start of the
+        // VBLANK-entry scanline but delays the actual VINT IRQ assertion to
+        // ~770 (H32) / 788 (H40) master cycles into that line -- the
+        // canonical "VINT_H32_MCYCLE / VINT_H40_MCYCLE" point. Games like
+        // Dracula, OutRunners and VR Troopers depend on the VBLANK-flag-
+        // before-IRQ window. -1 = no delay scheduled.
+        std::int64_t vint_pending_delay_master_{-1};
         bool sprite_overflow_{};
         bool sprite_collision_{};
         bool in_vblank_{};

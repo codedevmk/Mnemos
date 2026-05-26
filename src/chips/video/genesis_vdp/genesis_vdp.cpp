@@ -890,7 +890,11 @@ namespace mnemos::chips::video {
             in_hblank_ = true;
             hcounter_ = visible_w;
             if (vint_enabled()) {
-                vblank_pending_ = true;
+                // Delay VINT-pending by the the reference VINT_HxxxxMCYCLE constant:
+                // the VBLANK status bit is visible now (in_vblank_), but
+                // the IRQ doesn't assert until 770/788 master cycles into
+                // this line. The countdown drains in tick() each cycle.
+                vint_pending_delay_master_ = h40_mode() ? 788 : 770;
             }
             if (hint_counter_ <= 0) {
                 hint_counter_ = reg_[10];
@@ -946,6 +950,18 @@ namespace mnemos::chips::video {
         while (line_accumulator_ >= master_clocks_per_line) {
             line_accumulator_ -= master_clocks_per_line;
             run_scanline();
+        }
+        // Drain the post-VBLANK-entry VINT delay: VBLANK status went high
+        // when scanline crossed visible_h, but the IRQ doesn't assert until
+        // the delay window elapses.
+        if (vint_pending_delay_master_ > 0) {
+            vint_pending_delay_master_ -= static_cast<std::int64_t>(cycles);
+            if (vint_pending_delay_master_ <= 0) {
+                vint_pending_delay_master_ = -1;
+                if (vint_enabled()) {
+                    vblank_pending_ = true;
+                }
+            }
         }
         // Drain any pending DMA stall debt; while > 0 the genesis_system gates
         // the 68000 off so the bus appears held to the CPU during DMA, matching
@@ -1052,6 +1068,7 @@ namespace mnemos::chips::video {
         line_accumulator_ = 0;
 
         vint_happened_ = false;
+        vint_pending_delay_master_ = -1;
         sprite_overflow_ = false;
         sprite_collision_ = false;
         in_vblank_ = true; // start in vblank until the first frame
