@@ -560,6 +560,11 @@ int main(int argc, char* argv[]) {
     Uint64 fps_window_start = SDL_GetPerformanceCounter();
     int fps_window_frames = 0;
     int displayed_fps = static_cast<int>(target_fps + 0.5);
+    // Cumulative emulator frame counter -- shown on the HUD so a screenshot
+    // pins down the exact frame number being viewed. Useful for A/B against
+    // the reference or for filing bug reports ("at frame 1247 the credit roll
+    // diverges, here's the screenshot").
+    std::uint64_t total_frames = 0;
 
     // System-spec line composed once from whatever the adapter publishes
     // ("System: Genesis | Region: NTSC | Cart: ..."). Stays stable for
@@ -578,10 +583,10 @@ int main(int argc, char* argv[]) {
         }
     }
     const int spec_pixel_w = mnemos::apps::player::text_pixel_width(spec_line);
-    // The FPS line is "FPS: NNN" with the number right-justified to 3
-    // chars (snprintf "%3d") so digit-count changes don't shift any
-    // characters around -- the field width is a constant 8 cells.
-    constexpr int kFpsLinePixelW = 8 * mnemos::apps::player::kGlyphWidth;
+    // The FPS line is "FPS: NNN  F: NNNNNNNN" with both numbers
+    // right-justified ("%3d" / "%8llu") so digit-count changes don't shift
+    // characters around -- the field width is a constant 21 cells.
+    constexpr int kFpsLinePixelW = 21 * mnemos::apps::player::kGlyphWidth;
     const int panel_text_w = std::max(spec_pixel_w, kFpsLinePixelW);
     const int panel_w = std::min(panel_text_w + 2 * kOverlayPad, kOverlayBufW);
     constexpr int panel_h = kOverlayBufH;
@@ -735,6 +740,7 @@ int main(int argc, char* argv[]) {
             if (frame_due) {
                 system->step_one_frame();
                 ++fps_window_frames;
+                ++total_frames;
                 if (audio_stream != nullptr) {
                     const auto audio = system->drain_audio();
                     if (audio.samples != nullptr && audio.frame_count > 0U) {
@@ -822,8 +828,9 @@ int main(int argc, char* argv[]) {
             fill_rect(kOverlayBgColor, overlay_pixels.data(), kOverlayBufW, kOverlayBufH, 0, 0,
                       panel_w, panel_h);
 
-            char fps_line[16];
-            std::snprintf(fps_line, sizeof(fps_line), "FPS: %3d", displayed_fps);
+            char fps_line[32];
+            std::snprintf(fps_line, sizeof(fps_line), "FPS: %3d  F: %8llu",
+                          displayed_fps, static_cast<unsigned long long>(total_frames));
             draw_text(fps_line, kOverlayFgColor, overlay_pixels.data(), kOverlayBufW, kOverlayBufH,
                       kOverlayPad, kOverlayPad);
             if (!spec_line.empty()) {
