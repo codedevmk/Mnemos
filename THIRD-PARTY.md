@@ -21,6 +21,7 @@ expected end state. None of these corpora are committed.
 | Public per-instruction 6502 test corpus (one JSON file per opcode, ~10 000 cases each) | `m6510_conformance_test` | `MNEMOS_M6510_TESTS_DIR` |
 | Public per-instruction 68000 test corpus (one JSON file per mnemonic) | `m68000_conformance_test` | `MNEMOS_M68000_TESTS_DIR` |
 | Public Z80 instruction exerciser CP/M `.com` images (full-flag and documented-flag variants) | `z80_conformance_test` | `MNEMOS_Z80_TEST_ROM` |
+| Public per-instruction Z80 test corpus (one JSON file per opcode, per-cycle bus trace) | `z80_singlestep_test` | `MNEMOS_Z80_TESTS_DIR` |
 
 These corpora are the de-facto standard for verifying 8-/16-bit CPU cores; we
 acknowledge their authors' work in producing and maintaining them.
