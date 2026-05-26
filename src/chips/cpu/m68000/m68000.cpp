@@ -1116,6 +1116,7 @@ namespace mnemos::chips::cpu {
                 } else {
                     sr_ |= sr_z;
                 }
+                cycles_ += 2; // BTST bit-test microcode
                 return;
             }
             if (em == 1) {
@@ -1177,6 +1178,11 @@ namespace mnemos::chips::cpu {
         if (sub == 6) { // CMPI
             const std::uint32_t dst = ea_read(em, er, sz);
             flags_cmp(sz, imm, dst, dst - imm);
+            // CMPI.L #imm, Dn: 2 extra cycles for the 32-bit compare on a
+            // register (no write-back, so 2 less than the ORI/ANDI/etc family).
+            if (em == 0 && sz == op_size::longword) {
+                cycles_ += 2;
+            }
             return;
         }
         std::uint32_t addr = 0;
@@ -1210,6 +1216,11 @@ namespace mnemos::chips::cpu {
             break;
         default:
             break;
+        }
+        // ORI/ANDI/SUBI/ADDI/EORI.L #imm, Dn: 4 extra cycles for the 32-bit
+        // RMW on a register (same .l-on-Dn quirk as NEG/CLR/NOT/NEGX).
+        if (em == 0 && sz == op_size::longword) {
+            cycles_ += 4;
         }
     }
 
