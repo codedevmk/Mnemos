@@ -14,6 +14,7 @@
 
 #include "chip.hpp"
 #include "genesis_adapter.hpp"
+#include "genesis_vdp.hpp"
 #include "player_system.hpp"
 
 #include <SDL3/SDL.h>
@@ -104,6 +105,73 @@ namespace {
             return screenshot_request{*path, *frames};
         }
         return std::nullopt;
+    }
+
+    // Decode a Genesis CRAM entry (9-bit BGR, 3 bits per channel) to 0x00RRGGBB
+    // using the standard intensity LUT for normal brightness.
+    std::uint32_t cram_entry_to_rgb(std::uint16_t cram_word) {
+        constexpr std::array<std::uint8_t, 8> lut = {0, 36, 73, 109, 146, 182, 219, 255};
+        const std::uint8_t r = lut[(cram_word >> 1) & 0x7];
+        const std::uint8_t g = lut[(cram_word >> 5) & 0x7];
+        const std::uint8_t b = lut[(cram_word >> 9) & 0x7];
+        return (static_cast<std::uint32_t>(r) << 16) | (static_cast<std::uint32_t>(g) << 8) |
+               static_cast<std::uint32_t>(b);
+    }
+
+    // Render the entire plane A of a Genesis VDP (ignoring scroll, window,
+    // sprites) into a PPM. Diagnostic for debugging plane-data placement.
+    int scroll_size_cells(int sz_bits) {
+        constexpr int sizes[4] = {32, 64, 64, 128};
+        return sizes[sz_bits & 3];
+    }
+
+    bool dump_plane_a_ppm(
+        const mnemos::chips::video::genesis_vdp& vdp, const std::string& path) {
+        const int hsz_cells = scroll_size_cells(vdp.reg(16) & 0x03);
+        const int vsz_cells = scroll_size_cells((vdp.reg(16) >> 4) & 0x03);
+        const std::uint32_t nt_base = (static_cast<std::uint32_t>(vdp.reg(2)) & 0x38U) << 10U;
+        const int plane_w = hsz_cells * 8;
+        const int plane_h = vsz_cells * 8;
+        std::vector<std::uint32_t> buf(static_cast<std::size_t>(plane_w) * plane_h, 0U);
+        for (int cy = 0; cy < vsz_cells; ++cy) {
+            for (int cx = 0; cx < hsz_cells; ++cx) {
+                const std::uint32_t nt_offset =
+                    static_cast<std::uint32_t>(cy * hsz_cells + cx) * 2U;
+                const std::uint16_t nt = vdp.vram16(nt_base + nt_offset);
+                const int tile = nt & 0x7FF;
+                const bool hf = ((nt >> 11) & 1) != 0;
+                const bool vf = ((nt >> 12) & 1) != 0;
+                const int pal = (nt >> 13) & 3;
+                // Each tile = 32 bytes (8x8 4bpp); rows are 4 bytes each.
+                for (int fy = 0; fy < 8; ++fy) {
+                    const int row = vf ? (7 - fy) : fy;
+                    for (int fx = 0; fx < 8; ++fx) {
+                        const int col = hf ? (7 - fx) : fx;
+                        const std::uint32_t pat_addr =
+                            static_cast<std::uint32_t>(tile) * 32U + row * 4U + (col / 2);
+                        const std::uint16_t word = vdp.vram16(pat_addr & ~1U);
+                        const std::uint8_t byte = static_cast<std::uint8_t>(
+                            (pat_addr & 1) ? (word & 0xFF) : (word >> 8));
+                        const std::uint8_t color = (col & 1) ? (byte & 0xF) : (byte >> 4);
+                        const std::uint16_t cram = vdp.cram(pal * 16 + color);
+                        const std::uint32_t rgb = color == 0 ? 0U : cram_entry_to_rgb(cram);
+                        buf[(cy * 8 + fy) * plane_w + (cx * 8 + fx)] = rgb;
+                    }
+                }
+            }
+        }
+        std::ofstream out(path, std::ios::binary);
+        if (!out) {
+            return false;
+        }
+        out << "P6\n" << plane_w << " " << plane_h << "\n255\n";
+        for (auto p : buf) {
+            const char rgb[3] = {static_cast<char>((p >> 16) & 0xFF),
+                                 static_cast<char>((p >> 8) & 0xFF),
+                                 static_cast<char>(p & 0xFF)};
+            out.write(rgb, 3);
+        }
+        return out.good();
     }
 
     bool dump_framebuffer_ppm(const mnemos::chips::frame_buffer_view& fb,
@@ -223,6 +291,13 @@ int main(int argc, char* argv[]) {
             system.get());
         if (genesis != nullptr) {
             const auto& vdp = genesis->system().vdp;
+            // Always dump the full plane A alongside the visible-window PPM
+            // so we can see what's actually in VRAM (independent of scroll).
+            const std::string plane_path = screenshot->path + ".plane_a.ppm";
+            if (dump_plane_a_ppm(vdp, plane_path)) {
+                std::fprintf(stderr, "[mnemos_player] wrote %s (full plane A)\n",
+                             plane_path.c_str());
+            }
             std::fprintf(stderr, "[vdp] regs:");
             for (int i = 0; i < 24; ++i) {
                 std::fprintf(stderr, " %02d=%02X", i, vdp.reg(i));
