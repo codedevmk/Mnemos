@@ -49,3 +49,4 @@ scripts/local-roms.ps1
 
 # Working/scratch documents that are not part of the public history
 docs/architecture/mnemos-todos-v0.1.md
+*.obj
