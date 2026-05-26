@@ -331,7 +331,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
     }
@@ -410,6 +410,29 @@ int main(int argc, char* argv[]) {
     bool dump_requested = false;
     bool paused = false;
     bool fullscreen = false;
+
+    // Open an audio stream once we know the system's native sample rate.
+    // Genesis NTSC = ~53267 Hz, PAL = ~52781 Hz; SDL resamples to the device's
+    // rate transparently. Stereo s16 throughout. We push samples per frame
+    // from the adapter; SDL pulls them at the device's pace.
+    SDL_AudioStream* audio_stream = nullptr;
+    if (system) {
+        const auto chunk = system->drain_audio(); // probe for sample rate
+        const std::uint32_t rate = chunk.sample_rate != 0U ? chunk.sample_rate : 48000U;
+        SDL_AudioSpec spec{};
+        spec.format = SDL_AUDIO_S16;
+        spec.channels = 2;
+        spec.freq = static_cast<int>(rate);
+        audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr,
+                                                 nullptr);
+        if (audio_stream != nullptr) {
+            SDL_ResumeAudioStreamDevice(audio_stream);
+            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16\n", rate);
+        } else {
+            std::fprintf(stderr, "[mnemos_player] SDL_OpenAudioDeviceStream failed: %s\n",
+                         SDL_GetError());
+        }
+    }
 
     // Open whichever gamepad is currently plugged in for port 0, and watch
     // for hot-plug events to swap if a different controller arrives. Keyboard
@@ -523,6 +546,16 @@ int main(int argc, char* argv[]) {
         if (system) {
             if (!paused) {
                 system->step_one_frame();
+                // Drain audio the frame produced and feed it to SDL_AudioStream,
+                // which buffers + resamples to the device rate transparently.
+                if (audio_stream != nullptr) {
+                    const auto audio = system->drain_audio();
+                    if (audio.samples != nullptr && audio.frame_count > 0U) {
+                        SDL_PutAudioStreamData(
+                            audio_stream, audio.samples,
+                            static_cast<int>(audio.frame_count * 2U * sizeof(std::int16_t)));
+                    }
+                }
             }
             const auto fb = system->current_frame();
             src_w = fb.width;
@@ -681,6 +714,9 @@ int main(int argc, char* argv[]) {
 
     if (gamepad != nullptr) {
         SDL_CloseGamepad(gamepad);
+    }
+    if (audio_stream != nullptr) {
+        SDL_DestroyAudioStream(audio_stream);
     }
     SDL_ReleaseGPUTransferBuffer(device, xfer);
     SDL_ReleaseGPUTexture(device, tex);

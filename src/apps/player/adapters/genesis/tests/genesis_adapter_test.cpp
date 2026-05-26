@@ -61,22 +61,37 @@ TEST_CASE("genesis_adapter advances frames and reports region") {
     CHECK(fb_after.height == fb_before.height);
 }
 
-TEST_CASE("genesis_adapter records input but commit 3 keeps audio silent") {
+TEST_CASE("genesis_adapter ignores out-of-range input ports") {
     genesis_adapter adapter(tiny_rom());
-
     mnemos::frontend_sdk::controller_state pad{};
     pad.start = true;
     pad.a = true;
     adapter.apply_input(0, pad);
-    // No observable bus effect yet (commit 5 wires the MMIO). Just verify
-    // out-of-range ports are ignored cleanly.
     adapter.apply_input(7, pad);  // ignored
     adapter.apply_input(-1, pad); // ignored
+    // No throw, no UB; in-range input was recorded (port 0).
+    SUCCEED();
+}
 
-    const auto audio = adapter.drain_audio();
-    CHECK(audio.samples == nullptr);
+TEST_CASE("genesis_adapter drain_audio reports the YM sample rate and produces samples") {
+    genesis_adapter adapter(tiny_rom());
+    // Before stepping, no samples queued but the adapter still reports its
+    // native YM rate so the player can open SDL_AudioStream upfront.
+    auto audio = adapter.drain_audio();
     CHECK(audio.frame_count == 0U);
-    CHECK(audio.sample_rate == 0U);
+    CHECK(audio.sample_rate == 53267U); // NTSC default
+
+    // Stepping a frame produces ~888 NTSC stereo samples (53267 / 60).
+    adapter.step_one_frame();
+    audio = adapter.drain_audio();
+    CHECK(audio.sample_rate == 53267U);
+    CHECK(audio.frame_count > 800U);
+    CHECK(audio.frame_count < 1000U);
+    REQUIRE(audio.samples != nullptr);
+
+    // Second drain of the same frame returns nothing (samples consumed).
+    audio = adapter.drain_audio();
+    CHECK(audio.frame_count == 0U);
 }
 
 TEST_CASE("genesis_adapter selects PAL pacing when configured") {

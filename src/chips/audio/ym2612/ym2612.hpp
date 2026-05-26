@@ -3,8 +3,10 @@
 #include "chip.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace mnemos::chips::audio {
 
@@ -81,6 +83,23 @@ namespace mnemos::chips::audio {
         // Configure the analog-character low-pass on the stereo output. cutoff_hz<=0
         // disables it (the YM2612's discrete-DAC "ladder" output is famously dark).
         void set_lowpass_cutoff_hz(int sample_rate_hz, int cutoff_hz) noexcept;
+
+        // ---- audio sink for real-time playback ----
+        //
+        // When enabled, tick(cycles) also runs step() at the chip's native
+        // cadence (one stereo sample per 1008 master clocks) and appends the
+        // resulting (L,R) pair to an internal queue. drain_samples() copies
+        // up to `max_pairs` (L,R) pairs into `out` and removes them from the
+        // queue; pending_samples() reports how many pairs are queued. Used
+        // by the windowed player to feed SDL_AudioStream from the runtime
+        // schedule. Disabled until enable_audio_capture(true) is called so
+        // headless tests don't pay the cost.
+        void enable_audio_capture(bool on) noexcept { audio_capture_ = on; }
+        [[nodiscard]] bool audio_capture_enabled() const noexcept { return audio_capture_; }
+        [[nodiscard]] std::size_t pending_samples() const noexcept {
+            return sample_queue_.size() / 2U;
+        }
+        std::size_t drain_samples(std::int16_t* out, std::size_t max_pairs) noexcept;
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -210,6 +229,17 @@ namespace mnemos::chips::audio {
         std::int32_t lp_state_r_{};
         std::int16_t last_left_{};
         std::int16_t last_right_{};
+
+        // Real-time audio sink (enabled via enable_audio_capture). The chip
+        // emits one stereo sample every 144 internal chip cycles (the scheduler
+        // calls tick(cycles) in chip cycles, not master clocks -- the divider
+        // /7 happens upstream). 144 chip cycles = 1008 master clocks = the
+        // hardware sample period. Samples are pushed to `sample_queue_`
+        // interleaved (L,R,L,R,...) and drained by the host.
+        static constexpr std::uint32_t chip_cycles_per_sample = 144U;
+        bool audio_capture_{};
+        std::uint32_t sample_accum_{};
+        std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 14> register_view_{};
         introspection_surface introspection_{};
