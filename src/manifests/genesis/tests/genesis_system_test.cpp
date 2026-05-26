@@ -175,6 +175,37 @@ TEST_CASE("genesis Z80 bank window reaches 68K address space") {
     CHECK(sys->z80_bank == 0x080U);
 }
 
+TEST_CASE("genesis VDP DMA from 68K work RAM into CRAM populates the palette") {
+    // Sonic Spinball-style palette load: stage a palette in work RAM, program the
+    // VDP for a CRAM-write DMA from 68K space, and verify CRAM receives the words.
+    auto sys = assemble_genesis(make_rom());
+
+    // Stage 4 palette entries at work-RAM offset 0x10 ($FF0010 on the bus).
+    constexpr std::array<std::uint16_t, 4> palette = {0x0EEE, 0x0AAA, 0x0E00, 0x00E0};
+    for (std::size_t i = 0; i < palette.size(); ++i) {
+        sys->work_ram[0x10 + i * 2] = static_cast<std::uint8_t>(palette[i] >> 8U);
+        sys->work_ram[0x11 + i * 2] = static_cast<std::uint8_t>(palette[i]);
+    }
+
+    auto& v = sys->vdp;
+    v.write16(0x04, 0x8114); // reg1  = M5 + DMA enable
+    v.write16(0x04, 0x8F02); // reg15 = auto-increment 2
+    v.write16(0x04, 0x9304); // reg19 = length lo = 4 words
+    v.write16(0x04, 0x9400); // reg20 = length hi = 0
+    // Source word address = $FF0010 >> 1 = $7F8008.
+    v.write16(0x04, 0x9508); // reg21 = source bits 7-0
+    v.write16(0x04, 0x9680); // reg22 = source bits 15-8
+    v.write16(0x04, 0x977F); // reg23 = source bits 22-16 + type 0 (68K -> VDP)
+    // Command: CRAM write + DMA at CRAM addr 0 (cmd code 0x23).
+    v.write16(0x04, 0xC000); // first word
+    v.write16(0x04, 0x0080); // second word triggers the DMA
+
+    CHECK(v.cram(0) == palette[0]);
+    CHECK(v.cram(1) == palette[1]);
+    CHECK(v.cram(2) == palette[2]);
+    CHECK(v.cram(3) == palette[3]);
+}
+
 TEST_CASE("genesis Z80 bus routes RAM, YM2612, and PSG") {
     auto sys = assemble_genesis(make_rom());
 
