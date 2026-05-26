@@ -414,13 +414,22 @@ namespace mnemos::chips::audio {
     }
 
     void ym2612::tick(std::uint64_t cycles) {
-        // Drive the timer prescalers in master clocks. Chunked so a 64-bit cycle
-        // count can't overflow the 32-bit accumulator entry point.
+        // Drive the timer prescalers. The scheduler passes CHIP cycles (one
+        // chip cycle = 7 master clocks on Genesis, set via the chip's divider
+        // in the scheduled_chip entry), but tick_timers_master() expects
+        // master clocks -- so scale up by the Genesis YM divider here. This
+        // is the same /7 that makes the chip clock master/7 in the first
+        // place. Without it the Timer A/B periods (1008 / 16128 master clocks)
+        // are reached 7x too slowly: music driver IRQs fire ~7x rarer, music
+        // tempo crawls, timer-driven game logic drifts.
         const std::uint64_t total = cycles;
-        while (cycles > 0U) {
-            const auto chunk = static_cast<std::uint32_t>(std::min<std::uint64_t>(cycles, 0xFFFFU));
+        const std::uint64_t master = cycles * 7U;
+        std::uint64_t remaining = master;
+        while (remaining > 0U) {
+            const auto chunk =
+                static_cast<std::uint32_t>(std::min<std::uint64_t>(remaining, 0xFFFFU));
             (void)tick_timers_master(chunk);
-            cycles -= chunk;
+            remaining -= chunk;
         }
         // Audio capture: emit a stereo sample every 1008 master clocks. We do
         // this after the timer tick so the audio sees the same end-of-chunk
