@@ -1703,6 +1703,12 @@ namespace mnemos::chips::cpu {
         if (irq_ack_) {
             irq_ack_(level); // IACK cycle: let the device clear its interrupt request
         }
+        // 68000 autovectored interrupt total = 44 cycles (Motorola spec, also
+        // m68ki_exception_cycle_table entries 24-31 in the reference emulator). The
+        // bus accesses above (push32 = 8, push16 = 4, read32 = 8) account
+        // for 20 cycles; the remaining 24 are internal latency the M68000
+        // imposes before the first handler-instruction prefetch.
+        cycles_ += 24;
     }
 
     bool m68000::test_cc(int cc) const noexcept {
@@ -2089,6 +2095,13 @@ namespace mnemos::chips::cpu {
             return 4;
         }
 
+        // Genesis 68K bus DRAM refresh: every 128 68K cycles (896 master),
+        // the bus takes 2 extra cycles. Matches the reference's the reference line 305-309.
+        if (elapsed_ >= bus_refresh_due_) {
+            cycles_ += 2;
+            bus_refresh_due_ = elapsed_ + 128U;
+        }
+
         const std::uint16_t pre_sr = sr_;
         inst_addr_ = pc_;
         if (trace_callback_) {
@@ -2129,6 +2142,7 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
+        bus_refresh_due_ = 128U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
         // (SSP) and $4 (PC), read big-endian off the bus.

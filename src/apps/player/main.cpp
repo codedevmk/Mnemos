@@ -331,14 +331,16 @@ int main(int argc, char* argv[]) {
             const std::string trace_path = screenshot->path + ".68k_trace.csv";
             trace_out.open(trace_path);
             if (trace_out) {
-                trace_out << "frame,inst,pc\n";
-                genesis_for_trace->system().cpu.set_trace_callback(
-                    [&trace_out, &trace_frame, &trace_inst](std::uint32_t pc) {
-                        char buf[64];
-                        std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X\n",
+                trace_out << "frame,inst,pc,cycles\n";
+                auto* cpu_ptr = &genesis_for_trace->system().cpu;
+                cpu_ptr->set_trace_callback(
+                    [&trace_out, &trace_frame, &trace_inst, cpu_ptr](std::uint32_t pc) {
+                        char buf[80];
+                        std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu\n",
                                       static_cast<unsigned long long>(trace_frame),
                                       static_cast<unsigned long long>(trace_inst),
-                                      pc);
+                                      pc,
+                                      static_cast<unsigned long long>(cpu_ptr->elapsed_cycles()));
                         trace_out << buf;
                         ++trace_inst;
                     });

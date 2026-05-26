@@ -215,6 +215,16 @@ namespace mnemos::chips::cpu {
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
         std::uint64_t elapsed_{};   // total cycles executed
 
+        // Genesis / Mega Drive 68K bus DRAM refresh tracking. Every 128 68K
+        // cycles (= 896 master cycles) the bus takes 2 extra 68K cycles
+        // (= 14 master cycles) for DRAM refresh. Checked at the start of
+        // each instruction. This matches the reference emulator's
+        //   if (m68k.cycles >= m68k.refresh_cycles) { ... cycles += 14; }
+        // and is the difference between Mnemos and real Genesis cycle
+        // counts that was causing BoV's inner-loop PC to drift across an
+        // IRQ instruction boundary by frame ~115.
+        std::uint64_t bus_refresh_due_{128U};
+
         ibus* bus_{};
 
         std::array<register_descriptor, 20> register_view_{};
