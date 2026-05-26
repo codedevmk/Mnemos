@@ -1074,24 +1074,43 @@ namespace mnemos::chips::video {
     }
 
     std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_units,
-                                                        int /*dma_type*/) const noexcept {
-        // NOTE: this is the legacy formula (per-word VRAM-rate, applied to
-        // all DMA targets). The "correct" the reference emulator formula --
-        //   rate = dma_timing[blanking][h40] >> (dma_type & 1);
-        //   if (dma_type == 0) refresh_adjust(rate);
-        //   if (dma_type == 2) cycles += 2 * cycles_per_slot;
-        // -- has been tried and matches the reference's algorithm on paper, but on
-        // Blades of Vengeance it makes the f=115 divergence visibly worse,
-        // not better, which strongly suggests the cycle drift comes from
-        // somewhere other than the DMA rate (probably HINT/VINT enter-cycle
-        // timing or a specific 68K instruction's cycle cost compensated
-        // by the previous over-charge). See OPTIMIZATIONS.md and the
-        // [[blades-divergence-state]] memory for the full investigation.
+                                                        int dma_type) const noexcept {
+        // Port of the reference emulator's vdp_dma_update DMA-rate formula
+        // (the reference:659-669). Per-line access slots:
+        //                 H32  H40
+        //   active        16    18
+        //   blanking     166   204
+        // Adjustments:
+        //   dma_type & 1 (type 1=68K->VRAM, type 3=VRAM copy):
+        //       rate >>= 1   (one word = 2 access slots)
+        //   dma_type == 0 (68K->CRAM/VSRAM) with display off:
+        //       rate -= 5 (H32) or 6 (H40)   (refresh slots cost one each)
+        // Stall master cycles = length_units * MCYCLES_PER_LINE / rate.
+        //
+        // Earlier we used a legacy formula (per-word VRAM-rate applied to
+        // all DMA targets) because porting the the reference formula in isolation
+        // made BoV's f=115 divergence visibly worse. That cliff was
+        // actually IRQ-acceptance timing (now fixed via the V-int-flip /
+        // schedule_delayed_irq / IACK-sync chain), so the the reference formula
+        // should now be the correct one and the legacy formula is
+        // over-charging DMA stalls -- which by frame ~116 leaves Mnemos's
+        // CPU behind the reference's, delaying BoV's reg[1] V-int-enable write and
+        // costing later VINT IRQs that affect the credit screen layout.
         const bool blanking = in_vblank_ || !display_enabled();
-        if (blanking) {
-            return static_cast<std::int64_t>(length_units) * (h40_mode() ? 34 : 41);
+        constexpr int kMCyclesPerLine = 3420;
+        const bool h40 = h40_mode();
+        int rate = blanking ? (h40 ? 204 : 166) : (h40 ? 18 : 16);
+        if (dma_type & 1) {
+            rate >>= 1; // one VRAM/copy word = 2 access slots
         }
-        return static_cast<std::int64_t>(length_units) * (h40_mode() ? 380 : 428);
+        if (dma_type == 0 && blanking) {
+            // Refresh slots: 5/line in H32, 6/line in H40, cost 1 slot each.
+            rate -= h40 ? 6 : 5;
+        }
+        if (rate <= 0) {
+            rate = 1; // belt-and-suspenders; avoids div-by-zero on garbage state
+        }
+        return (static_cast<std::int64_t>(length_units) * kMCyclesPerLine) / rate;
     }
 
     int genesis_vdp::pending_irq_level() const noexcept {
