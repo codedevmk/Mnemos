@@ -898,3 +898,40 @@ TEST_CASE("m68000 MOVEP.L writes four bytes with a 2-byte stride") {
     CHECK(m.bus.read8(0x2006U) == 0x78U);
     (void)r;
 }
+
+TEST_CASE("JSR pushes return address as big-endian long (BoV $0690 scenario)") {
+    machine m;
+    // Mirror BoV's first JSR pattern, but scaled to the 64 KiB test bus:
+    //   SSP = $0FFE, initial PC = $0190
+    //   Instruction at $0190: JSR $00000500 (6 bytes: 4EB9 0000 0500)
+    //   Return address pushed should be $0196 (PC + 6).
+    m.w32(0x0000U, 0x00000FFEU); // SSP
+    m.w32(0x0004U, 0x00000190U); // PC
+    m.load(0x0190U, {0x4EB9U, 0x0000U, 0x0500U});
+    m.cpu.reset(reset_kind::power_on);
+
+    auto r = m.cpu.cpu_registers();
+    REQUIRE(r.a[7] == 0x00000FFEU);
+    REQUIRE(r.pc == 0x00000190U);
+
+    m.cpu.step_instruction();
+
+    r = m.cpu.cpu_registers();
+    CHECK(r.a[7] == 0x00000FFAU); // SP -= 4
+    CHECK(r.pc == 0x00000500U);   // jumped to target
+
+    // 4-byte BE encoding of return address $00000196 at SP..SP+3 = $FFA..$FFD.
+    INFO("ram[$FFA]=" << std::hex << +m.ram[0x0FFAU]
+         << " [$FFB]=" << +m.ram[0x0FFBU]
+         << " [$FFC]=" << +m.ram[0x0FFCU]
+         << " [$FFD]=" << +m.ram[0x0FFDU]);
+    CHECK(m.ram[0x0FFAU] == 0x00U); // bits 24-31 of $00000196
+    CHECK(m.ram[0x0FFBU] == 0x00U); // bits 16-23
+    CHECK(m.ram[0x0FFCU] == 0x01U); // bits  8-15
+    CHECK(m.ram[0x0FFDU] == 0x96U); // bits  0- 7
+
+    // What the 68K would read back as a word at $FFC must be $0196.
+    const std::uint32_t word = (static_cast<std::uint32_t>(m.ram[0x0FFCU]) << 8U) |
+                               m.ram[0x0FFDU];
+    CHECK(word == 0x0196U);
+}

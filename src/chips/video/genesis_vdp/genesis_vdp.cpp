@@ -250,7 +250,8 @@ namespace mnemos::chips::video {
                     dma_copy_step();
                 }
                 dma_busy_ = false;
-                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len);
+                // VRAM copy = dma_type 3 in the reference terms.
+                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 3);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
                 reg_[21] = static_cast<std::uint8_t>(dma_source_);
@@ -269,7 +270,11 @@ namespace mnemos::chips::video {
                     dma_transfer_step(word);
                 }
                 dma_busy_ = false;
-                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len);
+                // 68K -> VDP: dma_type = 0 if target is CRAM/VSRAM (code 3/5),
+                //              dma_type = 1 if target is VRAM (code 1).
+                const int code_low = cmd_code_ & 0x0F;
+                const int dma_type = (code_low & 0x06) ? 0 : 1;
+                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, dma_type);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
                 const std::uint32_t new_src = src >> 1U;
@@ -330,7 +335,8 @@ namespace mnemos::chips::video {
             }
             const std::uint32_t fill_src = dma_src_advance(dma_source() << 1U, len * 2U) >> 1U;
             dma_busy_ = false;
-            dma_stall_master_cycles_ += estimate_dma_stall_cycles(len);
+            // VRAM fill = dma_type 2 in the reference terms.
+            dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 2);
             reg_[19] = 0U;
             reg_[20] = 0U;
             reg_[21] = static_cast<std::uint8_t>(fill_src);
@@ -953,19 +959,25 @@ namespace mnemos::chips::video {
         refresh_irq();
     }
 
-    std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_words) const noexcept {
-        // Per-word 68K stall, derived from the VDP's published DMA slot budget
-        // (one access slot = one byte; one DMA word = 2 slots):
-        //   per_word_master = 2 * MCYCLES_PER_LINE(3420) / slots_per_line
-        //
-        //   slots/line:    H32   H40
-        //   active disp.:   16    18      -> H32: 428, H40: 380  master clk/word
-        //   blank disp. :  166   204      -> H32:  41, H40:  34  master clk/word
+    std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_units,
+                                                        int /*dma_type*/) const noexcept {
+        // NOTE: this is the legacy formula (per-word VRAM-rate, applied to
+        // all DMA targets). The "correct" the reference emulator formula --
+        //   rate = dma_timing[blanking][h40] >> (dma_type & 1);
+        //   if (dma_type == 0) refresh_adjust(rate);
+        //   if (dma_type == 2) cycles += 2 * cycles_per_slot;
+        // -- has been tried and matches the reference's algorithm on paper, but on
+        // Blades of Vengeance it makes the f=115 divergence visibly worse,
+        // not better, which strongly suggests the cycle drift comes from
+        // somewhere other than the DMA rate (probably HINT/VINT enter-cycle
+        // timing or a specific 68K instruction's cycle cost compensated
+        // by the previous over-charge). See OPTIMIZATIONS.md and the
+        // [[blades-divergence-state]] memory for the full investigation.
         const bool blanking = in_vblank_ || !display_enabled();
         if (blanking) {
-            return static_cast<std::int64_t>(length_words) * (h40_mode() ? 34 : 41);
+            return static_cast<std::int64_t>(length_units) * (h40_mode() ? 34 : 41);
         }
-        return static_cast<std::int64_t>(length_words) * (h40_mode() ? 380 : 428);
+        return static_cast<std::int64_t>(length_units) * (h40_mode() ? 380 : 428);
     }
 
     int genesis_vdp::pending_irq_level() const noexcept {

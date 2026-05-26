@@ -265,11 +265,15 @@ namespace mnemos::chips::video {
         // clocks/word in active display (DMA only gets 16 slots/H40 line).
         std::int64_t dma_stall_master_cycles_{};
 
-        // Estimate the master-clock cost of a DMA of `length_words` based on
-        // the current display state (vblank or display-disabled vs active).
+        // Master-clock cost of a DMA of `length_units` units against the
+        // current display state. `dma_type` follows the reference's convention:
+        //   0 = 68K -> CRAM / VSRAM   (1 access slot per word)
+        //   1 = 68K -> VRAM           (2 access slots per word)
+        //   2 = VRAM fill             (1 access slot per byte, treated as VRAM)
+        //   3 = VRAM copy             (2 access slots per byte, read + write)
         // Added to dma_stall_master_cycles_ at DMA dispatch.
         [[nodiscard]] std::int64_t
-        estimate_dma_stall_cycles(std::uint32_t length_words) const noexcept;
+        estimate_dma_stall_cycles(std::uint32_t length_units, int dma_type) const noexcept;
 
         // Timing / position.
         int scanline_{};
