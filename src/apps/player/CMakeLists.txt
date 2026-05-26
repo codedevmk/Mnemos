@@ -4,7 +4,10 @@ mnemos_fetch_sdl3()
 # Per-system adapters that bridge a manifest to the frontend_sdk::player_system
 # interface. Each adapter is its own concrete library so the player exec can
 # pick which systems it supports, and so adapters can be unit-tested in
-# isolation. Currently: Genesis. SMS, C64, 32X, Sega CD slot in alongside.
+# isolation. `adapters/common` is a small shared library for cross-family
+# utilities (region detection, future cart-header parsing). Currently:
+# Genesis. SMS, C64, 32X, Sega CD, SNES, NES slot in alongside.
+add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
 
 add_executable(mnemos_player main.cpp)

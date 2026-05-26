@@ -29,14 +29,11 @@
 
 namespace mnemos::apps::player::adapters::genesis {
 
-    // Detect NTSC vs PAL from the Genesis ROM header region bytes ($1F0-$1F2).
-    // The 3-byte ASCII region field encodes which markets the cart supports:
-    //   "J" Japan, "U" USA, "E" Europe (PAL). Multi-region carts (e.g. "EJU",
-    // "UE") combine letters. Convention: if Europe is present, prefer PAL so
-    // PAL-only screens (V30 mode, taller visible area, full border budget)
-    // render the way the cart's screens were authored for; otherwise NTSC.
-    // Hex-bitfield region bytes (used by some later carts) are handled by
-    // checking each ASCII hex digit's bits (bit 2 = Europe).
+    // Detect NTSC vs PAL from the Genesis ROM header. Thin Genesis-flavoured
+    // wrapper over the shared Sega 16-bit detector (Mega Drive / 32X / Sega CD
+    // share this header format -- see adapters/common/region.hpp). Returns the
+    // Genesis manifest's region enum so callers can construct a genesis_config
+    // directly.
     [[nodiscard]] manifests::genesis::genesis_config::region
     detect_region(std::span<const std::uint8_t> rom) noexcept;
 

@@ -32,11 +32,17 @@ function(mnemos_declare_tier)
             )
         endif()
 
-        if(NOT dependency_tier LESS MNEMOS_TIER_TIER)
+        # Tier rule: dependencies must point at the same tier or below. Strict
+        # downward (lower tier only) was too restrictive -- siblings within an
+        # adapter / app tier compose naturally (e.g. apps/player/adapters/common
+        # is a sibling helper of apps/player/adapters/genesis), and CMake's own
+        # topological sort guarantees no build-time cycle. Upward deps remain
+        # forbidden because those are the real architectural smell.
+        if(dependency_tier GREATER MNEMOS_TIER_TIER)
             message(
                 FATAL_ERROR
                 "Tier ${MNEMOS_TIER_NAME} (${MNEMOS_TIER_TIER}) may not depend on "
-                "${dependency} (${dependency_tier}); dependencies must point to lower tiers"
+                "${dependency} (${dependency_tier}); dependencies must not point at higher tiers"
             )
         endif()
     endforeach()
