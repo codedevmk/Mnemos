@@ -22,7 +22,7 @@ namespace mnemos::chips::peripheral {
         [[nodiscard]] virtual bool is_connected() const = 0;
     };
 
-    // Hayes "AT" command modem core (ported from the Emu reference per ADR 0006).
+    // Hayes "AT" command modem core.
     //
     // The C64 talks to the modem as DTE over a serial line: it writes bytes
     // (dte_write) and reads result codes / received data back (dte_read). In

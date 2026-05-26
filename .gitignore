@@ -46,3 +46,6 @@ conan.lock
 # Local, machine-specific ROM / test-corpus paths for the data-gated tests
 # (points at copyrighted material that must never be committed).
 scripts/local-roms.ps1
+
+# Working/scratch documents that are not part of the public history
+docs/architecture/mnemos-todos-v0.1.md

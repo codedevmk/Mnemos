@@ -13,13 +13,13 @@ namespace mnemos::chips::mapper {
     //
     // A simpler, distinct design from the Sega mapper (it is genuinely different
     // hardware, so it is a separate chip rather than a mode of sms_mapper). Spec per
-    // SMS Power's mapper notes, cross-checked against the reference emulator:
+    // Community-documented mapper notes (see THIRD-PARTY.md):
     //
     //   - Three fully-banked 16 KiB ROM slots: $0000-$3FFF, $4000-$7FFF, $8000-$BFFF.
     //     Unlike the Sega mapper there is NO fixed first 1 KiB -- slot 0 banks whole.
     //   - The page registers live in ROM space (not $FFFC-$FFFF): a write to $0000
     //     sets the slot-0 page, $4000 the slot-1 page, $8000 the slot-2 page.
-    //   - On-cart RAM (8 KiB, e.g. Ernie Els Golf): when bit 7 of the value written
+    //   - On-cart RAM (8 KiB, present on a few titles): when bit 7 of the value written
     //     to $4000 is set, the upper half of slot 2 ($A000-$BFFF) maps to that RAM;
     //     the lower half ($8000-$9FFF) stays ROM. Bit 7 clear unmaps it.
     //   - Power-on pages: slot 0 = 0, slot 1 = 1, slot 2 = 0.

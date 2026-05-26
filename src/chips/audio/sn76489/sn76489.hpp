@@ -9,9 +9,8 @@
 namespace mnemos::chips::audio {
 
     // Texas Instruments SN76489 PSG — 3 square-wave tone channels + 1 LFSR noise
-    // channel, each with 4-bit attenuation. Ported from the Emu reference core
-    // (ADR 0006); used by the Sega Master System (Z80 port $7F) and, later, the
-    // Genesis PSG.
+    // channel, each with 4-bit attenuation. Used by the Sega Master System (Z80
+    // port $7F) and, later, the Genesis PSG.
     //
     // Programmed through a single write port (latch/data byte format). The chip
     // generates one mono sample per internal step (the real chip runs at the input

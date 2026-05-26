@@ -12,8 +12,6 @@ namespace mnemos::chips::storage::c1541 {
     // with the variable sectors-per-track zoning, the BAM + directory on track 18,
     // and PRG file block chains. Pure logical decode (no GCR); the byte-level view
     // the synthetic drive serves and the full drive's disk-bind GCR encoder read.
-    //
-    // Ported from the Emu reference core (ADR 0006).
     class d64_image final {
       public:
         static constexpr std::uint16_t sector_size = 256U;

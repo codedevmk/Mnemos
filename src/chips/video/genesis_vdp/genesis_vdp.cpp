@@ -226,7 +226,7 @@ namespace mnemos::chips::video {
                 // VRAM fill: wait for the data-port write that supplies the value.
                 // DMA-busy is NOT asserted yet -- the fill is merely pending; real
                 // hardware only asserts busy once the data-port write actually starts
-                // the fill. Games (e.g. Columns 3) defensively poll dma_busy after the
+                // the fill. Some titles defensively poll dma_busy after the
                 // command and would deadlock if we claimed busy here.
                 dma_fill_pending_ = true;
             } else if (type == 3) {

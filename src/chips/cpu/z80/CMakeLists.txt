@@ -23,15 +23,15 @@ if(BUILD_TESTING)
         LIBRARIES mnemos::chips::cpu::z80 mnemos::topology
     )
 
-    # Data-gated ZEXALL/ZEXDOC conformance: skips unless MNEMOS_Z80_ZEX_ROM points
-    # at a .com exerciser (not committed). Catch2 exits 4 when the case skips.
+    # Data-gated Z80 conformance: skips unless MNEMOS_Z80_TEST_ROM points at a
+    # CP/M .com exerciser (not committed). Catch2 exits 4 when the case skips.
     mnemos_add_test(
-        mnemos_chips_cpu_z80_zexall_test
-        SOURCES tests/z80_zexall_test.cpp
+        mnemos_chips_cpu_z80_conformance_test
+        SOURCES tests/z80_conformance_test.cpp
         LIBRARIES mnemos::chips::cpu::z80 mnemos::topology
     )
     set_tests_properties(
-        mnemos_chips_cpu_z80_zexall_test
+        mnemos_chips_cpu_z80_conformance_test
         PROPERTIES SKIP_RETURN_CODE 4
     )
 endif()

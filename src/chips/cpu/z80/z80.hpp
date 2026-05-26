@@ -11,7 +11,7 @@ namespace mnemos::chips::cpu {
 
     // Zilog Z80 CPU.
     //
-    // Ported from the Emu reference core (ADR 0006). Complete instruction set:
+    // Complete instruction set:
     // the 256 unprefixed opcodes, the CB (rotate/shift/bit), ED (block transfer +
     // block I/O + 16-bit arithmetic), and DD/FD (IX/IY) prefixes including the
     // DDCB/FDCB indexed bit ops and the common undocumented opcodes (SLL, the

@@ -1,8 +1,5 @@
 # Commodore 1541 — port notes
 
-Ported from the Emu reference core (ADR 0006): `Emu/Emu/chips/c1541/`,
-`Emu/Emu/chips/iec_bus/`, `Emu/Emu/chips/m6522/`.
-
 ## What is here
 
 - **`d64_image`** — logical `.d64` decode: sectors-per-track zoning, track/sector
@@ -37,7 +34,7 @@ SYNC/byte-ready timing, and the IEC + auto-ATN-ack wiring. Registered as
 The memory map, VIA port wiring, stepper movement, motor, and head byte/SYNC
 mechanics are unit-tested with a synthetic ROM (the drive boots to its reset
 vector and runs the mechanism). **Running the real DOS ROM is data-gated** (the
-16 KB ROM is copyrighted, never committed — see the C64 ROMS.md pattern), and, as
-in Emu, the GCR *read* path is the part that needs real-ROM validation to prove
+16 KB ROM is copyrighted, never committed — see the C64 ROMS.md pattern), and the
+GCR *read* path is the part that needs real-ROM validation to prove
 out. The synthetic drive remains the reliable LOAD path; the full drive is for
 fastloaders / copy-protection once the DOS ROM is supplied locally.

@@ -3,12 +3,6 @@
 The Commodore 64 video interface controller. PAL 6569 (63 cyc × 312 lines) is the
 default; NTSC 6567 geometry is selectable via `set_revision`.
 
-## Provenance
-
-Ported from the Emu reference core (`Emu/Emu/chips/vic2/`), relicensed into Mnemos
-per ADR 0006. The port is a re-review into the Mnemos tier / C++23 / `ivideo`
-architecture, not a copy.
-
 ## Behavioral references
 
 - MOS 6569 / 6567 datasheets.
@@ -30,7 +24,7 @@ architecture, not a copy.
 - Internal video-matrix address generator (VC/VCBASE/RC/VMLI, display state).
 - Register-snapshot introspection.
 
-## Renderer (net-new — not in the Emu core)
+## Renderer
 
 A per-frame scanline renderer now lands pixels into an owned framebuffer
 (`cycles_per_line()*8` x `total_lines()`, 0x00RRGGBB). `render_line` runs as each
@@ -44,7 +38,7 @@ $1000-$1FFF in banks 0 and 2. Implemented modes: standard (hi-res) and
 multicolour text + border, gated by the DEN line-$30 latch and CSEL/RSEL
 geometry. The display window uses a canonical CSEL=1/RSEL=1 origin.
 
-## Still deferred (net-new — not in the Emu core either)
+## Still deferred
 
 - Standard / multicolour bitmap and extended-colour text modes.
 - Cycle-exact beam alignment (cycle->X), open-border / sprite-in-border tricks,
@@ -56,13 +50,6 @@ geometry. The display window uses a canonical CSEL=1/RSEL=1 origin.
 The /IRQ output now drives an edge callback (`set_irq_callback`) and the C64
 shell ORs it with CIA1 into the 6510 /IRQ; the 16K fetch bank tracks CIA2 port A
 at runtime (`set_bank` from the CIA2 port-A callback).
-
-## Intentionally omitted from the port
-
-Emu's opt-in dev-tool surfaces — raster-time profile, copper-list write log,
-beam-renderer scaffolding, and the per-line compositor shadow — are not ported.
-Those are M4-instrumentation / renderer concerns that Mnemos will model through
-its own instrumentation tier.
 
 ## Configuration / wiring
 

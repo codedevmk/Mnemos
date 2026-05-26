@@ -6,7 +6,7 @@
 // Commodore GCR (group-coded recording) 4-to-5 codec used by the 1541 on disk.
 // Each 4-bit nibble maps to a 5-bit codeword chosen so the bit stream never has
 // more than two consecutive zeros; four data bytes (eight nibbles) become five
-// GCR bytes. Header-only (ADR 0006 port of Emu's c1541_gcr).
+// GCR bytes. Header-only.
 namespace mnemos::chips::storage::c1541 {
 
     namespace detail {

@@ -11,7 +11,6 @@ namespace mnemos::chips::bus_controller {
 
     // MOS 6526 Complex Interface Adapter (CIA).
     //
-    // Ported from the Emu clean-room reference core (ADR 0006; Emu's ADR-0008).
     // Full feature surface: two 8-bit ports with DDR, two 16-bit interval timers
     // with cascade/pin-output and the silicon-accurate force-load + start-delay
     // pipelines, a BCD time-of-day clock with alarm, an 8-bit shift register with

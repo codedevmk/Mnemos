@@ -11,9 +11,8 @@ namespace mnemos::chips {
     // device pulls it, otherwise it floats HIGH (released). The bus itself models
     // only the wired-OR; all handshake timing lives in the devices.
     //
-    // Ported from the Emu reference core (ADR 0006). Header-only: it is a handful
-    // of bit operations with no clocked state, used by both tier-2 storage chips
-    // and the tier-4 C64 assembly.
+    // Header-only: it is a handful of bit operations with no clocked state, used
+    // by both tier-2 storage chips and the tier-4 C64 assembly.
     class iec_bus final {
       public:
         enum class line : std::uint8_t { atn = 0, clk = 1, data = 2 };

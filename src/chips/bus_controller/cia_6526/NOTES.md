@@ -7,10 +7,9 @@ the interrupt-control register. The C64 uses two — CIA1 (/IRQ → CPU) and CIA
 
 ## Provenance
 
-Ported from the Emu clean-room reference core (`Emu/Emu/chips/cia6526/`, Emu's
-ADR-0008), relicensed into Mnemos per ADR 0006. Emu's source provenance
-(MOS 6526 datasheet, C64 PRG §6, Wolfgang Lorenz suite as oracle, public
-die-shot analyses; no GPL emulator source) carries over.
+Clean-room implementation. Source provenance: MOS 6526 datasheet, C64 PRG §6,
+Wolfgang Lorenz suite as oracle, public die-shot analyses; no GPL emulator
+source.
 
 ## Coverage
 

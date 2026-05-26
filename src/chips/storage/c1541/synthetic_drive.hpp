@@ -14,7 +14,7 @@ namespace mnemos::chips::storage::c1541 {
 
     // Protocol-level ("synthetic") Commodore 1541 disk drive.
     //
-    // Ported from the Emu reference core (ADR 0006). It answers the standard
+    // It answers the standard
     // KERNAL serial routines on the IEC bus at byte granularity — no drive CPU,
     // VIAs, or GCR — serving files straight out of a mounted .d64. This is the
     // proven path that makes LOAD"*",8,1 / LOAD"$",8 work; the cycle-accurate

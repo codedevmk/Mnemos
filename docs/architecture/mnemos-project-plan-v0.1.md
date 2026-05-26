@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-Define the milestone phasing, success criteria, dependencies, and risk register for building Mnemos from a green field to system parity with the current Emu codebase.
+Define the milestone phasing, success criteria, dependencies, and risk register for building Mnemos from a green field to broad multi-system parity.
 
 This plan does not assign calendar dates. Effort is expressed in T-shirt sizes (S/M/L/XL) until enough velocity data exists to estimate calendar time meaningfully. T-shirt-to-week mapping is deliberately deferred — premature dates are noise.
 
@@ -24,9 +24,9 @@ This plan does not assign calendar dates. Effort is expressed in T-shirt sizes (
 
 ## 2. Strategic Posture
 
-- **Pure rewrite.** Emu is frozen at its current state. No reactive cleanup investments in Emu beyond what's already shipped.
-- **Single canonical workspace.** Mnemos lives in its own monorepo. Emu remains in its existing repository for reference and pre-Mnemos play.
-- **No code lift from Emu without re-review.** Any code carried over MUST be re-evaluated against the Mnemos architecture and conventions before landing.
+- **Pure rewrite.** Mnemos is built green-field, not by porting an existing codebase.
+- **Single canonical workspace.** Mnemos lives in its own monorepo with no implicit dependency on any prior codebase.
+- **No code lift without re-review.** Any external code carried over MUST be re-evaluated against the Mnemos architecture and conventions before landing, and its source acknowledged in `THIRD-PARTY.md`.
 - **AI agent participation is expected.** Multiple agents will contribute. Governance, naming, and layering rules are enforced via CI gates, not goodwill.
 
 ---
@@ -162,14 +162,14 @@ Eleven milestones, M0 through M10. Each milestone has a hard exit criterion. No 
 **Goal:** Prove the chip library and manifest system compose correctly for a different machine.
 
 **Scope:**
-- **`chips::cpu::z80`** — full Z80 with documented + undocumented flag behavior. Passes ZEXALL.
+- **`chips::cpu::z80`** — full Z80 with documented + undocumented flag behavior. Passes its public conformance corpus.
 - **`chips::audio::sn76489`** — PSG with three tone channels + noise.
 - **`chips::video::sms_vdp`** — SMS VDP modes.
 - **`manifests::sms`** with PAL + NTSC variants.
 - SMS golden frame tests.
 - Confirm: the M6 work consumed zero changes to the chip contract or runtime contract from M1–M3. If contract changes were required, an ADR documents why and v0.1 is amended.
 
-**Exit criterion:** SMS boots, runs a known commercial ROM headlessly with golden hash verification, plays in the player frontend. Z80 passes ZEXALL.
+**Exit criterion:** SMS boots, runs a known commercial ROM headlessly with golden hash verification, plays in the player frontend. Z80 passes its conformance corpus.
 
 **Dependencies:** M3 (M5 if intended to play in the frontend at exit).
 
@@ -259,7 +259,7 @@ These are tracked as planned but not gated by exit criteria until their scoping 
 - **Sega Saturn:** scope and HLE strategy require their own design doc; expected to be the hardest single system to land.
 - **Capcom CPS1:** arcade hardware, Z80 + 68000 reuse, custom chips.
 - **Commodore Amiga 500:** 68000 reuse, Paula + Denise + Agnus + Gary, custom chipset.
-- **Cleanup of pre-existing Emu work:** decide per-system whether to port lessons or re-derive from scratch.
+- **Cross-system cleanup:** revisit each system to decide whether to carry over earlier lessons or re-derive from scratch.
 
 A separate "Mnemos System Roadmap" document will govern these once M10 is in flight.
 

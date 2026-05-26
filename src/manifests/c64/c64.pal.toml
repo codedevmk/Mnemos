@@ -73,7 +73,7 @@ size    = 65536
 name    = "basic_rom"
 range   = "0xA000-0xBFFF"
 backing = "rom"
-file    = "roms/basic.901226-01.bin"
+file    = "basic.bin"
 sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
 overlay = true
 
@@ -81,7 +81,7 @@ overlay = true
 name    = "kernal_rom"
 range   = "0xE000-0xFFFF"
 backing = "rom"
-file    = "roms/kernal.901227-03.bin"
+file    = "kernal.bin"
 sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
 overlay = true
 
@@ -89,6 +89,6 @@ overlay = true
 name    = "char_rom"
 range   = "0xD000-0xDFFF"
 backing = "rom"
-file    = "roms/character.901225-01.bin"
+file    = "chargen.bin"
 sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
 overlay = true

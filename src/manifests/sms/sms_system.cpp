@@ -9,7 +9,8 @@ namespace mnemos::manifests::sms {
         // A Codemasters cart carries its own checksum header (the Sega BIOS routine
         // can't validate it through the different mapper): the 16-bit word at $7FE6
         // plus the complement word at $7FE8 sum to $10000. That doubles as the mapper
-        // signature (SMS Power). Used only when the config leaves the mapper on auto.
+        // signature (community-documented header convention; see THIRD-PARTY.md).
+        // Used only when the config leaves the mapper on auto.
         bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept {
             if (rom.size() < 0x8000U) {
                 return false;

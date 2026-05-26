@@ -2,11 +2,11 @@
 
 #include <cstdint>
 
-// Source basis: published Mega Drive H-counter timing tables as documented in
-// the reference emulator hvc.h and original hardware timing notes. These arrays are
-// factual cycle-to-readback mappings for standard H32/H40 timings: indexed by the
-// master-clock offset within a 3420-clock line, they give the value the 68000 sees
-// in the low byte of the H/V counter port ($C00008).
+// Source basis: published Mega Drive H-counter timing tables (see THIRD-PARTY.md)
+// and original hardware timing notes. These arrays are factual cycle-to-readback
+// mappings for standard H32/H40 timings: indexed by the master-clock offset
+// within a 3420-clock line, they give the value the 68000 sees in the low byte
+// of the H/V counter port ($C00008).
 namespace mnemos::chips::video {
 
     inline constexpr std::uint8_t cycle2hc32[3420] = {

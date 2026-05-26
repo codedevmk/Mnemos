@@ -7,7 +7,7 @@
 
 Mnemos needs a clean standalone repository that supports reusable chip libraries,
 a deterministic runtime, instrumentation, and multiple frontends without coupling
-to Emu or Eliot internals.
+to any prior or sibling project's internals.
 
 ## Decision
 
@@ -22,5 +22,5 @@ Supporting project surfaces live in `cmake`, `docs`, `extern`, `tests`, and
 ## Consequences
 
 - Code ownership and dependency direction are visible from the repository root.
-- CI can validate the CMake graph before meaningful emulator code exists.
+- CI can validate the CMake graph before meaningful emulation code exists.
 - Future source moves should preserve tier boundaries or add a new ADR.

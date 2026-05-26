@@ -5,7 +5,6 @@
 - Read `README.md` first, then review the specs in this order:
   1. `docs/architecture/mnemos-architecture-tds-v0.1.md`
   2. `docs/architecture/mnemos-project-plan-v0.1.md`
-  3. `docs/architecture/mnemos-todos-v0.1.md`
 - The v0.1 specs are marked `Draft, awaiting review`. Treat them as the current design source of truth, but do not treat them as blanket approval to implement every tier.
 - If a request asks for implementation before a relevant contract is approved, confirm explicit sign-off or keep the work to review, documentation, or safe M0 repository initialization.
 
@@ -14,7 +13,7 @@
 - Mnemos is a standalone multi-system emulator framework and developer toolkit.
 - It is not an Eliot Engine module and must not take Eliot runtime, UI, allocator, or namespace dependencies unless a future approved ADR introduces an integration boundary.
 - Use the `mnemos` namespace and the tiered layout described in the architecture TDS.
-- Emu is reference material only. Do not lift code from Emu without re-review against Mnemos architecture, licensing, determinism, and test requirements.
+- Any external code, sample, or test corpus brought in is reference material only. Do not lift code into Mnemos without re-review against the architecture, licensing, determinism, and test requirements, and acknowledge the source in `THIRD-PARTY.md`.
 
 ## Architecture Rules
 
@@ -29,12 +28,12 @@
 
 - Follow TDS section 6.5 for v0.1 dependencies. Use pinned CMake `FetchContent` entries for approved third-party code.
 - Do not add new third-party libraries without an ADR covering need, license, isolation, and maintenance risk.
-- No GPL code may enter Apache- or MIT-licensed tiers. Emulator projects may be used as behavioral references only when provenance is documented.
+- No GPL code may enter Apache- or MIT-licensed tiers. Open-source emulator projects may be used as behavioral references only when provenance is acknowledged in `THIRD-PARTY.md`.
 - ROMs, firmware dumps, build outputs, and generated logs are never committed.
 
 ## Implementation Workflow
 
-- Use `docs/architecture/mnemos-todos-v0.1.md` as the task ledger until a tracker supersedes it.
+- The working todo ledger is local-only (gitignored); ongoing tracker decisions stay in PR descriptions and ADRs.
 - A task is done only when its acceptance criterion is met and the relevant CI/build/test evidence is available.
 - Prefer Windows-first PowerShell commands, but keep Linux parity in every build-system and source-layout decision.
 - Planned build tooling is CMake 3.28+, Ninja, C++23, strict warnings, and presets. Do not invent ad hoc build commands once presets exist.

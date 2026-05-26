@@ -38,7 +38,7 @@ Mnemos's differentiating posture is **observability-first**. Every emulated comp
 
 ### 2.3 What Mnemos Is Not
 
-- Not a MAME fork or derivative. No GPL code lifted from MAME, ares, BSNES, Mednafen, or any GPL emulator.
+- Not a fork or derivative of any existing emulator. No GPL emulator source is lifted into Mnemos.
 - Not a media center. The player frontend is a focused retro experience.
 - Not a single-system project. Composability across systems is a non-negotiable design constraint.
 - Not coupled to Eliot Engine. Future Eliot plugin path is preserved through clean API boundaries; no shared core.
@@ -467,7 +467,7 @@ size      = 65536
 name      = "basic_rom"
 range     = "0xA000-0xBFFF"
 backing   = "rom"
-file      = "roms/basic.901226-01.bin"
+file      = "<basic-rom-image>"
 sha256    = "..."
 overlay   = true        # PLA-controlled
 
@@ -475,7 +475,7 @@ overlay   = true        # PLA-controlled
 name      = "kernal_rom"
 range     = "0xE000-0xFFFF"
 backing   = "rom"
-file      = "roms/kernal.901227-03.bin"
+file      = "<kernal-rom-image>"
 sha256    = "..."
 overlay   = true
 
@@ -483,7 +483,7 @@ overlay   = true
 name      = "char_rom"
 range     = "0xD000-0xDFFF"
 backing   = "rom"
-file      = "roms/character.901225-01.bin"
+file      = "<character-rom-image>"
 sha256    = "..."
 overlay   = true
 
@@ -715,7 +715,7 @@ Three test tiers, all required to be green in CI:
 2. **Integration tests** — system-level. Boot a manifest, run N frames, assert state invariants.
 3. **Golden frame tests** — per known ROM. Boot, run recorded inputs, hash framebuffer at checkpoints, compare against committed hashes.
 
-A CPU implementation MUST pass its public test suite (e.g. Klaus 2M65 for 6502 family, ZEXALL for Z80, fully-passing test ROMs for 68000/SH-2 as available) before its containing system is considered viable.
+A CPU implementation MUST pass its public conformance test suite (see `THIRD-PARTY.md` for the corpora used) before its containing system is considered viable.
 
 Sanitizer builds (ASan, UBSan, TSan) run nightly.
 

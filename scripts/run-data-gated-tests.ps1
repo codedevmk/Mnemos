@@ -1,17 +1,19 @@
 #!/usr/bin/env pwsh
 # Run the data-gated tests against a local ROM / test-corpus library.
 #
-# Several tests need copyrighted material that is NEVER committed (SMS cartridges,
-# C64 BASIC/KERNAL/CHARGEN ROMs, the Z80 ZEXALL exerciser, the SingleStepTests 6502
-# vectors). Each one self-SKIPs unless an environment variable points at the data:
+# Several tests need copyrighted material that is NEVER committed (system ROMs,
+# cartridge images, conformance corpora). Each one self-SKIPs unless an
+# environment variable points at the data (see THIRD-PARTY.md for corpus refs):
 #
-#   MNEMOS_SMS_ROM            a .sms cartridge image                  -> sms_boot_test
-#   MNEMOS_C64_ROM_DIR        dir with BASIC/KERNAL/CHARGEN images    -> c64_basic_boot_test
-#   MNEMOS_Z80_ZEX_ROM        zexall.com / zexdoc.com                 -> z80_zexall_test
-#   MNEMOS_M6510_TOMHARTE_DIR SingleStepTests 6502 JSON directory     -> m6510_tomharte_test
+#   MNEMOS_SMS_ROM            an SMS cartridge image                  -> sms_boot_test
+#   MNEMOS_C64_ROM_DIR        dir with the three C64 system ROMs      -> c64_basic_boot_test
+#   MNEMOS_GENESIS_ROM        a Genesis cartridge image               -> genesis_boot_test
+#   MNEMOS_Z80_TEST_ROM       a CP/M .com Z80 exerciser image         -> z80_conformance_test
+#   MNEMOS_M6510_TESTS_DIR    per-instruction 6502 test JSON dir      -> m6510_conformance_test
+#   MNEMOS_M68000_TESTS_DIR   per-instruction 68000 test JSON dir     -> m68000_conformance_test
 #
 # Optional golden-hash pins (assert the rendered framebuffer once locked in):
-#   MNEMOS_SMS_BOOT_SHA256, MNEMOS_C64_BOOT_SHA256
+#   MNEMOS_SMS_BOOT_SHA256, MNEMOS_C64_BOOT_SHA256, MNEMOS_GENESIS_BOOT_SHA256
 #
 # This script dot-sources scripts/local-roms.ps1 if present so you can keep your
 # machine-specific paths there (that file is git-ignored). Nothing here copies a ROM
@@ -34,12 +36,12 @@ if (Test-Path $localConfig) {
 
 # Report what is wired vs. what will skip.
 $vars = @(
-    @{ Name = "MNEMOS_SMS_ROM";            Test = "sms_boot_test" },
-    @{ Name = "MNEMOS_C64_ROM_DIR";        Test = "c64_basic_boot_test" },
-    @{ Name = "MNEMOS_GENESIS_ROM";        Test = "genesis_boot_test" },
-    @{ Name = "MNEMOS_Z80_ZEX_ROM";        Test = "z80_zexall_test" },
-    @{ Name = "MNEMOS_M6510_TOMHARTE_DIR"; Test = "m6510_tomharte_test" },
-    @{ Name = "MNEMOS_M68000_TESTS_DIR";   Test = "m68000_singlestep_test" }
+    @{ Name = "MNEMOS_SMS_ROM";          Test = "sms_boot_test" },
+    @{ Name = "MNEMOS_C64_ROM_DIR";      Test = "c64_basic_boot_test" },
+    @{ Name = "MNEMOS_GENESIS_ROM";      Test = "genesis_boot_test" },
+    @{ Name = "MNEMOS_Z80_TEST_ROM";     Test = "z80_conformance_test" },
+    @{ Name = "MNEMOS_M6510_TESTS_DIR";  Test = "m6510_conformance_test" },
+    @{ Name = "MNEMOS_M68000_TESTS_DIR"; Test = "m68000_conformance_test" }
 )
 foreach ($v in $vars) {
     $value = [Environment]::GetEnvironmentVariable($v.Name)
@@ -57,5 +59,5 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "tomharte|zexall|c64_basic_boot|sms_boot|genesis_boot|m68000_singlestep"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot"
 exit $LASTEXITCODE

@@ -5,12 +5,10 @@ mixed audio output. PAL φ2 (985248 Hz) is the default sample rate.
 
 ## Provenance
 
-Ported from the Emu clean-room reference core (`Emu/Emu/chips/sid/`, Emu's
-ADR-0007), relicensed into Mnemos per ADR 0006. Emu's source ledger (MOS 6581
-datasheet for the register map and ADSR rate periods; Bob Yannes public
-interviews for envelope staging and waveform AND-combination; no reSID/GPL
-source) carries over — this satisfies the M2 "published SID emulation note set"
-requirement.
+Clean-room implementation. Source ledger: MOS 6581 datasheet for the register
+map and ADSR rate periods; Bob Yannes public interviews for envelope staging
+and waveform AND-combination; no reSID/GPL source. This satisfies the M2
+"published SID emulation note set" requirement.
 
 ## Coverage
 
@@ -30,7 +28,7 @@ requirement.
 
 6581 vs 8580 differ in filter range (6581 ~220 Hz–18 kHz, 8580 ~30 Hz–12 kHz),
 combined-waveform fullness, and noise corruption. The 8580 combined-waveform and
-filter curves are documented approximations within Emu/ADR-0007's ±10% tolerance,
+filter curves are documented approximations within a ±10% tolerance,
 not measured wavetables.
 
 ## Wiring (M3) and deferred

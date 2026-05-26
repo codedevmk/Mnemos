@@ -11,7 +11,7 @@ namespace mnemos::chips::mapper {
 
     // Sega Master System / Game Gear standard memory mapper (the "Sega mapper").
     //
-    // Ported from the Emu reference core (ADR 0006). The mapper is cartridge glue:
+    // The mapper is cartridge glue:
     // it splits the Z80's lower 48 KiB into three 16 KiB ROM slots plus an optional
     // 16 KiB on-cart RAM window, driven by four control registers the CPU writes
     // through the top of RAM:

@@ -14,8 +14,7 @@ namespace mnemos::chips::video {
     // YM7101). The video display processor: 64KB VRAM, 64-entry CRAM (9-bit colour),
     // 40-entry VSRAM (vertical scroll), 24 control registers, the two-word command
     // port protocol, a DMA engine (68K->VRAM, VRAM fill, VRAM copy), the H/V counter,
-    // and V-blank (IRQ6) / H-blank (IRQ4) / external (IRQ2) interrupts. Ported from
-    // the Emu reference core (ADR 0006).
+    // and V-blank (IRQ6) / H-blank (IRQ4) / external (IRQ2) interrupts.
     //
     // Built in phases. THIS phase is the control plane: VRAM/CRAM/VSRAM with the
     // hardware access quirks, the full register file, the command/data ports with

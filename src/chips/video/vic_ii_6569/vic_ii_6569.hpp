@@ -13,7 +13,7 @@ namespace mnemos::chips::video {
 
     // MOS 6569 / 6567 (VIC-II) — the Commodore 64 video interface controller.
     //
-    // Ported from the Emu reference core (see ADR 0006 and NOTES.md). This is the
+    // See NOTES.md. This is the
     // register + raster-timing surface every C64 program writes against: the full
     // $D000-$D02E register path ($D02F-$D03F read $FF), the Pepto 16-colour
     // palette, the raster counter + 9-bit raster compare, the beam-position

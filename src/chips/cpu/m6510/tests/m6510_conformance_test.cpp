@@ -1,14 +1,15 @@
 // Allow std::getenv on MSVC (test-only; reads a corpus-path env var).
 #define _CRT_SECURE_NO_WARNINGS
 
-// Tom Harte (SingleStepTests / ProcessorTests) 6502 conformance harness.
+// 6502 / m6510 conformance harness.
 //
-// Validates the m6510 core against the public per-cycle 6502 corpus: each test
-// fixes an initial CPU + RAM state, runs exactly one instruction, and checks the
-// final CPU + RAM state and the exact per-cycle bus trace.
+// Validates the m6510 core against a public per-cycle 6502 test corpus (see
+// THIRD-PARTY.md): each test fixes an initial CPU + RAM state, runs exactly one
+// instruction, and checks the final CPU + RAM state and the exact per-cycle bus
+// trace.
 //
 // The corpus is large and never committed; the test is data-gated and SKIPs when
-// MNEMOS_M6510_TOMHARTE_DIR is unset or empty. The $00/$01 I/O port is disabled
+// MNEMOS_M6510_TESTS_DIR is unset or empty. The $00/$01 I/O port is disabled
 // so those addresses behave as the bare-6502 corpus expects. Opcodes Mnemos does
 // not implement for v0.1 (JAM/KIL and the unstable illegals) are skipped; see
 // src/chips/cpu/m6510/NOTES.md.
@@ -156,10 +157,11 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m6510 passes the Tom Harte 6502 corpus", "[conformance]") {
-    const char* dir = std::getenv("MNEMOS_M6510_TOMHARTE_DIR");
+TEST_CASE("m6510 passes the public 6502 conformance corpus", "[conformance]") {
+    const char* dir = std::getenv("MNEMOS_M6510_TESTS_DIR");
     if (dir == nullptr || std::string{dir}.empty() || !std::filesystem::is_directory(dir)) {
-        SKIP("set MNEMOS_M6510_TOMHARTE_DIR to the SingleStepTests 6502 JSON directory");
+        SKIP("set MNEMOS_M6510_TESTS_DIR to a directory of per-instruction 6502 test JSON files "
+             "(see THIRD-PARTY.md)");
     }
 
     std::size_t passed = 0;

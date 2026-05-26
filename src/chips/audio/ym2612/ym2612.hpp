@@ -11,8 +11,7 @@ namespace mnemos::chips::audio {
     // Yamaha YM2612 (OPN2) FM synthesizer -- the Sega Genesis / Mega Drive FM sound
     // chip: 6 channels x 4 operators, 8 FM algorithms, per-operator ADSR + SSG-EG,
     // an LFO (vibrato/tremolo), channel-3 per-operator frequency mode, channel-6 DAC
-    // (8-bit PCM), two programmable timers, and stereo panning. Ported from the Emu
-    // reference core (ADR 0006).
+    // (8-bit PCM), two programmable timers, and stereo panning.
     //
     // The control plane: the full register file (every $20-$B6 register decoded into
     // the operator/channel parameter state), the two timers (Timer A 10-bit / Timer B
@@ -25,7 +24,7 @@ namespace mnemos::chips::audio {
     // key-scaling and SSG-EG), the eight FM algorithms with operator-0 feedback, LFO
     // tremolo, and the log-sine/exp output pipeline -- mixed per channel, soft-clipped,
     // and run through the analog low-pass into stereo samples. Built from the canonical
-    // Nuked-OPN2 / MAME / the reference emulator model (hardware-verified tables).
+    // hardware-verified model and tables (see THIRD-PARTY.md).
     //
     // tick(cycles) advances the timer prescalers by that many YM master clocks; games
     // poll read_status() for timer overflow. step()/update() render audio (one stereo

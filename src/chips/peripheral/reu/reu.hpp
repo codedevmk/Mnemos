@@ -13,7 +13,7 @@ namespace mnemos::chips::peripheral {
     // A bus-mastering DMA controller with banked expansion RAM, mapped at the I/O-2
     // window ($DF00-$DFFF). Writing the command register with the execute bit runs
     // a stash (C64->REU), fetch (REU->C64), swap, or verify between C64 memory and
-    // the expansion RAM. Ported per ADR 0006. The transfer is modelled as immediate
+    // the expansion RAM. The transfer is modelled as immediate
     // (the real REU steals bus cycles); the /IRQ-on-completion line is reflected in
     // the status register but not yet wired to the CPU.
     class reu final : public iperipheral, public immio {

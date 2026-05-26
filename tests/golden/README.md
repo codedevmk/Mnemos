@@ -13,16 +13,10 @@ IRQ-driven cursor).
 
 ### ROMs
 
-Put the three C64 ROM images in one directory and point `MNEMOS_C64_ROM_DIR` at
-it. Accepted filenames (first match wins), sizes are checked:
-
-| ROM     | size  | filenames tried                                                   |
-|---------|-------|-------------------------------------------------------------------|
-| BASIC   | 8 KiB | `basic.901226-01.bin`, `basic.bin`, `basic`                       |
-| KERNAL  | 8 KiB | `kernal.901227-03.bin`, `kernal.bin`, `kernal`                    |
-| CHARGEN | 4 KiB | `character.901225-01.bin`, `chargen.901225-01.bin`, `chargen.bin`, `char.bin` |
-
-See `src/manifests/c64/ROMS.md` for acquisition + the canonical hashes.
+Put the three C64 ROM images in one directory and point `MNEMOS_C64_ROM_DIR`
+at it. The test loads each ROM by size: any 8 KiB file is tried for BASIC and
+KERNAL, any 4 KiB file is tried for CHARGEN. See `src/manifests/c64/ROMS.md`
+for acquisition.
 
 ### Environment variables
 

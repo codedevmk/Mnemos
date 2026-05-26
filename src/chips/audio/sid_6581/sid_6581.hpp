@@ -10,7 +10,6 @@ namespace mnemos::chips::audio {
 
     // MOS 6581 / 8580 Sound Interface Device (the Commodore 64 audio chip).
     //
-    // Ported from the Emu clean-room reference core (ADR 0006; Emu's ADR-0007).
     // Three voices, each with a 16-bit oscillator (triangle/sawtooth/pulse/noise
     // with combined-waveform AND, ring modulation, and hard sync), an ADSR
     // envelope generator, a multi-mode state-variable filter, OSC3/ENV3 readback,

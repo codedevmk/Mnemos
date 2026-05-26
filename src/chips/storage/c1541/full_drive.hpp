@@ -20,9 +20,9 @@ namespace mnemos::chips::storage::c1541 {
     // serial port, VIA2 = disk mechanism + GCR head), 2 KB RAM, and the 16 KB 1541
     // DOS ROM — spinning a GCR-encoded disk under its head.
     //
-    // Ported from Emu's c1541_full (ADR 0006). The DOS ROM is copyrighted and
+    // The DOS ROM is copyrighted and
     // never committed, so end-to-end operation is data-gated (see ROMS.md), exactly
-    // like the C64 golden boot; and, as in Emu, the GCR read path is the hard part
+    // like the C64 golden boot; and the GCR read path is the hard part
     // still being proven. The memory map, VIA port wiring, stepper, and head
     // byte/SYNC mechanics are unit-tested with a synthetic ROM.
     class full_drive final : public istorage {

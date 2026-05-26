@@ -4,15 +4,10 @@ Pure combinational memory-banking decoder. Five logic inputs — the CPU-port bi
 LORAM/HIRAM/CHAREN (low 3 bits of the 6510 $0001 port) plus the cartridge /GAME
 and /EXROM lines — select one chip-select region per area of the address map.
 
-## Provenance
-
-Ported from the Emu reference core (`Emu/Emu/chips/pla/`), relicensed into Mnemos
-per ADR 0006.
-
 ## Behavioral references
 
 - MOS 906114-01 / 82S100 truth table.
-- VICE `c64mem.c` / `c64memsc.c` (the open-bus / ultimax conventions).
+- Community-documented open-bus / ultimax conventions (see THIRD-PARTY.md).
 - *Mapping the C64*, Appendix H.
 
 ## Coverage

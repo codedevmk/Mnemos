@@ -1,16 +1,16 @@
-// Z80 conformance via the ZEXALL / ZEXDOC instruction exercisers.
+// Z80 conformance via a public CP/M instruction-exerciser .com image.
 //
-// ZEXALL (all flags) and ZEXDOC (documented flags only) are CP/M .com programs
-// that run every Z80 instruction against thousands of operand combinations and
-// CRC-check the results — the gold-standard Z80 conformance suite. This harness
-// runs one in a minimal CP/M environment and asserts it reports no errors.
+// The community-standard Z80 exercisers (see THIRD-PARTY.md) are CP/M .com
+// programs that run every Z80 instruction against thousands of operand
+// combinations and CRC-check the results. This harness runs one in a minimal
+// CP/M environment and asserts it reports no errors.
 //
 // The .com images are not committed, so this test is DATA-GATED: it SKIPs unless
-// MNEMOS_Z80_ZEX_ROM points at a zexall.com or zexdoc.com.
+// MNEMOS_Z80_TEST_ROM points at one.
 //
-//   MNEMOS_Z80_ZEX_ROM        path to the .com exerciser image
-//   MNEMOS_Z80_ZEX_MAX_INSTR  (optional) instruction-count safety cap
-//                             (default 20e9; ZEXALL needs ~11e9, ZEXDOC fewer)
+//   MNEMOS_Z80_TEST_ROM        path to the .com exerciser image
+//   MNEMOS_Z80_TEST_MAX_INSTR  (optional) instruction-count safety cap
+//                              (default 20e9; full-flag exercisers need ~11e9)
 //
 // CP/M contract the exercisers rely on: the program is the Transient Program Area
 // at $0100; console output is BDOS function 2 (char in E) / 9 ($-string at DE)
@@ -71,19 +71,20 @@ namespace {
     }
 } // namespace
 
-TEST_CASE("z80 passes the ZEXALL/ZEXDOC exerciser", "[conformance][z80]") {
-    const auto rom = get_env("MNEMOS_Z80_ZEX_ROM");
+TEST_CASE("z80 passes the public CP/M instruction exerciser", "[conformance][z80]") {
+    const auto rom = get_env("MNEMOS_Z80_TEST_ROM");
     if (!rom) {
-        SKIP("set MNEMOS_Z80_ZEX_ROM to a zexall.com / zexdoc.com image (not committed)");
+        SKIP("set MNEMOS_Z80_TEST_ROM to a CP/M .com exerciser image (not committed; "
+             "see THIRD-PARTY.md)");
     }
     auto image = read_file(fs::path(*rom));
     if (!image || image->empty() || image->size() > 0xFF00U) {
-        SKIP("MNEMOS_Z80_ZEX_ROM=" << *rom
-                                   << " could not be read as a CP/M .com (<= 0xFF00 bytes)");
+        SKIP("MNEMOS_Z80_TEST_ROM=" << *rom
+                                    << " could not be read as a CP/M .com (<= 0xFF00 bytes)");
     }
 
     std::uint64_t max_instr = 20'000'000'000ULL;
-    if (const auto cap = get_env("MNEMOS_Z80_ZEX_MAX_INSTR")) {
+    if (const auto cap = get_env("MNEMOS_Z80_TEST_MAX_INSTR")) {
         const std::uint64_t parsed = std::strtoull(cap->c_str(), nullptr, 10);
         if (parsed != 0U) {
             max_instr = parsed;

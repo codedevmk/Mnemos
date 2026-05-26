@@ -13,13 +13,13 @@ namespace mnemos::chips::audio {
         // The YM2612 numbers its operator registers in "slot" order S1,S2,S3,S4 but
         // wires them internally as M1,C1,M2,C2 = S1,S3,S2,S4 -- every per-operator
         // ($30-$9F), key-on ($28), and channel-3 special-mode ($A8) access is remapped
-        // through this table. Matches Nuked-OPN2 / MAME / the reference emulator.
+        // through this table. Matches published hardware studies (see THIRD-PARTY.md).
         constexpr std::array<int, 4> op_map = {0, 2, 1, 3};
 
         constexpr double pi = 3.14159265358979323846;
 
         // DT1 detune table (YM2608 Application Manual), indexed [kcode & 31][detune & 3].
-        // Hardware-exact values shared by MAME, BlastEm, and Nuked-OPN2.
+        // Hardware-exact values (see THIRD-PARTY.md).
         constexpr std::uint8_t dt1_table[32][4] = {
             {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 1, 2, 2},
             {0, 1, 2, 3},   {0, 1, 2, 3},   {0, 1, 2, 3},   {0, 1, 2, 4},   {0, 1, 3, 4},
@@ -41,7 +41,7 @@ namespace mnemos::chips::audio {
             {0, 0, 16, 24, 32, 32, 40, 48}, {0, 0, 32, 48, 64, 64, 80, 96},
         };
 
-        // Envelope-rate increment pattern (Nemesis's hardware tests via MAME / the reference),
+        // Envelope-rate increment pattern (community hardware tests; see THIRD-PARTY.md),
         // indexed eg_pattern[eg_rate_select[rate]][(eg_cnt >> shift) & 7].
         constexpr std::uint8_t eg_pattern[19][8] = {
             {0, 1, 0, 1, 0, 1, 0, 1}, {0, 1, 0, 1, 1, 1, 0, 1}, {0, 1, 1, 1, 0, 1, 1, 1},

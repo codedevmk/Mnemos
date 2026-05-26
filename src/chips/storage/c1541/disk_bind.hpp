@@ -8,7 +8,7 @@
 // Bind a logical .d64 into the GCR bit-stream the 1541 head actually reads: per
 // sector a header-sync, GCR-encoded header block, gap, data-sync, GCR-encoded
 // data block, and tail gap. This is the disk surface the full cycle-accurate
-// drive spins under its head. Ported from Emu's c1541_disk_bind (ADR 0006).
+// drive spins under its head.
 namespace mnemos::chips::storage::c1541 {
 
     struct gcr_track final {

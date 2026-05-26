@@ -10,8 +10,8 @@
 
 namespace mnemos::chips::video {
 
-    // Sega Master System VDP (315-5124, a TMS9918A derivative). Ported from the
-    // Emu reference core (ADR 0006). Implements Mode 4: a 32x28 name table with
+    // Sega Master System VDP (315-5124, a TMS9918A derivative). Implements Mode 4:
+    // a 32x28 name table with
     // per-tile priority / palette / flip, 4bpp planar tiles, full-screen H/V
     // scrolling with the row/column locks, 64 sprites (8x8 or 8x16, optional zoom,
     // 8-per-line limit with overflow + collision flags), the two-byte control-port

@@ -11,7 +11,7 @@ namespace mnemos::chips::storage {
 
     // Commodore 1530/C2N datasette: plays a `.tap` pulse stream to the C64.
     //
-    // Ported from the Emu reference core (ADR 0006). The tape is a sequence of
+    // The tape is a sequence of
     // pulse lengths (in cycles); while the motor runs and PLAY is held, the device
     // counts down each pulse and, at its end, asserts the CIA1 /FLAG line (one
     // negative edge). It also drives the cassette-sense line (low while a key is

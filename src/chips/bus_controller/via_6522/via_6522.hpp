@@ -11,7 +11,7 @@ namespace mnemos::chips::bus_controller {
 
     // MOS 6522 Versatile Interface Adapter (VIA).
     //
-    // Ported from the Emu reference core (ADR 0006). Two 8-bit ports with DDR and
+    // Two 8-bit ports with DDR and
     // input latching, two 16-bit timers (T1 free-run/one-shot with PB7 output, T2
     // timed/pulse-count), an 8-bit shift register, the CA1/CA2/CB1/CB2 handshake
     // lines, and the IFR/IER interrupt logic with a composite /IRQ output. tick()

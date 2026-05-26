@@ -25,14 +25,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <initializer_list>
 #include <optional>
 #include <span>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -70,18 +71,37 @@ namespace {
                                          std::istreambuf_iterator<char>());
     }
 
-    // Find the first candidate filename in `dir` that exists and is exactly
-    // `expected_size` bytes.
-    std::optional<std::vector<std::uint8_t>> load_rom(const fs::path& dir,
-                                                      std::initializer_list<const char*> names,
+    // Find a ROM image in `dir`: prefer `<role>.bin` if it exists and is the right
+    // size, otherwise fall back to the first file whose name contains `role` (case-
+    // insensitive) and whose size matches. This keeps specific dump filenames out
+    // of the repository while still picking the obvious dump in a typical ROM dir.
+    std::string to_lower(std::string s) {
+        for (char& c : s) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return s;
+    }
+
+    std::optional<std::vector<std::uint8_t>> load_rom(const fs::path& dir, const char* role,
                                                       std::size_t expected_size) {
-        for (const char* name : names) {
-            const fs::path path = dir / name;
-            std::error_code ec;
-            if (!fs::exists(path, ec)) {
+        const fs::path direct = dir / (std::string(role) + ".bin");
+        std::error_code ec;
+        if (fs::exists(direct, ec)) {
+            auto bytes = read_file(direct);
+            if (bytes && bytes->size() == expected_size) {
+                return bytes;
+            }
+        }
+        const std::string role_lower = to_lower(role);
+        for (const auto& entry : fs::directory_iterator(dir, ec)) {
+            if (!entry.is_regular_file(ec)) {
                 continue;
             }
-            auto bytes = read_file(path);
+            const std::string name = to_lower(entry.path().filename().string());
+            if (name.find(role_lower) == std::string::npos) {
+                continue;
+            }
+            auto bytes = read_file(entry.path());
             if (bytes && bytes->size() == expected_size) {
                 return bytes;
             }
@@ -140,12 +160,9 @@ TEST_CASE("c64 boots to a deterministic golden framebuffer", "[golden][c64]") {
     }
 
     const fs::path dir(*rom_dir);
-    auto basic = load_rom(dir, {"basic.901226-01.bin", "basic.bin", "basic"}, 0x2000U);
-    auto kernal = load_rom(dir, {"kernal.901227-03.bin", "kernal.bin", "kernal"}, 0x2000U);
-    auto chargen = load_rom(dir,
-                            {"character.901225-01.bin", "characters.901225-01.bin",
-                             "chargen.901225-01.bin", "chargen.bin", "characters.bin", "char.bin"},
-                            0x1000U);
+    auto basic = load_rom(dir, "basic", 0x2000U);
+    auto kernal = load_rom(dir, "kernal", 0x2000U);
+    auto chargen = load_rom(dir, "char", 0x1000U);
     if (!basic || !kernal || !chargen) {
         SKIP("MNEMOS_C64_ROM_DIR=" << dir.string()
                                    << " is missing a correctly-sized BASIC (8K) / KERNAL (8K) / "

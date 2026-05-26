@@ -10,7 +10,7 @@ namespace mnemos::chips::mapper {
 
     // Commodore 64 PLA (MOS 906114-01 / 82S100) memory-banking decoder.
     //
-    // Ported from the Emu reference core (ADR 0006). Pure combinational: five
+    // Pure combinational: five
     // logic inputs — the CPU-port bits LORAM/HIRAM/CHAREN plus the cartridge
     // /GAME and /EXROM lines — select one chip-select output per region of CPU
     // (or VIC-II) address space. No clocked state, so tick() is a no-op.

@@ -176,7 +176,7 @@ TEST_CASE("genesis Z80 bank window reaches 68K address space") {
 }
 
 TEST_CASE("genesis VDP DMA from 68K work RAM into CRAM populates the palette") {
-    // Sonic Spinball-style palette load: stage a palette in work RAM, program the
+    // Typical palette-load flow: stage a palette in work RAM, program the
     // VDP for a CRAM-write DMA from 68K space, and verify CRAM receives the words.
     auto sys = assemble_genesis(make_rom());
 

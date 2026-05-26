@@ -11,7 +11,7 @@ namespace mnemos::chips::cpu {
 
     // Motorola 68000 (MC68000) CPU.
     //
-    // Ported from the Emu reference core (ADR 0006). 32-bit programming model on a
+    // 32-bit programming model on a
     // 16-bit, big-endian, 24-bit-address data bus: eight data + eight address
     // registers, a supervisor/user split (USP/SSP), and a status register with the
     // 68000 CCR layout (C/V/Z/N/X). The foundation of the Genesis/Mega Drive (M8).
