@@ -12,6 +12,7 @@
 #include "region.hpp"
 #include "sms_adapter.hpp"
 #include "sms_region.hpp"
+#include "text_overlay.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -37,6 +38,20 @@ namespace {
     // active subregion the adapter reports.
     constexpr std::uint32_t kMaxFbWidth = 320U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
+
+    // Status overlay: two lines of 8x8 monospaced text, anchored to the
+    // top-right of the swapchain. Sized to fit the longest line we expect
+    // to draw (~80 chars including a generous cart title); excess width
+    // is just unused buffer.
+    constexpr int kOverlayMaxCols = 80;
+    constexpr int kOverlayBufW = kOverlayMaxCols * mnemos::apps::player::kGlyphWidth;
+    constexpr int kOverlayLines = 2;
+    constexpr int kOverlayPad = 4;
+    constexpr int kOverlayBufH =
+        kOverlayLines * mnemos::apps::player::kGlyphHeight + (kOverlayLines + 1) * kOverlayPad;
+    constexpr std::uint32_t kOverlayBgColor = 0xFF000000U; // opaque black panel
+    constexpr std::uint32_t kOverlayFgColor = 0xFFFFFFFFU; // white text
+    constexpr int kOverlayScreenMargin = 8;
 
     std::optional<std::string> parse_rom_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc - 1; ++i) {
@@ -433,6 +448,37 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Status-overlay GPU resources: a small texture + its own transfer
+    // buffer. CPU-side scratch lives in a std::vector so the text-blit
+    // helper can write into it without GPU mapping; once the panel's
+    // current contents are composed the bytes get uploaded as a single
+    // copy each frame.
+    SDL_GPUTextureCreateInfo otex_ci = tex_ci;
+    otex_ci.width = static_cast<Uint32>(kOverlayBufW);
+    otex_ci.height = static_cast<Uint32>(kOverlayBufH);
+    SDL_GPUTexture* otex = SDL_CreateGPUTexture(device, &otex_ci);
+
+    SDL_GPUTransferBufferCreateInfo oxfer_ci{};
+    oxfer_ci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    oxfer_ci.size = static_cast<Uint32>(kOverlayBufW * kOverlayBufH) * 4U;
+    SDL_GPUTransferBuffer* oxfer = SDL_CreateGPUTransferBuffer(device, &oxfer_ci);
+
+    std::vector<std::uint32_t> overlay_pixels(
+        static_cast<std::size_t>(kOverlayBufW * kOverlayBufH), 0U);
+
+    if (otex == nullptr || oxfer == nullptr) {
+        std::fprintf(stderr, "overlay GPU resources failed: %s\n", SDL_GetError());
+        if (oxfer != nullptr) SDL_ReleaseGPUTransferBuffer(device, oxfer);
+        if (otex != nullptr) SDL_ReleaseGPUTexture(device, otex);
+        SDL_ReleaseGPUTransferBuffer(device, xfer);
+        SDL_ReleaseGPUTexture(device, tex);
+        SDL_ReleaseWindowFromGPUDevice(device, window);
+        SDL_DestroyGPUDevice(device);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
     bool logged_dims = false;
     int dump_index = 0;
     bool dump_requested = false;
@@ -447,6 +493,39 @@ int main(int argc, char* argv[]) {
     const Uint64 perf_freq = SDL_GetPerformanceFrequency();
     const double frame_ticks = static_cast<double>(perf_freq) / target_fps;
     Uint64 next_frame_at = SDL_GetPerformanceCounter();
+
+    // FPS counter: count emulator frames actually stepped over a rolling
+    // ~1-second window. Reports steady-state target_fps unless the
+    // emulator is under-performing (drops show up here, not in render
+    // latency).
+    Uint64 fps_window_start = SDL_GetPerformanceCounter();
+    int fps_window_frames = 0;
+    int displayed_fps = static_cast<int>(target_fps + 0.5);
+
+    // System-spec line composed once from whatever the adapter publishes
+    // ("System: Genesis | Region: NTSC | Cart: ..."). Stays stable for
+    // the whole session, so build it here and reuse the string each
+    // frame.
+    std::string spec_line;
+    if (system) {
+        const auto& spec = system->system_spec();
+        for (std::size_t i = 0; i < spec.size(); ++i) {
+            if (i > 0U) {
+                spec_line += " | ";
+            }
+            spec_line += spec[i].label;
+            spec_line += ": ";
+            spec_line += spec[i].value;
+        }
+    }
+    const int spec_pixel_w = mnemos::apps::player::text_pixel_width(spec_line);
+    // The FPS line is "FPS: NNN" with the number right-justified to 3
+    // chars (snprintf "%3d") so digit-count changes don't shift any
+    // characters around -- the field width is a constant 8 cells.
+    constexpr int kFpsLinePixelW = 8 * mnemos::apps::player::kGlyphWidth;
+    const int panel_text_w = std::max(spec_pixel_w, kFpsLinePixelW);
+    const int panel_w = std::min(panel_text_w + 2 * kOverlayPad, kOverlayBufW);
+    constexpr int panel_h = kOverlayBufH;
 
     // The adapter reports its native stereo s16 sample rate via drain_audio();
     // SDL_AudioStream resamples to the device rate.
@@ -596,6 +675,7 @@ int main(int argc, char* argv[]) {
         if (system) {
             if (frame_due) {
                 system->step_one_frame();
+                ++fps_window_frames;
                 if (audio_stream != nullptr) {
                     const auto audio = system->drain_audio();
                     if (audio.samples != nullptr && audio.frame_count > 0U) {
@@ -656,6 +736,51 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Refresh the displayed FPS at ~1 Hz from the rolling emulation-
+        // frame counter, then compose the overlay panel into the CPU
+        // scratch buffer and upload it. Update cadence is intentionally
+        // slow so the number is readable rather than dancing per frame.
+        {
+            const Uint64 now = SDL_GetPerformanceCounter();
+            const Uint64 elapsed = now - fps_window_start;
+            if (elapsed >= perf_freq) {
+                displayed_fps = static_cast<int>(
+                    (static_cast<double>(fps_window_frames) * static_cast<double>(perf_freq)) /
+                    static_cast<double>(elapsed));
+                fps_window_start = now;
+                fps_window_frames = 0;
+            }
+        }
+        {
+            using mnemos::apps::player::draw_text;
+            using mnemos::apps::player::fill_rect;
+            using mnemos::apps::player::kGlyphHeight;
+            // Clear the whole scratch buffer so the strip past panel_w
+            // stays transparent-black (the blit's source region is
+            // clipped to [0, panel_w] anyway, but a clean buffer keeps
+            // partial-tail garbage out if the size ever changes).
+            std::fill(overlay_pixels.begin(), overlay_pixels.end(), 0U);
+            fill_rect(kOverlayBgColor, overlay_pixels.data(), kOverlayBufW, kOverlayBufH, 0, 0,
+                      panel_w, panel_h);
+
+            char fps_line[16];
+            std::snprintf(fps_line, sizeof(fps_line), "FPS: %3d", displayed_fps);
+            draw_text(fps_line, kOverlayFgColor, overlay_pixels.data(), kOverlayBufW, kOverlayBufH,
+                      kOverlayPad, kOverlayPad);
+            if (!spec_line.empty()) {
+                draw_text(spec_line, kOverlayFgColor, overlay_pixels.data(), kOverlayBufW,
+                          kOverlayBufH, kOverlayPad,
+                          kOverlayPad + kGlyphHeight + kOverlayPad);
+            }
+
+            void* mapped = SDL_MapGPUTransferBuffer(device, oxfer, true);
+            if (mapped != nullptr) {
+                SDL_memcpy(mapped, overlay_pixels.data(),
+                           overlay_pixels.size() * sizeof(std::uint32_t));
+                SDL_UnmapGPUTransferBuffer(device, oxfer);
+            }
+        }
+
         SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(device);
         if (cmd == nullptr) {
             std::fprintf(stderr, "SDL_AcquireGPUCommandBuffer failed: %s\n", SDL_GetError());
@@ -663,21 +788,38 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        if (system && src_w > 0U && src_h > 0U) {
+        // Single copy pass uploads both the framebuffer (when present)
+        // and the overlay panel each frame.
+        {
             SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(cmd);
-            SDL_GPUTextureTransferInfo src{};
-            src.transfer_buffer = xfer;
-            src.offset = 0;
-            src.pixels_per_row = src_w;
-            src.rows_per_layer = src_h;
-            SDL_GPUTextureRegion dst{};
-            dst.texture = tex;
-            dst.x = 0;
-            dst.y = 0;
-            dst.w = src_w;
-            dst.h = src_h;
-            dst.d = 1;
-            SDL_UploadToGPUTexture(copy_pass, &src, &dst, true);
+            if (system && src_w > 0U && src_h > 0U) {
+                SDL_GPUTextureTransferInfo src{};
+                src.transfer_buffer = xfer;
+                src.offset = 0;
+                src.pixels_per_row = src_w;
+                src.rows_per_layer = src_h;
+                SDL_GPUTextureRegion dst{};
+                dst.texture = tex;
+                dst.x = 0;
+                dst.y = 0;
+                dst.w = src_w;
+                dst.h = src_h;
+                dst.d = 1;
+                SDL_UploadToGPUTexture(copy_pass, &src, &dst, true);
+            }
+            SDL_GPUTextureTransferInfo osrc{};
+            osrc.transfer_buffer = oxfer;
+            osrc.offset = 0;
+            osrc.pixels_per_row = static_cast<Uint32>(kOverlayBufW);
+            osrc.rows_per_layer = static_cast<Uint32>(kOverlayBufH);
+            SDL_GPUTextureRegion odst{};
+            odst.texture = otex;
+            odst.x = 0;
+            odst.y = 0;
+            odst.w = static_cast<Uint32>(kOverlayBufW);
+            odst.h = static_cast<Uint32>(kOverlayBufH);
+            odst.d = 1;
+            SDL_UploadToGPUTexture(copy_pass, &osrc, &odst, true);
             SDL_EndGPUCopyPass(copy_pass);
         }
 
@@ -748,6 +890,33 @@ int main(int argc, char* argv[]) {
             SDL_EndGPURenderPass(rp);
         }
 
+        // Status overlay: blit the panel's used [0, panel_w] subregion to
+        // the top-right of the swapchain. The blit is an opaque copy
+        // (SDL_GPU has no shader-free alpha blend), so the panel sits as
+        // a small black rectangle over the corner of the framebuffer.
+        {
+            const int dst_x =
+                static_cast<int>(swap_w) - panel_w - kOverlayScreenMargin;
+            const int dst_y = kOverlayScreenMargin;
+            if (dst_x >= 0 && dst_y >= 0 && dst_x + panel_w <= static_cast<int>(swap_w) &&
+                dst_y + panel_h <= static_cast<int>(swap_h)) {
+                SDL_GPUBlitInfo oblit{};
+                oblit.source.texture = otex;
+                oblit.source.x = 0;
+                oblit.source.y = 0;
+                oblit.source.w = static_cast<Uint32>(panel_w);
+                oblit.source.h = static_cast<Uint32>(panel_h);
+                oblit.destination.texture = swap;
+                oblit.destination.x = static_cast<Uint32>(dst_x);
+                oblit.destination.y = static_cast<Uint32>(dst_y);
+                oblit.destination.w = static_cast<Uint32>(panel_w);
+                oblit.destination.h = static_cast<Uint32>(panel_h);
+                oblit.load_op = SDL_GPU_LOADOP_LOAD;
+                oblit.filter = SDL_GPU_FILTER_NEAREST;
+                SDL_BlitGPUTexture(cmd, &oblit);
+            }
+        }
+
         SDL_SubmitGPUCommandBuffer(cmd);
     }
 
@@ -757,6 +926,8 @@ int main(int argc, char* argv[]) {
     if (audio_stream != nullptr) {
         SDL_DestroyAudioStream(audio_stream);
     }
+    SDL_ReleaseGPUTransferBuffer(device, oxfer);
+    SDL_ReleaseGPUTexture(device, otex);
     SDL_ReleaseGPUTransferBuffer(device, xfer);
     SDL_ReleaseGPUTexture(device, tex);
     SDL_ReleaseWindowFromGPUDevice(device, window);
