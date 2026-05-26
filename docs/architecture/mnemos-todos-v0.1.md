@@ -464,7 +464,16 @@ interrupts), BCD/misc, then the Emu 743-check conformance vectors.
   29 assertions (arbitration gating, the 68K bank window, Z80-bus device routing). Phase
   3: combine YM2612 + PSG into mixed stereo audio output, and the 3/6-button controller
   protocol)
-- [ ] Golden frame tests for known commercial Genesis ROMs.
+- [~] Golden frame tests for known commercial Genesis ROMs. (tests/golden/genesis_boot_test
+  + run-data-gated-tests wiring DONE — MNEMOS_GENESIS_ROM, data-gated/skips in CI. Surfaced
+  real boot-divergence bugs vs the working Emu reference; FIXED the first: the 68000 had no
+  interrupt-acknowledge path, so VDP VINT was only cleared by a status read and games whose
+  V-blank handler relies on the IACK to clear it re-entered forever. Added m68000
+  set_irq_ack_callback (invoked in process_interrupt) + genesis_vdp::acknowledge_irq, wired in
+  the manifest. Result: Aerobiz Supersonic now boots to a rendered frame; Sonic Spinball went
+  0 -> 13K VRAM words. REMAINING divergences to chase against the reference: Sonic loads tiles
+  but no CRAM/palette (still blank); Columns 3 hangs very early (pc=$0588, reset SR) -- likely
+  more 68000 instruction bugs (the conformance suite is still gated on the prefetch refactor))
 - [ ] Validate dual-CPU scheduling correctness.
 
 ---

@@ -95,6 +95,11 @@ namespace mnemos::chips::video {
         [[nodiscard]] int pending_irq_level() const noexcept;
         [[nodiscard]] bool irq_asserted() const noexcept { return pending_irq_level() != 0; }
 
+        // Acknowledge (clear) the interrupt request at `level` -- the 68000 IACK cycle.
+        // The V-blank (6) and H-blank (4) requests are normally cleared this way; the
+        // status flag (vint_happened) stays set until a status read.
+        void acknowledge_irq(int level) noexcept;
+
         // Geometry + H/V readback (the manifest samples HV against bus time).
         [[nodiscard]] int visible_width() const noexcept;
         [[nodiscard]] int visible_height() const noexcept;

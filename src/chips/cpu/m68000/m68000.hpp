@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <span>
 
 namespace mnemos::chips::cpu {
@@ -82,6 +83,14 @@ namespace mnemos::chips::cpu {
         // Interrupt request level (0-7, IPL pins). Stored now; the dispatch arrives
         // with the exception-framework phase.
         void set_irq_level(int level) noexcept;
+
+        // Interrupt-acknowledge hook: invoked with the level when the CPU accepts an
+        // autovectored interrupt (the IACK bus cycle). A device whose interrupt is not
+        // cleared by a register read (e.g. the Genesis VDP V-blank IRQ) clears its
+        // request here. Unset by default.
+        void set_irq_ack_callback(std::function<void(int level)> callback) noexcept {
+            irq_ack_ = std::move(callback);
+        }
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -179,6 +188,7 @@ namespace mnemos::chips::cpu {
         std::uint32_t inst_addr_{}; // address of the instruction in flight (for exception frames)
         int irq_level_{};
         int prev_irq_level_{}; // for the level-7 (NMI) edge
+        std::function<void(int)> irq_ack_{};
         bool stopped_{};
         bool halted_{};
 

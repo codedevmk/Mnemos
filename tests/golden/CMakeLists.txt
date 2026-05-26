@@ -32,3 +32,19 @@ set_tests_properties(
     mnemos_sms_boot_test
     PROPERTIES SKIP_RETURN_CODE 4
 )
+
+# Genesis golden boot. Self-skips unless MNEMOS_GENESIS_ROM points at a cartridge,
+# so it is safe in CI (reports "Skipped") and locally boots + hashes the frame.
+mnemos_add_test(
+    mnemos_genesis_boot_test
+    SOURCES genesis_boot_test.cpp
+    LIBRARIES
+        mnemos::manifests::genesis
+        mnemos::runtime
+        mnemos::foundation
+        mnemos::tools::runtime_cli
+)
+set_tests_properties(
+    mnemos_genesis_boot_test
+    PROPERTIES SKIP_RETURN_CODE 4
+)

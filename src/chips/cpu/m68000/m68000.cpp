@@ -1558,6 +1558,9 @@ namespace mnemos::chips::cpu {
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vec_autovector_base + level) * 4U);
         stopped_ = false;
+        if (irq_ack_) {
+            irq_ack_(level); // IACK cycle: let the device clear its interrupt request
+        }
     }
 
     bool m68000::test_cc(int cc) const noexcept {

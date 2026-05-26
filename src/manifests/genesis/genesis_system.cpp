@@ -136,6 +136,9 @@ namespace mnemos::manifests::genesis {
 
         // --- VDP V/H-blank interrupt drives the 68000 IPL pins. ---
         s->vdp.set_irq_callback([s](int level) { s->cpu.set_irq_level(level); });
+        // The 68000 IACK cycle clears the VDP's interrupt request (many games' V-blank
+        // handlers rely on this rather than reading the VDP status to ack).
+        s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });
 
         // --- Z80 sound bus ($0000-$FFFF, little-endian). ---
         // $0000-$3FFF: Z80 RAM (8 KiB, mirrored).

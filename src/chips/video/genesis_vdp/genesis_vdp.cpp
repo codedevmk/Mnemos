@@ -942,6 +942,19 @@ namespace mnemos::chips::video {
         refresh_irq();
     }
 
+    void genesis_vdp::acknowledge_irq(int level) noexcept {
+        // The IACK cycle clears the interrupt *request* at this level; the status flag
+        // (vint_happened) is a separate latch cleared only by a status read.
+        if (level >= 6) {
+            vblank_pending_ = false;
+        } else if (level >= 4) {
+            hblank_pending_ = false;
+        } else if (level >= 2) {
+            ext_pending_ = false;
+        }
+        refresh_irq();
+    }
+
     void genesis_vdp::set_pal(bool pal) noexcept {
         pal_mode_ = pal;
         total_scanlines_ = pal ? scanlines_pal : scanlines_ntsc;
