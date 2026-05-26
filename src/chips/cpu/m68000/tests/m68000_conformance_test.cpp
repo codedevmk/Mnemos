@@ -298,9 +298,8 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
 
     // Per-mnemonic cycle-drift accumulator; rebuilt by run_file and aggregated
     // across all files so we can rank which mnemonics differ most from the
-    // corpus's `length` field (= Motorola bus cycles). Used to find the
-    // sources of per-instruction CPU timing drift that show up at the
-    // multi-frame level (see task #28 / Blades credits investigation).
+    // corpus's `length` field (= Motorola bus cycles). The ranking surfaces the
+    // worst per-instruction offenders behind multi-frame CPU timing drift.
     struct mnem_stats {
         std::string name;
         std::int64_t diff_sum = 0;
@@ -330,9 +329,8 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
                              result.cycle_mismatches});
     }
 
-    // Rank mnemonics by total absolute cycle drift -- the worst offenders are
-    // the ones most likely to make a game like Blades of Vengeance pull a DMA
-    // 36 frames earlier than real hardware (task #28).
+    // Rank mnemonics by total absolute cycle drift; the worst offenders are
+    // the most likely contributors to multi-frame timing drift in real games.
     std::sort(per_mnem.begin(), per_mnem.end(),
               [](const mnem_stats& a, const mnem_stats& b) { return a.diff_abs > b.diff_abs; });
     std::string cycle_report = "\ntop cycle drift (mine - corpus):\n";

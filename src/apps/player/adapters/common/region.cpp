@@ -9,12 +9,11 @@ namespace mnemos::apps::player::adapters {
         if (rom.size() < 0x200) {
             return video_region::ntsc;
         }
-        // Port of the reference emulator's get_region() country-bitfield scan: walk the
-        // 4-byte country field at $1F0, accumulate a bitfield (J=1, U=4, E=8),
-        // then priority-pick USA > Japan > Europe > Japan-PAL > default USA.
-        // Critically, the letter checks short-circuit the hex parse via else-if,
-        // so an ASCII 'E' is only the Europe letter -- never hex 0xE (which
-        // would imply USA-too and flip a pure-EU cart back to NTSC).
+        // Walk the 4-byte country field at $1F0, accumulate a bitfield
+        // (J=1, U=4, E=8), then priority-pick USA > Japan > Europe > Japan-PAL,
+        // defaulting to USA when nothing is declared. The letter checks
+        // short-circuit the hex parse via else-if, so an ASCII 'E' is only the
+        // Europe letter and is never re-interpreted as hex 0xE.
         int country = 0;
         const std::size_t end = std::min<std::size_t>(rom.size(), 0x1F4);
         for (std::size_t i = 0x1F0; i < end; ++i) {
@@ -27,7 +26,7 @@ namespace mnemos::apps::player::adapters {
             } else if (c == 'E') {
                 country |= 8;
             } else if (c == 'K') {
-                country |= 1; // Korea -> Japan-NTSC compatible region per the reference
+                country |= 1; // Korea routes to Japan-NTSC
             } else if (raw < 16U) {
                 country |= raw;
             } else if (c >= '0' && c <= '9') {

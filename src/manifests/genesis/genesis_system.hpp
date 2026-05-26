@@ -111,8 +111,8 @@ namespace mnemos::manifests::genesis {
         // I/O sub-controller registers ($A10000-$A1001F, byte-addressable).
         // Layout: 0x01=version (read-only), 0x03/0x05/0x07 = data A/B/C (read
         // via read_pad_port), 0x09/0x0B/0x0D = control A/B/C, 0x0F-0x1F =
-        // serial regs. All bytes default to 0 after a hardware reset; the
-        // ROM's TST on these at boot relies on it (#28 root cause).
+        // serial regs. All bytes default to 0 after a hardware reset, which the
+        // ROM's TST on these registers at boot relies on.
         std::array<std::uint8_t, 0x20> io_regs{};
 
         // 16-bit coalescing latches for the VDP ports: a 68000 word access arrives as
@@ -135,9 +135,7 @@ namespace mnemos::manifests::genesis {
         // Scheduler view of the 68000, advanced only while the VDP isn't
         // holding the bus for DMA. Without this gate the 68K runs through
         // DMA in zero emulated time and the game's per-frame work budget
-        // grows -- visible as the Blades-of-Vengeance credits screen
-        // pulling its tile-data DMA ~36 frames earlier than real hardware
-        // (background-agent investigation, tracked as task #28).
+        // grows, pulling DMA-driven screen updates earlier than real hardware.
         static bool cpu_runnable(void* user) noexcept {
             const auto* sys = static_cast<const genesis_system*>(user);
             return !sys->vdp.dma_stall_active();

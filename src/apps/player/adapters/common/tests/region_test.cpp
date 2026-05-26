@@ -32,11 +32,10 @@ TEST_CASE("detect_sega16_region: pure-region carts") {
     CHECK(detect_sega16_region(rom_with_region_code("E  ")) == video_region::pal);
 }
 
-TEST_CASE("detect_sega16_region: multi-region carts prefer NTSC (match the reference default)") {
-    // Multi-region carts (e.g. \"UE\", \"JUE\") run at NTSC -- 60Hz is the
-    // common reference frame rate, the game's timing budgets are usually tuned
-    // to it, and the reference picks NTSC for these. Only force PAL when Europe is the
-    // *only* declared region.
+TEST_CASE("detect_sega16_region: multi-region carts prefer NTSC") {
+    // Multi-region carts (e.g. \"UE\", \"JUE\") run at NTSC: 60Hz is the
+    // common reference frame rate and game timing budgets are usually tuned
+    // to it. Only force PAL when Europe is the *only* declared region.
     CHECK(detect_sega16_region(rom_with_region_code("UE ")) == video_region::ntsc);
     CHECK(detect_sega16_region(rom_with_region_code("JE ")) == video_region::ntsc);
     CHECK(detect_sega16_region(rom_with_region_code("EJU")) == video_region::ntsc);
@@ -46,8 +45,7 @@ TEST_CASE("detect_sega16_region: multi-region carts prefer NTSC (match the refer
 }
 
 TEST_CASE("detect_sega16_region: hex-bitfield region byte") {
-    // Actual Genesis country bit layout (per the reference get_region):
-    //   bit 0 = Japan-NTSC, bit 2 = USA, bit 3 = Europe.
+    // Genesis country bit layout: bit 0 = Japan-NTSC, bit 2 = USA, bit 3 = Europe.
     CHECK(detect_sega16_region(rom_with_region_code("8  ")) == video_region::pal);  // E only
     CHECK(detect_sega16_region(rom_with_region_code("4  ")) == video_region::ntsc); // U only
     CHECK(detect_sega16_region(rom_with_region_code("1  ")) == video_region::ntsc); // J only

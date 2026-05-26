@@ -161,7 +161,7 @@ TEST_CASE("detect_region honours the cartridge header region field") {
     CHECK(detect_region(rom_with_region("U  ")) == genesis_config::region::ntsc);
     CHECK(detect_region(rom_with_region("E  ")) == genesis_config::region::pal);
 
-    // Multi-region: USA wins over Europe (matches the reference get_region priority).
+    // Multi-region: USA wins over Europe in the country-byte priority.
     CHECK(detect_region(rom_with_region("UE ")) == genesis_config::region::ntsc);
     CHECK(detect_region(rom_with_region("EJU")) == genesis_config::region::ntsc);
     CHECK(detect_region(rom_with_region("JE ")) == genesis_config::region::ntsc); // J wins over E

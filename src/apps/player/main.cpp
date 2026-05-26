@@ -298,8 +298,8 @@ int main(int argc, char* argv[]) {
                 std::fprintf(stderr, "[mnemos_player] wrote %s (full plane A)\n",
                              plane_path.c_str());
             }
-            // Dump VRAM (64KB) as binary so we can diff byte-for-byte against
-            // the reference emulator's VRAM at the same point.
+            // Dump VRAM (64KB) as binary so it can be diffed byte-for-byte
+            // against an external reference at the same point.
             const std::string vram_path = screenshot->path + ".vram.bin";
             std::ofstream vout(vram_path, std::ios::binary);
             if (vout) {
@@ -312,9 +312,9 @@ int main(int argc, char* argv[]) {
                 std::fprintf(stderr, "[mnemos_player] wrote %s (64KB VRAM)\n",
                              vram_path.c_str());
             }
-            // 68K work RAM (64KB at $E00000-$FFFFFF, mirrored). Byte-identical
-            // layout to the reference's RETRO_MEMORY_SYSTEM_RAM buffer, so a direct
-            // memcmp against reference_runner's .wram.bin is meaningful.
+            // 68K work RAM (64KB at $E00000-$FFFFFF, mirrored). Flat byte
+            // layout so an external reference's work-RAM image can be diffed
+            // directly with memcmp.
             const std::string wram_path = screenshot->path + ".wram.bin";
             std::ofstream wout(wram_path, std::ios::binary);
             if (wout) {

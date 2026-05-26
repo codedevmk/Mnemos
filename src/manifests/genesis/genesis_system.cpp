@@ -17,15 +17,13 @@ namespace mnemos::manifests::genesis {
 #pragma warning(disable : 4996)
 #endif
         // ---- Optional WRAM-write watcher, gated by env vars. -------------------
-        // Activate with MNEMOS_WRAM_WATCH=1. Default range is the $E8E0..$E910
-        // block that opened the Blades-of-Vengeance divergence at frame 89-90;
-        // override with MNEMOS_WRAM_WATCH_LO / _HI (hex, no $). Frame gating via
+        // Activate with MNEMOS_WRAM_WATCH=1. Override the address range with
+        // MNEMOS_WRAM_WATCH_LO / _HI (hex, no $) and the frame range with
         // MNEMOS_WRAM_WATCH_F_LO / _F_HI (decimal, inclusive). Logs one stderr
         // line per write that lands in [LO,HI] during [F_LO,F_HI]:
         //   "[wram] f=N pc=$XXXXXX [$YYYYYY]=ZZ"
-        // PC is sampled after the CPU's bus-write step -- it's the next-instruction
-        // PC, not the writing instruction itself, but that's still close enough
-        // to identify the routine via the ROM disassembly.
+        // PC is sampled after the CPU's bus-write step, so it's the next-
+        // instruction PC; still close enough to identify the writing routine.
         struct watch_cfg {
             bool enabled{};
             std::uint32_t lo{0xE8E0U};
@@ -102,11 +100,8 @@ namespace mnemos::manifests::genesis {
         // selected by the most-recently written TH bit). $A10009/$A1000B/
         // $A1000D = control registers for the same three ports; the rest are
         // serial-port registers we don't model. All non-version bytes default
-        // to 0 after a hardware reset -- crucially, a TST.L $A10008 at the
-        // ROM's reset entry must read 0, NOT 0xFF, or the boot path branches
-        // wrong (we observed Blades stuck in the wrong boot routine at PC
-        // \$0696 instead of advancing to \$9606 as on real hardware / the reference,
-        // task #28).
+        // to 0 after a hardware reset -- a TST.L $A10008 at the ROM's reset
+        // entry must read 0 (not 0xFF) or the boot path branches wrong.
         s->bus.map_mmio(
             0xA10000U, 0x20U,
             [s](std::uint32_t a) -> std::uint8_t {

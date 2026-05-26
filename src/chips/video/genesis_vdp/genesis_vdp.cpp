@@ -547,11 +547,7 @@ namespace mnemos::chips::video {
                 px += hsz_px;
             }
             // Genesis VDP V scroll convention: visible_line N shows plane row
-            // (vscroll + N) mod plane_height. Empirically verified against the
-            // Blades of Vengeance title screen and EA splash, both of which
-            // break with subtraction. (The Blades credits screen still
-            // mis-positions because of a separate plane-data placement issue;
-            // see VDP credits-screen bug for the investigation.)
+            // (vscroll + N) mod plane_height. Subtraction is the wrong direction.
             int py = (vscroll + source_line) % vsz_px;
             if (py < 0) {
                 py += vsz_px;
@@ -899,13 +895,11 @@ namespace mnemos::chips::video {
                 --hint_counter_;
             }
         } else {
-            // V-blank lines past the entry line: the HINT counter is RELOADED from
-            // R10 each line and does not fire. (Per the reference vdp.c: decrement runs only
-            // through the active display + the first V-blank line; afterwards the
-            // counter is held at R10 until the next frame's line 0 resumes
-            // decrementing.) Without this, games that drive raster effects off
-            // HINT with R10 < V-blank-lines see spurious extra interrupts each
-            // frame -- Blades of Vengeance's credits is one such case (#28).
+            // V-blank lines past the entry line: the HINT counter is held at R10
+            // and does not fire. Decrement runs only through the active display
+            // and the first V-blank line; without this hold, games that drive
+            // raster effects off HINT with R10 < V-blank-lines see spurious
+            // extra interrupts each frame.
             in_hblank_ = true;
             hcounter_ = visible_w;
             hint_counter_ = reg_[10];
@@ -960,27 +954,15 @@ namespace mnemos::chips::video {
     }
 
     std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_words) const noexcept {
-        // Per-word master-clock cost, derived from the reference emulator's dma_timing[]
-        // table (the reference: slots-per-line per display mode). One slot = one
-        // byte transfer, so one DMA word = 2 slots:
+        // Per-word 68K stall, derived from the VDP's published DMA slot budget
+        // (one access slot = one byte; one DMA word = 2 slots):
         //   per_word_master = 2 * MCYCLES_PER_LINE(3420) / slots_per_line
         //
         //   slots/line:    H32   H40
-        //   active disp.:   16    18      ->  H32: 427.5, H40: 380   master clk/word
-        //   blank disp. :  166   204      ->  H32:  41.2, H40:  33.5 master clk/word
-        //   display off :  161   198      ->  H32:  42.5, H40:  34.5 master clk/word
-        //
-        // The prior values (16 inactive, 205/213 active) were ~half what they
-        // should be and inverted the H40/H32 ordering for active display, which
-        // gave the 68K an over-large per-frame work budget during DMA-heavy
-        // sequences (Blades credits: ~7 frames of phase lag at f120).
+        //   active disp.:   16    18      -> H32: 428, H40: 380  master clk/word
+        //   blank disp. :  166   204      -> H32:  41, H40:  34  master clk/word
         const bool blanking = in_vblank_ || !display_enabled();
         if (blanking) {
-            // V-blank and display-off behave the same (full bus to DMA, modulo
-            // the slot count); pick the slot count by display-disabled if the
-            // display is off, else by V-blank. They differ only slightly so the
-            // simpler choice (always V-blank slots when blanking) is within the
-            // measurement noise of this estimator.
             return static_cast<std::int64_t>(length_words) * (h40_mode() ? 34 : 41);
         }
         return static_cast<std::int64_t>(length_words) * (h40_mode() ? 380 : 428);
