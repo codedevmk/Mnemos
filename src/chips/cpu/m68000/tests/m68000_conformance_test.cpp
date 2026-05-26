@@ -164,10 +164,23 @@ namespace {
 
             load_registers(init, cpu);
             const int actual_cycles = cpu.step_instruction();
+
+            const auto& fin = test.at("final");
+            // Skip cases the corpus resolves via an address/bus-error trap (vector to
+            // the group-0 handler) -- not modelled by the instruction-stepped core.
+            // Done BEFORE the cycle compare so those cases (where the corpus's
+            // 'length' includes ~50 cycles of exception entry we don't pay) don't
+            // pollute the per-mnemonic drift metric.
+            const auto final_pc = fin.at("pc").get<std::uint32_t>();
+            if ((addr_error_handler != 0U && final_pc == addr_error_handler) ||
+                (bus_error_handler != 0U && final_pc == bus_error_handler)) {
+                ++result.skipped;
+                continue;
+            }
+
             // Compare against the corpus's `length` field (Motorola bus cycle
-            // count). Tracked only for state-passing cases so the metric isn't
-            // contaminated by cases where the state diverges (the cycle count
-            // is meaningless if we did something different).
+            // count). Tracked only for non-trap cases so the metric isn't
+            // dominated by exception-entry costs we don't model.
             if (test.contains("length")) {
                 const int expected_cycles = test.at("length").get<int>();
                 const std::int64_t diff =
@@ -177,17 +190,17 @@ namespace {
                 ++result.cycle_compared;
                 if (diff != 0) {
                     ++result.cycle_mismatches;
+                    // Dump first cycle mismatch per file when requested.
+                    static int dumped_cyc = 0;
+                    if (std::getenv("MNEMOS_M68000_CYCLE_DUMP") != nullptr && dumped_cyc < 5) {
+                        std::cerr << "[cyc] " << path.filename().string()
+                                  << " case=" << test.at("name").get<std::string>()
+                                  << " mine=" << actual_cycles
+                                  << " expected=" << expected_cycles
+                                  << " diff=" << diff << "\n";
+                        ++dumped_cyc;
+                    }
                 }
-            }
-
-            const auto& fin = test.at("final");
-            // Skip cases the corpus resolves via an address/bus-error trap (vector to
-            // the group-0 handler) -- not modelled by the instruction-stepped core.
-            const auto final_pc = fin.at("pc").get<std::uint32_t>();
-            if ((addr_error_handler != 0U && final_pc == addr_error_handler) ||
-                (bus_error_handler != 0U && final_pc == bus_error_handler)) {
-                ++result.skipped;
-                continue;
             }
             const auto r = cpu.cpu_registers();
             const bool fsuper = (fin.at("sr").get<std::uint16_t>() & m68000::sr_s) != 0U;
