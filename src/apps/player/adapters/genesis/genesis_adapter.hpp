@@ -21,6 +21,7 @@
 #include "player_system.hpp"
 #include "region.hpp" // chips/shared: video_region
 #include "scheduler.hpp"
+#include "scheduler_factory.hpp"
 
 #include <array>
 #include <cstdint>
@@ -46,7 +47,8 @@ namespace mnemos::apps::player::adapters::genesis {
         // cart filename, cleaned). Empty = no cart row in the spec.
         explicit genesis_adapter(std::vector<std::uint8_t> rom,
                                  const manifests::genesis::genesis_config& config = {},
-                                 std::string display_name = {});
+                                 std::string display_name = {},
+                                 frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override;
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&

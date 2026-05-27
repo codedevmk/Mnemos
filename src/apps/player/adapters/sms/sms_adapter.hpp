@@ -3,6 +3,7 @@
 #include "player_system.hpp"
 #include "region.hpp"
 #include "scheduler.hpp"
+#include "scheduler_factory.hpp"
 #include "sms_system.hpp"
 
 #include <array>
@@ -20,7 +21,8 @@ namespace mnemos::apps::player::adapters::sms {
       public:
         explicit sms_adapter(std::vector<std::uint8_t> rom,
                              const manifests::sms::sms_config& config = {},
-                             std::string display_name = {});
+                             std::string display_name = {},
+                             frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override;
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&

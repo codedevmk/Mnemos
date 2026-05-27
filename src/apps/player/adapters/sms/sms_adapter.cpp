@@ -90,13 +90,23 @@ namespace mnemos::apps::player::adapters::sms {
             return static_cast<int>(accum / total);
         }
 
+        runtime::scheduler make_scheduler(frontend_sdk::scheduler_factory* factory,
+                                          std::vector<runtime::scheduled_chip> chips,
+                                          chips::ivideo* frame_source) {
+            if (factory != nullptr) {
+                return factory->create(std::move(chips), frame_source);
+            }
+            return runtime::scheduler(std::move(chips), frame_source);
+        }
+
     } // namespace
 
     sms_adapter::sms_adapter(std::vector<std::uint8_t> rom,
                              const manifests::sms::sms_config& config,
-                             std::string display_name)
+                             std::string display_name,
+                             frontend_sdk::scheduler_factory* scheduler_factory)
         : sys_(manifests::sms::assemble_sms(std::move(rom), config)),
-          scheduler_(build_schedule(*sys_), &sys_->vdp),
+          scheduler_(make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->vdp)),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
         sys_->psg.enable_audio_capture(true);
@@ -183,10 +193,11 @@ namespace mnemos::apps::player::adapters::sms {
                 "sms",
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    auto* sched_factory = opts.scheduler_factory;
                     return std::make_unique<sms_adapter>(
                         std::move(opts.rom),
                         manifests::sms::sms_config{.video_region = opts.video_region},
-                        std::move(opts.display_name));
+                        std::move(opts.display_name), sched_factory);
                 });
             return 0;
         }();

@@ -1,4 +1,7 @@
-add_library(mnemos_frontend_sdk STATIC adapter_registry.cpp)
+add_library(mnemos_frontend_sdk STATIC
+    adapter_registry.cpp
+    scheduler_factory.cpp
+)
 add_library(mnemos::frontend_sdk ALIAS mnemos_frontend_sdk)
 
 target_include_directories(
@@ -15,6 +18,7 @@ target_link_libraries(
         mnemos::chips::shared
         mnemos::instrumentation
         mnemos::peripheral::common
+        mnemos::runtime
 )
 
 mnemos_apply_common_target_options(mnemos_frontend_sdk PUBLIC)
@@ -26,6 +30,7 @@ mnemos_declare_tier(
         mnemos_chips_shared
         mnemos_instrumentation
         mnemos_peripheral_common
+        mnemos_runtime
 )
 
 if(BUILD_TESTING)
@@ -34,6 +39,7 @@ if(BUILD_TESTING)
         SOURCES
             tests/player_system_test.cpp
             tests/adapter_registry_test.cpp
+            tests/scheduler_factory_test.cpp
         LIBRARIES mnemos::frontend_sdk
     )
 endif()

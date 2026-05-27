@@ -29,6 +29,8 @@
 
 namespace mnemos::frontend_sdk {
 
+    class scheduler_factory; // scheduler_factory.hpp
+
     // Inputs every adapter factory takes. Future adapters may need richer
     // config (CD-ROM image, BIOS path, manifest selection); extend this
     // struct rather than the factory signature so existing factories keep
@@ -37,6 +39,13 @@ namespace mnemos::frontend_sdk {
         std::vector<std::uint8_t> rom;
         mnemos::video_region video_region{mnemos::video_region::ntsc};
         std::string display_name;
+        // Optional scheduler-construction override. null = adapter falls back
+        // to its built-in scheduler. Non-null lets tooling (deterministic
+        // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)
+        // intercept scheduler construction without modifying adapter code.
+        // Non-owning; caller keeps the factory alive for the adapter's
+        // construction call.
+        scheduler_factory* scheduler_factory{};
     };
 
     class adapter_registry final {
