@@ -2,7 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax. **DO NOT START** any phase until the corresponding "Pre-Phase Decisions" block at the top is resolved with the user.
 
-**Status:** PLAN ONLY. Multi-day work. No code touched until the pre-phase decisions below are signed off.
+> **Status (2026-05-27 end-of-session):** **Phase A COMPLETE.** All five sub-phases landed in a single session as purely additive infrastructure. `build_system()` can now express every production-system mechanism the hand-written `assemble_*()` functions rely on: per-chip config, callback wiring, gated ticks, mapper overlays, and arbitrary system-specific MMIO blocks. Pre-phase decisions D1–D5 resolved per the recommendations inline. 48/48 ctest entries pass throughout; BoV f=120 still byte-perfect 0/215040 vs the reference after every Phase A commit. Phase B (system migrations) is unblocked but **not yet started** — needs fresh eyes for the parity-critical Genesis step.
+
+> **Commits landed this session:**
+> - A.1 `c3c8484` — per-chip `[chip.config]` TOML
+> - A.2 — callback registry plumbing (named-callback escape hatch)
+> - A.3 — declarative chip gating (`[[gate]]` + system-agnostic `gated_chip`)
+> - A.4 `5a4048c` — generic mapper overlays (`[[bus.region]] backing="mapper"`)
+> - A.5 `80164e7` — system-specific MMIO escape (`[[mmio_block]]`)
 
 **Goal:** Migrate every supported system (today: SMS, Genesis, C64; future: 32X, Sega CD, Saturn, Amiga, CPS1, CPS2) from hand-written `assemble_*()` C++ functions to declarative TOML manifests consumed by an extended `build_system()`. After completion, `manifests/<system>/<system>_system.cpp` is gone; adding a new system means writing a `.toml` file plus any genuinely-new chip implementations.
 
@@ -12,7 +19,7 @@
 
 These five design choices fundamentally shape the rest of the plan. Walk through them with the user before any code lands.
 
-### D1. Callback registry pattern OK as the escape hatch for non-declarative wiring?
+### D1. Callback registry pattern OK as the escape hatch for non-declarative wiring? ✅ RESOLVED — recommended pattern adopted in A.2.
 
 The 70% of system assembly that today's manifest schema can't express (inter-chip IRQ wiring, VDP→CPU DMA-read callbacks, Genesis TAS suppression, Z80 BUSREQ arbitration, etc.) needs a structured escape hatch. Proposal: manifests name callbacks by string ID; the host (player binary, runtime CLI, tests) supplies a `{name → function}` map alongside the ROM provider.
 
@@ -36,7 +43,7 @@ build_system(manifest, roms, callbacks{
 
 **Recommended:** callback registry. **Decision needed:** confirm.
 
-### D2. System-specific MMIO escape hatch: named handlers vs free-form code?
+### D2. System-specific MMIO escape hatch: named handlers vs free-form code? ✅ RESOLVED — named factory pattern adopted in A.5.
 
 Genesis's $A10000-$A1001F controller block, $A11100 BUSREQ, $A11200 Z80 RESET, $A12000-$A12FFF Z80 bank window are all hardcoded MMIO handlers today. Two options to express them:
 
@@ -45,7 +52,7 @@ Genesis's $A10000-$A1001F controller block, $A11100 BUSREQ, $A11200 Z80 RESET, $
 
 **Recommended:** D2.a (same pattern as D1 callbacks, generalized to MMIO regions). **Decision needed:** confirm.
 
-### D3. Co-existence policy — how long do both paths run side by side?
+### D3. Co-existence policy — how long do both paths run side by side? ✅ RESOLVED — both paths in tree; atomic per-system cutover when parity proven. Phase A established the additive foundation; B.1 begins with both paths live.
 
 Migrating Genesis is a multi-day effort. During that time, the manifest path and `assemble_genesis()` will both exist. Two options:
 
@@ -54,14 +61,14 @@ Migrating Genesis is a multi-day effort. During that time, the manifest path and
 
 **Recommended:** D3.a. **Decision needed:** confirm.
 
-### D4. Migration order — SMS first as smoke test, or Genesis first to flush out everything?
+### D4. Migration order — SMS first as smoke test, or Genesis first to flush out everything? ✅ RESOLVED — SMS → Genesis → C64.
 
 - **D4.a (recommended)** — SMS first (smallest, 214 LOC). Validates the framework with minimum complexity. Then Genesis (most complex, 311 LOC) which stress-tests every feature. Then C64.
 - **D4.b** — Genesis first. Forces every feature to be designed upfront; nothing falls between the cracks. Higher upfront cost; higher risk of a stuck migration.
 
 **Recommended:** D4.a. **Decision needed:** confirm.
 
-### D5. Parity verification budget — which ROMs gate each migration step?
+### D5. Parity verification budget — which ROMs gate each migration step? ✅ RESOLVED — load-bearing gate is BoV byte-perfect 0/215040 at f=120 after each commit; all 6 Genesis pixel-perfect titles validated at f=120/240/360/480 before B.2 ships; C64 BASIC boot test after B.3.
 
 Per [[genesis-four-title-parity]], the load-bearing check is BoV/Sonic 1+2/SoR/AB/TF3 at f=120 byte-perfect 0/215040 vs the reference. For each migration step (SMS → Genesis → C64):
 
@@ -91,9 +98,9 @@ Per [[genesis-four-title-parity]], the load-bearing check is BoV/Sonic 1+2/SoR/A
 
 ---
 
-## Phase A — Foundation Extensions
+## Phase A — Foundation Extensions ✅ COMPLETE (2026-05-27)
 
-Purely additive. Existing `assemble_*()` functions continue to work throughout. Each sub-phase ends green; no system-level regressions possible.
+Purely additive. Existing `assemble_*()` functions continue to work throughout. All five sub-phases landed and verified in one session. Total: ~1500 LOC added across `chips/shared` (config + callbacks + predicates + mmio_factory + imapper extensions), `manifests/common` (schema additions + parser + builder pass per mechanism + gated_chip lifted from genesis), and tests (88 new assertions across 12 new catch2 cases).
 
 ### A.1 — Per-chip TOML config (P5)
 
