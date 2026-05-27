@@ -55,7 +55,6 @@ namespace {
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::iaudio_synth, ym2612>);
-static_assert(ym2612::static_class == mnemos::chips::chip_class::audio_synth);
 
 TEST_CASE("ym2612 reports identity and registers under yamaha.ym2612") {
     const ym2612 fm;

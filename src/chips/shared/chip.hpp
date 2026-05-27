@@ -87,19 +87,22 @@ namespace mnemos::chips {
         [[nodiscard]] virtual instrumentation::ichip_introspection& introspection() noexcept = 0;
     };
 
+    // Each tier-2 subclass interface below selects the chip's classification
+    // by inheritance. Code that needs the class at runtime queries
+    // `metadata().klass`; code that needs it at compile time uses
+    // `std::is_base_of_v<icpu, ConcreteChip>` etc. There used to be a third
+    // path (`static constexpr chip_class static_class` on each interface);
+    // it was redundant with both the inheritance check and the metadata
+    // field, so it has been removed.
+
     class icpu : public ichip {
       public:
-        static constexpr chip_class static_class = chip_class::cpu;
-
         // Inject the bus the CPU executes against. Called once at attach time,
         // before the first tick; the CPU observes but does not own the bus.
         virtual void attach_bus(ibus& bus) noexcept = 0;
     };
 
-    class iaudio_synth : public ichip {
-      public:
-        static constexpr chip_class static_class = chip_class::audio_synth;
-    };
+    class iaudio_synth : public ichip {};
 
     // A borrowed, immutable view of a video chip's most recent complete frame.
     // Pixels are 0x00RRGGBB (alpha unused), row-major. `width` is the count of
@@ -122,8 +125,6 @@ namespace mnemos::chips {
 
     class ivideo : public ichip {
       public:
-        static constexpr chip_class static_class = chip_class::video;
-
         // Monotonic count of completed frames; the runtime detects a frame
         // boundary by observing this increment.
         [[nodiscard]] virtual std::uint64_t frame_index() const noexcept = 0;
@@ -133,25 +134,10 @@ namespace mnemos::chips {
         [[nodiscard]] virtual frame_buffer_view framebuffer() const noexcept = 0;
     };
 
-    class ibus_controller : public ichip {
-      public:
-        static constexpr chip_class static_class = chip_class::bus_controller;
-    };
-
-    class istorage : public ichip {
-      public:
-        static constexpr chip_class static_class = chip_class::storage;
-    };
-
-    class imapper : public ichip {
-      public:
-        static constexpr chip_class static_class = chip_class::mapper;
-    };
-
-    class iperipheral : public ichip {
-      public:
-        static constexpr chip_class static_class = chip_class::peripheral;
-    };
+    class ibus_controller : public ichip {};
+    class istorage : public ichip {};
+    class imapper : public ichip {};
+    class iperipheral : public ichip {};
 
     // Memory-mapped register access. A chip that exposes an MMIO window mixes this
     // in alongside its class interface; the topology bus routes reads/writes in the

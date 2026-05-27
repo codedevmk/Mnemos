@@ -28,7 +28,6 @@ namespace {
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::imapper, sms_mapper>);
-static_assert(sms_mapper::static_class == mnemos::chips::chip_class::mapper);
 
 TEST_CASE("sms_mapper reports identity and registers under sega.sms_mapper") {
     const sms_mapper mapper;

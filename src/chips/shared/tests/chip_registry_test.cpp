@@ -54,7 +54,6 @@ namespace {
 static_assert(std::is_trivially_copyable_v<mnemos::chips::chip_metadata>);
 static_assert(std::is_trivially_copyable_v<mnemos::chips::register_descriptor>);
 static_assert(std::is_base_of_v<mnemos::chips::ichip, mnemos::chips::icpu>);
-static_assert(mnemos::chips::icpu::static_class == mnemos::chips::chip_class::cpu);
 
 TEST_CASE("chip taxonomy names are stable") {
     using mnemos::chips::chip_class;

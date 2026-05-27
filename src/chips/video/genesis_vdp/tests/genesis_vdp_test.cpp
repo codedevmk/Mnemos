@@ -57,7 +57,6 @@ namespace {
 
 static_assert(std::is_base_of_v<mnemos::chips::ivideo, genesis_vdp>);
 static_assert(std::is_base_of_v<mnemos::chips::immio, genesis_vdp>);
-static_assert(genesis_vdp::static_class == mnemos::chips::chip_class::video);
 
 TEST_CASE("genesis_vdp reports identity and registers under sega.315_5313") {
     const genesis_vdp vdp;

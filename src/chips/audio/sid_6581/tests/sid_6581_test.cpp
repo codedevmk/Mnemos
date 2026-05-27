@@ -16,7 +16,6 @@ namespace {
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::iaudio_synth, sid_6581>);
-static_assert(sid_6581::static_class == mnemos::chips::chip_class::audio_synth);
 
 TEST_CASE("sid_6581 reports identity and registers under mos.6581") {
     const sid_6581 sid;

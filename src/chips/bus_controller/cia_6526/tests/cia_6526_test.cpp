@@ -15,7 +15,6 @@ namespace {
 }
 
 static_assert(std::is_base_of_v<mnemos::chips::ibus_controller, cia_6526>);
-static_assert(cia_6526::static_class == mnemos::chips::chip_class::bus_controller);
 
 TEST_CASE("cia_6526 reports identity and registers under mos.6526") {
     const cia_6526 cia;

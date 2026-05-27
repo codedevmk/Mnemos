@@ -29,7 +29,6 @@ namespace {
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::ivideo, sms_vdp>);
-static_assert(sms_vdp::static_class == mnemos::chips::chip_class::video);
 
 TEST_CASE("sms_vdp reports identity and registers under sega.sms_vdp") {
     const sms_vdp vdp;

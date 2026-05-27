@@ -16,7 +16,6 @@ namespace {
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::ivideo, vic_ii_6569>);
-static_assert(vic_ii_6569::static_class == mnemos::chips::chip_class::video);
 
 TEST_CASE("vic_ii_6569 reports its identity and registers under mos.6569") {
     const vic_ii_6569 vic;

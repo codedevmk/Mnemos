@@ -61,7 +61,6 @@ namespace {
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::icpu, m6510>);
-static_assert(m6510::static_class == mnemos::chips::chip_class::cpu);
 
 TEST_CASE("m6510 reports its identity") {
     const m6510 cpu;
