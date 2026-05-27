@@ -10,6 +10,7 @@
 #include "genesis_vdp.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
+#include "region_args.hpp"
 #include "sms_adapter.hpp"
 #include "sms_region.hpp"
 #include "text_overlay.hpp"
@@ -61,28 +62,6 @@ namespace {
             }
         }
         return std::nullopt;
-    }
-
-    enum class region_override {
-        auto_detect,
-        ntsc,
-        pal,
-    };
-
-    region_override parse_region_arg(int argc, char* argv[]) {
-        for (int i = 1; i < argc - 1; ++i) {
-            const std::string a = argv[i];
-            if (a == "--region") {
-                const std::string v = argv[i + 1];
-                if (v == "pal" || v == "PAL") {
-                    return region_override::pal;
-                }
-                if (v == "ntsc" || v == "NTSC") {
-                    return region_override::ntsc;
-                }
-            }
-        }
-        return region_override::auto_detect;
     }
 
     // --screenshot <path.ppm> --frames N: headless run, dump the resulting
@@ -264,24 +243,18 @@ namespace {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    using mnemos::apps::player::adapters::parse_region_arg;
+    using mnemos::apps::player::adapters::region_source_label;
+    using mnemos::apps::player::adapters::resolve_video_region;
+
     const auto rom_path = parse_rom_arg(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
 
-    // --region overrides whichever default the cart-byte parser hands back.
-    const auto resolve_video = [&](mnemos::video_region cart_default) {
-        switch (region_arg) {
-        case region_override::pal:
-            return mnemos::video_region::pal;
-        case region_override::ntsc:
-            return mnemos::video_region::ntsc;
-        case region_override::auto_detect:
-        default:
-            return cart_default;
-        }
+    const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
+        return resolve_video_region(region_arg, cart_default);
     };
-    const char* region_source = region_arg == region_override::auto_detect ? "auto-detected"
-                                                                           : "explicit --region";
+    const char* region_source = region_source_label(region_arg);
 
     std::unique_ptr<mnemos::frontend_sdk::player_system> system;
     if (rom_path) {

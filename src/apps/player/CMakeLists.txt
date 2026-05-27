@@ -7,6 +7,7 @@ mnemos_fetch_sdl3()
 # isolation. Cross-system primitives (video_region, market) live in
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
 # manifest. Currently wired: Genesis, SMS. C64, 32X, Sega CD, SNES, NES slot in.
+add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
 add_subdirectory(adapters/sms)
 
@@ -27,6 +28,7 @@ target_link_libraries(
     PRIVATE
         SDL3::SDL3-static
         mnemos::frontend_sdk
+        mnemos::apps::player::adapters::common
         mnemos::apps::player::genesis_adapter
         mnemos::apps::player::sms_adapter
         mnemos::apps::player::text_overlay
