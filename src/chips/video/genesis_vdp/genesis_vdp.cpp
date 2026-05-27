@@ -27,8 +27,40 @@ namespace mnemos::chips::video {
             return sizes[static_cast<std::size_t>(sz_bits) & 3U];
         }
 
-        // 3-bit CRAM component -> 8-bit, matching the common Genesis palette curve.
-        constexpr std::array<std::uint8_t, 8> color_lut = {0, 36, 73, 109, 146, 182, 219, 255};
+        // the reference-byte-matching CRAM-channel intensity ramp. Genesis CRAM is
+        // native 3-bit per channel; the reference's vdp_render.c MAKE_PIXEL +
+        // USE_16BPP_RENDERING packs intensity into 5:6:5, and reference_runner
+        // expands back to 8-bit-per-channel for the PPM. The 8-bit values
+        // therefore are NOT a clean linear ramp (max white = 239, not 255)
+        // -- the G channel even differs from R/B because it gets 6-bit
+        // precision in the 565 step. We mirror the full round-trip here so
+        // Mnemos's framebuffer A/Bs byte-for-byte against the reference's.
+        //
+        // Three intensity ramps applied BEFORE the 565 packing:
+        //   normal:    v << 1   (0,2,4,6,8,10,12,14)
+        //   shadow:    v        (0..7)
+        //   highlight: v + 7    (7..14)
+        [[nodiscard]] constexpr int reference_intensity(int v3, std::uint8_t shade_mode) noexcept {
+            // shade codes match genesis_vdp::shade_{shadow,normal,highlight}.
+            if (shade_mode == 0 /* shadow */) {
+                return v3;
+            }
+            if (shade_mode == 2 /* highlight */) {
+                return v3 + 7;
+            }
+            return v3 << 1; // normal
+        }
+        // the reference MAKE_PIXEL (16BPP): R5 = (r<<1)|(r>>3), G6 = (g<<2)|(g>>2),
+        // B5 = (b<<1)|(b>>3). Inputs are 4-bit. reference_runner's 565->888 then
+        // does R8 = (R5<<3)|(R5>>2), G8 = (G6<<2)|(G6>>4), B8 = same as R.
+        [[nodiscard]] constexpr std::uint8_t pack_rb_8(int v4) noexcept {
+            const int five = ((v4 & 0xF) << 1) | ((v4 >> 3) & 1);
+            return static_cast<std::uint8_t>((five << 3) | (five >> 2));
+        }
+        [[nodiscard]] constexpr std::uint8_t pack_g_8(int v4) noexcept {
+            const int six = ((v4 & 0xF) << 2) | ((v4 >> 2) & 3);
+            return static_cast<std::uint8_t>((six << 2) | (six >> 4));
+        }
     } // namespace
 
     chip_metadata genesis_vdp::metadata() const noexcept {
@@ -538,21 +570,20 @@ namespace mnemos::chips::video {
     }
 
     std::uint32_t genesis_vdp::cram_to_rgb(std::uint16_t cram_value, std::uint8_t shade) noexcept {
-        int cr = (cram_value >> 1U) & 7;
-        int cg = (cram_value >> 5U) & 7;
-        int cb = (cram_value >> 9U) & 7;
-        if (shade == shade_shadow) {
-            cr >>= 1;
-            cg >>= 1;
-            cb >>= 1;
-        } else if (shade == shade_highlight) {
-            cr = (cr << 1) > 7 ? 7 : (cr << 1);
-            cg = (cg << 1) > 7 ? 7 : (cg << 1);
-            cb = (cb << 1) > 7 ? 7 : (cb << 1);
-        }
-        return (static_cast<std::uint32_t>(color_lut[static_cast<std::size_t>(cr)]) << 16U) |
-               (static_cast<std::uint32_t>(color_lut[static_cast<std::size_t>(cg)]) << 8U) |
-               static_cast<std::uint32_t>(color_lut[static_cast<std::size_t>(cb)]);
+        // Extract 3-bit channels from CRAM word (layout: 0000 BBB0 GGG0 RRR0).
+        const int cr3 = (cram_value >> 1U) & 7;
+        const int cg3 = (cram_value >> 5U) & 7;
+        const int cb3 = (cram_value >> 9U) & 7;
+        // Apply the reference shade intensity ramp (-> 4-bit) then the reference MAKE_PIXEL +
+        // 565->888 expansion. The G channel uses 6-bit precision, R/B use
+        // 5-bit -- see helper comments above. Matches the reference libretro 16BPP
+        // output byte-for-byte.
+        const int cr4 = reference_intensity(cr3, shade);
+        const int cg4 = reference_intensity(cg3, shade);
+        const int cb4 = reference_intensity(cb3, shade);
+        return (static_cast<std::uint32_t>(pack_rb_8(cr4)) << 16U) |
+               (static_cast<std::uint32_t>(pack_g_8(cg4)) << 8U) |
+               static_cast<std::uint32_t>(pack_rb_8(cb4));
     }
 
     void genesis_vdp::fetch_pattern_row(int tile_idx, int row, bool hflip, bool interlace2,

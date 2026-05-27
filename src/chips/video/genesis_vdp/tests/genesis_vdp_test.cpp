@@ -49,8 +49,11 @@ namespace {
         0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111,
         0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111};
 
-    constexpr std::uint32_t rgb_red = 0x00FF0000U;
-    constexpr std::uint32_t rgb_green = 0x0000FF00U;
+    // CRAM 7 (max intensity) -> 8-bit per channel via the reference's 16BPP path
+    // (cram_to_rgb): R/B 5-bit precision -> 0xEF, G 6-bit precision -> 0xEF.
+    // Matches the reference libretro framebuffer byte-for-byte.
+    constexpr std::uint32_t rgb_red = 0x00EF0000U;
+    constexpr std::uint32_t rgb_green = 0x0000EF00U;
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::ivideo, genesis_vdp>);
