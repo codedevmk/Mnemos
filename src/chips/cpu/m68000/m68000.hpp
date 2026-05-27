@@ -138,7 +138,44 @@ namespace mnemos::chips::cpu {
       private:
         friend class m68000_diagnostics;
 
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Bridges the chip's diagnostic surface into the generic
+        // `instrumentation::ichip_introspection` capability container. The
+        // CPU advertises a trace target (per-instruction PC+cycles hook,
+        // forwarded to the existing `m68000_diagnostics::set_trace_callback`
+        // path) and a register view (snapshots from `register_snapshot()`).
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(m68000& owner) noexcept;
+
+            [[nodiscard]] instrumentation::trace_target* trace() override {
+                return &trace_impl_;
+            }
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_impl_;
+            }
+
+          private:
+            class trace_impl final : public instrumentation::trace_target {
+              public:
+                explicit trace_impl(m68000& owner) noexcept : owner_(&owner) {}
+                void install(callback cb) override;
+
+              private:
+                m68000* owner_;
+            };
+
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(m68000& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override;
+
+              private:
+                m68000* owner_;
+            };
+
+            trace_impl trace_impl_;
+            registers_impl registers_impl_;
+        };
 
         enum class op_size : std::uint8_t { byte, word, longword };
 
@@ -268,7 +305,7 @@ namespace mnemos::chips::cpu {
         ibus* bus_{};
 
         std::array<register_descriptor, 20> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
         m68000_diagnostics diagnostics_{*this};
     };
 

@@ -1324,6 +1324,98 @@ namespace mnemos::chips::video {
         return register_view_;
     }
 
+    // ------------------------------------------------------------------------
+    //  Introspection surface
+    // ------------------------------------------------------------------------
+
+    namespace {
+        [[nodiscard]] int scroll_size_cells(int sz_bits) noexcept {
+            constexpr int sizes[4] = {32, 64, 64, 128};
+            return sizes[sz_bits & 3];
+        }
+    } // namespace
+
+    genesis_vdp::introspection_surface::introspection_surface(genesis_vdp& owner) noexcept
+        : vram_view_("vram", std::span<const std::uint8_t>(owner.vram_)),
+          cram_view_("cram",
+                     std::span<const std::uint8_t>(
+                         reinterpret_cast<const std::uint8_t*>(owner.cram_.data()),
+                         owner.cram_.size() * sizeof(std::uint16_t))),
+          vsram_view_("vsram",
+                      std::span<const std::uint8_t>(
+                          reinterpret_cast<const std::uint8_t*>(owner.vsram_.data()),
+                          owner.vsram_.size() * sizeof(std::uint16_t))),
+          regs_view_("vdpregs", std::span<const std::uint8_t>(owner.reg_)),
+          registers_impl_(owner),
+          plane_a_(owner) {
+        mem_table_[0] = &vram_view_;
+        mem_table_[1] = &cram_view_;
+        mem_table_[2] = &vsram_view_;
+        mem_table_[3] = &regs_view_;
+        layer_table_[0] = &plane_a_;
+    }
+
+    std::span<const register_descriptor>
+    genesis_vdp::introspection_surface::registers_impl::registers() {
+        return owner_->register_snapshot();
+    }
+
+    frame_buffer_view
+    genesis_vdp::introspection_surface::plane_a_layer_impl::view() const {
+        // Lazily render plane A from the chip's live VRAM/CRAM. Pattern is
+        // pulled into a chip-owned buffer; geometry tracks the current plane-
+        // size registers, which may change between calls. This is the same
+        // walk the player's --screenshot path performed in apps/player/main.cpp
+        // before the introspection retrofit -- now the chip exposes it
+        // directly via the debug_layer surface.
+        const int hsz_cells = scroll_size_cells(owner_->reg_[16] & 0x03);
+        const int vsz_cells = scroll_size_cells((owner_->reg_[16] >> 4) & 0x03);
+        const std::uint32_t nt_base =
+            (static_cast<std::uint32_t>(owner_->reg_[2]) & 0x38U) << 10U;
+        const std::uint32_t plane_w = static_cast<std::uint32_t>(hsz_cells * 8);
+        const std::uint32_t plane_h = static_cast<std::uint32_t>(vsz_cells * 8);
+        const std::size_t total = static_cast<std::size_t>(plane_w) * plane_h;
+        buf_.assign(total, 0U);
+        width_ = plane_w;
+        height_ = plane_h;
+
+        for (int cy = 0; cy < vsz_cells; ++cy) {
+            for (int cx = 0; cx < hsz_cells; ++cx) {
+                const std::uint32_t nt_offset =
+                    static_cast<std::uint32_t>(cy * hsz_cells + cx) * 2U;
+                const std::uint16_t nt = owner_->vram16(nt_base + nt_offset);
+                const int tile = nt & 0x7FF;
+                const bool hf = ((nt >> 11) & 1) != 0;
+                const bool vf = ((nt >> 12) & 1) != 0;
+                const int pal = (nt >> 13) & 3;
+                for (int fy = 0; fy < 8; ++fy) {
+                    const int row = vf ? (7 - fy) : fy;
+                    for (int fx = 0; fx < 8; ++fx) {
+                        const int col = hf ? (7 - fx) : fx;
+                        const std::uint32_t pat_addr =
+                            static_cast<std::uint32_t>(tile) * 32U + row * 4U + (col / 2);
+                        const std::uint16_t word = owner_->vram16(pat_addr & ~1U);
+                        const std::uint8_t byte = static_cast<std::uint8_t>(
+                            (pat_addr & 1) ? (word & 0xFF) : (word >> 8));
+                        const std::uint8_t color =
+                            (col & 1) ? (byte & 0xF) : (byte >> 4);
+                        const std::uint16_t cram_value =
+                            owner_->cram_[static_cast<std::size_t>(pal * 16 + color) & 0x3FU];
+                        const std::uint32_t rgb =
+                            color == 0 ? 0U : cram_to_rgb(cram_value, shade_normal);
+                        buf_[(static_cast<std::size_t>(cy) * 8U + fy) * plane_w +
+                             (static_cast<std::size_t>(cx) * 8U + fx)] = rgb;
+                    }
+                }
+            }
+        }
+
+        return {.pixels = buf_.data(),
+                .width = width_,
+                .height = height_,
+                .stride = 0U};
+    }
+
     namespace {
         [[maybe_unused]] const auto genesis_vdp_registration =
             register_factory("sega.315_5313", chip_class::video, []() -> std::unique_ptr<ichip> {

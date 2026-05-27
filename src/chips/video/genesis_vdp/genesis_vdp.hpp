@@ -158,7 +158,80 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t vint_enabled_at_drain_count() const noexcept { return vint_enabled_at_drain_count_; }
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Exposes the chip's bulk memories (VRAM/CRAM/VSRAM/regs) as
+        // `memory_view`s, the architectural register file as a `register_view`,
+        // and a lazily-rendered plane-A `debug_layer`. The player's
+        // --screenshot path consumes these without depending on the VDP type.
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(genesis_vdp& owner) noexcept;
+
+            [[nodiscard]] std::span<instrumentation::memory_view* const>
+            memory_views() override {
+                return mem_table_;
+            }
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_impl_;
+            }
+            [[nodiscard]] std::span<instrumentation::debug_layer* const>
+            debug_layers() override {
+                return layer_table_;
+            }
+
+          private:
+            class byte_memory_view final : public instrumentation::memory_view {
+              public:
+                byte_memory_view(std::string_view name,
+                                 std::span<const std::uint8_t> bytes) noexcept
+                    : name_(name), bytes_(bytes) {}
+                [[nodiscard]] std::string_view name() const noexcept override {
+                    return name_;
+                }
+                [[nodiscard]] std::span<const std::uint8_t> bytes()
+                    const noexcept override {
+                    return bytes_;
+                }
+
+              private:
+                std::string_view name_;
+                std::span<const std::uint8_t> bytes_;
+            };
+
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(genesis_vdp& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override;
+
+              private:
+                genesis_vdp* owner_;
+            };
+
+            class plane_a_layer_impl final : public instrumentation::debug_layer {
+              public:
+                explicit plane_a_layer_impl(genesis_vdp& owner) noexcept
+                    : owner_(&owner) {}
+                [[nodiscard]] std::string_view name() const noexcept override {
+                    return "plane_a";
+                }
+                [[nodiscard]] frame_buffer_view view() const override;
+
+              private:
+                genesis_vdp* owner_;
+                mutable std::vector<std::uint32_t> buf_{};
+                mutable std::uint32_t width_{};
+                mutable std::uint32_t height_{};
+            };
+
+            byte_memory_view vram_view_;
+            byte_memory_view cram_view_;
+            byte_memory_view vsram_view_;
+            byte_memory_view regs_view_;
+            registers_impl registers_impl_;
+            plane_a_layer_impl plane_a_;
+
+            std::array<instrumentation::memory_view*, 4> mem_table_{};
+            std::array<instrumentation::debug_layer*, 1> layer_table_{};
+        };
 
         // ---- register-field decode ----
         [[nodiscard]] bool hint_enabled() const noexcept { return (reg_[0] & 0x10U) != 0U; }
@@ -338,7 +411,7 @@ namespace mnemos::chips::video {
         bool last_in_vblank_{};
 
         std::array<register_descriptor, 16> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::video

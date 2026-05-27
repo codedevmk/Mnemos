@@ -24,6 +24,7 @@ if(BUILD_TESTING)
             tests/chip_registry_test.cpp
             tests/state_test.cpp
             tests/iec_bus_test.cpp
+            tests/introspection_views_test.cpp
         LIBRARIES mnemos::chips::shared
     )
 endif()

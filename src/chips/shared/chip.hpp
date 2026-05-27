@@ -1,18 +1,10 @@
 #pragma once
 
+#include "introspection_views.hpp"
+
 #include <cstdint>
 #include <span>
 #include <string_view>
-
-namespace mnemos::instrumentation {
-    class ichip_introspection {
-      public:
-        ichip_introspection() = default;
-        ichip_introspection(const ichip_introspection&) = delete;
-        ichip_introspection& operator=(const ichip_introspection&) = delete;
-        virtual ~ichip_introspection() = default;
-    };
-} // namespace mnemos::instrumentation
 
 namespace mnemos::chips {
 
