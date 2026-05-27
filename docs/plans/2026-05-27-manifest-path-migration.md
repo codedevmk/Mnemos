@@ -25,6 +25,50 @@
 
 ---
 
+## Rationale — manifest vs adapter, honest trade-offs
+
+This migration is a bet. It's defensible, but not free. Both paths now exist in tree; this section captures the comparison so future maintainers can re-evaluate as the roster evolves.
+
+### Where the manifest path wins
+
+- **System as data, not code.** `sms.ntsc.toml` (90 lines) answers "what chips, where, with what wiring" in 30 seconds of reading. `assemble_sms()` (214 lines of imperative C++) takes 5+ minutes for the same question.
+- **Uniform schema across systems.** Adapters invent per-system initialization patterns (Genesis sets `set_irq_ack_callback` / `set_tas_callback` / `set_z80_bus_latency_enabled` via direct method calls; C64 wires its PLA differently; Saturn would be different again). Manifests fix the *vocabulary*: every system uses the same 5–6 constructs (`[chip.config]`, `[[bus]]`, `[[bus.region]]`, `[[gate]]`, `[[mmio_block]]`, callback IDs). A reader who learns one manifest reads all of them.
+- **Tooling becomes possible.** Once systems are TOML, validators, diagram generators, schema documentation, machine-readable catalogues, and fuzzers can operate without a C++ link. None of these exist today; the cost of building them once data is structured is low.
+- **Variants without code duplication.** PAL vs NTSC SMS is one config bit (`[chip.config] pal = true`). Adapters typically branch in code or add a parallel assembler per regional variant.
+- **Scale break-even.** For 1–3 systems the adapter path is simpler (fewer moving parts, direct field access). For 9+ systems the shared builder amortises across them and the per-system cost collapses to one TOML + one small callbacks helper. The target roster (SMS, Genesis, 32X, Sega CD, Saturn, C64, Amiga, CPS1, CPS2) puts this squarely past the break-even.
+
+### Where the manifest path costs
+
+- **More lines, not fewer, per system.** B.1.4's `sms_callbacks.cpp` (200 LOC of closures) + `sms.ntsc.toml` (90 LOC) + each chip's `configure()` consumer is *more* code than `assemble_sms` (214 LOC). The win isn't density; it's that the structure is *uniform across systems*.
+- **Indirection complicates debugging.** Stack traces traverse `build_system → chip.configure → find_callback<Sig> → variant access → captured `state*` → state.cpu->set_irq_line()`. The adapter path's call chain is `assemble_sms → bus.map_mmio(...) → lambda → cpu.set_irq_line()`. Three more layers in every fired callback. The TOML itself never appears in a stack trace.
+- **Chicken-and-egg with chip pointers.** Closures need chip pointers; chips are constructed *by* `build_system`. Today's workaround is `sms_callbacks_state` with pointers populated after the build returns. Adapters dodge this because chips are value-owned and addressable from the host directly.
+- **Schema churn fan-out.** A new chip config knob touches three sites: the TOML, the parser, the chip's `configure()`. Adapters touch one site (the call). For stable systems gaining a new tweak, adapter wins; for new systems with many tweaks, manifest wins.
+- **Callbacks are `std::function` on hot paths.** Adapter lambdas can be captured by reference into the bus; manifest callbacks go through type-erased variant lookup. The bus_bench measured `std::function` at ~0.2 ns/call — negligible — but it's measurable and the adapter path doesn't have it.
+
+### Realised vs future benefits
+
+| Benefit | Today (post-B.1) | Roster fully populated |
+|---|---|---|
+| Reading "what's a Genesis" from TOML | partial (SMS) | yes |
+| Uniform schema across systems | partial | yes |
+| Adding a new system | n/a | TOML + callbacks ~1 day |
+| Variants via config | yes | yes |
+| External tooling | nothing built | possible |
+| Hot-swap systems | no | could be added |
+| Mod support | no | could be added |
+
+### Honest verdict
+
+If Mnemos were ever going to be a 3-system project forever (SMS + Genesis + C64), the manifest path's indirection cost would exceed its benefit and `build_system()` would be deletable dead code. Adapter path keeps it simple.
+
+The migration is justified *because the roster is ambitious*. Nine systems including multi-CPU machines means the alternative is 9 hand-written assemblers totalling ~2500 LOC of subtly-different wiring patterns. The manifest path collapses that into 9 TOMLs + 9 small helpers on top of one shared builder. The real payoff is **cross-system uniformity**, not line count or runtime mechanism.
+
+A new contributor 6 months from now sees `genesis_callbacks.cpp`, `sms_callbacks.cpp`, `c64_callbacks.cpp`, `amiga_callbacks.cpp` — same shape, same vocabulary. Today's parallel-but-different `assemble_*()` files don't have that property.
+
+That's the bet.
+
+---
+
 ## Pre-Phase Decisions (block all coding until resolved)
 
 These five design choices fundamentally shape the rest of the plan. Walk through them with the user before any code lands.
