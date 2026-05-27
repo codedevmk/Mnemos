@@ -15,6 +15,7 @@
 #include "rom_loader.hpp"
 #include "sms_adapter.hpp"
 #include "sms_region.hpp"
+#include "system_family.hpp"
 #include "text_overlay.hpp"
 
 #include <SDL3/SDL.h>
@@ -144,24 +145,6 @@ namespace {
         return out.good();
     }
 
-    enum class system_family { genesis, sms };
-
-    // .sms / .sg -> SMS; everything else (.md, .gen, .smd, .bin, .68k, none) -> Genesis.
-    [[nodiscard]] system_family detect_family(const std::string& path) noexcept {
-        const auto dot = path.find_last_of('.');
-        if (dot == std::string::npos) {
-            return system_family::genesis;
-        }
-        std::string ext = path.substr(dot + 1);
-        for (char& c : ext) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
-        if (ext == "sms" || ext == "sg") {
-            return system_family::sms;
-        }
-        return system_family::genesis;
-    }
-
     struct dst_rect {
         int x{}, y{}, w{}, h{};
     };
@@ -190,12 +173,15 @@ namespace {
 
 int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::clean_rom_name;
+    using mnemos::apps::player::adapters::detect_family;
+    using mnemos::apps::player::adapters::family_label;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::read_file;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
+    using mnemos::apps::player::adapters::system_family;
 
     const auto rom_path = parse_rom_arg(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
@@ -214,12 +200,12 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         const auto family = detect_family(*rom_path);
-        const char* family_name = family == system_family::sms ? "SMS" : "Genesis";
         const auto market = family == system_family::sms
                                 ? mnemos::manifests::sms::parse_market(*bytes)
                                 : mnemos::manifests::genesis::parse_market(*bytes);
         const auto video = resolve_video(mnemos::default_video_for(market));
-        std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_name,
+        std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n",
+                     family_label(family),
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
 

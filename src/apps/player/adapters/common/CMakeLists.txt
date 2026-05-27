@@ -3,6 +3,7 @@ add_library(
     cli_args.cpp
     region_args.cpp
     rom_loader.cpp
+    system_family.cpp
 )
 add_library(
     mnemos::apps::player::adapters::common
@@ -37,6 +38,7 @@ if(BUILD_TESTING)
             tests/cli_args_test.cpp
             tests/region_args_test.cpp
             tests/rom_loader_test.cpp
+            tests/system_family_test.cpp
         LIBRARIES mnemos::apps::player::adapters::common
     )
 endif()
