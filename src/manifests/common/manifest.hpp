@@ -68,6 +68,17 @@ namespace mnemos::manifests {
         std::string predicate; // key into the host-supplied predicate_table
     };
 
+    // System-specific MMIO escape: the host registers an mmio_factory by name;
+    // the manifest references it via `[[mmio_block]]`. Used for stateful MMIO
+    // regions that don't fit the chip-MMIO-window, mapper-overlay, or RAM/ROM
+    // models -- Genesis controller-port block at $A10000-$A1001F, Z80 BUSREQ
+    // at $A11100, etc.
+    struct mmio_block_decl final {
+        std::string name;          // key into the host-supplied mmio_factory_table
+        std::string attached_bus;  // matches an existing bus_decl.id
+        address_range range;
+    };
+
     struct manifest final {
         std::string schema;
         std::string id;
@@ -78,6 +89,7 @@ namespace mnemos::manifests {
         std::vector<chip_decl> chips;
         std::vector<bus_decl> buses;
         std::vector<gate_decl> gates;
+        std::vector<mmio_block_decl> mmio_blocks;
     };
 
     // One validation/parse failure, located in the source where possible.

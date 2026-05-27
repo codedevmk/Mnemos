@@ -381,6 +381,96 @@ backing = "mapper"
     CHECK(found);
 }
 
+TEST_CASE("build_system wires [[mmio_block]] entries to host-supplied factories") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.mmio_block"
+[clock]
+master_hz = 1
+[[bus]]
+id = "main"
+address_bits = 24
+[[mmio_block]]
+name = "test.io_controller"
+attached_bus = "main"
+range = "0xA10000-0xA1001F"
+)toml";
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+
+    unsigned read_calls = 0;
+    unsigned write_calls = 0;
+    std::uint32_t last_read{};
+    std::uint32_t last_write_addr{};
+    std::uint8_t last_write_value{};
+    std::uint32_t captured_base{};
+    std::uint32_t captured_size{};
+
+    mnemos::manifests::mmio_factory_table factories;
+    factories.emplace("test.io_controller", [&](std::uint32_t base,
+                                                std::uint32_t size) {
+        captured_base = base;
+        captured_size = size;
+        return mnemos::chips::mmio_handlers{
+            .on_read = [&, base](std::uint32_t address) -> std::uint8_t {
+                ++read_calls;
+                last_read = address;
+                return static_cast<std::uint8_t>((address - base) & 0xFFU);
+            },
+            .on_write = [&](std::uint32_t address, std::uint8_t value) {
+                ++write_calls;
+                last_write_addr = address;
+                last_write_value = value;
+            },
+        };
+    });
+
+    auto built = build_system(*parsed.value, no_roms, {}, {}, factories);
+    REQUIRE(built.ok());
+    CHECK(captured_base == 0xA10000U);
+    CHECK(captured_size == 0x20U);
+
+    auto* bus = built.value->bus("main");
+    REQUIRE(bus != nullptr);
+    CHECK(bus->read8(0xA10003U) == 0x03U);
+    CHECK(read_calls == 1U);
+    CHECK(last_read == 0xA10003U);
+
+    bus->write8(0xA10011U, 0x42U);
+    CHECK(write_calls == 1U);
+    CHECK(last_write_addr == 0xA10011U);
+    CHECK(last_write_value == 0x42U);
+}
+
+TEST_CASE("build_system reports an unregistered mmio_block factory name") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.mmio_block.bad"
+[clock]
+master_hz = 1
+[[bus]]
+id = "main"
+address_bits = 16
+[[mmio_block]]
+name = "test.absent_factory"
+attached_bus = "main"
+range = "0x8000-0x8FFF"
+)toml";
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+    const auto built = build_system(*parsed.value, no_roms);
+    CHECK_FALSE(built.ok());
+    bool found = false;
+    for (const auto& d : built.errors) {
+        if (d.message.find("no host-registered factory") != std::string::npos) {
+            found = true;
+        }
+    }
+    CHECK(found);
+}
+
 TEST_CASE("build_system reports an unknown gate predicate") {
     const std::string text = R"toml(
 [manifest]

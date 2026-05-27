@@ -251,6 +251,41 @@ namespace mnemos::manifests {
             }
         }
 
+        // Optional [[mmio_block]] entries: each names a host-supplied MMIO
+        // factory + the bus to bind it onto + an address range. The builder
+        // resolves the factory through mmio_factory_table at build time.
+        if (const toml::array* blocks = root["mmio_block"].as_array()) {
+            for (const toml::node& el : *blocks) {
+                const toml::table* b = el.as_table();
+                if (b == nullptr) {
+                    report("[[mmio_block]] entry is not a table", &el);
+                    continue;
+                }
+                mmio_block_decl mb;
+                mb.name = (*b)["name"].value_or(std::string{});
+                mb.attached_bus = (*b)["attached_bus"].value_or(std::string{});
+                if (mb.name.empty()) {
+                    report("mmio_block.name is required", b);
+                }
+                if (mb.attached_bus.empty()) {
+                    report("mmio_block.attached_bus is required", b);
+                }
+                if (const auto rs = (*b)["range"].value<std::string>()) {
+                    if (const auto r = parse_range(*rs)) {
+                        mb.range = *r;
+                    } else {
+                        report("mmio_block.range is invalid: " + *rs,
+                               (*b)["range"].node());
+                    }
+                } else {
+                    report("mmio_block.range is required", b);
+                }
+                if (!mb.name.empty() && !mb.attached_bus.empty()) {
+                    m.mmio_blocks.push_back(std::move(mb));
+                }
+            }
+        }
+
         // Optional [[gate]] entries: each names a chip and a predicate the
         // builder will resolve through the host-supplied predicate_table.
         if (const toml::array* gates = root["gate"].as_array()) {

@@ -4,6 +4,7 @@
 
 #include "bus.hpp"
 #include "chip.hpp"
+#include "mmio_factory.hpp"
 #include "predicates.hpp"
 
 #include <cstdint>
@@ -33,6 +34,12 @@ namespace mnemos::manifests {
     // as long as the manifest has no gates; a manifest gate referencing a
     // missing predicate produces a build-time diagnostic.
     using predicate_table = chips::predicate_table;
+
+    // Host-supplied named-factory registry for system-specific MMIO blocks
+    // declared via `[[mmio_block]]`. The builder calls each factory with the
+    // block's base + size and binds the returned read/write handler pair
+    // onto the named bus.
+    using mmio_factory_table = chips::mmio_factory_table;
 
     // The instantiated machine: chips created from the manifest, the buses they
     // attach to, and the owned RAM/ROM storage the bus regions point into.
@@ -85,6 +92,7 @@ namespace mnemos::manifests {
     // queries hit the right type.
     [[nodiscard]] build_result build_system(const manifest& m, const rom_provider& roms,
                                             const callback_table& callbacks = {},
-                                            const predicate_table& predicates = {});
+                                            const predicate_table& predicates = {},
+                                            const mmio_factory_table& mmio_factories = {});
 
 } // namespace mnemos::manifests

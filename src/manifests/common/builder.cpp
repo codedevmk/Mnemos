@@ -28,7 +28,8 @@ namespace mnemos::manifests {
 
     build_result build_system(const manifest& m, const rom_provider& roms,
                               const callback_table& callbacks,
-                              const predicate_table& predicates) {
+                              const predicate_table& predicates,
+                              const mmio_factory_table& mmio_factories) {
         build_result out;
         system_graph graph;
         auto& errs = out.errors;
@@ -187,6 +188,30 @@ namespace mnemos::manifests {
                 [mapper](std::uint32_t address, bool is_write) {
                     return mapper->overlay_active(address, is_write);
                 });
+        }
+
+        // [[mmio_block]] entries: resolve each named factory through the
+        // host-supplied mmio_factory_table and bind its returned handler pair
+        // onto the named bus. Priority 2 matches chip-MMIO-window placement
+        // (above RAM/ROM, below any higher-priority mapper overlays).
+        for (const mmio_block_decl& mb : m.mmio_blocks) {
+            const auto bus_it = graph.bus_by_id.find(mb.attached_bus);
+            if (bus_it == graph.bus_by_id.end()) {
+                report("mmio_block '" + mb.name + "': attached_bus '" + mb.attached_bus +
+                       "' not found");
+                continue;
+            }
+            const auto factory_it = mmio_factories.find(mb.name);
+            if (factory_it == mmio_factories.end()) {
+                report("mmio_block '" + mb.name +
+                       "' has no host-registered factory");
+                continue;
+            }
+            const std::uint32_t size = mb.range.end - mb.range.start + 1U;
+            auto handlers = factory_it->second(mb.range.start, size);
+            bus_it->second->map_mmio(mb.range.start, size,
+                                     std::move(handlers.on_read),
+                                     std::move(handlers.on_write), 2);
         }
 
         // Gates: wrap any chip named in a [[gate]] entry with gated_chip
