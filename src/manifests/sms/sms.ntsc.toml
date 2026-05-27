@@ -1,10 +1,14 @@
-# Sega Master System (NTSC) — Mnemos system manifest (schema mnemos-manifest/1).
+# Sega Master System (NTSC) -- Mnemos system manifest (schema mnemos-manifest/1).
 #
-# Identifies the machine for the headless runner; the cartridge image is supplied
-# at run time with --cart (it is the game, not a fixed system ROM), so this
-# manifest declares no rom-backed regions. The runner derives the region (NTSC vs
-# PAL) from this manifest's id. The concrete memory map + I/O routing live in
-# manifests::sms::assemble_sms.
+# Describes the SMS-NTSC platform with the Sega cartridge mapper. The runner
+# supplies the cartridge image at run time via --cart (it's the game, not a
+# fixed system ROM), so this manifest declares no rom-backed regions. A
+# Codemasters-mapper variant lives in sms.ntsc.codemasters.toml (TBD); the
+# adapter picks between them per cart-header detection.
+#
+# Inter-chip wiring lives in `manifests::sms::sms_callbacks` (host-side glue
+# that registers the named callbacks + mmio_factories the manifest references
+# below).
 
 [manifest]
 schema       = "mnemos-manifest/1"
@@ -25,11 +29,21 @@ master_to_video_divider = 1
 id           = "cpu"
 type         = "zilog.z80"
 attached_bus = "main"
+[chip.config]
+# Z80 IN/OUT space is dispatched by the host: $00-$3F = I/O control;
+# $40-$7F = PSG write / V-counter+H-counter read; $80-$BF = VDP ctrl/data;
+# $C0-$FF = controller pads ($DC/$DD).
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
 
 [[chip]]
 id           = "video"
 type         = "sega.sms_vdp"
 attached_bus = "main"
+[chip.config]
+# /INT line: ORed into the Z80 IRQ. The callback observes the edge; it
+# queries irq_asserted() and updates the Z80's IRQ line.
+irq_callback = "sms.vdp_irq"
 
 [[chip]]
 id           = "audio"
@@ -48,13 +62,31 @@ id           = "main"
 address_bits = 16
 endianness   = "little"
 
+# Cartridge window: $0000-$BFFF routed through the Sega mapper's overlay
+# surface. The mapper resolves the active bank from its control registers
+# (at $FFFC-$FFFF, see mmio_block below) and returns the underlying ROM /
+# cart RAM byte.
 [[bus.region]]
-name    = "cartridge"
-range   = "0x0000-0xBFFF"
-backing = "mapper"
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
 
+# Work RAM: 8 KiB at $C000-$DFFF, mirrored at $E000-$FFFF (A13 is
+# unconnected on the SMS). The builder's `size < span_size` mirror path
+# maps the same 8 KiB buffer at $C000 and $E000.
 [[bus.region]]
 name    = "work_ram"
-range   = "0xC000-0xDFFF"
+range   = "0xC000-0xFFFF"
 backing = "ram"
 size    = 8192
+
+# Sega-mapper register overlay at $FFFC-$FFFF: bus writes here go to RAM
+# (the mapped RAM region above gets the byte) AND also update the mapper's
+# bank registers via write_register(). Reads return the RAM byte beneath.
+# Priority 2 (mmio_block default) wins over the RAM region beneath, so
+# the mmio_block's own handlers do the dual write.
+[[mmio_block]]
+name         = "sms.mapper_register_overlay"
+attached_bus = "main"
+range        = "0xFFFC-0xFFFF"

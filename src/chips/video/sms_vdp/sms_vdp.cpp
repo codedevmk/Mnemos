@@ -467,6 +467,21 @@ namespace mnemos::chips::video {
         return introspection_;
     }
 
+    void sms_vdp::configure(const config_table& cfg, const callback_table& callbacks) {
+        // Region selection: PAL = 313 scanlines / 50 Hz, NTSC = 262 / 60.
+        // The SMS manifest sets `pal = true` for PAL variants; defaults to NTSC.
+        if (const auto v = chips::cfg_bool(cfg, "pal")) {
+            set_pal(*v);
+        }
+        // /INT line callback (typically ORed into the Z80 IRQ on SMS).
+        // Manifest names a void(bool) callback; host registers it.
+        if (const auto id = chips::cfg_string(cfg, "irq_callback")) {
+            if (const auto* fn = chips::find_callback<void(bool)>(callbacks, *id)) {
+                set_irq_callback(*fn);
+            }
+        }
+    }
+
     namespace {
         [[maybe_unused]] const auto sms_vdp_registration =
             register_factory("sega.sms_vdp", chip_class::video, []() -> std::unique_ptr<ichip> {
