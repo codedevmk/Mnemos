@@ -1,5 +1,6 @@
 add_library(
     mnemos_apps_player_adapters_common
+    cli_args.cpp
     region_args.cpp
 )
 add_library(
@@ -31,7 +32,9 @@ mnemos_declare_tier(
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_apps_player_adapters_common_test
-        SOURCES tests/region_args_test.cpp
+        SOURCES
+            tests/cli_args_test.cpp
+            tests/region_args_test.cpp
         LIBRARIES mnemos::apps::player::adapters::common
     )
 endif()

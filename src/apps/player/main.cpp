@@ -5,6 +5,7 @@
 #define SDL_MAIN_HANDLED
 
 #include "chip.hpp"
+#include "cli_args.hpp"
 #include "genesis_adapter.hpp"
 #include "genesis_region.hpp"
 #include "genesis_vdp.hpp"
@@ -53,40 +54,6 @@ namespace {
     constexpr std::uint32_t kOverlayBgColor = 0xFF000000U; // opaque black panel
     constexpr std::uint32_t kOverlayFgColor = 0xFFFFFFFFU; // white text
     constexpr int kOverlayScreenMargin = 8;
-
-    std::optional<std::string> parse_rom_arg(int argc, char* argv[]) {
-        for (int i = 1; i < argc - 1; ++i) {
-            const std::string a = argv[i];
-            if (a == "--rom" || a == "-r") {
-                return std::string{argv[i + 1]};
-            }
-        }
-        return std::nullopt;
-    }
-
-    // --screenshot <path.ppm> --frames N: headless run, dump the resulting
-    // VDP framebuffer as PPM, exit.
-    struct screenshot_request final {
-        std::string path;
-        std::uint64_t frames{};
-    };
-
-    std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]) {
-        std::optional<std::string> path;
-        std::optional<std::uint64_t> frames;
-        for (int i = 1; i < argc - 1; ++i) {
-            const std::string a = argv[i];
-            if (a == "--screenshot") {
-                path = std::string{argv[i + 1]};
-            } else if (a == "--frames") {
-                frames = std::strtoull(argv[i + 1], nullptr, 10);
-            }
-        }
-        if (path && frames) {
-            return screenshot_request{*path, *frames};
-        }
-        return std::nullopt;
-    }
 
     // Genesis CRAM entry (9-bit BGR, 3 bits per channel) -> 0x00RRGGBB.
     std::uint32_t cram_entry_to_rgb(std::uint16_t cram_word) {
@@ -244,6 +211,8 @@ namespace {
 
 int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_region_arg;
+    using mnemos::apps::player::adapters::parse_rom_arg;
+    using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
 
