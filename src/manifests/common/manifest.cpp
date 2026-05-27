@@ -139,6 +139,35 @@ namespace mnemos::manifests {
                         report("chip.mmio_range is invalid: " + *mr, (*c)["mmio_range"].node());
                     }
                 }
+                // Optional [chip.config] sub-table: scalar key->value pairs the
+                // chip's configure() will consume. Use exact type predicates --
+                // toml++'s `.value<T>()` performs lossy conversions (e.g.
+                // int 12 narrows to bool true), which would collide variant
+                // alternatives. Predicates-first keeps each TOML scalar type
+                // in its own config_value bucket.
+                if (const toml::table* cfg = (*c)["config"].as_table()) {
+                    for (const auto& [key, node] : *cfg) {
+                        const std::string key_str{key.str()};
+                        if (node.is_boolean()) {
+                            cd.config.emplace(key_str,
+                                              chips::config_value{*node.value<bool>()});
+                        } else if (node.is_integer()) {
+                            cd.config.emplace(
+                                key_str,
+                                chips::config_value{*node.value<std::int64_t>()});
+                        } else if (node.is_floating_point()) {
+                            cd.config.emplace(
+                                key_str, chips::config_value{*node.value<double>()});
+                        } else if (node.is_string()) {
+                            cd.config.emplace(
+                                key_str,
+                                chips::config_value{*node.value<std::string>()});
+                        } else {
+                            report("chip.config." + key_str + " has unsupported type",
+                                   &node);
+                        }
+                    }
+                }
                 m.chips.push_back(std::move(cd));
             }
         }

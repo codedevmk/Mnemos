@@ -55,6 +55,7 @@ namespace mnemos::chips::video {
         void load_state(state_reader& reader) override;
 
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
+        void configure(const config_table& cfg) override;
 
         // ivideo: frame counter + framebuffer view.
         [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frame_index_; }

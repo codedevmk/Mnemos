@@ -1300,6 +1300,15 @@ namespace mnemos::chips::video {
         return introspection_;
     }
 
+    void genesis_vdp::configure(const config_table& cfg) {
+        // PAL (50 Hz, 313 scanlines) vs NTSC (60 Hz, 262 scanlines). The
+        // Sega Genesis manifest sets `pal = true` for PAL ROMs; defaults to
+        // NTSC.
+        if (const auto v = chips::cfg_bool(cfg, "pal")) {
+            set_pal(*v);
+        }
+    }
+
     std::span<const register_descriptor> genesis_vdp::register_snapshot() noexcept {
         using fmt = register_value_format;
         register_view_[0] = {"MODE1", reg_[0], 8U, fmt::flags};

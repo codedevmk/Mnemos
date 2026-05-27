@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config.hpp"
 #include "introspection_views.hpp"
 
 #include <cstdint>
@@ -85,6 +86,14 @@ namespace mnemos::chips {
         virtual void load_state(state_reader& reader) = 0;
 
         [[nodiscard]] virtual instrumentation::ichip_introspection& introspection() noexcept = 0;
+
+        // Apply per-chip configuration supplied by the manifest builder. The
+        // builder calls this exactly once, AFTER construction and BEFORE
+        // `reset(power_on)`. Chips read the keys they recognize via
+        // `cfg_bool` / `cfg_int` / etc.; unknown keys are silently ignored
+        // (forward-compat for manifests describing options the running
+        // binary doesn't know about yet). Default no-op.
+        virtual void configure(const config_table& /*cfg*/) {}
     };
 
     // Each tier-2 subclass interface below selects the chip's classification

@@ -95,6 +95,9 @@ namespace mnemos::manifests {
                 continue;
             }
             chips::ichip* raw = chip.get();
+            // Apply per-chip config from [chip.config] BEFORE bus attachment +
+            // reset. Chips ignore keys they don't recognize.
+            raw->configure(cd.config);
             graph.chip_by_id.emplace(cd.id, raw);
             graph.chips.push_back(std::move(chip));
 

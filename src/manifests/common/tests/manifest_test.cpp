@@ -101,6 +101,46 @@ TEST_CASE("parse_manifest reports malformed TOML with a source position") {
     CHECK(r.errors[0].line >= 1U);
 }
 
+TEST_CASE("parse_manifest captures [chip.config] scalar values into chip_decl") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "x"
+[clock]
+master_hz = 1
+[[chip]]
+id = "cpu"
+type = "motorola.68000"
+attached_bus = "main"
+[chip.config]
+z80_bus_latency = true
+hint_threshold = 12
+tas_callback = "genesis.tas_suppress"
+fudge = 0.25
+[[bus]]
+id = "main"
+address_bits = 24
+)toml";
+
+    const auto r = parse_manifest(text);
+    REQUIRE(r.ok());
+    REQUIRE(r.value);
+    REQUIRE(r.value->chips.size() == 1U);
+    const auto& cfg = r.value->chips[0].config;
+
+    REQUIRE(cfg.contains("z80_bus_latency"));
+    CHECK(std::get<bool>(cfg.at("z80_bus_latency")) == true);
+
+    REQUIRE(cfg.contains("hint_threshold"));
+    CHECK(std::get<std::int64_t>(cfg.at("hint_threshold")) == 12);
+
+    REQUIRE(cfg.contains("tas_callback"));
+    CHECK(std::get<std::string>(cfg.at("tas_callback")) == "genesis.tas_suppress");
+
+    REQUIRE(cfg.contains("fudge"));
+    CHECK(std::get<double>(cfg.at("fudge")) == 0.25);
+}
+
 TEST_CASE("parse_manifest validates region ranges and rom requirements") {
     const std::string text = R"toml(
 [manifest]

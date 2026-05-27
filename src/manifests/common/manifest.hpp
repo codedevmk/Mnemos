@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.hpp" // chips::config_table
+
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -30,6 +32,10 @@ namespace mnemos::manifests {
         std::string type; // canonical chip-factory id, e.g. "mos.6510"
         std::string attached_bus;
         std::optional<address_range> mmio_range;
+        // Optional [chip.config] table parsed verbatim from the manifest. The
+        // builder passes this to `ichip::configure(config)` after construction,
+        // before `reset(power_on)`. Empty = chip uses its defaults.
+        chips::config_table config{};
     };
 
     struct region_decl final {

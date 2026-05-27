@@ -2321,6 +2321,16 @@ namespace mnemos::chips::cpu {
         return introspection_;
     }
 
+    void m68000::configure(const config_table& cfg) {
+        // Genesis-style Z80-bus access latency: every $A00000-$A0FFFF bus
+        // access on the cycle-accounted path costs one extra CPU cycle. The
+        // Sega Genesis manifest sets `z80_bus_latency = true`; other m68000
+        // systems leave it off (default).
+        if (const auto v = chips::cfg_bool(cfg, "z80_bus_latency")) {
+            z80_bus_latency_enabled_ = *v;
+        }
+    }
+
     std::span<const register_descriptor> m68000::register_snapshot() noexcept {
         using fmt = register_value_format;
         static constexpr std::array<std::string_view, 8> dn = {"D0", "D1", "D2", "D3",
