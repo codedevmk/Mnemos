@@ -21,6 +21,7 @@ target_link_libraries(
         mnemos::manifests::genesis
         mnemos::peripheral::input
         mnemos::runtime
+        mnemos::apps::player::adapters::common
 )
 
 mnemos_apply_common_target_options(mnemos_apps_player_genesis_adapter PUBLIC)
@@ -32,6 +33,7 @@ mnemos_declare_tier(
         mnemos_manifests_genesis
         mnemos_peripheral_input
         mnemos_runtime
+        mnemos_apps_player_adapters_common
 )
 
 if(BUILD_TESTING)

@@ -1,11 +1,20 @@
 #include "genesis_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "audio_resampler.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <utility>
+
+using mnemos::apps::player::adapters::clip_i16;
+using mnemos::apps::player::adapters::kMixerGainOne;
+using mnemos::apps::player::adapters::kMixerGainShift;
+using mnemos::apps::player::adapters::kOutputRate;
+using mnemos::apps::player::adapters::sample_channel_box;
+using mnemos::apps::player::adapters::sample_channel_linear;
+using mnemos::apps::player::adapters::scale_q12;
 
 namespace mnemos::apps::player::adapters::genesis {
 
@@ -24,86 +33,11 @@ namespace mnemos::apps::player::adapters::genesis {
             };
         }
 
-        constexpr int kMixerGainShift = 12;
-        constexpr int kMixerGainOne = 1 << kMixerGainShift;
+        // Genesis-specific mixer gains. The system-agnostic DSP helpers
+        // (clip_i16, scale_q12, sample_channel_*) live in adapters/common.
         // 3:1 (~9.5 dB) FM bias.
         constexpr int kGainFm = 3072;
         constexpr int kGainPsg = 1024;
-        constexpr std::uint32_t kOutputRate = 48000U;
-
-        [[nodiscard]] inline std::int16_t clip_i16(int v) noexcept {
-            if (v > 32767) {
-                return 32767;
-            }
-            if (v < -32768) {
-                return -32768;
-            }
-            return static_cast<std::int16_t>(v);
-        }
-
-        [[nodiscard]] inline int scale_q12(int sample, int gain_q12) noexcept {
-            int scaled = sample * gain_q12;
-            scaled += scaled >= 0 ? (kMixerGainOne / 2) : -(kMixerGainOne / 2);
-            return scaled / kMixerGainOne;
-        }
-
-        [[nodiscard]] inline int sample_channel_linear(const std::int16_t* src, int stride,
-                                                       int channel, int src_count,
-                                                       double pos) noexcept {
-            if (!src || src_count <= 0) {
-                return 0;
-            }
-            if (src_count == 1 || pos <= 0.0) {
-                return src[channel];
-            }
-            int left_index = static_cast<int>(pos);
-            if (left_index >= src_count - 1) {
-                return src[(src_count - 1) * stride + channel];
-            }
-            int right_index = left_index + 1;
-            double frac = pos - static_cast<double>(left_index);
-            double a = static_cast<double>(src[left_index * stride + channel]);
-            double b = static_cast<double>(src[right_index * stride + channel]);
-            return static_cast<int>(a + (b - a) * frac);
-        }
-
-        [[nodiscard]] inline int sample_channel_box(const std::int16_t* src, int stride,
-                                                    int channel, int src_count, double start,
-                                                    double end) noexcept {
-            if (!src || src_count <= 0) {
-                return 0;
-            }
-            if (end <= start) {
-                return sample_channel_linear(src, stride, channel, src_count, start);
-            }
-            if (start < 0.0) {
-                start = 0.0;
-            }
-            if (end > static_cast<double>(src_count)) {
-                end = static_cast<double>(src_count);
-            }
-            int first = static_cast<int>(start);
-            int last = static_cast<int>(end);
-            if (last >= src_count) {
-                last = src_count - 1;
-            }
-            double accum = 0.0;
-            double total = 0.0;
-            for (int i = first; i <= last; ++i) {
-                double seg_start = start > static_cast<double>(i) ? start : static_cast<double>(i);
-                double seg_end = end < static_cast<double>(i + 1) ? end : static_cast<double>(i + 1);
-                double w = seg_end - seg_start;
-                if (w <= 0.0) {
-                    continue;
-                }
-                accum += static_cast<double>(src[i * stride + channel]) * w;
-                total += w;
-            }
-            if (total <= 0.0) {
-                return sample_channel_linear(src, stride, channel, src_count, start);
-            }
-            return static_cast<int>(accum / total);
-        }
 
         // Mix FM (stereo) + PSG (mono) into dst at dst_count samples, both
         // resampled from their respective source rates to the same target.

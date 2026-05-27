@@ -39,6 +39,7 @@ if(BUILD_TESTING)
             tests/region_args_test.cpp
             tests/rom_loader_test.cpp
             tests/system_family_test.cpp
+            tests/audio_resampler_test.cpp
         LIBRARIES mnemos::apps::player::adapters::common
     )
 endif()

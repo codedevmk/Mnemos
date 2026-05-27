@@ -1,11 +1,19 @@
 #include "sms_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "audio_resampler.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <utility>
+
+using mnemos::apps::player::adapters::clip_i16;
+using mnemos::apps::player::adapters::kMixerGainOne;
+using mnemos::apps::player::adapters::kMixerGainShift;
+using mnemos::apps::player::adapters::kOutputRate;
+using mnemos::apps::player::adapters::sample_channel_box;
+using mnemos::apps::player::adapters::scale_q12;
 
 namespace mnemos::apps::player::adapters::sms {
 
@@ -23,72 +31,9 @@ namespace mnemos::apps::player::adapters::sms {
             };
         }
 
-        constexpr int kMixerGainShift = 12;
-        constexpr int kMixerGainOne = 1 << kMixerGainShift;
+        // SMS-only PSG gain. The system-agnostic DSP helpers (clip_i16,
+        // scale_q12, sample_channel_*) live in adapters/common.
         constexpr int kGainPsg = kMixerGainOne;
-        constexpr std::uint32_t kOutputRate = 48000U;
-
-        [[nodiscard]] inline std::int16_t clip_i16(int v) noexcept {
-            if (v > 32767) {
-                return 32767;
-            }
-            if (v < -32768) {
-                return -32768;
-            }
-            return static_cast<std::int16_t>(v);
-        }
-
-        [[nodiscard]] inline int scale_q12(int sample, int gain_q12) noexcept {
-            int scaled = sample * gain_q12;
-            scaled += scaled >= 0 ? (kMixerGainOne / 2) : -(kMixerGainOne / 2);
-            return scaled / kMixerGainOne;
-        }
-
-        // Box-average [start, end) of src into one output sample.
-        [[nodiscard]] inline int sample_box(const std::int16_t* src, int src_count, double start,
-                                            double end) noexcept {
-            if (!src || src_count <= 0) {
-                return 0;
-            }
-            if (start < 0.0) {
-                start = 0.0;
-            }
-            if (end > static_cast<double>(src_count)) {
-                end = static_cast<double>(src_count);
-            }
-            if (end <= start) {
-                int idx = static_cast<int>(start);
-                if (idx >= src_count) {
-                    idx = src_count - 1;
-                }
-                if (idx < 0) {
-                    idx = 0;
-                }
-                return src[idx];
-            }
-            int first = static_cast<int>(start);
-            int last = static_cast<int>(end);
-            if (last >= src_count) {
-                last = src_count - 1;
-            }
-            double accum = 0.0;
-            double total = 0.0;
-            for (int i = first; i <= last; ++i) {
-                double seg_start = start > static_cast<double>(i) ? start : static_cast<double>(i);
-                double seg_end =
-                    end < static_cast<double>(i + 1) ? end : static_cast<double>(i + 1);
-                double w = seg_end - seg_start;
-                if (w <= 0.0) {
-                    continue;
-                }
-                accum += static_cast<double>(src[i]) * w;
-                total += w;
-            }
-            if (total <= 0.0) {
-                return src[first];
-            }
-            return static_cast<int>(accum / total);
-        }
 
         runtime::scheduler make_scheduler(frontend_sdk::scheduler_factory* factory,
                                           std::vector<runtime::scheduled_chip> chips,
@@ -174,8 +119,9 @@ namespace mnemos::apps::player::adapters::sms {
         const double psg_scale =
             static_cast<double>(psg_count) / static_cast<double>(dst_pairs);
         for (int i = 0; i < dst_pairs; ++i) {
-            const int s = sample_box(psg_buf_.data(), static_cast<int>(psg_count),
-                                     psg_scale * i, psg_scale * (i + 1));
+            const int s = sample_channel_box(psg_buf_.data(), 1, 0,
+                                             static_cast<int>(psg_count),
+                                             psg_scale * i, psg_scale * (i + 1));
             const std::int16_t out = clip_i16(scale_q12(s, kGainPsg));
             mix_buf_[i * 2 + 0] = out;
             mix_buf_[i * 2 + 1] = out; // duplicate mono into both stereo lanes
