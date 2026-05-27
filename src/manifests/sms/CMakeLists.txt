@@ -54,4 +54,16 @@ if(BUILD_TESTING)
         SOURCES tests/sms_manifest_path_test.cpp
         LIBRARIES mnemos::manifests::sms mnemos::manifests
     )
+    mnemos_add_test(
+        mnemos_manifests_sms_manifest_parity_test
+        SOURCES tests/sms_manifest_parity_test.cpp
+        LIBRARIES mnemos::manifests::sms mnemos::manifests mnemos::runtime
+    )
+    # Data-gated on MNEMOS_SMS_BIOS=<absolute path>. Catch2 returns 4 from a
+    # SKIP'd case; mark the test so ctest reports "Skipped" rather than
+    # "Failed" when the env var is unset.
+    set_tests_properties(
+        mnemos_manifests_sms_manifest_parity_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
 endif()
