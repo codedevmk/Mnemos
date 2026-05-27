@@ -18,11 +18,13 @@
 //     adapter declares (the frontend hands them to SDL_AudioStream which
 //     resamples to the device rate).
 
-#include "chip.hpp"       // for mnemos::chips::frame_buffer_view
+#include "chip.hpp"       // for mnemos::chips::frame_buffer_view, ichip
 #include "peripheral.hpp" // for mnemos::peripheral::controller_state
 
 #include <cstdint>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mnemos::frontend_sdk {
@@ -97,6 +99,30 @@ namespace mnemos::frontend_sdk {
         // Returns an empty chunk (frame_count == 0) when the adapter has no
         // audio path wired yet -- the frontend handles silence cleanly.
         [[nodiscard]] virtual audio_chunk drain_audio() noexcept = 0;
+
+        // The chips that make up this system, returned in scheduler order so
+        // debug consumers can present a stable view. Each pointer is non-owning
+        // and valid for the lifetime of the player_system. Used by the
+        // --screenshot path and any future debug UI to enumerate state via
+        // `ichip::introspection()` without depending on a concrete adapter
+        // type. Default empty -- adapters override to advertise their chips.
+        [[nodiscard]] virtual std::span<chips::ichip* const> chips() const noexcept {
+            return {};
+        }
+
+        // Convenience: lookup a chip by an adapter-stable id ("cpu", "vdp",
+        // "z80", "sub_cpu", "vdp1", ...). Returns nullptr if the adapter
+        // doesn't advertise that id. Default scans `chips()` for a match on
+        // chip_metadata.part_number -- adapters can override for cheaper / id-
+        // remapped lookup.
+        [[nodiscard]] virtual chips::ichip* chip(std::string_view id) const noexcept {
+            for (chips::ichip* c : chips()) {
+                if (c != nullptr && c->metadata().part_number == id) {
+                    return c;
+                }
+            }
+            return nullptr;
+        }
     };
 
 } // namespace mnemos::frontend_sdk

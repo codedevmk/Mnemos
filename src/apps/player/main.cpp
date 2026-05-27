@@ -6,9 +6,9 @@
 
 #include "chip.hpp"
 #include "cli_args.hpp"
+#include "debug_dump.hpp"
 #include "genesis_adapter.hpp"
 #include "genesis_region.hpp"
-#include "genesis_vdp.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
@@ -56,94 +56,6 @@ namespace {
     constexpr std::uint32_t kOverlayBgColor = 0xFF000000U; // opaque black panel
     constexpr std::uint32_t kOverlayFgColor = 0xFFFFFFFFU; // white text
     constexpr int kOverlayScreenMargin = 8;
-
-    // Genesis CRAM entry (9-bit BGR, 3 bits per channel) -> 0x00RRGGBB.
-    std::uint32_t cram_entry_to_rgb(std::uint16_t cram_word) {
-        constexpr std::array<std::uint8_t, 8> lut = {0, 36, 73, 109, 146, 182, 219, 255};
-        const std::uint8_t r = lut[(cram_word >> 1) & 0x7];
-        const std::uint8_t g = lut[(cram_word >> 5) & 0x7];
-        const std::uint8_t b = lut[(cram_word >> 9) & 0x7];
-        return (static_cast<std::uint32_t>(r) << 16) | (static_cast<std::uint32_t>(g) << 8) |
-               static_cast<std::uint32_t>(b);
-    }
-
-    int scroll_size_cells(int sz_bits) {
-        constexpr int sizes[4] = {32, 64, 64, 128};
-        return sizes[sz_bits & 3];
-    }
-
-    bool dump_plane_a_ppm(
-        const mnemos::chips::video::genesis_vdp& vdp, const std::string& path) {
-        const int hsz_cells = scroll_size_cells(vdp.reg(16) & 0x03);
-        const int vsz_cells = scroll_size_cells((vdp.reg(16) >> 4) & 0x03);
-        const std::uint32_t nt_base = (static_cast<std::uint32_t>(vdp.reg(2)) & 0x38U) << 10U;
-        const int plane_w = hsz_cells * 8;
-        const int plane_h = vsz_cells * 8;
-        std::vector<std::uint32_t> buf(static_cast<std::size_t>(plane_w) * plane_h, 0U);
-        for (int cy = 0; cy < vsz_cells; ++cy) {
-            for (int cx = 0; cx < hsz_cells; ++cx) {
-                const std::uint32_t nt_offset =
-                    static_cast<std::uint32_t>(cy * hsz_cells + cx) * 2U;
-                const std::uint16_t nt = vdp.vram16(nt_base + nt_offset);
-                const int tile = nt & 0x7FF;
-                const bool hf = ((nt >> 11) & 1) != 0;
-                const bool vf = ((nt >> 12) & 1) != 0;
-                const int pal = (nt >> 13) & 3;
-                // Each tile = 32 bytes (8x8 4bpp); rows are 4 bytes each.
-                for (int fy = 0; fy < 8; ++fy) {
-                    const int row = vf ? (7 - fy) : fy;
-                    for (int fx = 0; fx < 8; ++fx) {
-                        const int col = hf ? (7 - fx) : fx;
-                        const std::uint32_t pat_addr =
-                            static_cast<std::uint32_t>(tile) * 32U + row * 4U + (col / 2);
-                        const std::uint16_t word = vdp.vram16(pat_addr & ~1U);
-                        const std::uint8_t byte = static_cast<std::uint8_t>(
-                            (pat_addr & 1) ? (word & 0xFF) : (word >> 8));
-                        const std::uint8_t color = (col & 1) ? (byte & 0xF) : (byte >> 4);
-                        const std::uint16_t cram = vdp.cram(pal * 16 + color);
-                        const std::uint32_t rgb = color == 0 ? 0U : cram_entry_to_rgb(cram);
-                        buf[(cy * 8 + fy) * plane_w + (cx * 8 + fx)] = rgb;
-                    }
-                }
-            }
-        }
-        std::ofstream out(path, std::ios::binary);
-        if (!out) {
-            return false;
-        }
-        out << "P6\n" << plane_w << " " << plane_h << "\n255\n";
-        for (auto p : buf) {
-            const char rgb[3] = {static_cast<char>((p >> 16) & 0xFF),
-                                 static_cast<char>((p >> 8) & 0xFF),
-                                 static_cast<char>(p & 0xFF)};
-            out.write(rgb, 3);
-        }
-        return out.good();
-    }
-
-    bool dump_framebuffer_ppm(const mnemos::chips::frame_buffer_view& fb,
-                              const std::string& path) {
-        if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
-            return false;
-        }
-        std::ofstream out(path, std::ios::binary);
-        if (!out) {
-            return false;
-        }
-        const std::uint32_t stride = fb.effective_stride();
-        out << "P6\n" << fb.width << " " << fb.height << "\n255\n";
-        for (std::uint32_t y = 0; y < fb.height; ++y) {
-            const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
-            for (std::uint32_t x = 0; x < fb.width; ++x) {
-                const std::uint32_t p = row[x];
-                const char rgb[3] = {static_cast<char>((p >> 16U) & 0xFFU),
-                                     static_cast<char>((p >> 8U) & 0xFFU),
-                                     static_cast<char>(p & 0xFFU)};
-                out.write(rgb, 3);
-            }
-        }
-        return out.good();
-    }
 
     struct dst_rect {
         int x{}, y{}, w{}, h{};
@@ -221,128 +133,36 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Headless path: step --frames, dump PPM, exit. No window, no GPU.
+    // Headless path: step --frames, dump PPM + per-chip sidecars, exit. No
+    // window, no GPU. All system-specific knowledge lives behind player_system
+    // -- the adapter publishes its chip list and each chip's introspection
+    // surface advertises memory views, debug layers, and the CPU trace target.
     if (screenshot) {
         if (!system) {
             std::fprintf(stderr, "--screenshot requires --rom\n");
             return 1;
         }
-        // Per-instruction 68K trace, sibling .68k_trace.csv to the .ppm.
-        // Schema matches the external reference runner so a plain `diff`
-        // between the two CSVs surfaces the first diverging instruction.
-        auto* genesis_for_trace =
-            dynamic_cast<mnemos::apps::player::adapters::genesis::genesis_adapter*>(system.get());
-        std::ofstream trace_out;
         std::uint64_t trace_frame = 0;
-        std::uint64_t trace_inst = 0;
-        if (genesis_for_trace != nullptr) {
-            const std::string trace_path = screenshot->path + ".68k_trace.csv";
-            trace_out.open(trace_path);
-            if (trace_out) {
-                // The last 3 columns are markers for the PREVIOUS
-                // instruction (they describe what just happened to produce
-                // this row's cycles value). r=bus_refresh fired, z=Z80-bus
-                // access count, i=IRQ entered. Used to localise
-                // cycle-accounting drift without guessing from raw deltas.
-                trace_out << "frame,inst,pc,cycles,r,z,i\n";
-                auto* cpu_ptr = &genesis_for_trace->system().cpu;
-                cpu_ptr->diagnostics().set_trace_callback(
-                    [&trace_out, &trace_frame, &trace_inst, cpu_ptr](std::uint32_t pc) {
-                        const auto& src = cpu_ptr->diagnostics().last_cycle_sources();
-                        char buf[96];
-                        std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu,%u,%u,%u\n",
-                                      static_cast<unsigned long long>(trace_frame),
-                                      static_cast<unsigned long long>(trace_inst),
-                                      pc,
-                                      static_cast<unsigned long long>(cpu_ptr->elapsed_cycles()),
-                                      static_cast<unsigned>(src.refresh_fired),
-                                      static_cast<unsigned>(src.z80_bus_accesses),
-                                      static_cast<unsigned>(src.irq_entered));
-                        trace_out << buf;
-                        ++trace_inst;
-                    });
-            }
-        }
+        const std::string trace_path = screenshot->path + ".68k_trace.csv";
+        mnemos::apps::player::trace_csv_session trace(*system, trace_path, trace_frame);
+
         for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
             trace_frame = i + 1U;
             system->step_one_frame();
         }
-        if (genesis_for_trace != nullptr) {
-            genesis_for_trace->system().cpu.diagnostics().set_trace_callback({});
-        }
-        const auto fb = system->current_frame();
-        if (!dump_framebuffer_ppm(fb, screenshot->path)) {
+
+        if (!mnemos::apps::player::dump_screenshot_artifacts(*system, screenshot->path)) {
             std::fprintf(stderr, "could not write screenshot: %s\n", screenshot->path.c_str());
             return 1;
         }
+        const auto fb = system->current_frame();
         std::fprintf(stderr, "[mnemos_player] wrote %s (%ux%u after %llu frames)\n",
                      screenshot->path.c_str(), fb.width, fb.height,
                      static_cast<unsigned long long>(screenshot->frames));
-
-        // Genesis-specific diagnostic dump: plane A + VRAM + 68K work RAM.
-        auto* genesis = dynamic_cast<mnemos::apps::player::adapters::genesis::genesis_adapter*>(
-            system.get());
-        if (genesis != nullptr) {
-            const auto& vdp = genesis->system().vdp;
-            const std::string plane_path = screenshot->path + ".plane_a.ppm";
-            if (dump_plane_a_ppm(vdp, plane_path)) {
-                std::fprintf(stderr, "[mnemos_player] wrote %s (full plane A)\n",
-                             plane_path.c_str());
-            }
-            const std::string vram_path = screenshot->path + ".vram.bin";
-            std::ofstream vout(vram_path, std::ios::binary);
-            if (vout) {
-                for (std::uint32_t a = 0; a < 0x10000U; a += 2) {
-                    const std::uint16_t w = vdp.vram16(a);
-                    const char bytes[2] = {static_cast<char>(w >> 8),
-                                           static_cast<char>(w & 0xFF)};
-                    vout.write(bytes, 2);
-                }
-                std::fprintf(stderr, "[mnemos_player] wrote %s (64KB VRAM)\n",
-                             vram_path.c_str());
-            }
-            const std::string wram_path = screenshot->path + ".wram.bin";
-            std::ofstream wout(wram_path, std::ios::binary);
-            if (wout) {
-                const auto& ram = genesis->system().work_ram;
-                wout.write(reinterpret_cast<const char*>(ram.data()),
-                           static_cast<std::streamsize>(ram.size()));
-                std::fprintf(stderr, "[mnemos_player] wrote %s (64KB 68K work RAM)\n",
-                             wram_path.c_str());
-            }
-            std::fprintf(stderr, "[vdp] regs:");
-            for (int i = 0; i < 24; ++i) {
-                std::fprintf(stderr, " %02d=%02X", i, vdp.reg(i));
-            }
-            std::fprintf(stderr, "\n[vdp] reg10/16 plane-size: HSZ=%d VSZ=%d  "
-                                 "vscroll-mode=%s  hscroll-mode=R0Bbits01=%d\n",
-                         vdp.reg(16) & 0x03, (vdp.reg(16) >> 4) & 0x03,
-                         (vdp.reg(11) & 0x04) ? "per-2-cells" : "full-plane",
-                         vdp.reg(11) & 0x03);
-            std::fprintf(stderr, "[vdp] hscroll-base=$%04X   nameA=$%04X  nameB=$%04X\n",
-                         (vdp.reg(13) & 0x3F) << 10, (vdp.reg(2) & 0x38) << 10,
-                         (vdp.reg(4) & 0x07) << 13);
-            std::fprintf(stderr, "[vdp] vsram[0..3]: %04X %04X %04X %04X  (plane A col 0/1, B col 0/1)\n",
-                         vdp.vsram(0), vdp.vsram(1), vdp.vsram(2), vdp.vsram(3));
-            std::fprintf(stderr, "[vdp] vint_fired=%u  drain=%u  enabled_at_drain=%u\n",
-                         static_cast<unsigned>(vdp.vint_fired_count()),
-                         static_cast<unsigned>(vdp.vint_drain_count()),
-                         static_cast<unsigned>(vdp.vint_enabled_at_drain_count()));
-            // Diagnostic: master clock vs CPU's executed cycles. The diff
-            // is master cycles where the CPU was gated off (= DMA stall
-            // via the cpu_runnable predicate in genesis_system.hpp).
-            std::fprintf(stderr,
-                         "[sched] master=%llu cpu_elapsed*7=%llu dma_stall_master=%lld (%.2f frames)\n",
-                         static_cast<unsigned long long>(genesis_for_trace->scheduler().master_cycle()),
-                         static_cast<unsigned long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7),
-                         static_cast<long long>(genesis_for_trace->scheduler().master_cycle()) -
-                             static_cast<long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7),
-                         static_cast<double>(
-                             static_cast<long long>(genesis_for_trace->scheduler().master_cycle()) -
-                             static_cast<long long>(genesis_for_trace->system().cpu.elapsed_cycles() * 7)) /
-                             896040.0);
-            std::fflush(stderr);
+        if (trace.active()) {
+            std::fprintf(stderr, "[mnemos_player] wrote %s\n", trace_path.c_str());
         }
+        std::fflush(stderr);
         return 0;
     }
 

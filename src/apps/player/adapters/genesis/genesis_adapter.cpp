@@ -161,6 +161,16 @@ namespace mnemos::apps::player::adapters::genesis {
         sys_->fm.enable_audio_capture(true);
         sys_->psg.enable_audio_capture(true);
 
+        // Non-owning chip enumeration in scheduler order; matches build_schedule().
+        // Note: cpu and z80 are exposed directly (not the *_gate wrappers) because
+        // the gates are scheduling-side stalls, not the architectural chips
+        // generic debug tools want to inspect.
+        chip_view_[0] = &sys_->vdp;
+        chip_view_[1] = &sys_->cpu;
+        chip_view_[2] = &sys_->z80;
+        chip_view_[3] = &sys_->fm;
+        chip_view_[4] = &sys_->psg;
+
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = "Genesis"});
         spec_.push_back({.label = "Region",

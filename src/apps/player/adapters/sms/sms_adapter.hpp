@@ -28,6 +28,9 @@ namespace mnemos::apps::player::adapters::sms {
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
+        [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
+            return chip_view_;
+        }
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::sms::sms_system& system() noexcept { return *sys_; }
@@ -35,6 +38,7 @@ namespace mnemos::apps::player::adapters::sms {
 
       private:
         std::unique_ptr<manifests::sms::sms_system> sys_;
+        std::array<chips::ichip*, 3> chip_view_{};
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
         // Video standard the adapter was built for. region() returns the

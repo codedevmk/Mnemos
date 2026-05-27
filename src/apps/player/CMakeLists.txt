@@ -21,6 +21,22 @@ target_include_directories(
 )
 mnemos_apply_common_target_options(mnemos_apps_player_text_overlay PUBLIC)
 
+# System-agnostic debug-dump helpers (--screenshot path). Pulled into its own
+# static lib so the unit test exercises the same code the player binary uses.
+add_library(mnemos_apps_player_debug_dump STATIC debug_dump.cpp)
+add_library(mnemos::apps::player::debug_dump ALIAS mnemos_apps_player_debug_dump)
+target_include_directories(
+    mnemos_apps_player_debug_dump PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
+target_link_libraries(
+    mnemos_apps_player_debug_dump
+    PUBLIC
+        mnemos::frontend_sdk
+        mnemos::chips::shared
+)
+mnemos_apply_common_target_options(mnemos_apps_player_debug_dump PUBLIC)
+
 add_executable(mnemos_player main.cpp)
 
 target_link_libraries(
@@ -32,6 +48,7 @@ target_link_libraries(
         mnemos::apps::player::genesis_adapter
         mnemos::apps::player::sms_adapter
         mnemos::apps::player::text_overlay
+        mnemos::apps::player::debug_dump
 )
 
 # SDL3 headers trip /W4 /WX in some configs; mark them SYSTEM so warnings in
@@ -48,5 +65,10 @@ if(BUILD_TESTING)
         mnemos_apps_player_text_overlay_test
         SOURCES tests/text_overlay_test.cpp
         LIBRARIES mnemos::apps::player::text_overlay
+    )
+    mnemos_add_test(
+        mnemos_apps_player_debug_dump_test
+        SOURCES tests/debug_dump_test.cpp
+        LIBRARIES mnemos::apps::player::debug_dump
     )
 endif()

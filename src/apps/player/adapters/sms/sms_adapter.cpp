@@ -98,6 +98,11 @@ namespace mnemos::apps::player::adapters::sms {
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
         sys_->psg.enable_audio_capture(true);
 
+        // Non-owning chip enumeration in scheduler order; matches build_schedule().
+        chip_view_[0] = &sys_->vdp;
+        chip_view_[1] = &sys_->cpu;
+        chip_view_[2] = &sys_->psg;
+
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = "Master System"});
         spec_.push_back({.label = "Region",
