@@ -49,4 +49,9 @@ if(BUILD_TESTING)
         SOURCES tests/sms_region_test.cpp
         LIBRARIES mnemos::manifests::sms
     )
+    mnemos_add_test(
+        mnemos_manifests_sms_manifest_path_test
+        SOURCES tests/sms_manifest_path_test.cpp
+        LIBRARIES mnemos::manifests::sms mnemos::manifests
+    )
 endif()
