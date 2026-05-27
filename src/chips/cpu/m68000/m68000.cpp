@@ -165,10 +165,9 @@ namespace mnemos::chips::cpu {
 
     // ---- cycle-accounted accesses (one bus cycle = 4 clocks) ----
 
-    // Genesis Z80-bus access latency. When enabled, +1 CPU cycle per access
-    // into the $A00000-$A0FFFF region (Z80 RAM, YM2612, VDP-via-Z80-bus, etc).
-    // Matches the reference's `m68k.cycles += 1 * 7` in core/the reference (z80_read_byte
-    // line 144 / z80_write_byte line 179). See set_z80_bus_latency_enabled().
+    // Genesis Z80-bus access latency. When enabled, +1 CPU cycle (= 7
+    // master clocks) per access into $A00000-$A0FFFF (Z80 RAM, YM2612,
+    // VDP-via-Z80-bus). See set_z80_bus_latency_enabled().
     static constexpr bool is_z80_bus_addr(std::uint32_t a) noexcept {
         return (a & 0xFF0000U) == 0xA00000U;
     }
@@ -1758,19 +1757,12 @@ namespace mnemos::chips::cpu {
         if (irq_ack_) {
             irq_ack_(level); // IACK cycle: let the device clear its interrupt request
         }
-        // 68000 autovectored interrupt total cost is cycle-dependent in
-        // the reference emulator (the reference:1387 m68ki_cycle_interrupts):
-        //   {50, 59, 58, 57, 56, 55, 54, 53, 52, 51} CPU cycles
-        // indexed by (m68k.cycles / MUL) % 10. (the reference's reads/writes during
-        // IRQ entry don't add cycles, so the entire entry cost is this
-        // table value.) Mnemos's bus helpers DO add cycles -- push32 = 8,
-        // push16 = 4, read32 = 8 = 20 total -- so the remaining internal
-        // idle is (table - 20).
-        //
-        // The index uses elapsed_ (cycle count BEFORE this instruction)
-        // since the reference evaluates the table at the end of the entry but its
-        // m68k.cycles hasn't been incremented by the (zero-cost) bus
-        // accesses, matching the value at IRQ-entry start.
+        // Autovectored IRQ entry on the Genesis 68K is cycle-dependent:
+        // total entry cost is {50,59,58,57,56,55,54,53,52,51} CPU cycles
+        // indexed by (cycles / MUL) % 10. Our bus helpers above already
+        // billed 20 cycles (push32 + push16 + read32), so the remaining
+        // internal idle is (table - 20). The index uses elapsed_ (pre-
+        // instruction) -- the table is evaluated at the *start* of entry.
         constexpr int irq_idle[10] = {30, 39, 38, 37, 36, 35, 34, 33, 32, 31};
         cycles_ += irq_idle[static_cast<std::size_t>(elapsed_ % 10U)];
     }
@@ -1826,10 +1818,10 @@ namespace mnemos::chips::cpu {
         // Additive cycle accounting: the calling step_instruction has
         // already added fetch16(4) for the opcode, plus possibly +2 if bus
         // refresh fired this instruction; the word-displacement branch above
-        // adds another fetch16(4) for the displacement. We add ONLY the
-        // handler's internal idle (and push32 for BSR) here, so refresh and
-        // prefetch costs aren't overwritten -- matches the reference where refresh
-        // adds +14 master independently of the instruction's table cost.
+        // adds another fetch16(4) for the displacement. Add ONLY the
+        // handler's internal idle (and push32 for BSR) here so refresh and
+        // prefetch costs aren't overwritten -- refresh stalls bill +14
+        // master independently of the instruction's table cost.
         if (cc == 1) { // BSR (Motorola total = 18 cycles)
             push32(pc_);                          // adds 8 cycles
             pc_ = target;
@@ -2167,18 +2159,16 @@ namespace mnemos::chips::cpu {
 
         if (halted_ || stopped_) {
             last_cycle_sources_ = cycle_sources_;
-            // STOP/HALT: return a single bus-cycle's worth of time without
-            // executing. Account it in elapsed_ so the CPU clock stays in
-            // step with the master clock (matches the reference's m68k_run where
-            // CPU_STOPPED sets m68k.cycles = end_of_frame target before
-            // returning).
+            // STOP/HALT: return one bus cycle's worth of time without
+            // executing. Account it in elapsed_ so the CPU clock keeps in
+            // step with the master clock.
             cycles_ = 4;
             elapsed_ += 4U;
             return 4;
         }
 
-        // Genesis 68K bus DRAM refresh: every 128 68K cycles (896 master),
-        // the bus takes 2 extra cycles. Matches the reference's the reference line 305-309.
+        // Genesis 68K DRAM refresh: every 128 68K cycles (896 master) the
+        // bus takes 2 extra cycles.
         if (elapsed_ >= bus_refresh_due_) {
             cycles_ += 2;
             bus_refresh_due_ = elapsed_ + 128U;
@@ -2203,13 +2193,11 @@ namespace mnemos::chips::cpu {
         elapsed_ += static_cast<std::uint64_t>(cycles_);
         last_cycle_sources_ = cycle_sources_;
 
-        // the reference m68k_set_irq_delay: a V-int-enable-via-MOVE.W flip schedules
-        // the VINT IRQ for ONE INSTRUCTION later than the normal boundary
-        // (the reference:222-247). The counter is 2 when scheduled (set inside
-        // the instruction that triggers it), decrements at the end of each
-        // step_instruction, and only when it hits 0 do we raise irq_level_.
-        // Net effect: the inst that schedules it + ONE MORE inst run
-        // without taking the IRQ; the inst AFTER fires the exception.
+        // V-int-enable-via-MOVE.W schedules the VINT IRQ for one instruction
+        // later. The counter is set to 2 inside the triggering instruction
+        // and decrements at the end of each step_instruction; when it hits
+        // 0, irq_level_ is raised. Net effect: the scheduling instruction
+        // plus ONE more run without the IRQ; the next inst takes it.
         if (delayed_irq_counter_ > 0) {
             --delayed_irq_counter_;
             if (delayed_irq_counter_ == 0) {
@@ -2243,19 +2231,11 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
-        // Initial DRAM refresh phase. Semantically, the reference's m68k_pulse_reset
-        // sets m68k.cycles = 280 master (= 40 CPU cycles for the reset
-        // exception) and refresh_cycles = 896 master (= 128 CPU cycles),
-        // so its first refresh fires 88 CPU cycles into execution. Setting
-        // this to 88 here is the matched value -- but on the BoV trace it
-        // measures slightly *worse* than 62 (88.34% -> 87.95% cycle-exact),
-        // because the global refresh cadence is also misaligned by other
-        // (still-unidentified) cycle-accounting differences, and 62
-        // happens to opportunistically align more refresh events with
-        // the reference's positions. Keeping 62 until the upstream cause of the
-        // refresh-attribution drift at $1B9C/$1B4A is found and fixed,
-        // at which point this should be reset to 88 (the semantically
-        // correct value).
+        // Initial DRAM refresh phase. The semantically correct value
+        // (consistent with the reset-exception cost) is 88 CPU cycles, but
+        // 62 currently yields more refresh-event alignment under a
+        // separate cycle-attribution drift that is not yet root-caused.
+        // Revisit once that drift is closed.
         bus_refresh_due_ = 62U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0

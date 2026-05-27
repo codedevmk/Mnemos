@@ -319,9 +319,8 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         // Per-instruction 68K trace, sibling .68k_trace.csv to the .ppm.
-        // Same schema as our patched reference_runner emits (frame,inst,pc) so a
-        // plain `diff` against the the reference trace surfaces the first diverging
-        // instruction for the BoV cycle-drift hunt.
+        // Schema matches the external reference runner so a plain `diff`
+        // between the two CSVs surfaces the first diverging instruction.
         auto* genesis_for_trace =
             dynamic_cast<mnemos::apps::player::adapters::genesis::genesis_adapter*>(system.get());
         std::ofstream trace_out;
@@ -331,11 +330,11 @@ int main(int argc, char* argv[]) {
             const std::string trace_path = screenshot->path + ".68k_trace.csv";
             trace_out.open(trace_path);
             if (trace_out) {
-                // The last 3 columns are markers for the PREVIOUS instruction
-                // (they describe what just happened to produce this row's
-                // cycles value). r=bus_refresh fired, z=Z80-bus access count,
-                // i=IRQ entered. Used to localise cycle-accounting drift
-                // against the reference without having to guess from raw deltas.
+                // The last 3 columns are markers for the PREVIOUS
+                // instruction (they describe what just happened to produce
+                // this row's cycles value). r=bus_refresh fired, z=Z80-bus
+                // access count, i=IRQ entered. Used to localise
+                // cycle-accounting drift without guessing from raw deltas.
                 trace_out << "frame,inst,pc,cycles,r,z,i\n";
                 auto* cpu_ptr = &genesis_for_trace->system().cpu;
                 cpu_ptr->set_trace_callback(
@@ -420,10 +419,9 @@ int main(int argc, char* argv[]) {
                          static_cast<unsigned>(vdp.vint_fired_count()),
                          static_cast<unsigned>(vdp.vint_drain_count()),
                          static_cast<unsigned>(vdp.vint_enabled_at_drain_count()));
-            // Diagnostic: master clock vs CPU's executed cycles. The diff is
-            // master cycles where the CPU was gated off (= DMA stall via the
-            // cpu_runnable predicate in genesis_system.hpp:116). Matches
-            // the reference's `m68k.cycles = dma_endCycles` semantics.
+            // Diagnostic: master clock vs CPU's executed cycles. The diff
+            // is master cycles where the CPU was gated off (= DMA stall
+            // via the cpu_runnable predicate in genesis_system.hpp).
             std::fprintf(stderr,
                          "[sched] master=%llu cpu_elapsed*7=%llu dma_stall_master=%lld (%.2f frames)\n",
                          static_cast<unsigned long long>(genesis_for_trace->scheduler().master_cycle()),
@@ -560,10 +558,9 @@ int main(int argc, char* argv[]) {
     Uint64 fps_window_start = SDL_GetPerformanceCounter();
     int fps_window_frames = 0;
     int displayed_fps = static_cast<int>(target_fps + 0.5);
-    // Cumulative emulator frame counter -- shown on the HUD so a screenshot
-    // pins down the exact frame number being viewed. Useful for A/B against
-    // the reference or for filing bug reports ("at frame 1247 the credit roll
-    // diverges, here's the screenshot").
+    // Cumulative emulator frame counter -- shown on the HUD so a
+    // screenshot pins down the exact frame being viewed (useful for bug
+    // reports and reference A/Bs).
     std::uint64_t total_frames = 0;
 
     // System-spec line composed once from whatever the adapter publishes

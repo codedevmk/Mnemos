@@ -207,15 +207,13 @@ namespace mnemos::manifests::genesis {
         });
 
         s->vdp.set_irq_callback([s](int level) { s->cpu.set_irq_level(level); });
-        // the reference-style 1-instruction IRQ delay for V-int-enable-via-MOVE.W
-        // writes (see genesis_vdp.cpp set_delayed_irq_callback / m68000.hpp
-        // schedule_delayed_irq). Without this, BoV took IRQ at PC=$1162
-        // (right after the enabling MOVE.W); the reference takes it after the BSR.W
-        // at $1162 finishes, with saved PC = $22E4.
+        // One-instruction IRQ delay for V-int-enable-via-MOVE.W writes.
+        // Wired between the VDP's delayed-IRQ hook and the CPU's delayed-
+        // IRQ scheduler (see set_delayed_irq_callback / schedule_delayed_irq).
         s->vdp.set_delayed_irq_callback(
             [s](int level) { s->cpu.schedule_delayed_irq(level); });
-        // The 68K IACK clears the VDP IRQ request (many V-blank handlers rely
-        // on this instead of acking via the status read).
+        // The 68K IACK clears the VDP IRQ request -- many V-blank handlers
+        // rely on this instead of acking via the status read.
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });
         s->vdp.set_vblank_callback([s](bool in_vblank) {
             s->z80.set_irq_line(in_vblank);
@@ -234,10 +232,9 @@ namespace mnemos::manifests::genesis {
         // memory operand. Empty callback = drop, preserving flag side-effects.
         s->cpu.set_tas_callback([](std::uint32_t /*addr*/) {});
 
-        // 68K access into the Z80 bus area ($A00000-$A0FFFF -- Z80 RAM,
-        // YM2612 ports, PSG-via-bus, VDP-via-bus) costs an extra 1 CPU cycle
-        // (7 master cycles) per access. Matches the reference emulator core/the reference
-        // z80_read_byte/z80_write_byte (`m68k.cycles += 1 * 7`).
+        // 68K accesses into the Z80 bus area ($A00000-$A0FFFF -- Z80 RAM,
+        // YM2612 ports, PSG-via-bus, VDP-via-bus) cost an extra 1 CPU
+        // cycle (7 master cycles) per access.
         s->cpu.set_z80_bus_latency_enabled(true);
 
         // Z80 sound bus ($0000-$FFFF, little-endian).

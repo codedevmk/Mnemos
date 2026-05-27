@@ -101,22 +101,20 @@ namespace mnemos::chips::cpu {
             tas_callback_ = std::move(callback);
         }
 
-        // Per-instruction trace hook (diagnostic; off by default). Fired with
-        // the instruction's PC before any decode -- equivalent to the reference's
-        // HOOK_M68K_E. Used by the player's --screenshot trace dump for
-        // cycle-drift A/B against the reference. Unset = no trace overhead.
+        // Per-instruction trace hook (diagnostic; off by default). Fired
+        // with the instruction's PC BEFORE any decode. Used by the player's
+        // --screenshot trace dump for cycle-drift investigations. Unset =
+        // no trace overhead.
         void set_trace_callback(std::function<void(std::uint32_t pc)> callback) noexcept {
             trace_callback_ = std::move(callback);
         }
 
-        // Cycle-source tags for the LAST completed instruction. Lets a tracer
-        // decompose each instruction's cycle cost into its contributing pieces
-        // (refresh? Z80 bus latency? IRQ entry?) to localise cycle-accounting
-        // drift vs the reference emulator without having to guess from raw deltas.
-        // Populated at the END of step_instruction() with the just-completed
-        // instruction's events. So when a tracer fires its trace_callback at
-        // the START of instruction N (per the the reference HOOK_M68K_E convention),
-        // last_cycle_sources() describes instruction N-1.
+        // Cycle-source tags for the LAST completed instruction. Lets a
+        // tracer decompose each instruction's cycle cost into contributing
+        // pieces (refresh? Z80 bus latency? IRQ entry?). Populated at the
+        // END of step_instruction(). The trace callback above fires at the
+        // START of an instruction, so when it observes instruction N this
+        // accessor still describes instruction N-1.
         struct cycle_sources final {
             std::uint8_t refresh_fired{};   // 0 or 1 (only fires at most once per inst)
             std::uint8_t z80_bus_accesses{};// count of $A0xxxx accesses
@@ -126,23 +124,20 @@ namespace mnemos::chips::cpu {
             return last_cycle_sources_;
         }
 
-        // Genesis Z80-bus access latency. When enabled, every cycle-accounted
-        // bus access into $A00000-$A0FFFF costs an extra 1 CPU cycle (7 master
-        // cycles). This matches the reference emulator's core/the reference z80_read_byte/
-        // z80_write_byte which add `m68k.cycles += 1 * 7` per access. The
-        // Genesis manifest enables this; other m68000 systems leave it off.
+        // Genesis Z80-bus access latency. When enabled, every cycle-
+        // accounted bus access into $A00000-$A0FFFF costs an extra 1 CPU
+        // cycle (7 master cycles). The Genesis manifest enables this;
+        // other m68000 systems leave it off.
         void set_z80_bus_latency_enabled(bool enabled) noexcept {
             z80_bus_latency_enabled_ = enabled;
         }
 
         // Schedule an IRQ to fire ONE INSTRUCTION later than the normal
-        // boundary. This mirrors the reference's m68k_set_irq_delay (the reference:222)
-        // and is the canonical Genesis V-int-enable-via-MOVE.W behaviour:
-        // when reg[1] V-int bit is flipped on while a VINT is latched in
-        // the VDP, the reference finishes the MOVE, executes ONE MORE instruction,
-        // and ONLY THEN raises the IRQ. The saved PC on the IRQ stack is
-        // therefore the PC after that extra instruction (e.g. BoV's
-        // BSR.W $22E4 at $1162 → saved PC = $22E4 not $1162).
+        // boundary. The canonical Genesis V-int-enable-via-MOVE.W path:
+        // when reg[1]'s V-int bit is flipped on while a VINT is latched in
+        // the VDP, the CPU finishes the MOVE, executes ONE MORE
+        // instruction, and ONLY THEN raises the IRQ -- so the saved PC on
+        // the IRQ stack is the PC after that extra instruction.
         //
         // Implementation: VDP calls this from its register-1 write path.
         // The CPU then runs the in-flight + one more step_instruction
@@ -263,17 +258,13 @@ namespace mnemos::chips::cpu {
         // Genesis / Mega Drive 68K bus DRAM refresh tracking. Every 128 68K
         // cycles (= 896 master cycles) the bus takes 2 extra 68K cycles
         // (= 14 master cycles) for DRAM refresh. Checked at the start of
-        // each instruction. This matches the reference emulator's
-        //   if (m68k.cycles >= m68k.refresh_cycles) { ... cycles += 14; }
-        // and is the difference between Mnemos and real Genesis cycle
-        // counts that was causing BoV's inner-loop PC to drift across an
-        // IRQ instruction boundary by frame ~115.
+        // each instruction.
         std::uint64_t bus_refresh_due_{128U};
 
         // Genesis $A00000-$A0FFFF access latency (see set_z80_bus_latency_enabled).
         bool z80_bus_latency_enabled_{false};
 
-        // the reference m68k_set_irq_delay state (see schedule_delayed_irq above).
+        // Delayed-IRQ state (see schedule_delayed_irq above).
         // delayed_irq_counter_ counts step_instruction() invocations until
         // the IRQ should be raised: while > 0 the CPU runs normally without
         // taking the delayed IRQ; on reaching 0, irq_level_ is set to

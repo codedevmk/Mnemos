@@ -49,9 +49,8 @@ namespace {
         0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111,
         0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111, 0x1111};
 
-    // CRAM 7 (max intensity) -> 8-bit per channel via the reference's 16BPP path
-    // (cram_to_rgb): R/B 5-bit precision -> 0xEF, G 6-bit precision -> 0xEF.
-    // Matches the reference libretro framebuffer byte-for-byte.
+    // Max-intensity CRAM channel (3-bit value 7) renders to 0xEF after the
+    // 5:6:5 round-trip in cram_to_rgb (R/B 5-bit, G 6-bit).
     constexpr std::uint32_t rgb_red = 0x00EF0000U;
     constexpr std::uint32_t rgb_green = 0x0000EF00U;
 } // namespace
@@ -176,18 +175,15 @@ TEST_CASE("genesis_vdp raises the V-blank interrupt") {
     vdp.set_irq_callback([&irq_seen](int level) { irq_seen = level; });
     set_reg(vdp, 1, 0x60); // display enable + V-int enable
 
-    // After the reference-aligned reset the VDP is at the VBL entry line; the first
-    // tick of `vbl_lines * mc` drains the prepared VINT delay (770 master)
-    // and raises the IRQ. We don't need to advance through a full
-    // active display first, but a single scanline-worth gets us safely past
-    // the 770-master drain window.
+    // Reset leaves the VDP at the VBL entry line; the first tick drains
+    // the prepared VINT delay (770 master) and raises the IRQ. A single
+    // scanline-worth tick is safely past the drain window.
     vdp.tick(genesis_vdp::master_clocks_per_line);
     CHECK(vdp.pending_irq_level() == 6);
     CHECK(irq_seen == 6);
 
-    // Status read DOES NOT clear the CPU-facing IRQ pending (per the reference
-    // vdp_68k_ctrl_r at the reference:1249-1253 -- only cmd_pending, SOVR
-    // and SCOL are cleared on status read). Only the IACK cycle
+    // Status read must NOT clear the CPU-facing IRQ pending: only
+    // cmd_pending, SOVR and SCOL clear on status read. Only IACK
     // (acknowledge_irq) clears vblank_pending_.
     (void)vdp.read16(0x04);
     CHECK(vdp.pending_irq_level() == 6); // still pending
@@ -243,10 +239,8 @@ TEST_CASE("genesis_vdp HINT counter is held at R10 during V-blank") {
 
 TEST_CASE("genesis_vdp advances the V counter readback") {
     genesis_vdp vdp;
-    // the reference-aligned reset starts at the VBL entry line (= field_height(),
-    // 224 for default H40 mode 5). After 10 scanline ticks, V counter has
-    // advanced to 234. Matches the reference's v_counter = bitmap.viewport.h at
-    // frame start (system.c:489).
+    // Reset starts at the VBL entry line (= field_height(), 224 for
+    // default H40 mode 5). After 10 scanline ticks, V counter is 234.
     CHECK((vdp.read16(0x08) >> 8U) == 224U); // power-on at VBL entry line
     vdp.tick(10U * genesis_vdp::master_clocks_per_line);
     CHECK((vdp.read16(0x08) >> 8U) == 234U);
@@ -274,10 +268,10 @@ TEST_CASE("genesis_vdp round-trips its state") {
     CHECK(restored.reg(15) == 0x02);
 }
 
-    // After the reference-aligned reset the VDP is at the VBL entry line, so the
-    // first 38 (NTSC mode 5 default = 262 - 224 lines) ticks advance through
-    // V-blank without rendering. tick_to_active_line() advances past those
-    // so the first subsequent tick(master_clocks_per_line) renders scanline 0.
+    // Reset leaves the VDP at the VBL entry line, so the first 38 ticks
+    // (NTSC mode 5 = 262 - 224 lines) advance through V-blank without
+    // rendering. After this helper the next master_clocks_per_line tick
+    // renders scanline 0.
     static void tick_to_active_line(genesis_vdp& vdp) {
         constexpr std::uint64_t vbl_lines = 38;
         vdp.tick(vbl_lines * genesis_vdp::master_clocks_per_line);
@@ -312,33 +306,29 @@ TEST_CASE("genesis_vdp fills the backdrop when display is disabled") {
 }
 
 TEST_CASE("genesis_vdp window plane covers full width when V-condition is set") {
-    // Regression for BoV title screen: reg[18] V-condition that covers every
-    // active scanline must render the window plane full-width regardless of
-    // reg[17] H position (matches the reference render_bg_m5 "window takes entire line"
-    // branch). Without this, the window nametable is ignored and the
-    // underlying plane A (with its V-scroll applied) bleeds through.
+    // reg[18] V-condition covering all active lines must render the window
+    // plane full-width regardless of reg[17] H (otherwise plane A with its
+    // V-scroll bleeds through where the window should sit).
     genesis_vdp vdp;
     set_reg(vdp, 1, 0x44);                 // M5 + display enable
     set_reg(vdp, 12, 0x81);                // H40
     set_reg(vdp, 15, 0x02);                // auto-increment 2
-    set_reg(vdp, 2, 0x30);                 // plane A name table = $C000
-    set_reg(vdp, 3, 0x28);                 // window name table = (0x28<<10)&0xF000 = $A000
-    set_reg(vdp, 4, 0x07);                 // plane B name table = $E000 (kept clear)
-    set_reg(vdp, 17, 0x00);                // window H position = 0 (no H window)
-    set_reg(vdp, 18, 0x1C);                // window V covers cells 0..27 (= lines 0..223)
+    set_reg(vdp, 2, 0x30);                 // plane A nametable = $C000
+    set_reg(vdp, 3, 0x28);                 // window nametable  = $A000
+    set_reg(vdp, 4, 0x07);                 // plane B nametable = $E000 (kept clear)
+    set_reg(vdp, 17, 0x00);                // no window H
+    set_reg(vdp, 18, 0x1C);                // window V covers cell rows 0..27 (lines 0..223)
     write_vram(vdp, 0x0020, solid_tile_1); // tile 1 = solid colour index 1
-    write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) -> tile 1 / palette 0 (red)
-    // Window cell (0,0) at $A000 -> tile 1 / palette 1 (green via cram[17]).
-    write_vram(vdp, 0xA000, {0x2001});
+    write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) -> tile 1 / palette 0
+    write_vram(vdp, 0xA000, {0x2001});     // window cell (0,0) -> tile 1 / palette 1
     write_cram(vdp, 1, 0x000E);  // palette 0 colour 1 = max red
     write_cram(vdp, 17, 0x00E0); // palette 1 colour 1 = max green
 
     tick_to_active_line(vdp);
-    vdp.tick(genesis_vdp::master_clocks_per_line); // render scanline 0
+    vdp.tick(genesis_vdp::master_clocks_per_line);
     const auto fb = vdp.framebuffer();
     REQUIRE(fb.pixels != nullptr);
-    // Window's green wins at screen Y=0 X=0 -- not plane A's red.
-    CHECK(fb.pixels[0] == rgb_green);
+    CHECK(fb.pixels[0] == rgb_green); // window wins, not plane A
 }
 
 TEST_CASE("genesis_vdp renders a sprite over the planes") {

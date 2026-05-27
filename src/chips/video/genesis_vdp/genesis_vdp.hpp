@@ -85,11 +85,10 @@ namespace mnemos::chips::video {
         void set_irq_callback(std::function<void(int level)> cb) noexcept {
             irq_callback_ = std::move(cb);
         }
-        // the reference-style one-instruction-delayed IRQ raise (m68k_set_irq_delay).
-        // Set by the Genesis manifest; the VDP calls this when a V-int-enable
-        // register write needs the IRQ to fire AFTER one more CPU
-        // instruction, so the saved PC on the IRQ stack matches the reference
-        // (the post-extra-instruction PC, not the post-MOVE PC).
+        // One-instruction-delayed IRQ raise: the VDP invokes this when a
+        // V-int-enable register write must postpone the IRQ until the CPU
+        // has executed one more instruction, so the IRQ's saved PC points
+        // past that instruction rather than past the enabling MOVE.
         void set_delayed_irq_callback(std::function<void(int level)> cb) noexcept {
             delayed_irq_callback_ = std::move(cb);
         }
@@ -153,8 +152,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t cmd_addr() const noexcept { return cmd_addr_; }
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
-        // Diagnostic: number of rising-edge VINT fires (vblank_pending_ flipped
-        // from false to true). Used to confirm IRQ-raise behaviour vs the reference.
+        // Diagnostic: rising-edge VINT count (vblank_pending_ false->true).
         [[nodiscard]] std::uint32_t vint_fired_count() const noexcept { return vint_fired_count_; }
         [[nodiscard]] std::uint32_t vint_drain_count() const noexcept { return vint_drain_count_; }
         [[nodiscard]] std::uint32_t vint_enabled_at_drain_count() const noexcept { return vint_enabled_at_drain_count_; }
@@ -273,10 +271,9 @@ namespace mnemos::chips::video {
         bool dma_busy_{};
         // Remaining master-clock cycles the VDP's DMA is conceptually still
         // holding the bus. Decremented in tick(); when > 0, the host gates
-        // the 68000 off. ONLY set for 68K-bus DMAs (dma_type 0 and 1 in the reference
-        // terms: 68K->CRAM/VSRAM and 68K->VRAM). VRAM fill and VRAM copy
-        // (types 2 and 3) don't touch the 68K bus -- they run in parallel
-        // with the CPU on real hardware -- so they don't stall it.
+        // the 68000 off. ONLY set for 68K-bus DMAs (types 0 and 1: 68K to
+        // CRAM/VSRAM and 68K to VRAM). VRAM fill and VRAM copy (types 2
+        // and 3) run in parallel with the CPU on real hardware.
         std::int64_t dma_stall_master_cycles_{};
         // Remaining master-clock cycles the DMA-busy *status bit* should
         // stay set. Independent from dma_stall_master_cycles_ because VRAM
@@ -285,7 +282,7 @@ namespace mnemos::chips::video {
         std::int64_t dma_busy_master_cycles_{};
 
         // Master-clock cost of a DMA of `length_units` units against the
-        // current display state. `dma_type` follows the reference's convention:
+        // current display state. `dma_type`:
         //   0 = 68K -> CRAM / VSRAM   (1 access slot per word)
         //   1 = 68K -> VRAM           (2 access slots per word)
         //   2 = VRAM fill             (1 access slot per byte, treated as VRAM)
@@ -314,13 +311,11 @@ namespace mnemos::chips::video {
         // Status + interrupt flags.
         bool vint_happened_{};
 
-        // Master-cycle countdown until VINT pending fires. Real hardware (and
-        // the reference emulator) sets the VBLANK *status flag* at the start of the
-        // VBLANK-entry scanline but delays the actual VINT IRQ assertion to
-        // ~770 (H32) / 788 (H40) master cycles into that line -- the
-        // canonical "VINT_H32_MCYCLE / VINT_H40_MCYCLE" point. Games like
-        // Dracula, OutRunners and VR Troopers depend on the VBLANK-flag-
-        // before-IRQ window. -1 = no delay scheduled.
+        // Master-cycle countdown until VINT pending fires. The VBLANK
+        // status flag goes high at the start of the VBLANK-entry scanline,
+        // but the VINT IRQ itself asserts ~770 (H32) / 788 (H40) master
+        // cycles into that line; several games depend on observing the
+        // status flag before the IRQ. -1 = no delay scheduled.
         std::int64_t vint_pending_delay_master_{-1};
         bool sprite_overflow_{};
         bool sprite_collision_{};

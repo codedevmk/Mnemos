@@ -27,32 +27,22 @@ namespace mnemos::chips::video {
             return sizes[static_cast<std::size_t>(sz_bits) & 3U];
         }
 
-        // the reference-byte-matching CRAM-channel intensity ramp. Genesis CRAM is
-        // native 3-bit per channel; the reference's vdp_render.c MAKE_PIXEL +
-        // USE_16BPP_RENDERING packs intensity into 5:6:5, and reference_runner
-        // expands back to 8-bit-per-channel for the PPM. The 8-bit values
-        // therefore are NOT a clean linear ramp (max white = 239, not 255)
-        // -- the G channel even differs from R/B because it gets 6-bit
-        // precision in the 565 step. We mirror the full round-trip here so
-        // Mnemos's framebuffer A/Bs byte-for-byte against the reference's.
-        //
-        // Three intensity ramps applied BEFORE the 565 packing:
-        //   normal:    v << 1   (0,2,4,6,8,10,12,14)
-        //   shadow:    v        (0..7)
-        //   highlight: v + 7    (7..14)
-        [[nodiscard]] constexpr int reference_intensity(int v3, std::uint8_t shade_mode) noexcept {
-            // shade codes match genesis_vdp::shade_{shadow,normal,highlight}.
-            if (shade_mode == 0 /* shadow */) {
+        // CRAM channel intensity ramp: 3-bit CRAM -> 4-bit per shade mode.
+        //   shadow    -> v       (0..7)
+        //   normal    -> v << 1  (0,2,4,..,14)
+        //   highlight -> v + 7   (7..14)
+        [[nodiscard]] constexpr int channel_intensity(int v3, std::uint8_t shade_mode) noexcept {
+            if (shade_mode == 0) {
                 return v3;
             }
-            if (shade_mode == 2 /* highlight */) {
+            if (shade_mode == 2) {
                 return v3 + 7;
             }
-            return v3 << 1; // normal
+            return v3 << 1;
         }
-        // the reference MAKE_PIXEL (16BPP): R5 = (r<<1)|(r>>3), G6 = (g<<2)|(g>>2),
-        // B5 = (b<<1)|(b>>3). Inputs are 4-bit. reference_runner's 565->888 then
-        // does R8 = (R5<<3)|(R5>>2), G8 = (G6<<2)|(G6>>4), B8 = same as R.
+        // 4-bit channel -> 8-bit through a 5:6:5 round-trip. R and B use 5-bit
+        // precision, G uses 6-bit; this asymmetry is what produces the
+        // observed max-white of 0xEF rather than 0xFF.
         [[nodiscard]] constexpr std::uint8_t pack_rb_8(int v4) noexcept {
             const int five = ((v4 & 0xF) << 1) | ((v4 >> 3) & 1);
             return static_cast<std::uint8_t>((five << 3) | (five >> 2));
@@ -242,41 +232,24 @@ namespace mnemos::chips::video {
                     }
                 }
                 if (reg == 1 && !masked) {
-                    // Mirror the reference's vdp_reg_w register-1 handling
-                    // (the reference:1727-1743): if the V-int-enable bit
-                    // flipped ON while a VINT is latched in the VDP, raise
-                    // the CPU IRQ -- but with a one-instruction LATENCY
-                    // matching the reference's m68k_set_irq_delay (the reference:222).
-                    //
-                    // The game's MOVE that enabled V-int is still in flight
-                    // when we get here; the reference completes it, executes ONE
-                    // MORE instruction, then takes the IRQ. So the saved
-                    // PC on the IRQ stack frame is the PC AFTER that extra
-                    // instruction, not the PC right after the MOVE. This
-                    // matters for BoV: $115A is MOVE.W to VDP control (the
-                    // V-int enable write); $1162 is BSR.W $22E4 (the next
-                    // instruction). the reference takes IRQ with saved PC = $22E4
-                    // (post-BSR), so the ISR's RTE returns there.
+                    // Enabling V-int while a VINT is already latched raises
+                    // the CPU IRQ with a one-instruction latency: the CPU
+                    // completes the enabling MOVE and the next instruction
+                    // before accepting the IRQ, so the saved PC points past
+                    // the post-MOVE instruction.
                     const bool new_vint_en = (reg_[1] & 0x20U) != 0U;
                     const bool old_vint_en = (old & 0x20U) != 0U;
                     if (!old_vint_en && new_vint_en && vint_happened_) {
                         if (delayed_irq_callback_) {
-                            // Take the the reference m68k_set_irq_delay path: the
-                            // CPU runs one more instruction before raising
-                            // irq_level_=6, so the saved PC matches the reference.
-                            // We do NOT set vblank_pending_ here because
-                            // that would cause the next refresh_irq() to
-                            // race the delayed-IRQ mechanism and raise the
-                            // CPU IRQ immediately. The CPU's
-                            // schedule_delayed_irq sets irq_level_ directly
-                            // when the delay completes; vblank_pending_
-                            // stays as-is until the next regular VBL or
-                            // an IACK.
+                            // The CPU's delayed-IRQ path raises irq_level_=6
+                            // directly when the latency window closes; do not
+                            // set vblank_pending_ here, otherwise the next
+                            // refresh_irq() would race and raise the IRQ
+                            // immediately.
                             delayed_irq_callback_(6);
                         } else {
-                            // Fallback: no CPU support for delayed IRQ
-                            // (used by VDP unit tests). Raise immediately
-                            // via the normal pending_irq_level() path.
+                            // No delayed-IRQ wiring (unit-test path). Raise
+                            // immediately via the regular pending route.
                             vblank_pending_ = true;
                             refresh_irq();
                         }
@@ -324,15 +297,11 @@ namespace mnemos::chips::video {
                     dma_copy_step();
                 }
                 dma_busy_ = false;
-                // VRAM copy = dma_type 3 in the reference terms. NOTE: the
-                // theoretically-correct the reference behaviour is "don't stall the
-                // 68K, only hold the dma_busy status bit for the duration"
-                // -- see the [[blades-divergence-state]] memory and the
-                // 2026-05-26 trace investigation. That fix makes BoV's
-                // f=115 divergence visibly *worse*, not better, which means
-                // there's another cycle-accounting bug elsewhere that the
-                // old over-stall accidentally compensated for. Keeping the
-                // legacy stall here until the compensating bug is found.
+                // VRAM-to-VRAM copy (dma_type 3). Hardware-correct behaviour
+                // is "don't stall the 68K, only hold dma_busy for the
+                // duration", but removing the stall here uncovers a
+                // compensating cycle-accounting bug elsewhere -- keep the
+                // legacy stall until that root cause is found.
                 dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 3);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
@@ -352,10 +321,9 @@ namespace mnemos::chips::video {
                     dma_transfer_step(word);
                 }
                 dma_busy_ = false;
-                // 68K -> VDP: dma_type = 0 if target is CRAM/VSRAM (code 3/5),
-                //              dma_type = 1 if target is VRAM (code 1). Both
-                // hold the 68K off the bus for the DMA's duration -- that's
-                // what dma_stall_master_cycles_ models.
+                // 68K -> VDP transfer: target VRAM (code 1) = dma_type 1,
+                // target CRAM/VSRAM (code 3/5) = dma_type 0. Both stall the
+                // 68K bus -- modelled by dma_stall_master_cycles_.
                 const int code_low = cmd_code_ & 0x0F;
                 const int dma_type = (code_low & 0x06) ? 0 : 1;
                 dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, dma_type);
@@ -419,11 +387,8 @@ namespace mnemos::chips::video {
             }
             const std::uint32_t fill_src = dma_src_advance(dma_source() << 1U, len * 2U) >> 1U;
             dma_busy_ = false;
-            // VRAM fill = dma_type 2. Same caveat as the VRAM-copy branch
-            // above: the reference-correct = "no stall, timed busy", but on BoV that
-            // exposes a compensating bug elsewhere. Legacy stall kept until
-            // the cycle drift is properly diagnosed via the lockstep tracer
-            // we now have (see [[blades-divergence-state]]).
+            // VRAM fill (dma_type 2). Same legacy-stall caveat as the
+            // VRAM-copy branch: keep until the cycle drift is diagnosed.
             dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 2);
             reg_[19] = 0U;
             reg_[20] = 0U;
@@ -480,17 +445,10 @@ namespace mnemos::chips::video {
             s |= (1U << 0U);
         }
 
-        // Per the reference's vdp_68k_ctrl_r (the reference:1249-1253), reading the
-        // status register clears ONLY the cmd_pending flag and the
-        // sprite-overflow / sprite-collision status bits. It does NOT clear
-        // vint_happened (the status's VINT bit) or vblank_pending / hblank_pending
-        // (the CPU-facing IRQ-pending flags). Those are cleared by the CPU's
-        // IACK cycle (vdp_68k_irq_ack at the reference:1500). Mnemos used to
-        // clear all three here, which dropped the pending VINT whenever the
-        // game polled the status -- causing the BoV f=115 cliff (BoV reads
-        // status as part of its boot loop with IRQ masked; the pending VINT
-        // was dropped, and BoV had to wait one more frame for VINT to refire
-        // after IPM was lowered, taking the IRQ one frame later than the reference).
+        // Status read clears ONLY cmd_pending, SOVR and SCOL. vint_happened
+        // and the CPU-facing IRQ-pending flags are cleared by the CPU's IACK
+        // cycle -- clearing them here would drop a pending VINT whenever the
+        // game polled status with the IRQ masked.
         cmd_pending_ = false;
         sprite_overflow_ = false;
         sprite_collision_ = false;
@@ -570,17 +528,10 @@ namespace mnemos::chips::video {
     }
 
     std::uint32_t genesis_vdp::cram_to_rgb(std::uint16_t cram_value, std::uint8_t shade) noexcept {
-        // Extract 3-bit channels from CRAM word (layout: 0000 BBB0 GGG0 RRR0).
-        const int cr3 = (cram_value >> 1U) & 7;
-        const int cg3 = (cram_value >> 5U) & 7;
-        const int cb3 = (cram_value >> 9U) & 7;
-        // Apply the reference shade intensity ramp (-> 4-bit) then the reference MAKE_PIXEL +
-        // 565->888 expansion. The G channel uses 6-bit precision, R/B use
-        // 5-bit -- see helper comments above. Matches the reference libretro 16BPP
-        // output byte-for-byte.
-        const int cr4 = reference_intensity(cr3, shade);
-        const int cg4 = reference_intensity(cg3, shade);
-        const int cb4 = reference_intensity(cb3, shade);
+        // CRAM word layout: 0000 BBB0 GGG0 RRR0.
+        const int cr4 = channel_intensity((cram_value >> 1U) & 7, shade);
+        const int cg4 = channel_intensity((cram_value >> 5U) & 7, shade);
+        const int cb4 = channel_intensity((cram_value >> 9U) & 7, shade);
         return (static_cast<std::uint32_t>(pack_rb_8(cr4)) << 16U) |
                (static_cast<std::uint32_t>(pack_g_8(cg4)) << 8U) |
                static_cast<std::uint32_t>(pack_rb_8(cb4));
@@ -691,13 +642,9 @@ namespace mnemos::chips::video {
         const int cell_row = source_line >> (il2 ? 4 : 3);
         const int fine_y = source_line & (il2 ? 15 : 7);
 
-        // the reference semantics: when window V condition covers the line, the window
-        // takes up the entire visible width (regardless of reg[17] H), sourcing
-        // tiles from the window nametable cell-row that maps 1:1 to the screen
-        // line with NO V-scroll. BoV's title screen relies on this -- it sets
-        // reg[18]=$1C with reg[17]=$00 to use the window plane as a static
-        // (non-scrolling) overlay covering Y=0..223. The H_cell check still
-        // gates the "window shares the line with plane A" sub-case.
+        // When the V condition covers the line, the window claims the full
+        // visible width with no V-scroll, regardless of reg[17] H; otherwise
+        // the H boundary splits the line between window and plane A.
         const bool win_takes_line =
             win_down ? (cell_row >= win_v_cell) : (cell_row < win_v_cell);
         for (int cell_x = 0; cell_x < screen_cells; ++cell_x) {
@@ -985,12 +932,11 @@ namespace mnemos::chips::video {
                 --hint_counter_;
             }
         } else if (scanline_ == visible_h) {
-            // First VBL line. The VBL-entry state (in_vblank_, vint_happened_,
-            // VINT delay, odd_frame_ flip, frame_index_++) was set at the
-            // scanline-becomes-visible_h transition below, BEFORE this line's
-            // 3420 master cycles accumulated -- so VINT fires at master 788
-            // of this line (matching the reference system_frame_gen vint_cycle), not
-            // at master 788 *after* this line completed.
+            // First VBL line. The VBL-entry state (in_vblank_,
+            // vint_happened_, VINT delay, odd_frame_ flip, frame_index_++)
+            // was set at the scanline-becomes-visible_h transition below,
+            // BEFORE this line's 3420 master cycles accumulated -- so VINT
+            // fires at master 788 of THIS line, not 788 after it completes.
             in_hblank_ = true;
             hcounter_ = visible_w;
             if (hint_counter_ <= 0) {
@@ -1018,31 +964,20 @@ namespace mnemos::chips::video {
             hint_counter_ = reg_[10];
         }
 
-        // the reference-aligned frame boundary + VBL entry. system_frame_gen begins
-        // each frame with the VBL line (mcycles_vdp = 0 at line 357, then
-        // m68k_run(vint_cycle = 788) at line 492 raises VINT). Mnemos
-        // historically incremented frame_index_ at the scanline wrap (= end
-        // of all VBL lines), which meant the VINT fired 766,080 master
-        // cycles LATER per frame than the reference -- visible as the BoV f=115
-        // cliff (Mnemos's VDP didn't reach the VINT cycle until ~9000
-        // instructions after the reference took the IRQ). Setting up VBL state at
-        // the TRANSITION (when the post-increment scanline_ becomes
-        // visible_h) puts the VINT delay countdown at master 0 of the VBL
-        // line so the IRQ fires at master 788 -- matching the reference exactly.
+        // VBL entry happens at the scanline-becomes-visible_h transition
+        // (before this line's master cycles accumulate). This positions the
+        // VINT delay countdown at master 0 of the VBL line so the IRQ
+        // fires at master 788 (H40) / 770 (H32) of that same line.
         if (scanline_ == visible_h) {
             in_vblank_ = true;
             vint_happened_ = true;
             odd_frame_ = interlace_enabled() ? !odd_frame_ : false;
-            // Always start the VINT delay -- the vint_enabled() gate is
-            // applied at drain-completion in tick() (matching the reference's
-            // system_frame_gen line 503: vint_cycle delay runs UNCONDITIONALLY,
-            // then `if (reg[1] & 0x20) m68k_set_irq(6)` checks at the END).
-            // If we gate here, games that enable V-int within the 788-cycle
-            // delay window get their first VINT skipped (1-frame offset
-            // vs the reference -- this was the residual cause of the BoV cliff after
-            // VBL-first reset).
+            // Start the VINT delay UNCONDITIONALLY; the vint_enabled() gate
+            // is applied at drain-completion in tick(). Gating here would
+            // skip the first VINT for games that enable V-int within the
+            // 770/788-cycle delay window.
             vint_pending_delay_master_ = h40_mode() ? 788 : 770;
-            ++frame_index_; // one full frame scanned (visible_h..total-1 + 0..visible_h-1)
+            ++frame_index_;
         }
 
         vcounter_ = vcounter_readback(scanline_, odd_frame_);
@@ -1114,8 +1049,7 @@ namespace mnemos::chips::video {
 
     std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_units,
                                                         int dma_type) const noexcept {
-        // Port of the reference emulator's vdp_dma_update DMA-rate formula
-        // (the reference:659-669). Per-line access slots:
+        // DMA-rate model. Per-line access slots:
         //                 H32  H40
         //   active        16    18
         //   blanking     166   204
@@ -1125,16 +1059,6 @@ namespace mnemos::chips::video {
         //   dma_type == 0 (68K->CRAM/VSRAM) with display off:
         //       rate -= 5 (H32) or 6 (H40)   (refresh slots cost one each)
         // Stall master cycles = length_units * MCYCLES_PER_LINE / rate.
-        //
-        // Earlier we used a legacy formula (per-word VRAM-rate applied to
-        // all DMA targets) because porting the the reference formula in isolation
-        // made BoV's f=115 divergence visibly worse. That cliff was
-        // actually IRQ-acceptance timing (now fixed via the V-int-flip /
-        // schedule_delayed_irq / IACK-sync chain), so the the reference formula
-        // should now be the correct one and the legacy formula is
-        // over-charging DMA stalls -- which by frame ~116 leaves Mnemos's
-        // CPU behind the reference's, delaying BoV's reg[1] V-int-enable write and
-        // costing later VINT IRQs that affect the credit screen layout.
         const bool blanking = in_vblank_ || !display_enabled();
         constexpr int kMCyclesPerLine = 3420;
         const bool h40 = h40_mode();
@@ -1173,9 +1097,7 @@ namespace mnemos::chips::video {
     }
 
     void genesis_vdp::acknowledge_irq(int level) noexcept {
-        // The IACK cycle clears the pending latch on the level just accepted
-        // (matches the reference vdp_68k_irq_ack, the reference:1500-1518: for VINT
-        // it clears vint_pending and status bit 0x80).
+        // IACK clears the pending latch for the accepted level.
         if (level >= 6) {
             vblank_pending_ = false;
             vint_happened_ = false;
@@ -1184,14 +1106,11 @@ namespace mnemos::chips::video {
         } else if (level >= 2) {
             ext_pending_ = false;
         }
-        // IACK deasserts the IRQ line at this level. Pretend last_irq_level_
-        // matched the level being acked so refresh_irq's "if changed" guard
-        // fires (sending cpu.set_irq_level(<new>) ). The schedule_delayed_irq
-        // path raises CPU's irq_level_ directly without going through
-        // refresh_irq, so VDP's last_irq_level_ would have stayed 0 even
-        // though CPU's irq_level_ was 6 -- without this hint, the IACK
-        // clears VDP state but cpu's irq_level_ stays 6 → infinite IRQ
-        // loop (BoV f=115 second cliff).
+        // The delayed-IRQ path raises CPU irq_level_ directly without going
+        // through refresh_irq, so VDP's last_irq_level_ stayed 0 while the
+        // CPU was at 6. Force last_irq_level_ to the acked level so the
+        // following refresh_irq's "if changed" guard fires and deasserts
+        // the CPU IRQ -- otherwise the CPU spins on a never-cleared IRQ.
         last_irq_level_ = level;
         refresh_irq();
     }
@@ -1227,15 +1146,9 @@ namespace mnemos::chips::video {
         dma_stall_master_cycles_ = 0;
 
         total_scanlines_ = pal_mode_ ? scanlines_pal : scanlines_ntsc;
-        // the reference-aligned frame phase: system_frame_gen starts each frame with
-        // the VBL line (mcycles_vdp = 0 at the start of VBL). To match this
-        // exactly the scanline counter is initialised to field_height() and
-        // the VINT delay is primed so the first VINT fires at master 770/788
-        // from reset -- not at master ~767K after a full active display has
-        // scrolled past (which was the source of the BoV f=115 cliff: VINT
-        // was firing in the wrong frame relative to the reference, causing the CPU
-        // to miss the IRQ at the f=115 boundary). The frame_index_++ now
-        // also moves to the scanline-becomes-visible_h transition below.
+        // Frame phase: each frame starts on the VBL entry line so the very
+        // first VINT after reset fires at master 770/788 -- not after a
+        // whole active display has scrolled past first.
         scanline_ = field_height();
         hcounter_ = visible_width() / 2;
         vcounter_ = vcounter_readback(scanline_, false);
@@ -1246,8 +1159,8 @@ namespace mnemos::chips::video {
         line_accumulator_ = 0;
 
         vint_happened_ = false;
-        // Prime the VINT-pending delay -- fires VINT at master 770 (H32 reset
-        // default) / 788 (H40) of the first frame, matching the reference.
+        // Prime the delay so the first VINT fires at master 770 (H32 reset
+        // default) / 788 (H40) of the first frame.
         vint_pending_delay_master_ = h40_mode() ? 788 : 770;
         sprite_overflow_ = false;
         sprite_collision_ = false;
