@@ -12,6 +12,7 @@
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
+#include "rom_loader.hpp"
 #include "sms_adapter.hpp"
 #include "sms_region.hpp"
 #include "text_overlay.hpp"
@@ -143,29 +144,7 @@ namespace {
         return out.good();
     }
 
-    std::optional<std::vector<std::uint8_t>> read_file(const std::string& path) {
-        std::ifstream in(path, std::ios::binary);
-        if (!in) {
-            return std::nullopt;
-        }
-        return std::vector<std::uint8_t>((std::istreambuf_iterator<char>(in)),
-                                         std::istreambuf_iterator<char>());
-    }
-
     enum class system_family { genesis, sms };
-
-    // Strip the directory + extension off a ROM path so what we surface in
-    // the status overlay reads like a title rather than a filesystem path.
-    // No further "cleanup" (underscore-to-space, region-tag stripping etc.) --
-    // we don't want to silently re-interpret what the user named their file.
-    [[nodiscard]] std::string clean_rom_name(const std::string& path) {
-        const auto slash = path.find_last_of("/\\");
-        const auto begin = slash == std::string::npos ? 0U : slash + 1U;
-        const auto dot = path.find_last_of('.');
-        const auto end =
-            (dot == std::string::npos || dot < begin) ? path.size() : dot;
-        return path.substr(begin, end - begin);
-    }
 
     // .sms / .sg -> SMS; everything else (.md, .gen, .smd, .bin, .68k, none) -> Genesis.
     [[nodiscard]] system_family detect_family(const std::string& path) noexcept {
@@ -210,9 +189,11 @@ namespace {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    using mnemos::apps::player::adapters::clean_rom_name;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_screenshot_args;
+    using mnemos::apps::player::adapters::read_file;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
 
