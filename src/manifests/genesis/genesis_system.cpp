@@ -153,17 +153,29 @@ namespace mnemos::manifests::genesis {
             0);
 
         // $C00000-$C0001F: VDP ports + the SN76489 PSG at $C00011. 68K word
-        // accesses split into even (high) + odd (low) bytes we coalesce.
+        // accesses split into even (high) + odd (low) bytes; the data-port
+        // cache keeps that split atomic so the VDP only sees one read16
+        // per logical word. Status / HV reads bypass the cache: each byte
+        // access reads fresh state so standalone byte polls (e.g.
+        // BTST.B #N, ($C00005) waiting on the VBLANK status bit) see live
+        // values instead of whatever the last word-read happened to leave
+        // behind.
         s->bus.map_mmio(
             0xC00000U, 0x20U,
             [s](std::uint32_t a) -> std::uint8_t {
                 const std::uint32_t offset = a & 0x1FU;
+                const bool is_data_port = (offset & 0x1CU) == 0x00U; // 0x00..0x03
                 if ((offset & 1U) == 0U) {
                     const std::uint16_t word = s->vdp.read16(offset);
-                    s->vdp_read_low = static_cast<std::uint8_t>(word);
+                    if (is_data_port) {
+                        s->vdp_read_low = static_cast<std::uint8_t>(word);
+                    }
                     return static_cast<std::uint8_t>(word >> 8U);
                 }
-                return s->vdp_read_low;
+                if (is_data_port) {
+                    return s->vdp_read_low;
+                }
+                return static_cast<std::uint8_t>(s->vdp.read16(offset & ~1U));
             },
             [s](std::uint32_t a, std::uint8_t v) {
                 const std::uint32_t offset = a & 0x1FU;

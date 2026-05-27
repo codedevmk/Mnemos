@@ -417,7 +417,6 @@ namespace mnemos::chips::video {
 
     std::uint16_t genesis_vdp::status_read() noexcept {
         std::uint16_t s = 0;
-        const bool status_vblank = in_vblank_ || !display_enabled();
 
         s |= (1U << 9U); // FIFO empty (writes complete immediately in this model)
         if (vint_happened_) {
@@ -432,7 +431,7 @@ namespace mnemos::chips::video {
         if (odd_frame_) {
             s |= (1U << 4U);
         }
-        if (status_vblank) {
+        if (in_vblank_) {
             s |= (1U << 3U);
         }
         if (in_hblank_) {
