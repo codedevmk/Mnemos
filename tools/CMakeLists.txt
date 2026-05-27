@@ -1,1 +1,2 @@
 add_subdirectory(mnemos_runtime_cli)
+add_subdirectory(bus_bench)

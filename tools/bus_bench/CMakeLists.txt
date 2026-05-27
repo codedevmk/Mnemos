@@ -1,0 +1,3 @@
+add_executable(mnemos_bus_bench main.cpp)
+target_link_libraries(mnemos_bus_bench PRIVATE mnemos::topology)
+mnemos_apply_common_target_options(mnemos_bus_bench PRIVATE)
