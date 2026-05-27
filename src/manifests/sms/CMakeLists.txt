@@ -1,5 +1,6 @@
 add_library(
     mnemos_manifests_sms
+    sms_callbacks.cpp
     sms_system.cpp
     sms_region.cpp
 )
