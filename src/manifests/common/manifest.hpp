@@ -46,6 +46,10 @@ namespace mnemos::manifests {
         std::optional<std::string> file;   // rom backing
         std::optional<std::string> sha256; // rom backing
         bool overlay{};
+        // For backing == mapper: id of the imapper chip whose
+        // read_overlay/write_overlay/overlay_active methods route this
+        // region's accesses. Required for mapper backing; ignored otherwise.
+        std::optional<std::string> mapper_id;
     };
 
     struct bus_decl final {

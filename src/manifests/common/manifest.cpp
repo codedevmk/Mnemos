@@ -235,8 +235,14 @@ namespace mnemos::manifests {
                             rd.sha256 = *s;
                         }
                         rd.overlay = (*rt)["overlay"].value_or(false);
+                        if (const auto mid = (*rt)["mapper_id"].value<std::string>()) {
+                            rd.mapper_id = *mid;
+                        }
                         if (rd.backing == region_backing::rom && (!rd.file || !rd.sha256)) {
                             report("rom region '" + rd.name + "' requires file and sha256", rt);
+                        }
+                        if (rd.backing == region_backing::mapper && !rd.mapper_id) {
+                            report("mapper region '" + rd.name + "' requires mapper_id", rt);
                         }
                         bd.regions.push_back(std::move(rd));
                     }

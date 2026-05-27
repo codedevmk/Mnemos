@@ -36,6 +36,19 @@ namespace mnemos::manifests {
             errs.push_back({std::move(message), m.id, 0U, 0U});
         };
 
+        // Mapper-backed regions can't be wired in the bus loop because their
+        // mapper chip hasn't been constructed yet. Collect them here and
+        // resolve in a post-chip pass below.
+        struct pending_mapper_region final {
+            topology::bus* bus;
+            std::uint32_t start;
+            std::uint32_t size;
+            std::string mapper_id;
+            std::string region_name;
+            bool overlay;
+        };
+        std::vector<pending_mapper_region> pending_mapper_regions;
+
         // Buses first, so chips can attach and MMIO windows can be mapped.
         for (const bus_decl& bd : m.buses) {
             auto b =
@@ -81,9 +94,16 @@ namespace mnemos::manifests {
                     break;
                 }
                 case region_backing::mmio_chip:
+                    // MMIO windows are bound from the chip's mmio_range below.
+                    break;
                 case region_backing::mapper:
-                    // MMIO windows are bound from the chip's mmio_range below;
-                    // standalone mapper regions arrive with cartridge support.
+                    // Mapper-backed regions need the mapper chip in hand;
+                    // defer wiring until after chips are constructed.
+                    if (rd.mapper_id) {
+                        pending_mapper_regions.push_back(
+                            {b.get(), rd.range.start, span_size, *rd.mapper_id,
+                             rd.name, rd.overlay});
+                    }
                     break;
                 }
             }
@@ -134,6 +154,39 @@ namespace mnemos::manifests {
                         2);
                 }
             }
+        }
+
+        // Mapper-backed regions: now that chips exist, resolve each pending
+        // mapper region to its imapper chip and wire the overlay
+        // read/write/predicate trio onto its bus. Overlay regions get
+        // priority 1 (above plain RAM); non-overlay mapper regions get
+        // priority 2 (above ROM overlays + RAM but below MMIO chip
+        // windows at priority 2 -- the bus's priority-resolution tie-
+        // breaking handles the rest).
+        for (const auto& p : pending_mapper_regions) {
+            const auto chip_it = graph.chip_by_id.find(p.mapper_id);
+            if (chip_it == graph.chip_by_id.end()) {
+                report("mapper region '" + p.region_name + "' references unknown chip '" +
+                       p.mapper_id + "'");
+                continue;
+            }
+            auto* mapper = dynamic_cast<chips::imapper*>(chip_it->second);
+            if (mapper == nullptr) {
+                report("mapper region '" + p.region_name + "': chip '" + p.mapper_id +
+                       "' is not an imapper");
+                continue;
+            }
+            const int priority = p.overlay ? 1 : 2;
+            p.bus->map_mmio(
+                p.start, p.size,
+                [mapper](std::uint32_t address) { return mapper->read_overlay(address); },
+                [mapper](std::uint32_t address, std::uint8_t value) {
+                    mapper->write_overlay(address, value);
+                },
+                priority,
+                [mapper](std::uint32_t address, bool is_write) {
+                    return mapper->overlay_active(address, is_write);
+                });
         }
 
         // Gates: wrap any chip named in a [[gate]] entry with gated_chip

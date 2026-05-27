@@ -158,7 +158,35 @@ namespace mnemos::chips {
 
     class ibus_controller : public ichip {};
     class istorage : public ichip {};
-    class imapper : public ichip {};
+
+    // Mappers carry the overlay-read/write surface the manifest builder
+    // routes manifest-declared `backing = "mapper"` regions through. The
+    // defaults are open-bus / no-op so existing mapper implementations keep
+    // working unchanged; mappers that migrate to the manifest path override
+    // these.
+    class imapper : public ichip {
+      public:
+        // Read a byte from this mapper at a CPU-facing address inside one of
+        // its overlay regions. Default returns open bus.
+        [[nodiscard]] virtual std::uint8_t read_overlay(std::uint32_t /*address*/) noexcept {
+            return 0xFFU;
+        }
+        // Write a byte to this mapper at a CPU-facing address inside one of
+        // its overlay regions. The mapper may treat this as a bank-register
+        // write (changing future reads), as a passthrough into cart RAM, or
+        // as a drop for read-only mappers. Default: drop.
+        virtual void write_overlay(std::uint32_t /*address*/,
+                                   std::uint8_t /*value*/) noexcept {}
+        // Per-access predicate: should this mapper claim this address right
+        // now? Lets multiple mapper overlays coexist on the same bus with
+        // priority + state-dependent gating (e.g. C64 PLA paging). Default:
+        // always active.
+        [[nodiscard]] virtual bool overlay_active(std::uint32_t /*address*/,
+                                                  bool /*is_write*/) const noexcept {
+            return true;
+        }
+    };
+
     class iperipheral : public ichip {};
 
     // Memory-mapped register access. A chip that exposes an MMIO window mixes this

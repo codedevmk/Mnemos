@@ -2,6 +2,7 @@
 
 #include "manifest.hpp"
 
+#include "chip_registry.hpp"
 #include "cia_6526.hpp"
 #include "m6510.hpp"
 #include "sha256.hpp"
@@ -9,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -251,6 +253,132 @@ predicate = "test.cpu_running"
     cpu_running = true;
     scheduler_chip->tick(8U);
     CHECK(cpu->elapsed_cycles() > cycles_before);
+}
+
+namespace {
+    // Minimal imapper used by the mapper-overlay test below. Records the
+    // overlay accesses the builder routed through it so the test can assert
+    // bus reads/writes actually reach this code path.
+    class test_mapper final : public mnemos::chips::imapper {
+      public:
+        [[nodiscard]] mnemos::chips::chip_metadata metadata() const noexcept override {
+            return {.manufacturer = "test",
+                    .part_number = "test.mapper",
+                    .family = "test",
+                    .klass = mnemos::chips::chip_class::mapper,
+                    .revision = 1U};
+        }
+        void tick(std::uint64_t) override {}
+        void reset(mnemos::chips::reset_kind) override {}
+        void save_state(mnemos::chips::state_writer&) const override {}
+        void load_state(mnemos::chips::state_reader&) override {}
+        [[nodiscard]] mnemos::instrumentation::ichip_introspection& introspection() noexcept override {
+            return intro_;
+        }
+
+        [[nodiscard]] std::uint8_t read_overlay(std::uint32_t address) noexcept override {
+            ++reads;
+            last_read_address = address;
+            return static_cast<std::uint8_t>(address & 0xFFU);
+        }
+        void write_overlay(std::uint32_t address, std::uint8_t value) noexcept override {
+            ++writes;
+            last_write_address = address;
+            last_write_value = value;
+        }
+
+        unsigned reads{};
+        unsigned writes{};
+        std::uint32_t last_read_address{};
+        std::uint32_t last_write_address{};
+        std::uint8_t last_write_value{};
+
+      private:
+        mnemos::instrumentation::ichip_introspection intro_{};
+    };
+
+    // Register the test mapper once at static-init so the manifest layer
+    // can create it via chip_registry::create_chip("test.simple_mapper").
+    // Subsequent calls returning duplicate_id are benign; the registration
+    // sticks the first time.
+    [[maybe_unused]] const auto test_mapper_registration = mnemos::chips::register_factory(
+        "test.simple_mapper", mnemos::chips::chip_class::mapper,
+        []() -> std::unique_ptr<mnemos::chips::ichip> {
+            return std::make_unique<test_mapper>();
+        });
+} // namespace
+
+TEST_CASE("build_system routes a mapper-backed region through imapper overlay methods") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.mapper.region"
+[clock]
+master_hz = 1
+[[chip]]
+id = "cart"
+type = "test.simple_mapper"
+attached_bus = "main"
+[[bus]]
+id = "main"
+address_bits = 16
+[[bus.region]]
+name = "cart_window"
+range = "0x8000-0xBFFF"
+backing = "mapper"
+mapper_id = "cart"
+)toml";
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+    auto built = build_system(*parsed.value, no_roms);
+    REQUIRE(built.ok());
+
+    auto& graph = *built.value;
+    auto* mapper = dynamic_cast<test_mapper*>(graph.chip("cart"));
+    REQUIRE(mapper != nullptr);
+    auto* bus = graph.bus("main");
+    REQUIRE(bus != nullptr);
+
+    const std::uint8_t value = bus->read8(0x9123U);
+    CHECK(mapper->reads == 1U);
+    CHECK(mapper->last_read_address == 0x9123U);
+    CHECK(value == 0x23U); // test_mapper returns (address & 0xFF)
+
+    bus->write8(0xA456U, 0x77U);
+    CHECK(mapper->writes == 1U);
+    CHECK(mapper->last_write_address == 0xA456U);
+    CHECK(mapper->last_write_value == 0x77U);
+
+    // Outside the declared range, the mapper isn't consulted.
+    (void)bus->read8(0x0000U);
+    CHECK(mapper->reads == 1U);
+}
+
+TEST_CASE("build_system rejects a mapper region with missing mapper_id") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.mapper.bad"
+[clock]
+master_hz = 1
+[[bus]]
+id = "main"
+address_bits = 16
+[[bus.region]]
+name = "broken"
+range = "0x0000-0x3FFF"
+backing = "mapper"
+)toml";
+    const auto parsed = parse_manifest(text);
+    // The parser itself reports the missing mapper_id.
+    CHECK_FALSE(parsed.ok());
+    bool found = false;
+    for (const auto& d : parsed.errors) {
+        if (d.message.find("requires mapper_id") != std::string::npos) {
+            found = true;
+        }
+    }
+    CHECK(found);
 }
 
 TEST_CASE("build_system reports an unknown gate predicate") {
