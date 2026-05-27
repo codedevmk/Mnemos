@@ -47,6 +47,12 @@ namespace mnemos::chips::cpu {
                 tcu_ = 1U;
                 return;
             }
+            // Trace fires HERE: one PC per executed instruction (not per
+            // cycle), and only for regular instruction execution (IRQ/NMI
+            // entries above don't trace, matching m68000/z80 behaviour).
+            if (trace_callback_) {
+                trace_callback_(registers_.pc);
+            }
             ir_ = read(registers_.pc++); // opcode fetch is cycle 1
             tcu_ = 1U;
             return;
@@ -1549,6 +1555,29 @@ namespace mnemos::chips::cpu {
             registers_.p =
                 static_cast<std::uint8_t>(registers_.p & static_cast<std::uint8_t>(~mask));
         }
+    }
+
+    m6510::introspection_surface::introspection_surface(m6510& owner) noexcept
+        : trace_impl_(owner), registers_impl_(owner) {}
+
+    void m6510::introspection_surface::trace_impl::install(callback cb) {
+        if (cb) {
+            // Wrap the generic (pc + cycles) trace_target callback onto the
+            // 6510's PC-only trace_callback_ slot; cycles are queried at fire
+            // time from the chip's own elapsed counter.
+            m6510* cpu = owner_;
+            owner_->trace_callback_ =
+                [cpu, cb = std::move(cb)](std::uint32_t pc) {
+                    cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
+                };
+        } else {
+            owner_->trace_callback_ = {};
+        }
+    }
+
+    std::span<const register_descriptor>
+    m6510::introspection_surface::registers_impl::registers() {
+        return owner_->register_snapshot();
     }
 
     namespace {

@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <span>
 
 namespace mnemos::chips::cpu {
@@ -205,7 +206,44 @@ namespace mnemos::chips::cpu {
         void set_port_enabled(bool enabled) noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Bridges the chip's diagnostic surface into the generic
+        // `instrumentation::ichip_introspection`. The 6510 advertises a trace
+        // target (per-instruction PC + cycles, fired only at instruction-
+        // boundary cycles where tcu_==0 and no IRQ/NMI service is starting)
+        // and a register view (`register_snapshot()`).
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(m6510& owner) noexcept;
+
+            [[nodiscard]] instrumentation::trace_target* trace() override {
+                return &trace_impl_;
+            }
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_impl_;
+            }
+
+          private:
+            class trace_impl final : public instrumentation::trace_target {
+              public:
+                explicit trace_impl(m6510& owner) noexcept : owner_(&owner) {}
+                void install(callback cb) override;
+
+              private:
+                m6510* owner_;
+            };
+
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(m6510& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override;
+
+              private:
+                m6510* owner_;
+            };
+
+            trace_impl trace_impl_;
+            registers_impl registers_impl_;
+        };
 
         // Pins configured as inputs read high through the default pull.
         static constexpr std::uint8_t port_input_pull = 0xFFU;
@@ -274,8 +312,16 @@ namespace mnemos::chips::cpu {
         bool in_interrupt_{};
         std::uint16_t interrupt_vector_{};
 
+        // Per-instruction trace hook installed via the introspection surface.
+        // Fired at instruction-boundary cycles (tcu_==0, no IRQ/NMI taken).
+        // The trace_impl bridges the generic (pc + cycles) trace_event onto
+        // this PC-only slot.
+        std::function<void(std::uint32_t pc)> trace_callback_{};
+
+        friend class introspection_surface;
+
         std::array<register_descriptor, 6> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::cpu

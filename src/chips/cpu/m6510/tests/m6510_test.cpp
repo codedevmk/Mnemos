@@ -2,6 +2,7 @@
 
 #include "chip_registry.hpp"
 #include "ibus.hpp"
+#include "introspection_views.hpp"
 #include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -824,4 +825,60 @@ TEST_CASE("the 6510 port bits 6/7 fade to 0 after switching to input") {
 
     sys.cpu.tick(400000U);                         // run past the fall-off window
     CHECK((sys.cpu.read(0x01U) & 0xC0U) == 0x00U); // decayed
+}
+
+TEST_CASE("m6510 trace_target fires once per instruction, not once per cycle") {
+    test_system sys;
+    // Three NOPs at $0200; each takes 2 cycles. Trace should fire 3 times,
+    // not 6, despite the chip being cycle-stepped.
+    sys.boot(0x0200U, {0xEAU, 0xEAU, 0xEAU});
+
+    auto* trace = sys.cpu.introspection().trace();
+    REQUIRE(trace != nullptr);
+
+    std::vector<mnemos::instrumentation::trace_event> events;
+    trace->install([&events](const mnemos::instrumentation::trace_event& ev) {
+        events.push_back(ev);
+    });
+
+    sys.step_instruction();
+    sys.step_instruction();
+    sys.step_instruction();
+
+    REQUIRE(events.size() == 3U);
+    CHECK(events[0].pc == 0x0200U);
+    CHECK(events[1].pc == 0x0201U);
+    CHECK(events[2].pc == 0x0202U);
+    // Cycles is the cumulative cost at instruction start. NOPs are 2 cycles
+    // each, BUT the reset sequence at power-on costs additional cycles
+    // before the first user instruction. So check the deltas between events
+    // rather than absolute values.
+    const auto delta_01 = events[1].cycles - events[0].cycles;
+    const auto delta_12 = events[2].cycles - events[1].cycles;
+    CHECK(delta_01 == 2U);
+    CHECK(delta_12 == 2U);
+
+    // Clearing the callback halts firings.
+    trace->install({});
+    sys.step_instruction();
+    CHECK(events.size() == 3U);
+}
+
+TEST_CASE("m6510 register_view returns A/X/Y/SP/P/PC descriptors") {
+    test_system sys;
+    sys.boot(0x0200U, {0xA9U, 0x42U}); // LDA #$42
+    sys.step_instruction();
+
+    auto* regs = sys.cpu.introspection().registers();
+    REQUIRE(regs != nullptr);
+    auto descriptors = regs->registers();
+    REQUIRE(descriptors.size() == 6U);
+    bool saw_a = false;
+    for (const auto& d : descriptors) {
+        if (d.name == "A") {
+            saw_a = true;
+            CHECK(d.value == 0x42U);
+        }
+    }
+    CHECK(saw_a);
 }
