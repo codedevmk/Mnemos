@@ -30,6 +30,13 @@
 
 namespace mnemos::apps::player::adapters::genesis {
 
+    // Force-link hook so the adapter_registry self-registration in
+    // genesis_adapter.cpp survives the linker. main.cpp calls this once at
+    // startup; without it the entire genesis_adapter.cpp can be discarded
+    // because main.cpp no longer references the genesis_adapter type by
+    // name (it constructs via adapter_registry::create("genesis", ...)).
+    void force_link() noexcept;
+
     class genesis_adapter final : public frontend_sdk::player_system {
       public:
         // Build an adapter around a moved-in cartridge image. The 68000 boots

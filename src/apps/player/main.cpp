@@ -4,16 +4,17 @@
 
 #define SDL_MAIN_HANDLED
 
+#include "adapter_registry.hpp"
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
-#include "genesis_adapter.hpp"
+#include "genesis_adapter.hpp" // force_link + manifests::genesis::parse_market
 #include "genesis_region.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
 #include "rom_loader.hpp"
-#include "sms_adapter.hpp"
+#include "sms_adapter.hpp" // force_link + manifests::sms::parse_market
 #include "sms_region.hpp"
 #include "system_family.hpp"
 #include "text_overlay.hpp"
@@ -121,15 +122,25 @@ int main(int argc, char* argv[]) {
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
 
-        std::string display_name = clean_rom_name(*rom_path);
-        if (family == system_family::sms) {
-            using mnemos::manifests::sms::sms_config;
-            system = std::make_unique<mnemos::apps::player::adapters::sms::sms_adapter>(
-                std::move(*bytes), sms_config{.video_region = video}, std::move(display_name));
-        } else {
-            using mnemos::manifests::genesis::genesis_config;
-            system = std::make_unique<mnemos::apps::player::adapters::genesis::genesis_adapter>(
-                std::move(*bytes), genesis_config{.video_region = video}, std::move(display_name));
+        // Ensure each adapter's static-init self-registration with the
+        // adapter_registry actually links in. Without these calls a static-
+        // library adapter that the binary doesn't otherwise reference can be
+        // dropped, silently disabling its registration. Adding a new system
+        // means adding one more force_link() call here.
+        mnemos::apps::player::adapters::genesis::force_link();
+        mnemos::apps::player::adapters::sms::force_link();
+
+        const std::string_view family_id =
+            family == system_family::sms ? "sms" : "genesis";
+        system = mnemos::frontend_sdk::adapter_registry::instance().create(
+            family_id, {.rom = std::move(*bytes),
+                        .video_region = video,
+                        .display_name = clean_rom_name(*rom_path)});
+        if (!system) {
+            std::fprintf(stderr,
+                         "[mnemos_player] no adapter registered for family '%.*s'\n",
+                         static_cast<int>(family_id.size()), family_id.data());
+            return 1;
         }
     }
 

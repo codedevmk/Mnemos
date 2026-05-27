@@ -1,5 +1,7 @@
 #include "genesis_adapter.hpp"
 
+#include "adapter_registry.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
@@ -246,5 +248,22 @@ namespace mnemos::apps::player::adapters::genesis {
                 .frame_count = static_cast<std::uint32_t>(dst_pairs),
                 .sample_rate = kOutputRate};
     }
+
+    void force_link() noexcept {}
+
+    namespace {
+        const auto register_genesis = [] {
+            mnemos::frontend_sdk::adapter_registry::instance().register_family(
+                "genesis",
+                [](mnemos::frontend_sdk::adapter_options opts)
+                    -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    return std::make_unique<genesis_adapter>(
+                        std::move(opts.rom),
+                        manifests::genesis::genesis_config{.video_region = opts.video_region},
+                        std::move(opts.display_name));
+                });
+            return 0;
+        }();
+    } // namespace
 
 } // namespace mnemos::apps::player::adapters::genesis

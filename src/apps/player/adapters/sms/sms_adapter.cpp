@@ -1,7 +1,10 @@
 #include "sms_adapter.hpp"
 
+#include "adapter_registry.hpp"
+
 #include <algorithm>
 #include <cstddef>
+#include <memory>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::sms {
@@ -171,5 +174,22 @@ namespace mnemos::apps::player::adapters::sms {
                 .frame_count = static_cast<std::uint32_t>(dst_pairs),
                 .sample_rate = kOutputRate};
     }
+
+    void force_link() noexcept {}
+
+    namespace {
+        const auto register_sms = [] {
+            mnemos::frontend_sdk::adapter_registry::instance().register_family(
+                "sms",
+                [](mnemos::frontend_sdk::adapter_options opts)
+                    -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    return std::make_unique<sms_adapter>(
+                        std::move(opts.rom),
+                        manifests::sms::sms_config{.video_region = opts.video_region},
+                        std::move(opts.display_name));
+                });
+            return 0;
+        }();
+    } // namespace
 
 } // namespace mnemos::apps::player::adapters::sms

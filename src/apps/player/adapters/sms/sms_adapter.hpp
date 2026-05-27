@@ -13,6 +13,9 @@
 
 namespace mnemos::apps::player::adapters::sms {
 
+    // Force-link hook (see genesis_adapter.hpp for the rationale).
+    void force_link() noexcept;
+
     class sms_adapter final : public frontend_sdk::player_system {
       public:
         explicit sms_adapter(std::vector<std::uint8_t> rom,
