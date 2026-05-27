@@ -2338,6 +2338,16 @@ namespace mnemos::chips::cpu {
         return register_view_;
     }
 
+    void m68000_diagnostics::set_trace_callback(
+        std::function<void(std::uint32_t pc)> callback) noexcept {
+        owner_->trace_callback_ = std::move(callback);
+    }
+
+    const m68000_diagnostics::cycle_sources&
+    m68000_diagnostics::last_cycle_sources() const noexcept {
+        return owner_->last_cycle_sources_;
+    }
+
     namespace {
         [[maybe_unused]] const auto m68000_registration =
             register_factory("motorola.68000", chip_class::cpu,

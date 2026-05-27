@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "m68000_diagnostics.hpp"
 
 #include <array>
 #include <cstdint>
@@ -101,28 +102,11 @@ namespace mnemos::chips::cpu {
             tas_callback_ = std::move(callback);
         }
 
-        // Per-instruction trace hook (diagnostic; off by default). Fired
-        // with the instruction's PC BEFORE any decode. Used by the player's
-        // --screenshot trace dump for cycle-drift investigations. Unset =
-        // no trace overhead.
-        void set_trace_callback(std::function<void(std::uint32_t pc)> callback) noexcept {
-            trace_callback_ = std::move(callback);
-        }
-
-        // Cycle-source tags for the LAST completed instruction. Lets a
-        // tracer decompose each instruction's cycle cost into contributing
-        // pieces (refresh? Z80 bus latency? IRQ entry?). Populated at the
-        // END of step_instruction(). The trace callback above fires at the
-        // START of an instruction, so when it observes instruction N this
-        // accessor still describes instruction N-1.
-        struct cycle_sources final {
-            std::uint8_t refresh_fired{};   // 0 or 1 (only fires at most once per inst)
-            std::uint8_t z80_bus_accesses{};// count of $A0xxxx accesses
-            std::uint8_t irq_entered{};     // 0 or 1
-        };
-        [[nodiscard]] const cycle_sources& last_cycle_sources() const noexcept {
-            return last_cycle_sources_;
-        }
+        // Diagnostic facade: trace callback + cycle-source decomposition for
+        // the last completed instruction. Pure observation -- toggling these
+        // never changes the CPU's architectural behaviour. Off-by-default,
+        // zero overhead when unused.
+        [[nodiscard]] m68000_diagnostics& diagnostics() noexcept { return diagnostics_; }
 
         // Genesis Z80-bus access latency. When enabled, every cycle-
         // accounted bus access into $A00000-$A0FFFF costs an extra 1 CPU
@@ -152,6 +136,8 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
+        friend class m68000_diagnostics;
+
         class introspection_surface final : public instrumentation::ichip_introspection {};
 
         enum class op_size : std::uint8_t { byte, word, longword };
@@ -273,14 +259,17 @@ namespace mnemos::chips::cpu {
         int delayed_irq_counter_{};
 
         // Cycle-source accumulator for the instruction in flight; snapshotted
-        // to last_cycle_sources_ at the end of each step_instruction().
-        cycle_sources cycle_sources_{};
-        cycle_sources last_cycle_sources_{};
+        // to last_cycle_sources_ at the end of each step_instruction(). The
+        // type lives on m68000_diagnostics so the diagnostic facade can
+        // expose it without re-declaring.
+        m68000_diagnostics::cycle_sources cycle_sources_{};
+        m68000_diagnostics::cycle_sources last_cycle_sources_{};
 
         ibus* bus_{};
 
         std::array<register_descriptor, 20> register_view_{};
         introspection_surface introspection_{};
+        m68000_diagnostics diagnostics_{*this};
     };
 
 } // namespace mnemos::chips::cpu

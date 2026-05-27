@@ -246,9 +246,9 @@ int main(int argc, char* argv[]) {
                 // cycle-accounting drift without guessing from raw deltas.
                 trace_out << "frame,inst,pc,cycles,r,z,i\n";
                 auto* cpu_ptr = &genesis_for_trace->system().cpu;
-                cpu_ptr->set_trace_callback(
+                cpu_ptr->diagnostics().set_trace_callback(
                     [&trace_out, &trace_frame, &trace_inst, cpu_ptr](std::uint32_t pc) {
-                        const auto& src = cpu_ptr->last_cycle_sources();
+                        const auto& src = cpu_ptr->diagnostics().last_cycle_sources();
                         char buf[96];
                         std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu,%u,%u,%u\n",
                                       static_cast<unsigned long long>(trace_frame),
@@ -268,7 +268,7 @@ int main(int argc, char* argv[]) {
             system->step_one_frame();
         }
         if (genesis_for_trace != nullptr) {
-            genesis_for_trace->system().cpu.set_trace_callback({});
+            genesis_for_trace->system().cpu.diagnostics().set_trace_callback({});
         }
         const auto fb = system->current_frame();
         if (!dump_framebuffer_ppm(fb, screenshot->path)) {
