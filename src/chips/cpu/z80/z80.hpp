@@ -94,7 +94,45 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Bridges the chip's diagnostic surface into the generic
+        // `instrumentation::ichip_introspection`. The Z80 advertises a trace
+        // target (per-instruction PC + cycles hook) and a register view
+        // (`register_snapshot()`). Operational hooks (port_in/port_out, IRQ
+        // line, NMI) stay on z80 itself because the system needs them set
+        // for correct emulation.
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(z80& owner) noexcept;
+
+            [[nodiscard]] instrumentation::trace_target* trace() override {
+                return &trace_impl_;
+            }
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_impl_;
+            }
+
+          private:
+            class trace_impl final : public instrumentation::trace_target {
+              public:
+                explicit trace_impl(z80& owner) noexcept : owner_(&owner) {}
+                void install(callback cb) override;
+
+              private:
+                z80* owner_;
+            };
+
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(z80& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override;
+
+              private:
+                z80* owner_;
+            };
+
+            trace_impl trace_impl_;
+            registers_impl registers_impl_;
+        };
 
         // ---- 8-bit halves of the 16-bit pair registers (little-endian pairs) ----
         [[nodiscard]] std::uint8_t a() const noexcept {
@@ -218,8 +256,16 @@ namespace mnemos::chips::cpu {
         port_in_fn port_in_{};
         port_out_fn port_out_{};
 
+        // Per-instruction trace hook installed via the introspection surface.
+        // The trace_impl bridges the generic trace_target callback (pc +
+        // cycles trace_event) onto this PC-only slot; the chip queries its
+        // own elapsed_cycles() at fire time.
+        std::function<void(std::uint32_t pc)> trace_callback_{};
+
+        friend class introspection_surface;
+
         std::array<register_descriptor, 16> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::cpu

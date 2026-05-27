@@ -2,6 +2,7 @@
 
 #include "bus.hpp"
 #include "chip_registry.hpp"
+#include "introspection_views.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -10,6 +11,7 @@
 #include <initializer_list>
 #include <span>
 #include <type_traits>
+#include <vector>
 
 namespace {
     using mnemos::chips::cpu::z80;
@@ -238,4 +240,65 @@ TEST_CASE("z80 tick catches up by whole instructions") {
     m.cpu.tick(10U);                               // ~10 cycles -> 3 NOPs (12T)
     CHECK(m.cpu.elapsed_cycles() >= 10U);
     CHECK(m.cpu.cpu_registers().pc >= 0x0003U);
+}
+
+TEST_CASE("z80 trace_target fires once per executed instruction with pc + cycles") {
+    machine m;
+    m.load(0x0000U, {0x00U, 0x00U, 0x00U}); // three NOPs
+
+    auto* trace = m.cpu.introspection().trace();
+    REQUIRE(trace != nullptr);
+
+    std::vector<mnemos::instrumentation::trace_event> events;
+    trace->install([&events](const mnemos::instrumentation::trace_event& ev) {
+        events.push_back(ev);
+    });
+
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+
+    REQUIRE(events.size() == 3U);
+    CHECK(events[0].pc == 0x0000U);
+    CHECK(events[1].pc == 0x0001U);
+    CHECK(events[2].pc == 0x0002U);
+    // Cycles is the chip's elapsed counter at instruction START, so the
+    // event for instruction N captures the cumulative cost of instructions
+    // 0..N-1. NOP = 4 cycles each.
+    CHECK(events[0].cycles == 0U);
+    CHECK(events[1].cycles == 4U);
+    CHECK(events[2].cycles == 8U);
+
+    // Clearing the callback halts the firings.
+    trace->install({});
+    m.cpu.step_instruction();
+    CHECK(events.size() == 3U);
+}
+
+TEST_CASE("z80 register_view returns the live register snapshot") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0xABCDU;
+    r.af = 0x1234U;
+    m.cpu.set_registers(r);
+
+    auto* regs = m.cpu.introspection().registers();
+    REQUIRE(regs != nullptr);
+    auto descriptors = regs->registers();
+    REQUIRE(descriptors.size() == 16U);
+    // Find PC and AF in the descriptors; values must match the live state.
+    bool saw_pc = false;
+    bool saw_af = false;
+    for (const auto& d : descriptors) {
+        if (d.name == "PC") {
+            saw_pc = true;
+            CHECK(d.value == 0xABCDU);
+        }
+        if (d.name == "AF") {
+            saw_af = true;
+            CHECK(d.value == 0x1234U);
+        }
+    }
+    CHECK(saw_pc);
+    CHECK(saw_af);
 }

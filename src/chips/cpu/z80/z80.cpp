@@ -1379,6 +1379,9 @@ namespace mnemos::chips::cpu {
             return 4;
         }
 
+        if (trace_callback_) {
+            trace_callback_(pc_);
+        }
         const std::uint8_t op = op_fetch8();
         inc_r();
         exec_main(op);
@@ -1533,6 +1536,29 @@ namespace mnemos::chips::cpu {
         register_view_[14] = {"IM", im_, 8U, fmt::unsigned_integer};
         register_view_[15] = {"F", f(), 8U, fmt::flags};
         return register_view_;
+    }
+
+    z80::introspection_surface::introspection_surface(z80& owner) noexcept
+        : trace_impl_(owner), registers_impl_(owner) {}
+
+    void z80::introspection_surface::trace_impl::install(callback cb) {
+        if (cb) {
+            // Wrap the generic (pc + cycles) trace_target callback onto the
+            // Z80's PC-only trace_callback_ slot; cycles are queried at fire
+            // time from the chip's own elapsed counter.
+            z80* cpu = owner_;
+            owner_->trace_callback_ =
+                [cpu, cb = std::move(cb)](std::uint32_t pc) {
+                    cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
+                };
+        } else {
+            owner_->trace_callback_ = {};
+        }
+    }
+
+    std::span<const register_descriptor>
+    z80::introspection_surface::registers_impl::registers() {
+        return owner_->register_snapshot();
     }
 
     namespace {

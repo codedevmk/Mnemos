@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         std::uint64_t trace_frame = 0;
-        const std::string trace_path = screenshot->path + ".68k_trace.csv";
+        const std::string trace_path = screenshot->path + ".cpu_trace.csv";
         mnemos::apps::player::trace_csv_session trace(*system, trace_path, trace_frame);
 
         for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
