@@ -381,6 +381,69 @@ backing = "mapper"
     CHECK(found);
 }
 
+TEST_CASE("build_system mirrors a RAM region when size < range size") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.ram.mirror"
+[clock]
+master_hz = 1
+[[bus]]
+id = "main"
+address_bits = 16
+# 16 KiB range backed by an 8 KiB buffer: a write at the low half should be
+# visible from the mirror at the high half. Mimics SMS work-RAM mirror.
+[[bus.region]]
+name = "work_ram"
+range = "0xC000-0xFFFF"
+backing = "ram"
+size = 8192
+)toml";
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+    auto built = build_system(*parsed.value, no_roms);
+    REQUIRE(built.ok());
+
+    auto* bus = built.value->bus("main");
+    REQUIRE(bus != nullptr);
+
+    // Write at offset 0 of the low mirror, read from the high mirror.
+    bus->write8(0xC000U, 0xAAU);
+    CHECK(bus->read8(0xE000U) == 0xAAU);
+    // And vice-versa.
+    bus->write8(0xE123U, 0x55U);
+    CHECK(bus->read8(0xC123U) == 0x55U);
+}
+
+TEST_CASE("build_system rejects a RAM region with size > range") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.ram.oversize"
+[clock]
+master_hz = 1
+[[bus]]
+id = "main"
+address_bits = 16
+[[bus.region]]
+name = "too_big"
+range = "0x0000-0x00FF"
+backing = "ram"
+size = 8192
+)toml";
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+    const auto built = build_system(*parsed.value, no_roms);
+    CHECK_FALSE(built.ok());
+    bool found = false;
+    for (const auto& d : built.errors) {
+        if (d.message.find("exceeds range") != std::string::npos) {
+            found = true;
+        }
+    }
+    CHECK(found);
+}
+
 TEST_CASE("build_system wires [[mmio_block]] entries to host-supplied factories") {
     const std::string text = R"toml(
 [manifest]

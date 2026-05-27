@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <span>
+#include <string>
 #include <utility>
 
 namespace mnemos::manifests {
@@ -58,8 +59,29 @@ namespace mnemos::manifests {
                 const std::uint32_t span_size = rd.range.end - rd.range.start + 1U;
                 switch (rd.backing) {
                 case region_backing::ram: {
-                    auto block = std::make_unique<std::vector<std::uint8_t>>(span_size, 0U);
-                    b->map_ram(rd.range.start, std::span<std::uint8_t>(*block), 0);
+                    // When the region declares a `size` strictly smaller than its
+                    // address range, the buffer mirrors across the range -- the
+                    // SMS work RAM ($C000-$DFFF mirrored at $E000-$FFFF, total
+                    // 0x4000 range / 0x2000 size) is the canonical case.
+                    // size == 0 (default) or size == span_size both mean "no
+                    // mirroring; one buffer fills the range". size > span_size
+                    // is an authoring error.
+                    if (rd.size > span_size) {
+                        report("ram region '" + rd.name + "' size (" +
+                               std::to_string(rd.size) +
+                               ") exceeds range (" + std::to_string(span_size) + ")");
+                        break;
+                    }
+                    const std::uint32_t block_size =
+                        (rd.size > 0U && rd.size < span_size) ? rd.size : span_size;
+                    auto block =
+                        std::make_unique<std::vector<std::uint8_t>>(block_size, 0U);
+                    const auto storage = std::span<std::uint8_t>(*block);
+                    for (std::uint32_t offset = 0U;
+                         offset + block_size <= span_size;
+                         offset += block_size) {
+                        b->map_ram(rd.range.start + offset, storage, 0);
+                    }
                     graph.memory.push_back(std::move(block));
                     break;
                 }
