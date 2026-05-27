@@ -660,10 +660,18 @@ namespace mnemos::chips::video {
         const int cell_row = source_line >> (il2 ? 4 : 3);
         const int fine_y = source_line & (il2 ? 15 : 7);
 
+        // the reference semantics: when window V condition covers the line, the window
+        // takes up the entire visible width (regardless of reg[17] H), sourcing
+        // tiles from the window nametable cell-row that maps 1:1 to the screen
+        // line with NO V-scroll. BoV's title screen relies on this -- it sets
+        // reg[18]=$1C with reg[17]=$00 to use the window plane as a static
+        // (non-scrolling) overlay covering Y=0..223. The H_cell check still
+        // gates the "window shares the line with plane A" sub-case.
+        const bool win_takes_line =
+            win_down ? (cell_row >= win_v_cell) : (cell_row < win_v_cell);
         for (int cell_x = 0; cell_x < screen_cells; ++cell_x) {
             const bool in_win_h = win_right ? (cell_x >= win_h_cell) : (cell_x < win_h_cell);
-            const bool in_win_v = win_down ? (cell_row >= win_v_cell) : (cell_row < win_v_cell);
-            if (!(in_win_h && in_win_v)) {
+            if (!win_takes_line && !in_win_h) {
                 continue;
             }
 

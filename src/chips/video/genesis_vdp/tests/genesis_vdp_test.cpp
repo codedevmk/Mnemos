@@ -308,6 +308,36 @@ TEST_CASE("genesis_vdp fills the backdrop when display is disabled") {
     CHECK(fb.pixels[0] == rgb_green);
 }
 
+TEST_CASE("genesis_vdp window plane covers full width when V-condition is set") {
+    // Regression for BoV title screen: reg[18] V-condition that covers every
+    // active scanline must render the window plane full-width regardless of
+    // reg[17] H position (matches the reference render_bg_m5 "window takes entire line"
+    // branch). Without this, the window nametable is ignored and the
+    // underlying plane A (with its V-scroll applied) bleeds through.
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x44);                 // M5 + display enable
+    set_reg(vdp, 12, 0x81);                // H40
+    set_reg(vdp, 15, 0x02);                // auto-increment 2
+    set_reg(vdp, 2, 0x30);                 // plane A name table = $C000
+    set_reg(vdp, 3, 0x28);                 // window name table = (0x28<<10)&0xF000 = $A000
+    set_reg(vdp, 4, 0x07);                 // plane B name table = $E000 (kept clear)
+    set_reg(vdp, 17, 0x00);                // window H position = 0 (no H window)
+    set_reg(vdp, 18, 0x1C);                // window V covers cells 0..27 (= lines 0..223)
+    write_vram(vdp, 0x0020, solid_tile_1); // tile 1 = solid colour index 1
+    write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) -> tile 1 / palette 0 (red)
+    // Window cell (0,0) at $A000 -> tile 1 / palette 1 (green via cram[17]).
+    write_vram(vdp, 0xA000, {0x2001});
+    write_cram(vdp, 1, 0x000E);  // palette 0 colour 1 = max red
+    write_cram(vdp, 17, 0x00E0); // palette 1 colour 1 = max green
+
+    tick_to_active_line(vdp);
+    vdp.tick(genesis_vdp::master_clocks_per_line); // render scanline 0
+    const auto fb = vdp.framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    // Window's green wins at screen Y=0 X=0 -- not plane A's red.
+    CHECK(fb.pixels[0] == rgb_green);
+}
+
 TEST_CASE("genesis_vdp renders a sprite over the planes") {
     genesis_vdp vdp;
     set_reg(vdp, 1, 0x44);                 // M5 + display enable
