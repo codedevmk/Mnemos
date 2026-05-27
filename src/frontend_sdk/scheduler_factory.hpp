@@ -47,4 +47,18 @@ namespace mnemos::frontend_sdk {
                chips::ivideo* frame_source) override;
     };
 
+    // Convenience shim every adapter needs: if `factory` is non-null, delegate
+    // to it; otherwise build a default runtime::scheduler. Lets adapter ctors
+    // initialize their scheduler member via a single expression in the
+    // member-init list without repeating the null-check helper.
+    [[nodiscard]] inline runtime::scheduler
+    make_scheduler(scheduler_factory* factory,
+                   std::vector<runtime::scheduled_chip> chips,
+                   chips::ivideo* frame_source) {
+        if (factory != nullptr) {
+            return factory->create(std::move(chips), frame_source);
+        }
+        return runtime::scheduler(std::move(chips), frame_source);
+    }
+
 } // namespace mnemos::frontend_sdk

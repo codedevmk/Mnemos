@@ -35,15 +35,6 @@ namespace mnemos::apps::player::adapters::sms {
         // scale_q12, sample_channel_*) live in adapters/common.
         constexpr int kGainPsg = kMixerGainOne;
 
-        runtime::scheduler make_scheduler(frontend_sdk::scheduler_factory* factory,
-                                          std::vector<runtime::scheduled_chip> chips,
-                                          chips::ivideo* frame_source) {
-            if (factory != nullptr) {
-                return factory->create(std::move(chips), frame_source);
-            }
-            return runtime::scheduler(std::move(chips), frame_source);
-        }
-
     } // namespace
 
     sms_adapter::sms_adapter(std::vector<std::uint8_t> rom,
@@ -51,7 +42,8 @@ namespace mnemos::apps::player::adapters::sms {
                              std::string display_name,
                              frontend_sdk::scheduler_factory* scheduler_factory)
         : sys_(manifests::sms::assemble_sms(std::move(rom), config)),
-          scheduler_(make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->vdp)),
+          scheduler_(frontend_sdk::make_scheduler(scheduler_factory,
+                                                  build_schedule(*sys_), &sys_->vdp)),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
         sys_->psg.enable_audio_capture(true);
