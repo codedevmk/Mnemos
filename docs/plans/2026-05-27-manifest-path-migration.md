@@ -2,14 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax. **DO NOT START** any phase until the corresponding "Pre-Phase Decisions" block at the top is resolved with the user.
 
-> **Status (2026-05-27 end-of-session):** **Phase A COMPLETE.** All five sub-phases landed in a single session as purely additive infrastructure. `build_system()` can now express every production-system mechanism the hand-written `assemble_*()` functions rely on: per-chip config, callback wiring, gated ticks, mapper overlays, and arbitrary system-specific MMIO blocks. Pre-phase decisions D1–D5 resolved per the recommendations inline. 48/48 ctest entries pass throughout; BoV f=120 still byte-perfect 0/215040 vs the reference after every Phase A commit. Phase B (system migrations) is unblocked but **not yet started** — needs fresh eyes for the parity-critical Genesis step.
+> **Status (2026-05-27 end-of-session):** **Phase A COMPLETE. Phase B.1 FUNCTIONALLY COMPLETE** (SMS manifest path produces a runnable system, validated end-to-end). All eleven sub-phases (A.1–A.5 + B.1.1–B.1.5) landed in a single session. `build_system()` expresses every production-system mechanism `assemble_*()` relies on, and the SMS smoke test exercises every mechanism through one end-to-end pipeline (parse → build → configure → callbacks → mirror RAM → mapper overlay → mmio_block factory → CPU step). Pre-phase decisions D1–D5 resolved. 49/49 ctest entries pass; BoV f=120 still byte-perfect 0/215040 vs the reference after every commit.
 
-> **Commits landed this session:**
+> **Phase A commits:**
 > - A.1 `c3c8484` — per-chip `[chip.config]` TOML
-> - A.2 — callback registry plumbing (named-callback escape hatch)
+> - A.2 — callback registry plumbing
 > - A.3 — declarative chip gating (`[[gate]]` + system-agnostic `gated_chip`)
 > - A.4 `5a4048c` — generic mapper overlays (`[[bus.region]] backing="mapper"`)
 > - A.5 `80164e7` — system-specific MMIO escape (`[[mmio_block]]`)
+
+> **Phase B.1 commits:**
+> - B.1.1 `8bf3a2d` — z80 port_in/port_out callbacks
+> - B.1.2 `0b41ba6` — sms_mapper + codemasters_mapper read_overlay/write_overlay
+> - B.1.2b `5a6c10c` — builder RAM-region mirroring via `size < range`
+> - B.1.3 `495d688` — SMS NTSC/PAL TOML manifests + sms_vdp::configure
+> - B.1.4 — sms_callbacks host helper (`sms_callbacks_state` + `make_sms_host_tables`)
+> - B.1.5 `b26c30f` — end-to-end manifest-path smoke test (10/10 assertions pass on first run)
+
+> **What's left for full B.1 ship:** adapter cutover. `sms_adapter` today uses `assemble_sms` directly; switching to the manifest path requires restructuring `sms_system` to hold chip pointers (from `system_graph`) instead of value members, then `sms_adapter` queries the graph. Invasive but not architecturally risky — pure plumbing on top of the now-validated foundation.
 
 **Goal:** Migrate every supported system (today: SMS, Genesis, C64; future: 32X, Sega CD, Saturn, Amiga, CPS1, CPS2) from hand-written `assemble_*()` C++ functions to declarative TOML manifests consumed by an extended `build_system()`. After completion, `manifests/<system>/<system>_system.cpp` is gone; adding a new system means writing a `.toml` file plus any genuinely-new chip implementations.
 
@@ -160,7 +170,9 @@ Mapper chip exposes its banking via the introspection surface; builder wires the
 
 Each migration is a single PR. The PR keeps `assemble_*()` AND adds the manifest path; the player adapter is updated to use the manifest path; parity verified; only after that does the PR get merged. The hand-assembly `assemble_*()` is NOT deleted until Phase C.
 
-### B.1 — SMS migration
+### B.1 — SMS migration ⏳ FUNCTIONALLY COMPLETE, ADAPTER CUTOVER PENDING
+
+The build_system path produces a runnable SMS system as of `b26c30f`. The adapter still uses `assemble_sms`; switching requires the `sms_system` struct restructure.
 
 **Files**
 - `src/manifests/sms/sms.ntsc.toml`, `sms.pal.toml` — full system descriptions (chips, buses, regions, callbacks, gates, mmio_blocks).
