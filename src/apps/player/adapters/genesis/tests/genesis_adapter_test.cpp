@@ -100,7 +100,7 @@ TEST_CASE("genesis_adapter selects PAL pacing when configured") {
 }
 
 // Per-pad protocol tests (3-button MK-1650 + 6-button MK-1653) now live with
-// each device under src/peripheral/input/tests/. The adapter-level test below
+// each device under src/peripheral_sdk/input/tests/. The adapter-level test below
 // just verifies controller_state -> pad-bits routing end-to-end.
 
 TEST_CASE("genesis_adapter routes controller_state into the attached pad") {
