@@ -2321,13 +2321,35 @@ namespace mnemos::chips::cpu {
         return introspection_;
     }
 
-    void m68000::configure(const config_table& cfg) {
+    void m68000::configure(const config_table& cfg, const callback_table& callbacks) {
         // Genesis-style Z80-bus access latency: every $A00000-$A0FFFF bus
         // access on the cycle-accounted path costs one extra CPU cycle. The
         // Sega Genesis manifest sets `z80_bus_latency = true`; other m68000
         // systems leave it off (default).
         if (const auto v = chips::cfg_bool(cfg, "z80_bus_latency")) {
             z80_bus_latency_enabled_ = *v;
+        }
+
+        // Genesis IRQ-ack callback (clears VDP V-int latch on IACK cycle).
+        // Manifest names a void(int) callback; host registers the actual
+        // function. Phase A.2 plumbing: chip-side consumption ready, but no
+        // production system installs this through the manifest yet --
+        // assemble_genesis still wires set_irq_ack_callback inline. Phase B
+        // will switch over.
+        if (const auto id = chips::cfg_string(cfg, "irq_ack_callback")) {
+            if (const auto* fn = chips::find_callback<void(int)>(callbacks, *id)) {
+                irq_ack_ = *fn;
+            }
+        }
+
+        // TAS write-suppression callback (Genesis-only; Sega's bus controller
+        // ignores the TAS write phase). Manifest names a void(uint32_t) hook;
+        // host supplies it.
+        if (const auto id = chips::cfg_string(cfg, "tas_callback")) {
+            if (const auto* fn =
+                    chips::find_callback<void(std::uint32_t)>(callbacks, *id)) {
+                tas_callback_ = *fn;
+            }
         }
     }
 

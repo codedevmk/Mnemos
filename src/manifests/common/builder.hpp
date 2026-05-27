@@ -21,6 +21,12 @@ namespace mnemos::manifests {
     using rom_provider =
         std::function<std::optional<std::vector<std::uint8_t>>(std::string_view file)>;
 
+    // Host-supplied named-callback registry. Each chip's `configure()` reads
+    // callback IDs from its [chip.config] table and looks them up here.
+    // See `src/chips/shared/callbacks.hpp` for the supported signatures.
+    // Empty table = chips fall back to their built-in defaults.
+    using callback_table = chips::callback_table;
+
     // The instantiated machine: chips created from the manifest, the buses they
     // attach to, and the owned RAM/ROM storage the bus regions point into.
     struct system_graph final {
@@ -48,6 +54,12 @@ namespace mnemos::manifests {
     // Region mapping uses generic defaults: RAM at base priority, ROM overlays as
     // read-only overlays, MMIO above both. Machine-specific banking (e.g. the C64
     // PLA gating which overlay wins) is applied by a separate machine wirer.
-    [[nodiscard]] build_result build_system(const manifest& m, const rom_provider& roms);
+    //
+    // `callbacks` (optional) is the host-supplied named-callback registry. The
+    // builder hands each chip its [chip.config] table AND the callback table
+    // simultaneously via `ichip::configure(cfg, callbacks)`; chips that don't
+    // need callbacks ignore the parameter.
+    [[nodiscard]] build_result build_system(const manifest& m, const rom_provider& roms,
+                                            const callback_table& callbacks = {});
 
 } // namespace mnemos::manifests

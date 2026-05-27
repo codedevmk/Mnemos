@@ -1,5 +1,6 @@
 #pragma once
 
+#include "callbacks.hpp"
 #include "config.hpp"
 #include "introspection_views.hpp"
 
@@ -89,11 +90,23 @@ namespace mnemos::chips {
 
         // Apply per-chip configuration supplied by the manifest builder. The
         // builder calls this exactly once, AFTER construction and BEFORE
-        // `reset(power_on)`. Chips read the keys they recognize via
-        // `cfg_bool` / `cfg_int` / etc.; unknown keys are silently ignored
-        // (forward-compat for manifests describing options the running
-        // binary doesn't know about yet). Default no-op.
-        virtual void configure(const config_table& /*cfg*/) {}
+        // `reset(power_on)`.
+        //
+        // `cfg` carries scalar values from the [chip.config] manifest table
+        // (chips read recognised keys via cfg_bool / cfg_int / etc.).
+        //
+        // `callbacks` is the host-supplied named-callback registry. A chip
+        // that wants an externally-injected callback reads the callback's ID
+        // string from `cfg` and looks the typed function up via
+        // chips::find_callback<Sig>(callbacks, id). The chip falls back to
+        // its built-in default if either the ID is absent from cfg or the
+        // lookup misses; missing keys are not errors -- this lets manifests
+        // describe options the running binary doesn't know about, and lets
+        // chips be exercised without a full callback table in tests.
+        //
+        // Default no-op.
+        virtual void configure(const config_table& /*cfg*/,
+                               const callback_table& /*callbacks*/) {}
     };
 
     // Each tier-2 subclass interface below selects the chip's classification

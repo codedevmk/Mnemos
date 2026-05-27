@@ -24,7 +24,8 @@ namespace mnemos::manifests {
         }
     } // namespace
 
-    build_result build_system(const manifest& m, const rom_provider& roms) {
+    build_result build_system(const manifest& m, const rom_provider& roms,
+                              const callback_table& callbacks) {
         build_result out;
         system_graph graph;
         auto& errs = out.errors;
@@ -95,9 +96,10 @@ namespace mnemos::manifests {
                 continue;
             }
             chips::ichip* raw = chip.get();
-            // Apply per-chip config from [chip.config] BEFORE bus attachment +
-            // reset. Chips ignore keys they don't recognize.
-            raw->configure(cd.config);
+            // Apply per-chip config + host-supplied callback table BEFORE bus
+            // attachment + reset. Chips ignore keys they don't recognize and
+            // fall back to their built-in defaults for missing callbacks.
+            raw->configure(cd.config, callbacks);
             graph.chip_by_id.emplace(cd.id, raw);
             graph.chips.push_back(std::move(chip));
 

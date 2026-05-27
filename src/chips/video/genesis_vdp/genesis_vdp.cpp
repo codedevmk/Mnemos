@@ -1300,12 +1300,41 @@ namespace mnemos::chips::video {
         return introspection_;
     }
 
-    void genesis_vdp::configure(const config_table& cfg) {
+    void genesis_vdp::configure(const config_table& cfg, const callback_table& callbacks) {
         // PAL (50 Hz, 313 scanlines) vs NTSC (60 Hz, 262 scanlines). The
         // Sega Genesis manifest sets `pal = true` for PAL ROMs; defaults to
         // NTSC.
         if (const auto v = chips::cfg_bool(cfg, "pal")) {
             set_pal(*v);
+        }
+
+        // The VDP's host hooks: dma_read (68K->VDP DMA word source), irq
+        // (CPU IRQ assert/clear), delayed_irq (one-instruction-delayed IRQ
+        // for the canonical V-int-enable-via-MOVE.W path), and vblank (Z80
+        // IRQ-on-VBLANK edge signal). Phase A.2 plumbing in place; Phase B
+        // wires these through the manifest. assemble_genesis still installs
+        // them inline today.
+        if (const auto id = chips::cfg_string(cfg, "dma_read_callback")) {
+            if (const auto* fn =
+                    chips::find_callback<std::uint16_t(std::uint32_t)>(callbacks,
+                                                                       *id)) {
+                set_dma_read(*fn);
+            }
+        }
+        if (const auto id = chips::cfg_string(cfg, "irq_callback")) {
+            if (const auto* fn = chips::find_callback<void(int)>(callbacks, *id)) {
+                set_irq_callback(*fn);
+            }
+        }
+        if (const auto id = chips::cfg_string(cfg, "delayed_irq_callback")) {
+            if (const auto* fn = chips::find_callback<void(int)>(callbacks, *id)) {
+                set_delayed_irq_callback(*fn);
+            }
+        }
+        if (const auto id = chips::cfg_string(cfg, "vblank_callback")) {
+            if (const auto* fn = chips::find_callback<void(bool)>(callbacks, *id)) {
+                set_vblank_callback(*fn);
+            }
         }
     }
 
