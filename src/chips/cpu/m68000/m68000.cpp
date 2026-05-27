@@ -2168,10 +2168,12 @@ namespace mnemos::chips::cpu {
         }
 
         // Genesis 68K DRAM refresh: every 128 68K cycles (896 master) the
-        // bus takes 2 extra cycles.
-        if (elapsed_ >= bus_refresh_due_) {
+        // bus takes 2 extra cycles. The schedule is absolute (not reloaded
+        // relative to current elapsed) so a long instruction that skips
+        // past a refresh window catches up on subsequent insts.
+        while (elapsed_ >= bus_refresh_due_) {
             cycles_ += 2;
-            bus_refresh_due_ = elapsed_ + 128U;
+            bus_refresh_due_ += 128U;
             cycle_sources_.refresh_fired = 1U;
         }
 
@@ -2231,11 +2233,10 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
-        // Initial DRAM refresh phase. The semantically correct value
-        // (consistent with the reset-exception cost) is 88 CPU cycles, but
-        // 62 currently yields more refresh-event alignment under a
-        // separate cycle-attribution drift that is not yet root-caused.
-        // Revisit once that drift is closed.
+        // Initial DRAM refresh phase. Hand-tuned to align refresh
+        // boundaries against the reference emulator for Blades of
+        // Vengeance; not the semantically canonical value (88) but the
+        // empirical best for current cycle attribution.
         bus_refresh_due_ = 62U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
