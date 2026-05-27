@@ -69,6 +69,7 @@ namespace mnemos::chips::cpu {
         void load_state(state_reader& reader) override;
 
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
+        void configure(const config_table& cfg, const callback_table& callbacks) override;
 
         // icpu: the memory address space the CPU reads/writes.
         void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }

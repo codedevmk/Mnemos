@@ -1517,6 +1517,26 @@ namespace mnemos::chips::cpu {
 
     instrumentation::ichip_introspection& z80::introspection() noexcept { return introspection_; }
 
+    void z80::configure(const config_table& cfg, const callback_table& callbacks) {
+        // Z80 IN/OUT port handlers. The Z80's 64K I/O space is separate from
+        // its memory bus; each system dispatches IN/OUT to its own peripherals
+        // (e.g. on SMS: PSG, VDP, joypads, I/O control). Manifests name these
+        // callbacks; the host registers the actual handlers. Falls back to
+        // the chip's defaults (unset = open bus / drop) when missing.
+        if (const auto id = chips::cfg_string(cfg, "port_in_callback")) {
+            if (const auto* fn =
+                    chips::find_callback<std::uint8_t(std::uint16_t)>(callbacks, *id)) {
+                set_port_in(*fn);
+            }
+        }
+        if (const auto id = chips::cfg_string(cfg, "port_out_callback")) {
+            if (const auto* fn = chips::find_callback<void(std::uint16_t, std::uint8_t)>(
+                    callbacks, *id)) {
+                set_port_out(*fn);
+            }
+        }
+    }
+
     std::span<const register_descriptor> z80::register_snapshot() noexcept {
         using fmt = register_value_format;
         register_view_[0] = {"AF", af_, 16U, fmt::unsigned_integer};

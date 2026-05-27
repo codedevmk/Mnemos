@@ -34,7 +34,15 @@ namespace mnemos::chips {
         // memory space (e.g. genesis_vdp's 68K->VRAM DMA reads).
         std::function<std::uint16_t(std::uint32_t)>,
         // void(bool): boolean edge signals such as VBLANK transitions.
-        std::function<void(bool)>>;
+        std::function<void(bool)>,
+        // std::uint8_t(std::uint16_t port): Z80 IN-port read handler. The Z80
+        // has its own 64K I/O space separate from the memory bus; the system
+        // dispatches the actual hardware (PSG / VDP / pads / etc.) via this
+        // hook.
+        std::function<std::uint8_t(std::uint16_t)>,
+        // void(std::uint16_t port, std::uint8_t value): Z80 OUT-port write
+        // handler, the dual of the IN signature above.
+        std::function<void(std::uint16_t, std::uint8_t)>>;
 
     using callback_table = std::unordered_map<std::string, callback_value>;
 
