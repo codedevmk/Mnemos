@@ -417,6 +417,12 @@ namespace mnemos::chips::video {
 
     std::uint16_t genesis_vdp::status_read() noexcept {
         std::uint16_t s = 0;
+        // HBLANK status bit is high during the latter portion of each line.
+        // Approximate the active/hblank split at ~74% of the line cycle
+        // (matches H40's ~2540-master active region of a 3420-master line);
+        // good enough for status-poll loops that synchronise on HBLANK.
+        const bool in_hblank_phase =
+            in_hblank_ || line_accumulator_ >= (master_clocks_per_line * 3) / 4;
 
         s |= (1U << 9U); // FIFO empty (writes complete immediately in this model)
         if (vint_happened_) {
@@ -434,7 +440,7 @@ namespace mnemos::chips::video {
         if (in_vblank_) {
             s |= (1U << 3U);
         }
-        if (in_hblank_) {
+        if (in_hblank_phase) {
             s |= (1U << 2U);
         }
         if (dma_busy_) {
