@@ -57,6 +57,18 @@ namespace mnemos::chips::mapper {
         [[nodiscard]] std::uint8_t cpu_read(std::uint16_t address) const noexcept;
         void cpu_write(std::uint16_t address, std::uint8_t value) noexcept;
 
+        // imapper overlay surface. The build_system mapper-region path routes
+        // a `[[bus.region]] backing="mapper" mapper_id="this_chip"` region's
+        // bus reads/writes through these. Forwarded straight to the existing
+        // cpu_read/cpu_write CPU-side API; the 32-bit address is truncated to
+        // the Z80's 16-bit space because the SMS bus is 16-bit.
+        [[nodiscard]] std::uint8_t read_overlay(std::uint32_t address) noexcept override {
+            return cpu_read(static_cast<std::uint16_t>(address));
+        }
+        void write_overlay(std::uint32_t address, std::uint8_t value) noexcept override {
+            cpu_write(static_cast<std::uint16_t>(address), value);
+        }
+
         // Update a control register from a CPU write to $FFFC-$FFFF. Addresses
         // outside that range are ignored (the mapper fully decodes the four bytes
         // and never responds to the $DFFC-$DFFF RAM-mirror copy games use as work

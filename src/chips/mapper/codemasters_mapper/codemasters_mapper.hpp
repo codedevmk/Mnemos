@@ -53,6 +53,18 @@ namespace mnemos::chips::mapper {
         [[nodiscard]] std::uint8_t cpu_read(std::uint16_t address) const noexcept;
         void cpu_write(std::uint16_t address, std::uint8_t value) noexcept;
 
+        // imapper overlay surface. Same shape as sms_mapper's: the
+        // build_system mapper-region path routes a manifest-declared
+        // `backing="mapper"` region's bus accesses through these; the 32-bit
+        // address is truncated to the Z80's 16-bit window because the SMS
+        // bus is 16-bit.
+        [[nodiscard]] std::uint8_t read_overlay(std::uint32_t address) noexcept override {
+            return cpu_read(static_cast<std::uint16_t>(address));
+        }
+        void write_overlay(std::uint32_t address, std::uint8_t value) noexcept override {
+            cpu_write(static_cast<std::uint16_t>(address), value);
+        }
+
         [[nodiscard]] std::uint8_t page(int slot) const noexcept {
             return (slot >= 0 && slot < 3) ? page_[static_cast<std::size_t>(slot)] : 0U;
         }
