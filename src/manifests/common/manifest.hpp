@@ -55,6 +55,15 @@ namespace mnemos::manifests {
         std::vector<region_decl> regions;
     };
 
+    // Per-tick gate. When the named predicate is registered with the builder
+    // and returns false, the wrapped chip's tick is skipped that cycle. Used
+    // for: Genesis Z80 stalled by 68K's BUSREQ / RESET, Genesis 68K stalled
+    // during VDP DMA, etc.
+    struct gate_decl final {
+        std::string chip_id;   // matches an existing chip_decl.id
+        std::string predicate; // key into the host-supplied predicate_table
+    };
+
     struct manifest final {
         std::string schema;
         std::string id;
@@ -64,6 +73,7 @@ namespace mnemos::manifests {
         clock_config clock;
         std::vector<chip_decl> chips;
         std::vector<bus_decl> buses;
+        std::vector<gate_decl> gates;
     };
 
     // One validation/parse failure, located in the source where possible.

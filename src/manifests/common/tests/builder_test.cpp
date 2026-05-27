@@ -184,3 +184,103 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
     }
     CHECK(found);
 }
+
+TEST_CASE("build_system honours a [[gate]] by wrapping the chip with a gated tick") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.gated"
+[clock]
+master_hz = 1000000
+[[chip]]
+id = "cpu"
+type = "mos.6510"
+attached_bus = "main"
+[[bus]]
+id = "main"
+address_bits = 16
+[[bus.region]]
+name = "ram"
+range = "0x0000-0xFFFF"
+backing = "ram"
+size = 65536
+[[gate]]
+chip = "cpu"
+predicate = "test.cpu_running"
+)toml";
+
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+
+    bool cpu_running = false;
+    mnemos::manifests::predicate_table preds;
+    preds.emplace("test.cpu_running", [&cpu_running]() { return cpu_running; });
+
+    auto built = build_system(*parsed.value, no_roms, {}, preds);
+    REQUIRE(built.ok());
+
+    auto& graph = *built.value;
+    // chip_by_id resolves to the ORIGINAL m6510 (the wrapper's inner),
+    // not the gated_chip wrapper, so a downcast still finds the concrete
+    // chip.
+    auto* cpu = dynamic_cast<mnemos::chips::cpu::m6510*>(graph.chip("cpu"));
+    REQUIRE(cpu != nullptr);
+
+    // Load a single NOP at $C000 and point the reset vector there so the
+    // 6510 has a deterministic step. We tick the scheduler-view entry in
+    // chips[] (the wrapper) and observe whether the inner CPU advanced.
+    auto* bus = graph.bus("main");
+    REQUIRE(bus != nullptr);
+    bus->write8(0xC000U, 0xEAU);
+    bus->write8(0xFFFCU, 0x00U);
+    bus->write8(0xFFFDU, 0xC0U);
+    cpu->reset(mnemos::chips::reset_kind::power_on);
+
+    REQUIRE(graph.chips.size() == 1U);
+    auto* scheduler_chip = graph.chips[0].get();
+    REQUIRE(scheduler_chip != nullptr);
+
+    const std::uint64_t cycles_before = cpu->elapsed_cycles();
+
+    // Gate is OFF: ticking the wrapper should NOT advance the inner CPU.
+    cpu_running = false;
+    scheduler_chip->tick(8U);
+    CHECK(cpu->elapsed_cycles() == cycles_before);
+
+    // Gate is ON: ticking the wrapper SHOULD advance the inner CPU.
+    cpu_running = true;
+    scheduler_chip->tick(8U);
+    CHECK(cpu->elapsed_cycles() > cycles_before);
+}
+
+TEST_CASE("build_system reports an unknown gate predicate") {
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.gated.bad"
+[clock]
+master_hz = 1
+[[chip]]
+id = "cpu"
+type = "mos.6510"
+attached_bus = "main"
+[[bus]]
+id = "main"
+address_bits = 16
+[[gate]]
+chip = "cpu"
+predicate = "no_such_predicate"
+)toml";
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+    const auto built = build_system(*parsed.value, no_roms);
+    CHECK_FALSE(built.ok());
+    bool found = false;
+    for (const auto& d : built.errors) {
+        if (d.message.find("predicate 'no_such_predicate' is not registered") !=
+            std::string::npos) {
+            found = true;
+        }
+    }
+    CHECK(found);
+}

@@ -1,8 +1,10 @@
 #include "builder.hpp"
 
 #include "chip_registry.hpp"
+#include "gated_chip.hpp"
 #include "sha256.hpp"
 
+#include <algorithm>
 #include <span>
 #include <utility>
 
@@ -25,7 +27,8 @@ namespace mnemos::manifests {
     } // namespace
 
     build_result build_system(const manifest& m, const rom_provider& roms,
-                              const callback_table& callbacks) {
+                              const callback_table& callbacks,
+                              const predicate_table& predicates) {
         build_result out;
         system_graph graph;
         auto& errs = out.errors;
@@ -131,6 +134,46 @@ namespace mnemos::manifests {
                         2);
                 }
             }
+        }
+
+        // Gates: wrap any chip named in a [[gate]] entry with gated_chip
+        // controlled by the host-supplied named predicate. The original chip
+        // pointer in chip_by_id stays valid (the wrapper takes ownership of
+        // the chip's unique_ptr but the raw ichip* hasn't moved); the chips
+        // vector entry is replaced with the wrapper so the scheduler ticks
+        // through the gate.
+        for (const gate_decl& gd : m.gates) {
+            const auto chip_it = graph.chip_by_id.find(gd.chip_id);
+            if (chip_it == graph.chip_by_id.end()) {
+                report("gate '" + gd.chip_id + "' references unknown chip");
+                continue;
+            }
+            const auto pred_it = predicates.find(gd.predicate);
+            if (pred_it == predicates.end()) {
+                report("gate '" + gd.chip_id + "' predicate '" + gd.predicate +
+                       "' is not registered");
+                continue;
+            }
+            chips::ichip* raw = chip_it->second;
+            // Find the unique_ptr in graph.chips that owns raw.
+            auto own_it = std::find_if(graph.chips.begin(), graph.chips.end(),
+                                        [raw](const std::unique_ptr<chips::ichip>& p) {
+                                            return p.get() == raw;
+                                        });
+            if (own_it == graph.chips.end()) {
+                report("gate '" + gd.chip_id +
+                       "': chip ownership not found (internal error)");
+                continue;
+            }
+            // Steal ownership into the wrapper. We can't store the original
+            // unique_ptr inside the wrapper directly (gated_chip holds a raw
+            // pointer), so park the original alongside in graph.gated_originals
+            // to keep the unique_ptr alive, then replace the original slot in
+            // graph.chips with the wrapper.
+            std::unique_ptr<chips::ichip> orig = std::move(*own_it);
+            auto wrapper = std::make_unique<gated_chip>(*orig, pred_it->second);
+            *own_it = std::move(wrapper);
+            graph.gated_originals.push_back(std::move(orig));
         }
 
         if (errs.empty()) {

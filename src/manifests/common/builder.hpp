@@ -4,6 +4,7 @@
 
 #include "bus.hpp"
 #include "chip.hpp"
+#include "predicates.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -27,10 +28,26 @@ namespace mnemos::manifests {
     // Empty table = chips fall back to their built-in defaults.
     using callback_table = chips::callback_table;
 
+    // Host-supplied named-predicate registry. The builder consults this when
+    // it wraps a chip per a manifest `[[gate]]` entry. Empty table is valid
+    // as long as the manifest has no gates; a manifest gate referencing a
+    // missing predicate produces a build-time diagnostic.
+    using predicate_table = chips::predicate_table;
+
     // The instantiated machine: chips created from the manifest, the buses they
     // attach to, and the owned RAM/ROM storage the bus regions point into.
+    //
+    // `chips` is the SCHEDULER'S VIEW: for gated chips it holds the gated_chip
+    // wrapper; for ungated chips it holds the chip directly. `chip_by_id`
+    // resolves a manifest chip ID to the ORIGINAL chip (the inner of any
+    // wrapper) so introspection / register queries / state access hit the
+    // concrete chip type rather than the wrapper.
+    //
+    // `gated_originals` keeps the original chip unique_ptrs alive for chips
+    // that got wrapped; the wrapper holds a raw ichip* into one of these.
     struct system_graph final {
         std::vector<std::unique_ptr<chips::ichip>> chips;
+        std::vector<std::unique_ptr<chips::ichip>> gated_originals;
         std::vector<std::unique_ptr<topology::bus>> buses;
         std::vector<std::unique_ptr<std::vector<std::uint8_t>>> memory;
         std::unordered_map<std::string, chips::ichip*> chip_by_id;
@@ -59,7 +76,15 @@ namespace mnemos::manifests {
     // builder hands each chip its [chip.config] table AND the callback table
     // simultaneously via `ichip::configure(cfg, callbacks)`; chips that don't
     // need callbacks ignore the parameter.
+    //
+    // `predicates` (optional) is the host-supplied named-predicate registry.
+    // For each manifest `[[gate]]` entry the builder wraps the named chip in
+    // a `gated_chip` whose tick is gated by the named predicate. The wrapper
+    // replaces the chip in `system_graph::chips`; `system_graph::chip_by_id`
+    // continues to resolve to the ORIGINAL chip so introspection and register
+    // queries hit the right type.
     [[nodiscard]] build_result build_system(const manifest& m, const rom_provider& roms,
-                                            const callback_table& callbacks = {});
+                                            const callback_table& callbacks = {},
+                                            const predicate_table& predicates = {});
 
 } // namespace mnemos::manifests

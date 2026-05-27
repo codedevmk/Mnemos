@@ -245,6 +245,30 @@ namespace mnemos::manifests {
             }
         }
 
+        // Optional [[gate]] entries: each names a chip and a predicate the
+        // builder will resolve through the host-supplied predicate_table.
+        if (const toml::array* gates = root["gate"].as_array()) {
+            for (const toml::node& el : *gates) {
+                const toml::table* g = el.as_table();
+                if (g == nullptr) {
+                    report("[[gate]] entry is not a table", &el);
+                    continue;
+                }
+                gate_decl gd;
+                gd.chip_id = (*g)["chip"].value_or(std::string{});
+                gd.predicate = (*g)["predicate"].value_or(std::string{});
+                if (gd.chip_id.empty()) {
+                    report("gate.chip is required", g);
+                    continue;
+                }
+                if (gd.predicate.empty()) {
+                    report("gate.predicate is required", g);
+                    continue;
+                }
+                m.gates.push_back(std::move(gd));
+            }
+        }
+
         if (errs.empty()) {
             out.value = std::move(m);
         }
