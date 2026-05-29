@@ -30,6 +30,7 @@ configure_file(
 add_library(
     mnemos_manifests_sms
     sms_callbacks.cpp
+    sms_runtime.cpp
     sms_system.cpp
     sms_region.cpp
 )
@@ -48,6 +49,7 @@ target_link_libraries(
     mnemos_manifests_sms
     PUBLIC
         mnemos::topology
+        mnemos::manifests::common
         mnemos::chips::cpu::z80
         mnemos::chips::video::sms_vdp
         mnemos::chips::audio::sn76489
@@ -62,6 +64,7 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_topology
+        mnemos_manifests_common
         mnemos_chips_shared
         mnemos_foundation
         mnemos_peripheral_common
@@ -102,6 +105,14 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_sms_codemasters_parity_test
         SOURCES tests/sms_codemasters_parity_test.cpp
+        LIBRARIES mnemos::manifests::sms mnemos::manifests mnemos::runtime
+    )
+    # Integration parity for the build_sms_runtime wrapper vs assemble_sms. The
+    # synthetic-cart cases always run; the real-BIOS case is data-gated on
+    # MNEMOS_SMS_BIOS and SKIPs when unset (synthetic cases keep the binary at 0).
+    mnemos_add_test(
+        mnemos_manifests_sms_runtime_parity_test
+        SOURCES tests/sms_runtime_parity_test.cpp
         LIBRARIES mnemos::manifests::sms mnemos::manifests mnemos::runtime
     )
 endif()

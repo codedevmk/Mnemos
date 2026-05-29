@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace mnemos::manifests::sms {
@@ -62,12 +63,18 @@ namespace mnemos::manifests::sms {
         }
 
         [[nodiscard]] peripheral::device* port_device(int port) noexcept {
-            return (port >= 0 && port < 2) ? ports[static_cast<std::size_t>(port)].get()
-                                           : nullptr;
+            return (port >= 0 && port < 2) ? ports[static_cast<std::size_t>(port)].get() : nullptr;
         }
 
         void set_reset_button(bool pressed) noexcept { reset_pressed = pressed; }
     };
+
+    // True when a cartridge image carries a valid Codemasters checksum header
+    // (the 16-bit word at $7FE6 plus the complement at $7FE8 sum to $10000),
+    // which doubles as the Codemasters-mapper signature. Used to pick the mapper
+    // when sms_config::cartridge_mapper is `automatic`. Shared by assemble_sms
+    // and the manifest-path build_sms_runtime so both resolve carts identically.
+    [[nodiscard]] bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept;
 
     // Assemble a bootable SMS from a cartridge image (moved in). The mapper banks the
     // image; reads of $C000-$FFFF hit work RAM (with the $FFFC-$FFFF mapper-register

@@ -8,22 +8,22 @@
 
 namespace mnemos::manifests::sms {
 
-    namespace {
-        // A Codemasters cart carries its own checksum header (the Sega BIOS routine
-        // can't validate it through the different mapper): the 16-bit word at $7FE6
-        // plus the complement word at $7FE8 sum to $10000. That doubles as the mapper
-        // signature (community-documented header convention; see THIRD-PARTY.md).
-        bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept {
-            if (rom.size() < 0x8000U) {
-                return false;
-            }
-            const auto word = [&](std::size_t off) {
-                return static_cast<std::uint32_t>(rom[off]) |
-                       (static_cast<std::uint32_t>(rom[off + 1U]) << 8U);
-            };
-            return (word(0x7FE6U) + word(0x7FE8U)) == 0x10000U;
+    // A Codemasters cart carries its own checksum header (the Sega BIOS routine
+    // can't validate it through the different mapper): the 16-bit word at $7FE6
+    // plus the complement word at $7FE8 sum to $10000. That doubles as the mapper
+    // signature (community-documented header convention; see THIRD-PARTY.md).
+    bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept {
+        if (rom.size() < 0x8000U) {
+            return false;
         }
+        const auto word = [&](std::size_t off) {
+            return static_cast<std::uint32_t>(rom[off]) |
+                   (static_cast<std::uint32_t>(rom[off + 1U]) << 8U);
+        };
+        return (word(0x7FE6U) + word(0x7FE8U)) == 0x10000U;
+    }
 
+    namespace {
         // I/O control latch ($3F) bit layout: 0/1 = port-0 TR/TH direction
         // (1 = input), 2/3 = port-1, 4/5 = port-0 TR/TH output level, 6/7 =
         // port-1 output level.
@@ -56,8 +56,8 @@ namespace mnemos::manifests::sms {
             const std::uint8_t p1 = port_input(s, 0);
             const std::uint8_t p2 = port_input(s, 1);
             std::uint8_t v = static_cast<std::uint8_t>(p1 & 0x1FU); // U/D/L/R/B1
-            const std::uint8_t b2 = tr_is_input(s, 0) ? static_cast<std::uint8_t>((p1 >> 5U) & 1U)
-                                                      : tr_output(s, 0);
+            const std::uint8_t b2 =
+                tr_is_input(s, 0) ? static_cast<std::uint8_t>((p1 >> 5U) & 1U) : tr_output(s, 0);
             v |= static_cast<std::uint8_t>(b2 << 5U);
             v |= static_cast<std::uint8_t>(((p2 >> 0U) & 1U) << 6U); // P2 Up
             v |= static_cast<std::uint8_t>(((p2 >> 1U) & 1U) << 7U); // P2 Down
@@ -72,8 +72,8 @@ namespace mnemos::manifests::sms {
             v |= static_cast<std::uint8_t>(((p2 >> 2U) & 1U) << 0U); // Left
             v |= static_cast<std::uint8_t>(((p2 >> 3U) & 1U) << 1U); // Right
             v |= static_cast<std::uint8_t>(((p2 >> 4U) & 1U) << 2U); // Button 1
-            const std::uint8_t b2 = tr_is_input(s, 1) ? static_cast<std::uint8_t>((p2 >> 5U) & 1U)
-                                                      : tr_output(s, 1);
+            const std::uint8_t b2 =
+                tr_is_input(s, 1) ? static_cast<std::uint8_t>((p2 >> 5U) & 1U) : tr_output(s, 1);
             v |= static_cast<std::uint8_t>(b2 << 3U);
             v |= static_cast<std::uint8_t>((s->reset_pressed ? 0U : 1U) << 4U);
             v |= static_cast<std::uint8_t>(1U << 5U);
