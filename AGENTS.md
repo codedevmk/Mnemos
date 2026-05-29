@@ -42,6 +42,12 @@
 - Do not overgenerate comments. Add comments only when they explain a non-obvious invariant, constraint, or tradeoff.
 - No low-signal generated filler: avoid placeholder prose, broad abstractions, and scaffolding beyond the current milestone's acceptance needs.
 
+## Scratch artifacts
+
+- Every debug artifact a session produces goes under the git-ignored `scratch/` dir at the repo root: headless `--screenshot` framebuffers, VRAM/CRAM dumps, trace CSVs, ad-hoc logs, coverage `profraw`. Do not write them to the repo root.
+- Examples: `mnemos_player --screenshot scratch/boot.ppm --frames 120`; redirect logs with `... > scratch/dma.log`; for ad-hoc coverage set `LLVM_PROFILE_FILE=scratch/cov/%p.profraw` (the foundation coverage script already scopes its own profraw under the build dir).
+- Clear it with `scripts/clean-scratch.ps1` (supports `-OlderThanDays N` and `-Deep`). The whole dir is git-ignored, so a stale `scratch/` never dirties `git status`.
+
 ## Current Bootstrap State
 
 - This repository is still in M0 bootstrap. Root CMake presets, `src/` tier placeholder targets, CI wiring, licenses, hooks, ADR seeds, and a foundation smoke test are expected to exist.

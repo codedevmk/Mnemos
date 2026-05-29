@@ -11,10 +11,17 @@ compile_commands.json
 roms/
 firmware/
 
-# Framebuffer / VRAM dumps from the headless --screenshot path
-# and the reference_runner A/B harness. Scratch artefacts only.
-*.ppm
+# Scratch / debug artifacts. Canonical home is scratch/ -- headless --screenshot
+# framebuffers, VRAM/CRAM dumps, trace CSVs, ad-hoc logs, and coverage profraw
+# all belong there (see AGENTS.md "Scratch artifacts"). Cleared by
+# scripts/clean-scratch.ps1. Never committed.
+/scratch/
+# Legacy / session-specific scratch dirs: kept locally for in-flight debugging
+# (e.g. Genesis A/B traces) but never committed.
+scratch_sms/
 diverge_scratch/
+# Catch-all for stray framebuffer dumps written outside scratch/.
+*.ppm
 
 # Temporary files
 tmp/
