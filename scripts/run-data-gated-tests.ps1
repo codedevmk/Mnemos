@@ -11,6 +11,7 @@
 #   MNEMOS_Z80_TEST_ROM       a CP/M .com Z80 exerciser image         -> z80_conformance_test
 #   MNEMOS_M6510_TESTS_DIR    per-instruction 6502 test JSON dir      -> m6510_conformance_test
 #   MNEMOS_M68000_TESTS_DIR   per-instruction 68000 test JSON dir     -> m68000_conformance_test
+#   MNEMOS_SMS_BIOS           an SMS BIOS/cart image (A/B comparator) -> sms_manifest_parity_test
 #
 # Optional golden-hash pins (assert the rendered framebuffer once locked in):
 #   MNEMOS_SMS_BOOT_SHA256, MNEMOS_C64_BOOT_SHA256, MNEMOS_GENESIS_BOOT_SHA256
@@ -41,7 +42,8 @@ $vars = @(
     @{ Name = "MNEMOS_GENESIS_ROM";      Test = "genesis_boot_test" },
     @{ Name = "MNEMOS_Z80_TEST_ROM";     Test = "z80_conformance_test" },
     @{ Name = "MNEMOS_M6510_TESTS_DIR";  Test = "m6510_conformance_test" },
-    @{ Name = "MNEMOS_M68000_TESTS_DIR"; Test = "m68000_conformance_test" }
+    @{ Name = "MNEMOS_M68000_TESTS_DIR"; Test = "m68000_conformance_test" },
+    @{ Name = "MNEMOS_SMS_BIOS";         Test = "sms_manifest_parity_test" }
 )
 foreach ($v in $vars) {
     $value = [Environment]::GetEnvironmentVariable($v.Name)
@@ -59,5 +61,5 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "conformance|c64_basic_boot|sms_boot|genesis_boot"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity"
 exit $LASTEXITCODE
