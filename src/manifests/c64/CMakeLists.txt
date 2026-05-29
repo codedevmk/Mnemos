@@ -19,6 +19,7 @@ configure_file(
 add_library(
     mnemos_manifests_c64
     c64_callbacks.cpp
+    c64_runtime.cpp
     c64_system.cpp
     c64_input.cpp
 )
@@ -71,5 +72,12 @@ if(BUILD_TESTING)
         mnemos_manifests_c64_banking_test
         SOURCES tests/c64_manifest_banking_test.cpp
         LIBRARIES mnemos::manifests::c64 mnemos::manifests
+    )
+    # build_c64_runtime vs assemble_c64 framebuffer parity. Synthetic zero-ROMs
+    # always run; the real-ROM A/B is data-gated on MNEMOS_C64_ROM_DIR.
+    mnemos_add_test(
+        mnemos_manifests_c64_parity_test
+        SOURCES tests/c64_manifest_parity_test.cpp
+        LIBRARIES mnemos::manifests::c64 mnemos::manifests mnemos::runtime
     )
 endif()
