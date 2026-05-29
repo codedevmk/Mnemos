@@ -95,6 +95,17 @@ namespace mnemos::manifests::genesis {
         rt->state.main_bus = rt->graph.bus("main");
         rt->state.z80_bus = rt->graph.bus("z80");
 
+        // Reset the CPUs now the buses (with the cart ROM mapped) are wired,
+        // mirroring assemble_genesis: the 68000 loads SSP/PC from the cart's
+        // reset vectors, and the Z80 powers on (held idle by the z80_running gate
+        // until the 68K releases its RESET via $A11200). build_system does NOT
+        // reset chips, and the 68000 ctor can't read vectors with no bus
+        // attached, so without this the 68000 would start at PC=0 and run garbage.
+        // Resetting after configure() is safe -- the irq_ack/tas/z80_bus_latency
+        // settings survive reset (assemble_genesis installs them pre-reset too).
+        rt->state.z80->reset(chips::reset_kind::power_on);
+        rt->state.cpu->reset(chips::reset_kind::power_on);
+
         // Resolve the gated scheduler wrappers for the two CPUs.
         rt->cpu_sched = scheduler_entry(rt->graph, "cpu");
         rt->z80_sched = scheduler_entry(rt->graph, "z80");
