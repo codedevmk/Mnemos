@@ -1,0 +1,187 @@
+# Sega Genesis / Mega Drive (NTSC) -- Mnemos system manifest (schema mnemos-manifest/1).
+#
+# The data-driven description of the Genesis platform, mirroring assemble_genesis.
+# Two CPUs on two buses: the 68000 on the 24-bit big-endian main bus and the Z80
+# on its 16-bit little-endian sound bus. assemble_genesis stays in tree as the
+# byte-for-byte parity oracle (see genesis_manifest_parity_test); this manifest +
+# manifests::genesis::genesis_callbacks must reproduce it exactly.
+#
+# The cartridge is supplied at run time via the rom_provider (keyed "cart"), so
+# this manifest declares the cart as a rom-backed region with NO sha256 (carts
+# are not fixed system ROMs and carry no pinned hash).
+#
+# Almost all inter-chip and MMIO wiring is non-declarative (stateful Z80
+# arbitration, VDP 16-bit port coalescing, the banked Z80->68K window), so it
+# lives in the host-side genesis_callbacks bundle, named below by callback ID /
+# mmio_block name / predicate.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.genesis.ntsc"
+display_name = "Sega Genesis / Mega Drive (NTSC)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# NTSC Genesis master clock. The 68000 runs at master/7, the Z80 at master/15
+# (these ratios drive the scheduler tick weights in the adapter, not here). The
+# [clock] block is platform metadata; build_system does not use it for wiring.
+master_hz               = 53693175
+master_to_cpu_divider   = 7
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "motorola.68000"
+attached_bus = "main"
+[chip.config]
+# Genesis quirk: $A00000-$A0FFFF accesses cost +1 CPU cycle; the bus controller
+# drops the TAS write phase; the VDP V-int latch clears on the 68K IACK cycle.
+z80_bus_latency  = true
+irq_ack_callback = "genesis.irq_ack"
+tas_callback     = "genesis.tas_drop"
+
+[[chip]]
+id           = "z80"
+type         = "zilog.z80"
+attached_bus = "z80"
+# The sound Z80 reaches everything through its bus (RAM, YM2612, bank register,
+# PSG, and the banked 68K window); no port_in/port_out callbacks like the SMS.
+
+[[chip]]
+id           = "video"
+type         = "sega.315_5313"
+attached_bus = "main"
+[chip.config]
+# NTSC: pal defaults to false (omitted). dma_read sources 68K->VDP DMA words off
+# the main bus; irq/delayed_irq drive the 68K IRQ; vblank edges the Z80 IRQ and
+# ticks per-frame device hooks.
+dma_read_callback     = "genesis.dma_read"
+irq_callback          = "genesis.vdp_irq"
+delayed_irq_callback  = "genesis.vdp_delayed_irq"
+vblank_callback       = "genesis.vblank"
+
+[[chip]]
+id           = "fm"
+type         = "yamaha.ym2612"
+attached_bus = "main"
+# Register access is via the mmio_blocks below (mapped on BOTH buses); the chip
+# is constructed + scheduled like any other.
+
+[[chip]]
+id           = "psg"
+type         = "ti.sn76489"
+attached_bus = "main"
+# Accessed via mmio_blocks at $C00011 (main) and $7F11 (z80 bus).
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 24
+endianness   = "big"
+
+# Cartridge ROM $000000-$3FFFFF, supplied at run time (rom_provider key "cart").
+# No sha256: a cart is not a fixed system ROM.
+[[bus.region]]
+name    = "cartridge"
+range   = "0x000000-0x3FFFFF"
+backing = "rom"
+file    = "cart"
+
+# 68K work RAM: 64 KiB at $E00000, mirrored across $E00000-$FFFFFF (A16+ ignored).
+[[bus.region]]
+name    = "work_ram"
+range   = "0xE00000-0xFFFFFF"
+backing = "ram"
+size    = 65536
+
+[[bus]]
+id           = "z80"
+address_bits = 16
+endianness   = "little"
+
+# --- Main-bus MMIO blocks (host factories in genesis_callbacks) --------------
+
+# $A00000-$A03FFF: Z80 RAM (8 KiB, mirrored). Shared storage with the z80 bus's
+# $0000 region -- both route to the same buffer in the callback state.
+[[mmio_block]]
+name         = "genesis.z80_ram_main"
+attached_bus = "main"
+range        = "0xA00000-0xA03FFF"
+
+# $A04000-$A05FFF: YM2612 ports (addr/data x 2, mirrored).
+[[mmio_block]]
+name         = "genesis.ym2612_main"
+attached_bus = "main"
+range        = "0xA04000-0xA05FFF"
+
+# $A10000-$A1001F: I/O sub-controller (version, controller data/ctrl, serial).
+[[mmio_block]]
+name         = "genesis.io_controller"
+attached_bus = "main"
+range        = "0xA10000-0xA1001F"
+
+# $A11100-$A11101: Z80 BUSREQ.
+[[mmio_block]]
+name         = "genesis.z80_busreq"
+attached_bus = "main"
+range        = "0xA11100-0xA11101"
+
+# $A11200-$A11201: Z80 RESET (falling edge resets the Z80).
+[[mmio_block]]
+name         = "genesis.z80_reset"
+attached_bus = "main"
+range        = "0xA11200-0xA11201"
+
+# $C00000-$C0001F: VDP data/control/HV ports + the SN76489 PSG at $C00011.
+[[mmio_block]]
+name         = "genesis.vdp_ports"
+attached_bus = "main"
+range        = "0xC00000-0xC0001F"
+
+# --- Z80-bus MMIO blocks ------------------------------------------------------
+
+# $0000-$3FFF: Z80 RAM (same 8 KiB buffer as $A00000 on the main bus).
+[[mmio_block]]
+name         = "genesis.z80_ram_z80"
+attached_bus = "z80"
+range        = "0x0000-0x3FFF"
+
+# $4000-$5FFF: YM2612 (shared with the 68K's $A04000).
+[[mmio_block]]
+name         = "genesis.ym2612_z80"
+attached_bus = "z80"
+range        = "0x4000-0x5FFF"
+
+# $6000-$60FF: bank register -- shifts bit 0 into the 9-bit window base.
+[[mmio_block]]
+name         = "genesis.z80_bank"
+attached_bus = "z80"
+range        = "0x6000-0x60FF"
+
+# $7F00-$7FFF: SN76489 PSG at $7F11 (shared with the 68K's $C00011).
+[[mmio_block]]
+name         = "genesis.psg_z80"
+attached_bus = "z80"
+range        = "0x7F00-0x7FFF"
+
+# $8000-$FFFF: banked 32 KiB window into 68K address space ((bank<<15)|offset).
+[[mmio_block]]
+name         = "genesis.z80_window"
+attached_bus = "z80"
+range        = "0x8000-0xFFFF"
+
+# --- Chip gating -------------------------------------------------------------
+
+# The Z80 ticks only while the 68K has released its RESET and not asserted
+# BUSREQ; the 68K stalls while the VDP holds the bus for DMA.
+[[gate]]
+chip      = "z80"
+predicate = "genesis.z80_running"
+
+[[gate]]
+chip      = "cpu"
+predicate = "genesis.cpu_runnable"

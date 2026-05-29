@@ -1,0 +1,149 @@
+# Sega Genesis / Mega Drive (PAL) -- Mnemos system manifest (schema mnemos-manifest/1).
+#
+# PAL counterpart of genesis.ntsc.toml: slower master clock and a 313-line,
+# 50 Hz VDP frame (`pal = true`). See genesis.ntsc.toml for the full layout and
+# rationale; only the clock and the VDP `pal` flag differ.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.genesis.pal"
+display_name = "Sega Genesis / Mega Drive (PAL)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# PAL Genesis master clock; 68000 = master/7, Z80 = master/15.
+master_hz               = 53203424
+master_to_cpu_divider   = 7
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "motorola.68000"
+attached_bus = "main"
+[chip.config]
+z80_bus_latency  = true
+irq_ack_callback = "genesis.irq_ack"
+tas_callback     = "genesis.tas_drop"
+
+[[chip]]
+id           = "z80"
+type         = "zilog.z80"
+attached_bus = "z80"
+
+[[chip]]
+id           = "video"
+type         = "sega.315_5313"
+attached_bus = "main"
+[chip.config]
+# PAL: 313 scanlines, 50 Hz.
+pal                  = true
+dma_read_callback    = "genesis.dma_read"
+irq_callback         = "genesis.vdp_irq"
+delayed_irq_callback = "genesis.vdp_delayed_irq"
+vblank_callback      = "genesis.vblank"
+
+[[chip]]
+id           = "fm"
+type         = "yamaha.ym2612"
+attached_bus = "main"
+
+[[chip]]
+id           = "psg"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 24
+endianness   = "big"
+
+[[bus.region]]
+name    = "cartridge"
+range   = "0x000000-0x3FFFFF"
+backing = "rom"
+file    = "cart"
+
+[[bus.region]]
+name    = "work_ram"
+range   = "0xE00000-0xFFFFFF"
+backing = "ram"
+size    = 65536
+
+[[bus]]
+id           = "z80"
+address_bits = 16
+endianness   = "little"
+
+# --- Main-bus MMIO blocks ----------------------------------------------------
+
+[[mmio_block]]
+name         = "genesis.z80_ram_main"
+attached_bus = "main"
+range        = "0xA00000-0xA03FFF"
+
+[[mmio_block]]
+name         = "genesis.ym2612_main"
+attached_bus = "main"
+range        = "0xA04000-0xA05FFF"
+
+[[mmio_block]]
+name         = "genesis.io_controller"
+attached_bus = "main"
+range        = "0xA10000-0xA1001F"
+
+[[mmio_block]]
+name         = "genesis.z80_busreq"
+attached_bus = "main"
+range        = "0xA11100-0xA11101"
+
+[[mmio_block]]
+name         = "genesis.z80_reset"
+attached_bus = "main"
+range        = "0xA11200-0xA11201"
+
+[[mmio_block]]
+name         = "genesis.vdp_ports"
+attached_bus = "main"
+range        = "0xC00000-0xC0001F"
+
+# --- Z80-bus MMIO blocks ------------------------------------------------------
+
+[[mmio_block]]
+name         = "genesis.z80_ram_z80"
+attached_bus = "z80"
+range        = "0x0000-0x3FFF"
+
+[[mmio_block]]
+name         = "genesis.ym2612_z80"
+attached_bus = "z80"
+range        = "0x4000-0x5FFF"
+
+[[mmio_block]]
+name         = "genesis.z80_bank"
+attached_bus = "z80"
+range        = "0x6000-0x60FF"
+
+[[mmio_block]]
+name         = "genesis.psg_z80"
+attached_bus = "z80"
+range        = "0x7F00-0x7FFF"
+
+[[mmio_block]]
+name         = "genesis.z80_window"
+attached_bus = "z80"
+range        = "0x8000-0xFFFF"
+
+# --- Chip gating -------------------------------------------------------------
+
+[[gate]]
+chip      = "z80"
+predicate = "genesis.z80_running"
+
+[[gate]]
+chip      = "cpu"
+predicate = "genesis.cpu_runnable"

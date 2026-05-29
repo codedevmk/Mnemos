@@ -1,5 +1,6 @@
 add_library(
     mnemos_manifests_genesis
+    genesis_callbacks.cpp
     genesis_system.cpp
     genesis_region.cpp
 )
