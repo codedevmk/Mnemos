@@ -13,6 +13,7 @@
 #include "builder.hpp"
 #include "manifest.hpp"
 #include "sms_callbacks.hpp"
+#include "sms_manifests.hpp"
 #include "sms_system.hpp"
 
 #include "scheduler.hpp"
@@ -35,67 +36,6 @@
 
 namespace {
 
-    constexpr std::string_view kSmsNtscManifest = R"toml(
-[manifest]
-schema       = "mnemos-manifest/1"
-id           = "sega.sms.ntsc"
-display_name = "Sega Master System (NTSC)"
-family       = "sega"
-revision     = 1
-
-[clock]
-master_hz               = 3579545
-master_to_cpu_divider   = 1
-master_to_video_divider = 1
-
-[[chip]]
-id           = "cpu"
-type         = "zilog.z80"
-attached_bus = "main"
-[chip.config]
-port_in_callback  = "sms.z80_port_in"
-port_out_callback = "sms.z80_port_out"
-
-[[chip]]
-id           = "video"
-type         = "sega.sms_vdp"
-attached_bus = "main"
-[chip.config]
-irq_callback = "sms.vdp_irq"
-
-[[chip]]
-id           = "audio"
-type         = "ti.sn76489"
-attached_bus = "main"
-
-[[chip]]
-id           = "mapper"
-type         = "sega.sms_mapper"
-attached_bus = "main"
-
-[[bus]]
-id           = "main"
-address_bits = 16
-endianness   = "little"
-
-[[bus.region]]
-name      = "cartridge"
-range     = "0x0000-0xBFFF"
-backing   = "mapper"
-mapper_id = "mapper"
-
-[[bus.region]]
-name    = "work_ram"
-range   = "0xC000-0xFFFF"
-backing = "ram"
-size    = 8192
-
-[[mmio_block]]
-name         = "sms.mapper_register_overlay"
-attached_bus = "main"
-range        = "0xFFFC-0xFFFF"
-)toml";
-
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996) // std::getenv: opt-in test data path
@@ -113,8 +53,8 @@ range        = "0xFFFC-0xFFFF"
                          env);
             return std::nullopt;
         }
-        return std::vector<std::uint8_t>(
-            std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>{});
+        return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(in),
+                                         std::istreambuf_iterator<char>{});
     }
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -133,8 +73,7 @@ range        = "0xFFFC-0xFFFF"
         const std::uint32_t stride = fb.effective_stride();
         out.pixels.reserve(static_cast<std::size_t>(fb.width) * fb.height);
         for (std::uint32_t y = 0; y < fb.height; ++y) {
-            const std::uint32_t* row =
-                fb.pixels + static_cast<std::size_t>(y) * stride;
+            const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
             for (std::uint32_t x = 0; x < fb.width; ++x) {
                 out.pixels.push_back(row[x]);
             }
@@ -142,8 +81,7 @@ range        = "0xFFFC-0xFFFF"
         return out;
     }
 
-    [[nodiscard]] frame_pixels run_assemble_sms_path(std::vector<std::uint8_t> rom,
-                                                    int frames) {
+    [[nodiscard]] frame_pixels run_assemble_sms_path(std::vector<std::uint8_t> rom, int frames) {
         auto sys = mnemos::manifests::sms::assemble_sms(std::move(rom));
         std::vector<mnemos::runtime::scheduled_chip> chips = {
             {&sys->vdp, 1U}, {&sys->cpu, 1U}, {&sys->psg, 1U}};
@@ -154,30 +92,26 @@ range        = "0xFFFC-0xFFFF"
         return snapshot(sys->vdp.framebuffer());
     }
 
-    [[nodiscard]] frame_pixels run_manifest_path(const std::vector<std::uint8_t>& rom,
-                                                 int frames) {
+    [[nodiscard]] frame_pixels run_manifest_path(const std::vector<std::uint8_t>& rom, int frames) {
         using namespace mnemos::manifests;
 
-        const auto parsed = parse_manifest(kSmsNtscManifest);
+        const auto parsed = parse_manifest(sms::manifest_toml(mnemos::video_region::ntsc, false));
         REQUIRE(parsed.ok());
 
         sms::sms_callbacks_state state;
         auto tables = sms::make_sms_host_tables(state);
-        const auto no_roms =
-            [](std::string_view) -> std::optional<std::vector<std::uint8_t>> {
+        const auto no_roms = [](std::string_view) -> std::optional<std::vector<std::uint8_t>> {
             return std::nullopt;
         };
-        auto built = build_system(*parsed.value, no_roms, tables.callbacks, {},
-                                  tables.mmio_factories);
+        auto built =
+            build_system(*parsed.value, no_roms, tables.callbacks, {}, tables.mmio_factories);
         REQUIRE(built.ok());
 
         state.cpu = dynamic_cast<mnemos::chips::cpu::z80*>(built.value->chip("cpu"));
-        state.vdp =
-            dynamic_cast<mnemos::chips::video::sms_vdp*>(built.value->chip("video"));
-        state.psg =
-            dynamic_cast<mnemos::chips::audio::sn76489*>(built.value->chip("audio"));
-        state.mapper = dynamic_cast<mnemos::chips::mapper::sms_mapper*>(
-            built.value->chip("mapper"));
+        state.vdp = dynamic_cast<mnemos::chips::video::sms_vdp*>(built.value->chip("video"));
+        state.psg = dynamic_cast<mnemos::chips::audio::sn76489*>(built.value->chip("audio"));
+        state.mapper =
+            dynamic_cast<mnemos::chips::mapper::sms_mapper*>(built.value->chip("mapper"));
         REQUIRE(state.cpu != nullptr);
         REQUIRE(state.vdp != nullptr);
         REQUIRE(state.psg != nullptr);
@@ -232,7 +166,7 @@ TEST_CASE("SMS manifest path matches assemble_sms framebuffer on a real BIOS",
             ++diff;
         }
     }
-    INFO("pixels differing: " << diff << " / " << a.pixels.size()
-                              << "  first diff at index " << first_diff_index);
+    INFO("pixels differing: " << diff << " / " << a.pixels.size() << "  first diff at index "
+                              << first_diff_index);
     CHECK(diff == 0);
 }

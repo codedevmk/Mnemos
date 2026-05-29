@@ -1,3 +1,32 @@
+# Embed the canonical SMS manifests as compiled string constants so the player
+# carries them (no runtime filesystem dependency) and tests share the exact same
+# bytes. Editing any source .toml re-runs configuration and regenerates the
+# header, so the embedded copy can never drift from the file.
+set(_sms_manifest_files
+    "sms.ntsc.toml"
+    "sms.pal.toml"
+    "sms.ntsc.codemasters.toml"
+    "sms.pal.codemasters.toml"
+)
+foreach(_f IN LISTS _sms_manifest_files)
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${_f}"
+    )
+endforeach()
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.toml" MNEMOS_SMS_NTSC_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.toml" MNEMOS_SMS_PAL_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.codemasters.toml"
+     MNEMOS_SMS_NTSC_CODEMASTERS_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.codemasters.toml"
+     MNEMOS_SMS_PAL_CODEMASTERS_TOML)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/sms_embedded_manifests.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/sms_embedded_manifests.hpp"
+    @ONLY
+)
+
 add_library(
     mnemos_manifests_sms
     sms_callbacks.cpp
@@ -10,6 +39,7 @@ target_include_directories(
     mnemos_manifests_sms
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 

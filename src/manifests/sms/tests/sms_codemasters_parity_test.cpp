@@ -17,6 +17,7 @@
 #include "builder.hpp"
 #include "manifest.hpp"
 #include "sms_callbacks.hpp"
+#include "sms_manifests.hpp"
 #include "sms_system.hpp"
 
 #include "codemasters_mapper.hpp"
@@ -38,66 +39,6 @@
 #include <vector>
 
 namespace {
-
-    // The Codemasters-mapper SMS-NTSC manifest. Kept in sync with
-    // src/manifests/sms/sms.ntsc.codemasters.toml (embedded here for the same
-    // reason the Sega parity test embeds its manifest: tests must not depend on
-    // a runtime file-system path to the source tree).
-    constexpr std::string_view kSmsNtscCodemastersManifest = R"toml(
-[manifest]
-schema       = "mnemos-manifest/1"
-id           = "sega.sms.ntsc.codemasters"
-display_name = "Sega Master System (NTSC, Codemasters mapper)"
-family       = "sega"
-revision     = 1
-
-[clock]
-master_hz               = 3579545
-master_to_cpu_divider   = 1
-master_to_video_divider = 1
-
-[[chip]]
-id           = "cpu"
-type         = "zilog.z80"
-attached_bus = "main"
-[chip.config]
-port_in_callback  = "sms.z80_port_in"
-port_out_callback = "sms.z80_port_out"
-
-[[chip]]
-id           = "video"
-type         = "sega.sms_vdp"
-attached_bus = "main"
-[chip.config]
-irq_callback = "sms.vdp_irq"
-
-[[chip]]
-id           = "audio"
-type         = "ti.sn76489"
-attached_bus = "main"
-
-[[chip]]
-id           = "mapper"
-type         = "codemasters.mapper"
-attached_bus = "main"
-
-[[bus]]
-id           = "main"
-address_bits = 16
-endianness   = "little"
-
-[[bus.region]]
-name      = "cartridge"
-range     = "0x0000-0xBFFF"
-backing   = "mapper"
-mapper_id = "mapper"
-
-[[bus.region]]
-name    = "work_ram"
-range   = "0xC000-0xFFFF"
-backing = "ram"
-size    = 8192
-)toml";
 
     // 32 KiB cart with a valid Codemasters checksum header (word at $7FE6 plus
     // the complement at $7FE8 sum to $10000) so detection picks Codemasters.
@@ -183,7 +124,7 @@ size    = 8192
                           mnemos::manifests::sms::sms_callbacks_state& state,
                           mnemos::manifests::sms::sms_host_tables& tables) {
         using namespace mnemos::manifests;
-        const auto parsed = parse_manifest(kSmsNtscCodemastersManifest);
+        const auto parsed = parse_manifest(sms::manifest_toml(mnemos::video_region::ntsc, true));
         REQUIRE(parsed.ok());
 
         const auto no_roms = [](std::string_view) -> std::optional<std::vector<std::uint8_t>> {
