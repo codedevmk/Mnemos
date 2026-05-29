@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax. **DO NOT START** any phase until the corresponding "Pre-Phase Decisions" block at the top is resolved with the user.
 
+> **Status (2026-05-29):** **Phase A COMPLETE. Phase B.1 COMPLETE — SMS adapter fully cut over to the manifest path.** The player's `sms_adapter` now builds via `build_sms_runtime()` (embedded manifest + `build_system` + SMS host callbacks); `assemble_sms` is retained UNCHANGED as the independent byte-for-byte parity oracle (the planned "thin wrapper" was rejected because it would make the parity tests tautological). Added: the Codemasters-mapper manifest variant (`sms.ntsc/pal.codemasters.toml`) + parity test; manifests embedded as compiled string resources via `configure_file` (single source of truth, `manifest_toml(region, codemasters)`), DRY-ing the previously hand-copied test manifests; the orphaned `sms_manifest_parity_test` wired into the data-gated runner. Verified: full suite 52 ctest entries, 0 failures; SHA-pinned `sms_boot_test` golden hash unchanged; Sega+Codemasters+runtime parity all byte-identical to `assemble_sms`. Commits `1745305`, `dc57c9f`, `e7b8d91`, `a6f0c30`, `560bad7`. **Next: B.2 (Genesis).**
+
 > **Status (2026-05-27 end-of-session):** **Phase A COMPLETE. Phase B.1 FUNCTIONALLY COMPLETE** (SMS manifest path produces a runnable system, validated end-to-end). All eleven sub-phases (A.1–A.5 + B.1.1–B.1.5) landed in a single session. `build_system()` expresses every production-system mechanism `assemble_*()` relies on, and the SMS smoke test exercises every mechanism through one end-to-end pipeline (parse → build → configure → callbacks → mirror RAM → mapper overlay → mmio_block factory → CPU step). Pre-phase decisions D1–D5 resolved. 49/49 ctest entries pass; BoV f=120 still byte-perfect 0/215040 vs the reference after every commit.
 
 > **Phase A commits:**
@@ -19,7 +21,7 @@
 > - B.1.4 — sms_callbacks host helper (`sms_callbacks_state` + `make_sms_host_tables`)
 > - B.1.5 `b26c30f` — end-to-end manifest-path smoke test (10/10 assertions pass on first run)
 
-> **What's left for full B.1 ship:** adapter cutover. `sms_adapter` today uses `assemble_sms` directly; switching to the manifest path requires restructuring `sms_system` to hold chip pointers (from `system_graph`) instead of value members, then `sms_adapter` queries the graph. Invasive but not architecturally risky — pure plumbing on top of the now-validated foundation.
+> **What's left for full B.1 ship:** ~~adapter cutover~~ **DONE (2026-05-29).** Rather than restructuring `sms_system` into a thin wrapper (which would nullify the parity oracle), a parallel `sms_runtime` + `build_sms_runtime()` was added in `manifests/sms` and the adapter holds that instead. `assemble_sms`/`sms_system` are untouched and remain the parity oracle. Real work beyond "plumbing" surfaced during implementation: the Codemasters mapper needed its own manifest (auto-detected carts would otherwise regress), and runtime manifest delivery needed solving (embedded as a compiled resource).
 
 **Goal:** Migrate every supported system (today: SMS, Genesis, C64; future: 32X, Sega CD, Saturn, Amiga, CPS1, CPS2) from hand-written `assemble_*()` C++ functions to declarative TOML manifests consumed by an extended `build_system()`. After completion, `manifests/<system>/<system>_system.cpp` is gone; adding a new system means writing a `.toml` file plus any genuinely-new chip implementations.
 
@@ -214,9 +216,9 @@ Mapper chip exposes its banking via the introspection surface; builder wires the
 
 Each migration is a single PR. The PR keeps `assemble_*()` AND adds the manifest path; the player adapter is updated to use the manifest path; parity verified; only after that does the PR get merged. The hand-assembly `assemble_*()` is NOT deleted until Phase C.
 
-### B.1 — SMS migration ⏳ FUNCTIONALLY COMPLETE, ADAPTER CUTOVER PENDING
+### B.1 — SMS migration ✅ COMPLETE (2026-05-29)
 
-The build_system path produces a runnable SMS system as of `b26c30f`. The adapter still uses `assemble_sms`; switching requires the `sms_system` struct restructure.
+The build_system path produces a runnable SMS system (as of `b26c30f`), and the player adapter is now fully cut over to it via `build_sms_runtime()` (commit `560bad7`). `assemble_sms` is retained unchanged as the parity oracle. Codemasters support, embedded-manifest delivery, and the data-gated parity gate all landed alongside.
 
 **Files**
 - `src/manifests/sms/sms.ntsc.toml`, `sms.pal.toml` — full system descriptions (chips, buses, regions, callbacks, gates, mmio_blocks).
