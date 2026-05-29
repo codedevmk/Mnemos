@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -66,9 +67,15 @@ namespace mnemos::manifests {
         std::vector<std::unique_ptr<std::vector<std::uint8_t>>> memory;
         std::unordered_map<std::string, chips::ichip*> chip_by_id;
         std::unordered_map<std::string, topology::bus*> bus_by_id;
+        // RAM/ROM region buffers keyed by region name, so a machine wirer can
+        // reach the storage build_system allocated -- e.g. the C64 VIC fetches
+        // screen/char/colour data from the SAME buffers the CPU sees.
+        std::unordered_map<std::string, std::span<std::uint8_t>> region_memory;
 
         [[nodiscard]] chips::ichip* chip(std::string_view id) const;
         [[nodiscard]] topology::bus* bus(std::string_view id) const;
+        // Mutable span of a named RAM/ROM region's storage, or empty if absent.
+        [[nodiscard]] std::span<std::uint8_t> region_span(std::string_view id) const;
     };
 
     struct build_result final {

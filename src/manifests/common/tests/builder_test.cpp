@@ -118,6 +118,12 @@ active_predicate = "test.gate"
     auto* bus = built.value->bus("main");
     REQUIRE(bus != nullptr);
 
+    // Region buffers are retrievable by name (a machine wirer -- e.g. the C64
+    // VIC -- needs the SAME storage the bus mapped).
+    CHECK(built.value->region_span("ram").size() == 0x10000U);
+    CHECK(built.value->region_span("rom").size() == 0x2000U);
+    CHECK(built.value->region_span("nope").empty());
+
     // Gate off: $E000 reads the base RAM beneath (0x00).
     CHECK(bus->read8(0xE000U) == 0x00U);
     // Gate on: the ROM overlay shadows the read -> 0xAA.

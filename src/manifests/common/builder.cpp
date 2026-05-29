@@ -21,6 +21,11 @@ namespace mnemos::manifests {
         return it != bus_by_id.end() ? it->second : nullptr;
     }
 
+    std::span<std::uint8_t> system_graph::region_span(std::string_view id) const {
+        const auto it = region_memory.find(std::string{id});
+        return it != region_memory.end() ? it->second : std::span<std::uint8_t>{};
+    }
+
     namespace {
         [[nodiscard]] topology::endianness to_topology_endian(endianness e) {
             return e == endianness::big ? topology::endianness::big : topology::endianness::little;
@@ -97,6 +102,7 @@ namespace mnemos::manifests {
                          offset += block_size) {
                         b->map_ram(rd.range.start + offset, storage, ram_priority, ram_active);
                     }
+                    graph.region_memory.emplace(rd.name, storage);
                     graph.memory.push_back(std::move(block));
                     break;
                 }
@@ -134,6 +140,7 @@ namespace mnemos::manifests {
                         rd.priority ? static_cast<int>(*rd.priority) : (rd.overlay ? 1 : 0);
                     b->map_rom(rd.range.start, std::span<const std::uint8_t>(*block), rom_priority,
                                std::move(active));
+                    graph.region_memory.emplace(rd.name, std::span<std::uint8_t>(*block));
                     graph.memory.push_back(std::move(block));
                     break;
                 }
