@@ -1,0 +1,18 @@
+#pragma once
+
+// GENERATED FILE -- do not edit. Produced by configure_file from
+// c64_embedded_manifests.hpp.in, each constant's body read verbatim from the
+// canonical on-disk manifest (c64.ntsc.toml / c64.pal.toml) at configure time.
+// The source .toml files are on the directory's CMAKE_CONFIGURE_DEPENDS list, so
+// editing one regenerates this header. Access via manifest_toml() in
+// c64_manifests.hpp.
+
+#include <string_view>
+
+namespace mnemos::manifests::c64::embedded {
+
+    inline constexpr std::string_view c64_ntsc_toml = R"MNEMOS_TOML(@MNEMOS_C64_NTSC_TOML@)MNEMOS_TOML";
+
+    inline constexpr std::string_view c64_pal_toml = R"MNEMOS_TOML(@MNEMOS_C64_PAL_TOML@)MNEMOS_TOML";
+
+} // namespace mnemos::manifests::c64::embedded

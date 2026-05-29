@@ -1,9 +1,11 @@
-# Commodore 64 (NTSC) — Mnemos system manifest (schema mnemos-manifest/1).
+# Commodore 64 (NTSC) -- Mnemos system manifest (schema mnemos-manifest/1).
 #
-# The NTSC counterpart of c64.pal.toml: a 6567 VIC-II (65 cycles x 263 lines),
-# the ~1.0227 MHz NTSC phi2, and a 60 Hz mains TOD. The runner derives the region
-# from this manifest's id. Same ROM files + placeholder-sha256 policy (see ROMS.md);
-# ROM images are never committed.
+# A 6567 VIC-II (65 cycles x 263 lines), ~1.0227 MHz NTSC phi2, 60 Hz mains TOD.
+# The defining mechanism is PLA dynamic banking: BASIC/KERNAL/CHARGEN/I/O
+# visibility depends on the live 6510 $01 port (LORAM/HIRAM/CHAREN) + cartridge
+# lines, so every overlay names a host PLA-decode predicate
+# (manifests::c64::c64_callbacks). The three system ROM images are supplied at
+# run time via the rom_provider (no canonical sha256; never committed).
 
 [manifest]
 schema       = "mnemos-manifest/1"
@@ -25,28 +27,34 @@ type         = "mos.6510"
 attached_bus = "main"
 
 [[chip]]
-id           = "video"
-type         = "mos.6567"
-attached_bus = "main"
-mmio_range   = "0xD000-0xD3FF"
+# One VIC-II chip type; the NTSC 6567 vs PAL 6569 timing is selected at runtime
+# (c64_runtime calls vic.set_revision from the region).
+id                   = "video"
+type                 = "mos.6569"
+attached_bus         = "main"
+mmio_range           = "0xD000-0xD3FF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
-id           = "audio"
-type         = "mos.6581"
-attached_bus = "main"
-mmio_range   = "0xD400-0xD7FF"
+id                   = "audio"
+type                 = "mos.6581"
+attached_bus         = "main"
+mmio_range           = "0xD400-0xD7FF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
-id           = "cia1"
-type         = "mos.6526"
-attached_bus = "main"
-mmio_range   = "0xDC00-0xDCFF"
+id                   = "cia1"
+type                 = "mos.6526"
+attached_bus         = "main"
+mmio_range           = "0xDC00-0xDCFF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
-id           = "cia2"
-type         = "mos.6526"
-attached_bus = "main"
-mmio_range   = "0xDD00-0xDDFF"
+id                   = "cia2"
+type                 = "mos.6526"
+attached_bus         = "main"
+mmio_range           = "0xDD00-0xDDFF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
 id           = "pla"
@@ -60,32 +68,46 @@ id           = "main"
 address_bits = 16
 endianness   = "little"
 
+# Base RAM under everything (priority 0).
 [[bus.region]]
 name    = "ram"
 range   = "0x0000-0xFFFF"
 backing = "ram"
 size    = 65536
 
+# Colour RAM ($D800-$DBFF), visible only when the PLA selects I/O (priority 2,
+# above base RAM). The VIC also reads it via region_span("color_ram").
 [[bus.region]]
-name    = "basic_rom"
-range   = "0xA000-0xBFFF"
-backing = "rom"
-file    = "basic.bin"
-sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
-overlay = true
+name             = "color_ram"
+range            = "0xD800-0xDBFF"
+backing          = "ram"
+size             = 1024
+priority         = 2
+active_predicate = "c64.bank.io"
+
+# System ROM read-overlays (priority 1), each gated by the PLA decode.
+[[bus.region]]
+name             = "basic_rom"
+range            = "0xA000-0xBFFF"
+backing          = "rom"
+file             = "basic.bin"
+priority         = 1
+active_predicate = "c64.bank.basic"
 
 [[bus.region]]
-name    = "kernal_rom"
-range   = "0xE000-0xFFFF"
-backing = "rom"
-file    = "kernal.bin"
-sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
-overlay = true
+name             = "kernal_rom"
+range            = "0xE000-0xFFFF"
+backing          = "rom"
+file             = "kernal.bin"
+priority         = 1
+active_predicate = "c64.bank.kernal"
 
+# CHARGEN ($D000-$DFFF) overlaps the I/O chips; the PLA's chargen vs io decode
+# (CHAREN) picks which is visible. The VIC reads it via region_span("char_rom").
 [[bus.region]]
-name    = "char_rom"
-range   = "0xD000-0xDFFF"
-backing = "rom"
-file    = "chargen.bin"
-sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
-overlay = true
+name             = "char_rom"
+range            = "0xD000-0xDFFF"
+backing          = "rom"
+file             = "chargen.bin"
+priority         = 1
+active_predicate = "c64.bank.chargen"

@@ -1,12 +1,10 @@
-# Commodore 64 (PAL) — Mnemos system manifest (schema mnemos-manifest/1).
+# Commodore 64 (PAL) -- Mnemos system manifest (schema mnemos-manifest/1).
 #
-# Chip `type` values are the factory ids Mnemos registers (TDS §8.6 two-component
-# form): mos.6510 / mos.6569 / mos.6581 / mos.6526 / mos.906114.
-#
-# The ROM sha256 values below are PLACEHOLDERS (all-zero). ROM images are never
-# committed; fill these with the SHA-256 of your verified dump (see ROMS.md). The
-# loader rejects a ROM whose hash does not match, so a placeholder will refuse a
-# real ROM until updated.
+# PAL counterpart of c64.ntsc.toml: a 6569 VIC-II (63 cycles x 312 lines),
+# ~0.985 MHz PAL phi2, 50 Hz mains TOD. See c64.ntsc.toml for the PLA-banking
+# rationale; only the clock differs (the runtime VIC revision is set from the
+# region). The three system ROM images are supplied at run time via the
+# rom_provider; never committed.
 
 [manifest]
 schema       = "mnemos-manifest/1"
@@ -28,28 +26,32 @@ type         = "mos.6510"
 attached_bus = "main"
 
 [[chip]]
-id           = "video"
-type         = "mos.6569"
-attached_bus = "main"
-mmio_range   = "0xD000-0xD3FF"
+id                   = "video"
+type                 = "mos.6569"
+attached_bus         = "main"
+mmio_range           = "0xD000-0xD3FF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
-id           = "audio"
-type         = "mos.6581"
-attached_bus = "main"
-mmio_range   = "0xD400-0xD7FF"
+id                   = "audio"
+type                 = "mos.6581"
+attached_bus         = "main"
+mmio_range           = "0xD400-0xD7FF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
-id           = "cia1"
-type         = "mos.6526"
-attached_bus = "main"
-mmio_range   = "0xDC00-0xDCFF"
+id                   = "cia1"
+type                 = "mos.6526"
+attached_bus         = "main"
+mmio_range           = "0xDC00-0xDCFF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
-id           = "cia2"
-type         = "mos.6526"
-attached_bus = "main"
-mmio_range   = "0xDD00-0xDDFF"
+id                   = "cia2"
+type                 = "mos.6526"
+attached_bus         = "main"
+mmio_range           = "0xDD00-0xDDFF"
+mmio_active_predicate = "c64.bank.io"
 
 [[chip]]
 id           = "pla"
@@ -70,25 +72,33 @@ backing = "ram"
 size    = 65536
 
 [[bus.region]]
-name    = "basic_rom"
-range   = "0xA000-0xBFFF"
-backing = "rom"
-file    = "basic.bin"
-sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
-overlay = true
+name             = "color_ram"
+range            = "0xD800-0xDBFF"
+backing          = "ram"
+size             = 1024
+priority         = 2
+active_predicate = "c64.bank.io"
 
 [[bus.region]]
-name    = "kernal_rom"
-range   = "0xE000-0xFFFF"
-backing = "rom"
-file    = "kernal.bin"
-sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
-overlay = true
+name             = "basic_rom"
+range            = "0xA000-0xBFFF"
+backing          = "rom"
+file             = "basic.bin"
+priority         = 1
+active_predicate = "c64.bank.basic"
 
 [[bus.region]]
-name    = "char_rom"
-range   = "0xD000-0xDFFF"
-backing = "rom"
-file    = "chargen.bin"
-sha256  = "0000000000000000000000000000000000000000000000000000000000000000"
-overlay = true
+name             = "kernal_rom"
+range            = "0xE000-0xFFFF"
+backing          = "rom"
+file             = "kernal.bin"
+priority         = 1
+active_predicate = "c64.bank.kernal"
+
+[[bus.region]]
+name             = "char_rom"
+range            = "0xD000-0xDFFF"
+backing          = "rom"
+file             = "chargen.bin"
+priority         = 1
+active_predicate = "c64.bank.chargen"
