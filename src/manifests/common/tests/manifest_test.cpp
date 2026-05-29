@@ -159,5 +159,5 @@ backing = "rom"
     const auto r = parse_manifest(text);
     CHECK_FALSE(r.ok());
     CHECK(any_error_contains(r, "range is invalid"));
-    CHECK(any_error_contains(r, "requires file and sha256"));
+    CHECK(any_error_contains(r, "requires a file"));
 }

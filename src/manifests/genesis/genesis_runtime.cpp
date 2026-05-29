@@ -1,0 +1,110 @@
+#include "genesis_runtime.hpp"
+
+#include "gated_chip.hpp"        // mnemos::manifests::gated_chip (scheduler wrappers)
+#include "genesis_manifests.hpp" // manifest_toml
+#include "manifest.hpp"          // parse_manifest
+
+#include "mk1653.hpp" // default controller-port peripheral (6-button pad)
+
+#include <cstdio>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <utility>
+
+namespace mnemos::manifests::genesis {
+
+    namespace {
+
+        // Scheduler-view entry for a chip id: the gated_chip wrapper if the chip
+        // was gated by a [[gate]], else the chip itself. build_system replaces
+        // gated chips in system_graph::chips with the wrapper, while chip_by_id
+        // keeps resolving to the inner chip.
+        [[nodiscard]] chips::ichip* scheduler_entry(const system_graph& graph,
+                                                    std::string_view id) {
+            chips::ichip* inner = graph.chip(id);
+            for (const auto& up : graph.chips) {
+                chips::ichip* c = up.get();
+                if (c == inner) {
+                    return c;
+                }
+                // NB: build_system wraps with the COMMON manifests::gated_chip,
+                // not the genesis-local gated_chip in genesis_system.hpp (which
+                // assemble_genesis still uses and which shadows the name here).
+                if (auto* g = dynamic_cast<mnemos::manifests::gated_chip*>(c);
+                    g != nullptr && &g->inner() == inner) {
+                    return c;
+                }
+            }
+            return inner;
+        }
+
+    } // namespace
+
+    std::unique_ptr<genesis_runtime> build_genesis_runtime(std::vector<std::uint8_t> rom,
+                                                           const genesis_config& config) {
+        auto rt = std::make_unique<genesis_runtime>();
+        rt->rom = std::move(rom);
+
+        // Host glue: closures capture &rt->state (stable -- rt is heap-allocated).
+        auto tables = make_genesis_host_tables(rt->state);
+
+        // $A10001 version: bit7 = export, bit6 = PAL, bit5 = no expansion unit.
+        // Set before any I/O-controller read (matches assemble_genesis).
+        const bool pal = config.video_region == mnemos::video_region::pal;
+        rt->state.version_register =
+            static_cast<std::uint8_t>(0x80U | (pal ? 0x40U : 0x00U) | 0x20U);
+
+        // The manifest's cartridge region (backing="rom" file="cart") pulls the
+        // cart bytes from here; build_system keeps its own copy in graph.memory.
+        const auto roms = [&rt](std::string_view file) -> std::optional<std::vector<std::uint8_t>> {
+            if (file == "cart") {
+                return rt->rom;
+            }
+            return std::nullopt;
+        };
+
+        const auto parsed = parse_manifest(manifest_toml(config.video_region));
+        if (!parsed.ok()) {
+            for (const auto& d : parsed.errors) {
+                std::fprintf(stderr, "[genesis-manifest parse] %s:%u:%u: %s\n", d.source.c_str(),
+                             d.line, d.column, d.message.c_str());
+            }
+            std::fflush(stderr);
+            return rt;
+        }
+        auto built = build_system(*parsed.value, roms, tables.callbacks, tables.predicates,
+                                  tables.mmio_factories);
+        if (!built.ok()) {
+            for (const auto& d : built.errors) {
+                std::fprintf(stderr, "[genesis-manifest build] %s:%u:%u: %s\n", d.source.c_str(),
+                             d.line, d.column, d.message.c_str());
+            }
+            std::fflush(stderr);
+            return rt;
+        }
+        rt->graph = std::move(*built.value);
+
+        // Wire chip + bus pointers from the constructed graph into the state the
+        // callbacks already close over.
+        rt->state.cpu = dynamic_cast<chips::cpu::m68000*>(rt->graph.chip("cpu"));
+        rt->state.z80 = dynamic_cast<chips::cpu::z80*>(rt->graph.chip("z80"));
+        rt->state.vdp = dynamic_cast<chips::video::genesis_vdp*>(rt->graph.chip("video"));
+        rt->state.fm = dynamic_cast<chips::audio::ym2612*>(rt->graph.chip("fm"));
+        rt->state.psg = dynamic_cast<chips::audio::sn76489*>(rt->graph.chip("psg"));
+        rt->state.main_bus = rt->graph.bus("main");
+        rt->state.z80_bus = rt->graph.bus("z80");
+
+        // Resolve the gated scheduler wrappers for the two CPUs.
+        rt->cpu_sched = scheduler_entry(rt->graph, "cpu");
+        rt->z80_sched = scheduler_entry(rt->graph, "z80");
+
+        // Default-plug MK-1653 6-button pads into both sockets (matches
+        // assemble_genesis). Adapters can swap them after build.
+        rt->state.ports[0] = std::make_unique<peripheral::input::mk1653>();
+        rt->state.ports[1] = std::make_unique<peripheral::input::mk1653>();
+
+        return rt;
+    }
+
+} // namespace mnemos::manifests::genesis

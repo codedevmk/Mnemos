@@ -1,0 +1,20 @@
+#pragma once
+
+// GENERATED FILE -- do not edit. Produced by configure_file from
+// genesis_embedded_manifests.hpp.in, with each constant's body read verbatim
+// from the canonical on-disk manifest (genesis.ntsc.toml / genesis.pal.toml) at
+// configure time. The source .toml files are on the directory's
+// CMAKE_CONFIGURE_DEPENDS list, so editing one regenerates this header -- the
+// embedded copy can never drift from the file.
+//
+// Access these through `manifest_toml()` in genesis_manifests.hpp.
+
+#include <string_view>
+
+namespace mnemos::manifests::genesis::embedded {
+
+    inline constexpr std::string_view genesis_ntsc_toml = R"MNEMOS_TOML(@MNEMOS_GENESIS_NTSC_TOML@)MNEMOS_TOML";
+
+    inline constexpr std::string_view genesis_pal_toml = R"MNEMOS_TOML(@MNEMOS_GENESIS_PAL_TOML@)MNEMOS_TOML";
+
+} // namespace mnemos::manifests::genesis::embedded

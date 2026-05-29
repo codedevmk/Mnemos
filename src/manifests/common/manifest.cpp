@@ -149,22 +149,17 @@ namespace mnemos::manifests {
                     for (const auto& [key, node] : *cfg) {
                         const std::string key_str{key.str()};
                         if (node.is_boolean()) {
-                            cd.config.emplace(key_str,
-                                              chips::config_value{*node.value<bool>()});
+                            cd.config.emplace(key_str, chips::config_value{*node.value<bool>()});
                         } else if (node.is_integer()) {
-                            cd.config.emplace(
-                                key_str,
-                                chips::config_value{*node.value<std::int64_t>()});
+                            cd.config.emplace(key_str,
+                                              chips::config_value{*node.value<std::int64_t>()});
                         } else if (node.is_floating_point()) {
-                            cd.config.emplace(
-                                key_str, chips::config_value{*node.value<double>()});
+                            cd.config.emplace(key_str, chips::config_value{*node.value<double>()});
                         } else if (node.is_string()) {
-                            cd.config.emplace(
-                                key_str,
-                                chips::config_value{*node.value<std::string>()});
+                            cd.config.emplace(key_str,
+                                              chips::config_value{*node.value<std::string>()});
                         } else {
-                            report("chip.config." + key_str + " has unsupported type",
-                                   &node);
+                            report("chip.config." + key_str + " has unsupported type", &node);
                         }
                     }
                 }
@@ -238,8 +233,12 @@ namespace mnemos::manifests {
                         if (const auto mid = (*rt)["mapper_id"].value<std::string>()) {
                             rd.mapper_id = *mid;
                         }
-                        if (rd.backing == region_backing::rom && (!rd.file || !rd.sha256)) {
-                            report("rom region '" + rd.name + "' requires file and sha256", rt);
+                        // A rom region needs a source file; sha256 is optional --
+                        // present for fixed system ROMs (integrity-pinned), absent
+                        // for runtime cartridges that carry no canonical hash. The
+                        // builder verifies the digest only when sha256 is given.
+                        if (rd.backing == region_backing::rom && !rd.file) {
+                            report("rom region '" + rd.name + "' requires a file", rt);
                         }
                         if (rd.backing == region_backing::mapper && !rd.mapper_id) {
                             report("mapper region '" + rd.name + "' requires mapper_id", rt);
@@ -274,8 +273,7 @@ namespace mnemos::manifests {
                     if (const auto r = parse_range(*rs)) {
                         mb.range = *r;
                     } else {
-                        report("mmio_block.range is invalid: " + *rs,
-                               (*b)["range"].node());
+                        report("mmio_block.range is invalid: " + *rs, (*b)["range"].node());
                     }
                 } else {
                     report("mmio_block.range is required", b);

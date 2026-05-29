@@ -1,6 +1,26 @@
+# Embed the canonical Genesis manifests as compiled string constants (single
+# source of truth; the player carries them with no filesystem dependency).
+# Editing a source .toml re-runs configuration and regenerates the header.
+set(_genesis_manifest_files "genesis.ntsc.toml" "genesis.pal.toml")
+foreach(_f IN LISTS _genesis_manifest_files)
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${_f}"
+    )
+endforeach()
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/genesis.ntsc.toml" MNEMOS_GENESIS_NTSC_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/genesis.pal.toml" MNEMOS_GENESIS_PAL_TOML)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/genesis_embedded_manifests.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/genesis_embedded_manifests.hpp"
+    @ONLY
+)
+
 add_library(
     mnemos_manifests_genesis
     genesis_callbacks.cpp
+    genesis_runtime.cpp
     genesis_system.cpp
     genesis_region.cpp
 )
@@ -10,6 +30,7 @@ target_include_directories(
     mnemos_manifests_genesis
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
 )
 
@@ -19,6 +40,7 @@ target_link_libraries(
     mnemos_manifests_genesis
     PUBLIC
         mnemos::topology
+        mnemos::manifests::common
         mnemos::chips::cpu::m68000
         mnemos::chips::cpu::z80
         mnemos::chips::video::genesis_vdp
@@ -33,6 +55,7 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_topology
+        mnemos_manifests_common
         mnemos_chips_shared
         mnemos_foundation
         mnemos_peripheral_common
@@ -49,5 +72,13 @@ if(BUILD_TESTING)
         mnemos_manifests_genesis_region_test
         SOURCES tests/genesis_region_test.cpp
         LIBRARIES mnemos::manifests::genesis
+    )
+    # build_genesis_runtime vs assemble_genesis framebuffer parity. The synthetic
+    # case always runs; the real-cart case is data-gated on MNEMOS_GENESIS_ROM
+    # and SKIPs when unset (the synthetic case keeps the binary at exit 0).
+    mnemos_add_test(
+        mnemos_manifests_genesis_manifest_parity_test
+        SOURCES tests/genesis_manifest_parity_test.cpp
+        LIBRARIES mnemos::manifests::genesis mnemos::manifests mnemos::runtime
     )
 endif()
