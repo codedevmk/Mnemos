@@ -17,7 +17,7 @@
 // $A10003 / $A10005 still reads the hardware-idle 0x7F until Commit 5 wires
 // it through.
 
-#include "genesis_system.hpp"
+#include "genesis_runtime.hpp" // manifest-path build (also pulls genesis_config)
 #include "player_system.hpp"
 #include "region.hpp" // chips/shared: video_region
 #include "scheduler.hpp"
@@ -65,11 +65,11 @@ namespace mnemos::apps::player::adapters::genesis {
 
         // For tests / instrumentation.
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
-        [[nodiscard]] manifests::genesis::genesis_system& system() noexcept { return *sys_; }
+        [[nodiscard]] manifests::genesis::genesis_runtime& system() noexcept { return *sys_; }
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
-        std::unique_ptr<manifests::genesis::genesis_system> sys_;
+        std::unique_ptr<manifests::genesis::genesis_runtime> sys_;
         // Non-owning chip pointers in scheduler order. Populated by the ctor;
         // exposed via the player_system::chips() debug enumerator so generic
         // tools can walk the chip list without depending on genesis_system.

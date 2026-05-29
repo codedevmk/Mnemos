@@ -20,17 +20,17 @@ namespace mnemos::apps::player::adapters::genesis {
 
     namespace {
 
-        // VDP first: it drives the raster the 68000 then samples. cpu_gate /
-        // z80_gate let the 68K and Z80 stall on DMA / BUSREQ.
+        // VDP first: it drives the raster the 68000 then samples. The 68K and
+        // Z80 entries are their gated_chip wrappers (DMA / BUSREQ stalls), which
+        // genesis_runtime::schedule() resolves; this converts that tier-neutral
+        // view into runtime::scheduled_chip.
         std::vector<runtime::scheduled_chip>
-        build_schedule(manifests::genesis::genesis_system& sys) {
-            return {
-                {&sys.vdp, 1U},
-                {&sys.cpu_gate, 7U},
-                {&sys.z80_gate, 15U},
-                {&sys.fm, 7U},
-                {&sys.psg, 15U},
-            };
+        build_schedule(manifests::genesis::genesis_runtime& sys) {
+            std::vector<runtime::scheduled_chip> chips;
+            for (const auto& e : sys.schedule()) {
+                chips.push_back({e.chip, e.weight});
+            }
+            return chips;
         }
 
         // Genesis-specific mixer gains. The system-agnostic DSP helpers
@@ -41,9 +41,8 @@ namespace mnemos::apps::player::adapters::genesis {
 
         // Mix FM (stereo) + PSG (mono) into dst at dst_count samples, both
         // resampled from their respective source rates to the same target.
-        void mix_genesis(const std::int16_t* fm_stereo, int fm_count,
-                         const std::int16_t* psg_mono, int psg_count, std::int16_t* dst_stereo,
-                         int dst_count) noexcept {
+        void mix_genesis(const std::int16_t* fm_stereo, int fm_count, const std::int16_t* psg_mono,
+                         int psg_count, std::int16_t* dst_stereo, int dst_count) noexcept {
             if (!dst_stereo || dst_count <= 0) {
                 return;
             }
@@ -53,9 +52,9 @@ namespace mnemos::apps::player::adapters::genesis {
             }
             const double fm_scale =
                 fm_count > 0 ? static_cast<double>(fm_count) / static_cast<double>(dst_count) : 0.0;
-            const double psg_scale = psg_count > 0
-                                       ? static_cast<double>(psg_count) / static_cast<double>(dst_count)
-                                       : 0.0;
+            const double psg_scale =
+                psg_count > 0 ? static_cast<double>(psg_count) / static_cast<double>(dst_count)
+                              : 0.0;
             for (int i = 0; i < dst_count; ++i) {
                 int left = 0;
                 int right = 0;
@@ -79,7 +78,8 @@ namespace mnemos::apps::player::adapters::genesis {
                         psg = sample_channel_linear(psg_mono, 1, 0, psg_count, psg_scale * i);
                     }
                 }
-                dst_stereo[i * 2 + 0] = clip_i16(scale_q12(left, kGainFm) + scale_q12(psg, kGainPsg));
+                dst_stereo[i * 2 + 0] =
+                    clip_i16(scale_q12(left, kGainFm) + scale_q12(psg, kGainPsg));
                 dst_stereo[i * 2 + 1] =
                     clip_i16(scale_q12(right, kGainFm) + scale_q12(psg, kGainPsg));
             }
@@ -91,29 +91,29 @@ namespace mnemos::apps::player::adapters::genesis {
                                      const manifests::genesis::genesis_config& config,
                                      std::string display_name,
                                      frontend_sdk::scheduler_factory* scheduler_factory)
-        : sys_(manifests::genesis::assemble_genesis(std::move(rom), config)),
-          scheduler_(frontend_sdk::make_scheduler(scheduler_factory,
-                                                  build_schedule(*sys_), &sys_->vdp)),
+        : sys_(manifests::genesis::build_genesis_runtime(std::move(rom), config)),
+          scheduler_(
+              frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
-        sys_->fm.enable_audio_capture(true);
-        sys_->psg.enable_audio_capture(true);
+        sys_->fm()->enable_audio_capture(true);
+        sys_->psg()->enable_audio_capture(true);
 
         // Non-owning chip enumeration in scheduler order; matches build_schedule().
         // Note: cpu and z80 are exposed directly (not the *_gate wrappers) because
         // the gates are scheduling-side stalls, not the architectural chips
         // generic debug tools want to inspect.
-        chip_view_[0] = &sys_->vdp;
-        chip_view_[1] = &sys_->cpu;
-        chip_view_[2] = &sys_->z80;
-        chip_view_[3] = &sys_->fm;
-        chip_view_[4] = &sys_->psg;
+        chip_view_[0] = sys_->vdp();
+        chip_view_[1] = sys_->cpu();
+        chip_view_[2] = sys_->z80();
+        chip_view_[3] = sys_->fm();
+        chip_view_[4] = sys_->psg();
 
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = "Genesis"});
-        spec_.push_back({.label = "Region",
-                         .value = config.video_region == mnemos::video_region::pal ? "PAL"
-                                                                                   : "NTSC"});
+        spec_.push_back(
+            {.label = "Region",
+             .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
         if (!display_name.empty()) {
             spec_.push_back({.label = "Cart", .value = std::move(display_name)});
         }
@@ -124,7 +124,7 @@ namespace mnemos::apps::player::adapters::genesis {
     }
 
     chips::frame_buffer_view genesis_adapter::current_frame() const noexcept {
-        return sys_->vdp.framebuffer();
+        return sys_->vdp()->framebuffer();
     }
 
     void genesis_adapter::step_one_frame() {
@@ -150,20 +150,20 @@ namespace mnemos::apps::player::adapters::genesis {
         // Drain both chip queues, resample each from its native rate into a
         // fixed 48 kHz stereo output (SDL_AudioStream's built-in resampler from
         // the raw chip rates produced audible artifacts + a growing queue).
-        const std::size_t fm_count = sys_->fm.pending_samples();
-        const std::size_t psg_count = sys_->psg.pending_samples();
+        const std::size_t fm_count = sys_->fm()->pending_samples();
+        const std::size_t psg_count = sys_->psg()->pending_samples();
         if (fm_count == 0U && psg_count == 0U) {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
         }
         if (fm_count > 0U) {
             fm_buf_.resize(fm_count * 2U);
-            sys_->fm.drain_samples(fm_buf_.data(), fm_count);
+            sys_->fm()->drain_samples(fm_buf_.data(), fm_count);
         } else {
             fm_buf_.clear();
         }
         if (psg_count > 0U) {
             psg_buf_.resize(psg_count);
-            sys_->psg.drain_samples(psg_buf_.data(), psg_count);
+            sys_->psg()->drain_samples(psg_buf_.data(), psg_count);
         } else {
             psg_buf_.clear();
         }
