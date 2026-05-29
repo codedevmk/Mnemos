@@ -1,0 +1,69 @@
+# Sega Master System (PAL, Codemasters mapper) -- Mnemos system manifest
+# (schema mnemos-manifest/1).
+#
+# The PAL counterpart of sms.ntsc.codemasters.toml: slower Z80 master clock and a
+# 313-line VDP frame (`pal = true`). See sms.ntsc.codemasters.toml for the
+# Codemasters-mapper rationale (ROM-space page registers, no $FFFC overlay).
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.pal.codemasters"
+display_name = "Sega Master System (PAL, Codemasters mapper)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# PAL Z80 master clock; VDP + PSG ticked at the same rate (divider 1).
+master_hz               = 3546893
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+[chip.config]
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+[chip.config]
+# PAL: 313 scanlines, 50 Hz refresh.
+pal          = true
+irq_callback = "sms.vdp_irq"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "codemasters.mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+[[bus.region]]
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
+
+# 8 KiB work RAM mirrored at $E000-$FFFF; $FFFC-$FFFF is plain RAM (no mapper
+# register file on the Codemasters mapper).
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xFFFF"
+backing = "ram"
+size    = 8192

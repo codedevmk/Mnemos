@@ -66,4 +66,12 @@ if(BUILD_TESTING)
         mnemos_manifests_sms_manifest_parity_test
         PROPERTIES SKIP_RETURN_CODE 4
     )
+    # Codemasters-mapper manifest parity. The synthetic-cart cases always run;
+    # the real-cart case is data-gated on MNEMOS_SMS_CODIES_ROM and SKIPs when
+    # unset (the binary still returns 0 because the synthetic cases run).
+    mnemos_add_test(
+        mnemos_manifests_sms_codemasters_parity_test
+        SOURCES tests/sms_codemasters_parity_test.cpp
+        LIBRARIES mnemos::manifests::sms mnemos::manifests mnemos::runtime
+    )
 endif()
