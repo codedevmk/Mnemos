@@ -4,7 +4,7 @@
 #include "region.hpp"
 #include "scheduler.hpp"
 #include "scheduler_factory.hpp"
-#include "sms_system.hpp"
+#include "sms_runtime.hpp"
 
 #include <array>
 #include <cstdint>
@@ -38,11 +38,11 @@ namespace mnemos::apps::player::adapters::sms {
         }
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
-        [[nodiscard]] manifests::sms::sms_system& system() noexcept { return *sys_; }
+        [[nodiscard]] manifests::sms::sms_runtime& system() noexcept { return *sys_; }
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
-        std::unique_ptr<manifests::sms::sms_system> sys_;
+        std::unique_ptr<manifests::sms::sms_runtime> sys_;
         std::array<chips::ichip*, 3> chip_view_{};
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};

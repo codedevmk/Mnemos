@@ -22,12 +22,11 @@ namespace mnemos::apps::player::adapters::sms {
         // Scheduler ticks count Z80 cycles. VDP first: it drives the raster
         // the Z80 then samples. PSG ticks at the Z80 rate and applies its own
         // /16 internal divider.
-        std::vector<runtime::scheduled_chip>
-        build_schedule(manifests::sms::sms_system& sys) {
+        std::vector<runtime::scheduled_chip> build_schedule(manifests::sms::sms_runtime& sys) {
             return {
-                {&sys.vdp, 1U},
-                {&sys.cpu, 1U},
-                {&sys.psg, 1U},
+                {sys.vdp(), 1U},
+                {sys.cpu(), 1U},
+                {sys.psg(), 1U},
             };
         }
 
@@ -38,26 +37,25 @@ namespace mnemos::apps::player::adapters::sms {
     } // namespace
 
     sms_adapter::sms_adapter(std::vector<std::uint8_t> rom,
-                             const manifests::sms::sms_config& config,
-                             std::string display_name,
+                             const manifests::sms::sms_config& config, std::string display_name,
                              frontend_sdk::scheduler_factory* scheduler_factory)
-        : sys_(manifests::sms::assemble_sms(std::move(rom), config)),
-          scheduler_(frontend_sdk::make_scheduler(scheduler_factory,
-                                                  build_schedule(*sys_), &sys_->vdp)),
+        : sys_(manifests::sms::build_sms_runtime(std::move(rom), config)),
+          scheduler_(
+              frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
-        sys_->psg.enable_audio_capture(true);
+        sys_->psg()->enable_audio_capture(true);
 
         // Non-owning chip enumeration in scheduler order; matches build_schedule().
-        chip_view_[0] = &sys_->vdp;
-        chip_view_[1] = &sys_->cpu;
-        chip_view_[2] = &sys_->psg;
+        chip_view_[0] = sys_->vdp();
+        chip_view_[1] = sys_->cpu();
+        chip_view_[2] = sys_->psg();
 
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = "Master System"});
-        spec_.push_back({.label = "Region",
-                         .value = config.video_region == mnemos::video_region::pal ? "PAL"
-                                                                                   : "NTSC"});
+        spec_.push_back(
+            {.label = "Region",
+             .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
         if (!display_name.empty()) {
             spec_.push_back({.label = "Cart", .value = std::move(display_name)});
         }
@@ -68,7 +66,7 @@ namespace mnemos::apps::player::adapters::sms {
     }
 
     chips::frame_buffer_view sms_adapter::current_frame() const noexcept {
-        return sys_->vdp.framebuffer();
+        return sys_->vdp()->framebuffer();
     }
 
     void sms_adapter::step_one_frame() {
@@ -76,8 +74,7 @@ namespace mnemos::apps::player::adapters::sms {
         ++frames_stepped_;
     }
 
-    void sms_adapter::apply_input(int port,
-                                  const frontend_sdk::controller_state& state) noexcept {
+    void sms_adapter::apply_input(int port, const frontend_sdk::controller_state& state) noexcept {
         if (port < 0 || port >= static_cast<int>(ports_.size())) {
             return;
         }
@@ -91,12 +88,12 @@ namespace mnemos::apps::player::adapters::sms {
     }
 
     frontend_sdk::audio_chunk sms_adapter::drain_audio() noexcept {
-        const std::size_t psg_count = sys_->psg.pending_samples();
+        const std::size_t psg_count = sys_->psg()->pending_samples();
         if (psg_count == 0U) {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
         }
         psg_buf_.resize(psg_count);
-        sys_->psg.drain_samples(psg_buf_.data(), psg_count);
+        sys_->psg()->drain_samples(psg_buf_.data(), psg_count);
 
         // Accumulate the fractional sample so the long-term output rate is
         // exact even when (kOutputRate / target_fps_) is not an integer.
@@ -108,11 +105,9 @@ namespace mnemos::apps::player::adapters::sms {
         audio_frac_ = exact - static_cast<double>(dst_pairs);
 
         mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
-        const double psg_scale =
-            static_cast<double>(psg_count) / static_cast<double>(dst_pairs);
+        const double psg_scale = static_cast<double>(psg_count) / static_cast<double>(dst_pairs);
         for (int i = 0; i < dst_pairs; ++i) {
-            const int s = sample_channel_box(psg_buf_.data(), 1, 0,
-                                             static_cast<int>(psg_count),
+            const int s = sample_channel_box(psg_buf_.data(), 1, 0, static_cast<int>(psg_count),
                                              psg_scale * i, psg_scale * (i + 1));
             const std::int16_t out = clip_i16(scale_q12(s, kGainPsg));
             mix_buf_[i * 2 + 0] = out;
