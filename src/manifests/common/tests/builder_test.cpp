@@ -68,6 +68,67 @@ size = 65536
     CHECK(cpu->cpu_registers().pc == 0xC001U);
 }
 
+TEST_CASE("build_system gates a rom overlay by a named active_predicate") {
+    // The C64-banking mechanism: a region names a host overlay-predicate that
+    // decides per access whether the overlay is visible. Here a togglable gate
+    // stands in for the PLA decode.
+    const std::string text = R"toml(
+[manifest]
+schema = "mnemos-manifest/1"
+id = "test.overlay"
+[clock]
+master_hz = 1000000
+[[bus]]
+id = "main"
+address_bits = 16
+endianness = "little"
+[[bus.region]]
+name = "ram"
+range = "0x0000-0xFFFF"
+backing = "ram"
+size = 65536
+[[bus.region]]
+name = "rom"
+range = "0xE000-0xFFFF"
+backing = "rom"
+file = "testrom"
+priority = 1
+active_predicate = "test.gate"
+)toml";
+
+    const auto parsed = parse_manifest(text);
+    REQUIRE(parsed.ok());
+
+    const std::vector<std::uint8_t> rom(0x2000U, 0xAAU);
+    const auto roms = [&](std::string_view f) -> std::optional<std::vector<std::uint8_t>> {
+        if (f == "testrom") {
+            return rom;
+        }
+        return std::nullopt;
+    };
+
+    bool gate_on = false;
+    overlay_predicate_table preds;
+    preds.emplace("test.gate", [&gate_on](std::uint32_t, bool is_write) {
+        return !is_write && gate_on; // shadow reads only, when enabled
+    });
+
+    auto built = build_system(*parsed.value, roms, {}, {}, {}, preds);
+    REQUIRE(built.ok());
+    auto* bus = built.value->bus("main");
+    REQUIRE(bus != nullptr);
+
+    // Gate off: $E000 reads the base RAM beneath (0x00).
+    CHECK(bus->read8(0xE000U) == 0x00U);
+    // Gate on: the ROM overlay shadows the read -> 0xAA.
+    gate_on = true;
+    CHECK(bus->read8(0xE000U) == 0xAAU);
+    // Writes always fall through to RAM (the overlay shadows reads only).
+    bus->write8(0xE000U, 0x5AU);
+    gate_on = false;
+    CHECK(bus->read8(0xE000U) == 0x5AU);
+}
+
 TEST_CASE("build_system loads a verified ROM and binds an MMIO chip") {
     // Touch a non-inline CIA symbol so this TU pulls in the cia_6526 object and
     // its static-init factory registration runs (so create_chip("mos.6526")
@@ -272,7 +333,8 @@ namespace {
         void reset(mnemos::chips::reset_kind) override {}
         void save_state(mnemos::chips::state_writer&) const override {}
         void load_state(mnemos::chips::state_reader&) override {}
-        [[nodiscard]] mnemos::instrumentation::ichip_introspection& introspection() noexcept override {
+        [[nodiscard]] mnemos::instrumentation::ichip_introspection&
+        introspection() noexcept override {
             return intro_;
         }
 
@@ -303,9 +365,7 @@ namespace {
     // sticks the first time.
     [[maybe_unused]] const auto test_mapper_registration = mnemos::chips::register_factory(
         "test.simple_mapper", mnemos::chips::chip_class::mapper,
-        []() -> std::unique_ptr<mnemos::chips::ichip> {
-            return std::make_unique<test_mapper>();
-        });
+        []() -> std::unique_ptr<mnemos::chips::ichip> { return std::make_unique<test_mapper>(); });
 } // namespace
 
 TEST_CASE("build_system routes a mapper-backed region through imapper overlay methods") {
@@ -471,8 +531,7 @@ range = "0xA10000-0xA1001F"
     std::uint32_t captured_size{};
 
     mnemos::manifests::mmio_factory_table factories;
-    factories.emplace("test.io_controller", [&](std::uint32_t base,
-                                                std::uint32_t size) {
+    factories.emplace("test.io_controller", [&](std::uint32_t base, std::uint32_t size) {
         captured_base = base;
         captured_size = size;
         return mnemos::chips::mmio_handlers{
@@ -481,11 +540,12 @@ range = "0xA10000-0xA1001F"
                 last_read = address;
                 return static_cast<std::uint8_t>((address - base) & 0xFFU);
             },
-            .on_write = [&](std::uint32_t address, std::uint8_t value) {
-                ++write_calls;
-                last_write_addr = address;
-                last_write_value = value;
-            },
+            .on_write =
+                [&](std::uint32_t address, std::uint8_t value) {
+                    ++write_calls;
+                    last_write_addr = address;
+                    last_write_value = value;
+                },
         };
     });
 

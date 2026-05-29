@@ -32,6 +32,11 @@ namespace mnemos::manifests {
         std::string type; // canonical chip-factory id, e.g. "mos.6510"
         std::string attached_bus;
         std::optional<address_range> mmio_range;
+        // Optional named overlay-predicate gating this chip's mmio_range window
+        // (host-supplied bool(addr,is_write)). The C64's VIC/SID/CIA windows at
+        // $D000-$DFFF are visible only when the PLA selects I/O. Empty = always
+        // active.
+        std::optional<std::string> mmio_active_predicate;
         // Optional [chip.config] table parsed verbatim from the manifest. The
         // builder passes this to `ichip::configure(config)` after construction,
         // before `reset(power_on)`. Empty = chip uses its defaults.
@@ -46,6 +51,15 @@ namespace mnemos::manifests {
         std::optional<std::string> file;   // rom backing
         std::optional<std::string> sha256; // rom backing
         bool overlay{};
+        // Explicit bus priority (higher wins on overlap). When unset, defaults to
+        // 1 for overlay regions and 0 otherwise. Machine banking that layers more
+        // than two levels (the C64: RAM 0, ROM 1, I/O 2, REU 3) sets it directly.
+        std::optional<std::uint32_t> priority;
+        // Optional named overlay-predicate (host-supplied bool(addr,is_write))
+        // gating this region's visibility per access. Drives machine-specific
+        // dynamic banking (the C64 PLA decode). Empty = static visibility
+        // (overlay = read-only shadow, else always).
+        std::optional<std::string> active_predicate;
         // For backing == mapper: id of the imapper chip whose
         // read_overlay/write_overlay/overlay_active methods route this
         // region's accesses. Required for mapper backing; ignored otherwise.
@@ -74,8 +88,8 @@ namespace mnemos::manifests {
     // models -- Genesis controller-port block at $A10000-$A1001F, Z80 BUSREQ
     // at $A11100, etc.
     struct mmio_block_decl final {
-        std::string name;          // key into the host-supplied mmio_factory_table
-        std::string attached_bus;  // matches an existing bus_decl.id
+        std::string name;         // key into the host-supplied mmio_factory_table
+        std::string attached_bus; // matches an existing bus_decl.id
         address_range range;
     };
 

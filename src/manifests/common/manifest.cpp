@@ -139,6 +139,9 @@ namespace mnemos::manifests {
                         report("chip.mmio_range is invalid: " + *mr, (*c)["mmio_range"].node());
                     }
                 }
+                if (const auto ap = (*c)["mmio_active_predicate"].value<std::string>()) {
+                    cd.mmio_active_predicate = *ap;
+                }
                 // Optional [chip.config] sub-table: scalar key->value pairs the
                 // chip's configure() will consume. Use exact type predicates --
                 // toml++'s `.value<T>()` performs lossy conversions (e.g.
@@ -230,6 +233,12 @@ namespace mnemos::manifests {
                             rd.sha256 = *s;
                         }
                         rd.overlay = (*rt)["overlay"].value_or(false);
+                        if (const auto pr = (*rt)["priority"].value<std::int64_t>()) {
+                            rd.priority = static_cast<std::uint32_t>(*pr);
+                        }
+                        if (const auto ap = (*rt)["active_predicate"].value<std::string>()) {
+                            rd.active_predicate = *ap;
+                        }
                         if (const auto mid = (*rt)["mapper_id"].value<std::string>()) {
                             rd.mapper_id = *mid;
                         }

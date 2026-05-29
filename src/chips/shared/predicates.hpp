@@ -19,6 +19,7 @@
 // Tier 2 placement so chips, the manifests layer, and the host all share
 // the same type. Same rationale as callbacks.hpp / config.hpp.
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -29,5 +30,15 @@ namespace mnemos::chips {
     using predicate_fn = std::function<bool()>;
 
     using predicate_table = std::unordered_map<std::string, predicate_fn>;
+
+    // Per-access overlay-activation predicate: true = this region/MMIO window is
+    // visible for the given access. Distinct from predicate_fn (control flow):
+    // this gates a bus overlay's read/write visibility per access, matching the
+    // topology::bus active-predicate signature. The host supplies these to
+    // build_system for machine-specific dynamic banking (the C64 PLA reads the
+    // 6510 $01 port + cartridge lines live to decide RAM vs ROM vs I/O).
+    using overlay_predicate_fn = std::function<bool(std::uint32_t address, bool is_write)>;
+
+    using overlay_predicate_table = std::unordered_map<std::string, overlay_predicate_fn>;
 
 } // namespace mnemos::chips

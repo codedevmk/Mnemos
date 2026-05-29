@@ -28,14 +28,27 @@ namespace mnemos::manifests {
     } // namespace
 
     build_result build_system(const manifest& m, const rom_provider& roms,
-                              const callback_table& callbacks,
-                              const predicate_table& predicates,
-                              const mmio_factory_table& mmio_factories) {
+                              const callback_table& callbacks, const predicate_table& predicates,
+                              const mmio_factory_table& mmio_factories,
+                              const overlay_predicate_table& overlay_predicates) {
         build_result out;
         system_graph graph;
         auto& errs = out.errors;
         auto report = [&](std::string message) {
             errs.push_back({std::move(message), m.id, 0U, 0U});
+        };
+
+        // Resolve a manifest-named overlay predicate to the bus active-predicate
+        // type. Reports (and returns empty = always-active) if the host didn't
+        // supply it. overlay_predicate_fn and topology::bus::active_predicate
+        // share the bool(addr,is_write) signature, so the assignment is direct.
+        auto resolve_overlay = [&](const std::string& name) -> topology::bus::active_predicate {
+            const auto it = overlay_predicates.find(name);
+            if (it == overlay_predicates.end()) {
+                report("overlay predicate '" + name + "' is not registered");
+                return {};
+            }
+            return it->second;
         };
 
         // Mapper-backed regions can't be wired in the bus loop because their
@@ -67,20 +80,22 @@ namespace mnemos::manifests {
                     // mirroring; one buffer fills the range". size > span_size
                     // is an authoring error.
                     if (rd.size > span_size) {
-                        report("ram region '" + rd.name + "' size (" +
-                               std::to_string(rd.size) +
+                        report("ram region '" + rd.name + "' size (" + std::to_string(rd.size) +
                                ") exceeds range (" + std::to_string(span_size) + ")");
                         break;
                     }
                     const std::uint32_t block_size =
                         (rd.size > 0U && rd.size < span_size) ? rd.size : span_size;
-                    auto block =
-                        std::make_unique<std::vector<std::uint8_t>>(block_size, 0U);
+                    auto block = std::make_unique<std::vector<std::uint8_t>>(block_size, 0U);
                     const auto storage = std::span<std::uint8_t>(*block);
-                    for (std::uint32_t offset = 0U;
-                         offset + block_size <= span_size;
+                    topology::bus::active_predicate ram_active;
+                    if (rd.active_predicate) {
+                        ram_active = resolve_overlay(*rd.active_predicate);
+                    }
+                    const int ram_priority = rd.priority ? static_cast<int>(*rd.priority) : 0;
+                    for (std::uint32_t offset = 0U; offset + block_size <= span_size;
                          offset += block_size) {
-                        b->map_ram(rd.range.start + offset, storage, 0);
+                        b->map_ram(rd.range.start + offset, storage, ram_priority, ram_active);
                     }
                     graph.memory.push_back(std::move(block));
                     break;
@@ -105,14 +120,20 @@ namespace mnemos::manifests {
                         }
                     }
                     auto block = std::make_unique<std::vector<std::uint8_t>>(*bytes);
-                    // Overlay ROMs shadow on reads only; writes fall through to the
-                    // RAM beneath. Machine wirers refine the gating (e.g. the PLA).
+                    // A named active_predicate (e.g. the C64 PLA decode) gates
+                    // visibility dynamically. Otherwise `overlay` = shadow on reads
+                    // only (writes fall through to the RAM beneath); no overlay =
+                    // a plain priority-0 ROM.
                     topology::bus::active_predicate active;
-                    if (rd.overlay) {
+                    if (rd.active_predicate) {
+                        active = resolve_overlay(*rd.active_predicate);
+                    } else if (rd.overlay) {
                         active = [](std::uint32_t, bool is_write) { return !is_write; };
                     }
-                    b->map_rom(rd.range.start, std::span<const std::uint8_t>(*block),
-                               rd.overlay ? 1 : 0, std::move(active));
+                    const int rom_priority =
+                        rd.priority ? static_cast<int>(*rd.priority) : (rd.overlay ? 1 : 0);
+                    b->map_rom(rd.range.start, std::span<const std::uint8_t>(*block), rom_priority,
+                               std::move(active));
                     graph.memory.push_back(std::move(block));
                     break;
                 }
@@ -123,9 +144,8 @@ namespace mnemos::manifests {
                     // Mapper-backed regions need the mapper chip in hand;
                     // defer wiring until after chips are constructed.
                     if (rd.mapper_id) {
-                        pending_mapper_regions.push_back(
-                            {b.get(), rd.range.start, span_size, *rd.mapper_id,
-                             rd.name, rd.overlay});
+                        pending_mapper_regions.push_back({b.get(), rd.range.start, span_size,
+                                                          *rd.mapper_id, rd.name, rd.overlay});
                     }
                     break;
                 }
@@ -166,6 +186,10 @@ namespace mnemos::manifests {
                 } else {
                     const std::uint32_t base = cd.mmio_range->start;
                     const std::uint32_t size = cd.mmio_range->end - base + 1U;
+                    topology::bus::active_predicate mmio_active;
+                    if (cd.mmio_active_predicate) {
+                        mmio_active = resolve_overlay(*cd.mmio_active_predicate);
+                    }
                     attached->map_mmio(
                         base, size,
                         [mmio, base](std::uint32_t address) {
@@ -174,7 +198,7 @@ namespace mnemos::manifests {
                         [mmio, base](std::uint32_t address, std::uint8_t value) {
                             mmio->mmio_write(static_cast<std::uint16_t>(address - base), value);
                         },
-                        2);
+                        2, std::move(mmio_active));
                 }
             }
         }
@@ -225,14 +249,12 @@ namespace mnemos::manifests {
             }
             const auto factory_it = mmio_factories.find(mb.name);
             if (factory_it == mmio_factories.end()) {
-                report("mmio_block '" + mb.name +
-                       "' has no host-registered factory");
+                report("mmio_block '" + mb.name + "' has no host-registered factory");
                 continue;
             }
             const std::uint32_t size = mb.range.end - mb.range.start + 1U;
             auto handlers = factory_it->second(mb.range.start, size);
-            bus_it->second->map_mmio(mb.range.start, size,
-                                     std::move(handlers.on_read),
+            bus_it->second->map_mmio(mb.range.start, size, std::move(handlers.on_read),
                                      std::move(handlers.on_write), 2);
         }
 
@@ -256,13 +278,11 @@ namespace mnemos::manifests {
             }
             chips::ichip* raw = chip_it->second;
             // Find the unique_ptr in graph.chips that owns raw.
-            auto own_it = std::find_if(graph.chips.begin(), graph.chips.end(),
-                                        [raw](const std::unique_ptr<chips::ichip>& p) {
-                                            return p.get() == raw;
-                                        });
+            auto own_it = std::find_if(
+                graph.chips.begin(), graph.chips.end(),
+                [raw](const std::unique_ptr<chips::ichip>& p) { return p.get() == raw; });
             if (own_it == graph.chips.end()) {
-                report("gate '" + gd.chip_id +
-                       "': chip ownership not found (internal error)");
+                report("gate '" + gd.chip_id + "': chip ownership not found (internal error)");
                 continue;
             }
             // Steal ownership into the wrapper. We can't store the original

@@ -41,6 +41,13 @@ namespace mnemos::manifests {
     // onto the named bus.
     using mmio_factory_table = chips::mmio_factory_table;
 
+    // Host-supplied named overlay-activation predicates. A region or chip
+    // mmio_range that names one (manifest `active_predicate` / `mmio_active_predicate`)
+    // has its bus visibility gated per access by the named bool(addr,is_write).
+    // Drives machine-specific dynamic banking (the C64 PLA reads the 6510 $01
+    // port + cartridge lines live to decide RAM vs ROM vs I/O).
+    using overlay_predicate_table = chips::overlay_predicate_table;
+
     // The instantiated machine: chips created from the manifest, the buses they
     // attach to, and the owned RAM/ROM storage the bus regions point into.
     //
@@ -93,6 +100,7 @@ namespace mnemos::manifests {
     [[nodiscard]] build_result build_system(const manifest& m, const rom_provider& roms,
                                             const callback_table& callbacks = {},
                                             const predicate_table& predicates = {},
-                                            const mmio_factory_table& mmio_factories = {});
+                                            const mmio_factory_table& mmio_factories = {},
+                                            const overlay_predicate_table& overlay_predicates = {});
 
 } // namespace mnemos::manifests
