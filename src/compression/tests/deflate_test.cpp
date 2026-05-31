@@ -56,6 +56,29 @@ TEST_CASE("deflate_raw round-trips through inflate_raw", "[deflate]") {
     check_roundtrip(lcg_bytes(8192, 0x1234U)); // near-incompressible
 }
 
+TEST_CASE("deflate_raw round-trips skewed distributions (dynamic Huffman path)", "[deflate]") {
+    // A dominant byte plus a long thin tail of many distinct values: a skewed
+    // histogram that drives dynamic-Huffman code lengths toward (and past) the
+    // 15-bit cap, exercising the length-limiter.
+    std::vector<std::uint8_t> input;
+    input.reserve(50000);
+    std::uint32_t state = 0xC0FFEEU;
+    for (std::size_t i = 0; i < 50000; ++i) {
+        state = state * 1664525U + 1013904223U;
+        // ~94% zeros, the rest spread across all 256 values.
+        input.push_back((state >> 28U) < 15U ? static_cast<std::uint8_t>(state >> 8U) : 0x00U);
+    }
+    check_roundtrip(input);
+
+    // Natural-language-ish text repeated -- the case dynamic Huffman wins on.
+    std::vector<std::uint8_t> prose;
+    const std::string line = "the quick brown fox jumps over the lazy dog; ";
+    for (int i = 0; i < 400; ++i) {
+        prose.insert(prose.end(), line.begin(), line.end());
+    }
+    check_roundtrip(prose);
+}
+
 TEST_CASE("deflate_raw round-trips a structured larger buffer", "[deflate]") {
     std::vector<std::uint8_t> input;
     input.reserve(40000);
