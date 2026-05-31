@@ -9,6 +9,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -35,6 +37,11 @@ namespace {
         std::size_t off = 8;
         while (off + 12 <= png.size()) {
             const std::uint32_t len = read_be32(png, off);
+            // Guard a malformed/oversized length so a bad encoder yields a clean
+            // assertion failure rather than reading past the buffer.
+            if (len > png.size() - off - 12) {
+                break;
+            }
             chunk c;
             for (std::size_t i = 0; i < 4; ++i) {
                 c.type[i] = png[off + 4 + i];
