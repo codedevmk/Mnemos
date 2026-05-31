@@ -292,17 +292,16 @@ namespace mnemos::chips::video {
                 }
                 dma_source_ = static_cast<std::uint32_t>(reg_[21]) |
                               (static_cast<std::uint32_t>(reg_[22]) << 8U);
-                dma_busy_ = true;
                 for (std::uint16_t i = 0; i < len; ++i) {
                     dma_copy_step();
                 }
-                dma_busy_ = false;
-                // VRAM-to-VRAM copy (dma_type 3). Hardware-correct behaviour
-                // is "don't stall the 68K, only hold dma_busy for the
-                // duration", but removing the stall here uncovers a
-                // compensating cycle-accounting bug elsewhere -- keep the
-                // legacy stall until that root cause is found.
-                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 3);
+                // VRAM-to-VRAM copy (dma_type 3) runs on the VDP's internal data
+                // path: it does NOT stall the 68K bus. Hold the DMA-busy status
+                // bit for the copy duration so a game that defensively polls
+                // dma_busy after the command spins until the copy completes (the
+                // timer is drained in tick(), which flips dma_busy_ back to 0).
+                dma_busy_ = true;
+                dma_busy_master_cycles_ += estimate_dma_transfer_cycles(len, 3);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
                 reg_[21] = static_cast<std::uint8_t>(dma_source_);
@@ -326,7 +325,7 @@ namespace mnemos::chips::video {
                 // 68K bus -- modelled by dma_stall_master_cycles_.
                 const int code_low = cmd_code_ & 0x0F;
                 const int dma_type = (code_low & 0x06) ? 0 : 1;
-                dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, dma_type);
+                dma_stall_master_cycles_ += estimate_dma_transfer_cycles(len, dma_type);
                 reg_[19] = 0U;
                 reg_[20] = 0U;
                 const std::uint32_t new_src = src >> 1U;
@@ -386,10 +385,15 @@ namespace mnemos::chips::video {
                 dma_fill_step();
             }
             const std::uint32_t fill_src = dma_src_advance(dma_source() << 1U, len * 2U) >> 1U;
-            dma_busy_ = false;
-            // VRAM fill (dma_type 2). Same legacy-stall caveat as the
-            // VRAM-copy branch: keep until the cycle drift is diagnosed.
-            dma_stall_master_cycles_ += estimate_dma_stall_cycles(len, 2);
+            // VRAM fill (dma_type 2) runs on the VDP's internal data path: it
+            // does NOT stall the 68K bus. Hold the DMA-busy status bit for the
+            // fill duration so a game that defensively polls dma_busy spins until
+            // the fill completes (the timer is drained in tick()). The initial
+            // data-port write that primes the fill costs 2 extra access slots
+            // before the transfer proper begins, so the busy duration is modelled
+            // as estimate_dma_transfer_cycles(len + 2, 2).
+            dma_busy_ = true;
+            dma_busy_master_cycles_ += estimate_dma_transfer_cycles(len + 2U, 2);
             reg_[19] = 0U;
             reg_[20] = 0U;
             reg_[21] = static_cast<std::uint8_t>(fill_src);
@@ -1052,8 +1056,8 @@ namespace mnemos::chips::video {
         refresh_irq();
     }
 
-    std::int64_t genesis_vdp::estimate_dma_stall_cycles(std::uint32_t length_units,
-                                                        int dma_type) const noexcept {
+    std::int64_t genesis_vdp::estimate_dma_transfer_cycles(std::uint32_t length_units,
+                                                           int dma_type) const noexcept {
         // DMA-rate model. Per-line access slots:
         //                 H32  H40
         //   active        16    18

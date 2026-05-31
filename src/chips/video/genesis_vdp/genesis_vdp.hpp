@@ -355,15 +355,17 @@ namespace mnemos::chips::video {
         // the 68K out. Decremented in tick(); when 0, dma_busy_ flips back.
         std::int64_t dma_busy_master_cycles_{};
 
-        // Master-clock cost of a DMA of `length_units` units against the
+        // Master-clock duration of a DMA of `length_units` units against the
         // current display state. `dma_type`:
         //   0 = 68K -> CRAM / VSRAM   (1 access slot per word)
         //   1 = 68K -> VRAM           (2 access slots per word)
         //   2 = VRAM fill             (1 access slot per byte, treated as VRAM)
         //   3 = VRAM copy             (2 access slots per byte, read + write)
-        // Added to dma_stall_master_cycles_ at DMA dispatch.
+        // For 68K-bus DMA (types 0/1) this feeds dma_stall_master_cycles_ (the
+        // 68K is held off the bus); for VDP-internal DMA (types 2/3) it feeds
+        // dma_busy_master_cycles_ (the busy status bit is held, 68K runs free).
         [[nodiscard]] std::int64_t
-        estimate_dma_stall_cycles(std::uint32_t length_units, int dma_type) const noexcept;
+        estimate_dma_transfer_cycles(std::uint32_t length_units, int dma_type) const noexcept;
 
         // Diagnostic counters (see accessors above).
         std::uint32_t vint_fired_count_{};

@@ -148,6 +148,12 @@ TEST_CASE("genesis_vdp performs a VRAM fill DMA") {
     vdp.write16(0x00, 0xAB00);      // data-port write supplies the fill byte (high)
 
     CHECK(vdp.vram16(0x4002) == 0xABAB); // bytes filled with 0xAB
+    // VRAM fill runs on the VDP's internal data path: the DMA-busy status bit
+    // is held for the fill duration (the 68K is NOT bus-stalled), then clears
+    // once the busy timer drains in tick(). A game that defensively polls
+    // dma_busy after the fill must see it set, then see it clear.
+    CHECK(vdp.dma_busy());
+    vdp.tick(genesis_vdp::master_clocks_per_line); // one full line >> the 4-byte fill
     CHECK_FALSE(vdp.dma_busy());
 }
 
@@ -166,6 +172,11 @@ TEST_CASE("genesis_vdp performs a VRAM copy DMA") {
     set_command(vdp, 0x0200, 0x21); // VRAM write + DMA at dest 0x0200
 
     CHECK(vdp.vram16(0x0200) == 0x1234);
+    // VRAM-to-VRAM copy also runs on the VDP's internal path: busy is held for
+    // the copy duration, then clears once the timer drains.
+    CHECK(vdp.dma_busy());
+    vdp.tick(genesis_vdp::master_clocks_per_line);
+    CHECK_FALSE(vdp.dma_busy());
 }
 
 TEST_CASE("genesis_vdp raises the V-blank interrupt") {
