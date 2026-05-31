@@ -92,6 +92,8 @@ namespace mnemos::apps::player::adapters::genesis {
                                      std::string display_name,
                                      frontend_sdk::scheduler_factory* scheduler_factory)
         : sys_(manifests::genesis::build_genesis_runtime(std::move(rom), config)),
+          work_ram_view_("work_ram", sys_->graph.region_span("work_ram")),
+          z80_ram_view_("z80_ram", sys_->state.z80_ram),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
@@ -108,6 +110,9 @@ namespace mnemos::apps::player::adapters::genesis {
         chip_view_[2] = sys_->z80();
         chip_view_[3] = sys_->fm();
         chip_view_[4] = sys_->psg();
+
+        system_mem_view_[0] = &work_ram_view_;
+        system_mem_view_[1] = &z80_ram_view_;
 
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = "Genesis"});

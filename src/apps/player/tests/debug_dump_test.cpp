@@ -30,22 +30,9 @@ namespace {
     using mnemos::instrumentation::debug_layer;
     using mnemos::instrumentation::ichip_introspection;
     using mnemos::instrumentation::memory_view;
+    using mnemos::instrumentation::span_memory_view;
     using mnemos::instrumentation::trace_event;
     using mnemos::instrumentation::trace_target;
-
-    class bytes_view final : public memory_view {
-      public:
-        bytes_view(std::string_view name, std::span<const std::uint8_t> bytes) noexcept
-            : name_(name), bytes_(bytes) {}
-        [[nodiscard]] std::string_view name() const noexcept override { return name_; }
-        [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept override {
-            return bytes_;
-        }
-
-      private:
-        std::string_view name_;
-        std::span<const std::uint8_t> bytes_;
-    };
 
     class fake_trace final : public trace_target {
       public:
@@ -76,7 +63,7 @@ namespace {
         [[nodiscard]] std::span<memory_view* const> memory_views() override { return table_; }
 
       private:
-        bytes_view ram_;
+        span_memory_view ram_;
         std::array<memory_view*, 1> table_{};
     };
 
@@ -132,6 +119,7 @@ namespace {
             trace_chip_ = std::make_unique<trace_chip>();
             chip_list_[0] = trace_chip_.get();
             chip_list_[1] = mem_chip_.get();
+            sys_mem_table_[0] = &sysram_view_;
         }
 
         [[nodiscard]] video_region region() const noexcept override { return {60000U}; }
@@ -145,6 +133,9 @@ namespace {
         void apply_input(int, const controller_state&) noexcept override {}
         [[nodiscard]] audio_chunk drain_audio() noexcept override { return {}; }
         [[nodiscard]] std::span<ichip* const> chips() const noexcept override { return chip_list_; }
+        [[nodiscard]] std::span<memory_view* const> memory_views() const noexcept override {
+            return sys_mem_table_;
+        }
 
         [[nodiscard]] trace_chip& trace_chip_ref() noexcept { return *trace_chip_; }
 
@@ -155,6 +146,11 @@ namespace {
         std::unique_ptr<trace_chip> trace_chip_{};
         std::array<ichip*, 2> chip_list_{};
         std::vector<spec_field> spec_{};
+        // System-level memory (not owned by a chip), exposed via the
+        // player_system::memory_views() override above.
+        std::vector<std::uint8_t> sysram_{0x11U, 0x22U, 0x33U, 0x44U};
+        span_memory_view sysram_view_{"work_ram", sysram_};
+        std::array<memory_view*, 1> sys_mem_table_{};
     };
 
     [[nodiscard]] std::filesystem::path make_scratch_dir(const std::string& tag) {
@@ -206,6 +202,21 @@ TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars"
         const std::string name = entry.path().filename().string();
         CHECK(name.find("cpu_x") == std::string::npos);
     }
+}
+
+TEST_CASE("dump_screenshot_artifacts writes system-level memory_views without a chip id",
+          "[debug_dump]") {
+    const auto scratch = make_scratch_dir("system_mem");
+    const auto base = (scratch / "shot.ppm").string();
+
+    fake_system sys;
+    REQUIRE(mnemos::apps::player::dump_screenshot_artifacts(sys, base));
+
+    // System memory (work RAM, etc.) has no chip-id segment in its path,
+    // distinguishing it from a chip's memory_view (<base>.<chip>.<name>.bin).
+    const auto sys_path = scratch / "shot.ppm.work_ram.bin";
+    REQUIRE(std::filesystem::exists(sys_path));
+    REQUIRE(read_file(sys_path) == std::vector<std::uint8_t>{0x11U, 0x22U, 0x33U, 0x44U});
 }
 
 TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug_dump]") {

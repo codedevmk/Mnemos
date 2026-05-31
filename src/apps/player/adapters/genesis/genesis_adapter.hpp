@@ -17,7 +17,8 @@
 // $A10003 / $A10005 still reads the hardware-idle 0x7F until Commit 5 wires
 // it through.
 
-#include "genesis_runtime.hpp" // manifest-path build (also pulls genesis_config)
+#include "genesis_runtime.hpp"     // manifest-path build (also pulls genesis_config)
+#include "introspection_views.hpp" // chips/shared: span_memory_view
 #include "player_system.hpp"
 #include "region.hpp" // chips/shared: video_region
 #include "scheduler.hpp"
@@ -62,6 +63,10 @@ namespace mnemos::apps::player::adapters::genesis {
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
         }
+        [[nodiscard]] std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept override {
+            return system_mem_view_;
+        }
 
         // For tests / instrumentation.
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
@@ -70,6 +75,13 @@ namespace mnemos::apps::player::adapters::genesis {
 
       private:
         std::unique_ptr<manifests::genesis::genesis_runtime> sys_;
+        // System-level memories exposed via player_system::memory_views() for the
+        // --screenshot dump path: the 64 KiB 68K work RAM (stored in 68K /
+        // big-endian byte order) and the 8 KiB Z80 RAM. The spans borrow storage
+        // owned by *sys_, so these views stay valid for the adapter's lifetime.
+        instrumentation::span_memory_view work_ram_view_;
+        instrumentation::span_memory_view z80_ram_view_;
+        std::array<instrumentation::memory_view*, 2> system_mem_view_{};
         // Non-owning chip pointers in scheduler order. Populated by the ctor;
         // exposed via the player_system::chips() debug enumerator so generic
         // tools can walk the chip list without depending on genesis_system.
