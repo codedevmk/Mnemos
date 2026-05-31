@@ -38,8 +38,11 @@ namespace mnemos::logging {
         return "unknown";
     }
 
+    // `off` is a filter sentinel, never an emittable record level: a record at
+    // `off` is never enabled, and a minimum of `off` silences every level.
     [[nodiscard]] constexpr bool log_level_enabled(log_level level, log_level minimum) noexcept {
-        return static_cast<std::uint8_t>(level) >= static_cast<std::uint8_t>(minimum);
+        return level != log_level::off &&
+               static_cast<std::uint8_t>(level) >= static_cast<std::uint8_t>(minimum);
     }
 
 } // namespace mnemos::logging

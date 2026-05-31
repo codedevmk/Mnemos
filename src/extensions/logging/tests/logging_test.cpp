@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -85,14 +86,20 @@ TEST_CASE("logger_factory minimum level gates records and reconfigures live", "[
     CHECK(a[1].message == "now-kept");
 }
 
-TEST_CASE("log_level off silences everything", "[logging]") {
+TEST_CASE("log_level off is never emitted", "[logging]") {
     std::vector<recording_provider::entry> a;
     logger_factory factory;
     factory.add_provider(std::make_unique<recording_provider>(a));
-    factory.set_minimum_level(log_level::off);
 
+    // off as a minimum silences every level...
+    factory.set_minimum_level(log_level::off);
     auto log = factory.create_logger("x");
     log->log(log_level::fatal, "nope");
+    CHECK(a.empty());
+
+    // ...and off is never an emittable level, even under a permissive minimum.
+    factory.set_minimum_level(log_level::trace);
+    log->log(log_level::off, "still nope");
     CHECK(a.empty());
 }
 

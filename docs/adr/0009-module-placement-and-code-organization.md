@@ -128,5 +128,6 @@ primitive layer; new hashing/crypto and logging go to their named modules.
   instead of hiding them.
 - The catalog is the living index: a new category is a one-row change here,
   keeping the policy authoritative as the tree grows.
-- One known debt is recorded (foundation hashing → `security/cryptography`)
-  rather than silently violating the new rule.
+- The pre-policy `foundation` debts are resolved, not just recorded: `crc32` /
+  `sha256` now live in `security/cryptography` and logging in
+  `extensions/logging`, leaving `foundation` as std++ primitives only.

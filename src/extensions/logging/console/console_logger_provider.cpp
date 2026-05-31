@@ -50,12 +50,12 @@ namespace mnemos::logging::console {
                            std::string category) noexcept
                 : stream_(stream), mutex_(std::move(mutex)), category_(std::move(category)) {}
 
-            [[nodiscard]] bool is_enabled(log_level) const noexcept override {
-                return stream_ != nullptr;
+            [[nodiscard]] bool is_enabled(log_level level) const noexcept override {
+                return stream_ != nullptr && level != log_level::off;
             }
 
             void log(const log_record_view& record) noexcept override {
-                if (stream_ == nullptr) {
+                if (!is_enabled(record.level)) {
                     return;
                 }
                 const std::string_view category =
