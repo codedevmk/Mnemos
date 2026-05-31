@@ -142,7 +142,8 @@ TEST_CASE("build_system loads a verified ROM and binds an MMIO chip") {
     [[maybe_unused]] const mnemos::chips::bus_controller::cia_6526 force_cia_link{};
 
     const std::vector<std::uint8_t> rom = {0x11U, 0x22U, 0x33U, 0x44U};
-    const std::string sha = mnemos::foundation::sha256(std::span<const std::uint8_t>(rom)).hex();
+    const std::string sha =
+        mnemos::security::cryptography::sha256(std::span<const std::uint8_t>(rom)).hex();
 
     const std::string text = R"toml(
 [manifest]

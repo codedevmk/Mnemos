@@ -1,10 +1,13 @@
 #include "debug_dump.hpp"
 
+#include "file.hpp"
 #include "introspection_views.hpp"
+#include "ppm_image.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <vector>
 
 namespace mnemos::apps::player {
 
@@ -27,33 +30,21 @@ namespace mnemos::apps::player {
             if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
                 return false;
             }
-            std::ofstream out(path, std::ios::binary);
-            if (!out) {
-                return false;
-            }
+            // The framebuffer may be strided (storage pitch > visible width);
+            // pack the visible region row-by-row before encoding.
             const std::uint32_t stride = fb.effective_stride();
-            out << "P6\n" << fb.width << " " << fb.height << "\n255\n";
+            std::vector<std::uint32_t> packed;
+            packed.reserve(static_cast<std::size_t>(fb.width) * fb.height);
             for (std::uint32_t y = 0; y < fb.height; ++y) {
                 const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
-                for (std::uint32_t x = 0; x < fb.width; ++x) {
-                    const std::uint32_t p = row[x];
-                    const char rgb[3] = {static_cast<char>((p >> 16U) & 0xFFU),
-                                         static_cast<char>((p >> 8U) & 0xFFU),
-                                         static_cast<char>(p & 0xFFU)};
-                    out.write(rgb, 3);
-                }
+                packed.insert(packed.end(), row, row + fb.width);
             }
-            return out.good();
+            const graphics::images::ppm_image img(fb.width, fb.height, std::move(packed));
+            return img.write(path);
         }
 
         bool dump_bytes(const std::string& path, std::span<const std::uint8_t> bytes) {
-            std::ofstream out(path, std::ios::binary);
-            if (!out) {
-                return false;
-            }
-            out.write(reinterpret_cast<const char*>(bytes.data()),
-                      static_cast<std::streamsize>(bytes.size()));
-            return out.good();
+            return io::write_file(path, bytes);
         }
 
     } // namespace

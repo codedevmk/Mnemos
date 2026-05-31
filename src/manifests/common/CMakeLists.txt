@@ -29,6 +29,7 @@ target_link_libraries(
     mnemos_manifests_common
     PUBLIC
         mnemos::foundation
+        mnemos::security::cryptography
         mnemos::chips::shared
         mnemos::topology
     PRIVATE
@@ -39,7 +40,11 @@ mnemos_apply_common_target_options(mnemos_manifests_common PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_common
     TIER 4
-    DEPENDS mnemos_foundation mnemos_chips_shared mnemos_topology
+    DEPENDS
+        mnemos_foundation
+        mnemos_security_cryptography
+        mnemos_chips_shared
+        mnemos_topology
 )
 
 if(BUILD_TESTING)

@@ -8,10 +8,10 @@
 #include <string_view>
 #include <vector>
 
-// SHA-256 (FIPS 180-4). Header-only to fit the foundation INTERFACE target. Used
-// for ROM verification (manifest loader) and framebuffer hashing (runtime/golden
-// tests).
-namespace mnemos::foundation {
+// SHA-256 (FIPS 180-4). Header-only to fit the security::cryptography INTERFACE
+// target. Used for ROM verification (manifest loader) and framebuffer hashing
+// (runtime/golden tests).
+namespace mnemos::security::cryptography {
 
     struct sha256_digest final {
         std::array<std::uint8_t, 32> bytes{};
@@ -140,4 +140,4 @@ namespace mnemos::foundation {
             reinterpret_cast<const std::uint8_t*>(text.data()), text.size()));
     }
 
-} // namespace mnemos::foundation
+} // namespace mnemos::security::cryptography

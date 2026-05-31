@@ -118,7 +118,8 @@ namespace mnemos::manifests {
                     }
                     if (rd.sha256) {
                         const auto digest =
-                            foundation::sha256(std::span<const std::uint8_t>(*bytes)).hex();
+                            security::cryptography::sha256(std::span<const std::uint8_t>(*bytes))
+                                .hex();
                         if (digest != *rd.sha256) {
                             report("rom region '" + rd.name + "': sha256 mismatch (got " + digest +
                                    ")");

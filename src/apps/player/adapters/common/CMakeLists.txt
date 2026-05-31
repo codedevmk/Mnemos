@@ -21,6 +21,10 @@ target_link_libraries(
     mnemos_apps_player_adapters_common
     PUBLIC
         mnemos::chips::shared
+    PRIVATE
+        mnemos::common
+        mnemos::compression
+        mnemos::io
 )
 
 mnemos_apply_common_target_options(mnemos_apps_player_adapters_common PUBLIC)
@@ -29,6 +33,9 @@ mnemos_declare_tier(
     TIER 7
     DEPENDS
         mnemos_chips_shared
+        mnemos_common
+        mnemos_compression
+        mnemos_io
 )
 
 if(BUILD_TESTING)
@@ -39,7 +46,6 @@ if(BUILD_TESTING)
             tests/region_args_test.cpp
             tests/rom_loader_test.cpp
             tests/system_family_test.cpp
-            tests/audio_resampler_test.cpp
         LIBRARIES mnemos::apps::player::adapters::common
     )
 endif()

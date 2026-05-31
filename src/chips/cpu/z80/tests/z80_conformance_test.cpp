@@ -21,6 +21,7 @@
 #include "z80.hpp"
 
 #include "bus.hpp"
+#include "file.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -29,8 +30,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
@@ -60,15 +59,6 @@ namespace {
         return std::string(value);
 #endif
     }
-
-    std::optional<std::vector<std::uint8_t>> read_file(const fs::path& path) {
-        std::ifstream in(path, std::ios::binary);
-        if (!in) {
-            return std::nullopt;
-        }
-        return std::vector<std::uint8_t>((std::istreambuf_iterator<char>(in)),
-                                         std::istreambuf_iterator<char>());
-    }
 } // namespace
 
 TEST_CASE("z80 passes the public CP/M instruction exerciser", "[conformance][z80]") {
@@ -77,7 +67,7 @@ TEST_CASE("z80 passes the public CP/M instruction exerciser", "[conformance][z80
         SKIP("set MNEMOS_Z80_TEST_ROM to a CP/M .com exerciser image (not committed; "
              "see THIRD-PARTY.md)");
     }
-    auto image = read_file(fs::path(*rom));
+    auto image = mnemos::io::read_file(fs::path(*rom).string());
     if (!image || image->empty() || image->size() > 0xFF00U) {
         SKIP("MNEMOS_Z80_TEST_ROM=" << *rom
                                     << " could not be read as a CP/M .com (<= 0xFF00 bytes)");

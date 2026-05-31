@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-namespace mnemos::apps::player::adapters {
+namespace mnemos::dsp {
 
     // Common mixer fixed-point: Q12 for gain math (1.0 == 4096). Adapters
     // multiply their per-channel sample by a Q12 gain via `scale_q12`, sum
@@ -104,4 +104,4 @@ namespace mnemos::apps::player::adapters {
         return static_cast<int>(accum / total);
     }
 
-} // namespace mnemos::apps::player::adapters
+} // namespace mnemos::dsp

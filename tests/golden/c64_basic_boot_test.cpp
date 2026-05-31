@@ -110,7 +110,7 @@ namespace {
     }
 
     std::string sha_hex(const std::vector<std::uint8_t>& bytes) {
-        return mnemos::foundation::sha256(bytes).hex();
+        return mnemos::security::cryptography::sha256(bytes).hex();
     }
 
     // Boot a fresh C64 and render `frames` frames, mirroring the headless CLI's

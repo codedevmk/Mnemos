@@ -7,11 +7,20 @@
 
 namespace mnemos::apps::player::adapters {
 
-    // Read the file at `path` into a byte vector. Returns nullopt if the
-    // file can't be opened. Zero-byte files are returned as an empty vector,
-    // not nullopt -- callers should treat empty as a load failure if they
-    // need non-empty contents.
-    [[nodiscard]] std::optional<std::vector<std::uint8_t>> read_file(const std::string& path);
+    struct loaded_rom final {
+        std::vector<std::uint8_t> bytes; // the ROM image (extracted if the source was a .zip)
+        // Effective name for family + title detection: the chosen entry name
+        // for a .zip (so a zipped Foo.sms still resolves to SMS), else the path.
+        std::string name;
+    };
+
+    // Load a ROM image from `path`, transparently extracting it when the file
+    // is a .zip (detected by signature). The largest STORED/DEFLATE entry is
+    // taken as the ROM -- ROM-set archives are typically a single entry, and a
+    // ROM always dwarfs any readme/junk alongside it. A non-archive file is
+    // returned as-is. nullopt if the file can't be read, the archive is
+    // malformed, or extraction fails.
+    [[nodiscard]] std::optional<loaded_rom> load_rom(const std::string& path);
 
     // Strip the directory + extension off a ROM path so the result reads
     // like a title rather than a filesystem path. No further "cleanup"

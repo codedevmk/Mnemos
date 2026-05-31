@@ -8,13 +8,13 @@
 #include <cstdio>
 #include <utility>
 
-using mnemos::apps::player::adapters::clip_i16;
-using mnemos::apps::player::adapters::kMixerGainOne;
-using mnemos::apps::player::adapters::kMixerGainShift;
-using mnemos::apps::player::adapters::kOutputRate;
-using mnemos::apps::player::adapters::sample_channel_box;
-using mnemos::apps::player::adapters::sample_channel_linear;
-using mnemos::apps::player::adapters::scale_q12;
+using mnemos::dsp::clip_i16;
+using mnemos::dsp::kMixerGainOne;
+using mnemos::dsp::kMixerGainShift;
+using mnemos::dsp::kOutputRate;
+using mnemos::dsp::sample_channel_box;
+using mnemos::dsp::sample_channel_linear;
+using mnemos::dsp::scale_q12;
 
 namespace mnemos::apps::player::adapters::genesis {
 
@@ -34,7 +34,7 @@ namespace mnemos::apps::player::adapters::genesis {
         }
 
         // Genesis-specific mixer gains. The system-agnostic DSP helpers
-        // (clip_i16, scale_q12, sample_channel_*) live in adapters/common.
+        // (clip_i16, scale_q12, sample_channel_*) live in mnemos::dsp.
         // 3:1 (~9.5 dB) FM bias.
         constexpr int kGainFm = 3072;
         constexpr int kGainPsg = 1024;

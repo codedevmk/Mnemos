@@ -13,3 +13,4 @@ Current records:
 6. `0006-emu-reuse-and-conformance.md`
 7. `0007-manifest-toml-dependency.md`
 8. `0008-save-state-and-zstd.md`
+9. `0009-module-placement-and-code-organization.md`

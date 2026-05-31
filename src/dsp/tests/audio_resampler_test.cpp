@@ -9,12 +9,12 @@
 #include <array>
 #include <cstdint>
 
-using mnemos::apps::player::adapters::clip_i16;
-using mnemos::apps::player::adapters::kMixerGainOne;
-using mnemos::apps::player::adapters::kOutputRate;
-using mnemos::apps::player::adapters::sample_channel_box;
-using mnemos::apps::player::adapters::sample_channel_linear;
-using mnemos::apps::player::adapters::scale_q12;
+using mnemos::dsp::clip_i16;
+using mnemos::dsp::kMixerGainOne;
+using mnemos::dsp::kOutputRate;
+using mnemos::dsp::sample_channel_box;
+using mnemos::dsp::sample_channel_linear;
+using mnemos::dsp::scale_q12;
 
 TEST_CASE("clip_i16 saturates to int16 bounds") {
     CHECK(clip_i16(0) == 0);
