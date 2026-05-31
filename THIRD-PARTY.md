@@ -68,6 +68,26 @@ accuracy targets, and is acknowledged here:
 - **Nuked-OPN2** — die-accurate YM2612 FM reference.
 - **MAME** — cross-system hardware behaviour and timing reference.
 
+## Code adapted from sibling first-party projects
+
+Two of the author's own separate projects are used as cannibalization sources
+for non-emulation *utility* code: **Emu** (a C multi-system emulator) and the
+**Eliot** engine (`eliot-mark2`). These are first-party (same author), not
+third-party-owned, so no external license obligation attaches; they are
+acknowledged here per the AGENTS.md rule that any lifted code carry its
+provenance and a Mnemos re-review. Mnemos takes **no** runtime, namespace, or
+allocator dependency on either project — only self-contained utility code,
+re-expressed in Mnemos's own types, namespaces, and standards.
+
+| Mnemos code | Source | Nature |
+|---|---|---|
+| `src/common/hex.hpp` | Eliot `Core/Encoding/Hex` | Adapted: the table-driven encode/decode, re-typed to `std` with an `std::optional` decode result. |
+| `src/graphics/images/png_image.*` (PNG container) | Eliot `IML/Encoders/PNGEncoder` | Ported: the PNG signature + IHDR/IDAT/IEND chunk emission. The DEFLATE encoder it calls is independent clean-room work. |
+| `src/compression/*` (inflate, deflate, zip, lzma1) | Emu compression + the RFCs | Reimplemented in C++ from RFC 1950/1951 and the container specs, with Emu's C as the design reference (no zlib/LZMA source consulted). |
+
+Each was re-reviewed against Mnemos's architecture, determinism, licensing, and
+test requirements before landing.
+
 ## Project policy
 
 - No GPL emulator source is lifted into Mnemos. Where multiple open-source
