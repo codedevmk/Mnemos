@@ -55,6 +55,19 @@ multiple independent open-source implementations.
   hardware notes; cross-checked against multiple open-source Sega
   implementations.
 
+## Cross-check emulators
+
+Where a behavioural detail was ambiguous, it was validated against one or more
+independent open-source emulators used purely as black-box references — read or
+run to confirm a modelling decision against an independent implementation, never
+as a source of code. Their authors' work materially helped Mnemos reach its
+accuracy targets, and is acknowledged here:
+
+- **Genesis-Plus-GX** — Sega Genesis / Mega Drive behavioural reference.
+- **BlastEm** — Sega Genesis cycle-timing reference.
+- **Nuked-OPN2** — die-accurate YM2612 FM reference.
+- **MAME** — cross-system hardware behaviour and timing reference.
+
 ## Project policy
 
 - No GPL emulator source is lifted into Mnemos. Where multiple open-source

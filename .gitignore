@@ -55,10 +55,11 @@ conan.lock
 *.profraw
 *.profdata
 
-# Local, machine-specific ROM / test-corpus paths for the data-gated tests
-# (points at copyrighted material that must never be committed).
-scripts/local-roms.ps1
+# Local developer tooling lives in scripts/ and is not part of the committed
+# source -- machine-specific paths, ad-hoc diagnostic harnesses, build helpers.
+scripts/
 
 # Working/scratch documents that are not part of the public history
 docs/architecture/mnemos-todos-v0.1.md
+docs/genesis-cycle-parity-audit.md
 *.obj
