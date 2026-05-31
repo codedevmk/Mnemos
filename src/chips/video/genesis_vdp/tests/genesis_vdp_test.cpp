@@ -230,9 +230,9 @@ TEST_CASE("genesis_vdp HINT counter is held at R10 during V-blank") {
         }
         vdp.acknowledge_irq(level); // drain so we count each assertion
     });
-    set_reg(vdp, 1, 0x40);  // display enable, no V-int
-    set_reg(vdp, 0, 0x10);  // H-int enable
-    set_reg(vdp, 10, 20);   // HINT every 21 active lines
+    set_reg(vdp, 1, 0x40); // display enable, no V-int
+    set_reg(vdp, 0, 0x10); // H-int enable
+    set_reg(vdp, 10, 20);  // HINT every 21 active lines
 
     // Drive line-by-line so refresh_irq runs between each scanline (the test
     // counts level-rising edges, so we must drain HINT each line via the
@@ -278,14 +278,14 @@ TEST_CASE("genesis_vdp round-trips its state") {
     CHECK(restored.reg(15) == 0x02);
 }
 
-    // Reset leaves the VDP at the VBL entry line, so the first 38 ticks
-    // (NTSC mode 5 = 262 - 224 lines) advance through V-blank without
-    // rendering. After this helper the next master_clocks_per_line tick
-    // renders scanline 0.
-    static void tick_to_active_line(genesis_vdp& vdp) {
-        constexpr std::uint64_t vbl_lines = 38;
-        vdp.tick(vbl_lines * genesis_vdp::master_clocks_per_line);
-    }
+// Reset leaves the VDP at the VBL entry line, so the first 38 ticks
+// (NTSC mode 5 = 262 - 224 lines) advance through V-blank without
+// rendering. After this helper the next master_clocks_per_line tick
+// renders scanline 0.
+static void tick_to_active_line(genesis_vdp& vdp) {
+    constexpr std::uint64_t vbl_lines = 38;
+    vdp.tick(vbl_lines * genesis_vdp::master_clocks_per_line);
+}
 
 TEST_CASE("genesis_vdp renders a plane-A tile") {
     genesis_vdp vdp;
@@ -331,8 +331,8 @@ TEST_CASE("genesis_vdp window plane covers full width when V-condition is set") 
     write_vram(vdp, 0x0020, solid_tile_1); // tile 1 = solid colour index 1
     write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) -> tile 1 / palette 0
     write_vram(vdp, 0xA000, {0x2001});     // window cell (0,0) -> tile 1 / palette 1
-    write_cram(vdp, 1, 0x000E);  // palette 0 colour 1 = max red
-    write_cram(vdp, 17, 0x00E0); // palette 1 colour 1 = max green
+    write_cram(vdp, 1, 0x000E);            // palette 0 colour 1 = max red
+    write_cram(vdp, 17, 0x00E0);           // palette 1 colour 1 = max green
 
     tick_to_active_line(vdp);
     vdp.tick(genesis_vdp::master_clocks_per_line);

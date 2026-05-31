@@ -105,9 +105,7 @@ namespace mnemos::chips::cpu {
           public:
             explicit introspection_surface(z80& owner) noexcept;
 
-            [[nodiscard]] instrumentation::trace_target* trace() override {
-                return &trace_impl_;
-            }
+            [[nodiscard]] instrumentation::trace_target* trace() override { return &trace_impl_; }
             [[nodiscard]] instrumentation::register_view* registers() override {
                 return &registers_impl_;
             }

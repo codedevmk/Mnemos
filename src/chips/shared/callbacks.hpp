@@ -57,8 +57,8 @@ namespace mnemos::chips {
     // Mismatches are silent (returns nullptr); the chip falls back to its
     // built-in default.
     template <class Sig>
-    [[nodiscard]] const std::function<Sig>*
-    find_callback(const callback_table& cbs, std::string_view name) noexcept {
+    [[nodiscard]] const std::function<Sig>* find_callback(const callback_table& cbs,
+                                                          std::string_view name) noexcept {
         const auto it = cbs.find(std::string{name});
         if (it == cbs.end()) {
             return nullptr;

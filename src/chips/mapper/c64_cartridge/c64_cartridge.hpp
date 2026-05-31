@@ -11,8 +11,8 @@ namespace mnemos::chips::mapper {
 
     // Commodore 64 expansion-port cartridge.
     //
-    // Parses the community-standard `.crt` container (see THIRD-PARTY.md) and exposes the ROML ($8000-$9FFF) and
-    // ROMH ($A000-$BFFF, or $E000-$FFFF in ultimax) views plus the I/O-1/I/O-2
+    // Parses the community-standard `.crt` container (see THIRD-PARTY.md) and exposes the ROML
+    // ($8000-$9FFF) and ROMH ($A000-$BFFF, or $E000-$FFFF in ultimax) views plus the I/O-1/I/O-2
     // window ($DE00-$DFFF) for bank switching. It also drives the /GAME and /EXROM
     // lines the PLA decodes. Supported hardware types: generic 8K/16K/ultimax,
     // Ocean (5), Magic Desk (19), and EasyFlash (32).

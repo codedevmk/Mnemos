@@ -13,7 +13,7 @@ namespace {
 TEST_CASE("system_family: .sms and .sg map to SMS") {
     CHECK(detect_family("game.sms") == system_family::sms);
     CHECK(detect_family("game.sg") == system_family::sms);
-    CHECK(detect_family("C:/roms/Sonic.SMS") == system_family::sms);  // case-insensitive
+    CHECK(detect_family("C:/roms/Sonic.SMS") == system_family::sms); // case-insensitive
     CHECK(detect_family("/r/Phantasy.Sg") == system_family::sms);
 }
 
@@ -23,8 +23,8 @@ TEST_CASE("system_family: Genesis extensions and no-extension map to Genesis") {
     CHECK(detect_family("game.gen") == system_family::genesis);
     CHECK(detect_family("game.smd") == system_family::genesis);
     CHECK(detect_family("game.68k") == system_family::genesis);
-    CHECK(detect_family("game") == system_family::genesis);            // no extension
-    CHECK(detect_family("README.md") == system_family::genesis);       // .md still wins
+    CHECK(detect_family("game") == system_family::genesis);      // no extension
+    CHECK(detect_family("README.md") == system_family::genesis); // .md still wins
 }
 
 TEST_CASE("system_family: unknown extension falls through to Genesis") {

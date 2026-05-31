@@ -25,8 +25,7 @@ TEST_CASE("rom_loader: clean_rom_name preserves the basename verbatim") {
     // helper does no semantic cleanup.
     CHECK(clean_rom_name("Streets of Rage 2 (USA, Europe).md") ==
           "Streets of Rage 2 (USA, Europe)");
-    CHECK(clean_rom_name("/r/Blades of Vengence (EJU) [!].bin") ==
-          "Blades of Vengence (EJU) [!]");
+    CHECK(clean_rom_name("/r/Blades of Vengence (EJU) [!].bin") == "Blades of Vengence (EJU) [!]");
 }
 
 TEST_CASE("rom_loader: read_file returns nullopt for a missing path") {
@@ -37,8 +36,7 @@ TEST_CASE("rom_loader: read_file round-trips a binary blob") {
     namespace fs = std::filesystem;
     const auto tmp = fs::temp_directory_path() / "mnemos_rom_loader_roundtrip.bin";
     const std::string path = tmp.string();
-    const std::vector<std::uint8_t> payload{0x00, 0xFF, 0x7E, 0x81,
-                                             0xDE, 0xAD, 0xBE, 0xEF};
+    const std::vector<std::uint8_t> payload{0x00, 0xFF, 0x7E, 0x81, 0xDE, 0xAD, 0xBE, 0xEF};
     {
         std::ofstream out(path, std::ios::binary);
         REQUIRE(out);
@@ -55,7 +53,9 @@ TEST_CASE("rom_loader: read_file returns an empty vector for a zero-byte file") 
     namespace fs = std::filesystem;
     const auto tmp = fs::temp_directory_path() / "mnemos_rom_loader_empty.bin";
     const std::string path = tmp.string();
-    { std::ofstream out(path, std::ios::binary); }
+    {
+        std::ofstream out(path, std::ios::binary);
+    }
     auto loaded = read_file(path);
     REQUIRE(loaded.has_value());
     CHECK(loaded->empty());

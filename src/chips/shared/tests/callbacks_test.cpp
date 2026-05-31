@@ -19,13 +19,11 @@ TEST_CASE("find_callback returns nullptr for an unknown name", "[callbacks]") {
     CHECK(find_callback<void(int)>(cbs, "missing") == nullptr);
 }
 
-TEST_CASE("find_callback returns the function for a matching signature",
-          "[callbacks]") {
+TEST_CASE("find_callback returns the function for a matching signature", "[callbacks]") {
     callback_table cbs;
     int observed_level = -1;
-    cbs.emplace("vdp_irq_ack",
-                callback_value{std::function<void(int)>{
-                    [&observed_level](int level) { observed_level = level; }}});
+    cbs.emplace("vdp_irq_ack", callback_value{std::function<void(int)>{
+                                   [&observed_level](int level) { observed_level = level; }}});
 
     const auto* fn = find_callback<void(int)>(cbs, "vdp_irq_ack");
     REQUIRE(fn != nullptr);
@@ -36,8 +34,7 @@ TEST_CASE("find_callback returns the function for a matching signature",
 TEST_CASE("find_callback returns nullptr when the variant holds a different signature",
           "[callbacks]") {
     callback_table cbs;
-    cbs.emplace("vblank",
-                callback_value{std::function<void(bool)>{[](bool) {}}});
+    cbs.emplace("vblank", callback_value{std::function<void(bool)>{[](bool) {}}});
 
     // The name is present but registered under void(bool); requesting void(int)
     // must miss rather than coerce.
@@ -46,12 +43,10 @@ TEST_CASE("find_callback returns nullptr when the variant holds a different sign
     CHECK(find_callback<void(bool)>(cbs, "vblank") != nullptr);
 }
 
-TEST_CASE("find_callback supports all four currently-defined signatures",
-          "[callbacks]") {
+TEST_CASE("find_callback supports all four currently-defined signatures", "[callbacks]") {
     callback_table cbs;
     cbs.emplace("a", callback_value{std::function<void(int)>{[](int) {}}});
-    cbs.emplace("b", callback_value{std::function<void(std::uint32_t)>{
-                         [](std::uint32_t) {}}});
+    cbs.emplace("b", callback_value{std::function<void(std::uint32_t)>{[](std::uint32_t) {}}});
     cbs.emplace("c", callback_value{std::function<std::uint16_t(std::uint32_t)>{
                          [](std::uint32_t) -> std::uint16_t { return 0; }}});
     cbs.emplace("d", callback_value{std::function<void(bool)>{[](bool) {}}});

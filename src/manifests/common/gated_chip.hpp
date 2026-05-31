@@ -43,9 +43,7 @@ namespace mnemos::manifests {
             }
         }
         void reset(chips::reset_kind kind) override { inner_->reset(kind); }
-        void save_state(chips::state_writer& writer) const override {
-            inner_->save_state(writer);
-        }
+        void save_state(chips::state_writer& writer) const override { inner_->save_state(writer); }
         void load_state(chips::state_reader& reader) override { inner_->load_state(reader); }
         void configure(const chips::config_table& cfg,
                        const chips::callback_table& callbacks) override {

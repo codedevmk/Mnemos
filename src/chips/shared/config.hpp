@@ -42,8 +42,8 @@ namespace mnemos::chips {
         return std::nullopt;
     }
 
-    [[nodiscard]] inline std::optional<std::int64_t>
-    cfg_int(const config_table& cfg, std::string_view key) noexcept {
+    [[nodiscard]] inline std::optional<std::int64_t> cfg_int(const config_table& cfg,
+                                                             std::string_view key) noexcept {
         const auto it = cfg.find(std::string{key});
         if (it == cfg.end()) {
             return std::nullopt;
@@ -54,8 +54,8 @@ namespace mnemos::chips {
         return std::nullopt;
     }
 
-    [[nodiscard]] inline std::optional<double>
-    cfg_double(const config_table& cfg, std::string_view key) noexcept {
+    [[nodiscard]] inline std::optional<double> cfg_double(const config_table& cfg,
+                                                          std::string_view key) noexcept {
         const auto it = cfg.find(std::string{key});
         if (it == cfg.end()) {
             return std::nullopt;
@@ -66,8 +66,8 @@ namespace mnemos::chips {
         return std::nullopt;
     }
 
-    [[nodiscard]] inline std::optional<std::string_view>
-    cfg_string(const config_table& cfg, std::string_view key) noexcept {
+    [[nodiscard]] inline std::optional<std::string_view> cfg_string(const config_table& cfg,
+                                                                    std::string_view key) noexcept {
         const auto it = cfg.find(std::string{key});
         if (it == cfg.end()) {
             return std::nullopt;

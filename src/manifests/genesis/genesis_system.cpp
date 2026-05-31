@@ -56,7 +56,6 @@ namespace mnemos::manifests::genesis {
 #endif
     } // namespace
 
-
     std::unique_ptr<genesis_system> assemble_genesis(std::vector<std::uint8_t> rom,
                                                      const genesis_config& config) {
         auto sys = std::make_unique<genesis_system>();
@@ -206,8 +205,8 @@ namespace mnemos::manifests::genesis {
                     const auto pc = s->cpu.cpu_registers().pc;
                     std::fprintf(stderr, "[wram] f=%llu pc=$%06X [$%04X]=%02X\n",
                                  static_cast<unsigned long long>(s->frame_index),
-                                 static_cast<unsigned>(pc & 0xFFFFFFU),
-                                 static_cast<unsigned>(wa), static_cast<unsigned>(v));
+                                 static_cast<unsigned>(pc & 0xFFFFFFU), static_cast<unsigned>(wa),
+                                 static_cast<unsigned>(v));
                 }
             },
             0);
@@ -222,8 +221,7 @@ namespace mnemos::manifests::genesis {
         // One-instruction IRQ delay for V-int-enable-via-MOVE.W writes.
         // Wired between the VDP's delayed-IRQ hook and the CPU's delayed-
         // IRQ scheduler (see set_delayed_irq_callback / schedule_delayed_irq).
-        s->vdp.set_delayed_irq_callback(
-            [s](int level) { s->cpu.schedule_delayed_irq(level); });
+        s->vdp.set_delayed_irq_callback([s](int level) { s->cpu.schedule_delayed_irq(level); });
         // The 68K IACK clears the VDP IRQ request -- many V-blank handlers
         // rely on this instead of acking via the status read.
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });

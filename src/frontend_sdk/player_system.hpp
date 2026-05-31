@@ -106,9 +106,7 @@ namespace mnemos::frontend_sdk {
         // --screenshot path and any future debug UI to enumerate state via
         // `ichip::introspection()` without depending on a concrete adapter
         // type. Default empty -- adapters override to advertise their chips.
-        [[nodiscard]] virtual std::span<chips::ichip* const> chips() const noexcept {
-            return {};
-        }
+        [[nodiscard]] virtual std::span<chips::ichip* const> chips() const noexcept { return {}; }
 
         // Convenience: lookup a chip by an adapter-stable id ("cpu", "vdp",
         // "z80", "sub_cpu", "vdp1", ...). Returns nullptr if the adapter

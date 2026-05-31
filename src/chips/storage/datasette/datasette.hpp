@@ -39,6 +39,7 @@ namespace mnemos::chips::storage {
 
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
+        using ichip::configure; // un-hide base overload (gcc -Woverloaded-virtual)
         void configure(config cfg);
         [[nodiscard]] bool load_tap(std::span<const std::uint8_t> tap);
         void eject() noexcept;

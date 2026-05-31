@@ -45,6 +45,7 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Apply host wiring. Re-initialises chip state (like power-on).
+        using ichip::configure; // un-hide base overload (gcc -Woverloaded-virtual)
         void configure(config cfg);
 
         // Bus access over the low 4 bits of the address.

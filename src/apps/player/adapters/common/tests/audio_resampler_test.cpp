@@ -42,9 +42,7 @@ TEST_CASE("scale_q12 applies Q12 gain with half-away-from-zero rounding") {
     CHECK(scale_q12(-1, 6144) == -2);
 }
 
-TEST_CASE("kOutputRate is the player's fixed 48 kHz contract") {
-    CHECK(kOutputRate == 48000U);
-}
+TEST_CASE("kOutputRate is the player's fixed 48 kHz contract") { CHECK(kOutputRate == 48000U); }
 
 TEST_CASE("sample_channel_linear interpolates between adjacent frames") {
     // Stereo (stride 2): L=100,200,400  R=10,20,40

@@ -117,8 +117,7 @@ int main(int argc, char* argv[]) {
                                 ? mnemos::manifests::sms::parse_market(*bytes)
                                 : mnemos::manifests::genesis::parse_market(*bytes);
         const auto video = resolve_video(mnemos::default_video_for(market));
-        std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n",
-                     family_label(family),
+        std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
 
@@ -130,15 +129,13 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::genesis::force_link();
         mnemos::apps::player::adapters::sms::force_link();
 
-        const std::string_view family_id =
-            family == system_family::sms ? "sms" : "genesis";
+        const std::string_view family_id = family == system_family::sms ? "sms" : "genesis";
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
             family_id, {.rom = std::move(*bytes),
                         .video_region = video,
                         .display_name = clean_rom_name(*rom_path)});
         if (!system) {
-            std::fprintf(stderr,
-                         "[mnemos_player] no adapter registered for family '%.*s'\n",
+            std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%.*s'\n",
                          static_cast<int>(family_id.size()), family_id.data());
             return 1;
         }
@@ -260,13 +257,15 @@ int main(int argc, char* argv[]) {
     oxfer_ci.size = static_cast<Uint32>(kOverlayBufW * kOverlayBufH) * 4U;
     SDL_GPUTransferBuffer* oxfer = SDL_CreateGPUTransferBuffer(device, &oxfer_ci);
 
-    std::vector<std::uint32_t> overlay_pixels(
-        static_cast<std::size_t>(kOverlayBufW * kOverlayBufH), 0U);
+    std::vector<std::uint32_t> overlay_pixels(static_cast<std::size_t>(kOverlayBufW * kOverlayBufH),
+                                              0U);
 
     if (otex == nullptr || oxfer == nullptr) {
         std::fprintf(stderr, "overlay GPU resources failed: %s\n", SDL_GetError());
-        if (oxfer != nullptr) SDL_ReleaseGPUTransferBuffer(device, oxfer);
-        if (otex != nullptr) SDL_ReleaseGPUTexture(device, otex);
+        if (oxfer != nullptr)
+            SDL_ReleaseGPUTransferBuffer(device, oxfer);
+        if (otex != nullptr)
+            SDL_ReleaseGPUTexture(device, otex);
         SDL_ReleaseGPUTransferBuffer(device, xfer);
         SDL_ReleaseGPUTexture(device, tex);
         SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -285,8 +284,7 @@ int main(int argc, char* argv[]) {
     // Software-pace the loop at the game's native frame rate; pacing against
     // vsync would over- or under-clock games whose rate doesn't match the
     // display, drifting both gameplay speed and audio queue depth.
-    const double target_fps =
-        system ? system->region().frames_per_second_x1000 / 1000.0 : 60.0;
+    const double target_fps = system ? system->region().frames_per_second_x1000 / 1000.0 : 60.0;
     const Uint64 perf_freq = SDL_GetPerformanceFrequency();
     const double frame_ticks = static_cast<double>(perf_freq) / target_fps;
     Uint64 next_frame_at = SDL_GetPerformanceCounter();
@@ -338,8 +336,8 @@ int main(int argc, char* argv[]) {
         spec.format = SDL_AUDIO_S16;
         spec.channels = 2;
         spec.freq = static_cast<int>(rate);
-        audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr,
-                                                 nullptr);
+        audio_stream =
+            SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
         if (audio_stream != nullptr) {
             SDL_ResumeAudioStreamDevice(audio_stream);
             std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16\n", rate);
@@ -434,13 +432,13 @@ int main(int argc, char* argv[]) {
                 const auto lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
                 const auto ly = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
                 pad.up |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) ||
-                         ly < -kAxisThreshold;
+                          ly < -kAxisThreshold;
                 pad.down |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) ||
-                           ly > kAxisThreshold;
+                            ly > kAxisThreshold;
                 pad.left |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ||
-                           lx < -kAxisThreshold;
+                            lx < -kAxisThreshold;
                 pad.right |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
-                            lx > kAxisThreshold;
+                             lx > kAxisThreshold;
                 pad.a |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
                 pad.b |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST);
                 pad.c |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);
@@ -500,7 +498,8 @@ int main(int argc, char* argv[]) {
                 if (out) {
                     out << "P6\n" << src_w << " " << src_h << "\n255\n";
                     for (std::uint32_t y = 0; y < src_h; ++y) {
-                        const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * src_stride;
+                        const std::uint32_t* row =
+                            fb.pixels + static_cast<std::size_t>(y) * src_stride;
                         for (std::uint32_t x = 0; x < src_w; ++x) {
                             const std::uint32_t p = row[x];
                             const char rgb[3] = {static_cast<char>((p >> 16U) & 0xFFU),
@@ -566,14 +565,13 @@ int main(int argc, char* argv[]) {
                       panel_w, panel_h);
 
             char fps_line[32];
-            std::snprintf(fps_line, sizeof(fps_line), "FPS: %3d  F: %8llu",
-                          displayed_fps, static_cast<unsigned long long>(total_frames));
+            std::snprintf(fps_line, sizeof(fps_line), "FPS: %3d  F: %8llu", displayed_fps,
+                          static_cast<unsigned long long>(total_frames));
             draw_text(fps_line, kOverlayFgColor, overlay_pixels.data(), kOverlayBufW, kOverlayBufH,
                       kOverlayPad, kOverlayPad);
             if (!spec_line.empty()) {
                 draw_text(spec_line, kOverlayFgColor, overlay_pixels.data(), kOverlayBufW,
-                          kOverlayBufH, kOverlayPad,
-                          kOverlayPad + kGlyphHeight + kOverlayPad);
+                          kOverlayBufH, kOverlayPad, kOverlayPad + kGlyphHeight + kOverlayPad);
             }
 
             void* mapped = SDL_MapGPUTransferBuffer(device, oxfer, true);
@@ -698,8 +696,7 @@ int main(int argc, char* argv[]) {
         // (SDL_GPU has no shader-free alpha blend), so the panel sits as
         // a small black rectangle over the corner of the framebuffer.
         {
-            const int dst_x =
-                static_cast<int>(swap_w) - panel_w - kOverlayScreenMargin;
+            const int dst_x = static_cast<int>(swap_w) - panel_w - kOverlayScreenMargin;
             const int dst_y = kOverlayScreenMargin;
             if (dst_x >= 0 && dst_y >= 0 && dst_x + panel_w <= static_cast<int>(swap_w) &&
                 dst_y + panel_h <= static_cast<int>(swap_h)) {

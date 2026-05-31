@@ -26,25 +26,23 @@ namespace mnemos::peripheral::input {
         // 12-button layout owned by this model. The frontend pushes a
         // controller_state; we pick the subset the MK-1653 exposes and lay
         // it out into our internal bit positions.
-        constexpr std::uint16_t up_bit    = 0x0001U;
-        constexpr std::uint16_t down_bit  = 0x0002U;
-        constexpr std::uint16_t left_bit  = 0x0004U;
+        constexpr std::uint16_t up_bit = 0x0001U;
+        constexpr std::uint16_t down_bit = 0x0002U;
+        constexpr std::uint16_t left_bit = 0x0004U;
         constexpr std::uint16_t right_bit = 0x0008U;
-        constexpr std::uint16_t a_bit     = 0x0010U;
-        constexpr std::uint16_t b_bit     = 0x0020U;
-        constexpr std::uint16_t c_bit     = 0x0040U;
+        constexpr std::uint16_t a_bit = 0x0010U;
+        constexpr std::uint16_t b_bit = 0x0020U;
+        constexpr std::uint16_t c_bit = 0x0040U;
         constexpr std::uint16_t start_bit = 0x0080U;
-        constexpr std::uint16_t z_bit     = 0x0100U;
-        constexpr std::uint16_t y_bit     = 0x0200U;
-        constexpr std::uint16_t x_bit     = 0x0400U;
-        constexpr std::uint16_t mode_bit  = 0x0800U;
+        constexpr std::uint16_t z_bit = 0x0100U;
+        constexpr std::uint16_t y_bit = 0x0200U;
+        constexpr std::uint16_t x_bit = 0x0400U;
+        constexpr std::uint16_t mode_bit = 0x0800U;
         buttons_ = static_cast<std::uint16_t>(
-            (s.up    ? up_bit    : 0U) | (s.down  ? down_bit  : 0U) |
-            (s.left  ? left_bit  : 0U) | (s.right ? right_bit : 0U) |
-            (s.a     ? a_bit     : 0U) | (s.b     ? b_bit     : 0U) |
-            (s.c     ? c_bit     : 0U) | (s.start ? start_bit : 0U) |
-            (s.z     ? z_bit     : 0U) | (s.y     ? y_bit     : 0U) |
-            (s.x     ? x_bit     : 0U) | (s.mode  ? mode_bit  : 0U));
+            (s.up ? up_bit : 0U) | (s.down ? down_bit : 0U) | (s.left ? left_bit : 0U) |
+            (s.right ? right_bit : 0U) | (s.a ? a_bit : 0U) | (s.b ? b_bit : 0U) |
+            (s.c ? c_bit : 0U) | (s.start ? start_bit : 0U) | (s.z ? z_bit : 0U) |
+            (s.y ? y_bit : 0U) | (s.x ? x_bit : 0U) | (s.mode ? mode_bit : 0U));
     }
 
     std::uint8_t mk1653::read_data() const noexcept {

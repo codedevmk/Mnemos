@@ -126,7 +126,7 @@ namespace mnemos::apps::player::adapters::sms {
                 "sms",
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
-                    auto* sched_factory = opts.scheduler_factory;
+                    auto* sched_factory = opts.scheduler_factory_override;
                     return std::make_unique<sms_adapter>(
                         std::move(opts.rom),
                         manifests::sms::sms_config{.video_region = opts.video_region},

@@ -7,8 +7,8 @@
 namespace {
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::region_override;
-    using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::region_source_label;
+    using mnemos::apps::player::adapters::resolve_video_region;
 
     // parse_region_arg takes argv as `char* []`, so the test helper has to
     // hand it a mutable array of mutable C-strings.

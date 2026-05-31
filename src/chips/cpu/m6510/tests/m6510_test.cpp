@@ -836,9 +836,8 @@ TEST_CASE("m6510 trace_target fires once per instruction, not once per cycle") {
     REQUIRE(trace != nullptr);
 
     std::vector<mnemos::instrumentation::trace_event> events;
-    trace->install([&events](const mnemos::instrumentation::trace_event& ev) {
-        events.push_back(ev);
-    });
+    trace->install(
+        [&events](const mnemos::instrumentation::trace_event& ev) { events.push_back(ev); });
 
     sys.step_instruction();
     sys.step_instruction();

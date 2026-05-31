@@ -87,8 +87,7 @@ TEST_CASE("adapter_registry supports re-registration", "[registry]") {
     CHECK(dynamic_cast<stub_system*>(second.get())->tag() == "v2");
 }
 
-TEST_CASE("adapter_registry families() lists registered ids in sorted order",
-          "[registry]") {
+TEST_CASE("adapter_registry families() lists registered ids in sorted order", "[registry]") {
     auto& r = adapter_registry::instance();
 
     r.register_family("test.gamma", [](adapter_options) {
