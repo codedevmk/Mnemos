@@ -4,7 +4,7 @@
 
 #include <utility>
 
-namespace mnemos::instrumentation {
+namespace mnemos::debug {
 
     debugger::debugger(runtime::scheduler& scheduler, cpu_probe probe, topology::bus* watch_bus)
         : scheduler_(scheduler), probe_(std::move(probe)), watch_bus_(watch_bus) {
@@ -228,4 +228,4 @@ namespace mnemos::instrumentation {
                 .master_cycle = scheduler_.master_cycle()};
     }
 
-} // namespace mnemos::instrumentation
+} // namespace mnemos::debug

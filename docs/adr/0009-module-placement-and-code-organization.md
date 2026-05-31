@@ -62,7 +62,8 @@ rather than improvising a location.
 | buses / address decoding | `src/topology/` | `mnemos::topology` |
 | system assembly — per-console wiring, manifests | `src/manifests/<system>/` | `mnemos::manifests::<system>` |
 | scheduler / deterministic execution | `src/runtime/` | `mnemos::runtime` |
-| debug / observation surfaces | `src/instrumentation/` | `mnemos::instrumentation` |
+| chip observation contract — the memory/debug-layer/trace surfaces a chip exposes about itself | `src/instrumentation/` (contract types in `chips/shared`) | `mnemos::instrumentation` |
+| debugger + debugging tools — breakpoints, stepping, watchpoints, disassembly, trace export, artifact dumps, monitor | `src/debug/` | `mnemos::debug` |
 | frontend-facing system interface | `src/frontend_sdk/` | `mnemos::frontend_sdk` |
 | peripheral / controller devices | `src/peripheral_sdk/` | `mnemos::peripheral` |
 | runnable programs + their per-system glue | `src/apps/<app>/` | `mnemos::apps::<app>` |

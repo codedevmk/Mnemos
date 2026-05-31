@@ -11,7 +11,7 @@ namespace mnemos::runtime {
     class scheduler;
 }
 
-namespace mnemos::instrumentation {
+namespace mnemos::debug {
 
     using breakpoint_id = std::uint32_t;
     using watchpoint_id = std::uint32_t; // shares the monotonic id space with breakpoints
@@ -245,4 +245,4 @@ namespace mnemos::instrumentation {
         subscription_handle next_subscription_{1U};
     };
 
-} // namespace mnemos::instrumentation
+} // namespace mnemos::debug

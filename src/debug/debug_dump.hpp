@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 
-namespace mnemos::apps::player {
+namespace mnemos::debug {
 
     // Writes the system's primary framebuffer to <base_path> as a PPM, then
     // for every chip in `sys.chips()`:
@@ -63,4 +63,4 @@ namespace mnemos::apps::player {
         std::unique_ptr<state> state_{};
     };
 
-} // namespace mnemos::apps::player
+} // namespace mnemos::debug

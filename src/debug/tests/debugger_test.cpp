@@ -12,10 +12,10 @@
 
 namespace {
     using mnemos::chips::cpu::m6510;
-    using mnemos::instrumentation::cpu_probe;
-    using mnemos::instrumentation::debugger;
-    using mnemos::instrumentation::halt_reason;
-    using mnemos::instrumentation::watch_kind;
+    using mnemos::debug::cpu_probe;
+    using mnemos::debug::debugger;
+    using mnemos::debug::halt_reason;
+    using mnemos::debug::watch_kind;
     using mnemos::topology::access_event;
     using reset_kind = mnemos::chips::reset_kind;
 
@@ -193,10 +193,10 @@ TEST_CASE("debugger watchpoints never fire without a bus") {
 }
 
 namespace {
-    using mnemos::instrumentation::event;
-    using mnemos::instrumentation::event_kind;
+    using mnemos::debug::event;
+    using mnemos::debug::event_kind;
 
-    struct recording_sink final : mnemos::instrumentation::event_sink {
+    struct recording_sink final : mnemos::debug::event_sink {
         std::vector<event> events;
         void on_event(const event& e) override { events.push_back(e); }
     };
@@ -252,7 +252,7 @@ TEST_CASE("debugger delivers filtered events to subscribers") {
         mnemos::runtime::scheduler sched({{&m.cpu, 1U}}, nullptr);
         debugger dbg(sched, m.probe());
         recording_sink sink;
-        const auto handle = dbg.subscribe(mnemos::instrumentation::all_events, sink);
+        const auto handle = dbg.subscribe(mnemos::debug::all_events, sink);
         REQUIRE(dbg.unsubscribe(handle));
         CHECK_FALSE(dbg.unsubscribe(handle)); // already gone
         dbg.add_breakpoint({.address = 0x1004U});
