@@ -8,7 +8,7 @@
 #include <string>
 
 namespace {
-    using mnemos::foundation::sha256;
+    using mnemos::security::cryptography::sha256;
 }
 
 TEST_CASE("sha256 matches the FIPS 180-4 reference vectors") {

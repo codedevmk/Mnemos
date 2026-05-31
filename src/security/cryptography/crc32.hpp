@@ -6,9 +6,9 @@
 #include <string_view>
 
 // CRC-32 (IEEE 802.3 / zlib, reflected polynomial 0xEDB88320). Header-only to fit
-// the foundation INTERFACE target. Used as the fast save-state corruption check
-// (see ADR 0008); not a cryptographic checksum.
-namespace mnemos::foundation {
+// the security::cryptography INTERFACE target. Used as the fast save-state corruption
+// check (see ADR 0008); not a cryptographic checksum.
+namespace mnemos::security::cryptography {
 
     namespace detail {
 
@@ -46,4 +46,4 @@ namespace mnemos::foundation {
                      crc);
     }
 
-} // namespace mnemos::foundation
+} // namespace mnemos::security::cryptography

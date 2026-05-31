@@ -36,6 +36,7 @@ target_link_libraries(
     mnemos_runtime
     PUBLIC
         mnemos::foundation
+        mnemos::security::cryptography
         mnemos::chips
         mnemos::topology
         mnemos::manifests
@@ -47,7 +48,12 @@ mnemos_apply_common_target_options(mnemos_runtime PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_runtime
     TIER 5
-    DEPENDS mnemos_foundation mnemos_chips mnemos_topology mnemos_manifests
+    DEPENDS
+        mnemos_foundation
+        mnemos_security_cryptography
+        mnemos_chips
+        mnemos_topology
+        mnemos_manifests
 )
 
 if(BUILD_TESTING)

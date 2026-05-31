@@ -89,7 +89,7 @@ namespace mnemos::runtime {
         out.insert(out.end(), compressed.begin(), compressed.end());
 
         // CRC32 over the header + compressed body, appended little-endian.
-        const std::uint32_t crc = foundation::crc32(std::span<const std::uint8_t>(out));
+        const std::uint32_t crc = security::cryptography::crc32(std::span<const std::uint8_t>(out));
         chips::state_writer cw(out);
         cw.u32(crc);
         return out;
@@ -136,7 +136,7 @@ namespace mnemos::runtime {
                                          (static_cast<std::uint32_t>(data[body_end + 1U]) << 8U) |
                                          (static_cast<std::uint32_t>(data[body_end + 2U]) << 16U) |
                                          (static_cast<std::uint32_t>(data[body_end + 3U]) << 24U);
-        if (foundation::crc32(data.subspan(0, body_end)) != stored_crc) {
+        if (security::cryptography::crc32(data.subspan(0, body_end)) != stored_crc) {
             return {.status = load_status::bad_crc};
         }
 

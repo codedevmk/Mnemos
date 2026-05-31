@@ -1,6 +1,6 @@
 #include "system_family.hpp"
 
-#include <cctype>
+#include "string.hpp"
 
 namespace mnemos::apps::player::adapters {
 
@@ -9,10 +9,7 @@ namespace mnemos::apps::player::adapters {
         if (dot == std::string::npos) {
             return system_family::genesis;
         }
-        std::string ext = path.substr(dot + 1);
-        for (char& c : ext) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        }
+        const std::string ext = mnemos::common::to_lower(path.substr(dot + 1));
         if (ext == "sms" || ext == "sg") {
             return system_family::sms;
         }

@@ -8,6 +8,7 @@ mnemos_add_test(
         mnemos::manifests::c64
         mnemos::runtime
         mnemos::foundation
+        mnemos::security::cryptography
         mnemos::tools::runtime_cli
 )
 # ROMs are never committed; Catch2 exits 4 when the whole case skips, so CTest
@@ -26,6 +27,7 @@ mnemos_add_test(
         mnemos::manifests::sms
         mnemos::runtime
         mnemos::foundation
+        mnemos::security::cryptography
         mnemos::tools::runtime_cli
 )
 set_tests_properties(

@@ -22,6 +22,7 @@ target_link_libraries(
     PUBLIC
         mnemos::chips::shared
     PRIVATE
+        mnemos::common
         mnemos::compression
 )
 
@@ -31,6 +32,7 @@ mnemos_declare_tier(
     TIER 7
     DEPENDS
         mnemos_chips_shared
+        mnemos_common
         mnemos_compression
 )
 

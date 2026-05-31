@@ -445,7 +445,7 @@ namespace mnemos::tools {
                 bytes.push_back(0xFFU);                                         // A (opaque)
             }
         }
-        return foundation::sha256(bytes).hex();
+        return security::cryptography::sha256(bytes).hex();
     }
 
     namespace {
@@ -556,7 +556,7 @@ namespace mnemos::tools {
                     return 4;
                 }
                 if (region.sha256 && !is_placeholder_hash(*region.sha256)) {
-                    const std::string actual = foundation::sha256(*bytes).hex();
+                    const std::string actual = security::cryptography::sha256(*bytes).hex();
                     if (actual != *region.sha256) {
                         err << "error: ROM '" << region.name << "' sha256 mismatch\n  expected "
                             << *region.sha256 << "\n  actual   " << actual << "\n";

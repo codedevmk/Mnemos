@@ -6,7 +6,7 @@
 #include <span>
 #include <vector>
 
-using mnemos::foundation::crc32;
+using mnemos::security::cryptography::crc32;
 
 TEST_CASE("crc32 matches the standard check vector") {
     // The canonical CRC-32 check value for "123456789" is 0xCBF43926.
