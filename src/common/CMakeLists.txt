@@ -15,6 +15,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_common_test
         SOURCES
+            tests/hex_test.cpp
             tests/string_test.cpp
         LIBRARIES mnemos::common
     )

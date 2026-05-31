@@ -1,5 +1,7 @@
 #pragma once
 
+#include "hex.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -18,16 +20,7 @@ namespace mnemos::security::cryptography {
 
         [[nodiscard]] bool operator==(const sha256_digest&) const = default;
 
-        [[nodiscard]] std::string hex() const {
-            static constexpr char digits[] = "0123456789abcdef";
-            std::string out;
-            out.reserve(64);
-            for (std::uint8_t b : bytes) {
-                out.push_back(digits[(b >> 4U) & 0x0FU]);
-                out.push_back(digits[b & 0x0FU]);
-            }
-            return out;
-        }
+        [[nodiscard]] std::string hex() const { return common::to_hex(bytes); }
     };
 
     namespace detail {
