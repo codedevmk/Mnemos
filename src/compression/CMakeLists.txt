@@ -1,5 +1,6 @@
 add_library(
     mnemos_compression
+    deflate.cpp
     inflate.cpp
     lzma1.cpp
     zip_archive.cpp
@@ -20,6 +21,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_compression_test
         SOURCES
+            tests/deflate_test.cpp
             tests/inflate_test.cpp
             tests/lzma1_test.cpp
             tests/zip_archive_test.cpp
