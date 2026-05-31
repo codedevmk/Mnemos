@@ -7,12 +7,6 @@
 
 namespace mnemos::apps::player::adapters {
 
-    // Read the file at `path` into a byte vector. Returns nullopt if the
-    // file can't be opened. Zero-byte files are returned as an empty vector,
-    // not nullopt -- callers should treat empty as a load failure if they
-    // need non-empty contents.
-    [[nodiscard]] std::optional<std::vector<std::uint8_t>> read_file(const std::string& path);
-
     struct loaded_rom final {
         std::vector<std::uint8_t> bytes; // the ROM image (extracted if the source was a .zip)
         // Effective name for family + title detection: the chosen entry name

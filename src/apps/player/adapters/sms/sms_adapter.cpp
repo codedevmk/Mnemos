@@ -8,12 +8,12 @@
 #include <memory>
 #include <utility>
 
-using mnemos::apps::player::adapters::clip_i16;
-using mnemos::apps::player::adapters::kMixerGainOne;
-using mnemos::apps::player::adapters::kMixerGainShift;
-using mnemos::apps::player::adapters::kOutputRate;
-using mnemos::apps::player::adapters::sample_channel_box;
-using mnemos::apps::player::adapters::scale_q12;
+using mnemos::dsp::clip_i16;
+using mnemos::dsp::kMixerGainOne;
+using mnemos::dsp::kMixerGainShift;
+using mnemos::dsp::kOutputRate;
+using mnemos::dsp::sample_channel_box;
+using mnemos::dsp::scale_q12;
 
 namespace mnemos::apps::player::adapters::sms {
 
@@ -31,7 +31,7 @@ namespace mnemos::apps::player::adapters::sms {
         }
 
         // SMS-only PSG gain. The system-agnostic DSP helpers (clip_i16,
-        // scale_q12, sample_channel_*) live in adapters/common.
+        // scale_q12, sample_channel_*) live in mnemos::dsp.
         constexpr int kGainPsg = kMixerGainOne;
 
     } // namespace

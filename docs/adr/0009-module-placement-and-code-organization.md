@@ -55,6 +55,9 @@ rather than improvising a location.
 | character encoding / decoding — UTF-8, ASCII, Shift-JIS, region text codecs | `src/text/` (`encoding.{hpp,cpp}`, `decoding.{hpp,cpp}`) | `mnemos::text` |
 | hashing + encryption — CRC, SHA, MD5; AES, … | `src/security/cryptography/` | `mnemos::security::cryptography` |
 | compression codecs — DEFLATE, LZMA, ZIP, … | `src/compression/` | `mnemos::compression` |
+| audio / signal DSP (resampling, mixing, fixed-point) | `src/dsp/` | `mnemos::dsp` |
+| file read / write I/O | `src/io/` | `mnemos::io` |
+| image encode / decode (PPM, PNG, BMP, ...) | `src/graphics/images/` (base `image` + per-format subclasses) | `mnemos::graphics::images` |
 | emulated chips | `src/chips/<category>/<chip>/` | `mnemos::chips::<category>` |
 | buses / address decoding | `src/topology/` | `mnemos::topology` |
 | system assembly — per-console wiring, manifests | `src/manifests/<system>/` | `mnemos::manifests::<system>` |

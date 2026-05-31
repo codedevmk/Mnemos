@@ -28,7 +28,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_cpu_z80_conformance_test
         SOURCES tests/z80_conformance_test.cpp
-        LIBRARIES mnemos::chips::cpu::z80 mnemos::topology
+        LIBRARIES mnemos::chips::cpu::z80 mnemos::topology mnemos::io
     )
     set_tests_properties(
         mnemos_chips_cpu_z80_conformance_test

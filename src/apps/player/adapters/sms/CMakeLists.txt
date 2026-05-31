@@ -22,6 +22,8 @@ target_link_libraries(
         mnemos::peripheral::common
         mnemos::runtime
         mnemos::apps::player::adapters::common
+    PRIVATE
+        mnemos::dsp
 )
 
 mnemos_apply_common_target_options(mnemos_apps_player_sms_adapter PUBLIC)
@@ -34,6 +36,7 @@ mnemos_declare_tier(
         mnemos_peripheral_common
         mnemos_runtime
         mnemos_apps_player_adapters_common
+        mnemos_dsp
 )
 
 if(BUILD_TESTING)

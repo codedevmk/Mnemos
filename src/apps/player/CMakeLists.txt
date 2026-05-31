@@ -34,6 +34,9 @@ target_link_libraries(
     PUBLIC
         mnemos::frontend_sdk
         mnemos::chips::shared
+    PRIVATE
+        mnemos::io
+        mnemos::graphics::images
 )
 mnemos_apply_common_target_options(mnemos_apps_player_debug_dump PUBLIC)
 

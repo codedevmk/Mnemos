@@ -1,27 +1,16 @@
 #include "rom_loader.hpp"
 
+#include "file.hpp"
 #include "zip_archive.hpp"
 
-#include <fstream>
-#include <iterator>
-
 namespace mnemos::apps::player::adapters {
-
-    std::optional<std::vector<std::uint8_t>> read_file(const std::string& path) {
-        std::ifstream in(path, std::ios::binary);
-        if (!in) {
-            return std::nullopt;
-        }
-        return std::vector<std::uint8_t>{std::istreambuf_iterator<char>(in),
-                                         std::istreambuf_iterator<char>()};
-    }
 
     std::optional<loaded_rom> load_rom(const std::string& path) {
         using mnemos::compression::zip_archive;
         using mnemos::compression::zip_entry;
         using mnemos::compression::zip_method;
 
-        auto bytes = read_file(path);
+        auto bytes = mnemos::io::read_file(path);
         if (!bytes) {
             return std::nullopt;
         }

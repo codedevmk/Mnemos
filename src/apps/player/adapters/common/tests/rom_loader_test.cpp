@@ -4,7 +4,6 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <span>
@@ -14,7 +13,6 @@
 namespace {
     using mnemos::apps::player::adapters::clean_rom_name;
     using mnemos::apps::player::adapters::load_rom;
-    using mnemos::apps::player::adapters::read_file;
 
     // A deflate .zip holding a single "payload.bin" entry (128-byte body), from
     // PowerShell Compress-Archive. Exercises load_rom's signature detection,
@@ -56,40 +54,6 @@ TEST_CASE("rom_loader: clean_rom_name preserves the basename verbatim") {
     CHECK(clean_rom_name("Streets of Rage 2 (USA, Europe).md") ==
           "Streets of Rage 2 (USA, Europe)");
     CHECK(clean_rom_name("/r/Blades of Vengence (EJU) [!].bin") == "Blades of Vengence (EJU) [!]");
-}
-
-TEST_CASE("rom_loader: read_file returns nullopt for a missing path") {
-    CHECK(read_file("this/file/definitely/does/not/exist.bin") == std::nullopt);
-}
-
-TEST_CASE("rom_loader: read_file round-trips a binary blob") {
-    namespace fs = std::filesystem;
-    const auto tmp = fs::temp_directory_path() / "mnemos_rom_loader_roundtrip.bin";
-    const std::string path = tmp.string();
-    const std::vector<std::uint8_t> payload{0x00, 0xFF, 0x7E, 0x81, 0xDE, 0xAD, 0xBE, 0xEF};
-    {
-        std::ofstream out(path, std::ios::binary);
-        REQUIRE(out);
-        out.write(reinterpret_cast<const char*>(payload.data()),
-                  static_cast<std::streamsize>(payload.size()));
-    }
-    auto loaded = read_file(path);
-    REQUIRE(loaded.has_value());
-    CHECK(*loaded == payload);
-    std::remove(path.c_str());
-}
-
-TEST_CASE("rom_loader: read_file returns an empty vector for a zero-byte file") {
-    namespace fs = std::filesystem;
-    const auto tmp = fs::temp_directory_path() / "mnemos_rom_loader_empty.bin";
-    const std::string path = tmp.string();
-    {
-        std::ofstream out(path, std::ios::binary);
-    }
-    auto loaded = read_file(path);
-    REQUIRE(loaded.has_value());
-    CHECK(loaded->empty());
-    std::remove(path.c_str());
 }
 
 TEST_CASE("rom_loader: load_rom transparently extracts a zipped ROM by inner name") {
