@@ -152,14 +152,14 @@ int main(int argc, char* argv[]) {
         }
         std::uint64_t trace_frame = 0;
         const std::string trace_path = screenshot->path + ".cpu_trace.csv";
-        mnemos::apps::player::trace_csv_session trace(*system, trace_path, trace_frame);
+        mnemos::debug::trace_csv_session trace(*system, trace_path, trace_frame);
 
         for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
             trace_frame = i + 1U;
             system->step_one_frame();
         }
 
-        if (!mnemos::apps::player::dump_screenshot_artifacts(*system, screenshot->path)) {
+        if (!mnemos::debug::dump_screenshot_artifacts(*system, screenshot->path)) {
             std::fprintf(stderr, "could not write screenshot: %s\n", screenshot->path.c_str());
             return 1;
         }

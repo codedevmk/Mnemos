@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <vector>
 
-namespace mnemos::apps::player {
+namespace mnemos::debug {
 
     namespace {
 
@@ -164,4 +164,4 @@ namespace mnemos::apps::player {
         }
     }
 
-} // namespace mnemos::apps::player
+} // namespace mnemos::debug

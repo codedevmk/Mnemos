@@ -181,7 +181,7 @@ TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars"
     const auto base = (scratch / "shot.ppm").string();
 
     fake_system sys;
-    REQUIRE(mnemos::apps::player::dump_screenshot_artifacts(sys, base));
+    REQUIRE(mnemos::debug::dump_screenshot_artifacts(sys, base));
 
     // Primary framebuffer PPM exists with 8 pixels * 3 bytes + header.
     const auto ppm = read_file(base);
@@ -210,7 +210,7 @@ TEST_CASE("dump_screenshot_artifacts writes system-level memory_views without a 
     const auto base = (scratch / "shot.ppm").string();
 
     fake_system sys;
-    REQUIRE(mnemos::apps::player::dump_screenshot_artifacts(sys, base));
+    REQUIRE(mnemos::debug::dump_screenshot_artifacts(sys, base));
 
     // System memory (work RAM, etc.) has no chip-id segment in its path,
     // distinguishing it from a chip's memory_view (<base>.<chip>.<name>.bin).
@@ -226,7 +226,7 @@ TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug
     fake_system sys;
     std::uint64_t frame = 42U;
     {
-        mnemos::apps::player::trace_csv_session session(sys, csv, frame);
+        mnemos::debug::trace_csv_session session(sys, csv, frame);
         REQUIRE(session.active());
 
         // Fire two synthetic events as if the chip had executed two instructions.
@@ -270,6 +270,6 @@ TEST_CASE("trace_csv_session is inactive when no chip advertises a trace_target"
     empty_system sys;
     std::uint64_t frame = 0U;
     const auto scratch = make_scratch_dir("trace_empty");
-    mnemos::apps::player::trace_csv_session session(sys, (scratch / "x.csv").string(), frame);
+    mnemos::debug::trace_csv_session session(sys, (scratch / "x.csv").string(), frame);
     CHECK_FALSE(session.active());
 }

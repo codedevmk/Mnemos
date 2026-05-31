@@ -58,11 +58,13 @@ rather than improvising a location.
 | audio / signal DSP (resampling, mixing, fixed-point) | `src/dsp/` | `mnemos::dsp` |
 | file read / write I/O | `src/io/` | `mnemos::io` |
 | image encode / decode (PPM, PNG, BMP, ...) | `src/graphics/images/` (base `image` + per-format subclasses) | `mnemos::graphics::images` |
+| cross-cutting framework services — logging, configuration, DI, options | `src/extensions/<name>/` | `mnemos::<name>` (flat; see note) |
 | emulated chips | `src/chips/<category>/<chip>/` | `mnemos::chips::<category>` |
 | buses / address decoding | `src/topology/` | `mnemos::topology` |
 | system assembly — per-console wiring, manifests | `src/manifests/<system>/` | `mnemos::manifests::<system>` |
 | scheduler / deterministic execution | `src/runtime/` | `mnemos::runtime` |
-| debug / observation surfaces | `src/instrumentation/` | `mnemos::instrumentation` |
+| chip observation contract — the memory/debug-layer/trace surfaces a chip exposes about itself | `src/instrumentation/` (contract types in `chips/shared`) | `mnemos::instrumentation` |
+| debugger + debugging tools — breakpoints, stepping, watchpoints, disassembly, trace export, artifact dumps, monitor | `src/debug/` | `mnemos::debug` |
 | frontend-facing system interface | `src/frontend_sdk/` | `mnemos::frontend_sdk` |
 | peripheral / controller devices | `src/peripheral_sdk/` | `mnemos::peripheral` |
 | runnable programs + their per-system glue | `src/apps/<app>/` | `mnemos::apps::<app>` |
@@ -81,6 +83,13 @@ recognizable *domain* (it is *string* manipulation, *text* codecs, *crypto*,
   `decoding.{hpp,cpp}`.
 - **Hash and encryption** → `src/security/cryptography/`. This includes
   checksums (CRC) and digests (SHA): they are hashing.
+- **Cross-cutting framework services** → `src/extensions/<name>/`, modeled on
+  .NET's `Microsoft.Extensions.*`. The folder is an organizational grouping; the
+  namespace is **flat** (`mnemos::logging`, not `mnemos::extensions::logging`) for
+  ergonomic call sites — the one deliberate folder↔namespace divergence in the
+  tree. **Logging** is the first such service: `src/extensions/logging/`
+  (`mnemos::logging`) with a `console/` provider (`mnemos::logging::console`),
+  shaped after `ILogger` / `ILoggerProvider` / `ILoggerFactory`.
 
 ### Procedure
 
@@ -104,12 +113,12 @@ recognizable *domain* (it is *string* manipulation, *text* codecs, *crypto*,
 
 ### Reconciliation with existing code
 
-`src/foundation/` currently contains `crc32.hpp` and `sha256.hpp` (hashing),
-predating this policy. Under the catalog they belong in
-`src/security/cryptography/`. Migrating them is a follow-up — they have
-downstream users (ROM verification, save-state per ADR 0008) — so move them as a
-tracked change rather than ad hoc. From now on, new hashing/crypto goes directly
-to `src/security/cryptography/`.
+The pre-policy `foundation` hashing headers `crc32.hpp` / `sha256.hpp` have been
+relocated to `src/security/cryptography/` (`mnemos::security::cryptography`), and
+`foundation/log.hpp` has been removed in favour of `src/extensions/logging/`
+(`mnemos::logging`) — it had no production users, so it was retired outright
+rather than migrated. With those moves done, `foundation` is strictly the std++
+primitive layer; new hashing/crypto and logging go to their named modules.
 
 ## Consequences
 
@@ -119,5 +128,6 @@ to `src/security/cryptography/`.
   instead of hiding them.
 - The catalog is the living index: a new category is a one-row change here,
   keeping the policy authoritative as the tree grows.
-- One known debt is recorded (foundation hashing → `security/cryptography`)
-  rather than silently violating the new rule.
+- The pre-policy `foundation` debts are resolved, not just recorded: `crc32` /
+  `sha256` now live in `security/cryptography` and logging in
+  `extensions/logging`, leaving `foundation` as std++ primitives only.
