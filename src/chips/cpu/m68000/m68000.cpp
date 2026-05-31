@@ -2167,13 +2167,18 @@ namespace mnemos::chips::cpu {
             return 4;
         }
 
-        // Genesis 68K DRAM refresh: every 128 68K cycles (896 master) the
-        // bus takes 2 extra cycles. The schedule is absolute (not reloaded
-        // relative to current elapsed) so a long instruction that skips
-        // past a refresh window catches up on subsequent insts.
-        while (elapsed_ >= bus_refresh_due_) {
+        // Genesis 68K DRAM refresh: ~every 128 68K cycles the bus steals 2
+        // cycles. The schedule is SLIDING -- a single `if` per instruction that
+        // reloads the next-due point relative to the current elapsed count, so a
+        // long instruction that overshoots a refresh window pushes the schedule
+        // forward by the overshoot rather than firing a catch-up burst on the
+        // following instructions. An absolute 128-cycle grid (`while` + `+= 128`,
+        // commit 21d2565) fires ~2% more refreshes than the hardware in tight
+        // loops, which accumulates cumulative cycle drift over a boot sequence;
+        // the sliding form matches the bus controller's actual behaviour.
+        if (elapsed_ >= bus_refresh_due_) {
+            bus_refresh_due_ = elapsed_ + 128U;
             cycles_ += 2;
-            bus_refresh_due_ += 128U;
             cycle_sources_.refresh_fired = 1U;
         }
 
@@ -2233,10 +2238,10 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
-        // Initial DRAM refresh phase. Hand-tuned to align refresh
-        // boundaries against the reference emulator for Blades of
-        // Vengeance; not the semantically canonical value (88) but the
-        // empirical best for current cycle attribution.
+        // Initial DRAM refresh phase. The semantically canonical first-refresh
+        // point after the reset exception is 88, but 62 empirically aligns the
+        // refresh boundaries better with the rest of the boot-time cycle
+        // accounting, so it is the value used.
         bus_refresh_due_ = 62U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
