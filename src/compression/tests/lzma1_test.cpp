@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <span>
@@ -44,9 +45,28 @@ TEST_CASE("lzma1_decode decompresses a raw LZMA1 stream byte-for-byte", "[lzma]"
           std::vector<std::uint8_t>(kPayload.begin(), kPayload.end()));
 }
 
-TEST_CASE("lzma1_decode rejects a destination that is too small", "[lzma]") {
-    std::array<std::uint8_t, 16> tiny{};
-    CHECK_FALSE(lzma1_decode(3, 0, 2, kCompressed, tiny).has_value());
+TEST_CASE("lzma1_decode fills a smaller destination with the correct prefix", "[lzma]") {
+    // dst.size() is the authoritative length: a short dst yields the leading
+    // bytes (the decoder never over-reads); that is not an error.
+    std::array<std::uint8_t, 40> prefix{};
+    const auto n = lzma1_decode(3, 0, 2, kCompressed, prefix);
+    REQUIRE(n.has_value());
+    CHECK(std::vector<std::uint8_t>(prefix.begin(), prefix.end()) ==
+          std::vector<std::uint8_t>(kPayload.begin(), kPayload.begin() + 40));
+}
+
+TEST_CASE("lzma1_decode accepts a stream carrying an end-of-stream trailer", "[lzma]") {
+    // 1000 zero bytes via FORMAT_RAW FILTER_LZMA1: liblzma appends an EOS marker,
+    // so a correct full decode leaves >5 bytes of the input unconsumed. This must
+    // NOT be rejected (regression: a leftover-size heuristic broke it).
+    constexpr std::array<std::uint8_t, 18> kZerosEos = {0x00, 0x00, 0x6F, 0xFD, 0xFF, 0xFF,
+                                                        0xA3, 0xB7, 0x5A, 0xD3, 0xAE, 0xDB,
+                                                        0xFF, 0xFF, 0x9F, 0xF0, 0x00, 0x00};
+    std::array<std::uint8_t, 1000> out{};
+    out.fill(0xABU); // poison so a short decode would be visible
+    const auto n = lzma1_decode(3, 0, 2, kZerosEos, out);
+    REQUIRE(n.has_value());
+    CHECK(std::all_of(out.begin(), out.end(), [](std::uint8_t b) { return b == 0U; }));
 }
 
 TEST_CASE("lzma1_decode rejects a truncated stream", "[lzma]") {

@@ -36,10 +36,6 @@ namespace mnemos::compression {
         // Range decoder keeps >= kTopValue units of range for 11-bit precision.
         constexpr std::uint32_t kTopValue = 0x01000000U;
 
-        // The range coder flushes 5 trailing bytes; a complete decode of an
-        // exactly-sized stream leaves at most this many bytes unconsumed.
-        constexpr std::size_t kRcFlushBytes = 5U;
-
         // Three depth-8 bit-trees per literal context (sub-decoders).
         constexpr std::uint32_t kLitStateSize = 0x300U;
 
@@ -416,14 +412,10 @@ namespace mnemos::compression {
         if (!init_state(s, lc, lp, pb, src, dst)) {
             return std::nullopt;
         }
+        // dst.size() is the authoritative output length; decode exactly that many
+        // bytes. Trailing input (the range-coder flush or an end-of-stream marker)
+        // is left unconsumed -- the caller knows the base-stream length.
         if (!main_loop(s) || s.out_pos != dst.size()) {
-            return std::nullopt;
-        }
-        // A correctly-sized stream is consumed up to the range coder's 5-byte
-        // flush; a leftover larger than that means dst was too small and we
-        // stopped on a valid prefix. (The CHD caller slices src to the exact
-        // base-stream length, so this leftover is purely the flush.)
-        if (s.src.size() - s.src_pos > kRcFlushBytes) {
             return std::nullopt;
         }
         return s.src_pos;
