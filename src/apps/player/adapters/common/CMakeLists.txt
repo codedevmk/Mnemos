@@ -21,6 +21,8 @@ target_link_libraries(
     mnemos_apps_player_adapters_common
     PUBLIC
         mnemos::chips::shared
+    PRIVATE
+        mnemos::compression
 )
 
 mnemos_apply_common_target_options(mnemos_apps_player_adapters_common PUBLIC)
@@ -29,6 +31,7 @@ mnemos_declare_tier(
     TIER 7
     DEPENDS
         mnemos_chips_shared
+        mnemos_compression
 )
 
 if(BUILD_TESTING)

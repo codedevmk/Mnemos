@@ -1,4 +1,5 @@
 add_subdirectory(foundation)
+add_subdirectory(compression)
 add_subdirectory(chips)
 add_subdirectory(peripheral_sdk)
 add_subdirectory(topology)

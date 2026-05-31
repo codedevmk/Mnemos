@@ -88,10 +88,10 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::clean_rom_name;
     using mnemos::apps::player::adapters::detect_family;
     using mnemos::apps::player::adapters::family_label;
+    using mnemos::apps::player::adapters::load_rom;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_screenshot_args;
-    using mnemos::apps::player::adapters::read_file;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::system_family;
@@ -107,15 +107,15 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<mnemos::frontend_sdk::player_system> system;
     if (rom_path) {
-        auto bytes = read_file(*rom_path);
-        if (!bytes || bytes->empty()) {
+        auto loaded = load_rom(*rom_path);
+        if (!loaded || loaded->bytes.empty()) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_path->c_str());
             return 1;
         }
-        const auto family = detect_family(*rom_path);
+        const auto family = detect_family(loaded->name);
         const auto market = family == system_family::sms
-                                ? mnemos::manifests::sms::parse_market(*bytes)
-                                : mnemos::manifests::genesis::parse_market(*bytes);
+                                ? mnemos::manifests::sms::parse_market(loaded->bytes)
+                                : mnemos::manifests::genesis::parse_market(loaded->bytes);
         const auto video = resolve_video(mnemos::default_video_for(market));
         std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
@@ -131,9 +131,9 @@ int main(int argc, char* argv[]) {
 
         const std::string_view family_id = family == system_family::sms ? "sms" : "genesis";
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
-            family_id, {.rom = std::move(*bytes),
+            family_id, {.rom = std::move(loaded->bytes),
                         .video_region = video,
-                        .display_name = clean_rom_name(*rom_path)});
+                        .display_name = clean_rom_name(loaded->name)});
         if (!system) {
             std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%.*s'\n",
                          static_cast<int>(family_id.size()), family_id.data());
