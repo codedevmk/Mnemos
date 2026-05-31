@@ -60,6 +60,32 @@ TEST_CASE("genesis_adapter advances frames and reports region") {
     CHECK(fb_after.height == fb_before.height);
 }
 
+TEST_CASE("genesis_adapter publishes work_ram and z80_ram as system memory views") {
+    genesis_adapter adapter(tiny_rom());
+
+    // Resolve by name so the check is order-independent and catches a manifest
+    // region-id mismatch (an empty work_ram span) or a dropped/renamed entry --
+    // failures the system-agnostic debug_dump test cannot see.
+    std::size_t work_ram_bytes = 0U;
+    std::size_t z80_ram_bytes = 0U;
+    bool saw_work_ram = false;
+    bool saw_z80_ram = false;
+    for (const auto* mv : adapter.memory_views()) {
+        REQUIRE(mv != nullptr);
+        if (mv->name() == "work_ram") {
+            saw_work_ram = true;
+            work_ram_bytes = mv->bytes().size();
+        } else if (mv->name() == "z80_ram") {
+            saw_z80_ram = true;
+            z80_ram_bytes = mv->bytes().size();
+        }
+    }
+    REQUIRE(saw_work_ram);
+    REQUIRE(saw_z80_ram);
+    CHECK(work_ram_bytes == 0x10000U); // 64 KiB 68K work RAM
+    CHECK(z80_ram_bytes == 0x2000U);   // 8 KiB Z80 RAM
+}
+
 TEST_CASE("genesis_adapter ignores out-of-range input ports") {
     genesis_adapter adapter(tiny_rom());
     mnemos::frontend_sdk::controller_state pad{};

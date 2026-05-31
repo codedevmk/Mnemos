@@ -94,6 +94,19 @@ namespace mnemos::apps::player {
             }
         }
 
+        // System-level memories not owned by any single chip (68K/Z80 work RAM,
+        // ...). No chip-id segment, so these land as `<base>.<name>.bin` beside
+        // the per-chip `<base>.<chip>.<name>.bin` dumps.
+        for (instrumentation::memory_view* mv : sys.memory_views()) {
+            if (mv == nullptr) {
+                continue;
+            }
+            const std::string path = base_path + "." + std::string(mv->name()) + ".bin";
+            if (!dump_bytes(path, mv->bytes())) {
+                std::fprintf(stderr, "[debug_dump] could not write %s\n", path.c_str());
+            }
+        }
+
         return true;
     }
 

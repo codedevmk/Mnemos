@@ -18,8 +18,9 @@
 //     adapter declares (the frontend hands them to SDL_AudioStream which
 //     resamples to the device rate).
 
-#include "chip.hpp"       // for mnemos::chips::frame_buffer_view, ichip
-#include "peripheral.hpp" // for mnemos::peripheral::controller_state
+#include "chip.hpp"                // for mnemos::chips::frame_buffer_view, ichip
+#include "introspection_views.hpp" // for mnemos::instrumentation::memory_view
+#include "peripheral.hpp"          // for mnemos::peripheral::controller_state
 
 #include <cstdint>
 #include <span>
@@ -107,6 +108,16 @@ namespace mnemos::frontend_sdk {
         // `ichip::introspection()` without depending on a concrete adapter
         // type. Default empty -- adapters override to advertise their chips.
         [[nodiscard]] virtual std::span<chips::ichip* const> chips() const noexcept { return {}; }
+
+        // System-level memories that aren't owned by any single chip -- the 68K /
+        // Z80 work RAM, the I/O register file, etc. The --screenshot path dumps
+        // these alongside each chip's introspection().memory_views() so external
+        // game state (RAM counters, vsync flags) can be A/B'd byte-for-byte
+        // against a reference. Default empty; adapters override to advertise theirs.
+        [[nodiscard]] virtual std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept {
+            return {};
+        }
 
         // Convenience: lookup a chip by an adapter-stable id ("cpu", "vdp",
         // "z80", "sub_cpu", "vdp1", ...). Returns nullptr if the adapter

@@ -38,6 +38,23 @@ namespace mnemos::instrumentation {
         [[nodiscard]] virtual std::span<const std::uint8_t> bytes() const noexcept = 0;
     };
 
+    // The common memory_view: a fixed name over a borrowed byte span (a chip's
+    // VRAM, a system's work RAM, a register file viewed as bytes). The span must
+    // outlive the view; the chip/adapter that owns the storage owns the view.
+    class span_memory_view final : public memory_view {
+      public:
+        span_memory_view(std::string_view name, std::span<const std::uint8_t> bytes) noexcept
+            : name_(name), bytes_(bytes) {}
+        [[nodiscard]] std::string_view name() const noexcept override { return name_; }
+        [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept override {
+            return bytes_;
+        }
+
+      private:
+        std::string_view name_;
+        std::span<const std::uint8_t> bytes_;
+    };
+
     // The chip's architectural register file as a list of named descriptors,
     // populated at the moment of the call. Same lifetime rule as `memory_view`:
     // don't retain the span across a tick.

@@ -180,21 +180,6 @@ namespace mnemos::chips::video {
             }
 
           private:
-            class byte_memory_view final : public instrumentation::memory_view {
-              public:
-                byte_memory_view(std::string_view name,
-                                 std::span<const std::uint8_t> bytes) noexcept
-                    : name_(name), bytes_(bytes) {}
-                [[nodiscard]] std::string_view name() const noexcept override { return name_; }
-                [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept override {
-                    return bytes_;
-                }
-
-              private:
-                std::string_view name_;
-                std::span<const std::uint8_t> bytes_;
-            };
-
             class registers_impl final : public instrumentation::register_view {
               public:
                 explicit registers_impl(genesis_vdp& owner) noexcept : owner_(&owner) {}
@@ -217,10 +202,10 @@ namespace mnemos::chips::video {
                 mutable std::uint32_t height_{};
             };
 
-            byte_memory_view vram_view_;
-            byte_memory_view cram_view_;
-            byte_memory_view vsram_view_;
-            byte_memory_view regs_view_;
+            instrumentation::span_memory_view vram_view_;
+            instrumentation::span_memory_view cram_view_;
+            instrumentation::span_memory_view vsram_view_;
+            instrumentation::span_memory_view regs_view_;
             registers_impl registers_impl_;
             plane_a_layer_impl plane_a_;
 
