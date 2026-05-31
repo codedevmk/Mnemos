@@ -17,8 +17,8 @@
 #include <string_view>
 
 namespace mnemos::chips {
-    struct register_descriptor;     // chip.hpp
-    struct frame_buffer_view;       // chip.hpp
+    struct register_descriptor; // chip.hpp
+    struct frame_buffer_view;   // chip.hpp
 } // namespace mnemos::chips
 
 namespace mnemos::instrumentation {
@@ -48,8 +48,7 @@ namespace mnemos::instrumentation {
         register_view& operator=(const register_view&) = delete;
         virtual ~register_view() = default;
 
-        [[nodiscard]] virtual std::span<const chips::register_descriptor>
-        registers() = 0;
+        [[nodiscard]] virtual std::span<const chips::register_descriptor> registers() = 0;
     };
 
     // What the consumer gets fired on every instruction the CPU executes.
@@ -102,14 +101,10 @@ namespace mnemos::instrumentation {
         ichip_introspection& operator=(const ichip_introspection&) = delete;
         virtual ~ichip_introspection() = default;
 
-        [[nodiscard]] virtual std::span<memory_view* const> memory_views() {
-            return {};
-        }
+        [[nodiscard]] virtual std::span<memory_view* const> memory_views() { return {}; }
         [[nodiscard]] virtual register_view* registers() { return nullptr; }
         [[nodiscard]] virtual trace_target* trace() { return nullptr; }
-        [[nodiscard]] virtual std::span<debug_layer* const> debug_layers() {
-            return {};
-        }
+        [[nodiscard]] virtual std::span<debug_layer* const> debug_layers() { return {}; }
     };
 
 } // namespace mnemos::instrumentation

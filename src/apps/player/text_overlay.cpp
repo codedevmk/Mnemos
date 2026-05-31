@@ -231,9 +231,8 @@ namespace mnemos::apps::player {
         // clang-format on
 
         // Hollow square ("tofu") for any byte the font doesn't cover.
-        constexpr glyph kMissing =
-            make_glyph(".XXXXXX.", ".X....X.", ".X....X.", ".X....X.", ".X....X.", ".X....X.",
-                       ".XXXXXX.", "........");
+        constexpr glyph kMissing = make_glyph(".XXXXXX.", ".X....X.", ".X....X.", ".X....X.",
+                                              ".X....X.", ".X....X.", ".XXXXXX.", "........");
 
         [[nodiscard]] const glyph& glyph_for(unsigned char c) noexcept {
             const int idx = static_cast<int>(c) - kFirstGlyph;

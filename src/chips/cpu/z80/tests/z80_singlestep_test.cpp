@@ -85,10 +85,9 @@ namespace {
         return cycle_kind::internal;
     }
 
-    [[nodiscard]] std::uint16_t pair(const nlohmann::json& node, const char* hi,
-                                     const char* lo) {
-        return static_cast<std::uint16_t>(
-            (node.at(hi).get<std::uint8_t>() << 8U) | node.at(lo).get<std::uint8_t>());
+    [[nodiscard]] std::uint16_t pair(const nlohmann::json& node, const char* hi, const char* lo) {
+        return static_cast<std::uint16_t>((node.at(hi).get<std::uint8_t>() << 8U) |
+                                          node.at(lo).get<std::uint8_t>());
     }
 
     [[nodiscard]] z80::registers read_state(const nlohmann::json& node) {
@@ -180,8 +179,7 @@ namespace {
                  r.iff1 == expected.iff1 && r.iff2 == expected.iff2;
 
             for (const auto& cell : test.at("final").at("ram")) {
-                if (bus.memory[cell.at(0).get<std::uint16_t>()] !=
-                    cell.at(1).get<std::uint8_t>()) {
+                if (bus.memory[cell.at(0).get<std::uint16_t>()] != cell.at(1).get<std::uint8_t>()) {
                     ok = false;
                 }
             }
@@ -246,11 +244,9 @@ namespace {
 
 } // namespace
 
-TEST_CASE("z80 passes the public per-cycle Z80 conformance corpus",
-          "[conformance][z80]") {
+TEST_CASE("z80 passes the public per-cycle Z80 conformance corpus", "[conformance][z80]") {
     const char* dir = std::getenv("MNEMOS_Z80_TESTS_DIR");
-    if (dir == nullptr || std::string{dir}.empty() ||
-        !std::filesystem::is_directory(dir)) {
+    if (dir == nullptr || std::string{dir}.empty() || !std::filesystem::is_directory(dir)) {
         SKIP("set MNEMOS_Z80_TESTS_DIR to a directory of per-instruction Z80 test "
              "JSON files (see THIRD-PARTY.md)");
     }

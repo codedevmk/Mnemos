@@ -43,16 +43,16 @@ TEST_CASE("mk1653 exposes the 6-button id at phase 6 and Z/Y/X/Mode at phase 7")
         return pad.read_data();
     };
 
-    CHECK(pulse(0x40U) == 0x7FU);          // phase 1 (TH=1): standard CBRLDU
-    CHECK(pulse(0x00U) == 0x33U);          // phase 2 (TH=0): standard SA00DU
-    CHECK(pulse(0x40U) == 0x7FU);          // phase 3
-    CHECK(pulse(0x00U) == 0x33U);          // phase 4
-    CHECK(pulse(0x40U) == 0x7FU);          // phase 5
-    CHECK(pulse(0x00U) == 0x30U);          // phase 6 (TH=0): 6-button id (bits 3..0 = 0)
+    CHECK(pulse(0x40U) == 0x7FU); // phase 1 (TH=1): standard CBRLDU
+    CHECK(pulse(0x00U) == 0x33U); // phase 2 (TH=0): standard SA00DU
+    CHECK(pulse(0x40U) == 0x7FU); // phase 3
+    CHECK(pulse(0x00U) == 0x33U); // phase 4
+    CHECK(pulse(0x40U) == 0x7FU); // phase 5
+    CHECK(pulse(0x00U) == 0x30U); // phase 6 (TH=0): 6-button id (bits 3..0 = 0)
     CHECK(pad.phase() == 6U);
-    CHECK(pulse(0x40U) == 0x70U);          // phase 7 (TH=1): C B Mode X Y Z (all pressed)
+    CHECK(pulse(0x40U) == 0x70U); // phase 7 (TH=1): C B Mode X Y Z (all pressed)
     CHECK(pad.phase() == 7U);
-    CHECK(pulse(0x00U) == 0x33U);          // phase 0 (wrap): back to standard
+    CHECK(pulse(0x00U) == 0x33U); // phase 0 (wrap): back to standard
 }
 
 TEST_CASE("mk1653 V-blank resets the phase counter") {

@@ -18,8 +18,7 @@ namespace {
 
     constexpr std::uint64_t kIters = 200'000'000ULL;
 
-    template <class Fn>
-    void time_loop(const char* name, Fn fn) {
+    template <class Fn> void time_loop(const char* name, Fn fn) {
         using clock = std::chrono::steady_clock;
         const auto t0 = clock::now();
         fn();
@@ -99,9 +98,8 @@ namespace {
             bus b(16U, endianness::little);
             for (int p = 0; p < 8; ++p) {
                 const bool only_priority_0 = (p == 0);
-                b.map_ram(0U, ram, p, [only_priority_0](std::uint32_t, bool) {
-                    return only_priority_0;
-                });
+                b.map_ram(0U, ram, p,
+                          [only_priority_0](std::uint32_t, bool) { return only_priority_0; });
             }
             time_loop("[bus]      8 RAM regions, 7 inactive predicates", [&] {
                 std::uint64_t s = 0;
@@ -122,8 +120,7 @@ namespace {
                 [&mmio_value](std::uint32_t, std::uint8_t v) { mmio_value = v; }, 0);
             time_loop("[bus]      MMIO write, std::function on_write", [&] {
                 for (std::uint64_t i = 0; i < kIters; ++i) {
-                    b.write8(static_cast<std::uint32_t>(i),
-                             static_cast<std::uint8_t>(i));
+                    b.write8(static_cast<std::uint32_t>(i), static_cast<std::uint8_t>(i));
                 }
                 g_sink += mmio_value;
             });

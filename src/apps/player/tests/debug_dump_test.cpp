@@ -72,10 +72,7 @@ namespace {
 
     class memory_intro final : public ichip_introspection {
       public:
-        memory_intro(std::span<const std::uint8_t> ram)
-            : ram_("ram", ram) {
-            table_[0] = &ram_;
-        }
+        memory_intro(std::span<const std::uint8_t> ram) : ram_("ram", ram) { table_[0] = &ram_; }
         [[nodiscard]] std::span<memory_view* const> memory_views() override { return table_; }
 
       private:
@@ -147,9 +144,7 @@ namespace {
         void step_one_frame() override {}
         void apply_input(int, const controller_state&) noexcept override {}
         [[nodiscard]] audio_chunk drain_audio() noexcept override { return {}; }
-        [[nodiscard]] std::span<ichip* const> chips() const noexcept override {
-            return chip_list_;
-        }
+        [[nodiscard]] std::span<ichip* const> chips() const noexcept override { return chip_list_; }
 
         [[nodiscard]] trace_chip& trace_chip_ref() noexcept { return *trace_chip_; }
 
@@ -163,8 +158,8 @@ namespace {
     };
 
     [[nodiscard]] std::filesystem::path make_scratch_dir(const std::string& tag) {
-        const auto base = std::filesystem::temp_directory_path() /
-                          ("mnemos_debug_dump_test_" + tag);
+        const auto base =
+            std::filesystem::temp_directory_path() / ("mnemos_debug_dump_test_" + tag);
         std::filesystem::remove_all(base);
         std::filesystem::create_directories(base);
         return base;
@@ -179,15 +174,13 @@ namespace {
         in.seekg(0, std::ios::end);
         out.resize(static_cast<std::size_t>(in.tellg()));
         in.seekg(0, std::ios::beg);
-        in.read(reinterpret_cast<char*>(out.data()),
-                static_cast<std::streamsize>(out.size()));
+        in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(out.size()));
         return out;
     }
 
 } // namespace
 
-TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars",
-          "[debug_dump]") {
+TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars", "[debug_dump]") {
     const auto scratch = make_scratch_dir("artifacts");
     const auto base = (scratch / "shot.ppm").string();
 
@@ -226,16 +219,13 @@ TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug
         REQUIRE(session.active());
 
         // Fire two synthetic events as if the chip had executed two instructions.
-        sys.trace_chip_ref().intro_impl().trace_impl().fire(
-            {.pc = 0x1234U, .cycles = 100U});
-        sys.trace_chip_ref().intro_impl().trace_impl().fire(
-            {.pc = 0x5678U, .cycles = 220U});
+        sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0x1234U, .cycles = 100U});
+        sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0x5678U, .cycles = 220U});
     }
 
     // After the session ends, fire another event -- it must NOT appear in the
     // CSV because the dtor cleared the callback.
-    sys.trace_chip_ref().intro_impl().trace_impl().fire(
-        {.pc = 0xDEADU, .cycles = 999U});
+    sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0xDEADU, .cycles = 999U});
 
     std::ifstream in(csv);
     std::string line;
@@ -249,8 +239,7 @@ TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug
     CHECK(lines[2] == "42,1,005678,220");
 }
 
-TEST_CASE("trace_csv_session is inactive when no chip advertises a trace_target",
-          "[debug_dump]") {
+TEST_CASE("trace_csv_session is inactive when no chip advertises a trace_target", "[debug_dump]") {
     // A player_system that returns an empty chips() span.
     class empty_system final : public player_system {
       public:
@@ -270,7 +259,6 @@ TEST_CASE("trace_csv_session is inactive when no chip advertises a trace_target"
     empty_system sys;
     std::uint64_t frame = 0U;
     const auto scratch = make_scratch_dir("trace_empty");
-    mnemos::apps::player::trace_csv_session session(
-        sys, (scratch / "x.csv").string(), frame);
+    mnemos::apps::player::trace_csv_session session(sys, (scratch / "x.csv").string(), frame);
     CHECK_FALSE(session.active());
 }

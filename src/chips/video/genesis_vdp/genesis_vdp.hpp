@@ -156,7 +156,9 @@ namespace mnemos::chips::video {
         // Diagnostic: rising-edge VINT count (vblank_pending_ false->true).
         [[nodiscard]] std::uint32_t vint_fired_count() const noexcept { return vint_fired_count_; }
         [[nodiscard]] std::uint32_t vint_drain_count() const noexcept { return vint_drain_count_; }
-        [[nodiscard]] std::uint32_t vint_enabled_at_drain_count() const noexcept { return vint_enabled_at_drain_count_; }
+        [[nodiscard]] std::uint32_t vint_enabled_at_drain_count() const noexcept {
+            return vint_enabled_at_drain_count_;
+        }
 
       private:
         // Exposes the chip's bulk memories (VRAM/CRAM/VSRAM/regs) as
@@ -167,15 +169,13 @@ namespace mnemos::chips::video {
           public:
             explicit introspection_surface(genesis_vdp& owner) noexcept;
 
-            [[nodiscard]] std::span<instrumentation::memory_view* const>
-            memory_views() override {
+            [[nodiscard]] std::span<instrumentation::memory_view* const> memory_views() override {
                 return mem_table_;
             }
             [[nodiscard]] instrumentation::register_view* registers() override {
                 return &registers_impl_;
             }
-            [[nodiscard]] std::span<instrumentation::debug_layer* const>
-            debug_layers() override {
+            [[nodiscard]] std::span<instrumentation::debug_layer* const> debug_layers() override {
                 return layer_table_;
             }
 
@@ -185,11 +185,8 @@ namespace mnemos::chips::video {
                 byte_memory_view(std::string_view name,
                                  std::span<const std::uint8_t> bytes) noexcept
                     : name_(name), bytes_(bytes) {}
-                [[nodiscard]] std::string_view name() const noexcept override {
-                    return name_;
-                }
-                [[nodiscard]] std::span<const std::uint8_t> bytes()
-                    const noexcept override {
+                [[nodiscard]] std::string_view name() const noexcept override { return name_; }
+                [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept override {
                     return bytes_;
                 }
 
@@ -209,11 +206,8 @@ namespace mnemos::chips::video {
 
             class plane_a_layer_impl final : public instrumentation::debug_layer {
               public:
-                explicit plane_a_layer_impl(genesis_vdp& owner) noexcept
-                    : owner_(&owner) {}
-                [[nodiscard]] std::string_view name() const noexcept override {
-                    return "plane_a";
-                }
+                explicit plane_a_layer_impl(genesis_vdp& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::string_view name() const noexcept override { return "plane_a"; }
                 [[nodiscard]] frame_buffer_view view() const override;
 
               private:
@@ -364,8 +358,8 @@ namespace mnemos::chips::video {
         // For 68K-bus DMA (types 0/1) this feeds dma_stall_master_cycles_ (the
         // 68K is held off the bus); for VDP-internal DMA (types 2/3) it feeds
         // dma_busy_master_cycles_ (the busy status bit is held, 68K runs free).
-        [[nodiscard]] std::int64_t
-        estimate_dma_transfer_cycles(std::uint32_t length_units, int dma_type) const noexcept;
+        [[nodiscard]] std::int64_t estimate_dma_transfer_cycles(std::uint32_t length_units,
+                                                                int dma_type) const noexcept;
 
         // Diagnostic counters (see accessors above).
         std::uint32_t vint_fired_count_{};

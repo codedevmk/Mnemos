@@ -136,8 +136,7 @@ namespace mnemos::manifests::genesis {
         }
 
         [[nodiscard]] peripheral::device* port_device(int port) noexcept {
-            return (port >= 0 && port < 2) ? ports[static_cast<std::size_t>(port)].get()
-                                           : nullptr;
+            return (port >= 0 && port < 2) ? ports[static_cast<std::size_t>(port)].get() : nullptr;
         }
 
         [[nodiscard]] std::uint8_t read_pad_port(int port) const noexcept {

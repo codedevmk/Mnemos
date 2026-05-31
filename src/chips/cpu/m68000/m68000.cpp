@@ -1594,7 +1594,8 @@ namespace mnemos::chips::cpu {
         // step_instruction(), causing Bcc/RTS/JMP/etc to never reflect
         // refresh -- the source of the -747K master BoV drift.
         switch (op) {
-        case 0x4E70U: // RESET (privileged) -- Motorola total 132; no bus accesses, all idle - 4 prefetch
+        case 0x4E70U: // RESET (privileged) -- Motorola total 132; no bus accesses, all idle - 4
+                      // prefetch
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
             }
@@ -1610,9 +1611,11 @@ namespace mnemos::chips::cpu {
             write_sr(fetch16()); // adds 4 for the imm fetch
             stopped_ = true;
             // 4 (opcode fetch) + 4 (imm fetch) = 8 already; STOP itself = 4 idle
-            // but the imm-fetch is part of STOP's encoded cost in Motorola's table -- keep total at 4
+            // but the imm-fetch is part of STOP's encoded cost in Motorola's table -- keep total at
+            // 4
             cycles_ -= 4; // counter compensates the extra fetch16 above; matches old behaviour
-            if (cycles_ < 0) cycles_ = 0;
+            if (cycles_ < 0)
+                cycles_ = 0;
             return;
         case 0x4E73U: { // RTE (privileged) -- total 20 = pop16(4) + pop32(8) + fetch16(4) + 4 idle
             if ((sr_ & sr_s) == 0U) {
@@ -1655,13 +1658,25 @@ namespace mnemos::chips::cpu {
             // (variable: 0 for An, fetch16 for (d16,An)/(xxx).W/(d16,PC),
             // fetch32 for (xxx).L, etc.) + push32 (8).
             int internal_idle = 4; // (An): 4 + 0 + 8 + 4 = 16
-            if (em == 5) { internal_idle = 2; }       // (d16,An): 4 + 4 + 8 + 2 = 18
-            else if (em == 6) { internal_idle = 6; }  // (d8,An,Xn): 4 + 4 + 8 + 6 = 22
+            if (em == 5) {
+                internal_idle = 2;
+            } // (d16,An): 4 + 4 + 8 + 2 = 18
+            else if (em == 6) {
+                internal_idle = 6;
+            } // (d8,An,Xn): 4 + 4 + 8 + 6 = 22
             else if (em == 7) {
-                if (er == 0) { internal_idle = 2; }       // (xxx).W: 4 + 4 + 8 + 2 = 18
-                else if (er == 1) { internal_idle = 0; }  // (xxx).L: 4 + 8 + 8 + 0 = 20
-                else if (er == 2) { internal_idle = 2; }  // (d16,PC): 4 + 4 + 8 + 2 = 18
-                else if (er == 3) { internal_idle = 6; }  // (d8,PC,Xn): 4 + 4 + 8 + 6 = 22
+                if (er == 0) {
+                    internal_idle = 2;
+                } // (xxx).W: 4 + 4 + 8 + 2 = 18
+                else if (er == 1) {
+                    internal_idle = 0;
+                } // (xxx).L: 4 + 8 + 8 + 0 = 20
+                else if (er == 2) {
+                    internal_idle = 2;
+                } // (d16,PC): 4 + 4 + 8 + 2 = 18
+                else if (er == 3) {
+                    internal_idle = 6;
+                } // (d8,PC,Xn): 4 + 4 + 8 + 6 = 22
             }
             cycles_ += internal_idle;
             return;
@@ -1672,13 +1687,25 @@ namespace mnemos::chips::cpu {
             //   (xxx).W 10, (xxx).L 12, (d16,PC) 10, (d8,PC,Xn) 14.
             // Bus already counted: fetch16 (4) + EA address (0/4/8 depending on mode).
             int internal_idle = 4; // (An): 4 + 0 + 4 = 8
-            if (em == 5) { internal_idle = 2; }       // (d16,An): 4 + 4 + 2 = 10
-            else if (em == 6) { internal_idle = 6; }  // (d8,An,Xn): 4 + 4 + 6 = 14
+            if (em == 5) {
+                internal_idle = 2;
+            } // (d16,An): 4 + 4 + 2 = 10
+            else if (em == 6) {
+                internal_idle = 6;
+            } // (d8,An,Xn): 4 + 4 + 6 = 14
             else if (em == 7) {
-                if (er == 0) { internal_idle = 2; }       // (xxx).W: 4 + 4 + 2 = 10
-                else if (er == 1) { internal_idle = 0; }  // (xxx).L: 4 + 8 + 0 = 12
-                else if (er == 2) { internal_idle = 2; }  // (d16,PC): 4 + 4 + 2 = 10
-                else if (er == 3) { internal_idle = 6; }  // (d8,PC,Xn): 4 + 4 + 6 = 14
+                if (er == 0) {
+                    internal_idle = 2;
+                } // (xxx).W: 4 + 4 + 2 = 10
+                else if (er == 1) {
+                    internal_idle = 0;
+                } // (xxx).L: 4 + 8 + 0 = 12
+                else if (er == 2) {
+                    internal_idle = 2;
+                } // (d16,PC): 4 + 4 + 2 = 10
+                else if (er == 3) {
+                    internal_idle = 6;
+                } // (d8,PC,Xn): 4 + 4 + 6 = 14
             }
             cycles_ += internal_idle;
             return;
@@ -1822,15 +1849,15 @@ namespace mnemos::chips::cpu {
         // handler's internal idle (and push32 for BSR) here so refresh and
         // prefetch costs aren't overwritten -- refresh stalls bill +14
         // master independently of the instruction's table cost.
-        if (cc == 1) { // BSR (Motorola total = 18 cycles)
-            push32(pc_);                          // adds 8 cycles
+        if (cc == 1) {   // BSR (Motorola total = 18 cycles)
+            push32(pc_); // adds 8 cycles
             pc_ = target;
-            cycles_ += (d8 == 0) ? 2 : 6;         // .W: 4+4+8+2=18 ; .S: 4+8+6=18
-        } else if (cc == 0 || test_cc(cc)) {      // BRA / Bcc taken (= 10)
+            cycles_ += (d8 == 0) ? 2 : 6;    // .W: 4+4+8+2=18 ; .S: 4+8+6=18
+        } else if (cc == 0 || test_cc(cc)) { // BRA / Bcc taken (= 10)
             pc_ = target;
-            cycles_ += (d8 == 0) ? 2 : 6;         // .W: 4+4+2=10 ; .S: 4+6=10
-        } else {                                  // Bcc not taken
-            cycles_ += 4;                         // .W: 4+4+4=12 ; .S: 4+4=8
+            cycles_ += (d8 == 0) ? 2 : 6; // .W: 4+4+2=10 ; .S: 4+6=10
+        } else {                          // Bcc not taken
+            cycles_ += 4;                 // .W: 4+4+4=12 ; .S: 4+4=8
         }
     }
 
@@ -2351,8 +2378,7 @@ namespace mnemos::chips::cpu {
         // ignores the TAS write phase). Manifest names a void(uint32_t) hook;
         // host supplies it.
         if (const auto id = chips::cfg_string(cfg, "tas_callback")) {
-            if (const auto* fn =
-                    chips::find_callback<void(std::uint32_t)>(callbacks, *id)) {
+            if (const auto* fn = chips::find_callback<void(std::uint32_t)>(callbacks, *id)) {
                 tas_callback_ = *fn;
             }
         }
@@ -2394,10 +2420,9 @@ namespace mnemos::chips::cpu {
             // m68000's existing PC-only trace hook. The chip provides cycles
             // by querying its own elapsed counter at fire time.
             m68000* cpu = owner_;
-            owner_->trace_callback_ =
-                [cpu, cb = std::move(cb)](std::uint32_t pc) {
-                    cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
-                };
+            owner_->trace_callback_ = [cpu, cb = std::move(cb)](std::uint32_t pc) {
+                cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
+            };
         } else {
             owner_->trace_callback_ = {};
         }

@@ -654,8 +654,7 @@ namespace mnemos::chips::video {
         // When the V condition covers the line, the window claims the full
         // visible width with no V-scroll, regardless of reg[17] H; otherwise
         // the H boundary splits the line between window and plane A.
-        const bool win_takes_line =
-            win_down ? (cell_row >= win_v_cell) : (cell_row < win_v_cell);
+        const bool win_takes_line = win_down ? (cell_row >= win_v_cell) : (cell_row < win_v_cell);
         for (int cell_x = 0; cell_x < screen_cells; ++cell_x) {
             const bool in_win_h = win_right ? (cell_x >= win_h_cell) : (cell_x < win_h_cell);
             if (!win_takes_line && !in_win_h) {
@@ -1320,8 +1319,7 @@ namespace mnemos::chips::video {
         // them inline today.
         if (const auto id = chips::cfg_string(cfg, "dma_read_callback")) {
             if (const auto* fn =
-                    chips::find_callback<std::uint16_t(std::uint32_t)>(callbacks,
-                                                                       *id)) {
+                    chips::find_callback<std::uint16_t(std::uint32_t)>(callbacks, *id)) {
                 set_dma_read(*fn);
             }
         }
@@ -1379,16 +1377,13 @@ namespace mnemos::chips::video {
 
     genesis_vdp::introspection_surface::introspection_surface(genesis_vdp& owner) noexcept
         : vram_view_("vram", std::span<const std::uint8_t>(owner.vram_)),
-          cram_view_("cram",
-                     std::span<const std::uint8_t>(
-                         reinterpret_cast<const std::uint8_t*>(owner.cram_.data()),
-                         owner.cram_.size() * sizeof(std::uint16_t))),
-          vsram_view_("vsram",
-                      std::span<const std::uint8_t>(
-                          reinterpret_cast<const std::uint8_t*>(owner.vsram_.data()),
-                          owner.vsram_.size() * sizeof(std::uint16_t))),
-          regs_view_("vdpregs", std::span<const std::uint8_t>(owner.reg_)),
-          registers_impl_(owner),
+          cram_view_("cram", std::span<const std::uint8_t>(
+                                 reinterpret_cast<const std::uint8_t*>(owner.cram_.data()),
+                                 owner.cram_.size() * sizeof(std::uint16_t))),
+          vsram_view_("vsram", std::span<const std::uint8_t>(
+                                   reinterpret_cast<const std::uint8_t*>(owner.vsram_.data()),
+                                   owner.vsram_.size() * sizeof(std::uint16_t))),
+          regs_view_("vdpregs", std::span<const std::uint8_t>(owner.reg_)), registers_impl_(owner),
           plane_a_(owner) {
         mem_table_[0] = &vram_view_;
         mem_table_[1] = &cram_view_;
@@ -1402,8 +1397,7 @@ namespace mnemos::chips::video {
         return owner_->register_snapshot();
     }
 
-    frame_buffer_view
-    genesis_vdp::introspection_surface::plane_a_layer_impl::view() const {
+    frame_buffer_view genesis_vdp::introspection_surface::plane_a_layer_impl::view() const {
         // Lazily render plane A from the chip's live VRAM/CRAM. Pattern is
         // pulled into a chip-owned buffer; geometry tracks the current plane-
         // size registers, which may change between calls. This is the same
@@ -1412,8 +1406,7 @@ namespace mnemos::chips::video {
         // directly via the debug_layer surface.
         const int hsz_cells = scroll_size_cells(owner_->reg_[16] & 0x03);
         const int vsz_cells = scroll_size_cells((owner_->reg_[16] >> 4) & 0x03);
-        const std::uint32_t nt_base =
-            (static_cast<std::uint32_t>(owner_->reg_[2]) & 0x38U) << 10U;
+        const std::uint32_t nt_base = (static_cast<std::uint32_t>(owner_->reg_[2]) & 0x38U) << 10U;
         const std::uint32_t plane_w = static_cast<std::uint32_t>(hsz_cells * 8);
         const std::uint32_t plane_h = static_cast<std::uint32_t>(vsz_cells * 8);
         const std::size_t total = static_cast<std::size_t>(plane_w) * plane_h;
@@ -1437,10 +1430,9 @@ namespace mnemos::chips::video {
                         const std::uint32_t pat_addr =
                             static_cast<std::uint32_t>(tile) * 32U + row * 4U + (col / 2);
                         const std::uint16_t word = owner_->vram16(pat_addr & ~1U);
-                        const std::uint8_t byte = static_cast<std::uint8_t>(
-                            (pat_addr & 1) ? (word & 0xFF) : (word >> 8));
-                        const std::uint8_t color =
-                            (col & 1) ? (byte & 0xF) : (byte >> 4);
+                        const std::uint8_t byte =
+                            static_cast<std::uint8_t>((pat_addr & 1) ? (word & 0xFF) : (word >> 8));
+                        const std::uint8_t color = (col & 1) ? (byte & 0xF) : (byte >> 4);
                         const std::uint16_t cram_value =
                             owner_->cram_[static_cast<std::size_t>(pal * 16 + color) & 0x3FU];
                         const std::uint32_t rgb =
@@ -1452,10 +1444,7 @@ namespace mnemos::chips::video {
             }
         }
 
-        return {.pixels = buf_.data(),
-                .width = width_,
-                .height = height_,
-                .stride = 0U};
+        return {.pixels = buf_.data(), .width = width_, .height = height_, .stride = 0U};
     }
 
     namespace {

@@ -103,8 +103,8 @@ namespace {
         // bus cycles). Tracked but does NOT fail the test, only reported, so
         // we can find the worst offenders without breaking the existing
         // state-correctness signal.
-        std::int64_t cycle_diff_sum = 0;  // sum of (mine - corpus) over passing tests
-        std::int64_t cycle_diff_abs = 0;  // sum of abs(mine - corpus)
+        std::int64_t cycle_diff_sum = 0; // sum of (mine - corpus) over passing tests
+        std::int64_t cycle_diff_abs = 0; // sum of abs(mine - corpus)
         std::size_t cycle_compared = 0;
         std::size_t cycle_mismatches = 0;
     };
@@ -195,8 +195,7 @@ namespace {
                     if (std::getenv("MNEMOS_M68000_CYCLE_DUMP") != nullptr && dumped_cyc < 5) {
                         std::cerr << "[cyc] " << path.filename().string()
                                   << " case=" << test.at("name").get<std::string>()
-                                  << " mine=" << actual_cycles
-                                  << " expected=" << expected_cycles
+                                  << " mine=" << actual_cycles << " expected=" << expected_cycles
                                   << " diff=" << diff << "\n";
                         ++dumped_cyc;
                     }
@@ -325,8 +324,7 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
             tally += " " + entry.path().stem().string() + "=" + std::to_string(result.failed);
         }
         per_mnem.push_back({entry.path().stem().string(), result.cycle_diff_sum,
-                             result.cycle_diff_abs, result.cycle_compared,
-                             result.cycle_mismatches});
+                            result.cycle_diff_abs, result.cycle_compared, result.cycle_mismatches});
     }
 
     // Rank mnemonics by total absolute cycle drift; the worst offenders are
@@ -356,17 +354,18 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
         total_mismatches += s.mismatches;
     }
     cycle_report += "totals: " + std::to_string(total_mismatches) + "/" +
-                     std::to_string(total_compared) + " mismatch, sum=" +
-                     std::to_string(total_diff_sum) + " abs=" + std::to_string(total_diff_abs);
+                    std::to_string(total_compared) +
+                    " mismatch, sum=" + std::to_string(total_diff_sum) +
+                    " abs=" + std::to_string(total_diff_abs);
     std::cerr << cycle_report << "\n";
 
     std::string detail;
     for (const std::string& failure : failures) {
         detail += "\n  " + failure;
     }
-    INFO("files=" << files << " passed=" << passed << " failed=" << failed << " skipped(group0)="
-                  << skipped << "\nper-file failures:" << tally << "\nexamples:" << detail
-                  << cycle_report);
+    INFO("files=" << files << " passed=" << passed << " failed=" << failed
+                  << " skipped(group0)=" << skipped << "\nper-file failures:" << tally
+                  << "\nexamples:" << detail << cycle_report);
     CHECK(files > 0U);
     CHECK(failed == 0U);
 }

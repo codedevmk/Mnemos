@@ -920,17 +920,14 @@ TEST_CASE("JSR pushes return address as big-endian long (BoV $0690 scenario)") {
     CHECK(r.pc == 0x00000500U);   // jumped to target
 
     // 4-byte BE encoding of return address $00000196 at SP..SP+3 = $FFA..$FFD.
-    INFO("ram[$FFA]=" << std::hex << +m.ram[0x0FFAU]
-         << " [$FFB]=" << +m.ram[0x0FFBU]
-         << " [$FFC]=" << +m.ram[0x0FFCU]
-         << " [$FFD]=" << +m.ram[0x0FFDU]);
+    INFO("ram[$FFA]=" << std::hex << +m.ram[0x0FFAU] << " [$FFB]=" << +m.ram[0x0FFBU]
+                      << " [$FFC]=" << +m.ram[0x0FFCU] << " [$FFD]=" << +m.ram[0x0FFDU]);
     CHECK(m.ram[0x0FFAU] == 0x00U); // bits 24-31 of $00000196
     CHECK(m.ram[0x0FFBU] == 0x00U); // bits 16-23
     CHECK(m.ram[0x0FFCU] == 0x01U); // bits  8-15
     CHECK(m.ram[0x0FFDU] == 0x96U); // bits  0- 7
 
     // What the 68K would read back as a word at $FFC must be $0196.
-    const std::uint32_t word = (static_cast<std::uint32_t>(m.ram[0x0FFCU]) << 8U) |
-                               m.ram[0x0FFDU];
+    const std::uint32_t word = (static_cast<std::uint32_t>(m.ram[0x0FFCU]) << 8U) | m.ram[0x0FFDU];
     CHECK(word == 0x0196U);
 }

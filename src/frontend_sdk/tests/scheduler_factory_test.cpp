@@ -22,9 +22,9 @@ namespace {
     using mnemos::chips::reset_kind;
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
-    using mnemos::instrumentation::ichip_introspection;
     using mnemos::frontend_sdk::default_scheduler_factory;
     using mnemos::frontend_sdk::scheduler_factory;
+    using mnemos::instrumentation::ichip_introspection;
     using mnemos::runtime::scheduled_chip;
     using mnemos::runtime::scheduler;
 
@@ -41,9 +41,7 @@ namespace {
         void reset(reset_kind) override {}
         void save_state(state_writer&) const override {}
         void load_state(state_reader&) override {}
-        [[nodiscard]] ichip_introspection& introspection() noexcept override {
-            return intro_;
-        }
+        [[nodiscard]] ichip_introspection& introspection() noexcept override { return intro_; }
 
         std::uint64_t ticks{};
 

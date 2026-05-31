@@ -33,18 +33,16 @@ namespace mnemos::frontend_sdk {
         // divider); `frame_source` is the video chip whose frame_index()
         // increment marks frame completion (may be null for headless tests).
         // Returned by value -- the adapter stores it as a member.
-        [[nodiscard]] virtual runtime::scheduler
-        create(std::vector<runtime::scheduled_chip> chips,
-               chips::ivideo* frame_source) = 0;
+        [[nodiscard]] virtual runtime::scheduler create(std::vector<runtime::scheduled_chip> chips,
+                                                        chips::ivideo* frame_source) = 0;
     };
 
     // The behaviour adapters used inline before this interface existed:
     // returns a vanilla runtime::scheduler over the provided chip list.
     class default_scheduler_factory final : public scheduler_factory {
       public:
-        [[nodiscard]] runtime::scheduler
-        create(std::vector<runtime::scheduled_chip> chips,
-               chips::ivideo* frame_source) override;
+        [[nodiscard]] runtime::scheduler create(std::vector<runtime::scheduled_chip> chips,
+                                                chips::ivideo* frame_source) override;
     };
 
     // Convenience shim every adapter needs: if `factory` is non-null, delegate
@@ -52,8 +50,7 @@ namespace mnemos::frontend_sdk {
     // initialize their scheduler member via a single expression in the
     // member-init list without repeating the null-check helper.
     [[nodiscard]] inline runtime::scheduler
-    make_scheduler(scheduler_factory* factory,
-                   std::vector<runtime::scheduled_chip> chips,
+    make_scheduler(scheduler_factory* factory, std::vector<runtime::scheduled_chip> chips,
                    chips::ivideo* frame_source) {
         if (factory != nullptr) {
             return factory->create(std::move(chips), frame_source);

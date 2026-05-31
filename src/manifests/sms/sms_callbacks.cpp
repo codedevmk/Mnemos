@@ -18,12 +18,12 @@ namespace mnemos::manifests::sms {
             return (s.io_ctrl & (1U << static_cast<unsigned>(port * 2 + 1))) != 0U;
         }
         std::uint8_t tr_output(const sms_callbacks_state& s, int port) noexcept {
-            return static_cast<std::uint8_t>(
-                (s.io_ctrl >> static_cast<unsigned>(4 + port * 2)) & 1U);
+            return static_cast<std::uint8_t>((s.io_ctrl >> static_cast<unsigned>(4 + port * 2)) &
+                                             1U);
         }
         std::uint8_t th_output(const sms_callbacks_state& s, int port) noexcept {
-            return static_cast<std::uint8_t>(
-                (s.io_ctrl >> static_cast<unsigned>(5 + port * 2)) & 1U);
+            return static_cast<std::uint8_t>((s.io_ctrl >> static_cast<unsigned>(5 + port * 2)) &
+                                             1U);
         }
 
         std::uint8_t port_input(const sms_callbacks_state& s, int port) noexcept {
@@ -35,9 +35,8 @@ namespace mnemos::manifests::sms {
             const std::uint8_t p1 = port_input(s, 0);
             const std::uint8_t p2 = port_input(s, 1);
             std::uint8_t v = static_cast<std::uint8_t>(p1 & 0x1FU); // U/D/L/R/B1
-            const std::uint8_t b2 = tr_is_input(s, 0)
-                                        ? static_cast<std::uint8_t>((p1 >> 5U) & 1U)
-                                        : tr_output(s, 0);
+            const std::uint8_t b2 =
+                tr_is_input(s, 0) ? static_cast<std::uint8_t>((p1 >> 5U) & 1U) : tr_output(s, 0);
             v |= static_cast<std::uint8_t>(b2 << 5U);
             v |= static_cast<std::uint8_t>(((p2 >> 0U) & 1U) << 6U); // P2 Up
             v |= static_cast<std::uint8_t>(((p2 >> 1U) & 1U) << 7U); // P2 Down
@@ -50,16 +49,13 @@ namespace mnemos::manifests::sms {
             v |= static_cast<std::uint8_t>(((p2 >> 2U) & 1U) << 0U); // Left
             v |= static_cast<std::uint8_t>(((p2 >> 3U) & 1U) << 1U); // Right
             v |= static_cast<std::uint8_t>(((p2 >> 4U) & 1U) << 2U); // Button 1
-            const std::uint8_t b2 = tr_is_input(s, 1)
-                                        ? static_cast<std::uint8_t>((p2 >> 5U) & 1U)
-                                        : tr_output(s, 1);
+            const std::uint8_t b2 =
+                tr_is_input(s, 1) ? static_cast<std::uint8_t>((p2 >> 5U) & 1U) : tr_output(s, 1);
             v |= static_cast<std::uint8_t>(b2 << 3U);
             v |= static_cast<std::uint8_t>((s.reset_pressed ? 0U : 1U) << 4U);
             v |= static_cast<std::uint8_t>(1U << 5U);
-            v |= static_cast<std::uint8_t>(
-                (th_is_input(s, 0) ? 1U : th_output(s, 0)) << 6U);
-            v |= static_cast<std::uint8_t>(
-                (th_is_input(s, 1) ? 1U : th_output(s, 1)) << 7U);
+            v |= static_cast<std::uint8_t>((th_is_input(s, 0) ? 1U : th_output(s, 0)) << 6U);
+            v |= static_cast<std::uint8_t>((th_is_input(s, 1) ? 1U : th_output(s, 1)) << 7U);
             return v;
         }
 
@@ -116,12 +112,10 @@ namespace mnemos::manifests::sms {
 
         // VDP /INT -> Z80 IRQ bridge. Same shape as the hand-written
         // s->vdp.set_irq_callback([s](bool){ s->cpu.set_irq_line(...); }).
-        out.callbacks.emplace(
-            "sms.vdp_irq",
-            chips::callback_value{std::function<void(bool)>{
-                [s = &state](bool /*asserted*/) {
-                    s->cpu->set_irq_line(s->vdp->irq_asserted());
-                }}});
+        out.callbacks.emplace("sms.vdp_irq", chips::callback_value{std::function<void(bool)>{
+                                                 [s = &state](bool /*asserted*/) {
+                                                     s->cpu->set_irq_line(s->vdp->irq_asserted());
+                                                 }}});
 
         // Sega-mapper register overlay at $FFFC-$FFFF. Bus writes here route
         // to mapper.write_register(); reads return open-bus.
@@ -136,15 +130,12 @@ namespace mnemos::manifests::sms {
         // or a host-pointer-into-RAM dual write.
         out.mmio_factories.emplace(
             "sms.mapper_register_overlay",
-            [s = &state](std::uint32_t /*base*/,
-                         std::uint32_t /*size*/) -> chips::mmio_handlers {
+            [s = &state](std::uint32_t /*base*/, std::uint32_t /*size*/) -> chips::mmio_handlers {
                 return {
-                    .on_read =
-                        [](std::uint32_t /*address*/) -> std::uint8_t { return 0xFFU; },
+                    .on_read = [](std::uint32_t /*address*/) -> std::uint8_t { return 0xFFU; },
                     .on_write =
                         [s](std::uint32_t address, std::uint8_t value) {
-                            s->mapper->write_register(
-                                static_cast<std::uint16_t>(address), value);
+                            s->mapper->write_register(static_cast<std::uint16_t>(address), value);
                         },
                 };
             });

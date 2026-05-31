@@ -249,9 +249,8 @@ TEST_CASE("z80 trace_target fires once per executed instruction with pc + cycles
     REQUIRE(trace != nullptr);
 
     std::vector<mnemos::instrumentation::trace_event> events;
-    trace->install([&events](const mnemos::instrumentation::trace_event& ev) {
-        events.push_back(ev);
-    });
+    trace->install(
+        [&events](const mnemos::instrumentation::trace_event& ev) { events.push_back(ev); });
 
     m.cpu.step_instruction();
     m.cpu.step_instruction();

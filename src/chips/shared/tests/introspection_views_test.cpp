@@ -74,10 +74,7 @@ namespace {
       public:
         [[nodiscard]] std::string_view name() const noexcept override { return "plane_a"; }
         [[nodiscard]] frame_buffer_view view() const override {
-            return {.pixels = pixels_.data(),
-                    .width = 2U,
-                    .height = 2U,
-                    .stride = 0U};
+            return {.pixels = pixels_.data(), .width = 2U, .height = 2U, .stride = 0U};
         }
 
       private:
@@ -95,9 +92,7 @@ namespace {
         [[nodiscard]] std::span<memory_view* const> memory_views() override { return mem_table_; }
         [[nodiscard]] register_view* registers() override { return &reg_; }
         [[nodiscard]] trace_target* trace() override { return &trace_; }
-        [[nodiscard]] std::span<debug_layer* const> debug_layers() override {
-            return layer_table_;
-        }
+        [[nodiscard]] std::span<debug_layer* const> debug_layers() override { return layer_table_; }
 
         [[nodiscard]] noop_trace& trace_impl() noexcept { return trace_; }
 
@@ -113,11 +108,10 @@ namespace {
     class fancy_chip final : public ichip {
       public:
         fancy_chip()
-            : ram_{0xAAU, 0xBBU, 0xCCU},
-              reg_{.name = "pc",
-                   .value = 0x1234U,
-                   .bit_width = 16U,
-                   .format = register_value_format::unsigned_integer},
+            : ram_{0xAAU, 0xBBU, 0xCCU}, reg_{.name = "pc",
+                                              .value = 0x1234U,
+                                              .bit_width = 16U,
+                                              .format = register_value_format::unsigned_integer},
               intro_(ram_, reg_) {}
 
         [[nodiscard]] chip_metadata metadata() const noexcept override {

@@ -38,8 +38,7 @@ namespace mnemos::chips {
     // Factory: given the block's base address and size, return its handler
     // pair. Captures whatever system state the host needs (Genesis_system
     // struct, controller-port array, etc.) by closure.
-    using mmio_factory_fn =
-        std::function<mmio_handlers(std::uint32_t base, std::uint32_t size)>;
+    using mmio_factory_fn = std::function<mmio_handlers(std::uint32_t base, std::uint32_t size)>;
 
     using mmio_factory_table = std::unordered_map<std::string, mmio_factory_fn>;
 

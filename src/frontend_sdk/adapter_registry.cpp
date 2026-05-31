@@ -15,8 +15,8 @@ namespace mnemos::frontend_sdk {
         factories_[std::move(family)] = std::move(fn);
     }
 
-    std::unique_ptr<player_system>
-    adapter_registry::create(std::string_view family, adapter_options options) const {
+    std::unique_ptr<player_system> adapter_registry::create(std::string_view family,
+                                                            adapter_options options) const {
         factory copy;
         {
             std::lock_guard<std::mutex> lock(mu_);

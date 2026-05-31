@@ -15,8 +15,7 @@ namespace mnemos::apps::player {
             out.reserve(raw.size());
             for (char c : raw) {
                 if (std::isalnum(static_cast<unsigned char>(c))) {
-                    out.push_back(static_cast<char>(
-                        std::tolower(static_cast<unsigned char>(c))));
+                    out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
                 } else {
                     out.push_back('_');
                 }
@@ -24,8 +23,7 @@ namespace mnemos::apps::player {
             return out;
         }
 
-        bool dump_framebuffer_ppm(const chips::frame_buffer_view& fb,
-                                  const std::string& path) {
+        bool dump_framebuffer_ppm(const chips::frame_buffer_view& fb, const std::string& path) {
             if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
                 return false;
             }
@@ -36,8 +34,7 @@ namespace mnemos::apps::player {
             const std::uint32_t stride = fb.effective_stride();
             out << "P6\n" << fb.width << " " << fb.height << "\n255\n";
             for (std::uint32_t y = 0; y < fb.height; ++y) {
-                const std::uint32_t* row =
-                    fb.pixels + static_cast<std::size_t>(y) * stride;
+                const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
                 for (std::uint32_t x = 0; x < fb.width; ++x) {
                     const std::uint32_t p = row[x];
                     const char rgb[3] = {static_cast<char>((p >> 16U) & 0xFFU),
@@ -146,11 +143,10 @@ namespace mnemos::apps::player {
         tt->install([s](const instrumentation::trace_event& ev) {
             char buf[80];
             const std::uint64_t frame = s->frame != nullptr ? *s->frame : 0U;
-            std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu\n",
-                          static_cast<unsigned long long>(frame),
-                          static_cast<unsigned long long>(s->inst),
-                          static_cast<unsigned int>(ev.pc),
-                          static_cast<unsigned long long>(ev.cycles));
+            std::snprintf(
+                buf, sizeof(buf), "%llu,%llu,%06X,%llu\n", static_cast<unsigned long long>(frame),
+                static_cast<unsigned long long>(s->inst), static_cast<unsigned int>(ev.pc),
+                static_cast<unsigned long long>(ev.cycles));
             *s->out << buf;
             ++s->inst;
         });

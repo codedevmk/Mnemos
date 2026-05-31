@@ -50,8 +50,7 @@ namespace mnemos::frontend_sdk {
 
     class adapter_registry final {
       public:
-        using factory =
-            std::function<std::unique_ptr<player_system>(adapter_options options)>;
+        using factory = std::function<std::unique_ptr<player_system>(adapter_options options)>;
 
         adapter_registry(const adapter_registry&) = delete;
         adapter_registry& operator=(const adapter_registry&) = delete;
@@ -70,8 +69,8 @@ namespace mnemos::frontend_sdk {
 
         // Invoke the factory for `family`. Returns nullptr (without
         // constructing a system) if no adapter is registered under that name.
-        [[nodiscard]] std::unique_ptr<player_system>
-        create(std::string_view family, adapter_options options) const;
+        [[nodiscard]] std::unique_ptr<player_system> create(std::string_view family,
+                                                            adapter_options options) const;
 
         // Snapshot of currently-registered family IDs. Useful for diagnostic
         // listings ("supported systems: genesis, sms, ...").

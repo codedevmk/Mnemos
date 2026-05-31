@@ -44,9 +44,8 @@ namespace mnemos::apps::player::adapters {
     // selects the channel within the frame (0 for mono, 0/1 for stereo).
     // `src_count` is the number of frames available. Used for upsampling
     // (when the source rate is below the destination rate).
-    [[nodiscard]] inline int sample_channel_linear(const std::int16_t* src, int stride,
-                                                   int channel, int src_count,
-                                                   double pos) noexcept {
+    [[nodiscard]] inline int sample_channel_linear(const std::int16_t* src, int stride, int channel,
+                                                   int src_count, double pos) noexcept {
         if (!src || src_count <= 0) {
             return 0;
         }
@@ -68,9 +67,8 @@ namespace mnemos::apps::player::adapters {
     // Used for downsampling (when the source rate exceeds the destination
     // rate) so we don't alias by point-sampling. Degenerate ranges fall
     // back to `sample_channel_linear` at the start position.
-    [[nodiscard]] inline int sample_channel_box(const std::int16_t* src, int stride,
-                                                int channel, int src_count, double start,
-                                                double end) noexcept {
+    [[nodiscard]] inline int sample_channel_box(const std::int16_t* src, int stride, int channel,
+                                                int src_count, double start, double end) noexcept {
         if (!src || src_count <= 0) {
             return 0;
         }

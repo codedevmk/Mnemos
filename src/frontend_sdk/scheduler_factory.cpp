@@ -4,8 +4,8 @@
 
 namespace mnemos::frontend_sdk {
 
-    runtime::scheduler default_scheduler_factory::create(
-        std::vector<runtime::scheduled_chip> chips, chips::ivideo* frame_source) {
+    runtime::scheduler default_scheduler_factory::create(std::vector<runtime::scheduled_chip> chips,
+                                                         chips::ivideo* frame_source) {
         return runtime::scheduler(std::move(chips), frame_source);
     }
 

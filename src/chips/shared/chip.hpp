@@ -105,8 +105,7 @@ namespace mnemos::chips {
         // chips be exercised without a full callback table in tests.
         //
         // Default no-op.
-        virtual void configure(const config_table& /*cfg*/,
-                               const callback_table& /*callbacks*/) {}
+        virtual void configure(const config_table& /*cfg*/, const callback_table& /*callbacks*/) {}
     };
 
     // Each tier-2 subclass interface below selects the chip's classification
@@ -175,8 +174,7 @@ namespace mnemos::chips {
         // its overlay regions. The mapper may treat this as a bank-register
         // write (changing future reads), as a passthrough into cart RAM, or
         // as a drop for read-only mappers. Default: drop.
-        virtual void write_overlay(std::uint32_t /*address*/,
-                                   std::uint8_t /*value*/) noexcept {}
+        virtual void write_overlay(std::uint32_t /*address*/, std::uint8_t /*value*/) noexcept {}
         // Per-access predicate: should this mapper claim this address right
         // now? Lets multiple mapper overlays coexist on the same bus with
         // priority + state-dependent gating (e.g. C64 PLA paging). Default:

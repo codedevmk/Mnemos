@@ -34,7 +34,6 @@ namespace mnemos::peripheral {
         bool mode{};
     };
 
-
     // The category a peripheral belongs to. Drives the category subtree the
     // implementation lives in (input/, output/, storage/, network/, ...) and
     // tells frontends how to surface the device in any picker UI.
@@ -57,24 +56,24 @@ namespace mnemos::peripheral {
     // mode on a Master System); a Menacer is `genesis` only.
     namespace host {
         inline constexpr std::uint32_t genesis = 1U << 0; // Mega Drive / Genesis
-        inline constexpr std::uint32_t sms     = 1U << 1; // Master System
+        inline constexpr std::uint32_t sms = 1U << 1;     // Master System
         inline constexpr std::uint32_t mega_cd = 1U << 2; // Mega-CD / Sega CD
         inline constexpr std::uint32_t sega_32x = 1U << 3;
         inline constexpr std::uint32_t game_gear = 1U << 4;
-        inline constexpr std::uint32_t saturn  = 1U << 5;
-        inline constexpr std::uint32_t c64     = 1U << 6;
-        inline constexpr std::uint32_t snes    = 1U << 7;
-        inline constexpr std::uint32_t nes     = 1U << 8;
+        inline constexpr std::uint32_t saturn = 1U << 5;
+        inline constexpr std::uint32_t c64 = 1U << 6;
+        inline constexpr std::uint32_t snes = 1U << 7;
+        inline constexpr std::uint32_t nes = 1U << 8;
     } // namespace host
 
     // Each device exposes the same shape so frontends and adapters can pick,
     // describe, and route them uniformly.
     struct info final {
-        const char* manufacturer;   // "Sega", "Konami", ...
-        const char* part_number;    // "MK-1650", "MK-1653", ...
-        const char* family;         // "Mega Drive Control Pad", ...
+        const char* manufacturer; // "Sega", "Konami", ...
+        const char* part_number;  // "MK-1650", "MK-1653", ...
+        const char* family;       // "Mega Drive Control Pad", ...
         kind category;
-        std::uint32_t compatible;   // bitwise-OR of host:: constants
+        std::uint32_t compatible; // bitwise-OR of host:: constants
     };
 
     // Common port-side interface. The system's MMIO routes byte writes/reads

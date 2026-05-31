@@ -19,8 +19,8 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] region_override parse_region_arg(int argc, char* argv[]);
 
     // Apply a `--region` override on top of a cart-default video region.
-    [[nodiscard]] mnemos::video_region resolve_video_region(region_override ov,
-                                                            mnemos::video_region cart_default) noexcept;
+    [[nodiscard]] mnemos::video_region
+    resolve_video_region(region_override ov, mnemos::video_region cart_default) noexcept;
 
     // Short label describing where the active region came from. Used by the
     // player's startup banner ("auto-detected" / "explicit --region").
