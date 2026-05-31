@@ -1,4 +1,5 @@
 add_subdirectory(foundation)
+add_subdirectory(extensions)
 add_subdirectory(compression)
 add_subdirectory(security)
 add_subdirectory(common)
