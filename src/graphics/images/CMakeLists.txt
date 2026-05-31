@@ -2,6 +2,7 @@ add_library(
     mnemos_graphics_images
     image.cpp
     ppm_image.cpp
+    png_image.cpp
 )
 add_library(mnemos::graphics::images ALIAS mnemos_graphics_images)
 
@@ -12,15 +13,32 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
-target_link_libraries(mnemos_graphics_images PUBLIC mnemos::io)
+# io is public (image::write); compression + crc are png_image.cpp details.
+target_link_libraries(
+    mnemos_graphics_images
+    PUBLIC
+        mnemos::io
+    PRIVATE
+        mnemos::compression
+        mnemos::security::cryptography
+)
 
 mnemos_apply_common_target_options(mnemos_graphics_images PUBLIC)
-mnemos_declare_tier(NAME mnemos_graphics_images TIER 2 DEPENDS mnemos_io)
+mnemos_declare_tier(
+    NAME mnemos_graphics_images
+    TIER 2
+    DEPENDS mnemos_io mnemos_compression mnemos_security_cryptography
+)
 
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_graphics_images_test
-        SOURCES tests/ppm_image_test.cpp
-        LIBRARIES mnemos::graphics::images
+        SOURCES
+            tests/ppm_image_test.cpp
+            tests/png_image_test.cpp
+        LIBRARIES
+            mnemos::graphics::images
+            mnemos::compression
+            mnemos::security::cryptography
     )
 endif()
