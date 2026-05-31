@@ -45,7 +45,7 @@ namespace mnemos::frontend_sdk {
         // intercept scheduler construction without modifying adapter code.
         // Non-owning; caller keeps the factory alive for the adapter's
         // construction call.
-        scheduler_factory* scheduler_factory{};
+        scheduler_factory* scheduler_factory_override{};
     };
 
     class adapter_registry final {

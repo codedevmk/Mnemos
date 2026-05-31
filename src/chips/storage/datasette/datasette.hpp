@@ -39,10 +39,7 @@ namespace mnemos::chips::storage {
 
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        // Keep the base manifest-config hook visible alongside the typed
-        // configure(config) below, so the latter doesn't hide it (gcc rejects
-        // that under -Woverloaded-virtual).
-        using ichip::configure;
+        using ichip::configure; // un-hide base overload (gcc -Woverloaded-virtual)
         void configure(config cfg);
         [[nodiscard]] bool load_tap(std::span<const std::uint8_t> tap);
         void eject() noexcept;

@@ -50,9 +50,7 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // Apply host wiring + TOD rates. Re-initialises chip state (like power-on).
-        // The using-declaration keeps the base manifest-config hook visible so the
-        // typed overload below doesn't hide it (gcc -Woverloaded-virtual).
-        using ichip::configure;
+        using ichip::configure; // un-hide base overload (gcc -Woverloaded-virtual)
         void configure(config cfg);
 
         // Bus access over the low 4 bits of the address. read is non-const: the
