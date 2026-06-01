@@ -90,25 +90,29 @@ jobs:
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
 
   arm64:
-    name: ${{ matrix.preset }}
+    # The headless presets are arch-agnostic (they only disable the SDL3 apps);
+    # this job is what makes the build ARM64 by running on a native aarch64
+    # runner, so the architecture is reflected in the check name rather than the
+    # preset name. See ADR 0010.
+    name: arm64 / ${{ matrix.preset }}
     needs: format
     # Native aarch64 runner: no cross-compilation toolchain needed, and the core
-    # runs on the same ISA Android targets (arm64-v8a). See ADR 0010.
+    # runs on the same ISA Android targets (arm64-v8a).
     runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
         preset:
-          - linux-gcc-arm64-debug
-          - linux-gcc-arm64-release
+          - linux-gcc-headless-debug
+          - linux-gcc-headless-release
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # The ARM64 presets build the headless core + tests only
-      # (MNEMOS_BUILD_APPS=OFF), so the SDL3/windowing system packages are not
-      # required here -- just the build generator.
+      # The headless presets build the core + tests only (MNEMOS_BUILD_APPS=OFF),
+      # so the SDL3/windowing system packages are not required here -- just the
+      # build generator.
       - name: Install build tools
         run: |
           sudo apt-get update

@@ -77,8 +77,11 @@ mapping database is bundled so unknown controllers are recognised.
 - The headless core (Tiers 1–6) remains the single source of truth across
   desktop and mobile; only Tier 1 platform shims (`fs`) and Tiers 7–8 gain
   Android-aware code.
-- ARM64 becomes a supported architecture in presets and CI, expanding the build
-  matrix and CI cost; golden-frame tests gate ARM correctness.
+- ARM64 becomes a supported architecture in CI (a headless core + tests build
+  on a native aarch64 runner), expanding the build matrix and CI cost. The
+  foundation/chip/runtime unit and conformance tests gate ARM correctness today;
+  the golden-frame boot tests self-skip in CI when ROM env vars are absent, so
+  they only validate ARM once ROMs/test vectors are made available to CI.
 - A new Gradle/Android Studio toolchain and signing/packaging pipeline join the
   build surface, beyond the current CMake-only flow.
 - Bluetooth controller support lands on all platforms (not just Android) as a

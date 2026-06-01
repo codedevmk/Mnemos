@@ -145,9 +145,9 @@
       }
     },
     {
-      "name": "linux-gcc-arm64-debug",
+      "name": "linux-gcc-headless-debug",
       "inherits": "base",
-      "displayName": "Linux GCC ARM64 Debug (headless core + tests)",
+      "displayName": "Linux GCC Headless Debug (core + tests, no SDL apps)",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -160,9 +160,9 @@
       }
     },
     {
-      "name": "linux-gcc-arm64-release",
+      "name": "linux-gcc-headless-release",
       "inherits": "base",
-      "displayName": "Linux GCC ARM64 Release (headless core + tests)",
+      "displayName": "Linux GCC Headless Release (core + tests, no SDL apps)",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -185,8 +185,8 @@
     { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
     { "name": "linux-clang-asan", "configurePreset": "linux-clang-asan" },
     { "name": "linux-clang-coverage", "configurePreset": "linux-clang-coverage" },
-    { "name": "linux-gcc-arm64-debug", "configurePreset": "linux-gcc-arm64-debug" },
-    { "name": "linux-gcc-arm64-release", "configurePreset": "linux-gcc-arm64-release" }
+    { "name": "linux-gcc-headless-debug", "configurePreset": "linux-gcc-headless-debug" },
+    { "name": "linux-gcc-headless-release", "configurePreset": "linux-gcc-headless-release" }
   ],
   "testPresets": [
     {
@@ -235,13 +235,13 @@
       "output": { "outputOnFailure": true }
     },
     {
-      "name": "linux-gcc-arm64-debug",
-      "configurePreset": "linux-gcc-arm64-debug",
+      "name": "linux-gcc-headless-debug",
+      "configurePreset": "linux-gcc-headless-debug",
       "output": { "outputOnFailure": true }
     },
     {
-      "name": "linux-gcc-arm64-release",
-      "configurePreset": "linux-gcc-arm64-release",
+      "name": "linux-gcc-headless-release",
+      "configurePreset": "linux-gcc-headless-release",
       "output": { "outputOnFailure": true }
     }
   ]
