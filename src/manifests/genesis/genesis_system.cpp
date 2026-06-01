@@ -100,6 +100,12 @@ namespace mnemos::manifests::genesis {
                     return s->read_pad_port(0);
                 case 0x05:
                     return s->read_pad_port(1);
+                case 0x07:
+                    // Port C is the (unused) expansion connector. With no device
+                    // its data pins float high; a read returns 0x7F (TH/TR/TL +
+                    // D3-0 high, D7 from the latch). Boot code BTSTs bit 6 here
+                    // (TH) and must see 1, or it takes the wrong branch.
+                    return static_cast<std::uint8_t>((s->io_regs[off] & 0x80U) | 0x7FU);
                 default:
                     return s->io_regs[off];
                 }
