@@ -3,8 +3,10 @@
 #include "chip.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace mnemos::chips::audio {
 
@@ -65,6 +67,19 @@ namespace mnemos::chips::audio {
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
+        // Real-time audio sink (mirror of the SN76489 / YM2612 capture API).
+        // When enabled, tick() appends one mixed sample per φ2 cycle to an
+        // internal queue; the host drains it with drain_samples(). Samples come
+        // out at the φ2 rate the chip is clocked at (set_sample_rate, ~1 MHz),
+        // so the adapter downsamples to its output rate before mixing -- the
+        // same arrangement the Genesis/SMS PSG uses. Off by default: a SID
+        // nobody captures from behaves exactly as before, because tick() then
+        // never calls sample() and the queue stays empty.
+        void enable_audio_capture(bool on) noexcept { audio_capture_ = on; }
+        [[nodiscard]] bool audio_capture_enabled() const noexcept { return audio_capture_; }
+        [[nodiscard]] std::size_t pending_samples() const noexcept { return sample_queue_.size(); }
+        std::size_t drain_samples(std::int16_t* out, std::size_t max_samples) noexcept;
+
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {};
 
@@ -118,6 +133,12 @@ namespace mnemos::chips::audio {
 
         std::array<register_descriptor, 4> register_view_{};
         introspection_surface introspection_{};
+
+        // Host-side audio capture buffer (see enable_audio_capture). Transient
+        // playback state: not part of save/load and not cleared by reset(), so
+        // the host owns drain cadence independently of machine resets.
+        bool audio_capture_{};
+        std::vector<std::int16_t> sample_queue_{};
     };
 
 } // namespace mnemos::chips::audio

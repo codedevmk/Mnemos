@@ -1,10 +1,11 @@
 // SDL3 windowed player. Boots whichever player_system adapter the ROM's file
-// extension selects (Genesis / SMS), presents its framebuffer at integer scale,
-// streams audio, and routes keyboard + gamepad input. ESC quits.
+// extension selects (Genesis / SMS / C64), presents its framebuffer at integer
+// scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
+#include "c64_adapter.hpp" // force_link (the C64 has no cart-header region byte)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -113,10 +114,24 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         const auto family = detect_family(loaded->name);
-        const auto market = family == system_family::sms
-                                ? mnemos::manifests::sms::parse_market(loaded->bytes)
-                                : mnemos::manifests::genesis::parse_market(loaded->bytes);
-        const auto video = resolve_video(mnemos::default_video_for(market));
+        // Default video standard before any --region override: the cartridge
+        // consoles carry a region byte in their header; the C64 does not, so it
+        // defaults to PAL (its core market, and the manifest/c64_config default).
+        mnemos::video_region cart_default = mnemos::video_region::ntsc;
+        switch (family) {
+        case system_family::sms:
+            cart_default =
+                mnemos::default_video_for(mnemos::manifests::sms::parse_market(loaded->bytes));
+            break;
+        case system_family::genesis:
+            cart_default =
+                mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
+            break;
+        case system_family::c64:
+            cart_default = mnemos::video_region::pal;
+            break;
+        }
+        const auto video = resolve_video(cart_default);
         std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
@@ -128,8 +143,19 @@ int main(int argc, char* argv[]) {
         // means adding one more force_link() call here.
         mnemos::apps::player::adapters::genesis::force_link();
         mnemos::apps::player::adapters::sms::force_link();
+        mnemos::apps::player::adapters::c64::force_link();
 
-        const std::string_view family_id = family == system_family::sms ? "sms" : "genesis";
+        std::string_view family_id = "genesis";
+        switch (family) {
+        case system_family::sms:
+            family_id = "sms";
+            break;
+        case system_family::c64:
+            family_id = "c64";
+            break;
+        case system_family::genesis:
+            break;
+        }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
             family_id, {.rom = std::move(loaded->bytes),
                         .video_region = video,
