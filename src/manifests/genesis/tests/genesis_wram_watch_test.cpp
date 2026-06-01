@@ -75,7 +75,10 @@ TEST_CASE("genesis WRAM write watch (diagnostic)", "[genesis][diag]") {
             const std::uint32_t a = ev.address & 0xFFFFFFU;
             const std::uint32_t w = watch_addr & 0xFFFFFFU;
             if (ev.write && (a == w || a == w + 1U)) {
-                const auto pc = cpu->cpu_registers().pc;
+                // The instruction-start PC (the actual writer), matching the
+                // reference runner's last-executed-PC semantic -- NOT the
+                // already-advanced cpu_registers().pc.
+                const auto pc = cpu->current_instruction_addr();
                 std::fprintf(stderr, "[wram] pc=$%06X [$%06X]=%02X\n",
                              static_cast<unsigned>(pc & 0xFFFFFFU), static_cast<unsigned>(a),
                              static_cast<unsigned>(ev.value));
@@ -87,8 +90,10 @@ TEST_CASE("genesis WRAM write watch (diagnostic)", "[genesis][diag]") {
         chips.push_back({e.chip, e.weight});
     }
     mnemos::runtime::scheduler sched(std::move(chips), rt->vdp());
+    // 1-based frame labels to match the reference runner's g_trace_frame_num
+    // (= retro_run call count, i+1), so frame numbers compare directly.
     for (int i = 0; i < frames; ++i) {
-        std::fprintf(stderr, "=== frame %d ===\n", i);
+        std::fprintf(stderr, "=== frame %d ===\n", i + 1);
         sched.run_frame();
     }
     SUCCEED();
