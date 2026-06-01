@@ -60,6 +60,5 @@ conan.lock
 scripts/
 
 # Working/scratch documents that are not part of the public history
-docs/architecture/mnemos-todos-v0.1.md
 docs/genesis-cycle-parity-audit.md
 *.obj
