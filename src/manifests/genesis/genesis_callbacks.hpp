@@ -54,8 +54,13 @@ namespace mnemos::manifests::genesis {
 
         // Non-chip architectural state (lifted from genesis_system).
         std::array<std::uint8_t, 0x2000> z80_ram{}; // 8 KiB, shared by both buses
-        std::array<std::uint8_t, 0x20> io_regs{};   // $A10000-$A1001F register file
-        std::uint8_t version_register{};            // $A10001 region/version (set by caller)
+        // $A10000-$A1001F. Most reset to 0, but the three serial SCtrl bytes
+        // power on non-zero on real hardware (offsets 0x07/0x0A/0x0D = FF/FF/FB).
+        // Some boot code BTSTs these registers; a zero default would take the
+        // wrong branch and corrupt the boot. Kept identical to
+        // genesis_system::io_regs.
+        std::array<std::uint8_t, 0x20> io_regs{0, 0, 0, 0, 0, 0, 0, 0xFF, 0, 0, 0xFF, 0, 0, 0xFB};
+        std::uint8_t version_register{}; // $A10001 region/version (set by caller)
 
         // 16-bit coalescing latches for the VDP ports (68K word access splits
         // into a high-byte-even + low-byte-odd pair).

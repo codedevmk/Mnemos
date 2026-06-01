@@ -94,9 +94,22 @@ namespace mnemos::manifests::genesis {
 
         // I/O sub-controller registers ($A10000-$A1001F). $A10001=version (RO),
         // $A10003/05/07 = data A/B/C (via read_pad_port), $A10009/0B/0D = ctrl
-        // A/B/C, rest = serial regs. All bytes are 0 after a hardware reset --
-        // the ROM's boot TST relies on it.
-        std::array<std::uint8_t, 0x20> io_regs{};
+        // A/B/C, rest = serial TxData/RxData/SCtrl. Most reset to 0, but the
+        // three serial SCtrl bytes power on non-zero on real hardware (offsets
+        // 0x07/0x0A/0x0D = FF/FF/FB). Some boot code BTSTs these registers; a
+        // zero default would take the wrong branch and corrupt the boot.
+        std::array<std::uint8_t, 0x20> io_regs{// 0x00..0x06
+                                               0, 0, 0, 0, 0, 0, 0,
+                                               // 0x07 = port-C SCtrl
+                                               0xFF,
+                                               // 0x08..0x09
+                                               0, 0,
+                                               // 0x0A = port-A SCtrl mirror
+                                               0xFF,
+                                               // 0x0B..0x0C
+                                               0, 0,
+                                               // 0x0D = port-B SCtrl
+                                               0xFB};
 
         // 16-bit coalescing latches for the VDP ports (68K word access splits
         // into a high-byte-even + low-byte-odd byte pair).
