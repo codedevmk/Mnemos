@@ -39,6 +39,17 @@ namespace mnemos::frontend_sdk {
         std::vector<std::uint8_t> rom;
         mnemos::video_region video_region{mnemos::video_region::ntsc};
         std::string display_name;
+        // Additional media images beyond the primary `rom`, in load order. Used
+        // by disk-based systems for multi-disk games: the C64 adapter mounts
+        // `rom` as disk 1 and these as disks 2..N, swappable at runtime via
+        // player_system::insert_media. Empty for single-image media. Each entry
+        // is interpreted the same way the adapter interprets `rom`.
+        std::vector<std::vector<std::uint8_t>> additional_media;
+        // Whether the adapter should auto-start the loaded media (a disk/tape
+        // computer types LOAD/RUN for you). Adapters without an autostart
+        // concept ignore it. Defaults on; the frontend clears it to drop to a
+        // bare prompt instead.
+        bool autostart{true};
         // Optional scheduler-construction override. null = adapter falls back
         // to its built-in scheduler. Non-null lets tooling (deterministic
         // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)

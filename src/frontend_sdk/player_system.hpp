@@ -22,6 +22,7 @@
 #include "introspection_views.hpp" // for mnemos::instrumentation::memory_view
 #include "peripheral.hpp"          // for mnemos::peripheral::controller_state
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -131,6 +132,23 @@ namespace mnemos::frontend_sdk {
                 }
             }
             return nullptr;
+        }
+
+        // Removable-media control. Disk-based systems (a C64 with a multi-disk
+        // game) expose a set of swappable images so the frontend can change the
+        // medium in the drive when a program asks for the next disk -- the
+        // emulated equivalent of the user swapping the floppy. Fixed-media
+        // systems (cartridge consoles) leave the defaults: a count of 0 means
+        // "no removable media", and the frontend hides any disk UI.
+        [[nodiscard]] virtual std::size_t media_count() const noexcept { return 0; }
+        [[nodiscard]] virtual std::size_t current_media_index() const noexcept { return 0; }
+        // Swap the medium in the drive to `index`. Returns false (and changes
+        // nothing) if the system has no removable media or `index` is out of
+        // range. Takes effect immediately; the running program sees the new
+        // disk on its next access, exactly as a physical swap would.
+        virtual bool insert_media(std::size_t index) noexcept {
+            (void)index;
+            return false;
         }
     };
 

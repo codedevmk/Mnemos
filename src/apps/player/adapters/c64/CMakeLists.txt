@@ -25,6 +25,7 @@ target_link_libraries(
         mnemos::dsp
         mnemos::io
         mnemos::common
+        mnemos::chips::storage::c1541
 )
 
 mnemos_apply_common_target_options(mnemos_apps_player_c64_adapter PUBLIC)
@@ -39,6 +40,7 @@ mnemos_declare_tier(
         mnemos_dsp
         mnemos_io
         mnemos_common
+        mnemos_chips_storage_c1541
 )
 
 if(BUILD_TESTING)

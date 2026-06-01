@@ -48,6 +48,12 @@ namespace mnemos::chips::storage::c1541 {
         void unmount() noexcept;
         [[nodiscard]] bool mounted() const noexcept { return disk_.loaded(); }
 
+        // True while a serial transfer is in progress (the drive is being
+        // addressed, receiving a command/filename, or streaming a file back).
+        // A frontend watches this to tell when a LOAD has finished -- the drive
+        // returns to idle once the last byte is served.
+        [[nodiscard]] bool transfer_active() const noexcept { return link_ != link_mode::idle; }
+
         // Protocol-logic test/inspection surface (bypasses the bit-level handshake).
         void debug_command(std::uint8_t command);    // an ATN command byte
         void debug_filename_byte(std::uint8_t byte); // a filename byte during OPEN

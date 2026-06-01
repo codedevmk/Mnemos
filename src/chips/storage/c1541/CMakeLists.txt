@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_storage_c1541
     d64_image.cpp
+    prg_disk.cpp
     synthetic_drive.cpp
     disk_bind.cpp
     full_drive.cpp
@@ -30,6 +31,7 @@ if(BUILD_TESTING)
         mnemos_chips_storage_c1541_test
         SOURCES
             tests/d64_image_test.cpp
+            tests/prg_disk_test.cpp
             tests/synthetic_drive_test.cpp
             tests/gcr_test.cpp
             tests/disk_bind_test.cpp
