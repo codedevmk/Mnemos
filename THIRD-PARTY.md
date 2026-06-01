@@ -22,9 +22,19 @@ expected end state. None of these corpora are committed.
 | Public per-instruction 68000 test corpus (one JSON file per mnemonic) | `m68000_conformance_test` | `MNEMOS_M68000_TESTS_DIR` |
 | Public Z80 instruction exerciser CP/M `.com` images (full-flag and documented-flag variants) | `z80_conformance_test` | `MNEMOS_Z80_TEST_ROM` |
 | Public per-instruction Z80 test corpus (one JSON file per opcode, per-cycle bus trace) | `z80_singlestep_test` | `MNEMOS_Z80_TESTS_DIR` |
+| **ZEXALL-SMS** — Z80 instruction exerciser as a Sega Master System ROM (renders to the SMS VDP / SDSC console) | _SMS-native; no committed harness yet_ | _n/a_ |
 
 These corpora are the de-facto standard for verifying 8-/16-bit CPU cores; we
 acknowledge their authors' work in producing and maintaining them.
+
+**ZEXALL-SMS** (<https://www.smspower.org/Homebrew/ZEXALL-SMS>) is a Master
+System port of Frank Cringle's ZEXALL (ported to CP/M and the Spectrum by
+J.G. Harston, to the SMS by Brett K., and maintained by Maxim / Eric R. Quinn).
+It is licensed **GPLv2** and is **not** committed. Unlike the CP/M `.com`
+exercisers above, it reports results to the SMS VDP / SDSC debug console rather
+than via BDOS, so it exercises the whole SMS (Z80 + VDP) rather than the bare
+Z80 core — running it therefore needs the system harness, not the `.com`-loading
+`z80_conformance_test`.
 
 ## Hardware-reverse-engineering references
 
