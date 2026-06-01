@@ -21,6 +21,78 @@ namespace mnemos::chips::video {
             return code_low == 0 || code_low == 4 || code_low == 8 || code_low == 0x0C;
         }
 
+        // VDP FIFO access-slot timing tables (within-line master-cycle offsets at
+        // which a FIFO slot drains), ported verbatim from Genesis-Plus-GX
+        // (core/vdp_ctrl.c fifo_timing_h32/h40). Each table is the line's access
+        // slots followed by the FIRST 12 of those slots repeated +one line, so a
+        // FIFO entry positioned late in a line can still find a drain slot in the
+        // following line. (It is not a full shifted copy -- the tail slots of the
+        // line are omitted in the +line half, matching GPGX.) Used by the data-
+        // port write back-pressure model (see data_write).
+        constexpr int kLineMaster = genesis_vdp::master_clocks_per_line;
+        constexpr std::array<int, 28> fifo_timing_h32 = {
+            230,
+            510,
+            810,
+            970,
+            1130,
+            1450,
+            1610,
+            1770,
+            2090,
+            2250,
+            2410,
+            2730,
+            2890,
+            3050,
+            3350,
+            3370,
+            kLineMaster + 230,
+            kLineMaster + 510,
+            kLineMaster + 810,
+            kLineMaster + 970,
+            kLineMaster + 1130,
+            kLineMaster + 1450,
+            kLineMaster + 1610,
+            kLineMaster + 1770,
+            kLineMaster + 2090,
+            kLineMaster + 2250,
+            kLineMaster + 2410,
+            kLineMaster + 2730,
+        };
+        constexpr std::array<int, 30> fifo_timing_h40 = {
+            352,
+            820,
+            948,
+            1076,
+            1332,
+            1460,
+            1588,
+            1844,
+            1972,
+            2100,
+            2356,
+            2484,
+            2612,
+            2868,
+            2996,
+            3124,
+            3364,
+            3380,
+            kLineMaster + 352,
+            kLineMaster + 820,
+            kLineMaster + 948,
+            kLineMaster + 1076,
+            kLineMaster + 1332,
+            kLineMaster + 1460,
+            kLineMaster + 1588,
+            kLineMaster + 1844,
+            kLineMaster + 1972,
+            kLineMaster + 2100,
+            kLineMaster + 2356,
+            kLineMaster + 2484,
+        };
+
         // Scroll-plane size in cells (R16 HSZ/VSZ; 0b10 is invalid -> treat as 64).
         [[nodiscard]] constexpr int scroll_size(int sz_bits) noexcept {
             constexpr std::array<int, 4> sizes = {32, 64, 64, 128};
@@ -341,6 +413,46 @@ namespace mnemos::chips::video {
         }
     }
 
+    void genesis_vdp::fifo_data_write() noexcept {
+        // Back-pressure applies only during active display (display enabled and
+        // not in V-blank). Outside it the FIFO drains freely; GPGX gates on
+        // !(status & 8) && (reg[1] & 0x40).
+        if (in_vblank_ || !display_enabled()) {
+            return;
+        }
+
+        const auto& timing = h40_mode() ? std::span<const int>(fifo_timing_h40)
+                                        : std::span<const int>(fifo_timing_h32);
+        const std::int64_t now = current_line_master();
+
+        // GPGX vdp_68k_data_w: position the new entry against the existing FIFO.
+        std::int64_t cycles = now;
+        const std::int64_t newest = fifo_drain_[static_cast<std::size_t>((fifo_idx_ + 3) & 3)];
+        if (now < newest) {
+            // FIFO not empty. If the oldest entry has not drained yet the FIFO is
+            // full and the 68K must wait for it; accrue that wait as stall debt.
+            const std::int64_t oldest = fifo_drain_[static_cast<std::size_t>(fifo_idx_)];
+            if (now < oldest) {
+                fifo_stall_master_cycles_ += oldest - now;
+            }
+            // The new entry is processed after the current newest entry.
+            cycles = newest;
+        }
+
+        // Find the next free access slot at/after `cycles` and record this entry's
+        // drain time there. Word writes consume one slot (byte writes two, but the
+        // 68K data port is word-wide here, so byte_access = 0).
+        std::size_t slot = 0;
+        while (slot < timing.size() && cycles >= timing[slot]) {
+            ++slot;
+        }
+        if (slot >= timing.size()) {
+            slot = timing.size() - 1;
+        }
+        fifo_drain_[static_cast<std::size_t>(fifo_idx_)] = timing[slot];
+        fifo_idx_ = (fifo_idx_ + 1) & 3;
+    }
+
     void genesis_vdp::dma_transfer_step(std::uint16_t word) noexcept {
         write_target_word(cmd_code_ & 0x0F, word);
         cmd_addr_ = (cmd_addr_ + autoincrement()) & 0xFFFFU;
@@ -403,6 +515,10 @@ namespace mnemos::chips::video {
             return;
         }
 
+        // A plain 68K data-port write passes through the VDP write FIFO; during
+        // active display it back-pressures the 68K when the FIFO fills.
+        fifo_data_write();
+
         write_target_word(code_low, value);
         read_buffer_ = value;
         cmd_addr_ = (cmd_addr_ + autoincrement()) & 0xFFFFU;
@@ -428,7 +544,12 @@ namespace mnemos::chips::video {
         const bool in_hblank_phase =
             in_hblank_ || line_accumulator_ >= (master_clocks_per_line * 3) / 4;
 
-        s |= (1U << 9U); // FIFO empty (writes complete immediately in this model)
+        // FIFO-empty (bit 9) is reported as always-empty / never-full (bit 8 = 0):
+        // the write FIFO is modelled for 68K back-pressure timing (see
+        // fifo_data_write) but its live occupancy is not surfaced to status reads
+        // yet. Deriving the real empty/full bits from the drain schedule is a
+        // follow-up (some titles pace writes off these bits; needs its own sweep).
+        s |= (1U << 9U);
         if (vint_happened_) {
             s |= (1U << 7U);
         }
@@ -1016,6 +1137,16 @@ namespace mnemos::chips::video {
         while (line_accumulator_ >= master_clocks_per_line) {
             line_accumulator_ -= master_clocks_per_line;
             run_scanline();
+            // The FIFO drain schedule is kept in the current line's frame of
+            // reference; shift each entry back one line as the line wraps so
+            // entries that drained "into the next line" stay comparable to the
+            // new line's within-line position. Clamp at 0 (already drained).
+            for (auto& d : fifo_drain_) {
+                d -= master_clocks_per_line;
+                if (d < 0) {
+                    d = 0;
+                }
+            }
         }
         // Drain the post-VBLANK-entry VINT delay: VBLANK status went high
         // when scanline crossed visible_h, but the IRQ doesn't assert until
@@ -1041,6 +1172,13 @@ namespace mnemos::chips::video {
             dma_stall_master_cycles_ -= static_cast<std::int64_t>(cycles);
             if (dma_stall_master_cycles_ < 0) {
                 dma_stall_master_cycles_ = 0;
+            }
+        }
+        // Drain FIFO back-pressure stall debt (same 68K-gating path as DMA).
+        if (fifo_stall_master_cycles_ > 0) {
+            fifo_stall_master_cycles_ -= static_cast<std::int64_t>(cycles);
+            if (fifo_stall_master_cycles_ < 0) {
+                fifo_stall_master_cycles_ = 0;
             }
         }
         // Drain the DMA-busy *status bit* timer (independent: VRAM fill/copy
@@ -1153,6 +1291,10 @@ namespace mnemos::chips::video {
         dma_busy_master_cycles_ = 0;
         dma_stall_master_cycles_ = 0;
 
+        fifo_drain_.fill(0);
+        fifo_idx_ = 0;
+        fifo_stall_master_cycles_ = 0;
+
         total_scanlines_ = pal_mode_ ? scanlines_pal : scanlines_ntsc;
         // Frame phase: each frame starts on the VBL entry line so the very
         // first VINT after reset fires at master 770/788 -- not after a
@@ -1250,6 +1392,15 @@ namespace mnemos::chips::video {
         writer.boolean(hblank_pending_);
         writer.boolean(ext_pending_);
         writer.u64(frame_index_);
+
+        // Write-FIFO schedule + stall debt: part of the VDP's live timing state.
+        // Serialized so a save taken mid active-display burst restores the same
+        // back-pressure on load (deterministic save->load->continue).
+        for (const auto d : fifo_drain_) {
+            writer.u64(static_cast<std::uint64_t>(d));
+        }
+        writer.u32(static_cast<std::uint32_t>(fifo_idx_));
+        writer.u64(static_cast<std::uint64_t>(fifo_stall_master_cycles_));
     }
 
     void genesis_vdp::load_state(state_reader& reader) {
@@ -1295,6 +1446,12 @@ namespace mnemos::chips::video {
         hblank_pending_ = reader.boolean();
         ext_pending_ = reader.boolean();
         frame_index_ = reader.u64();
+
+        for (auto& d : fifo_drain_) {
+            d = static_cast<std::int64_t>(reader.u64());
+        }
+        fifo_idx_ = static_cast<int>(reader.u32());
+        fifo_stall_master_cycles_ = static_cast<std::int64_t>(reader.u64());
 
         last_irq_level_ = pending_irq_level();
     }

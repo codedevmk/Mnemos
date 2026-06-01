@@ -145,10 +145,33 @@ namespace mnemos::chips::video {
         // is consumed. `dma_stall_master_cycles_` is the remaining stall debt;
         // `tick(cycles)` drains it. The Genesis manifest reads this via a
         // gated_chip around the 68K (see genesis_system.cpp).
+        //
+        // The same gate also carries write-FIFO back-pressure
+        // (`fifo_stall_master_cycles_`): during active display a full data-port
+        // FIFO stalls the 68K just like DMA, so the gate can be active with no
+        // DMA in flight. See fifo_data_write().
         [[nodiscard]] bool dma_stall_active() const noexcept {
-            return dma_stall_master_cycles_ > 0;
+            return dma_stall_master_cycles_ > 0 || fifo_stall_master_cycles_ > 0;
         }
         [[nodiscard]] bool dma_fill_pending() const noexcept { return dma_fill_pending_; }
+
+        // Master-clock position WITHIN the current scanline (0..master_clocks_per_line).
+        // The FIFO-stall model (data_write) indexes GPGX's per-line access-slot table
+        // by this. It is `line_accumulator_` clamped to the line length; accuracy is
+        // bounded by the 68K's instruction-step granularity (the VDP has not yet
+        // ticked the in-flight instruction's cycles when a write arrives), which is
+        // the documented sub-instruction residual.
+        [[nodiscard]] int current_line_master() const noexcept {
+            const std::int64_t pos = line_accumulator_;
+            if (pos < 0) {
+                return 0;
+            }
+            if (pos > master_clocks_per_line) {
+                return master_clocks_per_line;
+            }
+            return static_cast<int>(pos);
+        }
+
         [[nodiscard]] std::uint8_t cmd_code() const noexcept { return cmd_code_; }
         [[nodiscard]] std::uint32_t cmd_addr() const noexcept { return cmd_addr_; }
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
@@ -334,6 +357,18 @@ namespace mnemos::chips::video {
         // the 68K out. Decremented in tick(); when 0, dma_busy_ flips back.
         std::int64_t dma_busy_master_cycles_{};
 
+        // VDP write-FIFO back-pressure (GPGX vdp_68k_data_w). During active
+        // display the 68K can outrun the VDP's data-port drain rate; when the
+        // 4-entry FIFO fills, the 68K stalls until the oldest entry drains.
+        // fifo_drain_[i] = the within-line master-cycle at which slot i drains
+        // (may exceed master_clocks_per_line when it spills into the next line).
+        // fifo_idx_ = next slot to write. fifo_stall_master_cycles_ accumulates
+        // the stall debt, folded into the dma_stall gate so the host pauses the
+        // 68K exactly as for DMA. All saved/loaded + reset with the chip.
+        std::array<std::int64_t, 4> fifo_drain_{};
+        int fifo_idx_{};
+        std::int64_t fifo_stall_master_cycles_{};
+
         // Master-clock duration of a DMA of `length_units` units against the
         // current display state. `dma_type`:
         //   0 = 68K -> CRAM / VSRAM   (1 access slot per word)
@@ -345,6 +380,12 @@ namespace mnemos::chips::video {
         // dma_busy_master_cycles_ (the busy status bit is held, 68K runs free).
         [[nodiscard]] std::int64_t estimate_dma_transfer_cycles(std::uint32_t length_units,
                                                                 int dma_type) const noexcept;
+
+        // FIFO back-pressure for a single 68K data-port write (GPGX
+        // vdp_68k_data_w). Advances the FIFO drain schedule by one slot and, if
+        // the FIFO is full at the current within-line position, accrues the
+        // 68K stall onto fifo_stall_master_cycles_. No-op outside active display.
+        void fifo_data_write() noexcept;
 
         // Diagnostic counters (see accessors above).
         std::uint32_t vint_fired_count_{};
