@@ -35,6 +35,21 @@ set_tests_properties(
     PROPERTIES SKIP_RETURN_CODE 4
 )
 
+# SMS Z80 conformance via the ZEXALL-SMS exerciser ROM. Self-skips unless
+# MNEMOS_SMS_ZEXALL_ROM points at a zexall.sms image (GPLv2, never committed).
+mnemos_add_test(
+    mnemos_sms_zexall_test
+    SOURCES sms_zexall_test.cpp
+    LIBRARIES
+        mnemos::manifests::sms
+        mnemos::runtime
+        mnemos::foundation
+)
+set_tests_properties(
+    mnemos_sms_zexall_test
+    PROPERTIES SKIP_RETURN_CODE 4
+)
+
 # Genesis golden boot. Self-skips unless MNEMOS_GENESIS_ROM points at a cartridge,
 # so it is safe in CI (reports "Skipped") and locally boots + hashes the frame.
 mnemos_add_test(

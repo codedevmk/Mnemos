@@ -1164,9 +1164,14 @@ namespace mnemos::chips::cpu {
                     step_cycles_ += 4;
                     break;
                 default: { // CCF
-                    const auto hf = static_cast<std::uint8_t>((f() & flag_c) != 0U ? flag_h : 0U);
-                    set_f(static_cast<std::uint8_t>((f() & (flag_s | flag_z | flag_p)) |
-                                                    (f() ^ flag_c) | hf |
+                    // H = previous carry, C = NOT previous carry, N = 0,
+                    // S/Z/P preserved, X/Y from A. Compute the new carry from the
+                    // old one directly -- XOR-ing the whole F register would drag
+                    // the old N/H bits back in via the OR (a documented-flag bug).
+                    const auto old_c = static_cast<std::uint8_t>(f() & flag_c);
+                    const auto hf = static_cast<std::uint8_t>(old_c != 0U ? flag_h : 0U);
+                    const auto cf = static_cast<std::uint8_t>(old_c != 0U ? 0U : flag_c);
+                    set_f(static_cast<std::uint8_t>((f() & (flag_s | flag_z | flag_p)) | cf | hf |
                                                     (a() & (flag_x | flag_y))));
                     step_cycles_ += 4;
                     break;
