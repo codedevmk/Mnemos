@@ -92,10 +92,11 @@ namespace mnemos::manifests::genesis {
 
         std::uint8_t version_register{}; // $A10001 region/version readback
 
-        // I/O sub-controller registers ($A10000-$A1001F). $A10001=version (RO),
-        // $A10003/05/07 = data A/B/C (via read_pad_port), $A10009/0B/0D = ctrl
-        // A/B/C, rest = serial regs. All bytes are 0 after a hardware reset --
-        // the ROM's boot TST relies on it.
+        // I/O sub-controller registers ($A10000-$A1001F), indexed by the low
+        // byte offset (a & 0x1F). $A10001=version, $A10003/05/07 = data A/B/C,
+        // $A10009/0B/0D = ctrl A/B/C, rest = serial TxData/RxData/SCtrl. All
+        // bytes reset to 0; the non-zero power-on state lives in the data-port
+        // read path (an unconnected port reads its pins high), not here.
         std::array<std::uint8_t, 0x20> io_regs{};
 
         // 16-bit coalescing latches for the VDP ports (68K word access splits

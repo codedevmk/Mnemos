@@ -156,7 +156,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] bool dma_fill_pending() const noexcept { return dma_fill_pending_; }
 
         // Master-clock position WITHIN the current scanline (0..master_clocks_per_line).
-        // The FIFO-stall model (data_write) indexes GPGX's per-line access-slot table
+        // The FIFO-stall model (data_write) indexes the per-line access-slot table
         // by this. It is `line_accumulator_` clamped to the line length; accuracy is
         // bounded by the 68K's instruction-step granularity (the VDP has not yet
         // ticked the in-flight instruction's cycles when a write arrives), which is
@@ -357,7 +357,7 @@ namespace mnemos::chips::video {
         // the 68K out. Decremented in tick(); when 0, dma_busy_ flips back.
         std::int64_t dma_busy_master_cycles_{};
 
-        // VDP write-FIFO back-pressure (GPGX vdp_68k_data_w). During active
+        // VDP write-FIFO back-pressure. During active
         // display the 68K can outrun the VDP's data-port drain rate; when the
         // 4-entry FIFO fills, the 68K stalls until the oldest entry drains.
         // fifo_drain_[i] = the within-line master-cycle at which slot i drains
@@ -381,10 +381,10 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::int64_t estimate_dma_transfer_cycles(std::uint32_t length_units,
                                                                 int dma_type) const noexcept;
 
-        // FIFO back-pressure for a single 68K data-port write (GPGX
-        // vdp_68k_data_w). Advances the FIFO drain schedule by one slot and, if
-        // the FIFO is full at the current within-line position, accrues the
-        // 68K stall onto fifo_stall_master_cycles_. No-op outside active display.
+        // FIFO back-pressure for a single 68K data-port write. Advances the FIFO
+        // drain schedule by one slot and, if the FIFO is full at the current
+        // within-line position, accrues the 68K stall onto
+        // fifo_stall_master_cycles_. No-op outside active display.
         void fifo_data_write() noexcept;
 
         // Diagnostic counters (see accessors above).

@@ -54,8 +54,12 @@ namespace mnemos::manifests::genesis {
 
         // Non-chip architectural state (lifted from genesis_system).
         std::array<std::uint8_t, 0x2000> z80_ram{}; // 8 KiB, shared by both buses
-        std::array<std::uint8_t, 0x20> io_regs{};   // $A10000-$A1001F register file
-        std::uint8_t version_register{};            // $A10001 region/version (set by caller)
+        // $A10000-$A1001F, indexed by low byte offset. All reset to 0; the
+        // non-zero power-on state is in the data-port read path (unconnected
+        // ports read their pins high), not here. Kept identical to
+        // genesis_system::io_regs.
+        std::array<std::uint8_t, 0x20> io_regs{};
+        std::uint8_t version_register{}; // $A10001 region/version (set by caller)
 
         // 16-bit coalescing latches for the VDP ports (68K word access splits
         // into a high-byte-even + low-byte-odd pair).

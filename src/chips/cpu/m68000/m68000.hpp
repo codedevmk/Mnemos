@@ -80,6 +80,11 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] registers cpu_registers() const noexcept;
         void set_registers(const registers& values) noexcept;
         [[nodiscard]] std::uint64_t elapsed_cycles() const noexcept { return elapsed_; }
+        // PC of the instruction currently executing (captured at its fetch).
+        // Unlike cpu_registers().pc -- which has already advanced past the
+        // instruction -- this is the address of the instruction that issued the
+        // in-flight bus access, so a write-watch reports the true writer PC.
+        [[nodiscard]] std::uint32_t current_instruction_addr() const noexcept { return inst_addr_; }
         [[nodiscard]] bool at_instruction_boundary() const noexcept { return true; }
 
         // Interrupt request level (0-7, IPL pins). Stored now; the dispatch arrives

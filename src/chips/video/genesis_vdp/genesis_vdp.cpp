@@ -22,13 +22,12 @@ namespace mnemos::chips::video {
         }
 
         // VDP FIFO access-slot timing tables (within-line master-cycle offsets at
-        // which a FIFO slot drains), ported verbatim from Genesis-Plus-GX
-        // (core/vdp_ctrl.c fifo_timing_h32/h40). Each table is the line's access
-        // slots followed by the FIRST 12 of those slots repeated +one line, so a
-        // FIFO entry positioned late in a line can still find a drain slot in the
-        // following line. (It is not a full shifted copy -- the tail slots of the
-        // line are omitted in the +line half, matching GPGX.) Used by the data-
-        // port write back-pressure model (see data_write).
+        // which a FIFO slot drains), from the hardware's documented per-line slot
+        // schedule. Each table is the line's access slots followed by the FIRST 12
+        // of those slots repeated +one line, so a FIFO entry positioned late in a
+        // line can still find a drain slot in the following line. (It is not a full
+        // shifted copy -- the tail slots of the line are omitted in the +line
+        // half.) Used by the data-port write back-pressure model (see data_write).
         constexpr int kLineMaster = genesis_vdp::master_clocks_per_line;
         constexpr std::array<int, 28> fifo_timing_h32 = {
             230,
@@ -414,9 +413,9 @@ namespace mnemos::chips::video {
     }
 
     void genesis_vdp::fifo_data_write() noexcept {
-        // Back-pressure applies only during active display (display enabled and
-        // not in V-blank). Outside it the FIFO drains freely; GPGX gates on
-        // !(status & 8) && (reg[1] & 0x40).
+        // Back-pressure applies only during active display: the hardware gates it
+        // on the display being enabled (reg[1] bit 6) and not being in V-blank.
+        // Outside active display the FIFO drains freely.
         if (in_vblank_ || !display_enabled()) {
             return;
         }
@@ -425,7 +424,7 @@ namespace mnemos::chips::video {
                                         : std::span<const int>(fifo_timing_h32);
         const std::int64_t now = current_line_master();
 
-        // GPGX vdp_68k_data_w: position the new entry against the existing FIFO.
+        // Position the new entry against the existing FIFO.
         std::int64_t cycles = now;
         const std::int64_t newest = fifo_drain_[static_cast<std::size_t>((fifo_idx_ + 3) & 3)];
         if (now < newest) {
