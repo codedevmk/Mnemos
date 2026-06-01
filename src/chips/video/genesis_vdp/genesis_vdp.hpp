@@ -145,6 +145,11 @@ namespace mnemos::chips::video {
         // is consumed. `dma_stall_master_cycles_` is the remaining stall debt;
         // `tick(cycles)` drains it. The Genesis manifest reads this via a
         // gated_chip around the 68K (see genesis_system.cpp).
+        //
+        // The same gate also carries write-FIFO back-pressure
+        // (`fifo_stall_master_cycles_`): during active display a full data-port
+        // FIFO stalls the 68K just like DMA, so the gate can be active with no
+        // DMA in flight. See fifo_data_write().
         [[nodiscard]] bool dma_stall_active() const noexcept {
             return dma_stall_master_cycles_ > 0 || fifo_stall_master_cycles_ > 0;
         }

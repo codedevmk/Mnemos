@@ -287,6 +287,67 @@ static void tick_to_active_line(genesis_vdp& vdp) {
     vdp.tick(vbl_lines * genesis_vdp::master_clocks_per_line);
 }
 
+TEST_CASE("genesis_vdp write FIFO back-pressures the 68K during active display") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x40);  // display enable, no V-int
+    set_reg(vdp, 15, 0x02); // auto-increment 2
+
+    tick_to_active_line(vdp);
+    vdp.tick(genesis_vdp::master_clocks_per_line); // render scanline 0 -> in_vblank_ clears
+    CHECK_FALSE(vdp.dma_stall_active());
+
+    // A burst of data-port words faster than the FIFO drains fills the 4-entry
+    // FIFO and stalls the 68K (no tick() advances the within-line clock between
+    // these writes, so each consumes the next access slot until the FIFO is full).
+    set_command(vdp, 0x0000, 0x01); // VRAM write
+    for (int i = 0; i < 8; ++i) {
+        vdp.write16(0x00, 0x1234);
+    }
+    CHECK(vdp.dma_stall_active());
+
+    // The stall is finite: enough master cycles drain it (a full line is well
+    // beyond the FIFO's per-line slot schedule).
+    vdp.tick(genesis_vdp::master_clocks_per_line);
+    CHECK_FALSE(vdp.dma_stall_active());
+}
+
+TEST_CASE("genesis_vdp write FIFO does not stall during V-blank") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x40);  // display enable
+    set_reg(vdp, 15, 0x02); // auto-increment 2
+    // Reset leaves the VDP on the V-blank entry line; do not advance to a
+    // visible line. FIFO back-pressure must not engage outside active display.
+    set_command(vdp, 0x0000, 0x01);
+    for (int i = 0; i < 8; ++i) {
+        vdp.write16(0x00, 0x1234);
+    }
+    CHECK_FALSE(vdp.dma_stall_active());
+}
+
+TEST_CASE("genesis_vdp round-trips the write-FIFO stall state") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x40);
+    set_reg(vdp, 15, 0x02);
+    tick_to_active_line(vdp);
+    vdp.tick(genesis_vdp::master_clocks_per_line); // into active display
+    set_command(vdp, 0x0000, 0x01);
+    for (int i = 0; i < 8; ++i) {
+        vdp.write16(0x00, 0x1234);
+    }
+    REQUIRE(vdp.dma_stall_active()); // mid-burst stall debt to preserve
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    vdp.save_state(writer);
+
+    genesis_vdp restored;
+    mnemos::chips::state_reader reader(blob);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+    // The pending back-pressure survives the round-trip (deterministic resume).
+    CHECK(restored.dma_stall_active());
+}
+
 TEST_CASE("genesis_vdp renders a plane-A tile") {
     genesis_vdp vdp;
     set_reg(vdp, 1, 0x44);                 // M5 + display enable
