@@ -81,4 +81,14 @@ if(BUILD_TESTING)
         SOURCES tests/genesis_manifest_parity_test.cpp
         LIBRARIES mnemos::manifests::genesis mnemos::manifests mnemos::runtime
     )
+    # Diagnostic WRAM-write tracer (data-gated; skips without MNEMOS_GENESIS_ROM).
+    mnemos_add_test(
+        mnemos_manifests_genesis_wram_watch_test
+        SOURCES tests/genesis_wram_watch_test.cpp
+        LIBRARIES mnemos::manifests::genesis mnemos::manifests mnemos::runtime
+    )
+    set_tests_properties(
+        mnemos_manifests_genesis_wram_watch_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
 endif()
