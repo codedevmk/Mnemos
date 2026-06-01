@@ -89,6 +89,43 @@ jobs:
         if: runner.os == 'Linux'
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
 
+  arm64:
+    name: ${{ matrix.preset }}
+    needs: format
+    # Native aarch64 runner: no cross-compilation toolchain needed, and the core
+    # runs on the same ISA Android targets (arm64-v8a). See ADR 0010.
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - linux-gcc-arm64-debug
+          - linux-gcc-arm64-release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The ARM64 presets build the headless core + tests only
+      # (MNEMOS_BUILD_APPS=OFF), so the SDL3/windowing system packages are not
+      # required here -- just the build generator.
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      # Validates the deterministic core on aarch64. Golden-frame boot tests
+      # self-skip (SKIP_RETURN_CODE 4) when ROM env vars are absent, as in the
+      # other CI jobs; the foundation/chip/runtime unit tests run unconditionally.
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
   sanitizers:
     name: linux-clang-asan
     needs: format

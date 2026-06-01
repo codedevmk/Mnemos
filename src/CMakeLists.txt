@@ -15,4 +15,12 @@ add_subdirectory(runtime)
 add_subdirectory(instrumentation)
 add_subdirectory(frontend_sdk)
 add_subdirectory(debug)
-add_subdirectory(apps)
+
+# Frontend applications pull in SDL3 (and its windowing/audio system
+# dependencies). Headless builds (e.g. the ARM64 core-correctness CI job, or a
+# future NDK build that supplies its own frontend) skip them via
+# -DMNEMOS_BUILD_APPS=OFF; the deterministic core and tests do not depend on
+# anything under apps/.
+if(MNEMOS_BUILD_APPS)
+    add_subdirectory(apps)
+endif()

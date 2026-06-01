@@ -143,6 +143,36 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "MNEMOS_ENABLE_COVERAGE": "ON"
       }
+    },
+    {
+      "name": "linux-gcc-arm64-debug",
+      "inherits": "base",
+      "displayName": "Linux GCC ARM64 Debug (headless core + tests)",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++",
+        "MNEMOS_BUILD_APPS": "OFF"
+      }
+    },
+    {
+      "name": "linux-gcc-arm64-release",
+      "inherits": "base",
+      "displayName": "Linux GCC ARM64 Release (headless core + tests)",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++",
+        "MNEMOS_BUILD_APPS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -154,7 +184,9 @@
     { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" },
     { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
     { "name": "linux-clang-asan", "configurePreset": "linux-clang-asan" },
-    { "name": "linux-clang-coverage", "configurePreset": "linux-clang-coverage" }
+    { "name": "linux-clang-coverage", "configurePreset": "linux-clang-coverage" },
+    { "name": "linux-gcc-arm64-debug", "configurePreset": "linux-gcc-arm64-debug" },
+    { "name": "linux-gcc-arm64-release", "configurePreset": "linux-gcc-arm64-release" }
   ],
   "testPresets": [
     {
@@ -200,6 +232,16 @@
     {
       "name": "linux-clang-coverage",
       "configurePreset": "linux-clang-coverage",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-gcc-arm64-debug",
+      "configurePreset": "linux-gcc-arm64-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-gcc-arm64-release",
+      "configurePreset": "linux-gcc-arm64-release",
       "output": { "outputOnFailure": true }
     }
   ]
