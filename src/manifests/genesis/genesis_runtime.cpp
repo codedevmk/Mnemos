@@ -95,6 +95,53 @@ namespace mnemos::manifests::genesis {
         rt->state.main_bus = rt->graph.bus("main");
         rt->state.z80_bus = rt->graph.bus("z80");
 
+        // Cartridge battery-RAM (SRAM). If the header declares it, back it with a
+        // byte buffer and map it on the main bus above the ROM, gated by the
+        // $A130F1 enable latch (so disabling it falls through to the ROM region).
+        rt->sram.info = parse_cart_sram(rt->rom);
+        if (rt->sram.info) {
+            const cart_sram info = *rt->sram.info;
+            rt->sram.data.assign(info.byte_count(), 0xFFU);
+            auto* s = &rt->sram;
+
+            // Header byte address -> backing-buffer index, or ~0 when the address
+            // is outside the region or on the unpopulated byte lane.
+            const auto index = [info](std::uint32_t addr) -> std::size_t {
+                if (addr < info.start || addr > info.end) {
+                    return ~std::size_t{0};
+                }
+                const std::uint32_t off = addr - info.start;
+                switch (info.map) {
+                case cart_sram::mapping::word:
+                    return off;
+                case cart_sram::mapping::odd_byte:
+                    return (addr & 1U) != 0U ? off / 2U : ~std::size_t{0};
+                case cart_sram::mapping::even_byte:
+                    return (addr & 1U) == 0U ? off / 2U : ~std::size_t{0};
+                }
+                return ~std::size_t{0};
+            };
+
+            rt->state.main_bus->map_mmio(
+                info.start, info.end - info.start + 1U,
+                [s, index](std::uint32_t addr) -> std::uint8_t {
+                    const std::size_t i = index(addr);
+                    return i < s->data.size() ? s->data[i] : 0xFFU;
+                },
+                [s, index](std::uint32_t addr, std::uint8_t v) {
+                    const std::size_t i = index(addr);
+                    if (i < s->data.size()) {
+                        s->data[i] = v;
+                    }
+                },
+                /*priority=*/1, [s](std::uint32_t, bool) { return s->enabled; });
+
+            // $A130F1: the SRAM enable/bank-control latch (bit 0 = SRAM mapped).
+            rt->state.main_bus->map_mmio(
+                0xA130F1U, 1U, [s](std::uint32_t) -> std::uint8_t { return s->enabled ? 1U : 0U; },
+                [s](std::uint32_t, std::uint8_t v) { s->enabled = (v & 1U) != 0U; }, 1);
+        }
+
         // Reset the CPUs now the buses (with the cart ROM mapped) are wired,
         // mirroring assemble_genesis: the 68000 loads SSP/PC from the cart's
         // reset vectors, and the Z80 powers on (held idle by the z80_running gate

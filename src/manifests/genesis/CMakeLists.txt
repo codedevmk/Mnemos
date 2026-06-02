@@ -75,6 +75,11 @@ if(BUILD_TESTING)
         LIBRARIES mnemos::manifests::genesis
     )
     mnemos_add_test(
+        mnemos_manifests_genesis_sram_test
+        SOURCES tests/genesis_sram_test.cpp
+        LIBRARIES mnemos::manifests::genesis
+    )
+    mnemos_add_test(
         mnemos_manifests_genesis_region_test
         SOURCES tests/genesis_region_test.cpp
         LIBRARIES mnemos::manifests::genesis

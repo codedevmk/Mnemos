@@ -17,11 +17,13 @@
 
 #include "builder.hpp"           // mnemos::manifests::system_graph
 #include "genesis_callbacks.hpp" // state + chip/bus types (+ chips::ichip via chip.hpp)
+#include "genesis_cart.hpp"      // cart_sram (header SRAM descriptor)
 #include "genesis_system.hpp"    // genesis_config
 
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace mnemos::manifests::genesis {
@@ -32,6 +34,15 @@ namespace mnemos::manifests::genesis {
     struct scheduled_entry final {
         chips::ichip* chip{};
         std::uint32_t weight{};
+    };
+
+    // Cartridge battery-RAM (SRAM): the header-declared region, its backing bytes,
+    // and the $A130F1 enable latch. The bus's SRAM handlers borrow this, so the
+    // owning genesis_runtime declares it BEFORE `graph` (which destructs first).
+    struct cart_sram_runtime final {
+        std::optional<cart_sram> info;  // nullopt when the cart declares no SRAM
+        std::vector<std::uint8_t> data; // backing bytes (info->byte_count() of them)
+        bool enabled{true};             // $A130F1 bit 0; powers on accessible
     };
 
     // A fully wired Genesis built through the manifest path. Member ORDER is
@@ -46,7 +57,8 @@ namespace mnemos::manifests::genesis {
         // themselves via `state`.
         chips::ichip* cpu_sched{};
         chips::ichip* z80_sched{};
-        system_graph graph; // owns chips/buses/memory; destructs first
+        cart_sram_runtime sram; // battery SRAM (borrowed by graph's bus handlers)
+        system_graph graph;     // owns chips/buses/memory; destructs first
 
         [[nodiscard]] chips::cpu::m68000* cpu() const noexcept { return state.cpu; }
         [[nodiscard]] chips::cpu::z80* z80() const noexcept { return state.z80; }
