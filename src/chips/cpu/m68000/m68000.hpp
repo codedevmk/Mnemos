@@ -90,7 +90,7 @@ namespace mnemos::chips::cpu {
         // Interrupt request level (0-7, IPL pins). Stored now; the dispatch arrives
         // with the exception-framework phase.
         void set_irq_level(int level) noexcept;
-        [[nodiscard]] int irq_level() const noexcept { return irq_level_; }      // diag
+        [[nodiscard]] int irq_level() const noexcept { return irq_level_; }        // diag
         [[nodiscard]] bool irq_resample() const noexcept { return irq_resample_; } // diag
 
         // Interrupt-acknowledge hook: invoked with the level when the CPU accepts an

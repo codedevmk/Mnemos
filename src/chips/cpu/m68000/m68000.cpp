@@ -2332,6 +2332,7 @@ namespace mnemos::chips::cpu {
         writer.u32(ssp_);
         writer.u8(static_cast<std::uint8_t>(irq_level_));
         writer.u8(static_cast<std::uint8_t>(prev_irq_level_));
+        writer.boolean(irq_resample_);
         writer.boolean(stopped_);
         writer.boolean(halted_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
@@ -2351,6 +2352,7 @@ namespace mnemos::chips::cpu {
         ssp_ = reader.u32();
         irq_level_ = reader.u8();
         prev_irq_level_ = reader.u8();
+        irq_resample_ = reader.boolean();
         stopped_ = reader.boolean();
         halted_ = reader.boolean();
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());
