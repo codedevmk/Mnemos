@@ -143,6 +143,36 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "MNEMOS_ENABLE_COVERAGE": "ON"
       }
+    },
+    {
+      "name": "linux-gcc-headless-debug",
+      "inherits": "base",
+      "displayName": "Linux GCC Headless Debug (core + tests, no SDL apps)",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++",
+        "MNEMOS_BUILD_APPS": "OFF"
+      }
+    },
+    {
+      "name": "linux-gcc-headless-release",
+      "inherits": "base",
+      "displayName": "Linux GCC Headless Release (core + tests, no SDL apps)",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++",
+        "MNEMOS_BUILD_APPS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -154,7 +184,9 @@
     { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" },
     { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
     { "name": "linux-clang-asan", "configurePreset": "linux-clang-asan" },
-    { "name": "linux-clang-coverage", "configurePreset": "linux-clang-coverage" }
+    { "name": "linux-clang-coverage", "configurePreset": "linux-clang-coverage" },
+    { "name": "linux-gcc-headless-debug", "configurePreset": "linux-gcc-headless-debug" },
+    { "name": "linux-gcc-headless-release", "configurePreset": "linux-gcc-headless-release" }
   ],
   "testPresets": [
     {
@@ -200,6 +232,16 @@
     {
       "name": "linux-clang-coverage",
       "configurePreset": "linux-clang-coverage",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-gcc-headless-debug",
+      "configurePreset": "linux-gcc-headless-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-gcc-headless-release",
+      "configurePreset": "linux-gcc-headless-release",
       "output": { "outputOnFailure": true }
     }
   ]

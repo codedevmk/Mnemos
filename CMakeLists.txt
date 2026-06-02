@@ -19,6 +19,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(MNEMOS_ENABLE_COVERAGE "Build Mnemos targets with LLVM source coverage instrumentation." OFF)
+option(MNEMOS_BUILD_APPS "Build the SDL3-backed frontend applications (src/apps). Disable for headless core + test builds that avoid the SDL3/windowing dependency." ON)
 
 include(MnemosCompilerFlags)
 include(MnemosDeclareTier)

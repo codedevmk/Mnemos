@@ -14,3 +14,4 @@ Current records:
 7. `0007-manifest-toml-dependency.md`
 8. `0008-save-state-and-zstd.md`
 9. `0009-module-placement-and-code-organization.md`
+10. `0010-android-and-bluetooth-gamepad-support.md`
