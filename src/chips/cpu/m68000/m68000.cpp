@@ -19,6 +19,8 @@ namespace mnemos::chips::cpu {
         constexpr int vec_trapv = 7;
         constexpr int vec_privilege = 8;
         constexpr int vec_trace = 9;
+        constexpr int vec_line_a = 10; // 1010 (line-A) emulator exception -> $28
+        constexpr int vec_line_f = 11; // 1111 (line-F) emulator exception -> $2C
         constexpr int vec_trap0 = 32;
         constexpr int vec_autovector_base = 24; // autovector level n is 24 + n
 
@@ -2153,9 +2155,18 @@ namespace mnemos::chips::cpu {
         case 0xE: // ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR
             op_shift(op);
             break;
+        case 0xA:
+            // Line-1010 emulator exception. Unimplemented $Axxx opcodes vector
+            // through $28; the frame stacks the FAULTING opcode's PC (inst_addr_),
+            // not the next instruction, so a handler can read the trapping opcode
+            // back -- some titles use line-A/F as syscalls and depend on it.
+            raise_exception(vec_line_a, inst_addr_);
+            break;
+        case 0xF:
+            // Line-1111 emulator exception ($Fxxx -> $2C), same faulting-PC frame.
+            raise_exception(vec_line_f, inst_addr_);
+            break;
         default:
-            // Groups A/F (line-A/line-F traps) arrive in a later phase -- a 4-cycle
-            // no-op until then.
             break;
         }
     }
