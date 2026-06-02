@@ -61,4 +61,5 @@ scripts/
 
 # Working/scratch documents that are not part of the public history
 docs/genesis-cycle-parity-audit.md
+docs/genesis-chipset-gap-audit.md
 *.obj
