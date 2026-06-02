@@ -36,15 +36,6 @@ namespace mnemos::manifests::genesis {
         std::uint32_t weight{};
     };
 
-    // Cartridge battery-RAM (SRAM): the header-declared region, its backing bytes,
-    // and the $A130F1 enable latch. The bus's SRAM handlers borrow this, so the
-    // owning genesis_runtime declares it BEFORE `graph` (which destructs first).
-    struct cart_sram_runtime final {
-        std::optional<cart_sram> info;  // nullopt when the cart declares no SRAM
-        std::vector<std::uint8_t> data; // backing bytes (info->byte_count() of them)
-        bool enabled{true};             // $A130F1 bit 0; powers on accessible
-    };
-
     // A fully wired Genesis built through the manifest path. Member ORDER is
     // load-bearing: `graph` is declared last so it destructs FIRST -- the chips
     // stop ticking (and stop dereferencing `state` / borrowing `rom`) before the
