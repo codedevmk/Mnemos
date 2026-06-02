@@ -17,11 +17,13 @@
 
 #include "builder.hpp"           // mnemos::manifests::system_graph
 #include "genesis_callbacks.hpp" // state + chip/bus types (+ chips::ichip via chip.hpp)
+#include "genesis_cart.hpp"      // cart_sram (header SRAM descriptor)
 #include "genesis_system.hpp"    // genesis_config
 
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace mnemos::manifests::genesis {
@@ -46,7 +48,8 @@ namespace mnemos::manifests::genesis {
         // themselves via `state`.
         chips::ichip* cpu_sched{};
         chips::ichip* z80_sched{};
-        system_graph graph; // owns chips/buses/memory; destructs first
+        cart_sram_runtime sram; // battery SRAM (borrowed by graph's bus handlers)
+        system_graph graph;     // owns chips/buses/memory; destructs first
 
         [[nodiscard]] chips::cpu::m68000* cpu() const noexcept { return state.cpu; }
         [[nodiscard]] chips::cpu::z80* z80() const noexcept { return state.z80; }

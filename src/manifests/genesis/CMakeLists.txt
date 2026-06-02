@@ -20,6 +20,7 @@ configure_file(
 add_library(
     mnemos_manifests_genesis
     genesis_callbacks.cpp
+    genesis_cart.cpp
     genesis_runtime.cpp
     genesis_system.cpp
     genesis_region.cpp
@@ -66,6 +67,16 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_genesis_test
         SOURCES tests/genesis_system_test.cpp
+        LIBRARIES mnemos::manifests::genesis
+    )
+    mnemos_add_test(
+        mnemos_manifests_genesis_cart_test
+        SOURCES tests/genesis_cart_test.cpp
+        LIBRARIES mnemos::manifests::genesis
+    )
+    mnemos_add_test(
+        mnemos_manifests_genesis_sram_test
+        SOURCES tests/genesis_sram_test.cpp
         LIBRARIES mnemos::manifests::genesis
     )
     mnemos_add_test(

@@ -71,6 +71,10 @@ namespace mnemos::manifests::genesis {
         // $000000-$3FFFFF: cartridge ROM.
         s->bus.map_rom(0x000000U, std::span<const std::uint8_t>(s->rom), 0);
 
+        // Cartridge battery-RAM (SRAM), if the header declares it. Shared wiring
+        // with build_genesis_runtime so the manifest path stays byte-identical.
+        wire_cart_sram(s->bus, s->sram, s->rom);
+
         // $A00000-$A03FFF: Z80 RAM (8 KiB, mirrored).
         s->bus.map_mmio(
             0xA00000U, 0x4000U, [s](std::uint32_t a) { return s->z80_ram[a & 0x1FFFU]; },
