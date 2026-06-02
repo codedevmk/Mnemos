@@ -1733,6 +1733,7 @@ namespace mnemos::chips::cpu {
     void m68000::write_sr(std::uint16_t value) noexcept {
         set_supervisor((value & sr_s) != 0U);
         sr_ = static_cast<std::uint16_t>(value & 0xA71FU); // T, S, IPM, CCR are the live bits
+        irq_resample_ = true; // an SR write may lower the mask -> re-sample the IRQ
     }
 
     void m68000::push16(std::uint16_t value) noexcept {
@@ -2168,7 +2169,12 @@ namespace mnemos::chips::cpu {
 
         // Interrupt dispatch. Level 7 is edge-triggered (NMI); the others are
         // accepted when the request level exceeds the SR interrupt-priority mask.
-        if (irq_level_ > 0) {
+        // Sampling is EVENT-DRIVEN: a pending IRQ is only re-evaluated after an
+        // interrupt-significant event (level change or SR write), not at every
+        // boundary -- so a program that masks before the next event is not
+        // interrupted in between. irq_resample_ is consumed here.
+        if (irq_level_ > 0 && irq_resample_) {
+            irq_resample_ = false;
             const int ipm = (sr_ >> 8U) & 7;
             const bool fire = irq_level_ == 7 ? prev_irq_level_ < 7 : irq_level_ > ipm;
             if (fire) {
@@ -2257,6 +2263,7 @@ namespace mnemos::chips::cpu {
         ssp_ = 0U;
         irq_level_ = 0;
         prev_irq_level_ = 0;
+        irq_resample_ = true;
         delayed_irq_level_ = 0;
         delayed_irq_counter_ = 0;
         inst_addr_ = 0U;
@@ -2286,6 +2293,7 @@ namespace mnemos::chips::cpu {
     void m68000::set_irq_level(int level) noexcept {
         prev_irq_level_ = irq_level_;
         irq_level_ = level < 0 ? 0 : (level > 7 ? 7 : level);
+        irq_resample_ = true; // a level change is an interrupt-significant event
         if (irq_level_ > 0) {
             stopped_ = false;
         }

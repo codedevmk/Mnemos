@@ -90,6 +90,8 @@ namespace mnemos::chips::cpu {
         // Interrupt request level (0-7, IPL pins). Stored now; the dispatch arrives
         // with the exception-framework phase.
         void set_irq_level(int level) noexcept;
+        [[nodiscard]] int irq_level() const noexcept { return irq_level_; }      // diag
+        [[nodiscard]] bool irq_resample() const noexcept { return irq_resample_; } // diag
 
         // Interrupt-acknowledge hook: invoked with the level when the CPU accepts an
         // autovectored interrupt (the IACK bus cycle). A device whose interrupt is not
@@ -272,6 +274,14 @@ namespace mnemos::chips::cpu {
         std::uint32_t inst_addr_{}; // address of the instruction in flight (for exception frames)
         int irq_level_{};
         int prev_irq_level_{}; // for the level-7 (NMI) edge
+        // Event-driven interrupt sampling. A real 68000 (and the reference) only
+        // re-evaluates a pending IRQ at interrupt-significant events -- the level
+        // changing, or the SR mask being written -- NOT at every instruction
+        // boundary. Without this, a held-pending IRQ is grabbed the instant the
+        // mask happens to allow it mid-routine, even when the program is about to
+        // mask interrupts; that accepts the IRQ instructions too early vs hardware.
+        // Set at reset / set_irq_level / write_sr; consumed once per step.
+        bool irq_resample_{true};
         std::function<void(int)> irq_ack_{};
         std::function<void(std::uint32_t)> tas_callback_{};
         std::function<void(std::uint32_t)> trace_callback_{};
