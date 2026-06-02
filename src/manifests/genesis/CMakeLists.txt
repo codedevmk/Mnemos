@@ -21,6 +21,7 @@ add_library(
     mnemos_manifests_genesis
     genesis_callbacks.cpp
     genesis_cart.cpp
+    genesis_eeprom.cpp
     genesis_runtime.cpp
     genesis_system.cpp
     genesis_region.cpp
@@ -47,6 +48,7 @@ target_link_libraries(
         mnemos::chips::video::genesis_vdp
         mnemos::chips::audio::ym2612
         mnemos::chips::audio::sn76489
+        mnemos::chips::storage::eeprom_i2c
         mnemos::peripheral::input
 )
 
@@ -75,6 +77,11 @@ if(BUILD_TESTING)
         LIBRARIES mnemos::manifests::genesis
     )
     mnemos_add_test(
+        mnemos_manifests_genesis_eeprom_test
+        SOURCES tests/genesis_eeprom_test.cpp
+        LIBRARIES mnemos::manifests::genesis
+    )
+    mnemos_add_test(
         mnemos_manifests_genesis_sram_test
         SOURCES tests/genesis_sram_test.cpp
         LIBRARIES mnemos::manifests::genesis
@@ -100,6 +107,20 @@ if(BUILD_TESTING)
     )
     set_tests_properties(
         mnemos_manifests_genesis_wram_watch_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
+    # Diagnostic EEPROM-port access tracer (data-gated; skips without MNEMOS_GENESIS_ROM).
+    mnemos_add_test(
+        mnemos_manifests_genesis_eeprom_watch_test
+        SOURCES tests/genesis_eeprom_watch_test.cpp
+        LIBRARIES
+            mnemos::manifests::genesis
+            mnemos::manifests
+            mnemos::runtime
+            mnemos::chips::storage::eeprom_i2c
+    )
+    set_tests_properties(
+        mnemos_manifests_genesis_eeprom_watch_test
         PROPERTIES SKIP_RETURN_CODE 4
     )
 endif()

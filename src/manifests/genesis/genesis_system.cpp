@@ -74,6 +74,8 @@ namespace mnemos::manifests::genesis {
         // Cartridge battery-RAM (SRAM), if the header declares it. Shared wiring
         // with build_genesis_runtime so the manifest path stays byte-identical.
         wire_cart_sram(s->bus, s->sram, s->rom);
+        // Serial EEPROM carts, mapped over the port above any flat SRAM.
+        wire_cart_eeprom(s->bus, s->eeprom, s->rom);
 
         // $A00000-$A03FFF: Z80 RAM (8 KiB, mirrored).
         s->bus.map_mmio(

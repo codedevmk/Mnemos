@@ -98,6 +98,9 @@ namespace mnemos::manifests::genesis {
         // Cartridge battery-RAM (SRAM): same wiring assemble_genesis uses, so the
         // two paths stay byte-identical (see wire_cart_sram).
         wire_cart_sram(*rt->state.main_bus, rt->sram, rt->rom);
+        // Serial EEPROM carts (Acclaim et al.): a priority-2 region over the port,
+        // above any flat SRAM the header may also declare.
+        wire_cart_eeprom(*rt->state.main_bus, rt->eeprom, rt->rom);
 
         // Reset the CPUs now the buses (with the cart ROM mapped) are wired,
         // mirroring assemble_genesis: the 68000 loads SSP/PC from the cart's
