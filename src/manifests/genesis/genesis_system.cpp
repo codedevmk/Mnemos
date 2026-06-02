@@ -68,14 +68,18 @@ namespace mnemos::manifests::genesis {
         // $A10001 version: bit7 = export, bit6 = PAL, bit5 = no expansion unit.
         s->version_register = static_cast<std::uint8_t>(0x80U | (pal ? 0x40U : 0x00U) | 0x20U);
 
-        // $000000-$3FFFFF: cartridge ROM.
-        s->bus.map_rom(0x000000U, std::span<const std::uint8_t>(s->rom), 0);
+        // $000000-$3FFFFF: cartridge ROM, clamped to the 4 MiB window (a >4 MiB
+        // image's upper banks are paged in by wire_cart_banking, not flat-mapped).
+        const std::size_t rom_window = s->rom.size() < 0x400000U ? s->rom.size() : 0x400000U;
+        s->bus.map_rom(0x000000U, std::span<const std::uint8_t>(s->rom).first(rom_window), 0);
 
         // Cartridge battery-RAM (SRAM), if the header declares it. Shared wiring
         // with build_genesis_runtime so the manifest path stays byte-identical.
         wire_cart_sram(s->bus, s->sram, s->rom);
         // Serial EEPROM carts, mapped over the port above any flat SRAM.
         wire_cart_eeprom(s->bus, s->eeprom, s->rom);
+        // >4 MiB ROMs: page the upper banks into the cartridge window ($A130F3-FF).
+        wire_cart_banking(s->bus, s->banking, s->rom);
 
         // $A00000-$A03FFF: Z80 RAM (8 KiB, mirrored).
         s->bus.map_mmio(

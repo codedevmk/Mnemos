@@ -16,6 +16,7 @@
 // runtime, so it cannot name runtime::scheduled_chip -- the adapter/test convert).
 
 #include "builder.hpp"           // mnemos::manifests::system_graph
+#include "genesis_banking.hpp"   // cart_banking_runtime (>4 MiB ROM bank-switch)
 #include "genesis_callbacks.hpp" // state + chip/bus types (+ chips::ichip via chip.hpp)
 #include "genesis_cart.hpp"      // cart_sram (header SRAM descriptor)
 #include "genesis_eeprom.hpp"    // cart_eeprom_runtime (serial EEPROM)
@@ -49,9 +50,10 @@ namespace mnemos::manifests::genesis {
         // themselves via `state`.
         chips::ichip* cpu_sched{};
         chips::ichip* z80_sched{};
-        cart_sram_runtime sram;     // battery SRAM (borrowed by graph's bus handlers)
-        cart_eeprom_runtime eeprom; // serial EEPROM (borrowed by graph's bus handlers)
-        system_graph graph;         // owns chips/buses/memory; destructs first
+        cart_sram_runtime sram;       // battery SRAM (borrowed by graph's bus handlers)
+        cart_eeprom_runtime eeprom;   // serial EEPROM (borrowed by graph's bus handlers)
+        cart_banking_runtime banking; // >4 MiB ROM bank-switch (borrowed by graph's bus handlers)
+        system_graph graph;           // owns chips/buses/memory; destructs first
 
         [[nodiscard]] chips::cpu::m68000* cpu() const noexcept { return state.cpu; }
         [[nodiscard]] chips::cpu::z80* z80() const noexcept { return state.z80; }
