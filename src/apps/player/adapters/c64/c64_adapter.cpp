@@ -476,6 +476,10 @@ namespace mnemos::apps::player::adapters::c64 {
         // that can't be found is substituted with a correctly-sized zero buffer
         // so the player still launches without a ROM set (boots a blank machine,
         // exactly as the manifest parity test's synthetic path does).
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv -- opt-in ROM dir
+#endif
         system_roms load_system_roms() {
             constexpr std::size_t kBasicSize = 0x2000U;
             constexpr std::size_t kKernalSize = 0x2000U;
@@ -499,6 +503,9 @@ namespace mnemos::apps::player::adapters::c64 {
             }
             return roms;
         }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
         const auto register_c64 = [] {
             mnemos::frontend_sdk::adapter_registry::instance().register_family(
