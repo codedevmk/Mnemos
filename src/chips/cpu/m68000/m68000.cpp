@@ -13,7 +13,7 @@ namespace mnemos::chips::cpu {
 
     namespace {
         // Exception vector numbers (the address is vector * 4).
-        [[maybe_unused]] constexpr int vec_illegal = 4; // illegal opcodes -> later phase
+        constexpr int vec_illegal = 4; // illegal instruction ($4AFC)
         constexpr int vec_divzero = 5;
         constexpr int vec_chk = 6;
         constexpr int vec_trapv = 7;
@@ -1272,6 +1272,14 @@ namespace mnemos::chips::cpu {
     void m68000::op_group4(std::uint16_t op) noexcept {
         if (op == 0x4E71U) {
             return; // NOP
+        }
+        if (op == 0x4AFCU) {
+            // The dedicated ILLEGAL opcode. Take the illegal-instruction exception
+            // (vector 4); the frame stacks the faulting PC. Caught here because the
+            // TAS decode below ($4AC0 mask) would otherwise mis-handle it as a TAS
+            // with an immediate effective address.
+            raise_exception(vec_illegal, inst_addr_);
+            return;
         }
         if ((op & 0xFFB8U) == 0x4880U) { // EXT
             const auto dn = static_cast<std::size_t>(op & 7);
