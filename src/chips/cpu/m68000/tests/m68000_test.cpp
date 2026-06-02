@@ -8,6 +8,8 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <initializer_list>
 #include <span>
 #include <string>
@@ -968,4 +970,95 @@ TEST_CASE("JSR pushes return address as big-endian long (BoV $0690 scenario)") {
     // What the 68K would read back as a word at $FFC must be $0196.
     const std::uint32_t word = (static_cast<std::uint32_t>(m.ram[0x0FFCU]) << 8U) | m.ram[0x0FFDU];
     CHECK(word == 0x0196U);
+}
+
+// ---------------------------------------------------------------------------
+// Opcode-coverage sweep (diagnostic). Runs all 65536 opcodes from two varied
+// register states and flags any that *silently no-op* -- neither executed (no
+// register/flag/memory change), nor branched, nor trapped. A silent no-op is
+// either a valid 68000 instruction the core never decodes, or an illegal/
+// unimplemented encoding that ought to take the illegal-instruction trap.
+// Env-gated + hidden ([.]) so it never runs in normal CI.
+TEST_CASE("m68000 opcode coverage sweep (diagnostic)", "[m68000][sweep][.]") {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const bool run = std::getenv("MNEMOS_M68000_OPCODE_SWEEP") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (!run) {
+        SKIP("set MNEMOS_M68000_OPCODE_SWEEP to run the 65536-opcode coverage sweep");
+    }
+
+    // 0 = silent no-op, 1 = executed (state change / branch), 2 = trapped.
+    const auto classify = [](std::uint16_t op, int variant) -> int {
+        machine m;
+        for (std::uint32_t v = 2; v < 48; ++v) {
+            m.w32(v * 4U, 0x00F00000U + v * 0x100U); // distinct sentinel per vector
+        }
+        for (std::uint32_t a = 0x3000U; a < 0x3200U; a += 4U) {
+            m.w32(a, 0xA5A5A5A5U); // data the effective addresses can touch
+        }
+        m68000::registers s{};
+        s.sr = m68000::sr_s; // supervisor: privileged ops execute rather than trap
+        for (int i = 0; i < 7; ++i) {
+            s.d[i] = variant != 0 ? 0x11111111U * static_cast<std::uint32_t>(i + 1) : 0U;
+            s.a[i] = 0x3000U + static_cast<std::uint32_t>(i) * 8U;
+        }
+        s.a[7] = 0x00002000U;
+        s.pc = 0x00001000U;
+        m.cpu.set_registers(s);
+        m.load(0x1000U, {op, 0x3000U, 0x3010U}); // opcode + two plausible operand words
+        const auto ram_before = m.ram;
+        m.cpu.step_instruction();
+        const auto r = m.cpu.cpu_registers();
+        if (r.pc >= 0x00F00000U && r.pc < 0x00F10000U) {
+            return 2; // trapped: PC vectored to a sentinel handler
+        }
+        if (r.pc < 0x00001002U || r.pc > 0x0000100AU) {
+            return 1; // branch/jump taken (PC left the fall-through range)
+        }
+        for (int i = 0; i < 8; ++i) {
+            if (r.d[i] != s.d[i] || r.a[i] != s.a[i]) {
+                return 1;
+            }
+        }
+        if ((r.sr & 0xFF1FU) != (s.sr & 0xFF1FU)) {
+            return 1;
+        }
+        return m.ram != ram_before ? 1 : 0;
+    };
+
+    std::vector<std::uint16_t> noops;
+    for (std::uint32_t op = 0; op <= 0xFFFFU; ++op) {
+        const auto o = static_cast<std::uint16_t>(op);
+        if (o == 0x4E71U) {
+            continue; // NOP is legitimately a no-op
+        }
+        if (classify(o, 0) == 0 && classify(o, 1) == 0) {
+            noops.push_back(o);
+        }
+    }
+
+    std::array<std::size_t, 16> by_group{};
+    for (const auto o : noops) {
+        ++by_group[(o >> 12U) & 0xFU];
+    }
+    std::fprintf(stderr, "[sweep] silent no-op opcodes: %zu / 65535\n", noops.size());
+    for (int g = 0; g < 16; ++g) {
+        if (by_group[static_cast<std::size_t>(g)] != 0U) {
+            std::fprintf(stderr, "  group $%X---: %zu\n", g, by_group[static_cast<std::size_t>(g)]);
+        }
+    }
+    int last_hi = -1;
+    for (const auto o : noops) {
+        const int hi = static_cast<int>((o >> 8U) & 0xFFU);
+        if (hi != last_hi) {
+            std::fprintf(stderr, "  e.g. $%04X\n", static_cast<unsigned>(o));
+            last_hi = hi;
+        }
+    }
+    SUCCEED();
 }
