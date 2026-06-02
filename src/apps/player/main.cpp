@@ -5,7 +5,8 @@
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
-#include "c64_adapter.hpp" // force_link (the C64 has no cart-header region byte)
+#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
+#include "c64_adapter.hpp"  // force_link (the C64 has no cart-header region byte)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -31,6 +32,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -61,6 +63,52 @@ namespace {
 
     struct dst_rect {
         int x{}, y{}, w{}, h{};
+    };
+
+    // Owns a cartridge's .srm battery save for the player's lifetime: loads the
+    // saved bytes into the adapter's live SRAM on construction, and writes them
+    // back on destruction -- but only when they actually changed since boot, so
+    // carts without battery RAM (empty span) and sessions that never wrote a save
+    // leave the filesystem untouched. Held at main scope so every exit path
+    // (normal quit, --screenshot return, error returns) persists through it.
+    class battery_save_guard {
+      public:
+        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path)
+            : sys_(sys), path_(std::move(path)) {
+            const auto sram = ram();
+            if (sram.empty()) {
+                return; // no battery RAM on this cart -- nothing to persist
+            }
+            if (mnemos::apps::player::adapters::load_battery_ram(path_, sram)) {
+                std::fprintf(stderr, "[mnemos_player] loaded battery save: %s\n", path_.c_str());
+                std::fflush(stderr);
+            }
+            loaded_.assign(sram.begin(), sram.end()); // snapshot to detect changes
+        }
+        battery_save_guard(const battery_save_guard&) = delete;
+        battery_save_guard& operator=(const battery_save_guard&) = delete;
+        ~battery_save_guard() {
+            const auto sram = ram();
+            if (sram.empty()) {
+                return;
+            }
+            const bool changed = sram.size() != loaded_.size() ||
+                                 !std::equal(sram.begin(), sram.end(), loaded_.begin());
+            if (changed && mnemos::apps::player::adapters::save_battery_ram(path_, sram)) {
+                std::fprintf(stderr, "[mnemos_player] wrote battery save: %s (%zu bytes)\n",
+                             path_.c_str(), sram.size());
+                std::fflush(stderr);
+            }
+        }
+
+      private:
+        [[nodiscard]] std::span<std::uint8_t> ram() const noexcept {
+            return (sys_ != nullptr && !path_.empty()) ? sys_->battery_ram()
+                                                       : std::span<std::uint8_t>{};
+        }
+        mnemos::frontend_sdk::player_system* sys_;
+        std::string path_;
+        std::vector<std::uint8_t> loaded_;
     };
 
     dst_rect integer_letterbox(int window_w, int window_h, int src_w, int src_h) {
@@ -96,6 +144,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
+    using mnemos::apps::player::adapters::srm_path_for;
     using mnemos::apps::player::adapters::system_family;
 
     const auto rom_paths = parse_rom_args(argc, argv);
@@ -109,6 +158,11 @@ int main(int argc, char* argv[]) {
     const char* region_source = region_source_label(region_arg);
 
     std::unique_ptr<mnemos::frontend_sdk::player_system> system;
+    // Persists the cartridge battery RAM across runs; emplaced once the system is
+    // built so it loads any existing .srm before the first frame and writes it
+    // back on every exit path. Declared after `system` so it destructs first,
+    // while the adapter (and its SRAM span) is still alive.
+    std::optional<battery_save_guard> srm_guard;
     if (!rom_paths.empty()) {
         auto loaded = load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
@@ -184,6 +238,10 @@ int main(int argc, char* argv[]) {
                          static_cast<int>(family_id.size()), family_id.data());
             return 1;
         }
+        // Load the battery save (if any) before the first frame; the guard writes
+        // it back on exit. Keyed off the on-disk ROM path so a .srm sits beside
+        // the cart even when the image came out of a .zip.
+        srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
     }
 
     // Headless path: step --frames, dump PPM + per-chip sidecars, exit. No

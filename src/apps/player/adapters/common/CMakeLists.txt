@@ -1,5 +1,6 @@
 add_library(
     mnemos_apps_player_adapters_common
+    battery_save.cpp
     cli_args.cpp
     region_args.cpp
     rom_loader.cpp
@@ -42,6 +43,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_apps_player_adapters_common_test
         SOURCES
+            tests/battery_save_test.cpp
             tests/cli_args_test.cpp
             tests/region_args_test.cpp
             tests/rom_loader_test.cpp

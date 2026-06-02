@@ -5,10 +5,15 @@
 
 #include "genesis_adapter.hpp"
 
+#include "battery_save.hpp"
+#include "bus.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -35,6 +40,24 @@ namespace {
         w16(0x08, 0x46FC);
         w16(0x0A, 0x2000); // MOVE.W #$2000,SR
         w16(0x0C, 0x60FE); // BRA.S *
+        return rom;
+    }
+
+    // tiny_rom() extended with an "RA" external-RAM header declaring odd-byte SRAM
+    // at $200001-$203FFF -- above the (tiny) ROM, so it powers on mapped.
+    std::vector<std::uint8_t> sram_rom() {
+        auto rom = tiny_rom();
+        rom.resize(0x200U, 0x00U); // room for the $1B0 header block
+        rom[0x1B0U] = 'R';
+        rom[0x1B1U] = 'A';
+        rom[0x1B4U] = 0x00U;
+        rom[0x1B5U] = 0x20U;
+        rom[0x1B6U] = 0x00U;
+        rom[0x1B7U] = 0x01U; // start $200001
+        rom[0x1B8U] = 0x00U;
+        rom[0x1B9U] = 0x20U;
+        rom[0x1BAU] = 0x3FU;
+        rom[0x1BBU] = 0xFFU; // end $203FFF
         return rom;
     }
 
@@ -145,6 +168,40 @@ TEST_CASE("genesis_adapter routes controller_state into the attached pad") {
     dev->write_data(0x40U); // TH = 1 -> phase 1
     // Bits: 0=U(1), 1=D(1), 2=L(1), 3=R(0 pressed), 4=B(1), 5=C(1), 6=TH=1.
     CHECK(dev->read_data() == 0x77U);
+}
+
+TEST_CASE("genesis_adapter exposes no battery_ram for a cart without a save chip") {
+    genesis_adapter adapter(tiny_rom());
+    CHECK(adapter.battery_ram().empty());
+}
+
+TEST_CASE("genesis_adapter battery_ram persists through a .srm round-trip") {
+    using mnemos::apps::player::adapters::load_battery_ram;
+    using mnemos::apps::player::adapters::save_battery_ram;
+
+    const auto path =
+        (std::filesystem::temp_directory_path() / "mnemos_genesis_adapter_test.srm").string();
+    std::filesystem::remove(path);
+
+    // Session 1: write a pattern into SRAM through the live bus, then save it.
+    {
+        genesis_adapter adapter(sram_rom());
+        REQUIRE_FALSE(adapter.battery_ram().empty()); // cart declares SRAM
+        auto* bus = adapter.system().state.main_bus;
+        bus->write8(0x200001U, 0xCAU);
+        bus->write8(0x200003U, 0xFEU);
+        REQUIRE(save_battery_ram(path, adapter.battery_ram()));
+    }
+    // Session 2: a fresh boot powers SRAM to 0xFF; loading the .srm restores it.
+    {
+        genesis_adapter adapter(sram_rom());
+        auto* bus = adapter.system().state.main_bus;
+        CHECK(bus->read8(0x200001U) == 0xFFU); // nothing loaded yet
+        REQUIRE(load_battery_ram(path, adapter.battery_ram()));
+        CHECK(bus->read8(0x200001U) == 0xCAU); // restored from disk
+        CHECK(bus->read8(0x200003U) == 0xFEU);
+    }
+    std::filesystem::remove(path);
 }
 
 // Cart-byte -> video_region resolution is now exercised end-to-end in the

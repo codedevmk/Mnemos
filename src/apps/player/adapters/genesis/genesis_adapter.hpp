@@ -67,6 +67,11 @@ namespace mnemos::apps::player::adapters::genesis {
         memory_views() const noexcept override {
             return system_mem_view_;
         }
+        // Cartridge battery SRAM backing store (empty span when the cart declares
+        // none); the player persists it to a .srm file across sessions.
+        [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
+            return sys_->sram.data;
+        }
 
         // For tests / instrumentation.
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }

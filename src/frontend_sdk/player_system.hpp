@@ -120,6 +120,13 @@ namespace mnemos::frontend_sdk {
             return {};
         }
 
+        // Cartridge battery-backed RAM (SRAM), exposed so the frontend can persist
+        // it to a .srm file across sessions: the frontend loads saved bytes into
+        // this span on boot and writes it back on exit. The span is the adapter's
+        // live backing store. Default empty -- only adapters with a battery-save
+        // chip return non-empty (a cartridge console with no save RAM returns {}).
+        [[nodiscard]] virtual std::span<std::uint8_t> battery_ram() noexcept { return {}; }
+
         // Convenience: lookup a chip by an adapter-stable id ("cpu", "vdp",
         // "z80", "sub_cpu", "vdp1", ...). Returns nullptr if the adapter
         // doesn't advertise that id. Default scans `chips()` for a match on
