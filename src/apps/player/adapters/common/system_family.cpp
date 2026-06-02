@@ -13,11 +13,23 @@ namespace mnemos::apps::player::adapters {
         if (ext == "sms" || ext == "sg") {
             return system_family::sms;
         }
+        if (ext == "prg" || ext == "d64" || ext == "d71" || ext == "d81" || ext == "t64" ||
+            ext == "tap" || ext == "crt" || ext == "g64" || ext == "p00") {
+            return system_family::c64;
+        }
         return system_family::genesis;
     }
 
     const char* family_label(system_family family) noexcept {
-        return family == system_family::sms ? "SMS" : "Genesis";
+        switch (family) {
+        case system_family::sms:
+            return "SMS";
+        case system_family::c64:
+            return "C64";
+        case system_family::genesis:
+            break;
+        }
+        return "Genesis";
     }
 
 } // namespace mnemos::apps::player::adapters

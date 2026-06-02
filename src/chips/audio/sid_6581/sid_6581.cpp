@@ -3,8 +3,10 @@
 #include "chip_registry.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 
 namespace mnemos::chips::audio {
@@ -410,11 +412,29 @@ namespace mnemos::chips::audio {
             for (std::uint8_t i = 0; i < voice_count; ++i) {
                 waveform_step(i);
             }
+            // Capture one mixed output sample per φ2 cycle when the host has
+            // opted in. sample() advances the filter integrators, so this is
+            // the chip's single sampling consumer -- nothing else calls it on
+            // the run path. Skipped entirely when capture is off.
+            if (audio_capture_) {
+                sample_queue_.push_back(sample());
+            }
         }
         env3_ = voices_[2].envelope;
         regs_[reg_env3] = env3_;
         osc3_ = static_cast<std::uint8_t>((waveform_output(2) >> 4U) & 0xFFU);
         regs_[reg_osc3] = osc3_;
+    }
+
+    std::size_t sid_6581::drain_samples(std::int16_t* out, std::size_t max_samples) noexcept {
+        const std::size_t n = std::min(sample_queue_.size(), max_samples);
+        if (n == 0U) {
+            return 0U;
+        }
+        std::memcpy(out, sample_queue_.data(), n * sizeof(std::int16_t));
+        sample_queue_.erase(sample_queue_.begin(),
+                            sample_queue_.begin() + static_cast<std::ptrdiff_t>(n));
+        return n;
     }
 
     std::uint8_t sid_6581::envelope_value(std::uint8_t voice) const noexcept {

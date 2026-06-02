@@ -1,10 +1,11 @@
 // SDL3 windowed player. Boots whichever player_system adapter the ROM's file
-// extension selects (Genesis / SMS), presents its framebuffer at integer scale,
-// streams audio, and routes keyboard + gamepad input. ESC quits.
+// extension selects (Genesis / SMS / C64), presents its framebuffer at integer
+// scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
+#include "c64_adapter.hpp" // force_link (the C64 has no cart-header region byte)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -89,14 +90,16 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::detect_family;
     using mnemos::apps::player::adapters::family_label;
     using mnemos::apps::player::adapters::load_rom;
+    using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_region_arg;
-    using mnemos::apps::player::adapters::parse_rom_arg;
+    using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::system_family;
 
-    const auto rom_path = parse_rom_arg(argc, argv);
+    const auto rom_paths = parse_rom_args(argc, argv);
+    const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
 
@@ -106,17 +109,42 @@ int main(int argc, char* argv[]) {
     const char* region_source = region_source_label(region_arg);
 
     std::unique_ptr<mnemos::frontend_sdk::player_system> system;
-    if (rom_path) {
-        auto loaded = load_rom(*rom_path);
+    if (!rom_paths.empty()) {
+        auto loaded = load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
-            std::fprintf(stderr, "could not read ROM: %s\n", rom_path->c_str());
+            std::fprintf(stderr, "could not read ROM: %s\n", rom_paths.front().c_str());
             return 1;
         }
+        // Any further media paths are additional images -- the rest of a
+        // multi-disk set the C64 adapter can swap between at runtime.
+        std::vector<std::vector<std::uint8_t>> additional_media;
+        for (std::size_t i = 1; i < rom_paths.size(); ++i) {
+            auto extra = load_rom(rom_paths[i]);
+            if (!extra || extra->bytes.empty()) {
+                std::fprintf(stderr, "could not read media: %s\n", rom_paths[i].c_str());
+                return 1;
+            }
+            additional_media.push_back(std::move(extra->bytes));
+        }
         const auto family = detect_family(loaded->name);
-        const auto market = family == system_family::sms
-                                ? mnemos::manifests::sms::parse_market(loaded->bytes)
-                                : mnemos::manifests::genesis::parse_market(loaded->bytes);
-        const auto video = resolve_video(mnemos::default_video_for(market));
+        // Default video standard before any --region override: the cartridge
+        // consoles carry a region byte in their header; the C64 does not, so it
+        // defaults to PAL (its core market, and the manifest/c64_config default).
+        mnemos::video_region cart_default = mnemos::video_region::ntsc;
+        switch (family) {
+        case system_family::sms:
+            cart_default =
+                mnemos::default_video_for(mnemos::manifests::sms::parse_market(loaded->bytes));
+            break;
+        case system_family::genesis:
+            cart_default =
+                mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
+            break;
+        case system_family::c64:
+            cart_default = mnemos::video_region::pal;
+            break;
+        }
+        const auto video = resolve_video(cart_default);
         std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
                      video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
         std::fflush(stderr);
@@ -128,12 +156,29 @@ int main(int argc, char* argv[]) {
         // means adding one more force_link() call here.
         mnemos::apps::player::adapters::genesis::force_link();
         mnemos::apps::player::adapters::sms::force_link();
+        mnemos::apps::player::adapters::c64::force_link();
 
-        const std::string_view family_id = family == system_family::sms ? "sms" : "genesis";
+        std::string_view family_id = "genesis";
+        switch (family) {
+        case system_family::sms:
+            family_id = "sms";
+            break;
+        case system_family::c64:
+            family_id = "c64";
+            break;
+        case system_family::genesis:
+            break;
+        }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
             family_id, {.rom = std::move(loaded->bytes),
                         .video_region = video,
-                        .display_name = clean_rom_name(loaded->name)});
+                        .display_name = clean_rom_name(loaded->name),
+                        .additional_media = std::move(additional_media),
+                        .autostart = autostart});
+        if (system && system->media_count() > 1U) {
+            std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
+                         system->media_count());
+        }
         if (!system) {
             std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%.*s'\n",
                          static_cast<int>(family_id.size()), family_id.data());
@@ -381,6 +426,18 @@ int main(int argc, char* argv[]) {
                     paused = !paused;
                     std::fprintf(stderr, "[mnemos_player] %s\n", paused ? "paused" : "resumed");
                     std::fflush(stderr);
+                } else if (event.key.key == SDLK_F6) {
+                    // Swap to the next disk in a multi-disk set, the way you'd
+                    // flip the floppy when a game asks for the next disk.
+                    if (system && system->media_count() > 1U) {
+                        const std::size_t next =
+                            (system->current_media_index() + 1U) % system->media_count();
+                        if (system->insert_media(next)) {
+                            std::fprintf(stderr, "[mnemos_player] inserted disk %zu/%zu\n",
+                                         next + 1U, system->media_count());
+                            std::fflush(stderr);
+                        }
+                    }
                 }
                 break;
             case SDL_EVENT_GAMEPAD_ADDED:

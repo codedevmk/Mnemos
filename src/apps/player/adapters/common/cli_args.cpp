@@ -15,6 +15,27 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::vector<std::string> parse_rom_args(int argc, char* argv[]) {
+        std::vector<std::string> paths;
+        for (int i = 1; i < argc - 1; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--rom" || a == "-r" || a == "--disk") {
+                paths.emplace_back(argv[i + 1]);
+                ++i; // skip the consumed value
+            }
+        }
+        return paths;
+    }
+
+    bool parse_no_autostart(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            if (std::string_view{argv[i]} == "--no-autostart") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]) {
         std::optional<std::string> path;
         std::optional<std::uint64_t> frames;
