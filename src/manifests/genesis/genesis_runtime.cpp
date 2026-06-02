@@ -101,6 +101,8 @@ namespace mnemos::manifests::genesis {
         // Serial EEPROM carts (Acclaim et al.): a priority-2 region over the port,
         // above any flat SRAM the header may also declare.
         wire_cart_eeprom(*rt->state.main_bus, rt->eeprom, rt->rom);
+        // >4 MiB ROMs: page the upper banks into the cartridge window ($A130F3-FF).
+        wire_cart_banking(*rt->state.main_bus, rt->banking, rt->rom);
 
         // Reset the CPUs now the buses (with the cart ROM mapped) are wired,
         // mirroring assemble_genesis: the 68000 loads SSP/PC from the cart's

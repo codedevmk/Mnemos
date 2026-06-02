@@ -1,15 +1,16 @@
 #pragma once
 
-#include "bus.hpp"            // topology bus
-#include "genesis_cart.hpp"   // cart_sram_runtime + wire_cart_sram
-#include "genesis_eeprom.hpp" // cart_eeprom_runtime + wire_cart_eeprom
-#include "genesis_vdp.hpp"    // video
-#include "m68000.hpp"         // main cpu
-#include "peripheral.hpp"     // peripheral::device (controller ports)
-#include "region.hpp"         // mnemos::video_region (shared)
-#include "sn76489.hpp"        // audio (PSG)
-#include "ym2612.hpp"         // audio (FM)
-#include "z80.hpp"            // sound cpu
+#include "bus.hpp"             // topology bus
+#include "genesis_banking.hpp" // cart_banking_runtime + wire_cart_banking
+#include "genesis_cart.hpp"    // cart_sram_runtime + wire_cart_sram
+#include "genesis_eeprom.hpp"  // cart_eeprom_runtime + wire_cart_eeprom
+#include "genesis_vdp.hpp"     // video
+#include "m68000.hpp"          // main cpu
+#include "peripheral.hpp"      // peripheral::device (controller ports)
+#include "region.hpp"          // mnemos::video_region (shared)
+#include "sn76489.hpp"         // audio (PSG)
+#include "ym2612.hpp"          // audio (FM)
+#include "z80.hpp"             // sound cpu
 
 #include <array>
 #include <cstddef>
@@ -93,6 +94,7 @@ namespace mnemos::manifests::genesis {
         std::vector<std::uint8_t> rom;                // cartridge image (borrowed by the buses)
         cart_sram_runtime sram;                       // battery SRAM (borrowed by `bus`)
         cart_eeprom_runtime eeprom;                   // serial EEPROM (borrowed by `bus`)
+        cart_banking_runtime banking;                 // >4 MiB ROM bank-switch (borrowed by `bus`)
 
         std::uint8_t version_register{}; // $A10001 region/version readback
 

@@ -19,6 +19,7 @@ configure_file(
 
 add_library(
     mnemos_manifests_genesis
+    genesis_banking.cpp
     genesis_callbacks.cpp
     genesis_cart.cpp
     genesis_eeprom.cpp
@@ -79,6 +80,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_genesis_eeprom_test
         SOURCES tests/genesis_eeprom_test.cpp
+        LIBRARIES mnemos::manifests::genesis
+    )
+    mnemos_add_test(
+        mnemos_manifests_genesis_banking_test
+        SOURCES tests/genesis_banking_test.cpp
         LIBRARIES mnemos::manifests::genesis
     )
     mnemos_add_test(
