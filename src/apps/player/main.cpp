@@ -158,10 +158,9 @@ int main(int argc, char* argv[]) {
     const char* region_source = region_source_label(region_arg);
 
     std::unique_ptr<mnemos::frontend_sdk::player_system> system;
-    // Persists the cartridge battery RAM across runs; emplaced once the system is
-    // built so it loads any existing .srm before the first frame and writes it
-    // back on every exit path. Declared after `system` so it destructs first,
-    // while the adapter (and its SRAM span) is still alive.
+    // Persists the cartridge battery RAM across runs (interactive playback only --
+    // gated on !screenshot at the emplace below). Declared after `system` so it
+    // destructs first, while the adapter (and its SRAM span) is still alive.
     std::optional<battery_save_guard> srm_guard;
     if (!rom_paths.empty()) {
         auto loaded = load_rom(rom_paths.front());
@@ -238,10 +237,14 @@ int main(int argc, char* argv[]) {
                          static_cast<int>(family_id.size()), family_id.data());
             return 1;
         }
-        // Load the battery save (if any) before the first frame; the guard writes
-        // it back on exit. Keyed off the on-disk ROM path so a .srm sits beside
-        // the cart even when the image came out of a .zip.
-        srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
+        // Load any existing .srm before the first frame; the guard writes it back
+        // on exit, keyed off the on-disk ROM path (so it sits beside the cart even
+        // when the image came from a .zip). Skipped under --screenshot: that
+        // headless render/diagnostic path (parity sweeps over a read-only ROM
+        // corpus) must not drop saves beside the ROMs.
+        if (!screenshot) {
+            srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
+        }
     }
 
     // Headless path: step --frames, dump PPM + per-chip sidecars, exit. No
