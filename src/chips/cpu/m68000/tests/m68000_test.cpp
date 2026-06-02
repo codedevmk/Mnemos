@@ -616,6 +616,44 @@ TEST_CASE("m68000 TRAP vectors through the exception table") {
     CHECK(m.bus.read8(0x2FFFU) == 0x02U);
 }
 
+TEST_CASE("m68000 Line-1111 (Line-F) opcode traps through vector $2C with the faulting PC") {
+    machine m;
+    m.w32(0x002CU, 0x00004000U); // vector 11 (Line-1111 emulator) -> $4000
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0xFF1FU}); // an unimplemented Line-F opcode (group $F)
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);   // vectored through $2C
+    CHECK(r.a[7] == 0x00002FFAU); // pushed PC (4) + SR (2)
+    // The 68000 Line-A/F frame stacks the FAULTING instruction's PC ($1000), not
+    // the next ($1002), so the handler can read the trapping opcode back.
+    CHECK(m.bus.read8(0x2FFEU) == 0x10U);
+    CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+    CHECK(m.bus.read8(0x2FFAU) == 0x20U); // stacked old SR ($2000, S set)
+    CHECK(m.bus.read8(0x2FFBU) == 0x00U);
+}
+
+TEST_CASE("m68000 Line-1010 (Line-A) opcode traps through vector $28 with the faulting PC") {
+    machine m;
+    m.w32(0x0028U, 0x00004000U); // vector 10 (Line-1010 emulator) -> $4000
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0xA000U}); // an unimplemented Line-A opcode (group $A)
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);           // vectored through $28
+    CHECK(r.a[7] == 0x00002FFAU);         // pushed PC (4) + SR (2)
+    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // faulting PC $1000
+    CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+}
+
 TEST_CASE("m68000 RTE restores SR and PC from the stack frame") {
     machine m;
     m.w16(0x2FFAU, 0x2000U);     // saved SR (S set)
