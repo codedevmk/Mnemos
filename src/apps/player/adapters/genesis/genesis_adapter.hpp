@@ -67,9 +67,13 @@ namespace mnemos::apps::player::adapters::genesis {
         memory_views() const noexcept override {
             return system_mem_view_;
         }
-        // Cartridge battery SRAM backing store (empty span when the cart declares
-        // none); the player persists it to a .srm file across sessions.
+        // Cartridge battery store (empty span when the cart declares none); the
+        // player persists it to a .srm file across sessions. Serial-EEPROM carts
+        // expose the EEPROM image; otherwise the flat battery SRAM.
         [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
+            if (sys_->eeprom.device) {
+                return sys_->eeprom.device->bytes();
+            }
             return sys_->sram.data;
         }
 
