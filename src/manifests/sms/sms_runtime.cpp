@@ -5,6 +5,7 @@
 
 #include "codemasters_mapper.hpp"
 #include "korean_mapper.hpp"
+#include "korean_msx_mapper.hpp"
 #include "mk3020.hpp" // default controller-port peripheral
 #include "sms_mapper.hpp"
 
@@ -26,6 +27,8 @@ namespace mnemos::manifests::sms {
             resolve_mapper(config, std::span<const std::uint8_t>(rt->rom));
         rt->codemasters_active = kind == sms_config::mapper::codemasters;
         rt->korean_active = kind == sms_config::mapper::korean;
+        rt->korean_msx_active = kind == sms_config::mapper::korean_msx ||
+                                kind == sms_config::mapper::korean_msx_nemesis;
 
         // Host glue: every closure captures &rt->state, whose address is stable
         // because rt is heap-allocated. The chips copy the closures during
@@ -56,7 +59,13 @@ namespace mnemos::manifests::sms {
         // and Korean mappers bank via writes inside the cartridge region and
         // need no such back-reference.
         const std::span<const std::uint8_t> rom_span(rt->rom);
-        if (rt->korean_active) {
+        if (rt->korean_msx_active) {
+            auto* msx = dynamic_cast<chips::mapper::korean_msx_mapper*>(rt->graph.chip("mapper"));
+            if (kind == sms_config::mapper::korean_msx_nemesis) {
+                msx->set_variant(chips::mapper::korean_msx_mapper::variant::nemesis);
+            }
+            msx->attach_rom(rom_span);
+        } else if (rt->korean_active) {
             auto* korean = dynamic_cast<chips::mapper::korean_mapper*>(rt->graph.chip("mapper"));
             korean->attach_rom(rom_span);
         } else if (rt->codemasters_active) {

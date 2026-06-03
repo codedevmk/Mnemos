@@ -34,6 +34,7 @@ namespace mnemos::manifests::sms {
         sms_callbacks_state state;     // chip pointers + ports + io_ctrl + reset latch
         bool codemasters_active{};
         bool korean_active{};
+        bool korean_msx_active{};
         system_graph graph; // owns chips/buses/memory; MUST destruct first
 
         [[nodiscard]] chips::cpu::z80* cpu() const noexcept { return state.cpu; }

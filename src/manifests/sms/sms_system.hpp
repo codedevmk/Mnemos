@@ -3,6 +3,7 @@
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
 #include "korean_mapper.hpp"      // standard Korean mapper
+#include "korean_msx_mapper.hpp"  // Korean MSX 8 KiB mapper (+ Nemesis variant)
 #include "peripheral.hpp"         // peripheral::device (controller ports)
 #include "region.hpp"             // mnemos::video_region (shared)
 #include "sms_mapper.hpp"         // Sega mapper
@@ -21,11 +22,19 @@ namespace mnemos::manifests::sms {
 
     struct sms_config final {
         // automatic picks Sega vs Codemasters from the cart's Codemasters
-        // checksum at $7FE6/$7FE8; the others force one. `korean` is force-only:
-        // the standard Korean cartridge carries no header signature, so a
-        // heuristic would risk misdetecting (and breaking) Sega/Codemasters
-        // carts -- automatic therefore never resolves to korean.
-        enum class mapper : std::uint8_t { automatic, sega, codemasters, korean };
+        // checksum at $7FE6/$7FE8; the others force one. The Korean families are
+        // force-only: their carts carry no header signature, so a heuristic would
+        // risk misdetecting (and breaking) Sega/Codemasters carts -- automatic
+        // therefore never resolves to one of them. `korean_msx_nemesis` is the
+        // MSX mapper with its boot-region remap (same chip, different variant).
+        enum class mapper : std::uint8_t {
+            automatic,
+            sega,
+            codemasters,
+            korean,
+            korean_msx,
+            korean_msx_nemesis,
+        };
 
         mnemos::video_region video_region{mnemos::video_region::ntsc};
         mapper cartridge_mapper{mapper::automatic};
@@ -39,16 +48,17 @@ namespace mnemos::manifests::sms {
         chips::cpu::z80 cpu;
         chips::video::sms_vdp vdp;
         chips::audio::sn76489 psg;
-        // All three mappers are members; assembly wires exactly one into the bus
-        // based on the cart (the Sega mapper pages through $FFFC-$FFFF, the
-        // Codemasters and Korean mappers through writes inside the cartridge
-        // window). codemasters_active / korean_active record which one is live
-        // (both false = the Sega mapper).
+        // All mappers are members; assembly wires exactly one into the bus based
+        // on the cart (the Sega mapper pages through $FFFC-$FFFF; the Codemasters
+        // and Korean mappers through writes inside the cartridge window). The
+        // *_active flags record which one is live (all false = the Sega mapper).
         chips::mapper::sms_mapper mapper;
         chips::mapper::codemasters_mapper codies;
         chips::mapper::korean_mapper korean;
+        chips::mapper::korean_msx_mapper korean_msx;
         bool codemasters_active{};
         bool korean_active{};
+        bool korean_msx_active{};
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x2000> ram{}; // 8 KiB, mirrored $C000 / $E000
