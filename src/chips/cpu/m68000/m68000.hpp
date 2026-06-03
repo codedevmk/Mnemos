@@ -85,6 +85,10 @@ namespace mnemos::chips::cpu {
         // instruction -- this is the address of the instruction that issued the
         // in-flight bus access, so a write-watch reports the true writer PC.
         [[nodiscard]] std::uint32_t current_instruction_addr() const noexcept { return inst_addr_; }
+        // Cycles accrued so far by the in-flight instruction (incl. the current bus
+        // access's own cost). Lets a VDP-port write be positioned at its true
+        // sub-instruction beam cycle instead of the instruction-dispatch tick.
+        [[nodiscard]] int current_instruction_cycles() const noexcept { return cycles_; }
         [[nodiscard]] bool at_instruction_boundary() const noexcept { return true; }
 
         // Interrupt request level (0-7, IPL pins). Stored now; the dispatch arrives
