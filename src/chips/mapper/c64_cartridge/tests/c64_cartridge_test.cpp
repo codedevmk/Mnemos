@@ -215,6 +215,34 @@ TEST_CASE("c64_cartridge Comal-80 banks 16K on $DE00 values $80-$83") {
     CHECK(cart.bank() == 3U);
 }
 
+TEST_CASE("c64_cartridge Zaxxon latches the ROMH bank from a ROML read") {
+    std::vector<std::uint8_t> roml = filled(0x1000U, 0xAAU); // 4 KiB, mirrored to 8 KiB
+    roml[0x0000U] = 0x11U;
+    roml[0x0FFFU] = 0x22U;
+    std::vector<chip_packet> chips = {
+        {0U, 0x8000U, roml},
+        {0U, 0xA000U, filled(0x2000U, 0xB0U)}, // ROMH bank 0
+        {1U, 0xA000U, filled(0x2000U, 0xB1U)}, // ROMH bank 1
+    };
+    c64_cartridge cart;
+    REQUIRE(cart.load_crt(build_crt(18U, 0U, 0U, chips))); // 16K config: both lines low
+    CHECK(cart.type() == c64_cartridge::hardware::zaxxon);
+
+    // The 4 KiB ROML is mirrored across the whole $8000-$9FFF window.
+    CHECK(cart.read_roml(0x0000U) == 0x11U);
+    CHECK(cart.read_roml(0x0FFFU) == 0x22U);
+    CHECK(cart.read_roml(0x1000U) == 0x11U); // mirror of $8000
+    CHECK(cart.read_roml(0x1FFFU) == 0x22U); // mirror of $8FFF
+
+    // A read of $8000-$8FFF selects ROMH bank 0; $9000-$9FFF selects bank 1.
+    (void)cart.read_roml(0x0000U);
+    CHECK(cart.read_romh(0U) == 0xB0U);
+    (void)cart.read_roml(0x1000U);
+    CHECK(cart.read_romh(0U) == 0xB1U);
+    (void)cart.read_roml(0x0800U); // bit 12 clear -> back to bank 0
+    CHECK(cart.read_romh(0x1FFFU) == 0xB0U);
+}
+
 TEST_CASE("c64_cartridge Magic Desk disables via bit 7") {
     c64_cartridge cart;
     REQUIRE(cart.load_crt(build_crt(19U, 0U, 1U, {{0U, 0x8000U, filled(0x2000U, 0x42U)}})));

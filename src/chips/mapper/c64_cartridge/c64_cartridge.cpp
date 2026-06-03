@@ -41,6 +41,7 @@ namespace mnemos::chips::mapper {
 
     void c64_cartridge::reset(reset_kind /*kind*/) {
         bank_ = 0U;
+        romh_bank_ = 0U;
         enabled_ = true;
         game_ = game_default_;
         exrom_ = exrom_default_;
@@ -51,6 +52,7 @@ namespace mnemos::chips::mapper {
         inserted_ = false;
         type_ = hardware::generic;
         bank_ = 0U;
+        romh_bank_ = 0U;
         bank_count_ = 0U;
         roml_.clear();
         romh_.clear();
@@ -87,6 +89,9 @@ namespace mnemos::chips::mapper {
             break;
         case 17U:
             type_ = hardware::dinamic;
+            break;
+        case 18U:
+            type_ = hardware::zaxxon;
             break;
         case 19U:
             type_ = hardware::magic_desk;
@@ -168,9 +173,16 @@ namespace mnemos::chips::mapper {
         return true;
     }
 
-    std::uint8_t c64_cartridge::read_roml(std::uint16_t offset) const noexcept {
+    std::uint8_t c64_cartridge::read_roml(std::uint16_t offset) noexcept {
         if (!inserted_ || !enabled_) {
             return 0xFFU;
+        }
+        if (type_ == hardware::zaxxon) {
+            // A ROML read latches the ROMH bank from address bit 12, and the 4 KiB
+            // ROML is mirrored across the whole $8000-$9FFF window.
+            romh_bank_ = (offset & 0x1000U) != 0U ? 1U : 0U;
+            const std::size_t idx = offset & 0x0FFFU;
+            return idx < roml_.size() ? roml_[idx] : 0xFFU;
         }
         const std::size_t idx = static_cast<std::size_t>(bank_) * bank_size + (offset & 0x1FFFU);
         return idx < roml_.size() ? roml_[idx] : 0xFFU;
@@ -180,7 +192,9 @@ namespace mnemos::chips::mapper {
         if (!inserted_ || !enabled_) {
             return 0xFFU;
         }
-        const std::size_t idx = static_cast<std::size_t>(bank_) * bank_size + (offset & 0x1FFFU);
+        // Zaxxon banks ROMH independently of ROML (latched by the ROML read above).
+        const std::uint16_t bank = (type_ == hardware::zaxxon) ? romh_bank_ : bank_;
+        const std::size_t idx = static_cast<std::size_t>(bank) * bank_size + (offset & 0x1FFFU);
         return idx < romh_.size() ? romh_[idx] : 0xFFU;
     }
 
@@ -267,7 +281,8 @@ namespace mnemos::chips::mapper {
             }
             break;
         case hardware::generic:
-        case hardware::dinamic:
+        case hardware::dinamic: // banks on the I/O-1 read, handled in mmio_read
+        case hardware::zaxxon:  // banks on the ROML read, handled in read_roml
         default:
             break;
         }
@@ -275,6 +290,7 @@ namespace mnemos::chips::mapper {
 
     void c64_cartridge::save_state(state_writer& writer) const {
         writer.u16(bank_);
+        writer.u16(romh_bank_);
         writer.boolean(enabled_);
         writer.boolean(game_);
         writer.boolean(exrom_);
@@ -283,6 +299,7 @@ namespace mnemos::chips::mapper {
 
     void c64_cartridge::load_state(state_reader& reader) {
         bank_ = reader.u16();
+        romh_bank_ = reader.u16();
         enabled_ = reader.boolean();
         game_ = reader.boolean();
         exrom_ = reader.boolean();
