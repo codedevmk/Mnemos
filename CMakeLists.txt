@@ -32,6 +32,11 @@ endif()
 add_subdirectory(src)
 add_subdirectory(tools)
 
+# APM tracer sidecar: a self-contained capability (NOT part of the engine in
+# src/). It loads the engine as a runtime plugin and observes it from the
+# outside. Added after src/ so it can bind against the engine's public targets.
+add_subdirectory(apm)
+
 # Cross-system tests (golden boot, integration). Added after tools/ so the shared
 # CLI core target they reuse already exists.
 if(BUILD_TESTING)
