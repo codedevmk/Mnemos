@@ -2,11 +2,50 @@
 
 #include "chip.hpp" // chips::reset_kind
 
+#include <cstdio>  // opt-in MNEMOS_WRITE_TRACE diagnostic (VDP write-timing CSV)
+#include <cstdlib> // std::getenv for the trace gate
 #include <functional>
 
 namespace mnemos::manifests::genesis {
 
     namespace {
+
+        // Opt-in VDP write-timing trace. With MNEMOS_WRITE_TRACE set, the VDP
+        // data-port write handler emits one CSV row (prefix "WT,") on stderr per
+        // completed 16-bit data-port word write (i.e. when the low byte arrives and
+        // forms the word): dispatch beam position vs the sub-instruction-corrected
+        // position (line_accumulator + in-flight-instruction cycles * 7). For offline
+        // raster/timing analysis. Off by default => one cached bool check, no behaviour
+        // change. Columns: WT,frame,scanline,raw_master,corr_master,straddle,cmd_code,addr,word.
+        [[nodiscard]] bool write_trace_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: opt-in diagnostic, not hot-path
+#endif
+            static const bool on = std::getenv("MNEMOS_WRITE_TRACE") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return on;
+        }
+
+        // Only emit trace rows for frame_index >= MNEMOS_WRITE_TRACE_FROM (default
+        // 0). Lets a corpus sweep capture just a measurement window (e.g. f115-121)
+        // instead of every frame -> far less I/O per title.
+        [[nodiscard]] std::uint64_t write_trace_from() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            static const std::uint64_t from = [] {
+                const char* e = std::getenv("MNEMOS_WRITE_TRACE_FROM");
+                return e != nullptr ? std::strtoull(e, nullptr, 10) : 0ULL;
+            }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return from;
+        }
 
         // Active-low controller byte from the plugged peripheral, or 0x7F when
         // the socket is empty -- matches genesis_system::read_pad_port.
@@ -211,10 +250,31 @@ namespace mnemos::manifests::genesis {
                             if ((offset & 1U) == 0U) {
                                 s->vdp_write_high = v;
                             } else {
-                                s->vdp->write16(
-                                    offset & ~1U,
-                                    static_cast<std::uint16_t>(
-                                        (static_cast<std::uint16_t>(s->vdp_write_high) << 8U) | v));
+                                const auto word = static_cast<std::uint16_t>(
+                                    (static_cast<std::uint16_t>(s->vdp_write_high) << 8U) | v);
+                                // Data-port writes only (offset & 0x1C == 0). Logs
+                                // dispatch beam pos `raw` vs sub-instruction-corrected
+                                // `corr = raw + cyc*7`; straddle=1 means the true bus
+                                // cycle falls in the NEXT scanline.
+                                if (write_trace_enabled() && (offset & 0x1CU) == 0U &&
+                                    s->vdp->frame_index() >= write_trace_from()) {
+                                    const long raw = s->vdp->current_line_master();
+                                    const long corr =
+                                        raw +
+                                        static_cast<long>(s->cpu->current_instruction_cycles()) *
+                                            7L;
+                                    std::fprintf(
+                                        stderr, "WT,%llu,%d,%ld,%ld,%d,%u,%06X,%04X\n",
+                                        static_cast<unsigned long long>(s->vdp->frame_index()),
+                                        s->vdp->scanline(), raw, corr,
+                                        corr >= chips::video::genesis_vdp::master_clocks_per_line
+                                            ? 1
+                                            : 0,
+                                        static_cast<unsigned>(s->vdp->cmd_code()),
+                                        static_cast<unsigned>(s->vdp->cmd_addr()),
+                                        static_cast<unsigned>(word));
+                                }
+                                s->vdp->write16(offset & ~1U, word);
                             }
                         }};
             }});

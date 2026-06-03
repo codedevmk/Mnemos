@@ -221,18 +221,22 @@ namespace mnemos::chips::cpu {
         wr16(a, v);
     }
     void m68000::write32(std::uint32_t a, std::uint32_t v) noexcept {
-        cycles_ += 8;
-        if (z80_bus_latency_enabled_) {
-            if (is_z80_bus_addr(a)) {
-                cycles_ += 1;
-                ++cycle_sources_.z80_bus_accesses;
-            }
-            if (is_z80_bus_addr(a + 2U)) {
-                cycles_ += 1;
-                ++cycle_sources_.z80_bus_accesses;
-            }
+        // A longword is two word bus transfers of 4 cycles each. Charge each word's
+        // cost BEFORE its own wr16 so a mid-instruction observer (e.g. the VDP
+        // write-timing trace) sees the correct cumulative cycles for each halfword
+        // -- the first word must read +4, not the full +8. Total cost (+8 plus any
+        // Z80-bus latency) and the per-access latency attribution are unchanged.
+        cycles_ += 4;
+        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
+            cycles_ += 1;
+            ++cycle_sources_.z80_bus_accesses;
         }
         wr16(a, static_cast<std::uint16_t>(v >> 16U));
+        cycles_ += 4;
+        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a + 2U)) {
+            cycles_ += 1;
+            ++cycle_sources_.z80_bus_accesses;
+        }
         wr16(a + 2U, static_cast<std::uint16_t>(v));
     }
 
