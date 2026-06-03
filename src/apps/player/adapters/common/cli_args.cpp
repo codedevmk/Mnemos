@@ -1,9 +1,26 @@
 #include "cli_args.hpp"
 
+#include <cctype>
 #include <cstdlib>
+#include <string>
 #include <string_view>
 
 namespace mnemos::apps::player::adapters {
+
+    std::optional<std::string> parse_mapper_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--mapper") {
+                std::string value{argv[i + 1]};
+                for (char& c : value) {
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                if (!value.empty()) {
+                    return value;
+                }
+            }
+        }
+        return std::nullopt;
+    }
 
     std::optional<std::string> parse_rom_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc - 1; ++i) {

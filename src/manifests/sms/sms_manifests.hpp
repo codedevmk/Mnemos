@@ -7,10 +7,12 @@
 // generated header) so the player carries them with no filesystem dependency
 // and tests share the exact same bytes (no hand-copied, drift-prone duplicates).
 //
-// Selection mirrors sms_config: PAL vs NTSC by region, Sega vs Codemasters
-// mapper by `codemasters` (the adapter sets it from cart-header detection).
+// Selection mirrors sms_config: PAL vs NTSC by region, and the cartridge mapper
+// (Sega / Codemasters / Korean) by the resolved kind the caller passes -- the
+// adapter resolves it via resolve_mapper() from cart-header detection + config.
 
-#include "region.hpp" // mnemos::video_region
+#include "region.hpp"     // mnemos::video_region
+#include "sms_system.hpp" // sms_config::mapper
 
 #include "sms_embedded_manifests.hpp" // generated; see sms_embedded_manifests.hpp.in
 
@@ -18,13 +20,22 @@
 
 namespace mnemos::manifests::sms {
 
+    // Pick the embedded manifest for the region + resolved mapper kind. `kind`
+    // must be a concrete choice (sega/codemasters/korean), not `automatic` --
+    // callers resolve via resolve_mapper() first; `automatic` falls back to Sega.
     [[nodiscard]] constexpr std::string_view manifest_toml(mnemos::video_region region,
-                                                           bool codemasters) noexcept {
+                                                           sms_config::mapper kind) noexcept {
         const bool pal = region == mnemos::video_region::pal;
-        if (codemasters) {
+        switch (kind) {
+        case sms_config::mapper::korean:
+            return pal ? embedded::sms_pal_korean_toml : embedded::sms_ntsc_korean_toml;
+        case sms_config::mapper::codemasters:
             return pal ? embedded::sms_pal_codemasters_toml : embedded::sms_ntsc_codemasters_toml;
+        case sms_config::mapper::sega:
+        case sms_config::mapper::automatic:
+        default:
+            return pal ? embedded::sms_pal_toml : embedded::sms_ntsc_toml;
         }
-        return pal ? embedded::sms_pal_toml : embedded::sms_ntsc_toml;
     }
 
 } // namespace mnemos::manifests::sms

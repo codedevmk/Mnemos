@@ -33,6 +33,7 @@ namespace mnemos::manifests::sms {
         std::vector<std::uint8_t> rom; // cartridge image; mapper borrows a span into it
         sms_callbacks_state state;     // chip pointers + ports + io_ctrl + reset latch
         bool codemasters_active{};
+        bool korean_active{};
         system_graph graph; // owns chips/buses/memory; MUST destruct first
 
         [[nodiscard]] chips::cpu::z80* cpu() const noexcept { return state.cpu; }

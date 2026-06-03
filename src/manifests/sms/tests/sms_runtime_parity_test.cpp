@@ -50,6 +50,16 @@ namespace {
         return rom;
     }
 
+    // 64 KiB cart (four 16 KiB pages) for the force-only Korean mapper; the
+    // distinct page-base bytes let any banking difference surface in a frame diff.
+    std::vector<std::uint8_t> korean_rom() {
+        std::vector<std::uint8_t> rom(0x10000U, 0U);
+        for (int p = 0; p < 4; ++p) {
+            rom[static_cast<std::size_t>(p) * 0x4000U] = static_cast<std::uint8_t>(0xA0 + p);
+        }
+        return rom;
+    }
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996) // std::getenv: opt-in test data path
@@ -138,6 +148,11 @@ TEST_CASE("build_sms_runtime matches assemble_sms (Sega mapper)", "[sms][runtime
 TEST_CASE("build_sms_runtime matches assemble_sms (Codemasters mapper)", "[sms][runtime][parity]") {
     const sms_config codies{.cartridge_mapper = sms_config::mapper::codemasters};
     require_parity(run_assemble(codies_rom(), codies, 5), run_runtime(codies_rom(), codies, 5));
+}
+
+TEST_CASE("build_sms_runtime matches assemble_sms (Korean mapper)", "[sms][runtime][parity]") {
+    const sms_config korean{.cartridge_mapper = sms_config::mapper::korean};
+    require_parity(run_assemble(korean_rom(), korean, 5), run_runtime(korean_rom(), korean, 5));
 }
 
 TEST_CASE("build_sms_runtime default-plugs both controller ports", "[sms][runtime]") {

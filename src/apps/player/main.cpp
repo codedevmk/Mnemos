@@ -138,6 +138,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::detect_family;
     using mnemos::apps::player::adapters::family_label;
     using mnemos::apps::player::adapters::load_rom;
+    using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
@@ -150,6 +151,7 @@ int main(int argc, char* argv[]) {
     const auto rom_paths = parse_rom_args(argc, argv);
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
+    const auto mapper_arg = parse_mapper_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
 
     const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
@@ -227,7 +229,8 @@ int main(int argc, char* argv[]) {
                         .video_region = video,
                         .display_name = clean_rom_name(loaded->name),
                         .additional_media = std::move(additional_media),
-                        .autostart = autostart});
+                        .autostart = autostart,
+                        .mapper_override = mapper_arg.value_or(std::string{})});
         if (system && system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
                          system->media_count());

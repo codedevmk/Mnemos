@@ -124,7 +124,8 @@ namespace {
                           mnemos::manifests::sms::sms_callbacks_state& state,
                           mnemos::manifests::sms::sms_host_tables& tables) {
         using namespace mnemos::manifests;
-        const auto parsed = parse_manifest(sms::manifest_toml(mnemos::video_region::ntsc, true));
+        const auto parsed = parse_manifest(
+            sms::manifest_toml(mnemos::video_region::ntsc, sms::sms_config::mapper::codemasters));
         REQUIRE(parsed.ok());
 
         const auto no_roms = [](std::string_view) -> std::optional<std::vector<std::uint8_t>> {

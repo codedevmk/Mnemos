@@ -95,7 +95,8 @@ namespace {
     [[nodiscard]] frame_pixels run_manifest_path(const std::vector<std::uint8_t>& rom, int frames) {
         using namespace mnemos::manifests;
 
-        const auto parsed = parse_manifest(sms::manifest_toml(mnemos::video_region::ntsc, false));
+        const auto parsed = parse_manifest(
+            sms::manifest_toml(mnemos::video_region::ntsc, sms::sms_config::mapper::sega));
         REQUIRE(parsed.ok());
 
         sms::sms_callbacks_state state;

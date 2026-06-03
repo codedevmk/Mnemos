@@ -196,10 +196,14 @@ Current baseline (do not re-implement):
       *Unblocks:* effectively the entire Korean SMS catalog (currently unbootable).
   - [x] Standard Korean mapper (`korean.mapper`): slots 0/1 fixed to banks 0/1, slot 2 banked by a
         write to `$A000`, 16 KiB pages, linear power-on. Standalone chip + 7 unit tests.
+  - [x] Wire into `sms_system`/`sms_runtime`: `sms_config::mapper::korean` (force-only -- no header
+        signature, so `automatic` never picks it), Korean manifest TOMLs (NTSC/PAL) + embedded gen,
+        both assembly paths, a `--mapper sega|codemasters|korean` player CLI override, and a Korean
+        case in the assemble + runtime-parity tests.
   - [ ] Korean MSX 8K mapper (4 registers, 8 KiB banks) + Nemesis variant.
   - [ ] Korean `188-in-1`, `4PAK All Action`, `Janggun` multicart/special mappers.
-  - [ ] Wire into `sms_system`/`sms_runtime`: extend `sms_config::mapper`, add the detection
-        heuristic + `--mapper` force-override, and a data-gated boot golden.
+  - [ ] Auto-detection (CRC database) so Korean carts resolve without an explicit `--mapper`, plus
+        a data-gated boot golden.
 - [ ] **Genesis J-Cart**: extra two controller ports mapped at the top of ROM space (`$38FFFE`
       region). Extends `genesis_cart`/banking + input wiring.
       *Unblocks:* EA J-Cart titles (Micro Machines 2/'96/Military, Pete Sampras Tennis) — they
