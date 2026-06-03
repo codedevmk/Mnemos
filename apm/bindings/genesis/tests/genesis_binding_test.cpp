@@ -64,5 +64,12 @@ TEST_CASE("genesis binding drives the engine through the C ABI") {
         CHECK(api->read_register(p, APM_REG_INST) == 0x200U);
     }
 
+    SECTION("read_register exposes the CPU cycle counter, which advances per frame") {
+        const std::uint64_t c0 = api->read_register(p, APM_REG_CYCLES);
+        api->run_frame(p);
+        const std::uint64_t c1 = api->read_register(p, APM_REG_CYCLES);
+        CHECK(c1 > c0); // the spin loop executes instructions every frame
+    }
+
     api->destroy(p);
 }

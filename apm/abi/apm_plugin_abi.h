@@ -19,13 +19,14 @@ extern "C" {
 #define APM_PLUGIN_ABI_VERSION 1u
 #define APM_PLUGIN_ENTRY_SYMBOL "apm_plugin_entry"
 
-/* CPU register ids for read_register(). D0..D7 = APM_REG_D0+n, A0..A7 = APM_REG_A0+n. */
+/* CPU register / counter ids for read_register(). D0..D7 = APM_REG_D0+n, A0..A7 = APM_REG_A0+n. */
 enum apm_reg {
-    APM_REG_PC = 0,   /* next-instruction program counter */
-    APM_REG_INST = 1, /* address of the instruction currently issuing a bus access */
-    APM_REG_SR = 2,   /* status register */
-    APM_REG_D0 = 16,  /* data registers D0..D7 */
-    APM_REG_A0 = 24   /* address registers A0..A7 */
+    APM_REG_PC = 0,     /* next-instruction program counter */
+    APM_REG_INST = 1,   /* address of the instruction currently issuing a bus access */
+    APM_REG_SR = 2,     /* status register */
+    APM_REG_CYCLES = 3, /* total CPU cycles executed (a free-running perf counter) */
+    APM_REG_D0 = 16,    /* data registers D0..D7 */
+    APM_REG_A0 = 24     /* address registers A0..A7 */
 };
 
 /* A tagged guest memory bank the host may observe. */
