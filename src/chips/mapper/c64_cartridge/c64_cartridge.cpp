@@ -76,6 +76,12 @@ namespace mnemos::chips::mapper {
         case 5U:
             type_ = hardware::ocean;
             break;
+        case 7U:
+            type_ = hardware::fun_play;
+            break;
+        case 8U:
+            type_ = hardware::super_games;
+            break;
         case 15U:
             type_ = hardware::system_3;
             break;
@@ -84,6 +90,9 @@ namespace mnemos::chips::mapper {
             break;
         case 19U:
             type_ = hardware::magic_desk;
+            break;
+        case 21U:
+            type_ = hardware::comal_80;
             break;
         case 32U:
             type_ = hardware::easyflash;
@@ -208,6 +217,38 @@ namespace mnemos::chips::mapper {
             // A write to I/O-1 ($DE00+bank) selects the bank; the value is ignored.
             if (offset < 0x100U) {
                 set_bank(static_cast<std::uint16_t>(offset & 0xFFU));
+            }
+            break;
+        case hardware::fun_play:
+            // $DE00: scrambled 4-bit bank in the value (bits 5-3 -> 2-0, bit 0 -> 3).
+            // (value & 0xC6) selects the config: 0x00 = 8K on, 0x86 = ROMs released.
+            if (offset < 0x100U) {
+                set_bank(
+                    static_cast<std::uint16_t>(((value >> 3U) & 0x07U) | ((value & 0x01U) << 3U)));
+                if ((value & 0xC6U) == 0x00U) {
+                    exrom_ = false; // /EXROM low: 8 KiB ROML mapped
+                    game_ = true;
+                } else if ((value & 0xC6U) == 0x86U) {
+                    exrom_ = true; // both lines released: cartridge RAM-transparent
+                    game_ = true;
+                }
+            }
+            break;
+        case hardware::super_games:
+            // $DF00 (I/O-2): bits 0-1 bank, bit 2 set releases both lines (cart off),
+            // bit 2 clear is the 16K config (ROML+ROMH).
+            if (offset >= 0x100U) {
+                set_bank(static_cast<std::uint16_t>(value & 0x03U));
+                const bool off = (value & 0x04U) != 0U;
+                exrom_ = off;
+                game_ = off;
+            }
+            break;
+        case hardware::comal_80:
+            // $DE00: only $80-$83 are valid writes (bit 7 validates); bits 0-1 are
+            // the 16K bank. The /GAME and /EXROM 16K config never changes.
+            if (offset < 0x100U && value >= 0x80U && value <= 0x83U) {
+                set_bank(static_cast<std::uint16_t>(value & 0x03U));
             }
             break;
         case hardware::magic_desk:

@@ -146,6 +146,75 @@ TEST_CASE("c64_cartridge Dinamic banks on the I/O-1 read address") {
     CHECK(cart.read_roml(0U) == 0x20U);
 }
 
+TEST_CASE("c64_cartridge Fun Play scrambles the bank and releases on $86") {
+    std::vector<chip_packet> chips;
+    for (std::uint16_t b = 0; b < 16U; ++b) {
+        chips.push_back({b, 0x8000U, filled(0x2000U, static_cast<std::uint8_t>(b))});
+    }
+    c64_cartridge cart;
+    REQUIRE(cart.load_crt(build_crt(7U, 0U, 1U, chips))); // 8K mode: EXROM low, GAME high
+    CHECK(cart.type() == c64_cartridge::hardware::fun_play);
+    CHECK(cart.bank_count() == 16U);
+    CHECK(cart.read_roml(0U) == 0U);
+    cart.mmio_write(0x00U, 0x08U); // ((8>>3)&7)|((8&1)<<3) = 1
+    CHECK(cart.bank() == 1U);
+    CHECK(cart.read_roml(0U) == 1U);
+    cart.mmio_write(0x00U, 0x01U); // ((1>>3)&7)|((1&1)<<3) = 8
+    CHECK(cart.bank() == 8U);
+    CHECK(cart.read_roml(0U) == 8U);
+    cart.mmio_write(0x00U, 0x86U); // ROMs off: both lines released
+    CHECK(cart.exrom());
+    CHECK(cart.game());
+    cart.mmio_write(0x00U, 0x00U); // back to 8K config, bank 0
+    CHECK_FALSE(cart.exrom());
+    CHECK(cart.game());
+    CHECK(cart.bank() == 0U);
+}
+
+TEST_CASE("c64_cartridge Super Games banks 16K via $DF00 and disables on bit 2") {
+    std::vector<chip_packet> chips;
+    for (std::uint16_t b = 0; b < 4U; ++b) {
+        std::vector<std::uint8_t> rom(0x4000U, static_cast<std::uint8_t>(0x40U + b));
+        rom[0x2000U] = static_cast<std::uint8_t>(0x50U + b); // ROMH byte 0
+        chips.push_back({b, 0x8000U, rom});
+    }
+    c64_cartridge cart;
+    REQUIRE(cart.load_crt(build_crt(8U, 0U, 0U, chips))); // 16K mode: both lines low
+    CHECK(cart.type() == c64_cartridge::hardware::super_games);
+    CHECK(cart.bank_count() == 4U);
+    CHECK(cart.read_roml(0U) == 0x40U);
+    CHECK(cart.read_romh(0U) == 0x50U);
+    cart.mmio_write(0x100U, 0x02U); // $DF00: bank 2, bit 2 clear (16K config)
+    CHECK(cart.bank() == 2U);
+    CHECK(cart.read_roml(0U) == 0x42U);
+    CHECK(cart.read_romh(0U) == 0x52U);
+    CHECK_FALSE(cart.exrom());
+    CHECK_FALSE(cart.game());
+    cart.mmio_write(0x100U, 0x04U); // bit 2 set: cartridge released
+    CHECK(cart.exrom());
+    CHECK(cart.game());
+}
+
+TEST_CASE("c64_cartridge Comal-80 banks 16K on $DE00 values $80-$83") {
+    std::vector<chip_packet> chips;
+    for (std::uint16_t b = 0; b < 4U; ++b) {
+        std::vector<std::uint8_t> rom(0x4000U, static_cast<std::uint8_t>(0x60U + b));
+        rom[0x2000U] = static_cast<std::uint8_t>(0x70U + b);
+        chips.push_back({b, 0x8000U, rom});
+    }
+    c64_cartridge cart;
+    REQUIRE(cart.load_crt(build_crt(21U, 0U, 0U, chips))); // 16K mode
+    CHECK(cart.type() == c64_cartridge::hardware::comal_80);
+    CHECK(cart.read_roml(0U) == 0x60U);
+    CHECK(cart.read_romh(0U) == 0x70U);
+    cart.mmio_write(0x00U, 0x83U); // bit 7 validates, bank 3
+    CHECK(cart.bank() == 3U);
+    CHECK(cart.read_roml(0U) == 0x63U);
+    CHECK(cart.read_romh(0U) == 0x73U);
+    cart.mmio_write(0x00U, 0x02U); // bit 7 clear: ignored, bank unchanged
+    CHECK(cart.bank() == 3U);
+}
+
 TEST_CASE("c64_cartridge Magic Desk disables via bit 7") {
     c64_cartridge cart;
     REQUIRE(cart.load_crt(build_crt(19U, 0U, 1U, {{0U, 0x8000U, filled(0x2000U, 0x42U)}})));
