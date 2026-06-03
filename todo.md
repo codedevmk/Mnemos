@@ -190,12 +190,16 @@ Current baseline (do not re-implement):
         4 KiB ROML mirrors across $8000-$9FFF. `read_roml` made non-const for the read side effect.
         1 unit test.
   - [ ] Per-type golden boot once a ROM is supplied (data-gated, like the existing boot tests).
-- [ ] **SMS Korean mappers**: add the Korean families as distinct mapper chips (peer to
-      `codemasters.mapper`) — Korean MSX-style `$A000` bank latch, Korean `188-in-1`, `4PAK
-      All Action`, `Janggun`. Header has no signature, so detect by ROM size + reset-vector
+- [~] **SMS Korean mappers**: add the Korean families as distinct mapper chips (peer to
+      `codemasters.mapper`). Header has no signature, so detect by ROM size + reset-vector
       heuristics with a force-override.
       *Unblocks:* effectively the entire Korean SMS catalog (currently unbootable).
-      *Accept:* banking unit test per family + a data-gated boot golden.
+  - [x] Standard Korean mapper (`korean.mapper`): slots 0/1 fixed to banks 0/1, slot 2 banked by a
+        write to `$A000`, 16 KiB pages, linear power-on. Standalone chip + 7 unit tests.
+  - [ ] Korean MSX 8K mapper (4 registers, 8 KiB banks) + Nemesis variant.
+  - [ ] Korean `188-in-1`, `4PAK All Action`, `Janggun` multicart/special mappers.
+  - [ ] Wire into `sms_system`/`sms_runtime`: extend `sms_config::mapper`, add the detection
+        heuristic + `--mapper` force-override, and a data-gated boot golden.
 - [ ] **Genesis J-Cart**: extra two controller ports mapped at the top of ROM space (`$38FFFE`
       region). Extends `genesis_cart`/banking + input wiring.
       *Unblocks:* EA J-Cart titles (Micro Machines 2/'96/Military, Pete Sampras Tennis) — they
