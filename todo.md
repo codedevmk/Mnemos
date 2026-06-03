@@ -154,3 +154,92 @@ the reference's instruction coalescing) — never raw instruction index, never r
 - **Next disciplined step (Phase 2 read-watch):** page-protect VDP status, fault on the boot
   wait-loop's poll in both engines, find the read whose returned bit differs + the branch it
   flips — the root cause of the 8-frame lead, hence the wave-table phase shift.
+
+---
+
+# TODO — Chip/Mapper Variant Coverage (ROM support & compatibility)
+
+Scope: the variant work that decides **whether a ROM boots and runs**, for the C64, SMS, and
+Genesis. Ordered by compatibility impact, not by effort. Cartridge/banking *mappers* are the
+dominant lever — a missing mapper means the image cannot be addressed at all, so it never runs;
+audio/timing variants only change fidelity once a title already boots, so they rank last.
+
+Each task names the existing chip it extends, the ROMs it unblocks, and an acceptance check.
+Mapper/cart variants are auto-selected from the image (header field or CRT type id) the same way
+`sms_mapper` vs `codemasters.mapper` is already auto-detected, with a manifest/CLI force-override.
+
+Current baseline (do not re-implement):
+- C64 `commodore.cartridge`: `generic` (8K/16K/ultimax), `ocean`, `magic_desk`, `easyflash`.
+- SMS: `sega.sms_mapper` + `codemasters.mapper` (header auto-detect + force).
+- Genesis: SSF2 >4 MiB banking, header SRAM/battery, I2C EEPROM (`24C01`–`24C65`, serial-keyed).
+
+## P0 — Boot-blockers across whole catalogs (highest coverage per task)
+
+- [ ] **C64 cartridge CRT types**: add the high-frequency `.crt` hardware ids that currently fail
+      to map — `system_3`/`c64gs` (id 15/16), `dinamic` (17), `zaxxon`/`super_zaxxon` (18),
+      `fun_play` (3), `super_games` (8), `comal_80` (21). Each is a bank-select decode on the
+      `$DE00`/`$DF00` I/O window over `c64_cartridge`'s ROML/ROMH machinery.
+      *Unblocks:* a large slice of the commercial C64 cart library.
+      *Accept:* a unit test per type maps the right 8 KiB bank for a known register write; one
+      golden boot per type once a ROM is supplied (data-gated, like the existing boot tests).
+- [ ] **SMS Korean mappers**: add the Korean families as distinct mapper chips (peer to
+      `codemasters.mapper`) — Korean MSX-style `$A000` bank latch, Korean `188-in-1`, `4PAK
+      All Action`, `Janggun`. Header has no signature, so detect by ROM size + reset-vector
+      heuristics with a force-override.
+      *Unblocks:* effectively the entire Korean SMS catalog (currently unbootable).
+      *Accept:* banking unit test per family + a data-gated boot golden.
+- [ ] **Genesis J-Cart**: extra two controller ports mapped at the top of ROM space (`$38FFFE`
+      region). Extends `genesis_cart`/banking + input wiring.
+      *Unblocks:* EA J-Cart titles (Micro Machines 2/'96/Military, Pete Sampras Tennis) — they
+      boot today but only see 2 of 4 pads.
+      *Accept:* system test reads pads 3/4 through the J-Cart port; existing 2-pad path unchanged.
+- [ ] **Genesis Lock-on (Sonic & Knuckles)**: pass-through cartridge that maps a second ROM
+      (`$300000` window) and exposes the combined image. Extends `genesis_cart` mapping.
+      *Unblocks:* S&K lock-on with Sonic 2/3 (and the "blue sphere" no-cart mode).
+      *Accept:* combined-image system test boots with both ROMs present (data-gated).
+
+## P1 — High-profile titles & unlicensed/protection compatibility
+
+- [ ] **Genesis SVP coprocessor** (`samsung.svp` DSP): the Virtua Racing cart. Large, isolated
+      effort — a new chip in `chips/cpu` or `chips/coprocessor` plus the DMA/bank glue.
+      *Unblocks:* Virtua Racing (the only retail SVP title).
+      *Accept:* SVP instruction conformance subset + a data-gated boot golden.
+- [ ] **Genesis pirate/protection bankswitch mappers**: Realtec, Kaiser/"Squirrel King", and the
+      common multicart `$A130xx` protection-register families, as a `genesis_protection_mapper`
+      variant set.
+      *Unblocks:* unlicensed/bootleg + multicart images that currently read open bus and hang.
+      *Accept:* per-family banking/protection-register unit tests.
+- [ ] **SMS 93C46 EEPROM saves**: wire the serial 93C46 onto the SMS cart path (analogous to the
+      Genesis I2C EEPROM) for the handful of titles that save to it.
+      *Unblocks:* Sega Game/World-class EEPROM SMS saves (e.g. *Pro Yakyuu*).
+      *Accept:* EEPROM read/write round-trip + battery-save persistence test.
+- [ ] **Game Gear VDP variant** (`sega.315_5378`): extended CRAM (12-bit, 4096-color) + the GG
+      reduced 160×144 viewport/border crop as a mode of `sms_vdp`.
+      *Unblocks:* the Game Gear ROM catalog (a new system the SMS core nearly covers).
+      *Accept:* CRAM-depth + viewport tests; a GG boot golden (data-gated).
+
+## P2 — Fidelity & edge-case compatibility (title already boots)
+
+- [ ] **SN76489 PSG variant select**: model the Genesis vs SMS noise-tap/clock difference (and
+      the SMS-vs-GG stereo register) as an explicit `enum class variant` on `sn76489`, set from
+      the manifest. *Impact:* audio correctness in the shared PSG, not boot.
+- [ ] **Genesis VDP revision quirks** (`vdp1` vs `vdp2`): expose a revision selector for the
+      handful of games that depend on the early-VDP fill/DMA timing or the masking-mode 0
+      sprite quirk. *Impact:* a few edge-case titles' raster effects.
+- [ ] **C64 freezer/utility carts** (Action Replay, Final Cartridge III, Retro Replay): NMI +
+      RAM-overlay freezer hardware over `c64_cartridge`. *Impact:* utility carts and their
+      freeze/restore; not a game-boot blocker.
+- [ ] **SID 6581 vs 8580 filter-curve fidelity**: the variant *exists*; tune the filter cutoff
+      curve + combined-waveform tables per part. *Impact:* audio accuracy only.
+- [ ] **VIC-II revision timing fidelity**: the four revisions *exist*; close any remaining
+      cycle-exact gaps the NTSC `6567r56a`/`6567r8` geometry needs. *Impact:* demo/raster-trick
+      compatibility, not ROM boot.
+
+## Build-first order (max compatibility per unit of work)
+
+1. **P0 C64 CRT types** + **P0 SMS Korean mappers** — biggest catalog unlock; pure banking, no
+   new clocked hardware, reuse existing cart/mapper machinery.
+2. **P0 Genesis J-Cart + Lock-on** — high-profile titles, small surface.
+3. **P1 EEPROM/protection mappers** — saves + unlicensed coverage.
+4. **P1 Game Gear VDP** then **P1 SVP** — net-new systems/titles, larger effort.
+5. **P2** — fidelity passes once the boot/save matrix is green.
