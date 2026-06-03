@@ -1487,7 +1487,8 @@ namespace mnemos::chips::video {
         }
         writer.u32(static_cast<std::uint32_t>(fifo_idx_));
         writer.u64(static_cast<std::uint64_t>(fifo_stall_master_cycles_));
-        writer.u64(static_cast<std::uint64_t>(fifo_accept_cursor_master_));
+        // fifo_accept_cursor_master_ is opt-in (MNEMOS_WRITE_ACCEPT) transient state and
+        // is deliberately NOT in the serialized format -- keeps the chunk byte-compatible.
     }
 
     void genesis_vdp::load_state(state_reader& reader) {
@@ -1539,7 +1540,9 @@ namespace mnemos::chips::video {
         }
         fifo_idx_ = static_cast<int>(reader.u32());
         fifo_stall_master_cycles_ = static_cast<std::int64_t>(reader.u64());
-        fifo_accept_cursor_master_ = static_cast<std::int64_t>(reader.u64());
+        // Not serialized (opt-in transient state): reset deterministically on load;
+        // re-derives at the next scanline wrap when the accept path is active.
+        fifo_accept_cursor_master_ = 0;
 
         last_irq_level_ = pending_irq_level();
     }
