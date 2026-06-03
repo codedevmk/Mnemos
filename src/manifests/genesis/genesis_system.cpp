@@ -1,5 +1,7 @@
 #include "genesis_system.hpp"
 
+#include "genesis_region.hpp" // parse_market (cart territory for $A10001)
+
 #include "mk1653.hpp" // default controller-port peripheral
 
 #include <cstdio>
@@ -65,8 +67,12 @@ namespace mnemos::manifests::genesis {
         const bool pal = config.video_region == mnemos::video_region::pal;
         s->vdp.set_pal(pal);
 
-        // $A10001 version: bit7 = export, bit6 = PAL, bit5 = no expansion unit.
-        s->version_register = static_cast<std::uint8_t>(0x80U | (pal ? 0x40U : 0x00U) | 0x20U);
+        // $A10001 version: bit7 = export (overseas), bit6 = PAL, bit5 = no
+        // expansion. Export is DOMESTIC (0) only for a Japan-region cart; hardcoding
+        // bit7=1 made Japanese carts read $A0 not $20, forking region-gated boot.
+        const bool domestic = parse_market(s->rom) == mnemos::market::japan;
+        s->version_register =
+            static_cast<std::uint8_t>((domestic ? 0x00U : 0x80U) | (pal ? 0x40U : 0x00U) | 0x20U);
 
         // $000000-$3FFFFF: cartridge ROM, clamped to the 4 MiB window (a >4 MiB
         // image's upper banks are paged in by wire_cart_banking, not flat-mapped).

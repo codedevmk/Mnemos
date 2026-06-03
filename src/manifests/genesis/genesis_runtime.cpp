@@ -2,6 +2,7 @@
 
 #include "gated_chip.hpp"        // mnemos::manifests::gated_chip (scheduler wrappers)
 #include "genesis_manifests.hpp" // manifest_toml
+#include "genesis_region.hpp"    // parse_market (cart territory for $A10001)
 #include "manifest.hpp"          // parse_manifest
 
 #include "mk1653.hpp" // default controller-port peripheral (6-button pad)
@@ -49,11 +50,16 @@ namespace mnemos::manifests::genesis {
         // Host glue: closures capture &rt->state (stable -- rt is heap-allocated).
         auto tables = make_genesis_host_tables(rt->state);
 
-        // $A10001 version: bit7 = export, bit6 = PAL, bit5 = no expansion unit.
+        // $A10001 version: bit7 = export (overseas), bit6 = PAL, bit5 = no
+        // expansion unit. The export bit is DOMESTIC (0) only for a Japan-region
+        // cartridge; US/Europe/multi-region read as overseas. Hardcoding bit7=1
+        // made Japanese carts read $A0 instead of $20, forking region-gated boot
+        // code (asset/tileset selection, H32/H40 mode) -> wrong VRAM/resolution.
         // Set before any I/O-controller read (matches assemble_genesis).
         const bool pal = config.video_region == mnemos::video_region::pal;
+        const bool domestic = parse_market(rt->rom) == mnemos::market::japan;
         rt->state.version_register =
-            static_cast<std::uint8_t>(0x80U | (pal ? 0x40U : 0x00U) | 0x20U);
+            static_cast<std::uint8_t>((domestic ? 0x00U : 0x80U) | (pal ? 0x40U : 0x00U) | 0x20U);
 
         // The manifest's cartridge region (backing="rom" file="cart") pulls the
         // cart bytes from here; build_system keeps its own copy in graph.memory.
