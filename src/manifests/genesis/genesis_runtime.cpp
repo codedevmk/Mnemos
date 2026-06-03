@@ -51,11 +51,12 @@ namespace mnemos::manifests::genesis {
         auto tables = make_genesis_host_tables(rt->state);
 
         // $A10001 version: bit7 = export (overseas), bit6 = PAL, bit5 = no
-        // expansion unit. The export bit is DOMESTIC (0) only for a Japan-region
-        // cartridge; US/Europe/multi-region read as overseas. Hardcoding bit7=1
-        // made Japanese carts read $A0 instead of $20, forking region-gated boot
-        // code (asset/tileset selection, H32/H40 mode) -> wrong VRAM/resolution.
-        // Set before any I/O-controller read (matches assemble_genesis).
+        // expansion unit. The export bit is DOMESTIC (0) only when the cart's
+        // market is market::japan -- the region parser maps both the Japanese
+        // 'J' and Korean 'K' header codes there; US/Europe/multi-region read as
+        // overseas. Hardcoding bit7=1 made domestic carts read $A0 instead of
+        // $20, forking region-gated boot code (asset/tileset selection, H32/H40
+        // mode) -> wrong VRAM/resolution. Set before any I/O read (matches assemble).
         const bool pal = config.video_region == mnemos::video_region::pal;
         const bool domestic = parse_market(rt->rom) == mnemos::market::japan;
         rt->state.version_register =

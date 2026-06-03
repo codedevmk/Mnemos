@@ -68,8 +68,10 @@ namespace mnemos::manifests::genesis {
         s->vdp.set_pal(pal);
 
         // $A10001 version: bit7 = export (overseas), bit6 = PAL, bit5 = no
-        // expansion. Export is DOMESTIC (0) only for a Japan-region cart; hardcoding
-        // bit7=1 made Japanese carts read $A0 not $20, forking region-gated boot.
+        // expansion. Export is DOMESTIC (0) only when the cart's market is
+        // market::japan (the region parser maps both Japanese 'J' and Korean 'K'
+        // codes there); hardcoding bit7=1 made domestic carts read $A0 not $20,
+        // forking region-gated boot.
         const bool domestic = parse_market(s->rom) == mnemos::market::japan;
         s->version_register =
             static_cast<std::uint8_t>((domestic ? 0x00U : 0x80U) | (pal ? 0x40U : 0x00U) | 0x20U);
