@@ -27,8 +27,7 @@ TEST_CASE("page_guard intercepts a guarded write, records it, and the write stil
 
     std::vector<guard_event> events;
     auto* target = region + 0x809;
-    guard.watch(target, 1, access_kind::write,
-                [&](const guard_event& e) { events.push_back(e); });
+    guard.watch(target, 1, access_kind::write, [&](const guard_event& e) { events.push_back(e); });
 
     // volatile so the store is not optimised away before the read-back below.
     *static_cast<volatile std::uint8_t*>(target) = 0x42U;
@@ -62,7 +61,7 @@ TEST_CASE("page_guard re-arms: every write to a watched counter is intercepted")
         *vcounter = static_cast<std::uint8_t>(*vcounter + 1U);
     }
 
-    CHECK(hits == 16);     // a read-modify-write faults on the store each iteration
+    CHECK(hits == 16); // a read-modify-write faults on the store each iteration
     CHECK(*counter == 16U);
 }
 
@@ -86,6 +85,6 @@ TEST_CASE("page_guard filters: writes outside the watched range are not reported
     auto* neighbour = static_cast<volatile std::uint8_t*>(region + 0x200); // same page, not watched
     *neighbour = 0x99U;
 
-    CHECK(hits == 0);          // neighbour write filtered out
+    CHECK(hits == 0);                  // neighbour write filtered out
     CHECK(*(region + 0x200) == 0x99U); // but still recovered: the value landed
 }

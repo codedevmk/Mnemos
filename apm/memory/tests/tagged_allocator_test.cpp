@@ -14,8 +14,8 @@ namespace {
 
 TEST_CASE("tagged_allocator hands out a page-aligned, writable, registered bank") {
     tagged_allocator alloc;
-    auto* mem = static_cast<std::uint8_t*>(
-        alloc.allocate_bank(memory_tag{chip_cpu, 0, 0xFF0000}, 0x10000));
+    auto* mem =
+        static_cast<std::uint8_t*>(alloc.allocate_bank(memory_tag{chip_cpu, 0, 0xFF0000}, 0x10000));
 
     REQUIRE(mem != nullptr);
     CHECK(reinterpret_cast<std::uintptr_t>(mem) % 4096U == 0U); // page-aligned

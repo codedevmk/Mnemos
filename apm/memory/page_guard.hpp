@@ -43,8 +43,8 @@ namespace mnemos::apm::memory {
         void unwatch(const void* base) noexcept;
 
       private:
-        std::vector<void*> allocations_;     // owned VirtualAlloc regions, freed on destruction
-        std::vector<const void*> watched_;   // armed watch bases, disarmed on destruction
+        std::vector<void*> allocations_;   // owned VirtualAlloc regions, freed on destruction
+        std::vector<const void*> watched_; // armed watch bases, disarmed on destruction
     };
 
 } // namespace mnemos::apm::memory

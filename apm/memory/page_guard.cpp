@@ -1,16 +1,16 @@
 #include "page_guard.hpp"
 
 #if defined(_WIN32)
-#    ifndef WIN32_LEAN_AND_MEAN
-#        define WIN32_LEAN_AND_MEAN
-#    endif
-#    ifndef NOMINMAX
-#        define NOMINMAX
-#    endif
-#    include <windows.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
-#    include <mutex>
-#    include <utility>
+#include <mutex>
+#include <utility>
 #endif
 
 namespace mnemos::apm::memory {
@@ -55,14 +55,14 @@ namespace mnemos::apm::memory {
         }
 
         std::uintptr_t host_instruction_pointer(const CONTEXT* ctx) noexcept {
-#    if defined(_M_X64)
+#if defined(_M_X64)
             return static_cast<std::uintptr_t>(ctx->Rip);
-#    elif defined(_M_IX86)
+#elif defined(_M_IX86)
             return static_cast<std::uintptr_t>(ctx->Eip);
-#    else
+#else
             (void)ctx;
             return 0U;
-#    endif
+#endif
         }
 
         LONG CALLBACK vectored_handler(EXCEPTION_POINTERS* ep) {
@@ -169,8 +169,8 @@ namespace mnemos::apm::memory {
 
         {
             std::lock_guard<std::mutex> lock(g_mutex);
-            g_watches.push_back(watch_entry{page_begin, page_end, b, b + bytes, protect, kind,
-                                            std::move(handler)});
+            g_watches.push_back(
+                watch_entry{page_begin, page_end, b, b + bytes, protect, kind, std::move(handler)});
         }
 
         DWORD old = 0;
