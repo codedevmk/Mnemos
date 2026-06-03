@@ -121,6 +121,24 @@ namespace mnemos::apps::player::adapters::sms {
     void force_link() noexcept {}
 
     namespace {
+        // Map the CLI `--mapper` override string to the SMS mapper selection.
+        // Unrecognised / empty -> automatic (cart-header detection). Korean is
+        // force-only, reachable solely through this explicit selection.
+        [[nodiscard]] manifests::sms::sms_config::mapper
+        mapper_from_override(const std::string& name) noexcept {
+            using mapper = manifests::sms::sms_config::mapper;
+            if (name == "sega") {
+                return mapper::sega;
+            }
+            if (name == "codemasters") {
+                return mapper::codemasters;
+            }
+            if (name == "korean") {
+                return mapper::korean;
+            }
+            return mapper::automatic;
+        }
+
         const auto register_sms = [] {
             mnemos::frontend_sdk::adapter_registry::instance().register_family(
                 "sms",
@@ -129,7 +147,9 @@ namespace mnemos::apps::player::adapters::sms {
                     auto* sched_factory = opts.scheduler_factory_override;
                     return std::make_unique<sms_adapter>(
                         std::move(opts.rom),
-                        manifests::sms::sms_config{.video_region = opts.video_region},
+                        manifests::sms::sms_config{.video_region = opts.video_region,
+                                                   .cartridge_mapper =
+                                                       mapper_from_override(opts.mapper_override)},
                         std::move(opts.display_name), sched_factory);
                 });
             return 0;

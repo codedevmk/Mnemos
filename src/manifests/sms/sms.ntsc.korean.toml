@@ -1,0 +1,81 @@
+# Sega Master System (NTSC, standard Korean mapper) -- Mnemos system manifest
+# (schema mnemos-manifest/1).
+#
+# The Korean-mapper variant of sms.ntsc.toml. Identical to the Sega-mapper
+# build EXCEPT the cartridge mapper and its banking surface:
+#
+#   - mapper chip type is `korean.mapper`, not `sega.sms_mapper`.
+#   - There is NO `$FFFC-$FFFF` register overlay: the Korean mapper's only page
+#     register lives at $A000, inside the cartridge window, so a bus write there
+#     routes straight to the mapper via the region's write_overlay. Slots 0 and 1
+#     are fixed to ROM banks 0 and 1; only slot 2 ($8000-$BFFF) banks.
+#   - `$FFFC-$FFFF` is therefore ordinary work RAM.
+#
+# The Korean mapper is force-only (no header signature to auto-detect), selected
+# via sms_config::mapper::korean / `--mapper korean`. Inter-chip wiring is the
+# same host-side glue in `manifests::sms::sms_callbacks`.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.ntsc.korean"
+display_name = "Sega Master System (NTSC, Korean mapper)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# Z80 master clock; the VDP and PSG are ticked at the same rate (divider 1).
+master_hz               = 3579545
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+[chip.config]
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+[chip.config]
+irq_callback = "sms.vdp_irq"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "korean.mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+# Cartridge window: $0000-$BFFF routed through the Korean mapper. Reads resolve
+# ROM through the fixed slots 0/1 and the live slot-2 page; a write to $A000
+# selects the slot-2 page, all via the mapper's write_overlay. No separate
+# register overlay exists.
+[[bus.region]]
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
+
+# Work RAM: 8 KiB at $C000-$DFFF, mirrored at $E000-$FFFF (A13 unconnected).
+# $FFFC-$FFFF is plain RAM here -- the Korean mapper has no register file there.
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xFFFF"
+backing = "ram"
+size    = 8192

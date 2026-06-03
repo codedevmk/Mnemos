@@ -97,6 +97,27 @@ TEST_CASE("assemble_sms honours a forced mapper choice", "[sms][mapper]") {
     CHECK(forced_codies->codemasters_active);
 }
 
+TEST_CASE("assemble_sms honours a forced Korean mapper", "[sms][mapper]") {
+    auto rom = blank_rom(0x10000U); // four 16 KiB pages
+    rom[2U * 0x4000U] = 0x5AU;      // page 2 base marker
+    rom[3U * 0x4000U] = 0x6BU;      // page 3 base marker
+
+    auto sys = assemble_sms(std::move(rom), {.cartridge_mapper = sms_config::mapper::korean});
+    REQUIRE(sys->korean_active);
+    CHECK_FALSE(sys->codemasters_active);
+
+    // Power-on: slots 0/1 fixed to pages 0/1, slot 2 = page 2 (linear).
+    CHECK(sys->korean.page() == 2U);
+    CHECK(sys->bus.read8(0x8000U) == 0x5AU); // slot 2 -> page 2
+
+    // A write to $A000 (inside the cartridge window) pages slot 2.
+    sys->bus.write8(0xA000U, 3U);
+    CHECK(sys->korean.page() == 3U);
+    CHECK(sys->bus.read8(0x8000U) == 0x6BU); // slot 2 -> page 3
+    CHECK(sys->bus.read8(0x0000U) == 0x00U); // slots 0/1 unaffected
+    CHECK(sys->bus.read8(0x4000U) == 0x00U);
+}
+
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {
     auto rom = blank_rom();
     // LD A,$AA ; OUT ($BF),A ; LD A,$81 ; OUT ($BF),A  -> VDP register 1 = $AA

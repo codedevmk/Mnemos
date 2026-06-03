@@ -2,6 +2,7 @@
 
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
+#include "korean_mapper.hpp"      // standard Korean mapper
 #include "peripheral.hpp"         // peripheral::device (controller ports)
 #include "region.hpp"             // mnemos::video_region (shared)
 #include "sms_mapper.hpp"         // Sega mapper
@@ -20,8 +21,11 @@ namespace mnemos::manifests::sms {
 
     struct sms_config final {
         // automatic picks Sega vs Codemasters from the cart's Codemasters
-        // checksum at $7FE6/$7FE8; the others force one.
-        enum class mapper : std::uint8_t { automatic, sega, codemasters };
+        // checksum at $7FE6/$7FE8; the others force one. `korean` is force-only:
+        // the standard Korean cartridge carries no header signature, so a
+        // heuristic would risk misdetecting (and breaking) Sega/Codemasters
+        // carts -- automatic therefore never resolves to korean.
+        enum class mapper : std::uint8_t { automatic, sega, codemasters, korean };
 
         mnemos::video_region video_region{mnemos::video_region::ntsc};
         mapper cartridge_mapper{mapper::automatic};
@@ -35,12 +39,16 @@ namespace mnemos::manifests::sms {
         chips::cpu::z80 cpu;
         chips::video::sms_vdp vdp;
         chips::audio::sn76489 psg;
-        // Both mappers are members; assembly wires exactly one into the bus based on
-        // the cart (the Sega mapper pages through $FFFC-$FFFF, the Codemasters mapper
-        // through ROM-space writes). codemasters_active records which one is live.
+        // All three mappers are members; assembly wires exactly one into the bus
+        // based on the cart (the Sega mapper pages through $FFFC-$FFFF, the
+        // Codemasters and Korean mappers through writes inside the cartridge
+        // window). codemasters_active / korean_active record which one is live
+        // (both false = the Sega mapper).
         chips::mapper::sms_mapper mapper;
         chips::mapper::codemasters_mapper codies;
+        chips::mapper::korean_mapper korean;
         bool codemasters_active{};
+        bool korean_active{};
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x2000> ram{}; // 8 KiB, mirrored $C000 / $E000
@@ -75,6 +83,14 @@ namespace mnemos::manifests::sms {
     // when sms_config::cartridge_mapper is `automatic`. Shared by assemble_sms
     // and the manifest-path build_sms_runtime so both resolve carts identically.
     [[nodiscard]] bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept;
+
+    // Resolve sms_config::cartridge_mapper to a concrete mapper kind (never
+    // `automatic`): forced choices pass through, `automatic` picks Codemasters
+    // vs Sega from the checksum header. Korean is force-only, so this returns
+    // `korean` only when explicitly requested. Shared by assemble_sms and
+    // build_sms_runtime so both paths resolve carts identically.
+    [[nodiscard]] sms_config::mapper resolve_mapper(const sms_config& config,
+                                                    std::span<const std::uint8_t> rom) noexcept;
 
     // Assemble a bootable SMS from a cartridge image (moved in). The mapper banks the
     // image; reads of $C000-$FFFF hit work RAM (with the $FFFC-$FFFF mapper-register

@@ -7,6 +7,8 @@ set(_sms_manifest_files
     "sms.pal.toml"
     "sms.ntsc.codemasters.toml"
     "sms.pal.codemasters.toml"
+    "sms.ntsc.korean.toml"
+    "sms.pal.korean.toml"
 )
 foreach(_f IN LISTS _sms_manifest_files)
     set_property(
@@ -21,6 +23,8 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.codemasters.toml"
      MNEMOS_SMS_NTSC_CODEMASTERS_TOML)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.codemasters.toml"
      MNEMOS_SMS_PAL_CODEMASTERS_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.korean.toml" MNEMOS_SMS_NTSC_KOREAN_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.korean.toml" MNEMOS_SMS_PAL_KOREAN_TOML)
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/sms_embedded_manifests.hpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/sms_embedded_manifests.hpp"
@@ -55,6 +59,7 @@ target_link_libraries(
         mnemos::chips::audio::sn76489
         mnemos::chips::mapper::sms_mapper
         mnemos::chips::mapper::codemasters_mapper
+        mnemos::chips::mapper::korean_mapper
         mnemos::peripheral::input
 )
 

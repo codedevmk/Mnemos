@@ -21,6 +21,12 @@ namespace mnemos::apps::player::adapters {
     // when the user opts out to drop to a bare prompt.
     [[nodiscard]] bool parse_no_autostart(int argc, char* argv[]);
 
+    // Scan argv for `--mapper <name>` and return the lowercased value, or
+    // nullopt when the flag is absent or has no value. The value is interpreted
+    // by the family adapter (the SMS adapter accepts sega/codemasters/korean);
+    // an unrecognised name leaves the adapter on auto-detect.
+    [[nodiscard]] std::optional<std::string> parse_mapper_arg(int argc, char* argv[]);
+
     // --screenshot <path.ppm> --frames N: headless run, dump the resulting
     // VDP framebuffer as PPM, exit. Both flags must be present together; a
     // missing or unparseable value disables the headless path.

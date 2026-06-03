@@ -50,6 +50,11 @@ namespace mnemos::frontend_sdk {
         // concept ignore it. Defaults on; the frontend clears it to drop to a
         // bare prompt instead.
         bool autostart{true};
+        // Optional cartridge-mapper override, interpreted by the family adapter
+        // (e.g. the SMS adapter accepts "sega" / "codemasters" / "korean").
+        // Empty = let the adapter auto-detect. Families without selectable
+        // mappers ignore it.
+        std::string mapper_override;
         // Optional scheduler-construction override. null = adapter falls back
         // to its built-in scheduler. Non-null lets tooling (deterministic
         // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)

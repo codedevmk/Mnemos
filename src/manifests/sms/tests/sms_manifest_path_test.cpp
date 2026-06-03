@@ -32,7 +32,8 @@
 TEST_CASE("SMS manifest path builds a runnable system", "[sms][manifest][smoke]") {
     using namespace mnemos::manifests;
 
-    const auto parsed = parse_manifest(sms::manifest_toml(mnemos::video_region::ntsc, false));
+    const auto parsed = parse_manifest(
+        sms::manifest_toml(mnemos::video_region::ntsc, sms::sms_config::mapper::sega));
     REQUIRE(parsed.ok());
 
     // Host state captures chip pointers + non-chip state. Closures inside

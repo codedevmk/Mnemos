@@ -4,6 +4,7 @@
 #include "sms_manifests.hpp" // manifest_toml
 
 #include "codemasters_mapper.hpp"
+#include "korean_mapper.hpp"
 #include "mk3020.hpp" // default controller-port peripheral
 #include "sms_mapper.hpp"
 
@@ -14,39 +15,24 @@
 
 namespace mnemos::manifests::sms {
 
-    namespace {
-
-        // Resolve the effective mapper: forced by config, else auto-detected
-        // from the cart header. Same policy as assemble_sms's switch.
-        [[nodiscard]] bool resolve_codemasters(const sms_config& config,
-                                               std::span<const std::uint8_t> rom) noexcept {
-            switch (config.cartridge_mapper) {
-            case sms_config::mapper::sega:
-                return false;
-            case sms_config::mapper::codemasters:
-                return true;
-            case sms_config::mapper::automatic:
-            default:
-                return detect_codemasters(rom);
-            }
-        }
-
-    } // namespace
-
     std::unique_ptr<sms_runtime> build_sms_runtime(std::vector<std::uint8_t> rom,
                                                    const sms_config& config) {
         auto rt = std::make_unique<sms_runtime>();
         rt->rom = std::move(rom);
-        rt->codemasters_active =
-            resolve_codemasters(config, std::span<const std::uint8_t>(rt->rom));
+
+        // Resolve the effective mapper once (forced by config, else auto-detected;
+        // Korean is force-only) -- the shared policy assemble_sms also uses.
+        const sms_config::mapper kind =
+            resolve_mapper(config, std::span<const std::uint8_t>(rt->rom));
+        rt->codemasters_active = kind == sms_config::mapper::codemasters;
+        rt->korean_active = kind == sms_config::mapper::korean;
 
         // Host glue: every closure captures &rt->state, whose address is stable
         // because rt is heap-allocated. The chips copy the closures during
         // configure(), so the local tables can die after build_system returns.
         auto tables = make_sms_host_tables(rt->state);
 
-        const auto parsed =
-            parse_manifest(manifest_toml(config.video_region, rt->codemasters_active));
+        const auto parsed = parse_manifest(manifest_toml(config.video_region, kind));
 
         // The SMS manifests declare no rom-backed regions (the cart is supplied
         // through the mapper, not a [[bus.region]] backing="rom"), so the
@@ -67,16 +53,20 @@ namespace mnemos::manifests::sms {
         // Attach the cartridge to whichever mapper the manifest instantiated.
         // The Sega mapper is also published in state.mapper because its $FFFC
         // register overlay (an mmio_factory) writes through it; the Codemasters
-        // mapper banks via ROM-space writes through the cartridge region and
-        // needs no such back-reference.
-        if (rt->codemasters_active) {
+        // and Korean mappers bank via writes inside the cartridge region and
+        // need no such back-reference.
+        const std::span<const std::uint8_t> rom_span(rt->rom);
+        if (rt->korean_active) {
+            auto* korean = dynamic_cast<chips::mapper::korean_mapper*>(rt->graph.chip("mapper"));
+            korean->attach_rom(rom_span);
+        } else if (rt->codemasters_active) {
             auto* codies =
                 dynamic_cast<chips::mapper::codemasters_mapper*>(rt->graph.chip("mapper"));
-            codies->attach_rom(std::span<const std::uint8_t>(rt->rom));
+            codies->attach_rom(rom_span);
         } else {
             auto* mapper = dynamic_cast<chips::mapper::sms_mapper*>(rt->graph.chip("mapper"));
             rt->state.mapper = mapper;
-            mapper->attach_rom(std::span<const std::uint8_t>(rt->rom));
+            mapper->attach_rom(rom_span);
         }
 
         // Post-BIOS stack pointer: the SMS BIOS sets SP=$DFF0 before handing off
