@@ -69,7 +69,9 @@ the reference's instruction coalescing) — never raw instruction index, never r
 ## Phase 1 — Tracer host + tagged allocator (self-contained module)
 
 - [ ] `apm/` module: own CMake target, own tests, own README. No engine internals included.
-- [ ] Tagged allocator: per-bank tags, page-aligned arenas, guard-band option, alloc/free log.
+- [~] Tagged allocator: per-bank tags + page-aligned arenas + reverse address->tag lookup DONE
+      (`apm/memory/tagged_allocator` + `bank_registry`, implementing the `imemory_allocator`
+      contract; slice #2, 6 tests pass). Pending: guard-band option, alloc/free log.
 - [ ] Bootstrap `tracer.exe`: `LoadLibrary(emulator.dll)`, inject allocator, drive run/step.
 - [ ] Perf counters (per-chip cycles, stalls, instr counts, fault counts, trace bytes/s) + an
       emit/event API.

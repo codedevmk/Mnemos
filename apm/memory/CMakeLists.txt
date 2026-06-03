@@ -1,7 +1,7 @@
 # Tagged-allocator + page-protection watchpoint engine for the APM tracer. The
 # heart of "observe from the outside": VirtualProtect + a Vectored Exception
 # Handler intercept guest-memory accesses without the traced program's help.
-add_library(mnemos_apm_memory page_guard.cpp)
+add_library(mnemos_apm_memory page_guard.cpp bank_registry.cpp tagged_allocator.cpp)
 add_library(mnemos::apm::memory ALIAS mnemos_apm_memory)
 
 target_include_directories(
@@ -20,6 +20,16 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_apm_memory_page_guard_test
         SOURCES tests/page_guard_proof.cpp
+        LIBRARIES mnemos::apm::memory
+    )
+    mnemos_add_test(
+        mnemos_apm_memory_bank_registry_test
+        SOURCES tests/bank_registry_test.cpp
+        LIBRARIES mnemos::apm::memory
+    )
+    mnemos_add_test(
+        mnemos_apm_memory_tagged_allocator_test
+        SOURCES tests/tagged_allocator_test.cpp
         LIBRARIES mnemos::apm::memory
     )
 endif()
