@@ -11,8 +11,9 @@ namespace mnemos::manifests::genesis {
     namespace {
 
         // Opt-in VDP write-timing trace. With MNEMOS_WRITE_TRACE set, the VDP
-        // data-port write handler emits a CSV row (prefix "WT,") on stderr for each
-        // 68K port write: dispatch beam position vs the sub-instruction-corrected
+        // data-port write handler emits one CSV row (prefix "WT,") on stderr per
+        // completed 16-bit data-port word write (i.e. when the low byte arrives and
+        // forms the word): dispatch beam position vs the sub-instruction-corrected
         // position (line_accumulator + in-flight-instruction cycles * 7). For offline
         // raster/timing analysis. Off by default => one cached bool check, no behaviour
         // change. Columns: WT,frame,scanline,raw_master,corr_master,straddle,cmd_code,addr,word.
@@ -269,7 +270,9 @@ namespace mnemos::manifests::genesis {
                                         corr >= chips::video::genesis_vdp::master_clocks_per_line
                                             ? 1
                                             : 0,
-                                        s->vdp->cmd_code(), s->vdp->cmd_addr(), word);
+                                        static_cast<unsigned>(s->vdp->cmd_code()),
+                                        static_cast<unsigned>(s->vdp->cmd_addr()),
+                                        static_cast<unsigned>(word));
                                 }
                                 s->vdp->write16(offset & ~1U, word);
                             }
