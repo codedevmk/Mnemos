@@ -15,17 +15,21 @@ namespace mnemos::chips::mapper {
     // ($8000-$9FFF) and ROMH ($A000-$BFFF, or $E000-$FFFF in ultimax) views plus the I/O-1/I/O-2
     // window ($DE00-$DFFF) for bank switching. It also drives the /GAME and /EXROM
     // lines the PLA decodes. Supported hardware types: generic 8K/16K/ultimax,
-    // System 3 / C64 Game System (15), Dinamic (17), Ocean (5), Magic Desk (19),
-    // and EasyFlash (32). The type is taken from the `.crt` header, so a title's
-    // mapper is auto-selected by loading its image -- no manifest entry needed.
+    // Fun Play / Power Play (7), Super Games (8), System 3 / C64 Game System (15),
+    // Dinamic (17), Magic Desk (19), Comal-80 (21), Ocean (5), and EasyFlash (32).
+    // The type is taken from the `.crt` header, so a title's mapper is
+    // auto-selected by loading its image -- no manifest entry needed.
     class c64_cartridge final : public imapper, public immio {
       public:
         enum class hardware : std::uint16_t {
             generic = 0U,
             ocean = 5U,
-            system_3 = 15U, // System 3 / C64 Game System: write $DE00+bank selects bank
-            dinamic = 17U,  // Dinamic: read $DE00+bank selects bank
+            fun_play = 7U,    // Fun Play / Power Play: $DE00 scrambled bank, $86 releases
+            super_games = 8U, // Super Games: $DF00 bank (bits 0-1), bit 2 disables
+            system_3 = 15U,   // System 3 / C64 Game System: write $DE00+bank selects bank
+            dinamic = 17U,    // Dinamic: read $DE00+bank selects bank
             magic_desk = 19U,
+            comal_80 = 21U, // Comal-80: $DE00 value $80-$83 selects a 16K bank
             easyflash = 32U,
         };
 

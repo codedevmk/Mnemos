@@ -180,10 +180,12 @@ Current baseline (do not re-implement):
       ROML/ROMH machinery. *Unblocks:* a large slice of the commercial C64 cart library.
   - [x] `system_3`/`c64gs` (15): write `$DE00+bank` selects the bank (value ignored). 1 unit test.
   - [x] `dinamic` (17): read `$DE00+bank` selects the bank (bus floats high). 1 unit test.
+  - [x] `fun_play`/`power_play` (7): `$DE00` scrambled bank `((v>>3)&7)|((v&1)<<3)`; `(v&0xC6)==
+        0x86` releases both lines. 1 unit test.
+  - [x] `super_games` (8): `$DF00` (I/O-2) bank = `v&3`, bit 2 set releases the lines (16K). 1 test.
+  - [x] `comal_80` (21): `$DE00` value `$80-$83` validates + selects a 16K bank `v&3`. 1 unit test.
   - [ ] `zaxxon`/`super_zaxxon` (18): bank selected by *which half* of the mirrored 4 KiB ROML is
         read, so it needs read-triggered banking through `read_roml` (interface tweak; deferred).
-  - [ ] `fun_play`/`power_play` (7): scrambled bank bits in the `$DE00` value + `$86` disable.
-  - [ ] `super_games` (8) and `comal_80` (21): `$DE00` value selects bank + mode/EXROM bits.
   - [ ] Per-type golden boot once a ROM is supplied (data-gated, like the existing boot tests).
 - [ ] **SMS Korean mappers**: add the Korean families as distinct mapper chips (peer to
       `codemasters.mapper`) — Korean MSX-style `$A000` bank latch, Korean `188-in-1`, `4PAK
