@@ -72,7 +72,12 @@ the reference's instruction coalescing) — never raw instruction index, never r
 - [~] Tagged allocator: per-bank tags + page-aligned arenas + reverse address->tag lookup DONE
       (`apm/memory/tagged_allocator` + `bank_registry`, implementing the `imemory_allocator`
       contract; slice #2, 6 tests pass). Pending: guard-band option, alloc/free log.
-- [ ] Bootstrap `tracer.exe`: `LoadLibrary(emulator.dll)`, inject allocator, drive run/step.
+- [x] Plugin C ABI (`apm/abi/apm_plugin_abi.h`) + genesis binding DLL (`apm/bindings/genesis`,
+      `mnemos_genesis.dll`) wrapping `build_genesis_runtime` behind create/load_rom/run_frame/
+      read_register/get_bank — ZERO engine change. Binding test (synthetic ROM) passes (slice #3).
+- [x] Bootstrap `mnemos_tracer.exe` (`apm/host`): `LoadLibrary(mnemos_genesis.dll)`, drive
+      run_frame, arm a page-protection watchpoint on a bank address, read guest PC via the ABI.
+      Links only abi + memory; the engine arrives at runtime. (slice #3)
 - [ ] Perf counters (per-chip cycles, stalls, instr counts, fault counts, trace bytes/s) + an
       emit/event API.
 
@@ -86,7 +91,9 @@ the reference's instruction coalescing) — never raw instruction index, never r
       intercept+host-IP, re-arm across repeated writes, sub-page filter). Pending: wire to the
       engine plugin + read guest PC via the ABI instead of host IP.
   - [x] Core engine: VirtualProtect + VEH intercept/recover/re-arm (apm/memory/page_guard).
-  - [ ] Write-watch wired to a real bank (e.g. work-RAM `$FFF7F5`/`$FFF809`) via the binding.
+  - [x] Write-watch wired to the REAL engine via the binding+host: traced Kid Chameleon `$FFF809`
+        from outside (writer `pc=$000488` per frame; `pc=$000720` resets it at frame 24). 130
+        frames in ~6 s. Guest PC read via the ABI (`read_register(APM_REG_INST)`), not host IP.
   - [ ] **Read-watch** VDP status `$C00004` / HV-counter `$C00008` + the branch taken next
         (the boot-wait-loop poll — root-cause mechanism for the current bug).
   - [x] Page-granularity filter (4 KiB pages; filter unrelated addrs in handler).
