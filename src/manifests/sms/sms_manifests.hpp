@@ -29,6 +29,9 @@ namespace mnemos::manifests::sms {
         switch (kind) {
         case sms_config::mapper::korean:
             return pal ? embedded::sms_pal_korean_toml : embedded::sms_ntsc_korean_toml;
+        case sms_config::mapper::korean_msx:
+        case sms_config::mapper::korean_msx_nemesis:
+            return pal ? embedded::sms_pal_korean_msx_toml : embedded::sms_ntsc_korean_msx_toml;
         case sms_config::mapper::codemasters:
             return pal ? embedded::sms_pal_codemasters_toml : embedded::sms_ntsc_codemasters_toml;
         case sms_config::mapper::sega:

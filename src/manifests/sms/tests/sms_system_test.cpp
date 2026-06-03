@@ -118,6 +118,37 @@ TEST_CASE("assemble_sms honours a forced Korean mapper", "[sms][mapper]") {
     CHECK(sys->bus.read8(0x4000U) == 0x00U);
 }
 
+TEST_CASE("assemble_sms honours a forced Korean MSX mapper", "[sms][mapper]") {
+    auto rom = blank_rom(0x10000U); // eight 8 KiB pages
+    for (std::uint8_t p = 0; p < 8U; ++p) {
+        rom[static_cast<std::size_t>(p) * 0x2000U] = static_cast<std::uint8_t>(0xC0U + p);
+    }
+
+    auto sys = assemble_sms(rom, {.cartridge_mapper = sms_config::mapper::korean_msx});
+    REQUIRE(sys->korean_msx_active);
+    CHECK_FALSE(sys->korean_active);
+
+    // Fixed bank 0: $0000 = page 0, $2000 = page 1. Windows power on at page 0.
+    CHECK(sys->bus.read8(0x0000U) == 0xC0U);
+    CHECK(sys->bus.read8(0x2000U) == 0xC1U);
+    CHECK(sys->bus.read8(0x8000U) == 0xC0U);
+
+    // Page the windows: reg 0 -> $8000, reg 2 -> $4000.
+    sys->bus.write8(0x0000U, 3U);
+    sys->bus.write8(0x0002U, 5U);
+    CHECK(sys->bus.read8(0x8000U) == 0xC3U);
+    CHECK(sys->bus.read8(0x4000U) == 0xC5U);
+    CHECK(sys->bus.read8(0x0000U) == 0xC0U); // fixed window unaffected
+
+    // Nemesis variant: $0000-$1FFF maps the last 8 KiB page.
+    auto nem = assemble_sms(rom, {.cartridge_mapper = sms_config::mapper::korean_msx_nemesis});
+    REQUIRE(nem->korean_msx_active);
+    CHECK(nem->korean_msx.chip_variant() ==
+          mnemos::chips::mapper::korean_msx_mapper::variant::nemesis);
+    CHECK(nem->bus.read8(0x0000U) == 0xC7U); // last 8 KiB page
+    CHECK(nem->bus.read8(0x2000U) == 0xC1U); // $2000-$3FFF stays bank 0
+}
+
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {
     auto rom = blank_rom();
     // LD A,$AA ; OUT ($BF),A ; LD A,$81 ; OUT ($BF),A  -> VDP register 1 = $AA

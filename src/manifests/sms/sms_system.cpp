@@ -32,6 +32,10 @@ namespace mnemos::manifests::sms {
             return sms_config::mapper::codemasters;
         case sms_config::mapper::korean:
             return sms_config::mapper::korean;
+        case sms_config::mapper::korean_msx:
+            return sms_config::mapper::korean_msx;
+        case sms_config::mapper::korean_msx_nemesis:
+            return sms_config::mapper::korean_msx_nemesis;
         case sms_config::mapper::automatic:
         default:
             return detect_codemasters(rom) ? sms_config::mapper::codemasters
@@ -114,12 +118,33 @@ namespace mnemos::manifests::sms {
             resolve_mapper(config, std::span<const std::uint8_t>(s->rom));
         s->codemasters_active = kind == sms_config::mapper::codemasters;
         s->korean_active = kind == sms_config::mapper::korean;
+        s->korean_msx_active = kind == sms_config::mapper::korean_msx ||
+                               kind == sms_config::mapper::korean_msx_nemesis;
 
         // --- Z80 memory map (16-bit address space) ---
         // $C000-$DFFF: 8 KiB system RAM, mirrored at $E000-$FFFF (the same storage).
         const std::span<std::uint8_t> work_ram(s->ram);
 
-        if (s->korean_active) {
+        if (s->korean_msx_active) {
+            // Korean MSX: $0000-$BFFF routed through the 8 KiB mapper. $0000-$3FFF is
+            // fixed bank 0; writes to $0000-$0003 page the four 8 KiB windows. The
+            // Nemesis variant remaps $0000-$1FFF to the last 8 KiB bank.
+            if (kind == sms_config::mapper::korean_msx_nemesis) {
+                s->korean_msx.set_variant(chips::mapper::korean_msx_mapper::variant::nemesis);
+            }
+            s->korean_msx.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) {
+                    return s->korean_msx.cpu_read(static_cast<std::uint16_t>(a));
+                },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->korean_msx.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
+        } else if (s->korean_active) {
             // Korean: $0000-$BFFF routed through the Korean mapper. Slots 0/1 are
             // fixed ROM banks 0/1; a write to $A000 (inside the window) pages slot 2.
             // No $FFFC-$FFFF register overlay -- $C000-$FFFF is plain work RAM.

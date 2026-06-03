@@ -1,0 +1,79 @@
+# Sega Master System (NTSC, Korean MSX 8 KiB mapper) -- Mnemos system manifest
+# (schema mnemos-manifest/1).
+#
+# The Korean-MSX-mapper variant of sms.ntsc.toml. Identical to the Sega-mapper
+# build EXCEPT the cartridge mapper and its banking surface:
+#
+#   - mapper chip type is `korean.msx_mapper`, not `sega.sms_mapper`.
+#   - 8 KiB banking: $0000-$3FFF is fixed bank 0, and writes to $0000-$0003 page
+#     the four 8 KiB windows ($8000/$A000/$4000/$6000). Those register writes land
+#     inside the cartridge window, so they route to the mapper via write_overlay;
+#     there is NO `$FFFC-$FFFF` register overlay and that range is plain work RAM.
+#
+# Both the plain MSX mapper and its `nemesis` boot-region variant use this same
+# manifest -- the variant is force-only configuration applied in code, not a
+# separate chip. Selected via sms_config / `--mapper korean-msx[-nemesis]`.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.ntsc.korean_msx"
+display_name = "Sega Master System (NTSC, Korean MSX mapper)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# Z80 master clock; the VDP and PSG are ticked at the same rate (divider 1).
+master_hz               = 3579545
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+[chip.config]
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+[chip.config]
+irq_callback = "sms.vdp_irq"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "korean.msx_mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+# Cartridge window: $0000-$BFFF routed through the Korean MSX mapper. Reads
+# resolve the fixed bank 0 + the four live 8 KiB pages; writes to $0000-$0003
+# select the pages, all via the mapper's write_overlay. No register overlay.
+[[bus.region]]
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
+
+# Work RAM: 8 KiB at $C000-$DFFF, mirrored at $E000-$FFFF (A13 unconnected).
+# $FFFC-$FFFF is plain RAM here -- this mapper has no register file there.
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xFFFF"
+backing = "ram"
+size    = 8192
