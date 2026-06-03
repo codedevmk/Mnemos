@@ -113,6 +113,39 @@ TEST_CASE("c64_cartridge Ocean banks via $DE00") {
     CHECK(cart.read_roml(0U) == 1U);
 }
 
+TEST_CASE("c64_cartridge System 3 / C64GS banks on the I/O-1 write address") {
+    std::vector<chip_packet> chips;
+    for (std::uint16_t b = 0; b < 4U; ++b) {
+        chips.push_back({b, 0x8000U, filled(0x2000U, static_cast<std::uint8_t>(0x10U + b))});
+    }
+    c64_cartridge cart;
+    REQUIRE(cart.load_crt(build_crt(15U, 0U, 1U, chips))); // 8K mode: EXROM low, GAME high
+    CHECK(cart.type() == c64_cartridge::hardware::system_3);
+    CHECK(cart.bank_count() == 4U);
+    CHECK(cart.read_roml(0U) == 0x10U); // power-on bank 0
+    cart.mmio_write(0x03U, 0x00U);      // write $DE03 selects bank 3 (value ignored)
+    CHECK(cart.bank() == 3U);
+    CHECK(cart.read_roml(0U) == 0x13U);
+    cart.mmio_write(0x06U, 0xFFU); // $DE06 -> 6 % 4 = bank 2
+    CHECK(cart.read_roml(0U) == 0x12U);
+}
+
+TEST_CASE("c64_cartridge Dinamic banks on the I/O-1 read address") {
+    std::vector<chip_packet> chips;
+    for (std::uint16_t b = 0; b < 8U; ++b) {
+        chips.push_back({b, 0x8000U, filled(0x2000U, static_cast<std::uint8_t>(0x20U + b))});
+    }
+    c64_cartridge cart;
+    REQUIRE(cart.load_crt(build_crt(17U, 0U, 1U, chips)));
+    CHECK(cart.type() == c64_cartridge::hardware::dinamic);
+    CHECK(cart.read_roml(0U) == 0x20U);    // power-on bank 0
+    CHECK(cart.mmio_read(0x05U) == 0xFFU); // read $DE05 selects bank 5, bus floats high
+    CHECK(cart.bank() == 5U);
+    CHECK(cart.read_roml(0U) == 0x25U);
+    (void)cart.mmio_read(0x00U); // $DE00 returns to bank 0
+    CHECK(cart.read_roml(0U) == 0x20U);
+}
+
 TEST_CASE("c64_cartridge Magic Desk disables via bit 7") {
     c64_cartridge cart;
     REQUIRE(cart.load_crt(build_crt(19U, 0U, 1U, {{0U, 0x8000U, filled(0x2000U, 0x42U)}})));

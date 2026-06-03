@@ -76,6 +76,12 @@ namespace mnemos::chips::mapper {
         case 5U:
             type_ = hardware::ocean;
             break;
+        case 15U:
+            type_ = hardware::system_3;
+            break;
+        case 17U:
+            type_ = hardware::dinamic;
+            break;
         case 19U:
             type_ = hardware::magic_desk;
             break;
@@ -169,9 +175,26 @@ namespace mnemos::chips::mapper {
         return idx < romh_.size() ? romh_[idx] : 0xFFU;
     }
 
+    void c64_cartridge::set_bank(std::uint16_t bank) noexcept {
+        bank_ = (bank_count_ != 0U) ? static_cast<std::uint16_t>(bank % bank_count_) : bank;
+    }
+
     std::uint8_t c64_cartridge::mmio_read(std::uint16_t offset) {
-        if (type_ == hardware::easyflash && offset >= 0x100U) {
-            return ef_ram_[offset & 0xFFU]; // I/O-2 = 256-byte RAM
+        switch (type_) {
+        case hardware::easyflash:
+            if (offset >= 0x100U) {
+                return ef_ram_[offset & 0xFFU]; // I/O-2 = 256-byte RAM
+            }
+            break;
+        case hardware::dinamic:
+            // A read of I/O-1 ($DE00-$DEFF) selects the bank named by the low
+            // address byte; the data bus floats, so the read itself yields $FF.
+            if (offset < 0x100U) {
+                set_bank(static_cast<std::uint16_t>(offset & 0x0FU));
+            }
+            break;
+        default:
+            break;
         }
         return 0xFFU;
     }
@@ -179,29 +202,33 @@ namespace mnemos::chips::mapper {
     void c64_cartridge::mmio_write(std::uint16_t offset, std::uint8_t value) {
         switch (type_) {
         case hardware::ocean:
-            bank_ = static_cast<std::uint16_t>(value & 0x3FU); // $DE00 bank select
+            set_bank(static_cast<std::uint16_t>(value & 0x3FU)); // $DE00 bank select
+            break;
+        case hardware::system_3:
+            // A write to I/O-1 ($DE00+bank) selects the bank; the value is ignored.
+            if (offset < 0x100U) {
+                set_bank(static_cast<std::uint16_t>(offset & 0xFFU));
+            }
             break;
         case hardware::magic_desk:
-            bank_ = static_cast<std::uint16_t>(value & 0x3FU);
+            set_bank(static_cast<std::uint16_t>(value & 0x3FU));
             enabled_ = (value & 0x80U) == 0U; // bit 7 = cartridge disabled
             exrom_ = !enabled_;               // disabled -> /EXROM released (RAM visible)
             break;
         case hardware::easyflash:
             if (offset == 0x00U) {
-                bank_ = static_cast<std::uint16_t>(value & 0x3FU); // $DE00 bank
-            } else if (offset == 0x02U) {                          // $DE02 control
-                exrom_ = (value & 0x02U) == 0U;                    // bit1=1 -> /EXROM low
+                set_bank(static_cast<std::uint16_t>(value & 0x3FU)); // $DE00 bank
+            } else if (offset == 0x02U) {                            // $DE02 control
+                exrom_ = (value & 0x02U) == 0U;                      // bit1=1 -> /EXROM low
                 game_ = (value & 0x04U) != 0U ? (value & 0x01U) != 0U : false; // bit2=mode
             } else if (offset >= 0x100U) {
                 ef_ram_[offset & 0xFFU] = value; // $DF00 RAM
             }
             break;
         case hardware::generic:
+        case hardware::dinamic:
         default:
             break;
-        }
-        if (bank_count_ != 0U) {
-            bank_ = static_cast<std::uint16_t>(bank_ % bank_count_);
         }
     }
 

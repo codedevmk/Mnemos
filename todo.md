@@ -175,13 +175,16 @@ Current baseline (do not re-implement):
 
 ## P0 — Boot-blockers across whole catalogs (highest coverage per task)
 
-- [ ] **C64 cartridge CRT types**: add the high-frequency `.crt` hardware ids that currently fail
-      to map — `system_3`/`c64gs` (id 15/16), `dinamic` (17), `zaxxon`/`super_zaxxon` (18),
-      `fun_play` (3), `super_games` (8), `comal_80` (21). Each is a bank-select decode on the
-      `$DE00`/`$DF00` I/O window over `c64_cartridge`'s ROML/ROMH machinery.
-      *Unblocks:* a large slice of the commercial C64 cart library.
-      *Accept:* a unit test per type maps the right 8 KiB bank for a known register write; one
-      golden boot per type once a ROM is supplied (data-gated, like the existing boot tests).
+- [~] **C64 cartridge CRT types**: add the high-frequency `.crt` hardware ids that currently fail
+      to map, each a bank-select decode on the `$DE00`/`$DF00` I/O window over `c64_cartridge`'s
+      ROML/ROMH machinery. *Unblocks:* a large slice of the commercial C64 cart library.
+  - [x] `system_3`/`c64gs` (15): write `$DE00+bank` selects the bank (value ignored). 1 unit test.
+  - [x] `dinamic` (17): read `$DE00+bank` selects the bank (bus floats high). 1 unit test.
+  - [ ] `zaxxon`/`super_zaxxon` (18): bank selected by *which half* of the mirrored 4 KiB ROML is
+        read, so it needs read-triggered banking through `read_roml` (interface tweak; deferred).
+  - [ ] `fun_play`/`power_play` (7): scrambled bank bits in the `$DE00` value + `$86` disable.
+  - [ ] `super_games` (8) and `comal_80` (21): `$DE00` value selects bank + mode/EXROM bits.
+  - [ ] Per-type golden boot once a ROM is supplied (data-gated, like the existing boot tests).
 - [ ] **SMS Korean mappers**: add the Korean families as distinct mapper chips (peer to
       `codemasters.mapper`) — Korean MSX-style `$A000` bank latch, Korean `188-in-1`, `4PAK
       All Action`, `Janggun`. Header has no signature, so detect by ROM size + reset-vector
