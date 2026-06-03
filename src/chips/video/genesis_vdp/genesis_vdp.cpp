@@ -497,8 +497,9 @@ namespace mnemos::chips::video {
             const std::int64_t accept = next_accept_slot(h40_mode(), base);
             fifo_stall_master_cycles_ += accept - effective_now;
             fifo_accept_cursor_master_ = accept + 1;
-            fifo_drain_[static_cast<std::size_t>(fifo_idx_)] = accept;
-            fifo_idx_ = (fifo_idx_ + 1) & 3;
+            // The accept-cadence model is independent of the 4-entry FIFO-drain
+            // schedule: leave fifo_drain_/fifo_idx_ untouched so they keep meaning
+            // exactly "drain times" (as documented + serialized).
             return;
         }
 
