@@ -6,7 +6,9 @@
 
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
+#include <span>
 
 namespace mnemos::chips::video {
     namespace {
@@ -91,6 +93,59 @@ namespace mnemos::chips::video {
             kLineMaster + 2356,
             kLineMaster + 2484,
         };
+
+        // Next external-access slot at/after `pos` (master cycles from the current
+        // line start; may span lines for a long burst -- slots repeat every
+        // kLineMaster). Used by the opt-in write-accept gating model.
+        [[nodiscard]] std::int64_t next_accept_slot(bool h40, std::int64_t pos) noexcept {
+            const std::span<const int> t =
+                h40 ? std::span<const int>(fifo_timing_h40) : std::span<const int>(fifo_timing_h32);
+            const std::int64_t line = pos / kLineMaster;
+            const std::int64_t within = pos - line * kLineMaster;
+            for (const int s : t) {
+                if (s >= kLineMaster) {
+                    break; // past the within-line slots (the +line repeat half)
+                }
+                if (s >= within) {
+                    return line * kLineMaster + s;
+                }
+            }
+            return (line + 1) * kLineMaster + t[0]; // roll into the next line's first slot
+        }
+
+        // Opt-in (MNEMOS_WRITE_ACCEPT): model VDP data-port write ACCEPT timing -- each
+        // 16-bit word waits for the next access slot during active display -- not just
+        // FIFO-full back-pressure. Off by default (one cached check), no behaviour change.
+        [[nodiscard]] bool write_accept_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: opt-in diagnostic, not hot-path
+#endif
+            static const bool on = std::getenv("MNEMOS_WRITE_ACCEPT") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return on;
+        }
+
+        // Tuning probe (MNEMOS_ACCEPT_MIN_GAP, default 0): minimum master cycles
+        // between consecutive accepted data-port words. The 68K cannot consume every
+        // documented drain slot, so the sustained accept cadence is sparser than the
+        // 18-slot drain schedule; this paces a burst to >= min_gap master/word.
+        [[nodiscard]] std::int64_t write_accept_min_gap() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            static const std::int64_t gap = [] {
+                const char* e = std::getenv("MNEMOS_ACCEPT_MIN_GAP");
+                return e != nullptr ? std::strtoll(e, nullptr, 10) : 0LL;
+            }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return gap;
+        }
 
         // Scroll-plane size in cells (R16 HSZ/VSZ; 0b10 is invalid -> treat as 64).
         [[nodiscard]] constexpr int scroll_size(int sz_bits) noexcept {
@@ -417,6 +472,34 @@ namespace mnemos::chips::video {
         // on the display being enabled (reg[1] bit 6) and not being in V-blank.
         // Outside active display the FIFO drains freely.
         if (in_vblank_ || !display_enabled()) {
+            return;
+        }
+
+        if (write_accept_enabled()) {
+            // Each data-port word waits for the next VDP external access slot, so a
+            // back-to-back write burst paces to ~1 word/slot (matching hardware
+            // /DTACK accept timing) instead of running at raw opcode cadence.
+            // effective_now folds in the pending stall so a MOVE.L's two words charge
+            // two SEQUENTIAL slots, not the same one twice.
+            const std::int64_t effective_now = current_line_master() + fifo_stall_master_cycles_;
+            std::int64_t base = effective_now > fifo_accept_cursor_master_
+                                    ? effective_now
+                                    : fifo_accept_cursor_master_;
+            // Optional sparser accept cadence: keep each accept at least min_gap past
+            // the previous one (the 68K can't consume every drain slot).
+            const std::int64_t min_gap = write_accept_min_gap();
+            if (min_gap > 0) {
+                const std::int64_t min_base = fifo_accept_cursor_master_ - 1 + min_gap;
+                if (base < min_base) {
+                    base = min_base;
+                }
+            }
+            const std::int64_t accept = next_accept_slot(h40_mode(), base);
+            fifo_stall_master_cycles_ += accept - effective_now;
+            fifo_accept_cursor_master_ = accept + 1;
+            // The accept-cadence model is independent of the 4-entry FIFO-drain
+            // schedule: leave fifo_drain_/fifo_idx_ untouched so they keep meaning
+            // exactly "drain times" (as documented + serialized).
             return;
         }
 
@@ -1146,6 +1229,10 @@ namespace mnemos::chips::video {
                     d = 0;
                 }
             }
+            fifo_accept_cursor_master_ -= master_clocks_per_line;
+            if (fifo_accept_cursor_master_ < 0) {
+                fifo_accept_cursor_master_ = 0;
+            }
         }
         // Drain the post-VBLANK-entry VINT delay: VBLANK status went high
         // when scanline crossed visible_h, but the IRQ doesn't assert until
@@ -1293,6 +1380,7 @@ namespace mnemos::chips::video {
         fifo_drain_.fill(0);
         fifo_idx_ = 0;
         fifo_stall_master_cycles_ = 0;
+        fifo_accept_cursor_master_ = 0;
 
         total_scanlines_ = pal_mode_ ? scanlines_pal : scanlines_ntsc;
         // Frame phase: each frame starts on the VBL entry line so the very
@@ -1400,6 +1488,8 @@ namespace mnemos::chips::video {
         }
         writer.u32(static_cast<std::uint32_t>(fifo_idx_));
         writer.u64(static_cast<std::uint64_t>(fifo_stall_master_cycles_));
+        // fifo_accept_cursor_master_ is opt-in (MNEMOS_WRITE_ACCEPT) transient state and
+        // is deliberately NOT in the serialized format -- keeps the chunk byte-compatible.
     }
 
     void genesis_vdp::load_state(state_reader& reader) {
@@ -1451,6 +1541,9 @@ namespace mnemos::chips::video {
         }
         fifo_idx_ = static_cast<int>(reader.u32());
         fifo_stall_master_cycles_ = static_cast<std::int64_t>(reader.u64());
+        // Not serialized (opt-in transient state): reset deterministically on load;
+        // re-derives at the next scanline wrap when the accept path is active.
+        fifo_accept_cursor_master_ = 0;
 
         last_irq_level_ = pending_irq_level();
     }

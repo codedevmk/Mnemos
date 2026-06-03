@@ -368,6 +368,11 @@ namespace mnemos::chips::video {
         std::array<std::int64_t, 4> fifo_drain_{};
         int fifo_idx_{};
         std::int64_t fifo_stall_master_cycles_{};
+        // Write-accept gating (opt-in MNEMOS_WRITE_ACCEPT): master-cycle just past the
+        // last accepted data-port write, so a back-to-back burst paces to one VDP
+        // access slot per 16-bit word (hardware /DTACK) instead of opcode cadence.
+        // Kept in the current line's frame of reference; shifted on line wrap.
+        std::int64_t fifo_accept_cursor_master_{};
 
         // Master-clock duration of a DMA of `length_units` units against the
         // current display state. `dma_type`:
