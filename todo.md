@@ -200,7 +200,10 @@ Current baseline (do not re-implement):
         signature, so `automatic` never picks it), Korean manifest TOMLs (NTSC/PAL) + embedded gen,
         both assembly paths, a `--mapper sega|codemasters|korean` player CLI override, and a Korean
         case in the assemble + runtime-parity tests.
-  - [ ] Korean MSX 8K mapper (4 registers, 8 KiB banks) + Nemesis variant.
+  - [~] Korean MSX 8K mapper (`korean.msx_mapper`): $0000-$3FFF fixed bank 0, four 8 KiB windows
+        banked by registers `$0000-$0003` (order 0/1/2/3 -> $8000/$A000/$4000/$6000), Nemesis
+        variant maps the last 8 KiB at $0000-$1FFF. Standalone chip + 7 unit tests. (System
+        wiring + CRC/force selection still to do, same as the standard Korean mapper's.)
   - [ ] Korean `188-in-1`, `4PAK All Action`, `Janggun` multicart/special mappers.
   - [ ] Auto-detection (CRC database) so Korean carts resolve without an explicit `--mapper`, plus
         a data-gated boot golden.
