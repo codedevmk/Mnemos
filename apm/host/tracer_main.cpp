@@ -95,31 +95,36 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Map the guest watch address into its live host bank.
+    // Optionally map the guest watch address into its live host bank
+    // (--watch 0 profiles per-frame CPU cycles without arming a watchpoint).
+    const bool watching = (opt.watch_addr != 0);
     std::uint8_t* host_addr = nullptr;
-    const int banks = api->bank_count(p);
-    for (int i = 0; i < banks; ++i) {
-        apm_bank_info b{};
-        if (api->get_bank(p, i, &b) != 0) {
-            continue;
+    if (watching) {
+        const int banks = api->bank_count(p);
+        for (int i = 0; i < banks; ++i) {
+            apm_bank_info b{};
+            if (api->get_bank(p, i, &b) != 0) {
+                continue;
+            }
+            if (opt.watch_addr >= b.guest_base && opt.watch_addr < b.guest_base + b.size) {
+                host_addr =
+                    static_cast<std::uint8_t*>(b.host_ptr) + (opt.watch_addr - b.guest_base);
+                std::printf("watch $%llX -> bank '%s' (guest_base $%llX) host %p\n",
+                            static_cast<unsigned long long>(opt.watch_addr), b.name,
+                            static_cast<unsigned long long>(b.guest_base),
+                            static_cast<void*>(host_addr));
+                break;
+            }
         }
-        if (opt.watch_addr >= b.guest_base && opt.watch_addr < b.guest_base + b.size) {
-            host_addr = static_cast<std::uint8_t*>(b.host_ptr) + (opt.watch_addr - b.guest_base);
-            std::printf("watch $%llX -> bank '%s' (guest_base $%llX) host %p\n",
-                        static_cast<unsigned long long>(opt.watch_addr), b.name,
-                        static_cast<unsigned long long>(b.guest_base),
-                        static_cast<void*>(host_addr));
-            break;
+        if (host_addr == nullptr) {
+            std::fprintf(stderr, "watch addr $%llX not in any bank\n",
+                         static_cast<unsigned long long>(opt.watch_addr));
+            return 1;
         }
-    }
-    if (host_addr == nullptr) {
-        std::fprintf(stderr, "watch addr $%llX not in any bank\n",
-                     static_cast<unsigned long long>(opt.watch_addr));
-        return 1;
-    }
-    if (!page_guard::supported()) {
-        std::fprintf(stderr, "page_guard not supported on this platform\n");
-        return 1;
+        if (!page_guard::supported()) {
+            std::fprintf(stderr, "page_guard not supported on this platform\n");
+            return 1;
+        }
     }
 
     struct write_record {
@@ -131,28 +136,37 @@ int main(int argc, char** argv) {
     std::uint64_t current_frame = 0;
 
     page_guard guard;
-    guard.watch(host_addr, 1, opt.read_watch ? access_kind::read : access_kind::write,
-                [&](const guard_event&) {
-                    if (records.size() < records.capacity()) {
-                        records.push_back({current_frame, api->read_register(p, APM_REG_INST)});
-                    }
-                });
+    if (watching) {
+        guard.watch(host_addr, 1, opt.read_watch ? access_kind::read : access_kind::write,
+                    [&](const guard_event&) {
+                        if (records.size() < records.capacity()) {
+                            records.push_back({current_frame, api->read_register(p, APM_REG_INST)});
+                        }
+                    });
+    }
 
-    std::printf("frame  end_value  writer_pcs\n");
+    std::printf("frame   cpu_cycles  end_value  writer_pcs\n");
     for (std::uint64_t f = 1; f <= opt.frames; ++f) {
         current_frame = f;
         const std::size_t before = records.size();
+        const std::uint64_t cyc_before = api->read_register(p, APM_REG_CYCLES);
         api->run_frame(p);
-        const std::uint8_t value = *host_addr; // read-only page is still readable
-        std::printf("f=%-4llu  $%02X       ", static_cast<unsigned long long>(f),
-                    static_cast<unsigned>(value));
-        for (std::size_t i = before; i < records.size(); ++i) {
-            std::printf(" pc=$%06llX", static_cast<unsigned long long>(records[i].pc));
+        const std::uint64_t cyc_delta = api->read_register(p, APM_REG_CYCLES) - cyc_before;
+        std::printf("f=%-4llu  %8llu", static_cast<unsigned long long>(f),
+                    static_cast<unsigned long long>(cyc_delta));
+        if (watching) {
+            const std::uint8_t value = *host_addr; // read-only page is still readable
+            std::printf("  $%02X     ", static_cast<unsigned>(value));
+            for (std::size_t i = before; i < records.size(); ++i) {
+                std::printf(" pc=$%06llX", static_cast<unsigned long long>(records[i].pc));
+            }
         }
         std::printf("\n");
     }
 
-    guard.unwatch(host_addr);
+    if (watching) {
+        guard.unwatch(host_addr);
+    }
     api->destroy(p);
     return 0;
 }

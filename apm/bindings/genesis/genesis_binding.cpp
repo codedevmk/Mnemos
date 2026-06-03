@@ -81,6 +81,9 @@ namespace {
         if (reg == APM_REG_INST) {
             return cpu->current_instruction_addr();
         }
+        if (reg == APM_REG_CYCLES) {
+            return cpu->elapsed_cycles();
+        }
         const auto r = cpu->cpu_registers();
         if (reg == APM_REG_PC) {
             return r.pc;
