@@ -118,6 +118,37 @@ TEST_CASE("sms_vdp horizontal scroll (reg 8) shifts the background right") {
     CHECK(pixel(vdp, 16, 0) == 0x00000000U);
 }
 
+TEST_CASE("sms_vdp resolves sprite patterns from the $2000 generator base (reg 6)") {
+    sms_vdp vdp;
+
+    // Sprite tile 1 with reg 6 bit 2 set lives at $2000 + 1*32 = $2020. Top-left
+    // pixel = colour 1. (The bug fetched it from $0020 instead.)
+    set_addr(vdp, 0x2020U, 1U);
+    vdp.data_write(0x80U);
+
+    // Sprite attribute table at $3F00 (reg 5 = $7E): sprite 0 at Y=0xFF (-> line 0),
+    // X=16, tile 1.
+    set_addr(vdp, 0x3F00U, 1U);
+    vdp.data_write(0xFFU); // Y -> spr_y 0
+    set_addr(vdp, 0x3F80U, 1U);
+    vdp.data_write(0x10U); // X = 16
+    vdp.data_write(0x01U); // tile 1
+
+    // Sprite palette colour 1 = CRAM[17] = red.
+    set_addr(vdp, 0x0011U, 3U);
+    vdp.data_write(0x03U);
+
+    write_reg(vdp, 0, 0x04U); // mode 4
+    write_reg(vdp, 1, 0xC0U); // display enable, 8x8 sprites, no zoom
+    write_reg(vdp, 5, 0x7EU); // sprite attribute table base = $3F00
+    write_reg(vdp, 6, 0x04U); // sprite pattern generator base = $2000
+
+    vdp.tick(static_cast<std::uint64_t>(sms_vdp::cycles_per_line)); // render scanline 0
+
+    CHECK(pixel(vdp, 16, 0) == 0x00FF0000U); // sprite pixel from $2020 -> CRAM[17]
+    CHECK(pixel(vdp, 24, 0) == 0x00000000U); // outside the sprite
+}
+
 TEST_CASE("sms_vdp Game Gear mode renders 12-bit BGR444 CRAM colours") {
     sms_vdp vdp;
     vdp.set_gg(true);

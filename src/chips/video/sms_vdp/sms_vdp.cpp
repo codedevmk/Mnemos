@@ -319,7 +319,10 @@ namespace mnemos::chips::video {
                 const int eff_row = row_in_spr & 7;
 
                 std::array<std::uint8_t, 8> pix{};
-                decode_tile_row(vram_, spr_base | eff_tile, eff_row, false, pix);
+                // spr_base is a VRAM byte address (reg 6 bit 2 selects $0000/$2000);
+                // decode_tile_row wants a tile index, so convert (32 bytes per tile).
+                decode_tile_row(vram_, static_cast<int>(spr_base >> 5U) + eff_tile, eff_row, false,
+                                pix);
 
                 for (int p = 0; p < 8; ++p) {
                     if (pix[static_cast<std::size_t>(p)] == 0U) {
