@@ -1,8 +1,12 @@
 #include "sms_system.hpp"
 
+#include "crc32.hpp"  // mnemos::security::cryptography::crc32 (CRC-based cart auto-detect)
 #include "mk3020.hpp" // default controller-port peripheral (Master System Control Pad)
 
+#include <array>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <utility>
 
@@ -21,6 +25,67 @@ namespace mnemos::manifests::sms {
                    (static_cast<std::uint32_t>(rom[off + 1U]) << 8U);
         };
         return (word(0x7FE6U) + word(0x7FE8U)) == 0x10000U;
+    }
+
+    // Korean carts carry no header signature, so they are auto-detected by ROM
+    // CRC-32 against a database of known images (CRCs catalogued in THIRD-PARTY.md).
+    // Each entry maps a cart's zlib CRC-32 (over the whole image) to the mapper it
+    // needs; only carts whose mapper Mnemos implements are listed.
+    namespace {
+        struct korean_crc_entry final {
+            std::uint32_t crc;
+            sms_config::mapper mapper;
+        };
+
+        constexpr std::array<korean_crc_entry, 27> korean_crc_db{{
+            // Standard Korean mapper ($A000 banks slot 2).
+            {0x89B79E77U, sms_config::mapper::korean}, // Dodgeball King
+            {0x929222C4U, sms_config::mapper::korean}, // Jang Pung II
+            {0x18FB98A3U, sms_config::mapper::korean}, // Jang Pung 3
+            {0x97D03541U, sms_config::mapper::korean}, // Sangokushi 3
+            // Korean MSX 8 KiB mapper.
+            {0x445525E2U, sms_config::mapper::korean_msx},         // Penguin Adventure
+            {0x83F0EEDEU, sms_config::mapper::korean_msx},         // Street Master
+            {0xA05258F5U, sms_config::mapper::korean_msx},         // Wonsiin
+            {0x06965ED9U, sms_config::mapper::korean_msx},         // F-1 Spirit
+            {0x77EFE84AU, sms_config::mapper::korean_msx},         // Cyborg Z
+            {0xF89AF3CCU, sms_config::mapper::korean_msx},         // Knightmare II
+            {0x9195C34CU, sms_config::mapper::korean_msx},         // Super Boy 3
+            {0x0A77FA5EU, sms_config::mapper::korean_msx},         // Nemesis 2
+            {0xE316C06DU, sms_config::mapper::korean_msx_nemesis}, // Nemesis
+            // HiCom 188-in-1 multicart.
+            {0x98AF0236U, sms_config::mapper::korean_hicom}, // Hi-Com 3-in-1 Vol. 1
+            {0x6EBFE1C3U, sms_config::mapper::korean_hicom}, // Hi-Com 3-in-1 Vol. 2
+            {0x81A36A4FU, sms_config::mapper::korean_hicom}, // Hi-Com 3-in-1 Vol. 3
+            {0x8D2D695DU, sms_config::mapper::korean_hicom}, // Hi-Com 3-in-1 Vol. 4
+            {0x82C09B57U, sms_config::mapper::korean_hicom}, // Hi-Com 3-in-1 Vol. 5
+            {0x4088EEB4U, sms_config::mapper::korean_hicom}, // Hi-Com 3-in-1 Vol. 6
+            {0xFBA94148U, sms_config::mapper::korean_hicom}, // Hi-Com 8-in-1 Vol. 1
+            {0x8333C86EU, sms_config::mapper::korean_hicom}, // Hi-Com 8-in-1 Vol. 2
+            {0x00E9809FU, sms_config::mapper::korean_hicom}, // Hi-Com 8-in-1 Vol. 3
+            // Janggun (bit-reversed) mapper.
+            {0x192949D5U, sms_config::mapper::korean_janggun}, // Janggun-ui Adeul
+            // $2000 XOR 4x8K multicart.
+            {0xBA5EC0E3U, sms_config::mapper::korean_multi_4x8k}, // 128 Hap
+            {0x380D7400U, sms_config::mapper::korean_multi_4x8k}, // 188 Hap [v0]
+            {0xC76601E0U, sms_config::mapper::korean_multi_4x8k}, // 188 Hap [v1]
+            // 4-Pak All Action 16K multicart.
+            {0xA67F2A5CU, sms_config::mapper::korean_multi_16k}, // 4-Pak All Action
+        }};
+    } // namespace
+
+    std::optional<sms_config::mapper> korean_mapper_for_crc(std::uint32_t crc) noexcept {
+        for (const korean_crc_entry& entry : korean_crc_db) {
+            if (entry.crc == crc) {
+                return entry.mapper;
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::optional<sms_config::mapper>
+    detect_korean_mapper(std::span<const std::uint8_t> rom) noexcept {
+        return korean_mapper_for_crc(security::cryptography::crc32(rom));
     }
 
     sms_config::mapper resolve_mapper(const sms_config& config,
@@ -46,6 +111,11 @@ namespace mnemos::manifests::sms {
             return sms_config::mapper::korean_multi_16k;
         case sms_config::mapper::automatic:
         default:
+            // Korean carts have no header signature, so try the CRC database first
+            // (an exact match), then the Codemasters checksum header, else Sega.
+            if (const auto korean = detect_korean_mapper(rom)) {
+                return *korean;
+            }
             return detect_codemasters(rom) ? sms_config::mapper::codemasters
                                            : sms_config::mapper::sega;
         }
