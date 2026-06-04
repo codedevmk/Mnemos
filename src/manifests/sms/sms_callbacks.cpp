@@ -155,6 +155,20 @@ namespace mnemos::manifests::sms {
                 };
             });
 
+        // Janggun register overlay at $FFFE-$FFFF. Same shape: writes drive the
+        // 16 KiB pair selects (cpu_write decodes $FFFE/$FFFF), reads return open bus.
+        out.mmio_factories.emplace(
+            "sms.janggun_register_overlay",
+            [s = &state](std::uint32_t /*base*/, std::uint32_t /*size*/) -> chips::mmio_handlers {
+                return {
+                    .on_read = [](std::uint32_t /*address*/) -> std::uint8_t { return 0xFFU; },
+                    .on_write =
+                        [s](std::uint32_t address, std::uint8_t value) {
+                            s->janggun->cpu_write(static_cast<std::uint16_t>(address), value);
+                        },
+                };
+            });
+
         return out;
     }
 

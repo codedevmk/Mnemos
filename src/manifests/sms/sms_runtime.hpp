@@ -36,6 +36,7 @@ namespace mnemos::manifests::sms {
         bool korean_active{};
         bool korean_msx_active{};
         bool korean_hicom_active{};
+        bool korean_janggun_active{};
         system_graph graph; // owns chips/buses/memory; MUST destruct first
 
         [[nodiscard]] chips::cpu::z80* cpu() const noexcept { return state.cpu; }

@@ -176,6 +176,35 @@ TEST_CASE("assemble_sms honours a forced HiCom mapper", "[sms][mapper]") {
     CHECK(sys->bus.read8(0xFFFFU) == 0x01U); // the register write also lands in work RAM
 }
 
+TEST_CASE("assemble_sms honours a forced Janggun mapper", "[sms][mapper]") {
+    auto rom = blank_rom(0x10000U); // eight 8 KiB pages
+    rom[3U * 0x2000U] = 0x3CU;      // page 3 marker
+    rom[5U * 0x2000U] = 0xC0U;      // page 5 marker (reverse(0xC0) == 0x03)
+    rom[7U * 0x2000U] = 0x7EU;      // page 7 marker
+
+    auto sys =
+        assemble_sms(std::move(rom), {.cartridge_mapper = sms_config::mapper::korean_janggun});
+    REQUIRE(sys->korean_janggun_active);
+    CHECK_FALSE(sys->korean_hicom_active);
+
+    // In-window select: a write to $8000 (inside the cart window) pages FCR0.
+    sys->bus.write8(0x8000U, 3U);
+    CHECK(sys->janggun.fcr(0) == 3U);
+    CHECK(sys->bus.read8(0x8000U) == 0x3CU); // $8000-$9FFF -> bank 3
+
+    // Sega-style 16 KiB pair at $FFFF (work-RAM mirror): FCR0=6, FCR1=7; the byte
+    // also lands in work RAM.
+    sys->bus.write8(0xFFFFU, 3U);
+    CHECK(sys->janggun.fcr(0) == 6U);
+    CHECK(sys->janggun.fcr(1) == 7U);
+    CHECK(sys->bus.read8(0xA000U) == 0x7EU); // $A000-$BFFF -> bank 7
+    CHECK(sys->bus.read8(0xFFFFU) == 0x03U); // the pair write also lands in work RAM
+
+    // Bit-reversal: select bank 5 in window 2 with the reverse flag (bit 7) set.
+    sys->bus.write8(0x4000U, 0x85U);
+    CHECK(sys->bus.read8(0x4000U) == 0x03U); // reverse(0xC0)
+}
+
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {
     auto rom = blank_rom();
     // LD A,$AA ; OUT ($BF),A ; LD A,$81 ; OUT ($BF),A  -> VDP register 1 = $AA

@@ -13,6 +13,8 @@ set(_sms_manifest_files
     "sms.pal.korean_msx.toml"
     "sms.ntsc.korean_hicom.toml"
     "sms.pal.korean_hicom.toml"
+    "sms.ntsc.korean_janggun.toml"
+    "sms.pal.korean_janggun.toml"
 )
 foreach(_f IN LISTS _sms_manifest_files)
     set_property(
@@ -35,6 +37,10 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.korean_hicom.toml"
      MNEMOS_SMS_NTSC_KOREAN_HICOM_TOML)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.korean_hicom.toml"
      MNEMOS_SMS_PAL_KOREAN_HICOM_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.korean_janggun.toml"
+     MNEMOS_SMS_NTSC_KOREAN_JANGGUN_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.korean_janggun.toml"
+     MNEMOS_SMS_PAL_KOREAN_JANGGUN_TOML)
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/sms_embedded_manifests.hpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/sms_embedded_manifests.hpp"
@@ -72,6 +78,7 @@ target_link_libraries(
         mnemos::chips::mapper::korean_mapper
         mnemos::chips::mapper::korean_msx_mapper
         mnemos::chips::mapper::hicom_mapper
+        mnemos::chips::mapper::janggun_mapper
         mnemos::peripheral::input
 )
 

@@ -77,6 +77,15 @@ namespace {
         return rom;
     }
 
+    // 64 KiB cart (eight 8 KiB pages) for the force-only Janggun mapper.
+    std::vector<std::uint8_t> janggun_rom() {
+        std::vector<std::uint8_t> rom(0x10000U, 0U);
+        for (int p = 0; p < 8; ++p) {
+            rom[static_cast<std::size_t>(p) * 0x2000U] = static_cast<std::uint8_t>(0xD0 + p);
+        }
+        return rom;
+    }
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996) // std::getenv: opt-in test data path
@@ -185,6 +194,11 @@ TEST_CASE("build_sms_runtime matches assemble_sms (Korean MSX Nemesis)", "[sms][
 TEST_CASE("build_sms_runtime matches assemble_sms (HiCom mapper)", "[sms][runtime][parity]") {
     const sms_config hicom{.cartridge_mapper = sms_config::mapper::korean_hicom};
     require_parity(run_assemble(hicom_rom(), hicom, 5), run_runtime(hicom_rom(), hicom, 5));
+}
+
+TEST_CASE("build_sms_runtime matches assemble_sms (Janggun mapper)", "[sms][runtime][parity]") {
+    const sms_config janggun{.cartridge_mapper = sms_config::mapper::korean_janggun};
+    require_parity(run_assemble(janggun_rom(), janggun, 5), run_runtime(janggun_rom(), janggun, 5));
 }
 
 TEST_CASE("build_sms_runtime default-plugs both controller ports", "[sms][runtime]") {
