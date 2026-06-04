@@ -190,6 +190,16 @@ namespace mnemos::manifests::sms {
         // Region: NTSC = 262 scanlines, PAL = 313.
         s->vdp.set_pal(config.video_region == mnemos::video_region::pal);
 
+        // Game Gear: 60 Hz NTSC only. The VDP runs in GG mode (12-bit CRAM +
+        // 160x144 viewport), the PSG captures interleaved stereo for the $06
+        // panning register, and ports $00-$06 decode the GG handset.
+        if (config.game_gear) {
+            s->vdp.set_pal(false);
+            s->vdp.set_gg(true);
+            s->psg.set_stereo_capture(true);
+            s->gg.enable(true);
+        }
+
         // Pick the cartridge mapper: forced by config, otherwise auto-detected from
         // the cart's Codemasters checksum header (Korean is force-only).
         const sms_config::mapper kind =
@@ -364,6 +374,9 @@ namespace mnemos::manifests::sms {
         // --- Z80 I/O ports (separate 64K IN/OUT space) ---
         s->cpu.set_port_in([s](std::uint16_t port) -> std::uint8_t {
             const auto p = static_cast<std::uint8_t>(port & 0xFFU);
+            if (s->gg.enabled() && p <= 0x06U) {
+                return s->gg.read(p); // Game Gear handset ($00 mode + EXT link)
+            }
             if (p <= 0x3FU) {
                 return 0xFFU; // open bus
             }
@@ -377,6 +390,10 @@ namespace mnemos::manifests::sms {
         });
         s->cpu.set_port_out([s](std::uint16_t port, std::uint8_t value) {
             const auto p = static_cast<std::uint8_t>(port & 0xFFU);
+            if (s->gg.enabled() && p <= 0x06U) {
+                s->gg.write(p, value, s->psg); // GG EXT link + $06 PSG stereo
+                return;
+            }
             if (p <= 0x3FU) {
                 if ((p & 1U) != 0U) {
                     s->io_ctrl = value; // I/O port control ($3F)

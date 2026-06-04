@@ -13,6 +13,9 @@ namespace mnemos::apps::player::adapters {
         if (ext == "sms" || ext == "sg") {
             return system_family::sms;
         }
+        if (ext == "gg") {
+            return system_family::gg;
+        }
         if (ext == "prg" || ext == "d64" || ext == "d71" || ext == "d81" || ext == "t64" ||
             ext == "tap" || ext == "crt" || ext == "g64" || ext == "p00") {
             return system_family::c64;
@@ -24,6 +27,8 @@ namespace mnemos::apps::player::adapters {
         switch (family) {
         case system_family::sms:
             return "SMS";
+        case system_family::gg:
+            return "Game Gear";
         case system_family::c64:
             return "C64";
         case system_family::genesis:

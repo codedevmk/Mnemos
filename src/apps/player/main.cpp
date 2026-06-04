@@ -191,6 +191,9 @@ int main(int argc, char* argv[]) {
             cart_default =
                 mnemos::default_video_for(mnemos::manifests::sms::parse_market(loaded->bytes));
             break;
+        case system_family::gg:
+            cart_default = mnemos::video_region::ntsc; // Game Gear is 60 Hz only
+            break;
         case system_family::genesis:
             cart_default =
                 mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
@@ -217,6 +220,9 @@ int main(int argc, char* argv[]) {
         switch (family) {
         case system_family::sms:
             family_id = "sms";
+            break;
+        case system_family::gg:
+            family_id = "gg";
             break;
         case system_family::c64:
             family_id = "c64";

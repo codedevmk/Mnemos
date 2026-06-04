@@ -43,7 +43,8 @@ namespace mnemos::apps::player::adapters::sms {
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
-          target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
+          target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]),
+          game_gear_(config.game_gear) {
         sys_->psg()->enable_audio_capture(true);
 
         // Non-owning chip enumeration in scheduler order; matches build_schedule().
@@ -52,7 +53,7 @@ namespace mnemos::apps::player::adapters::sms {
         chip_view_[2] = sys_->psg();
 
         // Publish the static description once, post-init.
-        spec_.push_back({.label = "System", .value = "Master System"});
+        spec_.push_back({.label = "System", .value = game_gear_ ? "Game Gear" : "Master System"});
         spec_.push_back(
             {.label = "Region",
              .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
@@ -85,6 +86,11 @@ namespace mnemos::apps::player::adapters::sms {
         if (auto* dev = sys_->port_device(port)) {
             dev->apply_state(state);
         }
+        // The Game Gear START button is a console key (not a pad pin); it reads
+        // back through the $00 mode register. Drive it from player 1's START.
+        if (game_gear_ && port == 0) {
+            sys_->set_gg_start(state.start);
+        }
     }
 
     frontend_sdk::audio_chunk sms_adapter::drain_audio() noexcept {
@@ -94,6 +100,15 @@ namespace mnemos::apps::player::adapters::sms {
         }
         psg_buf_.resize(psg_count);
         sys_->psg()->drain_samples(psg_buf_.data(), psg_count);
+
+        // The Game Gear PSG queues interleaved L/R (2 samples per step); the SMS
+        // queues mono. Resample each source channel with the box filter, reading
+        // the queue at the matching stride.
+        const int stride = game_gear_ ? 2 : 1;
+        const int src_frames = static_cast<int>(psg_count) / stride;
+        if (src_frames == 0) {
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
+        }
 
         // Accumulate the fractional sample so the long-term output rate is
         // exact even when (kOutputRate / target_fps_) is not an integer.
@@ -105,13 +120,16 @@ namespace mnemos::apps::player::adapters::sms {
         audio_frac_ = exact - static_cast<double>(dst_pairs);
 
         mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
-        const double psg_scale = static_cast<double>(psg_count) / static_cast<double>(dst_pairs);
+        const double scale = static_cast<double>(src_frames) / static_cast<double>(dst_pairs);
         for (int i = 0; i < dst_pairs; ++i) {
-            const int s = sample_channel_box(psg_buf_.data(), 1, 0, static_cast<int>(psg_count),
-                                             psg_scale * i, psg_scale * (i + 1));
-            const std::int16_t out = clip_i16(scale_q12(s, kGainPsg));
-            mix_buf_[i * 2 + 0] = out;
-            mix_buf_[i * 2 + 1] = out; // duplicate mono into both stereo lanes
+            const int l = sample_channel_box(psg_buf_.data(), stride, 0, src_frames, scale * i,
+                                             scale * (i + 1));
+            // Mono duplicates its single lane into both outputs; GG samples L/R.
+            const int r = game_gear_ ? sample_channel_box(psg_buf_.data(), stride, 1, src_frames,
+                                                          scale * i, scale * (i + 1))
+                                     : l;
+            mix_buf_[i * 2 + 0] = clip_i16(scale_q12(l, kGainPsg));
+            mix_buf_[i * 2 + 1] = clip_i16(scale_q12(r, kGainPsg));
         }
         return {.samples = mix_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(dst_pairs),
@@ -168,6 +186,26 @@ namespace mnemos::apps::player::adapters::sms {
                         manifests::sms::sms_config{.video_region = opts.video_region,
                                                    .cartridge_mapper =
                                                        mapper_from_override(opts.mapper_override)},
+                        std::move(opts.display_name), sched_factory);
+                });
+            return 0;
+        }();
+
+        // The Game Gear reuses the SMS adapter (same Z80/VDP/PSG/mapper stack)
+        // with game_gear enabled: GG VDP mode, PSG $06 stereo, and the $00-$06
+        // handset. The handset is 60 Hz NTSC only, so the region is forced.
+        const auto register_gg = [] {
+            mnemos::frontend_sdk::adapter_registry::instance().register_family(
+                "gg",
+                [](mnemos::frontend_sdk::adapter_options opts)
+                    -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    auto* sched_factory = opts.scheduler_factory_override;
+                    return std::make_unique<sms_adapter>(
+                        std::move(opts.rom),
+                        manifests::sms::sms_config{.video_region = mnemos::video_region::ntsc,
+                                                   .cartridge_mapper =
+                                                       mapper_from_override(opts.mapper_override),
+                                                   .game_gear = true},
                         std::move(opts.display_name), sched_factory);
                 });
             return 0;

@@ -61,6 +61,17 @@ namespace mnemos::manifests::sms {
         rt->state.vdp = dynamic_cast<chips::video::sms_vdp*>(rt->graph.chip("video"));
         rt->state.psg = dynamic_cast<chips::audio::sn76489*>(rt->graph.chip("audio"));
 
+        // Game Gear: 60 Hz NTSC only. Put the VDP in GG mode (12-bit CRAM +
+        // 160x144 viewport), capture interleaved PSG stereo for the $06 register,
+        // and enable the $00-$06 handset decode. Mirrors assemble_sms so the two
+        // paths stay equivalent by construction.
+        if (config.game_gear) {
+            rt->state.vdp->set_pal(false);
+            rt->state.vdp->set_gg(true);
+            rt->state.psg->set_stereo_capture(true);
+            rt->state.gg.enable(true);
+        }
+
         // Attach the cartridge to whichever mapper the manifest instantiated.
         // The Sega mapper is also published in state.mapper because its $FFFC
         // register overlay (an mmio_factory) writes through it; the Codemasters

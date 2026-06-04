@@ -51,6 +51,9 @@ namespace mnemos::apps::player::adapters::sms {
         mnemos::video_region region_;
         // Same value in natural Hz, precomputed for the audio resampler.
         double target_fps_;
+        // Game Gear hardware: the PSG queues interleaved L/R stereo (drained as
+        // two channels) and port 0's START feeds the GG $00 mode register.
+        bool game_gear_;
         std::uint64_t frames_stepped_{};
 
         // Pull-once status spec (System / Region / Cart) the player reads

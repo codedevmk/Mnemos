@@ -6,7 +6,9 @@
 #include <vector>
 
 namespace {
+    using mnemos::chips::audio::sn76489;
     using mnemos::manifests::sms::assemble_sms;
+    using mnemos::manifests::sms::gg_io;
     using mnemos::manifests::sms::korean_mapper_for_crc;
     using mnemos::manifests::sms::resolve_mapper;
     using mnemos::manifests::sms::sms_config;
@@ -361,4 +363,69 @@ TEST_CASE("assemble_sms vectors the VDP frame interrupt into the Z80", "[sms][ir
         sys->cpu.tick(1U);
     }
     CHECK(sys->bus.read8(0xC000U) == 0x99U); // the ISR ran
+}
+
+TEST_CASE("gg_io decodes the Game Gear handset ports", "[sms][gg][io]") {
+    sn76489 psg;
+    gg_io gg;
+    gg.enable(true);
+
+    // $00 mode register: bit7 = START (active-low), bit6 = region, low bits 0.
+    gg.set_export(true);
+    CHECK(gg.read(0x00U) == 0xC0U); // START idle high, export region set
+    gg.set_start(true);
+    CHECK(gg.read(0x00U) == 0x40U); // START pressed clears bit 7
+    gg.set_start(false);
+    gg.set_export(false);
+    CHECK(gg.read(0x00U) == 0x80U); // domestic region: bit 6 clear
+
+    // $06 PSG stereo: a write routes to the PSG stereo register; reads open-bus.
+    gg.write(0x06U, 0x3CU, psg);
+    CHECK(psg.stereo_register() == 0x3CU);
+    CHECK(gg.read(0x06U) == 0xFFU);
+
+    // EXT serial link (unconnected): reset loopback + read-only bits.
+    CHECK(gg.read(0x01U) == 0x7FU); // parallel data, all pins as direction inputs
+    CHECK(gg.read(0x02U) == 0xFFU); // direction register reset value
+    gg.write(0x03U, 0x5AU, psg);
+    CHECK(gg.read(0x03U) == 0x5AU); // transmit buffer latches
+    gg.write(0x05U, 0xFFU, psg);
+    CHECK(gg.read(0x05U) == 0xF8U); // serial control: bits 0-2 are read-only
+}
+
+TEST_CASE("assemble_sms enables Game Gear mode", "[sms][gg]") {
+    auto sys = assemble_sms(blank_rom(), {.game_gear = true});
+    CHECK(sys->vdp.is_gg());
+    CHECK_FALSE(sys->vdp.is_pal()); // the Game Gear is 60 Hz NTSC only
+
+    // The GG LCD crops the Mode-4 256x192 frame to its central 160x144 window.
+    const auto fb = sys->vdp.framebuffer();
+    CHECK(fb.width == 160U);
+    CHECK(fb.height == 144U);
+
+    // A base Master System leaves GG mode off.
+    CHECK_FALSE(assemble_sms(blank_rom())->vdp.is_gg());
+}
+
+TEST_CASE("assemble_sms routes the Game Gear $06 and $00 ports", "[sms][gg]") {
+    auto rom = blank_rom();
+    // LD A,$3C ; OUT ($06),A ; IN A,($00) ; LD ($C000),A
+    rom[0] = 0x3EU;
+    rom[1] = 0x3CU;
+    rom[2] = 0xD3U;
+    rom[3] = 0x06U;
+    rom[4] = 0xDBU;
+    rom[5] = 0x00U;
+    rom[6] = 0x32U;
+    rom[7] = 0x00U;
+    rom[8] = 0xC0U;
+
+    auto sys = assemble_sms(std::move(rom), {.game_gear = true});
+    sys->cpu.step_instruction(); // LD A,$3C
+    sys->cpu.step_instruction(); // OUT ($06),A -> PSG stereo register
+    CHECK(sys->psg.stereo_register() == 0x3CU);
+
+    sys->cpu.step_instruction();             // IN A,($00) -> GG mode register
+    sys->cpu.step_instruction();             // LD ($C000),A
+    CHECK(sys->bus.read8(0xC000U) == 0xC0U); // START idle, export region
 }
