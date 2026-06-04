@@ -93,6 +93,7 @@ target_link_libraries(
         mnemos::chips::mapper::janggun_mapper
         mnemos::chips::mapper::multi_4x8k_mapper
         mnemos::chips::mapper::multi_16k_mapper
+        mnemos::chips::storage::eeprom_93c46
         mnemos::peripheral::input
         mnemos::security::cryptography
 )
@@ -105,6 +106,7 @@ mnemos_declare_tier(
         mnemos_topology
         mnemos_manifests_common
         mnemos_chips_shared
+        mnemos_chips_storage_eeprom_93c46
         mnemos_foundation
         mnemos_peripheral_common
         mnemos_peripheral_input

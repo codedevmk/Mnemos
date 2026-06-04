@@ -8,6 +8,7 @@
 namespace {
     using mnemos::chips::audio::sn76489;
     using mnemos::manifests::sms::assemble_sms;
+    using mnemos::manifests::sms::detect_93c46;
     using mnemos::manifests::sms::gg_io;
     using mnemos::manifests::sms::korean_mapper_for_crc;
     using mnemos::manifests::sms::resolve_mapper;
@@ -428,4 +429,52 @@ TEST_CASE("assemble_sms routes the Game Gear $06 and $00 ports", "[sms][gg]") {
     sys->cpu.step_instruction();             // IN A,($00) -> GG mode register
     sys->cpu.step_instruction();             // LD ($C000),A
     CHECK(sys->bus.read8(0xC000U) == 0xC0U); // START idle, export region
+}
+
+TEST_CASE("detect_93c46 rejects an unknown cartridge", "[sms][eeprom]") {
+    CHECK_FALSE(detect_93c46(blank_rom(0x8000U)));
+}
+
+TEST_CASE("assemble_sms wires the 93C46 EEPROM onto the cart path", "[sms][eeprom]") {
+    auto sys = assemble_sms(blank_rom(0x8000U), {.eeprom_93c46 = true});
+    REQUIRE(sys->eeprom_93c46_active);
+    REQUIRE(sys->battery_ram().size() == 128U);
+
+    // Until $FFFC enables it, $8000 is plain slot-2 ROM (blank cart reads 0).
+    CHECK(sys->bus.read8(0x8000U) == 0x00U);
+
+    // Enable the serial port; in standby the read-back is CLK-high(2) + DO-high(1).
+    sys->bus.write8(0xFFFCU, 0x08U);
+    CHECK(sys->bus.read8(0x8000U) == 0x03U);
+
+    // Bit-bang a Microwire command stream over $8000 (DI=bit0, CLK=bit1, CS=bit2).
+    const auto clk_bit = [&](bool di) {
+        const auto base = static_cast<std::uint8_t>(0x04U | (di ? 1U : 0U)); // CS high, CLK low
+        sys->bus.write8(0x8000U, base);
+        sys->bus.write8(0x8000U, static_cast<std::uint8_t>(base | 0x02U)); // CLK rising edge
+    };
+    const auto send = [&](unsigned value, int n) {
+        for (int i = n - 1; i >= 0; --i) {
+            clk_bit(((value >> i) & 1U) != 0U);
+        }
+    };
+    const auto command = [&](unsigned opcode8) {
+        sys->bus.write8(0x8000U, 0x04U); // CS high, CLK low
+        clk_bit(true);                   // START bit
+        send(opcode8, 8);
+    };
+
+    command(0x30U);                  // EWEN (write-enable)
+    sys->bus.write8(0x8000U, 0x00U); // CS low
+    command(0x40U);                  // WRITE word 0
+    send(0xABCDU, 16);
+    sys->bus.write8(0x8000U, 0x00U); // CS low latches the write
+
+    // The byte reached the EEPROM store (little-endian word 0).
+    CHECK(sys->battery_ram()[0] == 0xCDU);
+    CHECK(sys->battery_ram()[1] == 0xABU);
+
+    // Disabling the port returns $8000 to ROM.
+    sys->bus.write8(0xFFFCU, 0x00U);
+    CHECK(sys->bus.read8(0x8000U) == 0x00U);
 }

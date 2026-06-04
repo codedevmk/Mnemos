@@ -36,6 +36,11 @@ namespace mnemos::apps::player::adapters::sms {
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
         }
+        // Cartridge battery store (the 93C46 EEPROM's 128 bytes when present, else
+        // empty) the frontend persists to .srm.
+        [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
+            return sys_->battery_ram();
+        }
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::sms::sms_runtime& system() noexcept { return *sys_; }

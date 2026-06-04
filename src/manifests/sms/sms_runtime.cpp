@@ -37,6 +37,11 @@ namespace mnemos::manifests::sms {
         rt->korean_janggun_active = kind == sms_config::mapper::korean_janggun;
         rt->korean_multi_4x8k_active = kind == sms_config::mapper::korean_multi_4x8k;
         rt->korean_multi_16k_active = kind == sms_config::mapper::korean_multi_16k;
+        // The 93C46 EEPROM rides on top of the Sega mapper (Game Gear carts);
+        // forced by config or auto-detected by ROM CRC, mirroring assemble_sms.
+        rt->eeprom_93c46_active =
+            kind == sms_config::mapper::sega &&
+            (config.eeprom_93c46 || detect_93c46(std::span<const std::uint8_t>(rt->rom)));
 
         // Host glue: every closure captures &rt->state, whose address is stable
         // because rt is heap-allocated. The chips copy the closures during
@@ -118,6 +123,12 @@ namespace mnemos::manifests::sms {
             auto* mapper = dynamic_cast<chips::mapper::sms_mapper*>(rt->graph.chip("mapper"));
             rt->state.mapper = mapper;
             mapper->attach_rom(rom_span);
+            // 93C46 EEPROM overlay ($8000 serial + $FFFC control) on the graph's
+            // bus, identical to assemble_sms's hand-wired path.
+            if (rt->eeprom_93c46_active) {
+                install_93c46_overlays(*rt->graph.bus("main"), *mapper, rt->eeprom,
+                                       rt->eeprom_enabled);
+            }
         }
 
         // Post-BIOS stack pointer: the SMS BIOS sets SP=$DFF0 before handing off

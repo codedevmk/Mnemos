@@ -88,6 +88,29 @@ namespace mnemos::manifests::sms {
         return korean_mapper_for_crc(security::cryptography::crc32(rom));
     }
 
+    namespace {
+        // Carts that carry a 93C46 serial EEPROM for saves (all Game Gear). The
+        // EEPROM rides on top of the standard Sega mapper, so it is detected by ROM
+        // CRC-32 rather than being a mapper kind (CRCs catalogued in THIRD-PARTY.md).
+        constexpr std::array<std::uint32_t, 5> eeprom_93c46_crc_db{
+            0x36EBCD6DU, // Majors Pro Baseball
+            0x2DA8E943U, // Pro Yakyuu GG League
+            0x3D8D0DD6U, // World Series Baseball [v0]
+            0xBB38CFD7U, // World Series Baseball [v1]
+            0x578A8A38U, // World Series Baseball '95
+        };
+    } // namespace
+
+    bool detect_93c46(std::span<const std::uint8_t> rom) noexcept {
+        const std::uint32_t crc = security::cryptography::crc32(rom);
+        for (const std::uint32_t known : eeprom_93c46_crc_db) {
+            if (known == crc) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     sms_config::mapper resolve_mapper(const sms_config& config,
                                       std::span<const std::uint8_t> rom) noexcept {
         switch (config.cartridge_mapper) {
@@ -119,6 +142,44 @@ namespace mnemos::manifests::sms {
             return detect_codemasters(rom) ? sms_config::mapper::codemasters
                                            : sms_config::mapper::sega;
         }
+    }
+
+    void install_93c46_overlays(topology::bus& bus, chips::mapper::sms_mapper& mapper,
+                                chips::storage::eeprom_93c46& eeprom, bool& enabled) {
+        // $8000 serial port: drive/read the EEPROM lines while enabled; otherwise
+        // the address is ordinary slot-2 ROM (read) or an ignored ROM write. Wins
+        // over the cartridge region (priority 0) beneath.
+        bus.map_mmio(
+            0x8000U, 0x1U,
+            [&eeprom, &enabled, &mapper](std::uint32_t /*a*/) -> std::uint8_t {
+                if (!enabled) {
+                    return mapper.cpu_read(0x8000U);
+                }
+                // Read-back byte: CS echo (bit 2), CLK forced high (bit 1), DO (bit 0).
+                return static_cast<std::uint8_t>((eeprom.chip_select() ? 0x04U : 0x00U) | 0x02U |
+                                                 (eeprom.data_out() ? 0x01U : 0x00U));
+            },
+            [&eeprom, &enabled, &mapper](std::uint32_t /*a*/, std::uint8_t v) {
+                if (!enabled) {
+                    mapper.cpu_write(0x8000U, v);
+                    return;
+                }
+                eeprom.update((v & 0x04U) != 0U, (v & 0x02U) != 0U, (v & 0x01U) != 0U); // CS/CLK/DI
+            },
+            1);
+
+        // $FFFC EEPROM control (bit 3 enable, bit 7 reset). These carts repurpose
+        // the Sega RAM-control register, so this overrides it with a higher priority
+        // than the $FFFC-$FFFF mapper overlay; $FFFD-$FFFF paging is left untouched.
+        bus.map_mmio(
+            0xFFFCU, 0x1U, [](std::uint32_t /*a*/) -> std::uint8_t { return 0xFFU; },
+            [&eeprom, &enabled](std::uint32_t /*a*/, std::uint8_t v) {
+                enabled = (v & 0x08U) != 0U;
+                if ((v & 0x80U) != 0U) {
+                    eeprom.reset();
+                }
+            },
+            3);
     }
 
     namespace {
@@ -212,6 +273,11 @@ namespace mnemos::manifests::sms {
         s->korean_janggun_active = kind == sms_config::mapper::korean_janggun;
         s->korean_multi_4x8k_active = kind == sms_config::mapper::korean_multi_4x8k;
         s->korean_multi_16k_active = kind == sms_config::mapper::korean_multi_16k;
+        // The 93C46 EEPROM rides on top of the Sega mapper (these carts are all
+        // Game Gear); forced by config or auto-detected by ROM CRC.
+        s->eeprom_93c46_active =
+            kind == sms_config::mapper::sega &&
+            (config.eeprom_93c46 || detect_93c46(std::span<const std::uint8_t>(s->rom)));
 
         // --- Z80 memory map (16-bit address space) ---
         // $C000-$DFFF: 8 KiB system RAM, mirrored at $E000-$FFFF (the same storage).
@@ -369,6 +435,9 @@ namespace mnemos::manifests::sms {
                     s->mapper.write_register(static_cast<std::uint16_t>(a), v);
                 },
                 1);
+            if (s->eeprom_93c46_active) {
+                install_93c46_overlays(s->bus, s->mapper, s->eeprom, s->eeprom_enabled);
+            }
         }
 
         // --- Z80 I/O ports (separate 64K IN/OUT space) ---
