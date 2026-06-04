@@ -20,12 +20,14 @@
 //   sms.vdp_irq                  void(bool)
 //   sms.mapper_register_overlay  mmio_factory at $FFFC-$FFFF
 //   sms.hicom_register_overlay   mmio_factory at $FFFF
+//   sms.janggun_register_overlay mmio_factory at $FFFE-$FFFF
 
 #include "callbacks.hpp"
 #include "mmio_factory.hpp"
 #include "peripheral.hpp"
 
 #include "hicom_mapper.hpp"
+#include "janggun_mapper.hpp"
 #include "sms_mapper.hpp"
 #include "sms_vdp.hpp"
 #include "sn76489.hpp"
@@ -47,9 +49,10 @@ namespace mnemos::manifests::sms {
         chips::video::sms_vdp* vdp{};
         chips::audio::sn76489* psg{};
         chips::mapper::sms_mapper* mapper{};
-        // Set instead of `mapper` when the HiCom manifest is built; its $FFFF
-        // register overlay writes through this back-reference.
+        // Set instead of `mapper` when the HiCom / Janggun manifest is built; their
+        // register overlays ($FFFF, $FFFE-$FFFF) write through these back-references.
         chips::mapper::hicom_mapper* hicom{};
+        chips::mapper::janggun_mapper* janggun{};
 
         // SMS-specific state that doesn't live on a chip: the two
         // controller-port peripherals (default-attached to MK-3020 pads

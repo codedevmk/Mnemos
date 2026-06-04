@@ -145,6 +145,9 @@ namespace mnemos::apps::player::adapters::sms {
             if (name == "korean-hicom") {
                 return mapper::korean_hicom;
             }
+            if (name == "korean-janggun") {
+                return mapper::korean_janggun;
+            }
             return mapper::automatic;
         }
 

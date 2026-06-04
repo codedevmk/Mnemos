@@ -33,4 +33,8 @@ namespace mnemos::manifests::sms::embedded {
 
     inline constexpr std::string_view sms_pal_korean_hicom_toml = R"MNEMOS_TOML(@MNEMOS_SMS_PAL_KOREAN_HICOM_TOML@)MNEMOS_TOML";
 
+    inline constexpr std::string_view sms_ntsc_korean_janggun_toml = R"MNEMOS_TOML(@MNEMOS_SMS_NTSC_KOREAN_JANGGUN_TOML@)MNEMOS_TOML";
+
+    inline constexpr std::string_view sms_pal_korean_janggun_toml = R"MNEMOS_TOML(@MNEMOS_SMS_PAL_KOREAN_JANGGUN_TOML@)MNEMOS_TOML";
+
 } // namespace mnemos::manifests::sms::embedded

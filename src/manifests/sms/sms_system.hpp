@@ -3,6 +3,7 @@
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
 #include "hicom_mapper.hpp"       // HiCom 188-in-1 Korean multicart mapper
+#include "janggun_mapper.hpp"     // Janggun bit-reversed Korean mapper
 #include "korean_mapper.hpp"      // standard Korean mapper
 #include "korean_msx_mapper.hpp"  // Korean MSX 8 KiB mapper (+ Nemesis variant)
 #include "peripheral.hpp"         // peripheral::device (controller ports)
@@ -28,7 +29,8 @@ namespace mnemos::manifests::sms {
         // risk misdetecting (and breaking) Sega/Codemasters carts -- automatic
         // therefore never resolves to one of them. `korean_msx_nemesis` is the
         // MSX mapper with its boot-region remap (same chip, different variant);
-        // `korean_hicom` is the HiCom 188-in-1 multicart.
+        // `korean_hicom` and `korean_janggun` are the HiCom 188-in-1 multicart and
+        // the bit-reversed Janggun cart.
         enum class mapper : std::uint8_t {
             automatic,
             sega,
@@ -37,6 +39,7 @@ namespace mnemos::manifests::sms {
             korean_msx,
             korean_msx_nemesis,
             korean_hicom,
+            korean_janggun,
         };
 
         mnemos::video_region video_region{mnemos::video_region::ntsc};
@@ -52,20 +55,22 @@ namespace mnemos::manifests::sms {
         chips::video::sms_vdp vdp;
         chips::audio::sn76489 psg;
         // All mappers are members; assembly wires exactly one into the bus based
-        // on the cart. The Sega mapper and the HiCom multicart page through a
-        // register overlay above the cartridge window ($FFFC-$FFFF and $FFFF); the
-        // Codemasters and the standard/MSX Korean mappers bank through writes
-        // inside the cartridge window. The *_active flags record which one is live
-        // (all false = the Sega mapper).
+        // on the cart. The Sega mapper, the HiCom multicart, and the Janggun cart
+        // page through a register overlay above the cartridge window ($FFFC-$FFFF,
+        // $FFFF, and $FFFE-$FFFF); the Codemasters and the standard/MSX Korean
+        // mappers bank through writes inside the cartridge window (Janggun does
+        // both). The *_active flags record which one is live (all false = Sega).
         chips::mapper::sms_mapper mapper;
         chips::mapper::codemasters_mapper codies;
         chips::mapper::korean_mapper korean;
         chips::mapper::korean_msx_mapper korean_msx;
         chips::mapper::hicom_mapper hicom;
+        chips::mapper::janggun_mapper janggun;
         bool codemasters_active{};
         bool korean_active{};
         bool korean_msx_active{};
         bool korean_hicom_active{};
+        bool korean_janggun_active{};
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x2000> ram{}; // 8 KiB, mirrored $C000 / $E000

@@ -38,6 +38,8 @@ namespace mnemos::manifests::sms {
             return sms_config::mapper::korean_msx_nemesis;
         case sms_config::mapper::korean_hicom:
             return sms_config::mapper::korean_hicom;
+        case sms_config::mapper::korean_janggun:
+            return sms_config::mapper::korean_janggun;
         case sms_config::mapper::automatic:
         default:
             return detect_codemasters(rom) ? sms_config::mapper::codemasters
@@ -123,6 +125,7 @@ namespace mnemos::manifests::sms {
         s->korean_msx_active = kind == sms_config::mapper::korean_msx ||
                                kind == sms_config::mapper::korean_msx_nemesis;
         s->korean_hicom_active = kind == sms_config::mapper::korean_hicom;
+        s->korean_janggun_active = kind == sms_config::mapper::korean_janggun;
 
         // --- Z80 memory map (16-bit address space) ---
         // $C000-$DFFF: 8 KiB system RAM, mirrored at $E000-$FFFF (the same storage).
@@ -197,6 +200,31 @@ namespace mnemos::manifests::sms {
                 [s](std::uint32_t a, std::uint8_t v) {
                     s->ram[a & 0x1FFFU] = v;
                     s->hicom.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                1);
+        } else if (s->korean_janggun_active) {
+            // Janggun: $0000-$BFFF is the mapper window ($0000-$3FFF fixed, four
+            // 8 KiB banked windows with per-page bit-reversed reads). The in-window
+            // bank selects ($4000/$6000/$8000/$A000) ride the cartridge MMIO's write
+            // path; the Sega-style 16 KiB pair selects sit at $FFFE-$FFFF in the
+            // work-RAM mirror, so -- like the Sega mapper's $FFFC-$FFFF -- a write
+            // there lands in RAM AND updates the mapper. Priority 1 wins over RAM.
+            s->janggun.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) { return s->janggun.cpu_read(static_cast<std::uint16_t>(a)); },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->janggun.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
+            s->bus.map_mmio(
+                chips::mapper::janggun_mapper::reg_pair_lower, 0x2U,
+                [s](std::uint32_t a) { return s->ram[a & 0x1FFFU]; },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->ram[a & 0x1FFFU] = v;
+                    s->janggun.cpu_write(static_cast<std::uint16_t>(a), v);
                 },
                 1);
         } else {
