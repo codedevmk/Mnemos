@@ -92,6 +92,8 @@ namespace mnemos::chips::video {
         }
         [[nodiscard]] std::uint8_t status() const noexcept { return status_; }
         [[nodiscard]] int scanline() const noexcept { return scanline_; }
+        // Read-only VRAM view (introspection / tests).
+        [[nodiscard]] std::span<const std::uint8_t> vram() const noexcept { return vram_; }
 
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {};
