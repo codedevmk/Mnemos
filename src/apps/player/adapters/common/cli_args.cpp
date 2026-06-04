@@ -53,6 +53,97 @@ namespace mnemos::apps::player::adapters {
         return false;
     }
 
+    namespace {
+        // Set the named button on `s`; returns false for an unknown name.
+        bool apply_button(mnemos::peripheral::controller_state& s, std::string_view b) {
+            if (b == "up") {
+                s.up = true;
+            } else if (b == "down") {
+                s.down = true;
+            } else if (b == "left") {
+                s.left = true;
+            } else if (b == "right") {
+                s.right = true;
+            } else if (b == "start") {
+                s.start = true;
+            } else if (b == "select") {
+                s.select = true;
+            } else if (b == "a") {
+                s.a = true;
+            } else if (b == "b") {
+                s.b = true;
+            } else if (b == "c") {
+                s.c = true;
+            } else if (b == "x") {
+                s.x = true;
+            } else if (b == "y") {
+                s.y = true;
+            } else if (b == "z") {
+                s.z = true;
+            } else if (b == "mode") {
+                s.mode = true;
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        // Parse one `<button>@<frame>[+duration]` spec.
+        std::optional<press_event> parse_press_spec(std::string_view spec) {
+            const auto at = spec.find('@');
+            if (at == std::string_view::npos || at == 0U) {
+                return std::nullopt;
+            }
+            std::string button{spec.substr(0, at)};
+            for (char& c : button) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            mnemos::peripheral::controller_state probe{};
+            if (!apply_button(probe, button)) {
+                return std::nullopt; // unknown button name
+            }
+            std::string_view rest = spec.substr(at + 1U);
+            const auto plus = rest.find('+');
+            const std::string frame_str{rest.substr(0, plus)};
+            if (frame_str.empty()) {
+                return std::nullopt;
+            }
+            press_event e;
+            e.button = std::move(button);
+            e.frame = std::strtoull(frame_str.c_str(), nullptr, 10);
+            if (plus != std::string_view::npos) {
+                const std::string dur_str{rest.substr(plus + 1U)};
+                const std::uint64_t d = std::strtoull(dur_str.c_str(), nullptr, 10);
+                e.duration = d > 0U ? d : press_default_duration;
+            }
+            return e;
+        }
+    } // namespace
+
+    std::vector<press_event> parse_press_events(int argc, char* argv[]) {
+        std::vector<press_event> events;
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--press") {
+                if (auto e = parse_press_spec(argv[i + 1])) {
+                    events.push_back(std::move(*e));
+                }
+                ++i; // skip the consumed value
+            }
+        }
+        return events;
+    }
+
+    mnemos::peripheral::controller_state input_for_frame(const std::vector<press_event>& events,
+                                                         std::uint64_t frame) noexcept {
+        mnemos::peripheral::controller_state state{};
+        for (const press_event& e : events) {
+            if (frame >= e.frame && frame < e.frame + e.duration) {
+                apply_button(state, e.button);
+            }
+        }
+        return state;
+    }
+
     std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]) {
         std::optional<std::string> path;
         std::optional<std::uint64_t> frames;

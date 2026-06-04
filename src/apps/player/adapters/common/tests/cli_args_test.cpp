@@ -9,7 +9,9 @@
 #include <vector>
 
 namespace {
+    using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::parse_no_autostart;
+    using mnemos::apps::player::adapters::parse_press_events;
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
@@ -100,4 +102,54 @@ TEST_CASE("cli_args: --frames alone (no --screenshot) returns nullopt") {
 TEST_CASE("cli_args: neither --screenshot nor --frames returns nullopt") {
     auto a = make_argv({"player", "--rom", "x.bin"});
     CHECK(parse_screenshot_args(a.argc(), a.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: parse_press_events parses button@frame[+duration]") {
+    auto a = make_argv({"player", "--press", "start@60", "--press", "a@10+8"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+    REQUIRE(ev.size() == 2U);
+    CHECK(ev[0].button == "start");
+    CHECK(ev[0].frame == 60U);
+    CHECK(ev[0].duration == 4U); // default
+    CHECK(ev[1].button == "a");
+    CHECK(ev[1].frame == 10U);
+    CHECK(ev[1].duration == 8U);
+}
+
+TEST_CASE("cli_args: parse_press_events lowercases and skips bad specs") {
+    auto a = make_argv({"player", "--press", "START@30", "--press", "bogus@5", "--press", "noat"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+    REQUIRE(ev.size() == 1U); // unknown button + missing '@' dropped
+    CHECK(ev[0].button == "start");
+    CHECK(ev[0].frame == 30U);
+}
+
+TEST_CASE("cli_args: input_for_frame holds a button over its [frame, frame+duration) window") {
+    auto a = make_argv({"player", "--press", "start@60+3"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+
+    CHECK_FALSE(input_for_frame(ev, 59U).start); // before
+    CHECK(input_for_frame(ev, 60U).start);       // first held frame
+    CHECK(input_for_frame(ev, 62U).start);       // last held frame
+    CHECK_FALSE(input_for_frame(ev, 63U).start); // released
+    CHECK_FALSE(input_for_frame(ev, 60U).a);     // other buttons stay released
+}
+
+TEST_CASE("cli_args: input_for_frame combines overlapping events") {
+    auto a = make_argv({"player", "--press", "left@10+20", "--press", "a@15+2"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+    const auto at16 = input_for_frame(ev, 16U);
+    CHECK(at16.left);
+    CHECK(at16.a);
+    const auto at20 = input_for_frame(ev, 20U);
+    CHECK(at20.left);
+    CHECK_FALSE(at20.a); // a's 2-frame window (15,16) has passed
+}
+
+TEST_CASE("cli_args: input_for_frame with no events is all-released") {
+    const std::vector<mnemos::apps::player::adapters::press_event> none;
+    const auto s = input_for_frame(none, 100U);
+    CHECK_FALSE(s.start);
+    CHECK_FALSE(s.a);
+    CHECK_FALSE(s.up);
 }

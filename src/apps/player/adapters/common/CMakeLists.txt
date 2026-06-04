@@ -22,6 +22,7 @@ target_link_libraries(
     mnemos_apps_player_adapters_common
     PUBLIC
         mnemos::chips::shared
+        mnemos::peripheral::common
     PRIVATE
         mnemos::common
         mnemos::compression
@@ -34,6 +35,7 @@ mnemos_declare_tier(
     TIER 7
     DEPENDS
         mnemos_chips_shared
+        mnemos_peripheral_common
         mnemos_common
         mnemos_compression
         mnemos_io
