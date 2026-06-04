@@ -9,6 +9,8 @@
 #include "korean_mapper.hpp"
 #include "korean_msx_mapper.hpp"
 #include "mk3020.hpp" // default controller-port peripheral
+#include "multi_16k_mapper.hpp"
+#include "multi_4x8k_mapper.hpp"
 #include "sms_mapper.hpp"
 
 #include <optional>
@@ -33,6 +35,8 @@ namespace mnemos::manifests::sms {
                                 kind == sms_config::mapper::korean_msx_nemesis;
         rt->korean_hicom_active = kind == sms_config::mapper::korean_hicom;
         rt->korean_janggun_active = kind == sms_config::mapper::korean_janggun;
+        rt->korean_multi_4x8k_active = kind == sms_config::mapper::korean_multi_4x8k;
+        rt->korean_multi_16k_active = kind == sms_config::mapper::korean_multi_16k;
 
         // Host glue: every closure captures &rt->state, whose address is stable
         // because rt is heap-allocated. The chips copy the closures during
@@ -89,6 +93,16 @@ namespace mnemos::manifests::sms {
             auto* janggun = dynamic_cast<chips::mapper::janggun_mapper*>(rt->graph.chip("mapper"));
             rt->state.janggun = janggun;
             janggun->attach_rom(rom_span);
+        } else if (rt->korean_multi_4x8k_active) {
+            // Banks via the $2000 register inside the cartridge region (caught by
+            // the region's write_overlay), so no state back-reference is needed.
+            auto* m = dynamic_cast<chips::mapper::multi_4x8k_mapper*>(rt->graph.chip("mapper"));
+            m->attach_rom(rom_span);
+        } else if (rt->korean_multi_16k_active) {
+            // Banks via the $3FFE/$7FFF/$BFFF registers inside the cartridge region,
+            // so no state back-reference is needed.
+            auto* m = dynamic_cast<chips::mapper::multi_16k_mapper*>(rt->graph.chip("mapper"));
+            m->attach_rom(rom_span);
         } else {
             auto* mapper = dynamic_cast<chips::mapper::sms_mapper*>(rt->graph.chip("mapper"));
             rt->state.mapper = mapper;

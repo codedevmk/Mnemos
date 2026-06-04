@@ -148,6 +148,12 @@ namespace mnemos::apps::player::adapters::sms {
             if (name == "korean-janggun") {
                 return mapper::korean_janggun;
             }
+            if (name == "korean-multi-4x8k") {
+                return mapper::korean_multi_4x8k;
+            }
+            if (name == "korean-multi-16k") {
+                return mapper::korean_multi_16k;
+            }
             return mapper::automatic;
         }
 

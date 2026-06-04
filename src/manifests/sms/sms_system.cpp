@@ -40,6 +40,10 @@ namespace mnemos::manifests::sms {
             return sms_config::mapper::korean_hicom;
         case sms_config::mapper::korean_janggun:
             return sms_config::mapper::korean_janggun;
+        case sms_config::mapper::korean_multi_4x8k:
+            return sms_config::mapper::korean_multi_4x8k;
+        case sms_config::mapper::korean_multi_16k:
+            return sms_config::mapper::korean_multi_16k;
         case sms_config::mapper::automatic:
         default:
             return detect_codemasters(rom) ? sms_config::mapper::codemasters
@@ -126,6 +130,8 @@ namespace mnemos::manifests::sms {
                                kind == sms_config::mapper::korean_msx_nemesis;
         s->korean_hicom_active = kind == sms_config::mapper::korean_hicom;
         s->korean_janggun_active = kind == sms_config::mapper::korean_janggun;
+        s->korean_multi_4x8k_active = kind == sms_config::mapper::korean_multi_4x8k;
+        s->korean_multi_16k_active = kind == sms_config::mapper::korean_multi_16k;
 
         // --- Z80 memory map (16-bit address space) ---
         // $C000-$DFFF: 8 KiB system RAM, mirrored at $E000-$FFFF (the same storage).
@@ -227,6 +233,39 @@ namespace mnemos::manifests::sms {
                     s->janggun.cpu_write(static_cast<std::uint16_t>(a), v);
                 },
                 1);
+        } else if (s->korean_multi_4x8k_active) {
+            // Multi 4x8K: $0000-$BFFF through the mapper. $0000-$3FFF fixed; a write
+            // to $2000 (inside the window) XOR-banks the four 8 KiB windows. No
+            // $FFFx register overlay -- $C000-$FFFF is plain work RAM.
+            s->multi4x8k.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) {
+                    return s->multi4x8k.cpu_read(static_cast<std::uint16_t>(a));
+                },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->multi4x8k.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
+        } else if (s->korean_multi_16k_active) {
+            // Multi 16K (4-Pak All Action): $0000-$BFFF through the mapper, three
+            // 16 KiB banked slots. The slot registers ($3FFE/$7FFF/$BFFF) sit inside
+            // the window, so they ride the cartridge MMIO's write path. No $FFFx
+            // register overlay -- $C000-$FFFF is plain work RAM.
+            s->multi16k.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) {
+                    return s->multi16k.cpu_read(static_cast<std::uint16_t>(a));
+                },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->multi16k.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
         } else {
             // Sega: $0000-$BFFF is the banked ROM / optional cart RAM via the mapper.
             s->mapper.attach_rom(std::span<const std::uint8_t>(s->rom));
