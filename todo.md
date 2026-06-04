@@ -257,14 +257,15 @@ Current baseline (do not re-implement):
       Genesis I2C EEPROM) for the handful of titles that save to it.
       *Unblocks:* Sega Game/World-class EEPROM SMS saves (e.g. *Pro Yakyuu*).
       *Accept:* EEPROM read/write round-trip + battery-save persistence test.
-- [~] **Game Gear VDP variant**: extended CRAM (12-bit BGR444) + the GG reduced 160×144
-      viewport/border crop as a `gg_mode_` of `sms_vdp`. DONE: the VDP mode (64-byte CRAM + 2-byte
-      write latch, `cram_rgb_gg`, centred 160×144 strided `framebuffer()`, `set_gg`/state) + CRAM-depth
-      and viewport unit tests; SMS mode byte-unchanged. *Unblocks:* the Game Gear ROM catalog (a
-      local GG ROM corpus is available for the data-gated golden, incl. the 93C46 baseball carts).
-      *Remaining (step 2):* a GG **system/adapter** (sets `gg_mode`, GG `$00` start-button port +
-      stereo PSG, GG manifests/region) so carts boot, then a data-gated GG boot golden. *Then:* the
-      SMS/GG **93C46 EEPROM** (device + cart glue) on top — its carts are the GG baseball titles.
+- [x] **Game Gear support**: the Master System core run in Game Gear mode. DONE across three PRs:
+      the VDP GG mode (12-bit BGR444 CRAM + centred 160×144 strided viewport, #44); the SN76489 `$06`
+      stereo register (#45); and the **GG system** (#46) — a `sms_config::game_gear` flag drives both
+      build paths (forces NTSC, `set_gg`, interleaved-stereo PSG capture), a shared `gg_io` decodes the
+      handset ports `$00`-`$06` (`$00` START/region, `$01`-`$05` EXT link, `$06`→`write_stereo`), a `gg`
+      adapter family reuses `sms_adapter` (stereo drain + "Game Gear" spec + START→`$00`), `.gg` routes
+      via `detect_family`, plus a data-gated GG boot golden (`MNEMOS_GG_ROM`). Verified vs real carts
+      32 KiB–512 KiB (160×144, non-uniform, deterministic); SMS mono path + parity unchanged.
+      *Remaining:* the SMS/GG **93C46 EEPROM** below — its carts are the GG baseball titles.
 
 ## P2 — Fidelity & edge-case compatibility (title already boots)
 
@@ -289,5 +290,5 @@ Current baseline (do not re-implement):
    new clocked hardware, reuse existing cart/mapper machinery.
 2. **P0 Genesis J-Cart + Lock-on** — high-profile titles, small surface.
 3. **P1 EEPROM/protection mappers** — saves + unlicensed coverage.
-4. **P1 Game Gear VDP** then **P1 SVP** — net-new systems/titles, larger effort.
+4. **P1 SVP** — net-new system/titles, larger effort (Game Gear DONE: #44/#45/#46).
 5. **P2** — fidelity passes once the boot/save matrix is green.
