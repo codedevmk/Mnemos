@@ -94,6 +94,7 @@ target_link_libraries(
         mnemos::chips::mapper::multi_4x8k_mapper
         mnemos::chips::mapper::multi_16k_mapper
         mnemos::peripheral::input
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_sms PUBLIC)
@@ -107,6 +108,7 @@ mnemos_declare_tier(
         mnemos_foundation
         mnemos_peripheral_common
         mnemos_peripheral_input
+        mnemos_security_cryptography
 )
 
 if(BUILD_TESTING)

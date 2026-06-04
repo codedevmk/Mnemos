@@ -40,15 +40,15 @@ TEST_CASE("korean_mapper reports identity and registers under korean.mapper") {
     CHECK(chip->metadata().family == std::string("Mapper"));
 }
 
-TEST_CASE("korean_mapper powers on linear with slot 2 = bank 2") {
+TEST_CASE("korean_mapper powers on with slot 2 = bank 0") {
     auto rom = make_rom();
     korean_mapper mapper;
     mapper.attach_rom(rom);
 
-    CHECK(mapper.page() == 2U);
+    CHECK(mapper.page() == 0U);
     CHECK(mapper.cpu_read(0x0000U) == 0U); // slot 0 -> bank 0 (fixed)
     CHECK(mapper.cpu_read(0x4000U) == 1U); // slot 1 -> bank 1 (fixed)
-    CHECK(mapper.cpu_read(0x8000U) == 2U); // slot 2 -> bank 2 (power-on)
+    CHECK(mapper.cpu_read(0x8000U) == 0U); // slot 2 -> bank 0 (power-on default)
 }
 
 TEST_CASE("korean_mapper banks slot 2 via a write to $A000") {
@@ -84,8 +84,8 @@ TEST_CASE("korean_mapper ignores writes outside the $A000 register") {
     mapper.cpu_write(0x0000U, 3U); // ROM is read-only -> dropped
     mapper.cpu_write(0x8000U, 4U); // slot-2 read window, not the register -> dropped
     mapper.cpu_write(0xBFFFU, 5U);
-    CHECK(mapper.page() == 2U); // unchanged power-on page
-    CHECK(mapper.cpu_read(0x8000U) == 2U);
+    CHECK(mapper.page() == 0U); // unchanged power-on page
+    CHECK(mapper.cpu_read(0x8000U) == 0U);
 }
 
 TEST_CASE("korean_mapper wraps the page index modulo the ROM page count") {

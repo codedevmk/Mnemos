@@ -228,8 +228,10 @@ Current baseline (do not re-implement):
           from the Nemesis remap in `korean.msx_mapper`. Standalone chip + 8 unit tests, wired
           end-to-end (`sms_config::mapper::korean_janggun`, NTSC/PAL manifest TOMLs with the
           $FFFE-$FFFF register overlay, `--mapper korean-janggun`, assemble + runtime-parity coverage).
-  - [ ] Auto-detection (CRC database) so Korean carts resolve without an explicit `--mapper`, plus
-        a data-gated boot golden.
+  - [~] Auto-detection: CRC database in `resolve_mapper` (`automatic` -> Korean CRC -> Codemasters
+        header -> Sega) so the six Korean mappers resolve without `--mapper`; 27-cart CRC table +
+        unit tests (DONE). Also fixed `korean.mapper` slot-2 power-on (2 -> 0) to match the reference.
+        Remaining: a data-gated boot golden once real Korean ROMs are available.
 - [ ] **Genesis J-Cart**: extra two controller ports mapped at the top of ROM space (`$38FFFE`
       region). Extends `genesis_cart`/banking + input wiring.
       *Unblocks:* EA J-Cart titles (Micro Machines 2/'96/Military, Pete Sampras Tennis) — they

@@ -20,8 +20,8 @@ namespace mnemos::chips::mapper {
     //   - The slot-2 page is selected by a byte written to $A000 (and only $A000;
     //     it overlaps the slot-2 read window, which stays ROM).
     //   - No on-cart RAM.
-    //   - Power-on page: slot 2 = bank 2, so a freshly booted cart reads as a flat
-    //     linear 48 KiB image (banks 0/1/2) until a game pages slot 2.
+    //   - Power-on page: slot 2 = bank 0 (the post-reset default); a cart pages
+    //     slot 2 before it uses the $8000-$BFFF window.
     //
     // The mapper has no clocked behaviour, so tick() is a no-op; only the slot-2
     // page register is saved.
@@ -29,7 +29,7 @@ namespace mnemos::chips::mapper {
       public:
         static constexpr int rom_page_size = 0x4000;            // 16 KiB
         static constexpr std::uint16_t bank_register = 0xA000U; // slot-2 page select
-        static constexpr std::uint8_t power_on_page = 2U;
+        static constexpr std::uint8_t power_on_page = 0U;
 
         korean_mapper() { reset(reset_kind::power_on); }
 

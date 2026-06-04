@@ -64,6 +64,11 @@ multiple independent open-source implementations.
 - **Codemasters SMS mapper** — bank-register layout documented in community
   hardware notes; cross-checked against multiple open-source Sega
   implementations.
+- **SMS Korean mapper CRC database** — the Korean cartridge families carry no
+  header signature, so they are auto-detected by ROM CRC-32. The CRC→mapper
+  catalogue (`src/manifests/sms/sms_system.cpp`) was compiled from the community
+  SMS cartridge database and cross-checked against open-source Sega emulators'
+  game lists; only carts whose mapper Mnemos implements are listed.
 
 ## Cross-check emulators
 

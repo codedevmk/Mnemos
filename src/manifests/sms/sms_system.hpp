@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -116,11 +117,22 @@ namespace mnemos::manifests::sms {
     // and the manifest-path build_sms_runtime so both resolve carts identically.
     [[nodiscard]] bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept;
 
+    // Look up a cartridge's zlib CRC-32 in the Korean-mapper database; returns the
+    // mapper it needs, or nullopt if the CRC is unknown. Catalogues the known Korean
+    // carts whose mapper Mnemos implements (see THIRD-PARTY.md).
+    [[nodiscard]] std::optional<sms_config::mapper>
+    korean_mapper_for_crc(std::uint32_t crc) noexcept;
+
+    // Auto-detect a Korean cartridge mapper from the ROM image: CRC-32 over the whole
+    // image, looked up via korean_mapper_for_crc. nullopt when the image is unknown.
+    [[nodiscard]] std::optional<sms_config::mapper>
+    detect_korean_mapper(std::span<const std::uint8_t> rom) noexcept;
+
     // Resolve sms_config::cartridge_mapper to a concrete mapper kind (never
-    // `automatic`): forced choices pass through, `automatic` picks Codemasters
-    // vs Sega from the checksum header. Korean is force-only, so this returns
-    // `korean` only when explicitly requested. Shared by assemble_sms and
-    // build_sms_runtime so both paths resolve carts identically.
+    // `automatic`): forced choices pass through; `automatic` auto-detects the Korean
+    // families by ROM CRC (see detect_korean_mapper), then picks Codemasters vs Sega
+    // from the checksum header. Shared by assemble_sms and build_sms_runtime so both
+    // paths resolve carts identically.
     [[nodiscard]] sms_config::mapper resolve_mapper(const sms_config& config,
                                                     std::span<const std::uint8_t> rom) noexcept;
 

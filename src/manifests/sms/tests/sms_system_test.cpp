@@ -7,6 +7,8 @@
 
 namespace {
     using mnemos::manifests::sms::assemble_sms;
+    using mnemos::manifests::sms::korean_mapper_for_crc;
+    using mnemos::manifests::sms::resolve_mapper;
     using mnemos::manifests::sms::sms_config;
 
     // A one-page (16 KiB) zero-filled cartridge image to poke a test program into.
@@ -106,9 +108,9 @@ TEST_CASE("assemble_sms honours a forced Korean mapper", "[sms][mapper]") {
     REQUIRE(sys->korean_active);
     CHECK_FALSE(sys->codemasters_active);
 
-    // Power-on: slots 0/1 fixed to pages 0/1, slot 2 = page 2 (linear).
-    CHECK(sys->korean.page() == 2U);
-    CHECK(sys->bus.read8(0x8000U) == 0x5AU); // slot 2 -> page 2
+    // Power-on: slots 0/1 fixed to pages 0/1, slot 2 = page 0 (reset default).
+    CHECK(sys->korean.page() == 0U);
+    CHECK(sys->bus.read8(0x8000U) == 0x00U); // slot 2 -> page 0 (not the page-2 marker)
 
     // A write to $A000 (inside the cartridge window) pages slot 2.
     sys->bus.write8(0xA000U, 3U);
@@ -246,6 +248,27 @@ TEST_CASE("assemble_sms honours a forced Multi 16K mapper", "[sms][mapper]") {
     CHECK(sys->bus.read8(0x0000U) == 0xA2U);
     CHECK(sys->bus.read8(0x4000U) == 0xA3U);
     CHECK(sys->bus.read8(0x8000U) == 0xA1U);
+}
+
+TEST_CASE("korean_mapper_for_crc maps known cart CRCs to their mapper", "[sms][mapper][crc]") {
+    CHECK(korean_mapper_for_crc(0x97D03541U) == sms_config::mapper::korean);     // Sangokushi 3
+    CHECK(korean_mapper_for_crc(0x77EFE84AU) == sms_config::mapper::korean_msx); // Cyborg Z
+    CHECK(korean_mapper_for_crc(0xE316C06DU) == sms_config::mapper::korean_msx_nemesis); // Nemesis
+    CHECK(korean_mapper_for_crc(0x98AF0236U) == sms_config::mapper::korean_hicom); // Hi-Com 3-in-1
+    CHECK(korean_mapper_for_crc(0x192949D5U) == sms_config::mapper::korean_janggun);    // Janggun
+    CHECK(korean_mapper_for_crc(0xBA5EC0E3U) == sms_config::mapper::korean_multi_4x8k); // 128 Hap
+    CHECK(korean_mapper_for_crc(0xA67F2A5CU) ==
+          sms_config::mapper::korean_multi_16k);                 // 4-Pak All Action
+    CHECK_FALSE(korean_mapper_for_crc(0x00000000U).has_value()); // unknown CRC
+}
+
+TEST_CASE("resolve_mapper auto-detects Korean carts by CRC, else falls back",
+          "[sms][mapper][crc]") {
+    // An arbitrary image (unknown CRC, no Codemasters header) -> Sega.
+    const std::vector<std::uint8_t> blank(0x8000U, 0U);
+    CHECK(resolve_mapper({}, blank) == sms_config::mapper::sega);
+    // The Codemasters checksum header still wins when the CRC is unknown.
+    CHECK(resolve_mapper({}, codies_rom()) == sms_config::mapper::codemasters);
 }
 
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {
