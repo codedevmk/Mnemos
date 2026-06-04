@@ -51,6 +51,9 @@ namespace mnemos::manifests::sms {
         }
 
         void set_reset_button(bool pressed) noexcept { state.reset_pressed = pressed; }
+
+        // Game Gear START button (port $00 bit 7). No-op on a base Master System.
+        void set_gg_start(bool pressed) noexcept { state.gg.set_start(pressed); }
     };
 
     // Build a runnable SMS from a cartridge image (moved in) via the manifest

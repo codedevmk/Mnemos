@@ -26,6 +26,7 @@
 #include "mmio_factory.hpp"
 #include "peripheral.hpp"
 
+#include "gg_io.hpp"
 #include "hicom_mapper.hpp"
 #include "janggun_mapper.hpp"
 #include "sms_mapper.hpp"
@@ -61,6 +62,7 @@ namespace mnemos::manifests::sms {
         std::array<std::unique_ptr<peripheral::device>, 2> ports{};
         std::uint8_t io_ctrl{0xFFU};
         bool reset_pressed{};
+        gg_io gg; // Game Gear I/O ($00-$06); inert unless build enables it
     };
 
     struct sms_host_tables final {

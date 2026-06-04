@@ -71,6 +71,9 @@ namespace mnemos::manifests::sms {
             chips::callback_value{std::function<std::uint8_t(std::uint16_t)>{
                 [s = &state](std::uint16_t port) -> std::uint8_t {
                     const auto p = static_cast<std::uint8_t>(port & 0xFFU);
+                    if (s->gg.enabled() && p <= 0x06U) {
+                        return s->gg.read(p); // Game Gear handset ($00 mode + EXT link)
+                    }
                     if (p <= 0x3FU) {
                         return 0xFFU; // open bus
                     }
@@ -89,6 +92,10 @@ namespace mnemos::manifests::sms {
             chips::callback_value{std::function<void(std::uint16_t, std::uint8_t)>{
                 [s = &state](std::uint16_t port, std::uint8_t value) {
                     const auto p = static_cast<std::uint8_t>(port & 0xFFU);
+                    if (s->gg.enabled() && p <= 0x06U) {
+                        s->gg.write(p, value, *s->psg); // GG EXT link + $06 PSG stereo
+                        return;
+                    }
                     if (p <= 0x3FU) {
                         if ((p & 1U) != 0U) {
                             s->io_ctrl = value; // $3F I/O control

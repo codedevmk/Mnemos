@@ -2,6 +2,7 @@
 
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
+#include "gg_io.hpp"              // Game Gear system I/O ($00-$06)
 #include "hicom_mapper.hpp"       // HiCom 188-in-1 Korean multicart mapper
 #include "janggun_mapper.hpp"     // Janggun bit-reversed Korean mapper
 #include "korean_mapper.hpp"      // standard Korean mapper
@@ -50,6 +51,10 @@ namespace mnemos::manifests::sms {
 
         mnemos::video_region video_region{mnemos::video_region::ntsc};
         mapper cartridge_mapper{mapper::automatic};
+        // Game Gear: the VDP runs in GG mode (12-bit CRAM + 160x144 viewport), the
+        // PSG gains its stereo register ($06), and ports $00-$06 decode the GG
+        // handset. The GG is 60 Hz only, so assembly forces NTSC when set.
+        bool game_gear{};
     };
 
     // A fully wired Sega Master System: the Z80, the VDP, the SN76489 PSG, the Sega
@@ -96,6 +101,7 @@ namespace mnemos::manifests::sms {
 
         std::uint8_t io_ctrl{0xFFU}; // I/O control latch (port $3F): TH/TR direction + level
         bool reset_pressed{};
+        gg_io gg; // Game Gear I/O ($00-$06); inert unless assembly enables it
 
         void attach(int port, std::unique_ptr<peripheral::device> dev) noexcept {
             if (port >= 0 && port < 2) {
@@ -108,6 +114,9 @@ namespace mnemos::manifests::sms {
         }
 
         void set_reset_button(bool pressed) noexcept { reset_pressed = pressed; }
+
+        // Game Gear START button (port $00 bit 7). No-op on a base Master System.
+        void set_gg_start(bool pressed) noexcept { gg.set_start(pressed); }
     };
 
     // True when a cartridge image carries a valid Codemasters checksum header
