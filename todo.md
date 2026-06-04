@@ -257,10 +257,14 @@ Current baseline (do not re-implement):
       Genesis I2C EEPROM) for the handful of titles that save to it.
       *Unblocks:* Sega Game/World-class EEPROM SMS saves (e.g. *Pro Yakyuu*).
       *Accept:* EEPROM read/write round-trip + battery-save persistence test.
-- [ ] **Game Gear VDP variant** (`sega.315_5378`): extended CRAM (12-bit, 4096-color) + the GG
-      reduced 160×144 viewport/border crop as a mode of `sms_vdp`.
-      *Unblocks:* the Game Gear ROM catalog (a new system the SMS core nearly covers).
-      *Accept:* CRAM-depth + viewport tests; a GG boot golden (data-gated).
+- [~] **Game Gear VDP variant**: extended CRAM (12-bit BGR444) + the GG reduced 160×144
+      viewport/border crop as a `gg_mode_` of `sms_vdp`. DONE: the VDP mode (64-byte CRAM + 2-byte
+      write latch, `cram_rgb_gg`, centred 160×144 strided `framebuffer()`, `set_gg`/state) + CRAM-depth
+      and viewport unit tests; SMS mode byte-unchanged. *Unblocks:* the Game Gear ROM catalog (542
+      ROMs at `C:\emu\sega\game-gear`, incl. the 93C46 baseball carts).
+      *Remaining (step 2):* a GG **system/adapter** (sets `gg_mode`, GG `$00` start-button port +
+      stereo PSG, GG manifests/region) so carts boot, then a data-gated GG boot golden. *Then:* the
+      SMS/GG **93C46 EEPROM** (device + cart glue) on top — its carts are the GG baseball titles.
 
 ## P2 — Fidelity & edge-case compatibility (title already boots)
 

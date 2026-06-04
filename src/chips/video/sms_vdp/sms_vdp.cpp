@@ -41,6 +41,15 @@ namespace mnemos::chips::video {
             return (r << 16U) | (g << 8U) | b;
         }
 
+        // Game Gear CRAM (16-bit ----BBBBGGGGRRRR, 4 bits/channel) to 0x00RRGGBB.
+        std::uint32_t cram_rgb_gg(std::uint16_t c) {
+            const auto chan = [](std::uint32_t v) { return (v & 0xFU) * 0x11U; };
+            const std::uint32_t r = chan(c);
+            const std::uint32_t g = chan(c >> 4U);
+            const std::uint32_t b = chan(c >> 8U);
+            return (r << 16U) | (g << 8U) | b;
+        }
+
         // Decode an 8-pixel tile row (4 planar bytes) into 4-bit colour indices.
         void decode_tile_row(std::span<const std::uint8_t> vram, int tile_idx, int row, bool hflip,
                              std::array<std::uint8_t, 8>& pix) {
@@ -83,6 +92,18 @@ namespace mnemos::chips::video {
     void sms_vdp::set_pal(bool pal) noexcept {
         pal_mode_ = pal;
         total_scanlines_ = pal ? scanlines_pal : scanlines_ntsc;
+    }
+
+    void sms_vdp::set_gg(bool gg) noexcept { gg_mode_ = gg; }
+
+    std::uint32_t sms_vdp::palette_rgb(std::uint8_t index) const noexcept {
+        const std::size_t e = static_cast<std::size_t>(index & 0x1FU);
+        if (gg_mode_) {
+            const std::uint16_t entry = static_cast<std::uint16_t>(
+                cram_[e * 2U] | (static_cast<std::uint16_t>(cram_[e * 2U + 1U]) << 8U));
+            return cram_rgb_gg(entry);
+        }
+        return cram_rgb(cram_[e]);
     }
 
     // ---- control / data ports ----
@@ -135,7 +156,18 @@ namespace mnemos::chips::video {
     void sms_vdp::data_write(std::uint8_t value) noexcept {
         cmd_pending_ = false;
         if (code_ == 3U) {
-            cram_[addr_ & 0x1FU] = value;
+            if (gg_mode_) {
+                // GG CRAM is 32 x 16-bit BGR444: the even byte latches the low half,
+                // the odd byte commits the full entry.
+                if ((addr_ & 1U) == 0U) {
+                    cram_latch_ = value;
+                } else {
+                    cram_[(addr_ - 1U) & 0x3FU] = cram_latch_;
+                    cram_[addr_ & 0x3FU] = value;
+                }
+            } else {
+                cram_[addr_ & 0x1FU] = value;
+            }
         } else {
             vram_[addr_ & 0x3FFFU] = value;
         }
@@ -171,7 +203,7 @@ namespace mnemos::chips::video {
     // ---- rendering ----
 
     void sms_vdp::fill_scanline_bg(int line) noexcept {
-        const std::uint32_t rgb = cram_rgb(cram_[reg_bg_color(reg_) & 0x1FU]);
+        const std::uint32_t rgb = palette_rgb(reg_bg_color(reg_));
         const std::size_t off = static_cast<std::size_t>(line) * fb_width;
         for (int x = 0; x < fb_width; ++x) {
             framebuffer_[off + static_cast<std::size_t>(x)] = rgb;
@@ -321,7 +353,7 @@ namespace mnemos::chips::video {
 
         for (int x = 0; x < fb_width; ++x) {
             framebuffer_[fb_off + static_cast<std::size_t>(x)] =
-                cram_rgb(cram_[bg_idx[static_cast<std::size_t>(x)] & 0x1FU]);
+                palette_rgb(bg_idx[static_cast<std::size_t>(x)]);
         }
     }
 
@@ -392,6 +424,13 @@ namespace mnemos::chips::video {
     }
 
     frame_buffer_view sms_vdp::framebuffer() const noexcept {
+        if (gg_mode_) {
+            // The Game Gear LCD shows the central 160x144 of the Mode-4 256x192
+            // frame: offset (48, 24), strided over the full 256-pixel-wide buffer.
+            constexpr std::uint32_t gg_w = 160U, gg_h = 144U, gg_x = 48U, gg_y = 24U;
+            return {framebuffer_.data() + (static_cast<std::size_t>(gg_y) * fb_width + gg_x), gg_w,
+                    gg_h, static_cast<std::uint32_t>(fb_width)};
+        }
         return {framebuffer_.data(), static_cast<std::uint32_t>(fb_width),
                 static_cast<std::uint32_t>(visible_height())};
     }
@@ -401,6 +440,7 @@ namespace mnemos::chips::video {
             0x36U, 0xA0U, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFBU, 0x00U, 0x00U, 0x00U, 0xFFU};
         vram_.fill(0U);
         cram_.fill(0U);
+        cram_latch_ = 0U;
         reg_.fill(0U);
         for (std::size_t i = 0; i < reg_defaults.size(); ++i) {
             reg_[i] = reg_defaults[i];
@@ -435,6 +475,8 @@ namespace mnemos::chips::video {
         writer.u32(static_cast<std::uint32_t>(scanline_cycle_));
         writer.u32(static_cast<std::uint32_t>(total_scanlines_));
         writer.boolean(pal_mode_);
+        writer.boolean(gg_mode_);
+        writer.u8(cram_latch_);
         writer.boolean(frame_irq_pending_);
         writer.boolean(line_irq_pending_);
         writer.u32(static_cast<std::uint32_t>(line_counter_));
@@ -455,6 +497,8 @@ namespace mnemos::chips::video {
         scanline_cycle_ = static_cast<int>(reader.u32());
         total_scanlines_ = static_cast<int>(reader.u32());
         pal_mode_ = reader.boolean();
+        gg_mode_ = reader.boolean();
+        cram_latch_ = reader.u8();
         frame_irq_pending_ = reader.boolean();
         line_irq_pending_ = reader.boolean();
         line_counter_ = static_cast<int>(reader.u32());

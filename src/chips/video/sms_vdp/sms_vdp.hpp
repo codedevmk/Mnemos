@@ -17,15 +17,18 @@ namespace mnemos::chips::video {
     // 8-per-line limit with overflow + collision flags), the two-byte control-port
     // command protocol, the V/H counters, and the line + frame interrupts.
     //
-    // 16 KiB VRAM + 32-entry CRAM (--BBGGRR). The scanline renderer fills an
-    // 0x00RRGGBB framebuffer. As an ivideo frame source the VDP is ticked per Z80
+    // 16 KiB VRAM + CRAM (SMS: 32 x --BBGGRR; Game Gear mode: 32 x 16-bit BGR444).
+    // The scanline renderer fills an 0x00RRGGBB framebuffer; Game Gear mode crops
+    // framebuffer() to the central 160x144 LCD window. As an ivideo frame source
+    // the VDP is ticked per Z80
     // cycle (228 per scanline); frame_index increments once per rendered frame.
     class sms_vdp final : public ivideo, public immio {
       public:
         static constexpr int fb_width = 256;
         static constexpr int fb_height = 240;
         static constexpr int vram_size = 0x4000;
-        static constexpr int cram_size = 32;
+        static constexpr int cram_size = 32;     // SMS CRAM entries (1 byte each)
+        static constexpr int gg_cram_bytes = 64; // GG CRAM: 32 x 16-bit BGR444 entries
         static constexpr int register_count = 16;
         static constexpr int cycles_per_line = 228; // Z80 cycles
         static constexpr int scanlines_ntsc = 262;
@@ -70,6 +73,10 @@ namespace mnemos::chips::video {
         void set_pal(bool pal) noexcept;
         [[nodiscard]] bool is_pal() const noexcept { return pal_mode_; }
 
+        // Game Gear mode: 12-bit (BGR444) CRAM + the central 160x144 LCD viewport.
+        void set_gg(bool gg) noexcept;
+        [[nodiscard]] bool is_gg() const noexcept { return gg_mode_; }
+
         // /INT line: fired on every transition; the SMS ORs it into the Z80 IRQ.
         void set_irq_callback(std::function<void(bool asserted)> cb) noexcept {
             irq_callback_ = std::move(cb);
@@ -95,8 +102,12 @@ namespace mnemos::chips::video {
         void fill_scanline_bg(int line) noexcept;
         void update_irq() noexcept;
 
+        // Resolve a CRAM palette index (0-31) to 0x00RRGGBB for the active mode
+        // (SMS 6-bit --BBGGRR or Game Gear 12-bit BGR444).
+        [[nodiscard]] std::uint32_t palette_rgb(std::uint8_t index) const noexcept;
+
         std::array<std::uint8_t, vram_size> vram_{};
-        std::array<std::uint8_t, cram_size> cram_{};
+        std::array<std::uint8_t, gg_cram_bytes> cram_{};
         std::array<std::uint8_t, register_count> reg_{};
 
         std::uint16_t addr_{};
@@ -104,11 +115,13 @@ namespace mnemos::chips::video {
         bool cmd_pending_{};
         std::uint8_t cmd_first_{};
         std::uint8_t read_buffer_{};
+        std::uint8_t cram_latch_{}; // GG: low byte of a 16-bit CRAM entry, pending its high byte
 
         int scanline_{};
         int scanline_cycle_{};
         int total_scanlines_{scanlines_ntsc};
         bool pal_mode_{};
+        bool gg_mode_{}; // Game Gear VDP mode (12-bit CRAM + 160x144 viewport)
 
         bool frame_irq_pending_{};
         bool line_irq_pending_{};

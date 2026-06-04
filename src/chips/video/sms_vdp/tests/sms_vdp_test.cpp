@@ -90,6 +90,41 @@ TEST_CASE("sms_vdp renders a Mode-4 tile to the framebuffer") {
     CHECK(pixel(vdp, 8, 0) == 0x00000000U); // next tile is blank -> CRAM[0]
 }
 
+TEST_CASE("sms_vdp Game Gear mode renders 12-bit BGR444 CRAM colours") {
+    sms_vdp vdp;
+    vdp.set_gg(true);
+    CHECK(vdp.is_gg());
+
+    // Border colour = CRAM entry 16 (reg7 low nibble 0). Write it as a Game Gear
+    // 16-bit BGR444 green (g=$F -> entry $00F0): low byte latched, high byte commits.
+    set_addr(vdp, 0x0020U, 3U); // GG CRAM byte 32 = entry 16
+    vdp.data_write(0xF0U);      // low half (latched)
+    vdp.data_write(0x00U);      // high half (commits the entry)
+
+    write_reg(vdp, 7, 0x00U); // border colour = CRAM entry 16
+    write_reg(vdp, 1, 0x00U); // display off -> whole line is the border colour
+
+    // Render through to scanline 24 (the top of the 160x144 LCD window).
+    vdp.tick(static_cast<std::uint64_t>(sms_vdp::cycles_per_line) * 25U);
+
+    // The viewport's top-left pixel is the 12-bit green (g=$F -> 0x00FF00).
+    CHECK(vdp.framebuffer().pixels[0] == 0x0000FF00U);
+}
+
+TEST_CASE("sms_vdp Game Gear mode crops the framebuffer to the central 160x144") {
+    sms_vdp gg;
+    gg.set_gg(true);
+    const auto fb = gg.framebuffer();
+    CHECK(fb.width == 160U);
+    CHECK(fb.height == 144U);
+    CHECK(fb.effective_stride() == 256U); // strided sub-view over the full SMS frame
+
+    const sms_vdp sms; // SMS mode is unchanged: full 256x192.
+    const auto sfb = sms.framebuffer();
+    CHECK(sfb.width == 256U);
+    CHECK(sfb.height == 192U);
+}
+
 TEST_CASE("sms_vdp raises the frame interrupt at vblank") {
     sms_vdp vdp;
     bool irq = false;
