@@ -113,15 +113,20 @@ namespace mnemos::chips::video {
             return (line + 1) * kLineMaster + t[0]; // roll into the next line's first slot
         }
 
-        // Opt-in (MNEMOS_WRITE_ACCEPT): model VDP data-port write ACCEPT timing -- each
-        // 16-bit word waits for the next access slot during active display -- not just
-        // FIFO-full back-pressure. Off by default (one cached check), no behaviour change.
+        // Model VDP data-port write-ACCEPT back-pressure: each 16-bit word drains at a
+        // VDP external-access slot (a VRAM word costs two), and the 68K stalls when it
+        // writes to a full 4-entry FIFO. This is the /DTACK pacing that times the boot
+        // VRAM clear; without it Mnemos boots ~4-8 frames too fast and intro animations
+        // diverge. ON by default; MNEMOS_WRITE_ACCEPT=0 disables it (the old behaviour).
         [[nodiscard]] bool write_accept_enabled() noexcept {
 #if defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable : 4996) // getenv: opt-in diagnostic, not hot-path
+#pragma warning(disable : 4996) // getenv: cached once, not hot-path
 #endif
-            static const bool on = std::getenv("MNEMOS_WRITE_ACCEPT") != nullptr;
+            static const bool on = [] {
+                const char* e = std::getenv("MNEMOS_WRITE_ACCEPT");
+                return (e == nullptr) || (e[0] != '0');
+            }();
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
