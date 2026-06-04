@@ -52,6 +52,21 @@ set_tests_properties(
     PROPERTIES SKIP_RETURN_CODE 4
 )
 
+# GG VDP triage probe (diagnostic). Self-skips unless MNEMOS_GG_ROM is set;
+# dumps VDP reg/VRAM state to stderr to localise rendering failures.
+mnemos_add_test(
+    mnemos_gg_vdp_triage_test
+    SOURCES gg_vdp_triage_test.cpp
+    LIBRARIES
+        mnemos::manifests::sms
+        mnemos::runtime
+        mnemos::foundation
+)
+set_tests_properties(
+    mnemos_gg_vdp_triage_test
+    PROPERTIES SKIP_RETURN_CODE 4
+)
+
 # SMS Z80 conformance via the ZEXALL-SMS exerciser ROM. Self-skips unless
 # MNEMOS_SMS_ZEXALL_ROM points at a zexall.sms image (GPLv2, never committed).
 mnemos_add_test(
