@@ -260,7 +260,9 @@ namespace mnemos::chips::video {
 
                 for (int p = 0; p < 8; ++p) {
                     int screen_x = col * 8 + p;
-                    screen_x = (screen_x - hscroll) & 0xFF;
+                    // reg 8 scrolls the background right: screen x shows name-table
+                    // pixel (x - hscroll), i.e. name-table pixel N lands at x + hscroll.
+                    screen_x = (screen_x + hscroll) & 0xFF;
                     if (screen_x < fb_width) {
                         const auto sx = static_cast<std::size_t>(screen_x);
                         bg_idx[sx] =

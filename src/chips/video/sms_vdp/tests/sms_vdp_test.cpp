@@ -90,6 +90,34 @@ TEST_CASE("sms_vdp renders a Mode-4 tile to the framebuffer") {
     CHECK(pixel(vdp, 8, 0) == 0x00000000U); // next tile is blank -> CRAM[0]
 }
 
+TEST_CASE("sms_vdp horizontal scroll (reg 8) shifts the background right") {
+    sms_vdp vdp;
+
+    // Tile 1: only the top-left pixel is colour 1.
+    set_addr(vdp, 0x0020U, 1U);
+    vdp.data_write(0x80U);
+    // Name-table entry (0,0) -> tile 1 (the only non-blank cell).
+    set_addr(vdp, 0x3800U, 1U);
+    vdp.data_write(0x01U);
+    vdp.data_write(0x00U);
+    // CRAM[1] = red.
+    set_addr(vdp, 0x0001U, 3U);
+    vdp.data_write(0x03U);
+
+    write_reg(vdp, 0, 0x04U); // mode 4, left-column blanking off
+    write_reg(vdp, 1, 0xC0U); // display enable
+    write_reg(vdp, 8, 0x08U); // horizontal scroll = 8 px
+
+    vdp.tick(static_cast<std::uint64_t>(sms_vdp::cycles_per_line)); // render scanline 0
+
+    // reg 8 scrolls the background RIGHT: the column-0 red pixel moves from x=0 to
+    // x=8 (screen x shows name-table pixel x-8). An inverted sign would push it to
+    // x=248 instead, leaving x=8 blank.
+    CHECK(pixel(vdp, 8, 0) == 0x00FF0000U);
+    CHECK(pixel(vdp, 0, 0) == 0x00000000U); // wrapped-in blank column
+    CHECK(pixel(vdp, 16, 0) == 0x00000000U);
+}
+
 TEST_CASE("sms_vdp Game Gear mode renders 12-bit BGR444 CRAM colours") {
     sms_vdp vdp;
     vdp.set_gg(true);
