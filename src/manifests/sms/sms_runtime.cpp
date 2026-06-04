@@ -4,6 +4,7 @@
 #include "sms_manifests.hpp" // manifest_toml
 
 #include "codemasters_mapper.hpp"
+#include "hicom_mapper.hpp"
 #include "korean_mapper.hpp"
 #include "korean_msx_mapper.hpp"
 #include "mk3020.hpp" // default controller-port peripheral
@@ -29,6 +30,7 @@ namespace mnemos::manifests::sms {
         rt->korean_active = kind == sms_config::mapper::korean;
         rt->korean_msx_active = kind == sms_config::mapper::korean_msx ||
                                 kind == sms_config::mapper::korean_msx_nemesis;
+        rt->korean_hicom_active = kind == sms_config::mapper::korean_hicom;
 
         // Host glue: every closure captures &rt->state, whose address is stable
         // because rt is heap-allocated. The chips copy the closures during
@@ -72,6 +74,13 @@ namespace mnemos::manifests::sms {
             auto* codies =
                 dynamic_cast<chips::mapper::codemasters_mapper*>(rt->graph.chip("mapper"));
             codies->attach_rom(rom_span);
+        } else if (rt->korean_hicom_active) {
+            // Published in state.hicom because its $FFFF register overlay (an
+            // mmio_factory) writes through it -- the same back-reference the Sega
+            // mapper needs for $FFFC-$FFFF.
+            auto* hicom = dynamic_cast<chips::mapper::hicom_mapper*>(rt->graph.chip("mapper"));
+            rt->state.hicom = hicom;
+            hicom->attach_rom(rom_span);
         } else {
             auto* mapper = dynamic_cast<chips::mapper::sms_mapper*>(rt->graph.chip("mapper"));
             rt->state.mapper = mapper;

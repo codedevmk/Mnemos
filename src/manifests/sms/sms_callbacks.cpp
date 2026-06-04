@@ -140,6 +140,21 @@ namespace mnemos::manifests::sms {
                 };
             });
 
+        // HiCom 188-in-1 register overlay at $FFFF. Same shape as the Sega
+        // overlay: writes drive the page register (cpu_write only latches $FFFF),
+        // reads return open bus.
+        out.mmio_factories.emplace(
+            "sms.hicom_register_overlay",
+            [s = &state](std::uint32_t /*base*/, std::uint32_t /*size*/) -> chips::mmio_handlers {
+                return {
+                    .on_read = [](std::uint32_t /*address*/) -> std::uint8_t { return 0xFFU; },
+                    .on_write =
+                        [s](std::uint32_t address, std::uint8_t value) {
+                            s->hicom->cpu_write(static_cast<std::uint16_t>(address), value);
+                        },
+                };
+            });
+
         return out;
     }
 

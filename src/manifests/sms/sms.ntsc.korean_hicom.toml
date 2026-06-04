@@ -1,0 +1,90 @@
+# Sega Master System (NTSC, HiCom 188-in-1 multicart mapper) -- Mnemos system
+# manifest (schema mnemos-manifest/1).
+#
+# The HiCom-mapper variant of sms.ntsc.toml. Identical to the Sega-mapper build
+# EXCEPT the cartridge mapper and its banking surface:
+#
+#   - mapper chip type is `korean.hicom_mapper`, not `sega.sms_mapper`.
+#   - 32 KiB pages: a register at $FFFF selects the page mapped at $0000-$7FFF,
+#     with $8000-$BFFF mirroring the page's lower 16 KiB. The whole $0000-$BFFF
+#     window follows the page -- there is no fixed bank.
+#   - The page register sits at $FFFF, in the work-RAM mirror OUTSIDE the
+#     cartridge window, so -- like the Sega mapper's $FFFC-$FFFF -- it needs a
+#     register overlay (the `sms.hicom_register_overlay` mmio_block below), not
+#     the in-window write the standard/MSX Korean mappers use.
+#
+# The HiCom mapper is force-only (no header signature to auto-detect), selected
+# via sms_config::mapper::korean_hicom / `--mapper korean-hicom`. Inter-chip
+# wiring is the same host-side glue in `manifests::sms::sms_callbacks`.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.ntsc.korean_hicom"
+display_name = "Sega Master System (NTSC, HiCom 188-in-1 mapper)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# Z80 master clock; the VDP and PSG are ticked at the same rate (divider 1).
+master_hz               = 3579545
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+[chip.config]
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+[chip.config]
+irq_callback = "sms.vdp_irq"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "korean.hicom_mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+# Cartridge window: $0000-$BFFF routed through the HiCom mapper. Reads resolve
+# the selected 32 KiB page ($0000-$7FFF) and its 16 KiB mirror ($8000-$BFFF).
+# The page register is NOT here -- it lives at $FFFF (see the overlay below).
+[[bus.region]]
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
+
+# Work RAM: 8 KiB at $C000-$DFFF, mirrored at $E000-$FFFF (A13 unconnected).
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xFFFF"
+backing = "ram"
+size    = 8192
+
+# HiCom register overlay at $FFFF: the page register sits in the work-RAM
+# mirror, outside the cartridge window, so this overlay routes a write here to
+# the mapper (sms.hicom_register_overlay -> hicom.cpu_write). Priority 2
+# (mmio_block default) wins over the work_ram region beneath.
+[[mmio_block]]
+name         = "sms.hicom_register_overlay"
+attached_bus = "main"
+range        = "0xFFFF-0xFFFF"
