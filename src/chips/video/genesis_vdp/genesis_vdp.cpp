@@ -128,25 +128,6 @@ namespace mnemos::chips::video {
             return on;
         }
 
-        // Tuning probe (MNEMOS_ACCEPT_MIN_GAP, default 0): minimum master cycles
-        // between consecutive accepted data-port words. The 68K cannot consume every
-        // documented drain slot, so the sustained accept cadence is sparser than the
-        // 18-slot drain schedule; this paces a burst to >= min_gap master/word.
-        [[nodiscard]] std::int64_t write_accept_min_gap() noexcept {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996)
-#endif
-            static const std::int64_t gap = [] {
-                const char* e = std::getenv("MNEMOS_ACCEPT_MIN_GAP");
-                return e != nullptr ? std::strtoll(e, nullptr, 10) : 0LL;
-            }();
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            return gap;
-        }
-
         // Scroll-plane size in cells (R16 HSZ/VSZ; 0b10 is invalid -> treat as 64).
         [[nodiscard]] constexpr int scroll_size(int sz_bits) noexcept {
             constexpr std::array<int, 4> sizes = {32, 64, 64, 128};
@@ -476,30 +457,32 @@ namespace mnemos::chips::video {
         }
 
         if (write_accept_enabled()) {
-            // Each data-port word waits for the next VDP external access slot, so a
-            // back-to-back write burst paces to ~1 word/slot (matching hardware
-            // /DTACK accept timing) instead of running at raw opcode cadence.
-            // effective_now folds in the pending stall so a MOVE.L's two words charge
-            // two SEQUENTIAL slots, not the same one twice.
+            // FIFO-buffered accept model (faithful to the 315-5313 data-port FIFO):
+            // a 4-entry FIFO absorbs spaced writes (no stall while it has room); the
+            // 68K stalls only when it writes to a FULL FIFO, waiting for the oldest
+            // entry to drain. Each entry drains at a VDP external-access slot; a VRAM
+            // word is BYTE-wide so it consumes TWO slots (drains one slot later),
+            // while CRAM/VSRAM take one -- this byte-access factor is what makes a
+            // dense VRAM burst (Kid Chameleon) stall while a spaced burst
+            // (Pagemaster) does not. effective_now folds in the pending stall.
+            const bool h40 = h40_mode();
             const std::int64_t effective_now = current_line_master() + fifo_stall_master_cycles_;
-            std::int64_t base = effective_now > fifo_accept_cursor_master_
-                                    ? effective_now
-                                    : fifo_accept_cursor_master_;
-            // Optional sparser accept cadence: keep each accept at least min_gap past
-            // the previous one (the 68K can't consume every drain slot).
-            const std::int64_t min_gap = write_accept_min_gap();
-            if (min_gap > 0) {
-                const std::int64_t min_base = fifo_accept_cursor_master_ - 1 + min_gap;
-                if (base < min_base) {
-                    base = min_base;
+            std::int64_t sched = effective_now;
+            const std::int64_t newest = fifo_drain_[static_cast<std::size_t>((fifo_idx_ + 3) & 3)];
+            if (effective_now < newest) { // FIFO not empty: queue behind the newest entry
+                const std::int64_t oldest = fifo_drain_[static_cast<std::size_t>(fifo_idx_)];
+                if (effective_now < oldest) { // FIFO full: 68K waits for the oldest to drain
+                    fifo_stall_master_cycles_ += oldest - effective_now;
                 }
+                sched = newest;
             }
-            const std::int64_t accept = next_accept_slot(h40_mode(), base);
-            fifo_stall_master_cycles_ += accept - effective_now;
-            fifo_accept_cursor_master_ = accept + 1;
-            // The accept-cadence model is independent of the 4-entry FIFO-drain
-            // schedule: leave fifo_drain_/fifo_idx_ untouched so they keep meaning
-            // exactly "drain times" (as documented + serialized).
+            // First access slot strictly after `sched`; a VRAM word (code & 6 == 0,
+            // incl. invalid 0/8/9) needs a second slot, so it drains one slot later.
+            const std::int64_t slot = next_accept_slot(h40, sched + 1);
+            const bool vram_word = (cmd_code_ & 0x06) == 0;
+            fifo_drain_[static_cast<std::size_t>(fifo_idx_)] =
+                vram_word ? next_accept_slot(h40, slot + 1) : slot;
+            fifo_idx_ = (fifo_idx_ + 1) & 3;
             return;
         }
 
