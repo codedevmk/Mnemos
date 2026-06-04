@@ -107,7 +107,8 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t palette_rgb(std::uint8_t index) const noexcept;
 
         std::array<std::uint8_t, vram_size> vram_{};
-        std::array<std::uint8_t, gg_cram_bytes> cram_{};
+        std::array<std::uint8_t, cram_size> cram_{};        // SMS CRAM (1 byte/entry)
+        std::array<std::uint8_t, gg_cram_bytes> gg_cram_{}; // GG CRAM (32 x 16-bit BGR444)
         std::array<std::uint8_t, register_count> reg_{};
 
         std::uint16_t addr_{};

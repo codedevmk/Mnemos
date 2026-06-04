@@ -100,7 +100,7 @@ namespace mnemos::chips::video {
         const std::size_t e = static_cast<std::size_t>(index & 0x1FU);
         if (gg_mode_) {
             const std::uint16_t entry = static_cast<std::uint16_t>(
-                cram_[e * 2U] | (static_cast<std::uint16_t>(cram_[e * 2U + 1U]) << 8U));
+                gg_cram_[e * 2U] | (static_cast<std::uint16_t>(gg_cram_[e * 2U + 1U]) << 8U));
             return cram_rgb_gg(entry);
         }
         return cram_rgb(cram_[e]);
@@ -162,8 +162,8 @@ namespace mnemos::chips::video {
                 if ((addr_ & 1U) == 0U) {
                     cram_latch_ = value;
                 } else {
-                    cram_[(addr_ - 1U) & 0x3FU] = cram_latch_;
-                    cram_[addr_ & 0x3FU] = value;
+                    gg_cram_[(addr_ - 1U) & 0x3FU] = cram_latch_;
+                    gg_cram_[addr_ & 0x3FU] = value;
                 }
             } else {
                 cram_[addr_ & 0x1FU] = value;
@@ -440,6 +440,7 @@ namespace mnemos::chips::video {
             0x36U, 0xA0U, 0xFFU, 0xFFU, 0xFFU, 0xFFU, 0xFBU, 0x00U, 0x00U, 0x00U, 0xFFU};
         vram_.fill(0U);
         cram_.fill(0U);
+        gg_cram_.fill(0U);
         cram_latch_ = 0U;
         reg_.fill(0U);
         for (std::size_t i = 0; i < reg_defaults.size(); ++i) {
@@ -475,13 +476,16 @@ namespace mnemos::chips::video {
         writer.u32(static_cast<std::uint32_t>(scanline_cycle_));
         writer.u32(static_cast<std::uint32_t>(total_scanlines_));
         writer.boolean(pal_mode_);
-        writer.boolean(gg_mode_);
-        writer.u8(cram_latch_);
         writer.boolean(frame_irq_pending_);
         writer.boolean(line_irq_pending_);
         writer.u32(static_cast<std::uint32_t>(line_counter_));
         writer.u8(status_);
         writer.u64(frame_index_);
+        // Game Gear fields appended last so the SMS save layout is unchanged: an
+        // older SMS state reads these back as their (zero) defaults.
+        writer.boolean(gg_mode_);
+        writer.u8(cram_latch_);
+        writer.bytes(std::span<const std::uint8_t>(gg_cram_));
     }
 
     void sms_vdp::load_state(state_reader& reader) {
@@ -497,13 +501,14 @@ namespace mnemos::chips::video {
         scanline_cycle_ = static_cast<int>(reader.u32());
         total_scanlines_ = static_cast<int>(reader.u32());
         pal_mode_ = reader.boolean();
-        gg_mode_ = reader.boolean();
-        cram_latch_ = reader.u8();
         frame_irq_pending_ = reader.boolean();
         line_irq_pending_ = reader.boolean();
         line_counter_ = static_cast<int>(reader.u32());
         status_ = reader.u8();
         frame_index_ = reader.u64();
+        gg_mode_ = reader.boolean();
+        cram_latch_ = reader.u8();
+        reader.bytes(std::span<std::uint8_t>(gg_cram_));
         irq_last_ = irq_asserted();
     }
 
