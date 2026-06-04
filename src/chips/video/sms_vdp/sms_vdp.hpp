@@ -18,7 +18,7 @@ namespace mnemos::chips::video {
     // command protocol, the V/H counters, and the line + frame interrupts.
     //
     // 16 KiB VRAM + CRAM (SMS: 32 x --BBGGRR; Game Gear mode: 32 x 16-bit BGR444).
-    // The scanline renderer fills an 0x00RRGGBB framebuffer; Game Gear mode crops
+    // The scanline renderer fills a 0x00RRGGBB framebuffer; Game Gear mode crops
     // framebuffer() to the central 160x144 LCD window. As an ivideo frame source
     // the VDP is ticked per Z80
     // cycle (228 per scanline); frame_index increments once per rendered frame.

@@ -260,8 +260,8 @@ Current baseline (do not re-implement):
 - [~] **Game Gear VDP variant**: extended CRAM (12-bit BGR444) + the GG reduced 160×144
       viewport/border crop as a `gg_mode_` of `sms_vdp`. DONE: the VDP mode (64-byte CRAM + 2-byte
       write latch, `cram_rgb_gg`, centred 160×144 strided `framebuffer()`, `set_gg`/state) + CRAM-depth
-      and viewport unit tests; SMS mode byte-unchanged. *Unblocks:* the Game Gear ROM catalog (542
-      ROMs at `C:\emu\sega\game-gear`, incl. the 93C46 baseball carts).
+      and viewport unit tests; SMS mode byte-unchanged. *Unblocks:* the Game Gear ROM catalog (a
+      local GG ROM corpus is available for the data-gated golden, incl. the 93C46 baseball carts).
       *Remaining (step 2):* a GG **system/adapter** (sets `gg_mode`, GG `$00` start-button port +
       stereo PSG, GG manifests/region) so carts boot, then a data-gated GG boot golden. *Then:* the
       SMS/GG **93C46 EEPROM** (device + cart glue) on top — its carts are the GG baseball titles.

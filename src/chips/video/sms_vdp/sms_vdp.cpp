@@ -94,7 +94,10 @@ namespace mnemos::chips::video {
         total_scanlines_ = pal ? scanlines_pal : scanlines_ntsc;
     }
 
-    void sms_vdp::set_gg(bool gg) noexcept { gg_mode_ = gg; }
+    void sms_vdp::set_gg(bool gg) noexcept {
+        gg_mode_ = gg;
+        cram_latch_ = 0U; // a mode toggle can't commit a stale latched low byte
+    }
 
     std::uint32_t sms_vdp::palette_rgb(std::uint8_t index) const noexcept {
         const std::size_t e = static_cast<std::size_t>(index & 0x1FU);
