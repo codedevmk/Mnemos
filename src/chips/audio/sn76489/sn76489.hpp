@@ -39,6 +39,11 @@ namespace mnemos::chips::audio {
         // Write a byte to the PSG data port (the SMS routes Z80 OUT ($7F) here).
         void write(std::uint8_t value) noexcept;
 
+        // Game Gear stereo register (Z80 OUT $06): bits 0-3 enable tone0/1/2/noise
+        // on the right channel, bits 4-7 on the left. Default 0xFF = both (mono).
+        void write_stereo(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint8_t stereo_register() const noexcept { return stereo_; }
+
         // Advance one PSG step and return the mixed mono sample (signed 16-bit).
         [[nodiscard]] std::int16_t step() noexcept;
         [[nodiscard]] std::int16_t last_sample() const noexcept { return last_sample_; }
@@ -68,6 +73,9 @@ namespace mnemos::chips::audio {
         // driven at master/15 that's ~223 kHz, much faster than the YM rate;
         // the adapter is responsible for any downsampling before mixing.
         void enable_audio_capture(bool on) noexcept { audio_capture_ = on; }
+        // When stereo capture is on (Game Gear), tick() queues interleaved L/R
+        // samples (2 per step) per the stereo register; off (default) = mono.
+        void set_stereo_capture(bool on) noexcept { capture_stereo_ = on; }
         [[nodiscard]] bool audio_capture_enabled() const noexcept { return audio_capture_; }
         [[nodiscard]] std::size_t pending_samples() const noexcept { return sample_queue_.size(); }
         std::size_t drain_samples(std::int16_t* out, std::size_t max_samples) noexcept;
@@ -81,6 +89,7 @@ namespace mnemos::chips::audio {
         std::array<std::uint8_t, 4> volume_{};   // 4-bit attenuation (0=loud, 15=off)
         std::uint8_t noise_mode_{};              // bits 1-0 rate, bit 2 white/periodic
         std::uint16_t lfsr_{};                   // 16-bit linear-feedback shift register
+        std::uint8_t stereo_{0xFFU};             // GG stereo register ($06): L/R channel enables
 
         std::uint8_t latched_ch_{};
         bool latched_vol_{};
@@ -91,11 +100,14 @@ namespace mnemos::chips::audio {
         int clock_divider_{default_clock_divider};
         int prescaler_{};
         std::int16_t last_sample_{};
+        std::int16_t last_left_{};  // GG: left-channel mix from the last step()
+        std::int16_t last_right_{}; // GG: right-channel mix from the last step()
 
         bool audio_capture_{};
+        bool capture_stereo_{}; // GG: queue interleaved L/R instead of mono
         std::vector<std::int16_t> sample_queue_{};
 
-        std::array<register_descriptor, 9> register_view_{};
+        std::array<register_descriptor, 10> register_view_{};
         introspection_surface introspection_{};
     };
 

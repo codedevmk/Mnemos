@@ -75,20 +75,19 @@ namespace mnemos::chips::audio {
     }
 
     std::int16_t sn76489::step() noexcept {
-        std::int32_t sample = 0;
+        std::array<std::int32_t, 4> ch{};
 
-        for (std::size_t ch = 0; ch < 3; ++ch) {
-            if (tone_[ch] == 0U || tone_[ch] == 1U) {
-                sample += vol_table[volume_[ch]]; // period 0/1 holds the output high
+        for (std::size_t c = 0; c < 3; ++c) {
+            if (tone_[c] == 0U || tone_[c] == 1U) {
+                ch[c] = vol_table[volume_[c]]; // period 0/1 holds the output high
                 continue;
             }
-            counter_[ch] = static_cast<std::uint16_t>(counter_[ch] - 1U);
-            if (counter_[ch] == 0U) {
-                counter_[ch] = tone_[ch];
-                polarity_[ch] = static_cast<std::int8_t>(-polarity_[ch]);
+            counter_[c] = static_cast<std::uint16_t>(counter_[c] - 1U);
+            if (counter_[c] == 0U) {
+                counter_[c] = tone_[c];
+                polarity_[c] = static_cast<std::int8_t>(-polarity_[c]);
             }
-            sample += polarity_[ch] > 0 ? vol_table[volume_[ch]]
-                                        : static_cast<std::int16_t>(-vol_table[volume_[ch]]);
+            ch[c] = polarity_[c] > 0 ? vol_table[volume_[c]] : -vol_table[volume_[c]];
         }
 
         // Noise channel.
@@ -111,10 +110,10 @@ namespace mnemos::chips::audio {
                 }
             }
         }
-        sample += (lfsr_ & 1U) != 0U ? vol_table[volume_[3]]
-                                     : static_cast<std::int16_t>(-vol_table[volume_[3]]);
+        ch[3] = (lfsr_ & 1U) != 0U ? vol_table[volume_[3]] : -vol_table[volume_[3]];
 
-        sample = clamp16(sample);
+        // Mono mix (with the optional analog low-pass) -- the SMS/Genesis output.
+        std::int32_t sample = clamp16(ch[0] + ch[1] + ch[2] + ch[3]);
         if (lp_alpha_q15_ != 0) {
             std::int32_t y = lp_state_;
             y += (lp_alpha_q15_ * (sample - y)) >> 15;
@@ -122,16 +121,38 @@ namespace mnemos::chips::audio {
             sample = y;
         }
         last_sample_ = static_cast<std::int16_t>(sample);
+
+        // Game Gear stereo: gate each channel to L (bits 4-7) and/or R (bits 0-3).
+        std::int32_t left = 0;
+        std::int32_t right = 0;
+        for (std::size_t c = 0; c < 4; ++c) {
+            if ((stereo_ & (1U << (c + 4U))) != 0U) {
+                left += ch[c];
+            }
+            if ((stereo_ & (1U << c)) != 0U) {
+                right += ch[c];
+            }
+        }
+        last_left_ = static_cast<std::int16_t>(clamp16(left));
+        last_right_ = static_cast<std::int16_t>(clamp16(right));
+
         return last_sample_;
     }
+
+    void sn76489::write_stereo(std::uint8_t value) noexcept { stereo_ = value; }
 
     void sn76489::tick(std::uint64_t cycles) {
         for (std::uint64_t i = 0; i < cycles; ++i) {
             if (++prescaler_ >= clock_divider_) {
                 prescaler_ = 0;
-                const auto s = step();
+                (void)step(); // stepped for its side effects; samples read via the members
                 if (audio_capture_) {
-                    sample_queue_.push_back(s);
+                    if (capture_stereo_) {
+                        sample_queue_.push_back(last_left_);
+                        sample_queue_.push_back(last_right_);
+                    } else {
+                        sample_queue_.push_back(last_sample_);
+                    }
                 }
             }
         }
@@ -186,6 +207,9 @@ namespace mnemos::chips::audio {
         latched_vol_ = false;
         prescaler_ = 0;
         last_sample_ = 0;
+        last_left_ = 0;
+        last_right_ = 0;
+        stereo_ = 0xFFU; // power-on: every channel on both sides (mono-equivalent)
         lp_alpha_q15_ = saved_alpha;
         lp_state_ = 0;
     }
@@ -212,6 +236,7 @@ namespace mnemos::chips::audio {
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
         writer.u32(static_cast<std::uint32_t>(prescaler_));
         writer.u16(static_cast<std::uint16_t>(last_sample_));
+        writer.u8(stereo_); // appended last: older mono states default it to 0xFF on load
     }
 
     void sn76489::load_state(state_reader& reader) {
@@ -236,6 +261,10 @@ namespace mnemos::chips::audio {
         clock_divider_ = static_cast<int>(reader.u32());
         prescaler_ = static_cast<int>(reader.u32());
         last_sample_ = static_cast<std::int16_t>(reader.u16());
+        // Appended field: older (pre-Game-Gear) states omit it -> keep the 0xFF default.
+        if (reader.remaining() >= 1U) {
+            stereo_ = reader.u8();
+        }
     }
 
     instrumentation::ichip_introspection& sn76489::introspection() noexcept {
@@ -253,6 +282,7 @@ namespace mnemos::chips::audio {
         register_view_[6] = {"VOL3", volume_[3], 4U, fmt::unsigned_integer};
         register_view_[7] = {"NOISE", noise_mode_, 3U, fmt::unsigned_integer};
         register_view_[8] = {"LFSR", lfsr_, 16U, fmt::unsigned_integer};
+        register_view_[9] = {"STEREO", stereo_, 8U, fmt::flags};
         return register_view_;
     }
 

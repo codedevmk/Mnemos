@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -101,9 +102,10 @@ TEST_CASE("sn76489 tick steps through the internal divider") {
 TEST_CASE("sn76489 round-trips its state") {
     sn76489 psg;
     psg.write(0x82U);
-    psg.write(0x01U); // tone0 = 0x12
-    psg.write(0x90U); // vol0 = 0
-    psg.write(0xE5U); // noise mode
+    psg.write(0x01U);        // tone0 = 0x12
+    psg.write(0x90U);        // vol0 = 0
+    psg.write(0xE5U);        // noise mode
+    psg.write_stereo(0x3CU); // GG stereo register
     (void)psg.step();
 
     std::vector<std::uint8_t> blob;
@@ -117,4 +119,37 @@ TEST_CASE("sn76489 round-trips its state") {
     CHECK(restored.tone(0) == 0x012U);
     CHECK(restored.volume(0) == 0x00U);
     CHECK(restored.lfsr() == psg.lfsr());
+    CHECK(restored.stereo_register() == 0x3CU); // appended field round-trips
+}
+
+TEST_CASE("sn76489 Game Gear stereo register routes channels to L/R") {
+    sn76489 psg;
+    // ch0 held high at peak (+8191): tone period 0 holds the output high.
+    psg.write(0x80U); // latch ch0 tone, low nibble 0
+    psg.write(0x00U); // tone0 high bits 0 -> period 0
+    psg.write(0x90U); // ch0 volume 0 (loud)
+    psg.write(0xBFU); // ch1 volume 0xF (mute)
+    psg.write(0xDFU); // ch2 volume 0xF (mute)
+    psg.write(0xFFU); // ch3 volume 0xF (mute)
+
+    psg.set_stereo_capture(true);
+    psg.enable_audio_capture(true);
+    std::array<std::int16_t, 2> lr{};
+
+    // Route ch0 to the LEFT channel only (bit 4).
+    psg.write_stereo(0x10U);
+    CHECK(psg.stereo_register() == 0x10U);
+    psg.tick(static_cast<std::uint64_t>(sn76489::default_clock_divider)); // one step
+    REQUIRE(psg.pending_samples() == 2U);
+    psg.drain_samples(lr.data(), 2U);
+    CHECK(lr[0] == 8191); // left = ch0
+    CHECK(lr[1] == 0);    // right silent
+
+    // Route ch0 to the RIGHT channel only (bit 0).
+    psg.write_stereo(0x01U);
+    psg.tick(static_cast<std::uint64_t>(sn76489::default_clock_divider));
+    REQUIRE(psg.pending_samples() == 2U);
+    psg.drain_samples(lr.data(), 2U);
+    CHECK(lr[0] == 0);    // left silent
+    CHECK(lr[1] == 8191); // right = ch0
 }
