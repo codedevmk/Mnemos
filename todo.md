@@ -213,8 +213,11 @@ Current baseline (do not re-implement):
           runtime-parity coverage).
     - [ ] `4PAK All Action`: `$2000` write sets four XOR-masked 8 KiB banks; the `$0000-$3FFF`
           fixed-region behaviour needs spec verification before implementing.
-    - [ ] True `Janggun` (bit-reversed banks) -- distinct from the Nemesis remap already shipped in
-          `korean.msx_mapper` (Genesis Plus GX conflates the two names).
+    - [x] True `Janggun` (`korean.janggun_mapper`): 8 KiB banks, $0000-$3FFF fixed (banks 0/1), four
+          windows via direct selects ($4000/$6000/$8000/$A000) + Sega-style 16 KiB pairs ($FFFE/$FFFF
+          in the work-RAM mirror); per-16 KiB-page bit-reversed reads (low-window FCR bit 7). Distinct
+          from the Nemesis remap in `korean.msx_mapper`. Standalone chip + 8 unit tests. (System wiring
+          needs the $4000-$A000 in-window selects + the $FFFE/$FFFF register overlay -- follow-up.)
   - [ ] Auto-detection (CRC database) so Korean carts resolve without an explicit `--mapper`, plus
         a data-gated boot golden.
 - [ ] **Genesis J-Cart**: extra two controller ports mapped at the top of ROM space (`$38FFFE`
