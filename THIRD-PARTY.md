@@ -69,6 +69,11 @@ multiple independent open-source implementations.
   catalogue (`src/manifests/sms/sms_system.cpp`) was compiled from the community
   SMS cartridge database and cross-checked against open-source Sega emulators'
   game lists; only carts whose mapper Mnemos implements are listed.
+- **93C46 EEPROM cart CRC database** — the handful of Game Gear cartridges that
+  carry a 93C46 serial EEPROM for saves are likewise auto-detected by ROM CRC-32
+  (`src/manifests/sms/sms_system.cpp`), compiled from the community Game Gear
+  cartridge database and cross-checked against open-source Sega emulators' game
+  lists. The 93C46 Microwire protocol is the published Microchip datasheet.
 
 ## Cross-check emulators
 

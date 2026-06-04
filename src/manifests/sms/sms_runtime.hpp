@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace mnemos::manifests::sms {
@@ -39,7 +40,10 @@ namespace mnemos::manifests::sms {
         bool korean_janggun_active{};
         bool korean_multi_4x8k_active{};
         bool korean_multi_16k_active{};
-        system_graph graph; // owns chips/buses/memory; MUST destruct first
+        chips::storage::eeprom_93c46 eeprom; // 93C46 serial save; inert unless active
+        bool eeprom_93c46_active{};          // cart carries the 93C46 EEPROM
+        bool eeprom_enabled{};               // $FFFC bit3: $8000 routed to the EEPROM
+        system_graph graph;                  // owns chips/buses/memory; MUST destruct first
 
         [[nodiscard]] chips::cpu::z80* cpu() const noexcept { return state.cpu; }
         [[nodiscard]] chips::video::sms_vdp* vdp() const noexcept { return state.vdp; }
@@ -54,6 +58,12 @@ namespace mnemos::manifests::sms {
 
         // Game Gear START button (port $00 bit 7). No-op on a base Master System.
         void set_gg_start(bool pressed) noexcept { state.gg.set_start(pressed); }
+
+        // Cartridge battery store for .srm persistence: the 93C46's 128 bytes when
+        // the cart has one, else empty.
+        [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept {
+            return eeprom_93c46_active ? eeprom.bytes() : std::span<std::uint8_t>{};
+        }
     };
 
     // Build a runnable SMS from a cartridge image (moved in) via the manifest

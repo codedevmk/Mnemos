@@ -2,6 +2,7 @@
 
 #include "bus.hpp"                // topology bus
 #include "codemasters_mapper.hpp" // Codemasters mapper
+#include "eeprom_93c46.hpp"       // Microwire serial EEPROM (Game Gear saves)
 #include "gg_io.hpp"              // Game Gear system I/O ($00-$06)
 #include "hicom_mapper.hpp"       // HiCom 188-in-1 Korean multicart mapper
 #include "janggun_mapper.hpp"     // Janggun bit-reversed Korean mapper
@@ -55,6 +56,10 @@ namespace mnemos::manifests::sms {
         // PSG gains its stereo register ($06), and ports $00-$06 decode the GG
         // handset. The GG is 60 Hz only, so assembly forces NTSC when set.
         bool game_gear{};
+        // Force the 93C46 serial EEPROM onto the cart path (a $8000 serial port +
+        // the $FFFC enable/reset register). Otherwise auto-detected by ROM CRC; the
+        // carts that use it are Game Gear.
+        bool eeprom_93c46{};
     };
 
     // A fully wired Sega Master System: the Z80, the VDP, the SN76489 PSG, the Sega
@@ -103,6 +108,10 @@ namespace mnemos::manifests::sms {
         bool reset_pressed{};
         gg_io gg; // Game Gear I/O ($00-$06); inert unless assembly enables it
 
+        chips::storage::eeprom_93c46 eeprom; // 93C46 serial save; inert unless active
+        bool eeprom_93c46_active{};          // cart carries the 93C46 EEPROM
+        bool eeprom_enabled{};               // $FFFC bit3: $8000 routed to the EEPROM
+
         void attach(int port, std::unique_ptr<peripheral::device> dev) noexcept {
             if (port >= 0 && port < 2) {
                 ports[static_cast<std::size_t>(port)] = std::move(dev);
@@ -117,6 +126,12 @@ namespace mnemos::manifests::sms {
 
         // Game Gear START button (port $00 bit 7). No-op on a base Master System.
         void set_gg_start(bool pressed) noexcept { gg.set_start(pressed); }
+
+        // Cartridge battery store for .srm persistence: the 93C46's 128 bytes when
+        // the cart has one, else empty (no other SMS save medium is wired yet).
+        [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept {
+            return eeprom_93c46_active ? eeprom.bytes() : std::span<std::uint8_t>{};
+        }
     };
 
     // True when a cartridge image carries a valid Codemasters checksum header
@@ -144,6 +159,21 @@ namespace mnemos::manifests::sms {
     // paths resolve carts identically.
     [[nodiscard]] sms_config::mapper resolve_mapper(const sms_config& config,
                                                     std::span<const std::uint8_t> rom) noexcept;
+
+    // True when a cartridge image's zlib CRC-32 matches a known 93C46-EEPROM cart
+    // (all Game Gear). The EEPROM is an add-on to the standard Sega mapper, not a
+    // mapper kind, so this is resolved separately from resolve_mapper. CRCs are
+    // catalogued in THIRD-PARTY.md.
+    [[nodiscard]] bool detect_93c46(std::span<const std::uint8_t> rom) noexcept;
+
+    // Overlay the 93C46 serial EEPROM onto an already-wired Sega-mapper bus: a
+    // serial port at $8000 (live only while `enabled`, else slot-2 ROM falls
+    // through) plus the $FFFC enable/reset control register (overriding the Sega
+    // RAM-control register these carts repurpose). `enabled` is the caller's live
+    // flag, toggled by $FFFC bit 3. Shared by assemble_sms and build_sms_runtime so
+    // both paths wire the EEPROM identically.
+    void install_93c46_overlays(topology::bus& bus, chips::mapper::sms_mapper& mapper,
+                                chips::storage::eeprom_93c46& eeprom, bool& enabled);
 
     // Assemble a bootable SMS from a cartridge image (moved in). The mapper banks the
     // image; reads of $C000-$FFFF hit work RAM (with the $FFFC-$FFFF mapper-register
