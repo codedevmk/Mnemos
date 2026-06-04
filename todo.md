@@ -205,7 +205,14 @@ Current baseline (do not re-implement):
         variant maps the last 8 KiB at $0000-$1FFF. Standalone chip + 7 unit tests, wired end-to-end
         (`sms_config::mapper::korean_msx[_nemesis]`, manifest TOMLs, `--mapper korean-msx[-nemesis]`,
         assemble + runtime-parity coverage incl. the Nemesis variant).
-  - [ ] Korean `188-in-1`, `4PAK All Action`, `Janggun` multicart/special mappers.
+  - [~] Korean `188-in-1`, `4PAK All Action`, `Janggun` multicart/special mappers.
+    - [x] HiCom `188-in-1` (`korean.hicom_mapper`): 32 KiB page register at `$FFFF`, page mapped at
+          `$0000-$7FFF` + 16 KiB mirror at `$8000-$BFFF`. Standalone chip + 6 unit tests. (System
+          wiring needs a `$FFFF` register overlay, like the Sega mapper's -- follow-up.)
+    - [ ] `4PAK All Action`: `$2000` write sets four XOR-masked 8 KiB banks; the `$0000-$3FFF`
+          fixed-region behaviour needs spec verification before implementing.
+    - [ ] True `Janggun` (bit-reversed banks) -- distinct from the Nemesis remap already shipped in
+          `korean.msx_mapper` (Genesis Plus GX conflates the two names).
   - [ ] Auto-detection (CRC database) so Korean carts resolve without an explicit `--mapper`, plus
         a data-gated boot golden.
 - [ ] **Genesis J-Cart**: extra two controller ports mapped at the top of ROM space (`$38FFFE`
