@@ -36,6 +36,8 @@ namespace mnemos::manifests::sms {
             return sms_config::mapper::korean_msx;
         case sms_config::mapper::korean_msx_nemesis:
             return sms_config::mapper::korean_msx_nemesis;
+        case sms_config::mapper::korean_hicom:
+            return sms_config::mapper::korean_hicom;
         case sms_config::mapper::automatic:
         default:
             return detect_codemasters(rom) ? sms_config::mapper::codemasters
@@ -120,6 +122,7 @@ namespace mnemos::manifests::sms {
         s->korean_active = kind == sms_config::mapper::korean;
         s->korean_msx_active = kind == sms_config::mapper::korean_msx ||
                                kind == sms_config::mapper::korean_msx_nemesis;
+        s->korean_hicom_active = kind == sms_config::mapper::korean_hicom;
 
         // --- Z80 memory map (16-bit address space) ---
         // $C000-$DFFF: 8 KiB system RAM, mirrored at $E000-$FFFF (the same storage).
@@ -172,6 +175,30 @@ namespace mnemos::manifests::sms {
                 0);
             s->bus.map_ram(0xC000U, work_ram, 0);
             s->bus.map_ram(0xE000U, work_ram, 0);
+        } else if (s->korean_hicom_active) {
+            // HiCom 188-in-1: $0000-$BFFF follows a single 32 KiB page register.
+            // $0000-$7FFF is the page; $8000-$BFFF mirrors its lower 16 KiB. The
+            // register sits at $FFFF in the work-RAM mirror, so -- like the Sega
+            // mapper's $FFFC-$FFFF -- a write there lands in RAM AND updates the
+            // mapper; reads return the RAM byte. Priority 1 wins over RAM.
+            s->hicom.attach_rom(std::span<const std::uint8_t>(s->rom));
+            s->bus.map_mmio(
+                0x0000U, 0xC000U,
+                [s](std::uint32_t a) { return s->hicom.cpu_read(static_cast<std::uint16_t>(a)); },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->hicom.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                0);
+            s->bus.map_ram(0xC000U, work_ram, 0);
+            s->bus.map_ram(0xE000U, work_ram, 0);
+            s->bus.map_mmio(
+                chips::mapper::hicom_mapper::bank_register, 0x1U,
+                [s](std::uint32_t a) { return s->ram[a & 0x1FFFU]; },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    s->ram[a & 0x1FFFU] = v;
+                    s->hicom.cpu_write(static_cast<std::uint16_t>(a), v);
+                },
+                1);
         } else {
             // Sega: $0000-$BFFF is the banked ROM / optional cart RAM via the mapper.
             s->mapper.attach_rom(std::span<const std::uint8_t>(s->rom));

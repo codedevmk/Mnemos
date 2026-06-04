@@ -69,6 +69,14 @@ namespace {
         return rom;
     }
 
+    // 64 KiB cart (two 32 KiB pages) for the force-only HiCom mapper.
+    std::vector<std::uint8_t> hicom_rom() {
+        std::vector<std::uint8_t> rom(0x10000U, 0U);
+        rom[0x0000U] = 0xA0U; // page 0 base
+        rom[0x8000U] = 0xB0U; // page 1 base
+        return rom;
+    }
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996) // std::getenv: opt-in test data path
@@ -172,6 +180,11 @@ TEST_CASE("build_sms_runtime matches assemble_sms (Korean MSX mapper)", "[sms][r
 TEST_CASE("build_sms_runtime matches assemble_sms (Korean MSX Nemesis)", "[sms][runtime][parity]") {
     const sms_config nem{.cartridge_mapper = sms_config::mapper::korean_msx_nemesis};
     require_parity(run_assemble(korean_msx_rom(), nem, 5), run_runtime(korean_msx_rom(), nem, 5));
+}
+
+TEST_CASE("build_sms_runtime matches assemble_sms (HiCom mapper)", "[sms][runtime][parity]") {
+    const sms_config hicom{.cartridge_mapper = sms_config::mapper::korean_hicom};
+    require_parity(run_assemble(hicom_rom(), hicom, 5), run_runtime(hicom_rom(), hicom, 5));
 }
 
 TEST_CASE("build_sms_runtime default-plugs both controller ports", "[sms][runtime]") {

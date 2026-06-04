@@ -1,0 +1,70 @@
+# Sega Master System (PAL, HiCom 188-in-1 multicart mapper) -- Mnemos system
+# manifest (schema mnemos-manifest/1).
+#
+# PAL counterpart of sms.ntsc.korean_hicom.toml: only the Z80 master clock
+# differs (the VDP scanline count is set from the region at runtime). See that
+# file for the HiCom-mapper banking + register-overlay rationale.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.pal.korean_hicom"
+display_name = "Sega Master System (PAL, HiCom 188-in-1 mapper)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# PAL Z80 master clock; VDP + PSG ticked at the same rate (divider 1).
+master_hz               = 3546893
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+[chip.config]
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+[chip.config]
+irq_callback = "sms.vdp_irq"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "korean.hicom_mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+[[bus.region]]
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
+
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xFFFF"
+backing = "ram"
+size    = 8192
+
+[[mmio_block]]
+name         = "sms.hicom_register_overlay"
+attached_bus = "main"
+range        = "0xFFFF-0xFFFF"

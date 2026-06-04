@@ -142,6 +142,9 @@ namespace mnemos::apps::player::adapters::sms {
             if (name == "korean-msx-nemesis") {
                 return mapper::korean_msx_nemesis;
             }
+            if (name == "korean-hicom") {
+                return mapper::korean_hicom;
+            }
             return mapper::automatic;
         }
 

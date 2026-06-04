@@ -207,8 +207,10 @@ Current baseline (do not re-implement):
         assemble + runtime-parity coverage incl. the Nemesis variant).
   - [~] Korean `188-in-1`, `4PAK All Action`, `Janggun` multicart/special mappers.
     - [x] HiCom `188-in-1` (`korean.hicom_mapper`): 32 KiB page register at `$FFFF`, page mapped at
-          `$0000-$7FFF` + 16 KiB mirror at `$8000-$BFFF`. Standalone chip + 6 unit tests. (System
-          wiring needs a `$FFFF` register overlay, like the Sega mapper's -- follow-up.)
+          `$0000-$7FFF` + 16 KiB mirror at `$8000-$BFFF`. Standalone chip + 6 unit tests, wired
+          end-to-end (`sms_config::mapper::korean_hicom`, NTSC/PAL manifest TOMLs with the `$FFFF`
+          register overlay -- the Sega-mapper scheme, `--mapper korean-hicom`, assemble +
+          runtime-parity coverage).
     - [ ] `4PAK All Action`: `$2000` write sets four XOR-masked 8 KiB banks; the `$0000-$3FFF`
           fixed-region behaviour needs spec verification before implementing.
     - [ ] True `Janggun` (bit-reversed banks) -- distinct from the Nemesis remap already shipped in

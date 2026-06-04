@@ -149,6 +149,33 @@ TEST_CASE("assemble_sms honours a forced Korean MSX mapper", "[sms][mapper]") {
     CHECK(nem->bus.read8(0x2000U) == 0xC1U); // $2000-$3FFF stays bank 0
 }
 
+TEST_CASE("assemble_sms honours a forced HiCom mapper", "[sms][mapper]") {
+    auto rom = blank_rom(0x10000U); // two 32 KiB pages
+    rom[0x0000U] = 0xA0U;           // page 0, offset $0000
+    rom[0x4000U] = 0xA4U;           // page 0, offset $4000
+    rom[0x8000U] = 0xB0U;           // page 1, offset $0000
+    rom[0xC000U] = 0xB4U;           // page 1, offset $4000
+
+    auto sys = assemble_sms(std::move(rom), {.cartridge_mapper = sms_config::mapper::korean_hicom});
+    REQUIRE(sys->korean_hicom_active);
+    CHECK_FALSE(sys->korean_active);
+
+    // Power-on: page 0 mapped across $0000-$BFFF. $8000-$BFFF mirrors the page's
+    // lower 16 KiB, so $8000 reads the same byte as $0000.
+    CHECK(sys->hicom.page() == 0U);
+    CHECK(sys->bus.read8(0x0000U) == 0xA0U);
+    CHECK(sys->bus.read8(0x4000U) == 0xA4U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U); // mirror of $0000
+
+    // A write to $FFFF selects the 32 KiB page; the byte also lands in work RAM.
+    sys->bus.write8(0xFFFFU, 0x01U);
+    CHECK(sys->hicom.page() == 0x01U);
+    CHECK(sys->bus.read8(0x0000U) == 0xB0U);
+    CHECK(sys->bus.read8(0x4000U) == 0xB4U);
+    CHECK(sys->bus.read8(0x8000U) == 0xB0U); // mirror of page 1 $0000
+    CHECK(sys->bus.read8(0xFFFFU) == 0x01U); // the register write also lands in work RAM
+}
+
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {
     auto rom = blank_rom();
     // LD A,$AA ; OUT ($BF),A ; LD A,$81 ; OUT ($BF),A  -> VDP register 1 = $AA
