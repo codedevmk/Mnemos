@@ -253,10 +253,13 @@ Current baseline (do not re-implement):
       variant set.
       *Unblocks:* unlicensed/bootleg + multicart images that currently read open bus and hang.
       *Accept:* per-family banking/protection-register unit tests.
-- [ ] **SMS 93C46 EEPROM saves**: wire the serial 93C46 onto the SMS cart path (analogous to the
-      Genesis I2C EEPROM) for the handful of titles that save to it.
-      *Unblocks:* Sega Game/World-class EEPROM SMS saves (e.g. *Pro Yakyuu*).
-      *Accept:* EEPROM read/write round-trip + battery-save persistence test.
+- [x] **SMS/GG 93C46 EEPROM saves**: DONE across two PRs — the Microwire `eeprom_93c46` device
+      (64×16-bit, EWEN/WRITE/WRAL/READ/ERASE/ERAL, line-driven like `eeprom_i2c`, #48) and the cart-path
+      wiring (#49): a `$8000` serial port + `$FFFC` enable/reset control overlaid on the Sega mapper,
+      shared by `assemble_sms` + `build_sms_runtime`, CRC-32 auto-detected (5 carts) or forced via
+      `sms_config::eeprom_93c46`, persisted to `.srm` through `battery_ram()`. Verified: full EWEN+WRITE+READ
+      round-trip over the bus, CRC matches the corpus baseball carts, and World Series Baseball boots
+      with the EEPROM auto-wired.
 - [x] **Game Gear support**: the Master System core run in Game Gear mode. DONE across three PRs:
       the VDP GG mode (12-bit BGR444 CRAM + centred 160×144 strided viewport, #44); the SN76489 `$06`
       stereo register (#45); and the **GG system** (#46) — a `sms_config::game_gear` flag drives both
@@ -265,7 +268,7 @@ Current baseline (do not re-implement):
       adapter family reuses `sms_adapter` (stereo drain + "Game Gear" spec + START→`$00`), `.gg` routes
       via `detect_family`, plus a data-gated GG boot golden (`MNEMOS_GG_ROM`). Verified vs real carts
       32 KiB–512 KiB (160×144, non-uniform, deterministic); SMS mono path + parity unchanged.
-      *Remaining:* the SMS/GG **93C46 EEPROM** below — its carts are the GG baseball titles.
+      The GG baseball carts' 93C46 saves are done too (see the EEPROM item above).
 
 ## P2 — Fidelity & edge-case compatibility (title already boots)
 
