@@ -1,0 +1,79 @@
+# Sega Master System (NTSC, Multi 16K / 4-Pak All Action mapper) -- Mnemos
+# system manifest (schema mnemos-manifest/1).
+#
+# The Multi-16K-mapper variant of sms.ntsc.toml. Identical to the Sega-mapper
+# build EXCEPT the cartridge mapper and its banking surface:
+#
+#   - mapper chip type is `korean.multi_16k_mapper`, not `sega.sms_mapper`.
+#   - 16 KiB banking: three banked slots ($0000-$3FFF, $4000-$7FFF, $8000-$BFFF)
+#     with no fixed region (even the first 1 KiB banks with slot 0). The slot
+#     registers ($3FFE/$7FFF/$BFFF) live inside the cartridge window, so they
+#     route to the mapper via write_overlay; there is NO $FFFx register overlay
+#     and $C000-$FFFF is plain work RAM.
+#
+# Force-only (no header signature), selected via sms_config::mapper::
+# korean_multi_16k / `--mapper korean-multi-16k`.
+
+[manifest]
+schema       = "mnemos-manifest/1"
+id           = "sega.sms.ntsc.korean_multi_16k"
+display_name = "Sega Master System (NTSC, Multi 16K mapper)"
+family       = "sega"
+revision     = 1
+
+[clock]
+# Z80 master clock; the VDP and PSG are ticked at the same rate (divider 1).
+master_hz               = 3579545
+master_to_cpu_divider   = 1
+master_to_video_divider = 1
+
+# --- Chips -------------------------------------------------------------------
+
+[[chip]]
+id           = "cpu"
+type         = "zilog.z80"
+attached_bus = "main"
+[chip.config]
+port_in_callback  = "sms.z80_port_in"
+port_out_callback = "sms.z80_port_out"
+
+[[chip]]
+id           = "video"
+type         = "sega.sms_vdp"
+attached_bus = "main"
+[chip.config]
+irq_callback = "sms.vdp_irq"
+
+[[chip]]
+id           = "audio"
+type         = "ti.sn76489"
+attached_bus = "main"
+
+[[chip]]
+id           = "mapper"
+type         = "korean.multi_16k_mapper"
+attached_bus = "main"
+
+# --- Bus topology ------------------------------------------------------------
+
+[[bus]]
+id           = "main"
+address_bits = 16
+endianness   = "little"
+
+# Cartridge window: $0000-$BFFF routed through the Multi 16K mapper. Reads
+# resolve the three banked 16 KiB slots; writes to $3FFE/$7FFF/$BFFF select the
+# slots, via the mapper's write_overlay. No register overlay exists.
+[[bus.region]]
+name      = "cartridge"
+range     = "0x0000-0xBFFF"
+backing   = "mapper"
+mapper_id = "mapper"
+
+# Work RAM: 8 KiB at $C000-$DFFF, mirrored at $E000-$FFFF (A13 unconnected).
+# $FFFC-$FFFF is plain RAM here -- this mapper has no register file there.
+[[bus.region]]
+name    = "work_ram"
+range   = "0xC000-0xFFFF"
+backing = "ram"
+size    = 8192

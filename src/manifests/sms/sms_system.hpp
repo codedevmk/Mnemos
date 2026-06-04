@@ -6,6 +6,8 @@
 #include "janggun_mapper.hpp"     // Janggun bit-reversed Korean mapper
 #include "korean_mapper.hpp"      // standard Korean mapper
 #include "korean_msx_mapper.hpp"  // Korean MSX 8 KiB mapper (+ Nemesis variant)
+#include "multi_16k_mapper.hpp"   // 4-Pak All Action 16 KiB multicart mapper
+#include "multi_4x8k_mapper.hpp"  // $2000 XOR 8 KiB multicart mapper
 #include "peripheral.hpp"         // peripheral::device (controller ports)
 #include "region.hpp"             // mnemos::video_region (shared)
 #include "sms_mapper.hpp"         // Sega mapper
@@ -30,7 +32,8 @@ namespace mnemos::manifests::sms {
         // therefore never resolves to one of them. `korean_msx_nemesis` is the
         // MSX mapper with its boot-region remap (same chip, different variant);
         // `korean_hicom` and `korean_janggun` are the HiCom 188-in-1 multicart and
-        // the bit-reversed Janggun cart.
+        // the bit-reversed Janggun cart; `korean_multi_4x8k` and `korean_multi_16k`
+        // are the $2000-XOR and 4-Pak-All-Action multicarts.
         enum class mapper : std::uint8_t {
             automatic,
             sega,
@@ -40,6 +43,8 @@ namespace mnemos::manifests::sms {
             korean_msx_nemesis,
             korean_hicom,
             korean_janggun,
+            korean_multi_4x8k,
+            korean_multi_16k,
         };
 
         mnemos::video_region video_region{mnemos::video_region::ntsc};
@@ -58,19 +63,24 @@ namespace mnemos::manifests::sms {
         // on the cart. The Sega mapper, the HiCom multicart, and the Janggun cart
         // page through a register overlay above the cartridge window ($FFFC-$FFFF,
         // $FFFF, and $FFFE-$FFFF); the Codemasters and the standard/MSX Korean
-        // mappers bank through writes inside the cartridge window (Janggun does
-        // both). The *_active flags record which one is live (all false = Sega).
+        // mappers and both Multi multicarts bank through writes inside the
+        // cartridge window (Janggun does both). The *_active flags record which
+        // one is live (all false = Sega).
         chips::mapper::sms_mapper mapper;
         chips::mapper::codemasters_mapper codies;
         chips::mapper::korean_mapper korean;
         chips::mapper::korean_msx_mapper korean_msx;
         chips::mapper::hicom_mapper hicom;
         chips::mapper::janggun_mapper janggun;
+        chips::mapper::multi_4x8k_mapper multi4x8k;
+        chips::mapper::multi_16k_mapper multi16k;
         bool codemasters_active{};
         bool korean_active{};
         bool korean_msx_active{};
         bool korean_hicom_active{};
         bool korean_janggun_active{};
+        bool korean_multi_4x8k_active{};
+        bool korean_multi_16k_active{};
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x2000> ram{}; // 8 KiB, mirrored $C000 / $E000

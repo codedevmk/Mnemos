@@ -15,6 +15,10 @@ set(_sms_manifest_files
     "sms.pal.korean_hicom.toml"
     "sms.ntsc.korean_janggun.toml"
     "sms.pal.korean_janggun.toml"
+    "sms.ntsc.korean_multi_4x8k.toml"
+    "sms.pal.korean_multi_4x8k.toml"
+    "sms.ntsc.korean_multi_16k.toml"
+    "sms.pal.korean_multi_16k.toml"
 )
 foreach(_f IN LISTS _sms_manifest_files)
     set_property(
@@ -41,6 +45,14 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.korean_janggun.toml"
      MNEMOS_SMS_NTSC_KOREAN_JANGGUN_TOML)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.korean_janggun.toml"
      MNEMOS_SMS_PAL_KOREAN_JANGGUN_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.korean_multi_4x8k.toml"
+     MNEMOS_SMS_NTSC_KOREAN_MULTI_4X8K_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.korean_multi_4x8k.toml"
+     MNEMOS_SMS_PAL_KOREAN_MULTI_4X8K_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.ntsc.korean_multi_16k.toml"
+     MNEMOS_SMS_NTSC_KOREAN_MULTI_16K_TOML)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sms.pal.korean_multi_16k.toml"
+     MNEMOS_SMS_PAL_KOREAN_MULTI_16K_TOML)
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/sms_embedded_manifests.hpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/sms_embedded_manifests.hpp"
@@ -79,6 +91,8 @@ target_link_libraries(
         mnemos::chips::mapper::korean_msx_mapper
         mnemos::chips::mapper::hicom_mapper
         mnemos::chips::mapper::janggun_mapper
+        mnemos::chips::mapper::multi_4x8k_mapper
+        mnemos::chips::mapper::multi_16k_mapper
         mnemos::peripheral::input
 )
 

@@ -37,6 +37,12 @@ namespace mnemos::manifests::sms {
         case sms_config::mapper::korean_janggun:
             return pal ? embedded::sms_pal_korean_janggun_toml
                        : embedded::sms_ntsc_korean_janggun_toml;
+        case sms_config::mapper::korean_multi_4x8k:
+            return pal ? embedded::sms_pal_korean_multi_4x8k_toml
+                       : embedded::sms_ntsc_korean_multi_4x8k_toml;
+        case sms_config::mapper::korean_multi_16k:
+            return pal ? embedded::sms_pal_korean_multi_16k_toml
+                       : embedded::sms_ntsc_korean_multi_16k_toml;
         case sms_config::mapper::codemasters:
             return pal ? embedded::sms_pal_codemasters_toml : embedded::sms_ntsc_codemasters_toml;
         case sms_config::mapper::sega:

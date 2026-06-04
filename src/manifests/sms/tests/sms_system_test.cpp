@@ -205,6 +205,49 @@ TEST_CASE("assemble_sms honours a forced Janggun mapper", "[sms][mapper]") {
     CHECK(sys->bus.read8(0x4000U) == 0x03U); // reverse(0xC0)
 }
 
+TEST_CASE("assemble_sms honours a forced Multi 4x8K mapper", "[sms][mapper]") {
+    auto rom = blank_rom(0x40000U); // 32 pages of 8 KiB
+    rom[0x2000U] = 0xB1U;           // fixed $2000-$3FFF marker (bank 1)
+    rom[0x1FU * 0x2000U] = 0x5AU;   // page 31 marker (window 2 after a $2000=0 write)
+
+    auto sys =
+        assemble_sms(std::move(rom), {.cartridge_mapper = sms_config::mapper::korean_multi_4x8k});
+    REQUIRE(sys->korean_multi_4x8k_active);
+
+    // Power-on: fixed first 16 KiB; the windows bank 0.
+    CHECK(sys->bus.read8(0x2000U) == 0xB1U); // fixed bank 1
+    CHECK(sys->bus.read8(0x4000U) == 0x00U); // window 2 -> bank 0
+
+    // A write to $2000 (inside the cart window) XOR-banks the four windows.
+    sys->bus.write8(0x2000U, 0x00U);
+    CHECK(sys->multi4x8k.page(2) == 0x1FU);  // $4000 window -> 0 ^ 0x1F
+    CHECK(sys->bus.read8(0x4000U) == 0x5AU); // page 31
+}
+
+TEST_CASE("assemble_sms honours a forced Multi 16K mapper", "[sms][mapper]") {
+    auto rom = blank_rom(0x20000U); // 8 pages of 16 KiB
+    for (std::uint8_t p = 0; p < 4U; ++p) {
+        rom[static_cast<std::size_t>(p) * 0x4000U] = static_cast<std::uint8_t>(0xA0U + p);
+    }
+
+    auto sys =
+        assemble_sms(std::move(rom), {.cartridge_mapper = sms_config::mapper::korean_multi_16k});
+    REQUIRE(sys->korean_multi_16k_active);
+
+    // Power-on banks {0, 1, 0}.
+    CHECK(sys->bus.read8(0x0000U) == 0xA0U); // slot 0 -> bank 0
+    CHECK(sys->bus.read8(0x4000U) == 0xA1U); // slot 1 -> bank 1
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U); // slot 2 -> bank 0
+
+    // In-window slot selects ride the cartridge MMIO ($3FFE/$7FFF/$BFFF).
+    sys->bus.write8(0x3FFEU, 2U); // slot 0 -> bank 2
+    sys->bus.write8(0x7FFFU, 3U); // slot 1 -> bank 3
+    sys->bus.write8(0xBFFFU, 1U); // slot 2 -> (2 & 0x30) + 1 = bank 1
+    CHECK(sys->bus.read8(0x0000U) == 0xA2U);
+    CHECK(sys->bus.read8(0x4000U) == 0xA3U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA1U);
+}
+
 TEST_CASE("assemble_sms routes Z80 OUT to the VDP control port", "[sms][vdp]") {
     auto rom = blank_rom();
     // LD A,$AA ; OUT ($BF),A ; LD A,$81 ; OUT ($BF),A  -> VDP register 1 = $AA

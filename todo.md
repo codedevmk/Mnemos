@@ -214,13 +214,14 @@ Current baseline (do not re-implement):
     - [x] Multi `4x8K` (`korean.multi_4x8k_mapper`): the $2000-register XOR multicarts (128 Hap,
           Game Mo-eumjip 188 Hap) -- one $2000 write banks all four 8 KiB windows from the value
           XORed with {0x1F,0x1E,0x1D,0x1C}; $0000-$3FFF fixed (banks 0/1). Standalone chip + 6 unit
-          tests. (System wiring -- the $0000-$BFFF cart MMIO catches the in-window $2000 register --
-          is the follow-up.) NOTE: this is NOT "4-Pak All Action"; the original entry conflated them.
+          tests, wired end-to-end (`sms_config::mapper::korean_multi_4x8k`, NTSC/PAL manifest TOMLs,
+          `--mapper korean-multi-4x8k`, assemble + runtime-parity coverage). NOTE: this is NOT "4-Pak
+          All Action"; the original entry conflated them.
     - [x] `4-Pak All Action` (`korean.multi_16k_mapper`): 16 KiB banking, three banked slots (no fixed
           region -- the first 1 KiB banks with slot 0), registers $3FFE/$7FFF/$BFFF; slot 2's high two
           bits come from the slot-0 register. Reset {0,1,0}; no cart RAM. Standalone chip + 8 unit
-          tests. (System wiring -- the $0000-$BFFF cart MMIO catches the in-window registers --
-          follow-up.)
+          tests, wired end-to-end (`sms_config::mapper::korean_multi_16k`, NTSC/PAL manifest TOMLs,
+          `--mapper korean-multi-16k`, assemble + runtime-parity coverage).
     - [x] True `Janggun` (`korean.janggun_mapper`): 8 KiB banks, $0000-$3FFF fixed (banks 0/1), four
           windows via direct selects ($4000/$6000/$8000/$A000) + Sega-style 16 KiB pairs ($FFFE/$FFFF
           in the work-RAM mirror); per-16 KiB-page bit-reversed reads (low-window FCR bit 7). Distinct
