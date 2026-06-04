@@ -1,5 +1,7 @@
 #pragma once
 
+#include "peripheral.hpp" // controller_state
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -36,5 +38,29 @@ namespace mnemos::apps::player::adapters {
     };
 
     [[nodiscard]] std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]);
+
+    // Frames a scripted button is held when `--press <button>@<frame>` gives no
+    // explicit `+duration` (long enough for a 60 Hz poll to catch the press).
+    inline constexpr std::uint64_t press_default_duration = 4U;
+
+    // A scripted controller input for the headless path: hold `button` on port 1
+    // for `duration` frames starting at the 1-based `frame`. Parsed from
+    // `--press <button>@<frame>[+duration]` (e.g. `--press start@60+12`).
+    struct press_event final {
+        std::string button;
+        std::uint64_t frame{};
+        std::uint64_t duration{press_default_duration};
+    };
+
+    // Every `--press <button>@<frame>[+duration]` event, in command-line order.
+    // Recognised buttons: up/down/left/right/start/select/a/b/c/x/y/z/mode.
+    // Specs with an unknown button or unparseable frame are skipped.
+    [[nodiscard]] std::vector<press_event> parse_press_events(int argc, char* argv[]);
+
+    // The port-1 controller_state implied by `events` at the given 1-based frame:
+    // every event whose [frame, frame+duration) window contains `frame` sets its
+    // button. No events / no match -> all-released.
+    [[nodiscard]] mnemos::peripheral::controller_state
+    input_for_frame(const std::vector<press_event>& events, std::uint64_t frame) noexcept;
 
 } // namespace mnemos::apps::player::adapters

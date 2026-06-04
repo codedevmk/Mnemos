@@ -137,9 +137,11 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::clean_rom_name;
     using mnemos::apps::player::adapters::detect_family;
     using mnemos::apps::player::adapters::family_label;
+    using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::load_rom;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
+    using mnemos::apps::player::adapters::parse_press_events;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
@@ -269,8 +271,14 @@ int main(int argc, char* argv[]) {
         const std::string trace_path = screenshot->path + ".cpu_trace.csv";
         mnemos::debug::trace_csv_session trace(*system, trace_path, trace_frame);
 
+        // Scripted input (`--press <button>@<frame>[+duration]`) so headless runs
+        // can drive a game past intro/menu screens. Sampled before each frame.
+        const auto press_events = parse_press_events(argc, argv);
         for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
             trace_frame = i + 1U;
+            if (!press_events.empty()) {
+                system->apply_input(0, input_for_frame(press_events, i + 1U));
+            }
             system->step_one_frame();
         }
 
