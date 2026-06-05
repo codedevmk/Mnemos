@@ -1,0 +1,57 @@
+#include "segacd_machine.hpp"
+
+namespace mnemos::manifests::segacd {
+
+    std::unique_ptr<segacd_machine> assemble_segacd_machine(std::vector<std::uint8_t> bios,
+                                                            const genesis::genesis_config& config) {
+        auto machine = std::make_unique<segacd_machine>();
+        // The sub side gets its own copy of the BIOS (the sub-CPU $0 overlay).
+        machine->sub = assemble_segacd(bios);
+        // The Genesis main side boots the BIOS as its cartridge.
+        machine->genesis = genesis::assemble_genesis(std::move(bios), config);
+
+        segacd_system* sub = machine->sub.get();
+        topology::bus& bus = machine->genesis->bus;
+
+        // $A12000-$A120FF: gate array (main-side access). The 128 KB BIOS only
+        // occupies $000000-$01FFFF, so these SCD windows sit in free address
+        // space; priority 1 keeps them above any future overlay.
+        bus.map_mmio(
+            0xA12000U, 0x100U,
+            [sub](std::uint32_t a) { return sub->gate_read(static_cast<std::uint8_t>(a & 0xFFU)); },
+            [sub](std::uint32_t a, std::uint8_t v) {
+                sub->gate_write_main(static_cast<std::uint8_t>(a & 0xFFU), v);
+            },
+            1);
+
+        // $020000-$03FFFF: sub-CPU PRG-RAM, a 128 KB bank window selected by the
+        // memory-mode register's bits 6-7 ($03).
+        bus.map_mmio(
+            0x020000U, 0x20000U,
+            [sub](std::uint32_t a) {
+                const std::uint32_t base =
+                    ((static_cast<std::uint32_t>(sub->gate_array[0x03]) >> 6U) & 0x03U) * 0x20000U;
+                return sub->prg_ram[(base + (a & 0x1FFFFU)) & (prg_ram_size - 1U)];
+            },
+            [sub](std::uint32_t a, std::uint8_t v) {
+                const std::uint32_t base =
+                    ((static_cast<std::uint32_t>(sub->gate_array[0x03]) >> 6U) & 0x03U) * 0x20000U;
+                sub->prg_ram[(base + (a & 0x1FFFFU)) & (prg_ram_size - 1U)] = v;
+            },
+            1);
+
+        // $200000-$23FFFF: word RAM (2M mode -- the full 256 KB).
+        bus.map_mmio(
+            0x200000U, 0x40000U,
+            [sub](std::uint32_t a) {
+                return sub->word_ram[(a - 0x200000U) & (word_ram_size - 1U)];
+            },
+            [sub](std::uint32_t a, std::uint8_t v) {
+                sub->word_ram[(a - 0x200000U) & (word_ram_size - 1U)] = v;
+            },
+            1);
+
+        return machine;
+    }
+
+} // namespace mnemos::manifests::segacd
