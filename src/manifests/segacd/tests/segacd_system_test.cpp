@@ -92,3 +92,71 @@ TEST_CASE("segacd BIOS read-overlay sits over PRG-RAM", "[segacd][bios]") {
     sys->sub_bus.write8(0x000100U, 0x7EU);
     REQUIRE(sys->sub_bus.read8(0x000100U) == 0x7E);
 }
+
+TEST_CASE("segacd gate-array $01 controls sub-CPU reset and bus request", "[segacd][gate]") {
+    auto sys = assemble_segacd();
+    load_test_program(*sys);
+    // RESET bit 0->1 releases + boots the sub-CPU.
+    sys->gate_write_main(0x01, 0x01);
+    sys->run_cycles(200);
+    REQUIRE(sys->sub_cpu.elapsed_cycles() > 0U);
+    REQUIRE(sys->word_ram[0x100] == 0x12);
+    // BUSREQ (bit 1) halts it: no further execution.
+    const std::uint64_t at_busreq = sys->sub_cpu.elapsed_cycles();
+    sys->gate_write_main(0x01, 0x03); // release + busreq
+    sys->run_cycles(200);
+    REQUIRE(sys->sub_cpu.elapsed_cycles() == at_busreq);
+    // Clearing busreq lets it run again (no re-boot).
+    sys->gate_write_main(0x01, 0x01);
+    sys->run_cycles(200);
+    REQUIRE(sys->sub_cpu.elapsed_cycles() > at_busreq);
+}
+
+TEST_CASE("segacd gate-array $03 memory mode tracks RET/DMNA ownership", "[segacd][gate]") {
+    auto sys = assemble_segacd();
+    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U); // RET=1 power-on (main owns word RAM)
+    // Main sets DMNA -> hands word RAM to the sub-CPU: RET clears, DMNA sets.
+    sys->gate_write_main(0x03, 0x02);
+    REQUIRE((sys->gate_read(0x03) & 0x03U) == 0x02U);
+    // Sub sets RET -> hands word RAM back to main: DMNA clears, RET sets.
+    sys->gate_write_sub(0x03, 0x01);
+    REQUIRE((sys->gate_read(0x03) & 0x03U) == 0x01U);
+    // Main writes the PRG-RAM bank (bits 6-7) + mode (bit 2); RET preserved.
+    sys->gate_write_main(0x03, 0xC4);
+    REQUIRE((sys->gate_read(0x03) & 0xC4U) == 0xC4U);
+    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U);
+    // The sub side cannot change the PRG bank (main-only bits preserved).
+    sys->gate_write_sub(0x03, 0x00);
+    REQUIRE((sys->gate_read(0x03) & 0xC0U) == 0xC0U);
+}
+
+TEST_CASE("segacd gate-array comm registers are shared", "[segacd][gate]") {
+    auto sys = assemble_segacd();
+    sys->gate_write_main(0x10, 0xAB); // main->sub comm word
+    REQUIRE(sys->gate_read(0x10) == 0xAB);
+    sys->gate_write_sub(0x20, 0xCD); // sub->main comm word
+    REQUIRE(sys->gate_read(0x20) == 0xCD);
+}
+
+TEST_CASE("segacd backup RAM uses the odd byte lane", "[segacd][bus]") {
+    auto sys = assemble_segacd();
+    sys->sub_bus.write8(0xFE0001U, 0x99U); // odd -> backup[0]
+    REQUIRE(sys->backup_ram[0] == 0x99);
+    REQUIRE(sys->sub_bus.read8(0xFE0001U) == 0x99);
+    sys->sub_bus.write8(0xFE0000U, 0x55U); // even -> ignored
+    REQUIRE(sys->sub_bus.read8(0xFE0000U) == 0x00);
+    sys->sub_bus.write8(0xFE0003U, 0x42U); // odd -> backup[1]
+    REQUIRE(sys->backup_ram[1] == 0x42);
+}
+
+TEST_CASE("segacd gate array is reachable through both sub-bus mirrors", "[segacd][bus][gate]") {
+    auto sys = assemble_segacd();
+    // $FF8003 routes to the sub-side memory-mode write.
+    sys->sub_bus.write8(0xFF8003U, 0x01U);
+    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U);
+    REQUIRE(sys->sub_bus.read8(0xFF8003U) == sys->gate_read(0x03));
+    // $0FF800 is the same register block.
+    sys->sub_bus.write8(0x0FF810U, 0x77U);
+    REQUIRE(sys->gate_read(0x10) == 0x77);
+    REQUIRE(sys->sub_bus.read8(0x0FF810U) == 0x77);
+}
