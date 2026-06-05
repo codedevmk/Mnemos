@@ -100,6 +100,44 @@ TEST_CASE("segacd_adapter mounts a CD image from a path", "[segacd][adapter]") {
     fs::remove(iso, ec);
 }
 
+TEST_CASE("segacd_adapter mixes CD-DA into the audio output", "[segacd][adapter][audio]") {
+    // 2-sector image: sector 0 a valid Mode-1 sector (so open_bin accepts it),
+    // sector 1 a loud constant PCM tone (L=R=0x4000).
+    std::vector<std::uint8_t> bin(2U * 2352U, 0);
+    bin[0] = 0x00;
+    for (std::size_t i = 1; i <= 10; ++i) {
+        bin[i] = 0xFF;
+    }
+    bin[11] = 0x00;
+    bin[15] = 0x01;
+    for (std::size_t i = 0; i < 2352U; i += 2U) {
+        bin[2352U + i] = 0x00;
+        bin[2352U + i + 1U] = 0x40; // little-endian 0x4000
+    }
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    REQUIRE(disc.has_value());
+
+    segacd_adapter adapter(make_bios());
+    auto& sub = *adapter.machine().sub;
+    sub.attach_disc(&*disc); // attach resets CD-DA state...
+    sub.cdda_active = true;  // ...so arm it afterwards, over the PCM sector
+    sub.cdda_start_lba = 1;
+    sub.cdda_end_lba = 1;
+    sub.cdda_current_lba = 1;
+    sub.cdda_sample_in_sector = 0;
+
+    const auto chunk = adapter.drain_audio();
+    REQUIRE(chunk.frame_count > 0U);
+    bool nonzero = false;
+    for (std::uint32_t i = 0; i < chunk.frame_count * 2U; ++i) {
+        if (chunk.samples[i] != 0) {
+            nonzero = true;
+            break;
+        }
+    }
+    REQUIRE(nonzero); // CD-DA reached the mixed output
+}
+
 // Data-gated: point MNEMOS_SEGACD_BIOS at a real Sega CD / Mega CD BIOS ROM to
 // boot it for real (no disc -> the BIOS's CD-player / no-disc screen). Skipped
 // when the env var is unset so the default suite stays hermetic.

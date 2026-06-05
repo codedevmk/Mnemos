@@ -90,9 +90,15 @@ namespace mnemos::apps::player::adapters::segacd {
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};
 
-        // Genesis FM + PSG audio mix scratch (CD audio joins in D3).
+        // Audio mix scratch: Genesis FM (stereo) + PSG (mono) + sub RF5C164 PCM
+        // (stereo) + CD-DA (stereo), each resampled to the output rate and summed
+        // into the int32 accumulators before clipping into mix_buf_.
         std::vector<std::int16_t> fm_buf_{};
         std::vector<std::int16_t> psg_buf_{};
+        std::vector<std::int16_t> pcm_buf_{};
+        std::vector<std::int16_t> cdda_buf_{};
+        std::vector<std::int32_t> acc_l_{};
+        std::vector<std::int32_t> acc_r_{};
         std::vector<std::int16_t> mix_buf_{};
         double audio_frac_{0.0};
 
