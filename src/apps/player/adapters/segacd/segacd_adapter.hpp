@@ -16,6 +16,7 @@
 // Audio for now is the Genesis FM + PSG mix; the CD-DA + RF5C164 PCM mix is
 // wired in a later commit (D3).
 
+#include "disc_image.hpp"          // mnemos::disc::disc_image (the mounted CD)
 #include "introspection_views.hpp" // span_memory_view
 #include "player_system.hpp"
 #include "region.hpp"
@@ -43,7 +44,8 @@ namespace mnemos::apps::player::adapters::segacd {
         explicit segacd_adapter(std::vector<std::uint8_t> bios,
                                 const manifests::genesis::genesis_config& config = {},
                                 std::string display_name = {},
-                                frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
+                                frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
+                                const std::string& disc_path = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override;
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
@@ -74,6 +76,9 @@ namespace mnemos::apps::player::adapters::segacd {
 
       private:
         std::unique_ptr<manifests::segacd::segacd_machine> machine_;
+        // The mounted CD image (borrowed by machine_->sub via attach_disc); null
+        // when booting the BIOS with no disc.
+        std::unique_ptr<mnemos::disc::disc_image> disc_;
         instrumentation::span_memory_view work_ram_view_;
         instrumentation::span_memory_view prg_ram_view_;
         std::array<instrumentation::memory_view*, 2> system_mem_view_{};

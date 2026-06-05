@@ -8,7 +8,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <initializer_list>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -74,4 +77,22 @@ TEST_CASE("segacd_adapter holds the sub-CPU until the BIOS releases it", "[segac
     adapter.step_one_frame();
     adapter.step_one_frame();
     REQUIRE(adapter.machine().sub->sub_cpu.elapsed_cycles() == 0U); // never released
+}
+
+TEST_CASE("segacd_adapter mounts a CD image from a path", "[segacd][adapter]") {
+    namespace fs = std::filesystem;
+    const fs::path iso = fs::temp_directory_path() / "mnemos_segacd_d3.iso";
+    {
+        const std::vector<std::uint8_t> data(4U * 2048U, 0xA5); // 4 user-data sectors
+        std::ofstream os(iso, std::ios::binary);
+        os.write(reinterpret_cast<const char*>(data.data()),
+                 static_cast<std::streamsize>(data.size()));
+    }
+
+    segacd_adapter adapter(make_bios(), {}, "Test Disc", nullptr, iso.string());
+    REQUIRE(adapter.machine().sub->disc != nullptr); // disc handed to the sub side
+    REQUIRE(adapter.machine().sub->cdd_loaded);
+
+    std::error_code ec;
+    fs::remove(iso, ec);
 }

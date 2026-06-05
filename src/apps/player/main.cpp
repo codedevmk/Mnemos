@@ -16,7 +16,8 @@
 #include "region.hpp"
 #include "region_args.hpp"
 #include "rom_loader.hpp"
-#include "sms_adapter.hpp" // force_link + manifests::sms::parse_market
+#include "segacd_adapter.hpp" // force_link (Sega CD: BIOS boot ROM + disc image)
+#include "sms_adapter.hpp"    // force_link + manifests::sms::parse_market
 #include "sms_region.hpp"
 #include "system_family.hpp"
 #include "text_overlay.hpp"
@@ -217,6 +218,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::genesis::force_link();
         mnemos::apps::player::adapters::sms::force_link();
         mnemos::apps::player::adapters::c64::force_link();
+        mnemos::apps::player::adapters::segacd::force_link();
 
         std::string_view family_id = "genesis";
         switch (family) {
@@ -229,16 +231,47 @@ int main(int argc, char* argv[]) {
         case system_family::c64:
             family_id = "c64";
             break;
+        case system_family::segacd:
+            family_id = "segacd";
+            break;
         case system_family::genesis:
             break;
         }
+        // Sega CD boots its BIOS as the program ROM; the file the user loaded is
+        // the CD image (passed by path so disc_image can resolve .cue tracks).
+        // Every other family runs the loaded file directly.
+        std::vector<std::uint8_t> primary_rom = std::move(loaded->bytes);
+        std::string disc_path;
+        if (family == system_family::segacd) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
+#endif
+            const char* bios_env = std::getenv("MNEMOS_SEGACD_BIOS");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            if (bios_env == nullptr) {
+                std::fprintf(
+                    stderr, "[mnemos_player] Sega CD needs MNEMOS_SEGACD_BIOS set to a BIOS ROM\n");
+                return 1;
+            }
+            auto bios = load_rom(bios_env);
+            if (!bios || bios->bytes.empty()) {
+                std::fprintf(stderr, "[mnemos_player] could not read Sega CD BIOS: %s\n", bios_env);
+                return 1;
+            }
+            disc_path = rom_paths.front();
+            primary_rom = std::move(bios->bytes);
+        }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
-            family_id, {.rom = std::move(loaded->bytes),
+            family_id, {.rom = std::move(primary_rom),
                         .video_region = video,
                         .display_name = clean_rom_name(loaded->name),
                         .additional_media = std::move(additional_media),
                         .autostart = autostart,
-                        .mapper_override = mapper_arg.value_or(std::string{})});
+                        .mapper_override = mapper_arg.value_or(std::string{}),
+                        .disc_path = std::move(disc_path)});
         if (system && system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
                          system->media_count());

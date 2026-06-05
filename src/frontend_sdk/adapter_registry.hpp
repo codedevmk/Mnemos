@@ -55,6 +55,12 @@ namespace mnemos::frontend_sdk {
         // Empty = let the adapter auto-detect. Families without selectable
         // mappers ignore it.
         std::string mapper_override;
+        // Filesystem path of the primary CD/disk image, for media that loads by
+        // path rather than a flat byte buffer (a .cue references sibling .bin
+        // tracks; .iso/.chd are read incrementally). The Sega CD adapter opens
+        // this with disc_image::open while `rom` carries the boot BIOS. Empty for
+        // byte-buffer media.
+        std::string disc_path;
         // Optional scheduler-construction override. null = adapter falls back
         // to its built-in scheduler. Non-null lets tooling (deterministic
         // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)

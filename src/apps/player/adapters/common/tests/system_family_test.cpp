@@ -27,6 +27,14 @@ TEST_CASE("system_family: Genesis extensions and no-extension map to Genesis") {
     CHECK(detect_family("README.md") == system_family::genesis); // .md still wins
 }
 
+TEST_CASE("system_family: CD image extensions select Sega CD") {
+    CHECK(detect_family("game.cue") == system_family::segacd);
+    CHECK(detect_family("game.iso") == system_family::segacd);
+    CHECK(detect_family("game.chd") == system_family::segacd);
+    CHECK(detect_family("D:/Sega CD/Sonic CD (USA).CUE") ==
+          system_family::segacd); // case-insensitive
+}
+
 TEST_CASE("system_family: unknown extension falls through to Genesis") {
     // Default-to-Genesis is intentional: most Genesis dumps in the wild
     // have heterogeneous extensions, so we don't fight the user when they
@@ -38,4 +46,5 @@ TEST_CASE("system_family: unknown extension falls through to Genesis") {
 TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::sms)} == "SMS");
     CHECK(std::string{family_label(system_family::genesis)} == "Genesis");
+    CHECK(std::string{family_label(system_family::segacd)} == "Sega CD");
 }

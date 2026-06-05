@@ -34,6 +34,7 @@ target_link_libraries(
         mnemos::apps::player::genesis_adapter
         mnemos::apps::player::sms_adapter
         mnemos::apps::player::c64_adapter
+        mnemos::apps::player::segacd_adapter
         mnemos::apps::player::text_overlay
         mnemos::debug::dump
 )

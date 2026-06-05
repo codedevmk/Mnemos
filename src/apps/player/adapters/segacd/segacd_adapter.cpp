@@ -85,7 +85,8 @@ namespace mnemos::apps::player::adapters::segacd {
     segacd_adapter::segacd_adapter(std::vector<std::uint8_t> bios,
                                    const manifests::genesis::genesis_config& config,
                                    std::string display_name,
-                                   frontend_sdk::scheduler_factory* scheduler_factory)
+                                   frontend_sdk::scheduler_factory* scheduler_factory,
+                                   const std::string& disc_path)
         : machine_(manifests::segacd::assemble_segacd_machine(std::move(bios), config)),
           work_ram_view_("work_ram", machine_->genesis->work_ram),
           prg_ram_view_("prg_ram", machine_->sub->prg_ram),
@@ -111,6 +112,15 @@ namespace mnemos::apps::player::adapters::segacd {
              .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
         if (!display_name.empty()) {
             spec_.push_back({.label = "Disc", .value = std::move(display_name)});
+        }
+
+        // Mount the CD image (if any) and hand it to the sub side. A failed open
+        // leaves the drive empty -- the BIOS boots to its no-disc screen.
+        if (!disc_path.empty()) {
+            if (auto image = mnemos::disc::disc_image::open(disc_path)) {
+                disc_ = std::make_unique<mnemos::disc::disc_image>(std::move(*image));
+                machine_->sub->attach_disc(disc_.get());
+            }
         }
     }
 
@@ -203,7 +213,8 @@ namespace mnemos::apps::player::adapters::segacd {
                     return std::make_unique<segacd_adapter>(
                         std::move(opts.rom),
                         manifests::genesis::genesis_config{.video_region = opts.video_region},
-                        std::move(opts.display_name), opts.scheduler_factory_override);
+                        std::move(opts.display_name), opts.scheduler_factory_override,
+                        opts.disc_path);
                 });
             return 0;
         }();
