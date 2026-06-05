@@ -457,6 +457,27 @@ TEST_CASE("segacd Play on a data track stops CD-DA", "[segacd][cdda]") {
     REQUIRE(sys->cdda_active == false); // Play on data stops CD-DA
 }
 
+TEST_CASE("segacd sub-CPU timer raises the level-3 IRQ at its period", "[segacd][timer]") {
+    auto sys = assemble_segacd();
+    sys->gate_write_main(0x33, segacd_system::irq_timer); // enable level-3 in the mask
+    sys->gate_write_main(0x31, 0x01);                     // timer_word=1 -> period 2*385 = 770
+    sys->release_sub_reset();                             // run_cycles now ticks + accumulates
+
+    sys->run_cycles(700); // under one period
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_timer) == 0U);
+    sys->run_cycles(200); // total 900 >= 770 -> the timer fires
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_timer) != 0U);
+}
+
+TEST_CASE("segacd sub-CPU timer is disabled when timer_word is 0", "[segacd][timer]") {
+    auto sys = assemble_segacd();
+    sys->gate_write_main(0x33, segacd_system::irq_timer);
+    sys->gate_write_main(0x31, 0x00); // 0 disables the timer
+    sys->release_sub_reset();
+    sys->run_cycles(100000);
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_timer) == 0U);
+}
+
 TEST_CASE("segacd stamp ASIC rotates word RAM into the image buffer + raises L1",
           "[segacd][stamp]") {
     auto sys = assemble_segacd();

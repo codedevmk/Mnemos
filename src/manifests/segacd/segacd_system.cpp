@@ -8,6 +8,17 @@ namespace mnemos::manifests::segacd {
         }
         sub_cpu.tick(cycles);
         cdc_dma_run(); // service any armed CDC memory DMA
+
+        // Sub-CPU timer: raise the level-3 IRQ once per (timer_word+1)*385 cycles
+        // (~30.72 us). timer_word == 0 disables it.
+        if (timer_word != 0U) {
+            timer_cycle_acc += static_cast<std::uint32_t>(cycles);
+            const std::uint32_t period = (static_cast<std::uint32_t>(timer_word) + 1U) * 385U;
+            while (timer_cycle_acc >= period) {
+                timer_cycle_acc -= period;
+                raise_sub_irq(irq_timer);
+            }
+        }
     }
 
     void segacd_system::release_sub_reset() {
@@ -61,6 +72,8 @@ namespace mnemos::manifests::segacd {
         img_buf_height = 0;
         img_buf_offset = 0;
         trace_vector_addr = 0;
+        timer_word = 0;
+        timer_cycle_acc = 0;
         pcm.reset(chips::reset_kind::power_on);
     }
 
@@ -133,6 +146,11 @@ namespace mnemos::manifests::segacd {
         }
         if (offset == 0x07U) {
             cdc_reg_w(value);
+        }
+        // $31 = sub-CPU timer word; reprogramming restarts the countdown.
+        if (offset == 0x31U) {
+            timer_word = value;
+            timer_cycle_acc = 0U;
         }
         // $58-$6B stamp / rotation ASIC config (ROT triggers on $59 bit 0).
         if (offset >= 0x58U && offset <= 0x6BU) {

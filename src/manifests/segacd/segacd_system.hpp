@@ -49,6 +49,11 @@ namespace mnemos::manifests::segacd {
         std::uint8_t sub_irq_mask{};                        // gate-array $33
         std::uint8_t sub_irq_pending{};
 
+        // Sub-CPU timer (gate-array $31). Period = (timer_word + 1) * 385 sub
+        // cycles (~30.72 us @ 12.5 MHz); raises the level-3 IRQ. 0 = disabled.
+        std::uint8_t timer_word{};
+        std::uint32_t timer_cycle_acc{};
+
         // CDD drive status codes (status-frame byte RS0).
         enum cdd_status_code : std::uint8_t {
             cdd_stop = 0x00,
