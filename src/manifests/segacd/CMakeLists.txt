@@ -1,5 +1,6 @@
 add_library(
     mnemos_manifests_segacd
+    segacd_cdd.cpp
     segacd_system.cpp
 )
 add_library(mnemos::manifests::segacd ALIAS mnemos_manifests_segacd)
@@ -16,6 +17,7 @@ target_link_libraries(
     mnemos_manifests_segacd
     PUBLIC
         mnemos::topology
+        mnemos::disc
         mnemos::chips::cpu::m68000
         mnemos::chips::audio::rf5c68
 )

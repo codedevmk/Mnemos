@@ -1,8 +1,9 @@
 #pragma once
 
-#include "bus.hpp"    // topology bus
-#include "m68000.hpp" // sub-CPU
-#include "rf5c68.hpp" // PCM
+#include "bus.hpp"        // topology bus
+#include "disc_image.hpp" // CD media
+#include "m68000.hpp"     // sub-CPU
+#include "rf5c68.hpp"     // PCM
 
 #include <array>
 #include <cstddef>
@@ -48,6 +49,36 @@ namespace mnemos::manifests::segacd {
         std::uint8_t sub_irq_mask{};                        // gate-array $33
         std::uint8_t sub_irq_pending{};
 
+        // CDD drive status codes (status-frame byte RS0).
+        enum cdd_status_code : std::uint8_t {
+            cdd_stop = 0x00,
+            cdd_play = 0x01,
+            cdd_seek = 0x02,
+            cdd_scan = 0x03,
+            cdd_pause = 0x04,
+            cdd_open = 0x05,
+            cdd_toc = 0x09,
+            cdd_nodisc = 0x0B,
+            cdd_end = 0x0C,
+        };
+
+        const mnemos::disc::disc_image* disc{}; // attached disc image (borrowed)
+        std::array<std::uint8_t, 10> cdd_command{};
+        std::array<std::uint8_t, 10> cdd_status{};
+        std::uint8_t cdd_drive_status{cdd_nodisc};
+        std::uint8_t cdd_pending_status{};
+        int cdd_latency{};
+        std::int32_t cdd_lba{};
+        int cdd_track{};
+        bool cdd_loaded{};
+        // C1 seams (the real CDC + CD-DA arrive in C2/C3): a count of sectors
+        // handed to the decoder, the last block header, and the CD-DA request.
+        std::uint64_t cdc_sectors_decoded{};
+        std::uint32_t last_sector_header{};
+        bool cdda_active{};
+        std::uint32_t cdda_start_lba{};
+        std::uint32_t cdda_end_lba{};
+
         // Advance the sub-CPU by `cycles` of its clock. No-op while held in reset.
         void run_cycles(std::uint64_t cycles);
         // Release the sub-CPU from reset and boot it from the $0/$4 vectors (which
@@ -71,6 +102,25 @@ namespace mnemos::manifests::segacd {
         void raise_sub_irq(std::uint8_t source_bit);
         void update_sub_irq();
         [[nodiscard]] int pending_irq_level() const noexcept;
+
+        // CDD (drive). attach_disc plugs a borrowed disc image; cdd_process_command
+        // runs when the CPU commits a command ($4B); cdd_update is the 75 Hz
+        // CD-frame tick that advances the read head and resolves pending seeks.
+        void attach_disc(const mnemos::disc::disc_image* image);
+        void cdd_process_command();
+        void cdd_update();
+
+      private:
+        void cdd_set_status();
+        void cdd_report_toc();
+        void cdd_commit_status();
+        [[nodiscard]] std::int32_t cdd_seek_target_lba() const;
+        [[nodiscard]] std::uint32_t disc_total_lbas() const;
+        [[nodiscard]] bool disc_lba_is_data(std::int32_t lba) const;
+        [[nodiscard]] int disc_track_of_lba(std::int32_t lba) const;
+        void feed_cdc_sector(std::uint32_t header);             // C1 seam (C2: real CDC)
+        void cdda_play(std::uint32_t start, std::uint32_t end); // C1 seam (C3: real CD-DA)
+        void cdda_stop();
     };
 
     // Build a Sega CD sub side and wire the sub-bus. `bios` may be empty (the

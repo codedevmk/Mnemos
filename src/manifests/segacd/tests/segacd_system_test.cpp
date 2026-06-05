@@ -4,6 +4,7 @@
 
 #include "segacd_system.hpp"
 
+#include "disc_image.hpp"
 #include "rf5c68.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -49,6 +50,33 @@ namespace {
         put(0x68, {0x00, 0x00, 0x00, 0x80});             // autovector L2 -> handler $80
         put(0x80, {0x33, 0xFC, 0xBE, 0xEF, 0x00, 0x08, 0x02, 0x00, 0x4E,
                    0x73}); // MOVE.W #$BEEF,($080200).L ; RTE
+    }
+
+    // A minimal multi-sector raw Mode-1 BIN (sync + Mode-1 byte per sector).
+    std::vector<std::uint8_t> make_data_bin(int sectors) {
+        std::vector<std::uint8_t> d(static_cast<std::size_t>(sectors) * 2352U, 0);
+        for (int lba = 0; lba < sectors; ++lba) {
+            std::uint8_t* s = &d[static_cast<std::size_t>(lba) * 2352U];
+            s[0] = 0x00;
+            for (std::size_t i = 1; i <= 10; ++i) {
+                s[i] = 0xFF;
+            }
+            s[11] = 0x00;
+            s[15] = 0x01; // Mode 1
+        }
+        return d;
+    }
+
+    // Issue a CDD Play command for the absolute MSF m:s:f.
+    void issue_play(segacd_system& sys, int m, int s, int f) {
+        sys.gate_write_main(0x42, 0x30); // Play (command 3)
+        sys.gate_write_main(0x44, static_cast<std::uint8_t>(m / 10));
+        sys.gate_write_main(0x45, static_cast<std::uint8_t>(m % 10));
+        sys.gate_write_main(0x46, static_cast<std::uint8_t>(s / 10));
+        sys.gate_write_main(0x47, static_cast<std::uint8_t>(s % 10));
+        sys.gate_write_main(0x48, static_cast<std::uint8_t>(f / 10));
+        sys.gate_write_main(0x49, static_cast<std::uint8_t>(f % 10));
+        sys.gate_write_main(0x4B, 0x00); // commit
     }
 
 } // namespace
@@ -219,4 +247,60 @@ TEST_CASE("segacd masked sub-CPU IRQ is not taken", "[segacd][irq]") {
     sys->gate_write_main(0x00, 0x01); // IFL2 raised but masked off
     sys->run_cycles(300);
     REQUIRE(sys->word_ram[0x200] == 0x00); // handler did not run
+}
+
+TEST_CASE("segacd CDD plays a data disc and advances the read head", "[segacd][cdd]") {
+    const auto bin = make_data_bin(10);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    REQUIRE(disc.has_value());
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_toc);
+
+    issue_play(*sys, 0, 2, 0); // absolute MSF 00:02:00 -> LBA 0
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_seek);
+    REQUIRE(sys->cdd_lba == 0);
+
+    for (int i = 0; i < 3; ++i) {
+        sys->cdd_update(); // seek latency resolves to PLAY
+    }
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_play);
+
+    const std::uint64_t before = sys->cdc_sectors_decoded;
+    sys->cdd_update();
+    REQUIRE(sys->cdd_lba == 1);
+    REQUIRE(sys->cdc_sectors_decoded > before); // a sector was fed to the decoder
+    REQUIRE(sys->cdda_active == false);         // data track -> no CD-DA
+    REQUIRE(sys->gate_read(0x38) == (segacd_system::cdd_play & 0x0F)); // status mirrored
+}
+
+TEST_CASE("segacd CDD stop returns to the TOC state", "[segacd][cdd]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    issue_play(*sys, 0, 2, 0);
+    sys->gate_write_main(0x42, 0x10); // Stop (command 1)
+    sys->gate_write_main(0x4B, 0x00); // commit
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_toc);
+    REQUIRE(sys->gate_read(0x38) == segacd_system::cdd_stop); // STOP status frame
+}
+
+TEST_CASE("segacd CDD reports first/last track numbers", "[segacd][cdd]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    sys->gate_write_main(0x42, 0x20);      // Report TOC (command 2)
+    sys->gate_write_main(0x44, 0x04);      // sub-command: first/last track
+    sys->gate_write_main(0x4B, 0x00);      // commit
+    REQUIRE(sys->gate_read(0x3A) == 0x01); // RS2 = first track 1 (BCD)
+    REQUIRE(sys->gate_read(0x3B) == 0x01); // RS3 = last track 1 (BCD)
+}
+
+TEST_CASE("segacd CDD with no disc reports no-disc", "[segacd][cdd]") {
+    auto sys = assemble_segacd();
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_nodisc);
+    sys->attach_disc(nullptr);
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_nodisc);
 }

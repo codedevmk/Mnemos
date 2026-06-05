@@ -25,6 +25,14 @@ namespace mnemos::manifests::segacd {
         gate_array[0x03] = 0x01; // RET=1: the main CPU owns word RAM at power-on
         sub_irq_mask = 0;
         sub_irq_pending = 0;
+        cdd_command.fill(0);
+        cdd_status.fill(0);
+        cdd_pending_status = 0;
+        cdd_latency = 0;
+        cdd_lba = 0;
+        cdd_track = 0;
+        cdd_drive_status = cdd_loaded ? std::uint8_t{cdd_toc} : std::uint8_t{cdd_nodisc};
+        cdda_active = false;
         pcm.reset(chips::reset_kind::power_on);
     }
 
@@ -72,7 +80,14 @@ namespace mnemos::manifests::segacd {
             sub_irq_mask = value;
             update_sub_irq();
         }
-        // CDC/CDD/timer/stamp side effects arrive in phase C.
+        // $42-$4B CDD command buffer; writing $4B commits the command.
+        if (offset >= 0x42U && offset <= 0x4BU) {
+            cdd_command[offset - 0x42U] = value;
+            if (offset == 0x4BU) {
+                cdd_process_command();
+            }
+        }
+        // CDC / timer / stamp side effects arrive in C2+.
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
