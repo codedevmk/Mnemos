@@ -2,6 +2,7 @@ add_subdirectory(common)
 add_subdirectory(c64)
 add_subdirectory(genesis)
 add_subdirectory(sms)
+add_subdirectory(segacd)
 
 add_library(mnemos_manifests INTERFACE)
 add_library(mnemos::manifests ALIAS mnemos_manifests)
