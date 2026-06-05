@@ -97,6 +97,18 @@ namespace mnemos::manifests::segacd {
         std::uint8_t cdc_irq{};
         int cdc_dma_dest{};
 
+        // Stamp / rotation ASIC config (gate $58-$6B).
+        std::uint16_t stamp_size{};
+        std::uint16_t stamp_map_addr{};
+        std::uint16_t img_buf_v_cell{};
+        std::uint16_t img_buf_vector{};
+        std::uint16_t img_v_step{};
+        std::uint16_t img_h_step{};
+        std::uint16_t img_buf_width{};
+        std::uint16_t img_buf_height{};
+        std::uint16_t img_buf_offset{};
+        std::uint16_t trace_vector_addr{};
+
         // Advance the sub-CPU by `cycles` of its clock. No-op while held in reset.
         void run_cycles(std::uint64_t cycles);
         // Release the sub-CPU from reset and boot it from the $0/$4 vectors (which
@@ -152,8 +164,12 @@ namespace mnemos::manifests::segacd {
         void cdc_dma_run();
         void cdc_dma_finish();
         void cdc_host_advance();
-        void cdda_play(std::uint32_t start, std::uint32_t end); // C1 seam (C3: real CD-DA)
+        void cdda_play(std::uint32_t start, std::uint32_t end);
         void cdda_stop();
+        // Stamp / rotation graphics ASIC ($58-$6B).
+        void stamp_reg_write(std::uint8_t offset, std::uint8_t value);
+        void stamp_renderer_run();
+        void graphics_complete();
     };
 
     // Build a Sega CD sub side and wire the sub-bus. `bios` may be empty (the

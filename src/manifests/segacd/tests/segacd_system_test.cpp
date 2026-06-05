@@ -454,3 +454,39 @@ TEST_CASE("segacd Play on a data track stops CD-DA", "[segacd][cdda]") {
     issue_play(*sys, 0, 2, 0);          // LBA 0 is a data track
     REQUIRE(sys->cdda_active == false); // Play on data stops CD-DA
 }
+
+TEST_CASE("segacd stamp ASIC rotates word RAM into the image buffer + raises L1",
+          "[segacd][stamp]") {
+    auto sys = assemble_segacd();
+    // Source stamp row at word RAM 0..3.
+    sys->word_ram[0] = 0xAA;
+    sys->word_ram[1] = 0xBB;
+    sys->word_ram[2] = 0xCC;
+    sys->word_ram[3] = 0xDD;
+    // Trace-vector table at word RAM 0x1000: src_x=0, src_y=0, dx=0x0010 (one
+    // source column per output pixel), dy=0.
+    sys->word_ram[0x1004] = 0x00;
+    sys->word_ram[0x1005] = 0x10; // dx = 16 (Q12.4 -> +1 column)
+    // Config: image-buffer width=4, height=1, trace vectors at 0x1000 (>>2),
+    // image buffer at word RAM 0x2000 (>>2).
+    sys->gate_write_main(0x64, 0x00);
+    sys->gate_write_main(0x65, 0x04); // IBW = 4
+    sys->gate_write_main(0x66, 0x00);
+    sys->gate_write_main(0x67, 0x01); // IBH = 1
+    sys->gate_write_main(0x6A, 0x04);
+    sys->gate_write_main(0x6B, 0x00); // TVADDR = 0x0400 (<<2 = 0x1000)
+    sys->gate_write_main(0x68, 0x08);
+    sys->gate_write_main(0x69, 0x00); // IBO = 0x0800 (<<2 = 0x2000)
+
+    // Trigger ROT ($59 bit 0).
+    sys->gate_write_main(0x58, 0x00);
+    sys->gate_write_main(0x59, 0x01);
+
+    // The rotated row landed in the image buffer at word RAM 0x2000.
+    REQUIRE(sys->word_ram[0x2000] == 0xAA);
+    REQUIRE(sys->word_ram[0x2001] == 0xBB);
+    REQUIRE(sys->word_ram[0x2002] == 0xCC);
+    REQUIRE(sys->word_ram[0x2003] == 0xDD);
+    // graphics-complete raised the sub-CPU level-1 IRQ.
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_graphics) != 0U);
+}

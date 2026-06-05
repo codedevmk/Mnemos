@@ -51,6 +51,16 @@ namespace mnemos::manifests::segacd {
         cdc_ar = 0;
         cdc_irq = 0;
         cdc_dma_dest = 0;
+        stamp_size = 0;
+        stamp_map_addr = 0;
+        img_buf_v_cell = 0;
+        img_buf_vector = 0;
+        img_v_step = 0;
+        img_h_step = 0;
+        img_buf_width = 0;
+        img_buf_height = 0;
+        img_buf_offset = 0;
+        trace_vector_addr = 0;
         pcm.reset(chips::reset_kind::power_on);
     }
 
@@ -124,7 +134,10 @@ namespace mnemos::manifests::segacd {
         if (offset == 0x07U) {
             cdc_reg_w(value);
         }
-        // timer / stamp side effects arrive in C3+.
+        // $58-$6B stamp / rotation ASIC config (ROT triggers on $59 bit 0).
+        if (offset >= 0x58U && offset <= 0x6BU) {
+            stamp_reg_write(offset, value);
+        }
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
