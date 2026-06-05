@@ -12,6 +12,7 @@ namespace mnemos::manifests::segacd {
     void segacd_system::release_sub_reset() {
         sub_reset_asserted = false;
         sub_cpu.reset(chips::reset_kind::hard); // re-fetch the $0/$4 reset vectors
+        update_sub_irq();                       // re-apply any pending IRQ now that we run
     }
 
     void segacd_system::reset() {
@@ -22,6 +23,8 @@ namespace mnemos::manifests::segacd {
         backup_ram.fill(0);
         gate_array.fill(0);
         gate_array[0x03] = 0x01; // RET=1: the main CPU owns word RAM at power-on
+        sub_irq_mask = 0;
+        sub_irq_pending = 0;
         pcm.reset(chips::reset_kind::power_on);
     }
 
@@ -59,9 +62,17 @@ namespace mnemos::manifests::segacd {
             gate_array[0x03] = next;
             return;
         }
-        // Comm registers + the still-unwired CDC/CDD/timer/IRQ/stamp registers
-        // default-store; their side effects arrive in B3 (IRQ) and phase C.
         gate_array[offset] = value;
+        // $00 bit 0 IFL2: the main CPU pulses the sub-CPU level-2 IRQ.
+        if (offset == 0x00U && (value & 0x01U) != 0U) {
+            raise_sub_irq(irq_ifl2);
+        }
+        // $33 sub-CPU IRQ mask.
+        if (offset == 0x33U) {
+            sub_irq_mask = value;
+            update_sub_irq();
+        }
+        // CDC/CDD/timer/stamp side effects arrive in phase C.
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
@@ -76,7 +87,43 @@ namespace mnemos::manifests::segacd {
             gate_array[0x03] = next;
             return;
         }
+        // $33 sub-side IRQ mask.
+        if (offset == 0x33U) {
+            sub_irq_mask = value;
+            gate_array[0x33] = value;
+            update_sub_irq();
+            return;
+        }
+        // $36 bit 0 acknowledges (clears) all pending sub-CPU IRQs.
+        if (offset == 0x36U && (value & 0x01U) != 0U) {
+            sub_irq_pending = 0U;
+            gate_array[0x36] = value;
+            update_sub_irq();
+            return;
+        }
         gate_write_main(offset, value); // sub-side falls through for the rest
+    }
+
+    int segacd_system::pending_irq_level() const noexcept {
+        const auto active = static_cast<std::uint8_t>(sub_irq_pending & sub_irq_mask);
+        for (int level = 6; level >= 1; --level) {
+            if ((active & (1U << (level - 1))) != 0U) {
+                return level;
+            }
+        }
+        return 0;
+    }
+
+    void segacd_system::update_sub_irq() {
+        if (sub_reset_asserted) {
+            return;
+        }
+        sub_cpu.set_irq_level(pending_irq_level());
+    }
+
+    void segacd_system::raise_sub_irq(std::uint8_t source_bit) {
+        sub_irq_pending = static_cast<std::uint8_t>(sub_irq_pending | source_bit);
+        update_sub_irq();
     }
 
     std::unique_ptr<segacd_system> assemble_segacd(std::vector<std::uint8_t> bios) {

@@ -38,6 +38,16 @@ namespace mnemos::manifests::segacd {
         bool sub_reset_asserted{true};  // held in reset until the main CPU releases it
         bool sub_busreq{false};         // main CPU holds the sub-CPU bus ($01 bit 1)
 
+        // Sub-CPU IRQ source bits (pending/mask); priority level = bit index + 1.
+        static constexpr std::uint8_t irq_graphics = 0x01U; // level 1 (stamp ASIC done)
+        static constexpr std::uint8_t irq_ifl2 = 0x02U;     // level 2 (main->sub pulse)
+        static constexpr std::uint8_t irq_timer = 0x04U;    // level 3
+        static constexpr std::uint8_t irq_cdd = 0x08U;      // level 4 (CDD frame)
+        static constexpr std::uint8_t irq_cdc = 0x10U;      // level 5 (CDC sector)
+        static constexpr std::uint8_t irq_subcode = 0x20U;  // level 6
+        std::uint8_t sub_irq_mask{};                        // gate-array $33
+        std::uint8_t sub_irq_pending{};
+
         // Advance the sub-CPU by `cycles` of its clock. No-op while held in reset.
         void run_cycles(std::uint64_t cycles);
         // Release the sub-CPU from reset and boot it from the $0/$4 vectors (which
@@ -53,6 +63,14 @@ namespace mnemos::manifests::segacd {
         [[nodiscard]] std::uint8_t gate_read(std::uint8_t offset) noexcept;
         void gate_write_main(std::uint8_t offset, std::uint8_t value);
         void gate_write_sub(std::uint8_t offset, std::uint8_t value);
+
+        // Sub-CPU interrupt controller. A source latches its bit into
+        // sub_irq_pending; the highest-priority enabled (masked by $33) pending
+        // source drives the sub-CPU IPL. $36 bit 0 acknowledges all pending.
+        // Driven by phase-C devices (CDD/CDC/timer) and the main CPU (IFL2).
+        void raise_sub_irq(std::uint8_t source_bit);
+        void update_sub_irq();
+        [[nodiscard]] int pending_irq_level() const noexcept;
     };
 
     // Build a Sega CD sub side and wire the sub-bus. `bios` may be empty (the

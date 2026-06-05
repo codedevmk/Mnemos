@@ -32,6 +32,25 @@ namespace {
         }
     }
 
+    // An IRQ test program: main lowers IPM (MOVE.W #$2000,SR) and spins; the
+    // level-2 autovector ($68) points at a handler ($80) that writes a $BEEF
+    // marker to word RAM and RTEs.
+    void load_irq_program(segacd_system& sys) {
+        sys.prg_ram.fill(0);
+        const auto put = [&](std::size_t at, std::initializer_list<std::uint8_t> bytes) {
+            std::size_t i = at;
+            for (const std::uint8_t b : bytes) {
+                sys.prg_ram[i++] = b;
+            }
+        };
+        put(0x00, {0x00, 0x08, 0x00, 0x00});             // SSP = $00080000
+        put(0x04, {0x00, 0x00, 0x00, 0x40});             // PC  = $40 (main)
+        put(0x40, {0x46, 0xFC, 0x20, 0x00, 0x60, 0xFE}); // MOVE.W #$2000,SR ; BRA *
+        put(0x68, {0x00, 0x00, 0x00, 0x80});             // autovector L2 -> handler $80
+        put(0x80, {0x33, 0xFC, 0xBE, 0xEF, 0x00, 0x08, 0x02, 0x00, 0x4E,
+                   0x73}); // MOVE.W #$BEEF,($080200).L ; RTE
+    }
+
 } // namespace
 
 TEST_CASE("segacd sub-CPU boots from PRG-RAM and writes word RAM", "[segacd][subcpu]") {
@@ -159,4 +178,45 @@ TEST_CASE("segacd gate array is reachable through both sub-bus mirrors", "[segac
     sys->sub_bus.write8(0x0FF810U, 0x77U);
     REQUIRE(sys->gate_read(0x10) == 0x77);
     REQUIRE(sys->sub_bus.read8(0x0FF810U) == 0x77);
+}
+
+TEST_CASE("segacd sub-CPU IRQ priority, masking, and acknowledge", "[segacd][irq]") {
+    auto sys = assemble_segacd();
+    sys->gate_write_main(0x33, 0x3F); // enable all six levels
+    REQUIRE(sys->pending_irq_level() == 0);
+    sys->raise_sub_irq(segacd_system::irq_ifl2); // level 2
+    REQUIRE(sys->pending_irq_level() == 2);
+    sys->raise_sub_irq(segacd_system::irq_cdd); // level 4 (higher wins)
+    REQUIRE(sys->pending_irq_level() == 4);
+    sys->raise_sub_irq(segacd_system::irq_subcode); // level 6 (highest)
+    REQUIRE(sys->pending_irq_level() == 6);
+    // Masking the top source falls back to the next pending one.
+    sys->gate_write_sub(0x33, static_cast<std::uint8_t>(0x3FU & ~segacd_system::irq_subcode));
+    REQUIRE(sys->pending_irq_level() == 4);
+    // $36 bit 0 acknowledges (clears) all pending.
+    sys->gate_write_sub(0x36, 0x01);
+    REQUIRE(sys->pending_irq_level() == 0);
+}
+
+TEST_CASE("segacd sub-CPU takes a level-2 IFL2 interrupt", "[segacd][irq]") {
+    auto sys = assemble_segacd();
+    load_irq_program(*sys);
+    sys->gate_write_main(0x33, segacd_system::irq_ifl2); // enable level 2
+    sys->release_sub_reset();
+    sys->run_cycles(80);              // main lowers IPM then spins
+    sys->gate_write_main(0x00, 0x01); // IFL2 pulse -> raise level 2
+    sys->run_cycles(300);             // the sub-CPU accepts -> handler runs
+    REQUIRE(sys->word_ram[0x200] == 0xBE);
+    REQUIRE(sys->word_ram[0x201] == 0xEF);
+}
+
+TEST_CASE("segacd masked sub-CPU IRQ is not taken", "[segacd][irq]") {
+    auto sys = assemble_segacd();
+    load_irq_program(*sys);
+    sys->gate_write_main(0x33, 0x00); // all masked
+    sys->release_sub_reset();
+    sys->run_cycles(80);
+    sys->gate_write_main(0x00, 0x01); // IFL2 raised but masked off
+    sys->run_cycles(300);
+    REQUIRE(sys->word_ram[0x200] == 0x00); // handler did not run
 }
