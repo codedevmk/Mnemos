@@ -18,9 +18,14 @@ namespace mnemos::apps::player::adapters::segacd {
     namespace {
 
         // The sub-CPU runs at 12.5 MHz; the CD drive ticks at 75 Hz. Neither is a
-        // Genesis master divider, so the adapter paces them per video frame.
+        // Genesis master divider, so the adapter paces them against the Genesis
+        // master clock (NTSC; the small PAL delta is immaterial to sub timing).
         constexpr double kSubCpuHz = 12'500'000.0;
+        constexpr double kGenesisMasterHz = 53'693'175.0;
         constexpr double kCdFrameHz = 75.0;
+        // Interleave granularity: ~one NTSC scanline of master cycles. Small
+        // enough that the main<->sub gate handshake makes progress every poll.
+        constexpr std::uint64_t kSliceMasterCycles = 3420;
 
         // Genesis FM bias (3:1, ~9.5 dB) over PSG -- matches the Genesis adapter.
         constexpr int kGainFm = 3072;
@@ -133,8 +138,22 @@ namespace mnemos::apps::player::adapters::segacd {
     }
 
     void segacd_adapter::step_one_frame() {
-        // Advance the Genesis a full video frame on the scheduler.
-        scheduler_.run_frame();
+        // Interleave the two 68000s at sub-frame granularity. The main and sub
+        // CPUs hand-shake through the gate array + word RAM continuously (the
+        // BIOS polls every few instructions), so running a whole main frame
+        // before the sub gets any cycles deadlocks the handshake. Advance ~a
+        // scanline of master cycles, then the sub's proportional share, until the
+        // VDP completes a frame.
+        const std::uint64_t start_frame = scheduler_.frame_index();
+        while (scheduler_.frame_index() == start_frame) {
+            scheduler_.run_master_cycles(kSliceMasterCycles);
+            const double sub_exact =
+                (static_cast<double>(kSliceMasterCycles) * kSubCpuHz / kGenesisMasterHz) +
+                sub_cycle_frac_;
+            const auto sub_cycles = static_cast<std::uint64_t>(sub_exact);
+            sub_cycle_frac_ = sub_exact - static_cast<double>(sub_cycles);
+            machine_->sub->run_cycles(sub_cycles); // no-op until the BIOS releases it
+        }
 
         // Tick the CD drive at 75 Hz (raises CDC/CDD IRQs the sub-CPU services).
         const double cd_exact = (kCdFrameHz / target_fps_) + cd_frame_frac_;
@@ -143,13 +162,6 @@ namespace mnemos::apps::player::adapters::segacd {
         for (int i = 0; i < cd_updates; ++i) {
             machine_->sub->cdd_update();
         }
-
-        // Run the sub-CPU for its share of this frame (a no-op until the BIOS
-        // releases it via gate $01).
-        const double sub_exact = (kSubCpuHz / target_fps_) + sub_cycle_frac_;
-        const auto sub_cycles = static_cast<std::uint64_t>(sub_exact);
-        sub_cycle_frac_ = sub_exact - static_cast<double>(sub_cycles);
-        machine_->sub->run_cycles(sub_cycles);
 
         ++frames_stepped_;
     }
