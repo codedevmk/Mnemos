@@ -6,6 +6,9 @@
 
 #include "segacd_system.hpp"
 
+#include <array>
+#include <span>
+
 namespace mnemos::manifests::segacd {
     namespace {
         std::uint8_t bcd_byte(std::uint32_t v) {
@@ -321,12 +324,55 @@ namespace mnemos::manifests::segacd {
         cdd_set_status();
     }
 
-    // ---- CD-DA seam: replaced by the real RF5C164 CD-DA pump in C3 ----
+    // ---- CD-DA (Red Book audio) ----
     void segacd_system::cdda_play(std::uint32_t start, std::uint32_t end) {
-        cdda_active = true;
+        if (end < start) {
+            end = start;
+        }
         cdda_start_lba = start;
         cdda_end_lba = end;
+        cdda_current_lba = start;
+        cdda_sample_in_sector = 0;
+        cdda_loop = false; // the CDD never loops; direct API callers could
+        cdda_active = true;
     }
-    void segacd_system::cdda_stop() { cdda_active = false; }
+
+    void segacd_system::cdda_stop() {
+        cdda_active = false;
+        cdda_sample_in_sector = 0;
+    }
+
+    bool segacd_system::cdda_next_sample(std::int16_t& out_l, std::int16_t& out_r) {
+        if (!cdda_active || disc == nullptr) {
+            return false;
+        }
+        // One 2352-byte raw sector = 588 stereo little-endian 16-bit samples.
+        constexpr std::uint16_t samples_per_frame = 588U;
+        std::array<std::uint8_t, mnemos::disc::disc_image::raw_sector_size> sector{};
+        if (!disc->read_raw_sector(
+                cdda_current_lba,
+                std::span<std::uint8_t, mnemos::disc::disc_image::raw_sector_size>{sector})) {
+            cdda_active = false;
+            return false;
+        }
+        const std::size_t base = static_cast<std::size_t>(cdda_sample_in_sector) * 4U;
+        out_l = static_cast<std::int16_t>(static_cast<std::uint16_t>(sector[base]) |
+                                          (static_cast<std::uint16_t>(sector[base + 1]) << 8U));
+        out_r = static_cast<std::int16_t>(static_cast<std::uint16_t>(sector[base + 2]) |
+                                          (static_cast<std::uint16_t>(sector[base + 3]) << 8U));
+        ++cdda_sample_in_sector;
+        if (cdda_sample_in_sector >= samples_per_frame) {
+            cdda_sample_in_sector = 0;
+            ++cdda_current_lba;
+            if (cdda_current_lba > cdda_end_lba) {
+                if (cdda_loop) {
+                    cdda_current_lba = cdda_start_lba;
+                } else {
+                    cdda_active = false;
+                }
+            }
+        }
+        return true;
+    }
 
 } // namespace mnemos::manifests::segacd

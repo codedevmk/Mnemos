@@ -34,6 +34,9 @@ namespace mnemos::manifests::segacd {
         cdd_track = 0;
         cdd_drive_status = cdd_loaded ? std::uint8_t{cdd_toc} : std::uint8_t{cdd_nodisc};
         cdda_active = false;
+        cdda_current_lba = 0;
+        cdda_sample_in_sector = 0;
+        cdda_loop = false;
         cdc_ram.fill(0);
         cdc_ifstat = 0xFFU;
         cdc_ifctrl = 0;

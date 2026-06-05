@@ -78,6 +78,9 @@ namespace mnemos::manifests::segacd {
         bool cdda_active{};
         std::uint32_t cdda_start_lba{};
         std::uint32_t cdda_end_lba{};
+        std::uint32_t cdda_current_lba{};
+        std::uint16_t cdda_sample_in_sector{};
+        bool cdda_loop{};
 
         // CDC (LC8951) state. cdc_ram is the 16 KB decode ring (+2352 headroom).
         std::array<std::uint8_t, 0x4000 + 2352> cdc_ram{};
@@ -124,6 +127,11 @@ namespace mnemos::manifests::segacd {
         void attach_disc(const mnemos::disc::disc_image* image);
         void cdd_process_command();
         void cdd_update();
+
+        // Pull the next 44.1 kHz stereo CD-DA sample (the host audio path drains
+        // these while an audio track plays). Returns false when none is available
+        // (no disc, not playing audio, or the sector read failed).
+        [[nodiscard]] bool cdda_next_sample(std::int16_t& out_l, std::int16_t& out_r);
 
       private:
         void cdd_set_status();

@@ -98,6 +98,29 @@ namespace {
         sys.gate_write_main(0x4B, 0x00); // commit
     }
 
+    // A 2-sector BIN: sector 0 is a valid Mode-1 sector (so open_bin accepts the
+    // image); sector 1 holds known little-endian stereo PCM (sample n: L=n,
+    // R=n+0x100) for the CD-DA pump to stream.
+    std::vector<std::uint8_t> make_audio_bin() {
+        std::vector<std::uint8_t> d(2U * 2352U, 0);
+        d[0] = 0x00;
+        for (std::size_t i = 1; i <= 10; ++i) {
+            d[i] = 0xFF;
+        }
+        d[11] = 0x00;
+        d[15] = 0x01;
+        std::uint8_t* a = &d[2352];
+        for (std::uint16_t n = 0; n < 588; ++n) {
+            const std::uint16_t l = n;
+            const auto r = static_cast<std::uint16_t>(n + 0x100);
+            a[n * 4 + 0] = static_cast<std::uint8_t>(l);
+            a[n * 4 + 1] = static_cast<std::uint8_t>(l >> 8);
+            a[n * 4 + 2] = static_cast<std::uint8_t>(r);
+            a[n * 4 + 3] = static_cast<std::uint8_t>(r >> 8);
+        }
+        return d;
+    }
+
 } // namespace
 
 TEST_CASE("segacd sub-CPU boots from PRG-RAM and writes word RAM", "[segacd][subcpu]") {
@@ -377,4 +400,57 @@ TEST_CASE("segacd CDC DMAs decoded user data to PRG-RAM", "[segacd][cdc]") {
     for (std::size_t k = 0; k < 8; ++k) {
         REQUIRE(sys->prg_ram[0x80 + k] == static_cast<std::uint8_t>(k));
     }
+}
+
+TEST_CASE("segacd CD-DA streams stereo samples from a raw sector", "[segacd][cdda]") {
+    const auto bin = make_audio_bin();
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    REQUIRE(disc.has_value());
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    // Drive the CD-DA pump over sector 1 (the PCM sector) directly.
+    sys->cdda_active = true;
+    sys->cdda_start_lba = 1;
+    sys->cdda_end_lba = 1;
+    sys->cdda_current_lba = 1;
+    sys->cdda_sample_in_sector = 0;
+
+    std::int16_t l = 0;
+    std::int16_t r = 0;
+    REQUIRE(sys->cdda_next_sample(l, r));
+    REQUIRE(l == 0);
+    REQUIRE(r == 0x100);
+    REQUIRE(sys->cdda_next_sample(l, r));
+    REQUIRE(l == 1);
+    REQUIRE(r == 0x101);
+}
+
+TEST_CASE("segacd CD-DA stops at the end of the range", "[segacd][cdda]") {
+    const auto bin = make_audio_bin();
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    sys->cdda_active = true;
+    sys->cdda_start_lba = 1;
+    sys->cdda_end_lba = 1;
+    sys->cdda_current_lba = 1;
+    sys->cdda_sample_in_sector = 0;
+
+    std::int16_t l = 0;
+    std::int16_t r = 0;
+    for (int i = 0; i < 588; ++i) { // one whole sector of samples
+        REQUIRE(sys->cdda_next_sample(l, r));
+    }
+    REQUIRE(sys->cdda_active == false);         // ran past end -> stopped
+    REQUIRE_FALSE(sys->cdda_next_sample(l, r)); // nothing left to pull
+}
+
+TEST_CASE("segacd Play on a data track stops CD-DA", "[segacd][cdda]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    sys->cdda_active = true;            // pretend audio was playing
+    issue_play(*sys, 0, 2, 0);          // LBA 0 is a data track
+    REQUIRE(sys->cdda_active == false); // Play on data stops CD-DA
 }
