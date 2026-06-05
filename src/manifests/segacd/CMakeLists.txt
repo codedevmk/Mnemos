@@ -1,5 +1,6 @@
 add_library(
     mnemos_manifests_segacd
+    segacd_cdc.cpp
     segacd_cdd.cpp
     segacd_system.cpp
 )

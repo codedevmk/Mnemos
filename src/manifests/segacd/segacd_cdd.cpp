@@ -2,7 +2,7 @@
 // through the gate array, a seek/play state machine, and the 75 Hz CD-frame
 // tick that advances the read head and feeds the decoder. Ported from the Emu
 // reference (systems/sega/segacd). The CDC decode (C2) and CD-DA pump (C3) are
-// reached through feed_cdc_sector()/cdda_play()/cdda_stop() seams.
+// reached through cdc_decoder_update()/cdda_play()/cdda_stop() seams.
 
 #include "segacd_system.hpp"
 
@@ -303,14 +303,14 @@ namespace mnemos::manifests::segacd {
                                              (static_cast<std::uint32_t>(hs) << 8U) |
                                              (static_cast<std::uint32_t>(hf) << 16U) |
                                              (static_cast<std::uint32_t>(mode) << 24U);
-                feed_cdc_sector(header);
+                cdc_decoder_update(header);
                 ++cdd_lba;
             } else {
-                feed_cdc_sector(0U); // audio track -- CD-DA pump handles output
+                cdc_decoder_update(0U); // audio track -- CD-DA pump handles output
                 ++cdd_lba;
             }
         } else {
-            feed_cdc_sector(0U); // keep the decoder ticking between sectors
+            cdc_decoder_update(0U); // keep the decoder ticking between sectors
         }
 
         if (cdd_pending_status != 0 && cdd_latency == 0) {
@@ -321,11 +321,7 @@ namespace mnemos::manifests::segacd {
         cdd_set_status();
     }
 
-    // ---- C1 seams: replaced by the real CDC (C2) and CD-DA (C3) ----
-    void segacd_system::feed_cdc_sector(std::uint32_t header) {
-        last_sector_header = header;
-        ++cdc_sectors_decoded;
-    }
+    // ---- CD-DA seam: replaced by the real RF5C164 CD-DA pump in C3 ----
     void segacd_system::cdda_play(std::uint32_t start, std::uint32_t end) {
         cdda_active = true;
         cdda_start_lba = start;

@@ -79,6 +79,21 @@ namespace mnemos::manifests::segacd {
         std::uint32_t cdda_start_lba{};
         std::uint32_t cdda_end_lba{};
 
+        // CDC (LC8951) state. cdc_ram is the 16 KB decode ring (+2352 headroom).
+        std::array<std::uint8_t, 0x4000 + 2352> cdc_ram{};
+        std::uint8_t cdc_ifstat{0xFFU};
+        std::uint8_t cdc_ifctrl{};
+        std::uint16_t cdc_dbc{};
+        std::uint16_t cdc_dac{};
+        std::uint16_t cdc_pt{};
+        std::uint16_t cdc_wa{};
+        std::array<std::uint8_t, 2> cdc_ctrl{};
+        std::array<std::array<std::uint8_t, 4>, 2> cdc_head{};
+        std::array<std::uint8_t, 4> cdc_stat{};
+        std::uint8_t cdc_ar{};
+        std::uint8_t cdc_irq{};
+        int cdc_dma_dest{};
+
         // Advance the sub-CPU by `cycles` of its clock. No-op while held in reset.
         void run_cycles(std::uint64_t cycles);
         // Release the sub-CPU from reset and boot it from the $0/$4 vectors (which
@@ -91,7 +106,7 @@ namespace mnemos::manifests::segacd {
         // sub-bus) and the main side ($A12000, wired in phase D) differ on the
         // memory-mode register ($03): the main CPU owns the PRG-RAM bank + DMNA,
         // the sub-CPU owns RET. $01 controls the sub-CPU reset / bus request.
-        [[nodiscard]] std::uint8_t gate_read(std::uint8_t offset) noexcept;
+        [[nodiscard]] std::uint8_t gate_read(std::uint8_t offset);
         void gate_write_main(std::uint8_t offset, std::uint8_t value);
         void gate_write_sub(std::uint8_t offset, std::uint8_t value);
 
@@ -118,7 +133,17 @@ namespace mnemos::manifests::segacd {
         [[nodiscard]] std::uint32_t disc_total_lbas() const;
         [[nodiscard]] bool disc_lba_is_data(std::int32_t lba) const;
         [[nodiscard]] int disc_track_of_lba(std::int32_t lba) const;
-        void feed_cdc_sector(std::uint32_t header);             // C1 seam (C2: real CDC)
+        // CDC (LC8951). cdc_decoder_update fills the ring buffer from the disc
+        // and raises the decoder IRQ; cdc_reg_w/r are the indirect register file;
+        // the DMA paths move decoded data to PRG/word/PCM RAM or the host port.
+        void cdc_decoder_update(std::uint32_t header);
+        void cdc_reg_w(std::uint8_t value);
+        [[nodiscard]] std::uint8_t cdc_reg_r();
+        void cdc_update_irq(std::uint8_t prev_irq);
+        void cdc_dma_init();
+        void cdc_dma_run();
+        void cdc_dma_finish();
+        void cdc_host_advance();
         void cdda_play(std::uint32_t start, std::uint32_t end); // C1 seam (C3: real CD-DA)
         void cdda_stop();
     };

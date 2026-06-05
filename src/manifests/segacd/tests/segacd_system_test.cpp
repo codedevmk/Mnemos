@@ -63,8 +63,27 @@ namespace {
             }
             s[11] = 0x00;
             s[15] = 0x01; // Mode 1
+            for (std::size_t k = 0; k < 2048; ++k) {
+                s[16U + k] = static_cast<std::uint8_t>(lba * 13 + static_cast<int>(k));
+            }
         }
         return d;
+    }
+
+    // Set a CDC indirect register via the gate array (AR pointer at $05, data at $07).
+    void cdc_set_reg(segacd_system& sys, std::uint8_t idx, std::uint8_t val) {
+        sys.gate_write_main(0x05, idx);
+        sys.gate_write_main(0x07, val);
+    }
+
+    // A tiny spin program (reset vectors + BRA *) so run_cycles can pump CDC DMA
+    // without the sub-CPU doing anything observable.
+    void load_spin(segacd_system& sys) {
+        sys.prg_ram.fill(0);
+        sys.prg_ram[1] = 0x08; // SSP = $00080000
+        sys.prg_ram[7] = 0x08; // PC  = $00000008
+        sys.prg_ram[8] = 0x60; // BRA *
+        sys.prg_ram[9] = 0xFE;
     }
 
     // Issue a CDD Play command for the absolute MSF m:s:f.
@@ -303,4 +322,59 @@ TEST_CASE("segacd CDD with no disc reports no-disc", "[segacd][cdd]") {
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_nodisc);
     sys->attach_disc(nullptr);
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_nodisc);
+}
+
+TEST_CASE("segacd CDC decodes a sector and raises the level-5 IRQ", "[segacd][cdc]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    sys->gate_write_main(0x33, segacd_system::irq_cdc); // enable CDC level-5
+    cdc_set_reg(*sys, 0x0A, 0x84);                      // CTRL0: DECEN | WRRQ
+    cdc_set_reg(*sys, 0x01, 0x20);                      // IFCTRL: DECIEN
+
+    issue_play(*sys, 0, 2, 0);
+    for (int i = 0; i < 4; ++i) {
+        sys->cdd_update(); // seek then decode sector 0
+    }
+    REQUIRE(sys->cdc_sectors_decoded > 0U);
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_cdc) != 0U); // level-5 latched
+
+    // cdc_reg_r over the block-header registers returns the latched header; the
+    // mode byte (HEAD3) is 0x01 for a Mode-1 sector.
+    sys->gate_write_main(0x05, 0x07); // AR = HEAD3
+    REQUIRE(sys->gate_read(0x07) == 0x01);
+}
+
+TEST_CASE("segacd CDC DMAs decoded user data to PRG-RAM", "[segacd][cdc]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    cdc_set_reg(*sys, 0x0A, 0x84); // CTRL0: DECEN | WRRQ
+    issue_play(*sys, 0, 2, 0);
+    for (int i = 0; i < 4; ++i) {
+        sys->cdd_update(); // decode sector 0 into the ring
+    }
+
+    // DMA 8 user-data bytes (skip the 4-byte header) from the ring to PRG-RAM.
+    const auto src = static_cast<std::uint16_t>((sys->cdc_pt & 0x3FFFU) + 4U);
+    cdc_set_reg(*sys, 0x04, static_cast<std::uint8_t>(src));       // DAC low
+    cdc_set_reg(*sys, 0x05, static_cast<std::uint8_t>(src >> 8U)); // DAC high
+    cdc_set_reg(*sys, 0x02, 0x07);                                 // DBC low = 7 -> 8 bytes
+    cdc_set_reg(*sys, 0x03, 0x00);                                 // DBC high
+    cdc_set_reg(*sys, 0x01, 0x02);                                 // IFCTRL: DOUTEN (arm transfers)
+    sys->gate_write_main(0x04, 0x05); // gate $04: transfer dest = 5 (PRG-RAM)
+    sys->gate_write_main(0x0A, 0x00); // dst word addr high
+    sys->gate_write_main(0x0B, 0x10); // dst word addr low -> byte (0x10<<3)=0x80
+    cdc_set_reg(*sys, 0x06, 0x00);    // DTRG -> arm the DMA
+
+    load_spin(*sys);
+    sys->release_sub_reset();
+    sys->run_cycles(50); // run_cycles services the armed CDC DMA
+
+    // LBA 0 user data is byte k = k; 8 bytes land at PRG-RAM $80.
+    for (std::size_t k = 0; k < 8; ++k) {
+        REQUIRE(sys->prg_ram[0x80 + k] == static_cast<std::uint8_t>(k));
+    }
 }

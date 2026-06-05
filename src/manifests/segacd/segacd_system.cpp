@@ -7,6 +7,7 @@ namespace mnemos::manifests::segacd {
             return;
         }
         sub_cpu.tick(cycles);
+        cdc_dma_run(); // service any armed CDC memory DMA
     }
 
     void segacd_system::release_sub_reset() {
@@ -33,10 +34,36 @@ namespace mnemos::manifests::segacd {
         cdd_track = 0;
         cdd_drive_status = cdd_loaded ? std::uint8_t{cdd_toc} : std::uint8_t{cdd_nodisc};
         cdda_active = false;
+        cdc_ram.fill(0);
+        cdc_ifstat = 0xFFU;
+        cdc_ifctrl = 0;
+        cdc_dbc = 0;
+        cdc_dac = 0;
+        cdc_pt = 0;
+        cdc_wa = 0;
+        cdc_ctrl = {};
+        cdc_head = {};
+        cdc_stat = {};
+        cdc_stat[3] = 0x80U; // VALST
+        cdc_ar = 0;
+        cdc_irq = 0;
+        cdc_dma_dest = 0;
         pcm.reset(chips::reset_kind::power_on);
     }
 
-    std::uint8_t segacd_system::gate_read(std::uint8_t offset) noexcept {
+    std::uint8_t segacd_system::gate_read(std::uint8_t offset) {
+        // $06/$07 are the CDC indirect register data port (the reference left
+        // cdc_reg_r unwired; reading it here makes CDC register reads work).
+        if (offset == 0x06U || offset == 0x07U) {
+            return cdc_reg_r();
+        }
+        // $09 is the low byte of the CDC host-read word; consuming it stages the
+        // next word (the high byte at $08 was read just before).
+        if (offset == 0x09U) {
+            const std::uint8_t lo = gate_array[0x09];
+            cdc_host_advance();
+            return lo;
+        }
         return gate_array[offset];
     }
 
@@ -87,7 +114,14 @@ namespace mnemos::manifests::segacd {
                 cdd_process_command();
             }
         }
-        // CDC / timer / stamp side effects arrive in C2+.
+        // $05 = CDC register-address pointer; $07 = CDC register-data (main side).
+        if (offset == 0x05U) {
+            cdc_ar = static_cast<std::uint8_t>(value & 0x1FU);
+        }
+        if (offset == 0x07U) {
+            cdc_reg_w(value);
+        }
+        // timer / stamp side effects arrive in C3+.
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
@@ -114,6 +148,12 @@ namespace mnemos::manifests::segacd {
             sub_irq_pending = 0U;
             gate_array[0x36] = value;
             update_sub_irq();
+            return;
+        }
+        // $06 = CDC register-data write port (sub side; main side is $07).
+        if (offset == 0x06U) {
+            gate_array[0x06] = value;
+            cdc_reg_w(value);
             return;
         }
         gate_write_main(offset, value); // sub-side falls through for the rest
