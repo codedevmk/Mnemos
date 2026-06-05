@@ -8,9 +8,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <iterator>
 #include <system_error>
 #include <vector>
 
@@ -95,4 +98,77 @@ TEST_CASE("segacd_adapter mounts a CD image from a path", "[segacd][adapter]") {
 
     std::error_code ec;
     fs::remove(iso, ec);
+}
+
+// Data-gated: point MNEMOS_SEGACD_BIOS at a real Sega CD / Mega CD BIOS ROM to
+// boot it for real (no disc -> the BIOS's CD-player / no-disc screen). Skipped
+// when the env var is unset so the default suite stays hermetic.
+TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]") {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in test data path
+#endif
+    const char* bios_path = std::getenv("MNEMOS_SEGACD_BIOS");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (bios_path == nullptr) {
+        SUCCEED("MNEMOS_SEGACD_BIOS not set -- skipping real-BIOS boot");
+        return;
+    }
+
+    std::ifstream is(bios_path, std::ios::binary);
+    REQUIRE(is.good());
+    std::vector<std::uint8_t> bios((std::istreambuf_iterator<char>(is)),
+                                   std::istreambuf_iterator<char>());
+    REQUIRE(bios.size() >= 0x20000U);
+
+    segacd_adapter adapter(std::move(bios));
+    constexpr int kBootFrames = 600; // ~10 s of emulated boot
+    for (int i = 0; i < kBootFrames; ++i) {
+        adapter.step_one_frame();
+    }
+
+    const auto& sub = *adapter.machine().sub;
+    std::fprintf(stderr, "[segacd-boot] frames=%llu sub_reset=%d sub_busreq=%d sub_elapsed=%llu\n",
+                 static_cast<unsigned long long>(adapter.frames_stepped()),
+                 static_cast<int>(sub.sub_reset_asserted), static_cast<int>(sub.sub_busreq),
+                 static_cast<unsigned long long>(sub.sub_cpu.elapsed_cycles()));
+    std::fprintf(stderr, "[segacd-boot] gate $00-$0F:");
+    for (std::size_t i = 0; i < 16; ++i) {
+        std::fprintf(stderr, " %02X", sub.gate_array[i]);
+    }
+    std::fprintf(stderr, "\n[segacd-boot] cdd_drive_status=%02X cdd_lba=%d\n", sub.cdd_drive_status,
+                 sub.cdd_lba);
+
+    const auto fb = adapter.current_frame();
+    std::size_t nonzero = 0;
+    if (fb.pixels != nullptr) {
+        const std::uint32_t stride = fb.effective_stride();
+        for (std::uint32_t y = 0; y < fb.height; ++y) {
+            for (std::uint32_t x = 0; x < fb.width; ++x) {
+                if ((fb.pixels[y * stride + x] & 0x00FFFFFFU) != 0U) {
+                    ++nonzero;
+                }
+            }
+        }
+    }
+    std::fprintf(stderr, "[segacd-boot] fb %ux%u, %zu non-black px\n", fb.width, fb.height, nonzero);
+
+    // Observed-true smoke signals: the main 68000 runs the BIOS (it writes the
+    // gate array to talk to the sub side) and the CDD reports no-disc (0x0B,
+    // since we booted with no disc). NOTE: the BIOS does not yet reach its
+    // visible screen -- it stalls polling, the suspected cause being the
+    // not-yet-implemented sub-CPU timer interrupt (INT3). Asserting a non-blank
+    // framebuffer is deferred until that lands.
+    bool gate_written = false;
+    for (std::size_t i = 0; i < sub.gate_array.size(); ++i) {
+        if (sub.gate_array[i] != 0U) {
+            gate_written = true;
+            break;
+        }
+    }
+    REQUIRE(gate_written);                 // the BIOS executed + drove the gate array
+    REQUIRE(sub.cdd_drive_status == 0x0BU); // CDD no-disc status
+    REQUIRE(adapter.frames_stepped() == static_cast<std::uint64_t>(kBootFrames));
 }
