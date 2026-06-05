@@ -165,19 +165,21 @@ TEST_CASE("segacd sub-bus maps PRG and word RAM directly", "[segacd][bus]") {
     REQUIRE(sys->sub_bus.read8(0x080040U) == 0xC3);
 }
 
-TEST_CASE("segacd BIOS read-overlay sits over PRG-RAM", "[segacd][bios]") {
-    std::vector<std::uint8_t> bios(64, 0x00);
-    bios[0] = 0x11;
-    bios[1] = 0x22;
+TEST_CASE("segacd sub-CPU $0 is PRG-RAM (no BIOS overlay)", "[segacd][bios]") {
+    // The sub bus must NOT overlay the BIOS at $0: the sub-CPU's reset vectors
+    // ($0 SSP / $4 PC) come from PRG-RAM, where the main BIOS writes the Sub-CPU
+    // BIOS before releasing the sub. An overlay here (as the Emu reference has)
+    // shadows those vectors with the MAIN entry -- whose stack is in main work
+    // RAM, unmapped on the sub bus -- and crashes the sub, so the real BIOS would
+    // never reach its boot screen.
+    std::vector<std::uint8_t> bios(64, 0x11); // non-zero BIOS image
     auto sys = assemble_segacd(std::move(bios));
-    // Reads in the BIOS range return the boot ROM...
-    REQUIRE(sys->sub_bus.read8(0x000000U) == 0x11);
-    REQUIRE(sys->sub_bus.read8(0x000001U) == 0x22);
-    // ...writes fall through to PRG-RAM underneath (BIOS unchanged on read).
+    // Sub $0 reads PRG-RAM (zero at power-on), NOT the BIOS.
+    REQUIRE(sys->sub_bus.read8(0x000000U) == 0x00);
+    // Writes land in PRG-RAM and read straight back (no read-only shadow).
     sys->sub_bus.write8(0x000000U, 0xFFU);
     REQUIRE(sys->prg_ram[0] == 0xFF);
-    REQUIRE(sys->sub_bus.read8(0x000000U) == 0x11); // still the BIOS byte
-    // Past the BIOS extent it is plain PRG-RAM.
+    REQUIRE(sys->sub_bus.read8(0x000000U) == 0xFF);
     sys->sub_bus.write8(0x000100U, 0x7EU);
     REQUIRE(sys->sub_bus.read8(0x000100U) == 0x7E);
 }

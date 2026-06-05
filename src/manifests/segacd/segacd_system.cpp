@@ -203,14 +203,13 @@ namespace mnemos::manifests::segacd {
         auto* s = sys.get();
         topology::bus& bus = s->sub_bus;
 
-        // PRG-RAM $000000-$07FFFF (read/write).
+        // PRG-RAM $000000-$07FFFF (read/write). The sub-CPU boots its reset
+        // vectors ($0 SSP / $4 PC) from HERE: the main BIOS loads the Sub-CPU
+        // BIOS + its vectors into PRG-RAM before releasing the sub. A BIOS
+        // read-overlay at $0 (as the reference has) would shadow those vectors
+        // with the MAIN entry -- whose stack lives in main work RAM, unmapped on
+        // the sub bus -- crashing the sub. So there is intentionally NO overlay.
         bus.map_ram(0x000000U, s->prg_ram, 0);
-        // BIOS read overlay: reads in $000000-$(bios_size-1) come from the boot
-        // ROM, writes fall through to PRG-RAM underneath (priority 1, reads only).
-        if (!s->bios.empty()) {
-            bus.map_rom(0x000000U, s->bios, 1,
-                        [](std::uint32_t /*addr*/, bool is_write) { return !is_write; });
-        }
         // Word RAM $080000-$0BFFFF. The sub side always sees the full 256 KB;
         // 2M/1M ownership (RET/DMNA) is tracked in the gate-array $03 register.
         bus.map_ram(0x080000U, s->word_ram, 0);

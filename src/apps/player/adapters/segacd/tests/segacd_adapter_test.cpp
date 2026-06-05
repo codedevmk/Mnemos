@@ -140,6 +140,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     }
     std::fprintf(stderr, "\n[segacd-boot] cdd_drive_status=%02X cdd_lba=%d\n", sub.cdd_drive_status,
                  sub.cdd_lba);
+    std::fprintf(stderr, "[segacd-boot] main_pc=%06X main_elapsed=%llu sub_pc=%06X sub_mask=%02X\n",
+                 adapter.machine().genesis->cpu.cpu_registers().pc,
+                 static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()),
+                 adapter.machine().sub->sub_cpu.cpu_registers().pc, sub.sub_irq_mask);
 
     const auto fb = adapter.current_frame();
     std::size_t nonzero = 0;
@@ -153,14 +157,13 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
             }
         }
     }
-    std::fprintf(stderr, "[segacd-boot] fb %ux%u, %zu non-black px\n", fb.width, fb.height, nonzero);
+    std::fprintf(stderr, "[segacd-boot] fb %ux%u, %zu non-black px\n", fb.width, fb.height,
+                 nonzero);
 
-    // Observed-true smoke signals: the main 68000 runs the BIOS (it writes the
-    // gate array to talk to the sub side) and the CDD reports no-disc (0x0B,
-    // since we booted with no disc). NOTE: the BIOS does not yet reach its
-    // visible screen -- it stalls polling, the suspected cause being the
-    // not-yet-implemented sub-CPU timer interrupt (INT3). Asserting a non-blank
-    // framebuffer is deferred until that lands.
+    // The BIOS boots and renders its screen: the main 68000 drives the gate
+    // array, the sub-CPU runs valid PRG-RAM code (a 24-bit PC, not a crashed
+    // out-of-range address), and the BIOS draws (a non-trivial slice of the
+    // framebuffer is non-black -- the "(c) 1992 SEGA" boot animation).
     bool gate_written = false;
     for (std::size_t i = 0; i < sub.gate_array.size(); ++i) {
         if (sub.gate_array[i] != 0U) {
@@ -168,7 +171,8 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
             break;
         }
     }
-    REQUIRE(gate_written);                 // the BIOS executed + drove the gate array
-    REQUIRE(sub.cdd_drive_status == 0x0BU); // CDD no-disc status
+    REQUIRE(gate_written);                                  // BIOS drove the gate array
+    REQUIRE(sub.sub_cpu.cpu_registers().pc <= 0x00FFFFFFU); // sub on a valid bus address
+    REQUIRE(nonzero > 1000U);                               // BIOS drew its boot screen
     REQUIRE(adapter.frames_stepped() == static_cast<std::uint64_t>(kBootFrames));
 }
