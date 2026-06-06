@@ -58,7 +58,19 @@ namespace mnemos::manifests::segacd {
         // space; priority 1 keeps them above any future overlay.
         bus.map_mmio(
             0xA12000U, 0x100U,
-            [sub](std::uint32_t a) { return sub->gate_read(static_cast<std::uint8_t>(a & 0xFFU)); },
+            [m](std::uint32_t a) {
+                const auto off = static_cast<std::uint8_t>(a & 0xFFU);
+                // Poll-sync on READS of sub-written registers (sub comm flag $0F, sub
+                // comm words $20-$2F, CDD status $38-$4B): run the sub up to the main's
+                // cycle so the main reads the sub's CURRENT value, not a stale one. The
+                // write-side sync alone misses sub state the main polls read-only
+                // between its own writes -- the boot CDBIOS handshake reads $0F that
+                // way. Matches the reference syncing the other CPU on comm access.
+                if ((off >= 0x0EU && off <= 0x2FU) || (off >= 0x38U && off <= 0x4BU)) {
+                    m->catch_up_sub();
+                }
+                return m->sub->gate_read(off);
+            },
             [m](std::uint32_t a, std::uint8_t v) {
                 const auto off = static_cast<std::uint8_t>(a & 0xFFU);
                 // Poll-sync: before the main commits a comm-register write, run the
