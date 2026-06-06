@@ -136,10 +136,15 @@ namespace mnemos::manifests::segacd {
 
         // Sub-CPU interrupt controller. A source latches its bit into
         // sub_irq_pending; the highest-priority enabled (masked by $33) pending
-        // source drives the sub-CPU IPL. $36 bit 0 acknowledges all pending.
+        // source drives the sub-CPU IPL. Pending bits retire on the IACK cycle
+        // (acknowledge_irq), per level -- never a clear-all.
         // Driven by phase-C devices (CDD/CDC/timer) and the main CPU (IFL2).
         void raise_sub_irq(std::uint8_t source_bit);
         void update_sub_irq();
+        // Acknowledge (retire) one IRQ level -- the sub-CPU IACK cycle: clears that
+        // level's pending bit (and the main-side IFL2 flag for level 2). Public so
+        // the IRQ controller can be unit-tested without driving a real IACK cycle.
+        void acknowledge_irq(int level);
         [[nodiscard]] int pending_irq_level() const noexcept;
 
         // CDD (drive). attach_disc plugs a borrowed disc image; cdd_process_command

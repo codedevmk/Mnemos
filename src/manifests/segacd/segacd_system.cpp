@@ -222,11 +222,15 @@ namespace mnemos::manifests::segacd {
             update_sub_irq();
             return;
         }
-        // $36 bit 0 acknowledges (clears) all pending sub-CPU IRQs.
-        if (offset == 0x36U && (value & 0x01U) != 0U) {
-            sub_irq_pending = 0U;
-            gate_array[0x36] = value;
-            update_sub_irq();
+        // $36 CDD control: only bit 2 (HOCK / CDD-comm enable) is writable and it
+        // latches into $37; bits [1:0] read back 0. INT4 is gated on $37 bit 2, and
+        // IRQ acknowledge is IACK-driven per-level -- $36 does NOT clear IRQs.
+        if (offset == 0x36U) {
+            gate_array[0x37] = static_cast<std::uint8_t>(value & 0x04U);
+            if (gate_trace_enabled()) {
+                std::fprintf(stderr, "[hock] $36=%02X -> $37=%02X pc=%06X\n", value,
+                             gate_array[0x37], sub_cpu.cpu_registers().pc);
+            }
             return;
         }
         // $06 = CDC register-data write port (sub side; main side is $07).
@@ -246,6 +250,19 @@ namespace mnemos::manifests::segacd {
             }
         }
         return 0;
+    }
+
+    void segacd_system::acknowledge_irq(int level) {
+        if (gate_trace_enabled()) {
+            std::fprintf(stderr, "[iack] L%d\n", level);
+        }
+        sub_irq_pending &= static_cast<std::uint8_t>(~(1U << level));
+        // Level-2 (IFL2) acknowledge also retires the main-side IFL2 request flag
+        // (gate $00 bit 0) so the boot comm handshake can advance.
+        if (level == 2) {
+            gate_array[0x00] &= static_cast<std::uint8_t>(~0x01U);
+        }
+        update_sub_irq();
     }
 
     void segacd_system::update_sub_irq() {
@@ -330,20 +347,7 @@ namespace mnemos::manifests::segacd {
         // the request stays pending and the sub re-takes the same level forever
         // -- e.g. the main's IFL2 (level 2), which deadlocks the BIOS boot
         // handshake. Mirrors how the Genesis VDP V-blank IRQ self-clears on ack.
-        s->sub_cpu.set_irq_ack_callback([s](int level) {
-            if (gate_trace_enabled()) {
-                std::fprintf(stderr, "[iack] L%d\n", level);
-            }
-            s->sub_irq_pending &= static_cast<std::uint8_t>(~(1U << level));
-            // Level-2 (IFL2) acknowledge also clears the main-side IFL2 request
-            // flag (gate $00 bit 0). The main pulses IFL2 to interrupt the sub;
-            // the sub accepting it must retire that pulse so the comm handshake
-            // can advance (matches Genesis-Plus-GX scd_68k_irq_ack).
-            if (level == 2) {
-                s->gate_array[0x00] &= static_cast<std::uint8_t>(~0x01U);
-            }
-            s->update_sub_irq();
-        });
+        s->sub_cpu.set_irq_ack_callback([s](int level) { s->acknowledge_irq(level); });
         s->pcm.reset(chips::reset_kind::power_on);
         // The sub-CPU stays held in reset (sub_reset_asserted == true) until the
         // main CPU releases it via the gate array (B2) / release_sub_reset().

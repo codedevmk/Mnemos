@@ -112,7 +112,7 @@ namespace mnemos::manifests::segacd {
         // CDD status frame = TEN single-digit bytes (RS0..RS9), one BCD digit per
         // byte (low nibble) -- NOT two-digits-packed. RS2..RS7 = MM SS FF as six
         // separate digits; the BIOS reads each as a 0-9 digit and verifies RS9.
-        // Packing two per byte feeds the BIOS a garbage time. Matches GPGX.
+        // Packing two per byte would feed the BIOS a garbage time.
         cdd_status[0] = static_cast<std::uint8_t>(cdd_drive_status & 0x0FU);
         cdd_status[1] = 0x00;
         cdd_status[2] = static_cast<std::uint8_t>(m / 10U);
@@ -369,9 +369,10 @@ namespace mnemos::manifests::segacd {
         cdd_set_status();
 
         // CDD level-4 IRQ -- the per-CD-frame "BIOS frame tick" that drives the
-        // sub-CPU's disc state machine. Without it the sub never runs its disc
-        // logic, so no game ever loads.
-        if (cdd_loaded) {
+        // sub-CPU's disc state machine. It fires only while CDD communication is
+        // enabled ($37 bit 2 / HOCK, set by the BIOS during CDD init); that gate
+        // is what lets the disc logic advance past Get-Status to Read/Play.
+        if (cdd_loaded && (gate_array[0x37] & 0x04U) != 0U) {
             raise_sub_irq(irq_cdd);
         }
     }

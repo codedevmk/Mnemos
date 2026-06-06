@@ -265,9 +265,39 @@ TEST_CASE("segacd sub-CPU IRQ priority, masking, and acknowledge", "[segacd][irq
     // Masking the top source falls back to the next pending one.
     sys->gate_write_sub(0x33, static_cast<std::uint8_t>(0x7EU & ~segacd_system::irq_subcode));
     REQUIRE(sys->pending_irq_level() == 4);
-    // $36 bit 0 acknowledges (clears) all pending.
-    sys->gate_write_sub(0x36, 0x01);
+    sys->gate_write_sub(0x33, 0x7E); // unmask all six again
+    REQUIRE(sys->pending_irq_level() == 6);
+    // Acknowledge is the IACK cycle: it retires ONLY the serviced level, so the
+    // next-highest pending source shows through (there is no clear-all path).
+    sys->acknowledge_irq(6); // subcode
+    REQUIRE(sys->pending_irq_level() == 4);
+    sys->acknowledge_irq(4); // cdd
+    REQUIRE(sys->pending_irq_level() == 2);
+    sys->acknowledge_irq(2); // ifl2
     REQUIRE(sys->pending_irq_level() == 0);
+}
+
+TEST_CASE("segacd CDD INT4 is gated on the $36/$37 HOCK (CDD-comm enable)",
+          "[segacd][irq][cdd]") {
+    const auto bin = make_data_bin(8);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    sys->gate_write_main(0x33, 0x7E); // unmask all sub IRQs (incl. level 4)
+
+    // HOCK ($37 bit 2) starts clear: a CDD frame tick raises no level-4 IRQ.
+    sys->sub_irq_pending = 0;
+    sys->cdd_update();
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_cdd) == 0U);
+
+    // A sub write to $36 latches ONLY bit 2 into $37 (it is not an IRQ ack).
+    sys->gate_write_sub(0x36, 0x05); // bits 0+2 -> only bit 2 survives
+    REQUIRE((sys->gate_read(0x37) & 0x07U) == 0x04U);
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_cdd) == 0U); // $36 cleared nothing
+
+    // With CDD comm enabled, the next CD-frame tick raises the level-4 IRQ.
+    sys->cdd_update();
+    REQUIRE((sys->sub_irq_pending & segacd_system::irq_cdd) != 0U);
 }
 
 TEST_CASE("segacd sub-CPU takes a level-2 IFL2 interrupt", "[segacd][irq]") {
