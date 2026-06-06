@@ -293,8 +293,8 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::fprintf(stderr, "[segacd-boot] fb %ux%u, %zu non-black px\n", fb.width, fb.height,
                  nonzero);
 
-    // Optionally dump the first 32 KB of PRG-RAM (the sub-CPU BIOS the main
-    // loaded there) to a file for disassembly (MNEMOS_SEGACD_PRGDUMP=path).
+    // Optionally dump PRG-RAM (the sub-CPU BIOS the main loaded there + the CDBIOS
+    // work area at $97E8) to a file for disassembly (MNEMOS_SEGACD_PRGDUMP=path).
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996)
@@ -306,7 +306,7 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     if (prg_dump != nullptr) {
         std::ofstream os(prg_dump, std::ios::binary);
         os.write(reinterpret_cast<const char*>(sub.prg_ram.data()),
-                 static_cast<std::streamsize>(0x8000));
+                 static_cast<std::streamsize>(sub.prg_ram.size()));
     }
 
     // The BIOS boots AND completes its main<->sub handshake: the main 68000
