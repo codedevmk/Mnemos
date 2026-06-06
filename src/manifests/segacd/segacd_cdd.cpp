@@ -104,14 +104,18 @@ namespace mnemos::manifests::segacd {
         total /= 75U;
         const std::uint32_t s = total % 60U;
         const std::uint32_t m = total / 60U;
+        // CDD status frame = TEN single-digit bytes (RS0..RS9), one BCD digit per
+        // byte (low nibble) -- NOT two-digits-packed. RS2..RS7 = MM SS FF as six
+        // separate digits; the BIOS reads each as a 0-9 digit and verifies RS9.
+        // Packing two per byte feeds the BIOS a garbage time. Matches GPGX.
         cdd_status[0] = static_cast<std::uint8_t>(cdd_drive_status & 0x0FU);
         cdd_status[1] = 0x00;
-        cdd_status[2] = bcd_byte(m);
-        cdd_status[3] = bcd_byte(s);
-        cdd_status[4] = bcd_byte(f);
-        cdd_status[5] = 0x00;
-        cdd_status[6] = 0x00;
-        cdd_status[7] = 0x00;
+        cdd_status[2] = static_cast<std::uint8_t>(m / 10U);
+        cdd_status[3] = static_cast<std::uint8_t>(m % 10U);
+        cdd_status[4] = static_cast<std::uint8_t>(s / 10U);
+        cdd_status[5] = static_cast<std::uint8_t>(s % 10U);
+        cdd_status[6] = static_cast<std::uint8_t>(f / 10U);
+        cdd_status[7] = static_cast<std::uint8_t>(f % 10U);
         cdd_status[8] = disc_lba_is_data(cdd_lba) ? std::uint8_t{0x04U} : std::uint8_t{0x00U};
         cdd_commit_status();
     }
@@ -125,17 +129,27 @@ namespace mnemos::manifests::segacd {
         cdd_status[1] = static_cast<std::uint8_t>(sub & 0x0FU);
         const int tc = disc != nullptr ? disc->track_count() : 0;
 
+        // RS2..RS7 = MM:SS:FF as six single BCD digits (one per byte, low nibble).
+        const auto put_msf = [this](std::uint32_t abslba) {
+            const std::uint32_t ff = abslba % 75U;
+            const std::uint32_t rem = abslba / 75U;
+            const std::uint32_t ss = rem % 60U;
+            const std::uint32_t mm = rem / 60U;
+            cdd_status[2] = static_cast<std::uint8_t>(mm / 10U);
+            cdd_status[3] = static_cast<std::uint8_t>(mm % 10U);
+            cdd_status[4] = static_cast<std::uint8_t>(ss / 10U);
+            cdd_status[5] = static_cast<std::uint8_t>(ss % 10U);
+            cdd_status[6] = static_cast<std::uint8_t>(ff / 10U);
+            cdd_status[7] = static_cast<std::uint8_t>(ff % 10U);
+        };
+
         switch (sub & 0x0FU) {
         case 0x00: { // current absolute time
             std::int32_t lba = cdd_lba + 150;
             if (lba < 0) {
                 lba = 0;
             }
-            std::uint32_t t = static_cast<std::uint32_t>(lba);
-            cdd_status[4] = bcd_byte(t % 75U);
-            t /= 75U;
-            cdd_status[3] = bcd_byte(t % 60U);
-            cdd_status[2] = bcd_byte(t / 60U);
+            put_msf(static_cast<std::uint32_t>(lba));
             cdd_status[8] = disc_lba_is_data(cdd_lba) ? std::uint8_t{0x04U} : std::uint8_t{0x00U};
             break;
         }
@@ -149,32 +163,27 @@ namespace mnemos::manifests::segacd {
             if (rel < 0) {
                 rel = -rel;
             }
-            std::uint32_t t = static_cast<std::uint32_t>(rel);
-            cdd_status[4] = bcd_byte(t % 75U);
-            t /= 75U;
-            cdd_status[3] = bcd_byte(t % 60U);
-            cdd_status[2] = bcd_byte(t / 60U);
+            put_msf(static_cast<std::uint32_t>(rel));
             cdd_status[8] = disc_lba_is_data(cdd_lba) ? std::uint8_t{0x04U} : std::uint8_t{0x00U};
             break;
         }
         case 0x02: { // current track number
-            const int trk = disc_track_of_lba(cdd_lba);
-            cdd_status[2] = bcd_byte(static_cast<std::uint32_t>(trk) + 1U);
+            const std::uint32_t trk = static_cast<std::uint32_t>(disc_track_of_lba(cdd_lba)) + 1U;
+            cdd_status[2] = static_cast<std::uint8_t>(trk / 10U);
+            cdd_status[3] = static_cast<std::uint8_t>(trk % 10U);
             break;
         }
         case 0x03: { // total disc length
-            std::uint32_t t = disc_total_lbas() + 150U;
-            cdd_status[4] = bcd_byte(t % 75U);
-            t /= 75U;
-            cdd_status[3] = bcd_byte(t % 60U);
-            cdd_status[2] = bcd_byte(t / 60U);
+            put_msf(disc_total_lbas() + 150U);
             break;
         }
         case 0x04: { // first / last track numbers
             const std::uint32_t last =
                 (disc != nullptr && tc > 0) ? static_cast<std::uint32_t>(tc) : 1U;
-            cdd_status[2] = bcd_byte(1U);
-            cdd_status[3] = bcd_byte(last);
+            cdd_status[2] = 0U;
+            cdd_status[3] = 1U; // first track = 01
+            cdd_status[4] = static_cast<std::uint8_t>(last / 10U);
+            cdd_status[5] = static_cast<std::uint8_t>(last % 10U);
             break;
         }
         case 0x05: { // track start MSF for the BCD track number at $46
@@ -191,13 +200,10 @@ namespace mnemos::manifests::segacd {
             } else {
                 start = disc_total_lbas(); // lead-out fallback
             }
-            std::uint32_t a = start + 150U;
-            cdd_status[4] = bcd_byte(a % 75U);
-            a /= 75U;
-            cdd_status[3] = bcd_byte(a % 60U);
-            cdd_status[2] = bcd_byte(a / 60U);
-            cdd_status[6] = is_data ? std::uint8_t{0x40U} : std::uint8_t{0x00U};
-            cdd_status[8] = bcd_byte(track);
+            put_msf(start + 150U);
+            // RS6 high nibble bit 3 flags a CD-ROM (data) track; RS8 = track low digit.
+            cdd_status[6] = static_cast<std::uint8_t>(cdd_status[6] | (is_data ? 0x08U : 0x00U));
+            cdd_status[8] = static_cast<std::uint8_t>(track % 10U);
             break;
         }
         default:

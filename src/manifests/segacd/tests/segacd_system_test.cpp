@@ -335,11 +335,15 @@ TEST_CASE("segacd CDD reports first/last track numbers", "[segacd][cdd]") {
     auto disc = mnemos::disc::disc_image::open_bin(bin);
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
-    sys->gate_write_main(0x42, 0x20);      // Report TOC (command 2)
-    sys->gate_write_main(0x44, 0x04);      // sub-command: first/last track
-    sys->gate_write_main(0x4B, 0x00);      // commit
-    REQUIRE(sys->gate_read(0x3A) == 0x01); // RS2 = first track 1 (BCD)
-    REQUIRE(sys->gate_read(0x3B) == 0x01); // RS3 = last track 1 (BCD)
+    sys->gate_write_main(0x42, 0x20); // Report TOC (command 2)
+    sys->gate_write_main(0x44, 0x04); // sub-command: first/last track
+    sys->gate_write_main(0x4B, 0x00); // commit
+    // CDD status digits are one BCD digit per byte (low nibble): first track 01,
+    // last track 01 -> RS2/RS3 = 0,1 and RS4/RS5 = 0,1.
+    REQUIRE(sys->gate_read(0x3A) == 0x00); // RS2 = first-track tens
+    REQUIRE(sys->gate_read(0x3B) == 0x01); // RS3 = first-track ones
+    REQUIRE(sys->gate_read(0x3C) == 0x00); // RS4 = last-track tens
+    REQUIRE(sys->gate_read(0x3D) == 0x01); // RS5 = last-track ones
 }
 
 TEST_CASE("segacd CDD with no disc reports no-disc", "[segacd][cdd]") {
