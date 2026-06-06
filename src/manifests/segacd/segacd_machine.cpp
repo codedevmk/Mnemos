@@ -55,10 +55,15 @@ namespace mnemos::manifests::segacd {
                     ((static_cast<std::uint32_t>(sub->gate_array[0x03]) >> 6U) & 0x03U) * 0x20000U;
                 return sub->prg_ram[(base + (a & 0x1FFFFU)) & (prg_ram_size - 1U)];
             },
-            [sub](std::uint32_t a, std::uint8_t v) {
+            [sub, gen](std::uint32_t a, std::uint8_t v) {
                 const std::uint32_t base =
                     ((static_cast<std::uint32_t>(sub->gate_array[0x03]) >> 6U) & 0x03U) * 0x20000U;
-                sub->prg_ram[(base + (a & 0x1FFFFU)) & (prg_ram_size - 1U)] = v;
+                const std::uint32_t off = (base + (a & 0x1FFFFU)) & (prg_ram_size - 1U);
+                if (machine_trace_enabled() && off >= 0x100U && off <= 0x57FFU) {
+                    std::fprintf(stderr, "[prgw] main_pc=%06X prg[%05X]=%02X\n",
+                                 gen->cpu.cpu_registers().pc, off, v);
+                }
+                sub->prg_ram[off] = v;
             },
             1);
 
