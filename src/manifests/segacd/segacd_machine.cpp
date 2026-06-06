@@ -1,6 +1,23 @@
 #include "segacd_machine.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace mnemos::manifests::segacd {
+
+    namespace {
+        bool machine_trace_enabled() {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic, not hot-path
+#endif
+            static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return on;
+        }
+    } // namespace
 
     std::unique_ptr<segacd_machine> assemble_segacd_machine(std::vector<std::uint8_t> bios,
                                                             const genesis::genesis_config& config) {
@@ -11,6 +28,7 @@ namespace mnemos::manifests::segacd {
         machine->genesis = genesis::assemble_genesis(std::move(bios), config);
 
         segacd_system* sub = machine->sub.get();
+        genesis::genesis_system* gen = machine->genesis.get();
         topology::bus& bus = machine->genesis->bus;
 
         // $A12000-$A120FF: gate array (main-side access). The 128 KB BIOS only
@@ -19,7 +37,11 @@ namespace mnemos::manifests::segacd {
         bus.map_mmio(
             0xA12000U, 0x100U,
             [sub](std::uint32_t a) { return sub->gate_read(static_cast<std::uint8_t>(a & 0xFFU)); },
-            [sub](std::uint32_t a, std::uint8_t v) {
+            [sub, gen](std::uint32_t a, std::uint8_t v) {
+                if (machine_trace_enabled() && (a & 0xFFU) == 0x01U && (v & 0x01U) == 0U) {
+                    std::fprintf(stderr, "[park] main_pc=%06X writes gate $01=%02X\n",
+                                 gen->cpu.cpu_registers().pc, v);
+                }
                 sub->gate_write_main(static_cast<std::uint8_t>(a & 0xFFU), v);
             },
             1);

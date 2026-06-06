@@ -182,6 +182,14 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
+        // $01 (sub-CPU RESET / BUSREQ) is MAIN-side ONLY -- the sub-CPU cannot
+        // reset or halt itself. The sub-CPU BIOS writes $FF8001 (e.g. `bclr #0`)
+        // during init; routing that into gate_write_main's reset logic would make
+        // the sub reset ITSELF mid-startup, so it never finishes its checksum nor
+        // signals the main via $0F -- and no disc/game ever boots. Ignore it here.
+        if (offset == 0x01U) {
+            return;
+        }
         // $03 memory mode (sub side): the sub-CPU writes RET (bit 0) and MODE
         // (bit 2); the PRG bank + DMNA are main-side and preserved.
         if (offset == 0x03U) {
