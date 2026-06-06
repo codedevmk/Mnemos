@@ -175,7 +175,11 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
-    segacd_adapter adapter(std::move(bios), {}, "", nullptr, disc_path != nullptr ? disc_path : "");
+    if (disc_path == nullptr) {
+        SUCCEED("MNEMOS_SEGACD_DISC not set -- the disc-boot handshake needs a disc");
+        return;
+    }
+    segacd_adapter adapter(std::move(bios), {}, "", nullptr, disc_path);
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996)
@@ -321,8 +325,14 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     }
     REQUIRE(gate_written);                                  // BIOS drove the gate array
     REQUIRE(sub.sub_cpu.cpu_registers().pc <= 0x00FFFFFFU); // sub on a valid bus address
-    REQUIRE((sub.gate_array[0x0FU] & 0x40U) != 0U);         // sub signalled $0F.6 (ready)
-    REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc != 0x00132CU); // main advanced
+    REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc != 0x00132CU); // main past early boot
+    if (disc_path != nullptr) {
+        // With a disc the boot advances past the word-RAM handover deadlock: the sub
+        // clears its $0F.6 + passes the $6194 comm-sync, and the main clears its
+        // $0E.2 request + advances past the RET-wait at $1AFA.
+        REQUIRE(sub.sub_cpu.cpu_registers().pc != 0x006194U);                    // sub past comm-sync
+        REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc != 0x001AFAU); // main past RET deadlock
+    }
     REQUIRE(adapter.frames_stepped() == static_cast<std::uint64_t>(kBootFrames));
     (void)nonzero;
 }

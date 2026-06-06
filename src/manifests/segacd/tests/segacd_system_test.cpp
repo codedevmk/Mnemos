@@ -212,13 +212,17 @@ TEST_CASE("segacd gate-array $03 memory mode tracks RET/DMNA ownership", "[segac
     // Sub sets RET -> hands word RAM back to main: DMNA clears, RET sets.
     sys->gate_write_sub(0x03, 0x01);
     REQUIRE((sys->gate_read(0x03) & 0x03U) == 0x01U);
-    // Main writes the PRG-RAM bank (bits 6-7) + mode (bit 2); RET preserved.
-    sys->gate_write_main(0x03, 0xC4);
-    REQUIRE((sys->gate_read(0x03) & 0xC4U) == 0xC4U);
-    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U);
-    // The sub side cannot change the PRG bank (main-only bits preserved).
+    // Main writes the PRG bank (bits 6-7) but NOT MODE (bit 2) or RET -- those are
+    // sub-controlled; a plain bank write preserves RET.
+    sys->gate_write_main(0x03, 0xC4); // bank 3 (+ the MODE bit, which the main ignores)
+    REQUIRE((sys->gate_read(0x03) & 0xC0U) == 0xC0U); // bank set
+    REQUIRE((sys->gate_read(0x03) & 0x04U) == 0x00U); // MODE NOT set by the main
+    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U); // RET preserved
+    // A sub $03 write that does NOT set RET PRESERVES it (RET clears only via the
+    // main's DMNA) and cannot change the PRG bank.
     sys->gate_write_sub(0x03, 0x00);
-    REQUIRE((sys->gate_read(0x03) & 0xC0U) == 0xC0U);
+    REQUIRE((sys->gate_read(0x03) & 0xC0U) == 0xC0U); // bank preserved
+    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U); // RET preserved (the toggle fix)
 }
 
 TEST_CASE("segacd gate-array comm registers are shared", "[segacd][gate]") {

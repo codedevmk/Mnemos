@@ -138,10 +138,14 @@ namespace mnemos::manifests::segacd {
         // CPU writes the PRG-RAM bank (bits 6-7), the 1M/2M mode (bit 2), and
         // DMNA (bit 1, hand word RAM to the sub-CPU).
         if (offset == 0x03U) {
+            // Word-RAM ownership (2M): the main owns the PRG bank (bits 6-7) and sets
+            // DMNA (bit 1, hand word RAM to the sub). RET (bit 0) + MODE (bit 2) are
+            // sub-controlled and preserved here; RET is cleared ONLY by the main
+            // setting DMNA, never by a plain bank write.
             const std::uint8_t cur = gate_array[0x03];
-            std::uint8_t next = static_cast<std::uint8_t>((cur & 0x01U) | (value & 0xC4U));
+            std::uint8_t next = static_cast<std::uint8_t>((cur & 0x07U) | (value & 0xC0U));
             if ((value & 0x02U) != 0U) {
-                next = static_cast<std::uint8_t>((next & 0xFEU) | 0x02U); // DMNA: clear RET
+                next = static_cast<std::uint8_t>((next & 0xFEU) | 0x02U); // DMNA: take word RAM, clear RET
             }
             if (gate_trace_enabled()) {
                 std::fprintf(stderr, "[wram] main $03 %02X->%02X\n", value, next);
@@ -214,10 +218,15 @@ namespace mnemos::manifests::segacd {
         // $03 memory mode (sub side): the sub-CPU writes RET (bit 0) and MODE
         // (bit 2); the PRG bank + DMNA are main-side and preserved.
         if (offset == 0x03U) {
+            // Word-RAM ownership (2M): the sub owns MODE (bit 2) and sets RET (bit 0,
+            // return word RAM to the main). The PRG bank + DMNA are main-controlled
+            // and preserved; crucially RET is PRESERVED on a sub write that does not
+            // set it (RET is cleared only by the main's DMNA) -- otherwise a sub
+            // $03=0 write wrongly drops RET and the main hangs at its RET-wait.
             const std::uint8_t cur = gate_array[0x03];
-            std::uint8_t next = static_cast<std::uint8_t>((cur & 0xC2U) | (value & 0x05U));
+            std::uint8_t next = static_cast<std::uint8_t>((cur & 0xC3U) | (value & 0x04U));
             if ((value & 0x01U) != 0U) {
-                next = static_cast<std::uint8_t>((next & 0xFDU) | 0x01U); // RET: clear DMNA
+                next = static_cast<std::uint8_t>((next & 0xFDU) | 0x01U); // RET: return word RAM, clear DMNA
             }
             if (gate_trace_enabled()) {
                 std::fprintf(stderr, "[wram] sub  $03 %02X->%02X pc=%06X\n", value, next,
