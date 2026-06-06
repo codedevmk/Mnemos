@@ -143,6 +143,9 @@ namespace mnemos::manifests::segacd {
             if ((value & 0x02U) != 0U) {
                 next = static_cast<std::uint8_t>((next & 0xFEU) | 0x02U); // DMNA: clear RET
             }
+            if (gate_trace_enabled()) {
+                std::fprintf(stderr, "[wram] main $03 %02X->%02X\n", value, next);
+            }
             gate_array[0x03] = next;
             return;
         }
@@ -201,6 +204,10 @@ namespace mnemos::manifests::segacd {
             std::uint8_t next = static_cast<std::uint8_t>((cur & 0xC2U) | (value & 0x05U));
             if ((value & 0x01U) != 0U) {
                 next = static_cast<std::uint8_t>((next & 0xFDU) | 0x01U); // RET: clear DMNA
+            }
+            if (gate_trace_enabled()) {
+                std::fprintf(stderr, "[wram] sub  $03 %02X->%02X pc=%06X\n", value, next,
+                             sub_cpu.cpu_registers().pc);
             }
             gate_array[0x03] = next;
             return;
