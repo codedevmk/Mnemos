@@ -182,6 +182,9 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
+        if (gate_trace_enabled() && (offset == 0x0EU || offset == 0x0FU)) {
+            std::fprintf(stderr, "[comm] sub writes gate $%02X = %02X\n", offset, value);
+        }
         // $01 (sub-CPU RESET / BUSREQ) is MAIN-side ONLY -- the sub-CPU cannot
         // reset or halt itself. The sub-CPU BIOS writes $FF8001 (e.g. `bclr #0`)
         // during init; routing that into gate_write_main's reset logic would make
