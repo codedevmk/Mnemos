@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -206,11 +207,26 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
 #pragma warning(pop)
 #endif
     // Sub-CPU PC histogram: pinpoints the loop the sub spins in (e.g. the stuck
-    // main<->sub comm handshake) so it can be disassembled.
+    // main<->sub comm handshake). Also captures the PC path into the LAST entry of
+    // the $618E comm-sync routine (a 64-PC ring snapshotted on each $618E hit) to
+    // reveal which branch diverts the sub into the comm-wait instead of a disc read.
     std::unordered_map<std::uint32_t, std::uint64_t> sub_pc_hist;
+    std::array<std::uint32_t, 64> pc_ring{};
+    std::array<std::uint32_t, 64> pc_path{};
+    std::size_t pc_ring_idx = 0;
+    bool pc_path_captured = false;
     if (pchist_trace) {
-        adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback(
-            [&sub_pc_hist](std::uint32_t pc) { ++sub_pc_hist[pc]; });
+        adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
+            ++sub_pc_hist[pc];
+            pc_ring[pc_ring_idx % pc_ring.size()] = pc;
+            ++pc_ring_idx;
+            if (pc == 0x618EU) {
+                for (std::size_t i = 0; i < pc_ring.size(); ++i) {
+                    pc_path[i] = pc_ring[(pc_ring_idx + i) % pc_ring.size()];
+                }
+                pc_path_captured = true;
+            }
+        });
     }
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
@@ -245,6 +261,16 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         for (std::size_t i = 0; i < top.size() && i < 28U; ++i) {
             std::fprintf(stderr, "  $%06X  %llu\n", top[i].first,
                          static_cast<unsigned long long>(top[i].second));
+        }
+        if (pc_path_captured) {
+            std::fprintf(stderr,
+                         "[pcpath] sub PCs into the last $618E comm-sync entry (oldest->newest):\n");
+            for (std::size_t i = 0; i < pc_path.size(); ++i) {
+                std::fprintf(stderr, " %06X", pc_path[i]);
+                if ((i % 8U) == 7U) {
+                    std::fprintf(stderr, "\n");
+                }
+            }
         }
     }
 
