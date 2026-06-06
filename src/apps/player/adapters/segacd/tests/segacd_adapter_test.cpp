@@ -161,7 +161,17 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                                    std::istreambuf_iterator<char>());
     REQUIRE(bios.size() >= 0x20000U);
 
-    segacd_adapter adapter(std::move(bios));
+    // Optionally mount a real game disc (MNEMOS_SEGACD_DISC = a .cue/.iso) to
+    // observe the BIOS's disc-boot sequence.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* disc_path = std::getenv("MNEMOS_SEGACD_DISC");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    segacd_adapter adapter(std::move(bios), {}, "", nullptr, disc_path != nullptr ? disc_path : "");
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
         adapter.step_one_frame();
@@ -176,8 +186,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     for (std::size_t i = 0; i < 16; ++i) {
         std::fprintf(stderr, " %02X", sub.gate_array[i]);
     }
-    std::fprintf(stderr, "\n[segacd-boot] cdd_drive_status=%02X cdd_lba=%d\n", sub.cdd_drive_status,
-                 sub.cdd_lba);
+    std::fprintf(
+        stderr, "\n[segacd-boot] cdd_loaded=%d cdd_drive_status=%02X cdd_lba=%d cdc_decoded=%llu\n",
+        static_cast<int>(sub.cdd_loaded), sub.cdd_drive_status, sub.cdd_lba,
+        static_cast<unsigned long long>(sub.cdc_sectors_decoded));
     std::fprintf(stderr, "[segacd-boot] main_pc=%06X main_elapsed=%llu sub_pc=%06X sub_mask=%02X\n",
                  adapter.machine().genesis->cpu.cpu_registers().pc,
                  static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()),
