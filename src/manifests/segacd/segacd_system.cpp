@@ -314,6 +314,15 @@ namespace mnemos::manifests::segacd {
         s->gate_array[0x03] = 0x01; // RET=1 at power-on (main CPU owns word RAM)
 
         s->sub_cpu.attach_bus(s->sub_bus);
+        // Interrupt-acknowledge: when the sub-CPU accepts an IRQ, the gate array
+        // clears that level's pulse/request flag (the IACK cycle). Without this
+        // the request stays pending and the sub re-takes the same level forever
+        // -- e.g. the main's IFL2 (level 2), which deadlocks the BIOS boot
+        // handshake. Mirrors how the Genesis VDP V-blank IRQ self-clears on ack.
+        s->sub_cpu.set_irq_ack_callback([s](int level) {
+            s->sub_irq_pending &= static_cast<std::uint8_t>(~(1U << level));
+            s->update_sub_irq();
+        });
         s->pcm.reset(chips::reset_kind::power_on);
         // The sub-CPU stays held in reset (sub_reset_asserted == true) until the
         // main CPU releases it via the gate array (B2) / release_sub_reset().
