@@ -220,6 +220,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::array<std::uint32_t, 64> pc_path{};
     std::size_t pc_ring_idx = 0;
     bool pc_path_captured = false;
+    std::array<std::uint32_t, 64> main_pc_ring{};
+    std::array<std::uint32_t, 64> main_pc_path{};
+    std::size_t main_ring_idx = 0;
+    bool main_path_captured = false;
     if (pchist_trace) {
         adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++sub_pc_hist[pc];
@@ -234,8 +238,17 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         });
         // Main-CPU PC histogram: pinpoints the BootROM loop the main spins in while
         // it fails to post the CDBIOS disc-read command to gate comm words $10-$1F.
-        adapter.machine().genesis->cpu.diagnostics().set_trace_callback(
-            [&main_pc_hist](std::uint32_t pc) { ++main_pc_hist[pc]; });
+        adapter.machine().genesis->cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
+            ++main_pc_hist[pc];
+            main_pc_ring[main_ring_idx % main_pc_ring.size()] = pc;
+            ++main_ring_idx;
+            if (pc == 0x000A0CU) { // the logo/delay sub entry -- capture its caller
+                for (std::size_t i = 0; i < main_pc_ring.size(); ++i) {
+                    main_pc_path[i] = main_pc_ring[(main_ring_idx + i) % main_pc_ring.size()];
+                }
+                main_path_captured = true;
+            }
+        });
     }
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
@@ -290,6 +303,15 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         for (std::size_t i = 0; i < mtop.size() && i < 24U; ++i) {
             std::fprintf(stderr, "  $%06X  %llu\n", mtop[i].first,
                          static_cast<unsigned long long>(mtop[i].second));
+        }
+        if (main_path_captured) {
+            std::fprintf(stderr, "[mainpath] main PCs into the last $0A0C logo-loop entry:\n");
+            for (std::size_t i = 0; i < main_pc_path.size(); ++i) {
+                std::fprintf(stderr, " %06X", main_pc_path[i]);
+                if ((i % 8U) == 7U) {
+                    std::fprintf(stderr, "\n");
+                }
+            }
         }
     }
 
