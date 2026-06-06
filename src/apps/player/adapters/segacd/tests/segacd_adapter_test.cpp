@@ -7,6 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -15,6 +16,8 @@
 #include <initializer_list>
 #include <iterator>
 #include <system_error>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -194,6 +197,21 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
             }
         });
     }
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const bool pchist_trace = std::getenv("MNEMOS_SEGACD_PCHIST") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    // Sub-CPU PC histogram: pinpoints the loop the sub spins in (e.g. the stuck
+    // main<->sub comm handshake) so it can be disassembled.
+    std::unordered_map<std::uint32_t, std::uint64_t> sub_pc_hist;
+    if (pchist_trace) {
+        adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback(
+            [&sub_pc_hist](std::uint32_t pc) { ++sub_pc_hist[pc]; });
+    }
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
         adapter.step_one_frame();
@@ -216,6 +234,19 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                  adapter.machine().genesis->cpu.cpu_registers().pc,
                  static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()),
                  adapter.machine().sub->sub_cpu.cpu_registers().pc, sub.sub_irq_mask);
+
+    if (pchist_trace) {
+        std::vector<std::pair<std::uint32_t, std::uint64_t>> top(sub_pc_hist.begin(),
+                                                                 sub_pc_hist.end());
+        std::sort(top.begin(), top.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+        std::fprintf(stderr, "[pchist] %zu distinct sub PCs; top 28 (hottest = stuck loop):\n",
+                     top.size());
+        for (std::size_t i = 0; i < top.size() && i < 28U; ++i) {
+            std::fprintf(stderr, "  $%06X  %llu\n", top[i].first,
+                         static_cast<unsigned long long>(top[i].second));
+        }
+    }
 
     const auto fb = adapter.current_frame();
     std::size_t nonzero = 0;
