@@ -272,6 +272,14 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                  adapter.machine().genesis->cpu.cpu_registers().pc,
                  static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()),
                  adapter.machine().sub->sub_cpu.cpu_registers().pc, sub.sub_irq_mask);
+    // Main BootROM CD-driver state ($FFFDDC region): $FDDC bit7 = the $1D62 busy
+    // wait the main spins on; $FDDE bit1 = CD-op active; $FDDF bit2 = busy; $FDF0 =
+    // the $1480 dispatch function index. Reveals whether the main ever issues a read.
+    std::fprintf(stderr, "[segacd-boot] main CD-state $FDDC-$FDF3:");
+    for (std::size_t i = 0xFDDCU; i <= 0xFDF3U; ++i) {
+        std::fprintf(stderr, " %02X", adapter.machine().genesis->work_ram[i]);
+    }
+    std::fprintf(stderr, "\n");
 
     if (pchist_trace) {
         std::vector<std::pair<std::uint32_t, std::uint64_t>> top(sub_pc_hist.begin(),
