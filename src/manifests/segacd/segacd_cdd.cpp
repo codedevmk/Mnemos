@@ -136,7 +136,9 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_report_toc() {
-        const std::uint8_t sub = cdd_command[2]; // $44
+        const std::uint8_t sub = cdd_command[3]; // $45 = TOC sub-command (the reference
+                                                  // reads the $44 word's LOW byte, $45,
+                                                  // not $44 -- $44 is the high/unused byte)
         for (std::size_t i = 1; i <= 8; ++i) {
             cdd_status[i] = 0;
         }
@@ -201,10 +203,14 @@ namespace mnemos::manifests::segacd {
             cdd_status[5] = static_cast<std::uint8_t>(last % 10U);
             break;
         }
-        case 0x05: { // track start MSF for the BCD track number at $46
+        case 0x05: { // track start MSF for the track number at $46-$47
+            // Track number = two single BCD digits: $46 = tens, $47 = units (one
+            // digit per command byte, like the rest of the CDD frame). Reading both
+            // nibbles of $46 alone instead returns the wrong track -- e.g. track 1,
+            // sent as $46=0/$47=1, reads as track 0 -- so the BIOS gets a bad IP LBA.
             const std::uint32_t track =
-                static_cast<std::uint32_t>((cdd_command[4] >> 4U) & 0x0FU) * 10U +
-                static_cast<std::uint32_t>(cdd_command[4] & 0x0FU);
+                static_cast<std::uint32_t>(cdd_command[4]) * 10U +
+                static_cast<std::uint32_t>(cdd_command[5]);
             std::uint32_t start = 0U;
             bool is_data = true;
             if (disc != nullptr && tc > 0 && track >= 1U &&

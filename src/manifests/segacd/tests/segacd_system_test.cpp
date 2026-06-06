@@ -387,7 +387,7 @@ TEST_CASE("segacd CDD reports first/last track numbers", "[segacd][cdd]") {
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
     sys->gate_write_main(0x42, 0x02); // Report TOC (command 2)
-    sys->gate_write_main(0x44, 0x04); // sub-command: first/last track
+    sys->gate_write_main(0x45, 0x04); // sub-command: first/last track (in $45, the $44-word low byte)
     sys->gate_write_main(0x4A, 0x00); // commit
     // CDD status digits are one BCD digit per byte (low nibble): first track 01,
     // last track 01 -> RS2/RS3 = 0,1 and RS4/RS5 = 0,1.
