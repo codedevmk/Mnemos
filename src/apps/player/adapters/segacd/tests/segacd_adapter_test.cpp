@@ -210,6 +210,22 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::fprintf(stderr, "[segacd-boot] fb %ux%u, %zu non-black px\n", fb.width, fb.height,
                  nonzero);
 
+    // Optionally dump the first 32 KB of PRG-RAM (the sub-CPU BIOS the main
+    // loaded there) to a file for disassembly (MNEMOS_SEGACD_PRGDUMP=path).
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* prg_dump = std::getenv("MNEMOS_SEGACD_PRGDUMP");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (prg_dump != nullptr) {
+        std::ofstream os(prg_dump, std::ios::binary);
+        os.write(reinterpret_cast<const char*>(sub.prg_ram.data()),
+                 static_cast<std::streamsize>(0x8000));
+    }
+
     // The BIOS boots and renders its screen: the main 68000 drives the gate
     // array, the sub-CPU runs valid PRG-RAM code (a 24-bit PC, not a crashed
     // out-of-range address), and the BIOS draws (a non-trivial slice of the
