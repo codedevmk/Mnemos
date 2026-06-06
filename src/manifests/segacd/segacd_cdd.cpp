@@ -102,15 +102,13 @@ namespace mnemos::manifests::segacd {
             for (std::size_t i = 1; i < 9; ++i) {
                 cdd_status[i] = 0;
             }
-            // RS9 = $F for an unpositioned drive (STOP/OPEN/TOC/NO_DISC/END). The
-            // BIOS's CDD sync wants RS8-RS9 = $000F regardless of RS0, so this is a
-            // FIXED idle-frame trailer, not the RS0-inclusive checksum -- the
-            // reference leaves the init RS9=$F untouched in these states, so a loaded
-            // TOC drive reads as RS0=9 with RS9=$F (a stopped drive as RS0=0/RS9=$F).
-            cdd_status[9] = 0x0FU;
-            for (std::size_t i = 0; i < 10; ++i) {
-                gate_array[0x38U + i] = cdd_status[i];
-            }
+            // RS9 = the computed checksum ~(RS0+..+RS8) & $F, recomputed after every
+            // command exactly like the reference (cdd.c). For STOP (RS0=0) this is $F
+            // (the all-zero handshake frame the boot CDD sync needs), but a loaded TOC
+            // drive (RS0=9) needs RS9=6; hardcoding $F made the TOC status frame fail
+            // the BIOS checksum, so the BIOS never validated the loaded disc and never
+            // advanced past Get-Status to Seek/Read.
+            cdd_commit_status();
             return;
         }
         std::int32_t abs_lba = cdd_lba + 150; // absolute = +2 s pre-gap
