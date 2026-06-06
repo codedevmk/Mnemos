@@ -254,7 +254,7 @@ TEST_CASE("segacd gate array is reachable through both sub-bus mirrors", "[segac
 
 TEST_CASE("segacd sub-CPU IRQ priority, masking, and acknowledge", "[segacd][irq]") {
     auto sys = assemble_segacd();
-    sys->gate_write_main(0x33, 0x3F); // enable all six levels
+    sys->gate_write_main(0x33, 0x7E); // enable all six levels (bits 1-6)
     REQUIRE(sys->pending_irq_level() == 0);
     sys->raise_sub_irq(segacd_system::irq_ifl2); // level 2
     REQUIRE(sys->pending_irq_level() == 2);
@@ -263,7 +263,7 @@ TEST_CASE("segacd sub-CPU IRQ priority, masking, and acknowledge", "[segacd][irq
     sys->raise_sub_irq(segacd_system::irq_subcode); // level 6 (highest)
     REQUIRE(sys->pending_irq_level() == 6);
     // Masking the top source falls back to the next pending one.
-    sys->gate_write_sub(0x33, static_cast<std::uint8_t>(0x3FU & ~segacd_system::irq_subcode));
+    sys->gate_write_sub(0x33, static_cast<std::uint8_t>(0x7EU & ~segacd_system::irq_subcode));
     REQUIRE(sys->pending_irq_level() == 4);
     // $36 bit 0 acknowledges (clears) all pending.
     sys->gate_write_sub(0x36, 0x01);

@@ -30,10 +30,10 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::cdc_update_irq(std::uint8_t prev_irq) {
         // The CDC /INT line is active while any source (DTEI/DECI) is set; a
-        // 0->non-0 edge latches a sub-CPU level-5 request when enabled by $33.4.
+        // 0->non-0 edge latches a sub-CPU level-5 request when enabled by $33.5.
         if (cdc_irq != 0U && prev_irq == 0U) {
-            if ((gate_array[0x33] & 0x10U) != 0U) {
-                raise_sub_irq(irq_cdc); // level 5
+            if ((gate_array[0x33] & irq_cdc) != 0U) { // $33 bit 5 enables CDC (level 5)
+                raise_sub_irq(irq_cdc);               // level 5
             }
         }
     }

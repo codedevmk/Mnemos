@@ -227,7 +227,7 @@ namespace mnemos::manifests::segacd {
     int segacd_system::pending_irq_level() const noexcept {
         const auto active = static_cast<std::uint8_t>(sub_irq_pending & sub_irq_mask);
         for (int level = 6; level >= 1; --level) {
-            if ((active & (1U << (level - 1))) != 0U) {
+            if ((active & (1U << level)) != 0U) { // $33/pending: bit N = level N
                 return level;
             }
         }

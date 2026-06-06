@@ -39,13 +39,17 @@ namespace mnemos::manifests::segacd {
         bool sub_reset_asserted{true};  // held in reset until the main CPU releases it
         bool sub_busreq{false};         // main CPU holds the sub-CPU bus ($01 bit 1)
 
-        // Sub-CPU IRQ source bits (pending/mask); priority level = bit index + 1.
-        static constexpr std::uint8_t irq_graphics = 0x01U; // level 1 (stamp ASIC done)
-        static constexpr std::uint8_t irq_ifl2 = 0x02U;     // level 2 (main->sub pulse)
-        static constexpr std::uint8_t irq_timer = 0x04U;    // level 3
-        static constexpr std::uint8_t irq_cdd = 0x08U;      // level 4 (CDD frame)
-        static constexpr std::uint8_t irq_cdc = 0x10U;      // level 5 (CDC sector)
-        static constexpr std::uint8_t irq_subcode = 0x20U;  // level 6
+        // Sub-CPU IRQ source bits (pending/mask). The gate-array $33 mask uses
+        // bit N = level N (bit 0 unused), so the pending bits use the same
+        // convention -- pending & mask then aligns. (The Emu reference used bit
+        // N-1, which never aligned with the BIOS mask; that off-by-one blocked
+        // the main<->sub IFL2 handshake and no disc/game would boot.)
+        static constexpr std::uint8_t irq_graphics = 0x02U; // level 1 (stamp ASIC done)
+        static constexpr std::uint8_t irq_ifl2 = 0x04U;     // level 2 (main->sub pulse)
+        static constexpr std::uint8_t irq_timer = 0x08U;    // level 3
+        static constexpr std::uint8_t irq_cdd = 0x10U;      // level 4 (CDD frame)
+        static constexpr std::uint8_t irq_cdc = 0x20U;      // level 5 (CDC sector)
+        static constexpr std::uint8_t irq_subcode = 0x40U;  // level 6
         std::uint8_t sub_irq_mask{};                        // gate-array $33
         std::uint8_t sub_irq_pending{};
 
