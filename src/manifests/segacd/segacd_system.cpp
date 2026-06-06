@@ -325,6 +325,13 @@ namespace mnemos::manifests::segacd {
                 std::fprintf(stderr, "[iack] L%d\n", level);
             }
             s->sub_irq_pending &= static_cast<std::uint8_t>(~(1U << level));
+            // Level-2 (IFL2) acknowledge also clears the main-side IFL2 request
+            // flag (gate $00 bit 0). The main pulses IFL2 to interrupt the sub;
+            // the sub accepting it must retire that pulse so the comm handshake
+            // can advance (matches Genesis-Plus-GX scd_68k_irq_ack).
+            if (level == 2) {
+                s->gate_array[0x00] &= static_cast<std::uint8_t>(~0x01U);
+            }
             s->update_sub_irq();
         });
         s->pcm.reset(chips::reset_kind::power_on);
