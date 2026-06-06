@@ -339,6 +339,15 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_update() {
+        // STOP->TOC handover: the drive starts STOPPED so the BIOS's early CDD sync
+        // (which requires the all-zero RS0=0 frame and re-runs through the boot
+        // handshake) passes. Once the MAIN grants the sub word RAM via DMNA ($03
+        // bit 1) -- which happens only AFTER the handshake, to stage the IP load --
+        // a loaded drive leaves STOP for TOC, so Get-Status reports a loaded disc
+        // (RS0=9) and the BIOS proceeds to Read-TOC / Seek / Read the IP.
+        if (cdd_loaded && cdd_drive_status == cdd_stop && (gate_array[0x03] & 0x02U) != 0U) {
+            cdd_drive_status = cdd_toc;
+        }
         if (cdd_latency > 0) {
             --cdd_latency;
         } else if (cdd_drive_status == cdd_play) {
