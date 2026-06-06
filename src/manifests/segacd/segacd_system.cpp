@@ -320,6 +320,9 @@ namespace mnemos::manifests::segacd {
         // -- e.g. the main's IFL2 (level 2), which deadlocks the BIOS boot
         // handshake. Mirrors how the Genesis VDP V-blank IRQ self-clears on ack.
         s->sub_cpu.set_irq_ack_callback([s](int level) {
+            if (gate_trace_enabled()) {
+                std::fprintf(stderr, "[iack] L%d\n", level);
+            }
             s->sub_irq_pending &= static_cast<std::uint8_t>(~(1U << level));
             s->update_sub_irq();
         });

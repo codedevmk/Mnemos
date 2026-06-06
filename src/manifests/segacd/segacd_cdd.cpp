@@ -40,9 +40,24 @@ namespace mnemos::manifests::segacd {
     void segacd_system::attach_disc(const mnemos::disc::disc_image* image) {
         disc = image;
         cdd_loaded = (image != nullptr) && (image->total_sectors() > 0U);
-        cdd_drive_status = cdd_loaded ? std::uint8_t{cdd_toc} : std::uint8_t{cdd_nodisc};
-        cdd_lba = 0;
-        cdd_track = 0;
+        if (cdd_loaded) {
+            // Seat the read head at the first data track and report PAUSE -- a
+            // disc that is "ready to be read". Reporting TOC instead leaves the
+            // BIOS parked at its no-disc poll and no game ever loads.
+            std::int32_t first_data = 0;
+            for (const auto& t : disc->tracks()) {
+                if (t.type != mnemos::disc::track_type::audio) {
+                    first_data = static_cast<std::int32_t>(t.start_lba);
+                    break;
+                }
+            }
+            cdd_drive_status = cdd_pause;
+            cdd_lba = first_data;
+        } else {
+            cdd_drive_status = cdd_nodisc;
+            cdd_lba = 0;
+        }
+        cdd_track = disc_track_of_lba(cdd_lba);
         cdd_pending_status = 0;
         cdd_latency = 0;
         cdda_active = false;
@@ -341,6 +356,13 @@ namespace mnemos::manifests::segacd {
             cdd_track = disc_track_of_lba(cdd_lba);
         }
         cdd_set_status();
+
+        // CDD level-4 IRQ -- the per-CD-frame "BIOS frame tick" that drives the
+        // sub-CPU's disc state machine. Without it the sub never runs its disc
+        // logic, so no game ever loads.
+        if (cdd_loaded) {
+            raise_sub_irq(irq_cdd);
+        }
     }
 
     // ---- CD-DA (Red Book audio) ----
