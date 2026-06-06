@@ -41,12 +41,12 @@ namespace mnemos::manifests::segacd {
         disc = image;
         cdd_loaded = (image != nullptr) && (image->total_sectors() > 0U);
         if (cdd_loaded) {
-            // Power-on: the drive is STOPPED at the disc start. A stopped drive
-            // reports an all-zero status frame (see cdd_set_status), which the
-            // sub-CPU BIOS's early CDD sync validates before it commands the
-            // drive. Reporting a positioned PAUSE frame here (a non-zero MSF +
-            // data-track flag) makes that validation fail and the sub re-init
-            // forever. The BIOS spins the drive up to PAUSE/PLAY via commands.
+            // The drive starts STOPPED, reporting the all-zero idle frame
+            // (cdd_set_status) that the sub-CPU BIOS's early CDD sync validates --
+            // it requires RS0=0 there, so starting at cdd_toc (RS0=9) regresses the
+            // boot back to the $132C handshake wait. The correct STOP->TOC handover
+            // needs the register-vs-internal-state decoupling (the handshake reads
+            // the INITIAL all-zero registers, then Get-Status reports TOC) -- TODO.
             cdd_drive_status = cdd_stop;
             cdd_lba = 0;
         } else {
@@ -91,13 +91,26 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_set_status() {
-        // A STOPPED (idle, not-yet-commanded) drive reports an ALL-ZERO status
-        // frame: RS0..RS8 = 0, RS9 = checksum = $F. The sub-CPU BIOS's early CDD
-        // sync requires this (it rejects a positioned MSF / data-track flag and
-        // re-inits). The drive leaves STOP only via a Play/Seek/Read command.
-        if (cdd_drive_status == cdd_stop) {
-            cdd_status.fill(0);
-            cdd_commit_status();
+        // RS0 = drive status. For STOP or any state ABOVE PAUSE (OPEN/TOC/NO_DISC/
+        // END) the drive is not positioned, so RS1..RS8 stay zero (an all-zero MSF
+        // with a valid RS9 checksum) -- the BIOS reads RS0 for the drive state. Only
+        // the active states (PLAY/SEEK/SCAN/PAUSE) report the current absolute MSF.
+        // Mirrors the reference Get-Status, which skips RS1..RS8 outside PLAY..PAUSE
+        // (so STOP stays the all-zero frame and a loaded TOC drive reads as RS0=9).
+        cdd_status[0] = static_cast<std::uint8_t>(cdd_drive_status & 0x0FU);
+        if (cdd_drive_status == cdd_stop || cdd_drive_status > cdd_pause) {
+            for (std::size_t i = 1; i < 9; ++i) {
+                cdd_status[i] = 0;
+            }
+            // RS9 = $F for an unpositioned drive (STOP/OPEN/TOC/NO_DISC/END). The
+            // BIOS's CDD sync wants RS8-RS9 = $000F regardless of RS0, so this is a
+            // FIXED idle-frame trailer, not the RS0-inclusive checksum -- the
+            // reference leaves the init RS9=$F untouched in these states, so a loaded
+            // TOC drive reads as RS0=9 with RS9=$F (a stopped drive as RS0=0/RS9=$F).
+            cdd_status[9] = 0x0FU;
+            for (std::size_t i = 0; i < 10; ++i) {
+                gate_array[0x38U + i] = cdd_status[i];
+            }
             return;
         }
         std::int32_t abs_lba = cdd_lba + 150; // absolute = +2 s pre-gap
@@ -109,11 +122,8 @@ namespace mnemos::manifests::segacd {
         total /= 75U;
         const std::uint32_t s = total % 60U;
         const std::uint32_t m = total / 60U;
-        // CDD status frame = TEN single-digit bytes (RS0..RS9), one BCD digit per
-        // byte (low nibble) -- NOT two-digits-packed. RS2..RS7 = MM SS FF as six
-        // separate digits; the BIOS reads each as a 0-9 digit and verifies RS9.
-        // Packing two per byte would feed the BIOS a garbage time.
-        cdd_status[0] = static_cast<std::uint8_t>(cdd_drive_status & 0x0FU);
+        // The status frame = TEN single-digit bytes (RS0..RS9), one BCD digit per
+        // byte (low nibble). RS2..RS7 = MM SS FF as six separate digits.
         cdd_status[1] = 0x00;
         cdd_status[2] = static_cast<std::uint8_t>(m / 10U);
         cdd_status[3] = static_cast<std::uint8_t>(m % 10U);
