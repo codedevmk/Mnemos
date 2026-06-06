@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <utility>
 
 using mnemos::dsp::clip_i16;
@@ -26,6 +28,27 @@ namespace mnemos::apps::player::adapters::segacd {
         // Interleave granularity: ~one NTSC scanline of master cycles. Small
         // enough that the main<->sub gate handshake makes progress every poll.
         constexpr std::uint64_t kSliceMasterCycles = 3420;
+
+        // Slice-size override (master cycles) for interleaving experiments:
+        // MNEMOS_SEGACD_SLICE=N runs the main in N-master-cycle steps before the
+        // sub gets its share; smaller = finer main<->sub handshake granularity.
+        std::uint64_t slice_master_cycles() {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
+#endif
+            const char* s = std::getenv("MNEMOS_SEGACD_SLICE");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            if (s != nullptr) {
+                const auto v = std::strtoull(s, nullptr, 10);
+                if (v >= 1ULL) {
+                    return static_cast<std::uint64_t>(v);
+                }
+            }
+            return kSliceMasterCycles;
+        }
 
         // Mixer gains (Q12). FM keeps its 3:1 (~9.5 dB) bias over PSG, matching
         // the Genesis adapter; PCM + CD-DA join the sub side.
@@ -132,11 +155,12 @@ namespace mnemos::apps::player::adapters::segacd {
         // before the sub gets any cycles deadlocks the handshake. Advance ~a
         // scanline of master cycles, then the sub's proportional share, until the
         // VDP completes a frame.
+        static const std::uint64_t slice_cycles = slice_master_cycles();
         const std::uint64_t start_frame = scheduler_.frame_index();
         while (scheduler_.frame_index() == start_frame) {
-            scheduler_.run_master_cycles(kSliceMasterCycles);
+            scheduler_.run_master_cycles(slice_cycles);
             const double sub_exact =
-                (static_cast<double>(kSliceMasterCycles) * kSubCpuHz / kGenesisMasterHz) +
+                (static_cast<double>(slice_cycles) * kSubCpuHz / kGenesisMasterHz) +
                 sub_cycle_frac_;
             const auto sub_cycles = static_cast<std::uint64_t>(sub_exact);
             sub_cycle_frac_ = sub_exact - static_cast<double>(sub_cycles);
