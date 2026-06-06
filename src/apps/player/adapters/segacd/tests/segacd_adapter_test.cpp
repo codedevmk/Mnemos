@@ -248,10 +248,13 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                  static_cast<std::streamsize>(0x8000));
     }
 
-    // The BIOS boots and renders its screen: the main 68000 drives the gate
-    // array, the sub-CPU runs valid PRG-RAM code (a 24-bit PC, not a crashed
-    // out-of-range address), and the BIOS draws (a non-trivial slice of the
-    // framebuffer is non-black -- the "(c) 1992 SEGA" boot animation).
+    // The BIOS boots AND completes its main<->sub handshake: the main 68000
+    // drives the gate array, the sub-CPU runs valid PRG-RAM code (a 24-bit PC),
+    // it SIGNALS the main by setting gate $0F bit 6 (the sub-ready flag the main
+    // spins on at BIOS $132C), and the main then ADVANCES past that poll. With a
+    // disc mounted the BIOS renders its "(c) 1992 SEGA" logo earlier, then clears
+    // it for the disc-load phase -- so the framebuffer is intentionally not
+    // asserted non-black at this later frame.
     bool gate_written = false;
     for (std::size_t i = 0; i < sub.gate_array.size(); ++i) {
         if (sub.gate_array[i] != 0U) {
@@ -261,6 +264,8 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     }
     REQUIRE(gate_written);                                  // BIOS drove the gate array
     REQUIRE(sub.sub_cpu.cpu_registers().pc <= 0x00FFFFFFU); // sub on a valid bus address
-    REQUIRE(nonzero > 1000U);                               // BIOS drew its boot screen
+    REQUIRE((sub.gate_array[0x0FU] & 0x40U) != 0U);         // sub signalled $0F.6 (ready)
+    REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc != 0x00132CU); // main advanced
     REQUIRE(adapter.frames_stepped() == static_cast<std::uint64_t>(kBootFrames));
+    (void)nonzero;
 }

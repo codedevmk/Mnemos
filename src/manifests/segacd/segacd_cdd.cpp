@@ -41,18 +41,14 @@ namespace mnemos::manifests::segacd {
         disc = image;
         cdd_loaded = (image != nullptr) && (image->total_sectors() > 0U);
         if (cdd_loaded) {
-            // Seat the read head at the first data track and report PAUSE -- a
-            // disc that is "ready to be read". Reporting TOC instead leaves the
-            // BIOS parked at its no-disc poll and no game ever loads.
-            std::int32_t first_data = 0;
-            for (const auto& t : disc->tracks()) {
-                if (t.type != mnemos::disc::track_type::audio) {
-                    first_data = static_cast<std::int32_t>(t.start_lba);
-                    break;
-                }
-            }
-            cdd_drive_status = cdd_pause;
-            cdd_lba = first_data;
+            // Power-on: the drive is STOPPED at the disc start. A stopped drive
+            // reports an all-zero status frame (see cdd_set_status), which the
+            // sub-CPU BIOS's early CDD sync validates before it commands the
+            // drive. Reporting a positioned PAUSE frame here (a non-zero MSF +
+            // data-track flag) makes that validation fail and the sub re-init
+            // forever. The BIOS spins the drive up to PAUSE/PLAY via commands.
+            cdd_drive_status = cdd_stop;
+            cdd_lba = 0;
         } else {
             cdd_drive_status = cdd_nodisc;
             cdd_lba = 0;
@@ -95,6 +91,15 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_set_status() {
+        // A STOPPED (idle, not-yet-commanded) drive reports an ALL-ZERO status
+        // frame: RS0..RS8 = 0, RS9 = checksum = $F. The sub-CPU BIOS's early CDD
+        // sync requires this (it rejects a positioned MSF / data-track flag and
+        // re-inits). The drive leaves STOP only via a Play/Seek/Read command.
+        if (cdd_drive_status == cdd_stop) {
+            cdd_status.fill(0);
+            cdd_commit_status();
+            return;
+        }
         std::int32_t abs_lba = cdd_lba + 150; // absolute = +2 s pre-gap
         if (abs_lba < 0) {
             abs_lba = 0;
