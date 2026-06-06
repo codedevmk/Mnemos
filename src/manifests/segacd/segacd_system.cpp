@@ -52,9 +52,21 @@ namespace mnemos::manifests::segacd {
         backup_ram.fill(0);
         gate_array.fill(0);
         gate_array[0x03] = 0x01; // RET=1: the main CPU owns word RAM at power-on
+        // Sub-side gate-register power-on defaults (match the reference): $08/$0A =
+        // $FFFF, $36 = $0100, $40 = $000F (status RS9 trailer), $42-$4B = $FFFF -- the
+        // CDD-command "idle" sentinel the BIOS sees before issuing a new command.
+        gate_array[0x08] = 0xFFU;
+        gate_array[0x09] = 0xFFU;
+        gate_array[0x0A] = 0xFFU;
+        gate_array[0x0B] = 0xFFU;
+        gate_array[0x36] = 0x01U;
+        gate_array[0x41] = 0x0FU;
+        for (std::size_t i = 0x42U; i <= 0x4BU; ++i) {
+            gate_array[i] = 0xFFU;
+        }
         sub_irq_mask = 0;
         sub_irq_pending = 0;
-        cdd_command.fill(0);
+        cdd_command.fill(0xFFU); // CDD command regs idle = $FF (matches the reference)
         cdd_status.fill(0);
         cdd_pending_status = 0;
         cdd_latency = 0;
