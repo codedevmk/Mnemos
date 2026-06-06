@@ -1,6 +1,23 @@
 #include "segacd_system.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace mnemos::manifests::segacd {
+
+    namespace {
+        bool gate_trace_enabled() {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic, not hot-path
+#endif
+            static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return on;
+        }
+    } // namespace
 
     void segacd_system::run_cycles(std::uint64_t cycles) {
         if (sub_reset_asserted || sub_busreq) {
@@ -100,6 +117,12 @@ namespace mnemos::manifests::segacd {
             const bool want_release = (value & 0x01U) != 0U;
             const bool want_busreq = (value & 0x02U) != 0U;
             const bool prev_release = (gate_array[0x01] & 0x01U) != 0U;
+            if (gate_trace_enabled() &&
+                (want_release != prev_release || want_busreq != sub_busreq)) {
+                std::fprintf(stderr, "[gate01] val=%02X %s busreq=%d sub_elapsed=%llu\n", value,
+                             want_release ? "RELEASE" : "PARK", static_cast<int>(want_busreq),
+                             static_cast<unsigned long long>(sub_cpu.elapsed_cycles()));
+            }
             gate_array[0x01] = value;
             if (want_release && !prev_release) {
                 release_sub_reset();

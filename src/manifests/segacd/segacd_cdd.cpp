@@ -7,10 +7,24 @@
 #include "segacd_system.hpp"
 
 #include <array>
+#include <cstdio>
+#include <cstdlib>
 #include <span>
 
 namespace mnemos::manifests::segacd {
     namespace {
+        // Opt-in CDD command trace (MNEMOS_SEGACD_TRACE) for disc-boot debugging.
+        bool cdd_trace_enabled() {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic, not hot-path
+#endif
+            static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return on;
+        }
         std::uint8_t bcd_byte(std::uint32_t v) {
             return static_cast<std::uint8_t>(((v / 10U) << 4U) | (v % 10U));
         }
@@ -186,6 +200,11 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::cdd_process_command() {
         const auto cmd = static_cast<std::uint8_t>((cdd_command[0] >> 4U) & 0x0FU);
+        if (cdd_trace_enabled()) {
+            std::fprintf(stderr, "[cdd] cmd=%X bytes=%02X%02X%02X%02X%02X%02X status=%02X lba=%d\n",
+                         cmd, cdd_command[1], cdd_command[2], cdd_command[3], cdd_command[4],
+                         cdd_command[5], cdd_command[6], cdd_drive_status, cdd_lba);
+        }
         switch (cmd) {
         case 0x00: // Get Drive Status
             cdd_set_status();
