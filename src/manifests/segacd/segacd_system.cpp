@@ -149,7 +149,18 @@ namespace mnemos::manifests::segacd {
             gate_array[0x03] = next;
             return;
         }
-        if (gate_trace_enabled() && (offset == 0x0EU || (offset >= 0x10U && offset <= 0x1FU))) {
+        // $0E/$0F communication flag: the MAIN owns $0E. Writing EITHER byte lane
+        // ($0E or $0F) updates $0E -- the byte-select strobe (!LWR) is ignored on
+        // hardware. (The sub owns $0F symmetrically; see gate_write_sub.) Storing a
+        // main "clear" to $0F instead of $0E is what hangs the boot comm handshake.
+        if (offset == 0x0EU || offset == 0x0FU) {
+            if (gate_trace_enabled()) {
+                std::fprintf(stderr, "[maincmd] main $%02X(comm)->$0E = %02X\n", offset, value);
+            }
+            gate_array[0x0E] = value;
+            return;
+        }
+        if (gate_trace_enabled() && (offset >= 0x10U && offset <= 0x1FU)) {
             std::fprintf(stderr, "[maincmd] main $%02X = %02X\n", offset, value);
         }
         gate_array[offset] = value;
@@ -237,6 +248,14 @@ namespace mnemos::manifests::segacd {
         if (offset == 0x06U) {
             gate_array[0x06] = value;
             cdc_reg_w(value);
+            return;
+        }
+        // $0E/$0F communication flag: the SUB owns $0F. Writing EITHER byte lane
+        // ($0E or $0F) updates $0F -- the byte-select strobes (!LDS/!UDS) are
+        // ignored on hardware. (The main owns $0E symmetrically.) This keeps a sub
+        // write off the main's $0E so the main's flag stays main-controlled.
+        if (offset == 0x0EU || offset == 0x0FU) {
+            gate_array[0x0F] = value;
             return;
         }
         gate_write_main(offset, value); // sub-side falls through for the rest

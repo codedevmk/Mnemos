@@ -229,6 +229,23 @@ TEST_CASE("segacd gate-array comm registers are shared", "[segacd][gate]") {
     REQUIRE(sys->gate_read(0x20) == 0xCD);
 }
 
+TEST_CASE("segacd $0E/$0F comm flags are side-owned byte lanes", "[segacd][gate][comm]") {
+    auto sys = assemble_segacd();
+    // The MAIN owns $0E: a main write to EITHER $0E or $0F lands on $0E only
+    // (the !LWR byte strobe is ignored on hardware).
+    sys->gate_write_main(0x0F, 0x05);
+    REQUIRE(sys->gate_read(0x0E) == 0x05);
+    REQUIRE(sys->gate_read(0x0F) == 0x00); // the sub's flag is untouched
+    sys->gate_write_main(0x0E, 0xA0);
+    REQUIRE(sys->gate_read(0x0E) == 0xA0);
+    // The SUB owns $0F: a sub write to EITHER $0E or $0F lands on $0F only.
+    sys->gate_write_sub(0x0E, 0x42);
+    REQUIRE(sys->gate_read(0x0F) == 0x42);
+    REQUIRE(sys->gate_read(0x0E) == 0xA0); // the main's flag is untouched
+    sys->gate_write_sub(0x0F, 0x6C);
+    REQUIRE(sys->gate_read(0x0F) == 0x6C);
+}
+
 TEST_CASE("segacd backup RAM uses the odd byte lane", "[segacd][bus]") {
     auto sys = assemble_segacd();
     sys->sub_bus.write8(0xFE0001U, 0x99U); // odd -> backup[0]
