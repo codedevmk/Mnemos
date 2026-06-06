@@ -215,6 +215,7 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     // the $618E comm-sync routine (a 64-PC ring snapshotted on each $618E hit) to
     // reveal which branch diverts the sub into the comm-wait instead of a disc read.
     std::unordered_map<std::uint32_t, std::uint64_t> sub_pc_hist;
+    std::unordered_map<std::uint32_t, std::uint64_t> main_pc_hist;
     std::array<std::uint32_t, 64> pc_ring{};
     std::array<std::uint32_t, 64> pc_path{};
     std::size_t pc_ring_idx = 0;
@@ -231,6 +232,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                 pc_path_captured = true;
             }
         });
+        // Main-CPU PC histogram: pinpoints the BootROM loop the main spins in while
+        // it fails to post the CDBIOS disc-read command to gate comm words $10-$1F.
+        adapter.machine().genesis->cpu.diagnostics().set_trace_callback(
+            [&main_pc_hist](std::uint32_t pc) { ++main_pc_hist[pc]; });
     }
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
@@ -275,6 +280,16 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                     std::fprintf(stderr, "\n");
                 }
             }
+        }
+        std::vector<std::pair<std::uint32_t, std::uint64_t>> mtop(main_pc_hist.begin(),
+                                                                  main_pc_hist.end());
+        std::sort(mtop.begin(), mtop.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+        std::fprintf(stderr, "[mainpc] %zu distinct main PCs; top 24 (the BootROM wait loop):\n",
+                     mtop.size());
+        for (std::size_t i = 0; i < mtop.size() && i < 24U; ++i) {
+            std::fprintf(stderr, "  $%06X  %llu\n", mtop[i].first,
+                         static_cast<unsigned long long>(mtop[i].second));
         }
     }
 
