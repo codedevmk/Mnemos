@@ -149,6 +149,9 @@ namespace mnemos::manifests::segacd {
             gate_array[0x03] = next;
             return;
         }
+        if (gate_trace_enabled() && (offset == 0x0EU || (offset >= 0x10U && offset <= 0x1FU))) {
+            std::fprintf(stderr, "[maincmd] main $%02X = %02X\n", offset, value);
+        }
         gate_array[offset] = value;
         // $00 bit 0 IFL2: the main CPU pulses the sub-CPU level-2 IRQ.
         if (offset == 0x00U && (value & 0x01U) != 0U) {
