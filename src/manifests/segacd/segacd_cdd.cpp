@@ -235,7 +235,12 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_process_command() {
-        const auto cmd = static_cast<std::uint8_t>((cdd_command[0] >> 4U) & 0x0FU);
+        // The CDD command code is the LOW nibble of the first command byte ($42),
+        // exactly like the status frame's RS0 (one BCD digit per byte). Decoding the
+        // HIGH nibble instead silently turns every real command (Play $03, Seek $04,
+        // Read, Report-TOC $02, ...) into Get-Status ($00) -- the drive then never
+        // seeks or reads, which stalls the disc-boot at Get-Status forever.
+        const auto cmd = static_cast<std::uint8_t>(cdd_command[0] & 0x0FU);
         if (cdd_trace_enabled()) {
             std::fprintf(stderr, "[cdd] cmd=%X bytes=%02X%02X%02X%02X%02X%02X status=%02X lba=%d\n",
                          cmd, cdd_command[1], cdd_command[2], cdd_command[3], cdd_command[4],

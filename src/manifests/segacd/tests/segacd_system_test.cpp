@@ -88,7 +88,7 @@ namespace {
 
     // Issue a CDD Play command for the absolute MSF m:s:f.
     void issue_play(segacd_system& sys, int m, int s, int f) {
-        sys.gate_write_main(0x42, 0x30); // Play (command 3)
+        sys.gate_write_main(0x42, 0x03); // Play: command 3 in the LOW nibble of $42
         sys.gate_write_main(0x44, static_cast<std::uint8_t>(m / 10));
         sys.gate_write_main(0x45, static_cast<std::uint8_t>(m % 10));
         sys.gate_write_main(0x46, static_cast<std::uint8_t>(s / 10));
@@ -375,7 +375,7 @@ TEST_CASE("segacd CDD stop returns to the TOC state", "[segacd][cdd]") {
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
     issue_play(*sys, 0, 2, 0);
-    sys->gate_write_main(0x42, 0x10); // Stop (command 1)
+    sys->gate_write_main(0x42, 0x01); // Stop (command 1)
     sys->gate_write_main(0x4B, 0x00); // commit
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_toc);
     REQUIRE(sys->gate_read(0x38) == segacd_system::cdd_stop); // STOP status frame
@@ -386,7 +386,7 @@ TEST_CASE("segacd CDD reports first/last track numbers", "[segacd][cdd]") {
     auto disc = mnemos::disc::disc_image::open_bin(bin);
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
-    sys->gate_write_main(0x42, 0x20); // Report TOC (command 2)
+    sys->gate_write_main(0x42, 0x02); // Report TOC (command 2)
     sys->gate_write_main(0x44, 0x04); // sub-command: first/last track
     sys->gate_write_main(0x4B, 0x00); // commit
     // CDD status digits are one BCD digit per byte (low nibble): first track 01,
