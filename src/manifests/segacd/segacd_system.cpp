@@ -107,6 +107,14 @@ namespace mnemos::manifests::segacd {
             cdc_host_advance();
             return lo;
         }
+        // Diagnostic: the sub copies the main->sub comm payload $10-$1F (the CDBIOS
+        // $6162 copy). Log any NONZERO read to confirm whether the sub ever captures
+        // a real command packet, or only reads $10-$1F during 0-periods (timing miss).
+        if (offset >= 0x10U && offset <= 0x1FU && gate_array[offset] != 0U &&
+            gate_trace_enabled()) {
+            std::fprintf(stderr, "[commrd] sub reads comm $%02X = %02X\n", offset,
+                         gate_array[offset]);
+        }
         return gate_array[offset];
     }
 
