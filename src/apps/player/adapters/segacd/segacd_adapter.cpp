@@ -158,14 +158,17 @@ namespace mnemos::apps::player::adapters::segacd {
         static const std::uint64_t slice_cycles = slice_master_cycles();
         const std::uint64_t start_frame = scheduler_.frame_index();
         while (scheduler_.frame_index() == start_frame) {
-            scheduler_.run_master_cycles(slice_cycles);
+            machine_->begin_comm_slice();               // baseline both CPUs for poll-sync
+            scheduler_.run_master_cycles(slice_cycles); // main; comm writes catch the sub up
+            machine_->catch_up_sub();                   // sub-CPU runs up to the slice end
+            // PCM is paced independently of the sub-CPU (it must run even while the
+            // sub is held in reset), so keep its own master-derived cycle budget.
             const double sub_exact =
                 (static_cast<double>(slice_cycles) * kSubCpuHz / kGenesisMasterHz) +
                 sub_cycle_frac_;
-            const auto sub_cycles = static_cast<std::uint64_t>(sub_exact);
-            sub_cycle_frac_ = sub_exact - static_cast<double>(sub_cycles);
-            machine_->sub->run_cycles(sub_cycles); // no-op until the BIOS releases it
-            machine_->sub->pcm.tick(sub_cycles);   // PCM runs regardless of sub-CPU reset
+            const auto pcm_cycles = static_cast<std::uint64_t>(sub_exact);
+            sub_cycle_frac_ = sub_exact - static_cast<double>(pcm_cycles);
+            machine_->sub->pcm.tick(pcm_cycles); // PCM runs regardless of sub-CPU reset
         }
 
         // Tick the CD drive at 75 Hz (raises CDC/CDD IRQs the sub-CPU services).

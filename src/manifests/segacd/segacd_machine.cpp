@@ -19,6 +19,27 @@ namespace mnemos::manifests::segacd {
         }
     } // namespace
 
+    void segacd_machine::begin_comm_slice() noexcept {
+        slice_base_main_ = genesis->cpu.elapsed_cycles();
+        slice_base_sub_ = sub->sub_cpu.elapsed_cycles();
+    }
+
+    void segacd_machine::catch_up_sub() {
+        // Run the sub-CPU up to the main's position within the current slice. Sub
+        // cycles per main 68k cycle = 12.5 MHz / (53.693175 MHz / 7) = 87.5/53.693175.
+        const std::uint64_t main_now = genesis->cpu.elapsed_cycles();
+        if (main_now <= slice_base_main_) {
+            return;
+        }
+        const std::uint64_t main_delta = main_now - slice_base_main_;
+        const std::uint64_t target =
+            slice_base_sub_ + (main_delta * 87'500'000ULL) / 53'693'175ULL;
+        const std::uint64_t cur = sub->sub_cpu.elapsed_cycles();
+        if (target > cur) {
+            sub->run_cycles(target - cur); // no-op while the sub is held in reset
+        }
+    }
+
     std::unique_ptr<segacd_machine> assemble_segacd_machine(std::vector<std::uint8_t> bios,
                                                             const genesis::genesis_config& config) {
         auto machine = std::make_unique<segacd_machine>();
@@ -30,6 +51,7 @@ namespace mnemos::manifests::segacd {
         segacd_system* sub = machine->sub.get();
         genesis::genesis_system* gen = machine->genesis.get();
         topology::bus& bus = machine->genesis->bus;
+        segacd_machine* m = machine.get(); // for the comm poll-sync in the gate bridge
 
         // $A12000-$A120FF: gate array (main-side access). The 128 KB BIOS only
         // occupies $000000-$01FFFF, so these SCD windows sit in free address
@@ -37,12 +59,20 @@ namespace mnemos::manifests::segacd {
         bus.map_mmio(
             0xA12000U, 0x100U,
             [sub](std::uint32_t a) { return sub->gate_read(static_cast<std::uint8_t>(a & 0xFFU)); },
-            [sub, gen](std::uint32_t a, std::uint8_t v) {
-                if (machine_trace_enabled() && (a & 0xFFU) == 0x01U && (v & 0x01U) == 0U) {
-                    std::fprintf(stderr, "[park] main_pc=%06X writes gate $01=%02X\n",
-                                 gen->cpu.cpu_registers().pc, v);
+            [m](std::uint32_t a, std::uint8_t v) {
+                const auto off = static_cast<std::uint8_t>(a & 0xFFU);
+                // Poll-sync: before the main commits a comm-register write, run the
+                // sub up to the main's current cycle so it observes intermediate flag
+                // values. Without this the sub misses the main's $0E bit-2 clear->set
+                // pulse and the boot deadlocks at sub PC $6194 (its $0E.2 poll loop).
+                if (off == 0x0EU || off == 0x0FU || (off >= 0x10U && off <= 0x1FU)) {
+                    m->catch_up_sub();
                 }
-                sub->gate_write_main(static_cast<std::uint8_t>(a & 0xFFU), v);
+                if (machine_trace_enabled() && off == 0x01U && (v & 0x01U) == 0U) {
+                    std::fprintf(stderr, "[park] main_pc=%06X writes gate $01=%02X\n",
+                                 m->genesis->cpu.cpu_registers().pc, v);
+                }
+                m->sub->gate_write_main(off, v);
             },
             1);
 
