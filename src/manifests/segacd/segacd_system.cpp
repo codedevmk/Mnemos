@@ -177,11 +177,16 @@ namespace mnemos::manifests::segacd {
             sub_irq_mask = value;
             update_sub_irq();
         }
-        // $42-$4B CDD command buffer; writing $4B commits the command.
+        // $42-$4B CDD command buffer. The BIOS commits by writing $4A: $42-$49 hold
+        // the command code + params, $4A is the commit trigger. Match the reference --
+        // process on the $4A write and zero $4A afterward so the next command needs a
+        // fresh commit. (Committing on $4B fires a byte late and misses any command
+        // frame the BIOS terminates at $4A.)
         if (offset >= 0x42U && offset <= 0x4BU) {
             cdd_command[offset - 0x42U] = value;
-            if (offset == 0x4BU) {
+            if (offset == 0x4AU) {
                 cdd_process_command();
+                cdd_command[0x08U] = 0; // $4A: clear the commit trigger
             }
         }
         // $05 = CDC register-address pointer; $07 = CDC register-data (main side).

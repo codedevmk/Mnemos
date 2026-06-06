@@ -95,7 +95,7 @@ namespace {
         sys.gate_write_main(0x47, static_cast<std::uint8_t>(s % 10));
         sys.gate_write_main(0x48, static_cast<std::uint8_t>(f / 10));
         sys.gate_write_main(0x49, static_cast<std::uint8_t>(f % 10));
-        sys.gate_write_main(0x4B, 0x00); // commit
+        sys.gate_write_main(0x4A, 0x00); // commit (the reference commits on $4A)
     }
 
     // A 2-sector BIN: sector 0 is a valid Mode-1 sector (so open_bin accepts the
@@ -376,7 +376,7 @@ TEST_CASE("segacd CDD stop returns to the TOC state", "[segacd][cdd]") {
     sys->attach_disc(&*disc);
     issue_play(*sys, 0, 2, 0);
     sys->gate_write_main(0x42, 0x01); // Stop (command 1)
-    sys->gate_write_main(0x4B, 0x00); // commit
+    sys->gate_write_main(0x4A, 0x00); // commit
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_toc);
     REQUIRE(sys->gate_read(0x38) == segacd_system::cdd_stop); // STOP status frame
 }
@@ -388,7 +388,7 @@ TEST_CASE("segacd CDD reports first/last track numbers", "[segacd][cdd]") {
     sys->attach_disc(&*disc);
     sys->gate_write_main(0x42, 0x02); // Report TOC (command 2)
     sys->gate_write_main(0x44, 0x04); // sub-command: first/last track
-    sys->gate_write_main(0x4B, 0x00); // commit
+    sys->gate_write_main(0x4A, 0x00); // commit
     // CDD status digits are one BCD digit per byte (low nibble): first track 01,
     // last track 01 -> RS2/RS3 = 0,1 and RS4/RS5 = 0,1.
     REQUIRE(sys->gate_read(0x3A) == 0x00); // RS2 = first-track tens
