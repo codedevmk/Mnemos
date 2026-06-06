@@ -172,6 +172,28 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
 #pragma warning(pop)
 #endif
     segacd_adapter adapter(std::move(bios), {}, "", nullptr, disc_path != nullptr ? disc_path : "");
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const bool reinit_trace = std::getenv("MNEMOS_SEGACD_REINIT") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (reinit_trace) {
+        // The re-init ($206) is reached from $40C when the status flag at PRG
+        // $5A2E reads $FF (error). Trace who writes $5A2E and with what value.
+        auto* sub = adapter.machine().sub.get();
+        sub->sub_bus.set_access_observer([sub](const auto& ev) {
+            if (ev.write && ev.address >= 0x5870U && ev.address <= 0x5877U) {
+                static int n = 0;
+                if (n++ < 60) {
+                    std::fprintf(stderr, "[wr] [%04X]=%02X pc=%06X\n", ev.address, ev.value,
+                                 sub->sub_cpu.cpu_registers().pc);
+                }
+            }
+        });
+    }
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
         adapter.step_one_frame();
