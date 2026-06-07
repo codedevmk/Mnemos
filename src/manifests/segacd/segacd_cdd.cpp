@@ -246,9 +246,11 @@ namespace mnemos::manifests::segacd {
         // seeks or reads, which stalls the disc-boot at Get-Status forever.
         const auto cmd = static_cast<std::uint8_t>(cdd_command[0] & 0x0FU);
         if (cdd_trace_enabled()) {
-            std::fprintf(stderr, "[cdd] cmd=%X bytes=%02X%02X%02X%02X%02X%02X status=%02X lba=%d\n",
-                         cmd, cdd_command[1], cdd_command[2], cdd_command[3], cdd_command[4],
-                         cdd_command[5], cdd_command[6], cdd_drive_status, cdd_lba);
+            std::fprintf(stderr,
+                         "[cdd] pc=%06X cmd=%X bytes=%02X%02X%02X%02X%02X%02X status=%02X lba=%d\n",
+                         static_cast<unsigned>(sub_cpu.cpu_registers().pc), cmd, cdd_command[1],
+                         cdd_command[2], cdd_command[3], cdd_command[4], cdd_command[5],
+                         cdd_command[6], cdd_drive_status, cdd_lba);
         }
         switch (cmd) {
         case 0x00: // Get Drive Status
