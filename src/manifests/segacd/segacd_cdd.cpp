@@ -85,6 +85,15 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::cdd_commit_status() {
         cdd_status[9] = cdd_checksum(cdd_status);
+        if (cdd_trace_enabled()) {
+            unsigned sum = 0;
+            for (std::size_t i = 0; i < 10; ++i) {
+                sum += cdd_status[i];
+            }
+            std::fprintf(stderr, "[cksum] rs=%X%X%X%X%X%X%X%X%X%X ~sum&F=%X\n", cdd_status[0],
+                         cdd_status[1], cdd_status[2], cdd_status[3], cdd_status[4], cdd_status[5],
+                         cdd_status[6], cdd_status[7], cdd_status[8], cdd_status[9], (~sum) & 0xFU);
+        }
         for (std::size_t i = 0; i < 10; ++i) {
             gate_array[0x38U + i] = cdd_status[i];
         }
