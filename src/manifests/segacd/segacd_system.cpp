@@ -188,8 +188,12 @@ namespace mnemos::manifests::segacd {
             std::fprintf(stderr, "[maincmd] main $%02X = %02X\n", offset, value);
         }
         gate_array[offset] = value;
-        // $00 bit 0 IFL2: the main CPU pulses the sub-CPU level-2 IRQ.
-        if (offset == 0x00U && (value & 0x01U) != 0U) {
+        // $00 bit 0 IFL2: the main CPU pulses the sub-CPU level-2 IRQ -- but ONLY when L2
+        // is enabled in the sub IRQ mask ($33 bit 2), matching the reference. A pulse while
+        // L2 is masked is IGNORED, not latched; otherwise it fires spuriously the instant
+        // the BIOS later unmasks L2 and enables interrupts -- the boot diverged off the
+        // disc-read driver at sub PC $3FA into the L2 handler in exactly that way.
+        if (offset == 0x00U && (value & 0x01U) != 0U && (gate_array[0x33] & irq_ifl2) != 0U) {
             raise_sub_irq(irq_ifl2);
         }
         // $33 sub-CPU IRQ mask.
