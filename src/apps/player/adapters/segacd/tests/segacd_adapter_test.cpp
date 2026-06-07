@@ -224,14 +224,14 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::array<std::uint32_t, 64> main_pc_path{};
     std::size_t main_ring_idx = 0;
     bool main_path_captured = false;
-    std::uint8_t wp_982a = adapter.machine().sub->prg_ram[0x982AU]; // $982A Seek-gate watchpoint
+    std::uint8_t wp_97ea = adapter.machine().sub->prg_ram[0x97EAU]; // $97EA comm-sync wake flag
     if (pchist_trace) {
         adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++sub_pc_hist[pc];
-            const std::uint8_t v982a = adapter.machine().sub->prg_ram[0x982AU];
-            if (v982a != wp_982a) { // who clears the Seek-gate flag $982A (FF -> >=0)?
-                std::fprintf(stderr, "[wp982A] sub pc=%06X $982A %02X->%02X\n", pc, wp_982a, v982a);
-                wp_982a = v982a;
+            const std::uint8_t v97ea = adapter.machine().sub->prg_ram[0x97EAU];
+            if (v97ea != wp_97ea) { // who sets the wake flag $97EA the $79FE loop waits on?
+                std::fprintf(stderr, "[wp97EA] sub pc=%06X $97EA %02X->%02X\n", pc, wp_97ea, v97ea);
+                wp_97ea = v97ea;
             }
             pc_ring[pc_ring_idx % pc_ring.size()] = pc;
             ++pc_ring_idx;
