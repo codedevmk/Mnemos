@@ -207,6 +207,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
 #pragma warning(disable : 4996)
 #endif
     const bool pchist_trace = std::getenv("MNEMOS_SEGACD_PCHIST") != nullptr;
+    // Dump the full sub-CPU PC stream (3-byte LE per instruction) to a file, matching
+    // the reference emulator's headless trace format, for the differential boot trace.
+    const char* subtrace_path = std::getenv("MNEMOS_SEGACD_SUBTRACE");
+    std::FILE* subtrace = (subtrace_path != nullptr) ? std::fopen(subtrace_path, "wb") : nullptr;
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
@@ -225,9 +229,15 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::size_t main_ring_idx = 0;
     bool main_path_captured = false;
     std::uint8_t wp_97ea = adapter.machine().sub->prg_ram[0x97EAU]; // $97EA comm-sync wake flag
-    if (pchist_trace) {
+    if (pchist_trace || subtrace != nullptr) {
         adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++sub_pc_hist[pc];
+            if (subtrace != nullptr) {
+                const unsigned char b[3] = {static_cast<unsigned char>(pc & 0xFFU),
+                                            static_cast<unsigned char>((pc >> 8U) & 0xFFU),
+                                            static_cast<unsigned char>((pc >> 16U) & 0xFFU)};
+                std::fwrite(b, 1U, 3U, subtrace);
+            }
             const std::uint8_t v97ea = adapter.machine().sub->prg_ram[0x97EAU];
             if (v97ea != wp_97ea) { // who sets the wake flag $97EA the $79FE loop waits on?
                 std::fprintf(stderr, "[wp97EA] sub pc=%06X $97EA %02X->%02X\n", pc, wp_97ea, v97ea);
@@ -287,6 +297,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     }
     std::fprintf(stderr, "\n");
 
+    if (subtrace != nullptr) {
+        std::fclose(subtrace);
+        std::fprintf(stderr, "[subtrace] wrote sub-CPU PC stream to %s\n", subtrace_path);
+    }
     if (pchist_trace) {
         std::vector<std::pair<std::uint32_t, std::uint64_t>> top(sub_pc_hist.begin(),
                                                                  sub_pc_hist.end());
