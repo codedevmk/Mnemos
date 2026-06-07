@@ -251,6 +251,16 @@ namespace mnemos::manifests::segacd {
                          static_cast<unsigned>(sub_cpu.cpu_registers().pc), cmd, cdd_command[1],
                          cdd_command[2], cdd_command[3], cdd_command[4], cdd_command[5],
                          cdd_command[6], cdd_drive_status, cdd_lba);
+            const std::uint32_t sp = sub_cpu.cpu_registers().a[7];
+            const std::uint32_t m = prg_ram_size - 1U;
+            auto rd = [this, m](std::uint32_t a) -> std::uint32_t {
+                return (static_cast<std::uint32_t>(prg_ram[a & m]) << 24) |
+                       (static_cast<std::uint32_t>(prg_ram[(a + 1U) & m]) << 16) |
+                       (static_cast<std::uint32_t>(prg_ram[(a + 2U) & m]) << 8) |
+                       static_cast<std::uint32_t>(prg_ram[(a + 3U) & m]);
+            };
+            std::fprintf(stderr, "[cdd-ret] cmd=%X ret=%06X %06X %06X\n", cmd,
+                         rd(sp) & 0xFFFFFFU, rd(sp + 4U) & 0xFFFFFFU, rd(sp + 8U) & 0xFFFFFFU);
         }
         switch (cmd) {
         case 0x00: // Get Drive Status
