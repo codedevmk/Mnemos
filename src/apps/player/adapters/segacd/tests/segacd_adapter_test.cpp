@@ -228,7 +228,8 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::array<std::uint32_t, 64> main_pc_path{};
     std::size_t main_ring_idx = 0;
     bool main_path_captured = false;
-    std::uint8_t wp_97ea = adapter.machine().sub->prg_ram[0x97EAU]; // $97EA comm-sync wake flag
+    std::uint8_t wp_5837 = adapter.machine().sub->prg_ram[0x5837U]; // op-accept latch ($5837.0)
+    std::uint8_t wp_583b = adapter.machine().sub->prg_ram[0x583BU]; // op-active flag ($583B.7)
     if (pchist_trace || subtrace != nullptr) {
         adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++sub_pc_hist[pc];
@@ -238,10 +239,15 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                                             static_cast<unsigned char>((pc >> 16U) & 0xFFU)};
                 std::fwrite(b, 1U, 3U, subtrace);
             }
-            const std::uint8_t v97ea = adapter.machine().sub->prg_ram[0x97EAU];
-            if (v97ea != wp_97ea) { // who sets the wake flag $97EA the $79FE loop waits on?
-                std::fprintf(stderr, "[wp97EA] sub pc=%06X $97EA %02X->%02X\n", pc, wp_97ea, v97ea);
-                wp_97ea = v97ea;
+            const std::uint8_t v5837 = adapter.machine().sub->prg_ram[0x5837U];
+            if (v5837 != wp_5837) { // who sets the op-accept latch $5837 (bit0 arms the disc op)?
+                std::fprintf(stderr, "[wp5837] sub pc=%06X $5837 %02X->%02X\n", pc, wp_5837, v5837);
+                wp_5837 = v5837;
+            }
+            const std::uint8_t v583b = adapter.machine().sub->prg_ram[0x583BU];
+            if (v583b != wp_583b) { // who sets the op flag $583B (bit7 = operation active)?
+                std::fprintf(stderr, "[wp583B] sub pc=%06X $583B %02X->%02X\n", pc, wp_583b, v583b);
+                wp_583b = v583b;
             }
             pc_ring[pc_ring_idx % pc_ring.size()] = pc;
             ++pc_ring_idx;
