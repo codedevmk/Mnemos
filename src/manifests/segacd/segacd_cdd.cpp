@@ -270,6 +270,12 @@ namespace mnemos::manifests::segacd {
             };
             std::fprintf(stderr, "[cdd-ret] cmd=%X ret=%06X %06X %06X\n", cmd,
                          rd(sp) & 0xFFFFFFU, rd(sp + 4U) & 0xFFFFFFU, rd(sp + 8U) & 0xFFFFFFU);
+            const std::uint32_t a5 = sub_cpu.cpu_registers().a[5];
+            std::fprintf(stderr,
+                         "[flags] a5=%06X 5834=%02X 5836=%02X 5837=%02X 583A=%02X 583B=%02X\n",
+                         a5 & 0xFFFFFFU, prg_ram[(a5 + 0x5834U) & m], prg_ram[(a5 + 0x5836U) & m],
+                         prg_ram[(a5 + 0x5837U) & m], prg_ram[(a5 + 0x583AU) & m],
+                         prg_ram[(a5 + 0x583BU) & m]);
         }
         switch (cmd) {
         case 0x00: // Get Drive Status
