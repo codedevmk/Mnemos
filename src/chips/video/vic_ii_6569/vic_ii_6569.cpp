@@ -808,10 +808,17 @@ namespace mnemos::chips::video {
             }
         }
 
-        // 8 hardware sprites: 24x21, 1bpp (hi-res shape), fetched via the sprite
-        // pointers at the end of the video matrix ($D018 VM13-10 field + $03F8).
+        // 8 hardware sprites: 24x21, fetched via the sprite pointers at the end of
+        // the video matrix ($D018 VM13-10 field + $03F8). Pixels resolve to true
+        // C64 colour indices. Hi-res: a set bit is the sprite colour ($D027+i),
+        // a clear bit is transparent (index 0). Multicolour ($D01C bit i): each
+        // 2-bit pair spans two columns -> 00 transparent, 01 $D025, 10 $D027+i,
+        // 11 $D026.
         const auto vm_base =
             static_cast<std::uint16_t>(((owner_->regs_[reg_memptr] >> 4) & 0x0FU) << 10U);
+        const std::uint8_t mc_enable = owner_->regs_[reg_spmc];
+        const auto mc0 = static_cast<std::uint8_t>(owner_->regs_[reg_spmc0] & 0x0FU);
+        const auto mc1 = static_cast<std::uint8_t>(owner_->regs_[reg_spmc1] & 0x0FU);
         constexpr std::uint32_t spr_w = 24;
         constexpr std::uint32_t spr_h = 21;
         sprite_px_.assign(static_cast<std::size_t>(spr_w) * spr_h * vic_ii_6569::sprite_count, 0U);
@@ -821,15 +828,30 @@ namespace mnemos::chips::video {
                 owner_->fetch(static_cast<std::uint16_t>(vm_base + 0x03F8U + i));
             const auto data_base = static_cast<std::uint16_t>(pointer * 64U);
             spr_src[i] = data_base;
+            const auto sprite_col =
+                static_cast<std::uint8_t>(owner_->regs_[reg_sp0col + i] & 0x0FU);
+            const bool multicolour = (mc_enable & (1U << i)) != 0U;
             const std::size_t off = static_cast<std::size_t>(i) * spr_w * spr_h;
             for (std::uint32_t row = 0; row < spr_h; ++row) {
-                for (std::uint32_t byte = 0; byte < 3U; ++byte) {
-                    const std::uint8_t bits =
-                        owner_->fetch(static_cast<std::uint16_t>(data_base + row * 3U + byte));
-                    for (std::uint32_t b = 0; b < 8U; ++b) {
-                        sprite_px_[off + static_cast<std::size_t>(row) * spr_w + byte * 8U + b] =
-                            static_cast<std::uint8_t>((bits >> (7 - b)) & 1U);
+                const std::uint32_t rowbits =
+                    (static_cast<std::uint32_t>(
+                         owner_->fetch(static_cast<std::uint16_t>(data_base + row * 3U + 0U)))
+                     << 16U) |
+                    (static_cast<std::uint32_t>(
+                         owner_->fetch(static_cast<std::uint16_t>(data_base + row * 3U + 1U)))
+                     << 8U) |
+                    static_cast<std::uint32_t>(
+                        owner_->fetch(static_cast<std::uint16_t>(data_base + row * 3U + 2U)));
+                for (std::uint32_t col = 0; col < spr_w; ++col) {
+                    std::uint8_t idx = 0U;
+                    if (multicolour) {
+                        const std::uint32_t pair = col >> 1U; // 0..11, each 2px wide
+                        const std::uint32_t v = (rowbits >> (22U - pair * 2U)) & 0x3U;
+                        idx = v == 0U ? 0U : (v == 1U ? mc0 : (v == 2U ? sprite_col : mc1));
+                    } else {
+                        idx = ((rowbits >> (23U - col)) & 1U) != 0U ? sprite_col : 0U;
                     }
+                    sprite_px_[off + static_cast<std::size_t>(row) * spr_w + col] = idx;
                 }
             }
         }
