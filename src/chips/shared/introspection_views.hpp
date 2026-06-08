@@ -23,6 +23,8 @@ namespace mnemos::chips {
 
 namespace mnemos::instrumentation {
 
+    class asset_source; // asset_views.hpp -- decoded graphics-extraction surface
+
     // A dense byte-addressable region of a chip's state -- VRAM, work RAM, a
     // register file viewed as bytes, etc. Stable name + live bytes for the
     // duration of the chip. Callers must not retain the span across the chip's
@@ -122,6 +124,11 @@ namespace mnemos::instrumentation {
         [[nodiscard]] virtual register_view* registers() { return nullptr; }
         [[nodiscard]] virtual trace_target* trace() { return nullptr; }
         [[nodiscard]] virtual std::span<debug_layer* const> debug_layers() { return {}; }
+
+        // The decoded graphics-extraction surface (palettes, tiles, sprites,
+        // fonts), or nullptr when the chip exposes no extractable graphics.
+        // Defined in asset_views.hpp; consumers that call this include it.
+        [[nodiscard]] virtual asset_source* assets() { return nullptr; }
     };
 
 } // namespace mnemos::instrumentation

@@ -25,6 +25,7 @@ if(BUILD_TESTING)
             tests/state_test.cpp
             tests/iec_bus_test.cpp
             tests/introspection_views_test.cpp
+            tests/asset_views_test.cpp
             tests/callbacks_test.cpp
         LIBRARIES mnemos::chips::shared
     )
