@@ -125,3 +125,70 @@ TEST_CASE("vic_ii decodes a multicolour sprite into its four colours") {
     CHECK(spr0->image.indices[4] == 7U); // 11 -> $D026
     CHECK(spr0->image.indices[6] == 0U); // 00 -> transparent
 }
+
+TEST_CASE("vic_ii emits no bitmap asset in text mode") {
+    vic_ii_6569 vic; // default boot is text mode (BMM clear)
+    auto assets = vic.introspection().assets()->graphics();
+    CHECK(find(assets, asset_kind::bitmap, "bitmap") == nullptr);
+}
+
+TEST_CASE("vic_ii decodes a standard hi-res bitmap screen") {
+    vic_ii_6569 vic;
+    std::vector<std::uint8_t> ram(0x10000U, 0U);
+    std::vector<std::uint8_t> char_rom(0x1000U, 0U);
+    std::vector<std::uint8_t> color_ram(0x0400U, 0U);
+
+    // Screen cell 0 colours: hi nibble 1 (set bit), lo nibble 15 (clear bit).
+    ram[0x0400U] = 0x1FU;
+    // Bitmap cell 0, row 0: bit 7 set -> col 0 foreground, col 1 background.
+    ram[0x2000U] = 0x80U;
+
+    vic.attach_memory({.ram = std::span<const std::uint8_t>(ram),
+                       .char_rom = std::span<const std::uint8_t>(char_rom),
+                       .color_ram = std::span<const std::uint8_t>(color_ram)});
+    vic.set_bank(0U);
+    vic.write(0x18U, 0x18U); // VM base $0400, bitmap base $2000
+    vic.write(0x11U, 0x20U); // BMM (bitmap mode)
+
+    auto assets = vic.introspection().assets()->graphics();
+    const auto* bmp = find(assets, asset_kind::bitmap, "bitmap");
+    REQUIRE(bmp != nullptr);
+    CHECK(bmp->image.width == 320U);
+    CHECK(bmp->image.height == 200U);
+    CHECK(bmp->image.palette == 0U);
+    CHECK(bmp->source_addr == 0x2000U);
+    REQUIRE(bmp->image.well_formed());
+    CHECK(bmp->image.indices[0] == 1U);  // set pixel -> screen hi nibble
+    CHECK(bmp->image.indices[1] == 15U); // clear pixel -> screen lo nibble
+}
+
+TEST_CASE("vic_ii decodes a multicolour bitmap screen") {
+    vic_ii_6569 vic;
+    std::vector<std::uint8_t> ram(0x10000U, 0U);
+    std::vector<std::uint8_t> char_rom(0x1000U, 0U);
+    std::vector<std::uint8_t> color_ram(0x0400U, 0U);
+
+    ram[0x0400U] = 0x12U;       // screen cell 0: hi nibble 1, lo nibble 2
+    color_ram[0x0000U] = 0x03U; // colour RAM cell 0 = 3
+    // Bitmap cell 0, row 0 = 0b00_01_10_11: pairs select bg0 / scr-hi / scr-lo / cram.
+    ram[0x2000U] = 0x1BU;
+
+    vic.attach_memory({.ram = std::span<const std::uint8_t>(ram),
+                       .char_rom = std::span<const std::uint8_t>(char_rom),
+                       .color_ram = std::span<const std::uint8_t>(color_ram)});
+    vic.set_bank(0U);
+    vic.write(0x18U, 0x18U); // VM base $0400, bitmap base $2000
+    vic.write(0x11U, 0x20U); // BMM
+    vic.write(0x16U, 0x10U); // MCM (multicolour)
+    vic.write(0x21U, 0x04U); // background colour 0 = 4
+
+    auto assets = vic.introspection().assets()->graphics();
+    const auto* bmp = find(assets, asset_kind::bitmap, "bitmap");
+    REQUIRE(bmp != nullptr);
+    REQUIRE(bmp->image.well_formed());
+    // Each 2-bit pair fills two columns: 00->bg0, 01->scr hi, 10->scr lo, 11->cram.
+    CHECK(bmp->image.indices[0] == 4U);
+    CHECK(bmp->image.indices[2] == 1U);
+    CHECK(bmp->image.indices[4] == 2U);
+    CHECK(bmp->image.indices[6] == 3U);
+}

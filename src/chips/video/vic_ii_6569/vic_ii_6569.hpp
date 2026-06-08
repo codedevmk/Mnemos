@@ -178,6 +178,7 @@ namespace mnemos::chips::video {
                 mutable std::array<instrumentation::palette_view, 1> palettes_{};
                 mutable std::vector<std::uint8_t> charset_px_{};
                 mutable std::vector<std::uint8_t> sprite_px_{};
+                mutable std::vector<std::uint8_t> bitmap_px_{};
                 mutable std::vector<std::string> names_{};
                 mutable std::vector<instrumentation::graphic_asset> assets_{};
             };

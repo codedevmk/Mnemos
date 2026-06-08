@@ -54,7 +54,7 @@ direct PNG export.
 
 ```cpp
 // Palettes are their own type (palette_view); a graphic_asset is a pixel kind.
-enum class asset_kind : std::uint8_t { tileset, sprite, font };
+enum class asset_kind : std::uint8_t { tileset, sprite, font, bitmap };
 
 // 0x00RRGGBB entries; index 0 may be transparent (see transparent_index).
 struct palette_view {

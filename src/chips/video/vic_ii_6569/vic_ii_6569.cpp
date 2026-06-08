@@ -856,10 +856,58 @@ namespace mnemos::chips::video {
             }
         }
 
+        // Bitmap-mode screen (BMM, $D011 bit 5): the full 320x200 image the VIC
+        // composes from the 8 KiB bitmap plus screen/colour RAM, decoded to true
+        // C64 colour indices. Standard mode takes a cell's two colours from the
+        // screen-RAM nibbles; multicolour mode reads 2-bit pixels (00 background,
+        // 01 screen-hi, 10 screen-lo, 11 colour RAM) at half resolution, doubled
+        // back to 320 wide. Only emitted when the VIC is actually in bitmap mode.
+        constexpr std::uint32_t bmp_w = 320;
+        constexpr std::uint32_t bmp_h = 200;
+        const bool bmm = (owner_->regs_[reg_scroly] & scroly_bmm) != 0U;
+        const bool bmp_mcm = (owner_->regs_[reg_scrolx] & scrolx_mcm) != 0U;
+        const auto bm_base = static_cast<std::uint16_t>(
+            (owner_->regs_[reg_memptr] & 0x08U) != 0U ? 0x2000U : 0x0000U);
+        const auto bg0_idx = static_cast<std::uint8_t>(owner_->regs_[reg_bgcol0] & 0x0FU);
+        if (bmm) {
+            bitmap_px_.assign(static_cast<std::size_t>(bmp_w) * bmp_h, 0U);
+            for (std::uint32_t y = 0; y < bmp_h; ++y) {
+                for (std::uint32_t x = 0; x < bmp_w; ++x) {
+                    const auto cell = static_cast<std::uint16_t>((y / 8U) * 40U + (x / 8U));
+                    const std::uint32_t glyph_y = y % 8U;
+                    const std::uint32_t glyph_x = x % 8U;
+                    const std::uint8_t scr =
+                        owner_->fetch(static_cast<std::uint16_t>(vm_base + cell));
+                    const std::uint8_t cram =
+                        cell < owner_->memory_.color_ram.size()
+                            ? static_cast<std::uint8_t>(owner_->memory_.color_ram[cell] & 0x0FU)
+                            : 0U;
+                    const std::uint8_t gfx =
+                        owner_->fetch(static_cast<std::uint16_t>(bm_base + cell * 8U + glyph_y));
+                    std::uint8_t idx = 0U;
+                    if (bmp_mcm) {
+                        const auto pair =
+                            static_cast<std::uint8_t>((gfx >> (6U - (glyph_x & 0x06U))) & 0x03U);
+                        idx =
+                            pair == 0U
+                                ? bg0_idx
+                                : (pair == 1U ? static_cast<std::uint8_t>(scr >> 4U)
+                                              : (pair == 2U ? static_cast<std::uint8_t>(scr & 0x0FU)
+                                                            : cram));
+                    } else {
+                        idx = ((gfx >> (7U - glyph_x)) & 0x01U) != 0U
+                                  ? static_cast<std::uint8_t>(scr >> 4U)
+                                  : static_cast<std::uint8_t>(scr & 0x0FU);
+                    }
+                    bitmap_px_[static_cast<std::size_t>(y) * bmp_w + x] = idx;
+                }
+            }
+        }
+
         names_.clear();
         names_.reserve(vic_ii_6569::sprite_count);
         assets_.clear();
-        assets_.reserve(vic_ii_6569::sprite_count + 1U);
+        assets_.reserve(vic_ii_6569::sprite_count + 2U);
         assets_.push_back(instrumentation::graphic_asset{
             .kind = instrumentation::asset_kind::font,
             .name = "charset",
@@ -883,6 +931,15 @@ namespace mnemos::chips::video {
                 .tile_w = 0U,
                 .tile_h = 0U,
                 .source_addr = spr_src[i]});
+        }
+        if (bmm) {
+            assets_.push_back(instrumentation::graphic_asset{
+                .kind = instrumentation::asset_kind::bitmap,
+                .name = "bitmap",
+                .image = {.width = bmp_w, .height = bmp_h, .indices = bitmap_px_, .palette = 0U},
+                .tile_w = 0U,
+                .tile_h = 0U,
+                .source_addr = bm_base});
         }
         return assets_;
     }

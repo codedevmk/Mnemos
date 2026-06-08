@@ -115,6 +115,7 @@ TEST_CASE("asset_kind_name maps every kind", "[asset]") {
     CHECK(asset_kind_name(asset_kind::tileset) == "tileset");
     CHECK(asset_kind_name(asset_kind::sprite) == "sprite");
     CHECK(asset_kind_name(asset_kind::font) == "font");
+    CHECK(asset_kind_name(asset_kind::bitmap) == "bitmap");
 }
 
 TEST_CASE("ichip_introspection exposes no asset_source by default", "[asset]") {

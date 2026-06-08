@@ -36,6 +36,7 @@ namespace mnemos::instrumentation {
         tileset, // a sheet of fixed-size background tiles / patterns
         sprite,  // one decoded hardware sprite
         font,    // a tile range a manifest marks as text glyphs
+        bitmap,  // a full decoded bitmap-mode image (e.g. a C64 bitmap screen)
     };
 
     [[nodiscard]] constexpr std::string_view asset_kind_name(asset_kind kind) noexcept {
@@ -46,6 +47,8 @@ namespace mnemos::instrumentation {
             return "sprite";
         case asset_kind::font:
             return "font";
+        case asset_kind::bitmap:
+            return "bitmap";
         }
         return "unknown";
     }
