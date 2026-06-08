@@ -1,11 +1,13 @@
 #pragma once
 
+#include "asset_views.hpp"
 #include "chip.hpp"
 
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace mnemos::chips::video {
@@ -201,8 +203,31 @@ namespace mnemos::chips::video {
             [[nodiscard]] std::span<instrumentation::debug_layer* const> debug_layers() override {
                 return layer_table_;
             }
+            [[nodiscard]] instrumentation::asset_source* assets() override { return &assets_; }
 
           private:
+            // Decodes the VDP's live graphics into the asset-extraction contract:
+            // the four 16-colour CRAM palettes, the 2048-pattern tile sheet, and
+            // one image per sprite in the SAT linked list. Buffers rebuilt per
+            // call (the contract's tick lifetime rule).
+            class asset_source_impl final : public instrumentation::asset_source {
+              public:
+                explicit asset_source_impl(genesis_vdp& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const instrumentation::palette_view>
+                palettes() const override;
+                [[nodiscard]] std::span<const instrumentation::graphic_asset>
+                graphics() const override;
+
+              private:
+                genesis_vdp* owner_;
+                mutable std::array<std::array<std::uint32_t, 16>, 4> pal_rgb_{};
+                mutable std::array<instrumentation::palette_view, 4> palettes_{};
+                mutable std::vector<std::uint8_t> tileset_px_{};
+                mutable std::vector<std::uint8_t> sprite_px_{};
+                mutable std::vector<std::string> names_{};
+                mutable std::vector<instrumentation::graphic_asset> assets_{};
+            };
+
             class registers_impl final : public instrumentation::register_view {
               public:
                 explicit registers_impl(genesis_vdp& owner) noexcept : owner_(&owner) {}
@@ -231,6 +256,7 @@ namespace mnemos::chips::video {
             instrumentation::span_memory_view regs_view_;
             registers_impl registers_impl_;
             plane_a_layer_impl plane_a_;
+            asset_source_impl assets_;
 
             std::array<instrumentation::memory_view*, 4> mem_table_{};
             std::array<instrumentation::debug_layer*, 1> layer_table_{};
