@@ -52,6 +52,19 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<extract_assets_request> parse_extract_assets_args(int argc,
                                                                                   char* argv[]);
 
+    // --extract-audio <base> [--extract-frames N]: the audio analogue of
+    // --extract-assets. Headless run that advances N frames (default 0) then
+    // writes every chip's PCM samples to `<base>.*` WAV/JSON files, and exits.
+    // Only `--extract-audio <base>` is required; a missing or empty base
+    // disables the path.
+    struct extract_audio_request final {
+        std::string base;
+        std::uint64_t frames{};
+    };
+
+    [[nodiscard]] std::optional<extract_audio_request> parse_extract_audio_args(int argc,
+                                                                                char* argv[]);
+
     // Frames a scripted button is held when `--press <button>@<frame>` gives no
     // explicit `+duration` (long enough for a 60 Hz poll to catch the press).
     inline constexpr std::uint64_t press_default_duration = 4U;

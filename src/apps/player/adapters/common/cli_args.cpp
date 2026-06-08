@@ -2,8 +2,10 @@
 
 #include <cctype>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace mnemos::apps::player::adapters {
 
@@ -161,26 +163,46 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
-    std::optional<extract_assets_request> parse_extract_assets_args(int argc, char* argv[]) {
-        std::optional<std::string> base;
-        std::uint64_t frames = 0U;
-        for (int i = 1; i < argc - 1; ++i) {
-            const std::string_view a{argv[i]};
-            if (a == "--extract-assets") {
-                const std::string_view value{argv[i + 1]};
-                // Reject an option-shaped token (e.g. a stray "--extract-frames"
-                // with no base path); leaving base unset disables the path.
-                if (!value.empty() && !value.starts_with("--")) {
-                    base = std::string{value};
+    namespace {
+        // Shared parse for the `--extract-* <base> [--extract-frames N]` family:
+        // returns the base path (rejecting an option-shaped value) and the frame
+        // count (default 0), or nullopt when `base_flag` is absent/valueless.
+        std::optional<std::pair<std::string, std::uint64_t>>
+        parse_base_and_frames(int argc, char* argv[], std::string_view base_flag) {
+            std::optional<std::string> base;
+            std::uint64_t frames = 0U;
+            for (int i = 1; i < argc - 1; ++i) {
+                const std::string_view a{argv[i]};
+                if (a == base_flag) {
+                    const std::string_view value{argv[i + 1]};
+                    // Reject an option-shaped token (e.g. a stray "--extract-frames"
+                    // with no base path); leaving base unset disables the path.
+                    if (!value.empty() && !value.starts_with("--")) {
+                        base = std::string{value};
+                        ++i; // skip the consumed value
+                    }
+                } else if (a == "--extract-frames") {
+                    frames = std::strtoull(argv[i + 1], nullptr, 10);
                     ++i; // skip the consumed value
                 }
-            } else if (a == "--extract-frames") {
-                frames = std::strtoull(argv[i + 1], nullptr, 10);
-                ++i; // skip the consumed value
             }
+            if (base) {
+                return std::pair{*base, frames};
+            }
+            return std::nullopt;
         }
-        if (base) {
-            return extract_assets_request{*base, frames};
+    } // namespace
+
+    std::optional<extract_assets_request> parse_extract_assets_args(int argc, char* argv[]) {
+        if (auto r = parse_base_and_frames(argc, argv, "--extract-assets")) {
+            return extract_assets_request{r->first, r->second};
+        }
+        return std::nullopt;
+    }
+
+    std::optional<extract_audio_request> parse_extract_audio_args(int argc, char* argv[]) {
+        if (auto r = parse_base_and_frames(argc, argv, "--extract-audio")) {
+            return extract_audio_request{r->first, r->second};
         }
         return std::nullopt;
     }
