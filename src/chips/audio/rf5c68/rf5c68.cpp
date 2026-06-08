@@ -61,6 +61,12 @@ namespace mnemos::chips::audio {
             break;
         case reg_st:
             v.start_high = value;
+            // RF5C164: an ST write moves the live play address only while the
+            // voice is stopped (channel OFF); a sounding voice keeps its address.
+            if (v.muted) {
+                v.sample_pos = static_cast<std::uint16_t>(value << 8U);
+                v.sample_frac = 0U;
+            }
             break;
         default:
             break;
@@ -81,8 +87,20 @@ namespace mnemos::chips::audio {
             break;
         case reg_chan:
             channel_mute_ = value;
+            // $08 ON/OFF (bit set = channel OFF). Turning a channel ON keys the
+            // voice so it sounds from its current play address; turning it OFF
+            // reloads that address to the start, so the next ON restarts it.
+            // This is the only key-on path real Sega CD software uses.
             for (int i = 0; i < voice_count; ++i) {
-                voices_[static_cast<std::size_t>(i)].muted = (value & (1U << i)) != 0U;
+                voice& v = voices_[static_cast<std::size_t>(i)];
+                const bool muted = (value & (1U << i)) != 0U;
+                v.muted = muted;
+                if (muted) {
+                    v.sample_pos = static_cast<std::uint16_t>(v.start_high << 8U);
+                    v.sample_frac = 0U;
+                } else {
+                    v.active = true;
+                }
             }
             break;
         default:
@@ -182,14 +200,16 @@ namespace mnemos::chips::audio {
         }
     }
 
-    std::size_t rf5c68::drain_samples(std::int16_t* out, std::size_t max_samples) noexcept {
-        const std::size_t n = std::min(sample_queue_.size(), max_samples);
+    std::size_t rf5c68::drain_samples(std::int16_t* out, std::size_t max_pairs) noexcept {
+        // The queue holds interleaved (L,R) int16; counts are in stereo pairs.
+        const std::size_t avail_pairs = sample_queue_.size() / 2U;
+        const std::size_t n = std::min(avail_pairs, max_pairs);
         if (n == 0U) {
             return 0U;
         }
-        std::memcpy(out, sample_queue_.data(), n * sizeof(std::int16_t));
+        std::memcpy(out, sample_queue_.data(), n * 2U * sizeof(std::int16_t));
         sample_queue_.erase(sample_queue_.begin(),
-                            sample_queue_.begin() + static_cast<std::ptrdiff_t>(n));
+                            sample_queue_.begin() + static_cast<std::ptrdiff_t>(n * 2U));
         return n;
     }
 

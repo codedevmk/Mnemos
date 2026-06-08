@@ -76,12 +76,18 @@ namespace mnemos::chips::audio {
         // Fill `buf_lr` with interleaved L,R samples (size must be even).
         void generate(std::span<std::int16_t> buf_lr) noexcept;
 
-        // Real-time capture sink (mirrors sn76489): when enabled, tick() queues
-        // interleaved L/R samples drained via drain_samples().
+        // Real-time capture sink (mirrors ym2612): when enabled, tick() queues
+        // one interleaved (L,R) stereo frame per native sample step. The counts
+        // below are in STEREO FRAMES (pairs) -- matching ym2612 and the player's
+        // add_source() contract -- NOT raw int16 samples.
         void enable_audio_capture(bool on) noexcept { audio_capture_ = on; }
         [[nodiscard]] bool audio_capture_enabled() const noexcept { return audio_capture_; }
-        [[nodiscard]] std::size_t pending_samples() const noexcept { return sample_queue_.size(); }
-        std::size_t drain_samples(std::int16_t* out, std::size_t max_samples) noexcept;
+        [[nodiscard]] std::size_t pending_samples() const noexcept {
+            return sample_queue_.size() / 2U;
+        }
+        // Copies up to `max_pairs` (L,R) pairs into `out` (2*max_pairs int16) and
+        // removes them from the queue; returns the number of pairs copied.
+        std::size_t drain_samples(std::int16_t* out, std::size_t max_pairs) noexcept;
         // Input cycles per native sample step.
         void set_clock_divider(int divider) noexcept {
             clock_divider_ = divider > 0 ? divider : default_clock_divider;

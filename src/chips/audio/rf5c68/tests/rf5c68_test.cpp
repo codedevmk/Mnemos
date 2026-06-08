@@ -39,8 +39,7 @@ namespace {
         chip.write_reg(rf5c68::reg_lsh, 0x01);  // loop_start = 0x0100
         chip.write_reg(rf5c68::reg_st, 0x01);   // start = 0x0100
         chip.write_reg(rf5c68::reg_ctrl, 0x80); // enable, voice 0
-        chip.write_reg(rf5c68::reg_chan, 0xFE); // unmute channel 0 only
-        chip.key_on(0);
+        chip.write_reg(rf5c68::reg_chan, 0xFE); // channel 0 ON -> keys the voice
     }
 
     constexpr std::array<std::int16_t, 128> kPcmGolden = {
@@ -106,4 +105,60 @@ TEST_CASE("rf5c68 save_state/load_state round-trips bit-identically", "[rf5c68][
     a.generate(from_a);
     b.generate(from_b);
     REQUIRE(from_a == from_b);
+}
+
+TEST_CASE("rf5c68 channel-enable keys the voice without an explicit key_on", "[rf5c68][audio]") {
+    rf5c68 chip;
+    constexpr std::array<std::uint8_t, 4> wave = {0x30, 0x40, 0x50, 0xFF};
+    const auto ram = chip.waveram();
+    for (std::size_t i = 0; i < wave.size(); ++i) {
+        ram[0x0200 + i] = wave[i];
+    }
+    chip.write_reg(rf5c68::reg_ctrl, 0x00); // select voice 0
+    chip.write_reg(rf5c68::reg_env, 0xFF);
+    chip.write_reg(rf5c68::reg_pan, 0xFF); // full left + right
+    chip.write_reg(rf5c68::reg_fdl, 0x00);
+    chip.write_reg(rf5c68::reg_fdh, 0x08);  // ~1 sample/step
+    chip.write_reg(rf5c68::reg_st, 0x02);   // start = 0x0200 (reloads addr while OFF)
+    chip.write_reg(rf5c68::reg_ctrl, 0x80); // enable the chip
+    // Enable channel 0 via the ON/OFF register ONLY -- no explicit key_on().
+    chip.write_reg(rf5c68::reg_chan, 0xFE);
+    chip.step();
+    REQUIRE(chip.last_left() != 0); // the voice sounds from its start address
+    REQUIRE(chip.last_right() != 0);
+
+    // Turning the channel OFF reloads the start address and silences it.
+    chip.write_reg(rf5c68::reg_chan, 0xFF);
+    chip.step();
+    REQUIRE(chip.last_left() == 0);
+    REQUIRE(chip.last_right() == 0);
+}
+
+TEST_CASE("rf5c68 audio capture counts and drains in stereo frames", "[rf5c68][audio]") {
+    rf5c68 chip;
+    configure_voice0(chip); // an enabled, audible voice
+    chip.enable_audio_capture(true);
+    constexpr std::size_t frames = 10U;
+    chip.tick(frames); // clock_divider defaults to 1 -> one (L,R) frame per cycle
+
+    // pending_samples() is in stereo frames (pairs), matching ym2612 + the
+    // player's add_source() contract -- NOT raw int16.
+    REQUIRE(chip.pending_samples() == frames);
+
+    // Drain fewer pairs than queued: returns pairs, fills 2*pairs int16.
+    std::array<std::int16_t, 16> buf{};
+    const std::size_t got = chip.drain_samples(buf.data(), 3U);
+    REQUIRE(got == 3U);
+    REQUIRE(chip.pending_samples() == frames - 3U);
+    bool any_nonzero = false; // an active voice must produce non-silent capture
+    for (std::size_t i = 0; i < got * 2U; ++i) {
+        any_nonzero = any_nonzero || (buf[i] != 0);
+    }
+    REQUIRE(any_nonzero);
+
+    // Draining past the end returns only what remains.
+    std::array<std::int16_t, 64> rest{};
+    const std::size_t left = chip.drain_samples(rest.data(), 100U);
+    REQUIRE(left == frames - 3U);
+    REQUIRE(chip.pending_samples() == 0U);
 }
