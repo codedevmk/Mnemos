@@ -37,7 +37,7 @@ a caller requires valid ECC.
 
 ## Roadmap
 
-- `chd_image` (MAME compressed-hunk disc) — will use `mnemos::compression::lzma1`
+- `chd_image` (compressed-hunk disc image format) — will use `mnemos::compression::lzma1`
   (already staged for this) + `circ_ecc` for cdlz sector reconstruction.
 - The Sega CD system itself (sub-CPU, gate array, CDC/CDD) consumes `disc_image`
   via `read_sector`/`read_raw_sector` in phase C.
