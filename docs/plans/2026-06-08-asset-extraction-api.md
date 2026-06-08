@@ -142,17 +142,21 @@ sidecar uses the foundation JSON writer if present, else a tiny local emitter.
 
 ### 4. Manifest font hint (optional, additive)
 
-Add an optional `[video.font]` table to system manifests so font extraction is
-declarative, not hardcoded:
+Make font extraction declarative via the existing per-chip `[chip.config]`
+scalar bag (the manifest layer only supports flat scalar keys there, not nested
+tables), read through the VDP's `configure(cfg, callbacks)` path -- no new
+plumbing:
 
 ```toml
-[video.font]
-first_tile = 0
-count = 96
+[chip.config]
+font_first_tile = 4   # first glyph's VRAM tile index
+font_count      = 96  # glyph tile count; 0 (default) = no font asset
 ```
 
-The VDP reads it via the existing `configure(cfg, callbacks)` path (no new
-plumbing). Absent table = no font asset; never an error. Wire SMS first.
+Absent / zero count = no font asset; never an error. The hint is clamped to the
+tile space. Shipped SMS manifests leave it unset (the glyph range is per-game);
+the knob is documented in `src/manifests/sms/README.md` and exercised by the
+VDP unit tests via `configure()`.
 
 ### 5. CLI surface — `apps/player`
 

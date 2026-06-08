@@ -125,6 +125,7 @@ namespace mnemos::chips::video {
                 mutable std::array<instrumentation::palette_view, 2> palettes_{};
                 mutable std::vector<std::uint8_t> tileset_px_{};
                 mutable std::vector<std::uint8_t> sprite_px_{};
+                mutable std::vector<std::uint8_t> font_px_{};
                 mutable std::vector<std::string> names_{};
                 mutable std::vector<instrumentation::graphic_asset> assets_{};
             };
@@ -159,6 +160,15 @@ namespace mnemos::chips::video {
         int total_scanlines_{scanlines_ntsc};
         bool pal_mode_{};
         bool gg_mode_{}; // Game Gear VDP mode (12-bit CRAM + 160x144 viewport)
+
+        // Font-extraction hint from the manifest ([chip.config] font_first_tile /
+        // font_count). SMS has no hardware font, so the glyph tile range is a
+        // per-game convention; when font_count_ > 0 the asset_source emits a
+        // "font" sheet over [font_first_tile_, font_first_tile_ + font_count_).
+        // Set by configure(); deliberately NOT touched by reset() so a runtime
+        // soft reset doesn't drop the manifest-supplied hint.
+        int font_first_tile_{0};
+        int font_count_{0};
 
         bool frame_irq_pending_{};
         bool line_irq_pending_{};

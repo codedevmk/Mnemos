@@ -3,6 +3,7 @@
 #include "chip_registry.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <memory>
@@ -621,7 +622,7 @@ namespace mnemos::chips::video {
         names_.clear();
         names_.reserve(metas.size());
         assets_.clear();
-        assets_.reserve(metas.size() + 1U);
+        assets_.reserve(metas.size() + 2U);
         assets_.push_back(instrumentation::graphic_asset{
             .kind = instrumentation::asset_kind::tileset,
             .name = "patterns",
@@ -645,6 +646,39 @@ namespace mnemos::chips::video {
                 .tile_h = 0U,
                 .source_addr = metas[s].src});
         }
+
+        // Optional font sheet: the manifest-hinted glyph tile range, decoded as
+        // an 8x8 tile sheet 16 cells wide (against the background palette).
+        if (owner_->font_count_ > 0) {
+            const int count = owner_->font_count_;
+            const int first = owner_->font_first_tile_;
+            constexpr int per_row = 16;
+            const auto fw = static_cast<std::uint32_t>(per_row * 8);
+            const auto fh = static_cast<std::uint32_t>(((count + per_row - 1) / per_row) * 8);
+            font_px_.assign(static_cast<std::size_t>(fw) * fh, 0U);
+            for (int t = 0; t < count; ++t) {
+                const int gcol = t % per_row;
+                const int grow = t / per_row;
+                for (int row = 0; row < 8; ++row) {
+                    std::array<std::uint8_t, 8> pix{};
+                    decode_tile_row(vram, first + t, row, false, pix);
+                    const std::size_t base =
+                        (static_cast<std::size_t>(grow) * 8U + static_cast<std::size_t>(row)) * fw +
+                        static_cast<std::size_t>(gcol) * 8U;
+                    for (int p = 0; p < 8; ++p) {
+                        font_px_[base + static_cast<std::size_t>(p)] =
+                            pix[static_cast<std::size_t>(p)];
+                    }
+                }
+            }
+            assets_.push_back(instrumentation::graphic_asset{
+                .kind = instrumentation::asset_kind::font,
+                .name = "font",
+                .image = {.width = fw, .height = fh, .indices = font_px_, .palette = 0U},
+                .tile_w = 8U,
+                .tile_h = 8U,
+                .source_addr = static_cast<std::uint32_t>(first) * 32U});
+        }
         return assets_;
     }
 
@@ -660,6 +694,17 @@ namespace mnemos::chips::video {
             if (const auto* fn = chips::find_callback<void(bool)>(callbacks, *id)) {
                 set_irq_callback(*fn);
             }
+        }
+        // Optional font-extraction hint: the glyph tile range surfaced as a
+        // "font" asset. Clamped to the 512-pattern VRAM tile space; a missing
+        // or non-positive count leaves font extraction off.
+        constexpr int max_tiles = vram_size / 32; // 512
+        if (const auto first = chips::cfg_int(cfg, "font_first_tile")) {
+            font_first_tile_ = static_cast<int>(std::clamp<std::int64_t>(*first, 0, max_tiles - 1));
+        }
+        if (const auto count = chips::cfg_int(cfg, "font_count")) {
+            font_count_ =
+                static_cast<int>(std::clamp<std::int64_t>(*count, 0, max_tiles - font_first_tile_));
         }
     }
 

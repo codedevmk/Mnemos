@@ -4,6 +4,8 @@
 // the system-agnostic contract only (no downcast to sms_vdp).
 
 #include "asset_views.hpp"
+#include "callbacks.hpp"
+#include "config.hpp"
 #include "sms_vdp.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -123,4 +125,58 @@ TEST_CASE("sms_vdp tall-sprite mode reports 8x16 sprite assets") {
     CHECK(spr.image.width == 8U);
     CHECK(spr.image.height == 16U);
     REQUIRE(spr.image.well_formed());
+}
+
+namespace {
+    [[nodiscard]] const mnemos::instrumentation::graphic_asset*
+    find_font(std::span<const mnemos::instrumentation::graphic_asset> assets) {
+        for (const auto& a : assets) {
+            if (a.kind == asset_kind::font) {
+                return &a;
+            }
+        }
+        return nullptr;
+    }
+} // namespace
+
+TEST_CASE("sms_vdp emits no font asset without a manifest hint") {
+    sms_vdp vdp;
+    CHECK(find_font(vdp.introspection().assets()->graphics()) == nullptr);
+}
+
+TEST_CASE("sms_vdp font hint surfaces a glyph tile sheet") {
+    sms_vdp vdp;
+    mnemos::chips::config_table cfg;
+    cfg.emplace("font_first_tile", mnemos::chips::config_value{std::int64_t{4}});
+    cfg.emplace("font_count", mnemos::chips::config_value{std::int64_t{96}});
+    vdp.configure(cfg, mnemos::chips::callback_table{});
+
+    // Seed glyph tile 4, row 0, plane 0 bit 7 -> pixel (0,0) is colour 1.
+    write_vram(vdp, static_cast<std::uint16_t>(4 * 32), {0x80U});
+
+    const auto* font = find_font(vdp.introspection().assets()->graphics());
+    REQUIRE(font != nullptr);
+    CHECK(font->name == "font");
+    CHECK(font->image.width == 128U); // 16 glyphs wide
+    CHECK(font->image.height == 48U); // 96 glyphs / 16 = 6 rows * 8 px
+    CHECK(font->tile_w == 8U);
+    CHECK(font->tile_h == 8U);
+    CHECK(font->image.palette == 0U);
+    CHECK(font->source_addr == 4U * 32U);
+    REQUIRE(font->image.well_formed());
+    CHECK(font->image.indices[0] == 1U); // first glyph's first pixel
+}
+
+TEST_CASE("sms_vdp font hint clamps an over-long range to the tile space") {
+    sms_vdp vdp;
+    mnemos::chips::config_table cfg;
+    cfg.emplace("font_first_tile", mnemos::chips::config_value{std::int64_t{500}});
+    cfg.emplace("font_count", mnemos::chips::config_value{std::int64_t{9999}});
+    vdp.configure(cfg, mnemos::chips::callback_table{});
+
+    const auto* font = find_font(vdp.introspection().assets()->graphics());
+    REQUIRE(font != nullptr);
+    // 512 total tiles - 500 first = 12 glyphs -> still 16 wide, one 8px row.
+    CHECK(font->image.height == 8U);
+    REQUIRE(font->image.well_formed());
 }
