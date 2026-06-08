@@ -5,20 +5,6 @@
 
 namespace mnemos::manifests::segacd {
 
-    namespace {
-        bool machine_trace_enabled() {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic, not hot-path
-#endif
-            static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            return on;
-        }
-    } // namespace
-
     void segacd_machine::begin_comm_slice() noexcept {
         // Fold the just-ended slice's fractional sub-cycle remainder into the carry
         // before re-baselining, so the sub's long-term rate tracks 87.5/53.693175
@@ -89,7 +75,7 @@ namespace mnemos::manifests::segacd {
                 if (off == 0x0EU || off == 0x0FU || (off >= 0x10U && off <= 0x1FU)) {
                     m->catch_up_sub();
                 }
-                if (machine_trace_enabled() && off == 0x01U && (v & 0x01U) == 0U) {
+                if (segacd_trace_enabled() && off == 0x01U && (v & 0x01U) == 0U) {
                     std::fprintf(stderr, "[park] main_pc=%06X writes gate $01=%02X\n",
                                  m->genesis->cpu.cpu_registers().pc, v);
                 }
@@ -110,7 +96,7 @@ namespace mnemos::manifests::segacd {
                 const std::uint32_t base =
                     ((static_cast<std::uint32_t>(sub->gate_array[0x03]) >> 6U) & 0x03U) * 0x20000U;
                 const std::uint32_t off = (base + (a & 0x1FFFFU)) & (prg_ram_size - 1U);
-                if (machine_trace_enabled() && off >= 0x100U && off <= 0x57FFU) {
+                if (segacd_trace_enabled() && off >= 0x100U && off <= 0x57FFU) {
                     std::fprintf(stderr, "[prgw] main_pc=%06X prg[%05X]=%02X\n",
                                  gen->cpu.cpu_registers().pc, off, v);
                 }

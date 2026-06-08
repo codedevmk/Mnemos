@@ -13,18 +13,6 @@
 
 namespace mnemos::manifests::segacd {
     namespace {
-        // Opt-in CDD command trace (MNEMOS_SEGACD_TRACE) for disc-boot debugging.
-        bool cdd_trace_enabled() {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic, not hot-path
-#endif
-            static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            return on;
-        }
         std::uint8_t bcd_byte(std::uint32_t v) {
             return static_cast<std::uint8_t>(((v / 10U) << 4U) | (v % 10U));
         }
@@ -85,7 +73,7 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::cdd_commit_status() {
         cdd_status[9] = cdd_checksum(cdd_status);
-        if (cdd_trace_enabled()) {
+        if (segacd_trace_enabled()) {
             unsigned sum = 0;
             for (std::size_t i = 0; i < 10; ++i) {
                 sum += cdd_status[i];
@@ -253,7 +241,7 @@ namespace mnemos::manifests::segacd {
         // Read, Report-TOC $02, ...) into Get-Status ($00) -- the drive then never
         // seeks or reads, which stalls the disc-boot at Get-Status forever.
         const auto cmd = static_cast<std::uint8_t>(cdd_command[0] & 0x0FU);
-        if (cdd_trace_enabled()) {
+        if (segacd_trace_enabled()) {
             std::fprintf(stderr,
                          "[cdd] pc=%06X cmd=%X bytes=%02X%02X%02X%02X%02X%02X status=%02X lba=%d\n",
                          static_cast<unsigned>(sub_cpu.cpu_registers().pc), cmd, cdd_command[1],

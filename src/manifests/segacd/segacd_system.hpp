@@ -192,6 +192,10 @@ namespace mnemos::manifests::segacd {
 
     // Build a Sega CD sub side and wire the sub-bus. `bios` may be empty (the
     // sub-CPU then boots from whatever is loaded into PRG-RAM, e.g. unit tests).
+    // Opt-in disc-boot debug tracing (MNEMOS_SEGACD_TRACE), shared by the gate
+    // array, CDD, and the main-side bridge.
+    [[nodiscard]] bool segacd_trace_enabled() noexcept;
+
     // The sub-CPU starts held in reset; call release_sub_reset() to run it. The
     // sub boots from PRG-RAM (loaded by the main BIOS), so no BIOS image is needed.
     [[nodiscard]] std::unique_ptr<segacd_system> assemble_segacd();

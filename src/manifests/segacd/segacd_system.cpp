@@ -5,19 +5,19 @@
 
 namespace mnemos::manifests::segacd {
 
-    namespace {
-        bool gate_trace_enabled() {
+    // Opt-in disc-boot debug tracing (MNEMOS_SEGACD_TRACE), shared by the gate
+    // array, CDD, and the main-side bridge.
+    bool segacd_trace_enabled() noexcept {
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996) // std::getenv: opt-in diagnostic, not hot-path
 #endif
-            static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
+        static const bool on = std::getenv("MNEMOS_SEGACD_TRACE") != nullptr;
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
-            return on;
-        }
-    } // namespace
+        return on;
+    }
 
     void segacd_system::run_cycles(std::uint64_t cycles) {
         if (sub_reset_asserted || sub_busreq) {
@@ -123,7 +123,7 @@ namespace mnemos::manifests::segacd {
         // $6162 copy). Log any NONZERO read to confirm whether the sub ever captures
         // a real command packet, or only reads $10-$1F during 0-periods (timing miss).
         if (offset >= 0x10U && offset <= 0x1FU && gate_array[offset] != 0U &&
-            gate_trace_enabled()) {
+            segacd_trace_enabled()) {
             std::fprintf(stderr, "[commrd] sub reads comm $%02X = %02X\n", offset,
                          gate_array[offset]);
         }
@@ -137,7 +137,7 @@ namespace mnemos::manifests::segacd {
             const bool want_release = (value & 0x01U) != 0U;
             const bool want_busreq = (value & 0x02U) != 0U;
             const bool prev_release = (gate_array[0x01] & 0x01U) != 0U;
-            if (gate_trace_enabled() &&
+            if (segacd_trace_enabled() &&
                 (want_release != prev_release || want_busreq != sub_busreq)) {
                 std::fprintf(stderr, "[gate01] val=%02X %s busreq=%d sub_elapsed=%llu\n", value,
                              want_release ? "RELEASE" : "PARK", static_cast<int>(want_busreq),
@@ -168,7 +168,7 @@ namespace mnemos::manifests::segacd {
                 next = static_cast<std::uint8_t>((next & 0xFEU) |
                                                  0x02U); // DMNA: take word RAM, clear RET
             }
-            if (gate_trace_enabled()) {
+            if (segacd_trace_enabled()) {
                 std::fprintf(stderr, "[wram] main $03 %02X->%02X\n", value, next);
             }
             gate_array[0x03] = next;
@@ -179,13 +179,13 @@ namespace mnemos::manifests::segacd {
         // hardware. (The sub owns $0F symmetrically; see gate_write_sub.) Storing a
         // main "clear" to $0F instead of $0E is what hangs the boot comm handshake.
         if (offset == 0x0EU || offset == 0x0FU) {
-            if (gate_trace_enabled()) {
+            if (segacd_trace_enabled()) {
                 std::fprintf(stderr, "[maincmd] main $%02X(comm)->$0E = %02X\n", offset, value);
             }
             gate_array[0x0E] = value;
             return;
         }
-        if (gate_trace_enabled() && (offset >= 0x10U && offset <= 0x1FU)) {
+        if (segacd_trace_enabled() && (offset >= 0x10U && offset <= 0x1FU)) {
             std::fprintf(stderr, "[maincmd] main $%02X = %02X\n", offset, value);
         }
         gate_array[offset] = value;
@@ -233,7 +233,7 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::gate_write_sub(std::uint8_t offset, std::uint8_t value) {
-        if (gate_trace_enabled() && (offset == 0x0EU || offset == 0x0FU)) {
+        if (segacd_trace_enabled() && (offset == 0x0EU || offset == 0x0FU)) {
             std::fprintf(stderr, "[comm] pc=%06X sub writes gate $%02X = %02X\n",
                          sub_cpu.cpu_registers().pc, offset, value);
         }
@@ -259,7 +259,7 @@ namespace mnemos::manifests::segacd {
                 next = static_cast<std::uint8_t>((next & 0xFDU) |
                                                  0x01U); // RET: return word RAM, clear DMNA
             }
-            if (gate_trace_enabled()) {
+            if (segacd_trace_enabled()) {
                 std::fprintf(stderr, "[wram] sub  $03 %02X->%02X pc=%06X\n", value, next,
                              sub_cpu.cpu_registers().pc);
             }
@@ -278,7 +278,7 @@ namespace mnemos::manifests::segacd {
         // IRQ acknowledge is IACK-driven per-level -- $36 does NOT clear IRQs.
         if (offset == 0x36U) {
             gate_array[0x37] = static_cast<std::uint8_t>(value & 0x04U);
-            if (gate_trace_enabled()) {
+            if (segacd_trace_enabled()) {
                 std::fprintf(stderr, "[hock] $36=%02X -> $37=%02X pc=%06X\n", value,
                              gate_array[0x37], sub_cpu.cpu_registers().pc);
             }
@@ -312,7 +312,7 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::acknowledge_irq(int level) {
-        if (gate_trace_enabled()) {
+        if (segacd_trace_enabled()) {
             std::fprintf(stderr, "[iack] L%d\n", level);
         }
         sub_irq_pending &= static_cast<std::uint8_t>(~(1U << level));
