@@ -36,45 +36,57 @@ Two natural asset kinds emerge:
   fields (already exposed as `register_descriptor`s via each chip's
   `register_snapshot()`). This is a structured dump, not audio.
 
-### Contract — `src/chips/shared/audio_views.hpp` (namespace `mnemos::instrumentation`)
+Domain A is split per the design review into three pieces with clearly
+different time models, so the snapshot-shaped contract stays honest:
 
-Mirrors `asset_views.hpp`. Neutral, decode-on-demand, borrowed-until-tick.
+- **A1 — PCM samples (snapshot, fits the pattern):** stored waveforms (e.g.
+  RF5C68 wave RAM). This is the clean asset-pattern win and is implemented now.
+- **A2 — synth register/voice state (reuse, no new contract):** synth chips
+  already expose their register file via `register_view` /
+  `register_snapshot()`; the exporter serialises that directly. A static
+  snapshot of a synth voice is of limited value (see A3), so we do **not**
+  invent a parallel `voice_view` — that would just duplicate `register_view`.
+- **A3 — register-write log (temporal, separate future capability):** for
+  SID/PSG/FM the genuinely valuable "music/instrument" extraction is the
+  register-write stream over time (VGM/SID-dump shaped). That is trace-shaped
+  (cf. `trace_target`), NOT a snapshot, and is explicitly out of scope for the
+  `audio_source` contract. Flagged here as its own future capability.
+
+### A1 contract — `src/chips/shared/audio_views.hpp` (namespace `mnemos::instrumentation`)
+
+Mirrors `asset_views.hpp`: neutral, decode-on-demand, borrowed-until-tick.
+Samples only -- no `voice_view` (see A2).
 
 ```cpp
-enum class audio_asset_kind : std::uint8_t { sample, voice };
-
-struct sample_view {                 // a PCM waveform
+struct sample_view {                       // a stored PCM waveform
     std::string_view name;
-    std::span<const std::int16_t> frames; // interleaved if channels > 1
+    std::span<const std::int16_t> frames;  // interleaved if channels > 1
     std::uint32_t sample_rate{};
     std::uint8_t channels{1};
-    int loop_start{-1};              // -1 = no loop
+    int loop_start{-1};                    // frame index, or -1 for one-shot
     std::uint32_t source_addr{};
-};
-
-struct voice_field { std::string_view name; std::int64_t value; }; // register-derived
-struct voice_view {                  // a synth program / patch
-    std::string_view name;
-    std::span<const voice_field> fields;
+    // frame_count() and well_formed() helpers verify the interleave.
 };
 
 class audio_source {
   public:
     virtual ~audio_source() = default;
     [[nodiscard]] virtual std::span<const sample_view> samples() const = 0;
-    [[nodiscard]] virtual std::span<const voice_view> voices() const = 0;
 };
 ```
 
 Add `audio_source* audio() { return nullptr; }` to `ichip_introspection`
 (forward-declared in `introspection_views.hpp`, exactly like `asset_source`).
+The accessor is named `audio()` so the call reads
+`introspection().audio()->samples()`.
 
 ### Exporter — `src/debug/audio_export.{hpp,cpp}`
 
 System-agnostic, modelled on `debug::export_assets`:
 - each `sample_view` → `<base>.<chip>.sample.<name>.wav` (canonical RIFF/WAVE
-  PCM; a tiny encoder in `src/audio/` or alongside the exporter — no new dep).
-- all `voice_view`s + sample metadata → `<base>.audio.json`.
+  PCM; a small `src/audio/wav` encoder — no new dependency).
+- a `<base>.audio.json` manifest with each sample's rate/channels/loop/source,
+  plus (A2) each audio chip's `register_snapshot()` serialised as-is.
 - Returns the count written; walks `sys.chips()` only.
 
 ### CLI — `apps/player --extract-audio <base> [--extract-frames N]`
@@ -83,22 +95,22 @@ Mirrors `--extract-assets`; lets sample memory fill before extraction.
 
 ### Open decisions
 
-- **WAV location.** A `wav_audio` writer belongs beside the PNG encoders.
-  There is no `src/audio` image-equivalent today; recommend a small
-  `src/audio/wav.{hpp,cpp}` tier (or fold into `debug/`). Confirm placement.
-- **DAC/stream capture.** RF5C68 `waveram` is a true sample store (easy).
-  YM2612 DAC + the synth voices are *streams*, not stored samples — capturing
-  them means recording over N frames, which is a different shape than the
-  graphics "snapshot". Recommend: phase 1 = RF5C68 samples + register-derived
-  voices for all four chips; phase 2 (optional) = streamed DAC capture.
+- **WAV location.** Recommend a small `src/audio/wav.{hpp,cpp}` tier parallel to
+  `graphics/images` (confirmed: no audio-file writer exists today).
+- **Native sample fidelity.** RF5C68 PCM is natively 8-bit with a `0xFF`
+  end/loop marker; the contract uses `s16` (lossless up-convert) and must honor
+  the terminator/loop point. Stream capture (YM2612 DAC, synth mixdown) stays
+  out of scope — that is A3, not A1.
 
 ### Increments
 
-1. `audio_views.hpp` contract + `ichip_introspection::audio()` + unit tests.
-2. RF5C68 `audio_source` (waveram → samples, registers → channels).
-3. `wav` writer + `debug::export_audio` + exporter tests.
-4. `--extract-audio` CLI + an SMS/Genesis end-to-end smoke.
-5. Register-derived `voice` views for SN76489 / SID / YM2612.
+1. `audio_views.hpp` contract (`sample_view` + `audio_source`) +
+   `ichip_introspection::audio()` + unit tests. **(done)**
+2. RF5C68 `audio_source` (wave RAM → samples, honoring channel start/loop).
+3. `src/audio/wav` writer + `debug::export_audio` + exporter tests.
+4. `--extract-audio` CLI + a Sega CD / Genesis end-to-end smoke.
+5. (A2) Exporter serialises audio chips' `register_snapshot()` into the
+   manifest. (A3 register-write logging tracked separately.)
 
 ---
 
@@ -197,8 +209,9 @@ already producing assets to display.
 
 ## Cross-cutting open decisions
 
-- WAV encoder placement (`src/audio/` vs `debug/`).
-- Whether streamed DAC/synth capture is in scope for phase 1 (recommend: no).
+- WAV encoder placement (recommend `src/audio/`, parallel to `graphics/images`).
+- Streamed DAC/synth capture is **out of A1** — it is the temporal A3
+  (register-write log) capability, tracked separately.
 - _(deferred with Domain C)_ Eliot UI Kit integration-boundary ADR for the dev
   frontend: scope, pinning/vendoring, and confinement to `apps/dev`.
 - Whether the audio exporter gets its own CLI flag or folds into a single
