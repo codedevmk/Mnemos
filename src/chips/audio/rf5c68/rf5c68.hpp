@@ -1,11 +1,13 @@
 #pragma once
 
+#include "audio_views.hpp"
 #include "chip.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace mnemos::chips::audio {
@@ -108,7 +110,30 @@ namespace mnemos::chips::audio {
             bool active{};
         };
 
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Surfaces each voice's wave-RAM region as a PCM sample_view (the audio
+        // analogue of the VDPs' asset_source). Decoded buffers are rebuilt per
+        // call and borrowed under the contract's tick lifetime rule.
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(rf5c68& owner) noexcept : audio_(owner) {}
+            [[nodiscard]] instrumentation::audio_source* audio() override { return &audio_; }
+
+          private:
+            class audio_source_impl final : public instrumentation::audio_source {
+              public:
+                explicit audio_source_impl(rf5c68& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const instrumentation::sample_view>
+                samples() const override;
+
+              private:
+                rf5c68* owner_;
+                mutable std::vector<std::int16_t> pcm_{};
+                mutable std::vector<std::string> names_{};
+                mutable std::vector<instrumentation::sample_view> samples_{};
+            };
+
+            audio_source_impl audio_;
+        };
 
         void apply_voice_write(std::uint8_t index, std::uint8_t value) noexcept;
 
@@ -130,7 +155,7 @@ namespace mnemos::chips::audio {
         std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 9> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::audio
