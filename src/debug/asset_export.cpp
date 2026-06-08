@@ -113,7 +113,11 @@ namespace mnemos::debug {
                     base_path + "." + chip_id + ".pal." + std::string(p.name) + ".png";
                 std::uint32_t w = 0;
                 std::uint32_t h = 0;
-                if (write_png(path, w, h, render_palette(p, w, h))) {
+                // Render first so w/h are set before write_png reads them:
+                // argument evaluation order is unspecified, so passing
+                // render_palette(p, w, h) alongside w/h could read them as 0.
+                std::vector<std::uint32_t> px = render_palette(p, w, h);
+                if (write_png(path, w, h, std::move(px))) {
                     ++written;
                 }
                 json += i == 0 ? "\n" : ",\n";

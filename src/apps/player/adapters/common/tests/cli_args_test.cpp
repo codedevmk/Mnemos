@@ -121,6 +121,13 @@ TEST_CASE("cli_args: --extract-assets defaults to 0 frames without --extract-fra
     CHECK(req->frames == 0U);
 }
 
+TEST_CASE("cli_args: --extract-assets rejects an option-shaped value") {
+    // The token after --extract-assets is another flag, so there is no base
+    // path -> the headless path stays disabled rather than ripping to "--...".
+    auto a = make_argv({"player", "--extract-assets", "--extract-frames", "90"});
+    CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);
+}
+
 TEST_CASE("cli_args: --extract-frames alone (no --extract-assets) returns nullopt") {
     auto a = make_argv({"player", "--extract-frames", "30"});
     CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);

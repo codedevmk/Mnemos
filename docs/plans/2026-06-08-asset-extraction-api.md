@@ -100,8 +100,9 @@ Add one accessor to `ichip_introspection` (default `nullptr`, like `trace()`):
 [[nodiscard]] virtual asset_source* assets() { return nullptr; }
 ```
 
-Forward-declared in `chip.hpp`'s `mnemos::chips` block alongside the existing
-`frame_buffer_view` / `register_descriptor` forwards, so `ichip` stays light.
+Forward-declared as `class asset_source;` in `introspection_views.hpp` (the
+`mnemos::instrumentation` block), so `ichip_introspection` stays light; chips
+that implement it include `asset_views.hpp` directly.
 
 ### 2. Reference implementation — SMS VDP first
 
@@ -111,7 +112,8 @@ VRAM, 32-entry CRAM, 8x8 4bpp planar patterns, 64-sprite SAT). Implement an
 
 - **palettes()**: two 16-color palettes resolved from CRAM via the existing
   (now reused) `palette_rgb`; index 0 transparent for the sprite palette.
-- **tileset**: all 448 background patterns decoded to an indexed sheet laid out
+- **tileset**: all 512 background patterns (16 KiB VRAM / 32 bytes per tile)
+  decoded to an indexed sheet laid out
   on a fixed grid (e.g. 16 tiles wide).
 - **sprites**: walk the SAT, decode each sprite (8x8 / 8x16) as its own
   `graphic_asset`, palette = sprite palette.
@@ -197,7 +199,7 @@ the player gains no system-specific code.
 - **Pixel format:** indexed + palette in the contract (re-tintable, smaller,
   truer to hardware); the exporter resolves to RGB.
 - **Output:** resolved-RGB PNG per asset/palette + a JSON manifest sidecar.
-- **Scope now:** implement increment 1 only — the contract header,
-  `ichip_introspection::assets()`, and unit tests — for sign-off before any
-  decoder is built, since the specs are still Draft. Increments 2–6 follow
-  under their own reviews.
+- **Scope:** increment 1 (the contract) was landed first for sign-off; the
+  remaining increments (2–6: SMS/Genesis/VIC-II decoders, the exporter, the
+  `--extract-assets` CLI, and the SMS font hint) then followed as separate
+  commits and are all included in this change set.

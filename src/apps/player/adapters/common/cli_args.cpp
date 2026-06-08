@@ -167,12 +167,16 @@ namespace mnemos::apps::player::adapters {
         for (int i = 1; i < argc - 1; ++i) {
             const std::string_view a{argv[i]};
             if (a == "--extract-assets") {
-                std::string value{argv[i + 1]};
-                if (!value.empty()) {
-                    base = std::move(value);
+                const std::string_view value{argv[i + 1]};
+                // Reject an option-shaped token (e.g. a stray "--extract-frames"
+                // with no base path); leaving base unset disables the path.
+                if (!value.empty() && !value.starts_with("--")) {
+                    base = std::string{value};
+                    ++i; // skip the consumed value
                 }
             } else if (a == "--extract-frames") {
                 frames = std::strtoull(argv[i + 1], nullptr, 10);
+                ++i; // skip the consumed value
             }
         }
         if (base) {
