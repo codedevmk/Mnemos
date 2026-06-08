@@ -1,11 +1,13 @@
 #pragma once
 
+#include "asset_views.hpp"
 #include "chip.hpp"
 
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -150,7 +152,38 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Decodes the VIC's live graphics into the asset-extraction contract:
+        // the fixed 16-colour C64 palette, the current 256-glyph character
+        // generator as a "font" sheet, and the 8 hardware sprites (24x21). The
+        // VIC owns no VRAM -- it fetches through the shared bus -- so the decode
+        // reads via the chip's fetch() against the attached memory + bank.
+        // Buffers rebuilt per call (the contract's tick lifetime rule).
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(vic_ii_6569& owner) noexcept : assets_(owner) {}
+            [[nodiscard]] instrumentation::asset_source* assets() override { return &assets_; }
+
+          private:
+            class asset_source_impl final : public instrumentation::asset_source {
+              public:
+                explicit asset_source_impl(vic_ii_6569& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const instrumentation::palette_view>
+                palettes() const override;
+                [[nodiscard]] std::span<const instrumentation::graphic_asset>
+                graphics() const override;
+
+              private:
+                vic_ii_6569* owner_;
+                mutable std::array<std::uint32_t, 16> pal_rgb_{};
+                mutable std::array<instrumentation::palette_view, 1> palettes_{};
+                mutable std::vector<std::uint8_t> charset_px_{};
+                mutable std::vector<std::uint8_t> sprite_px_{};
+                mutable std::vector<std::string> names_{};
+                mutable std::vector<instrumentation::graphic_asset> assets_{};
+            };
+
+            asset_source_impl assets_;
+        };
 
         [[nodiscard]] std::uint8_t current_irq_sources() const noexcept;
         void decode_modes() noexcept;
@@ -221,7 +254,7 @@ namespace mnemos::chips::video {
         mutable std::uint8_t last_fetch_{0xFFU};
 
         std::array<register_descriptor, 5> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::video

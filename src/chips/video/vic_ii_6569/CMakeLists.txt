@@ -19,7 +19,9 @@ mnemos_declare_tier(NAME mnemos_chips_video_vic_ii_6569 TIER 2 DEPENDS mnemos_fo
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_video_vic_ii_6569_test
-        SOURCES tests/vic_ii_6569_test.cpp
+        SOURCES
+            tests/vic_ii_6569_test.cpp
+            tests/vic_ii_6569_assets_test.cpp
         LIBRARIES mnemos::chips::video::vic_ii_6569
     )
 endif()

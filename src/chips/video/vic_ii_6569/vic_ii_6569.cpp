@@ -4,7 +4,9 @@
 #include "state.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <memory>
+#include <span>
 
 namespace mnemos::chips::video {
     namespace {
@@ -760,6 +762,107 @@ namespace mnemos::chips::video {
 
     instrumentation::ichip_introspection& vic_ii_6569::introspection() noexcept {
         return introspection_;
+    }
+
+    // ---- asset extraction ----
+
+    std::span<const instrumentation::palette_view>
+    vic_ii_6569::introspection_surface::asset_source_impl::palettes() const {
+        // The C64 has one fixed 16-colour hardware palette; transparency is
+        // register-driven per mode, not a palette property.
+        for (std::uint8_t i = 0; i < 16U; ++i) {
+            pal_rgb_[i] = vic_ii_6569::color_rgb888(i);
+        }
+        palettes_[0] = instrumentation::palette_view{
+            .name = "c64", .colors = pal_rgb_, .transparent_index = -1};
+        return palettes_;
+    }
+
+    std::span<const instrumentation::graphic_asset>
+    vic_ii_6569::introspection_surface::asset_source_impl::graphics() const {
+        // Character generator: the 256 current glyphs (8x8, 1bpp) the VIC fetches
+        // from the bus, surfaced as the system's "font". The char base is the
+        // $D018 CB13-11 field; fetch() applies the bank + char-ROM shadow.
+        const auto cb_base =
+            static_cast<std::uint16_t>(((owner_->regs_[reg_memptr] >> 1) & 0x07U) << 11U);
+        constexpr int glyphs = 256;
+        constexpr int per_row = 16;
+        constexpr std::uint32_t sheet_w = per_row * 8;            // 128
+        constexpr std::uint32_t sheet_h = (glyphs / per_row) * 8; // 128
+        charset_px_.assign(static_cast<std::size_t>(sheet_w) * sheet_h, 0U);
+        for (int g = 0; g < glyphs; ++g) {
+            const int gcol = g % per_row;
+            const int grow = g / per_row;
+            for (int row = 0; row < 8; ++row) {
+                const std::uint8_t bits = owner_->fetch(
+                    static_cast<std::uint16_t>(cb_base + static_cast<std::uint16_t>(g) * 8U +
+                                               static_cast<std::uint16_t>(row)));
+                const std::size_t base =
+                    (static_cast<std::size_t>(grow) * 8U + static_cast<std::size_t>(row)) *
+                        sheet_w +
+                    static_cast<std::size_t>(gcol) * 8U;
+                for (int x = 0; x < 8; ++x) {
+                    charset_px_[base + static_cast<std::size_t>(x)] =
+                        static_cast<std::uint8_t>((bits >> (7 - x)) & 1U);
+                }
+            }
+        }
+
+        // 8 hardware sprites: 24x21, 1bpp (hi-res shape), fetched via the sprite
+        // pointers at the end of the video matrix ($D018 VM13-10 field + $03F8).
+        const auto vm_base =
+            static_cast<std::uint16_t>(((owner_->regs_[reg_memptr] >> 4) & 0x0FU) << 10U);
+        constexpr std::uint32_t spr_w = 24;
+        constexpr std::uint32_t spr_h = 21;
+        sprite_px_.assign(static_cast<std::size_t>(spr_w) * spr_h * vic_ii_6569::sprite_count, 0U);
+        std::array<std::uint16_t, vic_ii_6569::sprite_count> spr_src{};
+        for (std::uint8_t i = 0; i < vic_ii_6569::sprite_count; ++i) {
+            const std::uint8_t pointer =
+                owner_->fetch(static_cast<std::uint16_t>(vm_base + 0x03F8U + i));
+            const auto data_base = static_cast<std::uint16_t>(pointer * 64U);
+            spr_src[i] = data_base;
+            const std::size_t off = static_cast<std::size_t>(i) * spr_w * spr_h;
+            for (std::uint32_t row = 0; row < spr_h; ++row) {
+                for (std::uint32_t byte = 0; byte < 3U; ++byte) {
+                    const std::uint8_t bits =
+                        owner_->fetch(static_cast<std::uint16_t>(data_base + row * 3U + byte));
+                    for (std::uint32_t b = 0; b < 8U; ++b) {
+                        sprite_px_[off + static_cast<std::size_t>(row) * spr_w + byte * 8U + b] =
+                            static_cast<std::uint8_t>((bits >> (7 - b)) & 1U);
+                    }
+                }
+            }
+        }
+
+        names_.clear();
+        names_.reserve(vic_ii_6569::sprite_count);
+        assets_.clear();
+        assets_.reserve(vic_ii_6569::sprite_count + 1U);
+        assets_.push_back(instrumentation::graphic_asset{
+            .kind = instrumentation::asset_kind::font,
+            .name = "charset",
+            .image = {.width = sheet_w, .height = sheet_h, .indices = charset_px_, .palette = 0U},
+            .tile_w = 8U,
+            .tile_h = 8U,
+            .source_addr = cb_base});
+        for (std::uint8_t i = 0; i < vic_ii_6569::sprite_count; ++i) {
+            std::array<char, 16> buf{};
+            std::snprintf(buf.data(), buf.size(), "sprite_%u", static_cast<unsigned>(i));
+            names_.emplace_back(buf.data());
+            const std::size_t off = static_cast<std::size_t>(i) * spr_w * spr_h;
+            assets_.push_back(instrumentation::graphic_asset{
+                .kind = instrumentation::asset_kind::sprite,
+                .name = names_[i],
+                .image = {.width = spr_w,
+                          .height = spr_h,
+                          .indices = std::span<const std::uint8_t>(sprite_px_)
+                                         .subspan(off, static_cast<std::size_t>(spr_w) * spr_h),
+                          .palette = 0U},
+                .tile_w = 0U,
+                .tile_h = 0U,
+                .source_addr = spr_src[i]});
+        }
+        return assets_;
     }
 
     std::span<const register_descriptor> vic_ii_6569::register_snapshot() noexcept {
