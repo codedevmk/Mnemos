@@ -19,7 +19,9 @@ mnemos_declare_tier(NAME mnemos_chips_video_sms_vdp TIER 2 DEPENDS mnemos_founda
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_video_sms_vdp_test
-        SOURCES tests/sms_vdp_test.cpp
+        SOURCES
+            tests/sms_vdp_test.cpp
+            tests/sms_vdp_assets_test.cpp
         LIBRARIES mnemos::chips::video::sms_vdp
     )
 endif()
