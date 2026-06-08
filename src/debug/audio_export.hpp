@@ -13,12 +13,14 @@
 
 namespace mnemos::debug {
 
-    // For each chip in `sys.chips()` exposing an audio_source:
+    // For each chip in `sys.chips()` exposing an audio_source and/or a register
+    // file (register_view):
     //   each sample -> <base>.<chip>.sample.<name>.wav (16-bit PCM RIFF/WAVE)
-    // and writes one <base>.audio.json manifest listing every chip's samples
-    // (name, sample_rate, channels, frame_count, loop_start, source_addr, and the
-    // written filename). <chip> is the chip's part_number sanitized to a path-safe
-    // segment.
+    // and writes one <base>.audio.json manifest listing every such chip's samples
+    // (name, sample_rate, channels, frame_count, loop_start, source_addr, file)
+    // and its register file (name, value, bits) -- a synth's voice/instrument
+    // state is its register file, so it reuses register_view rather than a
+    // bespoke type. <chip> is the chip's part_number sanitized to a path segment.
     //
     // Returns the number of WAV files successfully written. A file that fails to
     // write is reported on stderr and skipped (omitted from the count but still

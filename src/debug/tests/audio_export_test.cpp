@@ -22,6 +22,8 @@ namespace {
     using mnemos::chips::chip_metadata;
     using mnemos::chips::frame_buffer_view;
     using mnemos::chips::ichip;
+    using mnemos::chips::register_descriptor;
+    using mnemos::chips::register_value_format;
     using mnemos::chips::reset_kind;
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
@@ -32,6 +34,7 @@ namespace {
     using mnemos::frontend_sdk::video_region;
     using mnemos::instrumentation::audio_source;
     using mnemos::instrumentation::ichip_introspection;
+    using mnemos::instrumentation::register_view;
     using mnemos::instrumentation::sample_view;
 
     class fake_audio final : public audio_source {
@@ -48,12 +51,26 @@ namespace {
                                                       .source_addr = 0x0100U}};
     };
 
+    class fake_regs final : public register_view {
+      public:
+        [[nodiscard]] std::span<const register_descriptor> registers() override { return descs_; }
+
+      private:
+        std::array<register_descriptor, 1> descs_{
+            register_descriptor{.name = "ENV",
+                                .value = 0xC0U,
+                                .bit_width = 8U,
+                                .format = register_value_format::unsigned_integer}};
+    };
+
     class audio_intro final : public ichip_introspection {
       public:
         [[nodiscard]] audio_source* audio() override { return &audio_; }
+        [[nodiscard]] register_view* registers() override { return &regs_; }
 
       private:
         fake_audio audio_;
+        fake_regs regs_;
     };
 
     class pcm_chip final : public ichip {
@@ -186,6 +203,13 @@ TEST_CASE("export_audio manifest describes each sample", "[audio_export]") {
     CHECK(json.find("\"frames\": 3") != std::string::npos);
     CHECK(json.find("\"loop_start\": 2") != std::string::npos);
     CHECK(json.find("\"file\": \"out.rf5c68.sample.sample_0100.wav\"") != std::string::npos);
+
+    // The chip's register file is folded into the same entry (A2: reuse
+    // register_view; a synth's voice state is its registers).
+    CHECK(json.find("\"registers\":") != std::string::npos);
+    CHECK(json.find("\"name\": \"ENV\"") != std::string::npos);
+    CHECK(json.find("\"value\": 192") != std::string::npos); // 0xC0
+    CHECK(json.find("\"bits\": 8") != std::string::npos);
 }
 
 TEST_CASE("export_audio writes an empty manifest for a system with no samples", "[audio_export]") {

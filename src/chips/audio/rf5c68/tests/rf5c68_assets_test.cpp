@@ -67,3 +67,10 @@ TEST_CASE("rf5c68 emits no samples on a blank chip", "[rf5c68][audio]") {
     rf5c68 chip; // wave RAM all zero -> no 0xFF sentinel anywhere
     CHECK(chip.introspection().audio()->samples().empty());
 }
+
+TEST_CASE("rf5c68 exposes its register file via introspection", "[rf5c68][audio]") {
+    rf5c68 chip;
+    auto* rv = chip.introspection().registers();
+    REQUIRE(rv != nullptr); // register_view backed by register_snapshot()
+    CHECK_FALSE(rv->registers().empty());
+}

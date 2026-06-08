@@ -23,11 +23,15 @@ namespace mnemos::debug {
                 continue;
             }
             instrumentation::audio_source* src = chip->introspection().audio();
-            if (src == nullptr) {
+            instrumentation::register_view* regs = chip->introspection().registers();
+            // Include a chip when it surfaces PCM samples and/or a register file;
+            // skip chips that expose neither (most non-audio chips).
+            if (src == nullptr && regs == nullptr) {
                 continue;
             }
             const std::string chip_id = sanitize_id(chip->metadata().part_number);
-            const std::span<const instrumentation::sample_view> samples = src->samples();
+            const std::span<const instrumentation::sample_view> samples =
+                src != nullptr ? src->samples() : std::span<const instrumentation::sample_view>{};
 
             json += first_chip ? "\n" : ",\n";
             first_chip = false;
@@ -53,7 +57,23 @@ namespace mnemos::debug {
                         ", \"source_addr\": " + std::to_string(s.source_addr) +
                         ", \"file\": " + json_string(path_basename(path)) + "}";
             }
-            json += samples.empty() ? "]\n    }" : "\n      ]\n    }";
+            json += samples.empty() ? "],\n      \"registers\": ["
+                                    : "\n      ],\n      \"registers\": [";
+
+            // Reuse the chip's register_view (register_snapshot) rather than a
+            // bespoke "voice" type: a synth's voice/instrument state is its
+            // register file. Chips that don't expose registers() emit an empty
+            // array.
+            const std::span<const chips::register_descriptor> descriptors =
+                regs != nullptr ? regs->registers() : std::span<const chips::register_descriptor>{};
+            for (std::size_t i = 0; i < descriptors.size(); ++i) {
+                const chips::register_descriptor& d = descriptors[i];
+                json += i == 0 ? "\n" : ",\n";
+                json += "        {\"name\": " + json_string(d.name) +
+                        ", \"value\": " + std::to_string(d.value) +
+                        ", \"bits\": " + std::to_string(d.bit_width) + "}";
+            }
+            json += descriptors.empty() ? "]\n    }" : "\n      ]\n    }";
         }
 
         json += first_chip ? "]\n}\n" : "\n  ]\n}\n";

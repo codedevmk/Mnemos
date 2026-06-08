@@ -115,10 +115,25 @@ namespace mnemos::chips::audio {
         // call and borrowed under the contract's tick lifetime rule.
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
-            explicit introspection_surface(rf5c68& owner) noexcept : audio_(owner) {}
+            explicit introspection_surface(rf5c68& owner) noexcept
+                : audio_(owner), registers_(owner) {}
             [[nodiscard]] instrumentation::audio_source* audio() override { return &audio_; }
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_;
+            }
 
           private:
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(rf5c68& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override {
+                    return owner_->register_snapshot();
+                }
+
+              private:
+                rf5c68* owner_;
+            };
+
             class audio_source_impl final : public instrumentation::audio_source {
               public:
                 explicit audio_source_impl(rf5c68& owner) noexcept : owner_(&owner) {}
@@ -133,6 +148,7 @@ namespace mnemos::chips::audio {
             };
 
             audio_source_impl audio_;
+            registers_impl registers_;
         };
 
         void apply_voice_write(std::uint8_t index, std::uint8_t value) noexcept;
