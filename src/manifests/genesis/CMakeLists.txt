@@ -23,6 +23,7 @@ add_library(
     genesis_callbacks.cpp
     genesis_cart.cpp
     genesis_eeprom.cpp
+    genesis_lockon.cpp
     genesis_runtime.cpp
     genesis_system.cpp
     genesis_region.cpp
@@ -90,6 +91,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_genesis_sram_test
         SOURCES tests/genesis_sram_test.cpp
+        LIBRARIES mnemos::manifests::genesis
+    )
+    mnemos_add_test(
+        mnemos_manifests_genesis_lockon_test
+        SOURCES tests/genesis_lockon_test.cpp
         LIBRARIES mnemos::manifests::genesis
     )
     mnemos_add_test(

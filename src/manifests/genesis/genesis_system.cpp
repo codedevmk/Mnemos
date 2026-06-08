@@ -88,6 +88,10 @@ namespace mnemos::manifests::genesis {
         wire_cart_eeprom(s->bus, s->eeprom, s->rom);
         // >4 MiB ROMs: page the upper banks into the cartridge window ($A130F3-FF).
         wire_cart_banking(s->bus, s->banking, s->rom);
+        // Lock-on cart (Sonic & Knuckles pass-through): map the second image at
+        // $200000-$3FFFFF with the $A130F1 lock-on latch. No-op for a single cart.
+        s->lock_on_rom = config.lock_on_rom;
+        wire_cart_lockon(s->bus, s->lockon, s->lock_on_rom);
 
         // $A00000-$A03FFF: Z80 RAM (8 KiB, mirrored).
         s->bus.map_mmio(

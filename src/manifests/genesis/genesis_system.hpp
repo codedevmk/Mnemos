@@ -4,6 +4,7 @@
 #include "genesis_banking.hpp" // cart_banking_runtime + wire_cart_banking
 #include "genesis_cart.hpp"    // cart_sram_runtime + wire_cart_sram
 #include "genesis_eeprom.hpp"  // cart_eeprom_runtime + wire_cart_eeprom
+#include "genesis_lockon.hpp"  // lock_on_runtime + wire_cart_lockon
 #include "genesis_vdp.hpp"     // video
 #include "m68000.hpp"          // main cpu
 #include "peripheral.hpp"      // peripheral::device (controller ports)
@@ -22,6 +23,10 @@ namespace mnemos::manifests::genesis {
 
     struct genesis_config final {
         mnemos::video_region video_region{mnemos::video_region::ntsc};
+        // Optional lock-on cartridge image (Sonic & Knuckles pass-through): when
+        // non-empty it is mapped at $200000-$3FFFFF above the base ROM. Empty for
+        // an ordinary single cart.
+        std::vector<std::uint8_t> lock_on_rom{};
     };
 
     // Scheduler view of a chip, ticked only while `gate` is true. Used for
@@ -95,6 +100,8 @@ namespace mnemos::manifests::genesis {
         cart_sram_runtime sram;                       // battery SRAM (borrowed by `bus`)
         cart_eeprom_runtime eeprom;                   // serial EEPROM (borrowed by `bus`)
         cart_banking_runtime banking;                 // >4 MiB ROM bank-switch (borrowed by `bus`)
+        std::vector<std::uint8_t> lock_on_rom;        // pass-through cart image (borrowed by `bus`)
+        lock_on_runtime lockon;                       // lock-on $A130F1 latch (borrowed by `bus`)
 
         std::uint8_t version_register{}; // $A10001 region/version readback
 

@@ -20,6 +20,7 @@
 #include "genesis_callbacks.hpp" // state + chip/bus types (+ chips::ichip via chip.hpp)
 #include "genesis_cart.hpp"      // cart_sram (header SRAM descriptor)
 #include "genesis_eeprom.hpp"    // cart_eeprom_runtime (serial EEPROM)
+#include "genesis_lockon.hpp"    // lock_on_runtime (Sonic & Knuckles pass-through)
 #include "genesis_system.hpp"    // genesis_config
 
 #include <array>
@@ -53,7 +54,9 @@ namespace mnemos::manifests::genesis {
         cart_sram_runtime sram;       // battery SRAM (borrowed by graph's bus handlers)
         cart_eeprom_runtime eeprom;   // serial EEPROM (borrowed by graph's bus handlers)
         cart_banking_runtime banking; // >4 MiB ROM bank-switch (borrowed by graph's bus handlers)
-        system_graph graph;           // owns chips/buses/memory; destructs first
+        std::vector<std::uint8_t> lock_on_rom; // pass-through cart image (borrowed by graph's bus)
+        lock_on_runtime lockon;                // lock-on $A130F1 latch (borrowed by graph's bus)
+        system_graph graph;                    // owns chips/buses/memory; destructs first
 
         [[nodiscard]] chips::cpu::m68000* cpu() const noexcept { return state.cpu; }
         [[nodiscard]] chips::cpu::z80* z80() const noexcept { return state.z80; }

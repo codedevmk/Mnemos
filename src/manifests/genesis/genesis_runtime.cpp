@@ -110,6 +110,10 @@ namespace mnemos::manifests::genesis {
         wire_cart_eeprom(*rt->state.main_bus, rt->eeprom, rt->rom);
         // >4 MiB ROMs: page the upper banks into the cartridge window ($A130F3-FF).
         wire_cart_banking(*rt->state.main_bus, rt->banking, rt->rom);
+        // Lock-on cart (Sonic & Knuckles pass-through): the second image at
+        // $200000-$3FFFFF + the $A130F1 latch. No-op for a single cart.
+        rt->lock_on_rom = config.lock_on_rom;
+        wire_cart_lockon(*rt->state.main_bus, rt->lockon, rt->lock_on_rom);
 
         // Reset the CPUs now the buses (with the cart ROM mapped) are wired,
         // mirroring assemble_genesis: the 68000 loads SSP/PC from the cart's

@@ -237,10 +237,17 @@ Current baseline (do not re-implement):
       *Unblocks:* EA J-Cart titles (Micro Machines 2/'96/Military, Pete Sampras Tennis) — they
       boot today but only see 2 of 4 pads.
       *Accept:* system test reads pads 3/4 through the J-Cart port; existing 2-pad path unchanged.
-- [ ] **Genesis Lock-on (Sonic & Knuckles)**: pass-through cartridge that maps a second ROM
-      (`$300000` window) and exposes the combined image. Extends `genesis_cart` mapping.
-      *Unblocks:* S&K lock-on with Sonic 2/3 (and the "blue sphere" no-cart mode).
-      *Accept:* combined-image system test boots with both ROMs present (data-gated).
+- [~] **Genesis Lock-on (Sonic & Knuckles)**: pass-through cartridge that maps a second ROM.
+      *Unblocks:* S&K lock-on with Sonic 2/3.
+  - [x] Two-ROM combine (`genesis_lockon` / `wire_cart_lockon`): a `genesis_config.lock_on_rom`
+        maps the locked-on cart at `$200000-$3FFFFF` above the base ROM, with the `$A130F1` bit-0
+        latch gating the `$300000` "lock-on chip" half. Reproduces Sonic 3 & Knuckles. Wired on both
+        assemble + manifest paths; 4 unit tests (mapping, `$A130F1` gate, no-cart no-op, manifest
+        parity).
+  - [ ] The 256 KiB internal UPMEM (blue-sphere generator + Knuckles-in-Sonic-1/2) -- needs S&K's
+        own data and the size-dependent detection.
+  - [ ] Adapter/CLI plumbing to supply the locked-on cart as a second ROM (the engine API takes it
+        via `genesis_config.lock_on_rom`; the player just needs to pass `additional_media[0]`).
 
 ## P1 — High-profile titles & unlicensed/protection compatibility
 
