@@ -21,7 +21,7 @@ namespace mnemos::manifests::segacd {
 
     // Heap-allocated, never-moved Sega CD sub side: the sub-bus holds spans into
     // the member arrays and the MMIO handlers capture `this`. Phase B1 wires the
-    // sub-CPU, its bus (PRG/word RAM + PCM + BIOS overlay), and the run/reset
+    // sub-CPU, its bus (PRG/word RAM + PCM), and the run/reset
     // control. The gate array, word-RAM 2M/1M banking, backup RAM, and the
     // sub-CPU IRQ controller arrive in B2/B3; the CDC/CDD and stamp ASIC in
     // phase C; Genesis main-side integration in phase D.
@@ -35,9 +35,8 @@ namespace mnemos::manifests::segacd {
         std::array<std::uint8_t, backup_ram_size> backup_ram{};
         std::array<std::uint8_t, gate_array_size> gate_array{};
 
-        std::vector<std::uint8_t> bios; // borrowed by the sub-bus (read overlay)
-        bool sub_reset_asserted{true};  // held in reset until the main CPU releases it
-        bool sub_busreq{false};         // main CPU holds the sub-CPU bus ($01 bit 1)
+        bool sub_reset_asserted{true}; // held in reset until the main CPU releases it
+        bool sub_busreq{false};        // main CPU holds the sub-CPU bus ($01 bit 1)
 
         // Sub-CPU IRQ source bits (pending/mask). The gate-array $33 mask uses
         // bit N = level N (bit 0 unused), so the pending bits use the same
@@ -125,8 +124,8 @@ namespace mnemos::manifests::segacd {
 
         // Advance the sub-CPU by `cycles` of its clock. No-op while held in reset.
         void run_cycles(std::uint64_t cycles);
-        // Release the sub-CPU from reset and boot it from the $0/$4 vectors (which
-        // come from the BIOS overlay, or from PRG-RAM in tests with no BIOS).
+        // Release the sub-CPU from reset and boot it from the $0/$4 vectors in
+        // PRG-RAM (the main BIOS loads the Sub-CPU BIOS there before releasing it).
         void release_sub_reset();
         void assert_sub_reset() noexcept { sub_reset_asserted = true; }
         void reset();
@@ -193,8 +192,8 @@ namespace mnemos::manifests::segacd {
 
     // Build a Sega CD sub side and wire the sub-bus. `bios` may be empty (the
     // sub-CPU then boots from whatever is loaded into PRG-RAM, e.g. unit tests).
-    // The sub-CPU starts held in reset; call release_sub_reset() to run it.
-    [[nodiscard]] std::unique_ptr<segacd_system>
-    assemble_segacd(std::vector<std::uint8_t> bios = {});
+    // The sub-CPU starts held in reset; call release_sub_reset() to run it. The
+    // sub boots from PRG-RAM (loaded by the main BIOS), so no BIOS image is needed.
+    [[nodiscard]] std::unique_ptr<segacd_system> assemble_segacd();
 
 } // namespace mnemos::manifests::segacd

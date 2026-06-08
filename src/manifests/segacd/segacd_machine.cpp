@@ -51,8 +51,9 @@ namespace mnemos::manifests::segacd {
     std::unique_ptr<segacd_machine> assemble_segacd_machine(std::vector<std::uint8_t> bios,
                                                             const genesis::genesis_config& config) {
         auto machine = std::make_unique<segacd_machine>();
-        // The sub side gets its own copy of the BIOS (the sub-CPU $0 overlay).
-        machine->sub = assemble_segacd(bios);
+        // The sub side boots from PRG-RAM (the main BIOS loads the Sub-CPU BIOS
+        // there at runtime), so it needs no BIOS image of its own.
+        machine->sub = assemble_segacd();
         // The Genesis main side boots the BIOS as its cartridge.
         machine->genesis = genesis::assemble_genesis(std::move(bios), config);
 

@@ -172,9 +172,8 @@ TEST_CASE("segacd sub-CPU $0 is PRG-RAM (no BIOS overlay)", "[segacd][bios]") {
     // shadows those vectors with the MAIN entry -- whose stack is in main work
     // RAM, unmapped on the sub bus -- and crashes the sub, so the real BIOS would
     // never reach its boot screen.
-    std::vector<std::uint8_t> bios(64, 0x11); // non-zero BIOS image
-    auto sys = assemble_segacd(std::move(bios));
-    // Sub $0 reads PRG-RAM (zero at power-on), NOT the BIOS.
+    auto sys = assemble_segacd();
+    // Sub $0 reads PRG-RAM (zero at power-on); there is no BIOS overlay to shadow it.
     REQUIRE(sys->sub_bus.read8(0x000000U) == 0x00);
     // Writes land in PRG-RAM and read straight back (no read-only shadow).
     sys->sub_bus.write8(0x000000U, 0xFFU);

@@ -336,9 +336,8 @@ namespace mnemos::manifests::segacd {
         update_sub_irq();
     }
 
-    std::unique_ptr<segacd_system> assemble_segacd(std::vector<std::uint8_t> bios) {
+    std::unique_ptr<segacd_system> assemble_segacd() {
         auto sys = std::make_unique<segacd_system>();
-        sys->bios = std::move(bios);
         auto* s = sys.get();
         topology::bus& bus = s->sub_bus;
 

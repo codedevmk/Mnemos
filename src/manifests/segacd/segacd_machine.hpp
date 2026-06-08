@@ -36,9 +36,9 @@ namespace mnemos::manifests::segacd {
         std::uint64_t sub_cycle_carry_ = 0; // carried fractional sub-cycle remainder
     };
 
-    // Assemble a Sega CD machine from its BIOS ROM. The Genesis boots the BIOS
-    // as its cartridge; the same image overlays the sub-CPU $0 vectors. The
-    // caller attaches a disc via machine->sub->attach_disc().
+    // Assemble a Sega CD machine from its BIOS ROM. The Genesis boots the BIOS as
+    // its cartridge; the sub-CPU boots from PRG-RAM vectors the main BIOS loads
+    // there. The caller attaches a disc via machine->sub->attach_disc().
     [[nodiscard]] std::unique_ptr<segacd_machine>
     assemble_segacd_machine(std::vector<std::uint8_t> bios,
                             const genesis::genesis_config& config = {});
