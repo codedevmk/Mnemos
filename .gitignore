@@ -63,3 +63,6 @@ scripts/
 docs/genesis-cycle-parity-audit.md
 docs/genesis-chipset-gap-audit.md
 *.obj
+
+# Session-local agent tooling (Ralph loop)
+.claude/

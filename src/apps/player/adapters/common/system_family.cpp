@@ -16,6 +16,9 @@ namespace mnemos::apps::player::adapters {
         if (ext == "gg") {
             return system_family::gg;
         }
+        if (ext == "cue" || ext == "iso" || ext == "chd") {
+            return system_family::segacd;
+        }
         if (ext == "prg" || ext == "d64" || ext == "d71" || ext == "d81" || ext == "t64" ||
             ext == "tap" || ext == "crt" || ext == "g64" || ext == "p00") {
             return system_family::c64;
@@ -31,6 +34,8 @@ namespace mnemos::apps::player::adapters {
             return "Game Gear";
         case system_family::c64:
             return "C64";
+        case system_family::segacd:
+            return "Sega CD";
         case system_family::genesis:
             break;
         }
