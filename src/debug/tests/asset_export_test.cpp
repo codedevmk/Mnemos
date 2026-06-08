@@ -164,16 +164,24 @@ TEST_CASE("export_assets writes a PNG per palette + asset and a JSON manifest", 
     const auto base = (scratch / "out").string();
 
     gfx_system sys;
-    // One palette PNG + one tileset PNG from the single gfx chip.
-    CHECK(mnemos::debug::export_assets(sys, base) == 2U);
+    // From the single gfx chip: palette swatch PNG + tileset resolved PNG +
+    // tileset indexed PNG (the .pal file is not counted in the PNG total).
+    CHECK(mnemos::debug::export_assets(sys, base) == 3U);
 
     // Files land under the chip's sanitized id ("vdp-1" -> "vdp_1").
     const auto pal_png = scratch / "out.vdp_1.pal.main.png";
     const auto tile_png = scratch / "out.vdp_1.tileset.patterns.png";
+    const auto tile_idx = scratch / "out.vdp_1.tileset.patterns.idx.png";
+    const auto pal_jasc = scratch / "out.vdp_1.pal.main.pal";
     REQUIRE(std::filesystem::exists(pal_png));
     REQUIRE(std::filesystem::exists(tile_png));
+    REQUIRE(std::filesystem::exists(tile_idx));
+    REQUIRE(std::filesystem::exists(pal_jasc));
     CHECK(is_png(read_file(pal_png)));
     CHECK(is_png(read_file(tile_png)));
+    CHECK(is_png(read_file(tile_idx)));
+    // The .pal is JASC-PAL text: header line, format version, entry count (2).
+    CHECK(read_text(pal_jasc).starts_with("JASC-PAL\n0100\n2\n"));
 
     // The asset-free CPU chip produces no files.
     for (const auto& entry : std::filesystem::directory_iterator(scratch)) {
@@ -200,6 +208,9 @@ TEST_CASE("export_assets manifest describes palettes and assets", "[asset_export
     CHECK(json.find("\"name\": \"patterns\"") != std::string::npos);
     CHECK(json.find("\"width\": 2") != std::string::npos);
     CHECK(json.find("\"file\": \"out.vdp_1.tileset.patterns.png\"") != std::string::npos);
+    CHECK(json.find("\"indexed_file\": \"out.vdp_1.tileset.patterns.idx.png\"") !=
+          std::string::npos);
+    CHECK(json.find("\"pal_file\": \"out.vdp_1.pal.main.pal\"") != std::string::npos);
 }
 
 TEST_CASE("export_assets writes an empty manifest for a system with no graphics",
