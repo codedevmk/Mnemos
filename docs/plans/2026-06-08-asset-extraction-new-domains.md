@@ -144,34 +144,37 @@ and primitives (indexed, re-tintable) cleanly separated.
 
 ---
 
-## Domain C — Dev-frontend asset browser (heaviest, least reuse)
+## Domain C — Dev-frontend asset browser (heaviest; new app + gated dependency)
 
 `src/apps/dev` is a stub (`README.md` only). A live browser is a **new
-application**, not an extension of an existing one.
+application**, not an extension of an existing one, and it pulls in the Eliot
+UI Kit (see the dependency boundary below).
 
 ### Approach
 
-Reuse the player's proven stack rather than introducing a UI toolkit: SDL3 +
-the GPU-blit + `text_overlay` glyph renderer already in `apps/player`. The dev
-app boots a `player_system` (via `adapter_registry`, like the player), then:
+The browser UI is built on the **Eliot UI Kit**. The dev app boots a
+`player_system` (via `adapter_registry`, like the player), then:
 - enumerates `chips()` → `introspection().assets()` / `audio()`,
-- renders a scrollable list of assets and a preview pane (resolve indexed →
-  RGB, upload as a texture — the same path the player uses for framebuffers),
+- renders the asset list + a preview pane with Eliot UI Kit widgets (resolve
+  indexed → RGB and present the same way the player surfaces framebuffers),
 - steps frames on demand so assets update live.
 
-### Dependency question (needs an ADR)
+### Dependency boundary (needs an ADR)
 
-A real browser UI benefits from an immediate-mode toolkit (Dear ImGui). Adding
-it is a new third-party dependency → requires an ADR per `AGENTS.md`/TDS §6.5.
-Options: (a) hand-rolled SDL UI reusing `text_overlay` (no new dep, more work,
-limited polish); (b) ImGui via pinned `FetchContent` + ADR. Recommend deciding
-this **before** starting C.
+The Eliot UI Kit is an Eliot dependency. `AGENTS.md` states Mnemos "must not
+take Eliot runtime, UI, allocator, or namespace dependencies unless a future
+approved ADR introduces an integration boundary." So Domain C is **gated on
+that ADR**: it must define the integration boundary (which Eliot UI Kit
+surfaces the dev app may use, how they are pinned/vendored, and that the
+dependency is confined to `apps/dev` — the headless core, chips, and other
+frontends stay Eliot-free). Land the ADR before starting C.
 
-### Increments (after the dependency decision)
+### Increments (after the integration-boundary ADR)
 
-1. `apps/dev` skeleton: boot a `player_system`, window, frame stepping.
-2. Asset list + selection (text_overlay).
-3. Preview pane (texture upload of the resolved asset).
+1. `apps/dev` skeleton on the Eliot UI Kit: boot a `player_system`, window,
+   frame stepping.
+2. Asset list + selection (Eliot UI Kit widgets).
+3. Preview pane (present the resolved asset).
 4. Audio asset playback/inspection (depends on Domain A).
 
 ---
@@ -182,13 +185,14 @@ this **before** starting C.
    deps, no UI. Lands as ~5 reviewable increments like the graphics work.
 2. **B (scenes)** — medium; mostly per-chip `debug_layer`s + a PNG path in the
    exporter. Reuses existing surfaces.
-3. **C (browser)** — last; depends on a dependency ADR and benefits from A + B
-   already producing assets to display.
+3. **C (browser)** — last; gated on the Eliot UI Kit integration-boundary ADR,
+   and benefits from A + B already producing assets to display.
 
 ## Cross-cutting open decisions
 
 - WAV encoder placement (`src/audio/` vs `debug/`).
 - Whether streamed DAC/synth capture is in scope for phase 1 (recommend: no).
-- Dev-frontend UI toolkit: hand-rolled SDL vs ImGui-with-ADR.
+- Eliot UI Kit integration-boundary ADR for the dev frontend (Domain C):
+  scope, pinning/vendoring, and confinement to `apps/dev`.
 - Whether the audio exporter gets its own CLI flag or folds into a single
   `--extract-assets` that emits both graphics and audio.
