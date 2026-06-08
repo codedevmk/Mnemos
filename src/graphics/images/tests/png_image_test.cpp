@@ -123,3 +123,60 @@ TEST_CASE("png_image emits a structurally valid truecolour PNG", "[png]") {
     };
     CHECK(filtered == expected);
 }
+
+TEST_CASE("indexed_png_image emits an indexed PNG with PLTE + tRNS", "[png]") {
+    // 2x2 image of indices 0..3 over a 4-colour palette; index 0 transparent.
+    const std::vector<std::uint8_t> indices = {0U, 1U, 2U, 3U};
+    const std::vector<std::uint32_t> palette = {0x000000U, 0xFF0000U, 0x00FF00U, 0x0000FFU};
+    const mnemos::graphics::images::indexed_png_image img(2, 2, indices, palette, 0);
+    const std::vector<std::uint8_t> png = img.encode();
+
+    const std::array<std::uint8_t, 8> sig = {0x89U, 0x50U, 0x4EU, 0x47U,
+                                             0x0DU, 0x0AU, 0x1AU, 0x0AU};
+    REQUIRE(png.size() > 8U);
+    for (std::size_t i = 0; i < 8; ++i) {
+        CHECK(png[i] == sig[i]);
+    }
+
+    const std::vector<chunk> chunks = parse_chunks(png);
+    for (const chunk& c : chunks) {
+        std::uint32_t crc = mnemos::security::cryptography::crc32(c.type);
+        crc = mnemos::security::cryptography::crc32(c.data, crc);
+        CHECK(crc == c.crc);
+    }
+
+    // IHDR: 2x2, 8-bit, colour type 3 (indexed).
+    const chunk* ihdr = find(chunks, "IHDR");
+    REQUIRE(ihdr != nullptr);
+    CHECK(read_be32(ihdr->data, 0) == 2U);
+    CHECK(read_be32(ihdr->data, 4) == 2U);
+    CHECK(ihdr->data[8] == 0x08U);
+    CHECK(ihdr->data[9] == 0x03U);
+
+    // PLTE holds the 4 RGB triplets in order.
+    const chunk* plte = find(chunks, "PLTE");
+    REQUIRE(plte != nullptr);
+    REQUIRE(plte->data.size() == 12U);
+    const std::vector<std::uint8_t> expected_plte = {0x00, 0x00, 0x00, 0xFF, 0x00, 0x00,
+                                                     0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF};
+    CHECK(plte->data == expected_plte);
+
+    // tRNS marks index 0 transparent (single alpha byte 0x00).
+    const chunk* trns = find(chunks, "tRNS");
+    REQUIRE(trns != nullptr);
+    REQUIRE(trns->data.size() == 1U);
+    CHECK(trns->data[0] == 0x00U);
+
+    // IDAT inflates to None-filtered index scanlines.
+    const chunk* idat = find(chunks, "IDAT");
+    REQUIRE(idat != nullptr);
+    REQUIRE(idat->data.size() > 6U);
+    const std::span<const std::uint8_t> body(idat->data.data() + 2, idat->data.size() - 6U);
+    std::vector<std::uint8_t> filtered((2U + 1U) * 2U);
+    const auto n = mnemos::compression::inflate_raw(body, filtered);
+    REQUIRE(n.has_value());
+    REQUIRE(*n == filtered.size());
+    const std::vector<std::uint8_t> expected = {0x00, 0x00, 0x01,  // row 0: filter + indices
+                                                0x00, 0x02, 0x03}; // row 1
+    CHECK(filtered == expected);
+}

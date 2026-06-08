@@ -67,6 +67,47 @@ namespace mnemos::debug {
             return true;
         }
 
+        // Write an asset as a palette-indexed PNG (lossless: raw indices + a PLTE
+        // built from the referenced palette, with tRNS for its transparent entry).
+        bool write_indexed_png(const std::string& path, const instrumentation::indexed_image& img,
+                               std::span<const instrumentation::palette_view> pals) {
+            if (img.width == 0U || img.height == 0U) {
+                return false;
+            }
+            std::vector<std::uint32_t> colors;
+            int transparent = -1;
+            if (img.palette < pals.size()) {
+                const instrumentation::palette_view& p = pals[img.palette];
+                colors.assign(p.colors.begin(), p.colors.end());
+                transparent = p.transparent_index;
+            }
+            std::vector<std::uint8_t> idx(img.indices.begin(), img.indices.end());
+            const graphics::images::indexed_png_image png(img.width, img.height, std::move(idx),
+                                                          std::move(colors), transparent);
+            if (!png.write(path)) {
+                std::fprintf(stderr, "[asset_export] could not write %s\n", path.c_str());
+                return false;
+            }
+            return true;
+        }
+
+        // Write a palette as a JASC-PAL text file (the widely-importable sprite-tool
+        // palette format): a header, the entry count, then "R G B" decimal triplets.
+        bool write_pal(const std::string& path, const instrumentation::palette_view& pal) {
+            std::string out = "JASC-PAL\n0100\n" + std::to_string(pal.colors.size()) + "\n";
+            for (std::uint32_t c : pal.colors) {
+                out += std::to_string((c >> 16U) & 0xFFU) + " " +
+                       std::to_string((c >> 8U) & 0xFFU) + " " + std::to_string(c & 0xFFU) + "\n";
+            }
+            const std::span<const std::uint8_t> bytes(
+                reinterpret_cast<const std::uint8_t*>(out.data()), out.size());
+            if (!io::write_file(path, bytes)) {
+                std::fprintf(stderr, "[asset_export] could not write %s\n", path.c_str());
+                return false;
+            }
+            return true;
+        }
+
         // A minimal JSON string literal: quoted, with '"' and '\\' escaped.
         // Asset/chip names are simple identifiers, so this is sufficient.
         std::string json_str(std::string_view s) {
@@ -120,11 +161,15 @@ namespace mnemos::debug {
                 if (write_png(path, w, h, std::move(px))) {
                     ++written;
                 }
+                const std::string pal_path =
+                    base_path + "." + chip_id + ".pal." + std::string(p.name) + ".pal";
+                (void)write_pal(pal_path, p);
                 json += i == 0 ? "\n" : ",\n";
                 json += "        {\"name\": " + json_str(p.name) +
                         ", \"colors\": " + std::to_string(p.colors.size()) +
                         ", \"transparent_index\": " + std::to_string(p.transparent_index) +
-                        ", \"file\": " + json_str(path_basename(path)) + "}";
+                        ", \"file\": " + json_str(path_basename(path)) +
+                        ", \"pal_file\": " + json_str(path_basename(pal_path)) + "}";
             }
             json += pals.empty() ? "],\n      \"assets\": [" : "\n      ],\n      \"assets\": [";
 
@@ -136,6 +181,11 @@ namespace mnemos::debug {
                 if (write_png(path, a.image.width, a.image.height, resolve(a.image, pals))) {
                     ++written;
                 }
+                const std::string idx_path =
+                    base_path + "." + chip_id + "." + kind + "." + std::string(a.name) + ".idx.png";
+                if (write_indexed_png(idx_path, a.image, pals)) {
+                    ++written;
+                }
                 json += i == 0 ? "\n" : ",\n";
                 json += "        {\"name\": " + json_str(a.name) + ", \"kind\": " + json_str(kind) +
                         ", \"width\": " + std::to_string(a.image.width) +
@@ -144,7 +194,8 @@ namespace mnemos::debug {
                         ", \"tile_h\": " + std::to_string(a.tile_h) +
                         ", \"palette\": " + std::to_string(a.image.palette) +
                         ", \"source_addr\": " + std::to_string(a.source_addr) +
-                        ", \"file\": " + json_str(path_basename(path)) + "}";
+                        ", \"file\": " + json_str(path_basename(path)) +
+                        ", \"indexed_file\": " + json_str(path_basename(idx_path)) + "}";
             }
             json += assets.empty() ? "]\n    }" : "\n      ]\n    }";
         }

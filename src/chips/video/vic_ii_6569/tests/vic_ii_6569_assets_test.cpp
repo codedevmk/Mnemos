@@ -65,6 +65,7 @@ TEST_CASE("vic_ii surfaces the character generator as a font sheet and 8 sprites
                        .color_ram = std::span<const std::uint8_t>(color_ram)});
     vic.set_bank(0U);
     vic.write(0x18U, 0x14U); // VM base $0400, char base $1000 (ROM shadow)
+    vic.write(0x27U, 0x05U); // sprite 0 colour = 5 (a set hi-res pixel uses this)
 
     auto assets = vic.introspection().assets()->graphics();
     // charset + 8 sprites.
@@ -85,7 +86,42 @@ TEST_CASE("vic_ii surfaces the character generator as a font sheet and 8 sprites
     CHECK(spr0->image.height == 21U);
     CHECK(spr0->source_addr == 0x0400U); // pointer $10 * 64
     REQUIRE(spr0->image.well_formed());
-    CHECK(spr0->image.indices[0] == 1U); // top-left sprite pixel
+    CHECK(spr0->image.indices[0] == 5U); // set hi-res pixel -> sprite colour 5
+    CHECK(spr0->image.indices[1] == 0U); // clear pixel -> transparent (index 0)
 
     CHECK(find(assets, asset_kind::sprite, "sprite_7") != nullptr);
+}
+
+TEST_CASE("vic_ii decodes a multicolour sprite into its four colours") {
+    vic_ii_6569 vic;
+    std::vector<std::uint8_t> ram(0x10000U, 0U);
+    std::vector<std::uint8_t> char_rom(0x1000U, 0U);
+    std::vector<std::uint8_t> color_ram(0x0400U, 0U);
+
+    // Sprite 0 pointer $10 -> data $0400. Row 0 byte 0 = 0b01_10_11_00 = 0x6C:
+    // pair 0 -> $D025, pair 1 -> sprite colour, pair 2 -> $D026, pair 3 -> clear.
+    ram[0x07F8U] = 0x10U;
+    ram[0x0400U] = 0x6CU;
+
+    vic.attach_memory({.ram = std::span<const std::uint8_t>(ram),
+                       .char_rom = std::span<const std::uint8_t>(char_rom),
+                       .color_ram = std::span<const std::uint8_t>(color_ram)});
+    vic.set_bank(0U);
+    vic.write(0x18U, 0x14U); // VM base $0400
+    vic.write(0x1CU, 0x01U); // sprite 0 multicolour
+    vic.write(0x25U, 0x02U); // sprite multicolour 0 = 2
+    vic.write(0x26U, 0x07U); // sprite multicolour 1 = 7
+    vic.write(0x27U, 0x05U); // sprite 0 colour = 5
+
+    auto assets = vic.introspection().assets()->graphics();
+    const auto* spr0 = find(assets, asset_kind::sprite, "sprite_0");
+    REQUIRE(spr0 != nullptr);
+    CHECK(spr0->image.width == 24U); // multicolour pixels are doubled in width
+    REQUIRE(spr0->image.well_formed());
+    // Each 2-bit pair fills two columns.
+    CHECK(spr0->image.indices[0] == 2U); // 01 -> $D025
+    CHECK(spr0->image.indices[1] == 2U);
+    CHECK(spr0->image.indices[2] == 5U); // 10 -> sprite colour
+    CHECK(spr0->image.indices[4] == 7U); // 11 -> $D026
+    CHECK(spr0->image.indices[6] == 0U); // 00 -> transparent
 }
