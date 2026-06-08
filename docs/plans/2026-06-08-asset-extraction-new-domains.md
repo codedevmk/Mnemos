@@ -144,7 +144,12 @@ and primitives (indexed, re-tintable) cleanly separated.
 
 ---
 
-## Domain C — Dev-frontend asset browser (heaviest; new app + gated dependency)
+## Domain C — Dev-frontend asset browser (DEFERRED)
+
+> **Deferred** for now — not in active scope. The design below is retained for
+> when it is revived; nothing here is to be implemented until then. When picked
+> up, it is gated on the Eliot UI Kit integration-boundary ADR (below). Until
+> then, the JSON manifest + exported PNG/WAV files remain the consumption path.
 
 `src/apps/dev` is a stub (`README.md` only). A live browser is a **new
 application**, not an extension of an existing one, and it pulls in the Eliot
@@ -185,14 +190,16 @@ frontends stay Eliot-free). Land the ADR before starting C.
    deps, no UI. Lands as ~5 reviewable increments like the graphics work.
 2. **B (scenes)** — medium; mostly per-chip `debug_layer`s + a PNG path in the
    exporter. Reuses existing surfaces.
-3. **C (browser)** — last; gated on the Eliot UI Kit integration-boundary ADR,
-   and benefits from A + B already producing assets to display.
+
+**C (browser) is deferred** — out of active scope. If revived it comes last,
+gated on the Eliot UI Kit integration-boundary ADR, and benefits from A + B
+already producing assets to display.
 
 ## Cross-cutting open decisions
 
 - WAV encoder placement (`src/audio/` vs `debug/`).
 - Whether streamed DAC/synth capture is in scope for phase 1 (recommend: no).
-- Eliot UI Kit integration-boundary ADR for the dev frontend (Domain C):
-  scope, pinning/vendoring, and confinement to `apps/dev`.
+- _(deferred with Domain C)_ Eliot UI Kit integration-boundary ADR for the dev
+  frontend: scope, pinning/vendoring, and confinement to `apps/dev`.
 - Whether the audio exporter gets its own CLI flag or folds into a single
   `--extract-assets` that emits both graphics and audio.
