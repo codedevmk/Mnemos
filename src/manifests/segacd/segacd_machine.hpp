@@ -33,6 +33,7 @@ namespace mnemos::manifests::segacd {
       private:
         std::uint64_t slice_base_main_ = 0; // main 68k cycles at the slice baseline
         std::uint64_t slice_base_sub_ = 0;  // sub 68k cycles at the slice baseline
+        std::uint64_t sub_cycle_carry_ = 0; // carried fractional sub-cycle remainder
     };
 
     // Assemble a Sega CD machine from its BIOS ROM. The Genesis boots the BIOS

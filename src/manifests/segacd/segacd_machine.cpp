@@ -20,7 +20,15 @@ namespace mnemos::manifests::segacd {
     } // namespace
 
     void segacd_machine::begin_comm_slice() noexcept {
-        slice_base_main_ = genesis->cpu.elapsed_cycles();
+        // Fold the just-ended slice's fractional sub-cycle remainder into the carry
+        // before re-baselining, so the sub's long-term rate tracks 87.5/53.693175
+        // exactly instead of losing the sub-cycle truncation every slice. (The
+        // trailing catch_up_sub() leaves the sub at the slice boundary, so the full
+        // slice delta below is the amount that was just run.)
+        const std::uint64_t main_now = genesis->cpu.elapsed_cycles();
+        sub_cycle_carry_ =
+            ((main_now - slice_base_main_) * 87'500'000ULL + sub_cycle_carry_) % 53'693'175ULL;
+        slice_base_main_ = main_now;
         slice_base_sub_ = sub->sub_cpu.elapsed_cycles();
     }
 
@@ -32,7 +40,8 @@ namespace mnemos::manifests::segacd {
             return;
         }
         const std::uint64_t main_delta = main_now - slice_base_main_;
-        const std::uint64_t target = slice_base_sub_ + (main_delta * 87'500'000ULL) / 53'693'175ULL;
+        const std::uint64_t target =
+            slice_base_sub_ + (main_delta * 87'500'000ULL + sub_cycle_carry_) / 53'693'175ULL;
         const std::uint64_t cur = sub->sub_cpu.elapsed_cycles();
         if (target > cur) {
             sub->run_cycles(target - cur); // no-op while the sub is held in reset
