@@ -1,11 +1,13 @@
 #pragma once
 
+#include "asset_views.hpp"
 #include "chip.hpp"
 
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace mnemos::chips::video {
@@ -96,7 +98,40 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::span<const std::uint8_t> vram() const noexcept { return vram_; }
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Decodes the VDP's current graphics state into the system-agnostic
+        // asset-extraction contract (asset_views.hpp): the two 16-colour CRAM
+        // palettes, the full 512-pattern tile sheet, and one decoded image per
+        // active SAT sprite. The exporter consumes these without knowing this
+        // is an SMS VDP. Decoded buffers are rebuilt on each call and stay
+        // valid until the next call (the contract's tick lifetime rule).
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(sms_vdp& owner) noexcept : assets_(owner) {}
+            [[nodiscard]] instrumentation::asset_source* assets() override { return &assets_; }
+
+          private:
+            class asset_source_impl final : public instrumentation::asset_source {
+              public:
+                explicit asset_source_impl(sms_vdp& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const instrumentation::palette_view>
+                palettes() const override;
+                [[nodiscard]] std::span<const instrumentation::graphic_asset>
+                graphics() const override;
+
+              private:
+                sms_vdp* owner_;
+                mutable std::array<std::uint32_t, 16> bg_rgb_{};
+                mutable std::array<std::uint32_t, 16> spr_rgb_{};
+                mutable std::array<instrumentation::palette_view, 2> palettes_{};
+                mutable std::vector<std::uint8_t> tileset_px_{};
+                mutable std::vector<std::uint8_t> sprite_px_{};
+                mutable std::vector<std::uint8_t> font_px_{};
+                mutable std::vector<std::string> names_{};
+                mutable std::vector<instrumentation::graphic_asset> assets_{};
+            };
+
+            asset_source_impl assets_;
+        };
 
         void begin_scanline() noexcept;             // render the current scanline if visible
         [[nodiscard]] bool run_scanline() noexcept; // advance + interrupts; returns IRQ edge
@@ -126,6 +161,15 @@ namespace mnemos::chips::video {
         bool pal_mode_{};
         bool gg_mode_{}; // Game Gear VDP mode (12-bit CRAM + 160x144 viewport)
 
+        // Font-extraction hint from the manifest ([chip.config] font_first_tile /
+        // font_count). SMS has no hardware font, so the glyph tile range is a
+        // per-game convention; when font_count_ > 0 the asset_source emits a
+        // "font" sheet over [font_first_tile_, font_first_tile_ + font_count_).
+        // Set by configure(); deliberately NOT touched by reset() so a runtime
+        // soft reset doesn't drop the manifest-supplied hint.
+        int font_first_tile_{0};
+        int font_count_{0};
+
         bool frame_irq_pending_{};
         bool line_irq_pending_{};
         int line_counter_{};
@@ -137,7 +181,7 @@ namespace mnemos::chips::video {
         std::vector<std::uint32_t> framebuffer_; // fb_width * fb_height, 0x00RRGGBB
         std::uint64_t frame_index_{};
 
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::video

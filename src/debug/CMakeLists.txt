@@ -21,9 +21,10 @@ mnemos_declare_tier(
 )
 
 # Artifact dumping over an assembled player_system: framebuffer -> PPM, each
-# chip/system memory_view -> .bin, each debug_layer -> .ppm, plus the CSV trace
-# session. Drives any system through the frontend_sdk introspection surface only.
-add_library(mnemos_debug_dump debug_dump.cpp)
+# chip/system memory_view -> .bin, each debug_layer -> .ppm, the CSV trace
+# session, and decoded graphics asset extraction (asset_source -> PNG + JSON).
+# Drives any system through the frontend_sdk introspection surface only.
+add_library(mnemos_debug_dump debug_dump.cpp asset_export.cpp)
 add_library(mnemos::debug::dump ALIAS mnemos_debug_dump)
 
 target_include_directories(
@@ -61,7 +62,9 @@ if(BUILD_TESTING)
     )
     mnemos_add_test(
         mnemos_debug_dump_test
-        SOURCES tests/debug_dump_test.cpp
+        SOURCES
+            tests/debug_dump_test.cpp
+            tests/asset_export_test.cpp
         LIBRARIES mnemos::debug::dump
     )
 endif()

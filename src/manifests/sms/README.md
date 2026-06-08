@@ -15,4 +15,20 @@ plus 8 KiB of work RAM and the Z80 memory + I/O buses.
 `set_pad()` / `set_reset_button()` drive the controller state. A cartridge image is
 moved into `assemble_sms`; the mapper borrows it.
 
-The headless CLI run path (scheduler wiring) and golden-frame tests are follow-ups.
+## Asset extraction
+
+The VDP exposes a graphics `asset_source` (palettes, the 512-pattern tile sheet, and
+the active SAT sprites), surfaced by `mnemos_player --extract-assets`. The SMS has no
+hardware font, so the glyph tile range is a per-game convention supplied as an
+optional `[chip.config]` hint on the `video` chip:
+
+```toml
+[chip.config]
+font_first_tile = 4    # first glyph's VRAM tile index (0-511)
+font_count      = 96   # number of glyph tiles; 0 (default) emits no font asset
+```
+
+When `font_count > 0` the VDP emits a `font` asset -- an 8x8 tile sheet over
+`[font_first_tile, font_first_tile + font_count)`, clamped to the tile space. The
+shipped manifests leave it unset (no font) because the range differs per game;
+set it in a game-specific manifest to rip that title's font.

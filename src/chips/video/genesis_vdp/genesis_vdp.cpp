@@ -1621,12 +1621,149 @@ namespace mnemos::chips::video {
                                    reinterpret_cast<const std::uint8_t*>(owner.vsram_.data()),
                                    owner.vsram_.size() * sizeof(std::uint16_t))),
           regs_view_("vdpregs", std::span<const std::uint8_t>(owner.reg_)), registers_impl_(owner),
-          plane_a_(owner) {
+          plane_a_(owner), assets_(owner) {
         mem_table_[0] = &vram_view_;
         mem_table_[1] = &cram_view_;
         mem_table_[2] = &vsram_view_;
         mem_table_[3] = &regs_view_;
         layer_table_[0] = &plane_a_;
+    }
+
+    std::span<const instrumentation::palette_view>
+    genesis_vdp::introspection_surface::asset_source_impl::palettes() const {
+        static constexpr std::array<std::string_view, 4> names{"pal0", "pal1", "pal2", "pal3"};
+        for (int p = 0; p < 4; ++p) {
+            for (int i = 0; i < 16; ++i) {
+                pal_rgb_[static_cast<std::size_t>(p)][static_cast<std::size_t>(i)] =
+                    genesis_vdp::cram_to_rgb(owner_->cram_[static_cast<std::size_t>(p) * 16U +
+                                                           static_cast<std::size_t>(i)],
+                                             genesis_vdp::shade_normal);
+            }
+            palettes_[static_cast<std::size_t>(p)] =
+                instrumentation::palette_view{.name = names[static_cast<std::size_t>(p)],
+                                              .colors = pal_rgb_[static_cast<std::size_t>(p)],
+                                              .transparent_index = 0};
+        }
+        return palettes_;
+    }
+
+    std::span<const instrumentation::graphic_asset>
+    genesis_vdp::introspection_surface::asset_source_impl::graphics() const {
+        std::array<std::uint8_t, 8> pix{};
+
+        // Tile sheet: every 32-byte 4bpp pattern in VRAM as an 8x8 tile, 16 wide,
+        // visualised against palette 0.
+        constexpr int total_tiles = static_cast<int>(genesis_vdp::vram_size) / 32; // 2048
+        constexpr int per_row = 16;
+        constexpr std::uint32_t sheet_w = per_row * 8;                 // 128
+        constexpr std::uint32_t sheet_h = (total_tiles / per_row) * 8; // 1024
+        tileset_px_.assign(static_cast<std::size_t>(sheet_w) * sheet_h, 0U);
+        for (int t = 0; t < total_tiles; ++t) {
+            const int tcol = t % per_row;
+            const int trow = t / per_row;
+            for (int row = 0; row < 8; ++row) {
+                owner_->fetch_pattern_row(t, row, false, false, pix.data());
+                const std::size_t base =
+                    (static_cast<std::size_t>(trow) * 8U + static_cast<std::size_t>(row)) *
+                        sheet_w +
+                    static_cast<std::size_t>(tcol) * 8U;
+                for (int p = 0; p < 8; ++p) {
+                    tileset_px_[base + static_cast<std::size_t>(p)] =
+                        pix[static_cast<std::size_t>(p)];
+                }
+            }
+        }
+
+        // Sprites: walk the SAT linked list (start at entry 0, follow the link
+        // field, stop at link 0; bounded by sprites_max against a cyclic list).
+        const std::uint32_t sat = owner_->sat_base();
+        struct sprite_meta final {
+            int tile;
+            int w_cells;
+            int h_cells;
+            std::uint32_t palette;
+            std::uint32_t src;
+        };
+        std::vector<sprite_meta> metas;
+        int link = 0;
+        for (int s = 0; s < sprites_max; ++s) {
+            const std::uint32_t addr = sat + static_cast<std::uint32_t>(link) * 8U;
+            const std::uint16_t w1 = owner_->vram_read16(addr + 2U);
+            const std::uint16_t w2 = owner_->vram_read16(addr + 4U);
+            const int next = w1 & 0x7F;
+            metas.push_back({.tile = w2 & 0x07FF,
+                             .w_cells = ((w1 >> 10U) & 3) + 1,
+                             .h_cells = ((w1 >> 8U) & 3) + 1,
+                             .palette = static_cast<std::uint32_t>((w2 >> 13U) & 3),
+                             .src = addr});
+            if (next == 0) {
+                break;
+            }
+            link = next;
+        }
+
+        std::size_t total = 0;
+        std::vector<std::size_t> offsets(metas.size());
+        for (std::size_t i = 0; i < metas.size(); ++i) {
+            offsets[i] = total;
+            total += static_cast<std::size_t>(metas[i].w_cells) * 8U *
+                     static_cast<std::size_t>(metas[i].h_cells) * 8U;
+        }
+        sprite_px_.assign(total, 0U);
+        for (std::size_t i = 0; i < metas.size(); ++i) {
+            const sprite_meta& m = metas[i];
+            const auto sw = static_cast<std::uint32_t>(m.w_cells) * 8U;
+            // Patterns are column-major within a sprite (see render_sprites).
+            for (int cx = 0; cx < m.w_cells; ++cx) {
+                for (int cr = 0; cr < m.h_cells; ++cr) {
+                    const int cell_tile = m.tile + cx * m.h_cells + cr;
+                    for (int row = 0; row < 8; ++row) {
+                        owner_->fetch_pattern_row(cell_tile, row, false, false, pix.data());
+                        const std::size_t base =
+                            offsets[i] +
+                            (static_cast<std::size_t>(cr) * 8U + static_cast<std::size_t>(row)) *
+                                sw +
+                            static_cast<std::size_t>(cx) * 8U;
+                        for (int p = 0; p < 8; ++p) {
+                            sprite_px_[base + static_cast<std::size_t>(p)] =
+                                pix[static_cast<std::size_t>(p)];
+                        }
+                    }
+                }
+            }
+        }
+
+        names_.clear();
+        names_.reserve(metas.size());
+        assets_.clear();
+        assets_.reserve(metas.size() + 1U);
+        assets_.push_back(instrumentation::graphic_asset{
+            .kind = instrumentation::asset_kind::tileset,
+            .name = "patterns",
+            .image = {.width = sheet_w, .height = sheet_h, .indices = tileset_px_, .palette = 0U},
+            .tile_w = 8U,
+            .tile_h = 8U,
+            .source_addr = 0U});
+        for (std::size_t i = 0; i < metas.size(); ++i) {
+            const sprite_meta& m = metas[i];
+            const auto sw = static_cast<std::uint32_t>(m.w_cells) * 8U;
+            const auto sh = static_cast<std::uint32_t>(m.h_cells) * 8U;
+            std::array<char, 16> buf{};
+            std::snprintf(buf.data(), buf.size(), "sprite_%02zu", i);
+            names_.emplace_back(buf.data());
+            assets_.push_back(instrumentation::graphic_asset{
+                .kind = instrumentation::asset_kind::sprite,
+                .name = names_[i],
+                .image = {.width = sw,
+                          .height = sh,
+                          .indices = std::span<const std::uint8_t>(sprite_px_)
+                                         .subspan(offsets[i], static_cast<std::size_t>(sw) * sh),
+                          .palette = m.palette},
+                .tile_w = 8U,
+                .tile_h = 8U,
+                .source_addr = m.src});
+        }
+        return assets_;
     }
 
     std::span<const register_descriptor>

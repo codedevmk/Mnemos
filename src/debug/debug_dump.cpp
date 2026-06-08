@@ -2,29 +2,15 @@
 
 #include "file.hpp"
 #include "introspection_views.hpp"
+#include "path_id.hpp"
 #include "ppm_image.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <vector>
 
 namespace mnemos::debug {
 
     namespace {
-
-        std::string sanitize_id(std::string_view raw) {
-            std::string out;
-            out.reserve(raw.size());
-            for (char c : raw) {
-                if (std::isalnum(static_cast<unsigned char>(c))) {
-                    out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-                } else {
-                    out.push_back('_');
-                }
-            }
-            return out;
-        }
 
         bool dump_framebuffer_ppm(const chips::frame_buffer_view& fb, const std::string& path) {
             if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {

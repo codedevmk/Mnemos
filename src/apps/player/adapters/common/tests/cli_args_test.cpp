@@ -10,6 +10,7 @@
 
 namespace {
     using mnemos::apps::player::adapters::input_for_frame;
+    using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
     using mnemos::apps::player::adapters::parse_rom_arg;
@@ -102,6 +103,39 @@ TEST_CASE("cli_args: --frames alone (no --screenshot) returns nullopt") {
 TEST_CASE("cli_args: neither --screenshot nor --frames returns nullopt") {
     auto a = make_argv({"player", "--rom", "x.bin"});
     CHECK(parse_screenshot_args(a.argc(), a.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --extract-assets + --extract-frames returns the request") {
+    auto a = make_argv({"player", "--extract-assets", "scratch/rip", "--extract-frames", "90"});
+    const auto req = parse_extract_assets_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->base == "scratch/rip");
+    CHECK(req->frames == 90U);
+}
+
+TEST_CASE("cli_args: --extract-assets defaults to 0 frames without --extract-frames") {
+    auto a = make_argv({"player", "--extract-assets", "scratch/rip"});
+    const auto req = parse_extract_assets_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->base == "scratch/rip");
+    CHECK(req->frames == 0U);
+}
+
+TEST_CASE("cli_args: --extract-assets rejects an option-shaped value") {
+    // The token after --extract-assets is another flag, so there is no base
+    // path -> the headless path stays disabled rather than ripping to "--...".
+    auto a = make_argv({"player", "--extract-assets", "--extract-frames", "90"});
+    CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --extract-frames alone (no --extract-assets) returns nullopt") {
+    auto a = make_argv({"player", "--extract-frames", "30"});
+    CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --extract-assets without a value returns nullopt") {
+    auto a = make_argv({"player", "--extract-assets"});
+    CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: parse_press_events parses button@frame[+duration]") {
