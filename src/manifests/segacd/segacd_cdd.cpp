@@ -442,6 +442,7 @@ namespace mnemos::manifests::segacd {
         cdda_sample_in_sector = 0;
         cdda_loop = false; // the CDD never loops; direct API callers could
         cdda_active = true;
+        cdda_sector_valid = false; // force a fresh sector read on the next sample
     }
 
     void segacd_system::cdda_stop() {
@@ -455,18 +456,26 @@ namespace mnemos::manifests::segacd {
         }
         // One 2352-byte raw sector = 588 stereo little-endian 16-bit samples.
         constexpr std::uint16_t samples_per_frame = 588U;
-        std::array<std::uint8_t, mnemos::disc::disc_image::raw_sector_size> sector{};
-        if (!disc->read_raw_sector(
-                cdda_current_lba,
-                std::span<std::uint8_t, mnemos::disc::disc_image::raw_sector_size>{sector})) {
-            cdda_active = false;
-            return false;
+        // Refill the sector cache only when the playing LBA changes -- not on
+        // every 44.1 kHz sample (avoids ~44k full-sector reads/sec per track).
+        if (!cdda_sector_valid || cdda_sector_lba != cdda_current_lba) {
+            if (!disc->read_raw_sector(
+                    cdda_current_lba,
+                    std::span<std::uint8_t, mnemos::disc::disc_image::raw_sector_size>{
+                        cdda_sector})) {
+                cdda_active = false;
+                return false;
+            }
+            cdda_sector_lba = cdda_current_lba;
+            cdda_sector_valid = true;
         }
         const std::size_t base = static_cast<std::size_t>(cdda_sample_in_sector) * 4U;
-        out_l = static_cast<std::int16_t>(static_cast<std::uint16_t>(sector[base]) |
-                                          (static_cast<std::uint16_t>(sector[base + 1]) << 8U));
-        out_r = static_cast<std::int16_t>(static_cast<std::uint16_t>(sector[base + 2]) |
-                                          (static_cast<std::uint16_t>(sector[base + 3]) << 8U));
+        out_l =
+            static_cast<std::int16_t>(static_cast<std::uint16_t>(cdda_sector[base]) |
+                                      (static_cast<std::uint16_t>(cdda_sector[base + 1]) << 8U));
+        out_r =
+            static_cast<std::int16_t>(static_cast<std::uint16_t>(cdda_sector[base + 2]) |
+                                      (static_cast<std::uint16_t>(cdda_sector[base + 3]) << 8U));
         ++cdda_sample_in_sector;
         if (cdda_sample_in_sector >= samples_per_frame) {
             cdda_sample_in_sector = 0;

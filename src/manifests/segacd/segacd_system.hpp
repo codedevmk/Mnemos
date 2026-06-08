@@ -90,6 +90,11 @@ namespace mnemos::manifests::segacd {
         std::uint32_t cdda_current_lba{};
         std::uint16_t cdda_sample_in_sector{};
         bool cdda_loop{};
+        // CD-DA sector cache: read each 2352-byte raw sector once (not on every
+        // 44.1 kHz sample). Refilled when the playing LBA changes.
+        std::array<std::uint8_t, mnemos::disc::disc_image::raw_sector_size> cdda_sector{};
+        std::uint32_t cdda_sector_lba{};
+        bool cdda_sector_valid{};
 
         // CDC (LC8951) state. cdc_ram is the 16 KB decode ring (+2352 headroom).
         std::array<std::uint8_t, 0x4000 + 2352> cdc_ram{};
