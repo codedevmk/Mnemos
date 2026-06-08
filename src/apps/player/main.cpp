@@ -204,6 +204,9 @@ int main(int argc, char* argv[]) {
         case system_family::c64:
             cart_default = mnemos::video_region::pal;
             break;
+        case system_family::segacd:
+            cart_default = mnemos::video_region::ntsc; // disc-based; region comes from the BIOS
+            break;
         }
         const auto video = resolve_video(cart_default);
         std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
