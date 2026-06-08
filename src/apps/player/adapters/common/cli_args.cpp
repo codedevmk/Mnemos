@@ -161,4 +161,24 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::optional<extract_assets_request> parse_extract_assets_args(int argc, char* argv[]) {
+        std::optional<std::string> base;
+        std::uint64_t frames = 0U;
+        for (int i = 1; i < argc - 1; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--extract-assets") {
+                std::string value{argv[i + 1]};
+                if (!value.empty()) {
+                    base = std::move(value);
+                }
+            } else if (a == "--extract-frames") {
+                frames = std::strtoull(argv[i + 1], nullptr, 10);
+            }
+        }
+        if (base) {
+            return extract_assets_request{*base, frames};
+        }
+        return std::nullopt;
+    }
+
 } // namespace mnemos::apps::player::adapters

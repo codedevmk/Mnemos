@@ -39,6 +39,19 @@ namespace mnemos::apps::player::adapters {
 
     [[nodiscard]] std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]);
 
+    // --extract-assets <base> [--extract-frames N]: headless run that advances N
+    // frames (default 0 -- extract at the boot state) then writes the decoded
+    // graphics assets (palettes, tiles, sprites) of every chip to `<base>.*`
+    // PNG/JSON files, and exits. Only `--extract-assets <base>` is required; a
+    // missing or empty base disables the path.
+    struct extract_assets_request final {
+        std::string base;
+        std::uint64_t frames{};
+    };
+
+    [[nodiscard]] std::optional<extract_assets_request> parse_extract_assets_args(int argc,
+                                                                                  char* argv[]);
+
     // Frames a scripted button is held when `--press <button>@<frame>` gives no
     // explicit `+duration` (long enough for a 60 Hz poll to catch the press).
     inline constexpr std::uint64_t press_default_duration = 4U;

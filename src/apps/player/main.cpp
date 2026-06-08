@@ -5,6 +5,7 @@
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
+#include "asset_export.hpp" // --extract-assets: decoded graphics -> PNG + JSON
 #include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "c64_adapter.hpp"  // force_link (the C64 has no cart-header region byte)
 #include "chip.hpp"
@@ -140,6 +141,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::family_label;
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::load_rom;
+    using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
@@ -156,6 +158,7 @@ int main(int argc, char* argv[]) {
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
+    const auto extract = parse_extract_assets_args(argc, argv);
 
     const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
         return resolve_video_region(region_arg, cart_default);
@@ -203,6 +206,10 @@ int main(int argc, char* argv[]) {
             break;
         case system_family::c64:
             cart_default = mnemos::video_region::pal;
+            break;
+        case system_family::segacd:
+            // Region comes from the disc/BIOS, not a cart header byte; keep the
+            // NTSC default set above (also silences -Wswitch on this enum).
             break;
         }
         const auto video = resolve_video(cart_default);
@@ -297,10 +304,10 @@ int main(int argc, char* argv[]) {
         }
         // Load any existing .srm before the first frame; the guard writes it back
         // on exit, keyed off the on-disk ROM path (so it sits beside the cart even
-        // when the image came from a .zip). Skipped under --screenshot: that
-        // headless render/diagnostic path (parity sweeps over a read-only ROM
-        // corpus) must not drop saves beside the ROMs.
-        if (!screenshot) {
+        // when the image came from a .zip). Skipped under the headless
+        // --screenshot / --extract-assets paths: those diagnostic sweeps over a
+        // read-only ROM corpus must not drop saves beside the ROMs.
+        if (!screenshot && !extract) {
             srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
         }
     }
@@ -340,6 +347,31 @@ int main(int argc, char* argv[]) {
         if (trace.active()) {
             std::fprintf(stderr, "[mnemos_player] wrote %s\n", trace_path.c_str());
         }
+        std::fflush(stderr);
+        return 0;
+    }
+
+    // Headless asset-extraction path: step --extract-frames frames, then decode
+    // every chip's graphics (palettes, tiles, sprites) to <base>.* PNG + JSON
+    // and exit. Like --screenshot it drives the system only through
+    // player_system + the chip introspection surface, so it works for any
+    // adapter that implements an asset_source.
+    if (extract) {
+        if (!system) {
+            std::fprintf(stderr, "--extract-assets requires --rom\n");
+            return 1;
+        }
+        const auto press_events = parse_press_events(argc, argv);
+        for (std::uint64_t i = 0; i < extract->frames; ++i) {
+            if (!press_events.empty()) {
+                system->apply_input(0, input_for_frame(press_events, i + 1U));
+            }
+            system->step_one_frame();
+        }
+        const std::size_t count = mnemos::debug::export_assets(*system, extract->base);
+        std::fprintf(
+            stderr, "[mnemos_player] extracted %zu asset image(s) to %s.* after %llu frames\n",
+            count, extract->base.c_str(), static_cast<unsigned long long>(extract->frames));
         std::fflush(stderr);
         return 0;
     }
