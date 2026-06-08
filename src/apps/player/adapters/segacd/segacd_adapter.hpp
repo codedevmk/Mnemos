@@ -13,8 +13,7 @@
 // per-frame accumulator (fractional remainders carried so the long-term rate is
 // exact). The sub-CPU only runs once the BIOS releases it (gate $01).
 //
-// Audio for now is the Genesis FM + PSG mix; the CD-DA + RF5C164 PCM mix is
-// wired in a later commit (D3).
+// Audio mixes the Genesis FM + PSG with the Sega CD CD-DA + RF5C164 PCM.
 
 #include "disc_image.hpp"          // mnemos::disc::disc_image (the mounted CD)
 #include "introspection_views.hpp" // span_memory_view
@@ -38,9 +37,9 @@ namespace mnemos::apps::player::adapters::segacd {
 
     class segacd_adapter final : public frontend_sdk::player_system {
       public:
-        // Build around a moved-in BIOS image (the Genesis main CPU boots it as
-        // its cartridge; the same image overlays the sub-CPU reset vectors). A
-        // disc is attached separately via machine().sub->attach_disc().
+        // Build around a moved-in BIOS image (the Genesis main CPU boots it as its
+        // cartridge; the sub-CPU boots from PRG-RAM vectors the main BIOS loads
+        // there). A disc is attached separately via machine().sub->attach_disc().
         explicit segacd_adapter(std::vector<std::uint8_t> bios,
                                 const manifests::genesis::genesis_config& config = {},
                                 std::string display_name = {},
