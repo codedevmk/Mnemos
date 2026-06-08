@@ -459,6 +459,41 @@ TEST_CASE("segacd CDC DMAs decoded user data to PRG-RAM", "[segacd][cdc]") {
     }
 }
 
+TEST_CASE("segacd CDC DMAs decoded user data to PCM wave RAM", "[segacd][cdc]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    cdc_set_reg(*sys, 0x0A, 0x84); // CTRL0: DECEN | WRRQ
+    issue_play(*sys, 0, 2, 0);
+    for (int i = 0; i < 4; ++i) {
+        sys->cdd_update(); // decode sector 0 into the ring
+    }
+
+    // DMA 8 user-data bytes (skip the 4-byte header) from the ring to PCM RAM.
+    const auto src = static_cast<std::uint16_t>((sys->cdc_pt & 0x3FFFU) + 4U);
+    cdc_set_reg(*sys, 0x04, static_cast<std::uint8_t>(src));       // DAC low
+    cdc_set_reg(*sys, 0x05, static_cast<std::uint8_t>(src >> 8U)); // DAC high
+    cdc_set_reg(*sys, 0x02, 0x07);                                 // DBC low = 7 -> 8 bytes
+    cdc_set_reg(*sys, 0x03, 0x00);                                 // DBC high
+    cdc_set_reg(*sys, 0x01, 0x02);                                 // IFCTRL: DOUTEN
+    sys->gate_write_main(0x04, 0x04); // gate $04: transfer dest = 4 (PCM RAM)
+    sys->gate_write_main(0x0A, 0x00); // dst addr high
+    sys->gate_write_main(0x0B, 0x10); // dst addr low -> wave offset (0x10<<2)=0x40
+    cdc_set_reg(*sys, 0x06, 0x00);    // DTRG -> arm the DMA
+
+    load_spin(*sys);
+    sys->release_sub_reset();
+    sys->run_cycles(50); // run_cycles services the armed CDC DMA
+
+    // The dest is ($0A:$0B << 2), NOT the source offset: 8 bytes (byte k = k) land
+    // in PCM bank 0 at wave-RAM offset 0x40.
+    const auto wave = sys->pcm.waveram();
+    for (std::size_t k = 0; k < 8; ++k) {
+        REQUIRE(wave[0x40 + k] == static_cast<std::uint8_t>(k));
+    }
+}
+
 TEST_CASE("segacd CD-DA streams stereo samples from a raw sector", "[segacd][cdda]") {
     const auto bin = make_audio_bin();
     auto disc = mnemos::disc::disc_image::open_bin(bin);

@@ -112,12 +112,20 @@ namespace mnemos::manifests::segacd {
             gate_array[0x0B] = static_cast<std::uint8_t>(a);
             break;
         }
-        case 4: // PCM RAM
+        case 4: { // PCM RAM: dest = ($0A:$0B << 2) into the current 4 KB wave-RAM
+                  // bank (byte DMA), NOT the CDC source offset.
+            std::uint16_t dst = static_cast<std::uint16_t>(
+                (((gate_array[0x0A] << 8) | gate_array[0x0B]) << 2) & 0x0FFFU);
             for (std::uint32_t i = 0; i < len; ++i) {
-                pcm.write_waveram(static_cast<std::uint16_t>((src + i) & 0xFFFFU),
-                                  cdc_ram[(src + i) & 0x3FFFU]);
+                pcm.write_waveram(dst, cdc_ram[(src + i) & 0x3FFFU]);
+                dst = static_cast<std::uint16_t>((dst + 1U) & 0x0FFFU);
             }
+            auto a = static_cast<std::uint16_t>((gate_array[0x0A] << 8) | gate_array[0x0B]);
+            a = static_cast<std::uint16_t>(a + (len >> 2));
+            gate_array[0x0A] = static_cast<std::uint8_t>(a >> 8);
+            gate_array[0x0B] = static_cast<std::uint8_t>(a);
             break;
+        }
         default:
             break;
         }
