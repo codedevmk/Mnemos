@@ -144,8 +144,8 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::cdd_report_toc() {
         const std::uint8_t sub = cdd_command[3]; // $45 = TOC sub-command (the reference
-                                                  // reads the $44 word's LOW byte, $45,
-                                                  // not $44 -- $44 is the high/unused byte)
+                                                 // reads the $44 word's LOW byte, $45,
+                                                 // not $44 -- $44 is the high/unused byte)
         for (std::size_t i = 1; i <= 8; ++i) {
             cdd_status[i] = 0;
         }
@@ -215,9 +215,8 @@ namespace mnemos::manifests::segacd {
             // digit per command byte, like the rest of the CDD frame). Reading both
             // nibbles of $46 alone instead returns the wrong track -- e.g. track 1,
             // sent as $46=0/$47=1, reads as track 0 -- so the BIOS gets a bad IP LBA.
-            const std::uint32_t track =
-                static_cast<std::uint32_t>(cdd_command[4]) * 10U +
-                static_cast<std::uint32_t>(cdd_command[5]);
+            const std::uint32_t track = static_cast<std::uint32_t>(cdd_command[4]) * 10U +
+                                        static_cast<std::uint32_t>(cdd_command[5]);
             std::uint32_t start = 0U;
             bool is_data = true;
             if (disc != nullptr && tc > 0 && track >= 1U &&
@@ -268,8 +267,8 @@ namespace mnemos::manifests::segacd {
                        (static_cast<std::uint32_t>(prg_ram[(a + 2U) & m]) << 8) |
                        static_cast<std::uint32_t>(prg_ram[(a + 3U) & m]);
             };
-            std::fprintf(stderr, "[cdd-ret] cmd=%X ret=%06X %06X %06X\n", cmd,
-                         rd(sp) & 0xFFFFFFU, rd(sp + 4U) & 0xFFFFFFU, rd(sp + 8U) & 0xFFFFFFU);
+            std::fprintf(stderr, "[cdd-ret] cmd=%X ret=%06X %06X %06X\n", cmd, rd(sp) & 0xFFFFFFU,
+                         rd(sp + 4U) & 0xFFFFFFU, rd(sp + 8U) & 0xFFFFFFU);
             const std::uint32_t a5 = sub_cpu.cpu_registers().a[5];
             std::fprintf(stderr,
                          "[flags] a5=%06X 5834=%02X 5836=%02X 5837=%02X 583A=%02X 583B=%02X\n",

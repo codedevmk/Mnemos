@@ -298,8 +298,7 @@ TEST_CASE("segacd sub-CPU IRQ priority, masking, and acknowledge", "[segacd][irq
     REQUIRE(sys->pending_irq_level() == 0);
 }
 
-TEST_CASE("segacd CDD INT4 is gated on the $36/$37 HOCK (CDD-comm enable)",
-          "[segacd][irq][cdd]") {
+TEST_CASE("segacd CDD INT4 is gated on the $36/$37 HOCK (CDD-comm enable)", "[segacd][irq][cdd]") {
     const auto bin = make_data_bin(8);
     auto disc = mnemos::disc::disc_image::open_bin(bin);
     auto sys = assemble_segacd();
@@ -387,7 +386,8 @@ TEST_CASE("segacd CDD reports first/last track numbers", "[segacd][cdd]") {
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
     sys->gate_write_main(0x42, 0x02); // Report TOC (command 2)
-    sys->gate_write_main(0x45, 0x04); // sub-command: first/last track (in $45, the $44-word low byte)
+    sys->gate_write_main(0x45,
+                         0x04); // sub-command: first/last track (in $45, the $44-word low byte)
     sys->gate_write_main(0x4A, 0x00); // commit
     // CDD status digits are one BCD digit per byte (low nibble): first track 01,
     // last track 01 -> RS2/RS3 = 0,1 and RS4/RS5 = 0,1.

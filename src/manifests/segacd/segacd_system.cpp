@@ -165,7 +165,8 @@ namespace mnemos::manifests::segacd {
             const std::uint8_t cur = gate_array[0x03];
             std::uint8_t next = static_cast<std::uint8_t>((cur & 0x07U) | (value & 0xC0U));
             if ((value & 0x02U) != 0U) {
-                next = static_cast<std::uint8_t>((next & 0xFEU) | 0x02U); // DMNA: take word RAM, clear RET
+                next = static_cast<std::uint8_t>((next & 0xFEU) |
+                                                 0x02U); // DMNA: take word RAM, clear RET
             }
             if (gate_trace_enabled()) {
                 std::fprintf(stderr, "[wram] main $03 %02X->%02X\n", value, next);
@@ -255,7 +256,8 @@ namespace mnemos::manifests::segacd {
             const std::uint8_t cur = gate_array[0x03];
             std::uint8_t next = static_cast<std::uint8_t>((cur & 0xC3U) | (value & 0x04U));
             if ((value & 0x01U) != 0U) {
-                next = static_cast<std::uint8_t>((next & 0xFDU) | 0x01U); // RET: return word RAM, clear DMNA
+                next = static_cast<std::uint8_t>((next & 0xFDU) |
+                                                 0x01U); // RET: return word RAM, clear DMNA
             }
             if (gate_trace_enabled()) {
                 std::fprintf(stderr, "[wram] sub  $03 %02X->%02X pc=%06X\n", value, next,

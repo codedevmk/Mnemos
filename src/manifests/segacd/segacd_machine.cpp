@@ -32,8 +32,7 @@ namespace mnemos::manifests::segacd {
             return;
         }
         const std::uint64_t main_delta = main_now - slice_base_main_;
-        const std::uint64_t target =
-            slice_base_sub_ + (main_delta * 87'500'000ULL) / 53'693'175ULL;
+        const std::uint64_t target = slice_base_sub_ + (main_delta * 87'500'000ULL) / 53'693'175ULL;
         const std::uint64_t cur = sub->sub_cpu.elapsed_cycles();
         if (target > cur) {
             sub->run_cycles(target - cur); // no-op while the sub is held in reset

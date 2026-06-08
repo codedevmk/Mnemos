@@ -319,8 +319,8 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                          static_cast<unsigned long long>(top[i].second));
         }
         if (pc_path_captured) {
-            std::fprintf(stderr,
-                         "[pcpath] sub PCs into the last $618E comm-sync entry (oldest->newest):\n");
+            std::fprintf(
+                stderr, "[pcpath] sub PCs into the last $618E comm-sync entry (oldest->newest):\n");
             for (std::size_t i = 0; i < pc_path.size(); ++i) {
                 std::fprintf(stderr, " %06X", pc_path[i]);
                 if ((i % 8U) == 7U) {
@@ -401,8 +401,9 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         // With a disc the boot advances past the word-RAM handover deadlock: the sub
         // clears its $0F.6 + passes the $6194 comm-sync, and the main clears its
         // $0E.2 request + advances past the RET-wait at $1AFA.
-        REQUIRE(sub.sub_cpu.cpu_registers().pc != 0x006194U);                    // sub past comm-sync
-        REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc != 0x001AFAU); // main past RET deadlock
+        REQUIRE(sub.sub_cpu.cpu_registers().pc != 0x006194U); // sub past comm-sync
+        REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc !=
+                0x001AFAU); // main past RET deadlock
     }
     REQUIRE(adapter.frames_stepped() == static_cast<std::uint64_t>(kBootFrames));
     (void)nonzero;
