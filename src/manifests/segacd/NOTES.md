@@ -9,8 +9,7 @@ factory wires a `topology::bus`).
 ## Status (staged port)
 
 Phases A–D are implemented (PR #58): the real CD BIOS boots and renders its logo.
-The in-game disc-read (a game loading itself off the disc) is WIP — see
-[[gpgx-differential-trace]].
+The in-game disc-read (a game loading itself off the disc) is still WIP.
 
 - **A:** leaf modules — `circ_ecc`, `disc_image` (`src/disc`), `rf5c68` (`src/chips`).
 - **B:** `segacd_system` core — 2nd m68000 (sub-CPU) + `topology::bus` sub-bus mapping
