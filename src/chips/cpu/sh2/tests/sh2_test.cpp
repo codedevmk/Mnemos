@@ -825,6 +825,61 @@ TEST_CASE("sh2 LDC to SR inhibits IRQ acceptance for one instruction") {
     CHECK(m.cpu.cpu_registers().r[15] == 0x3008U);
 }
 
+TEST_CASE("sh2 SLEEP halts until an interrupt wakes it") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 0x44U * 4U, 0x6000U);
+    m.load(0x1000U, {0x001BU, 0xE509U}); // SLEEP ; MOV #9,R5 (resumes here after RTE)
+    m.load(0x6000U, {0x0009U});          // handler: NOP
+    m.cpu.step_instruction();            // SLEEP -> halted
+    CHECK(m.cpu.cpu_registers().pc == 0x1002U);
+    m.cpu.step_instruction(); // still halted (no interrupt): nothing runs
+    CHECK(m.cpu.cpu_registers().pc == 0x1002U);
+    CHECK(m.cpu.cpu_registers().r[5] == 0U);
+    m.cpu.set_irq(12, 0x44U);
+    m.cpu.step_instruction(); // the IRQ resumes the CPU and runs the handler
+    const auto a = m.cpu.cpu_registers();
+    CHECK(a.r[15] == 0x3008U); // frame pushed
+    CHECK(a.pc == 0x6002U);    // handler's NOP executed
+}
+
+TEST_CASE("sh2 an undecoded opcode raises general illegal-instruction") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 4U * 4U, 0x7000U); // general-illegal handler (vector 4) -> 0x7000
+    m.load(0x1000U, {0xF000U});        // FPU opcode: illegal on the SH7604
+    m.cpu.step_instruction();
+    const auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);    // vectored to the illegal-instruction handler
+    CHECK(a.r[15] == 0x3008U); // SR + faulting PC pushed
+}
+
+TEST_CASE("sh2 an illegal opcode in a delay slot raises slot-illegal") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 6U * 4U, 0x7000U);   // slot-illegal handler (vector 6) -> 0x7000
+    m.load(0x1000U, {0xA00AU, 0xF000U}); // BRA ; (delay) illegal FPU opcode
+    m.cpu.step_instruction();
+    const auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);    // vectored to slot-illegal, NOT the branch target
+    CHECK(a.r[15] == 0x3008U); // frame pushed (saved PC = the branch's resume target)
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();
