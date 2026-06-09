@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 
 namespace mnemos::manifests::sega32x {
 
@@ -14,16 +15,30 @@ namespace mnemos::manifests::sega32x {
     inline constexpr std::size_t framebuffer_size = 256U * 1024U; // $04000000 32X frame buffer
     inline constexpr std::size_t m_bios_size = 2U * 1024U;        // master SH-2 boot ROM
     inline constexpr std::size_t s_bios_size = 1U * 1024U;        // slave SH-2 boot ROM
+    inline constexpr std::size_t g_bios_size = 256U;              // 68000-side vector overlay
     inline constexpr std::size_t comm_words = 8U;                 // 8-word COMM bank
 
     // SH-2 address map (both CPUs see the same layout, with per-CPU BIOS at $0).
+    // The SH7604 partitions the 32-bit space by the top three address bits;
+    // partitions 0/4/6 alias one physical layout (cached / cacheable-alias /
+    // shadow) and partitions 1/5 alias the cache-through view, where the
+    // cartridge replaces the boot ROM at offset 0. With no cache model the
+    // aliases are plain mirrors, mapped per partition base.
     inline constexpr std::uint32_t bios_base = 0x00000000U;
+    inline constexpr std::uint32_t cart_base = 0x02000000U; // cart window within a partition
     inline constexpr std::uint32_t framebuffer_base = 0x04000000U;
     inline constexpr std::uint32_t sdram_base = 0x06000000U;
-    inline constexpr std::uint32_t sysreg_base = 0x00004000U;   // SH-2-side system registers
-    inline constexpr std::uint32_t sysreg_mirror = 0x20004000U; // cache-through (P1) mirror
-    inline constexpr std::uint32_t sysreg_size = 0x100U;        // 256-byte register window
-    inline constexpr std::uint32_t comm_offset = 0x20U;         // COMM bank within the window
+    inline constexpr std::uint32_t cart_window_size = 0x400000U; // 4 MiB cart view
+    inline constexpr std::uint32_t sysreg_base = 0x00004000U;    // SH-2-side system registers
+    inline constexpr std::uint32_t sysreg_mirror = 0x20004000U;  // cache-through (P1) mirror
+    inline constexpr std::uint32_t sysreg_size = 0x100U;         // 256-byte register window
+    inline constexpr std::uint32_t comm_offset = 0x20U;          // COMM bank within the window
+
+    // Partition bases. p0: cached + cacheable alias + shadow (boot ROM at $0);
+    // p1: cache-through views (cart at $0, the M_BIOS reads the header via
+    // $22000400 and runs GBR-relative system-register access at $20004000).
+    inline constexpr std::array<std::uint32_t, 3> p0_bases{0x00000000U, 0x80000000U, 0xC0000000U};
+    inline constexpr std::array<std::uint32_t, 2> p1_bases{0x20000000U, 0xA0000000U};
 
     // Heap-allocated, never-moved 32X board (the "Mars" hardware). The two SH-2s
     // run on their own CPU-local buses that share the SDRAM, frame buffer, and the
@@ -47,7 +62,12 @@ namespace mnemos::manifests::sega32x {
         std::array<std::uint8_t, framebuffer_size> framebuffer{};
         std::array<std::uint8_t, m_bios_size> m_bios{};
         std::array<std::uint8_t, s_bios_size> s_bios{};
-        std::array<std::uint16_t, comm_words> comm{}; // shared 8-word COMM bank
+        std::array<std::uint8_t, g_bios_size> g_bios{}; // 68000 $000000 vector overlay
+        std::array<std::uint16_t, comm_words> comm{};   // shared 8-word COMM bank
+
+        // Cartridge ROM view (borrowed -- the Genesis owns the bytes). Empty
+        // until attach_cart wires the SH-2-side cart windows.
+        std::span<const std::uint8_t> cart_rom{};
 
         std::uint16_t adapter_ctrl{};  // RV / ADEN / reset / bank-select bits
         bool sh2_reset_asserted{true}; // SH-2s held in reset until the adapter releases them
@@ -106,11 +126,17 @@ namespace mnemos::manifests::sega32x {
         void master_irq_accept() { fire_latched(master_cpu, master_irq_mask, master_irq_latch); }
         void slave_irq_accept() { fire_latched(slave_cpu, slave_irq_mask, slave_irq_latch); }
 
+        // Map the cartridge ROM into both SH-2 buses (partition-0 window at
+        // $02000000 plus the cache-through views at $20000000/$22000000 and
+        // their partition aliases). Call once, before the SH-2s are released.
+        void attach_cart(std::span<const std::uint8_t> rom);
+
         // Power-on: clear board state and (re)load both SH-2 reset vectors from
         // their BIOS. The CPUs stay held until set_sh2_reset(false).
         void reset();
-        // Hold (true) or release (false) the two SH-2s.
-        void set_sh2_reset(bool asserted) noexcept { sh2_reset_asserted = asserted; }
+        // Hold (true) or release (false) the two SH-2s. A release edge restarts
+        // both CPUs from their BIOS reset vectors (the /RES pin behaviour).
+        void set_sh2_reset(bool asserted);
         // Advance both SH-2s when not held in reset (lockstep; real interleaving
         // is a phase-D scheduling concern).
         void run_cycles(std::uint64_t cycles);

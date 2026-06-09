@@ -1,5 +1,9 @@
 #include "sega32x_machine.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <span>
+
 namespace mnemos::manifests::sega32x {
 
     namespace {
@@ -129,7 +133,7 @@ namespace mnemos::manifests::sega32x {
     }
 
     std::unique_ptr<sega32x_machine>
-    assemble_sega32x_machine(std::vector<std::uint8_t> cart,
+    assemble_sega32x_machine(std::vector<std::uint8_t> cart, const sega32x_bios& bios,
                              const genesis::genesis_config& config) {
         auto machine = std::make_unique<sega32x_machine>();
         machine->thirtytwox = assemble_sega32x();
@@ -139,6 +143,34 @@ namespace mnemos::manifests::sega32x {
         sega32x_system* tx = machine->thirtytwox.get();
         genesis::genesis_system* g = machine->genesis.get();
         topology::bus& bus = machine->genesis->bus;
+
+        // Load the boot ROM images (each clamped to its canonical size) and give
+        // the SH-2s their cart windows. The Genesis owns the cart bytes; both
+        // live on the machine, so the borrowed span stays valid.
+        const auto load = [](auto& dst, const std::vector<std::uint8_t>& src) {
+            std::copy_n(src.begin(), std::min(src.size(), dst.size()), dst.begin());
+        };
+        load(tx->m_bios, bios.m_bios);
+        load(tx->s_bios, bios.s_bios);
+        load(tx->g_bios, bios.g_bios);
+        tx->attach_cart(g->rom);
+
+        // 68000-side 32X cart remap. $880000-$8FFFFF views the first 512 KiB of
+        // the cart with no vector overlay (the boot code reads the cart's own
+        // security block and vectors here); $900000-$9FFFFF is the 1 MiB banked
+        // window at its power-on bank 0 (the bank-select write path is deferred
+        // with the DREQ group). Reads past the cart fall to open bus.
+        const std::span<const std::uint8_t> rom{g->rom};
+        bus.map_rom(0x880000U, rom.first(std::min<std::size_t>(rom.size(), 0x80000U)), 1);
+        bus.map_rom(0x900000U, rom.first(std::min<std::size_t>(rom.size(), 0x100000U)), 1);
+        // With a G BIOS present, its vectors overlay the bottom of cart space so
+        // the console boots the adapter's security/handshake code first. The
+        // 68000 fetched its reset vectors from the cart during assemble_genesis,
+        // before the overlay existed -- re-reset it so boot starts in the BIOS.
+        if (!bios.g_bios.empty()) {
+            bus.map_rom(0x000000U, tx->g_bios, 1);
+            g->cpu.reset(chips::reset_kind::power_on);
+        }
 
         // 32X interrupt sources from the Genesis VDP. VINT rides the
         // unconditional V-blank edge -- a 32X game may never enable the 68000's
