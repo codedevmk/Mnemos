@@ -147,3 +147,56 @@ TEST_CASE("sega32x_system redelivers a latched IRQ after the CPU accepts a highe
     CHECK(sys->master_cpu.pending_irq_level() == 10);
     CHECK(sys->master_cpu.pending_irq_vector() == 0x46U);
 }
+
+TEST_CASE("sega32x_system PWM FIFOs report status and reject pushes when full") {
+    auto sys = assemble_sega32x();
+
+    // LCH status (even byte = status high half): EMPTY (bit 14) out of reset.
+    CHECK(sys->master_bus.read8(0x00004034U) == 0x40U);
+
+    // Three byte-pair pushes fill the FIFO (bit 15 = FULL); a fourth drops.
+    for (int i = 0; i < 3; ++i) {
+        sys->master_bus.write8(0x00004034U, 0x00U); // duty high latch
+        sys->master_bus.write8(0x00004035U, static_cast<std::uint8_t>(0x0AU + i));
+    }
+    CHECK(sys->pwm_fifo_l_count == 3U);
+    CHECK(sys->master_bus.read8(0x00004034U) == 0x80U);
+    sys->master_bus.write8(0x00004034U, 0x00U);
+    sys->master_bus.write8(0x00004035U, 0x7FU); // full: rejected
+    CHECK(sys->pwm_fifo_l_count == 3U);
+    CHECK(sys->pwm_fifo_l[0] == 0x0AU);
+
+    // MONO pushes both channels; the MONO status is the OR of the two.
+    sys->master_bus.write8(0x00004038U, 0x00U);
+    sys->master_bus.write8(0x00004039U, 0x21U);
+    CHECK(sys->pwm_fifo_r_count == 1U);
+    CHECK(sys->master_bus.read8(0x00004038U) == 0x80U); // L still full
+}
+
+TEST_CASE("sega32x_system PWM steps at the CYCLE rate, holds on empty, raises TM IRQ") {
+    auto sys = assemble_sega32x();
+    sys->set_sh2_reset(false);
+
+    // CNTL TM = 1 (interrupt every step), CYCLE = 16 SH-2 cycles per step.
+    sys->master_bus.write8(0x00004030U, 0x01U);
+    sys->master_bus.write8(0x00004031U, 0x00U);
+    sys->master_bus.write8(0x00004032U, 0x00U);
+    sys->master_bus.write8(0x00004033U, 0x10U);
+
+    // Push duty 12 (above CYCLE/2 = 8) on the left channel only.
+    sys->master_bus.write8(0x00004034U, 0x00U);
+    sys->master_bus.write8(0x00004035U, 0x0CU);
+    sys->set_master_irq_mask(sega32x_system::irq_pwm);
+
+    sys->run_cycles(64U); // >= 4 steps: FIFO drains, then the DAC holds
+
+    // duty 12, half 8: PCM = (12-8)*32767/8 = 16383, held after the drain.
+    CHECK(sys->pwm_output_l() == 16383);
+    // The right FIFO never had data: its DAC stays at the reset duty 0,
+    // which converts to the negative rail ((0-8)*32767/8).
+    CHECK(sys->pwm_output_r() == -32767);
+    // The TM counter latched + delivered the PWM interrupt (level 6, vec 0x4A).
+    CHECK(sys->master_cpu.pending_irq_level() == 6);
+    CHECK(sys->master_cpu.pending_irq_vector() == 0x4AU);
+    CHECK((sys->slave_irq_latch & sega32x_system::irq_pwm) != 0U); // slave masked: latched
+}

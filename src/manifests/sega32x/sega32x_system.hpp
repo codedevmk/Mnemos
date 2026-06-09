@@ -18,6 +18,7 @@ namespace mnemos::manifests::sega32x {
     inline constexpr std::size_t s_bios_size = 1U * 1024U;        // slave SH-2 boot ROM
     inline constexpr std::size_t g_bios_size = 256U;              // 68000-side vector overlay
     inline constexpr std::size_t comm_words = 8U;                 // 8-word COMM bank
+    inline constexpr std::size_t pwm_fifo_depth = 3U;             // per-channel PWM FIFO
 
     // SH-2 address map (both CPUs see the same layout, with per-CPU BIOS at $0).
     // The SH7604 partitions the 32-bit space by the top three address bits;
@@ -92,11 +93,34 @@ namespace mnemos::manifests::sega32x {
         std::uint8_t master_irq_latch{};
         std::uint8_t slave_irq_latch{};
 
-        // PWM control/cycle registers (shared between the 68000 and SH-2 views).
-        // Latched so cart audio setup reads back its writes; the FIFO/DAC model
-        // arrives with the PWM phase.
+        // PWM unit. CNTL/CYCLE are shared between the 68000 and SH-2 views; the
+        // L/R FIFOs are three entries deep (a push into a full FIFO is rejected,
+        // matching hardware). The unit steps once every CYCLE SH-2 cycles: each
+        // step pops one duty value per channel into the DAC (an empty FIFO holds
+        // the previous value -- the carrier keeps running), converts duty to
+        // signed PCM centred on CYCLE/2, and advances the interrupt counter; when
+        // the counter reaches the CNTL TM field the PWM interrupt latches.
         std::uint16_t pwm_cntl{};
         std::uint16_t pwm_cycle{};
+        std::array<std::uint16_t, pwm_fifo_depth> pwm_fifo_l{};
+        std::array<std::uint16_t, pwm_fifo_depth> pwm_fifo_r{};
+        std::uint8_t pwm_fifo_l_count{};
+        std::uint8_t pwm_fifo_r_count{};
+        std::uint16_t pwm_current_l{}; // last duty latched into each DAC
+        std::uint16_t pwm_current_r{};
+        std::int16_t pwm_audio_l{}; // converted PCM output
+        std::int16_t pwm_audio_r{};
+        std::uint64_t pwm_cycle_acc{};     // SH-2 cycles toward the next step
+        std::uint8_t pwm_irq_step_count{}; // steps toward the TM threshold
+        std::uint8_t pwm_lch_high{};       // byte-pair latches for FIFO pushes
+        std::uint8_t pwm_rch_high{};
+        std::uint8_t pwm_mono_high{};
+
+        // Advance the PWM unit by the SH-2 cycles just executed (driven from
+        // run_cycles; CYCLE = 0 disables stepping).
+        void step_pwm(std::uint64_t sh2_cycles);
+        [[nodiscard]] std::int16_t pwm_output_l() const noexcept { return pwm_audio_l; }
+        [[nodiscard]] std::int16_t pwm_output_r() const noexcept { return pwm_audio_r; }
 
         // COMM bank byte access (big-endian: even byte = high half of the word).
         // Shared by both SH-2s; the Genesis 68000 joins it in the bridge phase.
