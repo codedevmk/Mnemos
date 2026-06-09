@@ -14,6 +14,7 @@
 #include <fstream>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -32,6 +33,7 @@ namespace {
     using mnemos::frontend_sdk::video_region;
     using mnemos::instrumentation::asset_kind;
     using mnemos::instrumentation::asset_source;
+    using mnemos::instrumentation::debug_layer;
     using mnemos::instrumentation::graphic_asset;
     using mnemos::instrumentation::ichip_introspection;
     using mnemos::instrumentation::palette_view;
@@ -84,6 +86,48 @@ namespace {
         gfx_intro intro_;
     };
 
+    // A composed RGB scene (a 2x2 "plane_a" framebuffer).
+    class fake_layer final : public debug_layer {
+      public:
+        [[nodiscard]] std::string_view name() const noexcept override { return "plane_a"; }
+        [[nodiscard]] frame_buffer_view view() const override {
+            return {.pixels = px_.data(), .width = 2U, .height = 2U, .stride = 0U};
+        }
+
+      private:
+        std::array<std::uint32_t, 4> px_{0x010203U, 0x040506U, 0x070809U, 0x0A0B0CU};
+    };
+
+    // A chip that exposes only a debug_layer (no asset_source) -- export must
+    // still include it and write its layer PNG.
+    class layer_intro final : public ichip_introspection {
+      public:
+        [[nodiscard]] std::span<debug_layer* const> debug_layers() override { return table_; }
+
+      private:
+        fake_layer layer_;
+        std::array<debug_layer*, 1> table_{&layer_};
+    };
+
+    class layer_chip final : public ichip {
+      public:
+        [[nodiscard]] chip_metadata metadata() const noexcept override {
+            return {.manufacturer = "test",
+                    .part_number = "vdp-2", // sanitizes to "vdp_2"
+                    .family = "test",
+                    .klass = chip_class::video,
+                    .revision = 1U};
+        }
+        void tick(std::uint64_t) override {}
+        void reset(reset_kind) override {}
+        void save_state(state_writer&) const override {}
+        void load_state(state_reader&) override {}
+        [[nodiscard]] ichip_introspection& introspection() noexcept override { return intro_; }
+
+      private:
+        layer_intro intro_;
+    };
+
     // A chip that exposes no asset_source -- export must skip it entirely.
     class plain_chip final : public ichip {
       public:
@@ -109,6 +153,7 @@ namespace {
         gfx_system() {
             chip_list_[0] = &plain_;
             chip_list_[1] = &gfx_;
+            chip_list_[2] = &layer_;
         }
         [[nodiscard]] video_region region() const noexcept override { return {60000U}; }
         [[nodiscard]] const std::vector<spec_field>& system_spec() const noexcept override {
@@ -123,7 +168,8 @@ namespace {
       private:
         plain_chip plain_;
         gfx_chip gfx_;
-        std::array<ichip*, 2> chip_list_{};
+        layer_chip layer_;
+        std::array<ichip*, 3> chip_list_{};
         std::vector<spec_field> spec_{};
     };
 
@@ -164,22 +210,25 @@ TEST_CASE("export_assets writes a PNG per palette + asset and a JSON manifest", 
     const auto base = (scratch / "out").string();
 
     gfx_system sys;
-    // From the single gfx chip: palette swatch PNG + tileset resolved PNG +
-    // tileset indexed PNG (the .pal file is not counted in the PNG total).
-    CHECK(mnemos::debug::export_assets(sys, base) == 3U);
+    // gfx chip: palette swatch + tileset resolved + tileset indexed (3 PNGs;
+    // the .pal is not counted). layer chip: one debug_layer PNG. Total 4.
+    CHECK(mnemos::debug::export_assets(sys, base) == 4U);
 
     // Files land under the chip's sanitized id ("vdp-1" -> "vdp_1").
     const auto pal_png = scratch / "out.vdp_1.pal.main.png";
     const auto tile_png = scratch / "out.vdp_1.tileset.patterns.png";
     const auto tile_idx = scratch / "out.vdp_1.tileset.patterns.idx.png";
     const auto pal_jasc = scratch / "out.vdp_1.pal.main.pal";
+    const auto layer_png = scratch / "out.vdp_2.layer.plane_a.png";
     REQUIRE(std::filesystem::exists(pal_png));
     REQUIRE(std::filesystem::exists(tile_png));
     REQUIRE(std::filesystem::exists(tile_idx));
     REQUIRE(std::filesystem::exists(pal_jasc));
+    REQUIRE(std::filesystem::exists(layer_png)); // layer-only chip still exported
     CHECK(is_png(read_file(pal_png)));
     CHECK(is_png(read_file(tile_png)));
     CHECK(is_png(read_file(tile_idx)));
+    CHECK(is_png(read_file(layer_png)));
     // The .pal is JASC-PAL text: header line, format version, entry count (2).
     CHECK(read_text(pal_jasc).starts_with("JASC-PAL\n0100\n2\n"));
 
@@ -211,6 +260,11 @@ TEST_CASE("export_assets manifest describes palettes and assets", "[asset_export
     CHECK(json.find("\"indexed_file\": \"out.vdp_1.tileset.patterns.idx.png\"") !=
           std::string::npos);
     CHECK(json.find("\"pal_file\": \"out.vdp_1.pal.main.pal\"") != std::string::npos);
+
+    // The layer-only chip is listed with its debug_layer scene.
+    CHECK(json.find("\"id\": \"vdp_2\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"plane_a\"") != std::string::npos);
+    CHECK(json.find("\"file\": \"out.vdp_2.layer.plane_a.png\"") != std::string::npos);
 }
 
 TEST_CASE("export_assets writes an empty manifest for a system with no graphics",

@@ -109,6 +109,23 @@ namespace mnemos::debug {
             return true;
         }
 
+        // Pack a chip's debug_layer framebuffer (possibly strided) into a tight
+        // RGB raster and write it as PNG. These are palette-resolved RGB scenes
+        // (a composed plane), distinct from the indexed graphic assets.
+        bool write_layer_png(const std::string& path, const chips::frame_buffer_view& fb) {
+            if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
+                return false;
+            }
+            const std::uint32_t stride = fb.effective_stride();
+            std::vector<std::uint32_t> packed;
+            packed.reserve(static_cast<std::size_t>(fb.width) * fb.height);
+            for (std::uint32_t y = 0; y < fb.height; ++y) {
+                const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
+                packed.insert(packed.end(), row, row + fb.width);
+            }
+            return write_png(path, fb.width, fb.height, std::move(packed));
+        }
+
     } // namespace
 
     std::size_t export_assets(const frontend_sdk::player_system& sys,
@@ -122,12 +139,19 @@ namespace mnemos::debug {
                 continue;
             }
             instrumentation::asset_source* src = chip->introspection().assets();
-            if (src == nullptr) {
+            const std::span<instrumentation::debug_layer* const> layers =
+                chip->introspection().debug_layers();
+            // Include a chip with decoded graphics (asset_source) and/or composed
+            // RGB scenes (debug_layers); skip chips that expose neither.
+            if (src == nullptr && layers.empty()) {
                 continue;
             }
             const std::string chip_id = sanitize_id(chip->metadata().part_number);
-            const std::span<const instrumentation::palette_view> pals = src->palettes();
-            const std::span<const instrumentation::graphic_asset> assets = src->graphics();
+            const std::span<const instrumentation::palette_view> pals =
+                src != nullptr ? src->palettes() : std::span<const instrumentation::palette_view>{};
+            const std::span<const instrumentation::graphic_asset> assets =
+                src != nullptr ? src->graphics()
+                               : std::span<const instrumentation::graphic_asset>{};
 
             json += first_chip ? "\n" : ",\n";
             first_chip = false;
@@ -185,7 +209,29 @@ namespace mnemos::debug {
                         ", \"file\": " + json_string(path_basename(path)) +
                         ", \"indexed_file\": " + json_string(path_basename(idx_path)) + "}";
             }
-            json += assets.empty() ? "]\n    }" : "\n      ]\n    }";
+            json += assets.empty() ? "],\n      \"layers\": [" : "\n      ],\n      \"layers\": [";
+
+            // Composed RGB scenes (a full plane / nametable). Distinct from the
+            // indexed graphic assets above; written as resolved-RGB PNG only.
+            std::size_t emitted_layers = 0;
+            for (instrumentation::debug_layer* layer : layers) {
+                if (layer == nullptr) {
+                    continue;
+                }
+                const chips::frame_buffer_view fb = layer->view();
+                const std::string path =
+                    base_path + "." + chip_id + ".layer." + std::string(layer->name()) + ".png";
+                if (write_layer_png(path, fb)) {
+                    ++written;
+                }
+                json += emitted_layers == 0 ? "\n" : ",\n";
+                json += "        {\"name\": " + json_string(layer->name()) +
+                        ", \"width\": " + std::to_string(fb.width) +
+                        ", \"height\": " + std::to_string(fb.height) +
+                        ", \"file\": " + json_string(path_basename(path)) + "}";
+                ++emitted_layers;
+            }
+            json += emitted_layers == 0 ? "]\n    }" : "\n      ]\n    }";
         }
 
         json += first_chip ? "]\n}\n" : "\n  ]\n}\n";
