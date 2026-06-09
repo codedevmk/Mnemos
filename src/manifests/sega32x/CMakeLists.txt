@@ -19,6 +19,7 @@ target_link_libraries(
     PUBLIC
         mnemos::topology
         mnemos::chips::cpu::sh2
+        mnemos::chips::video::sega32x_vdp
         mnemos::manifests::genesis
 )
 

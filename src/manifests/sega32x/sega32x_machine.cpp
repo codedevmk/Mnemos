@@ -180,6 +180,10 @@ namespace mnemos::manifests::sega32x {
         // bit 7, which games poll as a frame-sync barrier.
         g->vdp.set_vblank_callback([g, tx](bool in_vblank) {
             g->on_vblank(in_vblank);
+            // Drive the 32X VDP's VBLK status bit and its frame-select
+            // flip-flop from the same edge (HBLK joins with the per-scanline
+            // player loop in phase D).
+            tx->vdp.set_blanking(false, in_vblank);
             if (in_vblank) {
                 tx->adapter_ctrl |= 0x0080U;
                 tx->raise_vint();
@@ -215,6 +219,14 @@ namespace mnemos::manifests::sega32x {
                                                      (static_cast<std::uint16_t>(value) << 8U));
                 m68k_reg_write_word(*tx, off, next);
             },
+            1);
+
+        // $A15180-$A1518F: the 32X VDP register cells as seen by the 68000 --
+        // the same chip the SH-2s reach at +$4100, including the autofill
+        // trigger on a completed DATA write.
+        bus.map_mmio(
+            0xA15180U, 0x10U, [tx](std::uint32_t a) { return tx->vdp_reg_read(a - 0xA15180U); },
+            [tx](std::uint32_t a, std::uint8_t value) { tx->vdp_reg_write(a - 0xA15180U, value); },
             1);
 
         return machine;
