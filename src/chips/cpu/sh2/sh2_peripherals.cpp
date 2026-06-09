@@ -1,10 +1,31 @@
 #include "sh2_peripherals.hpp"
 
+#include "ibus.hpp"
 #include "state.hpp"
 
 namespace mnemos::chips::cpu {
 
     namespace {
+        // DMAC bits + byte-access helpers for its 32-bit registers.
+        constexpr std::uint32_t chcr_de = 0x01U;              // channel enable
+        constexpr std::uint32_t chcr_te = 0x02U;              // transfer end
+        constexpr std::uint32_t chcr_valid = 0xFFFFU;         // CHCR writable bits
+        constexpr std::uint32_t dmac_tcr_valid = 0x00FFFFFFU; // 24-bit transfer count
+        constexpr std::uint32_t dmaor_dme = 0x01U;            // DMA master enable
+        constexpr std::uint32_t dmaor_nmif = 0x02U;           // NMI flag (blocks DMA)
+        constexpr std::uint32_t dmaor_ae = 0x04U;             // address-error flag (blocks DMA)
+        constexpr std::uint32_t dmaor_valid = 0x0FU;
+
+        [[nodiscard]] std::uint8_t reg_byte(std::uint32_t reg, std::uint32_t off) noexcept {
+            return static_cast<std::uint8_t>(reg >> ((3U - (off & 3U)) * 8U)); // big-endian
+        }
+        [[nodiscard]] std::uint32_t set_reg_byte(std::uint32_t reg, std::uint32_t off,
+                                                 std::uint8_t value) noexcept {
+            const unsigned shift = (3U - (off & 3U)) * 8U;
+            return (reg & ~(static_cast<std::uint32_t>(0xFFU) << shift)) |
+                   (static_cast<std::uint32_t>(value) << shift);
+        }
+
         // FTCSR ($FE11) status/control bits.
         constexpr std::uint8_t ftcsr_cclr = 0x01U;     // clear FRC on an OCRA match
         constexpr std::uint8_t ftcsr_ovf = 0x02U;      // counter overflow
@@ -102,6 +123,22 @@ namespace mnemos::chips::cpu {
         case 0x83U:
             return rstcsr_;
         default:
+            if (off >= 0x180U && off < 0x1A0U) { // DMAC channel registers (32-bit)
+                const dma_channel& ch = dma_[(off >> 4U) & 1U];
+                switch ((off >> 2U) & 3U) {
+                case 0U:
+                    return reg_byte(ch.sar, off);
+                case 1U:
+                    return reg_byte(ch.dar, off);
+                case 2U:
+                    return reg_byte(ch.tcr, off);
+                default:
+                    return reg_byte(ch.chcr, off);
+                }
+            }
+            if (off >= 0x1B0U && off < 0x1B4U) { // DMAOR
+                return reg_byte(dmaor_, off);
+            }
             return regs_[off];
         }
     }
@@ -196,6 +233,27 @@ namespace mnemos::chips::cpu {
             }
             return;
         default:
+            if (off >= 0x180U && off < 0x1A0U) { // DMAC channel registers (32-bit)
+                dma_channel& ch = dma_[(off >> 4U) & 1U];
+                switch ((off >> 2U) & 3U) {
+                case 0U:
+                    ch.sar = set_reg_byte(ch.sar, off, value);
+                    return;
+                case 1U:
+                    ch.dar = set_reg_byte(ch.dar, off, value);
+                    return;
+                case 2U:
+                    ch.tcr = set_reg_byte(ch.tcr, off, value) & dmac_tcr_valid;
+                    return;
+                default:
+                    ch.chcr = set_reg_byte(ch.chcr, off, value) & chcr_valid;
+                    return;
+                }
+            }
+            if (off >= 0x1B0U && off < 0x1B4U) { // DMAOR
+                dmaor_ = set_reg_byte(dmaor_, off, value) & dmaor_valid;
+                return;
+            }
             regs_[off] = value;
             return;
         }
@@ -244,6 +302,53 @@ namespace mnemos::chips::cpu {
                 }
             }
         }
+
+        run_dmac();
+    }
+
+    void sh2_peripherals::run_dmac() noexcept {
+        if (bus_ == nullptr) {
+            return;
+        }
+        // Master enable, and no NMI/address-error halting the controller.
+        if ((dmaor_ & dmaor_dme) == 0U || (dmaor_ & (dmaor_nmif | dmaor_ae)) != 0U) {
+            return;
+        }
+        constexpr std::array<std::uint32_t, 4> unit_bytes{{1U, 2U, 4U, 16U}};
+        for (dma_channel& ch : dma_) {
+            if ((ch.chcr & chcr_de) == 0U || (ch.chcr & chcr_te) != 0U) {
+                continue;
+            }
+            std::uint32_t count = ch.tcr & dmac_tcr_valid;
+            if (count == 0U) {
+                continue;
+            }
+            const std::uint32_t ts = (ch.chcr >> 10U) & 3U;
+            const std::uint32_t sm = (ch.chcr >> 12U) & 3U;
+            const std::uint32_t dm = (ch.chcr >> 14U) & 3U;
+            const std::uint32_t bpu = unit_bytes[ts];
+            const std::uint32_t count_step = (ts == 3U) ? 4U : 1U;
+            // Auto-request: move the whole block now (cycle-exact metering is
+            // deferred). Each unit copies `bpu` bytes; SAR/DAR step per CHCR.
+            while (count > 0U) {
+                for (std::uint32_t i = 0; i < bpu; ++i) {
+                    bus_->write8(ch.dar + i, bus_->read8(ch.sar + i));
+                }
+                if (sm == 1U) {
+                    ch.sar += bpu;
+                } else if (sm == 2U) {
+                    ch.sar -= bpu;
+                }
+                if (dm == 1U) {
+                    ch.dar += bpu;
+                } else if (dm == 2U) {
+                    ch.dar -= bpu;
+                }
+                count = (count > count_step) ? (count - count_step) : 0U;
+            }
+            ch.tcr = 0U;
+            ch.chcr |= chcr_te; // transfer end (the interrupt is deferred)
+        }
     }
 
     sh2_peripherals::onchip_irq sh2_peripherals::pending_onchip_irq() const noexcept {
@@ -291,6 +396,9 @@ namespace mnemos::chips::cpu {
         wdt_prescale_acc_ = 0;
         wdt_key_ = 0U;
         wtcsr_ovf_read_ = false;
+        dma_ = {};
+        dmaor_ = 0U;
+        // bus_ is the attached handle, not reset state -- leave it intact.
     }
 
     void sh2_peripherals::save_state(state_writer& writer) const {
@@ -314,6 +422,13 @@ namespace mnemos::chips::cpu {
         writer.u32(static_cast<std::uint32_t>(wdt_prescale_acc_));
         writer.u8(wdt_key_);
         writer.u8(wtcsr_ovf_read_ ? 1U : 0U);
+        for (const dma_channel& ch : dma_) {
+            writer.u32(ch.sar);
+            writer.u32(ch.dar);
+            writer.u32(ch.tcr);
+            writer.u32(ch.chcr);
+        }
+        writer.u32(dmaor_);
     }
 
     void sh2_peripherals::load_state(state_reader& reader) {
@@ -337,6 +452,13 @@ namespace mnemos::chips::cpu {
         wdt_prescale_acc_ = static_cast<int>(reader.u32());
         wdt_key_ = reader.u8();
         wtcsr_ovf_read_ = reader.u8() != 0U;
+        for (dma_channel& ch : dma_) {
+            ch.sar = reader.u32();
+            ch.dar = reader.u32();
+            ch.tcr = reader.u32();
+            ch.chcr = reader.u32();
+        }
+        dmaor_ = reader.u32();
     }
 
 } // namespace mnemos::chips::cpu

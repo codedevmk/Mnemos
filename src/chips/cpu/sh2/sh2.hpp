@@ -68,8 +68,12 @@ namespace mnemos::chips::cpu {
 
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        // icpu: the memory address space the CPU executes against.
-        void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }
+        // icpu: the memory address space the CPU executes against. The on-chip
+        // DMAC moves data over this same bus, so hand it the same handle.
+        void attach_bus(ibus& bus) noexcept override {
+            bus_ = &bus;
+            peripherals_.set_bus(&bus);
+        }
 
         // ---- interrupt delivery (driven by the system / 32X INTC) ----
         // Present an external interrupt request at priority `level` (1-15) and
