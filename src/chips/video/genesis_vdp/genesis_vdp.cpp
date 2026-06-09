@@ -1779,8 +1779,9 @@ namespace mnemos::chips::video {
         // Lazily render a plane (or the window) from the chip's live VRAM/CRAM
         // into a chip-owned buffer; geometry tracks the current registers, which
         // may change between calls. Scroll planes use the scroll-plane size and
-        // their own nametable base; the window uses the screen size (64/32 cells
-        // wide in H40/H32) and the window nametable base.
+        // their own nametable base; the window uses its nametable pitch (64/32
+        // cells in H40/H32 -- wider than the 40/32-cell visible display) and the
+        // window nametable base.
         int cols = 0;
         int rows = 0;
         std::uint32_t nt_base = 0U;
@@ -1801,8 +1802,13 @@ namespace mnemos::chips::video {
             nt_base = owner_->ntw_base();
             break;
         }
+        // Interlace mode 2 stacks two patterns into a 16-px-tall cell (the
+        // production renderer fetches with interlace2 = true); other modes use
+        // 8-px cells. Width is unaffected.
+        const bool il2 = owner_->interlace_mode2();
+        const int cell_h = il2 ? 16 : 8;
         const std::uint32_t plane_w = static_cast<std::uint32_t>(cols * 8);
-        const std::uint32_t plane_h = static_cast<std::uint32_t>(rows * 8);
+        const std::uint32_t plane_h = static_cast<std::uint32_t>(rows * cell_h);
         const std::size_t total = static_cast<std::size_t>(plane_w) * plane_h;
         buf_.assign(total, 0U);
         width_ = plane_w;
@@ -1816,21 +1822,21 @@ namespace mnemos::chips::video {
                 const bool hf = ((nt >> 11) & 1) != 0;
                 const bool vf = ((nt >> 12) & 1) != 0;
                 const int pal = (nt >> 13) & 3;
-                for (int fy = 0; fy < 8; ++fy) {
-                    const int row = vf ? (7 - fy) : fy;
+                for (int fy = 0; fy < cell_h; ++fy) {
+                    const int row = vf ? (cell_h - 1 - fy) : fy;
+                    // fetch_pattern_row applies hflip and the interlace-2 tile /
+                    // 16-row addressing, yielding 8 colour indices left-to-right.
+                    std::array<std::uint8_t, 8> pix{};
+                    owner_->fetch_pattern_row(tile, row, hf, il2, pix.data());
                     for (int fx = 0; fx < 8; ++fx) {
-                        const int col = hf ? (7 - fx) : fx;
-                        const std::uint32_t pat_addr =
-                            static_cast<std::uint32_t>(tile) * 32U + row * 4U + (col / 2);
-                        const std::uint16_t word = owner_->vram16(pat_addr & ~1U);
-                        const std::uint8_t byte =
-                            static_cast<std::uint8_t>((pat_addr & 1) ? (word & 0xFF) : (word >> 8));
-                        const std::uint8_t color = (col & 1) ? (byte & 0xF) : (byte >> 4);
+                        const std::uint8_t color = pix[static_cast<std::size_t>(fx)];
                         const std::uint16_t cram_value =
                             owner_->cram_[static_cast<std::size_t>(pal * 16 + color) & 0x3FU];
                         const std::uint32_t rgb =
                             color == 0 ? 0U : cram_to_rgb(cram_value, shade_normal);
-                        buf_[(static_cast<std::size_t>(cy) * 8U + fy) * plane_w +
+                        buf_[(static_cast<std::size_t>(cy) * static_cast<std::size_t>(cell_h) +
+                              fy) *
+                                 plane_w +
                              (static_cast<std::size_t>(cx) * 8U + fx)] = rgb;
                     }
                 }

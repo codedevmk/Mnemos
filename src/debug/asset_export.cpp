@@ -221,9 +221,13 @@ namespace mnemos::debug {
                 const chips::frame_buffer_view fb = layer->view();
                 const std::string path =
                     base_path + "." + chip_id + ".layer." + std::string(layer->name()) + ".png";
-                if (write_layer_png(path, fb)) {
-                    ++written;
+                // Only record a layer in the manifest after its PNG actually
+                // wrote -- an empty/invalid framebuffer or a write failure must
+                // not leave the manifest pointing at a missing file.
+                if (!write_layer_png(path, fb)) {
+                    continue;
                 }
+                ++written;
                 json += emitted_layers == 0 ? "\n" : ",\n";
                 json += "        {\"name\": " + json_string(layer->name()) +
                         ", \"width\": " + std::to_string(fb.width) +

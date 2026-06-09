@@ -241,7 +241,8 @@ namespace mnemos::chips::video {
             // full nametable map laid out with per-tile palette + H/V flip,
             // resolved through CRAM (no scroll, no sprites). plane_a/plane_b read
             // the scroll-plane nametables at the scroll-plane size; window reads
-            // its own nametable at the screen size.
+            // its own nametable at its pitch (64/32 cells in H40/H32, wider than
+            // the visible display). Interlace mode 2 uses 16-px-tall cells.
             class plane_layer_impl final : public instrumentation::debug_layer {
               public:
                 enum class which : std::uint8_t { plane_a, plane_b, window };

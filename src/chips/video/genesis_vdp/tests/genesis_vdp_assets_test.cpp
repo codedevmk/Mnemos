@@ -154,3 +154,17 @@ TEST_CASE("genesis_vdp plane_b debug_layer composes plane B's nametable") {
     REQUIRE(fb.pixels != nullptr);
     CHECK(fb.pixels[0] == rgb_red); // tile 2 colour 1 -> palette 0 colour 1 = red
 }
+
+TEST_CASE("genesis_vdp scroll layers use 16px cells in interlace mode 2") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x04);  // M5: unlock registers above R10
+    set_reg(vdp, 16, 0x00); // 32x32 scroll plane
+    set_reg(vdp, 12, 0x06); // interlace mode 2 (reg12 field bits = 3)
+
+    const debug_layer* pa = vdp.introspection().debug_layers()[0];
+    REQUIRE(pa != nullptr);
+    CHECK(pa->name() == "plane_a");
+    const auto fb = pa->view();
+    CHECK(fb.width == 256U);  // 32 cells * 8
+    CHECK(fb.height == 512U); // 32 cells * 16 (interlace mode 2 doubles cell height)
+}
