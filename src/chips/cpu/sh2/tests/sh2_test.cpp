@@ -1090,6 +1090,84 @@ TEST_CASE("sh2_peripherals WDT ignores a data write without the matching key") {
     CHECK(p.read8(0xFFFFFE81U) == 0x00U); // WTCNT unchanged
 }
 
+namespace {
+    // A peripherals instance backed by a flat RAM bus the DMAC can transfer over.
+    struct dmac_fixture final {
+        std::array<std::uint8_t, 0x10000> ram{};
+        mnemos::topology::bus bus{32U, mnemos::topology::endianness::big};
+        mnemos::chips::cpu::sh2_peripherals p;
+
+        dmac_fixture() {
+            bus.map_ram(0x0000U, std::span<std::uint8_t>(ram), 0);
+            p.set_bus(&bus);
+        }
+        // DMAC channel-0 registers are 32-bit, big-endian byte lanes.
+        static constexpr std::uint32_t sar0 = 0xFFFFFF80U;
+        static constexpr std::uint32_t dar0 = 0xFFFFFF84U;
+        static constexpr std::uint32_t tcr0 = 0xFFFFFF88U;
+        static constexpr std::uint32_t chcr0 = 0xFFFFFF8CU;
+        static constexpr std::uint32_t dmaor = 0xFFFFFFB0U;
+        void w32reg(std::uint32_t addr, std::uint32_t v) {
+            p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
+            p.write8(addr + 1U, static_cast<std::uint8_t>(v >> 16U));
+            p.write8(addr + 2U, static_cast<std::uint8_t>(v >> 8U));
+            p.write8(addr + 3U, static_cast<std::uint8_t>(v));
+        }
+        std::uint32_t r32reg(std::uint32_t addr) {
+            return (static_cast<std::uint32_t>(p.read8(addr)) << 24U) |
+                   (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
+                   (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) |
+                   static_cast<std::uint32_t>(p.read8(addr + 3U));
+        }
+    };
+} // namespace
+
+TEST_CASE("sh2_peripherals DMAC auto-request copies a long-word block") {
+    dmac_fixture f;
+    for (std::uint32_t i = 0; i < 16U; ++i) {
+        f.ram[0x1000U + i] = static_cast<std::uint8_t>(0xA0U + i);
+    }
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 4U);           // 4 long-word units = 16 bytes
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x5801U);     // DE | TS=long | SM=inc | DM=inc
+    f.p.tick(1U);
+    for (std::uint32_t i = 0; i < 16U; ++i) {
+        CHECK(f.ram[0x2000U + i] == static_cast<std::uint8_t>(0xA0U + i));
+    }
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U); // CHCR.TE set on completion
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC honours fixed-source / incrementing-dest modes") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0x5AU; // single source byte, read repeatedly
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00003000U);
+    f.w32reg(f.tcr0, 4U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x4001U); // DE | TS=byte | SM=fixed | DM=inc
+    f.p.tick(1U);
+    for (std::uint32_t i = 0; i < 4U; ++i) {
+        CHECK(f.ram[0x3000U + i] == 0x5AU);
+    }
+}
+
+TEST_CASE("sh2_peripherals DMAC stays idle until the master enable is set") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0x11U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00004000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.chcr0, 0x4001U); // channel enabled but DMAOR.DME still clear
+    f.p.tick(1U);
+    CHECK(f.ram[0x4000U] == 0x00U); // no transfer without DME
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.p.tick(1U);
+    CHECK(f.ram[0x4000U] == 0x11U); // now it runs
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();

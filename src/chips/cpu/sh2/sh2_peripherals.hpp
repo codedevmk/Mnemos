@@ -6,6 +6,7 @@
 namespace mnemos::chips {
     class state_writer;
     class state_reader;
+    class ibus;
 } // namespace mnemos::chips
 
 namespace mnemos::chips::cpu {
@@ -40,6 +41,10 @@ namespace mnemos::chips::cpu {
             int level{};
             std::uint8_t vector{};
         };
+
+        // The DMAC moves data over the same bus the CPU sees; the owning sh2
+        // supplies the handle when it attaches its bus.
+        void set_bus(ibus* bus) noexcept { bus_ = bus; }
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t addr) const noexcept;
         void write8(std::uint32_t addr, std::uint8_t value) noexcept;
@@ -96,6 +101,23 @@ namespace mnemos::chips::cpu {
         int wdt_prescale_acc_{};        // accumulated source clocks
         std::uint8_t wdt_key_{};        // latched high-byte key of a keyed write
         mutable bool wtcsr_ovf_read_{}; // WTCSR.OVF observed by a read
+
+        // DMAC -- 2-channel DMA controller ($FF80-$FFAF channel regs, $FFB0 DMAOR).
+        // Auto-request transfers move TCR units of 1/2/4/16 bytes from SAR to DAR
+        // (each address fixed/incrementing/decrementing per CHCR), setting CHCR.TE
+        // on completion. The transfer-end interrupt + external DREQ are deferred.
+        struct dma_channel final {
+            std::uint32_t sar{};  // source address
+            std::uint32_t dar{};  // destination address
+            std::uint32_t tcr{};  // transfer count
+            std::uint32_t chcr{}; // channel control
+        };
+        std::array<dma_channel, 2> dma_{};
+        std::uint32_t dmaor_{}; // DMA operation register (master enable + flags)
+        ibus* bus_{};           // bus the DMAC transfers over (set by the owning sh2)
+
+        // Run any active auto-request DMA channel to completion (called per tick).
+        void run_dmac() noexcept;
     };
 
 } // namespace mnemos::chips::cpu
