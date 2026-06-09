@@ -64,8 +64,28 @@ namespace mnemos::manifests::sega32x {
             if (off == 0x04U) {
                 return tx.slave_irq_mask & sega32x_system::irq_cmd;
             }
+            // DREQ group: control at $A15106 (bit 2 = 68S, bit 7 = FIFO FULL),
+            // src/dst/len storage at $A15108-$A15110, the FIFO write port at
+            // $A15112 (write-only; reads return 0).
             if (off == 0x06U) {
-                return 0U; // DREQ control: not yet modelled
+                return static_cast<std::uint16_t>(
+                    (tx.dreq_ctrl & 0x0007U) |
+                    (tx.dreq_fifo_count >= sega32x_system::dreq_fifo_depth ? 0x0080U : 0U));
+            }
+            if (off == 0x08U) {
+                return tx.dreq_src_hi;
+            }
+            if (off == 0x0AU) {
+                return tx.dreq_src_lo;
+            }
+            if (off == 0x0CU) {
+                return tx.dreq_dst_hi;
+            }
+            if (off == 0x0EU) {
+                return tx.dreq_dst_lo;
+            }
+            if (off == 0x10U) {
+                return tx.dreq_len;
             }
             // COMM bank: 8 x 16-bit at $A15120-$A1512F, shared with the SH-2s.
             if (off >= 0x20U && off <= 0x2FU) {
@@ -123,6 +143,37 @@ namespace mnemos::manifests::sega32x {
                 }
                 return;
             }
+            if (off == 0x06U) {
+                // DREQ control: the 68000 owns 68S (bit 2); dropping it aborts
+                // the stream and flushes any queued words.
+                tx.dreq_ctrl = val & 0x0007U;
+                if ((val & 0x0004U) == 0U) {
+                    tx.dreq_fifo_count = 0U;
+                }
+                return;
+            }
+            if (off == 0x08U) {
+                tx.dreq_src_hi = val & 0x00FFU; // 24-bit address: high byte only
+                return;
+            }
+            if (off == 0x0AU) {
+                tx.dreq_src_lo = val & 0xFFFEU; // word-aligned
+                return;
+            }
+            if (off == 0x0CU) {
+                tx.dreq_dst_hi = val & 0x00FFU;
+                return;
+            }
+            if (off == 0x0EU) {
+                tx.dreq_dst_lo = val & 0xFFFEU;
+                return;
+            }
+            if (off == 0x10U) {
+                tx.dreq_len = val;
+                return;
+            }
+            // (The FIFO write port at $12 is handled at byte level in the bus
+            // lambda -- a word must push exactly once, not per RMW half.)
             if (off >= 0x20U && off <= 0x2FU) {
                 tx.comm[(off - 0x20U) >> 1U] = val;
                 return;
@@ -270,6 +321,17 @@ namespace mnemos::manifests::sega32x {
             },
             [tx](std::uint32_t a, std::uint8_t value) {
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
+                if (off == 0x12U) {
+                    // The DREQ FIFO write port pushes once per completed word:
+                    // the even byte latches the high half, the odd completes.
+                    if ((a & 1U) == 0U) {
+                        tx->dreq_write_high = value;
+                    } else if ((tx->dreq_ctrl & 0x0004U) != 0U) {
+                        tx->dreq_fifo_push(static_cast<std::uint16_t>(
+                            (static_cast<std::uint16_t>(tx->dreq_write_high) << 8U) | value));
+                    }
+                    return;
+                }
                 const std::uint16_t cur = m68k_reg_read_word(*tx, off);
                 const std::uint16_t next =
                     (a & 1U) != 0U

@@ -75,6 +75,16 @@ namespace mnemos::chips::cpu {
             peripherals_.set_bus(&bus);
         }
 
+        // Board-supplied DREQ level for module-request DMAC channels (the 32X
+        // 68000-to-SH-2 FIFO asserts it while words are queued).
+        void set_dmac_dreq_query(std::function<bool(int channel)> query) noexcept {
+            peripherals_.set_dreq_query(std::move(query));
+        }
+
+        // The on-chip peripheral block (board glue + tests program the DMAC /
+        // timers directly; CPU code reaches it through the $FFFFFE00 window).
+        [[nodiscard]] sh2_peripherals& peripherals() noexcept { return peripherals_; }
+
         // ---- interrupt delivery (driven by the system / 32X INTC) ----
         // Present an external interrupt request at priority `level` (1-15) and
         // the given vector number. The CPU accepts it at the next instruction

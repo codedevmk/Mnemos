@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 
 namespace mnemos::chips {
     class state_writer;
@@ -45,6 +46,13 @@ namespace mnemos::chips::cpu {
         // The DMAC moves data over the same bus the CPU sees; the owning sh2
         // supplies the handle when it attaches its bus.
         void set_bus(ibus* bus) noexcept { bus_ = bus; }
+
+        // Module-request (CHCR.AR = 0) DREQ level per channel: the board answers
+        // whether the requesting device still has data. Queried per transferred
+        // unit, so a source whose read drains the device self-regulates.
+        void set_dreq_query(std::function<bool(int channel)> query) noexcept {
+            dreq_query_ = std::move(query);
+        }
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t addr) const noexcept;
         void write8(std::uint32_t addr, std::uint8_t value) noexcept;
@@ -115,6 +123,7 @@ namespace mnemos::chips::cpu {
         std::array<dma_channel, 2> dma_{};
         std::uint32_t dmaor_{}; // DMA operation register (master enable + flags)
         ibus* bus_{};           // bus the DMAC transfers over (set by the owning sh2)
+        std::function<bool(int)> dreq_query_{}; // module-request DREQ level per channel
 
         // Run any active auto-request DMA channel to completion (called per tick).
         void run_dmac() noexcept;

@@ -11,6 +11,7 @@ namespace mnemos::chips::cpu {
         // DMAC bits + byte-access helpers for its 32-bit registers.
         constexpr std::uint32_t chcr_de = 0x01U;              // channel enable
         constexpr std::uint32_t chcr_te = 0x02U;              // transfer end
+        constexpr std::uint32_t chcr_ar = 0x200U;             // auto (1) vs module (0) request
         constexpr std::uint32_t chcr_valid = 0xFFFFU;         // CHCR writable bits
         constexpr std::uint32_t dmac_tcr_valid = 0x00FFFFFFU; // 24-bit transfer count
         constexpr std::uint32_t dmaor_dme = 0x01U;            // DMA master enable
@@ -467,7 +468,8 @@ namespace mnemos::chips::cpu {
             return;
         }
         constexpr std::array<std::uint32_t, 4> unit_bytes{{1U, 2U, 4U, 16U}};
-        for (dma_channel& ch : dma_) {
+        for (std::size_t chan = 0; chan < dma_.size(); ++chan) {
+            dma_channel& ch = dma_[chan];
             if ((ch.chcr & chcr_de) == 0U || (ch.chcr & chcr_te) != 0U) {
                 continue;
             }
@@ -475,14 +477,23 @@ namespace mnemos::chips::cpu {
             if (count == 0U) {
                 continue;
             }
+            // CHCR.AR (bit 9): auto request moves the whole block now;
+            // module request transfers one unit per asserted-DREQ poll (the
+            // board's dreq_query says whether the requesting device still has
+            // data -- e.g. the 32X 68K-to-SH-2 FIFO holding words).
+            const bool auto_request = (ch.chcr & chcr_ar) != 0U;
+            if (!auto_request && !dreq_query_) {
+                continue;
+            }
             const std::uint32_t ts = (ch.chcr >> 10U) & 3U;
             const std::uint32_t sm = (ch.chcr >> 12U) & 3U;
             const std::uint32_t dm = (ch.chcr >> 14U) & 3U;
             const std::uint32_t bpu = unit_bytes[ts];
             const std::uint32_t count_step = (ts == 3U) ? 4U : 1U;
-            // Auto-request: move the whole block now (cycle-exact metering is
-            // deferred). Each unit copies `bpu` bytes; SAR/DAR step per CHCR.
             while (count > 0U) {
+                if (!auto_request && !dreq_query_(static_cast<int>(chan))) {
+                    break; // the requester ran dry; resume on a later poll
+                }
                 for (std::uint32_t i = 0; i < bpu; ++i) {
                     bus_->write8(ch.dar + i, bus_->read8(ch.sar + i));
                 }
@@ -498,8 +509,10 @@ namespace mnemos::chips::cpu {
                 }
                 count = (count > count_step) ? (count - count_step) : 0U;
             }
-            ch.tcr = 0U;
-            ch.chcr |= chcr_te; // transfer end (the interrupt is deferred)
+            ch.tcr = count;
+            if (count == 0U) {
+                ch.chcr |= chcr_te; // transfer end (the interrupt is deferred)
+            }
         }
     }
 

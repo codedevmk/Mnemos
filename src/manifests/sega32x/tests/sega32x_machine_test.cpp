@@ -363,3 +363,56 @@ TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",
     bus.write8(0xA15135U, 0xAAU); // LCH FIFO -- dropped
     CHECK(bus.read8(0xA15135U) == 0x00U);
 }
+
+TEST_CASE("sega32x_machine streams 68000 words through the DREQ FIFO into SH-2 DMA",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+    bus.write8(0xA15101U, 0x03U); // ADEN + release
+
+    // Program the slave DMAC: channel 0 module-request (CHCR.AR=0), source
+    // fixed at the FIFO port ($20004012), destination incrementing into SDRAM,
+    // word units, 4 transfers, channel + master enable.
+    const auto wr32 = [&tx](std::uint32_t a, std::uint32_t v) {
+        // The on-chip window is intercepted by the CPU, not bus-mapped.
+        auto& p = tx.slave_cpu.peripherals();
+        p.write8(a, static_cast<std::uint8_t>(v >> 24U));
+        p.write8(a + 1U, static_cast<std::uint8_t>(v >> 16U));
+        p.write8(a + 2U, static_cast<std::uint8_t>(v >> 8U));
+        p.write8(a + 3U, static_cast<std::uint8_t>(v));
+    };
+    wr32(0xFFFFFF80U, 0x20004012U); // SAR0 = the FIFO read port
+    wr32(0xFFFFFF84U, 0x06000400U); // DAR0 = SDRAM
+    wr32(0xFFFFFF88U, 4U);          // TCR0 = 4 units
+    wr32(0xFFFFFF8CU, 0x4401U);     // CHCR0: DM=inc, TS=word, AR=0, DE
+    wr32(0xFFFFFFB0U, 1U);          // DMAOR.DME
+
+    // 68000: arm 68S, then push four words through the FIFO write port.
+    bus.write8(0xA15107U, 0x04U); // DREQ ctrl low byte: 68S
+    CHECK((tx.dreq_ctrl & 0x04U) != 0U);
+    const std::array<std::uint16_t, 4> words{{0x1234U, 0x5678U, 0x9ABCU, 0xDEF0U}};
+    for (const std::uint16_t w : words) {
+        bus.write8(0xA15112U, static_cast<std::uint8_t>(w >> 8U));
+        bus.write8(0xA15113U, static_cast<std::uint8_t>(w));
+    }
+    CHECK(tx.dreq_fifo_count == 4U);
+
+    // Run the SH-2s: the slave's DMAC drains the FIFO into SDRAM.
+    tx.run_cycles(64U);
+    CHECK(tx.dreq_fifo_count == 0U);
+    CHECK(tx.sdram[0x400] == 0x12U);
+    CHECK(tx.sdram[0x401] == 0x34U);
+    CHECK(tx.sdram[0x404] == 0x9AU);
+    CHECK(tx.sdram[0x407] == 0xF0U);
+
+    // FULL status: 8 queued words raise bit 7 of the DREQ control read;
+    // clearing 68S flushes.
+    for (int i = 0; i < 8; ++i) {
+        bus.write8(0xA15112U, 0x11U);
+        bus.write8(0xA15113U, 0x22U);
+    }
+    CHECK((bus.read8(0xA15107U) & 0x80U) != 0U);
+    bus.write8(0xA15107U, 0x00U);
+    CHECK(tx.dreq_fifo_count == 0U);
+}
