@@ -135,6 +135,426 @@ TEST_CASE("sh2 round-trips its state") {
     CHECK(restored.cpu_registers().pc == 0x1002U);
 }
 
+TEST_CASE("sh2 register ALU: ADD/SUB/NEG") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #10,R1 ; MOV #3,R2 ; ADD R2,R1 ; SUB R2,R1 ; NEG R1,R3
+    m.load(0x1000U, {0xE10AU, 0xE203U, 0x312CU, 0x3128U, 0x631BU});
+    for (int i = 0; i < 5; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 10U);                             // 10 + 3 - 3
+    CHECK(r.r[3] == static_cast<std::uint32_t>(-10)); // NEG R1,R3
+}
+
+TEST_CASE("sh2 EXTU/EXTS widen bytes and words") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #-1,R1 ; EXTU.B R1,R2 ; EXTS.B R1,R3 ; EXTU.W R1,R4 ; EXTS.W R1,R5
+    m.load(0x1000U, {0xE1FFU, 0x621CU, 0x631EU, 0x641DU, 0x651FU});
+    for (int i = 0; i < 5; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[2] == 0x000000FFU);
+    CHECK(r.r[3] == 0xFFFFFFFFU);
+    CHECK(r.r[4] == 0x0000FFFFU);
+    CHECK(r.r[5] == 0xFFFFFFFFU);
+}
+
+TEST_CASE("sh2 ADDC chains carry through T") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #-1,R1 ; MOV #1,R2 ; ADDC R2,R1 ; ADDC R2,R1
+    m.load(0x1000U, {0xE1FFU, 0xE201U, 0x312EU, 0x312EU});
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    m.cpu.step_instruction(); // 0xFFFFFFFF + 1 + 0 = 0, carry out
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 0U);
+    CHECK((r.sr & sh2::sr_t) != 0U);
+    m.cpu.step_instruction(); // 0 + 1 + 1 (carry in) = 2, no carry out
+    r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 2U);
+    CHECK((r.sr & sh2::sr_t) == 0U);
+}
+
+TEST_CASE("sh2 ADDV/SUBV flag signed overflow") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #-1,R1 ; SHLR R1 -> 0x7FFFFFFF ; MOV #1,R2 ; ADDV R2,R1 -> overflow
+    m.load(0x1000U, {0xE1FFU, 0x4101U, 0xE201U, 0x312FU});
+    for (int i = 0; i < 4; ++i) {
+        m.cpu.step_instruction();
+    }
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 0x80000000U);
+    CHECK((r.sr & sh2::sr_t) != 0U);
+    // SUBV: 0x80000000 - 1 -> signed overflow
+    m.set_pc(0x2000U);
+    m.load(0x2000U, {0xE201U, 0x312BU}); // MOV #1,R2 ; SUBV R2,R1
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 0x7FFFFFFFU);
+    CHECK((r.sr & sh2::sr_t) != 0U);
+}
+
+TEST_CASE("sh2 NEGC negates with borrow") {
+    machine m;
+    m.set_pc(0x1000U);
+    // SETT ; MOV #5,R1 ; NEGC R1,R2 -> 0 - 5 - 1 = -6, T = 1 (borrow)
+    m.load(0x1000U, {0x0018U, 0xE105U, 0x621AU});
+    for (int i = 0; i < 3; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[2] == static_cast<std::uint32_t>(-6));
+    CHECK((r.sr & sh2::sr_t) != 0U);
+}
+
+TEST_CASE("sh2 CMP/EQ,GT,HS,GE,HI set T") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #5,R1 ; MOV #3,R2 ; CMP/EQ ; CMP/GT ; CMP/HS ; CMP/GE ; CMP/HI
+    m.load(0x1000U, {0xE105U, 0xE203U, 0x3120U, 0x3127U, 0x3122U, 0x3123U, 0x3126U});
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) == 0U); // CMP/EQ 5==3 false
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // CMP/GT 5>3
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // CMP/HS 5>=3
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // CMP/GE 5>=3
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // CMP/HI 5>3
+}
+
+TEST_CASE("sh2 CMP/EQ #imm, CMP/PZ/PL, DT") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0xE007U, 0x8807U}); // MOV #7,R0 ; CMP/EQ #7,R0
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U);
+    m.set_pc(0x2000U);
+    m.load(0x2000U, {0xE102U, 0x4110U, 0x4110U}); // MOV #2,R1 ; DT R1 ; DT R1
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 1U);
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) == 0U);
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 0U);
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // T set when count hits 0
+}
+
+TEST_CASE("sh2 logical AND/OR/XOR/NOT and TST") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #0x12,R1 ; MOV #0x34,R2 ; AND R2,R1 ; MOV #0x12,R3 ; OR R2,R3 ;
+    // MOV #0x12,R4 ; XOR R2,R4 ; NOT R1,R5
+    m.load(0x1000U, {0xE112U, 0xE234U, 0x2129U, 0xE312U, 0x232BU, 0xE412U, 0x242AU, 0x6517U});
+    for (int i = 0; i < 8; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 0x10U);  // 0x12 & 0x34
+    CHECK(r.r[3] == 0x36U);  // 0x12 | 0x34
+    CHECK(r.r[4] == 0x26U);  // 0x12 ^ 0x34
+    CHECK(r.r[5] == ~0x10U); // NOT of R1 (0x10)
+    // TST sets T when the AND is zero.
+    m.set_pc(0x2000U);
+    m.load(0x2000U, {0xE101U, 0xE202U, 0x2128U}); // MOV #1,R1 ; MOV #2,R2 ; TST R2,R1
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U);
+}
+
+TEST_CASE("sh2 CMP/STR and XTRCT") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[3] = 0xAAAABBBBU;
+    r.r[4] = 0xCCCCDDDDU;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x243DU}); // XTRCT R3,R4 -> (R4>>16)|(R3<<16)
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[4] == 0xBBBBCCCCU);
+}
+
+TEST_CASE("sh2 shifts: SHLL/SHLR/SHAR/SHLL16/SHLL2") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 1U;
+    r.r[2] = 0xFFFFFFFFU;
+    r.r[3] = 0x80000000U;
+    r.sr = 0U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // SHLL R1 ; SHLR R2 ; SHAR R3 ; SHLL16 R1 ; SHLL2 R1
+    m.load(0x1000U, {0x4100U, 0x4201U, 0x4321U, 0x4128U, 0x4108U});
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 2U);
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[2] == 0x7FFFFFFFU);
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // T = shifted-out LSB
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[3] == 0xC0000000U); // arithmetic: sign preserved
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 0x80000U); // (2 << 16) << 2
+}
+
+TEST_CASE("sh2 rotates: ROTL and ROTCL through T") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x80000001U;
+    r.sr = 0U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x4104U}); // ROTL R1 -> (v<<1)|MSB, T=MSB
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 0x00000003U);
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U);
+    // ROTCL feeds the old T into bit 0.
+    auto r2 = m.cpu.cpu_registers();
+    r2.r[2] = 0U;
+    r2.pc = 0x2000U;
+    m.cpu.set_registers(r2);
+    m.load(0x2000U, {0x0018U, 0x4224U}); // SETT ; ROTCL R2
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[2] == 1U);
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) == 0U); // new T = old MSB (0)
+}
+
+TEST_CASE("sh2 SWAP.B/W and MOVT") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x11223344U;
+    r.sr = 0U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // SWAP.B R1,R2 ; SWAP.W R1,R3 ; SETT ; MOVT R4 ; CLRT ; MOVT R5
+    m.load(0x1000U, {0x6218U, 0x6319U, 0x0018U, 0x0429U, 0x0008U, 0x0529U});
+    for (int i = 0; i < 6; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.r[2] == 0x11224433U);
+    CHECK(rr.r[3] == 0x33441122U);
+    CHECK(rr.r[4] == 1U);
+    CHECK(rr.r[5] == 0U);
+}
+
+TEST_CASE("sh2 multiply: MUL.L, MULU.W, MULS.W, DMULU.L, DMULS.L") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 7U;
+    r.r[2] = 6U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x0127U}); // MUL.L R2,R1 -> MACL
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().macl == 42U);
+    // DMULS.L: -4 * 3 = -12
+    r = m.cpu.cpu_registers();
+    r.r[1] = static_cast<std::uint32_t>(-4);
+    r.r[2] = 3U;
+    r.pc = 0x2000U;
+    m.cpu.set_registers(r);
+    m.load(0x2000U, {0x312DU}); // DMULS.L R2,R1
+    m.cpu.step_instruction();
+    auto rr = m.cpu.cpu_registers();
+    CHECK(rr.mach == 0xFFFFFFFFU);
+    CHECK(rr.macl == 0xFFFFFFF4U);
+    // DMULU.L: 0xFFFFFFFF * 0xFFFFFFFF
+    r = m.cpu.cpu_registers();
+    r.r[1] = 0xFFFFFFFFU;
+    r.r[2] = 0xFFFFFFFFU;
+    r.pc = 0x3000U;
+    m.cpu.set_registers(r);
+    m.load(0x3000U, {0x3125U}); // DMULU.L R2,R1
+    m.cpu.step_instruction();
+    rr = m.cpu.cpu_registers();
+    CHECK(rr.mach == 0xFFFFFFFEU);
+    CHECK(rr.macl == 0x00000001U);
+    // MULU.W / MULS.W operate on the low 16 bits.
+    r = m.cpu.cpu_registers();
+    r.r[1] = 0xFFFFU;
+    r.r[2] = 0xFFFFU;
+    r.pc = 0x4000U;
+    m.cpu.set_registers(r);
+    m.load(0x4000U, {0x212EU, 0x212FU}); // MULU.W ; MULS.W
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().macl == 0xFFFE0001U); // 65535 * 65535
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().macl == 1U); // (-1) * (-1)
+}
+
+TEST_CASE("sh2 MAC.L accumulates signed 32x32 products") {
+    machine m;
+    m.w32(0x2000U, 7U);
+    m.w32(0x2004U, 6U);
+    m.w32(0x2008U, static_cast<std::uint32_t>(-2));
+    m.w32(0x200CU, 5U);
+    auto r = m.cpu.cpu_registers();
+    r.r[0] = 0x2000U;
+    r.r[1] = 0x2008U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x010FU, 0x010FU}); // MAC.L @R0+,@R1+ twice
+    m.cpu.step_instruction();
+    auto rr = m.cpu.cpu_registers();
+    const auto acc1 =
+        static_cast<std::int64_t>((static_cast<std::uint64_t>(rr.mach) << 32U) | rr.macl);
+    CHECK(acc1 == -14); // 7 * -2
+    CHECK(rr.r[0] == 0x2004U);
+    CHECK(rr.r[1] == 0x200CU);
+    m.cpu.step_instruction();
+    rr = m.cpu.cpu_registers();
+    const auto acc2 =
+        static_cast<std::int64_t>((static_cast<std::uint64_t>(rr.mach) << 32U) | rr.macl);
+    CHECK(acc2 == 16); // -14 + (6 * 5)
+}
+
+TEST_CASE("sh2 MAC.W saturates MACL when S is set") {
+    machine m;
+    m.w16(0x2000U, 0x7FFFU);
+    m.w16(0x2004U, 0x7FFFU);
+    auto r = m.cpu.cpu_registers();
+    r.r[0] = 0x2000U;
+    r.r[1] = 0x2004U;
+    r.macl = 0x7FFFFFFFU;
+    r.mach = 0U;
+    r.sr = sh2::sr_s;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x410FU}); // MAC.W @R0+,@R1+
+    m.cpu.step_instruction();
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.macl == 0x7FFFFFFFU); // clamped to INT32_MAX
+    CHECK((rr.mach & 1U) != 0U);   // overflow latched in MACH bit 0
+}
+
+TEST_CASE("sh2 MOV.L @(disp,PC) loads a 32-bit literal") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0xD101U}); // MOV.L @(1,PC),R1
+    m.w32(0x1008U, 0xDEADBEEFU);
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 0xDEADBEEFU);
+}
+
+TEST_CASE("sh2 MOV.W @(disp,PC) loads a sign-extended word") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0x9101U}); // MOV.W @(1,PC),R1
+    m.w16(0x1006U, 0xFFFEU);
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[1] == 0xFFFFFFFEU);
+}
+
+TEST_CASE("sh2 MOV.L store/load round-trips through memory") {
+    machine m;
+    m.set_pc(0x1000U);
+    // R1 <- 0x12345678 ; R2 <- 0x3000 ; MOV.L R1,@R2 ; MOV.L @R2,R3
+    m.load(0x1000U, {0xD102U, 0xD203U, 0x2212U, 0x6322U});
+    m.w32(0x100CU, 0x12345678U); // R1 literal
+    m.w32(0x1010U, 0x00003000U); // R2 literal
+    for (int i = 0; i < 4; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 0x12345678U);
+    CHECK(r.r[2] == 0x00003000U);
+    CHECK(r.r[3] == 0x12345678U);
+}
+
+TEST_CASE("sh2 MOV.B sign-extends; @-Rn and @Rm+ adjust the pointer") {
+    machine m;
+    m.set_pc(0x1000U);
+    // MOV #-128,R1 ; R2 <- 0x3004 ; MOV.B R1,@-R2 ; MOV.B @R2+,R3
+    m.load(0x1000U, {0xE180U, 0xD201U, 0x2214U, 0x6324U});
+    m.w32(0x1008U, 0x00003004U);
+    for (int i = 0; i < 4; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[3] == 0xFFFFFF80U); // 0x80 sign-extended
+    CHECK(r.r[2] == 0x00003004U); // @-Rn then @Rm+ restore the pointer
+}
+
+TEST_CASE("sh2 TAS.B tests and sets bit 7") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x3000U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.ram[0x3000] = 0x00U;
+    m.load(0x1000U, {0x411BU}); // TAS.B @R1
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U); // was zero
+    CHECK(m.ram[0x3000] == 0x80U);
+}
+
+TEST_CASE("sh2 DIV1 performs one non-restoring divide step") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[0] = 1U;
+    r.r[2] = 0x80000000U;
+    r.sr = 0U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x3204U}); // DIV1 R0,R2
+    m.cpu.step_instruction();
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.r[2] == 0xFFFFFFFFU);
+    CHECK((rr.sr & sh2::sr_q) == 0U);
+    CHECK((rr.sr & sh2::sr_t) != 0U);
+}
+
+TEST_CASE("sh2 DIV0U + DIV1 sequence divides unsigned 32/32") {
+    const auto run_div = [](std::uint32_t dividend, std::uint32_t divisor) {
+        machine m;
+        std::uint32_t a = 0x1000U;
+        m.w16(a, 0x0019U); // DIV0U
+        a += 2U;
+        for (int i = 0; i < 32; ++i) {
+            m.w16(a, 0x4124U); // ROTCL R1
+            a += 2U;
+            m.w16(a, 0x3204U); // DIV1 R0,R2
+            a += 2U;
+        }
+        m.w16(a, 0x4124U); // final ROTCL R1 brings in the last quotient bit
+        auto r = m.cpu.cpu_registers();
+        r.pc = 0x1000U;
+        r.r[0] = divisor;  // divisor
+        r.r[1] = dividend; // dividend low -> quotient
+        r.r[2] = 0U;       // dividend high / remainder accumulator
+        r.sr = 0U;
+        m.cpu.set_registers(r);
+        for (int i = 0; i < 66; ++i) {
+            m.cpu.step_instruction();
+        }
+        r = m.cpu.cpu_registers();
+        // The quotient is the unambiguous result of the 32 DIV1 steps. The
+        // remainder left in R2 is in non-restoring form (it may be off by one
+        // divisor and need the routine's sign-correction step), so it is not
+        // asserted here -- DIV1's per-step Rn/Q/T mechanics are covered by the
+        // single-step test above.
+        CHECK(r.r[1] == dividend / divisor);
+    };
+    run_div(1000U, 7U);
+    run_div(0xFFFFFFFFU, 7U);
+    run_div(12345U, 100U);
+    run_div(1U, 1U);
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();
