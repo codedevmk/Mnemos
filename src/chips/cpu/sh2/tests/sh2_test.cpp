@@ -896,9 +896,9 @@ TEST_CASE("sh2 intercepts the on-chip peripheral window before the bus") {
 
 TEST_CASE("sh2_peripherals round-trips and resets its register window") {
     mnemos::chips::cpu::sh2_peripherals p;
-    p.write8(0xFFFFFE10U, 0xA5U); // FRT region
+    p.write8(0xFFFFFE92U, 0xA5U); // CCR (raw-storage region, not a modelled timer)
     p.write8(0xFFFFFFFFU, 0x3CU); // top of the window
-    CHECK(p.read8(0xFFFFFE10U) == 0xA5U);
+    CHECK(p.read8(0xFFFFFE92U) == 0xA5U);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
@@ -907,11 +907,71 @@ TEST_CASE("sh2_peripherals round-trips and resets its register window") {
     mnemos::chips::state_reader reader(blob);
     q.load_state(reader);
     REQUIRE(reader.ok());
-    CHECK(q.read8(0xFFFFFE10U) == 0xA5U);
+    CHECK(q.read8(0xFFFFFE92U) == 0xA5U);
     CHECK(q.read8(0xFFFFFFFFU) == 0x3CU);
 
     q.reset();
-    CHECK(q.read8(0xFFFFFE10U) == 0x00U);
+    CHECK(q.read8(0xFFFFFE92U) == 0x00U);
+}
+
+TEST_CASE("sh2_peripherals FRT counts at the TCR-selected prescale") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE16U, 0x00U); // TCR = phi/8
+    p.tick(7U);                   // below one tick
+    CHECK(p.read8(0xFFFFFE12U) == 0x00U);
+    CHECK(p.read8(0xFFFFFE13U) == 0x00U);
+    p.tick(1U); // total 8 source clocks -> FRC = 1
+    CHECK(p.read8(0xFFFFFE12U) == 0x00U);
+    CHECK(p.read8(0xFFFFFE13U) == 0x01U);
+}
+
+TEST_CASE("sh2_peripherals FRT sets the overflow flag on wrap") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE16U, 0x00U); // phi/8
+    p.write8(0xFFFFFE12U, 0xFFU); // FRC = 0xFFFF
+    p.write8(0xFFFFFE13U, 0xFFU);
+    p.tick(8U);                                  // 0xFFFF -> 0x0000
+    CHECK((p.read8(0xFFFFFE11U) & 0x02U) != 0U); // FTCSR.OVF
+}
+
+TEST_CASE("sh2_peripherals FRT output-compare A matches and CCLR clears FRC") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE16U, 0x00U); // phi/8
+    p.write8(0xFFFFFE11U, 0x01U); // FTCSR.CCLR = 1
+    p.write8(0xFFFFFE14U, 0x00U); // OCRA = 0x0002 (TOCR.OCRS = 0)
+    p.write8(0xFFFFFE15U, 0x02U);
+    p.tick(16U);                                 // FRC reaches 2 -> OCRA match
+    CHECK((p.read8(0xFFFFFE11U) & 0x08U) != 0U); // FTCSR.OCFA
+    CHECK(p.read8(0xFFFFFE12U) == 0x00U);        // FRC cleared by CCLR
+    CHECK(p.read8(0xFFFFFE13U) == 0x00U);
+}
+
+TEST_CASE("sh2_peripherals FRT status flags clear only after a read") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE16U, 0x00U);
+    p.write8(0xFFFFFE12U, 0xFFU);
+    p.write8(0xFFFFFE13U, 0xFFU);
+    p.tick(8U);
+    CHECK((p.read8(0xFFFFFE11U) & 0x02U) != 0U); // read observes OVF
+    p.write8(0xFFFFFE11U, 0x00U);                // write 0 clears the observed flag
+    CHECK((p.read8(0xFFFFFE11U) & 0x02U) == 0U);
+}
+
+TEST_CASE("sh2 ticks the on-chip FRT as it executes") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0xFFFFFE12U; // FRC high
+    r.r[4] = 0xFFFFFE13U; // FRC low
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // 16 NOPs (phi/8 default -> FRC reaches 2), then MOV.B @R1,R2 ; MOV.B @R4,R3.
+    m.load(0x1000U,
+           {0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U,
+            0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x6210U, 0x6340U});
+    for (int i = 0; i < 18; ++i) {
+        m.cpu.step_instruction();
+    }
+    CHECK(m.cpu.cpu_registers().r[3] == 2U); // FRC low = 16 source clocks / 8
 }
 
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {

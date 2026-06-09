@@ -878,6 +878,7 @@ namespace mnemos::chips::cpu {
         }
 
         if (sleeping_) {
+            peripherals_.tick(static_cast<std::uint64_t>(cycles_)); // FRT/WDT keep running
             elapsed_ += static_cast<std::uint64_t>(cycles_);
             return cycles_; // halted: no fetch/execute until an interrupt arrives
         }
@@ -891,6 +892,7 @@ namespace mnemos::chips::cpu {
         pc_ += 2U;
         exec(op);
 
+        peripherals_.tick(static_cast<std::uint64_t>(cycles_));
         elapsed_ += static_cast<std::uint64_t>(cycles_);
         return cycles_;
     }

@@ -34,13 +34,37 @@ namespace mnemos::chips::cpu {
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t addr) const noexcept;
         void write8(std::uint32_t addr, std::uint8_t value) noexcept;
+        // Advance the time-driven peripherals (currently the FRT) by `cycles`
+        // SH-2 clocks. Called every instruction step, including during SLEEP.
+        void tick(std::uint64_t cycles) noexcept;
         void reset() noexcept;
 
         void save_state(state_writer& writer) const;
         void load_state(state_reader& reader);
 
       private:
+        // The output-compare register the TOCR.OCRS bit currently selects.
+        [[nodiscard]] std::uint16_t selected_ocr() const noexcept {
+            return (tocr_ & 0x10U) != 0U ? ocrb_ : ocra_;
+        }
+
         std::array<std::uint8_t, window_size> regs_{};
+
+        // FRT -- free-running timer ($FE10-$FE17). A 16-bit counter clocked off a
+        // TCR-selected prescale of the SH-2 clock; matches against OCRA/OCRB and
+        // wraps, latching status flags in FTCSR. The timer interrupts (gated by
+        // TIER) are delivered once the on-chip INTC lands; for now the flags are
+        // pollable. Input capture (FICR) is not modelled.
+        std::uint16_t frc_{};                     // FE12/13 free-running counter
+        std::uint16_t ocra_{0xFFFFU};             // FE14/15 output compare A
+        std::uint16_t ocrb_{0xFFFFU};             // FE14/15 output compare B
+        std::uint8_t tier_{0x01U};                // FE10 timer interrupt enable
+        std::uint8_t ftcsr_{};                    // FE11 control/status flags
+        std::uint8_t tcr_{};                      // FE16 timer control (clock select)
+        std::uint8_t tocr_{0xE0U};                // FE17 output-compare control
+        int frt_prescale_acc_{};                  // accumulated source clocks
+        mutable std::uint8_t frt_temp_{};         // 16-bit access byte latch
+        mutable std::uint8_t ftcsr_read_flags_{}; // flags observed by a read
     };
 
 } // namespace mnemos::chips::cpu
