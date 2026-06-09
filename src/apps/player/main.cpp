@@ -459,16 +459,45 @@ int main(int argc, char* argv[]) {
     }
 
     // We never create a shader (only SDL_BlitGPUTexture), but the format
-    // flags are required at device creation.
-    SDL_GPUDevice* device = SDL_CreateGPUDevice(
-        SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL, true,
-        nullptr);
+    // flags are required at device creation. GPU debug/validation only in
+    // debug builds -- it costs present-path performance and the pinned SDL3's
+    // Vulkan backend trips swapchain-semaphore validation (which can stall
+    // presentation on some drivers). On Windows prefer D3D12 for the same
+    // reason; MNEMOS_GPU_DRIVER overrides, and a failed named driver falls
+    // back to SDL's own choice.
+#if defined(NDEBUG)
+    constexpr bool kGpuDebug = false;
+#else
+    constexpr bool kGpuDebug = true;
+#endif
+    constexpr SDL_GPUShaderFormat kGpuFormats =
+        SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in override, not hot-path
+#endif
+    const char* gpu_driver = std::getenv("MNEMOS_GPU_DRIVER");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+#if defined(_WIN32)
+    if (gpu_driver == nullptr) {
+        gpu_driver = "direct3d12";
+    }
+#endif
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(kGpuFormats, kGpuDebug, gpu_driver);
+    if (device == nullptr && gpu_driver != nullptr) {
+        std::fprintf(stderr, "[mnemos_player] GPU driver '%s' unavailable (%s); falling back\n",
+                     gpu_driver, SDL_GetError());
+        device = SDL_CreateGPUDevice(kGpuFormats, kGpuDebug, nullptr);
+    }
     if (device == nullptr) {
         std::fprintf(stderr, "SDL_CreateGPUDevice failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
+    std::fprintf(stderr, "[mnemos_player] gpu driver: %s\n", SDL_GetGPUDeviceDriver(device));
     if (!SDL_ClaimWindowForGPUDevice(device, window)) {
         std::fprintf(stderr, "SDL_ClaimWindowForGPUDevice failed: %s\n", SDL_GetError());
         SDL_DestroyGPUDevice(device);
