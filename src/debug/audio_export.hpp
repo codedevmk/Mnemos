@@ -13,8 +13,9 @@
 
 namespace mnemos::debug {
 
-    // For each chip in `sys.chips()` exposing an audio_source and/or a register
-    // file (register_view):
+    // For each chip that exposes an audio_source, or is an audio chip
+    // (chip_class::audio_synth) exposing a register file (register_view) -- a
+    // non-audio chip's registers belong in a CPU/debug dump, not here:
     //   each sample -> <base>.<chip>.sample.<name>.wav (16-bit PCM RIFF/WAVE)
     // and writes one <base>.audio.json manifest listing every such chip's samples
     // (name, sample_rate, channels, frame_count, loop_start, source_addr, file)

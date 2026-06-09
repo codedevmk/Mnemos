@@ -24,9 +24,11 @@ namespace mnemos::debug {
             }
             instrumentation::audio_source* src = chip->introspection().audio();
             instrumentation::register_view* regs = chip->introspection().registers();
-            // Include a chip when it surfaces PCM samples and/or a register file;
-            // skip chips that expose neither (most non-audio chips).
-            if (src == nullptr && regs == nullptr) {
+            const bool is_audio = chip->metadata().klass == chips::chip_class::audio_synth;
+            // Include a chip when it exposes PCM samples, or it is an audio chip
+            // exposing its register file. A non-audio chip's registers (e.g. the
+            // CPU's) belong in a debug/CPU dump, not the audio manifest.
+            if (src == nullptr && !(is_audio && regs != nullptr)) {
                 continue;
             }
             const std::string chip_id = sanitize_id(chip->metadata().part_number);
