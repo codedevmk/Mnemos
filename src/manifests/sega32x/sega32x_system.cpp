@@ -6,6 +6,59 @@
 namespace mnemos::manifests::sega32x {
 
     namespace {
+        // PWM FIFO primitives. A push into a full FIFO drops the value (the
+        // hardware rejects the write); a pop from an empty FIFO returns the
+        // held DAC value so the carrier keeps running on the last duty.
+        void pwm_fifo_push(std::array<std::uint16_t, pwm_fifo_depth>& fifo, std::uint8_t& count,
+                           std::uint16_t duty) noexcept {
+            if (count >= pwm_fifo_depth) {
+                return;
+            }
+            fifo[count++] = duty & 0x0FFFU;
+        }
+
+        [[nodiscard]] std::uint16_t pwm_fifo_pop(std::array<std::uint16_t, pwm_fifo_depth>& fifo,
+                                                 std::uint8_t& count, std::uint16_t held) noexcept {
+            if (count == 0U) {
+                return held;
+            }
+            const std::uint16_t v = fifo[0];
+            for (std::size_t i = 0; i + 1U < pwm_fifo_depth; ++i) {
+                fifo[i] = fifo[i + 1U];
+            }
+            --count;
+            return v;
+        }
+
+        // FIFO status word: bit 15 = FULL, bit 14 = EMPTY, rest open bus.
+        [[nodiscard]] std::uint16_t pwm_fifo_status(std::uint8_t count) noexcept {
+            std::uint16_t w = 0U;
+            if (count >= pwm_fifo_depth) {
+                w |= 0x8000U;
+            }
+            if (count == 0U) {
+                w |= 0x4000U;
+            }
+            return w;
+        }
+
+        // Duty -> signed PCM: the analog filter centres on CYCLE/2, so the
+        // audible swing is (duty - CYCLE/2) scaled to the int16 range.
+        [[nodiscard]] std::int16_t pwm_duty_to_pcm(std::uint16_t duty, int cycle) noexcept {
+            const int half = cycle / 2;
+            if (half <= 0) {
+                return 0;
+            }
+            int sample = ((static_cast<int>(duty) - half) * 32767) / half;
+            if (sample > 32767) {
+                sample = 32767;
+            }
+            if (sample < -32768) {
+                sample = -32768;
+            }
+            return static_cast<std::int16_t>(sample);
+        }
+
         struct irq_source {
             std::uint8_t bit;
             int level;
@@ -53,15 +106,36 @@ namespace mnemos::manifests::sega32x {
         if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
             return comm_read(offset - comm_offset);
         }
-        // PWM control/cycle at $30/$32 (shared with the 68000's $A15130 view).
-        // The FIFO registers at $34-$39 and VDP / DMA-FIFO are not yet modelled.
-        if ((offset & ~1U) == 0x30U) {
-            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(pwm_cntl)
-                                       : static_cast<std::uint8_t>(pwm_cntl >> 8U);
-        }
-        if ((offset & ~1U) == 0x32U) {
-            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(pwm_cycle)
-                                       : static_cast<std::uint8_t>(pwm_cycle >> 8U);
+        // PWM registers at $30-$39 (CNTL/CYCLE shared with the 68000's $A15130
+        // view; LCH/RCH/MONO reads return FIFO status, MONO ORs both channels).
+        if (offset >= 0x30U && offset < 0x3AU) {
+            std::uint16_t w = 0U;
+            switch (offset & ~1U) {
+            case 0x30U:
+                w = pwm_cntl;
+                break;
+            case 0x32U:
+                w = pwm_cycle;
+                break;
+            case 0x34U:
+                w = pwm_fifo_status(pwm_fifo_l_count);
+                break;
+            case 0x36U:
+                w = pwm_fifo_status(pwm_fifo_r_count);
+                break;
+            case 0x38U:
+                w = static_cast<std::uint16_t>(pwm_fifo_status(pwm_fifo_l_count) |
+                                               pwm_fifo_status(pwm_fifo_r_count));
+                // MONO EMPTY only when both FIFOs are empty.
+                if (pwm_fifo_l_count != 0U || pwm_fifo_r_count != 0U) {
+                    w &= static_cast<std::uint16_t>(~0x4000U);
+                }
+                break;
+            default:
+                break;
+            }
+            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(w)
+                                       : static_cast<std::uint8_t>(w >> 8U);
         }
         return 0U;
     }
@@ -107,7 +181,36 @@ namespace mnemos::manifests::sega32x {
             write_word_lane(pwm_cycle);
             return;
         }
-        // else: PWM FIFOs / VDP / DMA-FIFO -- not yet modelled
+        // PWM FIFO pushes: the even byte latches the duty's high half, the odd
+        // byte completes the 12-bit value and pushes. MONO pushes both FIFOs.
+        const auto fifo_write = [this, offset, value](std::uint8_t& high_latch, bool left,
+                                                      bool right) {
+            if ((offset & 1U) == 0U) {
+                high_latch = value;
+                return;
+            }
+            const auto duty =
+                static_cast<std::uint16_t>((static_cast<std::uint16_t>(high_latch) << 8U) | value);
+            if (left) {
+                pwm_fifo_push(pwm_fifo_l, pwm_fifo_l_count, duty);
+            }
+            if (right) {
+                pwm_fifo_push(pwm_fifo_r, pwm_fifo_r_count, duty);
+            }
+        };
+        if ((offset & ~1U) == 0x34U) {
+            fifo_write(pwm_lch_high, true, false);
+            return;
+        }
+        if ((offset & ~1U) == 0x36U) {
+            fifo_write(pwm_rch_high, false, true);
+            return;
+        }
+        if ((offset & ~1U) == 0x38U) {
+            fifo_write(pwm_mono_high, true, true);
+            return;
+        }
+        // else: VDP / DMA-FIFO -- not yet modelled
     }
 
     std::uint8_t sega32x_system::vdp_reg_read(std::uint32_t offset) const noexcept {
@@ -265,6 +368,19 @@ namespace mnemos::manifests::sega32x {
         slave_irq_latch = 0U;
         pwm_cntl = 0U;
         pwm_cycle = 0U;
+        pwm_fifo_l.fill(0U);
+        pwm_fifo_r.fill(0U);
+        pwm_fifo_l_count = 0U;
+        pwm_fifo_r_count = 0U;
+        pwm_current_l = 0U;
+        pwm_current_r = 0U;
+        pwm_audio_l = 0;
+        pwm_audio_r = 0;
+        pwm_cycle_acc = 0U;
+        pwm_irq_step_count = 0U;
+        pwm_lch_high = 0U;
+        pwm_rch_high = 0U;
+        pwm_mono_high = 0U;
         vdp.reset(chips::reset_kind::power_on);
         // The buses are already attached, so reset reads each CPU's PC/SP from its
         // own BIOS reset vectors at $0.
@@ -272,12 +388,44 @@ namespace mnemos::manifests::sega32x {
         slave_cpu.reset(chips::reset_kind::power_on);
     }
 
+    void sega32x_system::step_pwm(std::uint64_t sh2_cycles) {
+        const int cycle = pwm_cycle & 0x0FFFU;
+        if (cycle == 0) {
+            return; // CYCLE = 0 disables stepping
+        }
+        pwm_cycle_acc += sh2_cycles;
+        while (pwm_cycle_acc >= static_cast<std::uint64_t>(cycle)) {
+            pwm_cycle_acc -= static_cast<std::uint64_t>(cycle);
+
+            pwm_current_l = pwm_fifo_pop(pwm_fifo_l, pwm_fifo_l_count, pwm_current_l);
+            pwm_current_r = pwm_fifo_pop(pwm_fifo_r, pwm_fifo_r_count, pwm_current_r);
+            pwm_audio_l = pwm_duty_to_pcm(pwm_current_l, cycle);
+            pwm_audio_r = pwm_duty_to_pcm(pwm_current_r, cycle);
+
+            // CNTL bits 11-8 = TM, the interrupt-rate divider: every TM steps
+            // the PWM interrupt latches on both SH-2s (per-CPU masks gate
+            // delivery as usual).
+            const auto tm = static_cast<std::uint8_t>((pwm_cntl >> 8U) & 0x0FU);
+            if (tm > 0U) {
+                ++pwm_irq_step_count;
+                if (pwm_irq_step_count >= tm) {
+                    pwm_irq_step_count = 0U;
+                    raise_pwm();
+                }
+            }
+        }
+    }
+
     void sega32x_system::run_cycles(std::uint64_t cycles) {
         if (sh2_reset_asserted) {
             return; // both SH-2s held inactive
         }
+        const std::uint64_t before = master_cpu.elapsed_cycles();
         master_cpu.tick(cycles);
         slave_cpu.tick(cycles);
+        // The PWM unit advances on the SH-2 clock; drive it with the master's
+        // actual progress (instruction-atomic stepping can overshoot `cycles`).
+        step_pwm(master_cpu.elapsed_cycles() - before);
     }
 
     std::unique_ptr<sega32x_system> assemble_sega32x() {
