@@ -528,6 +528,48 @@ namespace mnemos::chips::video {
         return introspection_;
     }
 
+    frame_buffer_view sms_vdp::introspection_surface::bg_layer_impl::view() const {
+        // Compose the whole name-table background into an RGB scene: the 32-column
+        // map, every tile decoded with its palette + H/V flip, resolved through
+        // CRAM. No scroll and no sprites -- the raw map, like the Genesis plane_a.
+        const auto& vram = owner_->vram_;
+        const auto& reg = owner_->reg_;
+        const std::uint16_t nt_base = reg_nt_base(reg);
+        const int rows = owner_->visible_height() == 192 ? 28 : 32; // name-table height
+        constexpr std::uint32_t cols = 32;
+        width_ = cols * 8U; // 256
+        height_ = static_cast<std::uint32_t>(rows) * 8U;
+        buf_.assign(static_cast<std::size_t>(width_) * height_, 0U);
+
+        for (int row = 0; row < rows; ++row) {
+            for (int col = 0; col < static_cast<int>(cols); ++col) {
+                const auto nt_addr = static_cast<std::uint16_t>(nt_base + ((row * 32 + col) * 2));
+                const auto entry = static_cast<std::uint16_t>(
+                    vram[nt_addr & 0x3FFFU] |
+                    (static_cast<std::uint16_t>(vram[(nt_addr + 1U) & 0x3FFFU]) << 8U));
+                const int tile = entry & 0x1FF;
+                const bool hflip = ((entry >> 9U) & 1U) != 0U;
+                const bool vflip = ((entry >> 10U) & 1U) != 0U;
+                const int pal = (entry >> 11U) & 1;
+                for (int fy = 0; fy < 8; ++fy) {
+                    const int row_in_tile = vflip ? (7 - fy) : fy;
+                    std::array<std::uint8_t, 8> pix{};
+                    decode_tile_row(vram, tile, row_in_tile, hflip, pix);
+                    const std::size_t off =
+                        (static_cast<std::size_t>(row) * 8U + static_cast<std::size_t>(fy)) *
+                            width_ +
+                        static_cast<std::size_t>(col) * 8U;
+                    for (int p = 0; p < 8; ++p) {
+                        const auto idx =
+                            static_cast<std::uint8_t>(pal * 16 + pix[static_cast<std::size_t>(p)]);
+                        buf_[off + static_cast<std::size_t>(p)] = owner_->palette_rgb(idx);
+                    }
+                }
+            }
+        }
+        return {.pixels = buf_.data(), .width = width_, .height = height_, .stride = 0U};
+    }
+
     // ---- asset extraction ----
 
     std::span<const instrumentation::palette_view>

@@ -180,3 +180,23 @@ TEST_CASE("sms_vdp font hint clamps an over-long range to the tile space") {
     CHECK(font->image.height == 8U);
     REQUIRE(font->image.well_formed());
 }
+
+TEST_CASE("sms_vdp bg debug_layer composes the name-table map") {
+    sms_vdp vdp;
+    write_cram(vdp, 1U, 0x03U);               // CRAM index 1 = red (--BBGGRR, R=3)
+    write_vram(vdp, 0x0020U, {0x80U});        // tile 1, row 0 -> pixel (0,0) = colour 1
+    write_vram(vdp, 0x3800U, {0x01U, 0x00U}); // name table (0,0) -> tile 1, palette 0
+
+    auto layers = vdp.introspection().debug_layers();
+    REQUIRE(layers.size() == 1U);
+    auto* layer = layers[0];
+    REQUIRE(layer != nullptr);
+    CHECK(layer->name() == "bg");
+
+    auto fb = layer->view();
+    CHECK(fb.width == 256U);  // 32 columns * 8
+    CHECK(fb.height == 224U); // 28 rows * 8 (192-line mode)
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == 0x00FF0000U); // tile 1 pixel (0,0) -> palette 0 colour 1 = red
+    CHECK(fb.pixels[1] == 0x00000000U); // pixel (1,0) -> colour 0 -> CRAM 0 = black
+}
