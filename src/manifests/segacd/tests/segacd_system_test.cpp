@@ -364,7 +364,11 @@ TEST_CASE("segacd CDD plays a data disc and advances the read head", "[segacd][c
     REQUIRE(sys->cdd_lba == 1);
     REQUIRE(sys->cdc_sectors_decoded > before); // a sector was fed to the decoder
     REQUIRE(sys->cdda_active == false);         // data track -> no CD-DA
-    REQUIRE(sys->gate_read(0x38) == (segacd_system::cdd_play & 0x0F)); // status mirrored
+    // The CDD status frame is published on a command (reference model), not from the
+    // per-tick update -- a Get-Status reports the current drive state.
+    sys->gate_write_main(0x42, 0x00); // Get Drive Status
+    sys->gate_write_main(0x4A, 0x00); // commit
+    REQUIRE(sys->gate_read(0x38) == (segacd_system::cdd_play & 0x0F));
 }
 
 TEST_CASE("segacd CDD stop returns to the TOC state", "[segacd][cdd]") {

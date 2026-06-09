@@ -421,7 +421,14 @@ namespace mnemos::manifests::segacd {
             cdd_pending_status = 0;
             cdd_track = disc_track_of_lba(cdd_lba);
         }
-        cdd_set_status();
+        // NOTE: cdd_update advances the INTERNAL drive state only; it must NOT publish
+        // the CDD status frame ($38-$41) here. The reference publishes status solely on
+        // a CDD command (Get-Status / Report-TOC via cdd_process), never from the 75 Hz
+        // tick. Publishing every tick made the BIOS observe a freshly-promoted PAUSE
+        // frame one comm cycle too early -- before the read driver consumed the prior
+        // TOC-dispatch state ($5837 bit3) -- so it bailed at the read-driver gate. The
+        // frame is now (re)built only by the command handlers / cdd_set_status on
+        // Get-Status.
 
         // CDD level-4 IRQ -- the per-CD-frame "BIOS frame tick" that drives the
         // sub-CPU's disc state machine. It fires only while CDD communication is
