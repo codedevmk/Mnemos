@@ -46,11 +46,33 @@ different time models, so the snapshot-shaped contract stays honest:
   `register_snapshot()`; the exporter serialises that directly. A static
   snapshot of a synth voice is of limited value (see A3), so we do **not**
   invent a parallel `voice_view` — that would just duplicate `register_view`.
-- **A3 — register-write log (temporal, separate future capability):** for
-  SID/PSG/FM the genuinely valuable "music/instrument" extraction is the
-  register-write stream over time (VGM/SID-dump shaped). That is trace-shaped
-  (cf. `trace_target`), NOT a snapshot, and is explicitly out of scope for the
-  `audio_source` contract. Flagged here as its own future capability.
+- **A3 — register-write log (temporal capability):** for SID/PSG/FM the
+  genuinely valuable "music/instrument" extraction is the register-write stream
+  over time (VGM/SID-dump shaped). That is trace-shaped (cf. `trace_target`),
+  NOT a snapshot, so it gets its own capability, a sibling of `trace_target`:
+
+  ```cpp
+  // introspection_views.hpp
+  struct reg_write_event { std::uint16_t port; std::uint8_t value; };
+  class reg_write_trace {
+    using callback = std::function<void(const reg_write_event&)>;
+    virtual void install(callback cb) = 0; // empty clears
+  };
+  // ichip_introspection::reg_writes() -> reg_write_trace* (default nullptr)
+  ```
+
+  The chip fires the callback from its register-write path; **timing is supplied
+  by the consumer** (group events by emulated frame -> a frame wait), not carried
+  on the event -- audio register logs are consumed at frame cadence and the chips
+  lack a unified cycle clock. Increments:
+
+  1. `reg_write_trace` contract + `ichip_introspection::reg_writes()` + tests.
+     **(done)**
+  2. Wire SN76489 (single-port PSG, well supported by VGM) to fire on writes.
+  3. A `src/audio/vgm` writer + a `reg_write_log_session` (like
+     `trace_csv_session`) that installs the trace, groups writes per frame, and
+     writes a VGM (PSG/FM) and/or a generic JSON/CSV log.
+  4. CLI (`--log-audio <base>`) + wire YM2612.
 
 ### A1 contract — `src/chips/shared/audio_views.hpp` (namespace `mnemos::instrumentation`)
 

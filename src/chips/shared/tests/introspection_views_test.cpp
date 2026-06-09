@@ -24,6 +24,8 @@ namespace {
     using mnemos::instrumentation::debug_layer;
     using mnemos::instrumentation::ichip_introspection;
     using mnemos::instrumentation::memory_view;
+    using mnemos::instrumentation::reg_write_event;
+    using mnemos::instrumentation::reg_write_trace;
     using mnemos::instrumentation::register_view;
     using mnemos::instrumentation::trace_event;
     using mnemos::instrumentation::trace_target;
@@ -70,6 +72,25 @@ namespace {
         bool installed_{};
     };
 
+    class noop_reg_trace final : public reg_write_trace {
+      public:
+        void install(callback cb) override {
+            installed_ = static_cast<bool>(cb);
+            last_ = std::move(cb);
+        }
+        // Test helper: fire a synthetic register-write event.
+        void fire(reg_write_event ev) {
+            if (last_) {
+                last_(ev);
+            }
+        }
+        [[nodiscard]] bool installed() const noexcept { return installed_; }
+
+      private:
+        callback last_{};
+        bool installed_{};
+    };
+
     class fake_layer final : public debug_layer {
       public:
         [[nodiscard]] std::string_view name() const noexcept override { return "plane_a"; }
@@ -92,14 +113,17 @@ namespace {
         [[nodiscard]] std::span<memory_view* const> memory_views() override { return mem_table_; }
         [[nodiscard]] register_view* registers() override { return &reg_; }
         [[nodiscard]] trace_target* trace() override { return &trace_; }
+        [[nodiscard]] reg_write_trace* reg_writes() override { return &reg_trace_; }
         [[nodiscard]] std::span<debug_layer* const> debug_layers() override { return layer_table_; }
 
         [[nodiscard]] noop_trace& trace_impl() noexcept { return trace_; }
+        [[nodiscard]] noop_reg_trace& reg_trace_impl() noexcept { return reg_trace_; }
 
       private:
         ram_view ram_;
         single_reg_view reg_;
         noop_trace trace_;
+        noop_reg_trace reg_trace_;
         fake_layer layer_;
         std::array<memory_view*, 1> mem_table_{};
         std::array<debug_layer*, 1> layer_table_{};
@@ -162,6 +186,7 @@ TEST_CASE("ichip_introspection default exposes no capabilities", "[introspection
     CHECK(intro.memory_views().empty());
     CHECK(intro.registers() == nullptr);
     CHECK(intro.trace() == nullptr);
+    CHECK(intro.reg_writes() == nullptr);
     CHECK(intro.debug_layers().empty());
 }
 
@@ -212,6 +237,30 @@ TEST_CASE("ichip_introspection trace_target install + fire round-trip", "[intros
     tt->install({});
     fired = false;
     chip.intro_impl().trace_impl().fire({.pc = 0xBEEFU, .cycles = 7U});
+    CHECK_FALSE(fired);
+}
+
+TEST_CASE("ichip_introspection reg_write_trace install + fire round-trip", "[introspection]") {
+    fancy_chip chip;
+    auto* rt = chip.introspection().reg_writes();
+    REQUIRE(rt != nullptr);
+
+    reg_write_event observed{};
+    bool fired = false;
+    rt->install([&](const reg_write_event& ev) {
+        observed = ev;
+        fired = true;
+    });
+    chip.intro_impl().reg_trace_impl().fire({.port = 0x07U, .value = 0xC0U});
+
+    CHECK(fired);
+    CHECK(observed.port == 0x07U);
+    CHECK(observed.value == 0xC0U);
+
+    // Empty callback clears.
+    rt->install({});
+    fired = false;
+    chip.intro_impl().reg_trace_impl().fire({.port = 0x01U, .value = 0x55U});
     CHECK_FALSE(fired);
 }
 
