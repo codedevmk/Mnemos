@@ -106,10 +106,31 @@ namespace mnemos::chips::video {
         // valid until the next call (the contract's tick lifetime rule).
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
-            explicit introspection_surface(sms_vdp& owner) noexcept : assets_(owner) {}
+            explicit introspection_surface(sms_vdp& owner) noexcept : assets_(owner), bg_(owner) {
+                layer_table_[0] = &bg_;
+            }
             [[nodiscard]] instrumentation::asset_source* assets() override { return &assets_; }
+            [[nodiscard]] std::span<instrumentation::debug_layer* const> debug_layers() override {
+                return layer_table_;
+            }
 
           private:
+            // The full name-table background composed into an RGB scene (the
+            // 32-column map with per-tile palette/flip resolved, no scroll or
+            // sprites), the SMS analogue of the Genesis VDP's plane_a layer.
+            class bg_layer_impl final : public instrumentation::debug_layer {
+              public:
+                explicit bg_layer_impl(sms_vdp& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::string_view name() const noexcept override { return "bg"; }
+                [[nodiscard]] frame_buffer_view view() const override;
+
+              private:
+                sms_vdp* owner_;
+                mutable std::vector<std::uint32_t> buf_{};
+                mutable std::uint32_t width_{};
+                mutable std::uint32_t height_{};
+            };
+
             class asset_source_impl final : public instrumentation::asset_source {
               public:
                 explicit asset_source_impl(sms_vdp& owner) noexcept : owner_(&owner) {}
@@ -131,6 +152,8 @@ namespace mnemos::chips::video {
             };
 
             asset_source_impl assets_;
+            bg_layer_impl bg_;
+            std::array<instrumentation::debug_layer*, 1> layer_table_{};
         };
 
         void begin_scanline() noexcept;             // render the current scanline if visible

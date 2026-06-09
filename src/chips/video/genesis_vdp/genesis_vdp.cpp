@@ -1621,12 +1621,16 @@ namespace mnemos::chips::video {
                                    reinterpret_cast<const std::uint8_t*>(owner.vsram_.data()),
                                    owner.vsram_.size() * sizeof(std::uint16_t))),
           regs_view_("vdpregs", std::span<const std::uint8_t>(owner.reg_)), registers_impl_(owner),
-          plane_a_(owner), assets_(owner) {
+          plane_a_(owner, plane_layer_impl::which::plane_a),
+          plane_b_(owner, plane_layer_impl::which::plane_b),
+          window_(owner, plane_layer_impl::which::window), assets_(owner) {
         mem_table_[0] = &vram_view_;
         mem_table_[1] = &cram_view_;
         mem_table_[2] = &vsram_view_;
         mem_table_[3] = &regs_view_;
         layer_table_[0] = &plane_a_;
+        layer_table_[1] = &plane_b_;
+        layer_table_[2] = &window_;
     }
 
     std::span<const instrumentation::palette_view>
@@ -1771,47 +1775,68 @@ namespace mnemos::chips::video {
         return owner_->register_snapshot();
     }
 
-    frame_buffer_view genesis_vdp::introspection_surface::plane_a_layer_impl::view() const {
-        // Lazily render plane A from the chip's live VRAM/CRAM. Pattern is
-        // pulled into a chip-owned buffer; geometry tracks the current plane-
-        // size registers, which may change between calls. This is the same
-        // walk the player's --screenshot path performed in apps/player/main.cpp
-        // before the introspection retrofit -- now the chip exposes it
-        // directly via the debug_layer surface.
-        const int hsz_cells = scroll_size_cells(owner_->reg_[16] & 0x03);
-        const int vsz_cells = scroll_size_cells((owner_->reg_[16] >> 4) & 0x03);
-        const std::uint32_t nt_base = (static_cast<std::uint32_t>(owner_->reg_[2]) & 0x38U) << 10U;
-        const std::uint32_t plane_w = static_cast<std::uint32_t>(hsz_cells * 8);
-        const std::uint32_t plane_h = static_cast<std::uint32_t>(vsz_cells * 8);
+    frame_buffer_view genesis_vdp::introspection_surface::plane_layer_impl::view() const {
+        // Lazily render a plane (or the window) from the chip's live VRAM/CRAM
+        // into a chip-owned buffer; geometry tracks the current registers, which
+        // may change between calls. Scroll planes use the scroll-plane size and
+        // their own nametable base; the window uses its nametable pitch (64/32
+        // cells in H40/H32 -- wider than the 40/32-cell visible display) and the
+        // window nametable base.
+        int cols = 0;
+        int rows = 0;
+        std::uint32_t nt_base = 0U;
+        switch (which_) {
+        case which::plane_a:
+            cols = scroll_size_cells(owner_->reg_[16] & 0x03);
+            rows = scroll_size_cells((owner_->reg_[16] >> 4) & 0x03);
+            nt_base = owner_->nta_base();
+            break;
+        case which::plane_b:
+            cols = scroll_size_cells(owner_->reg_[16] & 0x03);
+            rows = scroll_size_cells((owner_->reg_[16] >> 4) & 0x03);
+            nt_base = owner_->ntb_base();
+            break;
+        case which::window:
+            cols = owner_->h40_mode() ? 64 : 32;
+            rows = owner_->v30_mode() ? 30 : 28;
+            nt_base = owner_->ntw_base();
+            break;
+        }
+        // Interlace mode 2 stacks two patterns into a 16-px-tall cell (the
+        // production renderer fetches with interlace2 = true); other modes use
+        // 8-px cells. Width is unaffected.
+        const bool il2 = owner_->interlace_mode2();
+        const int cell_h = il2 ? 16 : 8;
+        const std::uint32_t plane_w = static_cast<std::uint32_t>(cols * 8);
+        const std::uint32_t plane_h = static_cast<std::uint32_t>(rows * cell_h);
         const std::size_t total = static_cast<std::size_t>(plane_w) * plane_h;
         buf_.assign(total, 0U);
         width_ = plane_w;
         height_ = plane_h;
 
-        for (int cy = 0; cy < vsz_cells; ++cy) {
-            for (int cx = 0; cx < hsz_cells; ++cx) {
-                const std::uint32_t nt_offset =
-                    static_cast<std::uint32_t>(cy * hsz_cells + cx) * 2U;
+        for (int cy = 0; cy < rows; ++cy) {
+            for (int cx = 0; cx < cols; ++cx) {
+                const std::uint32_t nt_offset = static_cast<std::uint32_t>(cy * cols + cx) * 2U;
                 const std::uint16_t nt = owner_->vram16(nt_base + nt_offset);
                 const int tile = nt & 0x7FF;
                 const bool hf = ((nt >> 11) & 1) != 0;
                 const bool vf = ((nt >> 12) & 1) != 0;
                 const int pal = (nt >> 13) & 3;
-                for (int fy = 0; fy < 8; ++fy) {
-                    const int row = vf ? (7 - fy) : fy;
+                for (int fy = 0; fy < cell_h; ++fy) {
+                    const int row = vf ? (cell_h - 1 - fy) : fy;
+                    // fetch_pattern_row applies hflip and the interlace-2 tile /
+                    // 16-row addressing, yielding 8 colour indices left-to-right.
+                    std::array<std::uint8_t, 8> pix{};
+                    owner_->fetch_pattern_row(tile, row, hf, il2, pix.data());
                     for (int fx = 0; fx < 8; ++fx) {
-                        const int col = hf ? (7 - fx) : fx;
-                        const std::uint32_t pat_addr =
-                            static_cast<std::uint32_t>(tile) * 32U + row * 4U + (col / 2);
-                        const std::uint16_t word = owner_->vram16(pat_addr & ~1U);
-                        const std::uint8_t byte =
-                            static_cast<std::uint8_t>((pat_addr & 1) ? (word & 0xFF) : (word >> 8));
-                        const std::uint8_t color = (col & 1) ? (byte & 0xF) : (byte >> 4);
+                        const std::uint8_t color = pix[static_cast<std::size_t>(fx)];
                         const std::uint16_t cram_value =
                             owner_->cram_[static_cast<std::size_t>(pal * 16 + color) & 0x3FU];
                         const std::uint32_t rgb =
                             color == 0 ? 0U : cram_to_rgb(cram_value, shade_normal);
-                        buf_[(static_cast<std::size_t>(cy) * 8U + fy) * plane_w +
+                        buf_[(static_cast<std::size_t>(cy) * static_cast<std::size_t>(cell_h) +
+                              fy) *
+                                 plane_w +
                              (static_cast<std::size_t>(cx) * 8U + fx)] = rgb;
                     }
                 }

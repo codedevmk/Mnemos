@@ -237,14 +237,33 @@ namespace mnemos::chips::video {
                 genesis_vdp* owner_;
             };
 
-            class plane_a_layer_impl final : public instrumentation::debug_layer {
+            // Composes a scroll plane / the window plane into an RGB scene: the
+            // full nametable map laid out with per-tile palette + H/V flip,
+            // resolved through CRAM (no scroll, no sprites). plane_a/plane_b read
+            // the scroll-plane nametables at the scroll-plane size; window reads
+            // its own nametable at its pitch (64/32 cells in H40/H32, wider than
+            // the visible display). Interlace mode 2 uses 16-px-tall cells.
+            class plane_layer_impl final : public instrumentation::debug_layer {
               public:
-                explicit plane_a_layer_impl(genesis_vdp& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::string_view name() const noexcept override { return "plane_a"; }
+                enum class which : std::uint8_t { plane_a, plane_b, window };
+                plane_layer_impl(genesis_vdp& owner, which w) noexcept
+                    : owner_(&owner), which_(w) {}
+                [[nodiscard]] std::string_view name() const noexcept override {
+                    switch (which_) {
+                    case which::plane_a:
+                        return "plane_a";
+                    case which::plane_b:
+                        return "plane_b";
+                    case which::window:
+                        return "window";
+                    }
+                    return "plane";
+                }
                 [[nodiscard]] frame_buffer_view view() const override;
 
               private:
                 genesis_vdp* owner_;
+                which which_;
                 mutable std::vector<std::uint32_t> buf_{};
                 mutable std::uint32_t width_{};
                 mutable std::uint32_t height_{};
@@ -255,11 +274,13 @@ namespace mnemos::chips::video {
             instrumentation::span_memory_view vsram_view_;
             instrumentation::span_memory_view regs_view_;
             registers_impl registers_impl_;
-            plane_a_layer_impl plane_a_;
+            plane_layer_impl plane_a_;
+            plane_layer_impl plane_b_;
+            plane_layer_impl window_;
             asset_source_impl assets_;
 
             std::array<instrumentation::memory_view*, 4> mem_table_{};
-            std::array<instrumentation::debug_layer*, 1> layer_table_{};
+            std::array<instrumentation::debug_layer*, 3> layer_table_{};
         };
 
         // ---- register-field decode ----
