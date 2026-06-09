@@ -13,6 +13,7 @@
 namespace {
 
     using mnemos::manifests::sega32x::assemble_sega32x_machine;
+    using mnemos::manifests::sega32x::sega32x_bios;
     using mnemos::manifests::sega32x::sega32x_system;
 
     // A minimal Genesis cartridge with valid 68000 reset vectors and a self-branch
@@ -195,6 +196,82 @@ TEST_CASE("sega32x_machine sources HINT from the VDP line-counter latch", "[sega
     CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 10);
     CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x46U);
     CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
+}
+
+TEST_CASE("sega32x_machine maps the cart into the SH-2 partition windows", "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& tx = *m->thirtytwox;
+
+    // Partition 0: cart at $02000000 (plus the $82000000 cacheable alias).
+    CHECK(tx.master_bus.read8(0x02000001U) == 0xFFU); // cart[1] (SSP byte)
+    CHECK(tx.master_bus.read8(0x02000006U) == 0x02U); // cart[6] (PC byte)
+    CHECK(tx.slave_bus.read8(0x82000006U) == 0x02U);
+
+    // Cache-through views: cart at $20000000 / $22000000 (the header-check
+    // alias the boot ROM uses) -- but the system registers stay on top of the
+    // $20004000 window.
+    CHECK(tx.master_bus.read8(0x20000006U) == 0x02U);
+    CHECK(tx.master_bus.read8(0x22000006U) == 0x02U);
+    tx.comm[0] = 0x4D5FU;
+    CHECK(tx.master_bus.read8(0x20004020U) == 0x4DU); // COMM, not cart bytes
+
+    // Cache-through aliases of the frame buffer and SDRAM.
+    tx.master_bus.write8(0x24000000U, 0xAAU);
+    CHECK(tx.framebuffer[0] == 0xAAU);
+    CHECK(tx.slave_bus.read8(0x04000000U) == 0xAAU);
+    tx.slave_bus.write8(0x26000010U, 0xBBU);
+    CHECK(tx.sdram[0x10] == 0xBBU);
+    CHECK(tx.master_bus.read8(0x86000010U) == 0xBBU); // partition-4 alias
+}
+
+TEST_CASE("sega32x_machine release edge restarts the SH-2s from their reset vectors",
+          "[sega32x][machine]") {
+    sega32x_bios bios;
+    bios.m_bios.assign(16, 0);
+    bios.m_bios[3] = 0x10U; // master PC = $00000010
+    bios.m_bios[6] = 0x40U; // master SP = $00004000... (big-endian @4)
+    bios.s_bios.assign(16, 0);
+    bios.s_bios[3] = 0x20U; // slave PC = $00000020
+    auto m = assemble_sega32x_machine(make_cart(), bios);
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+
+    bus.write8(0xA15101U, 0x03U); // ADEN + release
+    CHECK(tx.master_cpu.cpu_registers().pc == 0x10U);
+    CHECK(tx.slave_cpu.cpu_registers().pc == 0x20U);
+
+    // Park, scribble PC by running, then re-release: vectors are re-fetched.
+    bus.write8(0xA15101U, 0x00U);
+    bus.write8(0xA15101U, 0x03U);
+    CHECK(tx.master_cpu.cpu_registers().pc == 0x10U);
+}
+
+TEST_CASE("sega32x_machine overlays the G BIOS vectors and maps the 68K cart windows",
+          "[sega32x][machine]") {
+    sega32x_bios bios;
+    bios.g_bios.assign(256, 0x5AU);
+    auto m = assemble_sega32x_machine(make_cart(), bios);
+    auto& bus = m->genesis->bus;
+
+    // $000000-$0000FF reads the overlay, $000100+ falls back to the cart.
+    CHECK(bus.read8(0x000000U) == 0x5AU);
+    CHECK(bus.read8(0x0000FFU) == 0x5AU);
+    CHECK(bus.read8(0x000200U) == 0x60U); // cart entry loop opcode
+
+    // $880000 views the raw cart (no overlay): cart[0] = $00, cart[6] = $02.
+    CHECK(bus.read8(0x880000U) == 0x00U);
+    CHECK(bus.read8(0x880006U) == 0x02U);
+    // $900000 banked window, power-on bank 0.
+    CHECK(bus.read8(0x900200U) == 0x60U);
+    // Reads past the 64 KiB test cart fall to open bus.
+    CHECK(bus.read8(0x890000U) == 0xFFU);
+}
+
+TEST_CASE("sega32x_machine without a G BIOS leaves the cart vectors at $000000",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    CHECK(m->genesis->bus.read8(0x000001U) == 0xFFU); // cart SSP byte
+    CHECK(m->genesis->bus.read8(0x000006U) == 0x02U); // cart PC byte
 }
 
 TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",

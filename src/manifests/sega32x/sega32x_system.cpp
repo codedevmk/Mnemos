@@ -1,5 +1,6 @@
 #include "sega32x_system.hpp"
 
+#include <algorithm>
 #include <array>
 
 namespace mnemos::manifests::sega32x {
@@ -187,6 +188,34 @@ namespace mnemos::manifests::sega32x {
         fire_latched(slave_cpu, slave_irq_mask, slave_irq_latch);
     }
 
+    void sega32x_system::attach_cart(std::span<const std::uint8_t> rom) {
+        cart_rom = rom.first(std::min<std::size_t>(rom.size(), cart_window_size));
+        for (topology::bus* bus : {&master_bus, &slave_bus}) {
+            // Partition-0 family: cart window at +$02000000.
+            for (const std::uint32_t base : p0_bases) {
+                bus->map_rom(base + cart_base, cart_rom, 0);
+            }
+            // Cache-through family: cart at the partition base (the boot ROM is
+            // a partition-0 resident) plus the +$02000000 header-check alias.
+            // The system-register window at +$4000 stays on top (priority 1).
+            for (const std::uint32_t base : p1_bases) {
+                bus->map_rom(base, cart_rom, 0);
+                bus->map_rom(base + cart_base, cart_rom, 0);
+            }
+        }
+    }
+
+    void sega32x_system::set_sh2_reset(bool asserted) {
+        // The adapter-control RES bit drives the /RES pin directly: a release
+        // edge restarts both CPUs from their BIOS reset vectors. Re-releasing a
+        // running pair is a no-op; holding parks them where they are.
+        if (!asserted && sh2_reset_asserted) {
+            master_cpu.reset(chips::reset_kind::power_on);
+            slave_cpu.reset(chips::reset_kind::power_on);
+        }
+        sh2_reset_asserted = asserted;
+    }
+
     void sega32x_system::reset() {
         sh2_reset_asserted = true;
         adapter_ctrl = 0U;
@@ -216,18 +245,28 @@ namespace mnemos::manifests::sega32x {
         auto* s = sys.get();
 
         // Both CPUs share the SDRAM, frame buffer, and COMM bank but each boots
-        // from its own ROM at $0.
-        s->master_bus.map_rom(bios_base, s->m_bios, 0);
-        s->slave_bus.map_rom(bios_base, s->s_bios, 0);
-        for (topology::bus* bus : {&s->master_bus, &s->slave_bus}) {
-            bus->map_ram(framebuffer_base, s->framebuffer, 0);
-            bus->map_ram(sdram_base, s->sdram, 0);
+        // from its own ROM at $0. Every region is mirrored across the partition
+        // bases (cached / cache-through / aliases) since no cache is modelled.
+        for (const std::uint32_t base : p0_bases) {
+            s->master_bus.map_rom(base + bios_base, s->m_bios, 0);
+            s->slave_bus.map_rom(base + bios_base, s->s_bios, 0);
         }
-        // SH-2-side system registers ($00004000 + the $20004000 cache-through
-        // mirror), per CPU: adapter control, the self-referential interrupt-enable
-        // register, and the shared COMM bank.
+        for (topology::bus* bus : {&s->master_bus, &s->slave_bus}) {
+            for (const std::uint32_t base : p0_bases) {
+                bus->map_ram(base + framebuffer_base, s->framebuffer, 0);
+                bus->map_ram(base + sdram_base, s->sdram, 0);
+            }
+            for (const std::uint32_t base : p1_bases) {
+                bus->map_ram(base + framebuffer_base, s->framebuffer, 0);
+                bus->map_ram(base + sdram_base, s->sdram, 0);
+            }
+        }
+        // SH-2-side system registers at +$4000 in every partition, per CPU:
+        // adapter control, the self-referential interrupt-enable register, and
+        // the shared COMM bank. Priority 1 keeps the window above the
+        // cache-through cart view that spans the partition-1 bases.
         const auto map_sysregs = [s](topology::bus& bus, bool is_master) {
-            for (const std::uint32_t base : {sysreg_base, sysreg_mirror}) {
+            const auto map_at = [&bus, s, is_master](std::uint32_t base) {
                 bus.map_mmio(
                     base, sysreg_size,
                     [s, base, is_master](std::uint32_t a) {
@@ -236,7 +275,13 @@ namespace mnemos::manifests::sega32x {
                     [s, base, is_master](std::uint32_t a, std::uint8_t v) {
                         s->sys_reg_write(a - base, v, is_master);
                     },
-                    0);
+                    1);
+            };
+            for (const std::uint32_t base : p0_bases) {
+                map_at(base + sysreg_base);
+            }
+            for (const std::uint32_t base : p1_bases) {
+                map_at(base + sysreg_base);
             }
         };
         map_sysregs(s->master_bus, true);

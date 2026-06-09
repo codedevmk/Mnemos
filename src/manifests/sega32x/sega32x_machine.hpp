@@ -36,11 +36,22 @@ namespace mnemos::manifests::sega32x {
         std::uint64_t slice_base_sh2_ = 0;  // master SH-2 cycles at the slice baseline
     };
 
+    // The three 32X boot ROM images. m_bios/s_bios seed the SH-2s' reset
+    // vectors; g_bios overlays the 68000's $000000-$0000FF vectors so the boot
+    // sequence runs the adapter's security/handshake code before the cart.
+    // Any image may be empty: the matching window then stays on the cart (the
+    // unit tests run BIOS-less).
+    struct sega32x_bios final {
+        std::vector<std::uint8_t> m_bios;
+        std::vector<std::uint8_t> s_bios;
+        std::vector<std::uint8_t> g_bios;
+    };
+
     // Assemble a 32X machine from its cartridge image. The Genesis boots it as the
     // cartridge; the two SH-2s stay held in reset until the 68000 sets ADEN and
     // releases RES through the adapter-control register at $A15100.
     [[nodiscard]] std::unique_ptr<sega32x_machine>
-    assemble_sega32x_machine(std::vector<std::uint8_t> cart,
+    assemble_sega32x_machine(std::vector<std::uint8_t> cart, const sega32x_bios& bios = {},
                              const genesis::genesis_config& config = {});
 
 } // namespace mnemos::manifests::sega32x
