@@ -116,7 +116,30 @@ namespace mnemos::chips::audio {
         [[nodiscard]] bool operator_key_on(int ch, int op) const noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Exposes the chip's register file (register_snapshot) through the
+        // introspection register_view, so debuggers and the audio exporter can
+        // read voice state without downcasting.
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(ym2612& owner) noexcept : registers_(owner) {}
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_;
+            }
+
+          private:
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(ym2612& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override {
+                    return owner_->register_snapshot();
+                }
+
+              private:
+                ym2612* owner_;
+            };
+
+            registers_impl registers_;
+        };
 
         struct operator_state final {
             // Register-programmed parameters.
@@ -242,7 +265,7 @@ namespace mnemos::chips::audio {
         std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 14> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::audio

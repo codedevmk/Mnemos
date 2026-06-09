@@ -81,7 +81,30 @@ namespace mnemos::chips::audio {
         std::size_t drain_samples(std::int16_t* out, std::size_t max_samples) noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Exposes the chip's register file (register_snapshot) through the
+        // introspection register_view, so debuggers and the audio exporter can
+        // read voice state without downcasting.
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(sn76489& owner) noexcept : registers_(owner) {}
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_;
+            }
+
+          private:
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(sn76489& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override {
+                    return owner_->register_snapshot();
+                }
+
+              private:
+                sn76489* owner_;
+            };
+
+            registers_impl registers_;
+        };
 
         std::array<std::uint16_t, 3> tone_{};    // 10-bit tone period registers
         std::array<std::uint16_t, 4> counter_{}; // internal countdown timers
@@ -108,7 +131,7 @@ namespace mnemos::chips::audio {
         std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 10> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::audio

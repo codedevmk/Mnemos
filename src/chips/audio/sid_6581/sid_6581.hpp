@@ -81,7 +81,30 @@ namespace mnemos::chips::audio {
         std::size_t drain_samples(std::int16_t* out, std::size_t max_samples) noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {};
+        // Exposes the chip's register file (register_snapshot) through the
+        // introspection register_view, so debuggers and the audio exporter can
+        // read voice state without downcasting.
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(sid_6581& owner) noexcept : registers_(owner) {}
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_;
+            }
+
+          private:
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(sid_6581& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override {
+                    return owner_->register_snapshot();
+                }
+
+              private:
+                sid_6581* owner_;
+            };
+
+            registers_impl registers_;
+        };
 
         struct voice_state final {
             std::uint16_t frequency{};
@@ -132,7 +155,7 @@ namespace mnemos::chips::audio {
         std::uint8_t env3_{};
 
         std::array<register_descriptor, 4> register_view_{};
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
 
         // Host-side audio capture buffer (see enable_audio_capture). Transient
         // playback state: not part of save/load and not cleared by reset(), so

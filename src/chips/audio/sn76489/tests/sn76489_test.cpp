@@ -153,3 +153,10 @@ TEST_CASE("sn76489 Game Gear stereo register routes channels to L/R") {
     CHECK(lr[0] == 0);    // left silent
     CHECK(lr[1] == 8191); // right = ch0
 }
+
+TEST_CASE("sn76489 exposes its register file via introspection") {
+    sn76489 psg;
+    auto* rv = psg.introspection().registers();
+    REQUIRE(rv != nullptr); // register_view backed by register_snapshot()
+    CHECK_FALSE(rv->registers().empty());
+}

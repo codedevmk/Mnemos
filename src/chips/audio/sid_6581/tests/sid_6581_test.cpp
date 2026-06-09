@@ -184,3 +184,10 @@ TEST_CASE("sid_6581 save/load round-trips") {
     b.save_state(w2);
     CHECK(buf1 == buf2);
 }
+
+TEST_CASE("sid_6581 exposes its register file via introspection") {
+    sid_6581 sid;
+    auto* rv = sid.introspection().registers();
+    REQUIRE(rv != nullptr); // register_view backed by register_snapshot()
+    CHECK_FALSE(rv->registers().empty());
+}
