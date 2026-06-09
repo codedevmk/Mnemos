@@ -19,10 +19,19 @@ namespace mnemos::chips::cpu {
     }
 
     // ---- raw memory: big-endian assembly over the byte bus ----
+    // The on-chip peripheral window ($FFFFFE00..) is CPU-internal: intercept it
+    // before the external bus so each core keeps its own peripheral state.
     std::uint8_t sh2::rd8(std::uint32_t a) const noexcept {
+        if (sh2_peripherals::in_window(a)) {
+            return peripherals_.read8(a);
+        }
         return bus_ != nullptr ? bus_->read8(a) : 0xFFU;
     }
     void sh2::wr8(std::uint32_t a, std::uint8_t v) noexcept {
+        if (sh2_peripherals::in_window(a)) {
+            peripherals_.write8(a, v);
+            return;
+        }
         if (bus_ != nullptr) {
             bus_->write8(a, v);
         }
@@ -912,6 +921,7 @@ namespace mnemos::chips::cpu {
         pending_irq_level_ = 0;
         pending_irq_vector_ = 0;
         interrupt_inhibit_ = 0;
+        peripherals_.reset();
         // Reset: interrupts fully masked (I0-I3 = 1111), S/T cleared.
         sr_ = sr_imask;
         // The power-on reset vector lives at VBR (=0): PC at $00000000, the
@@ -963,6 +973,7 @@ namespace mnemos::chips::cpu {
         writer.u32(static_cast<std::uint32_t>(pending_irq_vector_));
         writer.u32(static_cast<std::uint32_t>(interrupt_inhibit_));
         writer.u32(sleeping_ ? 1U : 0U);
+        peripherals_.save_state(writer);
     }
 
     void sh2::load_state(state_reader& reader) {
@@ -982,6 +993,7 @@ namespace mnemos::chips::cpu {
         pending_irq_vector_ = static_cast<std::uint8_t>(reader.u32());
         interrupt_inhibit_ = static_cast<int>(reader.u32());
         sleeping_ = reader.u32() != 0U;
+        peripherals_.load_state(reader);
     }
 
     instrumentation::ichip_introspection& sh2::introspection() noexcept { return introspection_; }

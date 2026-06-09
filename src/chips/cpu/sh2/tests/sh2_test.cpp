@@ -880,6 +880,40 @@ TEST_CASE("sh2 an illegal opcode in a delay slot raises slot-illegal") {
     CHECK(a.r[15] == 0x3008U); // frame pushed (saved PC = the branch's resume target)
 }
 
+TEST_CASE("sh2 intercepts the on-chip peripheral window before the bus") {
+    machine m;
+    m.set_pc(0x1000U);
+    // R1 <- 0xFFFFFE92 (a peripheral reg) ; MOV #0x5A,R0 ; MOV.B R0,@R1 ; MOV.B @R1,R2
+    m.load(0x1000U, {0xD102U, 0xE05AU, 0x2100U, 0x6210U});
+    m.w32(0x100CU, 0xFFFFFE92U); // PC-relative literal
+    for (int i = 0; i < 4; ++i) {
+        m.cpu.step_instruction();
+    }
+    // Round-trips through the on-chip registers; an unmapped external read would
+    // return 0xFF (sign-extended to 0xFFFFFFFF).
+    CHECK(m.cpu.cpu_registers().r[2] == 0x5AU);
+}
+
+TEST_CASE("sh2_peripherals round-trips and resets its register window") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE10U, 0xA5U); // FRT region
+    p.write8(0xFFFFFFFFU, 0x3CU); // top of the window
+    CHECK(p.read8(0xFFFFFE10U) == 0xA5U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    p.save_state(writer);
+    mnemos::chips::cpu::sh2_peripherals q;
+    mnemos::chips::state_reader reader(blob);
+    q.load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(q.read8(0xFFFFFE10U) == 0xA5U);
+    CHECK(q.read8(0xFFFFFFFFU) == 0x3CU);
+
+    q.reset();
+    CHECK(q.read8(0xFFFFFE10U) == 0x00U);
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();
