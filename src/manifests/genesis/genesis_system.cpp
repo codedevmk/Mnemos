@@ -53,13 +53,23 @@ namespace mnemos::manifests::genesis {
             cfg.f_hi = parse_dec_env("MNEMOS_WRAM_WATCH_F_HI", cfg.f_hi);
             return cfg;
         }
+
+        // Opt-in YM2612 write trace (MNEMOS_FM_TRACE=path): one line per FM
+        // port write -- "<cpu> <frame> <pc> <port><a|d> <value>" -- for
+        // sound-driver debugging.
+        FILE* fm_trace_file() {
+            static FILE* f = [] {
+                const char* p = std::getenv("MNEMOS_FM_TRACE");
+                return p != nullptr && p[0] != '\0' ? std::fopen(p, "wb") : nullptr;
+            }();
+            return f;
+        }
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
     } // namespace
 
     void genesis_system::on_vblank(bool in_vblank) {
-        z80.set_irq_line(in_vblank);
         if (in_vblank) {
             ++frame_index;
             // Per-frame timeout hook for devices with stateful protocols
@@ -110,10 +120,24 @@ namespace mnemos::manifests::genesis {
 
         // $A04000-$A05FFF: YM2612 ports (addr/data x 2, mirrored).
         s->bus.map_mmio(
-            0xA04000U, 0x2000U, [s](std::uint32_t /*a*/) { return s->fm.read_status(); },
+            0xA04000U, 0x2000U,
+            [s](std::uint32_t /*a*/) {
+                const std::uint8_t v = s->fm.read_status();
+                if (FILE* t = fm_trace_file()) {
+                    std::fprintf(t, "M %llu %06X r %02X\n",
+                                 static_cast<unsigned long long>(s->frame_index),
+                                 s->cpu.cpu_registers().pc, v);
+                }
+                return v;
+            },
             [s](std::uint32_t a, std::uint8_t v) {
                 const int port = static_cast<int>((a >> 1U) & 1U);
                 const bool data = (a & 1U) != 0U;
+                if (FILE* t = fm_trace_file()) {
+                    std::fprintf(t, "M %llu %06X %d%c %02X\n",
+                                 static_cast<unsigned long long>(s->frame_index),
+                                 s->cpu.cpu_registers().pc, port, data ? 'd' : 'a', v);
+                }
                 s->fm.write(port, data, v);
             },
             0);
@@ -264,6 +288,11 @@ namespace mnemos::manifests::genesis {
         // rely on this instead of acking via the status read.
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });
         s->vdp.set_vblank_callback([s](bool in_vblank) { s->on_vblank(in_vblank); });
+        // Z80 /INT: a one-scanline pulse at V-blank entry (not the whole
+        // V-blank window). A level held across V-blank re-interrupts sound
+        // drivers whose handler returns mid-blank -- their per-frame tick
+        // then runs once per handler duration instead of once per frame.
+        s->vdp.set_z80_int_callback([s](bool asserted) { s->z80.set_irq_line(asserted); });
         // Genesis quirk: the bus controller drops the TAS write phase on a
         // memory operand. Empty callback = drop, preserving flag side-effects.
         s->cpu.set_tas_callback([](std::uint32_t /*addr*/) {});
@@ -280,9 +309,25 @@ namespace mnemos::manifests::genesis {
             [s](std::uint32_t a, std::uint8_t v) { s->z80_ram[a & 0x1FFFU] = v; }, 0);
         // $4000-$5FFF: YM2612 (shared with the 68K's $A04000).
         s->z80_bus.map_mmio(
-            0x4000U, 0x2000U, [s](std::uint32_t /*a*/) { return s->fm.read_status(); },
+            0x4000U, 0x2000U,
+            [s](std::uint32_t /*a*/) {
+                const std::uint8_t v = s->fm.read_status();
+                if (FILE* t = fm_trace_file()) {
+                    std::fprintf(t, "Z %llu %04X r %02X\n",
+                                 static_cast<unsigned long long>(s->frame_index),
+                                 s->z80.cpu_registers().pc, v);
+                }
+                return v;
+            },
             [s](std::uint32_t a, std::uint8_t v) {
-                s->fm.write(static_cast<int>((a >> 1U) & 1U), (a & 1U) != 0U, v);
+                const int port = static_cast<int>((a >> 1U) & 1U);
+                const bool data = (a & 1U) != 0U;
+                if (FILE* t = fm_trace_file()) {
+                    std::fprintf(t, "Z %llu %04X %d%c %02X\n",
+                                 static_cast<unsigned long long>(s->frame_index),
+                                 s->z80.cpu_registers().pc, port, data ? 'd' : 'a', v);
+                }
+                s->fm.write(port, data, v);
             },
             0);
         // $6000-$60FF: bank register, shifting bit 0 into bit 8 of the 9-bit

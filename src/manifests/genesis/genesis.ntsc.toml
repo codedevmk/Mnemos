@@ -56,12 +56,13 @@ type         = "sega.315_5313"
 attached_bus = "main"
 [chip.config]
 # NTSC: pal defaults to false (omitted). dma_read sources 68K->VDP DMA words off
-# the main bus; irq/delayed_irq drive the 68K IRQ; vblank edges the Z80 IRQ and
-# ticks per-frame device hooks.
+# the main bus; irq/delayed_irq drive the 68K IRQ; vblank ticks per-frame device
+# hooks; z80_int is the one-scanline /INT pulse into the Z80 at V-blank entry.
 dma_read_callback     = "genesis.dma_read"
 irq_callback          = "genesis.vdp_irq"
 delayed_irq_callback  = "genesis.vdp_delayed_irq"
 vblank_callback       = "genesis.vblank"
+z80_int_callback      = "genesis.z80_int"
 
 [[chip]]
 id           = "fm"

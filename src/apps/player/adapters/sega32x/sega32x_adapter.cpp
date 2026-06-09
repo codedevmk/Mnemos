@@ -43,6 +43,30 @@ namespace mnemos::apps::player::adapters::sega32x {
             };
         }
 
+        // Opt-in raw-dump knobs: each env var names a file that receives a raw
+        // s16 stream for offline analysis.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv/fopen: opt-in debug knobs
+#endif
+        bool env_set(const char* name) noexcept {
+            const char* p = std::getenv(name);
+            return p != nullptr && p[0] != '\0';
+        }
+
+        FILE* dump_file(const char* name) noexcept {
+            const char* p = std::getenv(name);
+            return p != nullptr && p[0] != '\0' ? std::fopen(p, "wb") : nullptr;
+        }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
+        constexpr const char* kPwmDumpEnv = "MNEMOS_32X_PWM_DUMP";
+        constexpr const char* kMixDumpEnv = "MNEMOS_32X_MIX_DUMP";
+        constexpr const char* kFmDumpEnv = "MNEMOS_32X_FM_DUMP";
+        constexpr const char* kPsgDumpEnv = "MNEMOS_32X_PSG_DUMP";
+
         // Resample one source (mono or interleaved stereo, `count` frames at its
         // native rate) to `dst_count` output frames and accumulate it, scaled by
         // `gain` (Q12), into the L/R sum buffers. A mono source feeds both sides.
@@ -79,6 +103,7 @@ namespace mnemos::apps::player::adapters::sega32x {
                                      frontend_sdk::scheduler_factory* scheduler_factory)
         : machine_(manifests::sega32x::assemble_sega32x_machine(std::move(cart), bios, config)),
           work_ram_view_("work_ram", machine_->genesis->work_ram),
+          z80_ram_view_("z80_ram", machine_->genesis->z80_ram),
           sdram_view_("sdram", machine_->thirtytwox->sdram),
           fb_view_("32x_framebuffer", machine_->thirtytwox->framebuffer),
           scheduler_(frontend_sdk::make_scheduler(
@@ -99,8 +124,9 @@ namespace mnemos::apps::player::adapters::sega32x {
         chip_view_[7] = &machine_->thirtytwox->vdp;
 
         system_mem_view_[0] = &work_ram_view_;
-        system_mem_view_[1] = &sdram_view_;
-        system_mem_view_[2] = &fb_view_;
+        system_mem_view_[1] = &z80_ram_view_;
+        system_mem_view_[2] = &sdram_view_;
+        system_mem_view_[3] = &fb_view_;
 
         spec_.push_back({.label = "System", .value = "Sega 32X"});
         spec_.push_back(
@@ -164,18 +190,9 @@ namespace mnemos::apps::player::adapters::sega32x {
 
         // Opt-in raw PWM dump (MNEMOS_32X_PWM_DUMP=path): drain the capture
         // queue here so headless runs (which never call drain_audio) record
-        // interleaved s16 L/R pairs at the PWM step rate.
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // getenv/fopen: opt-in debug knob
-#endif
-        static FILE* pwm_dump = [] {
-            const char* p = std::getenv("MNEMOS_32X_PWM_DUMP");
-            return p != nullptr && p[0] != '\0' ? std::fopen(p, "wb") : nullptr;
-        }();
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
+        // interleaved s16 L/R pairs at the PWM step rate. NOTE: this consumes
+        // the PWM queue, so a simultaneous mix dump records without PWM.
+        static FILE* pwm_dump = dump_file(kPwmDumpEnv);
         if (pwm_dump != nullptr) {
             const std::size_t n = machine_->thirtytwox->pwm_pending_samples();
             if (n > 0U) {
@@ -183,6 +200,21 @@ namespace mnemos::apps::player::adapters::sega32x {
                 machine_->thirtytwox->drain_pwm_samples(pwm_buf_.data(), n);
                 std::fwrite(pwm_buf_.data(), sizeof(std::int16_t), n * 2U, pwm_dump);
                 std::fflush(pwm_dump);
+            }
+        }
+
+        // Opt-in mixed-output dump (MNEMOS_32X_MIX_DUMP=path): the exact 48 kHz
+        // stereo mix the player would queue, recorded deterministically. The
+        // per-chip dumps hook drain_audio, so drive it for them too.
+        static FILE* mix_dump = dump_file(kMixDumpEnv);
+        static const bool drain_for_dumps =
+            mix_dump != nullptr || env_set(kFmDumpEnv) || env_set(kPsgDumpEnv);
+        if (drain_for_dumps) {
+            const auto chunk = drain_audio();
+            if (mix_dump != nullptr && chunk.samples != nullptr && chunk.frame_count > 0U) {
+                std::fwrite(chunk.samples, sizeof(std::int16_t),
+                            static_cast<std::size_t>(chunk.frame_count) * 2U, mix_dump);
+                std::fflush(mix_dump);
             }
         }
 
@@ -201,11 +233,19 @@ namespace mnemos::apps::player::adapters::sega32x {
 #endif
         if (probe) {
             auto& tx = *machine_->thirtytwox;
-            std::fprintf(
-                stderr, "[32x] f%05llu rst=%d mpc=%08X spc=%08X comm %04X %04X %04X %04X mode=%u\n",
-                static_cast<unsigned long long>(frames_stepped_), tx.sh2_reset_asserted,
-                tx.master_cpu.cpu_registers().pc, tx.slave_cpu.cpu_registers().pc, tx.comm[0],
-                tx.comm[1], tx.comm[2], tx.comm[3], static_cast<unsigned>(tx.vdp.mode()));
+            auto& gen = *machine_->genesis;
+            const std::uint64_t z80_now = gen.z80.elapsed_cycles();
+            const std::uint64_t z80_delta = z80_now - last_z80_cycles_;
+            last_z80_cycles_ = z80_now;
+            std::fprintf(stderr,
+                         "[32x] f%05llu rst=%d mpc=%08X spc=%08X comm %04X %04X %04X %04X mode=%u "
+                         "z80=%llu run=%d zpc=%04X\n",
+                         static_cast<unsigned long long>(frames_stepped_), tx.sh2_reset_asserted,
+                         tx.master_cpu.cpu_registers().pc, tx.slave_cpu.cpu_registers().pc,
+                         tx.comm[0], tx.comm[1], tx.comm[2], tx.comm[3],
+                         static_cast<unsigned>(tx.vdp.mode()),
+                         static_cast<unsigned long long>(z80_delta), gen.z80_running ? 1 : 0,
+                         gen.z80.cpu_registers().pc);
         }
     }
 
@@ -240,6 +280,20 @@ namespace mnemos::apps::player::adapters::sega32x {
         if (pwm_count > 0U) {
             pwm_buf_.resize(pwm_count * 2U);
             machine_->thirtytwox->drain_pwm_samples(pwm_buf_.data(), pwm_count);
+        }
+
+        // Opt-in per-chip dumps (MNEMOS_32X_FM_DUMP / MNEMOS_32X_PSG_DUMP=path):
+        // the raw pre-mix streams at chip rate (FM interleaved stereo, PSG
+        // mono), to attribute a bad mix to its source chip.
+        static FILE* fm_dump = dump_file(kFmDumpEnv);
+        static FILE* psg_dump = dump_file(kPsgDumpEnv);
+        if (fm_dump != nullptr && fm_count > 0U) {
+            std::fwrite(fm_buf_.data(), sizeof(std::int16_t), fm_count * 2U, fm_dump);
+            std::fflush(fm_dump);
+        }
+        if (psg_dump != nullptr && psg_count > 0U) {
+            std::fwrite(psg_buf_.data(), sizeof(std::int16_t), psg_count, psg_dump);
+            std::fflush(psg_dump);
         }
 
         const double exact = (static_cast<double>(kOutputRate) / target_fps_) + audio_frac_;
