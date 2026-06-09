@@ -124,6 +124,14 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint32_t rd32(std::uint32_t a) const noexcept;
         void wr32(std::uint32_t a, std::uint32_t v) noexcept;
 
+        // ---- status-register T bit ----
+        void set_t(bool value) noexcept { sr_ = value ? (sr_ | sr_t) : (sr_ & ~sr_t); }
+        [[nodiscard]] std::uint32_t t_in() const noexcept { return (sr_ & sr_t) != 0U ? 1U : 0U; }
+
+        // ---- multiply-accumulate (memory operands; SR.S saturates) ----
+        void mac_long(std::size_t rn, std::size_t rm) noexcept;
+        void mac_word(std::size_t rn, std::size_t rm) noexcept;
+
         // ---- decode + execute one fetched opcode ----
         void exec(std::uint16_t op);
 
