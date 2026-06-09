@@ -162,6 +162,30 @@ namespace mnemos::apps::player::adapters::sega32x {
         compose_frame();
         ++frames_stepped_;
 
+        // Opt-in raw PWM dump (MNEMOS_32X_PWM_DUMP=path): drain the capture
+        // queue here so headless runs (which never call drain_audio) record
+        // interleaved s16 L/R pairs at the PWM step rate.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv/fopen: opt-in debug knob
+#endif
+        static FILE* pwm_dump = [] {
+            const char* p = std::getenv("MNEMOS_32X_PWM_DUMP");
+            return p != nullptr && p[0] != '\0' ? std::fopen(p, "wb") : nullptr;
+        }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (pwm_dump != nullptr) {
+            const std::size_t n = machine_->thirtytwox->pwm_pending_samples();
+            if (n > 0U) {
+                pwm_buf_.resize(n * 2U);
+                machine_->thirtytwox->drain_pwm_samples(pwm_buf_.data(), n);
+                std::fwrite(pwm_buf_.data(), sizeof(std::int16_t), n * 2U, pwm_dump);
+                std::fflush(pwm_dump);
+            }
+        }
+
         // Opt-in boot probe (MNEMOS_32X_PROBE=1): one stderr line per frame with
         // both SH-2 positions and the COMM handshake words.
 #if defined(_MSC_VER)
