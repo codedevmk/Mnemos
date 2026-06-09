@@ -35,12 +35,40 @@ TEST_CASE("sega32x_system shares SDRAM and the COMM bank across both buses") {
     // SDRAM written via the master bus is visible on the slave bus.
     sys->master_bus.write8(0x06000010U, 0xABU);
     CHECK(sys->slave_bus.read8(0x06000010U) == 0xABU);
-    // COMM word 0 (big-endian) written via the master, read back via the slave.
-    sys->master_bus.write8(0x40000020U, 0x12U);
-    sys->master_bus.write8(0x40000021U, 0x34U);
-    CHECK(sys->slave_bus.read8(0x40000020U) == 0x12U);
-    CHECK(sys->slave_bus.read8(0x40000021U) == 0x34U);
+    // COMM word 0 (big-endian) in the system-register window, written via the
+    // master and read back via the slave.
+    sys->master_bus.write8(0x00004020U, 0x12U);
+    sys->master_bus.write8(0x00004021U, 0x34U);
+    CHECK(sys->slave_bus.read8(0x00004020U) == 0x12U);
+    CHECK(sys->slave_bus.read8(0x00004021U) == 0x34U);
     CHECK(sys->comm[0] == 0x1234U);
+    // The $20004000 cache-through mirror reaches the same COMM bank.
+    CHECK(sys->master_bus.read8(0x20004020U) == 0x12U);
+}
+
+TEST_CASE("sega32x_system drives each CPU's IRQ mask from its own register window") {
+    auto sys = assemble_sega32x();
+    sys->set_sh2_reset(false);
+    // The interrupt-enable register is self-referential: the master bus sets the
+    // master mask, the slave bus the slave mask (odd byte at $00004003).
+    sys->master_bus.write8(0x00004003U, sega32x_system::irq_vint);
+    CHECK(sys->master_irq_mask == sega32x_system::irq_vint);
+    CHECK(sys->slave_irq_mask == 0U); // unaffected
+    CHECK(sys->master_bus.read8(0x00004003U) == sega32x_system::irq_vint);
+    // With VINT now enabled, a raised VINT is delivered to the master.
+    sys->raise_vint();
+    CHECK(sys->master_cpu.pending_irq_level() == 12);
+    CHECK(sys->slave_cpu.pending_irq_level() == 0); // slave still masked
+}
+
+TEST_CASE("sega32x_system adapter control round-trips through the register window") {
+    auto sys = assemble_sega32x();
+    // Mars byte-lane quirk: even byte = low half, odd byte = high half.
+    sys->master_bus.write8(0x00004000U, 0x81U); // low byte
+    sys->master_bus.write8(0x00004001U, 0x02U); // high byte
+    CHECK(sys->adapter_ctrl == 0x0281U);
+    CHECK(sys->master_bus.read8(0x00004000U) == 0x81U);
+    CHECK(sys->master_bus.read8(0x00004001U) == 0x02U);
 }
 
 TEST_CASE("sega32x_system holds the SH-2s in reset until released") {

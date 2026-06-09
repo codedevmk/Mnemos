@@ -35,6 +35,53 @@ namespace mnemos::manifests::sega32x {
         }
     }
 
+    std::uint8_t sega32x_system::sys_reg_read(std::uint32_t offset, bool is_master) const noexcept {
+        if (offset < 0x02U) {
+            // Adapter control: even byte = low half, odd byte = high half (a Mars
+            // byte-lane quirk preserved from the reference).
+            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(adapter_ctrl >> 8U)
+                                       : static_cast<std::uint8_t>(adapter_ctrl);
+        }
+        if (offset < 0x04U) {
+            // Interrupt-enable: the executing CPU's own mask, in the low (odd) byte.
+            if ((offset & 1U) != 0U) {
+                return is_master ? master_irq_mask : slave_irq_mask;
+            }
+            return 0U;
+        }
+        if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
+            return comm_read(offset - comm_offset);
+        }
+        return 0U; // PWM / VDP / DMA-FIFO registers: not yet modelled
+    }
+
+    void sega32x_system::sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master) {
+        if (offset < 0x02U) {
+            if ((offset & 1U) != 0U) {
+                adapter_ctrl = static_cast<std::uint16_t>(
+                    (adapter_ctrl & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+            } else {
+                adapter_ctrl = static_cast<std::uint16_t>((adapter_ctrl & 0xFF00U) | value);
+            }
+            return;
+        }
+        if (offset < 0x04U) {
+            // Self-referential: the odd byte sets the executing CPU's own mask.
+            if ((offset & 1U) != 0U) {
+                if (is_master) {
+                    set_master_irq_mask(value);
+                } else {
+                    set_slave_irq_mask(value);
+                }
+            }
+            return;
+        }
+        if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
+            comm_write(offset - comm_offset, value);
+        }
+        // else: PWM / VDP / DMA-FIFO -- not yet modelled
+    }
+
     void sega32x_system::deliver_irq(std::uint8_t bit, int level, std::uint8_t vector) {
         if (sh2_reset_asserted) {
             return;
@@ -121,11 +168,25 @@ namespace mnemos::manifests::sega32x {
         for (topology::bus* bus : {&s->master_bus, &s->slave_bus}) {
             bus->map_ram(framebuffer_base, s->framebuffer, 0);
             bus->map_ram(sdram_base, s->sdram, 0);
-            bus->map_mmio(
-                comm_base, static_cast<std::uint32_t>(comm_words * 2U),
-                [s](std::uint32_t a) { return s->comm_read(a - comm_base); },
-                [s](std::uint32_t a, std::uint8_t v) { s->comm_write(a - comm_base, v); }, 0);
         }
+        // SH-2-side system registers ($00004000 + the $20004000 cache-through
+        // mirror), per CPU: adapter control, the self-referential interrupt-enable
+        // register, and the shared COMM bank.
+        const auto map_sysregs = [s](topology::bus& bus, bool is_master) {
+            for (const std::uint32_t base : {sysreg_base, sysreg_mirror}) {
+                bus.map_mmio(
+                    base, sysreg_size,
+                    [s, base, is_master](std::uint32_t a) {
+                        return s->sys_reg_read(a - base, is_master);
+                    },
+                    [s, base, is_master](std::uint32_t a, std::uint8_t v) {
+                        s->sys_reg_write(a - base, v, is_master);
+                    },
+                    0);
+            }
+        };
+        map_sysregs(s->master_bus, true);
+        map_sysregs(s->slave_bus, false);
 
         s->master_cpu.attach_bus(s->master_bus);
         s->slave_cpu.attach_bus(s->slave_bus);

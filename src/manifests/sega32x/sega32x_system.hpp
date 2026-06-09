@@ -20,7 +20,10 @@ namespace mnemos::manifests::sega32x {
     inline constexpr std::uint32_t bios_base = 0x00000000U;
     inline constexpr std::uint32_t framebuffer_base = 0x04000000U;
     inline constexpr std::uint32_t sdram_base = 0x06000000U;
-    inline constexpr std::uint32_t comm_base = 0x40000020U; // SH-2-side COMM window
+    inline constexpr std::uint32_t sysreg_base = 0x00004000U;   // SH-2-side system registers
+    inline constexpr std::uint32_t sysreg_mirror = 0x20004000U; // cache-through (P1) mirror
+    inline constexpr std::uint32_t sysreg_size = 0x100U;        // 256-byte register window
+    inline constexpr std::uint32_t comm_offset = 0x20U;         // COMM bank within the window
 
     // Heap-allocated, never-moved 32X board (the "Mars" hardware). The two SH-2s
     // run on their own CPU-local buses that share the SDRAM, frame buffer, and the
@@ -28,11 +31,12 @@ namespace mnemos::manifests::sega32x {
     // live inside each `sh2` (the $FFFFFE00 window). Built like segacd_system: the
     // buses hold spans into the member arrays and the MMIO handlers capture `this`.
     //
-    // Phase B increment 2 wires the two CPUs, their buses (BIOS/framebuffer/SDRAM/
-    // COMM), and the reset hold/release. The SH-2-side system/interrupt registers
-    // and IRQ latches arrive in increment 3; the INTC/FRT/WDT/DMAC behaviour in
-    // increment 4-5; the 32X VDP + PWM in phase C; the Genesis-bus bridge +
-    // scheduling in the sega32x_machine layer (phase D).
+    // Built so far: the two CPUs + buses (BIOS/framebuffer/SDRAM), the reset
+    // hold/release, the per-CPU 32X interrupt latches/masks, and the SH-2-side
+    // system-register window (adapter control + the interrupt-enable register +
+    // the COMM bank). Still to come: the INTC/FRT/WDT/DMAC behaviour, the 32X VDP +
+    // PWM (phase C), and the Genesis-bus bridge + scheduling in the sega32x_machine
+    // layer (phase D).
     struct sega32x_system final {
         chips::cpu::sh2 master_cpu;
         chips::cpu::sh2 slave_cpu;
@@ -66,6 +70,15 @@ namespace mnemos::manifests::sega32x {
         // Shared by both SH-2s; the Genesis 68000 joins it in the bridge phase.
         [[nodiscard]] std::uint8_t comm_read(std::uint32_t offset) const noexcept;
         void comm_write(std::uint32_t offset, std::uint8_t value) noexcept;
+
+        // SH-2-side system-register window ($00004000, offset 0..0xFF): adapter
+        // control ($00/$01), the self-referential interrupt-enable register ($03
+        // sets the executing CPU's own mask), and the COMM bank ($20-$2F). PWM /
+        // VDP / DMA-FIFO registers are stubbed until their phases. `is_master`
+        // selects which CPU's view this access belongs to.
+        [[nodiscard]] std::uint8_t sys_reg_read(std::uint32_t offset,
+                                                bool is_master) const noexcept;
+        void sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master);
 
         // Raise a 32X interrupt source (latches on both CPUs; delivered to each
         // whose mask enables it). No-op while the SH-2s are held in reset.
