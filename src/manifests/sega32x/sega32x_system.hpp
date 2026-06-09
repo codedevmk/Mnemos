@@ -66,6 +66,12 @@ namespace mnemos::manifests::sega32x {
         std::uint8_t master_irq_latch{};
         std::uint8_t slave_irq_latch{};
 
+        // PWM control/cycle registers (shared between the 68000 and SH-2 views).
+        // Latched so cart audio setup reads back its writes; the FIFO/DAC model
+        // arrives with the PWM phase.
+        std::uint16_t pwm_cntl{};
+        std::uint16_t pwm_cycle{};
+
         // COMM bank byte access (big-endian: even byte = high half of the word).
         // Shared by both SH-2s; the Genesis 68000 joins it in the bridge phase.
         [[nodiscard]] std::uint8_t comm_read(std::uint32_t offset) const noexcept;
@@ -86,6 +92,11 @@ namespace mnemos::manifests::sega32x {
         void raise_hint();
         void raise_cmd();
         void raise_pwm();
+        // Targeted CMD delivery: the Mars system controller routes a CMD asserted
+        // through the 68000-side interrupt-control registers to one SH-2 only.
+        // Still edge-latched -- a masked edge survives for later re-delivery.
+        void raise_cmd_master();
+        void raise_cmd_slave();
         // Set a CPU's interrupt-enable mask, then re-deliver any latched edge.
         void set_master_irq_mask(std::uint8_t mask);
         void set_slave_irq_mask(std::uint8_t mask);

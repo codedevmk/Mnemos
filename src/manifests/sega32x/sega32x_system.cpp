@@ -52,7 +52,17 @@ namespace mnemos::manifests::sega32x {
         if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
             return comm_read(offset - comm_offset);
         }
-        return 0U; // PWM / VDP / DMA-FIFO registers: not yet modelled
+        // PWM control/cycle at $30/$32 (shared with the 68000's $A15130 view).
+        // The FIFO registers at $34-$39 and VDP / DMA-FIFO are not yet modelled.
+        if ((offset & ~1U) == 0x30U) {
+            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(pwm_cntl)
+                                       : static_cast<std::uint8_t>(pwm_cntl >> 8U);
+        }
+        if ((offset & ~1U) == 0x32U) {
+            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(pwm_cycle)
+                                       : static_cast<std::uint8_t>(pwm_cycle >> 8U);
+        }
+        return 0U;
     }
 
     void sega32x_system::sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master) {
@@ -78,8 +88,25 @@ namespace mnemos::manifests::sega32x {
         }
         if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
             comm_write(offset - comm_offset, value);
+            return;
         }
-        // else: PWM / VDP / DMA-FIFO -- not yet modelled
+        const auto write_word_lane = [offset, value](std::uint16_t& word) {
+            if ((offset & 1U) != 0U) {
+                word = static_cast<std::uint16_t>((word & 0xFF00U) | value);
+            } else {
+                word = static_cast<std::uint16_t>((word & 0x00FFU) |
+                                                  (static_cast<std::uint16_t>(value) << 8U));
+            }
+        };
+        if ((offset & ~1U) == 0x30U) {
+            write_word_lane(pwm_cntl);
+            return;
+        }
+        if ((offset & ~1U) == 0x32U) {
+            write_word_lane(pwm_cycle);
+            return;
+        }
+        // else: PWM FIFOs / VDP / DMA-FIFO -- not yet modelled
     }
 
     void sega32x_system::deliver_irq(std::uint8_t bit, int level, std::uint8_t vector) {
@@ -125,6 +152,31 @@ namespace mnemos::manifests::sega32x {
     void sega32x_system::raise_cmd() { deliver_irq(irq_cmd, 8, 0x48U); }
     void sega32x_system::raise_pwm() { deliver_irq(irq_pwm, 6, 0x4AU); }
 
+    namespace {
+        // Targeted CMD edge for one CPU: latch regardless of mask, deliver only if
+        // the mask enables it and level 8 outranks the CPU's pending slot.
+        void deliver_cmd_to(bool reset_asserted, mnemos::chips::cpu::sh2& cpu, std::uint8_t mask,
+                            std::uint8_t& latch) {
+            if (reset_asserted) {
+                return;
+            }
+            latch |= sega32x_system::irq_cmd;
+            if ((mask & sega32x_system::irq_cmd) == 0U || cpu.pending_irq_level() >= 8) {
+                return;
+            }
+            cpu.set_irq(8, 0x48U);
+            latch &= static_cast<std::uint8_t>(~sega32x_system::irq_cmd);
+        }
+    } // namespace
+
+    void sega32x_system::raise_cmd_master() {
+        deliver_cmd_to(sh2_reset_asserted, master_cpu, master_irq_mask, master_irq_latch);
+    }
+
+    void sega32x_system::raise_cmd_slave() {
+        deliver_cmd_to(sh2_reset_asserted, slave_cpu, slave_irq_mask, slave_irq_latch);
+    }
+
     void sega32x_system::set_master_irq_mask(std::uint8_t mask) {
         master_irq_mask = mask;
         fire_latched(master_cpu, master_irq_mask, master_irq_latch);
@@ -143,6 +195,8 @@ namespace mnemos::manifests::sega32x {
         slave_irq_mask = 0U;
         master_irq_latch = 0U;
         slave_irq_latch = 0U;
+        pwm_cntl = 0U;
+        pwm_cycle = 0U;
         // The buses are already attached, so reset reads each CPU's PC/SP from its
         // own BIOS reset vectors at $0.
         master_cpu.reset(chips::reset_kind::power_on);
