@@ -19,15 +19,16 @@ namespace mnemos::chips::cpu {
     // slave); the chip itself carries no 32X knowledge -- the 32X manifest
     // instantiates two and wires them.
     //
-    // Built in phases (see docs/plans/2026-06-09-sega-32x-port.md). Implemented so
-    // far (A1): the programming model, reset (PC + SP loaded big-endian from the
-    // vector table at VBR=0), instruction-stepped execution plumbing, save/load
-    // state, register/trace introspection, and a starter decode (NOP; MOV #imm,Rn;
-    // ADD #imm,Rn; MOV Rm,Rn). Opcodes not yet decoded execute as 1-cycle no-ops,
-    // the same bring-up convention the m68000 used. Still to come: the full
-    // data-transfer / ALU / control-flow / system instruction set, the
-    // exception+interrupt model, and the on-chip peripherals the 32X drives
-    // (FRT/WDT timer, DMAC, INTC, serial).
+    // Built in phases (see docs/plans/2026-06-09-sega-32x-port.md), cannibalized
+    // from the Emu reference (chips/sh2). Implemented: the programming model,
+    // reset (PC + SP loaded big-endian from the vector table at VBR=0), the full
+    // instruction set (data transfer, ALU, logical, shift/rotate, multiply,
+    // divide-step, control flow with delay slots, system-register ops, all
+    // addressing modes), and the TRAPA/RTE + external-interrupt model (set_irq /
+    // an accept callback, with a one-instruction inhibit after SR loads). Still to
+    // come: the illegal-instruction / address-error exceptions, SLEEP, and the
+    // on-chip peripherals the 32X drives (FRT/WDT timer, DMAC, INTC, serial).
+    // Undecoded opcodes execute as 1-cycle no-ops, the m68000 bring-up convention.
     //
     // Instruction-stepped like the m68000: step_instruction() runs one
     // instruction and returns its cycle cost; tick(cycles) catches up by running
@@ -68,6 +69,22 @@ namespace mnemos::chips::cpu {
 
         // icpu: the memory address space the CPU executes against.
         void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }
+
+        // ---- interrupt delivery (driven by the system / 32X INTC) ----
+        // Present an external interrupt request at priority `level` (1-15) and
+        // the given vector number. The CPU accepts it at the next instruction
+        // boundary once level > SR.IMASK, pushing SR+PC and vectoring through
+        // VBR + vector*4 (raising IMASK to the accepted level). level 0 clears.
+        void set_irq(int level, std::uint8_t vector) noexcept {
+            pending_irq_level_ = level;
+            pending_irq_vector_ = vector;
+        }
+        void clear_irq() noexcept { pending_irq_level_ = 0; }
+        // Invoked when an external IRQ is accepted so the system can clear its
+        // own source latch and present the next pending request. Not serialized.
+        void set_irq_accept_callback(std::function<void(int level, std::uint8_t vector)> cb) {
+            irq_accept_ = std::move(cb);
+        }
 
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();
@@ -135,6 +152,13 @@ namespace mnemos::chips::cpu {
         // ---- control transfer: run the delay-slot instruction, then redirect ----
         void branch_delayed(std::uint32_t target);
 
+        // ---- exceptions + interrupts ----
+        // Push SR then PC to @-R15 and vector through VBR + vector*4.
+        void raise_exception(std::uint8_t vector, std::uint32_t saved_pc);
+        // Accept the presented external IRQ if level > SR.IMASK (called at the
+        // instruction boundary).
+        void try_service_irq();
+
         // ---- decode + execute one fetched opcode ----
         void exec(std::uint16_t op);
 
@@ -147,13 +171,17 @@ namespace mnemos::chips::cpu {
         std::uint32_t mach_{};
         std::uint32_t macl_{};
         std::uint32_t inst_addr_{};
-        bool in_delay_slot_{}; // transient: true while running a branch's delay slot
+        bool in_delay_slot_{};    // transient: true while running a branch's delay slot
+        int pending_irq_level_{}; // 0 = none; else the presented IRQ level (1-15)
+        std::uint8_t pending_irq_vector_{};
+        int interrupt_inhibit_{}; // >0: skip IRQ acceptance for that many boundaries
 
         int cycles_{};              // cycles of the instruction in flight
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
         std::uint64_t elapsed_{};   // total cycles executed
 
         std::function<void(std::uint32_t)> trace_callback_{};
+        std::function<void(int, std::uint8_t)> irq_accept_{};
 
         ibus* bus_{};
 

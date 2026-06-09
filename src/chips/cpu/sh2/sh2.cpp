@@ -56,12 +56,14 @@ namespace mnemos::chips::cpu {
 
     void sh2::exec(std::uint16_t op) {
         // SH-2 instruction decode. Behaviour ported from the Emu reference
-        // (chips/sh2). Phase A2 covers the data-transfer, ALU, logical,
-        // shift/rotate, multiply, and divide-step groups. Control flow,
-        // system-register ops (LDS/STS/LDC/STC), exceptions/interrupts, and the
-        // displacement / GBR / R0-indexed addressing modes arrive in A3; until
-        // then those encodings fall through as 1-cycle no-ops (the bring-up
-        // convention). Instruction timing beyond the 1-cycle base is deferred
+        // (chips/sh2). Implemented: data transfer, ALU, logical, shift/rotate,
+        // multiply, divide-step, control flow (with delay slots),
+        // system-register ops (LDS/STS/LDC/STC), all addressing modes, and the
+        // TRAPA/RTE + external-interrupt path (see step_instruction). Still
+        // deferred: SLEEP, the illegal-instruction / slot-illegal / address-error
+        // exceptions (need complete-decode + bus-fault reporting), and the FPU
+        // (absent on the SH7604) -- these undecoded encodings stay 1-cycle
+        // no-ops. Instruction timing beyond the 1-cycle base is deferred
         // (ADR-0011).
         const auto n0 = static_cast<unsigned>(op >> 12U);
         const auto rn = static_cast<std::size_t>((op >> 8U) & 0xFU);
@@ -93,6 +95,14 @@ namespace mnemos::chips::cpu {
             } // MOVT Rn
             if (op == 0x000BU) { // RTS -- PC := PR (delayed)
                 branch_delayed(pr_);
+                return;
+            }
+            if (op == 0x002BU) { // RTE -- pop PC + SR, then a delayed branch
+                const std::uint32_t new_pc = rd32(r_[15]);
+                const std::uint32_t new_sr = rd32(r_[15] + 4U) & sr_mask;
+                r_[15] += 8U;
+                sr_ = new_sr;
+                branch_delayed(new_pc);
                 return;
             }
             switch (static_cast<unsigned>(op & 0xFFU)) {
@@ -412,7 +422,8 @@ namespace mnemos::chips::cpu {
                 return; // JMP @Rn (delayed)
             case 0x0E:
                 sr_ = r_[rn] & sr_mask;
-                return; // LDC Rn,SR
+                interrupt_inhibit_ = 1; // SR write: defer IRQ acceptance one instruction
+                return;                 // LDC Rn,SR
             case 0x1E:
                 gbr_ = r_[rn];
                 return; // LDC Rn,GBR
@@ -467,6 +478,7 @@ namespace mnemos::chips::cpu {
             case 0x07: // LDC.L @Rn+,SR
                 sr_ = rd32(r_[rn]) & sr_mask;
                 r_[rn] += 4U;
+                interrupt_inhibit_ = 1; // SR write: defer IRQ acceptance one instruction
                 return;
             case 0x17: // LDC.L @Rn+,GBR
                 gbr_ = rd32(r_[rn]);
@@ -672,8 +684,11 @@ namespace mnemos::chips::cpu {
                 wr8(a, static_cast<std::uint8_t>(rd8(a) | imm));
                 return;
             }
+            case 0x3: // TRAPA #imm -- vector through VBR + imm*4; saved PC = next
+                raise_exception(static_cast<std::uint8_t>(imm), pc_);
+                return;
             default:
-                return; // 0xC3 = TRAPA: deferred
+                return;
             }
         }
         case 0xD: // MOV.L @(disp,PC),Rn -- PC-relative long load
@@ -771,8 +786,54 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    void sh2::raise_exception(std::uint8_t vector, std::uint32_t saved_pc) {
+        // Architectural exception entry: push SR then PC to @-R15 (frame is
+        // [R15]=PC, [R15+4]=SR) and vector through the table at VBR.
+        const std::uint32_t saved_sr = sr_ & sr_mask;
+        r_[15] -= 4U;
+        wr32(r_[15], saved_sr);
+        r_[15] -= 4U;
+        wr32(r_[15], saved_pc);
+        pc_ = rd32(vbr_ + (static_cast<std::uint32_t>(vector) << 2U));
+    }
+
+    void sh2::try_service_irq() {
+        // Accept the presented external IRQ only when its level outranks SR.IMASK.
+        if (pending_irq_level_ == 0) {
+            return;
+        }
+        const auto imask = static_cast<int>((sr_ & sr_imask) >> 4U);
+        if (pending_irq_level_ <= imask) {
+            return;
+        }
+        const int level = pending_irq_level_;
+        const std::uint8_t vector = pending_irq_vector_;
+        raise_exception(vector, pc_); // saved PC = the interrupted boundary
+        // Raise IMASK to the accepted level (clamped to the 4-bit field) so the
+        // handler is not immediately re-entered.
+        const std::uint32_t lv = level > 15 ? 15U : static_cast<std::uint32_t>(level);
+        sr_ = (sr_ & ~sr_imask) | ((lv << 4U) & sr_imask);
+        // Consume the request; the system re-presents the next source (if any)
+        // from the accept callback.
+        pending_irq_level_ = 0;
+        pending_irq_vector_ = 0;
+        if (irq_accept_) {
+            irq_accept_(level, vector);
+        }
+    }
+
     int sh2::step_instruction() {
         cycles_ = 1; // SH-2 base: one instruction per cycle on a hit
+
+        // Interrupt acceptance happens at the instruction boundary, unless a
+        // preceding control-register load inhibits it for one instruction (code
+        // that unmasks SR expects the next instruction to run before any newly
+        // enabled IRQ fires).
+        if (interrupt_inhibit_ > 0) {
+            --interrupt_inhibit_;
+        } else {
+            try_service_irq();
+        }
 
         inst_addr_ = pc_;
         if (trace_callback_) {
@@ -805,6 +866,10 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
+        in_delay_slot_ = false;
+        pending_irq_level_ = 0;
+        pending_irq_vector_ = 0;
+        interrupt_inhibit_ = 0;
         // Reset: interrupts fully masked (I0-I3 = 1111), S/T cleared.
         sr_ = sr_imask;
         // The power-on reset vector lives at VBR (=0): PC at $00000000, the
@@ -852,6 +917,9 @@ namespace mnemos::chips::cpu {
         writer.u32(macl_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
         writer.u64(elapsed_);
+        writer.u32(static_cast<std::uint32_t>(pending_irq_level_));
+        writer.u32(static_cast<std::uint32_t>(pending_irq_vector_));
+        writer.u32(static_cast<std::uint32_t>(interrupt_inhibit_));
     }
 
     void sh2::load_state(state_reader& reader) {
@@ -867,6 +935,9 @@ namespace mnemos::chips::cpu {
         macl_ = reader.u32();
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());
         elapsed_ = reader.u64();
+        pending_irq_level_ = static_cast<int>(reader.u32());
+        pending_irq_vector_ = static_cast<std::uint8_t>(reader.u32());
+        interrupt_inhibit_ = static_cast<int>(reader.u32());
     }
 
     instrumentation::ichip_introspection& sh2::introspection() noexcept { return introspection_; }

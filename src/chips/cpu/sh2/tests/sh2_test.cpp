@@ -739,6 +739,92 @@ TEST_CASE("sh2 MOV.B @(disp,Rn) with R0 sign-extends") {
     CHECK(m.cpu.cpu_registers().r[0] == 0xFFFFFF80U);
 }
 
+TEST_CASE("sh2 TRAPA pushes a frame and RTE returns through it") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 0x20U * 4U, 0x5000U); // vector 0x20 handler -> 0x5000
+    m.load(0x1000U, {0xC320U});           // TRAPA #0x20
+    m.load(0x5000U, {0x002BU, 0x0009U});  // RTE ; (delay) NOP
+    m.cpu.step_instruction();             // TRAPA
+    auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x5000U);    // vectored through VBR + 0x20*4
+    CHECK(a.r[15] == 0x3008U); // SR + PC pushed
+    m.cpu.step_instruction();  // RTE
+    const auto b = m.cpu.cpu_registers();
+    CHECK(b.pc == 0x1002U);    // returned to the instruction after TRAPA
+    CHECK(b.r[15] == 0x3010U); // stack restored
+}
+
+TEST_CASE("sh2 accepts an external IRQ above the mask") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U; // IMASK = 0
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 0x44U * 4U, 0x6000U); // vector 0x44 handler -> 0x6000
+    m.load(0x1000U, {0x0009U});           // NOP (interrupted instruction)
+    m.load(0x6000U, {0x0009U});           // handler entry: NOP
+    int seen_level = -1;
+    std::uint8_t seen_vec = 0U;
+    m.cpu.set_irq_accept_callback([&](int lvl, std::uint8_t v) {
+        seen_level = lvl;
+        seen_vec = v;
+    });
+    m.cpu.set_irq(12, 0x44U); // VINT: level 12, vector 0x44
+    m.cpu.step_instruction(); // services the IRQ, then runs the handler's first op
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(seen_level == 12);
+    CHECK(seen_vec == 0x44U);
+    CHECK(rr.r[15] == 0x3008U);                    // frame pushed
+    CHECK(((rr.sr & sh2::sr_imask) >> 4U) == 12U); // IMASK raised to the level
+    CHECK(rr.pc == 0x6002U);                       // handler's NOP executed
+}
+
+TEST_CASE("sh2 holds an IRQ at or below the mask") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 12U << 4U; // IMASK = 12
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x0009U});
+    m.cpu.set_irq(12, 0x44U); // level 12 is not > mask 12 -> not accepted
+    m.cpu.step_instruction();
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.pc == 0x1002U);    // ran the NOP, no vectoring
+    CHECK(rr.r[15] == 0x3010U); // no frame pushed
+}
+
+TEST_CASE("sh2 LDC to SR inhibits IRQ acceptance for one instruction") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 15U << 4U; // IMASK = 15 (all masked)
+    r.r[1] = 0U;      // LDC R1,SR will unmask everything (SR -> 0)
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 0x44U * 4U, 0x6000U);
+    m.load(0x1000U, {0x410EU, 0xE505U}); // LDC R1,SR ; MOV #5,R5
+    m.load(0x6000U, {0x0009U});
+    m.cpu.set_irq(12, 0x44U);
+    m.cpu.step_instruction(); // LDC R1,SR: unmasks + arms the one-instruction inhibit
+    m.cpu.step_instruction(); // MOV #5,R5 runs on the inhibited boundary (no IRQ yet)
+    auto a = m.cpu.cpu_registers();
+    CHECK(a.r[5] == 5U);
+    CHECK(a.r[15] == 0x3010U); // IRQ still pending, not taken
+    m.cpu.step_instruction();  // inhibit cleared -> IRQ accepted here
+    CHECK(m.cpu.cpu_registers().r[15] == 0x3008U);
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();
