@@ -26,9 +26,7 @@ namespace mnemos::topology {
         r.ram = storage;
         r.active = std::move(active);
         regions_.push_back(std::move(r));
-        fast_start_ = 1U;
-        fast_end_ = 0U; // mapping changes invalidate the fast path
-        fast_region_ = nullptr;
+        invalidate_fast_path(); // mapping changes; regions_ may also reallocate
     }
 
     void bus::map_rom(std::uint32_t start, std::span<const std::uint8_t> storage, int priority,
@@ -41,9 +39,7 @@ namespace mnemos::topology {
         r.rom = storage;
         r.active = std::move(active);
         regions_.push_back(std::move(r));
-        fast_start_ = 1U;
-        fast_end_ = 0U;
-        fast_region_ = nullptr;
+        invalidate_fast_path();
     }
 
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
@@ -57,9 +53,7 @@ namespace mnemos::topology {
         r.on_write = std::move(on_write);
         r.active = std::move(active);
         regions_.push_back(std::move(r));
-        fast_start_ = 1U;
-        fast_end_ = 0U;
-        fast_region_ = nullptr;
+        invalidate_fast_path();
     }
 
     void bus::retarget_ram(std::uint32_t start, std::span<std::uint8_t> storage) noexcept {
@@ -69,9 +63,7 @@ namespace mnemos::topology {
             }
         }
         // The fast path may cache a span into the old storage.
-        fast_start_ = 1U;
-        fast_end_ = 0U;
-        fast_region_ = nullptr;
+        invalidate_fast_path();
     }
 
     const bus::region* bus::resolve(std::uint32_t address, bool is_write) const noexcept {
@@ -123,17 +115,25 @@ namespace mnemos::topology {
                 hi = o.start - 1U;
             }
         }
-        fast_start_ = lo;
-        fast_end_ = hi;
-        fast_region_ = winner;
+        for (std::size_t i = fast_.size() - 1U; i > 0U; --i) {
+            fast_[i] = fast_[i - 1U];
+        }
+        fast_[0] = {.start = lo, .end = hi, .r = winner};
     }
 
     std::uint8_t bus::read8(std::uint32_t address) {
         const std::uint32_t addr = address & address_mask_;
         std::uint8_t value = 0xFFU; // open bus default
-        if (addr >= fast_start_ && addr <= fast_end_) {
-            const region* r = fast_region_;
+        for (std::size_t i = 0; i < fast_.size(); ++i) {
+            const fast_span& f = fast_[i];
+            if (addr < f.start || addr > f.end) {
+                continue;
+            }
+            const region* r = f.r;
             value = r->backing == kind::ram ? r->ram[addr - r->start] : r->rom[addr - r->start];
+            if (i != 0U) {
+                std::swap(fast_[0], fast_[i]);
+            }
             if (observer_) {
                 observer_({.address = addr, .value = value, .write = false});
             }
@@ -162,11 +162,18 @@ namespace mnemos::topology {
 
     void bus::write8(std::uint32_t address, std::uint8_t value) {
         const std::uint32_t addr = address & address_mask_;
-        if (addr >= fast_start_ && addr <= fast_end_) {
-            const region* r = fast_region_;
+        for (std::size_t i = 0; i < fast_.size(); ++i) {
+            const fast_span& f = fast_[i];
+            if (addr < f.start || addr > f.end) {
+                continue;
+            }
+            const region* r = f.r;
             if (r->backing == kind::ram) {
                 r->ram[addr - r->start] = value;
             } // ROM ignores writes
+            if (i != 0U) {
+                std::swap(fast_[0], fast_[i]);
+            }
             if (observer_) {
                 observer_({.address = addr, .value = value, .write = true});
             }

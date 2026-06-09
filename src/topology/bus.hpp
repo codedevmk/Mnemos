@@ -2,6 +2,7 @@
 
 #include "ibus.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -93,18 +94,27 @@ namespace mnemos::topology {
 
         [[nodiscard]] const region* resolve(std::uint32_t address, bool is_write) const noexcept;
 
-        // Hot-path cache: the last RAM/ROM region resolved, narrowed to the
-        // maximal address span where it provably stays the winner (no
+        // Hot-path cache: recently resolved RAM/ROM regions, each narrowed to
+        // the maximal address span where it provably stays the winner (no
         // overlapping region that could outrank it, no predicates involved).
-        // Within [fast_start_, fast_end_] an access indexes the span directly,
-        // skipping the region scan. Cleared by any map_* call. MMIO and
-        // predicate-gated regions never enter the cache, so dynamic decode
-        // (C64 PLA banking) keeps full resolve semantics.
-        void update_fast_path(std::uint32_t address, const region* winner) noexcept;
+        // Within a cached span an access indexes the storage directly,
+        // skipping the region scan. Four MRU entries (swap-to-front on hit)
+        // so workloads that alternate regions -- the SH-2 fetching from SDRAM
+        // while storing to the frame buffer -- don't thrash a single slot.
+        // Cleared by any map_* call (regions_ may reallocate, and the winner
+        // set changes). MMIO and predicate-gated regions never enter the
+        // cache, so dynamic decode (C64 PLA banking) keeps full resolve
+        // semantics.
+        struct fast_span final {
+            std::uint32_t start{1};
+            std::uint32_t end{0}; // empty range = unused entry
+            const region* r{};
+        };
 
-        std::uint32_t fast_start_{1};
-        std::uint32_t fast_end_{0}; // empty range = cache disabled
-        const region* fast_region_{};
+        void update_fast_path(std::uint32_t address, const region* winner) noexcept;
+        void invalidate_fast_path() noexcept { fast_.fill(fast_span{}); }
+
+        std::array<fast_span, 4> fast_{};
 
         unsigned address_bits_{16};
         endianness endian_{endianness::little};
