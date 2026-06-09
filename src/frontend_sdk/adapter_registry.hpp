@@ -61,6 +61,11 @@ namespace mnemos::frontend_sdk {
         // adapter opens this with disc_image::open while `rom` carries the boot
         // BIOS. Empty for byte-buffer media.
         std::string disc_path;
+        // System boot ROM images beyond the primary `rom`, in an adapter-defined
+        // order (the 32X adapter takes master SH-2 / slave SH-2 / 68000 vector
+        // overlay). Empty entries (or an empty vector) mean "boot without that
+        // image"; the adapter decides whether that is viable.
+        std::vector<std::vector<std::uint8_t>> bios_images;
         // Optional scheduler-construction override. null = adapter falls back
         // to its built-in scheduler. Non-null lets tooling (deterministic
         // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)

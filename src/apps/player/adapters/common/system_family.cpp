@@ -19,6 +19,9 @@ namespace mnemos::apps::player::adapters {
         if (ext == "cue" || ext == "iso" || ext == "chd") {
             return system_family::segacd;
         }
+        if (ext == "32x") {
+            return system_family::sega32x;
+        }
         if (ext == "prg" || ext == "d64" || ext == "d71" || ext == "d81" || ext == "t64" ||
             ext == "tap" || ext == "crt" || ext == "g64" || ext == "p00") {
             return system_family::c64;
@@ -36,6 +39,8 @@ namespace mnemos::apps::player::adapters {
             return "C64";
         case system_family::segacd:
             return "Sega CD";
+        case system_family::sega32x:
+            return "32X";
         case system_family::genesis:
             break;
         }
