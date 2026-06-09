@@ -137,7 +137,27 @@ namespace mnemos::manifests::sega32x {
         machine->genesis = genesis::assemble_genesis(std::move(cart), config);
 
         sega32x_system* tx = machine->thirtytwox.get();
+        genesis::genesis_system* g = machine->genesis.get();
         topology::bus& bus = machine->genesis->bus;
+
+        // 32X interrupt sources from the Genesis VDP. VINT rides the
+        // unconditional V-blank edge -- a 32X game may never enable the 68000's
+        // V-int, but the pulse still reaches the adapter and both SH-2 latches.
+        // The wrapper preserves the stock Genesis vblank behaviour (Z80 INT,
+        // frame counter, pad timeouts) and mirrors V-blank into adapter-control
+        // bit 7, which games poll as a frame-sync barrier.
+        g->vdp.set_vblank_callback([g, tx](bool in_vblank) {
+            g->on_vblank(in_vblank);
+            if (in_vblank) {
+                tx->adapter_ctrl |= 0x0080U;
+                tx->raise_vint();
+            } else {
+                tx->adapter_ctrl &= static_cast<std::uint16_t>(~0x0080U);
+            }
+        });
+        // HINT taps the VDP's /HINT latch edge (line counter expired with IE1
+        // set); the 68000 keeps its own pending-level path untouched.
+        g->vdp.set_hint_callback([tx] { tx->raise_hint(); });
 
         // $A15100-$A1513F: the 32X system registers as seen by the 68000 --
         // adapter control, INTM/INTS, the COMM bank, and the PWM scaffold. Byte

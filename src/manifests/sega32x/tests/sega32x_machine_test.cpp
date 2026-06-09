@@ -13,6 +13,7 @@
 namespace {
 
     using mnemos::manifests::sega32x::assemble_sega32x_machine;
+    using mnemos::manifests::sega32x::sega32x_system;
 
     // A minimal Genesis cartridge with valid 68000 reset vectors and a self-branch
     // loop at the entry point, so the 68000 advances deterministically when ticked.
@@ -137,6 +138,63 @@ TEST_CASE("sega32x_machine shares the COMM bank between the 68000 and the SH-2s"
     tx.slave_bus.write8(0x0000402FU, 0x34U);
     CHECK(bus.read8(0xA1512EU) == 0x12U);
     CHECK(bus.read8(0xA1512FU) == 0x34U);
+}
+
+TEST_CASE("sega32x_machine sources VINT from the Genesis VDP V-blank edge", "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+    bus.write8(0xA15101U, 0x03U); // ADEN + release RES
+
+    // Only the master program enables its VINT (slave stays masked).
+    tx.set_master_irq_mask(sega32x_system::irq_vint);
+
+    // The VDP resets onto the VBL-entry line, so the first ticked line flushes
+    // a boot-time V-blank edge through the wrapper. Consume it, then prove the
+    // per-frame edge delivers on its own.
+    auto& vdp = m->genesis->vdp;
+    vdp.tick(3420U);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 12); // boot edge seen
+    m->thirtytwox->master_cpu.clear_irq();
+    tx.master_irq_latch = 0U;
+    tx.slave_irq_latch = 0U;
+
+    // One full NTSC frame, line by line (edges within a single tick coalesce
+    // into the trailing state check, so big ticks can miss them).
+    for (int line = 0; line < 262; ++line) {
+        vdp.tick(3420U);
+    }
+
+    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 12);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x44U);
+    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
+    CHECK((tx.slave_irq_latch & sega32x_system::irq_vint) != 0U); // latched for later
+    // V-blank is mirrored into adapter-control bit 7 (a poll-based frame sync).
+    CHECK((tx.adapter_ctrl & 0x0080U) != 0U);
+    // The stock Genesis vblank behaviour still runs through the wrapper: the
+    // boot edge plus the per-frame edge both counted.
+    CHECK(m->genesis->frame_index == 2U);
+}
+
+TEST_CASE("sega32x_machine sources HINT from the VDP line-counter latch", "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+    bus.write8(0xA15101U, 0x03U); // ADEN + release RES
+    tx.set_master_irq_mask(sega32x_system::irq_hint);
+
+    // Program the VDP through the 68000 control port: reg 10 (H-int counter)
+    // = 0 fires every line, reg 0 bit 4 (IE1) enables the H-interrupt.
+    bus.write8(0xC00004U, 0x8AU);
+    bus.write8(0xC00005U, 0x00U);
+    bus.write8(0xC00004U, 0x80U);
+    bus.write8(0xC00005U, 0x14U); // IE1 + the always-set bit 2
+
+    m->genesis->vdp.tick(3420ULL * 2ULL); // a couple of scanlines
+
+    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 10);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x46U);
+    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
 }
 
 TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",

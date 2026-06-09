@@ -1125,7 +1125,7 @@ namespace mnemos::chips::video {
             if (hint_counter_ <= 0) {
                 hint_counter_ = reg_[10];
                 if (hint_enabled()) {
-                    hblank_pending_ = true;
+                    latch_hint();
                 }
             } else {
                 --hint_counter_;
@@ -1141,7 +1141,7 @@ namespace mnemos::chips::video {
             if (hint_counter_ <= 0) {
                 hint_counter_ = reg_[10];
                 if (hint_enabled()) {
-                    hblank_pending_ = true;
+                    latch_hint();
                 }
             } else {
                 --hint_counter_;
