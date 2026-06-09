@@ -555,6 +555,190 @@ TEST_CASE("sh2 DIV0U + DIV1 sequence divides unsigned 32/32") {
     run_div(1U, 1U);
 }
 
+TEST_CASE("sh2 BRA executes the delay slot then branches") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0xA006U, 0xE105U}); // BRA +6 ; (delay) MOV #5,R1
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[1] == 5U);    // delay slot executed before the branch landed
+    CHECK(r.pc == 0x1010U); // 0x1002 + 6*2 + 2
+}
+
+TEST_CASE("sh2 BSR sets PR and RTS returns through it") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0xB006U, 0x0009U}); // BSR +6 ; (delay) NOP
+    m.load(0x1010U, {0x000BU, 0x0009U}); // RTS ; (delay) NOP
+    m.cpu.step_instruction();            // BSR
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x1010U);
+    CHECK(r.pr == 0x1004U);   // return address = instruction after the delay slot
+    m.cpu.step_instruction(); // RTS
+    CHECK(m.cpu.cpu_registers().pc == 0x1004U);
+}
+
+TEST_CASE("sh2 BT branches only when T is set") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0x0018U, 0x8901U}); // SETT ; BT +1
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x1008U); // 0x1004 + 1*2 + 2
+    m.set_pc(0x2000U);
+    m.load(0x2000U, {0x0008U, 0x8901U}); // CLRT ; BT +1 (not taken)
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x2004U); // fell through
+}
+
+TEST_CASE("sh2 BT/S runs its delay slot when taken") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0x0018U, 0x8D01U, 0xE207U}); // SETT ; BT/S +1 ; (delay) MOV #7,R2
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.r[2] == 7U);
+    CHECK(r.pc == 0x1008U);
+}
+
+TEST_CASE("sh2 JMP and JSR transfer through a register with a delay slot") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[3] = 0x1010U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x432BU, 0x0009U}); // JMP @R3 ; (delay) NOP
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x1010U);
+    auto r2 = m.cpu.cpu_registers();
+    r2.r[4] = 0x2000U;
+    r2.pc = 0x1100U;
+    m.cpu.set_registers(r2);
+    m.load(0x1100U, {0x440BU, 0x0009U}); // JSR @R4 ; (delay) NOP
+    m.cpu.step_instruction();
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.pc == 0x2000U);
+    CHECK(rr.pr == 0x1104U);
+}
+
+TEST_CASE("sh2 BRAF computes a PC-relative branch") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x20U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x0123U, 0x0009U}); // BRAF R1 ; (delay) NOP
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x1024U); // 0x1002 + 2 + 0x20
+}
+
+TEST_CASE("sh2 LDS/STS and LDC/STC move system registers") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x11112222U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // LDS R1,PR ; STS PR,R2 ; LDC R1,GBR ; STC GBR,R3
+    m.load(0x1000U, {0x412AU, 0x022AU, 0x411EU, 0x0312U});
+    for (int i = 0; i < 4; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.pr == 0x11112222U);
+    CHECK(rr.r[2] == 0x11112222U);
+    CHECK(rr.gbr == 0x11112222U);
+    CHECK(rr.r[3] == 0x11112222U);
+}
+
+TEST_CASE("sh2 LDC to SR masks to the defined bits") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0xFFFFFFFFU;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x410EU}); // LDC R1,SR
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().sr == 0x000003F3U);
+}
+
+TEST_CASE("sh2 STS.L/LDS.L push and pop PR through the stack") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.pr = 0xCAFEBABEU;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x4F22U, 0x4F26U}); // STS.L PR,@-R15 ; LDS.L @R15+,PR
+    m.cpu.step_instruction();
+    auto r1 = m.cpu.cpu_registers();
+    CHECK(r1.r[15] == 0x300CU);    // SP pre-decremented
+    CHECK(m.ram[0x300C] == 0xCAU); // big-endian top byte on the stack
+    r1.pr = 0U;                    // clobber, then pop
+    m.cpu.set_registers(r1);
+    m.cpu.step_instruction();
+    const auto r2 = m.cpu.cpu_registers();
+    CHECK(r2.pr == 0xCAFEBABEU);
+    CHECK(r2.r[15] == 0x3010U);
+}
+
+TEST_CASE("sh2 displacement and R0-indexed addressing modes") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x3000U;
+    r.r[2] = 0x12345678U;
+    r.r[0] = 8U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // MOV.L R2,@(2,R1) ; MOV.L @(2,R1),R3 ; MOV.L R2,@(R0,R1) ; MOV.L @(R0,R1),R4
+    m.load(0x1000U, {0x1122U, 0x5312U, 0x0126U, 0x041EU});
+    for (int i = 0; i < 4; ++i) {
+        m.cpu.step_instruction();
+    }
+    const auto rr = m.cpu.cpu_registers();
+    CHECK(rr.r[3] == 0x12345678U); // @(disp,Rm) load
+    CHECK(rr.r[4] == 0x12345678U); // @(R0,Rm) load
+}
+
+TEST_CASE("sh2 GBR-relative store/load and immediate AND") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.gbr = 0x3100U;
+    r.r[0] = 0x0000ABCDU;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // MOV.L R0,@(2,GBR) ; AND #0x0F,R0 ; MOV.L @(2,GBR),R0
+    m.load(0x1000U, {0xC202U, 0xC90FU, 0xC602U});
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[0] == 0x0DU); // AND #imm zero-extends
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[0] == 0x0000ABCDU); // reloaded from GBR
+}
+
+TEST_CASE("sh2 MOVA computes a PC-relative address into R0") {
+    machine m;
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0xC703U}); // MOVA @(3,PC),R0
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[0] == 0x1010U); // ((0x1004)&~3) + 3*4
+}
+
+TEST_CASE("sh2 MOV.B @(disp,Rn) with R0 sign-extends") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[0] = 0x00000080U;
+    r.r[1] = 0x3000U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    // MOV.B R0,@(1,R1) ; MOV.B @(1,R1),R0
+    m.load(0x1000U, {0x8011U, 0x8411U});
+    m.cpu.step_instruction();
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().r[0] == 0xFFFFFF80U);
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();

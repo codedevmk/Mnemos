@@ -132,6 +132,9 @@ namespace mnemos::chips::cpu {
         void mac_long(std::size_t rn, std::size_t rm) noexcept;
         void mac_word(std::size_t rn, std::size_t rm) noexcept;
 
+        // ---- control transfer: run the delay-slot instruction, then redirect ----
+        void branch_delayed(std::uint32_t target);
+
         // ---- decode + execute one fetched opcode ----
         void exec(std::uint16_t op);
 
@@ -144,6 +147,7 @@ namespace mnemos::chips::cpu {
         std::uint32_t mach_{};
         std::uint32_t macl_{};
         std::uint32_t inst_addr_{};
+        bool in_delay_slot_{}; // transient: true while running a branch's delay slot
 
         int cycles_{};              // cycles of the instruction in flight
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
