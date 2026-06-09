@@ -96,10 +96,17 @@ namespace mnemos::chips::video {
             delayed_irq_callback_ = std::move(cb);
         }
         // Invoked whenever the in_vblank state changes (rising edge true, falling
-        // false). The Genesis system wires this to the Z80's IRQ line, which tracks
-        // vblank on real hardware.
+        // false). The Genesis system wires frame bookkeeping (frame counter,
+        // pad timeouts) to this edge.
         void set_vblank_callback(std::function<void(bool in_vblank)> cb) noexcept {
             vblank_callback_ = std::move(cb);
+        }
+        // Invoked on the Z80 /INT line edges: asserted at V-blank entry,
+        // released ONE SCANLINE later (the hardware pulse width). Deliberately
+        // narrower than the vblank callback -- a sound driver whose handler
+        // returns mid-V-blank must not be re-interrupted into a second tick.
+        void set_z80_int_callback(std::function<void(bool asserted)> cb) noexcept {
+            z80_int_callback_ = std::move(cb);
         }
         // Invoked on each H-interrupt latch edge (the line counter expired with
         // IE1 set -- the /HINT output the 32X adapter taps). Plain Genesis
@@ -497,8 +504,11 @@ namespace mnemos::chips::video {
         std::function<void(int)> delayed_irq_callback_{};
         std::function<void(bool)> vblank_callback_{};
         std::function<void()> hint_callback_{};
+        std::function<void(bool)> z80_int_callback_{};
         int last_irq_level_{};
         bool last_in_vblank_{};
+        bool z80_int_line_{};      // one-scanline /INT pulse at V-blank entry
+        bool last_z80_int_line_{}; // edge tracking for z80_int_callback_
 
         std::array<register_descriptor, 16> register_view_{};
         introspection_surface introspection_{*this};

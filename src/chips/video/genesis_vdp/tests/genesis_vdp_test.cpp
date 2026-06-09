@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdint>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -420,4 +421,25 @@ TEST_CASE("genesis_vdp renders a sprite over the planes") {
     const auto fb = vdp.framebuffer();
     REQUIRE(fb.pixels != nullptr);
     CHECK(fb.pixels[0] == rgb_red);
+}
+
+TEST_CASE("genesis_vdp pulses the Z80 /INT callback for exactly one scanline") {
+    genesis_vdp vdp; // reset state parks on the VBL-entry line, pulse not armed
+    std::vector<std::pair<bool, int>> edges;
+    int line = 0;
+    vdp.set_z80_int_callback([&](bool asserted) { edges.emplace_back(asserted, line); });
+
+    // Two full NTSC frames, line by line (edges coalesce in bigger ticks).
+    for (; line < 2 * 262 + 4; ++line) {
+        vdp.tick(genesis_vdp::master_clocks_per_line);
+    }
+
+    REQUIRE(edges.size() == 4); // two pulses: assert + release each
+    CHECK(edges[0].first);
+    CHECK_FALSE(edges[1].first);
+    CHECK(edges[1].second - edges[0].second == 1); // released one line later
+    CHECK(edges[2].first);
+    CHECK_FALSE(edges[3].first);
+    CHECK(edges[3].second - edges[2].second == 1);
+    CHECK(edges[2].second - edges[0].second == 262); // one pulse per frame
 }

@@ -1110,6 +1110,10 @@ namespace mnemos::chips::video {
         const int visible_h = field_height();
         const int visible_w = visible_width();
 
+        // The Z80 /INT pulse spans exactly one scanline: raised at the V-blank
+        // entry transition below, dropped here at the next line boundary.
+        z80_int_line_ = false;
+
         in_hblank_ = false;
         hcounter_ = visible_w / 2;
 
@@ -1169,6 +1173,7 @@ namespace mnemos::chips::video {
         // fires at master 788 (H40) / 770 (H32) of that same line.
         if (scanline_ == visible_h) {
             in_vblank_ = true;
+            z80_int_line_ = true;
             vint_happened_ = true;
             odd_frame_ = interlace_enabled() ? !odd_frame_ : false;
             // Start the VINT delay UNCONDITIONALLY; the vint_enabled() gate
@@ -1192,12 +1197,20 @@ namespace mnemos::chips::video {
                 irq_callback_(level);
             }
         }
-        // The Genesis Z80's INT line tracks vblank on real hardware; the manifest
-        // wires set_vblank_callback to s->z80.set_irq_line so sound drivers tick.
         if (in_vblank_ != last_in_vblank_) {
             last_in_vblank_ = in_vblank_;
             if (vblank_callback_) {
                 vblank_callback_(in_vblank_);
+            }
+        }
+        // The Z80 /INT one-scanline pulse (the manifest wires this to
+        // z80.set_irq_line). NOTE: like the vblank edge above, assert/release
+        // pairs coalesce if one tick() call crosses two line boundaries --
+        // callers that need the pulse must tick at scanline granularity.
+        if (z80_int_line_ != last_z80_int_line_) {
+            last_z80_int_line_ = z80_int_line_;
+            if (z80_int_callback_) {
+                z80_int_callback_(z80_int_line_);
             }
         }
     }
@@ -1394,6 +1407,8 @@ namespace mnemos::chips::video {
         vblank_pending_ = false;
         hblank_pending_ = false;
         ext_pending_ = false;
+        z80_int_line_ = false; // no pulse at power-on; the Z80 boots with IFF clear
+        last_z80_int_line_ = false;
 
         framebuffer_.assign(static_cast<std::size_t>(fb_width) * fb_height, 0U);
         frame_index_ = 0;
@@ -1573,6 +1588,11 @@ namespace mnemos::chips::video {
         if (const auto id = chips::cfg_string(cfg, "vblank_callback")) {
             if (const auto* fn = chips::find_callback<void(bool)>(callbacks, *id)) {
                 set_vblank_callback(*fn);
+            }
+        }
+        if (const auto id = chips::cfg_string(cfg, "z80_int_callback")) {
+            if (const auto* fn = chips::find_callback<void(bool)>(callbacks, *id)) {
+                set_z80_int_callback(*fn);
             }
         }
     }

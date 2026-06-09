@@ -2,8 +2,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <vector>
 
 namespace {
@@ -219,4 +221,49 @@ TEST_CASE("genesis Z80 bus routes RAM, YM2612, and PSG") {
 
     sys->z80_bus.write8(0x7F11U, 0x90); // PSG: channel-0 volume = 0
     CHECK(sys->psg.volume(0) == 0x00U);
+}
+
+TEST_CASE("genesis z80 v-int ticks a slow handler exactly once per frame") {
+    auto sys = assemble_genesis(make_rom());
+
+    // A sound-driver-shaped Z80 program: EI + idle main loop, and an IM-1
+    // handler at $0038 that counts entries into $1F00 then burns ~620 cycles
+    // (about three scanlines) before EI + RETI. With the hardware-true
+    // one-scanline /INT pulse the handler runs once per frame; a level held
+    // across V-blank would re-enter it ~12x per frame (the GEMS music-speed
+    // failure this guards against).
+    const std::uint8_t prog[] = {
+        0xF3,             // DI
+        0x31, 0xF0, 0x1F, // LD SP,$1FF0  (stack must live in Z80 RAM)
+        0xED, 0x56,       // IM 1
+        0xFB,             // EI
+        0x18, 0xFE,       // JR *
+    };
+    const std::uint8_t isr[] = {
+        0xF5,             // PUSH AF
+        0xC5,             // PUSH BC
+        0x21, 0x00, 0x1F, // LD HL,$1F00
+        0x34,             // INC (HL)
+        0x06, 0x30,       // LD B,$30
+        0x10, 0xFE,       // DJNZ *      (48 iterations)
+        0xC1,             // POP BC
+        0xF1,             // POP AF
+        0xFB,             // EI
+        0xED, 0x4D,       // RETI
+    };
+    std::copy(std::begin(prog), std::end(prog), sys->z80_ram.begin());
+    std::copy(std::begin(isr), std::end(isr), sys->z80_ram.begin() + 0x38);
+    sys->z80.reset(mnemos::chips::reset_kind::power_on);
+
+    // Three NTSC frames, line by line (the /INT pulse needs scanline-granular
+    // VDP ticks; one line = 228 Z80 cycles).
+    for (int line = 0; line < 3 * 262; ++line) {
+        sys->vdp.tick(genesis_vdp::master_clocks_per_line);
+        sys->z80.tick(228U);
+    }
+
+    // The boot V-blank edge (the VDP resets onto the VBL-entry line) advances
+    // frame_index without a pulse; every later entry pulses exactly once.
+    CHECK(sys->frame_index >= 2U);
+    CHECK(static_cast<unsigned>(sys->z80_ram[0x1F00]) == sys->frame_index - 1U);
 }

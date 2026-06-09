@@ -100,11 +100,10 @@ namespace mnemos::manifests::genesis {
                               chips::callback_value{std::function<void(int)>{
                                   [s](int level) { s->cpu->schedule_delayed_irq(level); }}});
 
-        // V-blank edge: pulses the Z80 IRQ, advances the frame counter, and
-        // fires per-device on_vblank() hooks (6-button pad phase counter, ...).
+        // V-blank edge: advances the frame counter and fires per-device
+        // on_vblank() hooks (6-button pad phase counter, ...).
         out.callbacks.emplace("genesis.vblank",
                               chips::callback_value{std::function<void(bool)>{[s](bool in_vblank) {
-                                  s->z80->set_irq_line(in_vblank);
                                   if (in_vblank) {
                                       ++s->frame_index;
                                       for (auto& p : s->ports) {
@@ -114,6 +113,13 @@ namespace mnemos::manifests::genesis {
                                       }
                                   }
                               }}});
+
+        // Z80 /INT: the VDP's one-scanline pulse at V-blank entry. Kept off
+        // the vblank edge above -- holding the line across V-blank re-ticks
+        // sound drivers whose handler returns mid-blank.
+        out.callbacks.emplace("genesis.z80_int",
+                              chips::callback_value{std::function<void(bool)>{
+                                  [s](bool asserted) { s->z80->set_irq_line(asserted); }}});
 
         // ---- Predicates (chip gates) ---------------------------------------
 

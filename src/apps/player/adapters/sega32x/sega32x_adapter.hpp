@@ -87,15 +87,17 @@ namespace mnemos::apps::player::adapters::sega32x {
 
         std::unique_ptr<manifests::sega32x::sega32x_machine> machine_;
         instrumentation::span_memory_view work_ram_view_;
+        instrumentation::span_memory_view z80_ram_view_;
         instrumentation::span_memory_view sdram_view_;
         instrumentation::span_memory_view fb_view_;
-        std::array<instrumentation::memory_view*, 3> system_mem_view_{};
+        std::array<instrumentation::memory_view*, 4> system_mem_view_{};
         std::array<chips::ichip*, 8> chip_view_{};
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
         mnemos::video_region region_;
         double target_fps_;
         std::uint64_t frames_stepped_{};
+        std::uint64_t last_z80_cycles_{}; // probe: per-frame executed-cycle delta
         std::vector<frontend_sdk::spec_field> spec_{};
 
         // The composed output frame (a copy of the Genesis frame with the 32X
