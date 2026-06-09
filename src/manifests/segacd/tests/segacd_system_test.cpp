@@ -348,7 +348,9 @@ TEST_CASE("segacd CDD plays a data disc and advances the read head", "[segacd][c
     REQUIRE(disc.has_value());
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
-    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_stop); // idle until commanded
+    // Internal drive status is TOC on load (a loaded drive holds the disc's TOC);
+    // the reported status frame is decoupled and stays STOP until Get-Status.
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_toc);
 
     issue_play(*sys, 0, 2, 0); // absolute MSF 00:02:00 -> LBA 0
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_seek);
