@@ -319,14 +319,21 @@ namespace mnemos::manifests::sega32x {
                 comm_bootstrap_after_byte_read(*tx, a);
                 return byte;
             },
-            [tx](std::uint32_t a, std::uint8_t value) {
+            [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
                 if (off == 0x12U) {
                     // The DREQ FIFO write port pushes once per completed word:
                     // the even byte latches the high half, the odd completes.
+                    // A full queue means the SH-2 DMA hasn't run yet this
+                    // slice -- catch the SH-2 pair up mid-slice so the drain
+                    // happens "now", as it would on hardware, instead of
+                    // dropping stream words (dropped PCM is white noise).
                     if ((a & 1U) == 0U) {
                         tx->dreq_write_high = value;
                     } else if ((tx->dreq_ctrl & 0x0004U) != 0U) {
+                        if (tx->dreq_fifo_count >= sega32x_system::dreq_fifo_depth) {
+                            machine->catch_up_sh2();
+                        }
                         tx->dreq_fifo_push(static_cast<std::uint16_t>(
                             (static_cast<std::uint16_t>(tx->dreq_write_high) << 8U) | value));
                     }
