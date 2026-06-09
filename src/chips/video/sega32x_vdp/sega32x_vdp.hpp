@@ -93,11 +93,14 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint8_t mode() const noexcept {
             return static_cast<std::uint8_t>(bitmap_mode_ & 0x03U);
         }
-        // Currently displayed frame-buffer bank (FBCR bit 0); the CPUs draw
-        // into the other one.
-        [[nodiscard]] int visible_bank() const noexcept {
+        // FBCR FS (bit 0) selects the frame-buffer bank the CPUs ACCESS through
+        // the $04000000 window; the scanout displays the OTHER bank. Both flip
+        // together at the V-blank FS commit, which is what makes the
+        // double-buffer swap tear-free.
+        [[nodiscard]] int access_bank() const noexcept {
             return static_cast<int>(fb_control_ & 0x1U);
         }
+        [[nodiscard]] int display_bank() const noexcept { return access_bank() ^ 1; }
         [[nodiscard]] std::uint16_t fb_control() const noexcept { return fb_control_; }
         [[nodiscard]] std::uint16_t palette(std::size_t idx) const noexcept {
             return idx < palette_entries ? palette_[idx] : 0U;

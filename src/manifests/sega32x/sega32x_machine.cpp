@@ -237,8 +237,10 @@ namespace mnemos::manifests::sega32x {
             g->on_vblank(in_vblank);
             // Drive the 32X VDP's VBLK status bit and its frame-select
             // flip-flop from the same edge (HBLK joins with the per-scanline
-            // player loop in phase D).
+            // player loop in phase D), then swing the $04000000 window onto
+            // the new access bank -- the double-buffer swap.
             tx->vdp.set_blanking(false, in_vblank);
+            tx->set_fb_access_bank(tx->vdp.access_bank());
             if (in_vblank) {
                 tx->adapter_ctrl |= 0x0080U;
                 tx->raise_vint();

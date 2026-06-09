@@ -14,7 +14,8 @@
 namespace mnemos::manifests::sega32x {
 
     inline constexpr std::size_t sdram_size = 256U * 1024U;       // $06000000 shared work RAM
-    inline constexpr std::size_t framebuffer_size = 256U * 1024U; // $04000000 32X frame buffer
+    inline constexpr std::size_t framebuffer_size = 256U * 1024U; // both frame-buffer banks
+    inline constexpr std::size_t fb_bank_size = 128U * 1024U;     // one bank = one $04000000 view
     inline constexpr std::size_t m_bios_size = 2U * 1024U;        // master SH-2 boot ROM
     inline constexpr std::size_t s_bios_size = 1U * 1024U;        // slave SH-2 boot ROM
     inline constexpr std::size_t g_bios_size = 256U;              // 68000-side vector overlay
@@ -197,6 +198,12 @@ namespace mnemos::manifests::sega32x {
         // $02000000 plus the cache-through views at $20000000/$22000000 and
         // their partition aliases). Call once, before the SH-2s are released.
         void attach_cart(std::span<const std::uint8_t> rom);
+
+        // Retarget the $04000000 frame-buffer windows (all partition bases,
+        // both buses) at the given 128 KiB bank -- the FS access-bank flip,
+        // driven at each V-blank frame-select commit. No-op when unchanged.
+        void set_fb_access_bank(int bank);
+        int fb_access_bank{0};
 
         // Power-on: clear board state and (re)load both SH-2 reset vectors from
         // their BIOS. The CPUs stay held until set_sh2_reset(false).

@@ -354,11 +354,14 @@ namespace mnemos::manifests::sega32x {
                                       (cur & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
         vdp.write16(reg, next);
         // A word write to the first AUTOFILL_DATA cell fires the fill into the
-        // shared frame buffer (the chip itself only latches). On this
-        // byte-decomposed bus the word completes with its LOW byte -- firing on
-        // both halves would run a second fill from the latched end address.
+        // ACCESS bank of the frame buffer (the chip itself only latches). On
+        // this byte-decomposed bus the word completes with its LOW byte --
+        // firing on both halves would run a second fill from the latched end
+        // address.
         if (reg == chips::video::sega32x_vdp::reg_autofill_data && (offset & 1U) != 0U) {
-            vdp.autofill_execute(framebuffer);
+            vdp.autofill_execute(
+                {framebuffer.data() + static_cast<std::size_t>(vdp.access_bank()) * fb_bank_size,
+                 fb_bank_size});
         }
     }
 
@@ -469,6 +472,24 @@ namespace mnemos::manifests::sega32x {
             for (const std::uint32_t base : p1_bases) {
                 bus->map_rom(base, cart_rom, 0);
                 bus->map_rom(base + cart_base, cart_rom, 0);
+            }
+        }
+    }
+
+    void sega32x_system::set_fb_access_bank(int bank) {
+        bank &= 1;
+        if (bank == fb_access_bank) {
+            return;
+        }
+        fb_access_bank = bank;
+        const std::span<std::uint8_t> view{
+            framebuffer.data() + static_cast<std::size_t>(bank) * fb_bank_size, fb_bank_size};
+        for (topology::bus* bus : {&master_bus, &slave_bus}) {
+            for (const std::uint32_t base : p0_bases) {
+                bus->retarget_ram(base + framebuffer_base, view);
+            }
+            for (const std::uint32_t base : p1_bases) {
+                bus->retarget_ram(base + framebuffer_base, view);
             }
         }
     }
@@ -588,13 +609,18 @@ namespace mnemos::manifests::sega32x {
             s->master_bus.map_rom(base + bios_base, s->m_bios, 0);
             s->slave_bus.map_rom(base + bios_base, s->s_bios, 0);
         }
+        // The $04000000 window exposes ONE 128 KiB frame-buffer bank (the FS
+        // access bank, initially bank 0); set_fb_access_bank retargets it at
+        // each frame-select commit. The displayed bank is only reachable
+        // through the VDP's composition path, like hardware.
+        const std::span<std::uint8_t> fb_bank0{s->framebuffer.data(), fb_bank_size};
         for (topology::bus* bus : {&s->master_bus, &s->slave_bus}) {
             for (const std::uint32_t base : p0_bases) {
-                bus->map_ram(base + framebuffer_base, s->framebuffer, 0);
+                bus->map_ram(base + framebuffer_base, fb_bank0, 0);
                 bus->map_ram(base + sdram_base, s->sdram, 0);
             }
             for (const std::uint32_t base : p1_bases) {
-                bus->map_ram(base + framebuffer_base, s->framebuffer, 0);
+                bus->map_ram(base + framebuffer_base, fb_bank0, 0);
                 bus->map_ram(base + sdram_base, s->sdram, 0);
             }
         }

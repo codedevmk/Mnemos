@@ -3,6 +3,8 @@
 #include "ibus.hpp"
 #include "state.hpp"
 
+#include <limits>
+
 namespace mnemos::chips::cpu {
 
     namespace {
@@ -123,6 +125,27 @@ namespace mnemos::chips::cpu {
         case 0x83U:
             return rstcsr_;
         default:
+            if (off >= 0x100U && off < 0x140U) { // DIVU (mirrored at +$20)
+                const std::uint32_t canon = off >= 0x120U ? off - 0x20U : off;
+                switch (canon & 0x1CU) {
+                case 0x00U:
+                    return reg_byte(dvsr_, off);
+                case 0x04U:
+                    return reg_byte(dvdnt_, off);
+                case 0x08U:
+                    return reg_byte(dvcr_ & 0x03U, off);
+                case 0x0CU:
+                    return reg_byte(vcrdiv_ & 0x7FU, off);
+                case 0x10U:
+                    return reg_byte(dvdnth_, off);
+                case 0x14U:
+                    return reg_byte(dvdntl_, off);
+                case 0x18U:
+                    return reg_byte(dvdntuh_, off);
+                default:
+                    return reg_byte(dvdntul_, off);
+                }
+            }
             if (off >= 0x180U && off < 0x1A0U) { // DMAC channel registers (32-bit)
                 const dma_channel& ch = dma_[(off >> 4U) & 1U];
                 switch ((off >> 2U) & 3U) {
@@ -233,6 +256,44 @@ namespace mnemos::chips::cpu {
             }
             return;
         default:
+            if (off >= 0x100U && off < 0x140U) { // DIVU (mirrored at +$20)
+                const std::uint32_t canon = off >= 0x120U ? off - 0x20U : off;
+                // The divide fires when the LAST byte of the trigger register
+                // completes (a 32-bit store arrives as four byte writes here).
+                const bool last_byte = (off & 3U) == 3U;
+                switch (canon & 0x1CU) {
+                case 0x00U:
+                    dvsr_ = set_reg_byte(dvsr_, off, value);
+                    return;
+                case 0x04U:
+                    dvdnt_ = set_reg_byte(dvdnt_, off, value);
+                    if (last_byte) {
+                        divu_run_32();
+                    }
+                    return;
+                case 0x08U:
+                    dvcr_ = set_reg_byte(dvcr_, off, value) & 0x03U;
+                    return;
+                case 0x0CU:
+                    vcrdiv_ = static_cast<std::uint16_t>(set_reg_byte(vcrdiv_, off, value) & 0x7FU);
+                    return;
+                case 0x10U:
+                    dvdnth_ = set_reg_byte(dvdnth_, off, value);
+                    return;
+                case 0x14U:
+                    dvdntl_ = set_reg_byte(dvdntl_, off, value);
+                    if (last_byte) {
+                        divu_run_64();
+                    }
+                    return;
+                case 0x18U:
+                    dvdntuh_ = set_reg_byte(dvdntuh_, off, value);
+                    return;
+                default:
+                    dvdntul_ = set_reg_byte(dvdntul_, off, value);
+                    return;
+                }
+            }
             if (off >= 0x180U && off < 0x1A0U) { // DMAC channel registers (32-bit)
                 dma_channel& ch = dma_[(off >> 4U) & 1U];
                 switch ((off >> 2U) & 3U) {
@@ -257,6 +318,97 @@ namespace mnemos::chips::cpu {
             regs_[off] = value;
             return;
         }
+    }
+
+    void sh2_peripherals::divu_finish(bool overflow, std::uint32_t quotient,
+                                      std::uint32_t remainder) noexcept {
+        dvdnt_ = quotient;
+        dvdntl_ = quotient;
+        dvdnth_ = remainder;
+        if (overflow) {
+            dvcr_ |= 0x01U; // OVF
+        }
+        dvdntuh_ = dvdnth_;
+        dvdntul_ = dvdntl_;
+    }
+
+    void sh2_peripherals::divu_run_32() noexcept {
+        // Signed 32/32. The unit first widens the dividend into DVDNTH:DVDNTL.
+        dvdntl_ = dvdnt_;
+        dvdnth_ = (dvdnt_ & 0x80000000U) != 0U ? 0xFFFFFFFFU : 0x00000000U;
+        const auto dividend = static_cast<std::int32_t>(dvdnt_);
+        const auto divisor = static_cast<std::int32_t>(dvsr_);
+        if (divisor == 0) {
+            // Divide-by-zero: the aborted hardware iteration leaves a shifted
+            // remainder; the quotient saturates unless OVFIE selects the raw
+            // partial result.
+            const std::uint32_t rem =
+                static_cast<std::uint32_t>(static_cast<std::int64_t>(dividend) >> 29);
+            std::uint32_t quot = 0;
+            if ((dvcr_ & 0x02U) != 0U) { // OVFIE: raw partial quotient
+                quot = (dvdnt_ << 3U) | (dividend < 0 ? 0U : 7U);
+            } else {
+                quot = dividend < 0 ? 0x80000000U : 0x7FFFFFFFU;
+            }
+            divu_finish(true, quot, rem);
+            return;
+        }
+        if (dividend == std::numeric_limits<std::int32_t>::min() && divisor == -1) {
+            divu_finish(false, 0x80000000U, 0U);
+            return;
+        }
+        const std::int32_t q = dividend / divisor;
+        const std::int32_t r = dividend - q * divisor;
+        divu_finish(false, static_cast<std::uint32_t>(q), static_cast<std::uint32_t>(r));
+    }
+
+    void sh2_peripherals::divu_run_64() noexcept {
+        // Signed 64/32 of DVDNTH:DVDNTL by DVSR.
+        const std::uint64_t dividend_bits = (static_cast<std::uint64_t>(dvdnth_) << 32U) | dvdntl_;
+        const auto dividend = static_cast<std::int64_t>(dividend_bits);
+        const auto divisor = static_cast<std::int32_t>(dvsr_);
+        if (dividend == static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::min()) &&
+            (divisor == 1 || divisor == -1)) {
+            divu_finish(false, 0x80000000U, 0U);
+            return;
+        }
+        const bool zero = divisor == 0;
+        std::int64_t q = 0;
+        std::int64_t r = 0;
+        if (!zero) {
+            q = dividend / divisor;
+            r = dividend - q * static_cast<std::int64_t>(divisor);
+        }
+        if (zero || q > 0x7FFFFFFFLL || q < -0x80000000LL) {
+            // Overflow: run the three aborted non-restoring iterations the
+            // hardware performs before stopping, for the remainder image; the
+            // quotient saturates by the dividend/divisor signs unless OVFIE
+            // selects the raw partial result.
+            std::uint64_t work = dividend_bits;
+            const std::uint64_t divisor_shifted = static_cast<std::uint64_t>(dvsr_) << 32U;
+            const bool divisor_negative = divisor < 0;
+            for (unsigned i = 0; i < 3U; ++i) {
+                bool work_negative = (work & 0x8000000000000000ULL) != 0U;
+                if (work_negative == divisor_negative) {
+                    work -= divisor_shifted;
+                } else {
+                    work += divisor_shifted;
+                }
+                work_negative = (work & 0x8000000000000000ULL) != 0U;
+                work = (work << 1U) | (work_negative == divisor_negative ? 1ULL : 0ULL);
+            }
+            std::uint32_t quot = 0;
+            if ((dvcr_ & 0x02U) != 0U) { // OVFIE: raw partial quotient
+                quot = static_cast<std::uint32_t>(work);
+            } else {
+                const auto high = static_cast<std::int32_t>(dvdnth_);
+                quot = (high ^ divisor) < 0 ? 0x80000000U : 0x7FFFFFFFU;
+            }
+            divu_finish(true, quot, static_cast<std::uint32_t>(work >> 32U));
+            return;
+        }
+        divu_finish(false, static_cast<std::uint32_t>(q & 0xFFFFFFFFU),
+                    static_cast<std::uint32_t>(r & 0xFFFFFFFFU));
     }
 
     void sh2_peripherals::tick(std::uint64_t cycles) noexcept {
@@ -398,6 +550,14 @@ namespace mnemos::chips::cpu {
         wtcsr_ovf_read_ = false;
         dma_ = {};
         dmaor_ = 0U;
+        dvsr_ = 0U;
+        dvdnt_ = 0U;
+        dvcr_ = 0U;
+        vcrdiv_ = 0U;
+        dvdnth_ = 0U;
+        dvdntl_ = 0U;
+        dvdntuh_ = 0U;
+        dvdntul_ = 0U;
         // bus_ is the attached handle, not reset state -- leave it intact.
     }
 
@@ -429,6 +589,14 @@ namespace mnemos::chips::cpu {
             writer.u32(ch.chcr);
         }
         writer.u32(dmaor_);
+        writer.u32(dvsr_);
+        writer.u32(dvdnt_);
+        writer.u32(dvcr_);
+        writer.u16(vcrdiv_);
+        writer.u32(dvdnth_);
+        writer.u32(dvdntl_);
+        writer.u32(dvdntuh_);
+        writer.u32(dvdntul_);
     }
 
     void sh2_peripherals::load_state(state_reader& reader) {
@@ -459,6 +627,14 @@ namespace mnemos::chips::cpu {
             ch.chcr = reader.u32();
         }
         dmaor_ = reader.u32();
+        dvsr_ = reader.u32();
+        dvdnt_ = reader.u32();
+        dvcr_ = reader.u32();
+        vcrdiv_ = reader.u16();
+        dvdnth_ = reader.u32();
+        dvdntl_ = reader.u32();
+        dvdntuh_ = reader.u32();
+        dvdntul_ = reader.u32();
     }
 
 } // namespace mnemos::chips::cpu
