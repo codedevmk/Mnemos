@@ -118,6 +118,26 @@ namespace mnemos::chips::cpu {
 
         // Run any active auto-request DMA channel to completion (called per tick).
         void run_dmac() noexcept;
+
+        // DIVU -- the division unit ($FF00-$FF1F, mirrored at $FF20-$FF3F).
+        // Completing a DVDNT write starts a signed 32/32 divide (quotient ->
+        // DVDNT/DVDNTL, remainder -> DVDNTH); completing a DVDNTL write starts
+        // a signed 64/32 divide of DVDNTH:DVDNTL by DVSR. Divide-by-zero and a
+        // quotient outside 32 bits set DVCR.OVF and yield the partial-iteration
+        // hardware result. Results complete immediately (the 39-cycle latency
+        // is below what retail polling observes); DVDNTUH/UL shadow the last
+        // result. The overflow interrupt (OVFIE + VCRDIV) is storage-only.
+        std::uint32_t dvsr_{};    // FF00 divisor
+        std::uint32_t dvdnt_{};   // FF04 32-bit dividend / quotient
+        std::uint32_t dvcr_{};    // FF08 control (bit 0 OVF, bit 1 OVFIE)
+        std::uint16_t vcrdiv_{};  // FF0C overflow-interrupt vector
+        std::uint32_t dvdnth_{};  // FF10 dividend high / remainder
+        std::uint32_t dvdntl_{};  // FF14 dividend low / quotient
+        std::uint32_t dvdntuh_{}; // FF18 shadow of the last remainder
+        std::uint32_t dvdntul_{}; // FF1C shadow of the last quotient
+        void divu_run_32() noexcept;
+        void divu_run_64() noexcept;
+        void divu_finish(bool overflow, std::uint32_t quotient, std::uint32_t remainder) noexcept;
     };
 
 } // namespace mnemos::chips::cpu

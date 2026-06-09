@@ -322,13 +322,21 @@ TEST_CASE("sega32x_machine commits the VDP frame-select on the V-blank edge",
     }
     CHECK((tx.vdp.fb_control() & 0x8000U) == 0U); // VBLK low in active display
 
-    // The SH-2 writes FS=1; the displayed bank holds until V-blank rises.
+    // The SH-2 writes FS=1; the banks hold until V-blank rises, then both the
+    // access bank and the $04000000 window flip together.
     tx.master_bus.write8(0x0000410BU, 0x01U); // FBCR low byte
-    CHECK(tx.vdp.visible_bank() == 0);
+    CHECK(tx.vdp.access_bank() == 0);
+    CHECK(tx.fb_access_bank == 0);
     for (int line = 0; line < 262; ++line) {
         vdp.tick(3420U);
     }
-    CHECK(tx.vdp.visible_bank() == 1);
+    CHECK(tx.vdp.access_bank() == 1);
+    CHECK(tx.fb_access_bank == 1);
+    // The window now reaches bank 1: a write through $04000000 lands at
+    // byte $20000 of the underlying store.
+    tx.master_bus.write8(0x04000000U, 0x5AU);
+    CHECK(tx.framebuffer[0x20000] == 0x5AU);
+    CHECK(tx.framebuffer[0] != 0x5AU);
 }
 
 TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",

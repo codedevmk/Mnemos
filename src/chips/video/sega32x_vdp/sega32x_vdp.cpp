@@ -172,9 +172,9 @@ namespace mnemos::chips::video {
         };
 
         // Every bitmap mode locates a row through the line table at the start
-        // of the visible bank: one big-endian word per line giving the row
+        // of the displayed bank: one big-endian word per line giving the row
         // data's word offset within the bank.
-        const std::size_t bank_base = static_cast<std::size_t>(visible_bank()) * 0x20000U;
+        const std::size_t bank_base = static_cast<std::size_t>(display_bank()) * 0x20000U;
         const std::size_t table_off = bank_base + static_cast<std::size_t>(y) * 2U;
         if (table_off + 1U >= fb.size()) {
             return;

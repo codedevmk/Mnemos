@@ -1191,3 +1191,69 @@ TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     m.cpu.step_instruction();
     CHECK(seen.size() == 1U);
 }
+
+TEST_CASE("sh2_peripherals DIVU performs signed 32/32 division on the DVDNT write") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    const auto wr32 = [&p](std::uint32_t addr, std::uint32_t v) {
+        p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
+        p.write8(addr + 1U, static_cast<std::uint8_t>(v >> 16U));
+        p.write8(addr + 2U, static_cast<std::uint8_t>(v >> 8U));
+        p.write8(addr + 3U, static_cast<std::uint8_t>(v));
+    };
+    const auto rd32 = [&p](std::uint32_t addr) {
+        return (static_cast<std::uint32_t>(p.read8(addr)) << 24U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
+    };
+
+    wr32(0xFFFFFF00U, 7U);                   // DVSR
+    wr32(0xFFFFFF04U, 100U);                 // DVDNT -> divide fires
+    CHECK(rd32(0xFFFFFF04U) == 14U);         // quotient
+    CHECK(rd32(0xFFFFFF14U) == 14U);         // DVDNTL mirror
+    CHECK(rd32(0xFFFFFF10U) == 2U);          // remainder in DVDNTH
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 0U); // no overflow
+
+    // Negative dividend: -100 / 7 = -14 rem -2 (truncating like the hardware).
+    wr32(0xFFFFFF04U, static_cast<std::uint32_t>(-100));
+    CHECK(rd32(0xFFFFFF04U) == static_cast<std::uint32_t>(-14));
+    CHECK(rd32(0xFFFFFF10U) == static_cast<std::uint32_t>(-2));
+
+    // Divide by zero saturates and sets DVCR.OVF.
+    wr32(0xFFFFFF00U, 0U);
+    wr32(0xFFFFFF04U, 5U);
+    CHECK(rd32(0xFFFFFF04U) == 0x7FFFFFFFU);
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U);
+}
+
+TEST_CASE("sh2_peripherals DIVU performs signed 64/32 division on the DVDNTL write") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    const auto wr32 = [&p](std::uint32_t addr, std::uint32_t v) {
+        p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
+        p.write8(addr + 1U, static_cast<std::uint8_t>(v >> 16U));
+        p.write8(addr + 2U, static_cast<std::uint8_t>(v >> 8U));
+        p.write8(addr + 3U, static_cast<std::uint8_t>(v));
+    };
+    const auto rd32 = [&p](std::uint32_t addr) {
+        return (static_cast<std::uint32_t>(p.read8(addr)) << 24U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
+    };
+
+    // (1 << 35) / 32 = 1 << 30, remainder 0. Dividend = $00000008:00000000.
+    wr32(0xFFFFFF00U, 32U);         // DVSR
+    wr32(0xFFFFFF10U, 0x00000008U); // DVDNTH
+    wr32(0xFFFFFF14U, 0x00000000U); // DVDNTL -> divide fires
+    CHECK(rd32(0xFFFFFF14U) == 0x40000000U);
+    CHECK(rd32(0xFFFFFF10U) == 0U);
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 0U);
+    // The shadow registers latch the result; the +$20 mirror reads the same.
+    CHECK(rd32(0xFFFFFF1CU) == 0x40000000U);
+    CHECK(rd32(0xFFFFFF34U) == 0x40000000U);
+
+    // Quotient overflow (1 << 35 / 2 needs 34 bits): saturate + OVF.
+    wr32(0xFFFFFF00U, 2U);
+    wr32(0xFFFFFF10U, 0x00000008U);
+    wr32(0xFFFFFF14U, 0x00000000U);
+    CHECK(rd32(0xFFFFFF14U) == 0x7FFFFFFFU);
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U);
+}

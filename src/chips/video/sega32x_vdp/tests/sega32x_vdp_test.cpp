@@ -78,22 +78,26 @@ TEST_CASE("sega32x_vdp autofill sweeps one 256-word row and latches the end addr
 TEST_CASE("sega32x_vdp frame-select commits on the V-blank rising edge", "[sega32x_vdp]") {
     sega32x_vdp v;
 
-    // The FS write latches but the displayed bank holds until V-blank rises.
+    // Out of reset FS = 0: the CPUs access bank 0, bank 1 is displayed. The FS
+    // write latches but nothing flips until V-blank rises.
+    CHECK(v.access_bank() == 0);
+    CHECK(v.display_bank() == 1);
     v.write16(sega32x_vdp::reg_fb_control, 0x0001U);
-    CHECK(v.visible_bank() == 0);
+    CHECK(v.access_bank() == 0);
     CHECK((v.read16(sega32x_vdp::reg_fb_control) & 0x0001U) == 0U);
 
     v.set_blanking(false, false); // still in active display
-    CHECK(v.visible_bank() == 0);
+    CHECK(v.access_bank() == 0);
 
-    v.set_blanking(false, true); // V-blank rising edge: commit
-    CHECK(v.visible_bank() == 1);
+    v.set_blanking(false, true); // V-blank rising edge: commit (both flip)
+    CHECK(v.access_bank() == 1);
+    CHECK(v.display_bank() == 0);
     CHECK((v.read16(sega32x_vdp::reg_fb_control) & 0x8000U) != 0U); // VBLK
     CHECK((v.read16(sega32x_vdp::reg_fb_control) & 0x4000U) == 0U); // HBLK
 
     // Falling edge: VBLK clears, the committed bank stays.
     v.set_blanking(true, false);
-    CHECK(v.visible_bank() == 1);
+    CHECK(v.access_bank() == 1);
     CHECK((v.read16(sega32x_vdp::reg_fb_control) & 0x4000U) != 0U); // HBLK
     CHECK((v.read16(sega32x_vdp::reg_fb_control) & 0x8000U) == 0U);
 }
@@ -106,14 +110,15 @@ TEST_CASE("sega32x_vdp composes packed-mode pixels with priority and transparenc
     v.palette_write16(1U * 2U, bgr15(31, 0, 0, true));  // index 1: red, over
     v.palette_write16(2U * 2U, bgr15(0, 31, 0, false)); // index 2: green, behind
 
-    // Line table: row 0's data starts at word $0100 (byte $200) in the bank.
-    fb[0] = 0x01U;
-    fb[1] = 0x00U;
+    // With FS = 0 the DISPLAYED bank is bank 1 (byte $20000). Line table:
+    // row 0's data starts at word $0100 (byte $200) within that bank.
+    fb[0x20000] = 0x01U;
+    fb[0x20001] = 0x00U;
     // Row 0: pixel 0 = transparent, 1 = red/over, 2..3 = green/behind.
-    fb[0x200] = 0U;
-    fb[0x201] = 1U;
-    fb[0x202] = 2U;
-    fb[0x203] = 2U;
+    fb[0x20200] = 0U;
+    fb[0x20201] = 1U;
+    fb[0x20202] = 2U;
+    fb[0x20203] = 2U;
 
     // The Genesis row has content at x=1 and x=2 but backdrop (black) at x=3.
     std::vector<std::uint32_t> row(320, 0U);
@@ -133,11 +138,12 @@ TEST_CASE("sega32x_vdp composes direct-colour pixels through the line table", "[
     std::vector<std::uint8_t> fb(0x40000, 0);
     v.write16(sega32x_vdp::reg_bitmap_mode, sega32x_vdp::mode_direct);
 
-    // Line table: row 3's entry (table word 3) points at word $0200 (byte $400).
-    fb[3U * 2U] = 0x02U;
-    fb[3U * 2U + 1U] = 0x00U;
+    // Displayed bank (FS = 0) is bank 1. Line table: row 3's entry points at
+    // word $0200 (byte $400) within the bank.
+    fb[0x20000U + 3U * 2U] = 0x02U;
+    fb[0x20000U + 3U * 2U + 1U] = 0x00U;
     // Pixel 5 of that row: priority white, big-endian word.
-    const std::size_t bo = 0x400U + 5U * 2U;
+    const std::size_t bo = 0x20400U + 5U * 2U;
     const std::uint16_t white = bgr15(31, 31, 31, true);
     fb[bo] = static_cast<std::uint8_t>(white >> 8U);
     fb[bo + 1U] = static_cast<std::uint8_t>(white);
@@ -177,6 +183,6 @@ TEST_CASE("sega32x_vdp save/load round-trips the full state", "[sega32x_vdp]") {
     CHECK(restored.read16(sega32x_vdp::reg_bitmap_mode) == 0x0001U);
     CHECK(restored.read16(sega32x_vdp::reg_autofill_addr) == 0x1234U);
     CHECK(restored.palette_read16(4U) == 0x7FFFU);
-    CHECK(restored.visible_bank() == 1);
+    CHECK(restored.access_bank() == 1);
     CHECK(restored.fb_control() == v.fb_control());
 }

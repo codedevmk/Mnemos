@@ -62,6 +62,18 @@ namespace mnemos::topology {
         fast_region_ = nullptr;
     }
 
+    void bus::retarget_ram(std::uint32_t start, std::span<std::uint8_t> storage) noexcept {
+        for (region& r : regions_) {
+            if (r.backing == kind::ram && r.start == start && r.ram.size() == storage.size()) {
+                r.ram = storage;
+            }
+        }
+        // The fast path may cache a span into the old storage.
+        fast_start_ = 1U;
+        fast_end_ = 0U;
+        fast_region_ = nullptr;
+    }
+
     const bus::region* bus::resolve(std::uint32_t address, bool is_write) const noexcept {
         // Highest-priority region that covers the address and is active for this
         // access. (Region counts are tiny; a linear scan is fine for v0.1. Cached

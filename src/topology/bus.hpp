@@ -58,6 +58,13 @@ namespace mnemos::topology {
         void map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                       write_handler on_write, int priority = 0, active_predicate active = {});
 
+        // Point an existing RAM region (matched by its exact `start`) at new
+        // backing storage of the same size -- the bank-window primitive (the
+        // 32X frame-buffer access bank flips at each frame-select commit).
+        // Cheaper than unmap/remap and keeps region order/priority stable.
+        // No-op if no RAM region starts at `start`; asserts on size mismatch.
+        void retarget_ram(std::uint32_t start, std::span<std::uint8_t> storage) noexcept;
+
         // ibus: unmapped reads return 0xFF (open bus); unmapped writes are dropped.
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
         void write8(std::uint32_t address, std::uint8_t value) override;

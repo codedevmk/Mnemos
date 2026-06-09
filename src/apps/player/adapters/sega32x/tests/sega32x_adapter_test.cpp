@@ -88,13 +88,14 @@ TEST_CASE("sega32x_adapter overlays 32X pixels onto the composed frame", "[sega3
     auto& tx = *adapter.machine().thirtytwox;
 
     // Packed mode, palette index 1 = priority white, one pixel at row 0 col 0.
-    // The line table at the bank start points row 0 at word $0100 (byte $200).
+    // FS = 0 displays bank 1; the line table at the bank start points row 0 at
+    // word $0100 (byte $200) within the bank.
     using vdp_chip = mnemos::chips::video::sega32x_vdp;
     tx.vdp.write16(vdp_chip::reg_bitmap_mode, vdp_chip::mode_packed);
     tx.vdp.palette_write16(1U * 2U, 0xFFFFU); // priority + white (5:5:5 all on)
-    tx.framebuffer[0] = 0x01U;
-    tx.framebuffer[1] = 0x00U;
-    tx.framebuffer[0x200] = 1U;
+    tx.framebuffer[0x20000] = 0x01U;
+    tx.framebuffer[0x20001] = 0x00U;
+    tx.framebuffer[0x20200] = 1U;
 
     adapter.step_one_frame();
     const auto composed = adapter.current_frame();
