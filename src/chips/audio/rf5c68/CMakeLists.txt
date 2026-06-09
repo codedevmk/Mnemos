@@ -19,7 +19,9 @@ mnemos_declare_tier(NAME mnemos_chips_audio_rf5c68 TIER 2 DEPENDS mnemos_foundat
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_audio_rf5c68_test
-        SOURCES tests/rf5c68_test.cpp
+        SOURCES
+            tests/rf5c68_test.cpp
+            tests/rf5c68_assets_test.cpp
         LIBRARIES mnemos::chips::audio::rf5c68
     )
 endif()

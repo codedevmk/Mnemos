@@ -2,6 +2,7 @@
 
 #include "asset_views.hpp"
 #include "file.hpp"
+#include "json_util.hpp"
 #include "path_id.hpp"
 #include "png_image.hpp"
 
@@ -108,20 +109,6 @@ namespace mnemos::debug {
             return true;
         }
 
-        // A minimal JSON string literal: quoted, with '"' and '\\' escaped.
-        // Asset/chip names are simple identifiers, so this is sufficient.
-        std::string json_str(std::string_view s) {
-            std::string out = "\"";
-            for (char c : s) {
-                if (c == '"' || c == '\\') {
-                    out.push_back('\\');
-                }
-                out.push_back(c);
-            }
-            out.push_back('"');
-            return out;
-        }
-
     } // namespace
 
     std::size_t export_assets(const frontend_sdk::player_system& sys,
@@ -144,8 +131,8 @@ namespace mnemos::debug {
 
             json += first_chip ? "\n" : ",\n";
             first_chip = false;
-            json += "    {\n      \"id\": " + json_str(chip_id) +
-                    ",\n      \"part_number\": " + json_str(chip->metadata().part_number) +
+            json += "    {\n      \"id\": " + json_string(chip_id) +
+                    ",\n      \"part_number\": " + json_string(chip->metadata().part_number) +
                     ",\n      \"palettes\": [";
 
             for (std::size_t i = 0; i < pals.size(); ++i) {
@@ -165,11 +152,11 @@ namespace mnemos::debug {
                     base_path + "." + chip_id + ".pal." + std::string(p.name) + ".pal";
                 (void)write_pal(pal_path, p);
                 json += i == 0 ? "\n" : ",\n";
-                json += "        {\"name\": " + json_str(p.name) +
+                json += "        {\"name\": " + json_string(p.name) +
                         ", \"colors\": " + std::to_string(p.colors.size()) +
                         ", \"transparent_index\": " + std::to_string(p.transparent_index) +
-                        ", \"file\": " + json_str(path_basename(path)) +
-                        ", \"pal_file\": " + json_str(path_basename(pal_path)) + "}";
+                        ", \"file\": " + json_string(path_basename(path)) +
+                        ", \"pal_file\": " + json_string(path_basename(pal_path)) + "}";
             }
             json += pals.empty() ? "],\n      \"assets\": [" : "\n      ],\n      \"assets\": [";
 
@@ -187,15 +174,16 @@ namespace mnemos::debug {
                     ++written;
                 }
                 json += i == 0 ? "\n" : ",\n";
-                json += "        {\"name\": " + json_str(a.name) + ", \"kind\": " + json_str(kind) +
+                json += "        {\"name\": " + json_string(a.name) +
+                        ", \"kind\": " + json_string(kind) +
                         ", \"width\": " + std::to_string(a.image.width) +
                         ", \"height\": " + std::to_string(a.image.height) +
                         ", \"tile_w\": " + std::to_string(a.tile_w) +
                         ", \"tile_h\": " + std::to_string(a.tile_h) +
                         ", \"palette\": " + std::to_string(a.image.palette) +
                         ", \"source_addr\": " + std::to_string(a.source_addr) +
-                        ", \"file\": " + json_str(path_basename(path)) +
-                        ", \"indexed_file\": " + json_str(path_basename(idx_path)) + "}";
+                        ", \"file\": " + json_string(path_basename(path)) +
+                        ", \"indexed_file\": " + json_string(path_basename(idx_path)) + "}";
             }
             json += assets.empty() ? "]\n    }" : "\n      ]\n    }";
         }

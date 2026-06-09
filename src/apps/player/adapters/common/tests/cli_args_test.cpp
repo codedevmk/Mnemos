@@ -11,6 +11,7 @@
 namespace {
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
+    using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
     using mnemos::apps::player::adapters::parse_rom_arg;
@@ -136,6 +137,24 @@ TEST_CASE("cli_args: --extract-frames alone (no --extract-assets) returns nullop
 TEST_CASE("cli_args: --extract-assets without a value returns nullopt") {
     auto a = make_argv({"player", "--extract-assets"});
     CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --extract-audio + --extract-frames returns the request") {
+    auto a = make_argv({"player", "--extract-audio", "scratch/snd", "--extract-frames", "120"});
+    const auto req = parse_extract_audio_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->base == "scratch/snd");
+    CHECK(req->frames == 120U);
+}
+
+TEST_CASE("cli_args: --extract-audio defaults to 0 frames and rejects an option value") {
+    auto a = make_argv({"player", "--extract-audio", "scratch/snd"});
+    const auto req = parse_extract_audio_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->frames == 0U);
+
+    auto b = make_argv({"player", "--extract-audio", "--extract-frames", "30"});
+    CHECK(parse_extract_audio_args(b.argc(), b.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: parse_press_events parses button@frame[+duration]") {

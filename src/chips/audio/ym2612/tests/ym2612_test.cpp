@@ -281,3 +281,10 @@ TEST_CASE("ym2612 round-trips a playing voice bit-exactly") {
     CHECK(a.left == b.left);
     CHECK(a.right == b.right);
 }
+
+TEST_CASE("ym2612 exposes its register file via introspection") {
+    ym2612 fm;
+    auto* rv = fm.introspection().registers();
+    REQUIRE(rv != nullptr); // register_view backed by register_snapshot()
+    CHECK_FALSE(rv->registers().empty());
+}

@@ -4,6 +4,8 @@
 #include "state.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 
@@ -281,6 +283,83 @@ namespace mnemos::chips::audio {
 
     instrumentation::ichip_introspection& rf5c68::introspection() noexcept {
         return introspection_;
+    }
+
+    // ---- audio sample extraction ----
+
+    std::span<const instrumentation::sample_view>
+    rf5c68::introspection_surface::audio_source_impl::samples() const {
+        // The chip's native step rate at unity pitch (~32.55 kHz, per the Mega-CD
+        // manual). The stored waveform's natural playback rate; per-voice pitch
+        // (freq_divider) is a playback parameter, not a property of the sample.
+        constexpr std::uint32_t native_rate = 32550U;
+
+        const auto& wram = owner_->waveram_;
+
+        struct meta final {
+            std::uint32_t start;
+            std::size_t off;
+            std::size_t len;
+            int loop;
+        };
+        std::vector<meta> metas;
+
+        pcm_.clear();
+        // A sample is a wave-RAM region, not a voice: voices point at regions and
+        // several may share one. Decode the distinct regions the 8 voices
+        // reference (deduped by start address) rather than 8 near-duplicates.
+        for (int vi = 0; vi < rf5c68::voice_count; ++vi) {
+            const voice& v = owner_->voices_[static_cast<std::size_t>(vi)];
+            const auto start = static_cast<std::uint32_t>(v.start_high) << 8U;
+            const bool seen = std::any_of(metas.begin(), metas.end(),
+                                          [start](const meta& m) { return m.start == start; });
+            if (seen) {
+                continue;
+            }
+            // A real RF5C68 sample runs from its start address until the 0xFF
+            // loop/stop sentinel. A region with no sentinel before the end of wave
+            // RAM (an undefined/blank voice) is not a valid sample -- skip it.
+            std::size_t end = start;
+            while (end < rf5c68::waveram_size && wram[end] != 0xFFU) {
+                ++end;
+            }
+            if (end >= rf5c68::waveram_size || end == start) {
+                continue;
+            }
+            const std::size_t off = pcm_.size();
+            for (std::size_t a = start; a < end; ++a) {
+                const std::uint8_t b = wram[a];
+                // 8-bit sign-magnitude (bit 7 = sign) -> s16 (x256: +-127 -> +-32512).
+                const auto mag = static_cast<std::int16_t>(b & 0x7FU);
+                const auto s = static_cast<std::int16_t>((b & 0x80U) != 0U ? -mag : mag);
+                pcm_.push_back(static_cast<std::int16_t>(s * 256));
+            }
+            int loop = -1;
+            if (v.loop_start >= start && v.loop_start < end) {
+                loop = static_cast<int>(v.loop_start - start);
+            }
+            metas.push_back({.start = start, .off = off, .len = end - start, .loop = loop});
+        }
+
+        // names_ is reserved up front so the string_views the samples hold into it
+        // never dangle on reallocation; pcm_ is complete, so its spans are stable.
+        names_.clear();
+        names_.reserve(metas.size());
+        samples_.clear();
+        samples_.reserve(metas.size());
+        for (std::size_t i = 0; i < metas.size(); ++i) {
+            std::array<char, 16> buf{};
+            std::snprintf(buf.data(), buf.size(), "sample_%04x", metas[i].start);
+            names_.emplace_back(buf.data());
+            samples_.push_back(instrumentation::sample_view{
+                .name = names_[i],
+                .frames = std::span<const std::int16_t>(pcm_).subspan(metas[i].off, metas[i].len),
+                .sample_rate = native_rate,
+                .channels = 1,
+                .loop_start = metas[i].loop,
+                .source_addr = metas[i].start});
+        }
+        return samples_;
     }
 
     std::span<const register_descriptor> rf5c68::register_snapshot() noexcept {

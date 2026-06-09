@@ -24,6 +24,7 @@ namespace mnemos::chips {
 namespace mnemos::instrumentation {
 
     class asset_source; // asset_views.hpp -- decoded graphics-extraction surface
+    class audio_source; // audio_views.hpp -- PCM sample-extraction surface
 
     // A dense byte-addressable region of a chip's state -- VRAM, work RAM, a
     // register file viewed as bytes, etc. Stable name + live bytes for the
@@ -129,6 +130,10 @@ namespace mnemos::instrumentation {
         // fonts), or nullptr when the chip exposes no extractable graphics.
         // Defined in asset_views.hpp; consumers that call this include it.
         [[nodiscard]] virtual asset_source* assets() { return nullptr; }
+
+        // The PCM sample-extraction surface, or nullptr when the chip exposes no
+        // extractable samples. Defined in audio_views.hpp; consumers include it.
+        [[nodiscard]] virtual audio_source* audio() { return nullptr; }
     };
 
 } // namespace mnemos::instrumentation

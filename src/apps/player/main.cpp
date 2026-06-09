@@ -6,6 +6,7 @@
 
 #include "adapter_registry.hpp"
 #include "asset_export.hpp" // --extract-assets: decoded graphics -> PNG + JSON
+#include "audio_export.hpp" // --extract-audio: decoded PCM samples -> WAV + JSON
 #include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "c64_adapter.hpp"  // force_link (the C64 has no cart-header region byte)
 #include "chip.hpp"
@@ -142,6 +143,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::load_rom;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
+    using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
@@ -159,6 +161,7 @@ int main(int argc, char* argv[]) {
     const auto mapper_arg = parse_mapper_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
+    const auto extract_audio = parse_extract_audio_args(argc, argv);
 
     const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
         return resolve_video_region(region_arg, cart_default);
@@ -307,7 +310,7 @@ int main(int argc, char* argv[]) {
         // when the image came from a .zip). Skipped under the headless
         // --screenshot / --extract-assets paths: those diagnostic sweeps over a
         // read-only ROM corpus must not drop saves beside the ROMs.
-        if (!screenshot && !extract) {
+        if (!screenshot && !extract && !extract_audio) {
             srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
         }
     }
@@ -372,6 +375,30 @@ int main(int argc, char* argv[]) {
         std::fprintf(
             stderr, "[mnemos_player] extracted %zu asset image(s) to %s.* after %llu frames\n",
             count, extract->base.c_str(), static_cast<unsigned long long>(extract->frames));
+        std::fflush(stderr);
+        return 0;
+    }
+
+    // Headless audio-extraction path: step --extract-frames frames (let sample
+    // memory fill), then write every chip's PCM samples to <base>.* WAV + JSON
+    // and exit. Same introspection-only drive as --extract-assets, via
+    // audio_source.
+    if (extract_audio) {
+        if (!system) {
+            std::fprintf(stderr, "--extract-audio requires --rom\n");
+            return 1;
+        }
+        const auto press_events = parse_press_events(argc, argv);
+        for (std::uint64_t i = 0; i < extract_audio->frames; ++i) {
+            if (!press_events.empty()) {
+                system->apply_input(0, input_for_frame(press_events, i + 1U));
+            }
+            system->step_one_frame();
+        }
+        const std::size_t count = mnemos::debug::export_audio(*system, extract_audio->base);
+        std::fprintf(stderr, "[mnemos_player] extracted %zu sample(s) to %s.* after %llu frames\n",
+                     count, extract_audio->base.c_str(),
+                     static_cast<unsigned long long>(extract_audio->frames));
         std::fflush(stderr);
         return 0;
     }
