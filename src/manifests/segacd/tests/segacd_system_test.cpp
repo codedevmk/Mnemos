@@ -348,14 +348,16 @@ TEST_CASE("segacd CDD plays a data disc and advances the read head", "[segacd][c
     REQUIRE(disc.has_value());
     auto sys = assemble_segacd();
     sys->attach_disc(&*disc);
-    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_stop); // idle until commanded
+    // Internal drive status is TOC on load (a loaded drive holds the disc's TOC);
+    // the reported status frame is decoupled and stays STOP until Get-Status.
+    REQUIRE(sys->cdd_drive_status == segacd_system::cdd_toc);
 
     issue_play(*sys, 0, 2, 0); // absolute MSF 00:02:00 -> LBA 0
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_seek);
     REQUIRE(sys->cdd_lba == 0);
 
-    for (int i = 0; i < 3; ++i) {
-        sys->cdd_update(); // seek latency resolves to PLAY
+    for (int i = 0; i < 64 && sys->cdd_drive_status != segacd_system::cdd_play; ++i) {
+        sys->cdd_update(); // drive the reference seek-latency window through to PLAY
     }
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_play);
 
@@ -364,7 +366,11 @@ TEST_CASE("segacd CDD plays a data disc and advances the read head", "[segacd][c
     REQUIRE(sys->cdd_lba == 1);
     REQUIRE(sys->cdc_sectors_decoded > before); // a sector was fed to the decoder
     REQUIRE(sys->cdda_active == false);         // data track -> no CD-DA
-    REQUIRE(sys->gate_read(0x38) == (segacd_system::cdd_play & 0x0F)); // status mirrored
+    // The CDD status frame is published on a command (reference model), not from the
+    // per-tick update -- a Get-Status reports the current drive state.
+    sys->gate_write_main(0x42, 0x00); // Get Drive Status
+    sys->gate_write_main(0x4A, 0x00); // commit
+    REQUIRE(sys->gate_read(0x38) == (segacd_system::cdd_play & 0x0F));
 }
 
 TEST_CASE("segacd CDD stop returns to the TOC state", "[segacd][cdd]") {
@@ -413,8 +419,8 @@ TEST_CASE("segacd CDC decodes a sector and raises the level-5 IRQ", "[segacd][cd
     cdc_set_reg(*sys, 0x01, 0x20);                      // IFCTRL: DECIEN
 
     issue_play(*sys, 0, 2, 0);
-    for (int i = 0; i < 4; ++i) {
-        sys->cdd_update(); // seek then decode sector 0
+    for (int i = 0; i < 64 && sys->cdc_sectors_decoded == 0U; ++i) {
+        sys->cdd_update(); // seek (reference latency) then decode sector 0
     }
     REQUIRE(sys->cdc_sectors_decoded > 0U);
     REQUIRE((sys->sub_irq_pending & segacd_system::irq_cdc) != 0U); // level-5 latched
@@ -432,8 +438,8 @@ TEST_CASE("segacd CDC DMAs decoded user data to PRG-RAM", "[segacd][cdc]") {
     sys->attach_disc(&*disc);
     cdc_set_reg(*sys, 0x0A, 0x84); // CTRL0: DECEN | WRRQ
     issue_play(*sys, 0, 2, 0);
-    for (int i = 0; i < 4; ++i) {
-        sys->cdd_update(); // decode sector 0 into the ring
+    for (int i = 0; i < 64 && sys->cdc_sectors_decoded == 0U; ++i) {
+        sys->cdd_update(); // seek (reference latency) then decode sector 0 into the ring
     }
 
     // DMA 8 user-data bytes (skip the 4-byte header) from the ring to PRG-RAM.
@@ -465,8 +471,8 @@ TEST_CASE("segacd CDC DMAs decoded user data to PCM wave RAM", "[segacd][cdc]") 
     sys->attach_disc(&*disc);
     cdc_set_reg(*sys, 0x0A, 0x84); // CTRL0: DECEN | WRRQ
     issue_play(*sys, 0, 2, 0);
-    for (int i = 0; i < 4; ++i) {
-        sys->cdd_update(); // decode sector 0 into the ring
+    for (int i = 0; i < 64 && sys->cdc_sectors_decoded == 0U; ++i) {
+        sys->cdd_update(); // seek (reference latency) then decode sector 0 into the ring
     }
 
     // DMA 8 user-data bytes (skip the 4-byte header) from the ring to PCM RAM.

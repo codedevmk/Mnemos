@@ -28,24 +28,27 @@ namespace mnemos::manifests::segacd {
     void segacd_system::attach_disc(const mnemos::disc::disc_image* image) {
         disc = image;
         cdd_loaded = (image != nullptr) && (image->total_sectors() > 0U);
-        if (cdd_loaded) {
-            // The drive starts STOPPED, reporting the all-zero idle frame
-            // (cdd_set_status) that the sub-CPU BIOS's early CDD sync validates --
-            // it requires RS0=0 there, so starting at cdd_toc (RS0=9) regresses the
-            // boot back to the $132C handshake wait. The correct STOP->TOC handover
-            // needs the register-vs-internal-state decoupling (the handshake reads
-            // the INITIAL all-zero registers, then Get-Status reports TOC) -- TODO.
-            cdd_drive_status = cdd_stop;
-            cdd_lba = 0;
-        } else {
-            cdd_drive_status = cdd_nodisc;
-            cdd_lba = 0;
-        }
+        // Internal drive status is TOC immediately for a loaded disc (the drive holds
+        // the disc's TOC), NO_DISC otherwise -- DECOUPLED from the reported status
+        // frame. The early BIOS CDD sync reads the all-zero STOP frame (RS0=0) we
+        // publish below; the first Get-Status / Report-TOC then publishes the internal
+        // TOC (RS0=9). (Matches the reference, which sets internal cdd.status=CD_TOC on
+        // disc load but leaves the reset register frame STOP-ish.) Previously STOP->TOC
+        // was gated on the main's DMNA ($03 bit1) -- but DMNA is word-RAM ownership, not
+        // drive readiness -- so the drive reached TOC only AFTER the read driver had run
+        // and bailed at its TOC-handler ($5837 bit3) gate.
+        cdd_drive_status = cdd_loaded ? std::uint8_t{cdd_toc} : std::uint8_t{cdd_nodisc};
+        cdd_lba = 0;
         cdd_track = disc_track_of_lba(cdd_lba);
         cdd_pending_status = 0;
         cdd_latency = 0;
         cdda_active = false;
-        cdd_set_status();
+        // Publish the initial all-zero STOP frame (RS0=0) for the boot handshake -- NOT
+        // the internal TOC. Get-Status publishes the live drive status thereafter.
+        for (std::size_t i = 0; i < 10; ++i) {
+            cdd_status[i] = 0;
+        }
+        cdd_commit_status();
     }
 
     std::uint32_t segacd_system::disc_total_lbas() const {
@@ -88,23 +91,28 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_set_status() {
+        // While a seek is in progress (latency > 3) the reference keeps reporting the
+        // committed CD_SEEK + RS1=$0F frame and does NOT refresh the status frame; the
+        // final PLAY/PAUSE status (and valid RS1..RS8 time) is exposed only once latency
+        // drops to <=3. Holding the seek frame for the full window is what lets the BIOS
+        // read driver observe the seek phases (it bails otherwise).
+        if (cdd_latency > 3) {
+            return;
+        }
         // RS0 = drive status. For STOP or any state ABOVE PAUSE (OPEN/TOC/NO_DISC/
-        // END) the drive is not positioned, so RS1..RS8 stay zero (an all-zero MSF
-        // with a valid RS9 checksum) -- the BIOS reads RS0 for the drive state. Only
-        // the active states (PLAY/SEEK/SCAN/PAUSE) report the current absolute MSF.
-        // Mirrors the reference Get-Status, which skips RS1..RS8 outside PLAY..PAUSE
-        // (so STOP stays the all-zero frame and a loaded TOC drive reads as RS0=9).
+        // END) the drive is not positioned, so Get-Status updates only RS0 and
+        // PRESERVES RS1..RS8 -- exactly like the reference (its Get-Status `break`s
+        // for STOP / above-PAUSE, leaving RS1..RS8 untouched). Those bytes hold the
+        // last Report-TOC (cmd2) response: first/last track, track-1 start MSF, and
+        // the CD-ROM/data flag. The BIOS reads that TOC data to decide to Seek+Read.
+        // Clearing RS1..RS8 here (the old behaviour) wiped the TOC response on every
+        // Get-Status poll AND on every 75 Hz cdd_update tick, so the BIOS never saw
+        // the TOC and looped Get-Status at TOC forever instead of Seeking. RS1..RS8
+        // start zero (value-init), so the boot's all-zero STOP handshake frame is
+        // unaffected; only a real TOC response now survives. RS9 is recomputed from
+        // the (possibly preserved) RS0..RS8 in cdd_commit_status.
         cdd_status[0] = static_cast<std::uint8_t>(cdd_drive_status & 0x0FU);
         if (cdd_drive_status == cdd_stop || cdd_drive_status > cdd_pause) {
-            for (std::size_t i = 1; i < 9; ++i) {
-                cdd_status[i] = 0;
-            }
-            // RS9 = the computed checksum ~(RS0+..+RS8) & $F, recomputed after every
-            // command exactly like the reference (cdd.c). For STOP (RS0=0) this is $F
-            // (the all-zero handshake frame the boot CDD sync needs), but a loaded TOC
-            // drive (RS0=9) needs RS9=6; hardcoding $F made the TOC status frame fail
-            // the BIOS checksum, so the BIOS never validated the loaded disc and never
-            // advanced past Get-Status to Seek/Read.
             cdd_commit_status();
             return;
         }
@@ -288,10 +296,16 @@ namespace mnemos::manifests::segacd {
             if (lba < 0) {
                 lba = 0;
             }
+            // Seek window = the reference's CD-drive latency model: base 2 + 10*cd_latency
+            // (cd_latency=1) plus a distance term (max seek ~1.5 s = 120 CDD interrupts over
+            // 270000 sectors). The drive reports CD_SEEK + RS1=$0F for this whole window and
+            // only exposes PLAY/PAUSE once latency drops to <=3; a too-short window made the
+            // BIOS skip the seek phases the read driver depends on.
+            const std::int32_t seek_dist = (lba > cdd_lba) ? (lba - cdd_lba) : (cdd_lba - lba);
+            cdd_latency = 12 + (seek_dist * 120) / 270000;
             cdd_lba = lba;
             cdd_track = disc_track_of_lba(lba);
             cdd_pending_status = cdd_play;
-            cdd_latency = 3; // seek interrupt delay
             cdd_drive_status = cdd_seek;
             if (!disc_lba_is_data(lba)) {
                 cdda_play(static_cast<std::uint32_t>(lba), disc_total_lbas());
@@ -311,10 +325,12 @@ namespace mnemos::manifests::segacd {
             if (lba < 0) {
                 lba = 0;
             }
+            // Distance-based seek window (see Play, cmd $03).
+            const std::int32_t seek_dist = (lba > cdd_lba) ? (lba - cdd_lba) : (cdd_lba - lba);
+            cdd_latency = 12 + (seek_dist * 120) / 270000;
             cdd_lba = lba;
             cdd_track = disc_track_of_lba(lba);
             cdd_pending_status = cdd_pause;
-            cdd_latency = 3;
             cdd_drive_status = cdd_seek;
             cdda_stop();
             cdd_status[0] = cdd_seek;
@@ -362,15 +378,9 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_update() {
-        // STOP->TOC handover: the drive starts STOPPED so the BIOS's early CDD sync
-        // (which requires the all-zero RS0=0 frame and re-runs through the boot
-        // handshake) passes. Once the MAIN grants the sub word RAM via DMNA ($03
-        // bit 1) -- which happens only AFTER the handshake, to stage the IP load --
-        // a loaded drive leaves STOP for TOC, so Get-Status reports a loaded disc
-        // (RS0=9) and the BIOS proceeds to Read-TOC / Seek / Read the IP.
-        if (cdd_loaded && cdd_drive_status == cdd_stop && (gate_array[0x03] & 0x02U) != 0U) {
-            cdd_drive_status = cdd_toc;
-        }
+        // (The drive's internal status is set to TOC on disc load in attach_disc; the
+        // old DMNA-gated STOP->TOC promotion here was wrong -- DMNA is word-RAM
+        // ownership, not drive readiness -- and made the drive reach TOC too late.)
         if (cdd_latency > 0) {
             --cdd_latency;
         } else if (cdd_drive_status == cdd_play) {
@@ -408,7 +418,14 @@ namespace mnemos::manifests::segacd {
             cdd_pending_status = 0;
             cdd_track = disc_track_of_lba(cdd_lba);
         }
-        cdd_set_status();
+        // NOTE: cdd_update advances the INTERNAL drive state only; it must NOT publish
+        // the CDD status frame ($38-$41) here. The reference publishes status solely on
+        // a CDD command (Get-Status / Report-TOC via cdd_process), never from the 75 Hz
+        // tick. Publishing every tick made the BIOS observe a freshly-promoted PAUSE
+        // frame one comm cycle too early -- before the read driver consumed the prior
+        // TOC-dispatch state ($5837 bit3) -- so it bailed at the read-driver gate. The
+        // frame is now (re)built only by the command handlers / cdd_set_status on
+        // Get-Status.
 
         // CDD level-4 IRQ -- the per-CD-frame "BIOS frame tick" that drives the
         // sub-CPU's disc state machine. It fires only while CDD communication is
