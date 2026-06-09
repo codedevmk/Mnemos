@@ -974,6 +974,94 @@ TEST_CASE("sh2 ticks the on-chip FRT as it executes") {
     CHECK(m.cpu.cpu_registers().r[3] == 2U); // FRC low = 16 source clocks / 8
 }
 
+TEST_CASE("sh2_peripherals INTC presents the FRT overflow interrupt") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE60U, 0x05U); // IPRB high: FRT priority 5
+    p.write8(0xFFFFFE68U, 0x70U); // VCRD high: overflow vector
+    p.write8(0xFFFFFE10U, 0x02U); // TIER: OVIE
+    p.write8(0xFFFFFE12U, 0xFFU); // FRC = 0xFFFF
+    p.write8(0xFFFFFE13U, 0xFFU);
+    p.tick(8U); // overflow
+    const auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 5);
+    CHECK(irq.vector == 0x70U);
+}
+
+TEST_CASE("sh2_peripherals INTC gates the FRT interrupt on TIER, priority and vector") {
+    auto overflow = [] {
+        mnemos::chips::cpu::sh2_peripherals q;
+        q.write8(0xFFFFFE60U, 0x05U); // priority 5
+        q.write8(0xFFFFFE68U, 0x70U); // vector
+        q.write8(0xFFFFFE10U, 0x02U); // OVIE
+        q.write8(0xFFFFFE12U, 0xFFU);
+        q.write8(0xFFFFFE13U, 0xFFU);
+        q.tick(8U);
+        return q;
+    };
+    // Baseline: all three present -> delivered.
+    CHECK(overflow().pending_onchip_irq().level == 5);
+    {
+        auto p = overflow();
+        p.write8(0xFFFFFE10U, 0x00U); // TIER OVIE cleared
+        CHECK(p.pending_onchip_irq().level == 0);
+    }
+    {
+        auto p = overflow();
+        p.write8(0xFFFFFE60U, 0x00U); // FRT priority 0
+        CHECK(p.pending_onchip_irq().level == 0);
+    }
+    {
+        auto p = overflow();
+        p.write8(0xFFFFFE68U, 0x00U); // vector 0
+        CHECK(p.pending_onchip_irq().level == 0);
+    }
+}
+
+TEST_CASE("sh2_peripherals INTC: output-compare outranks overflow") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE60U, 0x07U); // FRT priority 7
+    p.write8(0xFFFFFE67U, 0x60U); // VCRC low: output-compare vector
+    p.write8(0xFFFFFE68U, 0x70U); // VCRD high: overflow vector
+    p.write8(0xFFFFFE10U, 0x0AU); // TIER: OVIE | OCIAE
+    p.write8(0xFFFFFE14U, 0x00U); // OCRA = 1
+    p.write8(0xFFFFFE15U, 0x01U);
+    p.write8(0xFFFFFE12U, 0xFFU); // FRC = 0xFFFF
+    p.write8(0xFFFFFE13U, 0xFFU);
+    p.tick(16U); // 0xFFFF -> 0x0000 (OVF) -> 0x0001 (OCFA)
+    const auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 7);
+    CHECK(irq.vector == 0x60U); // the output-compare vector wins
+}
+
+TEST_CASE("sh2 accepts an on-chip FRT interrupt through the INTC") {
+    machine m;
+    m.w32(0x60U * 4U, 0x3000U);          // output-compare vector 0x60 -> handler
+    m.load(0x3000U, {0xAFFEU, 0x0009U}); // handler: BRA self ; (delay) NOP
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    r.sr = 0U;      // IMASK = 0 so the level-5 IRQ is accepted
+    r.r[0] = 0x08U; // TIER OCIAE
+    r.r[1] = 0xFFFFFE10U;
+    r.r[2] = 0x05U; // IPRB FRT priority 5
+    r.r[3] = 0xFFFFFE60U;
+    r.r[4] = 0x60U; // OCI vector
+    r.r[5] = 0xFFFFFE67U;
+    r.r[6] = 0x00U; // OCRA high
+    r.r[7] = 0xFFFFFE14U;
+    r.r[8] = 0x01U; // OCRA low -> OCRA = 1
+    r.r[9] = 0xFFFFFE15U;
+    r.r[10] = 0x00U; // TCR = phi/8 (resets the prescaler)
+    r.r[11] = 0xFFFFFE16U;
+    m.cpu.set_registers(r);
+    // Configure the FRT/INTC, then spin while the timer reaches the compare.
+    m.load(0x1000U, {0x2100U, 0x2320U, 0x2540U, 0x2760U, 0x2980U, 0x2BA0U, 0x0009U, 0x0009U,
+                     0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U});
+    for (int i = 0; i < 30; ++i) {
+        m.cpu.step_instruction();
+    }
+    CHECK(m.cpu.cpu_registers().pc == 0x3000U); // vectored into the handler loop
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();
