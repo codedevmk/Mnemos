@@ -91,16 +91,71 @@ namespace mnemos::chips::cpu {
                 r_[rn] = t_in();
                 return;
             } // MOVT Rn
-            if (lo == 0x7U) { // MUL.L Rm,Rn -> MACL (low 32 of product)
+            if (op == 0x000BU) { // RTS -- PC := PR (delayed)
+                branch_delayed(pr_);
+                return;
+            }
+            switch (static_cast<unsigned>(op & 0xFFU)) {
+            case 0x02:
+                r_[rn] = sr_;
+                return; // STC SR,Rn
+            case 0x12:
+                r_[rn] = gbr_;
+                return; // STC GBR,Rn
+            case 0x22:
+                r_[rn] = vbr_;
+                return; // STC VBR,Rn
+            case 0x0A:
+                r_[rn] = mach_;
+                return; // STS MACH,Rn
+            case 0x1A:
+                r_[rn] = macl_;
+                return; // STS MACL,Rn
+            case 0x2A:
+                r_[rn] = pr_;
+                return; // STS PR,Rn
+            case 0x03:  // BSRF Rn -- PC-relative call (delayed)
+                pr_ = pc_ + 2U;
+                branch_delayed(pc_ + 2U + r_[rn]);
+                return;
+            case 0x23:
+                branch_delayed(pc_ + 2U + r_[rn]);
+                return; // BRAF Rn (delayed)
+            default:
+                break;
+            }
+            switch (lo) {
+            case 0x4:
+                wr8(r_[rn] + r_[0], static_cast<std::uint8_t>(r_[rm]));
+                return; // MOV.B Rm,@(R0,Rn)
+            case 0x5:
+                wr16(r_[rn] + r_[0], static_cast<std::uint16_t>(r_[rm]));
+                return; // MOV.W Rm,@(R0,Rn)
+            case 0x6:
+                wr32(r_[rn] + r_[0], r_[rm]);
+                return; // MOV.L Rm,@(R0,Rn)
+            case 0x7:   // MUL.L Rm,Rn -> MACL
                 macl_ = static_cast<std::uint32_t>(static_cast<std::uint64_t>(r_[rn]) *
                                                    static_cast<std::uint64_t>(r_[rm]));
                 return;
-            }
-            if (lo == 0xFU) {
+            case 0xC:
+                r_[rn] = sx_b(rd8(r_[rm] + r_[0]));
+                return; // MOV.B @(R0,Rm),Rn
+            case 0xD:
+                r_[rn] = sx_w(rd16(r_[rm] + r_[0]));
+                return; // MOV.W @(R0,Rm),Rn
+            case 0xE:
+                r_[rn] = rd32(r_[rm] + r_[0]);
+                return; // MOV.L @(R0,Rm),Rn
+            case 0xF:
                 mac_long(rn, rm);
-                return;
-            } // MAC.L @Rm+,@Rn+
-            return; // NOP (0x0009) + deferred
+                return; // MAC.L @Rm+,@Rn+
+            default:
+                return; // NOP (0x0009); RTE/SLEEP deferred
+            }
+        case 0x1: // MOV.L Rm,@(disp,Rn) -- disp*4 store
+            wr32(r_[rn] + (static_cast<std::uint32_t>(op & 0xFU) * 4U), r_[rm]);
+            return;
         case 0x2:
             switch (lo) {
             case 0x0:
@@ -348,10 +403,86 @@ namespace mnemos::chips::cpu {
                 wr8(r_[rn], static_cast<std::uint8_t>(v | 0x80U));
                 return;
             }
+            case 0x0B: // JSR @Rn -- call (delayed)
+                pr_ = pc_ + 2U;
+                branch_delayed(r_[rn]);
+                return;
+            case 0x2B:
+                branch_delayed(r_[rn]);
+                return; // JMP @Rn (delayed)
+            case 0x0E:
+                sr_ = r_[rn] & sr_mask;
+                return; // LDC Rn,SR
+            case 0x1E:
+                gbr_ = r_[rn];
+                return; // LDC Rn,GBR
+            case 0x2E:
+                vbr_ = r_[rn];
+                return; // LDC Rn,VBR
+            case 0x0A:
+                mach_ = r_[rn];
+                return; // LDS Rn,MACH
+            case 0x1A:
+                macl_ = r_[rn];
+                return; // LDS Rn,MACL
+            case 0x2A:
+                pr_ = r_[rn];
+                return; // LDS Rn,PR
+            case 0x02:  // STS.L MACH,@-Rn
+                r_[rn] -= 4U;
+                wr32(r_[rn], mach_);
+                return;
+            case 0x12: // STS.L MACL,@-Rn
+                r_[rn] -= 4U;
+                wr32(r_[rn], macl_);
+                return;
+            case 0x22: // STS.L PR,@-Rn
+                r_[rn] -= 4U;
+                wr32(r_[rn], pr_);
+                return;
+            case 0x03: // STC.L SR,@-Rn
+                r_[rn] -= 4U;
+                wr32(r_[rn], sr_);
+                return;
+            case 0x13: // STC.L GBR,@-Rn
+                r_[rn] -= 4U;
+                wr32(r_[rn], gbr_);
+                return;
+            case 0x23: // STC.L VBR,@-Rn
+                r_[rn] -= 4U;
+                wr32(r_[rn], vbr_);
+                return;
+            case 0x06: // LDS.L @Rn+,MACH
+                mach_ = rd32(r_[rn]);
+                r_[rn] += 4U;
+                return;
+            case 0x16: // LDS.L @Rn+,MACL
+                macl_ = rd32(r_[rn]);
+                r_[rn] += 4U;
+                return;
+            case 0x26: // LDS.L @Rn+,PR
+                pr_ = rd32(r_[rn]);
+                r_[rn] += 4U;
+                return;
+            case 0x07: // LDC.L @Rn+,SR
+                sr_ = rd32(r_[rn]) & sr_mask;
+                r_[rn] += 4U;
+                return;
+            case 0x17: // LDC.L @Rn+,GBR
+                gbr_ = rd32(r_[rn]);
+                r_[rn] += 4U;
+                return;
+            case 0x27: // LDC.L @Rn+,VBR
+                vbr_ = rd32(r_[rn]);
+                r_[rn] += 4U;
+                return;
             default:
-                return; // JSR/LDS/LDC/STS.L/STC.L: deferred to A3
+                return; // remaining 0x4nxx (UBC/exception entry): deferred
             }
         }
+        case 0x5: // MOV.L @(disp,Rm),Rn -- disp*4 load
+            r_[rn] = rd32(r_[rm] + (static_cast<std::uint32_t>(op & 0xFU) * 4U));
+            return;
         case 0x6:
             switch (lo) {
             case 0x0:
@@ -422,15 +553,129 @@ namespace mnemos::chips::cpu {
         case 0x7:
             r_[rn] += sx8;
             return; // ADD #imm,Rn
-        case 0x8:
-            if ((op & 0xFF00U) == 0x8800U) {
-                set_t(r_[0] == sx8);
+        case 0x8: {
+            // Sub-opcode is in bits 8-11 (rn); the register operand is in bits 4-7
+            // (rm), the displacement in the low nibble, and the branch displacement
+            // in the low byte.
+            const auto d4 = static_cast<std::uint32_t>(op & 0xFU);
+            const auto d8 = static_cast<std::int32_t>(static_cast<std::int8_t>(op & 0xFFU));
+            switch (rn) {
+            case 0x0:
+                wr8(r_[rm] + d4, static_cast<std::uint8_t>(r_[0]));
+                return; // MOV.B R0,@(disp,Rn)
+            case 0x1:   // MOV.W R0,@(disp,Rn)
+                wr16(r_[rm] + d4 * 2U, static_cast<std::uint16_t>(r_[0]));
                 return;
-            } // CMP/EQ #imm,R0
-            return; // MOV.B/W @(disp,...) + BT/BF/BT-S/BF-S: deferred to A3
-        case 0x9:   // MOV.W @(disp,PC),Rn -- PC-relative word load (sign-extended)
+            case 0x4:
+                r_[0] = sx_b(rd8(r_[rm] + d4));
+                return; // MOV.B @(disp,Rm),R0
+            case 0x5:
+                r_[0] = sx_w(rd16(r_[rm] + d4 * 2U));
+                return; // MOV.W @(disp,Rm),R0
+            case 0x8:
+                set_t(r_[0] == sx8);
+                return; // CMP/EQ #imm,R0
+            case 0x9:   // BT disp (no delay slot)
+                if (t_in() != 0U) {
+                    pc_ = pc_ + static_cast<std::uint32_t>(d8 * 2) + 2U;
+                    cycles_ += 2;
+                }
+                return;
+            case 0xB: // BF disp (no delay slot)
+                if (t_in() == 0U) {
+                    pc_ = pc_ + static_cast<std::uint32_t>(d8 * 2) + 2U;
+                    cycles_ += 2;
+                }
+                return;
+            case 0xD: // BT/S disp (delayed)
+                if (t_in() != 0U) {
+                    branch_delayed(pc_ + static_cast<std::uint32_t>(d8 * 2) + 2U);
+                }
+                return;
+            case 0xF: // BF/S disp (delayed)
+                if (t_in() == 0U) {
+                    branch_delayed(pc_ + static_cast<std::uint32_t>(d8 * 2) + 2U);
+                }
+                return;
+            default:
+                return;
+            }
+        }
+        case 0x9: // MOV.W @(disp,PC),Rn -- PC-relative word load (sign-extended)
             r_[rn] = sx_w(rd16(pc_ + (static_cast<std::uint32_t>(op & 0xFFU) * 2U) + 2U));
             return;
+        case 0xA: { // BRA disp12 (delayed)
+            const std::int32_t d =
+                static_cast<std::int32_t>(static_cast<std::int16_t>((op & 0x0FFFU) << 4U)) >> 4;
+            branch_delayed(pc_ + static_cast<std::uint32_t>(d * 2) + 2U);
+            return;
+        }
+        case 0xB: { // BSR disp12 (delayed call)
+            const std::int32_t d =
+                static_cast<std::int32_t>(static_cast<std::int16_t>((op & 0x0FFFU) << 4U)) >> 4;
+            const std::uint32_t target = pc_ + static_cast<std::uint32_t>(d * 2) + 2U;
+            pr_ = pc_ + 2U;
+            branch_delayed(target);
+            return;
+        }
+        case 0xC: {
+            const auto imm = static_cast<std::uint32_t>(op & 0xFFU);
+            switch (rn) { // sub-opcode in bits 8-11
+            case 0x0:
+                wr8(gbr_ + imm, static_cast<std::uint8_t>(r_[0]));
+                return; // MOV.B R0,@(disp,GBR)
+            case 0x1:   // MOV.W R0,@(disp,GBR)
+                wr16(gbr_ + imm * 2U, static_cast<std::uint16_t>(r_[0]));
+                return;
+            case 0x2:
+                wr32(gbr_ + imm * 4U, r_[0]);
+                return; // MOV.L R0,@(disp,GBR)
+            case 0x4:
+                r_[0] = sx_b(rd8(gbr_ + imm));
+                return; // MOV.B @(disp,GBR),R0
+            case 0x5:
+                r_[0] = sx_w(rd16(gbr_ + imm * 2U));
+                return; // MOV.W @(disp,GBR),R0
+            case 0x6:
+                r_[0] = rd32(gbr_ + imm * 4U);
+                return; // MOV.L @(disp,GBR),R0
+            case 0x7:
+                r_[0] = ((pc_ + 2U) & ~3U) + imm * 4U;
+                return; // MOVA @(disp,PC),R0
+            case 0x8:
+                set_t((r_[0] & imm) == 0U);
+                return; // TST #imm,R0
+            case 0x9:
+                r_[0] &= imm;
+                return; // AND #imm,R0
+            case 0xA:
+                r_[0] ^= imm;
+                return; // XOR #imm,R0
+            case 0xB:
+                r_[0] |= imm;
+                return; // OR #imm,R0
+            case 0xC:
+                set_t((rd8(gbr_ + r_[0]) & imm) == 0U);
+                return; // TST.B #imm,@(R0,GBR)
+            case 0xD: { // AND.B #imm,@(R0,GBR)
+                const std::uint32_t a = gbr_ + r_[0];
+                wr8(a, static_cast<std::uint8_t>(rd8(a) & imm));
+                return;
+            }
+            case 0xE: { // XOR.B #imm,@(R0,GBR)
+                const std::uint32_t a = gbr_ + r_[0];
+                wr8(a, static_cast<std::uint8_t>(rd8(a) ^ imm));
+                return;
+            }
+            case 0xF: { // OR.B #imm,@(R0,GBR)
+                const std::uint32_t a = gbr_ + r_[0];
+                wr8(a, static_cast<std::uint8_t>(rd8(a) | imm));
+                return;
+            }
+            default:
+                return; // 0xC3 = TRAPA: deferred
+            }
+        }
         case 0xD: // MOV.L @(disp,PC),Rn -- PC-relative long load
             r_[rn] = rd32(((pc_ + 2U) & ~3U) + (static_cast<std::uint32_t>(op & 0xFFU) * 4U));
             return;
@@ -438,8 +683,26 @@ namespace mnemos::chips::cpu {
             r_[rn] = sx8;
             return; // MOV #imm,Rn (sign-extended)
         default:
-            return; // 0x1/0x5/0xA/0xB/0xC/0xF: deferred to A3
+            return; // 0xF (no FPU on the SH7604)
         }
+    }
+
+    void sh2::branch_delayed(std::uint32_t target) {
+        // SH-2 delayed control transfer: the instruction in the delay slot (the
+        // one immediately after the branch) executes before control moves to the
+        // target. A branch inside a delay slot is illegal on hardware (a
+        // slot-illegal exception, deferred to a later phase); the re-entry guard
+        // makes that case degrade safely instead of recursing.
+        if (in_delay_slot_) {
+            return;
+        }
+        in_delay_slot_ = true;
+        const std::uint16_t slot = rd16(pc_);
+        pc_ += 2U;
+        exec(slot);
+        in_delay_slot_ = false;
+        pc_ = target;
+        cycles_ += 2; // delay-slot op + branch-taken penalty (timing refined later)
     }
 
     void sh2::mac_long(std::size_t rn, std::size_t rm) noexcept {
