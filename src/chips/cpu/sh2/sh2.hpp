@@ -81,6 +81,12 @@ namespace mnemos::chips::cpu {
             pending_irq_vector_ = vector;
         }
         void clear_irq() noexcept { pending_irq_level_ = 0; }
+        // The currently-presented external IRQ (0 = none), for a system INTC that
+        // arbitrates several sources against the CPU's pending slot.
+        [[nodiscard]] int pending_irq_level() const noexcept { return pending_irq_level_; }
+        [[nodiscard]] std::uint8_t pending_irq_vector() const noexcept {
+            return pending_irq_vector_;
+        }
         // Invoked when an external IRQ is accepted so the system can clear its
         // own source latch and present the next pending request. Not serialized.
         void set_irq_accept_callback(std::function<void(int level, std::uint8_t vector)> cb) {
