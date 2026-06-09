@@ -23,6 +23,23 @@ namespace mnemos::chips::cpu {
         constexpr std::uint16_t vcr_valid = 0x7F7FU;  // two 7-bit vectors
         constexpr std::uint16_t vcrd_valid = 0x7F00U; // OVI vector in the high byte
 
+        // WDT ($FE80-$FE83) bits + keyed-write keys.
+        constexpr std::uint8_t wtcsr_ovf = 0x80U;       // interval-timer overflow flag
+        constexpr std::uint8_t wtcsr_wtit = 0x40U;      // watchdog (1) vs interval (0) mode
+        constexpr std::uint8_t wtcsr_tme = 0x20U;       // timer enable
+        constexpr std::uint8_t wtcsr_reserved = 0x18U;  // reserved bits read 1
+        constexpr std::uint8_t wtcsr_cks = 0x07U;       // clock select
+        constexpr std::uint8_t rstcsr_wovf = 0x80U;     // watchdog overflow flag
+        constexpr std::uint8_t rstcsr_writable = 0x60U; // RSTE | RSTS
+        constexpr std::uint8_t rstcsr_reserved = 0x1FU;
+        constexpr std::uint8_t wdt_key_wtcsr = 0xA5U; // high-byte key: write WTCSR / RSTCSR
+        constexpr std::uint8_t wdt_key_wtcnt = 0x5AU; // high-byte key: write WTCNT / clear WOVF
+
+        [[nodiscard]] int wdt_prescale_from_wtcsr(std::uint8_t wtcsr) noexcept {
+            constexpr std::array<int, 8> prescales{{2, 64, 128, 256, 512, 1024, 4096, 8192}};
+            return prescales[wtcsr & wtcsr_cks];
+        }
+
         // FRT clock prescale from TCR[1:0]. Mode 3 is the external FTCI pin, which
         // has no host surface here, so it leaves the timer stopped.
         [[nodiscard]] int frt_prescale_from_tcr(std::uint8_t tcr) noexcept {
@@ -74,6 +91,16 @@ namespace mnemos::chips::cpu {
             return static_cast<std::uint8_t>(vcrd_ >> 8U);
         case 0x69U: // VCRD low
             return static_cast<std::uint8_t>(vcrd_);
+        case 0x80U: // WTCSR -- reading observes the overflow flag
+            if ((wtcsr_ & wtcsr_ovf) != 0U) {
+                wtcsr_ovf_read_ = true;
+            }
+            return wtcsr_;
+        case 0x81U: // WTCNT
+            return wtcnt_;
+        case 0x82U: // RSTCSR
+        case 0x83U:
+            return rstcsr_;
         default:
             return regs_[off];
         }
@@ -137,6 +164,37 @@ namespace mnemos::chips::cpu {
         case 0x69U: // VCRD low
             vcrd_ = static_cast<std::uint16_t>(((vcrd_ & 0xFF00U) | value) & vcrd_valid);
             return;
+        case 0x80U: // WTCSR/WTCNT keyed write: latch the high-byte key
+        case 0x82U: // RSTCSR keyed write: latch the key
+            wdt_key_ = value;
+            return;
+        case 0x81U: // data byte completes a WTCSR or WTCNT write
+            if (wdt_key_ == wdt_key_wtcsr) {
+                // WTCSR: OVF is write-0-to-clear after a read; reserved bits set.
+                std::uint8_t ovf = wtcsr_ & wtcsr_ovf;
+                if ((value & wtcsr_ovf) == 0U && wtcsr_ovf_read_) {
+                    ovf = 0U;
+                }
+                wtcsr_ovf_read_ = false;
+                wtcsr_ = static_cast<std::uint8_t>(
+                    ovf | (value & (wtcsr_wtit | wtcsr_tme | wtcsr_cks)) | wtcsr_reserved);
+                if ((wtcsr_ & wtcsr_tme) == 0U) {
+                    wtcnt_ = 0U;
+                    wdt_prescale_acc_ = 0;
+                }
+            } else if (wdt_key_ == wdt_key_wtcnt) {
+                wtcnt_ = value;
+                wdt_prescale_acc_ = 0;
+            }
+            return;
+        case 0x83U: // data byte completes an RSTCSR write
+            if (wdt_key_ == wdt_key_wtcsr) {
+                rstcsr_ = static_cast<std::uint8_t>((value & rstcsr_writable) | rstcsr_reserved |
+                                                    (rstcsr_ & rstcsr_wovf));
+            } else if (wdt_key_ == wdt_key_wtcnt) {
+                rstcsr_ &= static_cast<std::uint8_t>(~rstcsr_wovf); // 0x5A clears WOVF
+            }
+            return;
         default:
             regs_[off] = value;
             return;
@@ -144,26 +202,46 @@ namespace mnemos::chips::cpu {
     }
 
     void sh2_peripherals::tick(std::uint64_t cycles) noexcept {
-        const int prescale = frt_prescale_from_tcr(tcr_);
-        if (prescale <= 0) {
-            return; // FRT stopped (external clock source not modelled)
-        }
-        frt_prescale_acc_ += static_cast<int>(cycles);
-        while (frt_prescale_acc_ >= prescale) {
-            frt_prescale_acc_ -= prescale;
-            const std::uint16_t prev = frc_;
-            frc_ = static_cast<std::uint16_t>(frc_ + 1U);
-            if (frc_ < prev) {
-                ftcsr_ |= ftcsr_ovf; // wrapped $FFFF -> $0000
-            }
-            if (frc_ == ocra_) {
-                ftcsr_ |= ftcsr_ocfa;
-                if ((ftcsr_ & ftcsr_cclr) != 0U) {
-                    frc_ = 0U; // compare-clear cadence
+        // FRT: a free-running counter unless TCR selects the (unmodelled) external
+        // clock.
+        const int frt_prescale = frt_prescale_from_tcr(tcr_);
+        if (frt_prescale > 0) {
+            frt_prescale_acc_ += static_cast<int>(cycles);
+            while (frt_prescale_acc_ >= frt_prescale) {
+                frt_prescale_acc_ -= frt_prescale;
+                const std::uint16_t prev = frc_;
+                frc_ = static_cast<std::uint16_t>(frc_ + 1U);
+                if (frc_ < prev) {
+                    ftcsr_ |= ftcsr_ovf; // wrapped $FFFF -> $0000
+                }
+                if (frc_ == ocra_) {
+                    ftcsr_ |= ftcsr_ocfa;
+                    if ((ftcsr_ & ftcsr_cclr) != 0U) {
+                        frc_ = 0U; // compare-clear cadence
+                    }
+                }
+                if (frc_ == ocrb_) {
+                    ftcsr_ |= ftcsr_ocfb;
                 }
             }
-            if (frc_ == ocrb_) {
-                ftcsr_ |= ftcsr_ocfb;
+        }
+
+        // WDT: an 8-bit counter that advances while TME is set; overflow flags
+        // the interval timer (or, in watchdog mode, the reset latch).
+        if ((wtcsr_ & wtcsr_tme) != 0U) {
+            const int wdt_prescale = wdt_prescale_from_wtcsr(wtcsr_);
+            wdt_prescale_acc_ += static_cast<int>(cycles);
+            while (wdt_prescale_acc_ >= wdt_prescale) {
+                wdt_prescale_acc_ -= wdt_prescale;
+                const std::uint8_t prev = wtcnt_;
+                wtcnt_ = static_cast<std::uint8_t>(wtcnt_ + 1U);
+                if (wtcnt_ < prev) { // overflow $FF -> $00
+                    if ((wtcsr_ & wtcsr_wtit) == 0U) {
+                        wtcsr_ |= wtcsr_ovf; // interval-timer flag
+                    } else {
+                        rstcsr_ |= rstcsr_wovf; // watchdog flag (reset deferred)
+                    }
+                }
             }
         }
     }
@@ -207,6 +285,12 @@ namespace mnemos::chips::cpu {
         iprb_ = 0U;
         vcrc_ = 0U;
         vcrd_ = 0U;
+        wtcsr_ = 0x18U;
+        wtcnt_ = 0U;
+        rstcsr_ = 0x1FU;
+        wdt_prescale_acc_ = 0;
+        wdt_key_ = 0U;
+        wtcsr_ovf_read_ = false;
     }
 
     void sh2_peripherals::save_state(state_writer& writer) const {
@@ -224,6 +308,12 @@ namespace mnemos::chips::cpu {
         writer.u16(iprb_);
         writer.u16(vcrc_);
         writer.u16(vcrd_);
+        writer.u8(wtcsr_);
+        writer.u8(wtcnt_);
+        writer.u8(rstcsr_);
+        writer.u32(static_cast<std::uint32_t>(wdt_prescale_acc_));
+        writer.u8(wdt_key_);
+        writer.u8(wtcsr_ovf_read_ ? 1U : 0U);
     }
 
     void sh2_peripherals::load_state(state_reader& reader) {
@@ -241,6 +331,12 @@ namespace mnemos::chips::cpu {
         iprb_ = reader.u16();
         vcrc_ = reader.u16();
         vcrd_ = reader.u16();
+        wtcsr_ = reader.u8();
+        wtcnt_ = reader.u8();
+        rstcsr_ = reader.u8();
+        wdt_prescale_acc_ = static_cast<int>(reader.u32());
+        wdt_key_ = reader.u8();
+        wtcsr_ovf_read_ = reader.u8() != 0U;
     }
 
 } // namespace mnemos::chips::cpu
