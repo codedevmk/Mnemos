@@ -83,6 +83,19 @@ namespace mnemos::chips::cpu {
         std::uint16_t iprb_{}; // FE60 interrupt priority B
         std::uint16_t vcrc_{}; // FE66 FRT ICI/OCI vectors
         std::uint16_t vcrd_{}; // FE68 FRT OVI vector
+
+        // WDT -- watchdog / interval timer ($FE80-$FE83). An 8-bit counter
+        // (WTCNT) clocked off a WTCSR-selected prescale; on overflow it sets the
+        // interval-timer flag (WTCSR.OVF) or, in watchdog mode, the reset flag
+        // (RSTCSR.WOVF). Writes are keyed (a high-byte key selects the register).
+        // The ITI interrupt and the watchdog reset are deferred; the flags are
+        // pollable.
+        std::uint8_t wtcsr_{0x18U};     // FE80 control/status
+        std::uint8_t wtcnt_{};          // FE80/81 counter
+        std::uint8_t rstcsr_{0x1FU};    // FE82/83 reset control/status
+        int wdt_prescale_acc_{};        // accumulated source clocks
+        std::uint8_t wdt_key_{};        // latched high-byte key of a keyed write
+        mutable bool wtcsr_ovf_read_{}; // WTCSR.OVF observed by a read
     };
 
 } // namespace mnemos::chips::cpu

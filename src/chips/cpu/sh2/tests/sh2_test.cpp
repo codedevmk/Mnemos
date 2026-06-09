@@ -1062,6 +1062,34 @@ TEST_CASE("sh2 accepts an on-chip FRT interrupt through the INTC") {
     CHECK(m.cpu.cpu_registers().pc == 0x3000U); // vectored into the handler loop
 }
 
+TEST_CASE("sh2_peripherals WDT counts in interval mode and flags overflow") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE80U, 0x5AU);                // key: WTCNT
+    p.write8(0xFFFFFE81U, 0xFFU);                // WTCNT = 0xFF
+    p.write8(0xFFFFFE80U, 0xA5U);                // key: WTCSR
+    p.write8(0xFFFFFE81U, 0x20U);                // WTCSR: TME, interval mode, CKS=0 (prescale 2)
+    p.tick(2U);                                  // one WDT tick -> 0xFF wraps to 0x00
+    CHECK((p.read8(0xFFFFFE80U) & 0x80U) != 0U); // WTCSR.OVF
+    CHECK(p.read8(0xFFFFFE81U) == 0x00U);        // WTCNT wrapped
+}
+
+TEST_CASE("sh2_peripherals WDT flags the reset latch in watchdog mode") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU); // WTCNT = 0xFF
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U); // WTCSR: TME | WTIT (watchdog mode)
+    p.tick(2U);
+    CHECK((p.read8(0xFFFFFE82U) & 0x80U) != 0U); // RSTCSR.WOVF
+}
+
+TEST_CASE("sh2_peripherals WDT ignores a data write without the matching key") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE80U, 0x00U);         // not a valid key
+    p.write8(0xFFFFFE81U, 0x42U);         // data dropped
+    CHECK(p.read8(0xFFFFFE81U) == 0x00U); // WTCNT unchanged
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();
