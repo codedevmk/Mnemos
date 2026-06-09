@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_cpu_sh2
     sh2.cpp
+    sh2_peripherals.cpp
 )
 add_library(mnemos::chips::cpu::sh2 ALIAS mnemos_chips_cpu_sh2)
 

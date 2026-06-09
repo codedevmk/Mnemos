@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "sh2_peripherals.hpp"
 
 #include <array>
 #include <cstdint>
@@ -191,6 +192,7 @@ namespace mnemos::chips::cpu {
         std::function<void(int, std::uint8_t)> irq_accept_{};
 
         ibus* bus_{};
+        sh2_peripherals peripherals_{}; // on-chip SH7604 peripherals ($FFFFFE00 window)
 
         std::array<register_descriptor, 23> register_view_{};
         introspection_surface introspection_{*this};
