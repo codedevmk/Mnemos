@@ -274,6 +274,63 @@ TEST_CASE("sega32x_machine without a G BIOS leaves the cart vectors at $000000",
     CHECK(m->genesis->bus.read8(0x000006U) == 0x02U); // cart PC byte
 }
 
+TEST_CASE("sega32x_machine exposes the 32X VDP to both SH-2s and the 68000", "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+    using vdp_chip = mnemos::chips::video::sega32x_vdp;
+
+    // Master SH-2 writes the bitmap-mode register at $4100 (byte lanes, even =
+    // high); the slave sees it through the cache-through mirror, the 68000
+    // through $A15180.
+    tx.master_bus.write8(0x00004101U, vdp_chip::mode_packed);
+    CHECK(tx.vdp.mode() == vdp_chip::mode_packed);
+    CHECK(tx.slave_bus.read8(0x20004101U) == vdp_chip::mode_packed);
+    CHECK(bus.read8(0xA15181U) == vdp_chip::mode_packed);
+
+    // Palette CRAM at $4200 (and its P1 mirror), shared storage.
+    tx.master_bus.write8(0x00004202U, 0x7CU);
+    tx.master_bus.write8(0x00004203U, 0x1FU);
+    CHECK(tx.vdp.palette(1) == 0x7C1FU);
+    CHECK(tx.slave_bus.read8(0x20004202U) == 0x7CU);
+
+    // An autofill programmed through the register window fills the shared
+    // frame buffer when the DATA low byte completes the word.
+    tx.master_bus.write8(0x00004105U, 0x01U); // length = 1 -> 2 words
+    tx.master_bus.write8(0x00004106U, 0x00U); // addr high
+    tx.master_bus.write8(0x00004107U, 0x10U); // addr low -> word $0010
+    tx.master_bus.write8(0x00004108U, 0xDEU); // data high (latch only)
+    CHECK(tx.framebuffer[0x10U * 2U] == 0x00U);
+    tx.master_bus.write8(0x00004109U, 0xADU); // data low -> fill fires
+    CHECK(tx.framebuffer[0x10U * 2U] == 0xDEU);
+    CHECK(tx.framebuffer[0x10U * 2U + 1U] == 0xADU);
+    CHECK(tx.framebuffer[0x11U * 2U] == 0xDEU);
+    CHECK(tx.framebuffer[0x12U * 2U] == 0x00U);
+}
+
+TEST_CASE("sega32x_machine commits the VDP frame-select on the V-blank edge",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& tx = *m->thirtytwox;
+    auto& vdp = m->genesis->vdp;
+
+    // Flush the boot V-blank edge (the Genesis VDP resets onto the VBL line),
+    // then run to active display so the next rising edge is a clean one.
+    vdp.tick(3420U);
+    for (int line = 0; line < 100; ++line) {
+        vdp.tick(3420U);
+    }
+    CHECK((tx.vdp.fb_control() & 0x8000U) == 0U); // VBLK low in active display
+
+    // The SH-2 writes FS=1; the displayed bank holds until V-blank rises.
+    tx.master_bus.write8(0x0000410BU, 0x01U); // FBCR low byte
+    CHECK(tx.vdp.visible_bank() == 0);
+    for (int line = 0; line < 262; ++line) {
+        vdp.tick(3420U);
+    }
+    CHECK(tx.vdp.visible_bank() == 1);
+}
+
 TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());

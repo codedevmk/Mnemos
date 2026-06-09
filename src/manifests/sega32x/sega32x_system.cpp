@@ -110,6 +110,45 @@ namespace mnemos::manifests::sega32x {
         // else: PWM FIFOs / VDP / DMA-FIFO -- not yet modelled
     }
 
+    std::uint8_t sega32x_system::vdp_reg_read(std::uint32_t offset) const noexcept {
+        const std::uint16_t word = vdp.read16(offset & 0xFEU);
+        return (offset & 1U) != 0U ? static_cast<std::uint8_t>(word)
+                                   : static_cast<std::uint8_t>(word >> 8U);
+    }
+
+    void sega32x_system::vdp_reg_write(std::uint32_t offset, std::uint8_t value) {
+        const std::uint32_t reg = offset & 0xFEU;
+        const std::uint16_t cur = vdp.read16(reg);
+        const std::uint16_t next =
+            (offset & 1U) != 0U ? static_cast<std::uint16_t>((cur & 0xFF00U) | value)
+                                : static_cast<std::uint16_t>(
+                                      (cur & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+        vdp.write16(reg, next);
+        // A word write to the first AUTOFILL_DATA cell fires the fill into the
+        // shared frame buffer (the chip itself only latches). On this
+        // byte-decomposed bus the word completes with its LOW byte -- firing on
+        // both halves would run a second fill from the latched end address.
+        if (reg == chips::video::sega32x_vdp::reg_autofill_data && (offset & 1U) != 0U) {
+            vdp.autofill_execute(framebuffer);
+        }
+    }
+
+    std::uint8_t sega32x_system::vdp_pal_read(std::uint32_t offset) const noexcept {
+        const std::uint16_t word = vdp.palette_read16(offset & 0x1FEU);
+        return (offset & 1U) != 0U ? static_cast<std::uint8_t>(word)
+                                   : static_cast<std::uint8_t>(word >> 8U);
+    }
+
+    void sega32x_system::vdp_pal_write(std::uint32_t offset, std::uint8_t value) {
+        const std::uint32_t cell = offset & 0x1FEU;
+        const std::uint16_t cur = vdp.palette_read16(cell);
+        const std::uint16_t next =
+            (offset & 1U) != 0U ? static_cast<std::uint16_t>((cur & 0xFF00U) | value)
+                                : static_cast<std::uint16_t>(
+                                      (cur & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+        vdp.palette_write16(cell, next);
+    }
+
     void sega32x_system::deliver_irq(std::uint8_t bit, int level, std::uint8_t vector) {
         if (sh2_reset_asserted) {
             return;
@@ -226,6 +265,7 @@ namespace mnemos::manifests::sega32x {
         slave_irq_latch = 0U;
         pwm_cntl = 0U;
         pwm_cycle = 0U;
+        vdp.reset(chips::reset_kind::power_on);
         // The buses are already attached, so reset reads each CPU's PC/SP from its
         // own BIOS reset vectors at $0.
         master_cpu.reset(chips::reset_kind::power_on);
@@ -286,6 +326,34 @@ namespace mnemos::manifests::sega32x {
         };
         map_sysregs(s->master_bus, true);
         map_sysregs(s->slave_bus, false);
+
+        // The 32X VDP register window (+$4100) and palette CRAM (+$4200), shared
+        // by both CPUs, at every partition base. Priority 1 over the
+        // cache-through cart view, like the system registers.
+        for (topology::bus* bus : {&s->master_bus, &s->slave_bus}) {
+            const auto map_vdp_at = [bus, s](std::uint32_t base) {
+                bus->map_mmio(
+                    base + vdp_reg_base, vdp_reg_size,
+                    [s, base](std::uint32_t a) { return s->vdp_reg_read(a - base - vdp_reg_base); },
+                    [s, base](std::uint32_t a, std::uint8_t v) {
+                        s->vdp_reg_write(a - base - vdp_reg_base, v);
+                    },
+                    1);
+                bus->map_mmio(
+                    base + vdp_pal_base, vdp_pal_size,
+                    [s, base](std::uint32_t a) { return s->vdp_pal_read(a - base - vdp_pal_base); },
+                    [s, base](std::uint32_t a, std::uint8_t v) {
+                        s->vdp_pal_write(a - base - vdp_pal_base, v);
+                    },
+                    1);
+            };
+            for (const std::uint32_t base : p0_bases) {
+                map_vdp_at(base);
+            }
+            for (const std::uint32_t base : p1_bases) {
+                map_vdp_at(base);
+            }
+        }
 
         s->master_cpu.attach_bus(s->master_bus);
         s->slave_cpu.attach_bus(s->slave_bus);

@@ -1,7 +1,8 @@
 #pragma once
 
-#include "bus.hpp" // topology bus
-#include "sh2.hpp" // master + slave CPUs
+#include "bus.hpp"         // topology bus
+#include "sega32x_vdp.hpp" // the 32X VDP (palette + autofill + composition)
+#include "sh2.hpp"         // master + slave CPUs
 
 #include <array>
 #include <cstddef>
@@ -33,6 +34,10 @@ namespace mnemos::manifests::sega32x {
     inline constexpr std::uint32_t sysreg_mirror = 0x20004000U;  // cache-through (P1) mirror
     inline constexpr std::uint32_t sysreg_size = 0x100U;         // 256-byte register window
     inline constexpr std::uint32_t comm_offset = 0x20U;          // COMM bank within the window
+    inline constexpr std::uint32_t vdp_reg_base = 0x00004100U;   // 32X VDP register window
+    inline constexpr std::uint32_t vdp_reg_size = 0x100U;
+    inline constexpr std::uint32_t vdp_pal_base = 0x00004200U; // 32X VDP palette CRAM
+    inline constexpr std::uint32_t vdp_pal_size = 0x200U;
 
     // Partition bases. p0: cached + cacheable alias + shadow (boot ROM at $0);
     // p1: cache-through views (cart at $0, the M_BIOS reads the header via
@@ -55,6 +60,7 @@ namespace mnemos::manifests::sega32x {
     struct sega32x_system final {
         chips::cpu::sh2 master_cpu;
         chips::cpu::sh2 slave_cpu;
+        chips::video::sega32x_vdp vdp; // registers + palette; pixels live in framebuffer
         topology::bus master_bus{32U, topology::endianness::big};
         topology::bus slave_bus{32U, topology::endianness::big};
 
@@ -105,6 +111,16 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::uint8_t sys_reg_read(std::uint32_t offset,
                                                 bool is_master) const noexcept;
         void sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master);
+
+        // 32X VDP register window ($00004100, offset 0..0xFF; both CPUs see the
+        // same chip) and palette CRAM ($00004200, offset 0..0x1FF). Byte access
+        // promotes to read-modify-write on the 16-bit cell; an AUTOFILL_DATA
+        // write fires the autofill into the shared frame buffer. The 68000's
+        // $A15180 window routes through the same pair.
+        [[nodiscard]] std::uint8_t vdp_reg_read(std::uint32_t offset) const noexcept;
+        void vdp_reg_write(std::uint32_t offset, std::uint8_t value);
+        [[nodiscard]] std::uint8_t vdp_pal_read(std::uint32_t offset) const noexcept;
+        void vdp_pal_write(std::uint32_t offset, std::uint8_t value);
 
         // Raise a 32X interrupt source (latches on both CPUs; delivered to each
         // whose mask enables it). No-op while the SH-2s are held in reset.
