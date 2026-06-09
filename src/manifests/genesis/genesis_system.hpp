@@ -153,6 +153,12 @@ namespace mnemos::manifests::genesis {
             const auto& dev = ports[static_cast<std::size_t>(port)];
             return dev ? dev->read_data() : 0x7FU;
         }
+
+        // The V-blank edge handler the VDP's vblank callback is wired to (Z80 INT
+        // line, frame counter, per-port device timeouts). Public so an expansion
+        // layer (the 32X machine) can re-wire the callback to its own wrapper and
+        // still invoke the stock behaviour.
+        void on_vblank(bool in_vblank);
     };
 
     // 68000 boots from the ROM's reset vectors ($0 SSP, $4 PC). The caller is

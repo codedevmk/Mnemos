@@ -101,6 +101,12 @@ namespace mnemos::chips::video {
         void set_vblank_callback(std::function<void(bool in_vblank)> cb) noexcept {
             vblank_callback_ = std::move(cb);
         }
+        // Invoked on each H-interrupt latch edge (the line counter expired with
+        // IE1 set -- the /HINT output the 32X adapter taps). Plain Genesis
+        // systems leave this unset; the 68000 keeps its own pending-level path.
+        void set_hint_callback(std::function<void()> cb) noexcept {
+            hint_callback_ = std::move(cb);
+        }
         [[nodiscard]] bool in_vblank() const noexcept { return in_vblank_; }
         void set_pal(bool pal) noexcept;
 
@@ -439,6 +445,14 @@ namespace mnemos::chips::video {
         // fifo_stall_master_cycles_. No-op outside active display.
         void fifo_data_write() noexcept;
 
+        // Latch the H-interrupt request and pulse the /HINT output hook.
+        void latch_hint() noexcept {
+            hblank_pending_ = true;
+            if (hint_callback_) {
+                hint_callback_();
+            }
+        }
+
         // Diagnostic counters (see accessors above).
         std::uint32_t vint_fired_count_{};
         std::uint32_t vint_drain_count_{};
@@ -482,6 +496,7 @@ namespace mnemos::chips::video {
         std::function<void(int)> irq_callback_{};
         std::function<void(int)> delayed_irq_callback_{};
         std::function<void(bool)> vblank_callback_{};
+        std::function<void()> hint_callback_{};
         int last_irq_level_{};
         bool last_in_vblank_{};
 

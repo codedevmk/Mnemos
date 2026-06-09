@@ -58,6 +58,20 @@ namespace mnemos::manifests::genesis {
 #endif
     } // namespace
 
+    void genesis_system::on_vblank(bool in_vblank) {
+        z80.set_irq_line(in_vblank);
+        if (in_vblank) {
+            ++frame_index;
+            // Per-frame timeout hook for devices with stateful protocols
+            // (the 6-button pad's phase counter, future analog devices).
+            for (auto& p : ports) {
+                if (p) {
+                    p->on_vblank();
+                }
+            }
+        }
+    }
+
     std::unique_ptr<genesis_system> assemble_genesis(std::vector<std::uint8_t> rom,
                                                      const genesis_config& config) {
         auto sys = std::make_unique<genesis_system>();
@@ -249,19 +263,7 @@ namespace mnemos::manifests::genesis {
         // The 68K IACK clears the VDP IRQ request -- many V-blank handlers
         // rely on this instead of acking via the status read.
         s->cpu.set_irq_ack_callback([s](int level) { s->vdp.acknowledge_irq(level); });
-        s->vdp.set_vblank_callback([s](bool in_vblank) {
-            s->z80.set_irq_line(in_vblank);
-            if (in_vblank) {
-                ++s->frame_index;
-                // Per-frame timeout hook for devices with stateful protocols
-                // (the 6-button pad's phase counter, future analog devices).
-                for (auto& p : s->ports) {
-                    if (p) {
-                        p->on_vblank();
-                    }
-                }
-            }
-        });
+        s->vdp.set_vblank_callback([s](bool in_vblank) { s->on_vblank(in_vblank); });
         // Genesis quirk: the bus controller drops the TAS write phase on a
         // memory operand. Empty callback = drop, preserving flag side-effects.
         s->cpu.set_tas_callback([](std::uint32_t /*addr*/) {});
