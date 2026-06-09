@@ -95,7 +95,9 @@ namespace mnemos::chips::audio {
             }
             // Called from the chip's write paths to log a register write live:
             // port 0 = the main data port, port 1 = the Game Gear stereo port.
-            void note_write(std::uint16_t port, std::uint8_t value) { reg_trace_.fire(port, value); }
+            void note_write(std::uint16_t port, std::uint8_t value) {
+                reg_trace_.fire(port, value);
+            }
 
           private:
             class registers_impl final : public instrumentation::register_view {
