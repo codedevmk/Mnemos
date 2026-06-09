@@ -90,6 +90,12 @@ namespace mnemos::chips::audio {
             [[nodiscard]] instrumentation::register_view* registers() override {
                 return &registers_;
             }
+            [[nodiscard]] instrumentation::reg_write_trace* reg_writes() override {
+                return &reg_trace_;
+            }
+            // Called from the chip's write paths to log a register write live:
+            // port 0 = the main data port, port 1 = the Game Gear stereo port.
+            void note_write(std::uint16_t port, std::uint8_t value) { reg_trace_.fire(port, value); }
 
           private:
             class registers_impl final : public instrumentation::register_view {
@@ -103,7 +109,21 @@ namespace mnemos::chips::audio {
                 sn76489* owner_;
             };
 
+            class reg_write_trace_impl final : public instrumentation::reg_write_trace {
+              public:
+                void install(callback cb) override { cb_ = std::move(cb); }
+                void fire(std::uint16_t port, std::uint8_t value) const {
+                    if (cb_) {
+                        cb_({.port = port, .value = value});
+                    }
+                }
+
+              private:
+                callback cb_{};
+            };
+
             registers_impl registers_;
+            reg_write_trace_impl reg_trace_;
         };
 
         std::array<std::uint16_t, 3> tone_{};    // 10-bit tone period registers
