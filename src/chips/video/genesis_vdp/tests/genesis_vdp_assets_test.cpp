@@ -13,6 +13,7 @@
 namespace {
     using mnemos::chips::video::genesis_vdp;
     using mnemos::instrumentation::asset_kind;
+    using mnemos::instrumentation::debug_layer;
 
     void set_reg(genesis_vdp& v, int r, std::uint8_t value) {
         v.write16(0x04,
@@ -119,4 +120,37 @@ TEST_CASE("genesis_vdp decodes a multi-cell SAT sprite at its palette and size")
     CHECK(spr.source_addr == 0xC000U);
     REQUIRE(spr.image.well_formed());
     CHECK(spr.image.indices[0] == 1U); // top-left cell (tile 4) is solid colour 1
+}
+
+TEST_CASE("genesis_vdp exposes plane_a, plane_b, and window debug_layers") {
+    genesis_vdp vdp;
+    auto layers = vdp.introspection().debug_layers();
+    REQUIRE(layers.size() == 3U);
+    CHECK(layers[0]->name() == "plane_a");
+    CHECK(layers[1]->name() == "plane_b");
+    CHECK(layers[2]->name() == "window");
+}
+
+TEST_CASE("genesis_vdp plane_b debug_layer composes plane B's nametable") {
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x04);               // M5
+    set_reg(vdp, 15, 0x02);              // auto-increment 2
+    set_reg(vdp, 16, 0x00);              // scroll plane size 32x32
+    set_reg(vdp, 4, 0x07);               // plane B nametable base = 0x07 << 13 = 0xE000
+    write_cram(vdp, 1, 0x000E);          // colour 1 = red
+    write_vram(vdp, 0x40, solid_tile_1); // tile 2 (solid colour 1)
+    write_vram(vdp, 0xE000, {0x0002});   // plane B (0,0) -> tile 2, palette 0
+
+    const debug_layer* pb = nullptr;
+    for (auto* l : vdp.introspection().debug_layers()) {
+        if (l->name() == "plane_b") {
+            pb = l;
+        }
+    }
+    REQUIRE(pb != nullptr);
+    const auto fb = pb->view();
+    CHECK(fb.width == 256U); // 32 cells * 8
+    CHECK(fb.height == 256U);
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == rgb_red); // tile 2 colour 1 -> palette 0 colour 1 = red
 }
