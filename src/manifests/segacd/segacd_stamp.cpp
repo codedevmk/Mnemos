@@ -5,6 +5,8 @@
 
 #include "segacd_system.hpp"
 
+#include <cstdio>
+
 namespace mnemos::manifests::segacd {
 
     void segacd_system::graphics_complete() {
@@ -12,6 +14,10 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::stamp_reg_write(std::uint8_t offset, std::uint8_t value) {
+        if (segacd_trace_enabled()) {
+            std::fprintf(stderr, "[stamp] sub_pc=%06X $%02X=%02X\n",
+                         sub_cpu.cpu_registers().pc, offset, value);
+        }
         if (offset == 0x58U) {
             stamp_size = static_cast<std::uint16_t>((stamp_size & 0x00FFU) |
                                                     (static_cast<std::uint16_t>(value) << 8U));
@@ -19,7 +25,11 @@ namespace mnemos::manifests::segacd {
         }
         if (offset == 0x59U) {
             stamp_size = static_cast<std::uint16_t>((stamp_size & 0xFF00U) | value);
-            if ((value & 0x01U) != 0U) { // ROT: start the rotation
+            // Legacy Emu render trigger (NOT hardware -- the real GFX start is the $66
+            // Trace Vector Base write handled below). Retained to keep stamp_renderer_run
+            // reachable + unit-tested; the CD BIOS never sets this bit so it is inert
+            // during a real boot.
+            if ((value & 0x01U) != 0U) {
                 stamp_renderer_run();
                 graphics_complete();
             }
@@ -64,6 +74,17 @@ namespace mnemos::manifests::segacd {
                 *reg = static_cast<std::uint16_t>((*reg & 0x00FFU) |
                                                   (static_cast<std::uint16_t>(value) << 8U));
             }
+        }
+        // The hardware starts the GFX operation when the sub-CPU writes the Trace Vector
+        // Base register ($66); the CD BIOS triggers here every logo-animation frame. (It
+        // never sets the Emu-derived $59 bit 0 -- it writes $59=04.) Model the op as
+        // instantaneous and raise the graphics-complete IRQ (INT1, level 1) so the sub
+        // leaves its GFX-complete wait. The pixel render is intentionally NOT run here:
+        // stamp_renderer_run uses an 8bpp word-RAM layout that does not match the
+        // hardware's 4bpp packed image buffer, so it would write garbage. A faithful 4bpp
+        // render (stamp map + cell/pixel LUTs) is a deferred follow-up.
+        if (offset == 0x66U) {
+            graphics_complete();
         }
     }
 
