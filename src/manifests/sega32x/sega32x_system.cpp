@@ -129,6 +129,25 @@ namespace mnemos::manifests::sega32x {
         }};
     } // namespace
 
+    void sega32x_system::dreq_fifo_push(std::uint16_t word) noexcept {
+        if (dreq_fifo_count >= dreq_fifo_depth) {
+            return; // full: the word is lost (the 68000 should poll FULL first)
+        }
+        dreq_fifo[dreq_fifo_count++] = word;
+    }
+
+    std::uint16_t sega32x_system::dreq_fifo_pop() noexcept {
+        if (dreq_fifo_count == 0U) {
+            return 0U;
+        }
+        const std::uint16_t word = dreq_fifo[0];
+        for (std::size_t i = 0; i + 1U < dreq_fifo_depth; ++i) {
+            dreq_fifo[i] = dreq_fifo[i + 1U];
+        }
+        --dreq_fifo_count;
+        return word;
+    }
+
     std::uint8_t sega32x_system::comm_read(std::uint32_t offset) const noexcept {
         const std::uint16_t word = comm[(offset >> 1U) & (comm_words - 1U)];
         return (offset & 1U) != 0U ? static_cast<std::uint8_t>(word)
@@ -150,7 +169,7 @@ namespace mnemos::manifests::sega32x {
         }
     }
 
-    std::uint8_t sega32x_system::sys_reg_read(std::uint32_t offset, bool is_master) const noexcept {
+    std::uint8_t sega32x_system::sys_reg_read(std::uint32_t offset, bool is_master) noexcept {
         if (offset < 0x02U) {
             // The SH-2-side $4000 system word. Even (high) byte: the adapter
             // flag bits the boot ROMs check -- ADEN (bit 1), FM (bit 7) -- plus
@@ -170,6 +189,45 @@ namespace mnemos::manifests::sega32x {
                 return static_cast<std::uint8_t>(hcount);
             }
             return static_cast<std::uint8_t>(hcount >> 8U);
+        }
+        if (offset >= 0x06U && offset < 0x12U) {
+            // DREQ control + src/dst/len (68000-armed storage).
+            std::uint16_t w = 0U;
+            switch (offset & ~1U) {
+            case 0x06U:
+                w = static_cast<std::uint16_t>(
+                    (dreq_ctrl & 0x0007U) |
+                    (dreq_fifo_count >= dreq_fifo_depth ? 0x0080U : 0U)); // FULL
+                break;
+            case 0x08U:
+                w = dreq_src_hi;
+                break;
+            case 0x0AU:
+                w = dreq_src_lo;
+                break;
+            case 0x0CU:
+                w = dreq_dst_hi;
+                break;
+            case 0x0EU:
+                w = dreq_dst_lo;
+                break;
+            default:
+                w = dreq_len;
+                break;
+            }
+            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(w)
+                                       : static_cast<std::uint8_t>(w >> 8U);
+        }
+        if ((offset & ~1U) == 0x12U) {
+            // The FIFO read port: the even byte serves the front word's high
+            // half; the odd byte completes the word and pops it (the SH-2
+            // DMAC's byte-decomposed source reads land here in order).
+            if ((offset & 1U) == 0U) {
+                const std::uint16_t front = dreq_fifo_count != 0U ? dreq_fifo[0] : 0U;
+                dreq_read_high = static_cast<std::uint8_t>(front >> 8U);
+                return dreq_read_high;
+            }
+            return static_cast<std::uint8_t>(dreq_fifo_pop());
         }
         if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
             return comm_read(offset - comm_offset);
@@ -290,7 +348,7 @@ namespace mnemos::manifests::sega32x {
         // else: VDP / DMA-FIFO -- not yet modelled
     }
 
-    std::uint8_t sega32x_system::alt_reg_read(std::uint32_t offset, bool is_master) const noexcept {
+    std::uint8_t sega32x_system::alt_reg_read(std::uint32_t offset, bool is_master) noexcept {
         if (offset < 0x02U) {
             // Standard big-endian lanes in this window: even = high byte.
             return (offset & 1U) != 0U ? static_cast<std::uint8_t>(adapter_ctrl)
@@ -521,6 +579,16 @@ namespace mnemos::manifests::sega32x {
         master_irq_latch = 0U;
         slave_irq_latch = 0U;
         m_ok_high_seen = false;
+        dreq_ctrl = 0U;
+        dreq_src_hi = 0U;
+        dreq_src_lo = 0U;
+        dreq_dst_hi = 0U;
+        dreq_dst_lo = 0U;
+        dreq_len = 0U;
+        dreq_fifo.fill(0U);
+        dreq_fifo_count = 0U;
+        dreq_read_high = 0U;
+        dreq_write_high = 0U;
         pwm_cntl = 0U;
         pwm_cycle = 0U;
         pwm_fifo_l.fill(0U);
@@ -711,6 +779,12 @@ namespace mnemos::manifests::sega32x {
         // lower-priority edge is delivered rather than stranded.
         s->master_cpu.set_irq_accept_callback([s](int, std::uint8_t) { s->master_irq_accept(); });
         s->slave_cpu.set_irq_accept_callback([s](int, std::uint8_t) { s->slave_irq_accept(); });
+
+        // Module-request DREQ level for both CPUs' DMACs: asserted while the
+        // 68000-to-SH-2 FIFO holds words (the armed channel's source reads pop
+        // it through the $4012 port, so the transfer self-regulates).
+        s->master_cpu.set_dmac_dreq_query([s](int) { return s->dreq_pending(); });
+        s->slave_cpu.set_dmac_dreq_query([s](int) { return s->dreq_pending(); });
         return sys;
     }
 

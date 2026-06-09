@@ -140,6 +140,28 @@ namespace mnemos::manifests::sega32x {
         bool pwm_capture{};
         std::vector<std::int16_t> pwm_queue{};
 
+        // DREQ -- the 68000-to-SH-2 DMA stream. The 68000 arms it through the
+        // control register (bit 2 = 68S) and writes words into the FIFO port;
+        // the FIFO asserts the SH-2 DMAC's module-request DREQ level while
+        // words are queued, and the SH-2-side FIFO read port pops them (the
+        // DMAC's source reads land there). Clearing 68S flushes the queue.
+        // src/dst/len are CPU-visible storage (carts use them as a contract
+        // between their own 68000 and SH-2 code).
+        static constexpr std::size_t dreq_fifo_depth = 8U;
+        std::uint16_t dreq_ctrl{}; // bit 2 = 68S; bits 1:0 latched (RV/DMA)
+        std::uint16_t dreq_src_hi{};
+        std::uint16_t dreq_src_lo{};
+        std::uint16_t dreq_dst_hi{};
+        std::uint16_t dreq_dst_lo{};
+        std::uint16_t dreq_len{};
+        std::array<std::uint16_t, dreq_fifo_depth> dreq_fifo{};
+        std::uint8_t dreq_fifo_count{};
+        std::uint8_t dreq_read_high{};  // SH-2-side byte-pair pop latch
+        std::uint8_t dreq_write_high{}; // 68000-side byte-pair push latch
+        void dreq_fifo_push(std::uint16_t word) noexcept;
+        [[nodiscard]] std::uint16_t dreq_fifo_pop() noexcept;
+        [[nodiscard]] bool dreq_pending() const noexcept { return dreq_fifo_count != 0U; }
+
         // COMM bank byte access (big-endian: even byte = high half of the word).
         // Shared by both SH-2s; the Genesis 68000 joins it in the bridge phase.
         [[nodiscard]] std::uint8_t comm_read(std::uint32_t offset) const noexcept;
@@ -150,8 +172,7 @@ namespace mnemos::manifests::sega32x {
         // sets the executing CPU's own mask), and the COMM bank ($20-$2F). PWM /
         // VDP / DMA-FIFO registers are stubbed until their phases. `is_master`
         // selects which CPU's view this access belongs to.
-        [[nodiscard]] std::uint8_t sys_reg_read(std::uint32_t offset,
-                                                bool is_master) const noexcept;
+        [[nodiscard]] std::uint8_t sys_reg_read(std::uint32_t offset, bool is_master) noexcept;
         void sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master);
 
         // The second system-register block at $40000000 (the reference maps it
@@ -160,8 +181,7 @@ namespace mnemos::manifests::sega32x {
         // byte lanes on adapter control, and the self-referential
         // interrupt-enable register at +$04 rather than +$02. COMM and PWM
         // share the GBR-window layout.
-        [[nodiscard]] std::uint8_t alt_reg_read(std::uint32_t offset,
-                                                bool is_master) const noexcept;
+        [[nodiscard]] std::uint8_t alt_reg_read(std::uint32_t offset, bool is_master) noexcept;
         void alt_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master);
 
         // 32X VDP register window ($00004100, offset 0..0xFF; both CPUs see the

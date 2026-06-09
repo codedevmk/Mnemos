@@ -1131,7 +1131,7 @@ TEST_CASE("sh2_peripherals DMAC auto-request copies a long-word block") {
     f.w32reg(f.dar0, 0x00002000U);
     f.w32reg(f.tcr0, 4U);           // 4 long-word units = 16 bytes
     f.w32reg(f.dmaor, 0x00000001U); // DME
-    f.w32reg(f.chcr0, 0x5801U);     // DE | TS=long | SM=inc | DM=inc
+    f.w32reg(f.chcr0, 0x5A01U);     // DE | AR | TS=long | SM=inc | DM=inc
     f.p.tick(1U);
     for (std::uint32_t i = 0; i < 16U; ++i) {
         CHECK(f.ram[0x2000U + i] == static_cast<std::uint8_t>(0xA0U + i));
@@ -1147,7 +1147,7 @@ TEST_CASE("sh2_peripherals DMAC honours fixed-source / incrementing-dest modes")
     f.w32reg(f.dar0, 0x00003000U);
     f.w32reg(f.tcr0, 4U);
     f.w32reg(f.dmaor, 0x00000001U);
-    f.w32reg(f.chcr0, 0x4001U); // DE | TS=byte | SM=fixed | DM=inc
+    f.w32reg(f.chcr0, 0x4201U); // DE | AR | TS=byte | SM=fixed | DM=inc
     f.p.tick(1U);
     for (std::uint32_t i = 0; i < 4U; ++i) {
         CHECK(f.ram[0x3000U + i] == 0x5AU);
@@ -1160,7 +1160,7 @@ TEST_CASE("sh2_peripherals DMAC stays idle until the master enable is set") {
     f.w32reg(f.sar0, 0x00001000U);
     f.w32reg(f.dar0, 0x00004000U);
     f.w32reg(f.tcr0, 1U);
-    f.w32reg(f.chcr0, 0x4001U); // channel enabled but DMAOR.DME still clear
+    f.w32reg(f.chcr0, 0x4201U); // channel enabled but DMAOR.DME still clear
     f.p.tick(1U);
     CHECK(f.ram[0x4000U] == 0x00U); // no transfer without DME
     f.w32reg(f.dmaor, 0x00000001U);
