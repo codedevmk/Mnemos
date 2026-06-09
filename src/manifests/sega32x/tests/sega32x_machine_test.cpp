@@ -64,8 +64,8 @@ TEST_CASE("sega32x_machine $A15100 ADEN+RES release starts and parks the SH-2s",
     // Low byte of the adapter-control word: ADEN (bit 1) + RES-release (bit 0).
     bus.write8(0xA15101U, 0x03U);
     CHECK_FALSE(m->thirtytwox->sh2_reset_asserted); // released
-    // Read-back: RES (bit 0) is driven not stored, so it reads 0; ADEN stays set.
-    CHECK(bus.read8(0xA15101U) == 0x02U);
+    // Read-back: RES (bit 0) reflects the live /RES line -- 1 while running.
+    CHECK(bus.read8(0xA15101U) == 0x03U);
 
     // Clearing RES (bit 0 = 0) parks the SH-2s again regardless of ADEN.
     bus.write8(0xA15101U, 0x00U);
@@ -87,4 +87,79 @@ TEST_CASE("sega32x_machine runs the SH-2s at 3x the 68000 after release", "[sega
     // target by at most one instruction, never undershoots.
     CHECK(sh2 >= main_delta * 3U);
     CHECK(sh2 < main_delta * 3U + 64U);
+}
+
+TEST_CASE("sega32x_machine INTM/INTS carry only the CMD bit and edge-assert CMD",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+    bus.write8(0xA15101U, 0x03U); // ADEN + release so IRQ delivery is live
+
+    // $A15102 (INTM): the 0->1 CMD-enable transition asserts CMD on the master.
+    bus.write8(0xA15103U, 0x04U);
+    CHECK(tx.master_irq_mask == 0x04U);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 8);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x48U);
+    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0); // targeted, not broadcast
+    CHECK(bus.read8(0xA15103U) == 0x04U);
+
+    // A 68000 write cannot set the SH-2-private VINT/HINT/PWM enables.
+    bus.write8(0xA15103U, 0xFFU);
+    CHECK(tx.master_irq_mask == 0x04U);
+
+    // $A15104 (INTS): same contract for the slave -- a bank-select style write
+    // without the CMD bit must not enable anything.
+    bus.write8(0xA15105U, 0x03U);
+    CHECK(tx.slave_irq_mask == 0x00U);
+    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
+    bus.write8(0xA15105U, 0x04U);
+    CHECK(tx.slave_irq_mask == 0x04U);
+    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 8);
+}
+
+TEST_CASE("sega32x_machine shares the COMM bank between the 68000 and the SH-2s",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+
+    // 68000 writes COMM word 0 byte-wise (big-endian lanes), the SH-2 buses see
+    // the same word through their $00004020 system-register window.
+    bus.write8(0xA15120U, 0x4DU); // "M"
+    bus.write8(0xA15121U, 0x5FU); // "_"
+    CHECK(tx.comm[0] == 0x4D5FU);
+    CHECK(tx.master_bus.read8(0x00004020U) == 0x4DU);
+    CHECK(tx.slave_bus.read8(0x00004021U) == 0x5FU);
+
+    // SH-2 writes are visible to the 68000 (word 7, both lanes).
+    tx.slave_bus.write8(0x0000402EU, 0x12U);
+    tx.slave_bus.write8(0x0000402FU, 0x34U);
+    CHECK(bus.read8(0xA1512EU) == 0x12U);
+    CHECK(bus.read8(0xA1512FU) == 0x34U);
+}
+
+TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->thirtytwox;
+
+    bus.write8(0xA15130U, 0x01U); // CNTL high byte (TM field)
+    bus.write8(0xA15131U, 0x05U); // CNTL low byte
+    bus.write8(0xA15132U, 0x02U); // CYCLE high byte
+    bus.write8(0xA15133U, 0x07U); // CYCLE low byte
+    CHECK(tx.pwm_cntl == 0x0105U);
+    CHECK(tx.pwm_cycle == 0x0207U);
+    CHECK(bus.read8(0xA15131U) == 0x05U);
+    CHECK(bus.read8(0xA15133U) == 0x07U);
+    // The SH-2s read the same registers through their own window ($4030/$4032).
+    CHECK(tx.master_bus.read8(0x00004031U) == 0x05U);
+    CHECK(tx.slave_bus.read8(0x00004032U) == 0x02U);
+
+    // DREQ control and the PWM FIFO offsets read 0 and drop writes for now.
+    CHECK(bus.read8(0xA15106U) == 0x00U);
+    CHECK(bus.read8(0xA15107U) == 0x00U);
+    bus.write8(0xA15135U, 0xAAU); // LCH FIFO -- dropped
+    CHECK(bus.read8(0xA15135U) == 0x00U);
 }
