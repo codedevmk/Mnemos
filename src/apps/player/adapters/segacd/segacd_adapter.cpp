@@ -160,6 +160,17 @@ namespace mnemos::apps::player::adapters::segacd {
         while (scheduler_.frame_index() == start_frame) {
             machine_->begin_comm_slice();               // baseline both CPUs for poll-sync
             scheduler_.run_master_cycles(slice_cycles); // main; comm writes catch the sub up
+            // Tick the CD drive (75 Hz) INTERLEAVED with the sub, not batched at the
+            // frame boundary: raise the CDD/CDC INT4 for each CD frame elapsed in this
+            // slice BEFORE the sub runs, so the sub services exactly one CD frame per
+            // interrupt. The BIOS read driver's flag timing (e.g. the $5837 TOC-dispatch
+            // bit) depends on seeing one CDD frame per service; a batch of CD frames at
+            // the frame end let the dispatcher run past the state the read driver reads.
+            cd_frame_frac_ += static_cast<double>(slice_cycles) * kCdFrameHz / kGenesisMasterHz;
+            while (cd_frame_frac_ >= 1.0) {
+                machine_->sub->cdd_update();
+                cd_frame_frac_ -= 1.0;
+            }
             machine_->catch_up_sub();                   // sub-CPU runs up to the slice end
             // PCM is paced independently of the sub-CPU (it must run even while the
             // sub is held in reset), so keep its own master-derived cycle budget.
@@ -169,14 +180,6 @@ namespace mnemos::apps::player::adapters::segacd {
             const auto pcm_cycles = static_cast<std::uint64_t>(sub_exact);
             sub_cycle_frac_ = sub_exact - static_cast<double>(pcm_cycles);
             machine_->sub->pcm.tick(pcm_cycles); // PCM runs regardless of sub-CPU reset
-        }
-
-        // Tick the CD drive at 75 Hz (raises CDC/CDD IRQs the sub-CPU services).
-        const double cd_exact = (kCdFrameHz / target_fps_) + cd_frame_frac_;
-        int cd_updates = static_cast<int>(cd_exact);
-        cd_frame_frac_ = cd_exact - static_cast<double>(cd_updates);
-        for (int i = 0; i < cd_updates; ++i) {
-            machine_->sub->cdd_update();
         }
 
         ++frames_stepped_;
