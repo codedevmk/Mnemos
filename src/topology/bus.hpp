@@ -86,6 +86,19 @@ namespace mnemos::topology {
 
         [[nodiscard]] const region* resolve(std::uint32_t address, bool is_write) const noexcept;
 
+        // Hot-path cache: the last RAM/ROM region resolved, narrowed to the
+        // maximal address span where it provably stays the winner (no
+        // overlapping region that could outrank it, no predicates involved).
+        // Within [fast_start_, fast_end_] an access indexes the span directly,
+        // skipping the region scan. Cleared by any map_* call. MMIO and
+        // predicate-gated regions never enter the cache, so dynamic decode
+        // (C64 PLA banking) keeps full resolve semantics.
+        void update_fast_path(std::uint32_t address, const region* winner) noexcept;
+
+        std::uint32_t fast_start_{1};
+        std::uint32_t fast_end_{0}; // empty range = cache disabled
+        const region* fast_region_{};
+
         unsigned address_bits_{16};
         endianness endian_{endianness::little};
         std::uint32_t address_mask_{0xFFFFU};

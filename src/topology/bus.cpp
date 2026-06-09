@@ -26,6 +26,9 @@ namespace mnemos::topology {
         r.ram = storage;
         r.active = std::move(active);
         regions_.push_back(std::move(r));
+        fast_start_ = 1U;
+        fast_end_ = 0U; // mapping changes invalidate the fast path
+        fast_region_ = nullptr;
     }
 
     void bus::map_rom(std::uint32_t start, std::span<const std::uint8_t> storage, int priority,
@@ -38,6 +41,9 @@ namespace mnemos::topology {
         r.rom = storage;
         r.active = std::move(active);
         regions_.push_back(std::move(r));
+        fast_start_ = 1U;
+        fast_end_ = 0U;
+        fast_region_ = nullptr;
     }
 
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
@@ -51,6 +57,9 @@ namespace mnemos::topology {
         r.on_write = std::move(on_write);
         r.active = std::move(active);
         regions_.push_back(std::move(r));
+        fast_start_ = 1U;
+        fast_end_ = 0U;
+        fast_region_ = nullptr;
     }
 
     const bus::region* bus::resolve(std::uint32_t address, bool is_write) const noexcept {
@@ -72,10 +81,53 @@ namespace mnemos::topology {
         return best;
     }
 
+    void bus::update_fast_path(std::uint32_t address, const region* winner) noexcept {
+        // Only a predicate-free RAM/ROM winner can be served without a resolve.
+        if (winner == nullptr || winner->backing == kind::mmio || winner->active) {
+            return;
+        }
+        // Narrow the winner's span to the part around `address` where no other
+        // region can outrank it. A region outranks on strictly higher priority,
+        // or on equal priority when it was mapped earlier (resolve keeps the
+        // first of equals). Predicate-gated regions count as if active -- they
+        // may become active at any time.
+        std::uint32_t lo = winner->start;
+        std::uint32_t hi = winner->end;
+        for (const region& o : regions_) {
+            if (&o == winner || o.end < lo || o.start > hi) {
+                continue;
+            }
+            const bool could_outrank =
+                o.priority > winner->priority || (o.priority == winner->priority && &o < winner);
+            if (!could_outrank) {
+                continue;
+            }
+            if (address >= o.start && address <= o.end) {
+                return; // a (currently inactive) rival covers this very address
+            }
+            if (o.end < address) {
+                lo = o.end + 1U;
+            } else {
+                hi = o.start - 1U;
+            }
+        }
+        fast_start_ = lo;
+        fast_end_ = hi;
+        fast_region_ = winner;
+    }
+
     std::uint8_t bus::read8(std::uint32_t address) {
         const std::uint32_t addr = address & address_mask_;
-        const region* r = resolve(addr, false);
         std::uint8_t value = 0xFFU; // open bus default
+        if (addr >= fast_start_ && addr <= fast_end_) {
+            const region* r = fast_region_;
+            value = r->backing == kind::ram ? r->ram[addr - r->start] : r->rom[addr - r->start];
+            if (observer_) {
+                observer_({.address = addr, .value = value, .write = false});
+            }
+            return value;
+        }
+        const region* r = resolve(addr, false);
         if (r != nullptr) {
             switch (r->backing) {
             case kind::ram:
@@ -88,6 +140,7 @@ namespace mnemos::topology {
                 value = r->on_read ? r->on_read(addr) : 0xFFU;
                 break;
             }
+            update_fast_path(addr, r);
         }
         if (observer_) {
             observer_({.address = addr, .value = value, .write = false});
@@ -97,6 +150,16 @@ namespace mnemos::topology {
 
     void bus::write8(std::uint32_t address, std::uint8_t value) {
         const std::uint32_t addr = address & address_mask_;
+        if (addr >= fast_start_ && addr <= fast_end_) {
+            const region* r = fast_region_;
+            if (r->backing == kind::ram) {
+                r->ram[addr - r->start] = value;
+            } // ROM ignores writes
+            if (observer_) {
+                observer_({.address = addr, .value = value, .write = true});
+            }
+            return;
+        }
         const region* r = resolve(addr, true);
         if (r != nullptr) {
             switch (r->backing) {
@@ -111,6 +174,7 @@ namespace mnemos::topology {
                 }
                 break;
             }
+            update_fast_path(addr, r);
         }
         // Report the attempted write (even if dropped/ROM) so watchpoints see it.
         if (observer_) {
