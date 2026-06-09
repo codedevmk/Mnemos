@@ -88,6 +88,14 @@ namespace mnemos::manifests::segacd {
     }
 
     void segacd_system::cdd_set_status() {
+        // While a seek is in progress (latency > 3) the reference keeps reporting the
+        // committed CD_SEEK + RS1=$0F frame and does NOT refresh the status frame; the
+        // final PLAY/PAUSE status (and valid RS1..RS8 time) is exposed only once latency
+        // drops to <=3. Holding the seek frame for the full window is what lets the BIOS
+        // read driver observe the seek phases (it bails otherwise).
+        if (cdd_latency > 3) {
+            return;
+        }
         // RS0 = drive status. For STOP or any state ABOVE PAUSE (OPEN/TOC/NO_DISC/
         // END) the drive is not positioned, so Get-Status updates only RS0 and
         // PRESERVES RS1..RS8 -- exactly like the reference (its Get-Status `break`s
@@ -285,10 +293,16 @@ namespace mnemos::manifests::segacd {
             if (lba < 0) {
                 lba = 0;
             }
+            // Seek window = the reference's CD-drive latency model: base 2 + 10*cd_latency
+            // (cd_latency=1) plus a distance term (max seek ~1.5 s = 120 CDD interrupts over
+            // 270000 sectors). The drive reports CD_SEEK + RS1=$0F for this whole window and
+            // only exposes PLAY/PAUSE once latency drops to <=3; a too-short window made the
+            // BIOS skip the seek phases the read driver depends on.
+            const std::int32_t seek_dist = (lba > cdd_lba) ? (lba - cdd_lba) : (cdd_lba - lba);
+            cdd_latency = 12 + (seek_dist * 120) / 270000;
             cdd_lba = lba;
             cdd_track = disc_track_of_lba(lba);
             cdd_pending_status = cdd_play;
-            cdd_latency = 3; // seek interrupt delay
             cdd_drive_status = cdd_seek;
             if (!disc_lba_is_data(lba)) {
                 cdda_play(static_cast<std::uint32_t>(lba), disc_total_lbas());
@@ -308,10 +322,12 @@ namespace mnemos::manifests::segacd {
             if (lba < 0) {
                 lba = 0;
             }
+            // Distance-based seek window (see Play, cmd $03).
+            const std::int32_t seek_dist = (lba > cdd_lba) ? (lba - cdd_lba) : (cdd_lba - lba);
+            cdd_latency = 12 + (seek_dist * 120) / 270000;
             cdd_lba = lba;
             cdd_track = disc_track_of_lba(lba);
             cdd_pending_status = cdd_pause;
-            cdd_latency = 3;
             cdd_drive_status = cdd_seek;
             cdda_stop();
             cdd_status[0] = cdd_seek;
