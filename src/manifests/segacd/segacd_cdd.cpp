@@ -89,22 +89,19 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::cdd_set_status() {
         // RS0 = drive status. For STOP or any state ABOVE PAUSE (OPEN/TOC/NO_DISC/
-        // END) the drive is not positioned, so RS1..RS8 stay zero (an all-zero MSF
-        // with a valid RS9 checksum) -- the BIOS reads RS0 for the drive state. Only
-        // the active states (PLAY/SEEK/SCAN/PAUSE) report the current absolute MSF.
-        // Mirrors the reference Get-Status, which skips RS1..RS8 outside PLAY..PAUSE
-        // (so STOP stays the all-zero frame and a loaded TOC drive reads as RS0=9).
+        // END) the drive is not positioned, so Get-Status updates only RS0 and
+        // PRESERVES RS1..RS8 -- exactly like the reference (its Get-Status `break`s
+        // for STOP / above-PAUSE, leaving RS1..RS8 untouched). Those bytes hold the
+        // last Report-TOC (cmd2) response: first/last track, track-1 start MSF, and
+        // the CD-ROM/data flag. The BIOS reads that TOC data to decide to Seek+Read.
+        // Clearing RS1..RS8 here (the old behaviour) wiped the TOC response on every
+        // Get-Status poll AND on every 75 Hz cdd_update tick, so the BIOS never saw
+        // the TOC and looped Get-Status at TOC forever instead of Seeking. RS1..RS8
+        // start zero (value-init), so the boot's all-zero STOP handshake frame is
+        // unaffected; only a real TOC response now survives. RS9 is recomputed from
+        // the (possibly preserved) RS0..RS8 in cdd_commit_status.
         cdd_status[0] = static_cast<std::uint8_t>(cdd_drive_status & 0x0FU);
         if (cdd_drive_status == cdd_stop || cdd_drive_status > cdd_pause) {
-            for (std::size_t i = 1; i < 9; ++i) {
-                cdd_status[i] = 0;
-            }
-            // RS9 = the computed checksum ~(RS0+..+RS8) & $F, recomputed after every
-            // command exactly like the reference (cdd.c). For STOP (RS0=0) this is $F
-            // (the all-zero handshake frame the boot CDD sync needs), but a loaded TOC
-            // drive (RS0=9) needs RS9=6; hardcoding $F made the TOC status frame fail
-            // the BIOS checksum, so the BIOS never validated the loaded disc and never
-            // advanced past Get-Status to Seek/Read.
             cdd_commit_status();
             return;
         }
