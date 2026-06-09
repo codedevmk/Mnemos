@@ -32,11 +32,21 @@ namespace mnemos::chips::cpu {
             return addr >= window_base;
         }
 
+        // The highest on-chip interrupt the INTC currently presents (level 0 = none).
+        // Derived from live register state with no side effects: the on-chip
+        // sources are level-triggered and stay asserted until the handler clears
+        // them, so the CPU may poll this every boundary.
+        struct onchip_irq final {
+            int level{};
+            std::uint8_t vector{};
+        };
+
         [[nodiscard]] std::uint8_t read8(std::uint32_t addr) const noexcept;
         void write8(std::uint32_t addr, std::uint8_t value) noexcept;
         // Advance the time-driven peripherals (currently the FRT) by `cycles`
         // SH-2 clocks. Called every instruction step, including during SLEEP.
         void tick(std::uint64_t cycles) noexcept;
+        [[nodiscard]] onchip_irq pending_onchip_irq() const noexcept;
         void reset() noexcept;
 
         void save_state(state_writer& writer) const;
@@ -65,6 +75,14 @@ namespace mnemos::chips::cpu {
         int frt_prescale_acc_{};                  // accumulated source clocks
         mutable std::uint8_t frt_temp_{};         // 16-bit access byte latch
         mutable std::uint8_t ftcsr_read_flags_{}; // flags observed by a read
+
+        // INTC -- interrupt controller. The FRT priority lives in IPRB[11:8]; its
+        // vectors in VCRC (low byte = output-compare, shared by OCFA/OCFB) and
+        // VCRD (high byte = overflow). WDT/DMAC/SCI priorities + vectors stay raw
+        // in the window until those interrupts land.
+        std::uint16_t iprb_{}; // FE60 interrupt priority B
+        std::uint16_t vcrc_{}; // FE66 FRT ICI/OCI vectors
+        std::uint16_t vcrd_{}; // FE68 FRT OVI vector
     };
 
 } // namespace mnemos::chips::cpu

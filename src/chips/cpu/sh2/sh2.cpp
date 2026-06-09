@@ -838,27 +838,41 @@ namespace mnemos::chips::cpu {
     }
 
     bool sh2::try_service_irq() {
-        // Accept the presented external IRQ only when its level outranks SR.IMASK.
-        if (pending_irq_level_ == 0) {
+        // Arbitrate two sources into the single accept path: the EXTERNAL request
+        // (edge-latched, presented via set_irq) and the on-chip INTC (level-driven,
+        // derived live from the peripherals). The external source wins ties.
+        int level = pending_irq_level_;
+        std::uint8_t vector = pending_irq_vector_;
+        bool external = level > 0;
+
+        const sh2_peripherals::onchip_irq onchip = peripherals_.pending_onchip_irq();
+        if (onchip.level > level) {
+            level = onchip.level;
+            vector = onchip.vector;
+            external = false;
+        }
+        if (level == 0) {
             return false;
         }
         const auto imask = static_cast<int>((sr_ & sr_imask) >> 4U);
-        if (pending_irq_level_ <= imask) {
+        if (level <= imask) {
             return false;
         }
-        const int level = pending_irq_level_;
-        const std::uint8_t vector = pending_irq_vector_;
+
         raise_exception(vector, pc_); // saved PC = the interrupted boundary
         // Raise IMASK to the accepted level (clamped to the 4-bit field) so the
         // handler is not immediately re-entered.
         const std::uint32_t lv = level > 15 ? 15U : static_cast<std::uint32_t>(level);
         sr_ = (sr_ & ~sr_imask) | ((lv << 4U) & sr_imask);
-        // Consume the request; the system re-presents the next source (if any)
-        // from the accept callback.
-        pending_irq_level_ = 0;
-        pending_irq_vector_ = 0;
-        if (irq_accept_) {
-            irq_accept_(level, vector);
+        // Only the external (edge) source is consumed on accept; the on-chip
+        // (level) source stays asserted until its handler clears the flag -- the
+        // raised IMASK is what prevents an immediate re-accept.
+        if (external) {
+            pending_irq_level_ = 0;
+            pending_irq_vector_ = 0;
+            if (irq_accept_) {
+                irq_accept_(level, vector);
+            }
         }
         return true;
     }
