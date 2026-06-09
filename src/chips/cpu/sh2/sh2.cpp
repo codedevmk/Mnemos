@@ -56,15 +56,15 @@ namespace mnemos::chips::cpu {
 
     void sh2::exec(std::uint16_t op) {
         // SH-2 instruction decode. Behaviour ported from the Emu reference
-        // (chips/sh2). Implemented: data transfer, ALU, logical, shift/rotate,
-        // multiply, divide-step, control flow (with delay slots),
-        // system-register ops (LDS/STS/LDC/STC), all addressing modes, and the
-        // TRAPA/RTE + external-interrupt path (see step_instruction). Still
-        // deferred: SLEEP, the illegal-instruction / slot-illegal / address-error
-        // exceptions (need complete-decode + bus-fault reporting), and the FPU
-        // (absent on the SH7604) -- these undecoded encodings stay 1-cycle
-        // no-ops. Instruction timing beyond the 1-cycle base is deferred
-        // (ADR-0011).
+        // (chips/sh2). The full SH7604 instruction set is implemented: data
+        // transfer, ALU, logical, shift/rotate, multiply, divide-step, control
+        // flow (with delay slots), system-register ops (LDS/STS/LDC/STC), all
+        // addressing modes, SLEEP, and the TRAPA/RTE + external-interrupt path
+        // (see step_instruction). Any undecoded encoding (including the FPU
+        // opcodes, absent on the SH7604) raises the illegal-instruction
+        // exception via illegal(). Still deferred: the address-error exception
+        // (needs misaligned-access fault plumbing). Instruction timing beyond the
+        // 1-cycle base is deferred (ADR-0011).
         const auto n0 = static_cast<unsigned>(op >> 12U);
         const auto rn = static_cast<std::size_t>((op >> 8U) & 0xFU);
         const auto rm = static_cast<std::size_t>((op >> 4U) & 0xFU);
@@ -103,6 +103,13 @@ namespace mnemos::chips::cpu {
                 r_[15] += 8U;
                 sr_ = new_sr;
                 branch_delayed(new_pc);
+                return;
+            }
+            if (op == 0x0009U) { // NOP
+                return;
+            }
+            if (op == 0x001BU) { // SLEEP -- halt until an interrupt arrives
+                sleeping_ = true;
                 return;
             }
             switch (static_cast<unsigned>(op & 0xFFU)) {
@@ -161,7 +168,8 @@ namespace mnemos::chips::cpu {
                 mac_long(rn, rm);
                 return; // MAC.L @Rm+,@Rn+
             default:
-                return; // NOP (0x0009); RTE/SLEEP deferred
+                illegal(op);
+                return;
             }
         case 0x1: // MOV.L Rm,@(disp,Rn) -- disp*4 store
             wr32(r_[rn] + (static_cast<std::uint32_t>(op & 0xFU) * 4U), r_[rm]);
@@ -226,6 +234,7 @@ namespace mnemos::chips::cpu {
                     static_cast<std::int32_t>(static_cast<std::int16_t>(r_[rm] & 0xFFFFU)));
                 return;
             default:
+                illegal(op);
                 return;
             }
         case 0x3:
@@ -331,6 +340,7 @@ namespace mnemos::chips::cpu {
                 return;
             }
             default:
+                illegal(op);
                 return;
             }
         case 0x4: {
@@ -489,7 +499,8 @@ namespace mnemos::chips::cpu {
                 r_[rn] += 4U;
                 return;
             default:
-                return; // remaining 0x4nxx (UBC/exception entry): deferred
+                illegal(op); // undefined 0x4nxx encoding
+                return;
             }
         }
         case 0x5: // MOV.L @(disp,Rm),Rn -- disp*4 load
@@ -560,6 +571,7 @@ namespace mnemos::chips::cpu {
                 r_[rn] = sx_w(r_[rm] & 0xFFFFU);
                 return; // EXTS.W
             default:
+                illegal(op);
                 return;
             }
         case 0x7:
@@ -610,6 +622,7 @@ namespace mnemos::chips::cpu {
                 }
                 return;
             default:
+                illegal(op); // undefined 0x8nxx sub-op (2/3/6/7/A/C/E)
                 return;
             }
         }
@@ -688,6 +701,7 @@ namespace mnemos::chips::cpu {
                 raise_exception(static_cast<std::uint8_t>(imm), pc_);
                 return;
             default:
+                illegal(op);
                 return;
             }
         }
@@ -698,24 +712,29 @@ namespace mnemos::chips::cpu {
             r_[rn] = sx8;
             return; // MOV #imm,Rn (sign-extended)
         default:
-            return; // 0xF (no FPU on the SH7604)
+            illegal(op); // 0xF: FPU opcodes are illegal on the SH7604
+            return;
         }
     }
 
     void sh2::branch_delayed(std::uint32_t target) {
         // SH-2 delayed control transfer: the instruction in the delay slot (the
         // one immediately after the branch) executes before control moves to the
-        // target. A branch inside a delay slot is illegal on hardware (a
-        // slot-illegal exception, deferred to a later phase); the re-entry guard
-        // makes that case degrade safely instead of recursing.
+        // target. The re-entry guard makes an (illegal) branch-in-a-delay-slot
+        // degrade safely instead of recursing.
         if (in_delay_slot_) {
             return;
         }
         in_delay_slot_ = true;
+        delay_resume_target_ = target;
         const std::uint16_t slot = rd16(pc_);
         pc_ += 2U;
         exec(slot);
         in_delay_slot_ = false;
+        if (exception_taken_) {
+            // The delay-slot instruction vectored (slot-illegal); it owns PC now.
+            return;
+        }
         pc_ = target;
         cycles_ += 2; // delay-slot op + branch-taken penalty (timing refined later)
     }
@@ -795,16 +814,28 @@ namespace mnemos::chips::cpu {
         r_[15] -= 4U;
         wr32(r_[15], saved_pc);
         pc_ = rd32(vbr_ + (static_cast<std::uint32_t>(vector) << 2U));
+        exception_taken_ = true;
     }
 
-    void sh2::try_service_irq() {
+    void sh2::illegal(std::uint16_t /*op*/) {
+        // Undecoded encoding: vector through the illegal-instruction handler. In
+        // a delay slot it is slot-illegal (vector 6), saving the branch's resume
+        // target; otherwise general-illegal (vector 4), saving the faulting PC.
+        if (in_delay_slot_) {
+            raise_exception(6U, delay_resume_target_);
+        } else {
+            raise_exception(4U, inst_addr_);
+        }
+    }
+
+    bool sh2::try_service_irq() {
         // Accept the presented external IRQ only when its level outranks SR.IMASK.
         if (pending_irq_level_ == 0) {
-            return;
+            return false;
         }
         const auto imask = static_cast<int>((sr_ & sr_imask) >> 4U);
         if (pending_irq_level_ <= imask) {
-            return;
+            return false;
         }
         const int level = pending_irq_level_;
         const std::uint8_t vector = pending_irq_vector_;
@@ -820,6 +851,7 @@ namespace mnemos::chips::cpu {
         if (irq_accept_) {
             irq_accept_(level, vector);
         }
+        return true;
     }
 
     int sh2::step_instruction() {
@@ -828,13 +860,20 @@ namespace mnemos::chips::cpu {
         // Interrupt acceptance happens at the instruction boundary, unless a
         // preceding control-register load inhibits it for one instruction (code
         // that unmasks SR expects the next instruction to run before any newly
-        // enabled IRQ fires).
+        // enabled IRQ fires). An accepted interrupt also resumes a CPU halted by
+        // SLEEP.
         if (interrupt_inhibit_ > 0) {
             --interrupt_inhibit_;
-        } else {
-            try_service_irq();
+        } else if (try_service_irq()) {
+            sleeping_ = false;
         }
 
+        if (sleeping_) {
+            elapsed_ += static_cast<std::uint64_t>(cycles_);
+            return cycles_; // halted: no fetch/execute until an interrupt arrives
+        }
+
+        exception_taken_ = false; // only a slot exception (set inside exec) matters
         inst_addr_ = pc_;
         if (trace_callback_) {
             trace_callback_(pc_);
@@ -867,6 +906,9 @@ namespace mnemos::chips::cpu {
         cycle_debt_ = 0;
         elapsed_ = 0U;
         in_delay_slot_ = false;
+        sleeping_ = false;
+        exception_taken_ = false;
+        delay_resume_target_ = 0U;
         pending_irq_level_ = 0;
         pending_irq_vector_ = 0;
         interrupt_inhibit_ = 0;
@@ -920,6 +962,7 @@ namespace mnemos::chips::cpu {
         writer.u32(static_cast<std::uint32_t>(pending_irq_level_));
         writer.u32(static_cast<std::uint32_t>(pending_irq_vector_));
         writer.u32(static_cast<std::uint32_t>(interrupt_inhibit_));
+        writer.u32(sleeping_ ? 1U : 0U);
     }
 
     void sh2::load_state(state_reader& reader) {
@@ -938,6 +981,7 @@ namespace mnemos::chips::cpu {
         pending_irq_level_ = static_cast<int>(reader.u32());
         pending_irq_vector_ = static_cast<std::uint8_t>(reader.u32());
         interrupt_inhibit_ = static_cast<int>(reader.u32());
+        sleeping_ = reader.u32() != 0U;
     }
 
     instrumentation::ichip_introspection& sh2::introspection() noexcept { return introspection_; }

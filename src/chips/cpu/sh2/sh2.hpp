@@ -156,8 +156,12 @@ namespace mnemos::chips::cpu {
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
         void raise_exception(std::uint8_t vector, std::uint32_t saved_pc);
         // Accept the presented external IRQ if level > SR.IMASK (called at the
-        // instruction boundary).
-        void try_service_irq();
+        // instruction boundary). Returns true if an interrupt was taken.
+        bool try_service_irq();
+        // Raise the illegal-instruction exception for an undecoded opcode
+        // (slot-illegal, vector 6, inside a delay slot; general-illegal, vector
+        // 4, otherwise).
+        void illegal(std::uint16_t op);
 
         // ---- decode + execute one fetched opcode ----
         void exec(std::uint16_t op);
@@ -171,8 +175,11 @@ namespace mnemos::chips::cpu {
         std::uint32_t mach_{};
         std::uint32_t macl_{};
         std::uint32_t inst_addr_{};
-        bool in_delay_slot_{};    // transient: true while running a branch's delay slot
-        int pending_irq_level_{}; // 0 = none; else the presented IRQ level (1-15)
+        bool in_delay_slot_{};                // transient: running a branch's delay slot
+        bool sleeping_{};                     // halted by SLEEP until an interrupt arrives
+        bool exception_taken_{};              // transient: an exception vectored this step
+        std::uint32_t delay_resume_target_{}; // transient: a delayed branch's target
+        int pending_irq_level_{};             // 0 = none; else presented IRQ level (1-15)
         std::uint8_t pending_irq_vector_{};
         int interrupt_inhibit_{}; // >0: skip IRQ acceptance for that many boundaries
 
