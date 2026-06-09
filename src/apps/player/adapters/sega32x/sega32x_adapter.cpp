@@ -1,0 +1,280 @@
+#include "sega32x_adapter.hpp"
+
+#include "adapter_registry.hpp"
+#include "audio_resampler.hpp"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <utility>
+
+using mnemos::dsp::clip_i16;
+using mnemos::dsp::kOutputRate;
+using mnemos::dsp::sample_channel_box;
+using mnemos::dsp::sample_channel_linear;
+using mnemos::dsp::scale_q12;
+
+namespace mnemos::apps::player::adapters::sega32x {
+
+    namespace {
+
+        // Interleave granularity: one NTSC scanline of master cycles. The 68000
+        // and the SH-2 pair hand-shake through the COMM registers continuously
+        // during boot, so the SH-2s catch up after every scanline of main time
+        // (the same per-scanline budget the reference uses).
+        constexpr std::uint64_t kSliceMasterCycles = 3420;
+
+        // Mixer gains (Q12). FM keeps its 3:1 bias over PSG, matching the
+        // Genesis adapter; the PWM pair joins at the PCM level used by the
+        // Sega CD adapter's sample sources.
+        constexpr int kGainFm = 3072;
+        constexpr int kGainPsg = 1024;
+        constexpr int kGainPwm = 2048;
+
+        // Scheduler order: VDP first (it drives the raster the 68000 samples),
+        // then the gated 68000 (DMA stall) + gated Z80 (BUSREQ), FM, PSG. The
+        // SH-2s are NOT scheduler chips -- the adapter paces them per slice
+        // through the machine's catch-up (they run at exactly 3x the 68000).
+        std::vector<runtime::scheduled_chip> build_schedule(manifests::genesis::genesis_system& g) {
+            return {
+                {&g.vdp, 1U}, {&g.cpu_gate, 7U}, {&g.z80_gate, 15U}, {&g.fm, 7U}, {&g.psg, 15U},
+            };
+        }
+
+        // Resample one source (mono or interleaved stereo, `count` frames at its
+        // native rate) to `dst_count` output frames and accumulate it, scaled by
+        // `gain` (Q12), into the L/R sum buffers. A mono source feeds both sides.
+        void add_source(std::int32_t* acc_l, std::int32_t* acc_r, const std::int16_t* src,
+                        int chans, int count, int gain, int dst_count) noexcept {
+            if (src == nullptr || count <= 0 || dst_count <= 0) {
+                return;
+            }
+            const int stride = chans;
+            const double scale = static_cast<double>(count) / static_cast<double>(dst_count);
+            for (int i = 0; i < dst_count; ++i) {
+                int l = 0;
+                int r = 0;
+                if (scale > 1.0) {
+                    l = sample_channel_box(src, stride, 0, count, scale * i, scale * (i + 1));
+                    r = chans == 2
+                            ? sample_channel_box(src, stride, 1, count, scale * i, scale * (i + 1))
+                            : l;
+                } else {
+                    l = sample_channel_linear(src, stride, 0, count, scale * i);
+                    r = chans == 2 ? sample_channel_linear(src, stride, 1, count, scale * i) : l;
+                }
+                acc_l[i] += scale_q12(l, gain);
+                acc_r[i] += scale_q12(r, gain);
+            }
+        }
+
+    } // namespace
+
+    sega32x_adapter::sega32x_adapter(std::vector<std::uint8_t> cart,
+                                     manifests::sega32x::sega32x_bios bios,
+                                     const manifests::genesis::genesis_config& config,
+                                     std::string display_name,
+                                     frontend_sdk::scheduler_factory* scheduler_factory)
+        : machine_(manifests::sega32x::assemble_sega32x_machine(std::move(cart), bios, config)),
+          work_ram_view_("work_ram", machine_->genesis->work_ram),
+          sdram_view_("sdram", machine_->thirtytwox->sdram),
+          fb_view_("32x_framebuffer", machine_->thirtytwox->framebuffer),
+          scheduler_(frontend_sdk::make_scheduler(
+              scheduler_factory, build_schedule(*machine_->genesis), &machine_->genesis->vdp)),
+          region_(config.video_region),
+          target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
+        machine_->genesis->fm.enable_audio_capture(true);
+        machine_->genesis->psg.enable_audio_capture(true);
+        machine_->thirtytwox->enable_pwm_capture(true);
+
+        chip_view_[0] = &machine_->genesis->vdp;
+        chip_view_[1] = &machine_->genesis->cpu;
+        chip_view_[2] = &machine_->genesis->z80;
+        chip_view_[3] = &machine_->genesis->fm;
+        chip_view_[4] = &machine_->genesis->psg;
+        chip_view_[5] = &machine_->thirtytwox->master_cpu;
+        chip_view_[6] = &machine_->thirtytwox->slave_cpu;
+        chip_view_[7] = &machine_->thirtytwox->vdp;
+
+        system_mem_view_[0] = &work_ram_view_;
+        system_mem_view_[1] = &sdram_view_;
+        system_mem_view_[2] = &fb_view_;
+
+        spec_.push_back({.label = "System", .value = "Sega 32X"});
+        spec_.push_back(
+            {.label = "Region",
+             .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
+        if (!display_name.empty()) {
+            spec_.push_back({.label = "Cart", .value = std::move(display_name)});
+        }
+
+        // Seed the composed frame from the Genesis view geometry so
+        // current_frame() is valid before the first step.
+        const auto gen = machine_->genesis->vdp.framebuffer();
+        composed_.assign(static_cast<std::size_t>(gen.effective_stride()) * gen.height, 0U);
+        composed_view_ = {.pixels = composed_.data(),
+                          .width = gen.width,
+                          .height = gen.height,
+                          .stride = gen.effective_stride()};
+    }
+
+    frontend_sdk::video_region sega32x_adapter::region() const noexcept {
+        return {mnemos::fps_x1000[static_cast<std::size_t>(region_)]};
+    }
+
+    chips::frame_buffer_view sega32x_adapter::current_frame() const noexcept {
+        return composed_view_;
+    }
+
+    void sega32x_adapter::compose_frame() noexcept {
+        const auto gen = machine_->genesis->vdp.framebuffer();
+        const std::size_t stride = gen.effective_stride();
+        composed_.assign(gen.pixels, gen.pixels + stride * gen.height);
+        composed_view_ = {.pixels = composed_.data(),
+                          .width = gen.width,
+                          .height = gen.height,
+                          .stride = static_cast<std::uint32_t>(stride)};
+        // Overlay the 32X pixels row by row (a no-op while the bitmap mode is
+        // off). Mid-frame palette/bank changes are not modelled yet -- the
+        // composition uses the frame-end 32X state.
+        auto& tx = *machine_->thirtytwox;
+        const int rows = static_cast<int>(gen.height);
+        for (int y = 0; y < rows; ++y) {
+            tx.vdp.compose_scanline(
+                tx.framebuffer,
+                std::span<std::uint32_t>{composed_.data() + static_cast<std::size_t>(y) * stride,
+                                         gen.width},
+                y);
+        }
+    }
+
+    void sega32x_adapter::step_one_frame() {
+        // Advance the Genesis a scanline of master cycles, then catch the SH-2
+        // pair up to 3x the 68000's progress, until the VDP completes a frame.
+        const std::uint64_t start_frame = scheduler_.frame_index();
+        while (scheduler_.frame_index() == start_frame) {
+            machine_->begin_slice();
+            scheduler_.run_master_cycles(kSliceMasterCycles);
+            machine_->catch_up_sh2();
+        }
+        compose_frame();
+        ++frames_stepped_;
+
+        // Opt-in boot probe (MNEMOS_32X_PROBE=1): one stderr line per frame with
+        // both SH-2 positions and the COMM handshake words.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
+#endif
+        static const bool probe = [] {
+            const char* p = std::getenv("MNEMOS_32X_PROBE");
+            return p != nullptr && p[0] != '\0' && p[0] != '0';
+        }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (probe) {
+            auto& tx = *machine_->thirtytwox;
+            std::fprintf(
+                stderr, "[32x] f%05llu rst=%d mpc=%08X spc=%08X comm %04X %04X %04X %04X mode=%u\n",
+                static_cast<unsigned long long>(frames_stepped_), tx.sh2_reset_asserted,
+                tx.master_cpu.cpu_registers().pc, tx.slave_cpu.cpu_registers().pc, tx.comm[0],
+                tx.comm[1], tx.comm[2], tx.comm[3], static_cast<unsigned>(tx.vdp.mode()));
+        }
+    }
+
+    void sega32x_adapter::apply_input(int port,
+                                      const frontend_sdk::controller_state& state) noexcept {
+        if (port < 0 || port >= static_cast<int>(ports_.size())) {
+            return;
+        }
+        ports_[static_cast<std::size_t>(port)] = state;
+        if (auto* dev = machine_->genesis->port_device(port)) {
+            dev->apply_state(state);
+        }
+    }
+
+    frontend_sdk::audio_chunk sega32x_adapter::drain_audio() noexcept {
+        const std::size_t fm_count = machine_->genesis->fm.pending_samples();
+        const std::size_t psg_count = machine_->genesis->psg.pending_samples();
+        const std::size_t pwm_count = machine_->thirtytwox->pwm_pending_samples();
+
+        if (fm_count == 0U && psg_count == 0U && pwm_count == 0U) {
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
+        }
+
+        if (fm_count > 0U) {
+            fm_buf_.resize(fm_count * 2U);
+            machine_->genesis->fm.drain_samples(fm_buf_.data(), fm_count);
+        }
+        if (psg_count > 0U) {
+            psg_buf_.resize(psg_count);
+            machine_->genesis->psg.drain_samples(psg_buf_.data(), psg_count);
+        }
+        if (pwm_count > 0U) {
+            pwm_buf_.resize(pwm_count * 2U);
+            machine_->thirtytwox->drain_pwm_samples(pwm_buf_.data(), pwm_count);
+        }
+
+        const double exact = (static_cast<double>(kOutputRate) / target_fps_) + audio_frac_;
+        int dst_pairs = static_cast<int>(exact);
+        if (dst_pairs <= 0) {
+            dst_pairs = 1;
+        }
+        audio_frac_ = exact - static_cast<double>(dst_pairs);
+
+        acc_l_.assign(static_cast<std::size_t>(dst_pairs), 0);
+        acc_r_.assign(static_cast<std::size_t>(dst_pairs), 0);
+        if (fm_count > 0U) {
+            add_source(acc_l_.data(), acc_r_.data(), fm_buf_.data(), 2, static_cast<int>(fm_count),
+                       kGainFm, dst_pairs);
+        }
+        if (psg_count > 0U) {
+            add_source(acc_l_.data(), acc_r_.data(), psg_buf_.data(), 1,
+                       static_cast<int>(psg_count), kGainPsg, dst_pairs);
+        }
+        if (pwm_count > 0U) {
+            add_source(acc_l_.data(), acc_r_.data(), pwm_buf_.data(), 2,
+                       static_cast<int>(pwm_count), kGainPwm, dst_pairs);
+        }
+
+        mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
+        for (std::size_t i = 0; i < static_cast<std::size_t>(dst_pairs); ++i) {
+            mix_buf_[i * 2U] = clip_i16(acc_l_[i]);
+            mix_buf_[i * 2U + 1U] = clip_i16(acc_r_[i]);
+        }
+        return {.samples = mix_buf_.data(),
+                .frame_count = static_cast<std::uint32_t>(dst_pairs),
+                .sample_rate = kOutputRate};
+    }
+
+    void force_link() noexcept {}
+
+    namespace {
+        const auto register_sega32x = [] {
+            mnemos::frontend_sdk::adapter_registry::instance().register_family(
+                "sega32x",
+                [](mnemos::frontend_sdk::adapter_options opts)
+                    -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    manifests::sega32x::sega32x_bios bios;
+                    if (opts.bios_images.size() > 0U) {
+                        bios.m_bios = std::move(opts.bios_images[0]);
+                    }
+                    if (opts.bios_images.size() > 1U) {
+                        bios.s_bios = std::move(opts.bios_images[1]);
+                    }
+                    if (opts.bios_images.size() > 2U) {
+                        bios.g_bios = std::move(opts.bios_images[2]);
+                    }
+                    return std::make_unique<sega32x_adapter>(
+                        std::move(opts.rom), std::move(bios),
+                        manifests::genesis::genesis_config{.video_region = opts.video_region},
+                        std::move(opts.display_name), opts.scheduler_factory_override);
+                });
+            return 0;
+        }();
+    } // namespace
+
+} // namespace mnemos::apps::player::adapters::sega32x

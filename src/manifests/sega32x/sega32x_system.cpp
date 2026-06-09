@@ -2,10 +2,28 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
+#include <cstdlib>
 
 namespace mnemos::manifests::sega32x {
 
     namespace {
+        // Opt-in COMM-write tracer (MNEMOS_32X_COMM_TRACE=1): one stderr line
+        // per SH-2-side COMM write, for boot-handshake debugging.
+        [[nodiscard]] bool comm_trace_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
+#endif
+            static const bool enabled = [] {
+                const char* v = std::getenv("MNEMOS_32X_COMM_TRACE");
+                return v != nullptr && v[0] != '\0' && v[0] != '0';
+            }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return enabled;
+        }
         // PWM FIFO primitives. A push into a full FIFO drops the value (the
         // hardware rejects the write); a pop from an empty FIFO returns the
         // held DAC value so the carrier keeps running on the last duty.
@@ -59,6 +77,44 @@ namespace mnemos::manifests::sega32x {
             return static_cast<std::int16_t>(sample);
         }
 
+        // The SH-2-side interrupt-enable register (low byte of the $4000 system
+        // word) uses the hardware bit order V=8 / H=4 / CMD=2 / PWM=1, the
+        // reverse of the internal source bits (VINT=1 .. PWM=8). Translate at
+        // the register boundary so the delivery logic keeps one convention.
+        [[nodiscard]] std::uint8_t hw_mask_to_internal(std::uint8_t hw) noexcept {
+            std::uint8_t m = 0;
+            if ((hw & 0x08U) != 0U) {
+                m |= sega32x_system::irq_vint;
+            }
+            if ((hw & 0x04U) != 0U) {
+                m |= sega32x_system::irq_hint;
+            }
+            if ((hw & 0x02U) != 0U) {
+                m |= sega32x_system::irq_cmd;
+            }
+            if ((hw & 0x01U) != 0U) {
+                m |= sega32x_system::irq_pwm;
+            }
+            return m;
+        }
+
+        [[nodiscard]] std::uint8_t internal_mask_to_hw(std::uint8_t m) noexcept {
+            std::uint8_t hw = 0;
+            if ((m & sega32x_system::irq_vint) != 0U) {
+                hw |= 0x08U;
+            }
+            if ((m & sega32x_system::irq_hint) != 0U) {
+                hw |= 0x04U;
+            }
+            if ((m & sega32x_system::irq_cmd) != 0U) {
+                hw |= 0x02U;
+            }
+            if ((m & sega32x_system::irq_pwm) != 0U) {
+                hw |= 0x01U;
+            }
+            return hw;
+        }
+
         struct irq_source {
             std::uint8_t bit;
             int level;
@@ -87,21 +143,33 @@ namespace mnemos::manifests::sega32x {
             word = static_cast<std::uint16_t>((word & 0x00FFU) |
                                               (static_cast<std::uint16_t>(value) << 8U));
         }
+        if (comm_trace_enabled()) {
+            std::fprintf(stderr, "[comm] sh2 wr idx%u <= %04X (mcyc=%llu)\n",
+                         static_cast<unsigned>((offset >> 1U) & (comm_words - 1U)), word,
+                         static_cast<unsigned long long>(master_cpu.elapsed_cycles()));
+        }
     }
 
     std::uint8_t sega32x_system::sys_reg_read(std::uint32_t offset, bool is_master) const noexcept {
         if (offset < 0x02U) {
-            // Adapter control: even byte = low half, odd byte = high half (a Mars
-            // byte-lane quirk preserved from the reference).
-            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(adapter_ctrl >> 8U)
-                                       : static_cast<std::uint8_t>(adapter_ctrl);
+            // The SH-2-side $4000 system word. Even (high) byte: the adapter
+            // flag bits the boot ROMs check -- ADEN (bit 1), FM (bit 7) -- plus
+            // the CPU-ID pin in bit 0 (master = 0, slave = 1). Odd (low) byte:
+            // the executing CPU's own interrupt-enable mask in the hardware bit
+            // order (V=8 / H=4 / CMD=2 / PWM=1) -- self-referential, each SH-2
+            // sees only its own.
+            if ((offset & 1U) != 0U) {
+                return internal_mask_to_hw(is_master ? master_irq_mask : slave_irq_mask);
+            }
+            return static_cast<std::uint8_t>((adapter_ctrl & 0xFFU) | (is_master ? 0x00U : 0x01U));
         }
         if (offset < 0x04U) {
-            // Interrupt-enable: the executing CPU's own mask, in the low (odd) byte.
+            // H-interrupt line-count register: round-trip storage (the HINT
+            // pacing itself follows the Genesis VDP's line counter).
             if ((offset & 1U) != 0U) {
-                return is_master ? master_irq_mask : slave_irq_mask;
+                return static_cast<std::uint8_t>(hcount);
             }
-            return 0U;
+            return static_cast<std::uint8_t>(hcount >> 8U);
         }
         if (offset >= comm_offset && offset < comm_offset + comm_words * 2U) {
             return comm_read(offset - comm_offset);
@@ -141,23 +209,32 @@ namespace mnemos::manifests::sega32x {
     }
 
     void sega32x_system::sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master) {
+        if (comm_trace_enabled() && offset < 0x10U) {
+            std::fprintf(stderr, "[sysreg] %s wr off=%02X <= %02X\n", is_master ? "m" : "s",
+                         static_cast<unsigned>(offset), value);
+        }
         if (offset < 0x02U) {
+            // Even byte: the adapter flag byte (FM and friends; ADEN/CART are
+            // read-only inputs). Odd byte: the executing CPU's own
+            // interrupt-enable mask, hardware bit order.
             if ((offset & 1U) != 0U) {
-                adapter_ctrl = static_cast<std::uint16_t>(
-                    (adapter_ctrl & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+                if (is_master) {
+                    set_master_irq_mask(hw_mask_to_internal(value));
+                } else {
+                    set_slave_irq_mask(hw_mask_to_internal(value));
+                }
             } else {
                 adapter_ctrl = static_cast<std::uint16_t>((adapter_ctrl & 0xFF00U) | value);
             }
             return;
         }
         if (offset < 0x04U) {
-            // Self-referential: the odd byte sets the executing CPU's own mask.
+            // H-interrupt line-count register: storage only.
             if ((offset & 1U) != 0U) {
-                if (is_master) {
-                    set_master_irq_mask(value);
-                } else {
-                    set_slave_irq_mask(value);
-                }
+                hcount = static_cast<std::uint16_t>((hcount & 0xFF00U) | value);
+            } else {
+                hcount = static_cast<std::uint16_t>((hcount & 0x00FFU) |
+                                                    (static_cast<std::uint16_t>(value) << 8U));
             }
             return;
         }
@@ -211,6 +288,55 @@ namespace mnemos::manifests::sega32x {
             return;
         }
         // else: VDP / DMA-FIFO -- not yet modelled
+    }
+
+    std::uint8_t sega32x_system::alt_reg_read(std::uint32_t offset, bool is_master) const noexcept {
+        if (offset < 0x02U) {
+            // Standard big-endian lanes in this window: even = high byte.
+            return (offset & 1U) != 0U ? static_cast<std::uint8_t>(adapter_ctrl)
+                                       : static_cast<std::uint8_t>(adapter_ctrl >> 8U);
+        }
+        if ((offset & ~1U) == 0x04U) {
+            // The self-referential interrupt-enable register sits at +$04 in
+            // this block, hardware bit order like the $4000 low byte.
+            if ((offset & 1U) != 0U) {
+                return internal_mask_to_hw(is_master ? master_irq_mask : slave_irq_mask);
+            }
+            return 0U;
+        }
+        if (offset >= comm_offset) {
+            return sys_reg_read(offset, is_master); // COMM + PWM: shared layout
+        }
+        return 0U;
+    }
+
+    void sega32x_system::alt_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master) {
+        if (comm_trace_enabled() && offset < 0x10U) {
+            std::fprintf(stderr, "[altreg] %s wr off=%02X <= %02X\n", is_master ? "m" : "s",
+                         static_cast<unsigned>(offset), value);
+        }
+        if (offset < 0x02U) {
+            if ((offset & 1U) != 0U) {
+                adapter_ctrl = static_cast<std::uint16_t>((adapter_ctrl & 0xFF00U) | value);
+            } else {
+                adapter_ctrl = static_cast<std::uint16_t>(
+                    (adapter_ctrl & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+            }
+            return;
+        }
+        if ((offset & ~1U) == 0x04U) {
+            if ((offset & 1U) != 0U) {
+                if (is_master) {
+                    set_master_irq_mask(hw_mask_to_internal(value));
+                } else {
+                    set_slave_irq_mask(hw_mask_to_internal(value));
+                }
+            }
+            return;
+        }
+        if (offset >= comm_offset) {
+            sys_reg_write(offset, value, is_master); // COMM + PWM: shared layout
+        }
     }
 
     std::uint8_t sega32x_system::vdp_reg_read(std::uint32_t offset) const noexcept {
@@ -352,6 +478,12 @@ namespace mnemos::manifests::sega32x {
         // edge restarts both CPUs from their BIOS reset vectors. Re-releasing a
         // running pair is a no-op; holding parks them where they are.
         if (!asserted && sh2_reset_asserted) {
+            // Reference-derived boot workaround: pre-seed "_CD_" in COMM 0/1 so
+            // the slave boot ROM exits its wait loop immediately and reaches the
+            // slave game entry before the master game code's handshake wait.
+            // The master boot ROM overwrites this with M_OK when it completes.
+            comm[0] = 0x5F43U;
+            comm[1] = 0x445FU;
             master_cpu.reset(chips::reset_kind::power_on);
             slave_cpu.reset(chips::reset_kind::power_on);
         }
@@ -361,11 +493,13 @@ namespace mnemos::manifests::sega32x {
     void sega32x_system::reset() {
         sh2_reset_asserted = true;
         adapter_ctrl = 0U;
+        hcount = 0U;
         comm.fill(0U);
         master_irq_mask = 0U;
         slave_irq_mask = 0U;
         master_irq_latch = 0U;
         slave_irq_latch = 0U;
+        m_ok_high_seen = false;
         pwm_cntl = 0U;
         pwm_cycle = 0U;
         pwm_fifo_l.fill(0U);
@@ -401,6 +535,10 @@ namespace mnemos::manifests::sega32x {
             pwm_current_r = pwm_fifo_pop(pwm_fifo_r, pwm_fifo_r_count, pwm_current_r);
             pwm_audio_l = pwm_duty_to_pcm(pwm_current_l, cycle);
             pwm_audio_r = pwm_duty_to_pcm(pwm_current_r, cycle);
+            if (pwm_capture) {
+                pwm_queue.push_back(pwm_audio_l);
+                pwm_queue.push_back(pwm_audio_r);
+            }
 
             // CNTL bits 11-8 = TM, the interrupt-rate divider: every TM steps
             // the PWM interrupt latches on both SH-2s (per-CPU masks gate
@@ -414,6 +552,17 @@ namespace mnemos::manifests::sega32x {
                 }
             }
         }
+    }
+
+    std::size_t sega32x_system::drain_pwm_samples(std::int16_t* out,
+                                                  std::size_t max_frames) noexcept {
+        const std::size_t frames = std::min(max_frames, pwm_queue.size() / 2U);
+        if (out != nullptr && frames > 0U) {
+            std::copy_n(pwm_queue.begin(), frames * 2U, out);
+        }
+        pwm_queue.erase(pwm_queue.begin(),
+                        pwm_queue.begin() + static_cast<std::ptrdiff_t>(frames * 2U));
+        return frames;
     }
 
     void sega32x_system::run_cycles(std::uint64_t cycles) {
@@ -474,6 +623,32 @@ namespace mnemos::manifests::sega32x {
         };
         map_sysregs(s->master_bus, true);
         map_sysregs(s->slave_bus, false);
+
+        // The second system-register block at $40000000 (alt layout: the
+        // interrupt-enable register at +$04), with the VDP registers at +$100
+        // and the palette at +$200 -- retail code reaches the same hardware
+        // through both this block and the $4000 windows.
+        const auto map_alt_regs = [s](topology::bus& bus, bool is_master) {
+            bus.map_mmio(
+                0x40000000U, sysreg_size,
+                [s, is_master](std::uint32_t a) {
+                    return s->alt_reg_read(a - 0x40000000U, is_master);
+                },
+                [s, is_master](std::uint32_t a, std::uint8_t v) {
+                    s->alt_reg_write(a - 0x40000000U, v, is_master);
+                },
+                1);
+            bus.map_mmio(
+                0x40000100U, vdp_reg_size,
+                [s](std::uint32_t a) { return s->vdp_reg_read(a - 0x40000100U); },
+                [s](std::uint32_t a, std::uint8_t v) { s->vdp_reg_write(a - 0x40000100U, v); }, 1);
+            bus.map_mmio(
+                0x40000200U, vdp_pal_size,
+                [s](std::uint32_t a) { return s->vdp_pal_read(a - 0x40000200U); },
+                [s](std::uint32_t a, std::uint8_t v) { s->vdp_pal_write(a - 0x40000200U, v); }, 1);
+        };
+        map_alt_regs(s->master_bus, true);
+        map_alt_regs(s->slave_bus, false);
 
         // The 32X VDP register window (+$4100) and palette CRAM (+$4200), shared
         // by both CPUs, at every partition base. Priority 1 over the

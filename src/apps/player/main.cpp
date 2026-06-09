@@ -18,8 +18,9 @@
 #include "region.hpp"
 #include "region_args.hpp"
 #include "rom_loader.hpp"
-#include "segacd_adapter.hpp" // force_link (Sega CD: BIOS boot ROM + disc image)
-#include "sms_adapter.hpp"    // force_link + manifests::sms::parse_market
+#include "sega32x_adapter.hpp" // force_link (Sega 32X: cart + the three boot ROMs)
+#include "segacd_adapter.hpp"  // force_link (Sega CD: BIOS boot ROM + disc image)
+#include "sms_adapter.hpp"     // force_link + manifests::sms::parse_market
 #include "sms_region.hpp"
 #include "system_family.hpp"
 #include "text_overlay.hpp"
@@ -210,6 +211,11 @@ int main(int argc, char* argv[]) {
         case system_family::c64:
             cart_default = mnemos::video_region::pal;
             break;
+        case system_family::sega32x:
+            // 32X carts carry a Genesis-style header with the region byte.
+            cart_default =
+                mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
+            break;
         case system_family::segacd:
             // Region comes from the disc/BIOS, not a cart header byte; keep the
             // NTSC default set above (also silences -Wswitch on this enum).
@@ -229,6 +235,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::sms::force_link();
         mnemos::apps::player::adapters::c64::force_link();
         mnemos::apps::player::adapters::segacd::force_link();
+        mnemos::apps::player::adapters::sega32x::force_link();
 
         std::string_view family_id = "genesis";
         switch (family) {
@@ -243,6 +250,9 @@ int main(int argc, char* argv[]) {
             break;
         case system_family::segacd:
             family_id = "segacd";
+            break;
+        case system_family::sega32x:
+            family_id = "sega32x";
             break;
         case system_family::genesis:
             break;
@@ -288,6 +298,36 @@ int main(int argc, char* argv[]) {
             }
             primary_rom = std::move(bios->bytes);
         }
+        // The 32X boots through three adapter ROMs (master SH-2 / slave SH-2 /
+        // 68000 vector overlay) found in MNEMOS_32X_BIOS_DIR by their canonical
+        // names. Without them the cart's own vectors run on the bare Genesis
+        // side -- the SH-2 handshake then never starts, so warn loudly.
+        std::vector<std::vector<std::uint8_t>> bios_images;
+        if (family == system_family::sega32x) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
+#endif
+            const char* bios_dir = std::getenv("MNEMOS_32X_BIOS_DIR");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            if (bios_dir == nullptr) {
+                std::fprintf(stderr, "[mnemos_player] MNEMOS_32X_BIOS_DIR unset; booting without "
+                                     "the 32X boot ROMs (most carts will not start)\n");
+            } else {
+                const std::string dir{bios_dir};
+                for (const char* name : {"32X_M_BIOS.bin", "32X_S_BIOS.bin", "32X_G_BIOS.bin"}) {
+                    auto image = load_rom(dir + "/" + name);
+                    if (!image || image->bytes.empty()) {
+                        std::fprintf(stderr, "[mnemos_player] could not read 32X boot ROM: %s/%s\n",
+                                     dir.c_str(), name);
+                        return 1;
+                    }
+                    bios_images.push_back(std::move(image->bytes));
+                }
+            }
+        }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
             family_id, {.rom = std::move(primary_rom),
                         .video_region = video,
@@ -295,7 +335,8 @@ int main(int argc, char* argv[]) {
                         .additional_media = std::move(additional_media),
                         .autostart = autostart,
                         .mapper_override = mapper_arg.value_or(std::string{}),
-                        .disc_path = std::move(disc_path)});
+                        .disc_path = std::move(disc_path),
+                        .bios_images = std::move(bios_images)});
         if (system && system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
                          system->media_count());

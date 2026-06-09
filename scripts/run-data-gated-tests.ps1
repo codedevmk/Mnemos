@@ -43,7 +43,9 @@ $vars = @(
     @{ Name = "MNEMOS_Z80_TEST_ROM";     Test = "z80_conformance_test" },
     @{ Name = "MNEMOS_M6510_TESTS_DIR";  Test = "m6510_conformance_test" },
     @{ Name = "MNEMOS_M68000_TESTS_DIR"; Test = "m68000_conformance_test" },
-    @{ Name = "MNEMOS_SMS_BIOS";         Test = "sms_manifest_parity_test" }
+    @{ Name = "MNEMOS_SMS_BIOS";         Test = "sms_manifest_parity_test" },
+    @{ Name = "MNEMOS_32X_BIOS_DIR";     Test = "sega32x_adapter_test (boot golden)" },
+    @{ Name = "MNEMOS_32X_ROM";          Test = "sega32x_adapter_test (boot golden)" }
 )
 foreach ($v in $vars) {
     $value = [Environment]::GetEnvironmentVariable($v.Name)

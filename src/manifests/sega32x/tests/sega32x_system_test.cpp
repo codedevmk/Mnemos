@@ -49,26 +49,35 @@ TEST_CASE("sega32x_system shares SDRAM and the COMM bank across both buses") {
 TEST_CASE("sega32x_system drives each CPU's IRQ mask from its own register window") {
     auto sys = assemble_sega32x();
     sys->set_sh2_reset(false);
-    // The interrupt-enable register is self-referential: the master bus sets the
-    // master mask, the slave bus the slave mask (odd byte at $00004003).
-    sys->master_bus.write8(0x00004003U, sega32x_system::irq_vint);
+    // The interrupt-enable mask is the low (odd) byte of the $4000 system word,
+    // self-referential, hardware bit order: V=8 / H=4 / CMD=2 / PWM=1.
+    sys->master_bus.write8(0x00004001U, 0x08U); // VINT enable
     CHECK(sys->master_irq_mask == sega32x_system::irq_vint);
     CHECK(sys->slave_irq_mask == 0U); // unaffected
-    CHECK(sys->master_bus.read8(0x00004003U) == sega32x_system::irq_vint);
+    CHECK(sys->master_bus.read8(0x00004001U) == 0x08U);
+    // The $40000004 block reaches the same mask (slave enables PWM there).
+    sys->slave_bus.write8(0x40000005U, 0x01U);
+    CHECK(sys->slave_irq_mask == sega32x_system::irq_pwm);
+    CHECK(sys->slave_bus.read8(0x40000005U) == 0x01U);
     // With VINT now enabled, a raised VINT is delivered to the master.
     sys->raise_vint();
     CHECK(sys->master_cpu.pending_irq_level() == 12);
-    CHECK(sys->slave_cpu.pending_irq_level() == 0); // slave still masked
+    CHECK(sys->slave_cpu.pending_irq_level() == 0); // slave's VINT still masked
 }
 
 TEST_CASE("sega32x_system adapter control round-trips through the register window") {
     auto sys = assemble_sega32x();
-    // Mars byte-lane quirk: even byte = low half, odd byte = high half.
-    sys->master_bus.write8(0x00004000U, 0x81U); // low byte
-    sys->master_bus.write8(0x00004001U, 0x02U); // high byte
-    CHECK(sys->adapter_ctrl == 0x0281U);
-    CHECK(sys->master_bus.read8(0x00004000U) == 0x81U);
-    CHECK(sys->master_bus.read8(0x00004001U) == 0x02U);
+    // Even byte = the adapter flag byte (the boot ROMs check ADEN bit 1 here);
+    // the odd byte is the interrupt-enable mask, not adapter state.
+    sys->master_bus.write8(0x00004000U, 0x82U); // flag byte (FM + ADEN-ish bits)
+    CHECK((sys->adapter_ctrl & 0x00FFU) == 0x82U);
+    CHECK(sys->master_bus.read8(0x00004000U) == 0x82U); // master: CPU-ID bit 0 = 0
+    CHECK(sys->slave_bus.read8(0x00004000U) == 0x83U);  // slave: CPU-ID bit 0 = 1
+    // The H-count register at +$02 is plain storage.
+    sys->master_bus.write8(0x00004002U, 0x00U);
+    sys->master_bus.write8(0x00004003U, 0x42U);
+    CHECK(sys->hcount == 0x0042U);
+    CHECK(sys->slave_bus.read8(0x00004003U) == 0x42U);
 }
 
 TEST_CASE("sega32x_system holds the SH-2s in reset until released") {

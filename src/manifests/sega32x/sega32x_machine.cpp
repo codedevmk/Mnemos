@@ -12,6 +12,35 @@ namespace mnemos::manifests::sega32x {
         // is promoted to read-modify-write on the 16-bit cell by the bus handlers
         // below, so handshake semantics (reset-bit toggles, COMM byte writes)
         // behave the way retail code expects.
+        // Reference-derived boot workaround on the 68000's COMM read path: many
+        // 32X carts' 68000 code polls COMM 0/1 for the master boot ROM's M_OK
+        // marker but never issues the explicit clear the master game code then
+        // waits on. Detect a completed 32-bit M_OK read, clear COMM 0/1 on the
+        // 68000's behalf, and re-inject the S_OK + SLAV markers the slave side
+        // would publish at the same moment (the slave boot ROM parks early on an
+        // unmodelled hardware handshake, so it cannot write them itself).
+        //
+        // Fires at BYTE granularity, after the LAST byte of the 32-bit read has
+        // been served -- the 68000's CMPI.L arrives as four byte reads on this
+        // bus, and clearing any earlier corrupts the value mid-assembly.
+        void comm_bootstrap_after_byte_read(sega32x_system& tx, std::uint32_t a) {
+            if (a == 0xA15121U) {                          // low byte of COMM 0 just served
+                tx.m_ok_high_seen = tx.comm[0] == 0x4D5FU; // "M_"
+                return;
+            }
+            if (a == 0xA15123U && tx.m_ok_high_seen) { // low byte of COMM 1
+                if (tx.comm[1] == 0x4F4BU) {           // "OK"
+                    tx.comm[0] = 0U;
+                    tx.comm[1] = 0U;
+                    tx.comm[2] = 0x535FU; // "S_"
+                    tx.comm[3] = 0x4F4BU; // "OK"
+                    tx.comm[4] = 0x534CU; // "SL"
+                    tx.comm[5] = 0x4156U; // "AV"
+                }
+                tx.m_ok_high_seen = false;
+            }
+        }
+
         std::uint16_t m68k_reg_read_word(const sega32x_system& tx, std::uint32_t off) {
             // Adapter control -- $A15100. Bit 15=FM, bit 7=RV, bit 1=ADEN, bit
             // 0=RES (0 = SH-2s held in reset). RES reflects the live /RES line,
@@ -155,6 +184,32 @@ namespace mnemos::manifests::sega32x {
         load(tx->g_bios, bios.g_bios);
         tx->attach_cart(g->rom);
 
+        // Power-on adapter state (reference-derived). With a master boot ROM
+        // present the gate array deasserts the SH-2 /RES line and raises ADEN
+        // at power-on -- the 68000 never writes a release; its cart-side boot
+        // code goes straight to the COMM handshake. The slave boot ROM parks
+        // early on an unmodelled hardware handshake, so its S_OK + SLAV
+        // markers are pre-seeded; the frame-buffer parameter block gets the
+        // slave entry/VBR from the cart's SH-2 entry table (the master boot
+        // path reads its own entry from the cart directly and never writes
+        // the slave's fields).
+        if (!bios.m_bios.empty()) {
+            tx->adapter_ctrl |= 0x0002U; // ADEN visible to the boot ROMs
+            tx->set_sh2_reset(false);
+        }
+        if (!bios.s_bios.empty()) {
+            tx->comm[2] = 0x535FU; // "S_"
+            tx->comm[3] = 0x4F4BU; // "OK"
+            tx->comm[4] = 0x534CU; // "SL"
+            tx->comm[5] = 0x4156U; // "AV"
+        }
+        if (tx->cart_rom.size() >= 0x3F0U) {
+            for (std::size_t i = 0; i < 4U; ++i) {
+                tx->framebuffer[0x24U + i] = tx->cart_rom[0x3E4U + i]; // slave entry
+                tx->framebuffer[0x2CU + i] = tx->cart_rom[0x3ECU + i]; // slave VBR
+            }
+        }
+
         // 68000-side 32X cart remap. $880000-$8FFFFF views the first 512 KiB of
         // the cart with no vector overlay (the boot code reads the cart's own
         // security block and vectors here); $900000-$9FFFFF is the 1 MiB banked
@@ -206,8 +261,10 @@ namespace mnemos::manifests::sega32x {
             [tx](std::uint32_t a) -> std::uint8_t {
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
                 const std::uint16_t w = m68k_reg_read_word(*tx, off);
-                return (a & 1U) != 0U ? static_cast<std::uint8_t>(w)
-                                      : static_cast<std::uint8_t>(w >> 8U);
+                const auto byte = (a & 1U) != 0U ? static_cast<std::uint8_t>(w)
+                                                 : static_cast<std::uint8_t>(w >> 8U);
+                comm_bootstrap_after_byte_read(*tx, a);
+                return byte;
             },
             [tx](std::uint32_t a, std::uint8_t value) {
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;

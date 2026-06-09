@@ -171,11 +171,22 @@ namespace mnemos::chips::video {
             return (row[x] & 0x00FFFFFFU) != 0U;
         };
 
+        // Every bitmap mode locates a row through the line table at the start
+        // of the visible bank: one big-endian word per line giving the row
+        // data's word offset within the bank.
+        const std::size_t bank_base = static_cast<std::size_t>(visible_bank()) * 0x20000U;
+        const std::size_t table_off = bank_base + static_cast<std::size_t>(y) * 2U;
+        if (table_off + 1U >= fb.size()) {
+            return;
+        }
+        const std::size_t line_word_off =
+            (static_cast<std::size_t>(fb[table_off]) << 8U) | fb[table_off + 1U];
+
         if (m == mode_packed) {
-            // 256-pixel-wide packed palette rows in the visible 128 KiB bank.
-            const std::size_t bank_base = static_cast<std::size_t>(visible_bank()) * 0x20000U;
-            const std::size_t row_base = bank_base + static_cast<std::size_t>(y) * 256U;
-            const std::size_t cols = row.size() < 256U ? row.size() : 256U;
+            // Packed 8bpp palette pixels, one byte each.
+            const std::size_t row_base = bank_base + line_word_off * 2U;
+            const std::size_t cols =
+                row.size() < static_cast<std::size_t>(visible_w) ? row.size() : visible_w;
             for (std::size_t x = 0; x < cols; ++x) {
                 const std::size_t bo = row_base + x;
                 if (bo >= fb.size()) {
@@ -195,11 +206,11 @@ namespace mnemos::chips::video {
         }
 
         if (m == mode_direct) {
-            // 320-pixel-wide direct colour. Single-buffered: 320 x 224 x 2
-            // bytes exceeds one 128 KiB bank, so the whole buffer is one
-            // surface and the bank bit is ignored. Words are big-endian.
-            const std::size_t row_base =
-                static_cast<std::size_t>(y) * (static_cast<std::size_t>(visible_w) * 2U);
+            // Direct 15bpp colour, one big-endian word per pixel. 320 x 224 x 2
+            // bytes exceeds one 128 KiB bank, so rows commonly spill past the
+            // bank boundary -- index from the bank-relative row offset without
+            // clamping to the bank.
+            const std::size_t row_base = bank_base + line_word_off * 2U;
             const std::size_t cols =
                 row.size() < static_cast<std::size_t>(visible_w) ? row.size() : visible_w;
             for (std::size_t x = 0; x < cols; ++x) {
@@ -220,16 +231,8 @@ namespace mnemos::chips::video {
             return;
         }
 
-        // Run-length mode: the visible bank starts with a 224-entry word table
-        // giving each line's data start (in words from the bank base); rows are
-        // 16-bit entries of high byte = palette index, low byte = run - 1.
-        const std::size_t bank_base = static_cast<std::size_t>(visible_bank()) * 0x20000U;
-        const std::size_t table_off = bank_base + static_cast<std::size_t>(y) * 2U;
-        if (table_off + 1U >= fb.size()) {
-            return;
-        }
-        const std::size_t line_word_off =
-            (static_cast<std::size_t>(fb[table_off]) << 8U) | fb[table_off + 1U];
+        // Run-length mode: rows are 16-bit entries of high byte = palette
+        // index, low byte = run length - 1.
         std::size_t entry = bank_base + line_word_off * 2U;
         const std::size_t cols =
             row.size() < static_cast<std::size_t>(visible_w) ? row.size() : visible_w;

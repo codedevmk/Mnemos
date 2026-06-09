@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <vector>
 
 namespace mnemos::manifests::sega32x {
 
@@ -77,7 +78,12 @@ namespace mnemos::manifests::sega32x {
         std::span<const std::uint8_t> cart_rom{};
 
         std::uint16_t adapter_ctrl{};  // RV / ADEN / reset / bank-select bits
+        std::uint16_t hcount{};        // SH-2-side H-interrupt line-count register
         bool sh2_reset_asserted{true}; // SH-2s held in reset until the adapter releases them
+        // Reference-derived 68000 COMM-read bootstrap state: tracks a completed
+        // 32-bit M_OK read so the bridge can auto-advance the boot handshake
+        // (see sega32x_machine's COMM read path).
+        bool m_ok_high_seen{};
 
         // 32X interrupt sources: a per-CPU enable mask + latch, each source with a
         // fixed SH-2 IRL level + vector. An edge latches on both CPUs regardless of
@@ -122,6 +128,17 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::int16_t pwm_output_l() const noexcept { return pwm_audio_l; }
         [[nodiscard]] std::int16_t pwm_output_r() const noexcept { return pwm_audio_r; }
 
+        // Real-time PWM audio sink (the sn76489/ym2612 capture model): when
+        // enabled, each PWM step queues one interleaved L/R pair; the host
+        // drains and resamples (native rate = SH-2 clock / CYCLE).
+        void enable_pwm_capture(bool on) noexcept { pwm_capture = on; }
+        [[nodiscard]] std::size_t pwm_pending_samples() const noexcept {
+            return pwm_queue.size() / 2U;
+        }
+        std::size_t drain_pwm_samples(std::int16_t* out, std::size_t max_frames) noexcept;
+        bool pwm_capture{};
+        std::vector<std::int16_t> pwm_queue{};
+
         // COMM bank byte access (big-endian: even byte = high half of the word).
         // Shared by both SH-2s; the Genesis 68000 joins it in the bridge phase.
         [[nodiscard]] std::uint8_t comm_read(std::uint32_t offset) const noexcept;
@@ -135,6 +152,16 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::uint8_t sys_reg_read(std::uint32_t offset,
                                                 bool is_master) const noexcept;
         void sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master);
+
+        // The second system-register block at $40000000 (the reference maps it
+        // alongside the GBR window; retail code reaches the same registers
+        // through it). Layout differs from the GBR window: standard big-endian
+        // byte lanes on adapter control, and the self-referential
+        // interrupt-enable register at +$04 rather than +$02. COMM and PWM
+        // share the GBR-window layout.
+        [[nodiscard]] std::uint8_t alt_reg_read(std::uint32_t offset,
+                                                bool is_master) const noexcept;
+        void alt_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master);
 
         // 32X VDP register window ($00004100, offset 0..0xFF; both CPUs see the
         // same chip) and palette CRAM ($00004200, offset 0..0x1FF). Byte access

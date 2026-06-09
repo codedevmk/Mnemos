@@ -106,11 +106,14 @@ TEST_CASE("sega32x_vdp composes packed-mode pixels with priority and transparenc
     v.palette_write16(1U * 2U, bgr15(31, 0, 0, true));  // index 1: red, over
     v.palette_write16(2U * 2U, bgr15(0, 31, 0, false)); // index 2: green, behind
 
-    // Row 0 of bank 0: pixel 0 = transparent, 1 = red/over, 2 = green/behind.
-    fb[0] = 0U;
-    fb[1] = 1U;
-    fb[2] = 2U;
-    fb[3] = 2U;
+    // Line table: row 0's data starts at word $0100 (byte $200) in the bank.
+    fb[0] = 0x01U;
+    fb[1] = 0x00U;
+    // Row 0: pixel 0 = transparent, 1 = red/over, 2..3 = green/behind.
+    fb[0x200] = 0U;
+    fb[0x201] = 1U;
+    fb[0x202] = 2U;
+    fb[0x203] = 2U;
 
     // The Genesis row has content at x=1 and x=2 but backdrop (black) at x=3.
     std::vector<std::uint32_t> row(320, 0U);
@@ -125,13 +128,16 @@ TEST_CASE("sega32x_vdp composes packed-mode pixels with priority and transparenc
     CHECK(row[3] == 0x0000FF00U); // behind pixel shows on the Genesis backdrop
 }
 
-TEST_CASE("sega32x_vdp composes direct-colour pixels single-buffered", "[sega32x_vdp]") {
+TEST_CASE("sega32x_vdp composes direct-colour pixels through the line table", "[sega32x_vdp]") {
     sega32x_vdp v;
     std::vector<std::uint8_t> fb(0x40000, 0);
     v.write16(sega32x_vdp::reg_bitmap_mode, sega32x_vdp::mode_direct);
 
-    // Row 3, pixel 5: priority white. Word offset = (3 * 320 + 5) * 2 bytes.
-    const std::size_t bo = (3U * 320U + 5U) * 2U;
+    // Line table: row 3's entry (table word 3) points at word $0200 (byte $400).
+    fb[3U * 2U] = 0x02U;
+    fb[3U * 2U + 1U] = 0x00U;
+    // Pixel 5 of that row: priority white, big-endian word.
+    const std::size_t bo = 0x400U + 5U * 2U;
     const std::uint16_t white = bgr15(31, 31, 31, true);
     fb[bo] = static_cast<std::uint8_t>(white >> 8U);
     fb[bo + 1U] = static_cast<std::uint8_t>(white);
