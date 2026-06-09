@@ -1,6 +1,7 @@
 add_library(
     mnemos_manifests_sega32x
     sega32x_system.cpp
+    sega32x_machine.cpp
 )
 add_library(mnemos::manifests::sega32x ALIAS mnemos_manifests_sega32x)
 
@@ -11,14 +12,14 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
-# The 32X board instantiates two SH-2s on their own buses. The Genesis-bus
-# bridge (sega32x_machine) joining it to manifests::genesis arrives in a later
-# phase, so this skeleton depends only on the CPU + topology.
+# The 32X board instantiates two SH-2s on their own buses; sega32x_machine joins
+# it to a Genesis (manifests::genesis) on the 68000 bus via the $A15xxx bridge.
 target_link_libraries(
     mnemos_manifests_sega32x
     PUBLIC
         mnemos::topology
         mnemos::chips::cpu::sh2
+        mnemos::manifests::genesis
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_sega32x PUBLIC)
@@ -27,6 +28,7 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_topology
+        mnemos_manifests_genesis
         mnemos_chips_shared
         mnemos_foundation
 )
@@ -34,7 +36,9 @@ mnemos_declare_tier(
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_sega32x_test
-        SOURCES tests/sega32x_system_test.cpp
+        SOURCES
+            tests/sega32x_system_test.cpp
+            tests/sega32x_machine_test.cpp
         LIBRARIES mnemos::manifests::sega32x
     )
 endif()
