@@ -186,3 +186,16 @@ TEST_CASE("sega32x_vdp save/load round-trips the full state", "[sega32x_vdp]") {
     CHECK(restored.access_bank() == 1);
     CHECK(restored.fb_control() == v.fb_control());
 }
+
+TEST_CASE("sega32x_vdp frame-select written during V-blank commits immediately", "[sega32x_vdp]") {
+    sega32x_vdp v;
+    v.set_blanking(false, true); // enter V-blank (VBLK set)
+    CHECK(v.access_bank() == 0);
+    v.write16(sega32x_vdp::reg_fb_control, 0x0001U);
+    CHECK(v.access_bank() == 1); // immediate during V-blank
+    v.set_blanking(false, false);
+    v.write16(sega32x_vdp::reg_fb_control, 0x0000U);
+    CHECK(v.access_bank() == 1); // deferred during active display
+    v.set_blanking(false, true);
+    CHECK(v.access_bank() == 0); // committed at the rising edge
+}

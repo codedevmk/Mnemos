@@ -421,6 +421,11 @@ namespace mnemos::manifests::sega32x {
                 {framebuffer.data() + static_cast<std::size_t>(vdp.access_bank()) * fb_bank_size,
                  fb_bank_size});
         }
+        // An FBCR write during V-blank commits the frame-select immediately --
+        // swing the $04000000 window onto the (possibly new) access bank.
+        if (reg == chips::video::sega32x_vdp::reg_fb_control) {
+            set_fb_access_bank(vdp.access_bank());
+        }
     }
 
     std::uint8_t sega32x_system::vdp_pal_read(std::uint32_t offset) const noexcept {

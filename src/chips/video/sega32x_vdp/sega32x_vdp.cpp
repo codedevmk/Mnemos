@@ -86,11 +86,16 @@ namespace mnemos::chips::video {
             autofill_data_ = val;
             break;
         case reg_fb_control:
-            // The only CPU-writable bit is FS (bit 0), and even that is
-            // latched into the displayed-bank bit at the next V-blank rising
-            // edge rather than committing immediately. FEN (bit 1) is driven
-            // by the autofill engine; HBLK/VBLK (14/15) by set_blanking.
+            // The only CPU-writable bit is FS (bit 0). During active display
+            // it latches and commits at the next V-blank rising edge; written
+            // DURING V-blank it takes effect immediately -- V-blank handlers
+            // flip right after finishing a frame and expect the swap before
+            // the next scanout. FEN (bit 1) is driven by the autofill engine;
+            // HBLK/VBLK (14/15) by set_blanking.
             pending_fs_ = static_cast<std::uint8_t>(val & 0x0001U);
+            if ((fb_control_ & 0x8000U) != 0U) { // VBLK active: commit now
+                fb_control_ = static_cast<std::uint16_t>((fb_control_ & ~0x0001U) | pending_fs_);
+            }
             break;
         default:
             break;
