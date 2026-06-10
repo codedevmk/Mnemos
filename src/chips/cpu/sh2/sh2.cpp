@@ -18,6 +18,13 @@ namespace mnemos::chips::cpu {
         };
     }
 
+    void sh2::attach_bus(ibus& bus) noexcept {
+        bus_ = &bus;
+        peripherals_.set_bus(&bus);
+        fetch_len_ = 0U;
+        bus.add_invalidation_listener([this]() noexcept { fetch_len_ = 0U; });
+    }
+
     // ---- raw memory: big-endian assembly over the byte bus ----
     // The on-chip peripheral window ($FFFFFE00..) is CPU-internal: intercept it
     // before the external bus so each core keeps its own peripheral state.
@@ -921,13 +928,43 @@ namespace mnemos::chips::cpu {
         if (trace_callback_) {
             trace_callback_(pc_);
         }
-        const std::uint16_t op = rd16(pc_);
+        // Fetch through the cached direct span when the PC is inside it (the
+        // span length is region-sized, far below 2^31, so the underflowing
+        // subtraction of an out-of-span PC always fails the compare).
+        const std::uint32_t fetch_off = pc_ - fetch_lo_;
+        const std::uint16_t op =
+            (fetch_off < fetch_len_ && fetch_off + 2U <= fetch_len_)
+                ? static_cast<std::uint16_t>(
+                      (static_cast<std::uint16_t>(fetch_data_[fetch_off]) << 8U) |
+                      fetch_data_[fetch_off + 1U])
+                : fetch_slow(pc_);
         pc_ += 2U;
         exec(op);
 
         peripherals_.tick(static_cast<std::uint64_t>(cycles_));
         elapsed_ += static_cast<std::uint64_t>(cycles_);
         return cycles_;
+    }
+
+    std::uint16_t sh2::fetch_slow(std::uint32_t a) {
+        // Refill the fetch span from the bus, then read through it. MMIO / the
+        // on-chip window / observer-guarded buses give no span -- plain rd16.
+        if (bus_ != nullptr && !sh2_peripherals::in_window(a) &&
+            !sh2_peripherals::in_window(a + 1U)) {
+            chips::ibus::direct_span span;
+            if (bus_->direct_read_span(a, span)) {
+                const std::uint32_t len = span.end - span.start;
+                fetch_data_ = span.data;
+                fetch_lo_ = span.start;
+                fetch_len_ = len == 0xFFFFFFFFU ? len : len + 1U;
+                const std::uint32_t off = a - span.start;
+                if (off + 2U <= fetch_len_) {
+                    return static_cast<std::uint16_t>(
+                        (static_cast<std::uint16_t>(span.data[off]) << 8U) | span.data[off + 1U]);
+                }
+            }
+        }
+        return rd16(a);
     }
 
     void sh2::tick(std::uint64_t cycles) {

@@ -169,6 +169,25 @@ namespace mnemos::topology {
         return value;
     }
 
+    bool bus::direct_read_span(std::uint32_t address, chips::ibus::direct_span& out) {
+        if (observer_) {
+            return false; // watchpoints must observe every access
+        }
+        const std::uint32_t addr = address & address_mask_;
+        const region* r = resolve(addr, false);
+        if (r == nullptr || r->backing == kind::mmio || r->active) {
+            return false;
+        }
+        update_fast_path(addr, r);
+        const fast_span& f = fast_[0];
+        if (f.r != r || addr < f.start || addr > f.end) {
+            return false; // a rival region covers this very address
+        }
+        const std::uint8_t* base = r->backing == kind::ram ? r->ram.data() : r->rom.data();
+        out = {.data = base + (f.start - r->start), .start = f.start, .end = f.end};
+        return true;
+    }
+
     std::uint16_t bus::read16_be(std::uint32_t address) {
         const std::uint32_t addr = address & address_mask_;
         if (!observer_ && addr + 1U > addr) {

@@ -84,9 +84,22 @@ namespace mnemos::topology {
         // Optional observer invoked after every completed read/write (the value is
         // the byte transferred). Null by default — a single null check on the hot
         // path when unset. The instrumentation layer installs one for watchpoints;
-        // pass {} to clear it.
+        // pass {} to clear it. Installing one revokes outstanding direct spans so
+        // every access becomes observable again.
         using access_observer = std::function<void(const access_event&)>;
-        void set_access_observer(access_observer observer) { observer_ = std::move(observer); }
+        void set_access_observer(access_observer observer) {
+            observer_ = std::move(observer);
+            invalidate_fast_path();
+        }
+
+        // ibus direct spans: a predicate-free RAM/ROM winner narrowed to where it
+        // provably stays the winner (the MRU narrowing), refused while an access
+        // observer is installed. Listeners fire on every remap/retarget/observer
+        // install -- the holder must drop its span then.
+        [[nodiscard]] bool direct_read_span(std::uint32_t address, direct_span& out) override;
+        void add_invalidation_listener(std::function<void()> listener) override {
+            invalidation_listeners_.push_back(std::move(listener));
+        }
 
       private:
         enum class kind : std::uint8_t { ram, rom, mmio };
@@ -123,9 +136,15 @@ namespace mnemos::topology {
         };
 
         void update_fast_path(std::uint32_t address, const region* winner) noexcept;
-        void invalidate_fast_path() noexcept { fast_.fill(fast_span{}); }
+        void invalidate_fast_path() noexcept {
+            fast_.fill(fast_span{});
+            for (const auto& listener : invalidation_listeners_) {
+                listener(); // contract: listeners do not throw
+            }
+        }
 
         std::array<fast_span, 4> fast_{};
+        std::vector<std::function<void()>> invalidation_listeners_;
 
         unsigned address_bits_{16};
         endianness endian_{endianness::little};

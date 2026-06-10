@@ -69,11 +69,10 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
         // icpu: the memory address space the CPU executes against. The on-chip
-        // DMAC moves data over this same bus, so hand it the same handle.
-        void attach_bus(ibus& bus) noexcept override {
-            bus_ = &bus;
-            peripherals_.set_bus(&bus);
-        }
+        // DMAC moves data over this same bus, so hand it the same handle. The
+        // fetch fast path caches a direct span; the bus's invalidation listener
+        // drops it on any remap / bank retarget / observer install.
+        void attach_bus(ibus& bus) noexcept override;
 
         // Board-supplied DREQ level for module-request DMAC channels (the 32X
         // 68000-to-SH-2 FIFO asserts it while words are queued).
@@ -213,6 +212,15 @@ namespace mnemos::chips::cpu {
 
         ibus* bus_{};
         sh2_peripherals peripherals_{}; // on-chip SH7604 peripherals ($FFFFFE00 window)
+
+        // Fetch fast path: a direct span over the region the PC executes from
+        // (fetch_len_ = 0 means none). Writes through the bus land in the same
+        // storage, so self-modifying code stays visible; only remap/retarget
+        // moves storage, and the bus listener clears the span then.
+        [[nodiscard]] std::uint16_t fetch_slow(std::uint32_t a);
+        const std::uint8_t* fetch_data_{};
+        std::uint32_t fetch_lo_{};
+        std::uint32_t fetch_len_{};
 
         std::array<register_descriptor, 23> register_view_{};
         introspection_surface introspection_{*this};

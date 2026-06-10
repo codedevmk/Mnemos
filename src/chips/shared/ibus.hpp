@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 namespace mnemos::chips {
 
@@ -42,6 +43,23 @@ namespace mnemos::chips {
             write16_be(address, static_cast<std::uint16_t>(value >> 16U));
             write16_be(address + 2U, static_cast<std::uint16_t>(value));
         }
+
+        // A stable read window over bus storage: the caller may index
+        // data[0 .. end-start] (data points at `start`) with no further
+        // dispatch -- the CPU fetch fast path. Valid until the bus signals
+        // invalidation. An implementation that hands out spans MUST notify
+        // every registered listener whenever a span may have moved or grown
+        // side effects (remap, bank retarget, access observer installed).
+        struct direct_span final {
+            const std::uint8_t* data{};
+            std::uint32_t start{};
+            std::uint32_t end{}; // inclusive
+        };
+        [[nodiscard]] virtual bool direct_read_span(std::uint32_t /*address*/,
+                                                    direct_span& /*out*/) {
+            return false; // default: no direct access, callers use read8/...
+        }
+        virtual void add_invalidation_listener(std::function<void()> /*listener*/) {}
     };
 
 } // namespace mnemos::chips
