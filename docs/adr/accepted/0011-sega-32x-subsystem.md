@@ -1,11 +1,12 @@
 ---
 id: ADR-0011
 title: "Sega 32X Subsystem"
-status: proposed
+status: accepted
 version: 1.0.0
 supersedes: []
 superseded_by: null
 proposed: 2026-06-09
+ratified: 2026-06-10
 ---
 
 # ADR 0011: Sega 32X Subsystem
@@ -145,3 +146,9 @@ file is not present in the repository. The Emu-reuse-and-conformance *policy*
 governing policy for both the Sega CD and this 32X effort; the missing file
 should be restored or rewritten so the policy this ADR depends on is actually
 recorded.
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session. The subsystem
+was already implemented while this record sat unratified — the drift case
+cited in ADR-0013; acceptance records reality.

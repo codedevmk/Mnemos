@@ -115,8 +115,8 @@ def make_index(docs: list[tuple[Path, dict]]) -> str:
         )
     lines.append("")
     lines.append(
-        "ADR-0006 (`0006-emu-reuse-and-conformance.md`) is referenced by "
-        "`src/disc/NOTES.md` but was never committed; the number stays reserved."
+        "ADR-0006's original file was never committed; the accepted entry is a "
+        "marked reconstruction (2026-06-10)."
     )
     lines.append("")
     return "\n".join(lines)

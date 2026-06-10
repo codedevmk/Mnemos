@@ -16,5 +16,5 @@ Every ADR carries YAML front matter linted by
 `tools/governance/adr_lint.py`. The generated index is
 [INDEX.md](INDEX.md) (`adr_lint.py --write-index`).
 
-ADR-0006 is referenced by `src/disc/NOTES.md` but was never committed; the
-number stays reserved.
+ADR-0006's original file was never committed; the accepted entry is a marked
+reconstruction (2026-06-10).

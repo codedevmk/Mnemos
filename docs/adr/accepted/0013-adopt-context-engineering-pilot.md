@@ -1,11 +1,12 @@
 ---
 id: ADR-0013
 title: "Adopt MNE-CTX-PLAN-001 (Context-Engineering Pilot)"
-status: proposed
+status: accepted
 version: 1.0.0
 supersedes: []
 superseded_by: null
 proposed: 2026-06-10
+ratified: 2026-06-10
 ---
 
 # ADR 0013: Adopt MNE-CTX-PLAN-001 (Context-Engineering Pilot)
@@ -84,3 +85,8 @@ kept verbatim and these amendments govern:
   sessions and are recorded as `pending` with the capture procedure in
   `metrics/README.md` — no synthetic baselines, per the plan's epistemic rule.
 - P1 (capsule machinery) starts on ratification of this ADR.
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session, together with
+the constitution modules (H1/H2). P1 starts with this acceptance.

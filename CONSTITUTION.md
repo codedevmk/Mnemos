@@ -1,11 +1,11 @@
 ---
 id: CONSTITUTION
 title: "Mnemos Constitution — L0 Index"
-status: proposed
-version: 0.1.0
+status: accepted
+version: 1.0.0
 supersedes: []
 superseded_by: null
-ratified: null
+ratified: 2026-06-10
 proposed: 2026-06-10
 ---
 
@@ -79,14 +79,14 @@ their modules.
 
 | ID | Summary | Version | Status |
 |----|---------|---------|--------|
-| [ARCH-001](constitution/ARCH-001-layering.md) | Eight-tier layering, flat modules, dependency enforcement | 0.1.0 | proposed |
-| [ARCH-002](constitution/ARCH-002-wire-protocol.md) | Cap'n Proto wire contract and append-only evolution | 0.1.0 | proposed |
-| [ARCH-003](constitution/ARCH-003-rendering.md) | Rendering and platform-access boundary (tier 7 only) | 0.1.0 | proposed |
-| [ARCH-004](constitution/ARCH-004-timing-model.md) | Clock authority, scheduling, determinism guarantees | 0.1.0 | proposed |
-| [ARCH-005](constitution/ARCH-005-licensing.md) | Apache-2.0 core / MIT chips / copyleft denylist | 0.1.0 | proposed |
-| [STD-001](constitution/STD-001-naming.md) | snake_case, unique header basenames, chip IDs | 0.1.0 | proposed |
-| [STD-002](constitution/STD-002-errors.md) | std::expected, no exceptions/RTTI in core, -Werror | 0.1.0 | proposed |
-| [MNE-CTX-PLAN-001](constitution/MNE-CTX-PLAN-001.md) | Context-engineering pilot: gates, metrics, phases | 0.1 | proposed |
+| [ARCH-001](constitution/ARCH-001-layering.md) | Eight-tier layering, flat modules, dependency enforcement | 1.0.0 | accepted |
+| [ARCH-002](constitution/ARCH-002-wire-protocol.md) | Cap'n Proto wire contract and append-only evolution | 1.0.0 | accepted |
+| [ARCH-003](constitution/ARCH-003-rendering.md) | Rendering and platform-access boundary (tier 7 only) | 1.0.0 | accepted |
+| [ARCH-004](constitution/ARCH-004-timing-model.md) | Clock authority, scheduling, determinism guarantees | 1.0.0 | accepted |
+| [ARCH-005](constitution/ARCH-005-licensing.md) | Apache-2.0 core / MIT chips / copyleft denylist | 1.0.0 | accepted |
+| [STD-001](constitution/STD-001-naming.md) | snake_case, unique header basenames, chip IDs | 1.0.0 | accepted |
+| [STD-002](constitution/STD-002-errors.md) | std::expected, no exceptions/RTTI in core, -Werror | 1.0.0 | accepted |
+| [MNE-CTX-PLAN-001](constitution/MNE-CTX-PLAN-001.md) | Context-engineering pilot: gates, metrics, phases | 1.0.0 | accepted |
 
 Traceability from the source documents: `constitution/MIGRATION.md`.
 

@@ -7,7 +7,7 @@ and later any CD platform). Peer to `mnemos::compression`; not a hardware chip.
 
 Ported from the Emu reference (`C:\Users\mkrol\source\repos\Emu\Emu\chips\…`),
 which is the user's own earlier project — cannibalizing it is sanctioned per
-ADR-0006 (`docs/adr/0006-emu-reuse-and-conformance.md`) and
+ADR-0006 (`docs/adr/accepted/0006-emu-reuse-and-conformance.md`) and
 [[mnemos-port-emu-cores]]. Restructured into Mnemos C++23 conventions
 (namespaces, `std::span`, `std::optional`, compile-time tables); no third-party
 emulator source consulted.

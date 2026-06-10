@@ -1,11 +1,11 @@
 ---
 id: STD-001
 title: "Naming Conventions"
-status: proposed
-version: 0.1.0
+status: accepted
+version: 1.0.0
 supersedes: []
 superseded_by: null
-ratified: null
+ratified: 2026-06-10
 proposed: 2026-06-10
 invariants:
   - id: INV-STD-001

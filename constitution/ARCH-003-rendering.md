@@ -1,45 +1,38 @@
 ---
 id: ARCH-003
 title: "Rendering and Platform-Access Boundary"
-status: proposed
-version: 0.1.0
+status: accepted
+version: 1.0.0
 supersedes: []
 superseded_by: null
-ratified: null
+ratified: 2026-06-10
 proposed: 2026-06-10
 ---
 
 # ARCH-003 — Rendering and Platform-Access Boundary
 
-Lifted verbatim from `docs/architecture/mnemos-architecture-tds-v0.1.md`
-section 14, per `constitution/MIGRATION.md`.
+Lifted from `docs/architecture/mnemos-architecture-tds-v0.1.md` section 14,
+per `constitution/MIGRATION.md`. The TDS's "Vulkan-based renderer abstraction"
+wording was adjudicated against repository fact at ratification: the platform
+layer is SDL3 and GPU access goes through the SDL_GPU API (Vulkan is one of
+its backends). ADR-0014 records the adjudication.
 
-## Contract (TDS §14)
+## Contract
 
-The frontend SDK (tier 7) provides:
+The frontend SDK / app tier (tiers 7–8) provides:
 
-- A custom retained-mode UI toolkit.
-- Vulkan-based renderer abstraction.
-- Theme system.
+- UI primitives, theming, and common widgets used by player and dev apps.
+- GPU rendering through the SDL3 GPU API (`SDL_CreateGPUDevice`); backend
+  selection (Vulkan, D3D12, ...) is SDL3's concern, never a lower tier's.
 - Asset loading (images, fonts, audio).
-- Common widgets used by both player and dev apps.
 - Input device abstraction (keyboard, mouse, gamepads).
 
-**The SDK is the only tier above the instrumentation API allowed to do
-platform graphics or audio.** Detailed SDK design is deferred to a separate
-Frontend SDK TDS.
+**Tiers 7–8 are the only tiers allowed to do platform graphics, audio, or
+windowing.** The runtime core remains headless: rendering and audio output
+never enter tiers 1–6 (cross-reference ARCH-004 on the headless deterministic
+core). SDL3 is consumed only by the apps (`THIRD_PARTY_NOTICES.md`: consumer
+`mnemos_player`), built statically, pinned by
+`cmake/modules/MnemosFetchSDL3.cmake`.
 
-The runtime core remains headless: rendering and audio output live in the
-frontend SDK / apps, never in tiers 1–6 (cross-reference ARCH-004 on the
-headless deterministic core).
-
-## Ratification note (candidate axis conflict)
-
-The TDS prescribes a Vulkan-based renderer abstraction; the repository
-currently fetches **SDL3** ("Window / GPU / audio / input for the player
-frontend", `THIRD_PARTY_NOTICES.md`, pinned in
-`cmake/modules/MnemosFetchSDL3.cmake`). Whether SDL3's GPU path satisfies or
-supersedes "Vulkan-based renderer abstraction" is an open intent-vs-fact
-question. The ratifier of this module should either amend this text to match
-the SDL3 reality or file an `axis-conflict` defect (H3) — this note exists so
-the conflict is adjudicated rather than silently inherited.
+Detailed SDK design remains deferred to a separate Frontend SDK TDS; a future
+move away from SDL_GPU is a supersession of this module, not a silent swap.
