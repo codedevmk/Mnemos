@@ -85,7 +85,7 @@ TEST_CASE("sega32x_adapter steps frames and passes the Genesis picture through",
 
 TEST_CASE("sega32x_adapter overlays 32X pixels onto the composed frame", "[sega32x][adapter]") {
     sega32x_adapter adapter{make_cart()};
-    auto& tx = *adapter.machine().thirtytwox;
+    auto& tx = *adapter.machine().sega32x;
 
     // Packed mode, palette index 1 = priority white, one pixel at row 0 col 0.
     // FS = 0 displays bank 1; the line table at the bank start points row 0 at
@@ -105,7 +105,7 @@ TEST_CASE("sega32x_adapter overlays 32X pixels onto the composed frame", "[sega3
 
 TEST_CASE("sega32x_adapter mixes PWM audio into the output", "[sega32x][adapter]") {
     sega32x_adapter adapter{make_cart()};
-    auto& tx = *adapter.machine().thirtytwox;
+    auto& tx = *adapter.machine().sega32x;
 
     // Release the SH-2s and program a PWM carrier so step_pwm queues samples.
     adapter.machine().genesis->bus.write8(0xA15101U, 0x03U);
@@ -149,7 +149,7 @@ TEST_CASE("sega32x_adapter boots a real cartridge through the 32X BIOS handshake
         adapter.step_one_frame();
     }
 
-    auto& tx = *adapter.machine().thirtytwox;
+    auto& tx = *adapter.machine().sega32x;
     INFO("master pc = " << std::hex << tx.master_cpu.cpu_registers().pc);
     INFO("slave  pc = " << std::hex << tx.slave_cpu.cpu_registers().pc);
     // The 68000 boot code must have enabled the adapter and released the SH-2s.

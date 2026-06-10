@@ -39,7 +39,7 @@ TEST_CASE("sega32x_machine boots the cartridge and holds the SH-2s in reset",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     REQUIRE(m->genesis != nullptr);
-    REQUIRE(m->thirtytwox != nullptr);
+    REQUIRE(m->sega32x != nullptr);
     auto& bus = m->genesis->bus;
 
     // The cartridge is visible at $000000 on the Genesis bus (reset vectors).
@@ -47,15 +47,15 @@ TEST_CASE("sega32x_machine boots the cartridge and holds the SH-2s in reset",
     REQUIRE(bus.read8(0x000006U) == 0x02);
 
     // The SH-2s power on held in reset and have executed nothing.
-    REQUIRE(m->thirtytwox->sh2_reset_asserted);
-    REQUIRE(m->thirtytwox->master_cpu.elapsed_cycles() == 0U);
-    REQUIRE(m->thirtytwox->slave_cpu.elapsed_cycles() == 0U);
+    REQUIRE(m->sega32x->sh2_reset_asserted);
+    REQUIRE(m->sega32x->master_cpu.elapsed_cycles() == 0U);
+    REQUIRE(m->sega32x->slave_cpu.elapsed_cycles() == 0U);
 
     // While held, the scheduler does not advance them even as the 68000 runs.
     m->begin_slice();
     m->genesis->cpu.tick(2000U);
     m->catch_up_sh2();
-    CHECK(m->thirtytwox->master_cpu.elapsed_cycles() == 0U);
+    CHECK(m->sega32x->master_cpu.elapsed_cycles() == 0U);
 }
 
 TEST_CASE("sega32x_machine $A15100 ADEN+nRES release starts and parks the SH-2s",
@@ -65,13 +65,13 @@ TEST_CASE("sega32x_machine $A15100 ADEN+nRES release starts and parks the SH-2s"
 
     // Low byte of the adapter-control word: ADEN (bit 0) + nRES (bit 1).
     bus.write8(0xA15101U, 0x03U);
-    CHECK_FALSE(m->thirtytwox->sh2_reset_asserted); // released
+    CHECK_FALSE(m->sega32x->sh2_reset_asserted); // released
     // Read-back: nRES (bit 1) reflects the live /RES line -- 1 while running.
     CHECK(bus.read8(0xA15101U) == 0x03U);
 
     // Clearing nRES (bit 1 = 0) parks the SH-2s again; ADEN stays latched.
     bus.write8(0xA15101U, 0x00U);
-    CHECK(m->thirtytwox->sh2_reset_asserted);
+    CHECK(m->sega32x->sh2_reset_asserted);
     CHECK(bus.read8(0xA15101U) == 0x01U);
 }
 
@@ -96,7 +96,7 @@ TEST_CASE("sega32x_machine runs the SH-2s at 3x the 68000 after release", "[sega
     const std::uint64_t main_delta = m->genesis->cpu.elapsed_cycles();
     m->catch_up_sh2();
 
-    const std::uint64_t sh2 = m->thirtytwox->master_cpu.elapsed_cycles();
+    const std::uint64_t sh2 = m->sega32x->master_cpu.elapsed_cycles();
     // The SH-2s tick at 3x the 68000; instruction-atomic stepping overshoots the
     // target by at most one instruction, never undershoots.
     CHECK(sh2 >= main_delta * 3U);
@@ -107,16 +107,16 @@ TEST_CASE("sega32x_machine $A15102 requests CMD interrupts held until the SH-2 c
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
     bus.write8(0xA15101U, 0x03U); // ADEN + release so IRQ delivery is live
 
     // INTM (bit 0): delivery is gated by the master's own CMD enable; the
     // request bit reads back at $A15102 either way.
     tx.set_master_irq_mask(sega32x_system::irq_cmd);
     bus.write8(0xA15103U, 0x01U);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 8);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x44U);
-    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0); // targeted, not broadcast
+    CHECK(m->sega32x->master_cpu.pending_irq_level() == 8);
+    CHECK(m->sega32x->master_cpu.pending_irq_vector() == 0x44U);
+    CHECK(m->sega32x->slave_cpu.pending_irq_level() == 0); // targeted, not broadcast
     CHECK(bus.read8(0xA15103U) == 0x01U);
 
     // A 68000 zero-write does NOT clear the request; the master SH-2's
@@ -130,7 +130,7 @@ TEST_CASE("sega32x_machine $A15102 requests CMD interrupts held until the SH-2 c
     // latched in the 32X latch (delivered on a later unmask) and the request
     // bit still reads 1.
     bus.write8(0xA15103U, 0x02U);
-    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
+    CHECK(m->sega32x->slave_cpu.pending_irq_level() == 0);
     CHECK((tx.slave_irq_latch & sega32x_system::irq_cmd) != 0U);
     CHECK(bus.read8(0xA15103U) == 0x02U);
     tx.slave_bus.write8(0x0000401BU, 0x00U); // odd byte clears too (word register)
@@ -160,7 +160,7 @@ TEST_CASE("sega32x_machine shares the COMM bank between the 68000 and the SH-2s"
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
 
     // 68000 writes COMM word 0 byte-wise (big-endian lanes), the SH-2 buses see
     // the same word through their $00004020 system-register window.
@@ -180,7 +180,7 @@ TEST_CASE("sega32x_machine shares the COMM bank between the 68000 and the SH-2s"
 TEST_CASE("sega32x_machine sources VINT from the Genesis VDP V-blank edge", "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
     bus.write8(0xA15101U, 0x03U); // ADEN + release RES
 
     // Only the master program enables its VINT (slave stays masked).
@@ -191,8 +191,8 @@ TEST_CASE("sega32x_machine sources VINT from the Genesis VDP V-blank edge", "[se
     // per-frame edge delivers on its own.
     auto& vdp = m->genesis->vdp;
     vdp.tick(3420U);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 12); // boot edge seen
-    m->thirtytwox->master_cpu.clear_irq();
+    CHECK(m->sega32x->master_cpu.pending_irq_level() == 12); // boot edge seen
+    m->sega32x->master_cpu.clear_irq();
     tx.master_irq_latch = 0U;
     tx.slave_irq_latch = 0U;
 
@@ -202,9 +202,9 @@ TEST_CASE("sega32x_machine sources VINT from the Genesis VDP V-blank edge", "[se
         vdp.tick(3420U);
     }
 
-    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 12);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x46U);
-    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
+    CHECK(m->sega32x->master_cpu.pending_irq_level() == 12);
+    CHECK(m->sega32x->master_cpu.pending_irq_vector() == 0x46U);
+    CHECK(m->sega32x->slave_cpu.pending_irq_level() == 0);
     CHECK((tx.slave_irq_latch & sega32x_system::irq_vint) != 0U); // latched for later
     // V-blank is mirrored into adapter-control bit 7 (a poll-based frame sync).
     CHECK((tx.adapter_ctrl & 0x0080U) != 0U);
@@ -216,7 +216,7 @@ TEST_CASE("sega32x_machine sources VINT from the Genesis VDP V-blank edge", "[se
 TEST_CASE("sega32x_machine sources HINT from the VDP line-counter latch", "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
     bus.write8(0xA15101U, 0x03U); // ADEN + release RES
     tx.set_master_irq_mask(sega32x_system::irq_hint);
 
@@ -229,14 +229,14 @@ TEST_CASE("sega32x_machine sources HINT from the VDP line-counter latch", "[sega
 
     m->genesis->vdp.tick(3420ULL * 2ULL); // a couple of scanlines
 
-    CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 10);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x45U);
-    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
+    CHECK(m->sega32x->master_cpu.pending_irq_level() == 10);
+    CHECK(m->sega32x->master_cpu.pending_irq_vector() == 0x45U);
+    CHECK(m->sega32x->slave_cpu.pending_irq_level() == 0);
 }
 
 TEST_CASE("sega32x_machine maps the cart into the SH-2 partition windows", "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
 
     // Partition 0: cart at $02000000 (plus the $82000000 cacheable alias).
     CHECK(tx.master_bus.read8(0x02000001U) == 0xFFU); // cart[1] (SSP byte)
@@ -270,7 +270,7 @@ TEST_CASE("sega32x_machine release edge restarts the SH-2s from their reset vect
     bios.s_bios[3] = 0x20U; // slave PC = $00000020
     auto m = assemble_sega32x_machine(make_cart(), bios);
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
 
     bus.write8(0xA15101U, 0x03U); // ADEN + release
     CHECK(tx.master_cpu.cpu_registers().pc == 0x10U);
@@ -298,7 +298,7 @@ TEST_CASE("sega32x_machine overlays the G BIOS vectors on the ADEN edge and maps
     // The security block sets ADEN alone (bit 0): the overlay appears, the
     // SH-2s stay parked.
     bus.write8(0xA15101U, 0x01U);
-    CHECK(m->thirtytwox->sh2_reset_asserted);
+    CHECK(m->sega32x->sh2_reset_asserted);
     CHECK(bus.read8(0x000000U) == 0x5AU);
     CHECK(bus.read8(0x0000FFU) == 0x5AU);
     CHECK(bus.read8(0x000200U) == 0x60U); // cart entry loop opcode past the overlay
@@ -322,7 +322,7 @@ TEST_CASE("sega32x_machine without a G BIOS leaves the cart vectors at $000000",
 TEST_CASE("sega32x_machine exposes the 32X VDP to both SH-2s and the 68000", "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
     using vdp_chip = mnemos::chips::video::sega32x_vdp;
 
     // Master SH-2 writes the bitmap-mode register at $4100 (byte lanes, even =
@@ -356,7 +356,7 @@ TEST_CASE("sega32x_machine exposes the 32X VDP to both SH-2s and the 68000", "[s
 TEST_CASE("sega32x_machine commits the VDP frame-select on the V-blank edge",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
     auto& vdp = m->genesis->vdp;
 
     // Flush the boot V-blank edge (the Genesis VDP resets onto the VBL line),
@@ -388,7 +388,7 @@ TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
 
     bus.write8(0xA15130U, 0x01U); // CNTL high byte (TM field)
     bus.write8(0xA15131U, 0x05U); // CNTL low byte
@@ -413,7 +413,7 @@ TEST_CASE("sega32x_machine streams 68000 words through the DREQ FIFO into SH-2 D
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
-    auto& tx = *m->thirtytwox;
+    auto& tx = *m->sega32x;
     bus.write8(0xA15101U, 0x03U); // ADEN + release
 
     // Program the slave DMAC: channel 0 module-request (CHCR.AR=0), source

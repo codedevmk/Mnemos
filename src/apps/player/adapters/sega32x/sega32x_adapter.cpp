@@ -104,8 +104,8 @@ namespace mnemos::apps::player::adapters::sega32x {
         : machine_(manifests::sega32x::assemble_sega32x_machine(std::move(cart), bios, config)),
           work_ram_view_("work_ram", machine_->genesis->work_ram),
           z80_ram_view_("z80_ram", machine_->genesis->z80_ram),
-          sdram_view_("sdram", machine_->thirtytwox->sdram),
-          fb_view_("32x_framebuffer", machine_->thirtytwox->framebuffer),
+          sdram_view_("sdram", machine_->sega32x->sdram),
+          fb_view_("32x_framebuffer", machine_->sega32x->framebuffer),
           scheduler_(frontend_sdk::make_scheduler(
               scheduler_factory, build_schedule(*machine_->genesis), &machine_->genesis->vdp)),
           region_(config.video_region),
@@ -113,16 +113,16 @@ namespace mnemos::apps::player::adapters::sega32x {
         machine_->genesis->fm.enable_audio_capture(true);
         machine_->genesis->psg.enable_audio_capture(true);
         machine_->genesis->vdp.enable_backdrop_mask(true);
-        machine_->thirtytwox->enable_pwm_capture(true);
+        machine_->sega32x->enable_pwm_capture(true);
 
         chip_view_[0] = &machine_->genesis->vdp;
         chip_view_[1] = &machine_->genesis->cpu;
         chip_view_[2] = &machine_->genesis->z80;
         chip_view_[3] = &machine_->genesis->fm;
         chip_view_[4] = &machine_->genesis->psg;
-        chip_view_[5] = &machine_->thirtytwox->master_cpu;
-        chip_view_[6] = &machine_->thirtytwox->slave_cpu;
-        chip_view_[7] = &machine_->thirtytwox->vdp;
+        chip_view_[5] = &machine_->sega32x->master_cpu;
+        chip_view_[6] = &machine_->sega32x->slave_cpu;
+        chip_view_[7] = &machine_->sega32x->vdp;
 
         system_mem_view_[0] = &work_ram_view_;
         system_mem_view_[1] = &z80_ram_view_;
@@ -152,7 +152,7 @@ namespace mnemos::apps::player::adapters::sega32x {
             const auto hi = sep != nullptr && *sep == ':'
                                 ? static_cast<std::uint32_t>(std::strtoul(sep + 1, nullptr, 16))
                                 : lo + 4U;
-            auto* tx = machine_->thirtytwox.get();
+            auto* tx = machine_->sega32x.get();
             const auto watch = [lo, hi](const char* cpu, std::uint32_t pc,
                                         const topology::access_event& ev) {
                 const std::uint32_t a = ev.address & 0x1FFFFFFFU;
@@ -160,11 +160,11 @@ namespace mnemos::apps::player::adapters::sega32x {
                     std::fprintf(stderr, "[busw] %s pc=%08X [%08X]=%02X\n", cpu, pc, a, ev.value);
                 }
             };
-            machine_->thirtytwox->master_bus.set_access_observer(
+            machine_->sega32x->master_bus.set_access_observer(
                 [tx, watch](const topology::access_event& ev) {
                     watch("M", tx->master_cpu.cpu_registers().pc, ev);
                 });
-            machine_->thirtytwox->slave_bus.set_access_observer(
+            machine_->sega32x->slave_bus.set_access_observer(
                 [tx, watch](const topology::access_event& ev) {
                     watch("S", tx->slave_cpu.cpu_registers().pc, ev);
                 });
@@ -253,7 +253,7 @@ namespace mnemos::apps::player::adapters::sega32x {
         }
         std::uint32_t* dst = composed_.data() + static_cast<std::size_t>(line) * stride;
         std::copy_n(gen.pixels + static_cast<std::size_t>(line) * stride, stride, dst);
-        auto& tx = *machine_->thirtytwox;
+        auto& tx = *machine_->sega32x;
         tx.vdp.compose_scanline(tx.framebuffer, std::span<std::uint32_t>{dst, gen.width}, line,
                                 machine_->genesis->vdp.backdrop_row(line));
     }
@@ -285,10 +285,10 @@ namespace mnemos::apps::player::adapters::sega32x {
         // the PWM queue, so a simultaneous mix dump records without PWM.
         static FILE* pwm_dump = dump_file(kPwmDumpEnv);
         if (pwm_dump != nullptr) {
-            const std::size_t n = machine_->thirtytwox->pwm_pending_samples();
+            const std::size_t n = machine_->sega32x->pwm_pending_samples();
             if (n > 0U) {
                 pwm_buf_.resize(n * 2U);
-                machine_->thirtytwox->drain_pwm_samples(pwm_buf_.data(), n);
+                machine_->sega32x->drain_pwm_samples(pwm_buf_.data(), n);
                 std::fwrite(pwm_buf_.data(), sizeof(std::int16_t), n * 2U, pwm_dump);
                 std::fflush(pwm_dump);
             }
@@ -323,7 +323,7 @@ namespace mnemos::apps::player::adapters::sega32x {
 #pragma warning(pop)
 #endif
         if (probe) {
-            auto& tx = *machine_->thirtytwox;
+            auto& tx = *machine_->sega32x;
             auto& gen = *machine_->genesis;
             const std::uint64_t z80_now = gen.z80.elapsed_cycles();
             const std::uint64_t z80_delta = z80_now - last_z80_cycles_;
@@ -361,7 +361,7 @@ namespace mnemos::apps::player::adapters::sega32x {
     frontend_sdk::audio_chunk sega32x_adapter::drain_audio() noexcept {
         const std::size_t fm_count = machine_->genesis->fm.pending_samples();
         const std::size_t psg_count = machine_->genesis->psg.pending_samples();
-        const std::size_t pwm_count = machine_->thirtytwox->pwm_pending_samples();
+        const std::size_t pwm_count = machine_->sega32x->pwm_pending_samples();
 
         if (fm_count == 0U && psg_count == 0U && pwm_count == 0U) {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
@@ -377,7 +377,7 @@ namespace mnemos::apps::player::adapters::sega32x {
         }
         if (pwm_count > 0U) {
             pwm_buf_.resize(pwm_count * 2U);
-            machine_->thirtytwox->drain_pwm_samples(pwm_buf_.data(), pwm_count);
+            machine_->sega32x->drain_pwm_samples(pwm_buf_.data(), pwm_count);
         }
 
         // Opt-in per-chip dumps (MNEMOS_32X_FM_DUMP / MNEMOS_32X_PSG_DUMP=path):
