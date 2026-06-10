@@ -29,48 +29,63 @@ namespace {
     constexpr std::uint32_t kChipSystem = 0;
     constexpr std::uint32_t kBankWorkRam = 0;
 
-    apm_plugin* gb_create() { return new (std::nothrow) apm_plugin(); }
+    // Every callback below is invoked through a C function pointer across the
+    // DLL boundary: a C++ exception must never unwind out (UB across runtimes),
+    // so the bodies that can throw are wrapped and report through the ABI's
+    // error returns instead.
+    apm_plugin* gb_create() noexcept { return new (std::nothrow) apm_plugin(); }
 
-    void gb_destroy(apm_plugin* p) { delete p; }
+    void gb_destroy(apm_plugin* p) noexcept { delete p; }
 
-    int gb_load_rom(apm_plugin* p, const std::uint8_t* data, std::size_t size) {
+    int gb_load_rom(apm_plugin* p, const std::uint8_t* data, std::size_t size) noexcept {
         if (p == nullptr || data == nullptr) {
             return -1;
         }
-        std::vector<std::uint8_t> rom(data, data + size);
-        p->sys = mnemos::manifests::genesis::build_genesis_runtime(std::move(rom), {});
-        if (!p->sys) {
+        try {
+            std::vector<std::uint8_t> rom(data, data + size);
+            p->sys = mnemos::manifests::genesis::build_genesis_runtime(std::move(rom), {});
+            if (!p->sys) {
+                return -1;
+            }
+
+            std::vector<mnemos::runtime::scheduled_chip> chips;
+            for (const auto& entry : p->sys->schedule()) {
+                chips.push_back({entry.chip, entry.weight});
+            }
+            p->sched.emplace(std::move(chips), p->sys->vdp());
+
+            p->banks.clear();
+            const std::span<std::uint8_t> wr = p->sys->graph.region_span("work_ram");
+            p->banks.push_back(apm_bank_info{wr.data(), static_cast<std::uint64_t>(wr.size()),
+                                             0xFF0000ULL, kChipSystem, kBankWorkRam, "work_ram"});
+            return 0;
+        } catch (...) {
+            p->sys.reset();
+            p->sched.reset();
+            p->banks.clear();
             return -1;
         }
-
-        std::vector<mnemos::runtime::scheduled_chip> chips;
-        for (const auto& entry : p->sys->schedule()) {
-            chips.push_back({entry.chip, entry.weight});
-        }
-        p->sched.emplace(std::move(chips), p->sys->vdp());
-
-        p->banks.clear();
-        const std::span<std::uint8_t> wr = p->sys->graph.region_span("work_ram");
-        p->banks.push_back(apm_bank_info{wr.data(), static_cast<std::uint64_t>(wr.size()),
-                                         0xFF0000ULL, kChipSystem, kBankWorkRam, "work_ram"});
-        return 0;
     }
 
-    std::uint64_t gb_run_frame(apm_plugin* p) {
+    std::uint64_t gb_run_frame(apm_plugin* p) noexcept {
         if (p == nullptr || !p->sched) {
             return 0;
         }
-        return p->sched->run_frame();
+        try {
+            return p->sched->run_frame();
+        } catch (...) {
+            return 0;
+        }
     }
 
-    std::uint64_t gb_frame_index(apm_plugin* p) {
+    std::uint64_t gb_frame_index(apm_plugin* p) noexcept {
         if (p == nullptr || !p->sched) {
             return 0;
         }
         return p->sched->frame_index();
     }
 
-    std::uint64_t gb_read_register(apm_plugin* p, int reg) {
+    std::uint64_t gb_read_register(apm_plugin* p, int reg) noexcept {
         if (p == nullptr || !p->sys) {
             return 0;
         }
@@ -100,11 +115,11 @@ namespace {
         return 0;
     }
 
-    int gb_bank_count(apm_plugin* p) {
+    int gb_bank_count(apm_plugin* p) noexcept {
         return (p == nullptr) ? 0 : static_cast<int>(p->banks.size());
     }
 
-    int gb_get_bank(apm_plugin* p, int index, apm_bank_info* out) {
+    int gb_get_bank(apm_plugin* p, int index, apm_bank_info* out) noexcept {
         if (p == nullptr || out == nullptr || index < 0 ||
             index >= static_cast<int>(p->banks.size())) {
             return -1;

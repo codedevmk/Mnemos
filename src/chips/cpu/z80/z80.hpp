@@ -246,6 +246,7 @@ namespace mnemos::chips::cpu {
         bool ei_pending_{};
         bool irq_line_{};
         bool nmi_pending_{};
+        bool nmi_line_{}; // previous /NMI level for edge detection
 
         int step_cycles_{};         // cycles of the instruction in flight
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()

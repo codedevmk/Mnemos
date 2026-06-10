@@ -18,10 +18,13 @@ namespace mnemos::apm::host {
 
         [[nodiscard]] bool ok() const noexcept { return api_ != nullptr; }
         [[nodiscard]] const apm_plugin_api* api() const noexcept { return api_; }
+        // Why ok() is false: which stage failed and the OS error code.
+        [[nodiscard]] const std::string& error() const noexcept { return error_; }
 
       private:
         void* module_ = nullptr; // HMODULE
         const apm_plugin_api* api_ = nullptr;
+        std::string error_;
     };
 
 } // namespace mnemos::apm::host

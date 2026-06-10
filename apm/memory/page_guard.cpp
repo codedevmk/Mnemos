@@ -1,6 +1,9 @@
 #include "page_guard.hpp"
 
-#if defined(_WIN32)
+// The single-step recovery below drives EFLAGS.TF, which exists only on x86;
+// other Windows targets (ARM64) take the unsupported stub until a PSTATE.SS
+// path exists -- supported() must answer honestly there.
+#if defined(_WIN32) && (defined(_M_X64) || defined(_M_IX86))
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -9,13 +12,14 @@
 #endif
 #include <windows.h>
 
+#include <cstdint>
 #include <mutex>
 #include <utility>
 #endif
 
 namespace mnemos::apm::memory {
 
-#if defined(_WIN32)
+#if defined(_WIN32) && (defined(_M_X64) || defined(_M_IX86))
 
     namespace {
 
@@ -90,39 +94,57 @@ namespace mnemos::apm::memory {
             const bool is_write = (info[0] == 1U);
             const auto fault_addr = static_cast<std::uintptr_t>(info[1]);
 
-            std::lock_guard<std::mutex> lock(g_mutex);
-            for (const watch_entry& w : g_watches) {
-                if (fault_addr < w.page_begin || fault_addr >= w.page_end) {
-                    continue;
-                }
+            // The matched handler is copied out and invoked only after the lock
+            // is dropped and the page is reopened: running user code while
+            // holding the non-recursive g_mutex, on a still-protected page,
+            // meant any handler that touched a watched page re-entered this
+            // VEH and self-deadlocked on the lock.
+            guard_handler handler_copy;
+            guard_event ev{};
+            bool matched = false;
+            {
+                std::lock_guard<std::mutex> lock(g_mutex);
+                for (const watch_entry& w : g_watches) {
+                    if (fault_addr < w.page_begin || fault_addr >= w.page_end) {
+                        continue;
+                    }
 
-                // Report only accesses that hit the exact watched range and kind;
-                // other faults on the shared page are recovered silently.
-                const bool in_range = fault_addr >= w.watch_begin && fault_addr < w.watch_end;
-                const bool kind_match = (w.kind == access_kind::write)
-                                            ? is_write
-                                            : true; // read-watch (NOACCESS) traps reads and writes
-                if (in_range && kind_match && w.handler) {
-                    const guard_event ev{reinterpret_cast<const void*>(fault_addr),
+                    // Report only accesses that hit the exact watched range and
+                    // kind; other faults on the shared page recover silently.
+                    const bool in_range = fault_addr >= w.watch_begin && fault_addr < w.watch_end;
+                    const bool kind_match =
+                        (w.kind == access_kind::write)
+                            ? is_write
+                            : true; // read-watch (NOACCESS) traps reads and writes
+                    if (in_range && kind_match && w.handler) {
+                        handler_copy = w.handler;
+                        ev = guard_event{reinterpret_cast<const void*>(fault_addr),
                                          is_write ? access_kind::write : access_kind::read,
                                          host_instruction_pointer(ep->ContextRecord)};
-                    w.handler(ev);
+                    }
+
+                    // Stage 1: open the page, re-run the faulting access,
+                    // single-step back so we can reprotect it.
+                    DWORD old = 0;
+                    const auto span = static_cast<SIZE_T>(w.page_end - w.page_begin);
+                    VirtualProtect(reinterpret_cast<void*>(w.page_begin), span, PAGE_READWRITE,
+                                   &old);
+                    t_pending.page_begin = w.page_begin;
+                    t_pending.size = static_cast<std::size_t>(w.page_end - w.page_begin);
+                    t_pending.protect = w.protect;
+                    t_pending.active = true;
+                    ep->ContextRecord->EFlags |= trap_flag;
+                    matched = true;
+                    break;
                 }
-
-                // Stage 1: open the page, re-run the faulting access, single-step
-                // back so we can reprotect it.
-                DWORD old = 0;
-                const auto span = static_cast<SIZE_T>(w.page_end - w.page_begin);
-                VirtualProtect(reinterpret_cast<void*>(w.page_begin), span, PAGE_READWRITE, &old);
-                t_pending.page_begin = w.page_begin;
-                t_pending.size = static_cast<std::size_t>(w.page_end - w.page_begin);
-                t_pending.protect = w.protect;
-                t_pending.active = true;
-                ep->ContextRecord->EFlags |= trap_flag;
-                return EXCEPTION_CONTINUE_EXECUTION;
             }
-
-            return EXCEPTION_CONTINUE_SEARCH;
+            if (!matched) {
+                return EXCEPTION_CONTINUE_SEARCH;
+            }
+            if (handler_copy) {
+                handler_copy(ev);
+            }
+            return EXCEPTION_CONTINUE_EXECUTION;
         }
 
     } // namespace
@@ -152,6 +174,9 @@ namespace mnemos::apm::memory {
 
     void* page_guard::allocate(std::size_t bytes) {
         const std::size_t page = page_size();
+        if (bytes == 0U || bytes > SIZE_MAX - page + 1U) {
+            return nullptr; // rounding below would wrap
+        }
         const std::size_t rounded = ((bytes + page - 1) / page) * page;
         void* p = VirtualAlloc(nullptr, rounded, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         if (p != nullptr) {
@@ -174,8 +199,16 @@ namespace mnemos::apm::memory {
         }
 
         DWORD old = 0;
-        VirtualProtect(reinterpret_cast<void*>(page_begin),
-                       static_cast<SIZE_T>(page_end - page_begin), protect, &old);
+        if (VirtualProtect(reinterpret_cast<void*>(page_begin),
+                           static_cast<SIZE_T>(page_end - page_begin), protect, &old) == 0) {
+            // A failed protect must not leave a registered-but-unarmed watch:
+            // the caller would believe accesses are observed when none are.
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (!g_watches.empty() && g_watches.back().watch_begin == b) {
+                g_watches.pop_back();
+            }
+            return;
+        }
         watched_.push_back(base);
     }
 
@@ -195,7 +228,7 @@ namespace mnemos::apm::memory {
         }
     }
 
-#else // !_WIN32
+#else // !(_WIN32 && x86/x64)
 
     page_guard::page_guard() = default;
     page_guard::~page_guard() = default;

@@ -868,8 +868,10 @@ namespace mnemos::chips::cpu {
         if (opm == 3 || opm == 7) { // CMPA (compares the full 32-bit address register)
             const op_size sz = opm == 3 ? op_size::word : op_size::longword;
             const std::int32_t src = sign_extend(ea_read(em, er, sz), sz);
-            const std::uint32_t r = static_cast<std::uint32_t>(
-                static_cast<std::int32_t>(a_[static_cast<std::size_t>(dn)]) - src);
+            // Unsigned subtraction: An - src in int32 overflows (UB) on ordinary
+            // guest values like CMPA.L against a high address.
+            const std::uint32_t r =
+                a_[static_cast<std::size_t>(dn)] - static_cast<std::uint32_t>(src);
             flags_cmp(op_size::longword, static_cast<std::uint32_t>(src),
                       a_[static_cast<std::size_t>(dn)], r);
             cycles_ += 2;
@@ -1191,7 +1193,7 @@ namespace mnemos::chips::cpu {
             } else {
                 a_[static_cast<std::size_t>(er)] += static_cast<std::uint32_t>(data);
             }
-            cycles_ += sz == op_size::longword ? 2 : 4;
+            cycles_ += 4; // 8 total for both .W and .L (UM table 8-5)
             return;
         }
         std::uint32_t addr = 0;
@@ -2107,9 +2109,9 @@ namespace mnemos::chips::cpu {
                 } else if (count >= bits) {
                     if ((v & msb) != 0U) {
                         r = m;
-                        if (count == bits) {
-                            sr_ |= sr_c | sr_x;
-                        }
+                        // Every shifted-out bit is the sign bit: C/X are set for
+                        // any count >= the operand width, not only count == width.
+                        sr_ |= sr_c | sr_x;
                     } else {
                         r = 0U;
                     }
@@ -2368,9 +2370,10 @@ namespace mnemos::chips::cpu {
     void m68000::set_irq_level(int level) noexcept {
         prev_irq_level_ = irq_level_;
         irq_level_ = level < 0 ? 0 : (level > 7 ? 7 : level);
-        if (irq_level_ > 0) {
-            stopped_ = false;
-        }
+        // STOP ends only when an interrupt is actually ACCEPTED (level above
+        // the SR mask, or level 7) -- process_interrupt() clears stopped_ then.
+        // Waking on any nonzero request resumed execution on requests the mask
+        // holds off, which STOP #$2700 code relies on staying stopped through.
     }
 
     m68000::registers m68000::cpu_registers() const noexcept {

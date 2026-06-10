@@ -755,9 +755,11 @@ namespace mnemos::chips::cpu {
     void sh2::branch_delayed(std::uint32_t target) {
         // SH-2 delayed control transfer: the instruction in the delay slot (the
         // one immediately after the branch) executes before control moves to the
-        // target. The re-entry guard makes an (illegal) branch-in-a-delay-slot
-        // degrade safely instead of recursing.
+        // target. A branch in a delay slot raises the slot-illegal exception
+        // (vector 6) on hardware -- vector it like any other slot-illegal
+        // encoding instead of silently ignoring the inner branch.
         if (in_delay_slot_) {
+            raise_exception(6U, delay_resume_target_);
             return;
         }
         in_delay_slot_ = true;

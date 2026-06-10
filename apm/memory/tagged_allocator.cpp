@@ -60,6 +60,12 @@ namespace mnemos::apm::memory {
 
     void* tagged_allocator::allocate_bank(const memory_tag& tag, std::size_t bytes) {
         const std::size_t page = page_size();
+        // Reject sizes the rounding below would wrap (registering the huge
+        // requested size over a tiny real allocation would be a latent heap
+        // overflow for every reverse-lookup consumer) and zero-byte banks.
+        if (bytes == 0U || bytes > SIZE_MAX - page + 1U) {
+            return nullptr;
+        }
         const std::size_t rounded = ((bytes + page - 1) / page) * page;
         void* p = page_alloc(rounded);
         if (p == nullptr) {

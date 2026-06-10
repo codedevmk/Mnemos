@@ -13,6 +13,12 @@ namespace mnemos::runtime {
 
 namespace mnemos::debug {
 
+    // Debug-visible address/PC type. Wide enough for every CPU in the tree
+    // (m6510: 16-bit, m68000: 24-bit, SH-2: 32-bit) and for future systems --
+    // the wire protocol and scripting layers freeze on these types, so they
+    // must not bake in any one CPU's width.
+    using debug_address = std::uint64_t;
+
     using breakpoint_id = std::uint32_t;
     using watchpoint_id = std::uint32_t; // shares the monotonic id space with breakpoints
 
@@ -42,7 +48,7 @@ namespace mnemos::debug {
     // `address`. The optional condition (evaluated against the live machine, which
     // the caller captures) gates it; an empty condition is unconditional.
     struct breakpoint_spec final {
-        std::uint16_t address{};
+        debug_address address{};
         std::function<bool()> condition{};
         bool enabled{true};
     };
@@ -92,7 +98,7 @@ namespace mnemos::debug {
     struct event final {
         event_kind kind{};
         breakpoint_id id{};
-        std::uint16_t pc{};
+        debug_address pc{};
         std::uint64_t master_cycle{};
         std::uint64_t frame_index{};
     };
@@ -113,7 +119,7 @@ namespace mnemos::debug {
         halt_reason reason{halt_reason::budget_exhausted};
         breakpoint_id breakpoint{}; // meaningful only when reason == breakpoint
         watchpoint_id watchpoint{}; // meaningful only when reason == watchpoint
-        std::uint16_t pc{};         // the next instruction's address
+        debug_address pc{};         // the next instruction's address
         std::uint64_t master_cycle{};
     };
 
@@ -122,7 +128,7 @@ namespace mnemos::debug {
     // caller wires these to the concrete CPU (e.g. m6510::cpu_registers().pc and
     // m6510::at_instruction_boundary()).
     struct cpu_probe final {
-        std::function<std::uint16_t()> program_counter; // current program counter
+        std::function<debug_address()> program_counter; // current program counter
         std::function<bool()> at_instruction_boundary;  // true at an opcode fetch
     };
 
@@ -226,13 +232,13 @@ namespace mnemos::debug {
 
         // Advance the scheduler until the CPU reaches its next instruction boundary.
         void advance_one_instruction();
-        [[nodiscard]] std::uint16_t current_pc() const;
+        [[nodiscard]] debug_address current_pc() const;
         // The id of the first enabled, matching breakpoint at `pc`, or 0 for none.
-        [[nodiscard]] breakpoint_id matching_breakpoint(std::uint16_t pc) const;
+        [[nodiscard]] breakpoint_id matching_breakpoint(debug_address pc) const;
         // Bus observer: records the first watchpoint a completed access trips.
         void on_bus_access(const topology::access_event& access);
         // Deliver an event to every subscription whose filter selects its kind.
-        void emit(event_kind kind, breakpoint_id id, std::uint16_t pc);
+        void emit(event_kind kind, breakpoint_id id, debug_address pc);
 
         runtime::scheduler& scheduler_;
         cpu_probe probe_;

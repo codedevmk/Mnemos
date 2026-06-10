@@ -74,7 +74,8 @@ int main(int argc, char** argv) {
 
     plugin_host host(opt.plugin);
     if (!host.ok()) {
-        std::fprintf(stderr, "failed to load plugin: %s\n", opt.plugin.c_str());
+        std::fprintf(stderr, "failed to load plugin %s: %s\n", opt.plugin.c_str(),
+                     host.error().c_str());
         return 1;
     }
     const apm_plugin_api* api = host.api();

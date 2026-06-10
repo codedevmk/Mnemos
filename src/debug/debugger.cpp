@@ -106,7 +106,7 @@ namespace mnemos::debug {
         return false;
     }
 
-    void debugger::emit(event_kind kind, breakpoint_id id, std::uint16_t pc) {
+    void debugger::emit(event_kind kind, breakpoint_id id, debug_address pc) {
         if (subscriptions_.empty()) {
             return;
         }
@@ -150,11 +150,11 @@ namespace mnemos::debug {
 
     // ----- execution control -----
 
-    std::uint16_t debugger::current_pc() const {
+    debug_address debugger::current_pc() const {
         return probe_.program_counter ? probe_.program_counter() : 0U;
     }
 
-    breakpoint_id debugger::matching_breakpoint(std::uint16_t pc) const {
+    breakpoint_id debugger::matching_breakpoint(debug_address pc) const {
         for (const auto& e : breakpoints_) {
             if (e.spec.enabled && e.spec.address == pc &&
                 (!e.spec.condition || e.spec.condition())) {
@@ -176,7 +176,7 @@ namespace mnemos::debug {
     stop_event debugger::step_instruction() {
         pending_watch_.reset();
         advance_one_instruction();
-        const std::uint16_t pc = current_pc();
+        const debug_address pc = current_pc();
         if (pending_watch_.has_value()) {
             emit(event_kind::watchpoint, pending_watch_->id, pc);
             return {.reason = halt_reason::watchpoint,
@@ -203,7 +203,7 @@ namespace mnemos::debug {
         for (std::uint64_t n = 0; n < max_instructions; ++n) {
             pending_watch_.reset();
             advance_one_instruction();
-            const std::uint16_t pc = current_pc();
+            const debug_address pc = current_pc();
             if (pending_watch_.has_value()) {
                 emit(event_kind::watchpoint, pending_watch_->id, pc);
                 return {.reason = halt_reason::watchpoint,

@@ -1405,10 +1405,15 @@ namespace mnemos::chips::cpu {
     }
 
     void z80::set_nmi_line(bool asserted) noexcept {
-        if (asserted) {
+        // Edge-triggered: latch one NMI per inactive->active transition, like
+        // the hardware /NMI pin (and the m6510's identically named API). A
+        // system holding the line and re-asserting each frame must not get one
+        // NMI per call.
+        if (asserted && !nmi_line_) {
             nmi_pending_ = true;
             halted_ = false;
         }
+        nmi_line_ = asserted;
     }
 
     void z80::reset(reset_kind /*kind*/) {
@@ -1420,7 +1425,7 @@ namespace mnemos::chips::cpu {
         pc_ = 0U;
         i_ = r_ = im_ = 0U;
         iff1_ = iff2_ = false;
-        halted_ = ei_pending_ = irq_line_ = nmi_pending_ = false;
+        halted_ = ei_pending_ = irq_line_ = nmi_pending_ = nmi_line_ = false;
         step_cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
@@ -1490,6 +1495,7 @@ namespace mnemos::chips::cpu {
         writer.boolean(ei_pending_);
         writer.boolean(irq_line_);
         writer.boolean(nmi_pending_);
+        writer.boolean(nmi_line_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
         writer.u64(elapsed_);
     }
@@ -1516,6 +1522,7 @@ namespace mnemos::chips::cpu {
         ei_pending_ = reader.boolean();
         irq_line_ = reader.boolean();
         nmi_pending_ = reader.boolean();
+        nmi_line_ = reader.boolean();
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());
         elapsed_ = reader.u64();
     }
