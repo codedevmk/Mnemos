@@ -50,6 +50,37 @@ jobs:
             git push
           fi
 
+  metrics:
+    name: metrics snapshot + dashboard (+ weekly packet on Mondays)
+    runs-on: ubuntu-24.04
+    needs: oracles
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Nightly snapshot + dashboard
+        run: python3 tools/governance/metrics.py
+
+      - name: Weekly packet (Mondays, or on manual dispatch)
+        run: |
+          if [ "$(date -u +%u)" = "1" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python3 tools/governance/weekly_packet.py --draft
+          fi
+
+      - name: Commit generated metrics
+        run: |
+          if ! git diff --quiet || [ -n "$(git status --porcelain metrics docs/adr/proposed)" ]; then
+            git config user.name "mnemos-nightly"
+            git config user.email "nightly@users.noreply.github.com"
+            git add metrics docs/adr/proposed
+            git commit -m "metrics: nightly snapshot + dashboard (generated)"
+            git push
+          fi
+
   sanitizers:
     name: sanitizer suite (G12)
     runs-on: ubuntu-24.04

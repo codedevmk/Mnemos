@@ -1,11 +1,12 @@
 ---
 id: ADR-0016
 title: "P2 Executable Authority — Implementation Decisions"
-status: proposed
+status: accepted
 version: 1.0.0
 supersedes: []
 superseded_by: null
 proposed: 2026-06-10
+ratified: 2026-06-10
 ---
 
 # ADR 0016: P2 Executable Authority — Implementation Decisions
@@ -77,3 +78,8 @@ defects, both fixed in this change set:
   (with auto-committed raises) and G12.
 - `highwater.json` is initialized from a real local run of the full suite,
   so the ratchet floor is measured, not asserted.
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session. P3 starts with
+this acceptance.

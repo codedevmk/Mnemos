@@ -64,6 +64,14 @@ docs/genesis-cycle-parity-audit.md
 docs/genesis-chipset-gap-audit.md
 *.obj
 
-# Session-local agent tooling (Ralph loop)
-.claude/
+# Session-local agent tooling (Ralph loop) — but the decision-capture
+# command and the session-instrumentation hooks are repository tooling
+# (MNE-CTX-PLAN-001 §5.2/§8) and stay tracked.
+.claude/*
+!.claude/commands/
+!.claude/settings.json
 __pycache__/
+
+# Raw session telemetry (M7/M15 inputs) — aggregated into committed
+# snapshots by metrics.py; the raw logs are working data, never authority.
+metrics/sessions/
