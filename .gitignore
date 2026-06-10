@@ -66,3 +66,4 @@ docs/genesis-chipset-gap-audit.md
 
 # Session-local agent tooling (Ralph loop)
 .claude/
+__pycache__/
