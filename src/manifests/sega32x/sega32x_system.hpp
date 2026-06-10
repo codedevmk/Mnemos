@@ -248,6 +248,24 @@ namespace mnemos::manifests::sega32x {
         void set_fb_access_bank(int bank);
         int fb_access_bank{0};
 
+        // Frame-buffer access through the live access bank, for the windows
+        // that cannot be plain RAM maps: a byte read, a plain byte write, and
+        // the overwrite-image write (a zero byte is skipped -- the hardware
+        // transparency blit at FB+$20000 and the 68000's $860000 window).
+        [[nodiscard]] std::uint8_t fb_read(std::uint32_t offset) const noexcept {
+            return framebuffer[static_cast<std::size_t>(fb_access_bank) * fb_bank_size +
+                               (offset & (fb_bank_size - 1U))];
+        }
+        void fb_write(std::uint32_t offset, std::uint8_t value) noexcept {
+            framebuffer[static_cast<std::size_t>(fb_access_bank) * fb_bank_size +
+                        (offset & (fb_bank_size - 1U))] = value;
+        }
+        void fb_overwrite_write(std::uint32_t offset, std::uint8_t value) noexcept {
+            if (value != 0U) {
+                fb_write(offset, value);
+            }
+        }
+
         // Power-on: clear board state and (re)load both SH-2 reset vectors from
         // their BIOS. The CPUs stay held until set_sh2_reset(false).
         void reset();
