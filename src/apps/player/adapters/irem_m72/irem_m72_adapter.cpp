@@ -35,10 +35,14 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         [[nodiscard]] std::vector<runtime::scheduled_chip>
         build_schedule(manifests::irem_m72::m72_system& sys) {
             // 32 MHz board crystal: pixel clock /4, V30 /4 (8 MHz), Z80 /8
-            // (4 MHz). Video first so the CPUs observe the advanced beam.
+            // (4 MHz); the YM2151's own 3.579545 MHz crystal is not an integer
+            // divider, so it runs on the rational rate (715909 chip cycles per
+            // 6400000 master cycles). Video first so the CPUs observe the
+            // advanced beam.
             return {{.chip = &sys.video, .divider = 4U},
                     {.chip = &sys.main_cpu, .divider = 4U},
-                    {.chip = &sys.sound_cpu, .divider = 8U}};
+                    {.chip = &sys.sound_cpu, .divider = 8U},
+                    {.chip = &sys.fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U}};
         }
 
     } // namespace
@@ -52,6 +56,23 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         spec_ = {{"System", "Arcade"},
                  {"Board", "Irem M72"},
                  {"Game", display_name.empty() ? std::string{"unknown"} : std::move(display_name)}};
+    }
+
+    frontend_sdk::audio_chunk irem_m72_adapter::drain_audio() noexcept {
+        // One stereo frame per 64 YM2151 clocks; the chip's elapsed-clock
+        // counter is the sample clock, so drains never drift from emulation.
+        const std::uint64_t due =
+            sys_->fm.elapsed_clocks() / chips::audio::ym2151::clocks_per_sample;
+        const std::uint64_t pending = due - samples_drained_;
+        samples_drained_ = due;
+        if (pending == 0U) {
+            return {};
+        }
+        audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
+        sys_->fm.update(audio_buf_);
+        return {.samples = audio_buf_.data(),
+                .frame_count = static_cast<std::uint32_t>(pending),
+                .sample_rate = 55930U}; // 3579545 / 64
     }
 
     void irem_m72_adapter::step_one_frame() {

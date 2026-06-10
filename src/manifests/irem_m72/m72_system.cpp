@@ -67,7 +67,8 @@ namespace mnemos::manifests::irem_m72 {
             switch (p) {
             case port_out_sound_latch:
                 sound_latch = value;
-                sound_cpu.set_irq_line(true); // latch write knocks on the Z80
+                sound_latch_irq = true; // latch write knocks on the Z80
+                update_sound_irq();
                 break;
             case port_out_flip_coin:
                 flip_coin_register = value; // semantics land with video/inputs
@@ -80,15 +81,34 @@ namespace mnemos::manifests::irem_m72 {
             }
         });
 
-        // --- Z80 I/O space: the latch read acknowledges the INT line; the
-        // YM2151 window reads open until the audio phase wires the chip ---
+        // --- Z80 I/O space: YM2151 at 0/1, the latch at 2 (its read
+        // acknowledges the latch side of the INT line) ---
         sound_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
-            if ((port & 0xFFU) == z80_port_latch) {
-                sound_cpu.set_irq_line(false);
+            switch (port & 0xFFU) {
+            case z80_port_ym2151_addr:
+            case z80_port_ym2151_data:
+                return fm.read_status();
+            case z80_port_latch:
+                sound_latch_irq = false;
+                update_sound_irq();
                 return sound_latch;
+            default:
+                return 0xFFU;
             }
-            return 0xFFU;
         });
+        sound_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
+            switch (port & 0xFFU) {
+            case z80_port_ym2151_addr:
+                fm.write_address(value);
+                break;
+            case z80_port_ym2151_data:
+                fm.write_data(value);
+                break;
+            default:
+                break; // the DAC/sample ports land with the next increment
+            }
+        });
+        fm.set_irq([this](bool) { update_sound_irq(); });
 
         // --- video: VRAM/palette/tile spans + vblank INT into the V30 ---
         video.attach_vram_a(vram_a);
