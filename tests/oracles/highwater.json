@@ -45,12 +45,28 @@
       "ctest": "mnemos_chips_cpu_m68000_conformance_test",
       "high_water": "skipped"
     },
+    "ORC-M72-SYSTEM": {
+      "ctest": "mnemos_manifests_irem_m72_test",
+      "high_water": "passed"
+    },
+    "ORC-M72VIDEO-UNIT": {
+      "ctest": "mnemos_chips_video_irem_m72_video_test",
+      "high_water": "passed"
+    },
     "ORC-SMS-PARITY": {
       "ctest": "mnemos_manifests_sms_manifest_parity_test",
       "high_water": "skipped"
     },
     "ORC-SMS-RUNTIME-PARITY": {
       "ctest": "mnemos_manifests_sms_runtime_parity_test",
+      "high_water": "passed"
+    },
+    "ORC-V30-SST": {
+      "ctest": "mnemos_chips_cpu_v30_singlestep_test",
+      "high_water": "skipped"
+    },
+    "ORC-V30-UNIT": {
+      "ctest": "mnemos_chips_cpu_v30_test",
       "high_water": "passed"
     },
     "ORC-Z80-SST": {
