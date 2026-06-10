@@ -22,17 +22,25 @@ namespace mnemos::chips::video {
     // scanline-compare callback fires at the start of the matching line for
     // the board's programmable raster IRQ.
     //
-    // The board attaches non-owning spans for VRAM / palette RAM / tile ROM;
-    // layer formats are first-cut (validated against R-Type in plan phase C):
+    // The board attaches non-owning spans for VRAM / sprite RAM / palette RAM
+    // / graphics ROM; formats are first-cut (validated against R-Type in plan
+    // phase C):
     //   * VRAM entry, 4 bytes per tile: code low, code high, color (low 4
     //     bits), attributes (bit0 flip-x, bit1 flip-y).
     //   * Tile ROM is 4 sequential bitplane banks (each region.size()/4
     //     bytes); tile N row R is byte N*8+R of each plane, MSB leftmost.
+    //   * Sprite RAM entry, 8 bytes: y low/high (9 bits), code low/high,
+    //     color (low 4 bits), attributes (bit0 flip-x, bit1 flip-y, bits 2-3
+    //     log2 width in 16px blocks, bits 4-5 log2 height), x low/high
+    //     (9 bits). Multi-block sprites take consecutive codes column-major
+    //     (code + column*height + row). Lower entry indices draw on top.
+    //   * Sprite ROM is 4 bitplane banks of 16x16 cells (32 bytes per cell
+    //     per plane: 16 rows x 2 bytes, MSB leftmost).
     //   * Palette RAM holds 5-bit gun planes at +0x000 (R), +0x400 (G),
-    //     +0x800 (B); both playfields read palette A, pixel value 0 of the
-    //     front layer is transparent over the back layer.
+    //     +0x800 (B); the playfields read palette A, sprites read palette B.
+    //     Pixel value 0 is transparent for sprites and the front playfield.
     //
-    // Sprites (palette B) and flip-screen land in the next phase-C increment.
+    // Flip-screen and sprite/playfield priority bits land with the parity pass.
     class irem_m72_video final : public ivideo {
       public:
         static constexpr std::uint32_t visible_width = 384U;
@@ -41,6 +49,9 @@ namespace mnemos::chips::video {
         static constexpr std::uint32_t frame_lines = 284U; // total per frame
         static constexpr std::uint32_t map_tiles = 64U;    // 64x64 tilemap
         static constexpr std::size_t vram_entry_bytes = 4U;
+        static constexpr std::size_t sprite_entry_bytes = 8U;
+        // Bytes per 16x16 sprite cell within one bitplane bank.
+        static constexpr std::size_t sprite_cell_bytes = 32U;
 
         // Fired with the line number: vblank at visible_height, raster at the
         // programmed compare line.
@@ -66,8 +77,13 @@ namespace mnemos::chips::video {
         void attach_palette_a(std::span<const std::uint8_t> palette) noexcept {
             palette_a_ = palette;
         }
+        void attach_palette_b(std::span<const std::uint8_t> palette) noexcept {
+            palette_b_ = palette;
+        }
         void attach_tiles_a(std::span<const std::uint8_t> tiles) noexcept { tiles_a_ = tiles; }
         void attach_tiles_b(std::span<const std::uint8_t> tiles) noexcept { tiles_b_ = tiles; }
+        void attach_sprite_ram(std::span<const std::uint8_t> ram) noexcept { sprite_ram_ = ram; }
+        void attach_sprites(std::span<const std::uint8_t> sprites) noexcept { sprites_ = sprites; }
 
         // Registers (driven by the board's I/O ports).
         void set_scroll_a(std::uint16_t x, std::uint16_t y) noexcept {
@@ -116,6 +132,9 @@ namespace mnemos::chips::video {
         void render_layer(std::span<const std::uint8_t> vram, std::span<const std::uint8_t> tiles,
                           std::uint16_t scroll_x, std::uint16_t scroll_y,
                           bool transparent_pixel0) noexcept;
+        void render_sprites() noexcept;
+        [[nodiscard]] static std::uint32_t lookup_rgb(std::span<const std::uint8_t> palette,
+                                                      std::size_t index) noexcept;
         [[nodiscard]] std::uint32_t palette_rgb(std::size_t index) const noexcept;
 
         std::vector<std::uint32_t> pixels_ =
@@ -127,8 +146,11 @@ namespace mnemos::chips::video {
         std::span<const std::uint8_t> vram_a_{};
         std::span<const std::uint8_t> vram_b_{};
         std::span<const std::uint8_t> palette_a_{};
+        std::span<const std::uint8_t> palette_b_{};
         std::span<const std::uint8_t> tiles_a_{};
         std::span<const std::uint8_t> tiles_b_{};
+        std::span<const std::uint8_t> sprite_ram_{};
+        std::span<const std::uint8_t> sprites_{};
 
         std::uint16_t scroll_a_x_{};
         std::uint16_t scroll_a_y_{};
