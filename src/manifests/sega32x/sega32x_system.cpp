@@ -24,21 +24,6 @@ namespace mnemos::manifests::sega32x {
 #endif
             return enabled;
         }
-        // Shares the machine's MNEMOS_32X_BOOTHACK knob (default on).
-        [[nodiscard]] bool boot_seed_enabled() noexcept {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
-#endif
-            static const bool enabled = [] {
-                const char* v = std::getenv("MNEMOS_32X_BOOTHACK");
-                return v == nullptr || v[0] != '0';
-            }();
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            return enabled;
-        }
         // PWM FIFO primitives. A push into a full FIFO drops the value (the
         // hardware rejects the write); a pop from an empty FIFO returns the
         // held DAC value so the carrier keeps running on the last duty.
@@ -189,15 +174,20 @@ namespace mnemos::manifests::sega32x {
     std::uint8_t sega32x_system::sys_reg_read(std::uint32_t offset, bool is_master) noexcept {
         if (offset < 0x02U) {
             // The SH-2-side $4000 system word. Even (high) byte: the adapter
-            // flag bits the boot ROMs check -- ADEN (bit 1), FM (bit 7) -- plus
-            // the CPU-ID pin in bit 0 (master = 0, slave = 1). Odd (low) byte:
-            // the executing CPU's own interrupt-enable mask in the hardware bit
-            // order (V=8 / H=4 / CMD=2 / PWM=1) -- self-referential, each SH-2
-            // sees only its own.
+            // flag bits the boot ROMs check -- FM (bit 7), ADEN (bit 1), and
+            // the CART pin in bit 0 (0 = cartridge connected). The slave boot
+            // ROM branches on CART: cart present -> read its entry from the
+            // cart header and post S_OK on M_OK alone; no cart -> the CD boot
+            // path (wait _CD_, entry from the frame-buffer parameter block).
+            // Odd (low) byte: the executing CPU's own interrupt-enable mask in
+            // the hardware bit order (V=8 / H=4 / CMD=2 / PWM=1) --
+            // self-referential, each SH-2 sees only its own.
             if ((offset & 1U) != 0U) {
                 return internal_mask_to_hw(is_master ? master_irq_mask : slave_irq_mask);
             }
-            return static_cast<std::uint8_t>((adapter_ctrl & 0xFFU) | (is_master ? 0x00U : 0x01U));
+            return static_cast<std::uint8_t>((adapter_ctrl & 0xFCU) |
+                                             (adapter_enabled ? 0x02U : 0x00U) |
+                                             (cart_rom.empty() ? 0x01U : 0x00U));
         }
         if (offset < 0x04U) {
             // H-interrupt line-count register: round-trip storage (the HINT
@@ -598,15 +588,6 @@ namespace mnemos::manifests::sega32x {
         // edge restarts both CPUs from their BIOS reset vectors. Re-releasing a
         // running pair is a no-op; holding parks them where they are.
         if (!asserted && sh2_reset_asserted) {
-            // Reference-derived boot workaround: pre-seed "_CD_" in COMM 0/1 so
-            // the slave boot ROM exits its wait loop immediately and reaches the
-            // slave game entry before the master game code's handshake wait.
-            // The master boot ROM overwrites this with M_OK when it completes.
-            // (Gated with the machine's other boot hacks: MNEMOS_32X_BOOTHACK=0.)
-            if (boot_seed_enabled()) {
-                comm[0] = 0x5F43U;
-                comm[1] = 0x445FU;
-            }
             master_cpu.reset(chips::reset_kind::power_on);
             slave_cpu.reset(chips::reset_kind::power_on);
         }
@@ -616,13 +597,13 @@ namespace mnemos::manifests::sega32x {
     void sega32x_system::reset() {
         sh2_reset_asserted = true;
         adapter_ctrl = 0U;
+        adapter_enabled = false;
         hcount = 0U;
         comm.fill(0U);
         master_irq_mask = 0U;
         slave_irq_mask = 0U;
         master_irq_latch = 0U;
         slave_irq_latch = 0U;
-        m_ok_high_seen = false;
         dreq_ctrl = 0U;
         dreq_src_hi = 0U;
         dreq_src_lo = 0U;
@@ -736,6 +717,11 @@ namespace mnemos::manifests::sega32x {
                 bus->map_ram(base + sdram_base, s->sdram, 0);
             }
         }
+        // SH7604 cache data array: 4 KiB of per-CPU on-chip RAM at $C0000000.
+        // Priority 1 puts it above the partition mirror of external space.
+        s->master_bus.map_ram(0xC0000000U, s->master_cache_data, 1);
+        s->slave_bus.map_ram(0xC0000000U, s->slave_cache_data, 1);
+
         // SH-2-side system registers at +$4000 in every partition, per CPU:
         // adapter control, the self-referential interrupt-enable register, and
         // the shared COMM bank. Priority 1 keeps the window above the

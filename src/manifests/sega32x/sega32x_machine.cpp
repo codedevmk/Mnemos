@@ -14,66 +14,20 @@ namespace mnemos::manifests::sega32x {
         // is promoted to read-modify-write on the 16-bit cell by the bus handlers
         // below, so handshake semantics (reset-bit toggles, COMM byte writes)
         // behave the way retail code expects.
-        // Reference-derived boot workaround on the 68000's COMM read path: many
-        // 32X carts' 68000 code polls COMM 0/1 for the master boot ROM's M_OK
-        // marker but never issues the explicit clear the master game code then
-        // waits on. Detect a completed 32-bit M_OK read, clear COMM 0/1 on the
-        // 68000's behalf, and re-inject the S_OK + SLAV markers the slave side
-        // would publish at the same moment (the slave boot ROM parks early on an
-        // unmodelled hardware handshake, so it cannot write them itself).
-        //
-        // Fires at BYTE granularity, after the LAST byte of the 32-bit read has
-        // been served -- the 68000's CMPI.L arrives as four byte reads on this
-        // bus, and clearing any earlier corrupts the value mid-assembly.
-        // MNEMOS_32X_BOOTHACK=0 disables the reference-derived COMM boot
-        // workarounds (the M_OK clear-on-read + S_OK/SLAV/_CD_ seeds) so the
-        // real BIOS handshake can be exercised end-to-end.
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // getenv: opt-in debug knob
-#endif
-        bool boot_hack_enabled() {
-            static const bool on = [] {
-                const char* p = std::getenv("MNEMOS_32X_BOOTHACK");
-                return p == nullptr || p[0] != '0';
-            }();
-            return on;
-        }
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-
-        void comm_bootstrap_after_byte_read(sega32x_system& tx, std::uint32_t a) {
-            if (!boot_hack_enabled()) {
-                return;
-            }
-            if (a == 0xA15121U) {                          // low byte of COMM 0 just served
-                tx.m_ok_high_seen = tx.comm[0] == 0x4D5FU; // "M_"
-                return;
-            }
-            if (a == 0xA15123U && tx.m_ok_high_seen) { // low byte of COMM 1
-                if (tx.comm[1] == 0x4F4BU) {           // "OK"
-                    tx.comm[0] = 0U;
-                    tx.comm[1] = 0U;
-                    tx.comm[2] = 0x535FU; // "S_"
-                    tx.comm[3] = 0x4F4BU; // "OK"
-                    tx.comm[4] = 0x534CU; // "SL"
-                    tx.comm[5] = 0x4156U; // "AV"
-                }
-                tx.m_ok_high_seen = false;
-            }
-        }
-
         std::uint16_t m68k_reg_read_word(const sega32x_system& tx, std::uint32_t off) {
-            // Adapter control -- $A15100. Bit 15=FM, bit 7=RV, bit 1=ADEN, bit
-            // 0=RES (0 = SH-2s held in reset). RES reflects the live /RES line,
-            // not a latch.
+            // Adapter control -- $A15100. Bit 15=FM, bit 1=nRES (the live SH-2
+            // /RES line: 1 = running), bit 0=ADEN, bit 7 = the V-blank status
+            // mirror (the cart's security block spins on it before enabling).
+            // The retail security block proves the layout: it writes $01 and
+            // immediately runs through the $880000 window (ADEN must be bit 0),
+            // then writes $03 to start the SH-2s (nRES is bit 1).
             if (off == 0x00U) {
-                std::uint16_t v = tx.adapter_ctrl;
-                if (tx.sh2_reset_asserted) {
-                    v &= static_cast<std::uint16_t>(~0x0001U);
-                } else {
+                std::uint16_t v = static_cast<std::uint16_t>(tx.adapter_ctrl & ~0x0003U);
+                if (tx.adapter_enabled) {
                     v |= 0x0001U;
+                }
+                if (!tx.sh2_reset_asserted) {
+                    v |= 0x0002U;
                 }
                 return v;
             }
@@ -143,19 +97,30 @@ namespace mnemos::manifests::sega32x {
 #pragma warning(pop)
 #endif
 
-        void m68k_reg_write_word(sega32x_system& tx, manifests::genesis::genesis_system* gen,
-                                 std::uint32_t off, std::uint16_t val) {
+        void m68k_reg_write_word(sega32x_machine& m, std::uint32_t off, std::uint16_t val) {
+            sega32x_system& tx = *m.thirtytwox;
+            manifests::genesis::genesis_system* gen = m.genesis.get();
             if (reg_trace_enabled() && off < 0x30U) {
                 std::fprintf(stderr, "[reg] 68k w $A151%02X = %04X\n", off, val);
             }
             if (off == 0x00U) {
-                // The register directly drives the SH-2 /RES pin: ADEN+RES=1
-                // releases (a re-release while running is safe -- the BIOS checks
-                // ADEN at its reset vector), RES=0 always parks. The non-reset
-                // bits stay latched so game code reads back its own writes.
-                const bool aden = (val & 0x0002U) != 0U;
-                const bool res_release = (val & 0x0001U) != 0U;
-                tx.adapter_ctrl = val & 0xFFFEU;
+                // Bit 0 = ADEN: the cart's security block sets it alone first;
+                // the 0->1 edge switches the 68000 map (G BIOS vectors overlay
+                // $000000) while the SH-2s stay parked. Bit 1 = nRES, driving
+                // the SH-2 /RES pin: ADEN+nRES releases (a re-release while
+                // running is safe -- the BIOS checks ADEN at its reset vector),
+                // nRES=0 always parks. Latched bits (FM and friends) read back;
+                // bit 7 stays with the V-blank mirror.
+                const bool aden = (val & 0x0001U) != 0U;
+                const bool res_release = (val & 0x0002U) != 0U;
+                tx.adapter_ctrl =
+                    static_cast<std::uint16_t>((val & 0xFF7CU) | (tx.adapter_ctrl & 0x0080U));
+                if (aden && !tx.adapter_enabled) {
+                    tx.adapter_enabled = true;
+                    if (m.g_bios_present) {
+                        gen->bus.map_rom(0x000000U, tx.g_bios, 1);
+                    }
+                }
                 if (aden && res_release) {
                     tx.set_sh2_reset(false);
                 } else if (!res_release) {
@@ -292,31 +257,13 @@ namespace mnemos::manifests::sega32x {
         load(tx->g_bios, bios.g_bios);
         tx->attach_cart(g->rom);
 
-        // Power-on adapter state (reference-derived). With a master boot ROM
-        // present the gate array deasserts the SH-2 /RES line and raises ADEN
-        // at power-on -- the 68000 never writes a release; its cart-side boot
-        // code goes straight to the COMM handshake. The slave boot ROM parks
-        // early on an unmodelled hardware handshake, so its S_OK + SLAV
-        // markers are pre-seeded; the frame-buffer parameter block gets the
-        // slave entry/VBR from the cart's SH-2 entry table (the master boot
-        // path reads its own entry from the cart directly and never writes
-        // the slave's fields).
-        if (!bios.m_bios.empty()) {
-            tx->adapter_ctrl |= 0x0002U; // ADEN visible to the boot ROMs
-            tx->set_sh2_reset(false);
-        }
-        if (!bios.s_bios.empty() && boot_hack_enabled()) {
-            tx->comm[2] = 0x535FU; // "S_"
-            tx->comm[3] = 0x4F4BU; // "OK"
-            tx->comm[4] = 0x534CU; // "SL"
-            tx->comm[5] = 0x4156U; // "AV"
-        }
-        if (tx->cart_rom.size() >= 0x3F0U) {
-            for (std::size_t i = 0; i < 4U; ++i) {
-                tx->framebuffer[0x24U + i] = tx->cart_rom[0x3E4U + i]; // slave entry
-                tx->framebuffer[0x2CU + i] = tx->cart_rom[0x3ECU + i]; // slave VBR
-            }
-        }
+        // Power-on adapter state: ADEN clear, SH-2s parked. The 68000 boots the
+        // cartridge's own reset vectors in plain-Genesis mode and runs the
+        // standard 32X security block: probe the adapter ID, enable ADEN (the
+        // map switch), then release the SH-2 /RES line -- all through $A15100.
+        // From there the real boot ROM protocol carries the handshake: the
+        // master posts the cart checksum + M_OK, the slave (cart present) takes
+        // its entry from the cart's SH-2 table and posts S_OK.
 
         // 68000-side 32X cart remap. $880000-$8FFFFF views the first 512 KiB of
         // the cart with no vector overlay (the boot code reads the cart's own
@@ -326,14 +273,15 @@ namespace mnemos::manifests::sega32x {
         const std::span<const std::uint8_t> rom{g->rom};
         bus.map_rom(0x880000U, rom.first(std::min<std::size_t>(rom.size(), 0x80000U)), 1);
         bus.map_rom(0x900000U, rom.first(std::min<std::size_t>(rom.size(), 0x100000U)), 1);
-        // With a G BIOS present, its vectors overlay the bottom of cart space so
-        // the console boots the adapter's security/handshake code first. The
-        // 68000 fetched its reset vectors from the cart during assemble_genesis,
-        // before the overlay existed -- re-reset it so boot starts in the BIOS.
-        if (!bios.g_bios.empty()) {
-            bus.map_rom(0x000000U, tx->g_bios, 1);
-            g->cpu.reset(chips::reset_kind::power_on);
-        }
+        // The G BIOS vectors overlay $000000 only once the security block sets
+        // ADEN (the $A15100 write path maps it); until then the 68000 runs on
+        // the cart's own vectors, exactly like a plain Genesis.
+        machine->g_bios_present = !bios.g_bios.empty();
+
+        // The adapter identity the security block probes before enabling:
+        // ASCII "MARS" at $A130EC, readable regardless of ADEN.
+        static constexpr std::uint8_t mars_id[4]{0x4DU, 0x41U, 0x52U, 0x53U};
+        bus.map_rom(0xA130ECU, {mars_id, 4U}, 1);
 
         // 32X interrupt sources from the Genesis VDP. VINT rides the
         // unconditional V-blank edge -- a 32X game may never enable the 68000's
@@ -371,13 +319,19 @@ namespace mnemos::manifests::sega32x {
             [tx](std::uint32_t a) -> std::uint8_t {
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
                 const std::uint16_t w = m68k_reg_read_word(*tx, off);
-                const auto byte = (a & 1U) != 0U ? static_cast<std::uint8_t>(w)
-                                                 : static_cast<std::uint8_t>(w >> 8U);
-                comm_bootstrap_after_byte_read(*tx, a);
-                return byte;
+                return (a & 1U) != 0U ? static_cast<std::uint8_t>(w)
+                                      : static_cast<std::uint8_t>(w >> 8U);
             },
             [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
+                if (off >= 0x20U && off <= 0x2FU) {
+                    // COMM write: let the SH-2s observe the pre-write state
+                    // first. The boot handshake interlocks on consecutive 68000
+                    // COMM writes (clear-then-command) landing in the same
+                    // interleave slice -- a hardware SH-2 polls continuously
+                    // and never misses the window.
+                    machine->catch_up_sh2();
+                }
                 if (off == 0x12U) {
                     // The DREQ FIFO write port pushes once per completed word:
                     // the even byte latches the high half, the odd completes.
@@ -402,7 +356,7 @@ namespace mnemos::manifests::sega32x {
                         ? static_cast<std::uint16_t>((cur & 0xFF00U) | value)
                         : static_cast<std::uint16_t>((cur & 0x00FFU) |
                                                      (static_cast<std::uint16_t>(value) << 8U));
-                m68k_reg_write_word(*tx, machine->genesis.get(), off, next);
+                m68k_reg_write_word(*machine, off, next);
             },
             1);
 
@@ -412,6 +366,13 @@ namespace mnemos::manifests::sega32x {
         bus.map_mmio(
             0xA15180U, 0x10U, [tx](std::uint32_t a) { return tx->vdp_reg_read(a - 0xA15180U); },
             [tx](std::uint32_t a, std::uint8_t value) { tx->vdp_reg_write(a - 0xA15180U, value); },
+            1);
+
+        // $A15200-$A153FF: the 32X palette CRAM as seen by the 68000 (the SH-2
+        // +$4200 window). Boot code write-verifies it word by word.
+        bus.map_mmio(
+            0xA15200U, 0x200U, [tx](std::uint32_t a) { return tx->vdp_pal_read(a - 0xA15200U); },
+            [tx](std::uint32_t a, std::uint8_t value) { tx->vdp_pal_write(a - 0xA15200U, value); },
             1);
 
         return machine;

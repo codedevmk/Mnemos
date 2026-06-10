@@ -25,6 +25,11 @@ namespace mnemos::manifests::sega32x {
         // needed (unlike the Sega CD sub-CPU's 87.5/53.693175).
         static constexpr std::uint64_t sh2_clock_multiplier = 3U;
 
+        // Whether a G BIOS image was supplied: the ADEN 0->1 edge then overlays
+        // its vectors at $000000 (no image: the cart vectors stay, as the
+        // BIOS-less unit tests expect).
+        bool g_bios_present = false;
+
         // begin_slice() baselines the SH-2 position against the 68000 at the start
         // of an interleave slice; catch_up_sh2() advances both SH-2s up to the
         // 68000's current cycle * 3. A no-op while the SH-2s are held in reset.

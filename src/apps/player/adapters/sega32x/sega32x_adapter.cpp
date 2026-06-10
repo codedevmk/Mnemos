@@ -188,6 +188,32 @@ namespace mnemos::apps::player::adapters::sega32x {
                     }
                 });
         }
+
+        // Opt-in 68000 work-RAM write watch (MNEMOS_WRAM_WATCH=<lo>:<hi>, hex
+        // 16-bit work-RAM offsets): logs every work-RAM byte write whose
+        // mirror-collapsed offset falls in [lo, hi) with the writing PC.
+        // Claims the 68K-bus observer slot (don't combine with BUSWATCH).
+        if (const char* spec = std::getenv("MNEMOS_WRAM_WATCH");
+            spec != nullptr && spec[0] != '\0') {
+            char* sep = nullptr;
+            const auto lo = static_cast<std::uint32_t>(std::strtoul(spec, &sep, 16)) & 0xFFFFU;
+            auto hi = sep != nullptr && *sep == ':'
+                          ? static_cast<std::uint32_t>(std::strtoul(sep + 1, nullptr, 16))
+                          : lo + 2U;
+            hi = std::min(hi, 0x10000U);
+            auto* gen_sys = machine_->genesis.get();
+            machine_->genesis->bus.set_access_observer(
+                [gen_sys, lo, hi](const topology::access_event& ev) {
+                    if (!ev.write || (ev.address & 0xE00000U) != 0xE00000U) {
+                        return;
+                    }
+                    const std::uint32_t off = ev.address & 0xFFFFU;
+                    if (off >= lo && off < hi) {
+                        std::fprintf(stderr, "[wramw] pc=%06X [FF%04X]=%02X\n",
+                                     gen_sys->cpu.cpu_registers().pc, off, ev.value);
+                    }
+                });
+        }
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif

@@ -58,20 +58,32 @@ TEST_CASE("sega32x_machine boots the cartridge and holds the SH-2s in reset",
     CHECK(m->thirtytwox->master_cpu.elapsed_cycles() == 0U);
 }
 
-TEST_CASE("sega32x_machine $A15100 ADEN+RES release starts and parks the SH-2s",
+TEST_CASE("sega32x_machine $A15100 ADEN+nRES release starts and parks the SH-2s",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
 
-    // Low byte of the adapter-control word: ADEN (bit 1) + RES-release (bit 0).
+    // Low byte of the adapter-control word: ADEN (bit 0) + nRES (bit 1).
     bus.write8(0xA15101U, 0x03U);
     CHECK_FALSE(m->thirtytwox->sh2_reset_asserted); // released
-    // Read-back: RES (bit 0) reflects the live /RES line -- 1 while running.
+    // Read-back: nRES (bit 1) reflects the live /RES line -- 1 while running.
     CHECK(bus.read8(0xA15101U) == 0x03U);
 
-    // Clearing RES (bit 0 = 0) parks the SH-2s again regardless of ADEN.
+    // Clearing nRES (bit 1 = 0) parks the SH-2s again; ADEN stays latched.
     bus.write8(0xA15101U, 0x00U);
     CHECK(m->thirtytwox->sh2_reset_asserted);
+    CHECK(bus.read8(0xA15101U) == 0x01U);
+}
+
+TEST_CASE("sega32x_machine serves the MARS adapter identity at $A130EC", "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+
+    // The security block probes this before ADEN is set.
+    CHECK(bus.read8(0xA130ECU) == 'M');
+    CHECK(bus.read8(0xA130EDU) == 'A');
+    CHECK(bus.read8(0xA130EEU) == 'R');
+    CHECK(bus.read8(0xA130EFU) == 'S');
 }
 
 TEST_CASE("sega32x_machine runs the SH-2s at 3x the 68000 after release", "[sega32x][machine]") {
@@ -270,17 +282,26 @@ TEST_CASE("sega32x_machine release edge restarts the SH-2s from their reset vect
     CHECK(tx.master_cpu.cpu_registers().pc == 0x10U);
 }
 
-TEST_CASE("sega32x_machine overlays the G BIOS vectors and maps the 68K cart windows",
+TEST_CASE("sega32x_machine overlays the G BIOS vectors on the ADEN edge and maps the 68K cart "
+          "windows",
           "[sega32x][machine]") {
     sega32x_bios bios;
     bios.g_bios.assign(256, 0x5AU);
     auto m = assemble_sega32x_machine(make_cart(), bios);
     auto& bus = m->genesis->bus;
 
-    // $000000-$0000FF reads the overlay, $000100+ falls back to the cart.
+    // Power-on is plain-Genesis mode: the cart's own vectors at $000000 (the
+    // security block boots from them before it enables the adapter).
+    CHECK(bus.read8(0x000001U) == 0xFFU); // cart SSP byte
+    CHECK(bus.read8(0x000006U) == 0x02U); // cart PC byte
+
+    // The security block sets ADEN alone (bit 0): the overlay appears, the
+    // SH-2s stay parked.
+    bus.write8(0xA15101U, 0x01U);
+    CHECK(m->thirtytwox->sh2_reset_asserted);
     CHECK(bus.read8(0x000000U) == 0x5AU);
     CHECK(bus.read8(0x0000FFU) == 0x5AU);
-    CHECK(bus.read8(0x000200U) == 0x60U); // cart entry loop opcode
+    CHECK(bus.read8(0x000200U) == 0x60U); // cart entry loop opcode past the overlay
 
     // $880000 views the raw cart (no overlay): cart[0] = $00, cart[6] = $02.
     CHECK(bus.read8(0x880000U) == 0x00U);
