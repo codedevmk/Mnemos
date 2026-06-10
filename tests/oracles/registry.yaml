@@ -114,6 +114,37 @@ chips:
     # SH7604-manual-derived micro-vectors are scheduled P2+ authoring work;
     # SH-2 chip ratification is blocked on that oracle floor, not on schedule.
 
+  nec.v30:
+    module: src/chips/cpu/v30
+    suites:
+      - id: ORC-V30-UNIT
+        ctest: mnemos_chips_cpu_v30_test
+        kind: unit
+        provenance: in-tree Catch2 suite (Irem M72 port, ADR-0012 phase A1)
+        pass_criteria: all assertions pass
+        data_gated: false
+      - id: ORC-V30-SST
+        ctest: mnemos_chips_cpu_v30_singlestep_test
+        kind: conformance
+        provenance: >
+          public per-instruction JSON corpus for the 8088/V20 family
+          (initial/final register + RAM images); functional only — cycle/bus
+          comparison arrives with the M72 plan timing increment (A3/A4).
+        pass_criteria: final state matches every vector (undefined-flag mask
+          via MNEMOS_V30_FLAGS_MASK until per-instruction masks land)
+        data_gated: true
+        data_env: MNEMOS_V30_TESTS_DIR
+
+  irem.m72_video:
+    module: src/chips/video/irem_m72_video
+    suites:
+      - id: ORC-M72VIDEO-UNIT
+        ctest: mnemos_chips_video_irem_m72_video_test
+        kind: unit
+        provenance: in-tree Catch2 suite (ADR-0012 phase C1)
+        pass_criteria: all assertions pass
+        data_gated: false
+
 machines:
   sms:
     module: src/manifests/sms
@@ -141,3 +172,12 @@ machines:
       - id: ORC-SMS-RUNTIME-PARITY
         ctest: mnemos_manifests_sms_runtime_parity_test
         data_gated: false
+
+  irem_m72:
+    module: src/manifests/irem_m72
+    parity:
+      - id: ORC-M72-SYSTEM
+        ctest: mnemos_manifests_irem_m72_test
+        data_gated: false
+    # golden scenarios arrive with the M72 plan's later phases (boot to
+    # attract mode needs the sound/sprite increments); registered then.

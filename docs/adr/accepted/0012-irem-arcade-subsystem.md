@@ -1,11 +1,12 @@
 ---
 id: ADR-0012
 title: "Irem Arcade Subsystem (M72 first, M92 later)"
-status: proposed
+status: accepted
 version: 1.0.0
 supersedes: []
 superseded_by: null
 proposed: 2026-06-10
+ratified: 2026-06-10
 ---
 
 # ADR 0012: Irem Arcade Subsystem (M72 first, M92 later)
@@ -226,3 +227,11 @@ idiom:
   manifest path changes except the additive extensions named above (LE wide
   bus accessors, rational divider, multi-file ROM regions, input/DIP schema),
   each of which lands with its own tests.
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session. Plan phases
+A1-C1 (NEC V30 core, arcade ROM-set loader, M72 board + tilemap video) were
+merged to master while this record sat proposed -- the third occurrence of
+the accepted-in-practice pattern (after ADR-0011 and ADR-0010); acceptance
+records reality before the expiry clock could detach it.
