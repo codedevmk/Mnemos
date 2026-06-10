@@ -96,6 +96,35 @@ namespace mnemos::instrumentation {
         virtual void install(callback cb) = 0;
     };
 
+    // One register write observed on a chip: the port/register index written and
+    // the value. Fired live from the chip's register-write path as the write
+    // happens. Timing is supplied by the CONSUMER (e.g. grouping events by
+    // emulated frame) rather than carried here -- audio register logs are
+    // consumed at frame cadence and the audio chips lack a unified cycle clock.
+    struct reg_write_event final {
+        std::uint16_t port{};
+        std::uint8_t value{};
+    };
+
+    // Per-register-write hook -- the temporal complement to `register_view`'s
+    // snapshot. Audio chips (PSG / FM / PCM) expose this so a consumer can
+    // capture the register-write STREAM over time, the basis for a VGM-style
+    // song / instrument dump (the actual music is the write sequence, not a
+    // frozen register file). Installing an empty callback clears any previous
+    // installation; the chip owns the callback's lifetime and `install` again
+    // replaces it.
+    class reg_write_trace {
+      public:
+        using callback = std::function<void(const reg_write_event&)>;
+
+        reg_write_trace() = default;
+        reg_write_trace(const reg_write_trace&) = delete;
+        reg_write_trace& operator=(const reg_write_trace&) = delete;
+        virtual ~reg_write_trace() = default;
+
+        virtual void install(callback cb) = 0;
+    };
+
     // A secondary framebuffer the chip can render for debug visualization --
     // a Genesis VDP plane A view, a sprite-only view, an SMS pattern-table
     // dump, an Amiga bitplane view, etc. Distinct from `ivideo::framebuffer()`
@@ -124,6 +153,9 @@ namespace mnemos::instrumentation {
         [[nodiscard]] virtual std::span<memory_view* const> memory_views() { return {}; }
         [[nodiscard]] virtual register_view* registers() { return nullptr; }
         [[nodiscard]] virtual trace_target* trace() { return nullptr; }
+        // Per-register-write trace hook (the temporal sibling of registers()),
+        // or nullptr when the chip does not expose its register-write stream.
+        [[nodiscard]] virtual reg_write_trace* reg_writes() { return nullptr; }
         [[nodiscard]] virtual std::span<debug_layer* const> debug_layers() { return {}; }
 
         // The decoded graphics-extraction surface (palettes, tiles, sprites,

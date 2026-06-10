@@ -23,9 +23,16 @@ mnemos_declare_tier(
 # Artifact dumping over an assembled player_system: framebuffer -> PPM, each
 # chip/system memory_view -> .bin, each debug_layer -> .ppm, the CSV trace
 # session, decoded graphics asset extraction (asset_source -> PNG + JSON), and
-# PCM sample extraction (audio_source -> WAV + JSON). Drives any system through
-# the frontend_sdk introspection surface only.
-add_library(mnemos_debug_dump debug_dump.cpp asset_export.cpp audio_export.cpp)
+# PCM sample extraction (audio_source -> WAV + JSON), and register-write logging
+# (reg_write_trace -> VGM). Drives any system through the frontend_sdk
+# introspection surface only.
+add_library(
+    mnemos_debug_dump
+    debug_dump.cpp
+    asset_export.cpp
+    audio_export.cpp
+    reg_write_log.cpp
+)
 add_library(mnemos::debug::dump ALIAS mnemos_debug_dump)
 
 target_include_directories(
@@ -44,6 +51,7 @@ target_link_libraries(
         mnemos::io
         mnemos::graphics::images
         mnemos::audio::wav
+        mnemos::audio::vgm
 )
 
 mnemos_apply_common_target_options(mnemos_debug_dump PUBLIC)
@@ -56,6 +64,7 @@ mnemos_declare_tier(
         mnemos_io
         mnemos_graphics_images
         mnemos_audio_wav
+        mnemos_audio_vgm
 )
 
 if(BUILD_TESTING)
@@ -73,6 +82,7 @@ if(BUILD_TESTING)
             tests/debug_dump_test.cpp
             tests/asset_export_test.cpp
             tests/audio_export_test.cpp
+            tests/reg_write_log_test.cpp
         LIBRARIES mnemos::debug::dump
     )
 endif()
