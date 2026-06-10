@@ -8,7 +8,7 @@ namespace mnemos::runtime {
         : chips_(std::move(chips)), accumulator_(chips_.size(), 0U), frame_source_(frame_source) {
         uniform_lockstep_ = !chips_.empty();
         for (const auto& sc : chips_) {
-            if (sc.divider != 1U) {
+            if (sc.divider != 1U || sc.rate_num != 0U) {
                 uniform_lockstep_ = false;
                 break;
             }
@@ -33,9 +33,18 @@ namespace mnemos::runtime {
 
         for (std::uint64_t c = 0; c < cycles; ++c) {
             for (std::size_t i = 0; i < chips_.size(); ++i) {
-                if (++accumulator_[i] >= chips_[i].divider) {
+                const scheduled_chip& sc = chips_[i];
+                if (sc.rate_num != 0U) {
+                    // Rational rate: rate_den chip cycles per rate_num master
+                    // cycles, spread evenly by the accumulator.
+                    accumulator_[i] += sc.rate_den;
+                    while (accumulator_[i] >= sc.rate_num) {
+                        accumulator_[i] -= sc.rate_num;
+                        sc.chip->tick(1U);
+                    }
+                } else if (++accumulator_[i] >= sc.divider) {
                     accumulator_[i] = 0U;
-                    chips_[i].chip->tick(1U);
+                    sc.chip->tick(1U);
                 }
             }
         }

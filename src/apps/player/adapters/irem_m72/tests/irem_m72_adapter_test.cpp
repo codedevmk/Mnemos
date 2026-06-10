@@ -85,9 +85,24 @@ TEST_CASE("irem_m72_adapter maps pads onto the board's input bytes", "[irem_m72]
     CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x08U));
 }
 
-TEST_CASE("irem_m72_adapter reports silence until the audio phase", "[irem_m72][adapter]") {
+TEST_CASE("irem_m72_adapter drains YM2151-clocked audio frames", "[irem_m72][adapter]") {
     irem_m72_adapter adapter(make_program());
     adapter.step_one_frame();
+
     const auto chunk = adapter.drain_audio();
-    CHECK(chunk.frame_count == 0U);
+    // The power-on frame completes at the vblank line (256 of 284 lines in),
+    // so the first drain is ~916 stereo frames; steady-state frames yield
+    // ~1016 (581632 master cycles -> ~65062 YM2151 clocks, one frame per 64).
+    CHECK(chunk.frame_count > 900U);
+    CHECK(chunk.frame_count < 1050U);
+    CHECK(chunk.sample_rate == 55930U);
+    REQUIRE(chunk.samples != nullptr);
+    for (std::uint32_t i = 0; i < chunk.frame_count * 2U; ++i) {
+        if (chunk.samples[i] != 0) {
+            FAIL("expected silence before the synthesis increment");
+        }
+    }
+
+    // Nothing stepped since the last drain: nothing further is due.
+    CHECK(adapter.drain_audio().frame_count == 0U);
 }

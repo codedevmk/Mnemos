@@ -28,8 +28,10 @@ namespace mnemos::apps::player::adapters::irem_m72 {
     // Input mapping (first-cut, active low): joystick bytes carry up/down/
     // left/right in bits 0-3 and buttons A/B in bits 4-5; the system byte
     // carries coin 1/2 in bits 0-1 (the pads' `select`) and start 1/2 in
-    // bits 2-3. No audio path yet -- drain_audio() reports silence until the
-    // YM2151/DAC phase.
+    // bits 2-3. Audio: the YM2151 runs on its own 3.579545 MHz crystal via a
+    // rational-rate scheduler entry and is drained at one stereo frame per 64
+    // chip clocks (~55.93 kHz); samples are silence until the OPM synthesis
+    // core lands, but the timing/IRQ path is live.
     class irem_m72_adapter final : public frontend_sdk::player_system {
       public:
         explicit irem_m72_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
@@ -48,7 +50,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         }
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
-        [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override { return {}; }
+        [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
         }
@@ -63,6 +65,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         std::array<frontend_sdk::controller_state, 2> ports_{};
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};
+        std::vector<std::int16_t> audio_buf_{};
+        std::uint64_t samples_drained_{};
     };
 
 } // namespace mnemos::apps::player::adapters::irem_m72

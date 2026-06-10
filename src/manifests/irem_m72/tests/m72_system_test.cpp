@@ -146,3 +146,68 @@ TEST_CASE("m72 vblank interrupts the V30 through the programmed vector under the
     CHECK(system->work_ram[0x20U] == 0x99U);
     CHECK(system->irq_vector_base == 0x20U);
 }
+
+TEST_CASE("m72 Z80 programs the YM2151 through its ports and takes the timer IRQ", "[m72]") {
+    auto system = assemble_m72(rom_set_image{});
+    auto& sound = system->roms.regions["soundcpu"];
+
+    // Program CLKA = 1023 (overflow every 64 chip clocks), run + IRQ enable,
+    // then IM 1; EI; HALT. The IM 1 handler at 0x38 stores a marker.
+    const std::vector<std::uint8_t> program{
+        0x3EU, 0x10U, 0xD3U, 0x00U, // LD A,10; OUT (0),A   (address CLKA hi)
+        0x3EU, 0xFFU, 0xD3U, 0x01U, // LD A,FF; OUT (1),A
+        0x3EU, 0x11U, 0xD3U, 0x00U, // LD A,11; OUT (0),A   (address CLKA lo)
+        0x3EU, 0x03U, 0xD3U, 0x01U, // LD A,03; OUT (1),A   (CLKA = 1023)
+        0x3EU, 0x14U, 0xD3U, 0x00U, // LD A,14; OUT (0),A   (timer control)
+        0x3EU, 0x05U, 0xD3U, 0x01U, // LD A,05; OUT (1),A   (run A + IRQ enable)
+        0xEDU, 0x56U,               // IM 1
+        0x31U, 0x00U, 0xF8U,        // LD SP,F800 (stack in sound RAM)
+        0xFBU,                      // EI
+        0x76U,                      // HALT
+    };
+    for (std::size_t i = 0; i < program.size(); ++i) {
+        sound[i] = program[i];
+    }
+    // IM 1 vector: LD A,99; LD (F900),A; HALT
+    const std::vector<std::uint8_t> handler{0x3EU, 0x99U, 0x32U, 0x00U, 0xF9U, 0x76U};
+    for (std::size_t i = 0; i < handler.size(); ++i) {
+        sound[0x38U + i] = handler[i];
+    }
+
+    for (int i = 0; i < 16; ++i) {
+        system->sound_cpu.step_instruction(); // runs to the HALT
+    }
+    CHECK(system->fm.register_value(0x14U) == 0x05U);
+    CHECK_FALSE(system->sound_cpu.cpu_registers().halted == false);
+
+    system->fm.tick(64U); // timer A overflows -> IRQ -> Z80 INT line
+    CHECK(system->fm.irq_asserted());
+    for (int i = 0; i < 4; ++i) {
+        system->sound_cpu.step_instruction(); // INT accept + handler
+    }
+    CHECK(system->sound_bus.read8(0xF900U) == 0x99U);
+}
+
+TEST_CASE("m72 sound latch and YM2151 IRQs OR onto the Z80 INT line", "[m72]") {
+    auto system = assemble_m72(rom_set_image{});
+
+    // Assert both sources, then clear them one at a time: the line drops only
+    // after BOTH are acknowledged.
+    system->sound_latch_irq = true;
+    system->update_sound_irq();
+    system->fm.write_address(0x10U);
+    system->fm.write_data(0xFFU);
+    system->fm.write_address(0x11U);
+    system->fm.write_data(0x03U);
+    system->fm.write_address(0x14U);
+    system->fm.write_data(0x05U);
+    system->fm.tick(64U);
+    REQUIRE(system->fm.irq_asserted());
+
+    system->sound_latch_irq = false; // latch acknowledged
+    system->update_sound_irq();
+    // The YM2151 still holds the line: clearing its flag drops it.
+    system->fm.write_address(0x14U);
+    system->fm.write_data(0x15U); // reset flag A
+    CHECK_FALSE(system->fm.irq_asserted());
+}
