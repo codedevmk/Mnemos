@@ -21,9 +21,13 @@ namespace {
 TEST_CASE("sega32x_vdp registers round-trip with hardware write masks", "[sega32x_vdp]") {
     sega32x_vdp v;
 
-    // Bitmap-mode bit 15 is the read-only PAL mirror: stripped on write.
+    // Bitmap-mode bit 15 is the read-only video-standard pin (1 = NTSC,
+    // 0 = PAL): stripped on write, mirrored on read.
     v.write16(sega32x_vdp::reg_bitmap_mode, 0xFFFFU);
+    CHECK(v.read16(sega32x_vdp::reg_bitmap_mode) == 0xFFFFU); // NTSC default
+    v.set_pal(true);
     CHECK(v.read16(sega32x_vdp::reg_bitmap_mode) == 0x7FFFU);
+    v.set_pal(false);
     CHECK(v.mode() == sega32x_vdp::mode_rle);
 
     // Autofill length keeps the low byte only.
@@ -209,7 +213,7 @@ TEST_CASE("sega32x_vdp save/load round-trips the full state", "[sega32x_vdp]") {
     restored.load_state(r);
     REQUIRE(r.ok());
     REQUIRE(r.remaining() == 0U);
-    CHECK(restored.read16(sega32x_vdp::reg_bitmap_mode) == 0x0001U);
+    CHECK(restored.read16(sega32x_vdp::reg_bitmap_mode) == 0x8001U); // NTSC pin set
     CHECK(restored.read16(sega32x_vdp::reg_autofill_addr) == 0x1234U);
     CHECK(restored.palette_read16(4U) == 0x7FFFU);
     CHECK(restored.access_bank() == 1);

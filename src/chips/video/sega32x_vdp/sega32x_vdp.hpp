@@ -89,6 +89,10 @@ namespace mnemos::chips::video {
         void compose_scanline(std::span<const std::uint8_t> fb, std::span<std::uint32_t> row, int y,
                               const std::uint8_t* genesis_backdrop = nullptr) const noexcept;
 
+        // Video-standard pin: drives the read-only bit 15 of BITMAP_MODE
+        // (1 = NTSC, 0 = PAL). The machine sets it from the Genesis config.
+        void set_pal(bool pal) noexcept { pal_ = pal; }
+
         // Introspection / glue accessors.
         [[nodiscard]] std::uint8_t mode() const noexcept {
             return static_cast<std::uint8_t>(bitmap_mode_ & 0x03U);
@@ -144,6 +148,7 @@ namespace mnemos::chips::video {
         // rising edge; reads meanwhile keep returning the displayed bank, so a
         // poll after writing FS correctly sees "still on the old bank".
         std::uint8_t pending_fs_{};
+        bool pal_{};         // NTSC/PAL pin, mirrored into BITMAP_MODE bit 15
         bool prev_vblank_{}; // V-blank edge detector for the FS commit
 
         std::array<register_descriptor, 7> register_view_{};
