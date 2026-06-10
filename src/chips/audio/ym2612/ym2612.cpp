@@ -153,9 +153,12 @@ namespace mnemos::chips::audio {
     void ym2612::eg_key_on(operator_state& op) noexcept {
         if (!op.key_on) {
             op.key_on = true;
+            // Hardware-verified OPN2 behaviour: key-on enters attack FROM THE
+            // CURRENT attenuation (only rate >= 62 snaps to 0, in eg_step).
+            // Forcing 0x3FF here made every re-key of a still-sounding
+            // operator drop to silence first, audibly changing fast retriggers.
             op.phase = eg_phase::attack;
-            op.eg_level = 0x3FFU; // start silent; the attack ramps up
-            op.pg_phase = 0U;     // restart the phase generator on key-on
+            op.pg_phase = 0U; // restart the phase generator on key-on
             op.ssg_inv = false;
         }
     }

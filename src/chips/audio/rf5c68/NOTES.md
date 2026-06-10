@@ -15,9 +15,11 @@ tick / reset / save_state / introspection / factory registration) and the
 sn76489 audio-capture model (`tick()` queues interleaved L/R, drained via
 `drain_samples`).
 
-The CTRL register decode follows the reference *code* (bank = bits 3-0,
-voice = bits 6-4, enable = bit 7), which is what produces hardware-matching
-output, not the looser prose in the datasheet writeups.
+The CTRL register decode follows the datasheet MOD-bit model: bit 7 = enable,
+bit 6 = MOD selecting what bits 3:0 carry -- MOD=1 picks the current channel
+(bits 2:0), MOD=0 picks the wave-RAM bank (bits 3:0). One write sets one or
+the other, never both; real Sega CD drivers select voices with `0xC0 | ch`,
+which a combined decode mis-routed to voice 4 for every channel.
 
 ## Conformance
 

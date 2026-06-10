@@ -183,6 +183,27 @@ namespace mnemos::chips::video {
 
     std::uint8_t sms_vdp::vcounter() const noexcept {
         const int s = scanline_;
+        if (pal_mode_) {
+            // PAL (313 lines), per-mode discontinuities (SMS Power VDP docs):
+            // 192-line: 0x00-0xF2 then 0xBA-0xFF; 224-line: 0x00-0xFF,
+            // 0x00-0x02, 0xCA-0xFF; 240-line: 0x00-0xFF, 0x00-0x0A, 0xD2-0xFF.
+            const int h = visible_height();
+            if (h == 192) {
+                if (s <= 0xF2) {
+                    return static_cast<std::uint8_t>(s);
+                }
+                return static_cast<std::uint8_t>(s - (total_scanlines_ - 256));
+            }
+            if (s <= 0xFF) {
+                return static_cast<std::uint8_t>(s);
+            }
+            const int second_end = (h == 240) ? 0x10A : 0x102;
+            if (s <= second_end) {
+                return static_cast<std::uint8_t>(s - 0x100);
+            }
+            return static_cast<std::uint8_t>(s - (total_scanlines_ - 256));
+        }
+        // NTSC (262 lines), 192-line mode: 0x00-0xDA then 0xD5-0xFF.
         if (s <= 0xDA) {
             return static_cast<std::uint8_t>(s);
         }

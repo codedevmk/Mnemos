@@ -84,8 +84,17 @@ namespace mnemos::chips::audio {
         switch (index) {
         case reg_ctrl:
             enabled_ = (value & ctrl_enable) != 0U;
-            bank_index_ = static_cast<std::uint8_t>(value & ctrl_bank_mask);
-            selected_voice_ = static_cast<std::uint8_t>((value >> 4U) & 0x07U);
+            // Bit 6 is MOD (datasheet): it selects WHICH field bits 3:0 carry.
+            // MOD=1: bits 2:0 select the current channel; MOD=0: bits 3:0
+            // select the wave-RAM bank. One write sets one or the other --
+            // real drivers write 0xC0|ch to pick a voice, which under a
+            // combined decode landed every channel on voice 4 and clobbered
+            // the bank with the channel number.
+            if ((value & ctrl_mod) != 0U) {
+                selected_voice_ = static_cast<std::uint8_t>(value & 0x07U);
+            } else {
+                bank_index_ = static_cast<std::uint8_t>(value & ctrl_bank_mask);
+            }
             break;
         case reg_chan:
             channel_mute_ = value;

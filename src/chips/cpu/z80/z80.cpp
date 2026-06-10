@@ -705,7 +705,12 @@ namespace mnemos::chips::cpu {
                 const auto port_lo =
                     static_cast<std::uint8_t>((y & 1) != 0 ? (c() - 1U) : (c() + 1U));
                 const std::uint16_t k = static_cast<std::uint16_t>(v + port_lo);
-                std::uint8_t fl = static_cast<std::uint8_t>(tables().sz53[b()] | flag_n);
+                // Undocumented Z80 Documented: N = bit 7 of the transferred
+                // value; H = C = (k > 255); P = parity((k & 7) ^ B).
+                std::uint8_t fl = tables().sz53[b()];
+                if ((v & 0x80U) != 0U) {
+                    fl |= flag_n;
+                }
                 if (k > 255U) {
                     fl |= flag_h | flag_c;
                 }
@@ -727,7 +732,19 @@ namespace mnemos::chips::cpu {
                 } else {
                     hl_ = static_cast<std::uint16_t>(hl_ + 1U);
                 }
-                set_f(static_cast<std::uint8_t>(tables().sz53[b()] | flag_n));
+                // Undocumented Z80 Documented: k = v + L (post-update); H = C =
+                // (k > 255); P = parity((k & 7) ^ B); N = bit 7 of the value.
+                const std::uint16_t k =
+                    static_cast<std::uint16_t>(v + static_cast<std::uint8_t>(hl_ & 0xFFU));
+                std::uint8_t fl = tables().sz53[b()];
+                if ((v & 0x80U) != 0U) {
+                    fl |= flag_n;
+                }
+                if (k > 255U) {
+                    fl |= flag_h | flag_c;
+                }
+                fl |= tables().parity[static_cast<std::uint8_t>((k & 7U) ^ b())];
+                set_f(fl);
                 step_cycles_ += 16;
                 if (y >= 6 && b() != 0U) {
                     pc_ = static_cast<std::uint16_t>(pc_ - 2U);
@@ -1346,6 +1363,7 @@ namespace mnemos::chips::cpu {
             halted_ = false;
             iff2_ = iff1_;
             iff1_ = false;
+            inc_r(); // the IACK/opcode-fetch cycle refreshes R (visible via LD A,R)
             push16(pc_);
             pc_ = 0x0066U;
             step_cycles_ += 11;
@@ -1356,10 +1374,15 @@ namespace mnemos::chips::cpu {
         if (irq_line_ && iff1_ && !ei_pending_) {
             halted_ = false;
             iff1_ = iff2_ = false;
+            inc_r(); // the IACK cycle refreshes R
             push16(pc_);
             switch (im_) {
             case 2: {
-                const auto vec_addr = static_cast<std::uint16_t>((i_ << 8U) | 0xFEU);
+                // The device supplies the vector byte during IACK; with no
+                // vector source the floating bus reads 0xFF (the MSX/Spectrum
+                // convention IM2 software relies on: I*256 + 0xFF).
+                const std::uint8_t vec = irq_vector_ ? irq_vector_() : 0xFFU;
+                const auto vec_addr = static_cast<std::uint16_t>((i_ << 8U) | vec);
                 pc_ = rw(vec_addr);
                 step_cycles_ += 19;
                 break;

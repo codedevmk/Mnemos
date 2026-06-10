@@ -58,6 +58,7 @@ namespace mnemos::chips::cpu {
 
         using port_in_fn = std::function<std::uint8_t(std::uint16_t port)>;
         using port_out_fn = std::function<void(std::uint16_t port, std::uint8_t value)>;
+        using irq_vector_fn = std::function<std::uint8_t()>;
 
         z80() { reset(reset_kind::power_on); }
 
@@ -76,6 +77,9 @@ namespace mnemos::chips::cpu {
 
         // The separate Z80 I/O space (IN/OUT). Optional; unset ports read 0xFF.
         void set_port_in(port_in_fn handler) noexcept { port_in_ = std::move(handler); }
+        // IM2 vector byte supplied by the interrupting device during IACK.
+        // Unset: the floating-bus convention 0xFF.
+        void set_irq_vector(irq_vector_fn handler) noexcept { irq_vector_ = std::move(handler); }
         void set_port_out(port_out_fn handler) noexcept { port_out_ = std::move(handler); }
 
         // Execute exactly one instruction (servicing a pending interrupt first);
@@ -254,6 +258,7 @@ namespace mnemos::chips::cpu {
 
         ibus* bus_{};
         port_in_fn port_in_{};
+        irq_vector_fn irq_vector_{};
         port_out_fn port_out_{};
 
         // Per-instruction trace hook installed via the introspection surface.

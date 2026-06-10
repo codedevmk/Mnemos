@@ -281,16 +281,19 @@ namespace mnemos::chips::bus_controller {
         }
 
         while (count-- > 0U) {
+            // The counter occupies each value -- including 0 -- for one cycle;
+            // underflow/reload happens on the cycle AFTER reaching 0, so the
+            // continuous-mode period is latch+1 (the 6526 datasheet / Lorenz
+            // model; the sibling VIA implements the same shape). Reloading on
+            // the same cycle as the decrement-to-zero made every period one
+            // cycle short and 0 unreadable.
             if (t.counter == 0U) {
                 timer_handle_underflow(t, is_timer_a);
                 if (!t.running) {
                     break;
                 }
-            } else if (--t.counter == 0U) {
-                timer_handle_underflow(t, is_timer_a);
-                if (!t.running) {
-                    break;
-                }
+            } else {
+                --t.counter;
             }
         }
     }
@@ -603,8 +606,15 @@ namespace mnemos::chips::bus_controller {
             }
             timer_step(timer_b_, tb_count, false);
 
-            if (timer_a_.underflow && sdr_.output_mode && timer_a_.toggle_pb) {
-                sdr_step_output_bit();
+            if (timer_a_.underflow && sdr_.output_mode) {
+                // The serial shifter is clocked by an internal half-rate
+                // flip-flop on TA underflow, independent of CRA.PBON -- gating
+                // it on the PB6 output toggle hung SDR drivers that never
+                // enable the port-B pin.
+                sdr_.clock_ff = !sdr_.clock_ff;
+                if (sdr_.clock_ff) {
+                    sdr_step_output_bit();
+                }
             }
 
             if (tod_.divider_reload != 0U && !tod_.write_frozen) {
@@ -715,6 +725,7 @@ namespace mnemos::chips::bus_controller {
         writer.u8(sdr_.sdr_write);
         writer.boolean(sdr_.output_mode);
         writer.boolean(sdr_.shifting);
+        writer.boolean(sdr_.clock_ff);
         writer.u8(sdr_.bit_count);
         writer.boolean(sdr_.sp_level);
         writer.boolean(sdr_.cnt_prev);
@@ -777,6 +788,7 @@ namespace mnemos::chips::bus_controller {
         sdr_.sdr_write = reader.u8();
         sdr_.output_mode = reader.boolean();
         sdr_.shifting = reader.boolean();
+        sdr_.clock_ff = reader.boolean();
         sdr_.bit_count = reader.u8();
         sdr_.sp_level = reader.boolean();
         sdr_.cnt_prev = reader.boolean();

@@ -41,6 +41,7 @@ namespace mnemos::chips::audio {
             reg_chan = 0x08, // global: per-voice mute bitmap (bit=1 means muted)
         };
         static constexpr std::uint8_t ctrl_enable = 0x80U;
+        static constexpr std::uint8_t ctrl_mod = 0x40U; // bits 3:0 = channel (1) / bank (0)
         static constexpr std::uint8_t ctrl_bank_mask = 0x0FU;
 
         rf5c68() { reset(reset_kind::power_on); }

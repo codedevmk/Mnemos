@@ -129,6 +129,7 @@ namespace mnemos::chips::audio {
 
         void decode_voice(std::uint8_t voice_index) noexcept;
         void decode_filter_and_volume() noexcept;
+        void update_filter_coeffs() noexcept;
         void envelope_step(voice_state& v) noexcept;
         void waveform_step(std::uint8_t voice_index) noexcept;
         void apply_noise_corruption(voice_state& v) const noexcept;
@@ -161,7 +162,10 @@ namespace mnemos::chips::audio {
         // playback state: not part of save/load and not cleared by reset(), so
         // the host owns drain cadence independently of machine resets.
         bool audio_capture_{};
+        static constexpr std::size_t max_queued_samples = 4U * 1024U * 1024U;
         std::vector<std::int16_t> sample_queue_{};
+        std::int32_t filter_f_coeff_{};
+        std::int32_t filter_q_coeff_{};
     };
 
 } // namespace mnemos::chips::audio

@@ -217,12 +217,23 @@ namespace mnemos::chips::audio {
         poty_ = 0U;
         osc3_ = 0U;
         env3_ = 0U;
+        update_filter_coeffs();
     }
 
     void sid_6581::set_sample_rate(std::int32_t rate_hz) noexcept {
         if (rate_hz > 0) {
             sample_rate_hz_ = rate_hz;
+            update_filter_coeffs();
         }
+    }
+
+    void sid_6581::update_filter_coeffs() noexcept {
+        // The coefficients depend only on the cutoff/resonance registers, the
+        // variant, and the sample rate -- computing them (with 64-bit divides)
+        // once per register write instead of once per ~1 MHz sample keeps them
+        // out of the hottest audio path in the tree.
+        filter_f_coeff_ = filter_frequency_coeff();
+        filter_q_coeff_ = filter_damping_coeff();
     }
 
     void sid_6581::decode_voice(std::uint8_t voice_index) noexcept {
@@ -251,6 +262,7 @@ namespace mnemos::chips::audio {
         filter_route_ = static_cast<std::uint8_t>(regs_[reg_res_filt] & 0x0FU);
         filter_mode_ = static_cast<std::uint8_t>(regs_[reg_mode_vol] & 0xF0U);
         volume_ = static_cast<std::uint8_t>(regs_[reg_mode_vol] & mode_vol_vol_mask);
+        update_filter_coeffs();
     }
 
     std::uint8_t sid_6581::read(std::uint8_t address) const noexcept {
@@ -417,7 +429,13 @@ namespace mnemos::chips::audio {
             // the chip's single sampling consumer -- nothing else calls it on
             // the run path. Skipped entirely when capture is off.
             if (audio_capture_) {
-                sample_queue_.push_back(sample());
+                // Bound the backlog (~4 s at phi2): an undrained host stalls
+                // capture instead of growing the queue without limit.
+                if (sample_queue_.size() < max_queued_samples) {
+                    sample_queue_.push_back(sample());
+                } else {
+                    (void)sample(); // keep the filter integrators advancing
+                }
             }
         }
         env3_ = voices_[2].envelope;
@@ -550,8 +568,8 @@ namespace mnemos::chips::audio {
             }
         }
 
-        const std::int32_t f = filter_frequency_coeff();
-        const std::int32_t q = filter_damping_coeff();
+        const std::int32_t f = filter_f_coeff_;
+        const std::int32_t q = filter_q_coeff_;
         const auto bp_damped = static_cast<std::int32_t>(
             (static_cast<std::int64_t>(filter_bp_) * q) >> filter_fixed_shift);
         const std::int32_t hp = routed_sum - bp_damped - filter_lp_;
@@ -650,6 +668,7 @@ namespace mnemos::chips::audio {
         poty_ = reader.u8();
         osc3_ = reader.u8();
         env3_ = reader.u8();
+        update_filter_coeffs(); // derived from the restored cutoff/resonance/rate
     }
 
     instrumentation::ichip_introspection& sid_6581::introspection() noexcept {

@@ -187,6 +187,20 @@ namespace mnemos::chips::video {
             const auto ivc = static_cast<std::uint16_t>(scanline * 2 + (odd_frame ? 1 : 0));
             return static_cast<std::uint8_t>((ivc & 0xFEU) | ((ivc >> 8U) & 0x01U));
         }
+        if (pal_mode_) {
+            // PAL (313 lines) counts 0x00-0xFF, wraps through a short second
+            // segment, then jumps to the tail: V28 = 0x00-0x02 then 0xCA-0xFF,
+            // V30 = 0x00-0x0A then 0xD2-0xFF. (Both tails are line - 57.)
+            if (scanline <= 0xFF) {
+                return static_cast<std::uint8_t>(scanline);
+            }
+            const int second_end = v30_mode() ? 0x10A : 0x102;
+            if (scanline <= second_end) {
+                return static_cast<std::uint8_t>(scanline - 0x100);
+            }
+            return static_cast<std::uint8_t>(scanline - (total_scanlines_ - 0x100));
+        }
+        // NTSC (262 lines): 0x00-0xEA, then 0xE5-0xFF.
         if (scanline <= 0xEA) {
             return static_cast<std::uint8_t>(scanline);
         }

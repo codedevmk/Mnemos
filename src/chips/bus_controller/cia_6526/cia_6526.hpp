@@ -123,6 +123,7 @@ namespace mnemos::chips::bus_controller {
             std::uint8_t sdr_write{};
             bool output_mode{};
             bool shifting{};
+            bool clock_ff{}; // half-rate shift clock: toggles on every TA underflow
             std::uint8_t bit_count{};
             bool sp_level{true};
             bool cnt_prev{true};
