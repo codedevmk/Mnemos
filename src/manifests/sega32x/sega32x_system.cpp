@@ -624,6 +624,10 @@ namespace mnemos::manifests::sega32x {
         pwm_current_r = 0U;
         pwm_audio_l = 0;
         pwm_audio_r = 0;
+        pwm_dcb_x_l = 0.0F;
+        pwm_dcb_y_l = 0.0F;
+        pwm_dcb_x_r = 0.0F;
+        pwm_dcb_y_r = 0.0F;
         pwm_cycle_acc = 0U;
         pwm_irq_step_count = 0U;
         pwm_lch_high = 0U;
@@ -650,8 +654,19 @@ namespace mnemos::manifests::sega32x {
             pwm_audio_l = pwm_duty_to_pcm(pwm_current_l, cycle);
             pwm_audio_r = pwm_duty_to_pcm(pwm_current_r, cycle);
             if (pwm_capture) {
-                pwm_queue.push_back(pwm_audio_l);
-                pwm_queue.push_back(pwm_audio_r);
+                // AC-couple the stream like the hardware audio path: a held
+                // duty (a configured carrier nobody feeds) is a DC pedestal
+                // that must decay to silence, not sit in the mix where every
+                // queue gap edge turns it into an audible click.
+                const auto dc_block = [](std::int16_t x, float& px, float& py) {
+                    const float y = static_cast<float>(x) - px + 0.999F * py;
+                    px = static_cast<float>(x);
+                    py = y;
+                    const float c = y < -32768.0F ? -32768.0F : (y > 32767.0F ? 32767.0F : y);
+                    return static_cast<std::int16_t>(c);
+                };
+                pwm_queue.push_back(dc_block(pwm_audio_l, pwm_dcb_x_l, pwm_dcb_y_l));
+                pwm_queue.push_back(dc_block(pwm_audio_r, pwm_dcb_x_r, pwm_dcb_y_r));
             }
 
             // CNTL bits 11-8 = TM, the interrupt-rate divider: every TM steps
