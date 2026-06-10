@@ -66,6 +66,15 @@ namespace mnemos::topology {
         invalidate_fast_path();
     }
 
+    void bus::retarget_rom(std::uint32_t start, std::span<const std::uint8_t> storage) noexcept {
+        for (region& r : regions_) {
+            if (r.backing == kind::rom && r.start == start && r.rom.size() == storage.size()) {
+                r.rom = storage;
+            }
+        }
+        invalidate_fast_path(); // cached spans may point into the old storage
+    }
+
     const bus::region* bus::resolve(std::uint32_t address, bool is_write) const noexcept {
         // Highest-priority region that covers the address and is active for this
         // access. (Region counts are tiny; a linear scan is fine for v0.1. Cached

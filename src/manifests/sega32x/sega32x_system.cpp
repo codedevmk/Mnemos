@@ -24,6 +24,21 @@ namespace mnemos::manifests::sega32x {
 #endif
             return enabled;
         }
+        // Shares the machine's MNEMOS_32X_BOOTHACK knob (default on).
+        [[nodiscard]] bool boot_seed_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
+#endif
+            static const bool enabled = [] {
+                const char* v = std::getenv("MNEMOS_32X_BOOTHACK");
+                return v == nullptr || v[0] != '0';
+            }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return enabled;
+        }
         // PWM FIFO primitives. A push into a full FIFO drops the value (the
         // hardware rejects the write); a pop from an empty FIFO returns the
         // held DAC value so the carrier keeps running on the last duty.
@@ -295,6 +310,21 @@ namespace mnemos::manifests::sega32x {
             } else {
                 hcount = static_cast<std::uint16_t>((hcount & 0x00FFU) |
                                                     (static_cast<std::uint16_t>(value) << 8U));
+            }
+            return;
+        }
+        if (offset >= 0x14U && offset < 0x20U) {
+            // Interrupt-clear block: $14 VRES / $16 V / $18 H / $1A CMD /
+            // $1C PWM -- a write acknowledges that source for the executing
+            // CPU. CMD clear also drops the 68000-visible INTM/INTS bit in
+            // $A15102 (the manual's "cleared by the SH2" rule); the others
+            // are accepted as no-ops until level-held delivery lands.
+            if ((offset & ~1U) == 0x1AU) {
+                if (is_master) {
+                    intm_pending = false;
+                } else {
+                    ints_pending = false;
+                }
             }
             return;
         }
@@ -572,8 +602,11 @@ namespace mnemos::manifests::sega32x {
             // the slave boot ROM exits its wait loop immediately and reaches the
             // slave game entry before the master game code's handshake wait.
             // The master boot ROM overwrites this with M_OK when it completes.
-            comm[0] = 0x5F43U;
-            comm[1] = 0x445FU;
+            // (Gated with the machine's other boot hacks: MNEMOS_32X_BOOTHACK=0.)
+            if (boot_seed_enabled()) {
+                comm[0] = 0x5F43U;
+                comm[1] = 0x445FU;
+            }
             master_cpu.reset(chips::reset_kind::power_on);
             slave_cpu.reset(chips::reset_kind::power_on);
         }

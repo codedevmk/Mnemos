@@ -25,7 +25,28 @@ namespace mnemos::manifests::sega32x {
         // Fires at BYTE granularity, after the LAST byte of the 32-bit read has
         // been served -- the 68000's CMPI.L arrives as four byte reads on this
         // bus, and clearing any earlier corrupts the value mid-assembly.
+        // MNEMOS_32X_BOOTHACK=0 disables the reference-derived COMM boot
+        // workarounds (the M_OK clear-on-read + S_OK/SLAV/_CD_ seeds) so the
+        // real BIOS handshake can be exercised end-to-end.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: opt-in debug knob
+#endif
+        bool boot_hack_enabled() {
+            static const bool on = [] {
+                const char* p = std::getenv("MNEMOS_32X_BOOTHACK");
+                return p == nullptr || p[0] != '0';
+            }();
+            return on;
+        }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
         void comm_bootstrap_after_byte_read(sega32x_system& tx, std::uint32_t a) {
+            if (!boot_hack_enabled()) {
+                return;
+            }
             if (a == 0xA15121U) {                          // low byte of COMM 0 just served
                 tx.m_ok_high_seen = tx.comm[0] == 0x4D5FU; // "M_"
                 return;
@@ -56,15 +77,18 @@ namespace mnemos::manifests::sega32x {
                 }
                 return v;
             }
-            // Interrupt control: $A15102 = INTM (master), $A15104 = INTS (slave).
-            // Only the CMD bit is 68000-visible -- the VINT/HINT/PWM enables are
-            // SH-2-private (each SH-2's own program sets them through its
-            // system-register window).
+            // Interrupt control -- $A15102. Bit 0 = INTM, bit 1 = INTS: the CMD
+            // requests to the master / slave SH-2. Each bit reads 1 from the
+            // 68000 write until the TARGET SH-2 acknowledges through its
+            // CMD-interrupt-clear register ($401A).
             if (off == 0x02U) {
-                return tx.master_irq_mask & sega32x_system::irq_cmd;
+                return static_cast<std::uint16_t>((tx.ints_pending ? 0x2U : 0x0U) |
+                                                  (tx.intm_pending ? 0x1U : 0x0U));
             }
+            // Bank set -- $A15104. Bits 1:0 pick which 1 MiB of cart the
+            // 68000's $900000 window views.
             if (off == 0x04U) {
-                return tx.slave_irq_mask & sega32x_system::irq_cmd;
+                return tx.cart_bank;
             }
             // DREQ group: control at $A15106 (bit 2 = 68S, bit 7 = FIFO FULL),
             // src/dst/len storage at $A15108-$A15110, the FIFO write port at
@@ -119,8 +143,9 @@ namespace mnemos::manifests::sega32x {
 #pragma warning(pop)
 #endif
 
-        void m68k_reg_write_word(sega32x_system& tx, std::uint32_t off, std::uint16_t val) {
-            if (reg_trace_enabled() && off < 0x20U) {
+        void m68k_reg_write_word(sega32x_system& tx, manifests::genesis::genesis_system* gen,
+                                 std::uint32_t off, std::uint16_t val) {
+            if (reg_trace_enabled() && off < 0x30U) {
                 std::fprintf(stderr, "[reg] 68k w $A151%02X = %04X\n", off, val);
             }
             if (off == 0x00U) {
@@ -138,28 +163,39 @@ namespace mnemos::manifests::sega32x {
                 }
                 return;
             }
-            // INTM/INTS: the 68000 may only drive the CMD-enable bit; a 0->1
-            // transition asserts the CMD interrupt on the targeted SH-2. The
-            // other enable bits belong to that SH-2's own program -- letting a
-            // 68000 bank-select write at $A15104 enable the slave's VINT would
-            // deadlock the boot handshake.
+            // Interrupt control -- $A15102: writing 1 to bit 0 (INTM) / bit 1
+            // (INTS) asserts the CMD interrupt at the master / slave SH-2
+            // (delivery still gated by that SH-2's own CMD enable; undelivered
+            // edges stay latched). The bits hold until the target SH-2 writes
+            // its CMD-interrupt-clear register -- 68000 writes never clear.
             if (off == 0x02U) {
-                const std::uint8_t prev = tx.master_irq_mask;
-                const auto next = static_cast<std::uint8_t>((prev & ~sega32x_system::irq_cmd) |
-                                                            (val & sega32x_system::irq_cmd));
-                tx.set_master_irq_mask(next);
-                if ((next & ~prev & sega32x_system::irq_cmd) != 0U) {
-                    tx.raise_cmd_master();
+                if ((val & 0x1U) != 0U) {
+                    if (!tx.intm_pending) {
+                        tx.raise_cmd_master();
+                    }
+                    tx.intm_pending = true;
+                }
+                if ((val & 0x2U) != 0U) {
+                    if (!tx.ints_pending) {
+                        tx.raise_cmd_slave();
+                    }
+                    tx.ints_pending = true;
                 }
                 return;
             }
+            // Bank set -- $A15104: bits 1:0 swing the 68000's $900000 window
+            // onto that 1 MiB of the cart (the SEGA-logo decompressor in the
+            // standard cart startup streams through it). A bank past the end
+            // of a smaller cart leaves the window unchanged (open-bus-ish).
             if (off == 0x04U) {
-                const std::uint8_t prev = tx.slave_irq_mask;
-                const auto next = static_cast<std::uint8_t>((prev & ~sega32x_system::irq_cmd) |
-                                                            (val & sega32x_system::irq_cmd));
-                tx.set_slave_irq_mask(next);
-                if ((next & ~prev & sega32x_system::irq_cmd) != 0U) {
-                    tx.raise_cmd_slave();
+                tx.cart_bank = static_cast<std::uint8_t>(val & 0x3U);
+                if (gen != nullptr) {
+                    const std::span<const std::uint8_t> rom{gen->rom};
+                    const std::size_t window = std::min<std::size_t>(rom.size(), 0x100000U);
+                    const std::size_t base = static_cast<std::size_t>(tx.cart_bank) << 20U;
+                    if (window > 0U && base + window <= rom.size()) {
+                        gen->bus.retarget_rom(0x900000U, rom.subspan(base, window));
+                    }
                 }
                 return;
             }
@@ -243,6 +279,7 @@ namespace mnemos::manifests::sega32x {
         sega32x_system* tx = machine->thirtytwox.get();
         genesis::genesis_system* g = machine->genesis.get();
         topology::bus& bus = machine->genesis->bus;
+        tx->vdp.set_pal(config.video_region == mnemos::video_region::pal);
 
         // Load the boot ROM images (each clamped to its canonical size) and give
         // the SH-2s their cart windows. The Genesis owns the cart bytes; both
@@ -268,7 +305,7 @@ namespace mnemos::manifests::sega32x {
             tx->adapter_ctrl |= 0x0002U; // ADEN visible to the boot ROMs
             tx->set_sh2_reset(false);
         }
-        if (!bios.s_bios.empty()) {
+        if (!bios.s_bios.empty() && boot_hack_enabled()) {
             tx->comm[2] = 0x535FU; // "S_"
             tx->comm[3] = 0x4F4BU; // "OK"
             tx->comm[4] = 0x534CU; // "SL"
@@ -365,7 +402,7 @@ namespace mnemos::manifests::sega32x {
                         ? static_cast<std::uint16_t>((cur & 0xFF00U) | value)
                         : static_cast<std::uint16_t>((cur & 0x00FFU) |
                                                      (static_cast<std::uint16_t>(value) << 8U));
-                m68k_reg_write_word(*tx, off, next);
+                m68k_reg_write_word(*tx, machine->genesis.get(), off, next);
             },
             1);
 

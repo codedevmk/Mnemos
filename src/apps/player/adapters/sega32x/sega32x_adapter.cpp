@@ -168,6 +168,25 @@ namespace mnemos::apps::player::adapters::sega32x {
                 [tx, watch](const topology::access_event& ev) {
                     watch("S", tx->slave_cpu.cpu_registers().pc, ev);
                 });
+            // TEMP DEBUG: 68K-bus DATA access sampling in the same range
+            // (reads + writes, instruction fetches filtered out, 1 in 16).
+            auto* gen_sys = machine_->genesis.get();
+            machine_->genesis->bus.set_access_observer(
+                [gen_sys, lo, hi](const topology::access_event& ev) {
+                    static std::uint32_t n = 0;
+                    if (ev.address < lo || ev.address >= hi) {
+                        return;
+                    }
+                    const std::uint32_t pc = gen_sys->cpu.cpu_registers().pc;
+                    const std::uint32_t d = ev.address > pc ? ev.address - pc : pc - ev.address;
+                    if (d < 0x40U) {
+                        return; // instruction fetch
+                    }
+                    if (!ev.write && (++n <= 80U || (n & 0x3FFU) == 0U)) {
+                        std::fprintf(stderr, "[busw] G pc=%08X %c [%08X]=%02X\n", pc,
+                                     ev.write ? 'w' : 'r', ev.address, ev.value);
+                    }
+                });
         }
 #if defined(_MSC_VER)
 #pragma warning(pop)

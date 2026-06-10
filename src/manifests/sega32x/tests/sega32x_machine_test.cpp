@@ -91,33 +91,57 @@ TEST_CASE("sega32x_machine runs the SH-2s at 3x the 68000 after release", "[sega
     CHECK(sh2 < main_delta * 3U + 64U);
 }
 
-TEST_CASE("sega32x_machine INTM/INTS carry only the CMD bit and edge-assert CMD",
+TEST_CASE("sega32x_machine $A15102 requests CMD interrupts held until the SH-2 clears",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
     auto& bus = m->genesis->bus;
     auto& tx = *m->thirtytwox;
     bus.write8(0xA15101U, 0x03U); // ADEN + release so IRQ delivery is live
 
-    // $A15102 (INTM): the 0->1 CMD-enable transition asserts CMD on the master.
-    bus.write8(0xA15103U, 0x04U);
-    CHECK(tx.master_irq_mask == 0x04U);
+    // INTM (bit 0): delivery is gated by the master's own CMD enable; the
+    // request bit reads back at $A15102 either way.
+    tx.set_master_irq_mask(sega32x_system::irq_cmd);
+    bus.write8(0xA15103U, 0x01U);
     CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 8);
     CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x44U);
     CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0); // targeted, not broadcast
-    CHECK(bus.read8(0xA15103U) == 0x04U);
+    CHECK(bus.read8(0xA15103U) == 0x01U);
 
-    // A 68000 write cannot set the SH-2-private VINT/HINT/PWM enables.
-    bus.write8(0xA15103U, 0xFFU);
-    CHECK(tx.master_irq_mask == 0x04U);
+    // A 68000 zero-write does NOT clear the request; the master SH-2's
+    // CMD-interrupt-clear register ($401A) does.
+    bus.write8(0xA15103U, 0x00U);
+    CHECK(bus.read8(0xA15103U) == 0x01U);
+    tx.master_bus.write8(0x0000401AU, 0x00U);
+    CHECK(bus.read8(0xA15103U) == 0x00U);
 
-    // $A15104 (INTS): same contract for the slave -- a bank-select style write
-    // without the CMD bit must not enable anything.
-    bus.write8(0xA15105U, 0x03U);
-    CHECK(tx.slave_irq_mask == 0x00U);
+    // INTS (bit 1) targets the slave: with its CMD enable off the edge stays
+    // latched in the 32X latch (delivered on a later unmask) and the request
+    // bit still reads 1.
+    bus.write8(0xA15103U, 0x02U);
     CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
-    bus.write8(0xA15105U, 0x04U);
-    CHECK(tx.slave_irq_mask == 0x04U);
-    CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 8);
+    CHECK((tx.slave_irq_latch & sega32x_system::irq_cmd) != 0U);
+    CHECK(bus.read8(0xA15103U) == 0x02U);
+    tx.slave_bus.write8(0x0000401BU, 0x00U); // odd byte clears too (word register)
+    CHECK(bus.read8(0xA15103U) == 0x00U);
+}
+
+TEST_CASE("sega32x_machine $A15104 swings the $900000 window across cart banks",
+          "[sega32x][machine]") {
+    auto cart = make_cart();
+    cart.resize(0x200000U, 0x00U); // two full 1 MiB banks
+    cart[0x000123U] = 0x11U;
+    cart[0x100123U] = 0x22U;
+    auto m = assemble_sega32x_machine(std::move(cart));
+    auto& bus = m->genesis->bus;
+
+    CHECK(bus.read8(0x900123U) == 0x11U); // power-on bank 0
+    bus.write8(0xA15105U, 0x01U);
+    CHECK(bus.read8(0xA15105U) == 0x01U);
+    CHECK(bus.read8(0x900123U) == 0x22U); // bank 1 now visible
+    bus.write8(0xA15105U, 0x03U);         // past the cart end: window unchanged
+    CHECK(bus.read8(0x900123U) == 0x22U);
+    bus.write8(0xA15105U, 0x00U);
+    CHECK(bus.read8(0x900123U) == 0x11U);
 }
 
 TEST_CASE("sega32x_machine shares the COMM bank between the 68000 and the SH-2s",

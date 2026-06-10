@@ -65,6 +65,8 @@ namespace mnemos::topology {
         // Cheaper than unmap/remap and keeps region order/priority stable.
         // No-op if no RAM region starts at `start`; asserts on size mismatch.
         void retarget_ram(std::uint32_t start, std::span<std::uint8_t> storage) noexcept;
+        // ROM flavour of the same primitive (the 32X $900000 cart bank window).
+        void retarget_rom(std::uint32_t start, std::span<const std::uint8_t> storage) noexcept;
 
         // ibus: unmapped reads return 0xFF (open bus); unmapped writes are dropped.
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;

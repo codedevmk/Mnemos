@@ -47,7 +47,10 @@ namespace mnemos::chips::video {
     std::uint16_t sega32x_vdp::read16(std::uint32_t off) const noexcept {
         switch (off & 0x0EU) {
         case reg_bitmap_mode:
-            return bitmap_mode_;
+            // Bit 15 is the read-only NTSC/PAL pin mirror: 1 = NTSC, 0 = PAL.
+            // Retail region checks halt on the "for use only with NTSC
+            // systems" screen when it reads 0 on an NTSC machine.
+            return static_cast<std::uint16_t>(bitmap_mode_ | (pal_ ? 0x0000U : 0x8000U));
         case reg_screen_shift:
             return screen_shift_;
         case reg_autofill_length:

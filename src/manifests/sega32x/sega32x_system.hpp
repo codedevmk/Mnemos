@@ -168,6 +168,15 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::uint16_t dreq_fifo_pop() noexcept;
         [[nodiscard]] bool dreq_pending() const noexcept { return dreq_fifo_count != 0U; }
 
+        // 68000-side adapter state owned here so the SH-2 register window can
+        // act on it. cart_bank: the $A15104 bank-set value (bits 1:0) for the
+        // 68000's $900000 window. intm/ints: the $A15102 CMD-interrupt control
+        // bits -- set by a 68000 write, held until the TARGET SH-2 writes its
+        // CMD-interrupt-clear register ($401A).
+        std::uint8_t cart_bank{};
+        bool intm_pending{};
+        bool ints_pending{};
+
         // SFX-stream debug counters (read by the player probe; wrap is fine).
         std::uint32_t dbg_dreq_pushes{}; // 68000 words accepted into the DREQ FIFO
         std::uint32_t dbg_dreq_pops{};   // slave-side FIFO pops ($12 odd-byte reads)
