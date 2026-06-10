@@ -1,3 +1,13 @@
+---
+id: ADR-0010
+title: "Android and Bluetooth Gamepad Support"
+status: proposed
+version: 1.0.0
+supersedes: []
+superseded_by: null
+proposed: 2026-06-01
+---
+
 # ADR 0010: Android and Bluetooth Gamepad Support
 
 **Status:** Proposed

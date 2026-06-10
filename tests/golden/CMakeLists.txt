@@ -70,20 +70,25 @@ set_tests_properties(
 # GG visual-golden corpus. Self-skips unless MNEMOS_GG_CORPUS points at a dir of
 # raw .gg files; enforces per-title framebuffer-hash goldens (a regression ratchet
 # over screens verified by eye -- the pixel check the boot tests lacked).
-mnemos_add_test(
-    mnemos_gg_visual_corpus_test
-    SOURCES gg_visual_corpus_test.cpp
-    LIBRARIES
-        mnemos::manifests::sms
-        mnemos::runtime
-        mnemos::foundation
-        mnemos::security::cryptography
-        mnemos::apps::player::adapters::common
-)
-set_tests_properties(
-    mnemos_gg_visual_corpus_test
-    PROPERTIES SKIP_RETURN_CODE 4
-)
+# Links the player's scripted-input parser (cli_args.hpp), which only exists
+# when apps are built; headless presets (MNEMOS_BUILD_APPS=OFF) must stay
+# configurable without anything under apps/ (src/CMakeLists.txt invariant).
+if(MNEMOS_BUILD_APPS)
+    mnemos_add_test(
+        mnemos_gg_visual_corpus_test
+        SOURCES gg_visual_corpus_test.cpp
+        LIBRARIES
+            mnemos::manifests::sms
+            mnemos::runtime
+            mnemos::foundation
+            mnemos::security::cryptography
+            mnemos::apps::player::adapters::common
+    )
+    set_tests_properties(
+        mnemos_gg_visual_corpus_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
+endif()
 
 # SMS Z80 conformance via the ZEXALL-SMS exerciser ROM. Self-skips unless
 # MNEMOS_SMS_ZEXALL_ROM points at a zexall.sms image (GPLv2, never committed).

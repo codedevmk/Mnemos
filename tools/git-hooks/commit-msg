@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Gate G10: provenance trailer on commits touching authority paths.
+set -eu
+
+if command -v python3 >/dev/null 2>&1; then
+  repo_root="$(git rev-parse --show-toplevel)"
+  python3 "$repo_root/tools/governance/trailer_check.py" --message-file "$1" --staged
+fi

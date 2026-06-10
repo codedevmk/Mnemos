@@ -1,3 +1,13 @@
+---
+id: ADR-0005
+title: "Runtime Scheduler Strategy (Fixed-Divider Master Clock)"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-25
+---
+
 # ADR 0005: Runtime Scheduler Strategy (Fixed-Divider Master Clock)
 
 **Status:** Accepted for M3 runtime

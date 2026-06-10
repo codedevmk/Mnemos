@@ -7,6 +7,56 @@ on:
       - master
 
 jobs:
+  # Gates G1 (naming), G7 (license), G9 (ADR/front-matter lint) blocking;
+  # G11 (token budgets) advisory. See constitution/MNE-CTX-PLAN-001.md §9.
+  governance:
+    name: governance
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Naming validator (G1)
+        run: python3 tools/governance/naming_validator.py
+
+      - name: ADR / front-matter lint (G9)
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            BASE="--base origin/${{ github.base_ref }}"
+          else
+            BASE=""
+          fi
+          python3 tools/governance/adr_lint.py --check-index $BASE
+
+      - name: License audit (G7)
+        run: python3 tools/governance/license_audit.py
+
+      - name: Capsule drift (G2, pilot modules)
+        run: |
+          cd tools/governance && python3 gen_capsule.py --check \
+            src/chips/cpu/z80 src/manifests/sms
+
+      - name: Doc liveness (G3)
+        run: cd tools/governance && python3 doc_liveness.py
+
+      - name: Invariant coverage (G4)
+        run: python3 tools/governance/invariant_check.py
+
+      - name: Schema compatibility (G8)
+        run: python3 tools/governance/schema_compat.py
+
+      - name: Provenance trailers (G10)
+        if: github.base_ref != ''
+        run: |
+          python3 tools/governance/trailer_check.py \
+            --range "origin/${{ github.base_ref }}..HEAD"
+
+      - name: Token budgets (G11, advisory)
+        run: python3 tools/governance/token_budget.py
+
   format:
     name: clang-format
     runs-on: ubuntu-24.04
@@ -88,6 +138,15 @@ jobs:
       - name: Test
         if: runner.os == 'Linux'
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
+      # G5/G6 smoke: re-run the registry suites against the high-water marks.
+      # Data-gated suites skip on hosted runners; the ratchet still catches a
+      # passing suite turning red or vanishing from the build.
+      - name: Oracle ratchet (G5/G6 smoke)
+        if: matrix.preset == 'linux-gcc-release'
+        run: |
+          python3 tools/governance/oracle_runner.py \
+            --build-dir build/linux-gcc-release
 
   arm64:
     # The headless presets are arch-agnostic (they only disable the SDL3 apps);

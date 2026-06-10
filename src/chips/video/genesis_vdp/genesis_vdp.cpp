@@ -1802,7 +1802,9 @@ namespace mnemos::chips::video {
             const sprite_meta& m = metas[i];
             const auto sw = static_cast<std::uint32_t>(m.w_cells) * 8U;
             const auto sh = static_cast<std::uint32_t>(m.h_cells) * 8U;
-            std::array<char, 16> buf{};
+            // Sized for the full %zu range, not just the 80-sprite reality,
+            // so -Wformat-truncation stays quiet on every compiler.
+            std::array<char, 32> buf{};
             std::snprintf(buf.data(), buf.size(), "sprite_%02zu", i);
             names_.emplace_back(buf.data());
             assets_.push_back(instrumentation::graphic_asset{

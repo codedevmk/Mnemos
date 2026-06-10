@@ -1,0 +1,143 @@
+# Oracle registry — MNE-CTX-PLAN-001 §7.2 (gate G5), pilot scope per D1.
+#
+# Per chip: the authoritative suites with provenance and pass criteria.
+# `ctest` names the CTest target exactly; `data_gated: true` means the suite
+# self-skips (SKIP_RETURN_CODE 4) unless its `data_env` variable points at the
+# corpus/ROM, which is never committed. Suites marked ORC-LEGACY-* are the
+# in-tree suites carried over from the Emu reference port (ADR-0006) — the
+# factual regression floor.
+#
+# Ratchet semantics (tools/governance/oracle_runner.py, highwater.json):
+# a suite that has ever passed may never fail; data-gated suites may skip
+# without lowering the high-water mark (data absence is not a regression).
+# Machine golden scenarios at the bottom feed gate G6 (zero divergence).
+
+schema: mnemos-oracles/1
+
+chips:
+  zilog.z80:
+    module: src/chips/cpu/z80
+    suites:
+      - id: ORC-LEGACY-Z80-UNIT
+        ctest: mnemos_chips_cpu_z80_test
+        kind: unit
+        provenance: in-tree Catch2 suite, ported from the Emu reference per ADR-0006
+        pass_criteria: all assertions pass
+        data_gated: false
+      - id: ORC-Z80-ZEXALL
+        ctest: mnemos_chips_cpu_z80_conformance_test
+        kind: conformance
+        provenance: >
+          ZEXALL/ZEXDOC CP/M instruction exercisers (public corpus); functional
+          correctness pinned via CRCs in a minimal CP/M environment.
+        pass_criteria: exerciser reports no ERROR line
+        data_gated: true
+        data_env: MNEMOS_Z80_TEST_ROM
+      - id: ORC-Z80-SST
+        ctest: mnemos_chips_cpu_z80_singlestep_test
+        kind: conformance
+        provenance: >
+          SingleStepTests per-instruction JSON corpus (one file per opcode,
+          per-cycle bus trace); pins cycle accuracy and access order.
+        pass_criteria: final state and full bus trace match every vector
+        data_gated: true
+        data_env: MNEMOS_Z80_TESTS_DIR
+
+  sega.sms_vdp:
+    module: src/chips/video/sms_vdp
+    suites:
+      - id: ORC-LEGACY-SMSVDP-UNIT
+        ctest: mnemos_chips_video_sms_vdp_test
+        kind: unit
+        provenance: >
+          in-tree Catch2 suite (datasheet- and community-notes-derived),
+          including the asset-extraction surface tests
+        pass_criteria: all assertions pass
+        data_gated: false
+
+  ti.sn76489:
+    module: src/chips/audio/sn76489
+    suites:
+      - id: ORC-LEGACY-SN76489-UNIT
+        ctest: mnemos_chips_audio_sn76489_test
+        kind: unit
+        provenance: in-tree Catch2 suite
+        pass_criteria: all assertions pass
+        data_gated: false
+
+  # Non-pilot anchors registered now because their corpora are the strongest
+  # oracles in the tree; rollout beyond the pilot reuses these entries as-is.
+  mos.6510:
+    module: src/chips/cpu/m6510
+    suites:
+      - id: ORC-LEGACY-M6510-UNIT
+        ctest: mnemos_chips_cpu_m6510_test
+        kind: unit
+        provenance: in-tree Catch2 suite incl. decimal mode and stable illegals
+        pass_criteria: all assertions pass
+        data_gated: false
+      - id: ORC-M6510-SST
+        ctest: mnemos_chips_cpu_m6510_conformance_test
+        kind: conformance
+        provenance: public per-instruction 6502 corpus (~10k cases/opcode), per-cycle bus trace
+        pass_criteria: final state and bus trace match every vector
+        data_gated: true
+        data_env: MNEMOS_M6510_TESTS_DIR
+
+  motorola.68000:
+    module: src/chips/cpu/m68000
+    suites:
+      - id: ORC-LEGACY-M68000-UNIT
+        ctest: mnemos_chips_cpu_m68000_test
+        kind: unit
+        provenance: in-tree Catch2 suite
+        pass_criteria: all assertions pass
+        data_gated: false
+      - id: ORC-M68000-SST
+        ctest: mnemos_chips_cpu_m68000_conformance_test
+        kind: conformance
+        provenance: public per-instruction 68000 corpus (one JSON file per mnemonic)
+        pass_criteria: final state matches every vector
+        data_gated: true
+        data_env: MNEMOS_M68000_TESTS_DIR
+
+  hitachi.sh7604:
+    module: src/chips/cpu/sh2
+    suites:
+      - id: ORC-LEGACY-SH2-UNIT
+        ctest: mnemos_chips_cpu_sh2_test
+        kind: unit
+        provenance: in-tree Catch2 suite (SH7604 hardware manual-derived)
+        pass_criteria: all assertions pass
+        data_gated: false
+    # gap — risk R3 (MNE-CTX-PLAN-001 §15): no public conformance corpus.
+    # SH7604-manual-derived micro-vectors are scheduled P2+ authoring work;
+    # SH-2 chip ratification is blocked on that oracle floor, not on schedule.
+
+machines:
+  sms:
+    module: src/manifests/sms
+    golden:                               # gate G6 — zero divergence
+      - id: GLD-SMS-BOOT
+        ctest: mnemos_sms_boot_test
+        data_gated: true
+      - id: GLD-SMS-ZEXALL
+        ctest: mnemos_sms_zexall_test
+        data_gated: true
+        data_env: MNEMOS_SMS_ZEXALL_ROM
+      - id: GLD-GG-BOOT
+        ctest: mnemos_gg_boot_test
+        data_gated: true
+      - id: GLD-GG-CORPUS
+        ctest: mnemos_gg_visual_corpus_test
+        data_gated: true
+        data_env: MNEMOS_GG_CORPUS
+        requires_apps: true               # links player input scripting
+    parity:                               # deterministic, always runnable
+      - id: ORC-SMS-PARITY
+        ctest: mnemos_manifests_sms_manifest_parity_test
+        data_gated: true
+        data_env: MNEMOS_SMS_BIOS
+      - id: ORC-SMS-RUNTIME-PARITY
+        ctest: mnemos_manifests_sms_runtime_parity_test
+        data_gated: false

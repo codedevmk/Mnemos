@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Read|Glob|Grep|Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 tools/governance/claude_hooks.py post-tool-use"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 tools/governance/claude_hooks.py session-end"
+          }
+        ]
+      }
+    ]
+  }
+}

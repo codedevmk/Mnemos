@@ -1,3 +1,13 @@
+---
+id: ADR-0008
+title: "Save-State Format and the zstd Dependency"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-25
+---
+
 # ADR 0008: Save-State Format and the zstd Dependency
 
 **Status:** Accepted for M3 runtime save-state
