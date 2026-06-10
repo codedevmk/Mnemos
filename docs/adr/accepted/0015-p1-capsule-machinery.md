@@ -1,11 +1,12 @@
 ---
 id: ADR-0015
 title: "P1 Capsule Machinery — Implementation Decisions"
-status: proposed
+status: accepted
 version: 1.0.0
 supersedes: []
 superseded_by: null
 proposed: 2026-06-10
+ratified: 2026-06-10
 ---
 
 # ADR 0015: P1 Capsule Machinery — Implementation Decisions
@@ -61,3 +62,8 @@ decisions worth recording; each is a default the weekly packet can revisit.
 - The G3 resolver's vocabulary lists (CMake names, lifecycle keywords,
   external API prefixes) are the tuning surface for M2 noise; changes to
   them ride normal PRs, not amendments.
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session. P2 starts with
+this acceptance.

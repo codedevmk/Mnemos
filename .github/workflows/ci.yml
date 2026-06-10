@@ -42,6 +42,12 @@ jobs:
       - name: Doc liveness (G3)
         run: cd tools/governance && python3 doc_liveness.py
 
+      - name: Invariant coverage (G4)
+        run: python3 tools/governance/invariant_check.py
+
+      - name: Schema compatibility (G8)
+        run: python3 tools/governance/schema_compat.py
+
       - name: Provenance trailers (G10)
         if: github.base_ref != ''
         run: |
@@ -132,6 +138,15 @@ jobs:
       - name: Test
         if: runner.os == 'Linux'
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
+      # G5/G6 smoke: re-run the registry suites against the high-water marks.
+      # Data-gated suites skip on hosted runners; the ratchet still catches a
+      # passing suite turning red or vanishing from the build.
+      - name: Oracle ratchet (G5/G6 smoke)
+        if: matrix.preset == 'linux-gcc-release'
+        run: |
+          python3 tools/governance/oracle_runner.py \
+            --build-dir build/linux-gcc-release
 
   arm64:
     # The headless presets are arch-agnostic (they only disable the SDL3 apps);

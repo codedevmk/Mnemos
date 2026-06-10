@@ -1,9 +1,9 @@
 ---
 capsule: src/chips/cpu/z80
 generator: gen_capsule/0.1
-source_digest: sha256:328b7fc0c4455604606228406d411294e36eb4644f5fbedde338baad4e008a16
+source_digest: sha256:744246a289b86bfc8ca8aa95cc2819cb8354bd70d55101354443d86480ccb507
 intent_ratified: sha256:5851e3ff1e19107caf90632468e9e5e5e94261a8cd8ea86c59ff109f5afd885a
-token_estimate: 460
+token_estimate: 458
 ---
 # Capsule — `src/chips/cpu/z80`
 
@@ -56,4 +56,4 @@ module tests:
 repository tests referencing this module (leaf-name match):
 - (none)
 
-oracle registry: not yet populated (pilot phase P2)
+oracle registry: `tests/oracles/registry.yaml`

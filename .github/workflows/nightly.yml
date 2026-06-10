@@ -1,0 +1,79 @@
+name: nightly
+
+# Nightly executable-authority suite (MNE-CTX-PLAN-001 §8/§9): full oracle run
+# with the G5 ratchet (auto-committing high-water raises), G6 golden suites,
+# and the G12 sanitizer pass. Data-gated suites self-skip on hosted runners
+# (corpora and ROMs are never committed); they ratchet on data-equipped
+# runners only.
+
+on:
+  schedule:
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  oracles:
+    name: oracle ratchet (G5/G6)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure (headless)
+        run: cmake --preset linux-gcc-headless-release
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-headless-release
+
+      - name: Oracle ratchet (G5 + G6)
+        run: |
+          python3 tools/governance/oracle_runner.py \
+            --build-dir build/linux-gcc-headless-release \
+            --headless --update
+
+      - name: Commit high-water raises
+        run: |
+          if ! git diff --quiet tests/oracles/highwater.json; then
+            git config user.name "mnemos-nightly"
+            git config user.email "nightly@users.noreply.github.com"
+            git add tests/oracles/highwater.json
+            git commit -m "oracles: record high-water raises (nightly ratchet)"
+            git push
+          fi
+
+  sanitizers:
+    name: sanitizer suite (G12)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install sanitizer tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm ninja-build \
+            libasound2-dev libpulse-dev libaudio-dev libjack-jackd2-dev libsndio-dev \
+            libusb-1.0-0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev libpipewire-0.3-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev
+
+      - name: Configure
+        run: cmake --preset linux-clang-asan
+
+      - name: Build
+        run: cmake --build --preset linux-clang-asan
+
+      - name: Test under ASan + UBSan
+        run: ctest --preset linux-clang-asan --output-on-failure

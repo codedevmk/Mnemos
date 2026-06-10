@@ -673,7 +673,9 @@ namespace mnemos::chips::video {
             .tile_h = 8U,
             .source_addr = 0U});
         for (std::size_t s = 0; s < metas.size(); ++s) {
-            std::array<char, 16> buf{};
+            // Sized for the full %zu range, not just the 64-sprite reality,
+            // so -Wformat-truncation stays quiet on every compiler.
+            std::array<char, 32> buf{};
             std::snprintf(buf.data(), buf.size(), "sprite_%02zu", s);
             names_.emplace_back(buf.data());
             assets_.push_back(instrumentation::graphic_asset{
