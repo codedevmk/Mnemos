@@ -40,6 +40,7 @@ namespace mnemos::chips::video {
         autofill_addr_ = 0U;
         autofill_data_ = 0U;
         fb_control_ = 0U;
+        fen_busy_reads_ = 0;
         pending_fs_ = 0U;
         prev_vblank_ = false;
     }
@@ -60,6 +61,10 @@ namespace mnemos::chips::video {
         case reg_autofill_data:
             return autofill_data_;
         case reg_fb_control:
+            if (fen_busy_reads_ > 0) {
+                --fen_busy_reads_;
+                return static_cast<std::uint16_t>(fb_control_ | 0x0002U);
+            }
             return fb_control_;
         default:
             return 0U;
@@ -139,8 +144,12 @@ namespace mnemos::chips::video {
 
         // Hardware latches the final address back after the fill ends.
         autofill_addr_ = static_cast<std::uint16_t>(top | low);
-        // The fill completes well inside a scanline, so FEN reads as done.
-        fb_control_ &= static_cast<std::uint16_t>(~0x0002U);
+        // FEN (bit 1) = fill in progress. The fill itself completes instantly
+        // here, but pollers must still OBSERVE the busy edge: one waiter idiom
+        // spins until FEN goes 1 (fill started) before a later not-busy wait,
+        // the other spins until FEN reads 0 (fill done). Latch a few busy
+        // reads so both sequences resolve deterministically.
+        fen_busy_reads_ = 4;
         return written;
     }
 
