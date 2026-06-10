@@ -99,7 +99,7 @@ TEST_CASE("irem_m72_adapter drains YM2151-clocked audio frames", "[irem_m72][ada
     REQUIRE(chunk.samples != nullptr);
     for (std::uint32_t i = 0; i < chunk.frame_count * 2U; ++i) {
         if (chunk.samples[i] != 0) {
-            FAIL("expected silence before the synthesis increment");
+            FAIL("expected silence with no notes keyed on");
         }
     }
 
