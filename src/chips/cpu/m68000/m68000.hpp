@@ -71,8 +71,10 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
         void configure(const config_table& cfg, const callback_table& callbacks) override;
 
-        // icpu: the memory address space the CPU executes against.
-        void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }
+        // icpu: the memory address space the CPU executes against. The fetch
+        // fast path caches a direct span; the bus's invalidation listener
+        // drops it on any remap / bank retarget / observer install.
+        void attach_bus(ibus& bus) noexcept override;
 
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();
@@ -197,6 +199,7 @@ namespace mnemos::chips::cpu {
         void wr8(std::uint32_t a, std::uint8_t v) noexcept;
         [[nodiscard]] std::uint16_t rd16(std::uint32_t a) const noexcept;
         void wr16(std::uint32_t a, std::uint16_t v) noexcept;
+        [[nodiscard]] std::uint32_t rd32(std::uint32_t a) const noexcept;
 
         // ---- cycle-accounted accesses (4 clocks per word/byte bus cycle) ----
         [[nodiscard]] std::uint8_t read8(std::uint32_t a) noexcept;
@@ -311,6 +314,15 @@ namespace mnemos::chips::cpu {
         m68000_diagnostics::cycle_sources last_cycle_sources_{};
 
         ibus* bus_{};
+
+        // Fetch fast path: a direct span over the region the PC executes from
+        // (fetch_len_ = 0 means none). Writes through the bus land in the same
+        // storage, so self-modifying code stays visible; only remap/retarget
+        // moves storage, and the bus listener clears the span then.
+        [[nodiscard]] std::uint16_t fetch_slow(std::uint32_t a) noexcept;
+        const std::uint8_t* fetch_data_{};
+        std::uint32_t fetch_lo_{};
+        std::uint32_t fetch_len_{};
 
         std::array<register_descriptor, 20> register_view_{};
         introspection_surface introspection_{*this};

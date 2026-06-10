@@ -174,6 +174,14 @@ namespace mnemos::chips::cpu {
         wr8(a, static_cast<std::uint8_t>(v >> 8U));
         wr8(a + 1U, static_cast<std::uint8_t>(v));
     }
+    std::uint32_t m68000::rd32(std::uint32_t a) const noexcept {
+        const std::uint32_t am = a & address_mask;
+        if (bus_ != nullptr && am + 3U <= address_mask) {
+            return bus_->read32_be(am);
+        }
+        // Longword wraps the address mask (or no bus): per-word, each re-masked.
+        return (static_cast<std::uint32_t>(rd16(a)) << 16U) | rd16(a + 2U);
+    }
 
     // ---- cycle-accounted accesses (one bus cycle = 4 clocks) ----
 
@@ -212,7 +220,7 @@ namespace mnemos::chips::cpu {
                 ++cycle_sources_.z80_bus_accesses;
             }
         }
-        return (static_cast<std::uint32_t>(rd16(a)) << 16U) | rd16(a + 2U);
+        return rd32(a);
     }
     void m68000::write8(std::uint32_t a, std::uint8_t v) noexcept {
         cycles_ += 4;
@@ -277,17 +285,58 @@ namespace mnemos::chips::cpu {
 
     // ---- instruction stream ----
 
+    void m68000::attach_bus(ibus& bus) noexcept {
+        bus_ = &bus;
+        fetch_len_ = 0U;
+        bus.add_invalidation_listener([this]() noexcept { fetch_len_ = 0U; });
+    }
+
+    std::uint16_t m68000::fetch_slow(std::uint32_t a) noexcept {
+        // Refill the fetch span from the bus, then read through it. MMIO and
+        // observer-guarded buses give no span -- plain rd16.
+        if (bus_ != nullptr) {
+            chips::ibus::direct_span span;
+            if (bus_->direct_read_span(a, span)) {
+                const std::uint32_t len = span.end - span.start;
+                fetch_data_ = span.data;
+                fetch_lo_ = span.start;
+                fetch_len_ = len == 0xFFFFFFFFU ? len : len + 1U;
+                const std::uint32_t off = a - span.start;
+                if (off + 2U <= fetch_len_) {
+                    return static_cast<std::uint16_t>(
+                        (static_cast<std::uint16_t>(span.data[off]) << 8U) | span.data[off + 1U]);
+                }
+            }
+        }
+        return rd16(a);
+    }
+
     std::uint16_t m68000::fetch16() noexcept {
         cycles_ += 4;
-        const std::uint16_t v = rd16(pc_);
+        const std::uint32_t a = pc_ & address_mask;
         pc_ += 2U;
-        return v;
+        // Fetch through the cached direct span when the PC is inside it (span
+        // lengths sit far below 2^31, so an out-of-span subtraction always
+        // fails the compare).
+        const std::uint32_t off = a - fetch_lo_;
+        if (off < fetch_len_ && off + 2U <= fetch_len_) {
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(fetch_data_[off]) << 8U) |
+                                              fetch_data_[off + 1U]);
+        }
+        return fetch_slow(a);
     }
     std::uint32_t m68000::fetch32() noexcept {
-        cycles_ += 8;
-        const std::uint32_t v = (static_cast<std::uint32_t>(rd16(pc_)) << 16U) | rd16(pc_ + 2U);
-        pc_ += 4U;
-        return v;
+        const std::uint32_t hi = fetch16();
+        cycles_ += 4;
+        const std::uint32_t a = pc_ & address_mask;
+        pc_ += 2U;
+        const std::uint32_t off = a - fetch_lo_;
+        const std::uint32_t lo =
+            (off < fetch_len_ && off + 2U <= fetch_len_)
+                ? static_cast<std::uint32_t>((static_cast<std::uint32_t>(fetch_data_[off]) << 8U) |
+                                             fetch_data_[off + 1U])
+                : fetch_slow(a);
+        return (hi << 16U) | lo;
     }
 
     // ---- effective-address resolution ----
