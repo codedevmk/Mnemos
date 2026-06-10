@@ -54,9 +54,12 @@ namespace mnemos::chips {
         // accesses, concrete buses may override with a single resolution over
         // RAM/ROM.
         [[nodiscard]] virtual std::uint16_t read16_le(std::uint32_t address) {
-            return static_cast<std::uint16_t>(
-                static_cast<std::uint16_t>(read8(address)) |
-                (static_cast<std::uint16_t>(read8(address + 1U)) << 8U));
+            // Sequenced explicitly, like the BE defaults above: operands of |
+            // are indeterminately sequenced, and MMIO side-effect order must
+            // not vary by compiler.
+            const std::uint16_t lo = read8(address);
+            const std::uint16_t hi = read8(address + 1U);
+            return static_cast<std::uint16_t>(lo | (hi << 8U));
         }
         virtual void write16_le(std::uint32_t address, std::uint16_t value) {
             write8(address, static_cast<std::uint8_t>(value));

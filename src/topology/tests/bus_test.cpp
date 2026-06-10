@@ -163,6 +163,7 @@ TEST_CASE("bus rejects empty and zero-size mappings instead of claiming the spac
     // An empty span used to underflow `end` to 0xFFFFFFFF and serve OOB reads.
     CHECK(b.read8(0x0000U) == 0xFFU); // open bus
     CHECK(b.read8(0x123456U) == 0xFFU);
+}
 
 TEST_CASE("bus little-endian wide accesses hit the fast span and fall back byte-exact") {
     std::array<std::uint8_t, 0x100> ram{};
