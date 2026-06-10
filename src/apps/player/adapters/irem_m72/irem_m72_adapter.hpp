@@ -1,0 +1,68 @@
+#pragma once
+
+#include "m72_system.hpp"
+#include "player_system.hpp"
+#include "scheduler.hpp"
+#include "scheduler_factory.hpp"
+
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace mnemos::apps::player::adapters::irem_m72 {
+
+    // Force-link hook (see genesis_adapter.hpp for the rationale).
+    void force_link() noexcept;
+
+    // Player adapter for the Irem M72 arcade board family.
+    //
+    // Accepts either a development-format ROM set -- a .zip whose entries are
+    // named by board region ("maincpu.bin", "soundcpu.bin", "tiles_a.bin",
+    // "tiles_b.bin", "sprites.bin"), each loaded whole -- or a bare binary
+    // treated as the V30 program image. Real per-game set declarations (dump
+    // file lists, interleave, CRCs) arrive with the TOML game manifests and
+    // supersede the development format.
+    //
+    // Input mapping (first-cut, active low): joystick bytes carry up/down/
+    // left/right in bits 0-3 and buttons A/B in bits 4-5; the system byte
+    // carries coin 1/2 in bits 0-1 (the pads' `select`) and start 1/2 in
+    // bits 2-3. No audio path yet -- drain_audio() reports silence until the
+    // YM2151/DAC phase.
+    class irem_m72_adapter final : public frontend_sdk::player_system {
+      public:
+        explicit irem_m72_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
+                                  frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
+
+        [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
+            // 8 MHz pixel clock over a 512x284 raster: 55.0176... Hz.
+            return {.frames_per_second_x1000 = 55018U};
+        }
+        [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
+        system_spec() const noexcept override {
+            return spec_;
+        }
+        [[nodiscard]] chips::frame_buffer_view current_frame() const noexcept override {
+            return sys_->video.framebuffer();
+        }
+        void step_one_frame() override;
+        void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
+        [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override { return {}; }
+        [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
+            return chip_view_;
+        }
+
+        [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
+        [[nodiscard]] manifests::irem_m72::m72_system& machine() noexcept { return *sys_; }
+
+      private:
+        std::unique_ptr<manifests::irem_m72::m72_system> sys_;
+        std::array<chips::ichip*, 3> chip_view_{};
+        runtime::scheduler scheduler_;
+        std::array<frontend_sdk::controller_state, 2> ports_{};
+        std::uint64_t frames_stepped_{};
+        std::vector<frontend_sdk::spec_field> spec_{};
+    };
+
+} // namespace mnemos::apps::player::adapters::irem_m72

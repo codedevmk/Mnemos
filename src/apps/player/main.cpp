@@ -15,6 +15,7 @@
 #include "debug_dump.hpp"
 #include "genesis_adapter.hpp" // force_link + manifests::genesis::parse_market
 #include "genesis_region.hpp"
+#include "irem_m72_adapter.hpp" // force_link (arcade: no cart region byte)
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
@@ -240,6 +241,10 @@ int main(int argc, char* argv[]) {
             // Region comes from the disc/BIOS, not a cart header byte; keep the
             // NTSC default set above (also silences -Wswitch on this enum).
             break;
+        case system_family::irem_m72:
+            // Arcade boards have no region byte; the adapter reports the
+            // board's own 55 Hz raster through region().
+            break;
         }
         const auto video = resolve_video(cart_default);
         std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
@@ -256,6 +261,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::c64::force_link();
         mnemos::apps::player::adapters::segacd::force_link();
         mnemos::apps::player::adapters::sega32x::force_link();
+        mnemos::apps::player::adapters::irem_m72::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
