@@ -211,3 +211,33 @@ TEST_CASE("m72 sound latch and YM2151 IRQs OR onto the Z80 INT line", "[m72]") {
     system->fm.write_data(0x15U); // reset flag A
     CHECK_FALSE(system->fm.irq_asserted());
 }
+
+TEST_CASE("m72 Z80 streams sample bytes from the sample ROM into the DAC", "[m72]") {
+    rom_set_image image;
+    image.regions["samples"] = {0x10U, 0x20U, 0x30U, 0x40U, 0x90U, 0xA0U};
+    auto system = assemble_m72(std::move(image));
+    auto& sound = system->roms.regions["soundcpu"];
+
+    // Set the sample cursor to 4, then stream two bytes to the DAC.
+    const std::vector<std::uint8_t> program{
+        0x3EU, 0x04U, 0xD3U, 0x80U, // LD A,04; OUT (80),A  (address low)
+        0x3EU, 0x00U, 0xD3U, 0x81U, // LD A,00; OUT (81),A  (address high)
+        0xDBU, 0x84U, 0xD3U, 0x82U, // IN A,(84); OUT (82),A
+        0xDBU, 0x84U, 0xD3U, 0x82U, // IN A,(84); OUT (82),A
+        0x76U,                      // HALT
+    };
+    for (std::size_t i = 0; i < program.size(); ++i) {
+        sound[i] = program[i];
+    }
+
+    for (int i = 0; i < 6; ++i) {
+        system->sound_cpu.step_instruction(); // through the first IN/OUT pair
+    }
+    CHECK(system->dac.level() == 0x90U); // first streamed byte
+    for (int i = 0; i < 2; ++i) {
+        system->sound_cpu.step_instruction(); // second IN/OUT pair
+    }
+    CHECK(system->dac.level() == 0xA0U); // cursor auto-incremented
+    CHECK(system->sample_address == 6U);
+    CHECK(system->dac.output() == (0xA0 - 0x80) * 64);
+}

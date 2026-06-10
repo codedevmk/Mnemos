@@ -70,6 +70,16 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         }
         audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
         sys_->fm.update(audio_buf_);
+        // Mix the DAC's held level into both channels (per-sample DAC timing
+        // is a parity-pass refinement; the latch level changes at most once
+        // per drain granule here).
+        if (const std::int32_t dac = sys_->dac.output(); dac != 0) {
+            for (std::int16_t& sample : audio_buf_) {
+                const std::int32_t mixed = sample + dac;
+                sample = static_cast<std::int16_t>(
+                    mixed > 32767 ? 32767 : (mixed < -32768 ? -32768 : mixed));
+            }
+        }
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = 55930U}; // 3579545 / 64

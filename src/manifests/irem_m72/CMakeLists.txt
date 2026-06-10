@@ -21,6 +21,7 @@ target_link_libraries(
         mnemos::chips::cpu::z80
         mnemos::chips::video::irem_m72_video
         mnemos::chips::audio::ym2151
+        mnemos::chips::audio::dac8
         mnemos::manifests::common
 )
 
