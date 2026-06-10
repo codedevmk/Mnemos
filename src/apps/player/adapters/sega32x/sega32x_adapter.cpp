@@ -112,6 +112,7 @@ namespace mnemos::apps::player::adapters::sega32x {
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
         machine_->genesis->fm.enable_audio_capture(true);
         machine_->genesis->psg.enable_audio_capture(true);
+        machine_->genesis->vdp.enable_backdrop_mask(true);
         machine_->thirtytwox->enable_pwm_capture(true);
 
         chip_view_[0] = &machine_->genesis->vdp;
@@ -136,17 +137,27 @@ namespace mnemos::apps::player::adapters::sega32x {
             spec_.push_back({.label = "Cart", .value = std::move(display_name)});
         }
 
-        // Opt-in vector-table write watch (MNEMOS_32X_VECWATCH=1): logs every
-        // SH-2 write into the slave's interrupt-vector slots (VBR $06000400,
-        // vectors $40-$4F) with the writing CPU's PC -- mirrors collapse via
-        // the partition mask.
-        if (env_set("MNEMOS_32X_VECWATCH")) {
+        // Opt-in SH-2 bus write watch (MNEMOS_32X_BUSWATCH=<lo>:<hi>, hex):
+        // logs every write whose mirror-collapsed address falls in [lo, hi)
+        // with the writing CPU's PC. The tool that located both the slave
+        // vector-table stubs and the status-bar scratch writes.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: opt-in debug knob
+#endif
+        if (const char* spec = std::getenv("MNEMOS_32X_BUSWATCH");
+            spec != nullptr && spec[0] != '\0') {
+            char* sep = nullptr;
+            const auto lo = static_cast<std::uint32_t>(std::strtoul(spec, &sep, 16));
+            const auto hi = sep != nullptr && *sep == ':'
+                                ? static_cast<std::uint32_t>(std::strtoul(sep + 1, nullptr, 16))
+                                : lo + 4U;
             auto* tx = machine_->thirtytwox.get();
-            const auto watch = [](const char* cpu, std::uint32_t pc,
-                                  const topology::access_event& ev) {
+            const auto watch = [lo, hi](const char* cpu, std::uint32_t pc,
+                                        const topology::access_event& ev) {
                 const std::uint32_t a = ev.address & 0x1FFFFFFFU;
-                if (ev.write && a >= 0x06000500U && a < 0x06000540U) {
-                    std::fprintf(stderr, "[vec] %s pc=%08X [%08X]=%02X\n", cpu, pc, a, ev.value);
+                if (ev.write && a >= lo && a < hi) {
+                    std::fprintf(stderr, "[busw] %s pc=%08X [%08X]=%02X\n", cpu, pc, a, ev.value);
                 }
             };
             machine_->thirtytwox->master_bus.set_access_observer(
@@ -158,6 +169,9 @@ namespace mnemos::apps::player::adapters::sega32x {
                     watch("S", tx->slave_cpu.cpu_registers().pc, ev);
                 });
         }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
         // Seed the composed frame from the Genesis view geometry so
         // current_frame() is valid before the first step.
@@ -177,26 +191,34 @@ namespace mnemos::apps::player::adapters::sega32x {
         return composed_view_;
     }
 
-    void sega32x_adapter::compose_frame() noexcept {
+    void sega32x_adapter::compose_finished_line() noexcept {
+        // Each 3420-master-cycle slice completes exactly one VDP line, so the
+        // row the VDP just rendered is scanline()-1; V-blank lines have no
+        // display row. The 32X overlay (a no-op while the bitmap mode is off)
+        // samples the 32X VDP state as of this raster position.
         const auto gen = machine_->genesis->vdp.framebuffer();
+        const int line = machine_->genesis->vdp.scanline() - 1;
+        if (line < 0 || line >= static_cast<int>(gen.height)) {
+            return;
+        }
         const std::size_t stride = gen.effective_stride();
-        composed_.assign(gen.pixels, gen.pixels + stride * gen.height);
+        const std::size_t need = stride * gen.height;
+        if (composed_.size() != need) {
+            composed_.assign(need, 0U);
+        }
+        std::uint32_t* dst = composed_.data() + static_cast<std::size_t>(line) * stride;
+        std::copy_n(gen.pixels + static_cast<std::size_t>(line) * stride, stride, dst);
+        auto& tx = *machine_->thirtytwox;
+        tx.vdp.compose_scanline(tx.framebuffer, std::span<std::uint32_t>{dst, gen.width}, line,
+                                machine_->genesis->vdp.backdrop_row(line));
+    }
+
+    void sega32x_adapter::finish_composed_frame() noexcept {
+        const auto gen = machine_->genesis->vdp.framebuffer();
         composed_view_ = {.pixels = composed_.data(),
                           .width = gen.width,
                           .height = gen.height,
-                          .stride = static_cast<std::uint32_t>(stride)};
-        // Overlay the 32X pixels row by row (a no-op while the bitmap mode is
-        // off). Mid-frame palette/bank changes are not modelled yet -- the
-        // composition uses the frame-end 32X state.
-        auto& tx = *machine_->thirtytwox;
-        const int rows = static_cast<int>(gen.height);
-        for (int y = 0; y < rows; ++y) {
-            tx.vdp.compose_scanline(
-                tx.framebuffer,
-                std::span<std::uint32_t>{composed_.data() + static_cast<std::size_t>(y) * stride,
-                                         gen.width},
-                y);
-        }
+                          .stride = static_cast<std::uint32_t>(gen.effective_stride())};
     }
 
     void sega32x_adapter::step_one_frame() {
@@ -207,8 +229,9 @@ namespace mnemos::apps::player::adapters::sega32x {
             machine_->begin_slice();
             scheduler_.run_master_cycles(kSliceMasterCycles);
             machine_->catch_up_sh2();
+            compose_finished_line();
         }
-        compose_frame();
+        finish_composed_frame();
         ++frames_stepped_;
 
         // Opt-in raw PWM dump (MNEMOS_32X_PWM_DUMP=path): drain the capture

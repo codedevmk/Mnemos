@@ -159,7 +159,8 @@ namespace mnemos::chips::video {
     }
 
     void sega32x_vdp::compose_scanline(std::span<const std::uint8_t> fb,
-                                       std::span<std::uint32_t> row, int y) const noexcept {
+                                       std::span<std::uint32_t> row, int y,
+                                       const std::uint8_t* genesis_backdrop) const noexcept {
         if (row.empty() || y < 0 || y >= visible_h) {
             return;
         }
@@ -168,11 +169,16 @@ namespace mnemos::chips::video {
             return; // display passthrough, the Genesis row is final
         }
 
-        // A "behind" (priority-0) pixel draws only where the Genesis pixel is
-        // black -- the backdrop approximation. Priority gates layer order, not
-        // visibility: a full-screen priority-0 bitmap over a blank Genesis
-        // frame must still display.
-        const auto genesis_has_content = [&row](std::size_t x) {
+        // A "behind" (priority-0) pixel draws only where the Genesis output is
+        // the backdrop. With a real per-pixel backdrop row (the cartridge
+        // connector's "transparent" signal) opaque-but-black Genesis pixels
+        // correctly hide the 32X pixel -- games park work data in FB rows the
+        // status bar covers. Without one, fall back to the colour heuristic
+        // (black == backdrop).
+        const auto genesis_has_content = [&row, genesis_backdrop](std::size_t x) {
+            if (genesis_backdrop != nullptr) {
+                return genesis_backdrop[x] == 0U;
+            }
             return (row[x] & 0x00FFFFFFU) != 0U;
         };
 

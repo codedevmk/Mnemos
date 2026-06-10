@@ -443,3 +443,26 @@ TEST_CASE("genesis_vdp pulses the Z80 /INT callback for exactly one scanline") {
     CHECK(edges[3].second - edges[2].second == 1);
     CHECK(edges[2].second - edges[0].second == 262); // one pulse per frame
 }
+
+TEST_CASE("genesis_vdp backdrop mask distinguishes opaque pixels from backdrop") {
+    genesis_vdp vdp;
+    vdp.enable_backdrop_mask(true);
+    set_reg(vdp, 1, 0x44);                 // M5 + display enable
+    set_reg(vdp, 15, 0x02);                // auto-increment 2
+    set_reg(vdp, 2, 0x30);                 // plane A 0xC000
+    set_reg(vdp, 4, 0x07);                 // plane B 0xE000 (transparent)
+    write_vram(vdp, 0x0020, solid_tile_1); // tile 1 = solid colour index 1
+    write_vram(vdp, 0xC000, {0x0001});     // plane A cell (0,0) = tile 1
+    write_cram(vdp, 1, 0x0000);            // tile colour BLACK -- same as backdrop
+    write_cram(vdp, 0, 0x0000);            // backdrop black
+
+    tick_to_active_line(vdp);
+    vdp.tick(genesis_vdp::master_clocks_per_line); // render line 0
+    const std::uint8_t* row = vdp.backdrop_row(0);
+    REQUIRE(row != nullptr);
+    CHECK(row[0] == 0U);   // opaque tile pixel, even though it is black
+    CHECK(row[7] == 0U);   // last tile column
+    CHECK(row[8] == 1U);   // backdrop beyond the tile
+    CHECK(row[100] == 1U); // backdrop mid-line
+    CHECK(vdp.backdrop_row(1000) == nullptr);
+}

@@ -876,8 +876,8 @@ namespace mnemos::chips::video {
         }
     }
 
-    void genesis_vdp::render_sprites(int line, std::uint8_t* linebuf,
-                                     std::uint8_t* shade) noexcept {
+    void genesis_vdp::render_sprites(int line, std::uint8_t* linebuf, std::uint8_t* shade,
+                                     std::uint8_t* backdrop) noexcept {
         const bool il2 = interlace_mode2();
         const bool il = interlace_enabled();
         const int display_line = display_line_for_field(line);
@@ -1021,6 +1021,7 @@ namespace mnemos::chips::video {
             const bool bg_opaque = (linebuf[xi] & 0x0F) != 0;
             if (spr_pri || !bg_pri || !bg_opaque) {
                 linebuf[xi] = spr_buf[xi];
+                backdrop[xi] = 0;
                 if (!sh_enabled() || spr_pri || shade[xi] != shade_shadow) {
                     shade[xi] = shade_normal;
                 }
@@ -1035,6 +1036,26 @@ namespace mnemos::chips::video {
         for (int x = 0; x < fb_width; ++x) {
             framebuffer_[base + static_cast<std::size_t>(x)] = rgb;
         }
+        if (backdrop_mask_enabled_) {
+            std::fill_n(backdrop_mask_.begin() + static_cast<std::ptrdiff_t>(base), fb_width,
+                        std::uint8_t{1});
+        }
+    }
+
+    void genesis_vdp::enable_backdrop_mask(bool on) {
+        backdrop_mask_enabled_ = on;
+        if (on) {
+            backdrop_mask_.assign(static_cast<std::size_t>(fb_width) * fb_height, 1U);
+        } else {
+            backdrop_mask_.clear();
+        }
+    }
+
+    const std::uint8_t* genesis_vdp::backdrop_row(int display_line) const noexcept {
+        if (!backdrop_mask_enabled_ || display_line < 0 || display_line >= fb_height) {
+            return nullptr;
+        }
+        return backdrop_mask_.data() + static_cast<std::size_t>(display_line) * fb_width;
     }
 
     void genesis_vdp::render_scanline(int line) noexcept {
@@ -1049,6 +1070,7 @@ namespace mnemos::chips::video {
 
         std::array<std::uint8_t, fb_width> composited{};
         std::array<std::uint8_t, fb_width> shade{};
+        std::array<std::uint8_t, fb_width> is_backdrop{};
         const auto bg = static_cast<std::uint8_t>(bg_index());
         for (int x = 0; x < screen_w; ++x) {
             const auto xi = static_cast<std::size_t>(x);
@@ -1071,10 +1093,11 @@ namespace mnemos::chips::video {
                 composited[xi] = plane_b[xi];
             } else {
                 composited[xi] = bg;
+                is_backdrop[xi] = 1;
             }
         }
 
-        render_sprites(line, composited.data(), shade.data());
+        render_sprites(line, composited.data(), shade.data(), is_backdrop.data());
 
         const std::size_t fb_base = static_cast<std::size_t>(display_line) * fb_width;
         for (int x = 0; x < screen_w; ++x) {
@@ -1089,6 +1112,7 @@ namespace mnemos::chips::video {
                 cram_to_rgb(cram_[static_cast<std::size_t>(bg_index()) & 0x3FU], shade_normal);
             for (int x = 0; x < 8 && x < screen_w; ++x) {
                 framebuffer_[fb_base + static_cast<std::size_t>(x)] = bgc;
+                is_backdrop[static_cast<std::size_t>(x)] = 1;
             }
         }
 
@@ -1098,7 +1122,13 @@ namespace mnemos::chips::video {
                 cram_to_rgb(cram_[static_cast<std::size_t>(bg_index()) & 0x3FU], shade_normal);
             for (int x = screen_w; x < fb_width; ++x) {
                 framebuffer_[fb_base + static_cast<std::size_t>(x)] = bgc;
+                is_backdrop[static_cast<std::size_t>(x)] = 1;
             }
+        }
+
+        if (backdrop_mask_enabled_) {
+            std::copy_n(is_backdrop.data(), fb_width,
+                        backdrop_mask_.begin() + static_cast<std::ptrdiff_t>(fb_base));
         }
     }
 
