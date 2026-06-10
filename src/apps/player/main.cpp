@@ -365,9 +365,23 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "--screenshot requires --rom\n");
             return 1;
         }
+        // Per-instruction CPU trace (MNEMOS_CPU_TRACE=1): opt-in -- the CSV
+        // write dominates headless runtime and bloats sweep outputs, so plain
+        // screenshot runs skip it.
         std::uint64_t trace_frame = 0;
         const std::string trace_path = screenshot->path + ".cpu_trace.csv";
-        mnemos::debug::trace_csv_session trace(*system, trace_path, trace_frame);
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
+#endif
+        const char* trace_env = std::getenv("MNEMOS_CPU_TRACE");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        std::optional<mnemos::debug::trace_csv_session> trace;
+        if (trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0') {
+            trace.emplace(*system, trace_path, trace_frame);
+        }
 
         // Scripted input (`--press <button>@<frame>[+duration]`) so headless runs
         // can drive a game past intro/menu screens. Sampled before each frame.
@@ -388,7 +402,7 @@ int main(int argc, char* argv[]) {
         std::fprintf(stderr, "[mnemos_player] wrote %s (%ux%u after %llu frames)\n",
                      screenshot->path.c_str(), fb.width, fb.height,
                      static_cast<unsigned long long>(screenshot->frames));
-        if (trace.active()) {
+        if (trace && trace->active()) {
             std::fprintf(stderr, "[mnemos_player] wrote %s\n", trace_path.c_str());
         }
         std::fflush(stderr);
