@@ -2,7 +2,7 @@
 id: ARCH-004
 title: "Timing Model and Determinism"
 status: accepted
-version: 1.0.0
+version: 1.0.1
 supersedes: []
 superseded_by: null
 ratified: 2026-06-10
@@ -22,7 +22,7 @@ accepted authority.
 
 ## Clock contract (TDS §8.3)
 
-- A chip's `tick(cycles)` advances its internal state by exactly `cycles` of
+- A chip's `tick(cycles)` advances its internal state by exactly that many cycles of
   its own clock domain.
 - The scheduler (tier 5) translates master clock ticks into per-chip clock
   ticks via the divider declared in the system manifest. The master clock is

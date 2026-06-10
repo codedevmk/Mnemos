@@ -2,7 +2,7 @@
 id: CONSTITUTION
 title: "Mnemos Constitution — L0 Index"
 status: accepted
-version: 1.0.0
+version: 1.0.1
 supersedes: []
 superseded_by: null
 ratified: 2026-06-10
@@ -47,8 +47,8 @@ classification; the adjudication is human.
    are prohibited from editing either side of the conflict.
 3. **Other emulators are L5** — advisory, never an oracle. Behavioral
    authority for silicon is official documentation plus the oracle registry
-   (`tests/oracles/registry.yaml`, once populated in pilot phase P2).
-4. **Proposals expire.** An `adr/proposed` entry unratified after 14 days
+   (`tests/oracles/registry.yaml`, once populated in pilot phase P2). <!-- nolint: forward reference, lands in P2 -->
+4. **Proposals expire.** A `docs/adr/proposed/` entry unratified after 14 days
    flips to `expired`; an unratified decision must not silently become
    load-bearing.
 5. **Capsules are mechanical.** Generated capsule blocks are extraction only;

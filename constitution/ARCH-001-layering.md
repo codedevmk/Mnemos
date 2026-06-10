@@ -2,7 +2,7 @@
 id: ARCH-001
 title: "Layered Architecture"
 status: accepted
-version: 1.0.0
+version: 1.0.1
 supersedes: []
 superseded_by: null
 ratified: 2026-06-10
@@ -57,7 +57,7 @@ placement) refines this module and remains accepted authority.
 ## Module layout (TDS §5.1)
 
 Each module is self-contained and **flat**: public headers and implementation
-sources live directly at the module root (no nested `include/mnemos/...`
+sources live directly at the module root (no nested `include/mnemos/...` <!-- nolint: names the forbidden layout -->
 tree), with unit tests under `tests/`. CMake exposes the module root as the
 target's public include directory, so headers are included by **basename in
 quotes** both within a module and across modules. Because there is no path

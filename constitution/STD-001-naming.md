@@ -2,7 +2,7 @@
 id: STD-001
 title: "Naming Conventions"
 status: accepted
-version: 1.0.0
+version: 1.0.1
 supersedes: []
 superseded_by: null
 ratified: 2026-06-10
@@ -26,7 +26,7 @@ and `docs/architecture/mnemos-project-plan-v0.1.md` section 4.4, per
 
 - snake_case naming throughout, in the `mnemos` namespace, with tier
   sub-namespaces (`mnemos::chips::cpu`, `mnemos::runtime`, ...).
-- Interface types carry an `i` prefix on the type name (`ichip`, `ibus`,
+- Interface types carry an `i` prefix on the type name (`ichip`, `ibus`, <!-- nolint: single-letter prefix -->
   `icpu`), per the chip contract (ADR-0004).
 
 ## Files

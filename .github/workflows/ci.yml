@@ -34,6 +34,20 @@ jobs:
       - name: License audit (G7)
         run: python3 tools/governance/license_audit.py
 
+      - name: Capsule drift (G2, pilot modules)
+        run: |
+          cd tools/governance && python3 gen_capsule.py --check \
+            src/chips/cpu/z80 src/manifests/sms
+
+      - name: Doc liveness (G3)
+        run: cd tools/governance && python3 doc_liveness.py
+
+      - name: Provenance trailers (G10)
+        if: github.base_ref != ''
+        run: |
+          python3 tools/governance/trailer_check.py \
+            --range "origin/${{ github.base_ref }}..HEAD"
+
       - name: Token budgets (G11, advisory)
         run: python3 tools/governance/token_budget.py
 
