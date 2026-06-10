@@ -4,29 +4,45 @@
 
 namespace mnemos::apps::player::adapters {
 
-    system_family detect_family(const std::string& path) noexcept {
-        const auto dot = path.find_last_of('.');
-        if (dot == std::string::npos) {
+    std::optional<system_family> family_from_name(const std::string& name) noexcept {
+        const std::string id = mnemos::common::to_lower(name);
+        if (id == "genesis") {
             return system_family::genesis;
         }
-        const std::string ext = mnemos::common::to_lower(path.substr(dot + 1));
-        if (ext == "sms" || ext == "sg") {
+        if (id == "sms") {
             return system_family::sms;
         }
-        if (ext == "gg") {
+        if (id == "gg") {
             return system_family::gg;
         }
-        if (ext == "cue" || ext == "iso" || ext == "chd") {
-            return system_family::segacd;
-        }
-        if (ext == "32x") {
-            return system_family::sega32x;
-        }
-        if (ext == "prg" || ext == "d64" || ext == "d71" || ext == "d81" || ext == "t64" ||
-            ext == "tap" || ext == "crt" || ext == "g64" || ext == "p00") {
+        if (id == "c64") {
             return system_family::c64;
         }
-        return system_family::genesis;
+        if (id == "segacd") {
+            return system_family::segacd;
+        }
+        if (id == "sega32x") {
+            return system_family::sega32x;
+        }
+        return std::nullopt;
+    }
+
+    const char* family_id(system_family family) noexcept {
+        switch (family) {
+        case system_family::sms:
+            return "sms";
+        case system_family::gg:
+            return "gg";
+        case system_family::c64:
+            return "c64";
+        case system_family::segacd:
+            return "segacd";
+        case system_family::sega32x:
+            return "sega32x";
+        case system_family::genesis:
+            break;
+        }
+        return "genesis";
     }
 
     const char* family_label(system_family family) noexcept {
@@ -46,5 +62,7 @@ namespace mnemos::apps::player::adapters {
         }
         return "Genesis";
     }
+
+    const char* family_names() noexcept { return "genesis, sms, gg, c64, segacd, sega32x"; }
 
 } // namespace mnemos::apps::player::adapters

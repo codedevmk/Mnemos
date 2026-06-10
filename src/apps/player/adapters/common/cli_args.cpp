@@ -34,6 +34,19 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::optional<std::string> parse_system_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--system" || a == "-s") {
+                std::string value{argv[i + 1]};
+                if (!value.empty()) {
+                    return value;
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
     std::vector<std::string> parse_rom_args(int argc, char* argv[]) {
         std::vector<std::string> paths;
         for (int i = 1; i < argc - 1; ++i) {

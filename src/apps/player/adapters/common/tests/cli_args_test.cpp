@@ -17,6 +17,7 @@ namespace {
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
+    using mnemos::apps::player::adapters::parse_system_arg;
 
     // parse_*_arg takes a `char* []`, so the helper hands them a mutable
     // backing vector and a parallel vector of pointers into it.
@@ -46,6 +47,22 @@ TEST_CASE("cli_args: --rom and -r return the path") {
 
     auto b = make_argv({"player", "-r", "other.smd"});
     REQUIRE(parse_rom_arg(b.argc(), b.argv.data()) == "other.smd");
+}
+
+TEST_CASE("cli_args: --system and -s return the engine name") {
+    auto a = make_argv({"player", "--system", "sega32x", "--rom", "game.zip"});
+    REQUIRE(parse_system_arg(a.argc(), a.argv.data()) == "sega32x");
+
+    auto b = make_argv({"player", "-s", "genesis", "-r", "game.bin"});
+    REQUIRE(parse_system_arg(b.argc(), b.argv.data()) == "genesis");
+}
+
+TEST_CASE("cli_args: missing or valueless --system returns nullopt") {
+    auto a = make_argv({"player", "--rom", "game.bin"});
+    REQUIRE(parse_system_arg(a.argc(), a.argv.data()) == std::nullopt);
+
+    auto b = make_argv({"player", "--system"});
+    REQUIRE(parse_system_arg(b.argc(), b.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: missing --rom returns nullopt") {
