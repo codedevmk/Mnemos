@@ -150,6 +150,10 @@ namespace mnemos::chips::video {
         std::uint8_t pending_fs_{};
         bool pal_{};         // NTSC/PAL pin, mirrored into BITMAP_MODE bit 15
         bool prev_vblank_{}; // V-blank edge detector for the FS commit
+        // FEN busy latch: an autofill arms a few busy reads so pollers observe
+        // the fill-in-progress edge even though the fill itself is instant
+        // (mutable: decremented from the const register read).
+        mutable int fen_busy_reads_{};
 
         std::array<register_descriptor, 7> register_view_{};
         introspection_surface introspection_{*this};
