@@ -218,20 +218,22 @@ namespace mnemos::manifests::sega32x {
 
     void sega32x_machine::begin_slice() noexcept {
         slice_base_main_ = genesis->cpu.elapsed_cycles();
-        slice_base_sh2_ = sega32x->master_cpu.elapsed_cycles();
+        slice_base_sh2_ = sega32x->sh2_position();
     }
 
     void sega32x_machine::catch_up_sh2() {
         // Run both SH-2s up to the 68000's position within the current slice. The
         // SH-2s tick at 3x the 68000, so the target is the slice's 68000 delta
         // scaled by 3. run_cycles is a no-op while the SH-2s are held in reset.
+        // All anchors are sh2_position() values, which stay continuous across a
+        // /RES release edge (the CPU's own elapsed counter resets to zero there).
         const std::uint64_t main_now = genesis->cpu.elapsed_cycles();
         if (main_now <= slice_base_main_) {
             return;
         }
         const std::uint64_t main_delta = main_now - slice_base_main_;
         const std::uint64_t target = slice_base_sh2_ + main_delta * sh2_clock_multiplier;
-        const std::uint64_t cur = sega32x->master_cpu.elapsed_cycles();
+        const std::uint64_t cur = sega32x->sh2_position();
         if (target > cur) {
             sega32x->run_cycles(target - cur);
         }
@@ -266,7 +268,11 @@ namespace mnemos::manifests::sega32x {
             if (worker_quit_.load(std::memory_order_acquire)) {
                 return;
             }
-            const std::uint64_t cur = sega32x->master_cpu.elapsed_cycles();
+            // sh2_position() reads sh2_elapsed_base, which the main thread only
+            // writes on a /RES release edge -- always with the worker parked
+            // (the register window joins first) and before the next target is
+            // published, so the acquire on sh2_target_ orders the read.
+            const std::uint64_t cur = sega32x->sh2_position();
             if (seen > cur) {
                 sega32x->run_cycles(seen - cur);
             }
@@ -280,7 +286,7 @@ namespace mnemos::manifests::sega32x {
             return;
         }
         sched_main_base_ = genesis->cpu.elapsed_cycles();
-        sched_target_ = sega32x->master_cpu.elapsed_cycles();
+        sched_target_ = sega32x->sh2_position();
         sh2_target_.store(sched_target_, std::memory_order_release);
         sh2_done_.store(sched_target_, std::memory_order_release);
         worker_ = std::thread([this] { worker_main(); });
@@ -312,11 +318,12 @@ namespace mnemos::manifests::sega32x {
         const std::uint64_t delta = main_now - sched_main_base_;
         sched_main_base_ = main_now;
         if (sega32x->sh2_reset_asserted) {
-            // Held: pin the target to the parked position so released boots
-            // resume in step instead of bursting through the held-back cycles.
-            sched_target_ = sega32x->master_cpu.elapsed_cycles();
-            sh2_done_.store(sched_target_, std::memory_order_release);
-            sh2_target_.store(sched_target_, std::memory_order_release);
+            // Held: consume the delta without advancing the target, so released
+            // boots resume in step instead of bursting through the held-back
+            // cycles. The published batch is already complete (we just joined),
+            // so the atomics must not move: only the worker may write sh2_done_,
+            // and a main-thread store to sh2_target_ here could wake the
+            // spinning worker into an unfenced batch.
             return;
         }
         sched_target_ += delta * sh2_clock_multiplier;
@@ -337,11 +344,12 @@ namespace mnemos::manifests::sega32x {
         const std::uint64_t delta = main_now - sched_main_base_;
         sched_main_base_ = main_now;
         if (sega32x->sh2_reset_asserted) {
-            sched_target_ = sega32x->master_cpu.elapsed_cycles();
+            // Held: consume the delta without advancing the target (see
+            // schedule_sh2_catch_up).
             return;
         }
         sched_target_ += delta * sh2_clock_multiplier;
-        const std::uint64_t cur = sega32x->master_cpu.elapsed_cycles();
+        const std::uint64_t cur = sega32x->sh2_position();
         if (sched_target_ > cur) {
             sega32x->run_cycles(sched_target_ - cur);
         }

@@ -131,6 +131,13 @@ namespace mnemos::chips::mapper {
             if (packet_len < 0x10U || data_off + image > crt.size()) {
                 return false;
             }
+            // The bank index sizes the ROML/ROMH allocations (bank_size each), so
+            // an untrusted value must be capped: the largest real format is
+            // EasyFlash's 64 banks, and 0xFFFF would wrap bank_count_ to zero and
+            // turn the copy below into a wild out-of-bounds write.
+            if (bank >= 256U) {
+                return false;
+            }
             chunks.push_back({bank, load,
                               std::vector<std::uint8_t>(
                                   crt.begin() + static_cast<std::ptrdiff_t>(data_off),

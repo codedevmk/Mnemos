@@ -15,7 +15,7 @@ namespace mnemos::manifests::segacd {
         sub_cycle_carry_ =
             ((main_now - slice_base_main_) * 87'500'000ULL + sub_cycle_carry_) % 53'693'175ULL;
         slice_base_main_ = main_now;
-        slice_base_sub_ = sub->sub_cpu.elapsed_cycles();
+        slice_base_sub_ = sub->sub_position();
     }
 
     void segacd_machine::catch_up_sub() {
@@ -28,7 +28,7 @@ namespace mnemos::manifests::segacd {
         const std::uint64_t main_delta = main_now - slice_base_main_;
         const std::uint64_t target =
             slice_base_sub_ + (main_delta * 87'500'000ULL + sub_cycle_carry_) / 53'693'175ULL;
-        const std::uint64_t cur = sub->sub_cpu.elapsed_cycles();
+        const std::uint64_t cur = sub->sub_position();
         if (target > cur) {
             sub->run_cycles(target - cur); // no-op while the sub is held in reset
         }

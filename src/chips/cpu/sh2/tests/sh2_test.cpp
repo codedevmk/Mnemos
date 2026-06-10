@@ -1257,3 +1257,27 @@ TEST_CASE("sh2_peripherals DIVU performs signed 64/32 division on the DVDNTL wri
     CHECK(rd32(0xFFFFFF14U) == 0x7FFFFFFFU);
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U);
 }
+
+TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of crashing") {
+    // $80000000:00000000 / $FFFFFFFF asks for +2^63: the one quotient that does
+    // not fit the host's int64 either. The divider must take the overflow path
+    // without evaluating the division (UB / SIGFPE on x86).
+    mnemos::chips::cpu::sh2_peripherals p;
+    const auto wr32 = [&p](std::uint32_t addr, std::uint32_t v) {
+        p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
+        p.write8(addr + 1U, static_cast<std::uint8_t>(v >> 16U));
+        p.write8(addr + 2U, static_cast<std::uint8_t>(v >> 8U));
+        p.write8(addr + 3U, static_cast<std::uint8_t>(v));
+    };
+    const auto rd32 = [&p](std::uint32_t addr) {
+        return (static_cast<std::uint32_t>(p.read8(addr)) << 24U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
+    };
+    wr32(0xFFFFFF00U, 0xFFFFFFFFU); // DVSR = -1
+    wr32(0xFFFFFF10U, 0x80000000U); // DVDNTH
+    wr32(0xFFFFFF14U, 0x00000000U); // DVDNTL -> divide fires
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U); // DVCR.OVF
+    // Negative dividend, negative divisor: positive overflow saturates high.
+    CHECK(rd32(0xFFFFFF14U) == 0x7FFFFFFFU);
+}

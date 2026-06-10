@@ -374,13 +374,19 @@ namespace mnemos::chips::cpu {
             return;
         }
         const bool zero = divisor == 0;
+        // INT64_MIN / -1 is the one non-zero pair whose quotient (2^63) does not
+        // fit the host's int64 -- evaluating it is UB (SIGFPE on x86), and guest
+        // code can write exactly those register values. It is an overflow case
+        // architecturally too, so route it down the overflow path undivided.
+        const bool host_overflow =
+            divisor == -1 && dividend == std::numeric_limits<std::int64_t>::min();
         std::int64_t q = 0;
         std::int64_t r = 0;
-        if (!zero) {
+        if (!zero && !host_overflow) {
             q = dividend / divisor;
             r = dividend - q * static_cast<std::int64_t>(divisor);
         }
-        if (zero || q > 0x7FFFFFFFLL || q < -0x80000000LL) {
+        if (zero || host_overflow || q > 0x7FFFFFFFLL || q < -0x80000000LL) {
             // Overflow: run the three aborted non-restoring iterations the
             // hardware performs before stopping, for the remainder image; the
             // quotient saturates by the dividend/divisor signs unless OVFIE

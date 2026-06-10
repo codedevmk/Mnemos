@@ -124,3 +124,42 @@ TEST_CASE("bus is usable through the chips::ibus interface") {
     as_bus.write8(0x0003U, 0x42U);
     CHECK(as_bus.read8(0x0003U) == 0x42U);
 }
+
+TEST_CASE("bus survives an MMIO handler that remaps the bus mid-access") {
+    // A control-register write that maps an overlay (the 32X ADEN pattern):
+    // regions_ may reallocate while the handler's own std::function is
+    // executing, so the bus must not touch the resolved region afterwards.
+    static constexpr std::array<std::uint8_t, 4> overlay{0xDEU, 0xADU, 0xBEU, 0xEFU};
+    bus b(24U);
+    std::array<std::uint8_t, 0x10> ram{};
+    b.map_ram(0x1000U, ram);
+    bus* self = &b;
+    int writes = 0;
+    b.map_mmio(
+        0x8000U, 0x10U, [](std::uint32_t) -> std::uint8_t { return 0x55U; },
+        [self, &writes](std::uint32_t, std::uint8_t) {
+            ++writes;
+            // Force regions_ growth (and likely reallocation) from inside the
+            // handler call.
+            for (int i = 0; i < 16; ++i) {
+                self->map_rom(0x100000U + static_cast<std::uint32_t>(i) * 0x10U, overlay, 1);
+            }
+        },
+        1);
+    b.write8(0x8000U, 0x01U);
+    CHECK(writes == 1);
+    CHECK(b.read8(0x100000U) == 0xDEU); // the overlay mapped by the handler is live
+    CHECK(b.read8(0x8000U) == 0x55U);   // the MMIO region itself still resolves
+}
+
+TEST_CASE("bus rejects empty and zero-size mappings instead of claiming the space") {
+    bus b(24U);
+    b.map_ram(0x0000U, std::span<std::uint8_t>{});
+    b.map_rom(0x0000U, std::span<const std::uint8_t>{});
+    b.map_mmio(
+        0x0000U, 0U, [](std::uint32_t) -> std::uint8_t { return 0x00U; },
+        [](std::uint32_t, std::uint8_t) {});
+    // An empty span used to underflow `end` to 0xFFFFFFFF and serve OOB reads.
+    CHECK(b.read8(0x0000U) == 0xFFU); // open bus
+    CHECK(b.read8(0x123456U) == 0xFFU);
+}

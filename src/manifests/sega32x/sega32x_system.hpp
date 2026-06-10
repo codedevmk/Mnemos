@@ -276,6 +276,14 @@ namespace mnemos::manifests::sega32x {
         // Hold (true) or release (false) the two SH-2s. A release edge restarts
         // both CPUs from their BIOS reset vectors (the /RES pin behaviour).
         void set_sh2_reset(bool asserted);
+        // Monotone SH-2 timeline position for pacing. cpu.reset() zeroes the
+        // CPU's elapsed counter on every /RES release edge, so pacing anchors
+        // must not read elapsed_cycles() directly: a release would replay every
+        // pre-park cycle as one burst. The base absorbs each release edge.
+        [[nodiscard]] std::uint64_t sh2_position() const noexcept {
+            return sh2_elapsed_base + master_cpu.elapsed_cycles();
+        }
+        std::uint64_t sh2_elapsed_base{0}; // accumulated pre-release elapsed counts
         // Advance both SH-2s when not held in reset (lockstep; real interleaving
         // is a phase-D scheduling concern).
         void run_cycles(std::uint64_t cycles);

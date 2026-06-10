@@ -127,6 +127,14 @@ namespace mnemos::manifests::segacd {
         // Release the sub-CPU from reset and boot it from the $0/$4 vectors in
         // PRG-RAM (the main BIOS loads the Sub-CPU BIOS there before releasing it).
         void release_sub_reset();
+        // Monotone sub-CPU timeline position for pacing. release_sub_reset()
+        // zeroes the CPU's elapsed counter, so pacing anchors must not read
+        // elapsed_cycles() directly: a mid-run SRES toggle would replay every
+        // pre-reset cycle as one burst. The base absorbs each release edge.
+        [[nodiscard]] std::uint64_t sub_position() const noexcept {
+            return sub_elapsed_base + sub_cpu.elapsed_cycles();
+        }
+        std::uint64_t sub_elapsed_base{0}; // accumulated pre-release elapsed counts
         void assert_sub_reset() noexcept { sub_reset_asserted = true; }
         void reset();
 

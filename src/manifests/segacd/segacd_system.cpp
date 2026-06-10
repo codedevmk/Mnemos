@@ -40,12 +40,16 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::release_sub_reset() {
         sub_reset_asserted = false;
+        // The CPU reset zeroes elapsed_cycles(); fold the discarded count into
+        // the base so sub_position() stays continuous across the edge.
+        sub_elapsed_base += sub_cpu.elapsed_cycles();
         sub_cpu.reset(chips::reset_kind::hard); // re-fetch the $0/$4 reset vectors
         update_sub_irq();                       // re-apply any pending IRQ now that we run
     }
 
     void segacd_system::reset() {
         sub_reset_asserted = true;
+        sub_elapsed_base = 0U;
         sub_busreq = false;
         prg_ram.fill(0);
         word_ram.fill(0);

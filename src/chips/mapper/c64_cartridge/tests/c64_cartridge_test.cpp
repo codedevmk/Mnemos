@@ -299,3 +299,14 @@ TEST_CASE("c64_cartridge save/load round-trips") {
     b.save_state(w2);
     CHECK(buf1 == buf2);
 }
+
+TEST_CASE("c64_cartridge rejects a CRT whose CHIP bank index is hostile") {
+    // bank = 0xFFFF used to wrap bank_count_ to zero and turn the bank copy
+    // into a wild out-of-bounds write; large banks also force multi-hundred-MB
+    // allocations from a tiny file. Both must be rejected.
+    mnemos::chips::mapper::c64_cartridge cart;
+    CHECK_FALSE(cart.load_crt(build_crt(0U, 0U, 1U, {{0xFFFFU, 0x8000U, filled(0x100U, 0xAAU)}})));
+    CHECK_FALSE(cart.load_crt(build_crt(0U, 0U, 1U, {{0x8000U, 0x8000U, filled(0x100U, 0xAAU)}})));
+    // The cap still admits the largest real format (EasyFlash, 64 banks).
+    CHECK(cart.load_crt(build_crt(32U, 0U, 0U, {{63U, 0x8000U, filled(0x2000U, 0xAAU)}})));
+}

@@ -588,6 +588,9 @@ namespace mnemos::manifests::sega32x {
         // edge restarts both CPUs from their BIOS reset vectors. Re-releasing a
         // running pair is a no-op; holding parks them where they are.
         if (!asserted && sh2_reset_asserted) {
+            // The CPU reset zeroes elapsed_cycles(); fold the discarded count
+            // into the base so sh2_position() stays continuous across the edge.
+            sh2_elapsed_base += master_cpu.elapsed_cycles();
             master_cpu.reset(chips::reset_kind::power_on);
             slave_cpu.reset(chips::reset_kind::power_on);
         }
@@ -596,6 +599,7 @@ namespace mnemos::manifests::sega32x {
 
     void sega32x_system::reset() {
         sh2_reset_asserted = true;
+        sh2_elapsed_base = 0U;
         adapter_ctrl = 0U;
         adapter_enabled = false;
         hcount = 0U;

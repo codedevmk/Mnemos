@@ -18,6 +18,9 @@ namespace mnemos::topology {
 
     void bus::map_ram(std::uint32_t start, std::span<std::uint8_t> storage, int priority,
                       active_predicate active) {
+        if (storage.empty()) {
+            return; // an empty span would underflow `end` and claim the whole space
+        }
         region r;
         r.start = start;
         r.end = static_cast<std::uint32_t>(start + storage.size() - 1U);
@@ -31,6 +34,9 @@ namespace mnemos::topology {
 
     void bus::map_rom(std::uint32_t start, std::span<const std::uint8_t> storage, int priority,
                       active_predicate active) {
+        if (storage.empty()) {
+            return; // an empty span would underflow `end` and claim the whole space
+        }
         region r;
         r.start = start;
         r.end = static_cast<std::uint32_t>(start + storage.size() - 1U);
@@ -44,6 +50,9 @@ namespace mnemos::topology {
 
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                        write_handler on_write, int priority, active_predicate active) {
+        if (size == 0U) {
+            return; // a zero size would underflow `end` and claim the whole space
+        }
         region r;
         r.start = start;
         r.end = start + size - 1U;
@@ -150,18 +159,19 @@ namespace mnemos::topology {
         }
         const region* r = resolve(addr, false);
         if (r != nullptr) {
-            switch (r->backing) {
-            case kind::ram:
-                value = r->ram[addr - r->start];
-                break;
-            case kind::rom:
-                value = r->rom[addr - r->start];
-                break;
-            case kind::mmio:
-                value = r->on_read ? r->on_read(addr) : 0xFFU;
-                break;
+            if (r->backing == kind::mmio) {
+                // Copy the handler before invoking it: a handler may remap this
+                // bus (the 32X ADEN write maps a BIOS overlay), which can
+                // reallocate regions_ -- moving the stored std::function out
+                // from under its own call and dangling `r`.
+                const read_handler handler = r->on_read;
+                r = nullptr;
+                value = handler ? handler(addr) : 0xFFU;
+            } else {
+                value = r->backing == kind::ram ? r->ram[addr - r->start]
+                                                : r->rom[addr - r->start];
+                update_fast_path(addr, r);
             }
-            update_fast_path(addr, r);
         }
         if (observer_) {
             observer_({.address = addr, .value = value, .write = false});
@@ -300,19 +310,21 @@ namespace mnemos::topology {
         }
         const region* r = resolve(addr, true);
         if (r != nullptr) {
-            switch (r->backing) {
-            case kind::ram:
-                r->ram[addr - r->start] = value;
-                break;
-            case kind::rom:
-                break; // ROM ignores writes
-            case kind::mmio:
-                if (r->on_write) {
-                    r->on_write(addr, value);
+            if (r->backing == kind::mmio) {
+                // Copy the handler before invoking it: a handler may remap this
+                // bus, which can reallocate regions_ -- moving the stored
+                // std::function out from under its own call and dangling `r`.
+                const write_handler handler = r->on_write;
+                r = nullptr;
+                if (handler) {
+                    handler(addr, value);
                 }
-                break;
+            } else {
+                if (r->backing == kind::ram) {
+                    r->ram[addr - r->start] = value;
+                } // ROM ignores writes
+                update_fast_path(addr, r);
             }
-            update_fast_path(addr, r);
         }
         // Report the attempted write (even if dropped/ROM) so watchpoints see it.
         if (observer_) {
