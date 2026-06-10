@@ -91,10 +91,16 @@ namespace mnemos::manifests::sega32x {
         // the mask; the mask only gates CPU-visible delivery, so a mask 0->1 write
         // or an IRQ-accept rescan re-delivers a still-latched edge (the Mars
         // interrupt-controller flip-flop semantics, from the Emu reference).
-        static constexpr std::uint8_t irq_vint = 0x01U; // V-blank: level 12, vector 0x44
-        static constexpr std::uint8_t irq_hint = 0x02U; // H-blank: level 10, vector 0x46
-        static constexpr std::uint8_t irq_cmd = 0x04U;  // 68K cmd: level 8,  vector 0x48
-        static constexpr std::uint8_t irq_pwm = 0x08U;  // PWM:     level 6,  vector 0x4A
+        // The SH-2s take the Mars sources as IRL AUTO-VECTORED interrupts
+        // (SH7604 INTC, VECMD=0): vector = 64 + the level pair, so VRES/V/H/
+        // CMD/PWM land on $47/$46/$45/$44/$43. Retail code installs its real
+        // dispatcher at those slots and leaves SDK stubs at the old "software"
+        // $44-$4A list -- delivering PWM at $4A hits a stub RTE and the sound
+        // engine never runs.
+        static constexpr std::uint8_t irq_vint = 0x01U; // V-blank: level 12, vector 0x46
+        static constexpr std::uint8_t irq_hint = 0x02U; // H-blank: level 10, vector 0x45
+        static constexpr std::uint8_t irq_cmd = 0x04U;  // 68K cmd: level 8,  vector 0x44
+        static constexpr std::uint8_t irq_pwm = 0x08U;  // PWM:     level 6,  vector 0x43
         std::uint8_t master_irq_mask{};
         std::uint8_t slave_irq_mask{};
         std::uint8_t master_irq_latch{};
@@ -161,6 +167,12 @@ namespace mnemos::manifests::sega32x {
         void dreq_fifo_push(std::uint16_t word) noexcept;
         [[nodiscard]] std::uint16_t dreq_fifo_pop() noexcept;
         [[nodiscard]] bool dreq_pending() const noexcept { return dreq_fifo_count != 0U; }
+
+        // SFX-stream debug counters (read by the player probe; wrap is fine).
+        std::uint32_t dbg_dreq_pushes{}; // 68000 words accepted into the DREQ FIFO
+        std::uint32_t dbg_dreq_pops{};   // slave-side FIFO pops ($12 odd-byte reads)
+        std::uint32_t dbg_pwm_writes{};  // SH-2 byte pairs completing a PWM FIFO push
+        std::uint32_t dbg_pwm_irqs{};    // PWM TM interrupts raised
 
         // COMM bank byte access (big-endian: even byte = high half of the word).
         // Shared by both SH-2s; the Genesis 68000 joins it in the bridge phase.

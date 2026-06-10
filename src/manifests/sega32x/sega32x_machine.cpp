@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <span>
 
 namespace mnemos::manifests::sega32x {
@@ -102,7 +104,25 @@ namespace mnemos::manifests::sega32x {
             return 0U;
         }
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: opt-in debug knob
+#endif
+        bool reg_trace_enabled() {
+            static const bool on = [] {
+                const char* p = std::getenv("MNEMOS_32X_REGTRACE");
+                return p != nullptr && p[0] != '\0' && p[0] != '0';
+            }();
+            return on;
+        }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
         void m68k_reg_write_word(sega32x_system& tx, std::uint32_t off, std::uint16_t val) {
+            if (reg_trace_enabled() && off < 0x20U) {
+                std::fprintf(stderr, "[reg] 68k w $A151%02X = %04X\n", off, val);
+            }
             if (off == 0x00U) {
                 // The register directly drives the SH-2 /RES pin: ADEN+RES=1
                 // releases (a re-release while running is safe -- the BIOS checks

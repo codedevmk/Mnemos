@@ -105,7 +105,7 @@ TEST_CASE("sega32x_system latches a masked IRQ and redelivers it on a mask write
     CHECK((sys->master_irq_latch & sega32x_system::irq_vint) != 0U);
     sys->set_master_irq_mask(sega32x_system::irq_vint); // enable -> redeliver the latched edge
     CHECK(sys->master_cpu.pending_irq_level() == 12);
-    CHECK(sys->master_cpu.pending_irq_vector() == 0x44U);
+    CHECK(sys->master_cpu.pending_irq_vector() == 0x46U);
 }
 
 TEST_CASE("sega32x_system presents the highest-priority latched IRQ first") {
@@ -135,7 +135,7 @@ TEST_CASE("sega32x_system redelivers a latched IRQ after the CPU accepts a highe
     auto sys = assemble_sega32x();
     write_be32(sys->m_bios, 0, 0x06000000U);          // reset PC
     write_be32(sys->m_bios, 4, 0x0603FFFCU);          // SP
-    write_be32(sys->m_bios, 0x44U * 4U, 0x06000100U); // VINT vector (0x44) -> handler
+    write_be32(sys->m_bios, 0x46U * 4U, 0x06000100U); // VINT auto-vector (0x46) -> handler
     write_be32(sys->s_bios, 0, 0x06000000U);
     write_be32(sys->s_bios, 4, 0x0603FFFCU);
     sys->master_bus.write8(0x06000000U, 0x00U); // NOP at the boot address
@@ -154,7 +154,7 @@ TEST_CASE("sega32x_system redelivers a latched IRQ after the CPU accepts a highe
     REQUIRE(sys->master_cpu.pending_irq_level() == 12);
     sys->run_cycles(1); // master accepts VINT -> accept callback redelivers HINT
     CHECK(sys->master_cpu.pending_irq_level() == 10);
-    CHECK(sys->master_cpu.pending_irq_vector() == 0x46U);
+    CHECK(sys->master_cpu.pending_irq_vector() == 0x45U);
 }
 
 TEST_CASE("sega32x_system PWM FIFOs report status and reject pushes when full") {
@@ -204,8 +204,8 @@ TEST_CASE("sega32x_system PWM steps at the CYCLE rate, holds on empty, raises TM
     // The right FIFO never had data: its DAC stays at the reset duty 0,
     // which converts to the negative rail ((0-8)*32767/8).
     CHECK(sys->pwm_output_r() == -32767);
-    // The TM counter latched + delivered the PWM interrupt (level 6, vec 0x4A).
+    // The TM counter latched + delivered the PWM interrupt (level 6, vec 0x43).
     CHECK(sys->master_cpu.pending_irq_level() == 6);
-    CHECK(sys->master_cpu.pending_irq_vector() == 0x4AU);
+    CHECK(sys->master_cpu.pending_irq_vector() == 0x43U);
     CHECK((sys->slave_irq_latch & sega32x_system::irq_pwm) != 0U); // slave masked: latched
 }
