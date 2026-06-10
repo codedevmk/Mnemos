@@ -707,13 +707,27 @@ namespace mnemos::manifests::sega32x {
         // each frame-select commit. The displayed bank is only reachable
         // through the VDP's composition path, like hardware.
         const std::span<std::uint8_t> fb_bank0{s->framebuffer.data(), fb_bank_size};
+        // The overwrite image at FB+$20000 mirrors the access bank but skips
+        // zero bytes on write -- the hardware transparency blit. MMIO (not a
+        // RAM map) so it follows the live access bank without retargeting.
+        const auto map_fb_overwrite = [s](topology::bus& bus, std::uint32_t base) {
+            bus.map_mmio(
+                base, static_cast<std::uint32_t>(fb_bank_size),
+                [s, base](std::uint32_t a) { return s->fb_read(a - base); },
+                [s, base](std::uint32_t a, std::uint8_t v) { s->fb_overwrite_write(a - base, v); },
+                0);
+        };
         for (topology::bus* bus : {&s->master_bus, &s->slave_bus}) {
             for (const std::uint32_t base : p0_bases) {
                 bus->map_ram(base + framebuffer_base, fb_bank0, 0);
+                map_fb_overwrite(*bus, base + framebuffer_base +
+                                           static_cast<std::uint32_t>(fb_bank_size));
                 bus->map_ram(base + sdram_base, s->sdram, 0);
             }
             for (const std::uint32_t base : p1_bases) {
                 bus->map_ram(base + framebuffer_base, fb_bank0, 0);
+                map_fb_overwrite(*bus, base + framebuffer_base +
+                                           static_cast<std::uint32_t>(fb_bank_size));
                 bus->map_ram(base + sdram_base, s->sdram, 0);
             }
         }

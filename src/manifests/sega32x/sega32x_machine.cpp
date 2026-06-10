@@ -375,6 +375,21 @@ namespace mnemos::manifests::sega32x {
             [tx](std::uint32_t a, std::uint8_t value) { tx->vdp_pal_write(a - 0xA15200U, value); },
             1);
 
+        // $840000-$85FFFF: the 68000's frame-buffer window (the live access
+        // bank), and $860000-$87FFFF its overwrite image (zero bytes skipped).
+        // Games that render 32X video from the 68000 side draw through these.
+        bus.map_mmio(
+            0x840000U, static_cast<std::uint32_t>(fb_bank_size),
+            [tx](std::uint32_t a) { return tx->fb_read(a - 0x840000U); },
+            [tx](std::uint32_t a, std::uint8_t value) { tx->fb_write(a - 0x840000U, value); }, 1);
+        bus.map_mmio(
+            0x860000U, static_cast<std::uint32_t>(fb_bank_size),
+            [tx](std::uint32_t a) { return tx->fb_read(a - 0x860000U); },
+            [tx](std::uint32_t a, std::uint8_t value) {
+                tx->fb_overwrite_write(a - 0x860000U, value);
+            },
+            1);
+
         return machine;
     }
 

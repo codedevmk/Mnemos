@@ -384,6 +384,40 @@ TEST_CASE("sega32x_machine commits the VDP frame-select on the V-blank edge",
     CHECK(tx.framebuffer[0] != 0x5AU);
 }
 
+TEST_CASE("sega32x_machine exposes the 68K frame-buffer and overwrite windows",
+          "[sega32x][machine]") {
+    auto m = assemble_sega32x_machine(make_cart());
+    auto& bus = m->genesis->bus;
+    auto& tx = *m->sega32x;
+
+    // $840000 reads and writes the live access bank (bank 0 at power-on).
+    bus.write8(0x840010U, 0x5AU);
+    CHECK(tx.framebuffer[0x10] == 0x5AU);
+    CHECK(bus.read8(0x840010U) == 0x5AU);
+
+    // $860000 is the overwrite image: a zero byte is skipped, non-zero lands.
+    bus.write8(0x860010U, 0x00U);
+    CHECK(tx.framebuffer[0x10] == 0x5AU); // zero write skipped
+    bus.write8(0x860010U, 0xA5U);
+    CHECK(tx.framebuffer[0x10] == 0xA5U);
+
+    // Both windows follow the access-bank flip.
+    tx.set_fb_access_bank(1);
+    bus.write8(0x840010U, 0x77U);
+    CHECK(tx.framebuffer[0x20000U + 0x10U] == 0x77U);
+    CHECK(tx.framebuffer[0x10] == 0xA5U); // bank 0 untouched
+
+    // The SH-2-side overwrite image at FB+$20000 has the same semantics.
+    tx.set_fb_access_bank(0);
+    tx.master_bus.write8(0x04020020U, 0x00U);
+    CHECK(tx.framebuffer[0x20] == 0x00U); // skipped (still the cleared value)
+    tx.master_bus.write8(0x04020020U, 0x42U);
+    CHECK(tx.framebuffer[0x20] == 0x42U);
+    tx.slave_bus.write8(0x24020020U, 0x00U); // cache-through alias, zero skipped
+    CHECK(tx.framebuffer[0x20] == 0x42U);
+    CHECK(tx.slave_bus.read8(0x04020020U) == 0x42U);
+}
+
 TEST_CASE("sega32x_machine latches PWM CNTL/CYCLE and stubs DREQ/FIFO offsets",
           "[sega32x][machine]") {
     auto m = assemble_sega32x_machine(make_cart());
