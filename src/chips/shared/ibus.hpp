@@ -20,6 +20,28 @@ namespace mnemos::chips {
 
         [[nodiscard]] virtual std::uint8_t read8(std::uint32_t address) = 0;
         virtual void write8(std::uint32_t address, std::uint8_t value) = 0;
+
+        // Big-endian wide accesses. The defaults compose byte accesses, so
+        // every implementation keeps byte-exact semantics (MMIO side effects,
+        // watchpoints); a concrete bus may override them with a single
+        // resolution over RAM/ROM -- the hot path for 16/32-bit CPUs whose
+        // every fetch and load otherwise pays per-byte dispatch.
+        [[nodiscard]] virtual std::uint16_t read16_be(std::uint32_t address) {
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(read8(address)) << 8U) |
+                                              read8(address + 1U));
+        }
+        virtual void write16_be(std::uint32_t address, std::uint16_t value) {
+            write8(address, static_cast<std::uint8_t>(value >> 8U));
+            write8(address + 1U, static_cast<std::uint8_t>(value));
+        }
+        [[nodiscard]] virtual std::uint32_t read32_be(std::uint32_t address) {
+            return (static_cast<std::uint32_t>(read16_be(address)) << 16U) |
+                   read16_be(address + 2U);
+        }
+        virtual void write32_be(std::uint32_t address, std::uint32_t value) {
+            write16_be(address, static_cast<std::uint16_t>(value >> 16U));
+            write16_be(address + 2U, static_cast<std::uint16_t>(value));
+        }
     };
 
 } // namespace mnemos::chips

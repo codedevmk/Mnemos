@@ -169,6 +169,97 @@ namespace mnemos::topology {
         return value;
     }
 
+    std::uint16_t bus::read16_be(std::uint32_t address) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!observer_ && addr + 1U > addr) {
+            for (std::size_t i = 0; i < fast_.size(); ++i) {
+                const fast_span& f = fast_[i];
+                if (addr < f.start || addr + 1U > f.end) {
+                    continue;
+                }
+                const region* r = f.r;
+                const std::size_t off = addr - r->start;
+                const std::uint8_t* p = r->backing == kind::ram ? r->ram.data() : r->rom.data();
+                if (i != 0U) {
+                    std::swap(fast_[0], fast_[i]);
+                }
+                return static_cast<std::uint16_t>((static_cast<std::uint16_t>(p[off]) << 8U) |
+                                                  p[off + 1U]);
+            }
+        }
+        return ibus::read16_be(address);
+    }
+
+    std::uint32_t bus::read32_be(std::uint32_t address) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!observer_ && addr + 3U > addr) {
+            for (std::size_t i = 0; i < fast_.size(); ++i) {
+                const fast_span& f = fast_[i];
+                if (addr < f.start || addr + 3U > f.end) {
+                    continue;
+                }
+                const region* r = f.r;
+                const std::size_t off = addr - r->start;
+                const std::uint8_t* p = r->backing == kind::ram ? r->ram.data() : r->rom.data();
+                if (i != 0U) {
+                    std::swap(fast_[0], fast_[i]);
+                }
+                return (static_cast<std::uint32_t>(p[off]) << 24U) |
+                       (static_cast<std::uint32_t>(p[off + 1U]) << 16U) |
+                       (static_cast<std::uint32_t>(p[off + 2U]) << 8U) | p[off + 3U];
+            }
+        }
+        return ibus::read32_be(address);
+    }
+
+    void bus::write16_be(std::uint32_t address, std::uint16_t value) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!observer_ && addr + 1U > addr) {
+            for (std::size_t i = 0; i < fast_.size(); ++i) {
+                const fast_span& f = fast_[i];
+                if (addr < f.start || addr + 1U > f.end) {
+                    continue;
+                }
+                const region* r = f.r;
+                if (r->backing == kind::ram) {
+                    const std::size_t off = addr - r->start;
+                    r->ram[off] = static_cast<std::uint8_t>(value >> 8U);
+                    r->ram[off + 1U] = static_cast<std::uint8_t>(value);
+                } // ROM ignores writes
+                if (i != 0U) {
+                    std::swap(fast_[0], fast_[i]);
+                }
+                return;
+            }
+        }
+        ibus::write16_be(address, value);
+    }
+
+    void bus::write32_be(std::uint32_t address, std::uint32_t value) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!observer_ && addr + 3U > addr) {
+            for (std::size_t i = 0; i < fast_.size(); ++i) {
+                const fast_span& f = fast_[i];
+                if (addr < f.start || addr + 3U > f.end) {
+                    continue;
+                }
+                const region* r = f.r;
+                if (r->backing == kind::ram) {
+                    const std::size_t off = addr - r->start;
+                    r->ram[off] = static_cast<std::uint8_t>(value >> 24U);
+                    r->ram[off + 1U] = static_cast<std::uint8_t>(value >> 16U);
+                    r->ram[off + 2U] = static_cast<std::uint8_t>(value >> 8U);
+                    r->ram[off + 3U] = static_cast<std::uint8_t>(value);
+                } // ROM ignores writes
+                if (i != 0U) {
+                    std::swap(fast_[0], fast_[i]);
+                }
+                return;
+            }
+        }
+        ibus::write32_be(address, value);
+    }
+
     void bus::write8(std::uint32_t address, std::uint8_t value) {
         const std::uint32_t addr = address & address_mask_;
         for (std::size_t i = 0; i < fast_.size(); ++i) {

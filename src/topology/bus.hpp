@@ -72,6 +72,15 @@ namespace mnemos::topology {
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
         void write8(std::uint32_t address, std::uint8_t value) override;
 
+        // Wide big-endian accesses: a single fast-span resolution when the whole
+        // access fits one cached RAM/ROM span and no observer is installed;
+        // otherwise byte-exact composition (MMIO side effects, watchpoints,
+        // span-straddling and address-mask wrap all keep read8/write8 semantics).
+        [[nodiscard]] std::uint16_t read16_be(std::uint32_t address) override;
+        void write16_be(std::uint32_t address, std::uint16_t value) override;
+        [[nodiscard]] std::uint32_t read32_be(std::uint32_t address) override;
+        void write32_be(std::uint32_t address, std::uint32_t value) override;
+
         // Optional observer invoked after every completed read/write (the value is
         // the byte transferred). Null by default — a single null check on the hot
         // path when unset. The instrumentation layer installs one for watchpoints;

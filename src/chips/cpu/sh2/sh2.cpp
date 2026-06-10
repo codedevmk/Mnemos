@@ -37,18 +37,37 @@ namespace mnemos::chips::cpu {
         }
     }
     std::uint16_t sh2::rd16(std::uint32_t a) const noexcept {
-        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(rd8(a)) << 8U) | rd8(a + 1U));
+        if (sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U) ||
+            bus_ == nullptr) {
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(rd8(a)) << 8U) |
+                                              rd8(a + 1U));
+        }
+        return bus_->read16_be(a);
     }
     void sh2::wr16(std::uint32_t a, std::uint16_t v) noexcept {
-        wr8(a, static_cast<std::uint8_t>(v >> 8U));
-        wr8(a + 1U, static_cast<std::uint8_t>(v));
+        if (sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U) ||
+            bus_ == nullptr) {
+            wr8(a, static_cast<std::uint8_t>(v >> 8U));
+            wr8(a + 1U, static_cast<std::uint8_t>(v));
+            return;
+        }
+        bus_->write16_be(a, v);
     }
     std::uint32_t sh2::rd32(std::uint32_t a) const noexcept {
-        return (static_cast<std::uint32_t>(rd16(a)) << 16U) | rd16(a + 2U);
+        if (sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U) ||
+            bus_ == nullptr) {
+            return (static_cast<std::uint32_t>(rd16(a)) << 16U) | rd16(a + 2U);
+        }
+        return bus_->read32_be(a);
     }
     void sh2::wr32(std::uint32_t a, std::uint32_t v) noexcept {
-        wr16(a, static_cast<std::uint16_t>(v >> 16U));
-        wr16(a + 2U, static_cast<std::uint16_t>(v));
+        if (sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U) ||
+            bus_ == nullptr) {
+            wr16(a, static_cast<std::uint16_t>(v >> 16U));
+            wr16(a + 2U, static_cast<std::uint16_t>(v));
+            return;
+        }
+        bus_->write32_be(a, v);
     }
 
     // Signed widening helpers (byte/word -> 32-bit) used by the loads + EXT ops.

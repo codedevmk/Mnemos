@@ -158,9 +158,19 @@ namespace mnemos::chips::cpu {
         }
     }
     std::uint16_t m68000::rd16(std::uint32_t a) const noexcept {
+        const std::uint32_t am = a & address_mask;
+        if (bus_ != nullptr && am != address_mask) {
+            return bus_->read16_be(am);
+        }
+        // Word wraps the address mask (or no bus): per-byte, each re-masked.
         return static_cast<std::uint16_t>((static_cast<std::uint16_t>(rd8(a)) << 8U) | rd8(a + 1U));
     }
     void m68000::wr16(std::uint32_t a, std::uint16_t v) noexcept {
+        const std::uint32_t am = a & address_mask;
+        if (bus_ != nullptr && am != address_mask) {
+            bus_->write16_be(am, v);
+            return;
+        }
         wr8(a, static_cast<std::uint8_t>(v >> 8U));
         wr8(a + 1U, static_cast<std::uint8_t>(v));
     }
