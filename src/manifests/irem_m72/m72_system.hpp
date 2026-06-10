@@ -1,9 +1,10 @@
 #pragma once
 
-#include "bus.hpp"     // topology bus
-#include "rom_set.hpp" // arcade ROM-set image
-#include "v30.hpp"     // main CPU
-#include "z80.hpp"     // sound CPU
+#include "bus.hpp"            // topology bus
+#include "irem_m72_video.hpp" // tilemap video unit
+#include "rom_set.hpp"        // arcade ROM-set image
+#include "v30.hpp"            // main CPU
+#include "z80.hpp"            // sound CPU
 
 #include <array>
 #include <cstddef>
@@ -47,6 +48,12 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::uint16_t port_in_dsw_hi = 0x05U;
     inline constexpr std::uint16_t port_out_sound_latch = 0x00U;
     inline constexpr std::uint16_t port_out_flip_coin = 0x02U;
+    // INT vector the board's interrupt controller drives during the V30
+    // acknowledge cycle; games program it at boot.
+    inline constexpr std::uint16_t port_out_irq_base = 0x40U;
+    // Scroll registers as four little-endian words: +0/+2 = playfield A Y/X,
+    // +4/+6 = playfield B Y/X (first-cut layout).
+    inline constexpr std::uint16_t port_out_scroll_base = 0x80U;
 
     // Z80-side ports (first-cut): YM2151 at 0/1 (lands in the audio phase),
     // the sound latch readable at 2.
@@ -60,13 +67,16 @@ namespace mnemos::manifests::irem_m72 {
     //
     // Built so far: V30 + Z80 on their buses, the program ROM regions out of a
     // loaded rom_set_image, the RAM overlays, the main->sound latch (write
-    // asserts the Z80 INT line, the Z80's latch read clears it), and the
-    // input/DIP port reads off plain state bytes. Still to come: the tilemap/
-    // sprite video unit + raster IRQs (phase C), YM2151 + DAC + the sample
-    // port (phase D), real input/DIP devices (phase D).
+    // asserts the Z80 INT line, the Z80's latch read clears it), the input/DIP
+    // port reads off plain state bytes, and the tilemap video unit (VRAM/
+    // palette/tile-ROM spans, scroll ports, vblank INT into the V30 through
+    // the programmable vector). Still to come: sprites + raster-compare port
+    // wiring (phase C), YM2151 + DAC + the sample port (phase D), real
+    // input/DIP devices (phase D).
     struct m72_system final {
         chips::cpu::v30 main_cpu;
         chips::cpu::z80 sound_cpu;
+        chips::video::irem_m72_video video;
         topology::bus main_bus{20U, topology::endianness::little};
         topology::bus sound_bus{16U, topology::endianness::little};
 
@@ -89,6 +99,8 @@ namespace mnemos::manifests::irem_m72 {
         std::uint8_t input_system{0xFFU}; // coins/start/service, active low
         std::uint16_t dip_switches{0xFFFFU};
         std::uint8_t flip_coin_register{}; // state only until phase C/D
+        std::uint8_t irq_vector_base{};    // INT vector served on V30 acknowledge
+        std::array<std::uint8_t, 8> scroll_regs{};
 
         explicit m72_system(common::rom_set_image image);
     };

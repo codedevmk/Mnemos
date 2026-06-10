@@ -54,13 +54,26 @@ namespace mnemos::manifests::irem_m72 {
             }
         });
         main_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
-            switch (port & 0xFFU) {
+            const std::uint16_t p = port & 0xFFU;
+            if (p >= port_out_scroll_base && p < port_out_scroll_base + scroll_regs.size()) {
+                scroll_regs[p - port_out_scroll_base] = value;
+                const auto word = [this](std::size_t i) {
+                    return static_cast<std::uint16_t>(scroll_regs[i] | (scroll_regs[i + 1U] << 8U));
+                };
+                video.set_scroll_a(word(2U), word(0U));
+                video.set_scroll_b(word(6U), word(4U));
+                return;
+            }
+            switch (p) {
             case port_out_sound_latch:
                 sound_latch = value;
                 sound_cpu.set_irq_line(true); // latch write knocks on the Z80
                 break;
             case port_out_flip_coin:
                 flip_coin_register = value; // semantics land with video/inputs
+                break;
+            case port_out_irq_base:
+                irq_vector_base = value;
                 break;
             default:
                 break; // remaining board ports land with their subsystems
@@ -75,6 +88,18 @@ namespace mnemos::manifests::irem_m72 {
                 return sound_latch;
             }
             return 0xFFU;
+        });
+
+        // --- video: VRAM/palette/tile spans + vblank INT into the V30 ---
+        video.attach_vram_a(vram_a);
+        video.attach_vram_b(vram_b);
+        video.attach_palette_a(palette_a);
+        video.attach_tiles_a(roms.regions["tiles_a"]);
+        video.attach_tiles_b(roms.regions["tiles_b"]);
+        video.set_vblank_callback([this](std::uint32_t) { main_cpu.set_irq_line(true); });
+        main_cpu.set_irq_ack([this]() -> std::uint8_t {
+            main_cpu.set_irq_line(false);
+            return irq_vector_base;
         });
 
         main_cpu.reset(chips::reset_kind::power_on);

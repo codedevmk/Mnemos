@@ -1,5 +1,7 @@
 #include "m72_system.hpp"
 
+#include "scheduler.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -101,4 +103,46 @@ TEST_CASE("m72 pads missing program regions to open bus", "[m72]") {
     CHECK(system->main_bus.read8(0x00000U) == 0xFFU);
     CHECK(system->main_bus.read8(0xFFFF0U) == 0xFFU);
     CHECK(system->sound_bus.read8(0x0000U) == 0xFFU);
+}
+
+TEST_CASE("m72 vblank interrupts the V30 through the programmed vector under the scheduler",
+          "[m72]") {
+    // Boot: program the IRQ vector base (0x20), set up a stack, enable
+    // interrupts, halt. The vblank INT then vectors through IVT[0x20] to the
+    // handler, which writes a marker into work RAM and halts again.
+    auto image = make_image({
+        0xB0U, 0x20U,        // MOV AL,20
+        0xE6U, 0x40U,        // OUT 40,AL    (IRQ vector base)
+        0xB8U, 0x00U, 0xE0U, // MOV AX,E000
+        0x8EU, 0xD0U,        // MOV SS,AX
+        0xBCU, 0x00U, 0x10U, // MOV SP,1000
+        0xFBU,               // STI
+        0xF4U                // HLT
+    });
+    auto& main = image.regions["maincpu"];
+    // IVT[0x20] -> 0040:0008 (physical 0x408).
+    main[0x80U] = 0x08U;
+    main[0x81U] = 0x00U;
+    main[0x82U] = 0x40U;
+    main[0x83U] = 0x00U;
+    // Handler: MOV AX,E000; MOV DS,AX; MOV AL,99; MOV [0020],AL; HLT
+    const std::vector<std::uint8_t> handler{0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, 0xB0U,
+                                            0x99U, 0xA2U, 0x20U, 0x00U, 0xF4U};
+    for (std::size_t i = 0; i < handler.size(); ++i) {
+        main[0x408U + i] = handler[i];
+    }
+
+    auto system = assemble_m72(std::move(image));
+    // 32 MHz master: pixel clock /4, V30 /4 (8 MHz), Z80 /8 (4 MHz). Video
+    // first so the CPUs observe the freshly advanced beam.
+    mnemos::runtime::scheduler scheduler({{.chip = &system->video, .divider = 4U},
+                                          {.chip = &system->main_cpu, .divider = 4U},
+                                          {.chip = &system->sound_cpu, .divider = 8U}},
+                                         &system->video);
+
+    scheduler.run_frame(); // stops the master cycle the frame completes
+    CHECK(system->video.frame_index() == 1U);
+    scheduler.run_master_cycles(4096U); // let the handler run
+    CHECK(system->work_ram[0x20U] == 0x99U);
+    CHECK(system->irq_vector_base == 0x20U);
 }

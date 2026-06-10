@@ -19,6 +19,7 @@ target_link_libraries(
         mnemos::topology
         mnemos::chips::cpu::v30
         mnemos::chips::cpu::z80
+        mnemos::chips::video::irem_m72_video
         mnemos::manifests::common
 )
 
@@ -37,6 +38,6 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_irem_m72_test
         SOURCES tests/m72_system_test.cpp
-        LIBRARIES mnemos::manifests::irem_m72
+        LIBRARIES mnemos::manifests::irem_m72 mnemos::runtime
     )
 endif()
