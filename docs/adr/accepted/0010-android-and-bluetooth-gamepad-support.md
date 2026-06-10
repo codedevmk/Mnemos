@@ -1,3 +1,14 @@
+---
+id: ADR-0010
+title: "Android and Bluetooth Gamepad Support"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+proposed: 2026-06-01
+ratified: 2026-06-10
+---
+
 # ADR 0010: Android and Bluetooth Gamepad Support
 
 **Status:** Proposed
@@ -91,3 +102,12 @@ mapping database is bundled so unknown controllers are recognised.
   code with no desktop equivalent.
 - Scope grows beyond the v0.1 Windows/Linux-x64 boundary; this ADR records that
   deliberate expansion.
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session, ahead of its
+2026-06-15 expiry. Stage 1 (ARM64 core correctness in CI) was already merged
+and load-bearing — the same accepted-in-practice drift ADR-0011 exhibited.
+Stages 2-5 (Gradle build path, SAF storage, touch overlay, mobile UX) remain
+future work; this acceptance records the direction and the stage-1 reality,
+not a schedule.

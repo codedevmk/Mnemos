@@ -1,3 +1,13 @@
+---
+id: ADR-0003
+title: "License Split"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-22
+---
+
 # ADR 0003: License Split
 
 **Status:** Accepted for M0 scaffold

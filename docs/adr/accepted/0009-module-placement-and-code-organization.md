@@ -1,3 +1,13 @@
+---
+id: ADR-0009
+title: "Module Placement & Code Organization Policy"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-31
+---
+
 # ADR 0009: Module Placement & Code Organization Policy
 
 **Status:** Accepted

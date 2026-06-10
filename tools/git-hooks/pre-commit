@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+# Fast pre-commit subset (MNE-CTX-PLAN-001 §8): clang-format + G1 naming +
+# G9 lint + G11 budgets + G2 capsule check on touched pilot modules.
 set -eu
 
 if ! command -v clang-format >/dev/null 2>&1; then
@@ -8,8 +10,22 @@ fi
 
 files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$' || true)
 
-if [ -z "${files}" ]; then
-  exit 0
+if [ -n "${files}" ]; then
+  clang-format --dry-run --Werror ${files}
 fi
 
-clang-format --dry-run --Werror ${files}
+if command -v python3 >/dev/null 2>&1; then
+  repo_root="$(git rev-parse --show-toplevel)"
+  python3 "$repo_root/tools/governance/naming_validator.py"
+  python3 "$repo_root/tools/governance/adr_lint.py" --check-index
+  python3 "$repo_root/tools/governance/token_budget.py"
+
+  staged=$(git diff --cached --name-only)
+  for module in src/chips/cpu/z80 src/manifests/sms; do
+    if printf '%s\n' "$staged" | grep -q "^$module/"; then
+      python3 "$repo_root/tools/governance/gen_capsule.py" --check "$module"
+    fi
+  done
+else
+  echo "warning: python3 not found; governance pre-commit gates skipped" >&2
+fi

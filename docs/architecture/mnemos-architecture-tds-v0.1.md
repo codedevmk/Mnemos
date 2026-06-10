@@ -1,3 +1,7 @@
+> **L3 design note** (2026-06-10): normative content lifted to `constitution/`
+> per `constitution/MIGRATION.md` (MNE-CTX-PLAN-001 P0, ADR-0013). On any
+> divergence, `CONSTITUTION.md` and the constitution modules take precedence.
+
 # Mnemos — Architecture Technical Design Specification
 
 **Version:** 0.1 (initial draft)

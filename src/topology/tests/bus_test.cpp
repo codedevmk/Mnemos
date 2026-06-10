@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace {
     using mnemos::topology::bus;
@@ -162,4 +163,52 @@ TEST_CASE("bus rejects empty and zero-size mappings instead of claiming the spac
     // An empty span used to underflow `end` to 0xFFFFFFFF and serve OOB reads.
     CHECK(b.read8(0x0000U) == 0xFFU); // open bus
     CHECK(b.read8(0x123456U) == 0xFFU);
+
+TEST_CASE("bus little-endian wide accesses hit the fast span and fall back byte-exact") {
+    std::array<std::uint8_t, 0x100> ram{};
+    bus b(16U);
+    b.map_ram(0x0000U, ram);
+
+    SECTION("RAM round-trips low byte first") {
+        b.write16_le(0x0010U, 0xBEEFU);
+        CHECK(ram[0x10U] == 0xEFU);
+        CHECK(ram[0x11U] == 0xBEU);
+        CHECK(b.read16_le(0x0010U) == 0xBEEFU);
+        // Prime the fast span via a byte read, then take the wide fast path.
+        CHECK(b.read8(0x0020U) == 0x00U);
+        b.write16_le(0x0020U, 0x1234U);
+        CHECK(b.read16_le(0x0020U) == 0x1234U);
+    }
+
+    SECTION("MMIO composes byte accesses in low-to-high order") {
+        std::vector<std::uint8_t> writes;
+        b.map_mmio(
+            0xD000U, 0x10U,
+            [&](std::uint32_t addr) -> std::uint8_t {
+                return static_cast<std::uint8_t>(addr); // low byte of the address
+            },
+            [&](std::uint32_t, std::uint8_t v) { writes.push_back(v); });
+
+        CHECK(b.read16_le(0xD002U) == 0x0302U); // [D002]=02 low, [D003]=03 high
+        b.write16_le(0xD004U, 0xA1B2U);
+        REQUIRE(writes.size() == 2U);
+        CHECK(writes[0] == 0xB2U); // low byte first
+        CHECK(writes[1] == 0xA1U);
+    }
+
+    SECTION("ROM ignores wide writes on the fast path") {
+        const std::array<std::uint8_t, 4> rom{0x11U, 0x22U, 0x33U, 0x44U};
+        b.map_rom(0xE000U, std::span<const std::uint8_t>(rom));
+        CHECK(b.read16_le(0xE000U) == 0x2211U);
+        b.write16_le(0xE000U, 0xFFFFU); // dropped
+        CHECK(b.read16_le(0xE000U) == 0x2211U);
+    }
+
+    SECTION("an installed observer forces the byte-exact path") {
+        std::size_t events = 0U;
+        b.set_access_observer([&](const mnemos::topology::access_event&) { ++events; });
+        b.write16_le(0x0030U, 0xCAFEU);
+        CHECK(b.read16_le(0x0030U) == 0xCAFEU);
+        CHECK(events == 4U); // two byte writes + two byte reads observed
+    }
 }

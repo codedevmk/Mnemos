@@ -1,3 +1,13 @@
+---
+id: ADR-0004
+title: "Chip Contract"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-22
+---
+
 # ADR 0004: Chip Contract
 
 **Status:** Accepted for M1 chip contract

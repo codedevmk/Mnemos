@@ -1,3 +1,13 @@
+---
+id: ADR-0007
+title: "Manifest TOML Dependency (tomlplusplus)"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-25
+---
+
 # ADR 0007: Manifest TOML Dependency (tomlplusplus)
 
 **Status:** Accepted for M3 manifest loader

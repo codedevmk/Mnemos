@@ -1,3 +1,13 @@
+---
+id: ADR-0002
+title: "CMake and Toolchain"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-22
+---
+
 # ADR 0002: CMake and Toolchain
 
 **Status:** Accepted for M0 scaffold

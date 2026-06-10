@@ -1,0 +1,97 @@
+{
+  "snapshot": "week0",
+  "date": "2026-06-10",
+  "base_commit": "5db38505e6baf90825f244fab08fa429fca7ffe8",
+  "note": "Pilot baseline (MNE-CTX-PLAN-001 P0). Values are measured or pending; never synthetic.",
+  "measured": {
+    "adr_documents": {
+      "accepted": 8,
+      "proposed": 4,
+      "superseded": 0,
+      "detail": "0001-0009 accepted (0006 never committed), 0010-0013 proposed"
+    },
+    "constitution_modules": {
+      "proposed": 8,
+      "accepted": 0
+    },
+    "token_budget_g11": [
+      {
+        "file": "CONSTITUTION.md",
+        "tokens": 1451,
+        "budget": 8000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/ARCH-001-layering.md",
+        "tokens": 933,
+        "budget": 12000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/ARCH-002-wire-protocol.md",
+        "tokens": 473,
+        "budget": 12000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/ARCH-003-rendering.md",
+        "tokens": 398,
+        "budget": 12000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/ARCH-004-timing-model.md",
+        "tokens": 685,
+        "budget": 12000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/ARCH-005-licensing.md",
+        "tokens": 533,
+        "budget": 12000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/STD-001-naming.md",
+        "tokens": 457,
+        "budget": 12000,
+        "over_budget": false
+      },
+      {
+        "file": "constitution/STD-002-errors.md",
+        "tokens": 325,
+        "budget": 12000,
+        "over_budget": false
+      }
+    ],
+    "M13_proposal_expiry_rate": {
+      "expired": 0,
+      "proposed": 4,
+      "value": 0.0
+    },
+    "gates_live": [
+      "G1",
+      "G7",
+      "G9",
+      "G11-advisory"
+    ]
+  },
+  "baselines": {
+    "M6_tokens_per_accepted_change": {
+      "value": null,
+      "status": "pending-instrumented-capture",
+      "procedure": "metrics/README.md"
+    },
+    "M7_context_escape_rate": {
+      "value": null,
+      "status": "pending-instrumented-capture",
+      "procedure": "metrics/README.md",
+      "note": "read manifests do not exist at week 0; raw read sets are the captured input"
+    },
+    "M15_onboarding_reads": {
+      "value": null,
+      "status": "pending-instrumented-capture",
+      "procedure": "metrics/README.md"
+    }
+  }
+}
