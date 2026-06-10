@@ -17,7 +17,7 @@ namespace mnemos::manifests::sega32x {
 
     struct sega32x_machine final {
         std::unique_ptr<genesis::genesis_system> genesis; // main side (the 68000)
-        std::unique_ptr<sega32x_system> thirtytwox;       // the 32X board (two SH-2s)
+        std::unique_ptr<sega32x_system> sega32x;          // the 32X board (two SH-2s)
 
         // SH-2 : 68000 clock ratio. Both derive from the same NTSC master clock --
         // the 68000 runs at master/7, each SH-2 at master*3/7 -- so the SH-2s tick

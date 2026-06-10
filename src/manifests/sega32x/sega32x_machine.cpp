@@ -98,7 +98,7 @@ namespace mnemos::manifests::sega32x {
 #endif
 
         void m68k_reg_write_word(sega32x_machine& m, std::uint32_t off, std::uint16_t val) {
-            sega32x_system& tx = *m.thirtytwox;
+            sega32x_system& tx = *m.sega32x;
             manifests::genesis::genesis_system* gen = m.genesis.get();
             if (reg_trace_enabled() && off < 0x30U) {
                 std::fprintf(stderr, "[reg] 68k w $A151%02X = %04X\n", off, val);
@@ -214,7 +214,7 @@ namespace mnemos::manifests::sega32x {
 
     void sega32x_machine::begin_slice() noexcept {
         slice_base_main_ = genesis->cpu.elapsed_cycles();
-        slice_base_sh2_ = thirtytwox->master_cpu.elapsed_cycles();
+        slice_base_sh2_ = sega32x->master_cpu.elapsed_cycles();
     }
 
     void sega32x_machine::catch_up_sh2() {
@@ -227,9 +227,9 @@ namespace mnemos::manifests::sega32x {
         }
         const std::uint64_t main_delta = main_now - slice_base_main_;
         const std::uint64_t target = slice_base_sh2_ + main_delta * sh2_clock_multiplier;
-        const std::uint64_t cur = thirtytwox->master_cpu.elapsed_cycles();
+        const std::uint64_t cur = sega32x->master_cpu.elapsed_cycles();
         if (target > cur) {
-            thirtytwox->run_cycles(target - cur);
+            sega32x->run_cycles(target - cur);
         }
     }
 
@@ -237,11 +237,11 @@ namespace mnemos::manifests::sega32x {
     assemble_sega32x_machine(std::vector<std::uint8_t> cart, const sega32x_bios& bios,
                              const genesis::genesis_config& config) {
         auto machine = std::make_unique<sega32x_machine>();
-        machine->thirtytwox = assemble_sega32x();
+        machine->sega32x = assemble_sega32x();
         // The Genesis main side boots the 32X cartridge as its cartridge ROM.
         machine->genesis = genesis::assemble_genesis(std::move(cart), config);
 
-        sega32x_system* tx = machine->thirtytwox.get();
+        sega32x_system* tx = machine->sega32x.get();
         genesis::genesis_system* g = machine->genesis.get();
         topology::bus& bus = machine->genesis->bus;
         tx->vdp.set_pal(config.video_region == mnemos::video_region::pal);
