@@ -12,25 +12,29 @@ namespace mnemos::chips::audio {
     // Yamaha YM2151 (OPM) FM synthesizer -- the Irem M72 (and a long list of
     // other arcade boards') FM sound chip: 8 channels x 4 operators.
     //
-    // First increment: the CONTROL PLANE -- the address/data register
-    // protocol with the BUSY flag, the full register file stored and
-    // readable for debugging, Timer A (10-bit, one count per 64 chip clocks)
-    // and Timer B (8-bit, one count per 1024 chip clocks) with their overflow
-    // flags, the $14 control register (run/IRQ-enable/flag-reset bits), the
-    // status register, and the IRQ line surfaced through a callback -- enough
-    // for a sound program's timer-driven tempo loop to run correctly.
+    // Control plane: the address/data register protocol with the BUSY flag,
+    // the stored register file, Timer A (10-bit, one count per 64 chip
+    // clocks) and Timer B (8-bit, one count per 1024) with the $14
+    // run/IRQ-enable/flag-reset control, status reads, and the IRQ line
+    // through an edge callback.
     //
-    // The FM synthesis core (phase generator from KC/KF, ADSR envelopes, the
-    // 8 connection algorithms, LFO, noise) is the next increment; step() and
-    // update() emit silence meanwhile so the board's audio path can be wired
-    // and exercised end to end.
+    // Synthesis core: the OPM phase generator (7-bit KC octave/note + 6-bit
+    // KF fraction + DT2 coarse and DT1 fine detune + MUL), per-operator ADSR
+    // envelopes (AR/D1R/D1L/D2R/RR with key scaling, the hardware
+    // exponential attack convergence), the 8 OPM connection algorithms with
+    // M1 feedback, the log-sine/exp output pipeline shared with the OPN
+    // family, and per-channel L/R routing. One stereo sample per 64 chip
+    // clocks (~55.93 kHz at 3.579545 MHz). Deferred to the conformance pass:
+    // the LFO (PMS/AMS registers are stored, not applied), the channel-7
+    // noise generator, CSM, and exact EG rate parity.
     //
-    // tick(cycles) advances the chip by that many chip clocks (3.579545 MHz
-    // on the M72, scheduled via the rational-rate scheduler entry).
+    // tick(cycles) advances the chip clocks (timers/BUSY); step()/update()
+    // render samples on demand -- the board drains one sample per 64 elapsed
+    // clocks so envelope time stays locked to emulated time.
     class ym2151 final : public iaudio_synth {
       public:
         static constexpr int channel_count = 8;
-        static constexpr int operator_count = 4; // per channel
+        static constexpr int operator_count = 4; // M1, M2, C1, C2
 
         // One stereo output sample per 64 chip clocks (~55.93 kHz at
         // 3.579545 MHz).
@@ -81,16 +85,43 @@ namespace mnemos::chips::audio {
         }
         [[nodiscard]] std::uint64_t elapsed_clocks() const noexcept { return elapsed_; }
 
-        // Audio output -- silence until the synthesis increment lands.
-        [[nodiscard]] stereo_sample step() noexcept { return {}; }
+        // Render one stereo sample (advances the envelope/phase generators).
+        [[nodiscard]] stereo_sample step() noexcept;
         // Render out.size()/2 interleaved stereo frames (L,R,L,R,...).
-        void update(std::span<std::int16_t> out) noexcept {
-            for (std::int16_t& s : out) {
-                s = 0;
-            }
-        }
+        void update(std::span<std::int16_t> out) noexcept;
 
       private:
+        enum class eg_state : std::uint8_t { attack, decay, sustain, release, off };
+
+        struct operator_state final {
+            std::uint32_t phase{}; // 20-bit phase counter
+            std::int32_t output{}; // last output (feedback source)
+            std::int32_t prev_output{};
+            std::uint16_t eg_level{0x3FFU}; // 10-bit attenuation, 0 = loudest
+            eg_state state{eg_state::off};
+            bool key_on{};
+            // Parameters decoded from the register file.
+            std::uint8_t dt1{};
+            std::uint8_t dt2{};
+            std::uint8_t mul{};
+            std::uint8_t tl{0x7FU};
+            std::uint8_t ks{};
+            std::uint8_t ar{};
+            std::uint8_t d1r{};
+            std::uint8_t d2r{};
+            std::uint8_t d1l{};
+            std::uint8_t rr{};
+        };
+
+        struct channel_state final {
+            std::array<operator_state, 4> op{}; // M1, M2, C1, C2
+            std::uint8_t kc{};
+            std::uint8_t kf{};
+            std::uint8_t feedback{};
+            std::uint8_t connection{};
+            std::uint8_t rl{}; // bit0 = left enable, bit1 = right enable
+        };
+
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
             explicit introspection_surface(ym2151& owner) noexcept : registers_impl_(owner) {}
@@ -119,8 +150,18 @@ namespace mnemos::chips::audio {
             return static_cast<std::uint16_t>((registers_[0x10] << 2U) | (registers_[0x11] & 3U));
         }
 
+        void key_on_off(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint32_t phase_increment(const channel_state& ch,
+                                                    const operator_state& op) const noexcept;
+        void eg_step(operator_state& op, std::uint8_t kc) noexcept;
+        [[nodiscard]] static std::int32_t op_calc(const operator_state& op, std::uint32_t phase,
+                                                  std::int32_t modulation) noexcept;
+        [[nodiscard]] std::int32_t channel_calc(channel_state& ch) noexcept;
+
         std::array<std::uint8_t, 256> registers_{};
+        std::array<channel_state, 8> channels_{};
         std::uint8_t address_{};
+        std::uint32_t eg_counter_{};
 
         std::uint16_t timer_a_counter_{}; // counts 0..1023, reloads from CLKA
         std::uint16_t timer_b_counter_{}; // counts 0..255, reloads from CLKB
