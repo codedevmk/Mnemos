@@ -254,6 +254,50 @@ namespace mnemos::topology {
         ibus::write16_be(address, value);
     }
 
+    std::uint16_t bus::read16_le(std::uint32_t address) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!observer_ && addr + 1U > addr) {
+            for (std::size_t i = 0; i < fast_.size(); ++i) {
+                const fast_span& f = fast_[i];
+                if (addr < f.start || addr + 1U > f.end) {
+                    continue;
+                }
+                const region* r = f.r;
+                const std::size_t off = addr - r->start;
+                const std::uint8_t* p = r->backing == kind::ram ? r->ram.data() : r->rom.data();
+                if (i != 0U) {
+                    std::swap(fast_[0], fast_[i]);
+                }
+                return static_cast<std::uint16_t>(static_cast<std::uint16_t>(p[off]) |
+                                                  (static_cast<std::uint16_t>(p[off + 1U]) << 8U));
+            }
+        }
+        return ibus::read16_le(address);
+    }
+
+    void bus::write16_le(std::uint32_t address, std::uint16_t value) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!observer_ && addr + 1U > addr) {
+            for (std::size_t i = 0; i < fast_.size(); ++i) {
+                const fast_span& f = fast_[i];
+                if (addr < f.start || addr + 1U > f.end) {
+                    continue;
+                }
+                const region* r = f.r;
+                if (r->backing == kind::ram) {
+                    const std::size_t off = addr - r->start;
+                    r->ram[off] = static_cast<std::uint8_t>(value);
+                    r->ram[off + 1U] = static_cast<std::uint8_t>(value >> 8U);
+                } // ROM ignores writes
+                if (i != 0U) {
+                    std::swap(fast_[0], fast_[i]);
+                }
+                return;
+            }
+        }
+        ibus::write16_le(address, value);
+    }
+
     void bus::write32_be(std::uint32_t address, std::uint32_t value) {
         const std::uint32_t addr = address & address_mask_;
         if (!observer_ && addr + 3U > addr) {

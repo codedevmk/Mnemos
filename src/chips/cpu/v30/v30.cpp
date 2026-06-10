@@ -101,14 +101,22 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint16_t v30::rw(std::uint16_t segment, std::uint16_t offset) noexcept {
-        // Little-endian, composed byte-by-byte; the offset wraps within the
-        // segment like the silicon does.
+        // Little-endian. The wide bus accessor serves the common case; a word
+        // at offset 0xFFFF wraps within the segment like the silicon, which a
+        // physically-contiguous access cannot express, so it composes bytes.
+        if (bus_ != nullptr && offset != 0xFFFFU) {
+            return bus_->read16_le(phys(segment, offset));
+        }
         const std::uint8_t lo = rb(segment, offset);
         const std::uint8_t hi = rb(segment, static_cast<std::uint16_t>(offset + 1U));
         return static_cast<std::uint16_t>(lo | (hi << 8U));
     }
 
     void v30::ww(std::uint16_t segment, std::uint16_t offset, std::uint16_t value) noexcept {
+        if (bus_ != nullptr && offset != 0xFFFFU) {
+            bus_->write16_le(phys(segment, offset), value);
+            return;
+        }
         wb(segment, offset, static_cast<std::uint8_t>(value));
         wb(segment, static_cast<std::uint16_t>(offset + 1U),
            static_cast<std::uint8_t>(value >> 8U));

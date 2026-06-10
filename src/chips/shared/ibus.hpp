@@ -44,6 +44,20 @@ namespace mnemos::chips {
             write16_be(address + 2U, static_cast<std::uint16_t>(value));
         }
 
+        // Little-endian wide accesses -- the V30/x86-family counterpart of the
+        // big-endian set above, with the same contract: defaults compose byte
+        // accesses, concrete buses may override with a single resolution over
+        // RAM/ROM.
+        [[nodiscard]] virtual std::uint16_t read16_le(std::uint32_t address) {
+            return static_cast<std::uint16_t>(
+                static_cast<std::uint16_t>(read8(address)) |
+                (static_cast<std::uint16_t>(read8(address + 1U)) << 8U));
+        }
+        virtual void write16_le(std::uint32_t address, std::uint16_t value) {
+            write8(address, static_cast<std::uint8_t>(value));
+            write8(address + 1U, static_cast<std::uint8_t>(value >> 8U));
+        }
+
         // A stable read window over bus storage: the caller may index
         // data[0 .. end-start] (data points at `start`) with no further
         // dispatch -- the CPU fetch fast path. Valid until the bus signals
