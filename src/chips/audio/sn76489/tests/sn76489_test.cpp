@@ -160,3 +160,25 @@ TEST_CASE("sn76489 exposes its register file via introspection") {
     REQUIRE(rv != nullptr); // register_view backed by register_snapshot()
     CHECK_FALSE(rv->registers().empty());
 }
+
+TEST_CASE("sn76489 fires reg_write_trace on data and stereo writes") {
+    sn76489 psg;
+    auto* rt = psg.introspection().reg_writes();
+    REQUIRE(rt != nullptr);
+
+    std::vector<mnemos::instrumentation::reg_write_event> log;
+    rt->install([&](const mnemos::instrumentation::reg_write_event& ev) { log.push_back(ev); });
+    psg.write(0x8FU);        // data port: latch ch0 volume off
+    psg.write_stereo(0xFFU); // Game Gear stereo port
+
+    REQUIRE(log.size() == 2U);
+    CHECK(log[0].port == 0U); // main data port
+    CHECK(log[0].value == 0x8FU);
+    CHECK(log[1].port == 1U); // GG stereo port
+    CHECK(log[1].value == 0xFFU);
+
+    // An empty callback clears the hook.
+    rt->install({});
+    psg.write(0x90U);
+    CHECK(log.size() == 2U);
+}
