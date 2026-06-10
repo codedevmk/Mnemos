@@ -92,6 +92,15 @@ namespace mnemos::manifests::irem_m72 {
                 sound_latch_irq = false;
                 update_sound_irq();
                 return sound_latch;
+            case z80_port_sample_read: {
+                const auto& samples = roms.regions["samples"];
+                if (samples.empty()) {
+                    return 0xFFU;
+                }
+                const std::uint8_t byte = samples[sample_address % samples.size()];
+                ++sample_address;
+                return byte;
+            }
             default:
                 return 0xFFU;
             }
@@ -104,8 +113,18 @@ namespace mnemos::manifests::irem_m72 {
             case z80_port_ym2151_data:
                 fm.write_data(value);
                 break;
+            case z80_port_sample_addr_lo:
+                sample_address = static_cast<std::uint16_t>((sample_address & 0xFF00U) | value);
+                break;
+            case z80_port_sample_addr_hi:
+                sample_address =
+                    static_cast<std::uint16_t>((sample_address & 0x00FFU) | (value << 8U));
+                break;
+            case z80_port_dac:
+                dac.write(value);
+                break;
             default:
-                break; // the DAC/sample ports land with the next increment
+                break;
             }
         });
         fm.set_irq([this](bool) { update_sound_irq(); });

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bus.hpp"            // topology bus
+#include "dac8.hpp"           // sample-playback DAC
 #include "irem_m72_video.hpp" // tilemap video unit
 #include "rom_set.hpp"        // arcade ROM-set image
 #include "v30.hpp"            // main CPU
@@ -57,10 +58,17 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::uint16_t port_out_scroll_base = 0x80U;
 
     // Z80-side ports (first-cut): YM2151 address/data (status readable at
-    // the data port), the sound latch readable at 2.
+    // the data port), the sound latch readable at 2, the sample path at
+    // 0x80-0x84 (a 16-bit address latch, the DAC level, and the auto-
+    // incrementing sample-ROM read used by the M84-style sound program;
+    // R-Type itself plays no samples).
     inline constexpr std::uint16_t z80_port_ym2151_addr = 0x00U;
     inline constexpr std::uint16_t z80_port_ym2151_data = 0x01U;
     inline constexpr std::uint16_t z80_port_latch = 0x02U;
+    inline constexpr std::uint16_t z80_port_sample_addr_lo = 0x80U;
+    inline constexpr std::uint16_t z80_port_sample_addr_hi = 0x81U;
+    inline constexpr std::uint16_t z80_port_dac = 0x82U;
+    inline constexpr std::uint16_t z80_port_sample_read = 0x84U;
 
     // Heap-allocated, never-moved M72 board. Built like sega32x_system: chips
     // and RAM blocks as value members, the buses holding spans into them, the
@@ -71,15 +79,16 @@ namespace mnemos::manifests::irem_m72 {
     // asserts the Z80 INT line, the Z80's latch read clears it), the input/DIP
     // port reads off plain state bytes, the tilemap/sprite video unit (VRAM/
     // palette/tile-ROM spans, scroll ports, vblank INT into the V30 through
-    // the programmable vector), and the YM2151 on the Z80 ports with its IRQ
-    // OR'd with the sound latch onto the Z80 INT line. Still to come: the
-    // raster-compare port wiring, the DAC + sample port, real input/DIP
-    // devices (phase D).
+    // the programmable vector), the YM2151 on the Z80 ports with its IRQ
+    // OR'd with the sound latch onto the Z80 INT line, and the DAC + sample-
+    // ROM read path on Z80 ports 0x80-0x84. Still to come: the raster-compare
+    // port wiring and real input/DIP devices.
     struct m72_system final {
         chips::cpu::v30 main_cpu;
         chips::cpu::z80 sound_cpu;
         chips::video::irem_m72_video video;
         chips::audio::ym2151 fm;
+        chips::audio::dac8 dac;
         topology::bus main_bus{20U, topology::endianness::little};
         topology::bus sound_bus{16U, topology::endianness::little};
 
@@ -107,6 +116,9 @@ namespace mnemos::manifests::irem_m72 {
         // The Z80's INT line is the OR of the pending sound latch and the
         // YM2151 IRQ; update_sound_irq() recomputes it on either change.
         bool sound_latch_irq{};
+        // Sample-ROM read cursor (Z80 ports 0x80/0x81 set it, reads at 0x84
+        // auto-increment it through the "samples" region).
+        std::uint16_t sample_address{};
 
         void update_sound_irq() noexcept {
             sound_cpu.set_irq_line(sound_latch_irq || fm.irq_asserted());
