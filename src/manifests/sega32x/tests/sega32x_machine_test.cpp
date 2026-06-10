@@ -102,7 +102,7 @@ TEST_CASE("sega32x_machine INTM/INTS carry only the CMD bit and edge-assert CMD"
     bus.write8(0xA15103U, 0x04U);
     CHECK(tx.master_irq_mask == 0x04U);
     CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 8);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x48U);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x44U);
     CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0); // targeted, not broadcast
     CHECK(bus.read8(0xA15103U) == 0x04U);
 
@@ -167,7 +167,7 @@ TEST_CASE("sega32x_machine sources VINT from the Genesis VDP V-blank edge", "[se
     }
 
     CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 12);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x44U);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x46U);
     CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
     CHECK((tx.slave_irq_latch & sega32x_system::irq_vint) != 0U); // latched for later
     // V-blank is mirrored into adapter-control bit 7 (a poll-based frame sync).
@@ -194,7 +194,7 @@ TEST_CASE("sega32x_machine sources HINT from the VDP line-counter latch", "[sega
     m->genesis->vdp.tick(3420ULL * 2ULL); // a couple of scanlines
 
     CHECK(m->thirtytwox->master_cpu.pending_irq_level() == 10);
-    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x46U);
+    CHECK(m->thirtytwox->master_cpu.pending_irq_vector() == 0x45U);
     CHECK(m->thirtytwox->slave_cpu.pending_irq_level() == 0);
 }
 

@@ -136,6 +136,29 @@ namespace mnemos::apps::player::adapters::sega32x {
             spec_.push_back({.label = "Cart", .value = std::move(display_name)});
         }
 
+        // Opt-in vector-table write watch (MNEMOS_32X_VECWATCH=1): logs every
+        // SH-2 write into the slave's interrupt-vector slots (VBR $06000400,
+        // vectors $40-$4F) with the writing CPU's PC -- mirrors collapse via
+        // the partition mask.
+        if (env_set("MNEMOS_32X_VECWATCH")) {
+            auto* tx = machine_->thirtytwox.get();
+            const auto watch = [](const char* cpu, std::uint32_t pc,
+                                  const topology::access_event& ev) {
+                const std::uint32_t a = ev.address & 0x1FFFFFFFU;
+                if (ev.write && a >= 0x06000500U && a < 0x06000540U) {
+                    std::fprintf(stderr, "[vec] %s pc=%08X [%08X]=%02X\n", cpu, pc, a, ev.value);
+                }
+            };
+            machine_->thirtytwox->master_bus.set_access_observer(
+                [tx, watch](const topology::access_event& ev) {
+                    watch("M", tx->master_cpu.cpu_registers().pc, ev);
+                });
+            machine_->thirtytwox->slave_bus.set_access_observer(
+                [tx, watch](const topology::access_event& ev) {
+                    watch("S", tx->slave_cpu.cpu_registers().pc, ev);
+                });
+        }
+
         // Seed the composed frame from the Genesis view geometry so
         // current_frame() is valid before the first step.
         const auto gen = machine_->genesis->vdp.framebuffer();
@@ -239,13 +262,18 @@ namespace mnemos::apps::player::adapters::sega32x {
             last_z80_cycles_ = z80_now;
             std::fprintf(stderr,
                          "[32x] f%05llu rst=%d mpc=%08X spc=%08X comm %04X %04X %04X %04X mode=%u "
-                         "z80=%llu run=%d zpc=%04X\n",
+                         "z80=%llu run=%d zpc=%04X dreq=%u/%u ctl=%02X pwm=%u/%u "
+                         "smask=%02X ssr=%03X spend=%d slatch=%02X svbr=%08X sgbr=%08X\n",
                          static_cast<unsigned long long>(frames_stepped_), tx.sh2_reset_asserted,
                          tx.master_cpu.cpu_registers().pc, tx.slave_cpu.cpu_registers().pc,
                          tx.comm[0], tx.comm[1], tx.comm[2], tx.comm[3],
                          static_cast<unsigned>(tx.vdp.mode()),
                          static_cast<unsigned long long>(z80_delta), gen.z80_running ? 1 : 0,
-                         gen.z80.cpu_registers().pc);
+                         gen.z80.cpu_registers().pc, tx.dbg_dreq_pushes, tx.dbg_dreq_pops,
+                         tx.dreq_ctrl, tx.dbg_pwm_writes, tx.dbg_pwm_irqs, tx.slave_irq_mask,
+                         tx.slave_cpu.cpu_registers().sr & 0xFFFU, tx.slave_cpu.pending_irq_level(),
+                         tx.slave_irq_latch, tx.slave_cpu.cpu_registers().vbr,
+                         tx.slave_cpu.cpu_registers().gbr);
         }
     }
 

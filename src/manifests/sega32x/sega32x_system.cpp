@@ -122,14 +122,15 @@ namespace mnemos::manifests::sega32x {
         };
         // The four 32X interrupt sources, highest priority first.
         constexpr std::array<irq_source, 4> irq_sources{{
-            {0x01U, 12, 0x44U}, // VINT
-            {0x02U, 10, 0x46U}, // HINT
-            {0x04U, 8, 0x48U},  // CMD
-            {0x08U, 6, 0x4AU},  // PWM
+            {0x01U, 12, 0x46U}, // VINT  (IRL auto-vector 64 + pair)
+            {0x02U, 10, 0x45U}, // HINT
+            {0x04U, 8, 0x44U},  // CMD
+            {0x08U, 6, 0x43U},  // PWM
         }};
     } // namespace
 
     void sega32x_system::dreq_fifo_push(std::uint16_t word) noexcept {
+        ++dbg_dreq_pushes;
         if (dreq_fifo_count >= dreq_fifo_depth) {
             return; // full: the word is lost (the 68000 should poll FULL first)
         }
@@ -140,6 +141,7 @@ namespace mnemos::manifests::sega32x {
         if (dreq_fifo_count == 0U) {
             return 0U;
         }
+        ++dbg_dreq_pops;
         const std::uint16_t word = dreq_fifo[0];
         for (std::size_t i = 0; i + 1U < dreq_fifo_depth; ++i) {
             dreq_fifo[i] = dreq_fifo[i + 1U];
@@ -267,7 +269,7 @@ namespace mnemos::manifests::sega32x {
     }
 
     void sega32x_system::sys_reg_write(std::uint32_t offset, std::uint8_t value, bool is_master) {
-        if (comm_trace_enabled() && offset < 0x10U) {
+        if (comm_trace_enabled() && offset < 0x20U) {
             std::fprintf(stderr, "[sysreg] %s wr off=%02X <= %02X\n", is_master ? "m" : "s",
                          static_cast<unsigned>(offset), value);
         }
@@ -326,6 +328,7 @@ namespace mnemos::manifests::sega32x {
             }
             const auto duty =
                 static_cast<std::uint16_t>((static_cast<std::uint16_t>(high_latch) << 8U) | value);
+            ++dbg_pwm_writes;
             if (left) {
                 pwm_fifo_push(pwm_fifo_l, pwm_fifo_l_count, duty);
             }
@@ -482,10 +485,13 @@ namespace mnemos::manifests::sega32x {
         }
     }
 
-    void sega32x_system::raise_vint() { deliver_irq(irq_vint, 12, 0x44U); }
-    void sega32x_system::raise_hint() { deliver_irq(irq_hint, 10, 0x46U); }
-    void sega32x_system::raise_cmd() { deliver_irq(irq_cmd, 8, 0x48U); }
-    void sega32x_system::raise_pwm() { deliver_irq(irq_pwm, 6, 0x4AU); }
+    void sega32x_system::raise_vint() { deliver_irq(irq_vint, 12, 0x46U); }
+    void sega32x_system::raise_hint() { deliver_irq(irq_hint, 10, 0x45U); }
+    void sega32x_system::raise_cmd() { deliver_irq(irq_cmd, 8, 0x44U); }
+    void sega32x_system::raise_pwm() {
+        ++dbg_pwm_irqs;
+        deliver_irq(irq_pwm, 6, 0x43U);
+    }
 
     namespace {
         // Targeted CMD edge for one CPU: latch regardless of mask, deliver only if
@@ -499,7 +505,7 @@ namespace mnemos::manifests::sega32x {
             if ((mask & sega32x_system::irq_cmd) == 0U || cpu.pending_irq_level() >= 8) {
                 return;
             }
-            cpu.set_irq(8, 0x48U);
+            cpu.set_irq(8, 0x44U);
             latch &= static_cast<std::uint8_t>(~sega32x_system::irq_cmd);
         }
     } // namespace
