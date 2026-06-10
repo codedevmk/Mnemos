@@ -218,6 +218,20 @@ namespace mnemos::apps::player::adapters::sega32x {
 #pragma warning(pop)
 #endif
 
+        // SH-2 worker thread (MNEMOS_32X_THREAD=0 disables): the depth-1
+        // scanline pipeline overlaps the SH-2 pair with the Genesis side.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: opt-out knob
+#endif
+        const char* thread_env = std::getenv("MNEMOS_32X_THREAD");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (thread_env == nullptr || thread_env[0] != '0') {
+            machine_->start_sh2_worker();
+        }
+
         // Seed the composed frame from the Genesis view geometry so
         // current_frame() is valid before the first step.
         const auto gen = machine_->genesis->vdp.framebuffer();
@@ -241,8 +255,11 @@ namespace mnemos::apps::player::adapters::sega32x {
         // row the VDP just rendered is scanline()-1; V-blank lines have no
         // display row. The 32X overlay (a no-op while the bitmap mode is off)
         // samples the 32X VDP state as of this raster position.
+        compose_line(machine_->genesis->vdp.scanline() - 1);
+    }
+
+    void sega32x_adapter::compose_line(int line) noexcept {
         const auto gen = machine_->genesis->vdp.framebuffer();
-        const int line = machine_->genesis->vdp.scanline() - 1;
         if (line < 0 || line >= static_cast<int>(gen.height)) {
             return;
         }
@@ -270,11 +287,34 @@ namespace mnemos::apps::player::adapters::sega32x {
         // Advance the Genesis a scanline of master cycles, then catch the SH-2
         // pair up to 3x the 68000's progress, until the VDP completes a frame.
         const std::uint64_t start_frame = scheduler_.frame_index();
-        while (scheduler_.frame_index() == start_frame) {
-            machine_->begin_slice();
-            scheduler_.run_master_cycles(kSliceMasterCycles);
-            machine_->catch_up_sh2();
-            compose_finished_line();
+        if (machine_->sh2_worker_running()) {
+            // Depth-1 pipeline: the worker runs the SH-2 batch for line N-1
+            // while the main thread emulates Genesis line N. Compose for a
+            // line happens after its batch joins -- same data, one line later
+            // in wall time. Mid-line interactions fence inside the machine.
+            int pending_line = -1;
+            bool have_pending = false;
+            while (scheduler_.frame_index() == start_frame) {
+                scheduler_.run_master_cycles(kSliceMasterCycles);
+                machine_->join_sh2();
+                if (have_pending) {
+                    compose_line(pending_line);
+                }
+                pending_line = machine_->genesis->vdp.scanline() - 1;
+                have_pending = true;
+                machine_->schedule_sh2_catch_up();
+            }
+            machine_->join_sh2();
+            if (have_pending) {
+                compose_line(pending_line);
+            }
+        } else {
+            while (scheduler_.frame_index() == start_frame) {
+                machine_->begin_slice();
+                scheduler_.run_master_cycles(kSliceMasterCycles);
+                machine_->catch_up_sh2();
+                compose_finished_line();
+            }
         }
         finish_composed_frame();
         ++frames_stepped_;

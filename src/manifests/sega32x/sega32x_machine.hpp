@@ -9,8 +9,10 @@
 #include "genesis_system.hpp" // genesis_system + genesis_config + assemble_genesis
 #include "sega32x_system.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <thread>
 #include <vector>
 
 namespace mnemos::manifests::sega32x {
@@ -36,9 +38,38 @@ namespace mnemos::manifests::sega32x {
         void begin_slice() noexcept;
         void catch_up_sh2();
 
+        ~sega32x_machine(); // parks and joins the SH-2 worker
+
+        // ---- SH-2 worker: a depth-1 scanline pipeline ----
+        // The worker runs the SH-2 batch for line N while the main thread
+        // emulates Genesis line N+1. Equivalence with the synchronous schedule
+        // holds because every 68000 access the SH-2s can observe (the $A15xxx
+        // windows, the FB windows, the V-blank/H-int wrappers) joins the
+        // in-flight batch first -- between fences the SH-2s see exactly the
+        // state the synchronous schedule would have shown them.
+        void start_sh2_worker();
+        [[nodiscard]] bool sh2_worker_running() const noexcept { return worker_.joinable(); }
+        // Wait for the published batch to complete (no-op when idle / no worker).
+        void join_sh2() noexcept;
+        // Publish the next batch: everything the 68000 advanced since the last
+        // schedule, times the clock ratio. Joins the previous batch first.
+        void schedule_sh2_catch_up();
+        // The exact-interlock fence (COMM writes, DREQ-full): join, then bring
+        // the SH-2s synchronously to the 68000's current position.
+        void fence_sh2();
+
       private:
+        void worker_main();
+
         std::uint64_t slice_base_main_ = 0; // 68000 cycles at the slice baseline
         std::uint64_t slice_base_sh2_ = 0;  // master SH-2 cycles at the slice baseline
+
+        std::thread worker_{};
+        std::atomic<std::uint64_t> sh2_target_{0}; // published batch end (master SH-2 cycles)
+        std::atomic<std::uint64_t> sh2_done_{0};   // worker progress against the target
+        std::atomic<bool> worker_quit_{false};
+        std::uint64_t sched_target_ = 0;    // cumulative SH-2 cycle target (main thread)
+        std::uint64_t sched_main_base_ = 0; // 68000 elapsed at the last schedule
     };
 
     // The three 32X boot ROM images. m_bios/s_bios seed the SH-2s' reset

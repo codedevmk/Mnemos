@@ -88,6 +88,9 @@ namespace mnemos::apps::player::adapters::sega32x {
         // game updates mid-frame (status-bar redraws) are sampled when the
         // beam reaches them, not re-snapshotted at frame end.
         void compose_finished_line() noexcept;
+        // Compose an explicit display line (the pipelined path composes line N
+        // after its SH-2 batch joins, one line behind the beam).
+        void compose_line(int line) noexcept;
         // Publish the composed frame's geometry once the frame completes.
         void finish_composed_frame() noexcept;
 
