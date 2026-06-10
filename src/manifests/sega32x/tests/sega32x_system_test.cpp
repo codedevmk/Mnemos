@@ -69,10 +69,15 @@ TEST_CASE("sega32x_system adapter control round-trips through the register windo
     auto sys = assemble_sega32x();
     // Even byte = the adapter flag byte (the boot ROMs check ADEN bit 1 here);
     // the odd byte is the interrupt-enable mask, not adapter state.
-    sys->master_bus.write8(0x00004000U, 0x82U); // flag byte (FM + ADEN-ish bits)
+    sys->master_bus.write8(0x00004000U, 0x82U); // flag byte (FM-ish bits latch)
     CHECK((sys->adapter_ctrl & 0x00FFU) == 0x82U);
-    CHECK(sys->master_bus.read8(0x00004000U) == 0x82U); // master: CPU-ID bit 0 = 0
-    CHECK(sys->slave_bus.read8(0x00004000U) == 0x83U);  // slave: CPU-ID bit 0 = 1
+    // ADEN (bit 1) and the CART pin (bit 0, 1 = no cartridge) are read-only
+    // inputs on the SH-2 view -- written bits do not echo; they reflect the
+    // adapter's real state. The bare system has no cart attached.
+    CHECK(sys->master_bus.read8(0x00004000U) == 0x81U);
+    sys->adapter_enabled = true;
+    CHECK(sys->master_bus.read8(0x00004000U) == 0x83U);
+    CHECK(sys->slave_bus.read8(0x00004000U) == 0x83U); // same flags on both CPUs
     // The H-count register at +$02 is plain storage.
     sys->master_bus.write8(0x00004002U, 0x00U);
     sys->master_bus.write8(0x00004003U, 0x42U);

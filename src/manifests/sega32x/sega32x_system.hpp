@@ -69,6 +69,11 @@ namespace mnemos::manifests::sega32x {
 
         std::array<std::uint8_t, sdram_size> sdram{};
         std::array<std::uint8_t, framebuffer_size> framebuffer{};
+        // Per-CPU SH7604 cache data array at $C0000000: 4 KiB of on-chip RAM
+        // when used as scratch (no cache behaviour is modelled). Retail slave
+        // code copies hot loops here.
+        std::array<std::uint8_t, 0x1000> master_cache_data{};
+        std::array<std::uint8_t, 0x1000> slave_cache_data{};
         std::array<std::uint8_t, m_bios_size> m_bios{};
         std::array<std::uint8_t, s_bios_size> s_bios{};
         std::array<std::uint8_t, g_bios_size> g_bios{}; // 68000 $000000 vector overlay
@@ -78,13 +83,10 @@ namespace mnemos::manifests::sega32x {
         // until attach_cart wires the SH-2-side cart windows.
         std::span<const std::uint8_t> cart_rom{};
 
-        std::uint16_t adapter_ctrl{};  // RV / ADEN / reset / bank-select bits
+        std::uint16_t adapter_ctrl{};  // latched FM / RV bits + the V-blank status mirror
+        bool adapter_enabled{};        // ADEN: set once by the cart's security block
         std::uint16_t hcount{};        // SH-2-side H-interrupt line-count register
         bool sh2_reset_asserted{true}; // SH-2s held in reset until the adapter releases them
-        // Reference-derived 68000 COMM-read bootstrap state: tracks a completed
-        // 32-bit M_OK read so the bridge can auto-advance the boot handshake
-        // (see sega32x_machine's COMM read path).
-        bool m_ok_high_seen{};
 
         // 32X interrupt sources: a per-CPU enable mask + latch, each source with a
         // fixed SH-2 IRL level + vector. An edge latches on both CPUs regardless of
