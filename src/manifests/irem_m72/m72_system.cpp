@@ -94,8 +94,11 @@ namespace mnemos::manifests::irem_m72 {
         video.attach_vram_a(vram_a);
         video.attach_vram_b(vram_b);
         video.attach_palette_a(palette_a);
+        video.attach_palette_b(palette_b);
+        video.attach_sprite_ram(sprite_ram);
         video.attach_tiles_a(roms.regions["tiles_a"]);
         video.attach_tiles_b(roms.regions["tiles_b"]);
+        video.attach_sprites(roms.regions["sprites"]);
         video.set_vblank_callback([this](std::uint32_t) { main_cpu.set_irq_line(true); });
         main_cpu.set_irq_ack([this]() -> std::uint8_t {
             main_cpu.set_irq_line(false);

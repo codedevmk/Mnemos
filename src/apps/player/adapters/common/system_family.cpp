@@ -24,6 +24,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "sega32x") {
             return system_family::sega32x;
         }
+        if (id == "irem_m72") {
+            return system_family::irem_m72;
+        }
         return std::nullopt;
     }
 
@@ -39,6 +42,8 @@ namespace mnemos::apps::player::adapters {
             return "segacd";
         case system_family::sega32x:
             return "sega32x";
+        case system_family::irem_m72:
+            return "irem_m72";
         case system_family::genesis:
             break;
         }
@@ -57,12 +62,16 @@ namespace mnemos::apps::player::adapters {
             return "Sega CD";
         case system_family::sega32x:
             return "32X";
+        case system_family::irem_m72:
+            return "Irem M72";
         case system_family::genesis:
             break;
         }
         return "Genesis";
     }
 
-    const char* family_names() noexcept { return "genesis, sms, gg, c64, segacd, sega32x"; }
+    const char* family_names() noexcept {
+        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72";
+    }
 
 } // namespace mnemos::apps::player::adapters
