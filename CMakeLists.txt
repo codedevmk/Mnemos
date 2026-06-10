@@ -18,6 +18,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Release: whole-program optimization. The emulation hot path crosses
+# translation units (CPU cores call the bus through an interface); LTO lets
+# the linker inline and devirtualize across them. Measured on the 32X
+# in-game run before enabling by default.
+option(MNEMOS_ENABLE_LTO "Whole-program optimization for Release builds." OFF)
+if(MNEMOS_ENABLE_LTO)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
+
 option(MNEMOS_ENABLE_COVERAGE "Build Mnemos targets with LLVM source coverage instrumentation." OFF)
 option(MNEMOS_BUILD_APPS "Build the SDL3-backed frontend applications (src/apps). Disable for headless core + test builds that avoid the SDL3/windowing dependency." ON)
 
