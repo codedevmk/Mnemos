@@ -3,6 +3,7 @@
 #include "chip_registry.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <memory>
 
 namespace mnemos::chips::storage::c1541 {
@@ -248,11 +249,14 @@ namespace mnemos::chips::storage::c1541 {
         via2_.load_state(reader);
         reader.bytes(std::span<std::uint8_t>(ram_));
         device_ = static_cast<std::uint8_t>(reader.u8() & 0x0FU);
-        head_half_track_ = reader.u8();
+        // Clamp restored mechanism state: density_zone_ indexes a 4-entry
+        // period table on every drive cycle, and the head can only sit on a
+        // real half-track. A corrupt state must not restore wild indices.
+        head_half_track_ = std::min<std::uint8_t>(reader.u8(), 83U);
         byte_index_ = reader.u64();
         latched_byte_ = reader.u8();
         stepper_prev_ = reader.u8();
-        density_zone_ = reader.u8();
+        density_zone_ = reader.u8() & 0x03U;
         motor_ = reader.boolean();
         atn_prev_ = reader.boolean();
         byte_cycles_ = reader.u32();

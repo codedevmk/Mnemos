@@ -109,6 +109,18 @@ namespace mnemos::compression {
         }
         const std::span<const std::uint8_t> comp = bytes_.subspan(data, entry.compressed_size);
 
+        // uncompressed_size comes straight from an untrusted central directory:
+        // cap it before allocating, or a ~100-byte archive can demand 4 GiB per
+        // entry. 256 MiB covers any plausible ROM/media payload, and a deflate
+        // stream cannot legitimately expand beyond ~1032x its compressed size.
+        constexpr std::uint64_t max_entry_size = 256ULL * 1024U * 1024U;
+        constexpr std::uint64_t max_expansion = 1032U;
+        if (entry.uncompressed_size > max_entry_size ||
+            (entry.method == zip_method::deflated &&
+             entry.uncompressed_size > (static_cast<std::uint64_t>(entry.compressed_size) + 64U) *
+                                           max_expansion)) {
+            return std::nullopt;
+        }
         std::vector<std::uint8_t> out(entry.uncompressed_size);
         if (entry.method == zip_method::stored) {
             if (entry.compressed_size != entry.uncompressed_size) {

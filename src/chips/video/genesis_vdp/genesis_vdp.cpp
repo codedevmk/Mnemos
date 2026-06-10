@@ -113,26 +113,6 @@ namespace mnemos::chips::video {
             return (line + 1) * kLineMaster + t[0]; // roll into the next line's first slot
         }
 
-        // Model VDP data-port write-ACCEPT back-pressure: each 16-bit word drains at a
-        // VDP external-access slot (a VRAM word costs two), and the 68K stalls when it
-        // writes to a full 4-entry FIFO. This is the /DTACK pacing that times the boot
-        // VRAM clear; without it Mnemos boots ~4-8 frames too fast and intro animations
-        // diverge. ON by default; MNEMOS_WRITE_ACCEPT=0 disables it (the old behaviour).
-        [[nodiscard]] bool write_accept_enabled() noexcept {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // getenv: cached once, not hot-path
-#endif
-            static const bool on = [] {
-                const char* e = std::getenv("MNEMOS_WRITE_ACCEPT");
-                return (e == nullptr) || (e[0] != '0');
-            }();
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            return on;
-        }
-
         // Scroll-plane size in cells (R16 HSZ/VSZ; 0b10 is invalid -> treat as 64).
         [[nodiscard]] constexpr int scroll_size(int sz_bits) noexcept {
             constexpr std::array<int, 4> sizes = {32, 64, 64, 128};
@@ -461,7 +441,7 @@ namespace mnemos::chips::video {
             return;
         }
 
-        if (write_accept_enabled()) {
+        if (write_accept_) {
             // FIFO-buffered accept model (faithful to the 315-5313 data-port FIFO):
             // a 4-entry FIFO absorbs spaced writes (no stall while it has room); the
             // 68K stalls only when it writes to a FULL FIFO, waiting for the oldest
@@ -1521,8 +1501,20 @@ namespace mnemos::chips::video {
         }
         writer.u32(static_cast<std::uint32_t>(fifo_idx_));
         writer.u64(static_cast<std::uint64_t>(fifo_stall_master_cycles_));
-        // fifo_accept_cursor_master_ is opt-in (MNEMOS_WRITE_ACCEPT) transient state and
+        // fifo_accept_cursor_master_ is transient write-accept state and
         // is deliberately NOT in the serialized format -- keeps the chunk byte-compatible.
+
+        // Live DMA/interrupt timing debts, appended after the FIFO block. Without
+        // these a state saved mid VRAM fill/copy restores dma_busy_ stuck high
+        // forever (tick only clears it while the countdown is positive), a 68K
+        // DMA stall is silently released, and a VINT scheduled inside its
+        // 770/788-master-cycle window is dropped.
+        writer.u64(static_cast<std::uint64_t>(dma_busy_master_cycles_));
+        writer.u64(static_cast<std::uint64_t>(dma_stall_master_cycles_));
+        writer.u64(static_cast<std::uint64_t>(vint_pending_delay_master_));
+        writer.boolean(last_in_vblank_);
+        writer.boolean(z80_int_line_);
+        writer.boolean(last_z80_int_line_);
     }
 
     void genesis_vdp::load_state(state_reader& reader) {
@@ -1578,6 +1570,13 @@ namespace mnemos::chips::video {
         // re-derives at the next scanline wrap when the accept path is active.
         fifo_accept_cursor_master_ = 0;
 
+        dma_busy_master_cycles_ = static_cast<std::int64_t>(reader.u64());
+        dma_stall_master_cycles_ = static_cast<std::int64_t>(reader.u64());
+        vint_pending_delay_master_ = static_cast<std::int64_t>(reader.u64());
+        last_in_vblank_ = reader.boolean();
+        z80_int_line_ = reader.boolean();
+        last_z80_int_line_ = reader.boolean();
+
         last_irq_level_ = pending_irq_level();
     }
 
@@ -1591,6 +1590,14 @@ namespace mnemos::chips::video {
         // NTSC.
         if (const auto v = chips::cfg_bool(cfg, "pal")) {
             set_pal(*v);
+        }
+
+        // Data-port write-ACCEPT back-pressure (the /DTACK pacing that times the
+        // boot VRAM clear). ON by default; a manifest may set it off for A/B
+        // parity experiments. A chip config rather than an environment variable:
+        // behaviour that alters the execution trace must not depend on host env.
+        if (const auto v = chips::cfg_bool(cfg, "write_accept")) {
+            write_accept_ = *v;
         }
 
         // The VDP's host hooks: dma_read (68K->VDP DMA word source), irq

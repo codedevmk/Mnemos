@@ -325,6 +325,7 @@ namespace mnemos::disc {
         // Post-pass: per-track sector_count + cumulative start_lba. A track ends
         // where the next track in the same file begins, else at end-of-file.
         std::uint32_t cumulative = 0;
+        std::uint32_t file_base_lba = 0; // absolute LBA where the current file starts
         for (std::size_t i = 0; i < tracks_.size(); ++i) {
             track& t = tracks_[i];
             std::uint64_t end_byte = files_[static_cast<std::size_t>(t.file_index)].size();
@@ -337,9 +338,15 @@ namespace mnemos::disc {
             const std::uint64_t span = end_byte > t.file_offset ? end_byte - t.file_offset : 0;
             t.sector_count = static_cast<std::uint32_t>(span / t.sector_size);
 
+            // A track's absolute LBA is the file's base plus its file-relative
+            // sector offset; the file-relative offset alone is only correct for
+            // the first file (base 0), and using it for a later file would
+            // overlap earlier tracks' LBA ranges.
             const bool new_file = (i == 0) || (tracks_[i - 1].file_index != t.file_index);
-            t.start_lba =
-                new_file ? cumulative : static_cast<std::uint32_t>(t.file_offset / t.sector_size);
+            if (new_file) {
+                file_base_lba = cumulative;
+            }
+            t.start_lba = file_base_lba + static_cast<std::uint32_t>(t.file_offset / t.sector_size);
             cumulative = t.start_lba + t.sector_count;
         }
 

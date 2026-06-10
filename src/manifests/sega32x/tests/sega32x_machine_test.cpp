@@ -52,7 +52,6 @@ TEST_CASE("sega32x_machine boots the cartridge and holds the SH-2s in reset",
     REQUIRE(m->sega32x->slave_cpu.elapsed_cycles() == 0U);
 
     // While held, the scheduler does not advance them even as the 68000 runs.
-    m->begin_slice();
     m->genesis->cpu.tick(2000U);
     m->catch_up_sh2();
     CHECK(m->sega32x->master_cpu.elapsed_cycles() == 0U);
@@ -91,7 +90,6 @@ TEST_CASE("sega32x_machine runs the SH-2s at 3x the 68000 after release", "[sega
     auto& bus = m->genesis->bus;
     bus.write8(0xA15101U, 0x03U); // ADEN + release RES
 
-    m->begin_slice();
     m->genesis->cpu.tick(3000U);
     const std::uint64_t main_delta = m->genesis->cpu.elapsed_cycles();
     m->catch_up_sh2();

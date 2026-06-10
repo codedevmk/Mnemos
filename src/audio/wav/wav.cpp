@@ -33,6 +33,12 @@ namespace mnemos::audio {
     std::vector<std::uint8_t> encode_wav(std::span<const std::int16_t> frames,
                                          std::uint32_t sample_rate, std::uint8_t channels) {
         const std::uint16_t ch = channels == 0U ? 1U : channels;
+        // RIFF/WAVE sizes are inherently 32-bit. Refuse a payload the header
+        // cannot describe instead of silently truncating the size fields while
+        // still writing every frame (a corrupt file).
+        if (frames.size() > (0xFFFFFFFFULL - 44U) / sizeof(std::int16_t)) {
+            return {};
+        }
         const auto data_bytes = static_cast<std::uint32_t>(frames.size() * sizeof(std::int16_t));
         const std::uint16_t block_align = static_cast<std::uint16_t>(ch * 2U);
         const std::uint32_t byte_rate = sample_rate * block_align;

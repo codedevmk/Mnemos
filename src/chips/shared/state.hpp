@@ -49,6 +49,10 @@ namespace mnemos::chips {
 
         [[nodiscard]] bool ok() const noexcept { return ok_; }
         [[nodiscard]] std::size_t remaining() const noexcept { return data_.size() - pos_; }
+        // Mark the chunk semantically invalid (a decoded value failed validation,
+        // e.g. a blob whose size cannot apply to this chip model). Callers already
+        // gate on ok(), so this is how a chip rejects a state it cannot restore.
+        void fail() noexcept { ok_ = false; }
 
       private:
         [[nodiscard]] bool need(std::size_t count) noexcept;

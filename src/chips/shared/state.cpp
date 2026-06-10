@@ -32,7 +32,9 @@ namespace mnemos::chips {
     }
 
     bool state_reader::need(std::size_t count) noexcept {
-        if (!ok_ || pos_ + count > data_.size()) {
+        // Compare without computing pos_ + count: a forged length near
+        // SIZE_MAX must not wrap the sum into an in-bounds value.
+        if (!ok_ || count > data_.size() - pos_) {
             ok_ = false;
             return false;
         }

@@ -3,6 +3,7 @@
 #include "chip_registry.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <memory>
@@ -474,17 +475,22 @@ namespace mnemos::chips::peripheral {
     }
 
     void modem::load_state(state_reader& reader) {
-        mode_ = static_cast<mode>(reader.u8());
+        // The reader bounds-checks the chunk, but the decoded values still need
+        // semantic validation: cmdlen_ indexes cmdbuf_ and the ring indices
+        // index outbuf_, so a corrupt state must not restore wild indices.
+        mode_ = reader.u8() == 0U ? mode::command : mode::online;
         echo_ = reader.boolean();
         verbose_ = reader.boolean();
         quiet_ = reader.boolean();
         reader.bytes(std::span<std::uint8_t>(sreg_));
-        cmdlen_ = static_cast<int>(reader.u32());
+        cmdlen_ = static_cast<int>(
+            std::min<std::uint32_t>(reader.u32(), static_cast<std::uint32_t>(cmdbuf_len - 1U)));
         reader.bytes(std::span<std::uint8_t>(reinterpret_cast<std::uint8_t*>(cmdbuf_.data()),
                                              cmdbuf_.size()));
-        out_head_ = static_cast<int>(reader.u32());
-        out_tail_ = static_cast<int>(reader.u32());
-        out_count_ = static_cast<int>(reader.u32());
+        out_head_ = static_cast<int>(reader.u32() % outbuf_len);
+        out_tail_ = static_cast<int>(reader.u32() % outbuf_len);
+        out_count_ = static_cast<int>(
+            std::min<std::uint32_t>(reader.u32(), static_cast<std::uint32_t>(outbuf_len)));
         reader.bytes(std::span<std::uint8_t>(outbuf_));
         connected_ = reader.boolean();
         plus_count_ = static_cast<int>(reader.u32());

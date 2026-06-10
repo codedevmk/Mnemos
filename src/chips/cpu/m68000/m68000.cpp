@@ -2410,6 +2410,13 @@ namespace mnemos::chips::cpu {
         writer.boolean(halted_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
         writer.u64(elapsed_);
+        // Timing/IRQ state appended after the v1 layout: the refresh schedule
+        // phase (a resumed run must fire refreshes at the saved cadence, not
+        // re-seed at a different phase) and a delayed IRQ parked in its
+        // instruction-count window (dropping it loses the interrupt entirely).
+        writer.u64(bus_refresh_due_);
+        writer.u8(static_cast<std::uint8_t>(delayed_irq_level_));
+        writer.u8(static_cast<std::uint8_t>(delayed_irq_counter_));
     }
 
     void m68000::load_state(state_reader& reader) {
@@ -2429,6 +2436,9 @@ namespace mnemos::chips::cpu {
         halted_ = reader.boolean();
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());
         elapsed_ = reader.u64();
+        bus_refresh_due_ = reader.u64();
+        delayed_irq_level_ = reader.u8() & 0x7;
+        delayed_irq_counter_ = reader.u8();
     }
 
     instrumentation::ichip_introspection& m68000::introspection() noexcept {

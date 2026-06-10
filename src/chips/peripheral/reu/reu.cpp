@@ -209,6 +209,11 @@ namespace mnemos::chips::peripheral {
         std::vector<std::uint8_t> ram = reader.blob();
         if (ram.size() == ram_.size()) {
             ram_ = std::move(ram);
+        } else {
+            // A blob sized for a different REU model cannot apply: silently
+            // keeping the current RAM would "succeed" into an inconsistent
+            // machine. Poison the reader so the caller rejects the restore.
+            reader.fail();
         }
     }
 

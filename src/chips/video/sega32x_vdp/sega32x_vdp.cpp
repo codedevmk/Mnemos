@@ -289,6 +289,9 @@ namespace mnemos::chips::video {
         writer.u16(fb_control_);
         writer.u8(pending_fs_);
         writer.u8(prev_vblank_ ? 1U : 0U);
+        // FEN read-back window: a save taken inside the post-autofill transient
+        // busy reads must replay the same number of busy reads after load.
+        writer.u32(static_cast<std::uint32_t>(fen_busy_reads_));
     }
 
     void sega32x_vdp::load_state(state_reader& reader) {
@@ -303,6 +306,7 @@ namespace mnemos::chips::video {
         fb_control_ = reader.u16();
         pending_fs_ = reader.u8();
         prev_vblank_ = reader.u8() != 0U;
+        fen_busy_reads_ = static_cast<int>(reader.u32());
     }
 
     std::span<const register_descriptor> sega32x_vdp::register_snapshot() noexcept {

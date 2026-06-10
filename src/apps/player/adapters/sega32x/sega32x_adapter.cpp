@@ -310,7 +310,6 @@ namespace mnemos::apps::player::adapters::sega32x {
             }
         } else {
             while (scheduler_.frame_index() == start_frame) {
-                machine_->begin_slice();
                 scheduler_.run_master_cycles(kSliceMasterCycles);
                 machine_->catch_up_sh2();
                 compose_finished_line();

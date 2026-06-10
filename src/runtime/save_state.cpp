@@ -34,10 +34,18 @@ namespace mnemos::runtime {
             return dst;
         }
 
+        // Cap on the frame's self-declared content size. The CRC covers only the
+        // compressed body, so a hostile file reaches this with an arbitrary
+        // declared size; without a cap that is an attacker-chosen allocation.
+        // Largest real state today is a few MB (Sega CD: ~1 MB of RAM banks plus
+        // chip chunks); 256 MiB leaves generous headroom for future systems.
+        constexpr unsigned long long max_state_content_size = 256ULL * 1024U * 1024U;
+
         std::optional<std::vector<std::uint8_t>>
         zstd_decompress(std::span<const std::uint8_t> src) {
             const unsigned long long size = ZSTD_getFrameContentSize(src.data(), src.size());
-            if (size == ZSTD_CONTENTSIZE_ERROR || size == ZSTD_CONTENTSIZE_UNKNOWN) {
+            if (size == ZSTD_CONTENTSIZE_ERROR || size == ZSTD_CONTENTSIZE_UNKNOWN ||
+                size > max_state_content_size) {
                 return std::nullopt;
             }
             std::vector<std::uint8_t> dst(static_cast<std::size_t>(size));

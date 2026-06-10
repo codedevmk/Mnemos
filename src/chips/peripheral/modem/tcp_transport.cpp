@@ -1,5 +1,6 @@
 #include "modem.hpp"
 
+#include <cerrno>
 #include <string>
 
 #ifdef _WIN32
@@ -40,6 +41,12 @@ namespace mnemos::chips::peripheral {
         int do_recv(sock_t s, std::uint8_t* out, int max) {
             return ::recv(s, reinterpret_cast<char*>(out), max, 0);
         }
+        // A negative send/recv is transient only for would-block; everything
+        // else (reset, aborted, net down) means the connection is gone.
+        bool last_error_transient() {
+            const int e = WSAGetLastError();
+            return e == WSAEWOULDBLOCK || e == WSAEINTR;
+        }
 #else
         using sock_t = int;
         constexpr sock_t k_invalid = -1;
@@ -54,6 +61,11 @@ namespace mnemos::chips::peripheral {
         }
         int do_recv(sock_t s, std::uint8_t* out, int max) {
             return static_cast<int>(::recv(s, out, static_cast<std::size_t>(max), 0));
+        }
+        // A negative send/recv is transient only for would-block; everything
+        // else (ECONNRESET, EPIPE, net down) means the connection is gone.
+        bool last_error_transient() {
+            return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
         }
 #endif
     } // namespace
@@ -115,7 +127,10 @@ namespace mnemos::chips::peripheral {
             return 0;
         }
         const int n = do_send(static_cast<sock_t>(fd_), data, len);
-        return n > 0 ? n : 0; // a would-block / transient error sends nothing now
+        if (n < 0 && !last_error_transient()) {
+            connected_ = false; // hard error: the modem must see carrier drop
+        }
+        return n > 0 ? n : 0; // would-block sends nothing now
     }
 
     int tcp_transport::recv(std::uint8_t* out, int max) {
@@ -127,7 +142,10 @@ namespace mnemos::chips::peripheral {
             connected_ = false; // an orderly peer close
             return 0;
         }
-        return n > 0 ? n : 0; // n < 0: nothing buffered right now (would-block)
+        if (n < 0 && !last_error_transient()) {
+            connected_ = false; // hard error (reset/abort): drop carrier
+        }
+        return n > 0 ? n : 0; // n < 0 transient: nothing buffered right now
     }
 
 } // namespace mnemos::chips::peripheral

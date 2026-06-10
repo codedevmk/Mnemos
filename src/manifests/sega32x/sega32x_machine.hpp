@@ -32,21 +32,27 @@ namespace mnemos::manifests::sega32x {
         // BIOS-less unit tests expect).
         bool g_bios_present = false;
 
-        // begin_slice() baselines the SH-2 position against the 68000 at the start
-        // of an interleave slice; catch_up_sh2() advances both SH-2s up to the
-        // 68000's current cycle * 3. A no-op while the SH-2s are held in reset.
-        void begin_slice() noexcept;
+        // catch_up_sh2() advances both SH-2s up to the 68000's position * 3,
+        // against the same cumulative anchors the worker schedule uses (so the
+        // synchronous and threaded schedules fence at identical SH-2 cycle
+        // positions). Consumes the delta without running while the SH-2s are
+        // held in reset.
         void catch_up_sh2();
 
         ~sega32x_machine(); // parks and joins the SH-2 worker
 
         // ---- SH-2 worker: a depth-1 scanline pipeline ----
         // The worker runs the SH-2 batch for line N while the main thread
-        // emulates Genesis line N+1. Equivalence with the synchronous schedule
-        // holds because every 68000 access the SH-2s can observe (the $A15xxx
-        // windows, the FB windows, the V-blank/H-int wrappers) joins the
-        // in-flight batch first -- between fences the SH-2s see exactly the
-        // state the synchronous schedule would have shown them.
+        // emulates Genesis line N+1. Emulated-state equivalence with the
+        // synchronous schedule holds because every 68000 access the SH-2s can
+        // observe (the $A15xxx windows, the FB windows, the V-blank/H-int
+        // wrappers) joins the in-flight batch first, and both schedules use the
+        // same cumulative cycle targets -- between fences the SH-2s see exactly
+        // the state the synchronous schedule would have shown them. Caveat: the
+        // adapter composes line N's 32X overlay only after Genesis line N+1 has
+        // run (the join point), so 68000-side writes to the 32X VDP registers /
+        // palette during line N+1 are visible in line N's composed pixels --
+        // a one-line presentation skew, not an emulated-state divergence.
         void start_sh2_worker();
         [[nodiscard]] bool sh2_worker_running() const noexcept { return worker_.joinable(); }
         // Wait for the published batch to complete (no-op when idle / no worker).
@@ -60,9 +66,6 @@ namespace mnemos::manifests::sega32x {
 
       private:
         void worker_main();
-
-        std::uint64_t slice_base_main_ = 0; // 68000 cycles at the slice baseline
-        std::uint64_t slice_base_sh2_ = 0;  // master SH-2 cycles at the slice baseline
 
         std::thread worker_{};
         std::atomic<std::uint64_t> sh2_target_{0}; // published batch end (master SH-2 cycles)

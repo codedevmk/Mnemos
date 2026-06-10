@@ -14,8 +14,13 @@ namespace mnemos::chips::storage {
         }
     } // namespace
 
-    eeprom_i2c::eeprom_i2c(std::size_t size_bytes) : store_(size_bytes, 0xFFU) {
-        addr_mask_ = size_bytes ? static_cast<std::uint32_t>(size_bytes - 1U) : 0U;
+    eeprom_i2c::eeprom_i2c(std::size_t size_bytes)
+        : store_(size_bytes != 0U ? size_bytes : 128U, 0xFFU) {
+        // addr_mask_ assumes a power-of-two store (every real 24Cxx part is);
+        // size 0 in particular would make store_[addr_ & 0] index an empty
+        // vector. Fall back to the smallest part rather than corrupt memory.
+        size_bytes = store_.size();
+        addr_mask_ = static_cast<std::uint32_t>(size_bytes - 1U);
         if (size_bytes <= 256U) {
             word_addr_bytes_ = 1;
             block_bits_ = 0;

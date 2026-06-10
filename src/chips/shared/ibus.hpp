@@ -28,16 +28,21 @@ namespace mnemos::chips {
         // resolution over RAM/ROM -- the hot path for 16/32-bit CPUs whose
         // every fetch and load otherwise pays per-byte dispatch.
         [[nodiscard]] virtual std::uint16_t read16_be(std::uint32_t address) {
-            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(read8(address)) << 8U) |
-                                              read8(address + 1U));
+            // Sequence the byte reads explicitly: operands of | are
+            // indeterminately sequenced, and for side-effecting MMIO the
+            // externally observable access order must not vary by compiler.
+            const std::uint16_t hi = read8(address);
+            const std::uint16_t lo = read8(address + 1U);
+            return static_cast<std::uint16_t>((hi << 8U) | lo);
         }
         virtual void write16_be(std::uint32_t address, std::uint16_t value) {
             write8(address, static_cast<std::uint8_t>(value >> 8U));
             write8(address + 1U, static_cast<std::uint8_t>(value));
         }
         [[nodiscard]] virtual std::uint32_t read32_be(std::uint32_t address) {
-            return (static_cast<std::uint32_t>(read16_be(address)) << 16U) |
-                   read16_be(address + 2U);
+            const std::uint32_t hi = read16_be(address);
+            const std::uint32_t lo = read16_be(address + 2U);
+            return (hi << 16U) | lo;
         }
         virtual void write32_be(std::uint32_t address, std::uint32_t value) {
             write16_be(address, static_cast<std::uint16_t>(value >> 16U));
