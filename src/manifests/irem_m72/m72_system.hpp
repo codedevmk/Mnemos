@@ -4,6 +4,7 @@
 #include "irem_m72_video.hpp" // tilemap video unit
 #include "rom_set.hpp"        // arcade ROM-set image
 #include "v30.hpp"            // main CPU
+#include "ym2151.hpp"         // FM synth on the Z80 ports
 #include "z80.hpp"            // sound CPU
 
 #include <array>
@@ -55,8 +56,8 @@ namespace mnemos::manifests::irem_m72 {
     // +4/+6 = playfield B Y/X (first-cut layout).
     inline constexpr std::uint16_t port_out_scroll_base = 0x80U;
 
-    // Z80-side ports (first-cut): YM2151 at 0/1 (lands in the audio phase),
-    // the sound latch readable at 2.
+    // Z80-side ports (first-cut): YM2151 address/data (status readable at
+    // the data port), the sound latch readable at 2.
     inline constexpr std::uint16_t z80_port_ym2151_addr = 0x00U;
     inline constexpr std::uint16_t z80_port_ym2151_data = 0x01U;
     inline constexpr std::uint16_t z80_port_latch = 0x02U;
@@ -68,15 +69,17 @@ namespace mnemos::manifests::irem_m72 {
     // Built so far: V30 + Z80 on their buses, the program ROM regions out of a
     // loaded rom_set_image, the RAM overlays, the main->sound latch (write
     // asserts the Z80 INT line, the Z80's latch read clears it), the input/DIP
-    // port reads off plain state bytes, and the tilemap video unit (VRAM/
+    // port reads off plain state bytes, the tilemap/sprite video unit (VRAM/
     // palette/tile-ROM spans, scroll ports, vblank INT into the V30 through
-    // the programmable vector). Still to come: sprites + raster-compare port
-    // wiring (phase C), YM2151 + DAC + the sample port (phase D), real
-    // input/DIP devices (phase D).
+    // the programmable vector), and the YM2151 on the Z80 ports with its IRQ
+    // OR'd with the sound latch onto the Z80 INT line. Still to come: the
+    // raster-compare port wiring, the DAC + sample port, real input/DIP
+    // devices (phase D).
     struct m72_system final {
         chips::cpu::v30 main_cpu;
         chips::cpu::z80 sound_cpu;
         chips::video::irem_m72_video video;
+        chips::audio::ym2151 fm;
         topology::bus main_bus{20U, topology::endianness::little};
         topology::bus sound_bus{16U, topology::endianness::little};
 
@@ -101,6 +104,13 @@ namespace mnemos::manifests::irem_m72 {
         std::uint8_t flip_coin_register{}; // state only until phase C/D
         std::uint8_t irq_vector_base{};    // INT vector served on V30 acknowledge
         std::array<std::uint8_t, 8> scroll_regs{};
+        // The Z80's INT line is the OR of the pending sound latch and the
+        // YM2151 IRQ; update_sound_irq() recomputes it on either change.
+        bool sound_latch_irq{};
+
+        void update_sound_irq() noexcept {
+            sound_cpu.set_irq_line(sound_latch_irq || fm.irq_asserted());
+        }
 
         explicit m72_system(common::rom_set_image image);
     };
