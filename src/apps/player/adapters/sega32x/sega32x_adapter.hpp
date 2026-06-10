@@ -82,8 +82,14 @@ namespace mnemos::apps::player::adapters::sega32x {
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
-        // Overlay the 32X frame onto the freshly completed Genesis frame.
-        void compose_frame() noexcept;
+        // Per-scanline compose: after each slice completes a VDP line, copy
+        // that Genesis row and overlay the 32X pixels for it with the 32X
+        // state AT THAT RASTER POSITION. Mirrors the hardware beam: rows the
+        // game updates mid-frame (status-bar redraws) are sampled when the
+        // beam reaches them, not re-snapshotted at frame end.
+        void compose_finished_line() noexcept;
+        // Publish the composed frame's geometry once the frame completes.
+        void finish_composed_frame() noexcept;
 
         std::unique_ptr<manifests::sega32x::sega32x_machine> machine_;
         instrumentation::span_memory_view work_ram_view_;

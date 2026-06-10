@@ -149,6 +149,13 @@ namespace mnemos::chips::video {
         }
         [[nodiscard]] std::uint16_t vsram(int idx) const noexcept;
         [[nodiscard]] int scanline() const noexcept { return scanline_; }
+        // 32X composition support: opt-in per-pixel backdrop tracking. When
+        // enabled, each rendered line records which pixels carried no plane
+        // or sprite pixel (the backdrop fill) -- the cartridge connector
+        // exposes this "transparent" signal and the 32X mixes its priority-0
+        // pixels only where it is set. Off (and cost-free) for plain Genesis.
+        void enable_backdrop_mask(bool on);
+        [[nodiscard]] const std::uint8_t* backdrop_row(int display_line) const noexcept;
         [[nodiscard]] bool dma_busy() const noexcept { return dma_busy_; }
 
         // Real hardware stalls the 68000 while VDP DMA holds the bus. Mnemos
@@ -379,7 +386,8 @@ namespace mnemos::chips::video {
         void render_scroll_plane(std::uint32_t nt_base, int line, bool is_plane_a,
                                  std::uint8_t* linebuf) const noexcept;
         void render_window(int line, std::uint8_t* linebuf) const noexcept;
-        void render_sprites(int line, std::uint8_t* linebuf, std::uint8_t* shade) noexcept;
+        void render_sprites(int line, std::uint8_t* linebuf, std::uint8_t* shade,
+                            std::uint8_t* backdrop) noexcept;
         void render_scanline(int line) noexcept;
         void fill_line_background(int display_line) noexcept;
         [[nodiscard]] static std::uint32_t cram_to_rgb(std::uint16_t cram_value,
@@ -496,6 +504,8 @@ namespace mnemos::chips::video {
 
         // Output.
         std::vector<std::uint32_t> framebuffer_; // fb_width * fb_height, 0x00RRGGBB
+        bool backdrop_mask_enabled_{};
+        std::vector<std::uint8_t> backdrop_mask_; // 1 = backdrop pixel (when enabled)
         std::uint64_t frame_index_{};
 
         // Host hooks.

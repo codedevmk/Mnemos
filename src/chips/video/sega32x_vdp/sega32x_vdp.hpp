@@ -86,8 +86,8 @@ namespace mnemos::chips::video {
         // direct-colour word 0) leave the Genesis pixel; the per-pixel priority
         // bit selects over/behind, where "behind" still shows wherever the
         // Genesis pixel is black (the backdrop approximation).
-        void compose_scanline(std::span<const std::uint8_t> fb, std::span<std::uint32_t> row,
-                              int y) const noexcept;
+        void compose_scanline(std::span<const std::uint8_t> fb, std::span<std::uint32_t> row, int y,
+                              const std::uint8_t* genesis_backdrop = nullptr) const noexcept;
 
         // Introspection / glue accessors.
         [[nodiscard]] std::uint8_t mode() const noexcept {

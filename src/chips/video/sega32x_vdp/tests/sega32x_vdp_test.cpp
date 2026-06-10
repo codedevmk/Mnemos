@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -131,6 +132,34 @@ TEST_CASE("sega32x_vdp composes packed-mode pixels with priority and transparenc
     CHECK(row[1] == 0x00FF0000U); // priority pixel wins over Genesis content
     CHECK(row[2] == 0x00445566U); // behind pixel loses where Genesis has content
     CHECK(row[3] == 0x0000FF00U); // behind pixel shows on the Genesis backdrop
+}
+
+TEST_CASE("sega32x_vdp behind pixels honour the Genesis backdrop mask", "[sega32x_vdp]") {
+    sega32x_vdp v;
+    std::vector<std::uint8_t> fb(0x40000, 0);
+    v.write16(sega32x_vdp::reg_bitmap_mode, sega32x_vdp::mode_packed);
+    v.palette_write16(2U * 2U, bgr15(0, 31, 0, false)); // index 2: green, behind
+
+    // Displayed bank (FS = 0) is bank 1; row 0 data at byte $200.
+    fb[0x20000] = 0x01U;
+    fb[0x20001] = 0x00U;
+    fb[0x20200] = 2U; // x=0: behind pixel over an opaque-black Genesis pixel
+    fb[0x20201] = 2U; // x=1: behind pixel over the Genesis backdrop
+
+    // Both Genesis pixels are black -- indistinguishable by colour. The mask
+    // says x=0 is an opaque tile pixel and x=1 is backdrop.
+    std::vector<std::uint32_t> row(320, 0U);
+    const std::array<std::uint8_t, 320> backdrop = [] {
+        std::array<std::uint8_t, 320> m{};
+        m.fill(1U);
+        m[0] = 0U;
+        return m;
+    }();
+
+    v.compose_scanline(fb, row, 0, backdrop.data());
+
+    CHECK(row[0] == 0U);          // hidden behind the opaque black tile
+    CHECK(row[1] == 0x0000FF00U); // shows on the true backdrop
 }
 
 TEST_CASE("sega32x_vdp composes direct-colour pixels through the line table", "[sega32x_vdp]") {
