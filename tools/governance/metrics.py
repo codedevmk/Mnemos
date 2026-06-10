@@ -172,10 +172,11 @@ def session_metrics() -> dict:
     logs = sorted(sessions_dir.glob("*.jsonl")) if sessions_dir.is_dir() else []
     if not logs:
         return {"sessions_logged": 0, "M7": None, "M15": None,
-                "capture_omissions": 0,
+                "capture_omissions": 0, "billable_tokens": 0,
                 "note": "no session logs; hooks install via .claude/settings.json"}
     onboarding: list[int] = []
     omissions = 0
+    billable = 0
     for log in logs:
         reads_before_edit = 0
         seen_edit = False
@@ -190,6 +191,8 @@ def session_metrics() -> dict:
                 seen_edit = True
             elif ev.get("event") == "capture_omission":
                 omissions += 1
+            elif ev.get("event") == "session_tokens":
+                billable += int(ev.get("billable_tokens") or 0)
         if seen_edit:
             onboarding.append(reads_before_edit)
     return {
@@ -197,7 +200,35 @@ def session_metrics() -> dict:
         "M7": None,  # needs task-contract read manifests to score against
         "M15": statistics.median(onboarding) if onboarding else None,
         "capture_omissions": omissions,
+        "billable_tokens": billable,
     }
+
+
+def m6_tokens_per_change(today: dt.date, billable: int) -> dict:
+    if billable <= 0:
+        return {"value": None, "note": "no session_tokens events; "
+                "ingest via tools/governance/ingest_session.py or OTel (D8)"}
+    since = (today - dt.timedelta(days=7)).isoformat()
+    commits = len([c for c in git("log", f"--since={since}",
+                                  "--format=%H").splitlines() if c])
+    return {"value": round(billable / max(commits, 1)),
+            "billable_tokens_7d_sessions": billable, "commits_7d": commits,
+            "note": "heuristic: session billable tokens / commits, 7d (ADR-0017)"}
+
+
+def m14_gate_latency() -> dict:
+    src = REPO / "metrics" / "ci_durations.json"
+    if not src.exists():
+        return {"p50_s": None, "p95_s": None,
+                "note": "no ci_durations.json; nightly ingest writes it"}
+    runs = [r["seconds"] for r in
+            json.loads(src.read_text(encoding="utf-8")).get("runs", [])]
+    if not runs:
+        return {"p50_s": None, "p95_s": None, "note": "no completed runs in window"}
+    runs.sort()
+    return {"p50_s": runs[len(runs) // 2],
+            "p95_s": runs[min(len(runs) - 1, int(len(runs) * 0.95))],
+            "runs": len(runs)}
 
 
 def collect(today: dt.date) -> dict:
@@ -220,8 +251,7 @@ def collect(today: dt.date) -> dict:
         "M3_invariant_coverage": (inv or {}).get("coverage"),
         "M4_prose_only_claims": m4_prose_ratio(),
         "M5_authority_churn_lines_7d": m5_authority_churn(today),
-        "M6_tokens_per_change": None,
-        "M6_note": "pending OTel ingestion (D8)",
+        "M6_tokens_per_change": m6_tokens_per_change(today, sess["billable_tokens"]),
         "M7_context_escape": sess["M7"],
         "M8_first_pass": m8_first_pass(today),
         "M9_oracle_state": oracles,
@@ -230,8 +260,7 @@ def collect(today: dt.date) -> dict:
         "M11_determinism_divergences": divergences,
         "M12_decision_latency_days": latency,
         "M13_proposal_expiry": expiry,
-        "M14_gate_latency": None,
-        "M14_note": "pending CI duration ingestion",
+        "M14_gate_latency": m14_gate_latency(),
         "M15_onboarding_reads_median": sess["M15"],
         "M16_ratifications_7d": ratified_week,
         "sessions": {k: sess[k] for k in ("sessions_logged", "capture_omissions")},
@@ -253,13 +282,13 @@ def render_dashboard(snap: dict) -> str:
         ("M3 invariant coverage", snap["M3_invariant_coverage"], "1.0 (G4)"),
         ("M4 prose-only claim ratio", snap["M4_prose_only_claims"]["ratio"], "trend ↓"),
         ("M5 authority churn (lines/7d)", snap["M5_authority_churn_lines_7d"], "trend → 0"),
-        ("M6 tokens / accepted change", fmt(snap["M6_tokens_per_change"]), "−40% vs wk0 [H1]"),
+        ("M6 tokens / accepted change", fmt(snap["M6_tokens_per_change"]["value"]), "−40% vs wk0 [H1]"),
         ("M7 context-escape rate", fmt(snap["M7_context_escape"]), "< 15% [H2]"),
         ("M8 first-pass acceptance", fmt(m8["rate"]), "≥ 80% [H3]"),
         ("M11 determinism divergences", fmt(snap["M11_determinism_divergences"]), "0 (G6)"),
         ("M12 decision latency (days)", fmt(snap["M12_decision_latency_days"]), "trend"),
         ("M13 proposal expiry rate", fmt(m13["rate"]), "trend"),
-        ("M14 gate latency", fmt(snap["M14_gate_latency"]), "≤ 5 min PR suite"),
+        ("M14 gate latency p50 (s)", fmt(snap["M14_gate_latency"]["p50_s"]), "≤ 300 s PR suite"),
         ("M15 onboarding reads (median)", fmt(snap["M15_onboarding_reads_median"]), "−50% vs wk0 [H4]"),
         ("M16 ratifications (7d)", snap["M16_ratifications_7d"], "≤ 6/week"),
     ]
@@ -280,9 +309,10 @@ def render_dashboard(snap: dict) -> str:
         + (", ".join(f"{k}: {v}" for k, v in sorted(hw.items())) or "uninitialized")
         + f" — {snap['M9_oracle_state'].get('total_suites', 0)} suites registered.",
         "",
-        "Null values are unmeasured, never estimated: M6 awaits OTel ingestion "
-        "(D8), M7 awaits task-contract read manifests, M10 awaits per-vector "
-        "harness output, M14 awaits CI duration ingestion.",
+        "Null values are unmeasured, never estimated: M6 fills from ingested "
+        "session tokens (ingest_session.py / OTel per D8), M7 awaits "
+        "task-contract read manifests, M10 awaits per-vector harness output, "
+        "M14 fills from the nightly CI-duration ingest.",
         "",
     ]
     return "\n".join(lines)

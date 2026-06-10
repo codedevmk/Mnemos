@@ -67,16 +67,19 @@
   "M10_note": "pending per-vector harness JSON (ADR-0016)",
   "M10_opcode_coverage": null,
   "M11_determinism_divergences": 0,
-  "M12_decision_latency_days": 0,
+  "M12_decision_latency_days": 0.0,
   "M13_proposal_expiry": {
     "expired": 0,
-    "open_proposals": 3,
+    "open_proposals": 2,
     "rate": 0.0
   },
-  "M14_gate_latency": null,
-  "M14_note": "pending CI duration ingestion",
+  "M14_gate_latency": {
+    "note": "no ci_durations.json; nightly ingest writes it",
+    "p50_s": null,
+    "p95_s": null
+  },
   "M15_onboarding_reads_median": null,
-  "M16_ratifications_7d": 15,
+  "M16_ratifications_7d": 16,
   "M1_capsule_drift": 0,
   "M2_dead_references": 0,
   "M3_invariant_coverage": 1.0,
@@ -86,14 +89,16 @@
     "rfc2119_lines": 17,
     "verified_invariants": 7
   },
-  "M5_authority_churn_lines_7d": 2046,
-  "M6_note": "pending OTel ingestion (D8)",
-  "M6_tokens_per_change": null,
+  "M5_authority_churn_lines_7d": 2131,
+  "M6_tokens_per_change": {
+    "note": "no session_tokens events; ingest via tools/governance/ingest_session.py or OTel (D8)",
+    "value": null
+  },
   "M7_context_escape": null,
   "M8_first_pass": {
-    "clean": 55,
+    "clean": 56,
     "rate": 1.0,
-    "total": 55
+    "total": 56
   },
   "M9_oracle_state": {
     "suite_high_water": {
@@ -102,7 +107,7 @@
     },
     "total_suites": 15
   },
-  "commit": "f6260a326d99a713345c801acc800753d9f0f377",
+  "commit": "b2c655d49dc62909fced0cd34142e02b508371f9",
   "sessions": {
     "capture_omissions": 0,
     "sessions_logged": 0

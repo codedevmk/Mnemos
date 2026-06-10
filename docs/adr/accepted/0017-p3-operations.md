@@ -1,11 +1,12 @@
 ---
 id: ADR-0017
 title: "P3 Operations — Implementation Decisions"
-status: proposed
+status: accepted
 version: 1.0.0
 supersedes: []
 superseded_by: null
 proposed: 2026-06-10
+ratified: 2026-06-10
 ---
 
 # ADR 0017: P3 Operations — Implementation Decisions
@@ -55,6 +56,21 @@ worth recording:
    oracle ratchet and commits the snapshot + dashboard; the weekly packet
    generates on Mondays (or manual dispatch) with `--draft` enabled.
 
+7. **M14 lands via CI-duration ingestion.** The nightly metrics job runs
+   `tools/governance/ingest_ci_durations.py`, which queries the GitHub
+   Actions API (`GITHUB_TOKEN` in CI; graceful no-op without one) for the
+   trailing week of completed `ci` workflow runs and writes
+   `metrics/ci_durations.json`; `metrics.py` computes the p50/p95 against
+   the 5-minute PR-suite budget from that file.
+
+8. **M6 lands via transcript parsing — the D8 fallback.** OTel export
+   remains the recommended path, but `tools/governance/ingest_session.py`
+   parses a Claude Code session transcript (JSONL) into a `session_tokens`
+   event in `metrics/sessions/`, counting non-cache-read input +
+   cache-creation + output tokens. `metrics.py` then reports M6 as total
+   session tokens over commits in the trailing 7 days — a documented
+   heuristic until sessions reference their merged changes explicitly.
+
 ## Consequences
 
 - P3 exit criterion "2 consecutive packets with zero manual assembly" is
@@ -64,3 +80,8 @@ worth recording:
   the packet trend is the signal to watch.
 - The hypothesis evaluation clock starts when the owner captures the week-0
   session baselines (see `metrics/README.md`).
+
+## Ratification
+
+Ratified 2026-06-10 by owner directive in the pilot session (amended with
+decisions 7-8 prior to acceptance).

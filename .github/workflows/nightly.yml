@@ -62,6 +62,11 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
+      - name: Ingest CI durations (M14)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/governance/ingest_ci_durations.py
+
       - name: Nightly snapshot + dashboard
         run: python3 tools/governance/metrics.py
 
