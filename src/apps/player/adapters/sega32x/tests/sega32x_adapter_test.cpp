@@ -140,8 +140,11 @@ TEST_CASE("sega32x_adapter boots a real cartridge through the 32X BIOS handshake
     bios_images.push_back(std::move(*m_bios));
     bios_images.push_back(std::move(*s_bios));
     bios_images.push_back(std::move(*g_bios));
-    auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
-        "sega32x", {.rom = std::move(*cart), .bios_images = std::move(bios_images)});
+    mnemos::frontend_sdk::adapter_options options;
+    options.rom = std::move(*cart);
+    options.bios_images = std::move(bios_images);
+    auto system = mnemos::frontend_sdk::adapter_registry::instance().create("sega32x",
+                                                                            std::move(options));
     REQUIRE(system != nullptr);
     auto& adapter = dynamic_cast<sega32x_adapter&>(*system);
 
