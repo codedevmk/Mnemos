@@ -81,6 +81,11 @@ namespace mnemos::topology {
         [[nodiscard]] std::uint32_t read32_be(std::uint32_t address) override;
         void write32_be(std::uint32_t address, std::uint32_t value) override;
 
+        // Little-endian counterparts (the V30 fetch/load hot path), same
+        // fast-span-or-byte-exact contract as the big-endian set.
+        [[nodiscard]] std::uint16_t read16_le(std::uint32_t address) override;
+        void write16_le(std::uint32_t address, std::uint16_t value) override;
+
         // Optional observer invoked after every completed read/write (the value is
         // the byte transferred). Null by default — a single null check on the hot
         // path when unset. The instrumentation layer installs one for watchpoints;

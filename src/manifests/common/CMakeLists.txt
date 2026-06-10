@@ -13,6 +13,7 @@ add_library(
     mnemos_manifests_common
     manifest.cpp
     builder.cpp
+    rom_set.cpp
 )
 add_library(mnemos::manifests::common ALIAS mnemos_manifests_common)
 
@@ -24,7 +25,8 @@ target_include_directories(
 )
 
 # Public: the builder's headers expose chips + topology types and use foundation
-# (sha256). toml++ is an implementation detail of the parser (PRIVATE, ADR 0007).
+# (sha256). toml++ is an implementation detail of the parser (PRIVATE, ADR 0007);
+# io + compression are implementation details of the ROM-set providers.
 target_link_libraries(
     mnemos_manifests_common
     PUBLIC
@@ -34,6 +36,8 @@ target_link_libraries(
         mnemos::topology
     PRIVATE
         tomlplusplus::tomlplusplus
+        mnemos::io
+        mnemos::compression
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_common PUBLIC)
@@ -45,6 +49,8 @@ mnemos_declare_tier(
         mnemos_security_cryptography
         mnemos_chips_shared
         mnemos_topology
+        mnemos_io
+        mnemos_compression
 )
 
 if(BUILD_TESTING)
@@ -58,9 +64,11 @@ if(BUILD_TESTING)
         SOURCES
             tests/manifest_test.cpp
             tests/builder_test.cpp
+            tests/rom_set_test.cpp
         LIBRARIES
             mnemos::manifests::common
             mnemos::chips::cpu::m6510
             mnemos::chips::bus_controller::cia_6526
+            mnemos::io
     )
 endif()
