@@ -305,7 +305,8 @@ namespace mnemos::apps::player::adapters::sega32x {
             std::fprintf(stderr,
                          "[32x] f%05llu rst=%d mpc=%08X spc=%08X comm %04X %04X %04X %04X mode=%u "
                          "z80=%llu run=%d zpc=%04X dreq=%u/%u ctl=%02X pwm=%u/%u "
-                         "smask=%02X ssr=%03X spend=%d slatch=%02X svbr=%08X sgbr=%08X\n",
+                         "smask=%02X ssr=%03X spend=%d slatch=%02X svbr=%08X sgbr=%08X "
+                         "d0=%08X c4567 %04X %04X %04X %04X\n",
                          static_cast<unsigned long long>(frames_stepped_), tx.sh2_reset_asserted,
                          tx.master_cpu.cpu_registers().pc, tx.slave_cpu.cpu_registers().pc,
                          tx.comm[0], tx.comm[1], tx.comm[2], tx.comm[3],
@@ -315,7 +316,8 @@ namespace mnemos::apps::player::adapters::sega32x {
                          tx.dreq_ctrl, tx.dbg_pwm_writes, tx.dbg_pwm_irqs, tx.slave_irq_mask,
                          tx.slave_cpu.cpu_registers().sr & 0xFFFU, tx.slave_cpu.pending_irq_level(),
                          tx.slave_irq_latch, tx.slave_cpu.cpu_registers().vbr,
-                         tx.slave_cpu.cpu_registers().gbr);
+                         tx.slave_cpu.cpu_registers().gbr, gen.cpu.cpu_registers().d[0], tx.comm[4],
+                         tx.comm[5], tx.comm[6], tx.comm[7]);
         }
     }
 
