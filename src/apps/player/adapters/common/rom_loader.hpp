@@ -9,8 +9,9 @@ namespace mnemos::apps::player::adapters {
 
     struct loaded_rom final {
         std::vector<std::uint8_t> bytes; // the ROM image (extracted if the source was a .zip)
-        // Effective name for family + title detection: the chosen entry name
-        // for a .zip (so a zipped Foo.sms still resolves to SMS), else the path.
+        // Effective name for the displayed title: the chosen entry name for a
+        // .zip, else the path. Carries no routing weight -- the engine comes
+        // from --system.
         std::string name;
     };
 

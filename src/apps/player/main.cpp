@@ -1,5 +1,6 @@
-// SDL3 windowed player. Boots whichever player_system adapter the ROM's file
-// extension selects (Genesis / SMS / C64), presents its framebuffer at integer
+// SDL3 windowed player. Boots the player_system adapter named by --system
+// (genesis / sms / gg / c64 / segacd / sega32x) with the --rom media (zip
+// archives are extracted transparently), presents its framebuffer at integer
 // scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
@@ -139,8 +140,10 @@ namespace {
 
 int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::clean_rom_name;
-    using mnemos::apps::player::adapters::detect_family;
+    using mnemos::apps::player::adapters::family_from_name;
+    using mnemos::apps::player::adapters::family_id;
     using mnemos::apps::player::adapters::family_label;
+    using mnemos::apps::player::adapters::family_names;
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::load_rom;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
@@ -151,12 +154,14 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
+    using mnemos::apps::player::adapters::parse_system_arg;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::srm_path_for;
     using mnemos::apps::player::adapters::system_family;
 
     const auto rom_paths = parse_rom_args(argc, argv);
+    const auto system_arg = parse_system_arg(argc, argv);
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
@@ -175,6 +180,22 @@ int main(int argc, char* argv[]) {
     // destructs first, while the adapter (and its SRAM span) is still alive.
     std::optional<battery_save_guard> srm_guard;
     if (!rom_paths.empty()) {
+        // The engine is named explicitly: `--system <name> --rom <file>`. ROM
+        // filenames carry no weight -- a zipped image routes by the name alone.
+        if (!system_arg) {
+            std::fprintf(stderr,
+                         "[mnemos_player] --system <name> is required with --rom "
+                         "(one of: %s)\n",
+                         family_names());
+            return 1;
+        }
+        const auto family_opt = family_from_name(*system_arg);
+        if (!family_opt) {
+            std::fprintf(stderr, "[mnemos_player] unknown system '%s' (one of: %s)\n",
+                         system_arg->c_str(), family_names());
+            return 1;
+        }
+        const system_family family = *family_opt;
         auto loaded = load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_paths.front().c_str());
@@ -191,7 +212,6 @@ int main(int argc, char* argv[]) {
             }
             additional_media.push_back(std::move(extra->bytes));
         }
-        const auto family = detect_family(loaded->name);
         // Default video standard before any --region override: the cartridge
         // consoles carry a region byte in their header; the C64 does not, so it
         // defaults to PAL (its core market, and the manifest/c64_config default).
@@ -237,26 +257,6 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::segacd::force_link();
         mnemos::apps::player::adapters::sega32x::force_link();
 
-        std::string_view family_id = "genesis";
-        switch (family) {
-        case system_family::sms:
-            family_id = "sms";
-            break;
-        case system_family::gg:
-            family_id = "gg";
-            break;
-        case system_family::c64:
-            family_id = "c64";
-            break;
-        case system_family::segacd:
-            family_id = "segacd";
-            break;
-        case system_family::sega32x:
-            family_id = "sega32x";
-            break;
-        case system_family::genesis:
-            break;
-        }
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
         // Every other family runs the loaded file directly.
@@ -329,21 +329,21 @@ int main(int argc, char* argv[]) {
             }
         }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
-            family_id, {.rom = std::move(primary_rom),
-                        .video_region = video,
-                        .display_name = clean_rom_name(loaded->name),
-                        .additional_media = std::move(additional_media),
-                        .autostart = autostart,
-                        .mapper_override = mapper_arg.value_or(std::string{}),
-                        .disc_path = std::move(disc_path),
-                        .bios_images = std::move(bios_images)});
+            family_id(family), {.rom = std::move(primary_rom),
+                                .video_region = video,
+                                .display_name = clean_rom_name(loaded->name),
+                                .additional_media = std::move(additional_media),
+                                .autostart = autostart,
+                                .mapper_override = mapper_arg.value_or(std::string{}),
+                                .disc_path = std::move(disc_path),
+                                .bios_images = std::move(bios_images)});
         if (system && system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
                          system->media_count());
         }
         if (!system) {
-            std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%.*s'\n",
-                         static_cast<int>(family_id.size()), family_id.data());
+            std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%s'\n",
+                         family_id(family));
             return 1;
         }
         // Load any existing .srm before the first frame; the guard writes it back

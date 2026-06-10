@@ -5,46 +5,53 @@
 #include <string>
 
 namespace {
-    using mnemos::apps::player::adapters::detect_family;
+    using mnemos::apps::player::adapters::family_from_name;
+    using mnemos::apps::player::adapters::family_id;
     using mnemos::apps::player::adapters::family_label;
+    using mnemos::apps::player::adapters::family_names;
     using mnemos::apps::player::adapters::system_family;
 } // namespace
 
-TEST_CASE("system_family: .sms and .sg map to SMS") {
-    CHECK(detect_family("game.sms") == system_family::sms);
-    CHECK(detect_family("game.sg") == system_family::sms);
-    CHECK(detect_family("C:/roms/Sonic.SMS") == system_family::sms); // case-insensitive
-    CHECK(detect_family("/r/Phantasy.Sg") == system_family::sms);
+TEST_CASE("system_family: every registry id maps to its family") {
+    CHECK(family_from_name("genesis") == system_family::genesis);
+    CHECK(family_from_name("sms") == system_family::sms);
+    CHECK(family_from_name("gg") == system_family::gg);
+    CHECK(family_from_name("c64") == system_family::c64);
+    CHECK(family_from_name("segacd") == system_family::segacd);
+    CHECK(family_from_name("sega32x") == system_family::sega32x);
 }
 
-TEST_CASE("system_family: Genesis extensions and no-extension map to Genesis") {
-    CHECK(detect_family("game.bin") == system_family::genesis);
-    CHECK(detect_family("game.md") == system_family::genesis);
-    CHECK(detect_family("game.gen") == system_family::genesis);
-    CHECK(detect_family("game.smd") == system_family::genesis);
-    CHECK(detect_family("game.68k") == system_family::genesis);
-    CHECK(detect_family("game") == system_family::genesis);      // no extension
-    CHECK(detect_family("README.md") == system_family::genesis); // .md still wins
+TEST_CASE("system_family: names are case-insensitive") {
+    CHECK(family_from_name("Genesis") == system_family::genesis);
+    CHECK(family_from_name("SEGA32X") == system_family::sega32x);
+    CHECK(family_from_name("SegaCD") == system_family::segacd);
 }
 
-TEST_CASE("system_family: CD image extensions select Sega CD") {
-    CHECK(detect_family("game.cue") == system_family::segacd);
-    CHECK(detect_family("game.iso") == system_family::segacd);
-    CHECK(detect_family("game.chd") == system_family::segacd);
-    CHECK(detect_family("D:/Sega CD/Sonic CD (USA).CUE") ==
-          system_family::segacd); // case-insensitive
+TEST_CASE("system_family: unknown names are rejected, never guessed") {
+    CHECK(family_from_name("") == std::nullopt);
+    CHECK(family_from_name("megadrive") == std::nullopt);
+    CHECK(family_from_name("32x") == std::nullopt);
+    CHECK(family_from_name("game.bin") == std::nullopt);
 }
 
-TEST_CASE("system_family: unknown extension falls through to Genesis") {
-    // Default-to-Genesis is intentional: most Genesis dumps in the wild
-    // have heterogeneous extensions, so we don't fight the user when they
-    // hand us a .rom or similar.
-    CHECK(detect_family("game.rom") == system_family::genesis);
-    CHECK(detect_family("game.xyz") == system_family::genesis);
+TEST_CASE("system_family: family_from_name and family_id round-trip") {
+    for (const auto family : {system_family::genesis, system_family::sms, system_family::gg,
+                              system_family::c64, system_family::segacd, system_family::sega32x}) {
+        CHECK(family_from_name(family_id(family)) == family);
+    }
+}
+
+TEST_CASE("system_family: family_names lists every accepted id") {
+    const std::string names = family_names();
+    for (const auto family : {system_family::genesis, system_family::sms, system_family::gg,
+                              system_family::c64, system_family::segacd, system_family::sega32x}) {
+        CHECK(names.find(family_id(family)) != std::string::npos);
+    }
 }
 
 TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::sms)} == "SMS");
     CHECK(std::string{family_label(system_family::genesis)} == "Genesis");
     CHECK(std::string{family_label(system_family::segacd)} == "Sega CD");
+    CHECK(std::string{family_label(system_family::sega32x)} == "32X");
 }

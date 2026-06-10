@@ -1,26 +1,28 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 namespace mnemos::apps::player::adapters {
 
-    // Which adapter to wire for a given ROM. Extended as new systems land.
+    // Which adapter to wire for a ROM. Extended as new systems land.
     enum class system_family { genesis, sms, gg, c64, segacd, sega32x };
 
-    // Pick the adapter from the ROM path's extension:
-    //   .sms / .sg                                 -> SMS
-    //   .gg                                        -> Game Gear
-    //   .cue / .iso / .chd                         -> Sega CD
-    //   .32x                                       -> Sega 32X
-    //   .prg / .d64 / .d71 / .d81 / .t64 / .tap /
-    //   .crt / .g64 / .p00                         -> C64
-    //   anything else (incl. no extension, .md / .gen / .smd / .bin / .68k)
-    //                                              -> Genesis
-    // Case-insensitive on the extension. No content sniffing.
-    [[nodiscard]] system_family detect_family(const std::string& path) noexcept;
+    // Map a `--system` name to its family. The accepted names are exactly the
+    // adapter-registry family ids -- genesis, sms, gg, c64, segacd, sega32x --
+    // case-insensitive. nullopt for anything else. The engine is always chosen
+    // by this name, never inferred from the ROM filename.
+    [[nodiscard]] std::optional<system_family> family_from_name(const std::string& name) noexcept;
+
+    // The adapter-registry id for `family` ("genesis", "sms", ...).
+    [[nodiscard]] const char* family_id(system_family family) noexcept;
 
     // Display label for `family` ("SMS" / "Game Gear" / "Genesis" / "C64"). Used
     // by the startup banner and the status overlay.
     [[nodiscard]] const char* family_label(system_family family) noexcept;
+
+    // Every accepted `--system` name as one comma-separated list, for usage and
+    // error text.
+    [[nodiscard]] const char* family_names() noexcept;
 
 } // namespace mnemos::apps::player::adapters

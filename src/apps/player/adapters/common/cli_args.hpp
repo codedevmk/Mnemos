@@ -12,6 +12,12 @@ namespace mnemos::apps::player::adapters {
     // Scan argv for `--rom <path>` (or `-r <path>`) and return the path.
     [[nodiscard]] std::optional<std::string> parse_rom_arg(int argc, char* argv[]);
 
+    // Scan argv for `--system <name>` (or `-s <name>`): which emulation engine
+    // runs the media. Required whenever media is given -- the engine is chosen
+    // by this name (a registry family id), never inferred from the ROM
+    // filename. nullopt when the flag is absent or has no value.
+    [[nodiscard]] std::optional<std::string> parse_system_arg(int argc, char* argv[]);
+
     // All media paths in command-line order: every `--rom`/`-r`/`--disk <path>`.
     // The first is the primary image (it selects the system); the rest are
     // additional media -- e.g. the further disks of a multi-disk C64 game,
