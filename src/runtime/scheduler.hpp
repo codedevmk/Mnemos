@@ -10,9 +10,19 @@ namespace mnemos::runtime {
     // One chip on the master clock: the chip and how many master-clock cycles
     // advance it by exactly one chip cycle. A divider of 1 means the chip ticks
     // every master cycle (lockstep with the master clock).
+    //
+    // A chip whose crystal is not an integer divider of the master clock (the
+    // M72's 3.579545 MHz YM2151 against the 32 MHz board crystal) sets the
+    // RATIONAL rate instead: the chip ticks `rate_den` times per `rate_num`
+    // master cycles, spread evenly by an integer accumulator (acc += rate_den
+    // per master cycle; each time acc reaches rate_num the chip ticks once and
+    // acc decreases by rate_num). Integer-only state, fixed dispatch order --
+    // determinism is preserved. rate_num == 0 selects the plain divider.
     struct scheduled_chip final {
         chips::ichip* chip{};
         std::uint32_t divider{1U};
+        std::uint32_t rate_num{0U}; // master cycles per `rate_den` chip cycles
+        std::uint32_t rate_den{0U};
     };
 
     // Fixed-divider master-clock scheduler (TDS §11.2).
@@ -47,7 +57,10 @@ namespace mnemos::runtime {
 
       private:
         std::vector<scheduled_chip> chips_;
-        std::vector<std::uint32_t> accumulator_; // per-chip master cycles since last tick
+        // Per-chip progress toward the next tick: master cycles since the last
+        // tick for divider chips, the rational accumulator (bounded below
+        // rate_num + rate_den) for rational-rate chips.
+        std::vector<std::uint32_t> accumulator_;
         chips::ivideo* frame_source_{};
         std::uint64_t master_cycle_{};
         bool uniform_lockstep_{}; // every divider == 1: tick all chips together

@@ -111,3 +111,32 @@ TEST_CASE("scheduler with no frame source treats run_frame as a no-op") {
     CHECK(a.ticks == 0U);
     CHECK(sched.frame_index() == 0U);
 }
+
+TEST_CASE("scheduler spreads rational-rate chips evenly across master cycles") {
+    counting_chip rational; // 3 chip cycles per 8 master cycles
+    counting_chip divided;  // every fourth master cycle
+    mnemos::runtime::scheduler s(
+        {{.chip = &rational, .divider = 1U, .rate_num = 8U, .rate_den = 3U},
+         {.chip = &divided, .divider = 4U}},
+        nullptr);
+
+    s.run_master_cycles(8U);
+    CHECK(rational.ticks == 3U);
+    CHECK(divided.ticks == 2U);
+
+    // The accumulator carries the remainder exactly: over any span the tick
+    // count is floor((cycles * den) / num) with no drift.
+    s.run_master_cycles(8000U - 8U);
+    CHECK(rational.ticks == 3000U);
+    CHECK(divided.ticks == 2000U);
+}
+
+TEST_CASE("scheduler rational rate models the M72 YM2151 crystal exactly") {
+    // 3.579545 MHz off a 32 MHz master: 715909 chip cycles per 6400000
+    // master cycles. One emulated second must yield exactly 3579545 ticks.
+    counting_chip opm;
+    mnemos::runtime::scheduler s(
+        {{.chip = &opm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U}}, nullptr);
+    s.run_master_cycles(32000000U);
+    CHECK(opm.ticks == 3579545U);
+}
