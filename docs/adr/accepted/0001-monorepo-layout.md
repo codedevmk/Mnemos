@@ -1,3 +1,13 @@
+---
+id: ADR-0001
+title: "Monorepo Layout"
+status: accepted
+version: 1.0.0
+supersedes: []
+superseded_by: null
+ratified: 2026-05-22
+---
+
 # ADR 0001: Monorepo Layout
 
 **Status:** Accepted for M0 scaffold

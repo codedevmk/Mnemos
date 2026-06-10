@@ -1,3 +1,13 @@
+---
+id: ADR-0011
+title: "Sega 32X Subsystem"
+status: proposed
+version: 1.0.0
+supersedes: []
+superseded_by: null
+proposed: 2026-06-09
+---
+
 # ADR 0011: Sega 32X Subsystem
 
 **Status:** Proposed

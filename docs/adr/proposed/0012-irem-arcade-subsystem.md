@@ -1,3 +1,13 @@
+---
+id: ADR-0012
+title: "Irem Arcade Subsystem (M72 first, M92 later)"
+status: proposed
+version: 1.0.0
+supersedes: []
+superseded_by: null
+proposed: 2026-06-10
+---
+
 # ADR 0012: Irem Arcade Subsystem (M72 first, M92 later)
 
 **Status:** Proposed

@@ -7,6 +7,36 @@ on:
       - master
 
 jobs:
+  # Gates G1 (naming), G7 (license), G9 (ADR/front-matter lint) blocking;
+  # G11 (token budgets) advisory. See constitution/MNE-CTX-PLAN-001.md §9.
+  governance:
+    name: governance
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Naming validator (G1)
+        run: python3 tools/governance/naming_validator.py
+
+      - name: ADR / front-matter lint (G9)
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            BASE="--base origin/${{ github.base_ref }}"
+          else
+            BASE=""
+          fi
+          python3 tools/governance/adr_lint.py --check-index $BASE
+
+      - name: License audit (G7)
+        run: python3 tools/governance/license_audit.py
+
+      - name: Token budgets (G11, advisory)
+        run: python3 tools/governance/token_budget.py
+
   format:
     name: clang-format
     runs-on: ubuntu-24.04

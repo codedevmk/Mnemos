@@ -2,10 +2,16 @@
 
 ## First Read
 
-- Read `README.md` first, then review the specs in this order:
+- Read `CONSTITUTION.md` first — the L0 authority index (precedence rules,
+  standing rules, global invariants, module table). It points into
+  `constitution/` modules that load on demand.
+- Then `README.md`, and for design background:
   1. `docs/architecture/mnemos-architecture-tds-v0.1.md`
   2. `docs/architecture/mnemos-project-plan-v0.1.md`
-- The v0.1 specs are marked `Draft, awaiting review`. Treat them as the current design source of truth, but do not treat them as blanket approval to implement every tier.
+- The v0.1 specs are L3 design notes: their normative content was lifted into
+  `constitution/` (see `constitution/MIGRATION.md`); on any divergence the
+  constitution wins. Do not treat them as blanket approval to implement every
+  tier.
 - If a request asks for implementation before a relevant contract is approved, confirm explicit sign-off or keep the work to review, documentation, or safe M0 repository initialization.
 
 ## Project Identity
