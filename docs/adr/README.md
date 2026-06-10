@@ -15,3 +15,5 @@ Current records:
 8. `0008-save-state-and-zstd.md`
 9. `0009-module-placement-and-code-organization.md`
 10. `0010-android-and-bluetooth-gamepad-support.md`
+11. `0011-sega-32x-subsystem.md`
+12. `0012-irem-arcade-subsystem.md`
