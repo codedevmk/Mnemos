@@ -6,6 +6,10 @@
 #include <cstdlib>
 #include <span>
 
+#if defined(_MSC_VER)
+#include <intrin.h> // _mm_pause for the join/worker spin loops
+#endif
+
 namespace mnemos::manifests::sega32x {
 
     namespace {
@@ -233,6 +237,116 @@ namespace mnemos::manifests::sega32x {
         }
     }
 
+    sega32x_machine::~sega32x_machine() {
+        if (worker_.joinable()) {
+            worker_quit_.store(true, std::memory_order_release);
+            sh2_target_.fetch_add(1U, std::memory_order_release); // wake the wait
+            sh2_target_.notify_one();
+            worker_.join();
+        }
+    }
+
+    void sega32x_machine::worker_main() {
+        std::uint64_t seen = sh2_target_.load(std::memory_order_acquire);
+        for (;;) {
+            // The next batch arrives within a scanline of host time; spin
+            // briefly before sleeping so the line cadence stays syscall-free.
+            std::uint64_t next = sh2_target_.load(std::memory_order_acquire);
+            for (int spin = 0; spin < 16384 && next == seen; ++spin) {
+#if defined(_MSC_VER)
+                _mm_pause();
+#endif
+                next = sh2_target_.load(std::memory_order_acquire);
+            }
+            while (next == seen) {
+                sh2_target_.wait(seen, std::memory_order_acquire);
+                next = sh2_target_.load(std::memory_order_acquire);
+            }
+            seen = next;
+            if (worker_quit_.load(std::memory_order_acquire)) {
+                return;
+            }
+            const std::uint64_t cur = sega32x->master_cpu.elapsed_cycles();
+            if (seen > cur) {
+                sega32x->run_cycles(seen - cur);
+            }
+            sh2_done_.store(seen, std::memory_order_release);
+            sh2_done_.notify_all();
+        }
+    }
+
+    void sega32x_machine::start_sh2_worker() {
+        if (worker_.joinable()) {
+            return;
+        }
+        sched_main_base_ = genesis->cpu.elapsed_cycles();
+        sched_target_ = sega32x->master_cpu.elapsed_cycles();
+        sh2_target_.store(sched_target_, std::memory_order_release);
+        sh2_done_.store(sched_target_, std::memory_order_release);
+        worker_ = std::thread([this] { worker_main(); });
+    }
+
+    void sega32x_machine::join_sh2() noexcept {
+        const std::uint64_t target = sh2_target_.load(std::memory_order_acquire);
+        std::uint64_t done = sh2_done_.load(std::memory_order_acquire);
+        if (done >= target) {
+            return;
+        }
+        // The batch usually finishes within the same scanline of host time, so
+        // spin briefly before paying the futex round trip.
+        for (int spin = 0; spin < 16384 && done < target; ++spin) {
+#if defined(_MSC_VER)
+            _mm_pause();
+#endif
+            done = sh2_done_.load(std::memory_order_acquire);
+        }
+        while (done < target) {
+            sh2_done_.wait(done, std::memory_order_acquire);
+            done = sh2_done_.load(std::memory_order_acquire);
+        }
+    }
+
+    void sega32x_machine::schedule_sh2_catch_up() {
+        join_sh2(); // one batch in flight at a time
+        const std::uint64_t main_now = genesis->cpu.elapsed_cycles();
+        const std::uint64_t delta = main_now - sched_main_base_;
+        sched_main_base_ = main_now;
+        if (sega32x->sh2_reset_asserted) {
+            // Held: pin the target to the parked position so released boots
+            // resume in step instead of bursting through the held-back cycles.
+            sched_target_ = sega32x->master_cpu.elapsed_cycles();
+            sh2_done_.store(sched_target_, std::memory_order_release);
+            sh2_target_.store(sched_target_, std::memory_order_release);
+            return;
+        }
+        sched_target_ += delta * sh2_clock_multiplier;
+        sh2_target_.store(sched_target_, std::memory_order_release);
+        sh2_target_.notify_one();
+    }
+
+    void sega32x_machine::fence_sh2() {
+        if (!worker_.joinable()) {
+            catch_up_sh2(); // synchronous mode: the existing interlock semantics
+            return;
+        }
+        join_sh2();
+        // Worker parked: bring the SH-2s to the 68000's current position on
+        // this thread, against the cumulative anchors. The published atomics
+        // stay at the completed batch (no new batch is in flight).
+        const std::uint64_t main_now = genesis->cpu.elapsed_cycles();
+        const std::uint64_t delta = main_now - sched_main_base_;
+        sched_main_base_ = main_now;
+        if (sega32x->sh2_reset_asserted) {
+            sched_target_ = sega32x->master_cpu.elapsed_cycles();
+            return;
+        }
+        sched_target_ += delta * sh2_clock_multiplier;
+        const std::uint64_t cur = sega32x->master_cpu.elapsed_cycles();
+        if (sched_target_ > cur) {
+            sega32x->run_cycles(sched_target_ - cur);
+        }
+    }
+
     std::unique_ptr<sega32x_machine>
     assemble_sega32x_machine(std::vector<std::uint8_t> cart, const sega32x_bios& bios,
                              const genesis::genesis_config& config) {
@@ -289,7 +403,8 @@ namespace mnemos::manifests::sega32x {
         // The wrapper preserves the stock Genesis vblank behaviour (Z80 INT,
         // frame counter, pad timeouts) and mirrors V-blank into adapter-control
         // bit 7, which games poll as a frame-sync barrier.
-        g->vdp.set_vblank_callback([g, tx](bool in_vblank) {
+        g->vdp.set_vblank_callback([g, tx, machine = machine.get()](bool in_vblank) {
+            machine->join_sh2(); // bank swing + IRQ delivery need a parked pair
             g->on_vblank(in_vblank);
             // Drive the 32X VDP's VBLK status bit and its frame-select
             // flip-flop from the same edge (HBLK joins with the per-scanline
@@ -306,7 +421,10 @@ namespace mnemos::manifests::sega32x {
         });
         // HINT taps the VDP's /HINT latch edge (line counter expired with IE1
         // set); the 68000 keeps its own pending-level path untouched.
-        g->vdp.set_hint_callback([tx] { tx->raise_hint(); });
+        g->vdp.set_hint_callback([tx, machine = machine.get()] {
+            machine->join_sh2();
+            tx->raise_hint();
+        });
 
         // $A15100-$A1513F: the 32X system registers as seen by the 68000 --
         // adapter control, INTM/INTS, the COMM bank, and the PWM scaffold. Byte
@@ -316,13 +434,15 @@ namespace mnemos::manifests::sega32x {
         // maps it.
         bus.map_mmio(
             0xA15100U, 0x40U,
-            [tx](std::uint32_t a) -> std::uint8_t {
+            [tx, machine = machine.get()](std::uint32_t a) -> std::uint8_t {
+                machine->join_sh2(); // observe a settled batch, never a torn one
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
                 const std::uint16_t w = m68k_reg_read_word(*tx, off);
                 return (a & 1U) != 0U ? static_cast<std::uint8_t>(w)
                                       : static_cast<std::uint8_t>(w >> 8U);
             },
             [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
+                machine->join_sh2();
                 const std::uint32_t off = (a - 0xA15100U) & ~1U;
                 if (off >= 0x20U && off <= 0x2FU) {
                     // COMM write: let the SH-2s observe the pre-write state
@@ -330,7 +450,7 @@ namespace mnemos::manifests::sega32x {
                     // COMM writes (clear-then-command) landing in the same
                     // interleave slice -- a hardware SH-2 polls continuously
                     // and never misses the window.
-                    machine->catch_up_sh2();
+                    machine->fence_sh2();
                 }
                 if (off == 0x12U) {
                     // The DREQ FIFO write port pushes once per completed word:
@@ -343,7 +463,7 @@ namespace mnemos::manifests::sega32x {
                         tx->dreq_write_high = value;
                     } else if ((tx->dreq_ctrl & 0x0004U) != 0U) {
                         if (tx->dreq_fifo_count >= sega32x_system::dreq_fifo_depth) {
-                            machine->catch_up_sh2();
+                            machine->fence_sh2();
                         }
                         tx->dreq_fifo_push(static_cast<std::uint16_t>(
                             (static_cast<std::uint16_t>(tx->dreq_write_high) << 8U) | value));
@@ -364,15 +484,29 @@ namespace mnemos::manifests::sega32x {
         // the same chip the SH-2s reach at +$4100, including the autofill
         // trigger on a completed DATA write.
         bus.map_mmio(
-            0xA15180U, 0x10U, [tx](std::uint32_t a) { return tx->vdp_reg_read(a - 0xA15180U); },
-            [tx](std::uint32_t a, std::uint8_t value) { tx->vdp_reg_write(a - 0xA15180U, value); },
+            0xA15180U, 0x10U,
+            [tx, machine = machine.get()](std::uint32_t a) {
+                machine->join_sh2();
+                return tx->vdp_reg_read(a - 0xA15180U);
+            },
+            [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
+                machine->join_sh2();
+                tx->vdp_reg_write(a - 0xA15180U, value);
+            },
             1);
 
         // $A15200-$A153FF: the 32X palette CRAM as seen by the 68000 (the SH-2
         // +$4200 window). Boot code write-verifies it word by word.
         bus.map_mmio(
-            0xA15200U, 0x200U, [tx](std::uint32_t a) { return tx->vdp_pal_read(a - 0xA15200U); },
-            [tx](std::uint32_t a, std::uint8_t value) { tx->vdp_pal_write(a - 0xA15200U, value); },
+            0xA15200U, 0x200U,
+            [tx, machine = machine.get()](std::uint32_t a) {
+                machine->join_sh2();
+                return tx->vdp_pal_read(a - 0xA15200U);
+            },
+            [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
+                machine->join_sh2();
+                tx->vdp_pal_write(a - 0xA15200U, value);
+            },
             1);
 
         // $840000-$85FFFF: the 68000's frame-buffer window (the live access
@@ -380,12 +514,23 @@ namespace mnemos::manifests::sega32x {
         // Games that render 32X video from the 68000 side draw through these.
         bus.map_mmio(
             0x840000U, static_cast<std::uint32_t>(fb_bank_size),
-            [tx](std::uint32_t a) { return tx->fb_read(a - 0x840000U); },
-            [tx](std::uint32_t a, std::uint8_t value) { tx->fb_write(a - 0x840000U, value); }, 1);
+            [tx, machine = machine.get()](std::uint32_t a) {
+                machine->join_sh2();
+                return tx->fb_read(a - 0x840000U);
+            },
+            [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
+                machine->join_sh2();
+                tx->fb_write(a - 0x840000U, value);
+            },
+            1);
         bus.map_mmio(
             0x860000U, static_cast<std::uint32_t>(fb_bank_size),
-            [tx](std::uint32_t a) { return tx->fb_read(a - 0x860000U); },
-            [tx](std::uint32_t a, std::uint8_t value) {
+            [tx, machine = machine.get()](std::uint32_t a) {
+                machine->join_sh2();
+                return tx->fb_read(a - 0x860000U);
+            },
+            [tx, machine = machine.get()](std::uint32_t a, std::uint8_t value) {
+                machine->join_sh2();
                 tx->fb_overwrite_write(a - 0x860000U, value);
             },
             1);
