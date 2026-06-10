@@ -117,6 +117,10 @@ namespace mnemos::manifests::sega32x {
         // the counter reaches the CNTL TM field the PWM interrupt latches.
         std::uint16_t pwm_cntl{};
         std::uint16_t pwm_cycle{};
+        // DC-blocker state (per channel): the hardware PWM output is
+        // AC-coupled into the mix, so a held duty decays to silence.
+        float pwm_dcb_x_l{}, pwm_dcb_y_l{};
+        float pwm_dcb_x_r{}, pwm_dcb_y_r{};
         std::array<std::uint16_t, pwm_fifo_depth> pwm_fifo_l{};
         std::array<std::uint16_t, pwm_fifo_depth> pwm_fifo_r{};
         std::uint8_t pwm_fifo_l_count{};
