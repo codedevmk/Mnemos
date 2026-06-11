@@ -47,6 +47,75 @@ namespace mnemos::manifests::segacd {
         update_sub_irq();                       // re-apply any pending IRQ now that we run
     }
 
+    void segacd_system::sub_peripheral_reset() {
+        // Soft CD-hardware reset (sub-side $01 bit 0 cleared). Matches the
+        // reference: clear ONLY the sub-side registers -- the comm flags/words
+        // $0E-$2F are preserved -- then re-apply the power-on defaults and reset
+        // the drive, CDC, GFX and PCM. The published CDD status frame becomes
+        // the pristine all-zero frame (RS0-RS8 = 0, RS9 checksum = $F) the
+        // BIOS's drive-init op validates against.
+        gate_array[0x04] = 0;
+        gate_array[0x05] = 0;
+        gate_array[0x0C] = 0;
+        gate_array[0x0D] = 0;
+        for (std::size_t i = 0x30U; i < gate_array.size(); ++i) {
+            gate_array[i] = 0;
+        }
+        gate_array[0x08] = 0xFFU;
+        gate_array[0x09] = 0xFFU;
+        gate_array[0x0A] = 0xFFU;
+        gate_array[0x0B] = 0xFFU;
+        gate_array[0x36] = 0x01U;
+        gate_array[0x41] = 0x0FU; // RS9 of the pristine CDD status frame
+        for (std::size_t i = 0x42U; i <= 0x4BU; ++i) {
+            gate_array[i] = 0xFFU;
+        }
+        sub_irq_mask = 0;
+        sub_irq_pending = 0;
+        update_sub_irq();
+        timer_word = 0;
+        timer_cycle_acc = 0;
+        // Drive (the reference's cdd_reset): position/latency cleared, status
+        // back to TOC-with-disc, CD-DA silenced.
+        cdd_command.fill(0xFFU);
+        cdd_status.fill(0);
+        cdd_status[9] = 0x0FU;
+        cdd_pending_status = 0;
+        cdd_latency = 0;
+        cdd_play_warmup = 0;
+        cdd_lba = 0;
+        cdd_track = 0;
+        cdd_drive_status = cdd_loaded ? std::uint8_t{cdd_toc} : std::uint8_t{cdd_nodisc};
+        cdda_stop();
+        // CDC registers (the reference's cdc_reset; the 16 KB ring is kept).
+        cdc_ifstat = 0xFFU;
+        cdc_ifctrl = 0;
+        cdc_dbc = 0;
+        cdc_dac = 0;
+        cdc_pt = 0;
+        cdc_wa = 0;
+        cdc_ctrl = {};
+        cdc_head = {};
+        cdc_head[0][3] = 0x01U; // mode byte defaults to Mode 1
+        cdc_stat = {};
+        cdc_stat[3] = 0x80U; // VALST
+        cdc_ar = 0;
+        cdc_irq = 0;
+        cdc_dma_dest = 0;
+        // Stamp / rotation ASIC config (the gate registers were cleared above).
+        stamp_size = 0;
+        stamp_map_addr = 0;
+        img_buf_v_cell = 0;
+        img_buf_vector = 0;
+        img_v_step = 0;
+        img_h_step = 0;
+        img_buf_width = 0;
+        img_buf_height = 0;
+        img_buf_offset = 0;
+        trace_vector_addr = 0;
+        pcm.reset(chips::reset_kind::power_on);
+    }
+
     void segacd_system::reset() {
         sub_reset_asserted = true;
         sub_elapsed_base = 0U;
@@ -264,12 +333,23 @@ namespace mnemos::manifests::segacd {
             sub_led = value;
             return;
         }
-        // $01 (sub-CPU RESET / BUSREQ) is MAIN-side ONLY -- the sub-CPU cannot
-        // reset or halt itself. The sub-CPU BIOS writes $FF8001 (e.g. `bclr #0`)
-        // during init; routing that into gate_write_main's reset logic would make
-        // the sub reset ITSELF mid-startup, so it never finishes its checksum nor
-        // signals the main via $0F -- and no disc/game ever boots. Ignore it here.
+        // $01 (sub side): clearing bit 0 soft-resets the CD PERIPHERALS -- the
+        // drive, CDC, GFX, timer and the sub-side gate registers (the comm
+        // flags/words $0E-$2F survive) -- but NOT the sub CPU itself; CPU
+        // reset/halt is the MAIN-side $01. Routing this into gate_write_main's
+        // reset logic once made the sub reset ITSELF mid-startup (no boot);
+        // dropping the write entirely instead broke the game launch: the BIOS's
+        // drive-init op validates the pristine all-zero CDD frame (RS9=$F) this
+        // reset publishes, and without it the op errors ($5A2E=$FF) and the
+        // boot parks at the "Press the START BUTTON" re-init screen.
         if (offset == 0x01U) {
+            if ((value & 0x01U) == 0U) {
+                if (segacd_trace_enabled()) {
+                    std::fprintf(stderr, "[subrst] pc=%06X CD peripheral soft reset\n",
+                                 sub_cpu.cpu_registers().pc);
+                }
+                sub_peripheral_reset();
+            }
             return;
         }
         // $03 memory mode (sub side): the sub-CPU writes RET (bit 0) and MODE
