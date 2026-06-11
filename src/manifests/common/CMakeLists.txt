@@ -14,6 +14,7 @@ add_library(
     manifest.cpp
     builder.cpp
     rom_set.cpp
+    rom_set_toml.cpp
 )
 add_library(mnemos::manifests::common ALIAS mnemos_manifests_common)
 
@@ -65,6 +66,7 @@ if(BUILD_TESTING)
             tests/manifest_test.cpp
             tests/builder_test.cpp
             tests/rom_set_test.cpp
+            tests/rom_set_toml_test.cpp
         LIBRARIES
             mnemos::manifests::common
             mnemos::chips::cpu::m6510

@@ -124,3 +124,118 @@ TEST_CASE("irem_m72_adapter applies the DIP override and reports orientation",
     adapter.set_orientation(mnemos::frontend_sdk::display_orientation::vertical);
     CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::vertical);
 }
+
+namespace {
+
+    void put16(std::vector<std::uint8_t>& out, std::uint16_t v) {
+        out.push_back(static_cast<std::uint8_t>(v));
+        out.push_back(static_cast<std::uint8_t>(v >> 8U));
+    }
+
+    void put32(std::vector<std::uint8_t>& out, std::uint32_t v) {
+        put16(out, static_cast<std::uint16_t>(v));
+        put16(out, static_cast<std::uint16_t>(v >> 16U));
+    }
+
+    // Minimal STORED-method zip over the given entries (CRC fields zeroed;
+    // the reader does not verify them).
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_stored_zip(const std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& entries) {
+        std::vector<std::uint8_t> out;
+        struct central final {
+            std::string name;
+            std::uint32_t size;
+            std::uint32_t local_offset;
+        };
+        std::vector<central> directory;
+        for (const auto& [name, data] : entries) {
+            const auto local_offset = static_cast<std::uint32_t>(out.size());
+            const auto size = static_cast<std::uint32_t>(data.size());
+            put32(out, 0x04034B50U);
+            put16(out, 20U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put32(out, 0U);
+            put32(out, 0U); // crc (unchecked by the reader)
+            put32(out, size);
+            put32(out, size);
+            put16(out, static_cast<std::uint16_t>(name.size()));
+            put16(out, 0U);
+            out.insert(out.end(), name.begin(), name.end());
+            out.insert(out.end(), data.begin(), data.end());
+            directory.push_back({name, size, local_offset});
+        }
+        const auto cd_offset = static_cast<std::uint32_t>(out.size());
+        for (const central& c : directory) {
+            put32(out, 0x02014B50U);
+            put16(out, 20U);
+            put16(out, 20U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put32(out, 0U);
+            put32(out, 0U);
+            put32(out, c.size);
+            put32(out, c.size);
+            put16(out, static_cast<std::uint16_t>(c.name.size()));
+            put16(out, 0U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put32(out, 0U);
+            put32(out, c.local_offset);
+            out.insert(out.end(), c.name.begin(), c.name.end());
+        }
+        const auto cd_size = static_cast<std::uint32_t>(out.size()) - cd_offset;
+        put32(out, 0x06054B50U);
+        put16(out, 0U);
+        put16(out, 0U);
+        put16(out, static_cast<std::uint16_t>(directory.size()));
+        put16(out, static_cast<std::uint16_t>(directory.size()));
+        put32(out, cd_size);
+        put32(out, cd_offset);
+        put16(out, 0U);
+        return out;
+    }
+
+} // namespace
+
+TEST_CASE("irem_m72_adapter loads a declarative game.toml set from a zip", "[irem_m72][adapter]") {
+    // Split the working program image into even/odd halves and let the
+    // declaration's stride-2 placement reassemble it.
+    const auto whole = make_program();
+    std::vector<std::uint8_t> low(whole.size() / 2U);
+    std::vector<std::uint8_t> high(whole.size() / 2U);
+    for (std::size_t i = 0; i < whole.size() / 2U; ++i) {
+        low[i] = whole[i * 2U];
+        high[i] = whole[i * 2U + 1U];
+    }
+    const std::string manifest = R"(
+[set]
+schema = "mnemos-romset/1"
+name = "synthetic"
+board = "irem_m72"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name = "prog.lo"
+offset = 0
+stride = 2
+
+[[region.file]]
+name = "prog.hi"
+offset = 1
+stride = 2
+)";
+    const auto zip = make_stored_zip({
+        {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
+        {"prog.lo", low},
+        {"prog.hi", high},
+    });
+
+    irem_m72_adapter adapter(zip, "synthetic");
+    adapter.step_one_frame();
+    CHECK(adapter.machine().work_ram[0] == 0x42U); // the program ran
+}

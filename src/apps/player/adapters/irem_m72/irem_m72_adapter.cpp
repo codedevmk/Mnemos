@@ -2,7 +2,9 @@
 
 #include "adapter_registry.hpp"
 #include "rom_set.hpp"
+#include "rom_set_toml.hpp"
 
+#include <cstdio>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::irem_m72 {
@@ -11,14 +13,37 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
         using mnemos::manifests::common::rom_set_image;
 
-        // Development-format set loader: a .zip with region-named entries, or
-        // a bare binary as the V30 program. See the class comment.
+        // Set loader. A .zip carrying a "game.toml" declaration (schema
+        // mnemos-romset/1) loads declaratively -- per-file placement,
+        // interleave, CRC verification -- with loader issues reported to
+        // stderr. Without one, the development format applies: region-named
+        // entries ("maincpu.bin", ...) loaded whole. A bare binary is the
+        // V30 program image.
         [[nodiscard]] rom_set_image load_set(std::vector<std::uint8_t> rom) {
             rom_set_image image;
             const bool is_zip = rom.size() >= 4U && rom[0] == 'P' && rom[1] == 'K';
             if (is_zip) {
                 if (auto provider =
                         mnemos::manifests::common::make_zip_rom_provider(std::move(rom))) {
+                    if (auto manifest_bytes = (*provider)("game.toml")) {
+                        const std::string text(manifest_bytes->begin(), manifest_bytes->end());
+                        const auto parsed =
+                            mnemos::manifests::common::parse_rom_set_decl(text, "game.toml");
+                        if (!parsed.ok()) {
+                            for (const auto& error : parsed.errors) {
+                                std::fprintf(stderr, "[irem_m72] %s:%u:%u: %s\n",
+                                             error.source.c_str(), error.line, error.column,
+                                             error.message.c_str());
+                            }
+                            return image; // declared but invalid: boot an empty board
+                        }
+                        image = mnemos::manifests::common::load_rom_set(*parsed.value, *provider);
+                        for (const auto& issue : image.issues) {
+                            std::fprintf(stderr, "[irem_m72] %s: %s\n", issue.file.c_str(),
+                                         issue.message.c_str());
+                        }
+                        return image;
+                    }
                     for (const char* region :
                          {"maincpu", "soundcpu", "tiles_a", "tiles_b", "sprites"}) {
                         if (auto bytes = (*provider)(std::string{region} + ".bin")) {

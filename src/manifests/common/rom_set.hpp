@@ -43,7 +43,8 @@ namespace mnemos::manifests::common {
     };
 
     struct rom_set_decl final {
-        std::string name; // set id, e.g. "rtype"
+        std::string name;  // set id, e.g. "rtype"
+        std::string board; // board family id, e.g. "irem_m72" (informational)
         std::vector<rom_set_region> regions;
     };
 
