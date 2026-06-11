@@ -422,7 +422,10 @@ namespace mnemos::chips::cpu {
             set_szp8(result);
             return op == alu_cmp ? lhs : result;
         }
-        default: { // OR / AND / XOR
+        case alu_or:
+        case alu_and:
+        case alu_xor:
+        default: {
             std::uint8_t result{};
             if (op == alu_or) {
                 result = static_cast<std::uint8_t>(lhs | rhs);
@@ -465,7 +468,10 @@ namespace mnemos::chips::cpu {
             set_szp16(result);
             return op == alu_cmp ? lhs : result;
         }
-        default: { // OR / AND / XOR
+        case alu_or:
+        case alu_and:
+        case alu_xor:
+        default: {
             std::uint16_t result{};
             if (op == alu_or) {
                 result = static_cast<std::uint16_t>(lhs | rhs);
