@@ -362,6 +362,12 @@ TEST_CASE("segacd CDD plays a data disc and advances the read head", "[segacd][c
     REQUIRE(sys->cdd_drive_status == segacd_system::cdd_play);
 
     const std::uint64_t before = sys->cdc_sectors_decoded;
+    // One sector-sync warmup tick separates the PLAY report from the first
+    // decode (the real drive reports 'playing' a frame before data flows; the
+    // BIOS read driver arms its per-sector service in that gap).
+    sys->cdd_update();
+    REQUIRE(sys->cdd_lba == 0);
+    REQUIRE(sys->cdc_sectors_decoded == before);
     sys->cdd_update();
     REQUIRE(sys->cdd_lba == 1);
     REQUIRE(sys->cdc_sectors_decoded > before); // a sector was fed to the decoder

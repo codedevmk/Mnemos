@@ -447,6 +447,25 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
             main_pc_hist.clear();
         }
         rt_frame = i;
+        // Optional headless START press (MNEMOS_SEGACD_PRESS_START = frame#):
+        // held for 10 frames, e.g. to drive the BIOS "Press the START BUTTON"
+        // prompt of the disc-boot flow.
+        {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            static const char* press_env = std::getenv("MNEMOS_SEGACD_PRESS_START");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            if (press_env != nullptr) {
+                const int press_at = std::atoi(press_env);
+                mnemos::peripheral::controller_state pad{};
+                pad.start = (i >= press_at && i < press_at + 10);
+                adapter.apply_input(0, pad);
+            }
+        }
         if (pchist_trace && i >= 100 && i < 220) {
             std::fprintf(
                 stderr, "[frame] %d M=%llu\n", i,
@@ -532,6 +551,40 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     }
 
     const auto fb = adapter.current_frame();
+    // Optional end-of-run framebuffer dump (MNEMOS_SEGACD_FBDUMP = .ppm path)
+    // for headless visual verification of the boot stage reached.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* fb_dump = std::getenv("MNEMOS_SEGACD_FBDUMP");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (fb_dump != nullptr && fb.pixels != nullptr) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::fopen: opt-in diagnostic dump
+#endif
+        std::FILE* f = std::fopen(fb_dump, "wb");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (f != nullptr) {
+            std::fprintf(f, "P6\n%u %u\n255\n", fb.width, fb.height);
+            const std::uint32_t stride = fb.effective_stride();
+            for (std::uint32_t y = 0; y < fb.height; ++y) {
+                for (std::uint32_t x = 0; x < fb.width; ++x) {
+                    const std::uint32_t p = fb.pixels[y * stride + x];
+                    const unsigned char rgb[3] = {static_cast<unsigned char>((p >> 16) & 0xFF),
+                                                  static_cast<unsigned char>((p >> 8) & 0xFF),
+                                                  static_cast<unsigned char>(p & 0xFF)};
+                    std::fwrite(rgb, 1, 3, f);
+                }
+            }
+            std::fclose(f);
+        }
+    }
     std::size_t nonzero = 0;
     if (fb.pixels != nullptr) {
         const std::uint32_t stride = fb.effective_stride();

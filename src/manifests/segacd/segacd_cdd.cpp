@@ -384,6 +384,8 @@ namespace mnemos::manifests::segacd {
         // ownership, not drive readiness -- and made the drive reach TOC too late.)
         if (cdd_latency > 0) {
             --cdd_latency;
+        } else if (cdd_drive_status == cdd_play && cdd_play_warmup > 0) {
+            --cdd_play_warmup; // sector-sync acquisition: PLAY reported, no data yet
         } else if (cdd_drive_status == cdd_play) {
             const std::uint32_t total = disc_total_lbas();
             if (total == 0U || (cdd_lba >= 0 && static_cast<std::uint32_t>(cdd_lba) >= total)) {
@@ -424,6 +426,9 @@ namespace mnemos::manifests::segacd {
 
         if (cdd_pending_status != 0 && cdd_latency == 0) {
             cdd_drive_status = cdd_pending_status;
+            if (cdd_drive_status == cdd_play) {
+                cdd_play_warmup = 1; // first sector arrives one CD frame after PLAY
+            }
             cdd_pending_status = 0;
             cdd_track = disc_track_of_lba(cdd_lba);
         }
