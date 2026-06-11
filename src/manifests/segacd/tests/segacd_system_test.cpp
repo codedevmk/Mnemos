@@ -224,6 +224,72 @@ TEST_CASE("segacd gate-array $03 memory mode tracks RET/DMNA ownership", "[segac
     REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U); // RET preserved (the toggle fix)
 }
 
+TEST_CASE("segacd word RAM 1M mode: banks are word-interleaved views", "[segacd][gate][wram]") {
+    auto sys = assemble_segacd();
+    // Pattern in the canonical 2M image (sub window, 2M mode at power-on).
+    for (std::uint8_t i = 0; i < 8; ++i) {
+        sys->sub_bus.write8(0x080000U + i, static_cast<std::uint8_t>(0x10U + i));
+    }
+    // Sub enters 1M mode with RET=0: the sub gets bank 1 = the ODD 2M words.
+    sys->gate_write_sub(0x03, 0x04);
+    REQUIRE(sys->word_ram_1m());
+    REQUIRE(sys->sub_word_bank() == 1U);
+    REQUIRE(sys->sub_bus.read8(0x0C0000U) == 0x12);
+    REQUIRE(sys->sub_bus.read8(0x0C0001U) == 0x13);
+    REQUIRE(sys->sub_bus.read8(0x0C0002U) == 0x16);
+    REQUIRE(sys->sub_bus.read8(0x0C0003U) == 0x17);
+    // RET=1 swaps: the sub gets bank 0 = the EVEN 2M words.
+    sys->gate_write_sub(0x03, 0x05);
+    REQUIRE(sys->sub_word_bank() == 0U);
+    REQUIRE(sys->sub_bus.read8(0x0C0000U) == 0x10);
+    REQUIRE(sys->sub_bus.read8(0x0C0002U) == 0x14);
+    // In 1M the linear $080000 window is the DOT IMAGE: one window byte per
+    // 4-bit pixel of the sub's bank, high nibble first (bank byte 0 = $10).
+    REQUIRE(sys->sub_bus.read8(0x080000U) == 0x01);
+    REQUIRE(sys->sub_bus.read8(0x080001U) == 0x00);
+    REQUIRE(sys->sub_bus.read8(0x080002U) == 0x01);
+    REQUIRE(sys->sub_bus.read8(0x080003U) == 0x01);
+    // Dot writes go through the $03 priority mode (PM=0 here: replace) into
+    // the sub's bank: dot 4 = the high nibble of bank byte 2 = 2M byte 4.
+    sys->sub_bus.write8(0x080004U, 0x0FU);
+    REQUIRE(sys->word_ram[4] == 0xF4);
+    // Back to 2M: the linear window returns, the bank window goes open bus.
+    sys->gate_write_sub(0x03, 0x00);
+    REQUIRE_FALSE(sys->word_ram_1m());
+    REQUIRE(sys->sub_bus.read8(0x080000U) == 0x10);
+    REQUIRE(sys->sub_bus.read8(0x0C0000U) == 0xFF);
+}
+
+TEST_CASE("segacd word RAM 1M mode: DMNA request and the 2M-exit RET rule",
+          "[segacd][gate][wram]") {
+    auto sys = assemble_segacd();
+    sys->gate_write_sub(0x03, 0x04); // enter 1M
+    // Main DMNA=1 in 1M arms the return-to-sub request; readback unchanged.
+    sys->gate_write_main(0x03, 0x02);
+    REQUIRE((sys->gate_read(0x03) & 0x02U) == 0x00U);
+    REQUIRE(sys->dmna_pending);
+    // Exit to 2M with the request armed: RET stays clear (word RAM to the sub).
+    sys->gate_write_sub(0x03, 0x00);
+    REQUIRE((sys->gate_read(0x03) & 0x05U) == 0x00U);
+    REQUIRE_FALSE(sys->dmna_pending);
+    // Without the request the 2M exit forces RET=1 (word RAM to the main).
+    sys->gate_write_sub(0x03, 0x04);
+    sys->gate_write_sub(0x03, 0x00);
+    REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U);
+    // Main DMNA=0 in 1M quirk-SETS the readback DMNA bit; the sub's next RET
+    // write (swap completed) clears it.
+    sys->gate_write_sub(0x03, 0x04);
+    sys->gate_write_main(0x03, 0x00);
+    REQUIRE((sys->gate_read(0x03) & 0x02U) == 0x02U);
+    sys->gate_write_sub(0x03, 0x05);
+    REQUIRE((sys->gate_read(0x03) & 0x03U) == 0x01U);
+    sys->gate_write_main(0x03, 0x02);
+    REQUIRE(sys->dmna_pending);
+    sys->reset();
+    REQUIRE_FALSE(sys->dmna_pending);
+    REQUIRE((sys->gate_read(0x03) & 0x05U) == 0x01U);
+}
+
 TEST_CASE("segacd gate-array comm registers are shared", "[segacd][gate]") {
     auto sys = assemble_segacd();
     sys->gate_write_main(0x10, 0xAB); // main->sub comm word
@@ -266,6 +332,9 @@ TEST_CASE("segacd gate array is reachable through both sub-bus mirrors", "[segac
     sys->sub_bus.write8(0xFF8003U, 0x01U);
     REQUIRE((sys->gate_read(0x03) & 0x01U) == 0x01U);
     REQUIRE(sys->sub_bus.read8(0xFF8003U) == sys->gate_read(0x03));
+    // The memory-mode write ignores the byte lane: $FF8002 is equivalent.
+    sys->sub_bus.write8(0xFF8002U, 0x04U);
+    REQUIRE((sys->gate_read(0x03) & 0x04U) == 0x04U);
     // $0FF800 is the same register block.
     sys->sub_bus.write8(0x0FF810U, 0x77U);
     REQUIRE(sys->gate_read(0x10) == 0x77);
@@ -470,6 +539,49 @@ TEST_CASE("segacd CDC DMAs decoded user data to PRG-RAM", "[segacd][cdc]") {
     }
 }
 
+TEST_CASE("segacd CDC DMAs decoded user data to Word-RAM in 2M and 1M modes",
+          "[segacd][cdc][wram]") {
+    const auto bin = make_data_bin(4);
+    auto disc = mnemos::disc::disc_image::open_bin(bin);
+    auto sys = assemble_segacd();
+    sys->attach_disc(&*disc);
+    cdc_set_reg(*sys, 0x0A, 0x84); // CTRL0: DECEN | WRRQ
+    issue_play(*sys, 0, 2, 0);
+    for (int i = 0; i < 64 && sys->cdc_sectors_decoded == 0U; ++i) {
+        sys->cdd_update(); // seek (reference latency) then decode sector 0 into the ring
+    }
+
+    const auto src = static_cast<std::uint16_t>((sys->cdc_pt & 0x3FFFU) + 5U);
+    const auto arm_word_dma = [&](std::uint16_t dest_word_addr) {
+        cdc_set_reg(*sys, 0x04, static_cast<std::uint8_t>(src));       // DAC low
+        cdc_set_reg(*sys, 0x05, static_cast<std::uint8_t>(src >> 8U)); // DAC high
+        cdc_set_reg(*sys, 0x02, 0x07);                                 // DBC low = 7 -> 8 bytes
+        cdc_set_reg(*sys, 0x03, 0x00);                                 // DBC high
+        cdc_set_reg(*sys, 0x01, 0x02);                                 // IFCTRL: DOUTEN
+        sys->gate_write_main(0x04, 0x07);                              // gate $04: Word-RAM
+        sys->gate_write_main(0x0A, static_cast<std::uint8_t>(dest_word_addr >> 8U));
+        sys->gate_write_main(0x0B, static_cast<std::uint8_t>(dest_word_addr));
+        cdc_set_reg(*sys, 0x06, 0x00); // DTRG -> arm the DMA
+    };
+
+    load_spin(*sys);
+    sys->release_sub_reset();
+    arm_word_dma(0x0010U); // byte destination = 0x80 in 2M
+    sys->run_cycles(50);
+    for (std::size_t k = 0; k < 8; ++k) {
+        REQUIRE(sys->word_ram[0x80U + k] == static_cast<std::uint8_t>(k + 1U));
+    }
+
+    sys->gate_write_sub(0x03, 0x04); // 1M, RET=0: sub owns bank 1
+    arm_word_dma(0x0000U);
+    sys->run_cycles(50);
+    for (std::uint32_t k = 0; k < 8; ++k) {
+        REQUIRE(sys->word_ram[segacd_system::word_bank_offset(1U, k)] ==
+                static_cast<std::uint8_t>(k + 1U));
+        REQUIRE(sys->word_ram[segacd_system::word_bank_offset(0U, k)] == 0x00U);
+    }
+}
+
 TEST_CASE("segacd CDC DMAs decoded user data to PCM wave RAM", "[segacd][cdc]") {
     const auto bin = make_data_bin(4);
     auto disc = mnemos::disc::disc_image::open_bin(bin);
@@ -579,38 +691,41 @@ TEST_CASE("segacd sub-CPU timer is disabled when timer_word is 0", "[segacd][tim
     REQUIRE((sys->sub_irq_pending & segacd_system::irq_timer) == 0U);
 }
 
-TEST_CASE("segacd stamp ASIC rotates word RAM into the image buffer + raises L1",
+TEST_CASE("segacd stamp ASIC samples stamps along trace vectors into the image buffer + raises L1",
           "[segacd][stamp]") {
     auto sys = assemble_segacd();
-    // Source stamp row at word RAM 0..3.
-    sys->word_ram[0] = 0xAA;
-    sys->word_ram[1] = 0xBB;
-    sys->word_ram[2] = 0xCC;
-    sys->word_ram[3] = 0xDD;
-    // Trace-vector table at word RAM 0x1000: src_x=0, src_y=0, dx=0x0010 (one
-    // source column per output pixel), dy=0.
-    sys->word_ram[0x1004] = 0x00;
-    sys->word_ram[0x1005] = 0x10; // dx = 16 (Q12.4 -> +1 column)
-    // Config: image-buffer width=4, height=1, trace vectors at 0x1000 (>>2),
-    // image buffer at word RAM 0x2000 (>>2).
-    sys->gate_write_main(0x64, 0x00);
-    sys->gate_write_main(0x65, 0x04); // IBW = 4
-    sys->gate_write_main(0x66, 0x00);
-    sys->gate_write_main(0x67, 0x01); // IBH = 1
-    sys->gate_write_main(0x6A, 0x04);
-    sys->gate_write_main(0x6B, 0x00); // TVADDR = 0x0400 (<<2 = 0x1000)
-    sys->gate_write_main(0x68, 0x08);
-    sys->gate_write_main(0x69, 0x00); // IBO = 0x0800 (<<2 = 0x2000)
+    // 16x16 stamps / 16x16 map (cfg $59 = 0). Map entry (0,0) -> stamp 4.
+    sys->word_ram[0x000] = 0x00;
+    sys->word_ram[0x001] = 0x04;
+    // Stamp 4 pixel data starts at nibble 4<<8 = byte 0x200; the first row of
+    // its top-left cell: dots 0-3 = colors 1,2,3,4 (4bpp packed).
+    sys->word_ram[0x200] = 0x12;
+    sys->word_ram[0x201] = 0x34;
+    // One trace vector at byte 0x1000: start (0,0) in 13.3, delta (+1.0, 0) in
+    // signed 5.11.
+    sys->word_ram[0x1004] = 0x08;
+    sys->word_ram[0x1005] = 0x00; // X delta = 0x0800 = +1 dot per output dot
+    // Config: stamp map at word RAM 0, image buffer 1 cell tall starting at
+    // dot 0x8000 (byte 0x4000), 4 dots wide x 1 line, trace table at 0x1000.
+    sys->gate_write_main(0x59, 0x00);
+    sys->gate_write_main(0x5A, 0x00);
+    sys->gate_write_main(0x5B, 0x00);
+    sys->gate_write_main(0x5D, 0x00);
+    sys->gate_write_main(0x5E, 0x10);
+    sys->gate_write_main(0x5F, 0x00);
+    sys->gate_write_main(0x61, 0x00);
+    sys->gate_write_main(0x62, 0x00);
+    sys->gate_write_main(0x63, 0x04);
+    sys->gate_write_main(0x65, 0x01);
+    sys->gate_write_main(0x66, 0x04);
+    sys->gate_write_main(0x67, 0x00); // trace-base low byte commits = GO
 
-    // Trigger ROT ($59 bit 0).
-    sys->gate_write_main(0x58, 0x00);
-    sys->gate_write_main(0x59, 0x01);
-
-    // The rotated row landed in the image buffer at word RAM 0x2000.
-    REQUIRE(sys->word_ram[0x2000] == 0xAA);
-    REQUIRE(sys->word_ram[0x2001] == 0xBB);
-    REQUIRE(sys->word_ram[0x2002] == 0xCC);
-    REQUIRE(sys->word_ram[0x2003] == 0xDD);
+    // The sampled dots landed 4bpp-packed in the image buffer.
+    REQUIRE(sys->word_ram[0x4000] == 0x12);
+    REQUIRE(sys->word_ram[0x4001] == 0x34);
+    // Op complete: V dots cleared, GRON idle.
+    REQUIRE(sys->gate_array[0x65] == 0);
+    REQUIRE((sys->gate_array[0x58] & 0x80U) == 0U);
     // graphics-complete raised the sub-CPU level-1 IRQ.
     REQUIRE((sys->sub_irq_pending & segacd_system::irq_graphics) != 0U);
 }

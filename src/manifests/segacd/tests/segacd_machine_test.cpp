@@ -56,6 +56,34 @@ TEST_CASE("segacd_machine bridges the Genesis main bus to the sub side", "[segac
     REQUIRE(bus.read8(0x020080U) == 0x5A);
 }
 
+TEST_CASE("segacd_machine 1M handoff: a sub $0C0000 deposit reaches the main after RET",
+          "[segacd][machine][wram]") {
+    auto m = assemble_segacd_machine(make_bios());
+    auto& bus = m->genesis->bus;
+    auto& sub = *m->sub;
+    // Sub switches to 1M with RET=0: the sub owns bank 1, the main sees bank 0.
+    sub.gate_write_sub(0x03, 0x04);
+    // Sub deposits through its $0C0000 bank window (the IP-load path).
+    const std::uint8_t ip[4] = {0x43, 0xFA, 0x00, 0x0A};
+    for (std::uint32_t i = 0; i < 4; ++i) {
+        sub.sub_bus.write8(0x0C0000U + i, ip[i]);
+    }
+    REQUIRE(bus.read8(0x200000U) == 0x00); // main still on bank 0
+    // Sub returns its bank (RET=1): the main's window now shows the deposit.
+    sub.gate_write_sub(0x03, 0x05);
+    REQUIRE(bus.read8(0x200000U) == 0x43);
+    REQUIRE(bus.read8(0x200001U) == 0xFA);
+    REQUIRE(bus.read8(0x200002U) == 0x00);
+    REQUIRE(bus.read8(0x200003U) == 0x0A);
+    // $220000+ is the VRAM-cell image of the same bank: cell (0,0) line 0
+    // starts at bank byte 0, so its first bytes mirror $200000.
+    REQUIRE(bus.read8(0x220000U) == 0x43);
+    REQUIRE(bus.read8(0x220001U) == 0xFA);
+    // Back in 2M the main window is linear again (bank-1 byte 0 = 2M byte 2).
+    sub.gate_write_sub(0x03, 0x00);
+    REQUIRE(bus.read8(0x200002U) == 0x43);
+}
+
 TEST_CASE("segacd_machine PRG window follows the bank register", "[segacd][machine]") {
     auto m = assemble_segacd_machine(make_bios());
     auto& bus = m->genesis->bus;

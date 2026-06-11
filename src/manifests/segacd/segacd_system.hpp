@@ -39,6 +39,82 @@ namespace mnemos::manifests::segacd {
         bool sub_busreq{false};        // main CPU holds the sub-CPU bus ($01 bit 1)
         std::uint8_t sub_led{};        // sub-side $00 write target (LED control)
 
+        // Word-RAM 1M-mode banking. The canonical storage stays the 2M-linear
+        // image; the two 1M banks are word-interleaved VIEWS over it (bank 0 =
+        // even 2M words, bank 1 = odd), so mode switches need no copying. In 1M
+        // mode the $03 RET bit selects the split: RET=1 assigns bank 1 to the
+        // main CPU (bank 0 to the sub), RET=0 the inverse.
+        [[nodiscard]] bool word_ram_1m() const noexcept { return (gate_array[0x03] & 0x04U) != 0U; }
+        [[nodiscard]] std::uint32_t main_word_bank() const noexcept {
+            return gate_array[0x03] & 0x01U;
+        }
+        [[nodiscard]] std::uint32_t sub_word_bank() const noexcept {
+            return (gate_array[0x03] & 0x01U) ^ 1U;
+        }
+        // Linear index into word_ram for byte `offset` of 1M bank `bank`.
+        [[nodiscard]] static constexpr std::uint32_t
+        word_bank_offset(std::uint32_t bank, std::uint32_t offset) noexcept {
+            return ((offset & 0x1FFFEU) << 1U) | (bank << 1U) | (offset & 1U);
+        }
+        // Cell-image address transform (1M): the main's $220000-$23FFFF window
+        // presents its bank rearranged as VDP cells -- four regions (V32/V16/
+        // V8/V4) whose linear word index maps to a (cell column, cell row,
+        // in-cell line) bank offset. `offset` is window-relative (0..$1FFFF).
+        [[nodiscard]] static constexpr std::uint32_t
+        cell_image_offset(std::uint32_t offset) noexcept {
+            const std::uint32_t i = (offset >> 2U) & 0x7FFFU;
+            std::uint32_t cell = (i & 0x07U) << 8U; // in-cell vline (0-7)
+            if (i < 0x4000U) {                      // $220000-$22FFFF: V32 (64x32 cells)
+                cell |= (((i >> 8U) & 0x3FU) << 2U) | (((i >> 3U) & 0x1FU) << 11U);
+            } else if (i < 0x6000U) { // $230000-$237FFF: V16
+                cell |= (((i >> 7U) & 0x3FU) << 2U) | (((i >> 3U) & 0x0FU) << 11U);
+            } else if (i < 0x7000U) { // $238000-$23BFFF: V8
+                cell |= (((i >> 6U) & 0x3FU) << 2U) | (((i >> 3U) & 0x07U) << 11U) | 0x8000U;
+            } else if (i < 0x7800U) { // $23C000-$23DFFF: V4
+                cell |= (((i >> 5U) & 0x3FU) << 2U) | (((i >> 3U) & 0x03U) << 11U) | 0xC000U;
+            } else { // $23E000-$23FFFF: V4
+                cell |= (((i >> 5U) & 0x3FU) << 2U) | (((i >> 3U) & 0x03U) << 11U) | 0xE000U;
+            }
+            return cell | (offset & 0x10003U);
+        }
+        // Dot-image access (1M, sub side $080000-$0BFFFF): each window byte is
+        // one 4-bit pixel of the sub's bank (two window bytes per bank byte);
+        // writes go through the $03 PM1:PM0 priority mode.
+        [[nodiscard]] std::uint8_t word_dot_read(std::uint32_t offset) const noexcept {
+            const std::uint8_t b =
+                word_ram[word_bank_offset(sub_word_bank(), (offset >> 1U) & 0x1FFFFU)];
+            return ((offset & 1U) != 0U) ? static_cast<std::uint8_t>(b & 0x0FU)
+                                         : static_cast<std::uint8_t>(b >> 4U);
+        }
+        void word_dot_write(std::uint32_t offset, std::uint8_t v) noexcept {
+            const std::uint32_t at = word_bank_offset(sub_word_bank(), (offset >> 1U) & 0x1FFFFU);
+            const std::uint8_t prev = word_ram[at];
+            const auto data =
+                static_cast<std::uint8_t>(((offset & 1U) != 0U) ? ((prev & 0xF0U) | (v & 0x0FU))
+                                                                : ((prev & 0x0FU) | (v << 4U)));
+            switch ((gate_array[0x03] >> 3U) & 0x03U) { // PM1:PM0 write priority
+            case 1:                                     // underwrite: existing non-zero pixels win
+                word_ram[at] = static_cast<std::uint8_t>(
+                    (((prev & 0x0FU) != 0U) ? (prev & 0x0FU) : (data & 0x0FU)) |
+                    (((prev & 0xF0U) != 0U) ? (prev & 0xF0U) : (data & 0xF0U)));
+                break;
+            case 2: // overwrite: only non-zero source pixels land
+                word_ram[at] = static_cast<std::uint8_t>(
+                    (((data & 0x0FU) != 0U) ? (data & 0x0FU) : (prev & 0x0FU)) |
+                    (((data & 0xF0U) != 0U) ? (data & 0xF0U) : (prev & 0xF0U)));
+                break;
+            case 3: // invalid: writes are ignored
+                break;
+            default:
+                word_ram[at] = data;
+                break;
+            }
+        }
+        // Main wrote DMNA=1 while in 1M mode: hardware arms "return word RAM to
+        // the sub-CPU on the 2M exit" instead of swapping (readback unchanged).
+        // Disarmed by the sub setting RET in 1M; consumed at the 1M->2M switch.
+        bool dmna_pending{};
+
         // Sub-CPU IRQ source bits (pending/mask). The gate-array $33 mask uses
         // bit N = level N (bit 0 unused), so the pending bits use the same
         // convention -- pending & mask then aligns. (The Emu reference used bit
@@ -117,18 +193,6 @@ namespace mnemos::manifests::segacd {
         std::uint8_t cdc_ar{};
         std::uint8_t cdc_irq{};
         int cdc_dma_dest{};
-
-        // Stamp / rotation ASIC config (gate $58-$6B).
-        std::uint16_t stamp_size{};
-        std::uint16_t stamp_map_addr{};
-        std::uint16_t img_buf_v_cell{};
-        std::uint16_t img_buf_vector{};
-        std::uint16_t img_v_step{};
-        std::uint16_t img_h_step{};
-        std::uint16_t img_buf_width{};
-        std::uint16_t img_buf_height{};
-        std::uint16_t img_buf_offset{};
-        std::uint16_t trace_vector_addr{};
 
         // Advance the sub-CPU by `cycles` of its clock. No-op while held in reset.
         void run_cycles(std::uint64_t cycles);

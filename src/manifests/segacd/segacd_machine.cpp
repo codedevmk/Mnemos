@@ -106,14 +106,32 @@ namespace mnemos::manifests::segacd {
             },
             1);
 
-        // $200000-$23FFFF: word RAM (2M mode -- the full 256 KB).
+        // $200000-$23FFFF: word RAM, main side. 2M mode: the full 256 KB
+        // linearly. 1M mode: $200000-$21FFFF is the main's current bank (the
+        // BIOS->game handoff copies the IP out of here); $220000-$23FFFF is the
+        // VRAM-cell image of that bank (the cell-arranged view games compose
+        // tiles through -- the license-screen text renders via it).
         bus.map_mmio(
             0x200000U, 0x40000U,
-            [sub](std::uint32_t a) {
-                return sub->word_ram[(a - 0x200000U) & (word_ram_size - 1U)];
+            [sub](std::uint32_t a) -> std::uint8_t {
+                const std::uint32_t off = (a - 0x200000U) & (word_ram_size - 1U);
+                if (!sub->word_ram_1m()) {
+                    return sub->word_ram[off];
+                }
+                const std::uint32_t bank_off =
+                    off < 0x20000U ? off : segacd_system::cell_image_offset(off - 0x20000U);
+                return sub
+                    ->word_ram[segacd_system::word_bank_offset(sub->main_word_bank(), bank_off)];
             },
             [sub](std::uint32_t a, std::uint8_t v) {
-                sub->word_ram[(a - 0x200000U) & (word_ram_size - 1U)] = v;
+                const std::uint32_t off = (a - 0x200000U) & (word_ram_size - 1U);
+                if (!sub->word_ram_1m()) {
+                    sub->word_ram[off] = v;
+                    return;
+                }
+                const std::uint32_t bank_off =
+                    off < 0x20000U ? off : segacd_system::cell_image_offset(off - 0x20000U);
+                sub->word_ram[segacd_system::word_bank_offset(sub->main_word_bank(), bank_off)] = v;
             },
             1);
 
