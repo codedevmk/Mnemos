@@ -382,3 +382,121 @@ TEST_CASE("v30 exposes a trace target and register view through introspection", 
     CHECK(snapshot[0].name == "AX");
     CHECK(snapshot[13].name == "FLAGS");
 }
+
+TEST_CASE("v30 0F bit-manipulation group operates on registers and memory", "[v30]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+
+    SECTION("SET1, NOT1, CLR1, TEST1 on BL by CL") {
+        // MOV BL,00; MOV CL,03; SET1 BL,CL; TEST1 BL,CL; NOT1 BL,CL; CLR1 BL,CL
+        load_program(bus, cpu, 0x0100U, 0x0000U,
+                     {0xB3U, 0x00U, 0xB1U, 0x03U, 0x0FU, 0x14U, 0xC3U, // SET1 BL,CL
+                      0x0FU, 0x10U, 0xC3U, // TEST1 BL,CL (bit now set -> ZF clear)
+                      0x0FU, 0x16U, 0xC3U, // NOT1 BL,CL (clears it back)
+                      0x0FU, 0x10U, 0xC3U, // TEST1 BL,CL (bit clear -> ZF set)
+                      0xF4U});
+        cpu.step_instruction();
+        cpu.step_instruction();
+        cpu.step_instruction(); // SET1
+        CHECK((cpu.cpu_registers().bx & 0xFFU) == 0x08U);
+        cpu.step_instruction(); // TEST1
+        CHECK((cpu.cpu_registers().flags & v30::flag_z) == 0U);
+        cpu.step_instruction(); // NOT1
+        CHECK((cpu.cpu_registers().bx & 0xFFU) == 0x00U);
+        cpu.step_instruction(); // TEST1
+        CHECK((cpu.cpu_registers().flags & v30::flag_z) != 0U);
+    }
+
+    SECTION("CLR1 by immediate on a 16-bit memory word") {
+        // MOV AX,E000; MOV DS,AX; MOV WORD [0010],FFFF; CLR1 WORD [0010],imm 15
+        load_program(bus, cpu, 0x0100U, 0x0000U,
+                     {0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, 0xC7U, 0x06U, 0x10U, 0x00U, 0xFFU,
+                      0xFFU,                                    // MOV [0010],FFFF
+                      0x0FU, 0x1BU, 0x06U, 0x10U, 0x00U, 0x0FU, // CLR1 [0010],15
+                      0xF4U});
+        for (int i = 0; i < 5; ++i) {
+            cpu.step_instruction();
+        }
+        CHECK(bus.memory[0xE0010U] == 0xFFU);
+        CHECK(bus.memory[0xE0011U] == 0x7FU); // bit 15 cleared
+    }
+}
+
+TEST_CASE("v30 ROL4 and ROR4 rotate nibbles through AL", "[v30]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+
+    // MOV AL,0A; MOV BL,34; ROL4 BL; then ROR4 BL
+    load_program(bus, cpu, 0x0100U, 0x0000U,
+                 {0xB0U, 0x0AU, 0xB3U, 0x34U, 0x0FU, 0x28U, 0xC3U, // ROL4 BL: BL=4A, AL low=3
+                  0x0FU, 0x2AU, 0xC3U, // ROR4 BL: BL=3A wait -- recomputed below
+                  0xF4U});
+    cpu.step_instruction();
+    cpu.step_instruction();
+    cpu.step_instruction(); // ROL4: BL 0x34, AL 0x0A -> BL = 0x4A, AL = 0x03
+    auto regs = cpu.cpu_registers();
+    CHECK((regs.bx & 0xFFU) == 0x4AU);
+    CHECK((regs.ax & 0xFFU) == 0x03U);
+    cpu.step_instruction(); // ROR4: BL 0x4A, AL 0x03 -> BL = 0x34, AL = 0x0A
+    regs = cpu.cpu_registers();
+    CHECK((regs.bx & 0xFFU) == 0x34U);
+    CHECK((regs.ax & 0xFFU) == 0x0AU);
+}
+
+TEST_CASE("v30 packed-BCD string arithmetic", "[v30]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+
+    // Source 1234 at DS:0000, destination 8766 at ES:0010 (little-endian
+    // packed BCD: low bytes first). ADD4S over 4 digits -> 0000 carry 1
+    // (8766 + 1234 = 10000).
+    load_program(bus, cpu, 0x0100U, 0x0000U, {0x0FU, 0x20U, 0xF4U}); // ADD4S; HLT
+    auto regs = cpu.cpu_registers();
+    regs.ds = 0x2000U;
+    regs.si = 0x0000U;
+    regs.es = 0x3000U;
+    regs.di = 0x0010U;
+    regs.cx = 0x0004U; // CL = 4 digits
+    cpu.set_registers(regs);
+    bus.memory[linear(0x2000U, 0x0000U)] = 0x34U; // source 1234
+    bus.memory[linear(0x2000U, 0x0001U)] = 0x12U;
+    bus.memory[linear(0x3000U, 0x0010U)] = 0x66U; // destination 8766
+    bus.memory[linear(0x3000U, 0x0011U)] = 0x87U;
+
+    cpu.step_instruction();
+    CHECK(bus.memory[linear(0x3000U, 0x0010U)] == 0x00U);
+    CHECK(bus.memory[linear(0x3000U, 0x0011U)] == 0x00U);
+    const auto after = cpu.cpu_registers();
+    CHECK((after.flags & v30::flag_c) != 0U); // carry out of the top digit
+    CHECK((after.flags & v30::flag_z) != 0U); // result string is zero
+
+    // SUB4S: 8766 - 1234 = 7532, no borrow, nonzero.
+    bus.memory[linear(0x3000U, 0x0010U)] = 0x66U;
+    bus.memory[linear(0x3000U, 0x0011U)] = 0x87U;
+    auto rerun = cpu.cpu_registers();
+    rerun.cs = 0x0100U;
+    rerun.ip = 0x0020U;
+    cpu.set_registers(rerun);
+    bus.memory[linear(0x0100U, 0x0020U)] = 0x0FU; // SUB4S; HLT
+    bus.memory[linear(0x0100U, 0x0021U)] = 0x22U;
+    bus.memory[linear(0x0100U, 0x0022U)] = 0xF4U;
+    cpu.step_instruction();
+    CHECK(bus.memory[linear(0x3000U, 0x0010U)] == 0x32U);
+    CHECK(bus.memory[linear(0x3000U, 0x0011U)] == 0x75U);
+    const auto sub = cpu.cpu_registers();
+    CHECK((sub.flags & v30::flag_c) == 0U);
+    CHECK((sub.flags & v30::flag_z) == 0U);
+
+    // CMP4S leaves the destination untouched.
+    auto cmp = cpu.cpu_registers();
+    cmp.ip = 0x0030U;
+    cpu.set_registers(cmp);
+    bus.memory[linear(0x0100U, 0x0030U)] = 0x0FU; // CMP4S; HLT
+    bus.memory[linear(0x0100U, 0x0031U)] = 0x26U;
+    bus.memory[linear(0x0100U, 0x0032U)] = 0xF4U;
+    cpu.step_instruction();
+    CHECK(bus.memory[linear(0x3000U, 0x0010U)] == 0x32U); // unchanged
+}
