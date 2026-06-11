@@ -13,14 +13,20 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
         using mnemos::manifests::common::rom_set_image;
 
+        struct loaded_set final {
+            rom_set_image image;
+            std::string set_name; // from the declaration; empty for dev formats
+        };
+
         // Set loader. A .zip carrying a "game.toml" declaration (schema
         // mnemos-romset/1) loads declaratively -- per-file placement,
         // interleave, CRC verification -- with loader issues reported to
-        // stderr. Without one, the development format applies: region-named
-        // entries ("maincpu.bin", ...) loaded whole. A bare binary is the
-        // V30 program image.
-        [[nodiscard]] rom_set_image load_set(std::vector<std::uint8_t> rom) {
-            rom_set_image image;
+        // stderr; the declared set name selects the per-game board wiring.
+        // Without one, the development format applies: region-named entries
+        // ("maincpu.bin", ...) loaded whole. A bare binary is the V30
+        // program image.
+        [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom) {
+            loaded_set result;
             const bool is_zip = rom.size() >= 4U && rom[0] == 'P' && rom[1] == 'K';
             if (is_zip) {
                 if (auto provider =
@@ -35,39 +41,47 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                                              error.source.c_str(), error.line, error.column,
                                              error.message.c_str());
                             }
-                            return image; // declared but invalid: boot an empty board
+                            return result; // declared but invalid: boot an empty board
                         }
-                        image = mnemos::manifests::common::load_rom_set(*parsed.value, *provider);
-                        for (const auto& issue : image.issues) {
+                        result.image =
+                            mnemos::manifests::common::load_rom_set(*parsed.value, *provider);
+                        result.set_name = parsed.value->name;
+                        for (const auto& issue : result.image.issues) {
                             std::fprintf(stderr, "[irem_m72] %s: %s\n", issue.file.c_str(),
                                          issue.message.c_str());
                         }
-                        return image;
+                        return result;
                     }
                     for (const char* region :
                          {"maincpu", "soundcpu", "tiles_a", "tiles_b", "sprites"}) {
                         if (auto bytes = (*provider)(std::string{region} + ".bin")) {
-                            image.regions.emplace(region, std::move(*bytes));
+                            result.image.regions.emplace(region, std::move(*bytes));
                         }
                     }
                 }
-                return image;
+                return result;
             }
-            image.regions.emplace("maincpu", std::move(rom));
-            return image;
+            result.image.regions.emplace("maincpu", std::move(rom));
+            return result;
+        }
+
+        [[nodiscard]] std::unique_ptr<manifests::irem_m72::m72_system>
+        assemble_from(loaded_set set) {
+            return manifests::irem_m72::assemble_m72(
+                std::move(set.image), manifests::irem_m72::board_params_for(set.set_name));
         }
 
         [[nodiscard]] std::vector<runtime::scheduled_chip>
         build_schedule(manifests::irem_m72::m72_system& sys) {
-            // 32 MHz board crystal: pixel clock /4, V30 /4 (8 MHz), Z80 /8
-            // (4 MHz); the YM2151's own 3.579545 MHz crystal is not an integer
-            // divider, so it runs on the rational rate (715909 chip cycles per
-            // 6400000 master cycles). Video first so the CPUs observe the
-            // advanced beam.
+            // 32 MHz board crystal: pixel clock /4, V30 /4 (8 MHz effective).
+            // The Z80 and the YM2151 share the separate 3.579545 MHz sound
+            // crystal -- not an integer divider of the master, so both run on
+            // the rational rate (715909 chip cycles per 6400000 master
+            // cycles). Video first so the CPUs observe the advanced beam.
             std::vector<runtime::scheduled_chip> chips{
                 {.chip = &sys.video, .divider = 4U},
                 {.chip = &sys.main_cpu, .divider = 4U},
-                {.chip = &sys.sound_cpu, .divider = 8U},
+                {.chip = &sys.sound_cpu, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U},
                 {.chip = &sys.fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U}};
             if (sys.mcu_present) {
                 // 8 MHz MCU crystal, 12 clocks per machine cycle: 32 MHz / 48.
@@ -81,7 +95,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
     irem_m72_adapter::irem_m72_adapter(std::vector<std::uint8_t> rom, std::string display_name,
                                        frontend_sdk::scheduler_factory* scheduler_factory,
                                        std::optional<std::uint16_t> dip_override)
-        : sys_(manifests::irem_m72::assemble_m72(load_set(std::move(rom)))),
+        : sys_(assemble_from(load_set(std::move(rom)))),
           scheduler_(frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_),
                                                   &sys_->video)) {
         if (dip_override.has_value()) {
@@ -135,43 +149,47 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         }
         ports_[static_cast<std::size_t>(port)] = state;
 
+        // Hardware bit layout (active low): joystick right/left/down/up from
+        // bit 0, buttons 4..1 from bit 4 -- button 1 is the MSB.
         const auto pack = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            std::uint8_t value = 0xFFU; // active low
-            if (c.up) {
+            std::uint8_t value = 0xFFU;
+            if (c.right) {
                 value &= static_cast<std::uint8_t>(~0x01U);
             }
-            if (c.down) {
+            if (c.left) {
                 value &= static_cast<std::uint8_t>(~0x02U);
             }
-            if (c.left) {
+            if (c.down) {
                 value &= static_cast<std::uint8_t>(~0x04U);
             }
-            if (c.right) {
+            if (c.up) {
                 value &= static_cast<std::uint8_t>(~0x08U);
             }
             if (c.a) {
-                value &= static_cast<std::uint8_t>(~0x10U);
+                value &= static_cast<std::uint8_t>(~0x80U); // button 1
             }
             if (c.b) {
-                value &= static_cast<std::uint8_t>(~0x20U);
+                value &= static_cast<std::uint8_t>(~0x40U); // button 2
             }
             return value;
         };
         sys_->input_p1 = pack(ports_[0]);
         sys_->input_p2 = pack(ports_[1]);
 
+        // System byte: start1/start2/coin1/coin2 from bit 0, service at 4/5,
+        // bit 7 = sprite-DMA-complete (always inactive here).
         std::uint8_t system_byte = 0xFFU;
-        if (ports_[0].select) {
-            system_byte &= static_cast<std::uint8_t>(~0x01U); // coin 1
-        }
-        if (ports_[1].select) {
-            system_byte &= static_cast<std::uint8_t>(~0x02U); // coin 2
-        }
         if (ports_[0].start) {
-            system_byte &= static_cast<std::uint8_t>(~0x04U); // start 1
+            system_byte &= static_cast<std::uint8_t>(~0x01U); // start 1
         }
         if (ports_[1].start) {
-            system_byte &= static_cast<std::uint8_t>(~0x08U); // start 2
+            system_byte &= static_cast<std::uint8_t>(~0x02U); // start 2
+        }
+        if (ports_[0].select) {
+            system_byte &= static_cast<std::uint8_t>(~0x04U); // coin 1
+        }
+        if (ports_[1].select) {
+            system_byte &= static_cast<std::uint8_t>(~0x08U); // coin 2
         }
         sys_->input_system = system_byte;
     }

@@ -23,6 +23,11 @@ namespace mnemos::apps::player::adapters {
     // malformed, or extraction fails.
     [[nodiscard]] std::optional<loaded_rom> load_rom(const std::string& path);
 
+    // Load the file verbatim -- no archive unwrapping. Arcade families take
+    // the whole multi-dump set zip as their medium; their adapters resolve
+    // the entries themselves through the game declaration inside it.
+    [[nodiscard]] std::optional<loaded_rom> load_rom_verbatim(const std::string& path);
+
     // Strip the directory + extension off a ROM path so the result reads
     // like a title rather than a filesystem path. No further "cleanup"
     // (underscore-to-space, region-tag stripping etc.) -- silently

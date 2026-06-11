@@ -1,10 +1,12 @@
 #include "irem_m72_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "file.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -22,7 +24,7 @@ namespace {
         rom[0xFFFF3U] = 0x00U;
         rom[0xFFFF4U] = 0x00U;
         const std::vector<std::uint8_t> program{
-            0xB8U, 0x00U, 0xE0U, // MOV AX,E000
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000 (the base map's work RAM)
             0x8EU, 0xD8U,        // MOV DS,AX
             0xB0U, 0x42U,        // MOV AL,42
             0xA2U, 0x00U, 0x00U, // MOV [0000],AL
@@ -76,13 +78,14 @@ TEST_CASE("irem_m72_adapter maps pads onto the board's input bytes", "[irem_m72]
     adapter.apply_input(1, p2);
 
     auto& machine = adapter.machine();
-    CHECK(machine.input_p1 == static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x10U));
-    CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x08U));
-    // coin1 (bit0) + start1 (bit2) + start2 (bit3) held low.
-    CHECK(machine.input_system == static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x04U & ~0x08U));
+    // Hardware layout: up = bit 3, button 1 = bit 7; right = bit 0.
+    CHECK(machine.input_p1 == static_cast<std::uint8_t>(0xFFU & ~0x08U & ~0x80U));
+    CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U));
+    // start1 (bit0) + start2 (bit1) + coin1 (bit2) held low.
+    CHECK(machine.input_system == static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U));
 
     adapter.apply_input(2, p1); // out-of-range port ignored
-    CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x08U));
+    CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U));
 }
 
 TEST_CASE("irem_m72_adapter drains YM2151-clocked audio frames", "[irem_m72][adapter]") {
@@ -111,7 +114,7 @@ TEST_CASE("irem_m72_adapter applies the DIP override and reports orientation",
           "[irem_m72][adapter]") {
     mnemos::frontend_sdk::adapter_options options{};
     options.rom = make_program();
-    options.dip_override = 0xA5C3U;
+    options.dip_override = std::uint16_t{0xA5C3U};
     auto system =
         mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
     REQUIRE(system != nullptr);
@@ -198,6 +201,60 @@ namespace {
     }
 
 } // namespace
+
+TEST_CASE("irem_m72_adapter boots the real first-game set", "[irem_m72][adapter][data]") {
+    // Data-gated (never committed): MNEMOS_M72_RTYPE_SET points at a zip of
+    // the authentic dump files plus a "game.toml" copy of
+    // src/manifests/irem_m72/games/rtype.toml. Asserts the hardware boot
+    // path: the V30 uploads the sound program and releases the Z80, and the
+    // frame goes non-blank.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in test data path
+#endif
+    const char* set_env = std::getenv("MNEMOS_M72_RTYPE_SET");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (set_env == nullptr || *set_env == '\0') {
+        SKIP("set MNEMOS_M72_RTYPE_SET to the first-game set zip (game.toml inside)");
+    }
+    auto bytes = mnemos::io::read_file(set_env);
+    REQUIRE(bytes.has_value());
+
+    irem_m72_adapter adapter(std::move(*bytes), "rtype");
+    REQUIRE(adapter.machine().roms.issues.empty()); // CRC-verified load
+    CHECK(adapter.machine().params.work_ram_base == 0x40000U);
+    CHECK(adapter.machine().dip_switches == 0xFDFBU);
+    CHECK(adapter.machine().sound_cpu.reset_line_held()); // parked at power-on
+    // The boot-chunk reload must put a far jump at the V30 reset vector --
+    // in the region, through the bus, and through the first executed
+    // instruction.
+    const auto& main_region = adapter.machine().roms.regions.at("maincpu");
+    REQUIRE(main_region.size() == 0x100000U);
+    REQUIRE(main_region[0xFFFF0U] == 0xEAU);
+    REQUIRE(adapter.machine().main_bus.read8(0xFFFF0U) == 0xEAU);
+    adapter.machine().main_cpu.step_instruction();
+    const auto boot_regs = adapter.machine().main_cpu.cpu_registers();
+    INFO("after reset-vector jump: cs=" << boot_regs.cs << " ip=" << boot_regs.ip);
+    REQUIRE((static_cast<std::uint32_t>(boot_regs.cs) * 16U + boot_regs.ip) < 0x40000U);
+
+    bool sound_released = false;
+    bool frame_lit = false;
+    for (int frame = 0; frame < 600 && !(sound_released && frame_lit); ++frame) {
+        adapter.step_one_frame();
+        sound_released = sound_released || !adapter.machine().sound_cpu.reset_line_held();
+        const auto view = adapter.current_frame();
+        for (std::uint32_t i = 1; i < view.width * view.height; ++i) {
+            if (view.pixels[i] != view.pixels[0]) {
+                frame_lit = true;
+                break;
+            }
+        }
+    }
+    CHECK(sound_released);
+    CHECK(frame_lit);
+}
 
 TEST_CASE("irem_m72_adapter loads a declarative game.toml set from a zip", "[irem_m72][adapter]") {
     // Split the working program image into even/odd halves and let the

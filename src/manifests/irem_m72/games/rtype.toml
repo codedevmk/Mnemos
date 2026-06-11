@@ -1,0 +1,193 @@
+# R-Type (World) -- Irem M72, the board family's first game (ADR-0012).
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# The V30 program is two even/odd-interleaved pairs; the second pair reloads
+# at the top of the 1 MiB region so the FFFF0 reset vector lands in ROM.
+# There is no sound program dump: the M72 sound CPU runs from RAM the main
+# CPU fills at boot. The 32K sprite dumps repeat in the 32K hole after each
+# (the board sees 64K windows); tiles are four bitplane files per playfield.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "rtype"
+board  = "irem_m72"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rt_r-h0-b.1b"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x591c7754
+
+[[region.file]]
+name   = "rt_r-l0-b.3b"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0xa1928df0
+
+[[region.file]]
+name   = "rt_r-h1-b.1c"
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0xa9d71eca
+
+[[region.file]]
+name   = "rt_r-l1-b.3c"
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0x0df3573d
+
+# Boot-chunk reload of the second pair at the top of the region.
+[[region.file]]
+name   = "rt_r-h1-b.1c"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0xa9d71eca
+
+[[region.file]]
+name   = "rt_r-l1-b.3c"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0x0df3573d
+
+[[region]]
+name = "sprites"
+size = 0x80000
+
+[[region.file]]
+name   = "rt_r-00.1h"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xdad53bc0
+
+[[region.file]]
+name   = "rt_r-01.1j"
+offset = 0x10000
+size   = 0x8000
+crc32  = 0x5e441e7f
+
+[[region.file]]
+name   = "rt_r-01.1j"
+offset = 0x18000
+size   = 0x8000
+crc32  = 0x5e441e7f
+
+[[region.file]]
+name   = "rt_r-10.1k"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xd6a66298
+
+[[region.file]]
+name   = "rt_r-11.1l"
+offset = 0x30000
+size   = 0x8000
+crc32  = 0x791df4f8
+
+[[region.file]]
+name   = "rt_r-11.1l"
+offset = 0x38000
+size   = 0x8000
+crc32  = 0x791df4f8
+
+[[region.file]]
+name   = "rt_r-20.3h"
+offset = 0x40000
+size   = 0x10000
+crc32  = 0xfc247c8a
+
+[[region.file]]
+name   = "rt_r-21.3j"
+offset = 0x50000
+size   = 0x8000
+crc32  = 0xed793841
+
+[[region.file]]
+name   = "rt_r-21.3j"
+offset = 0x58000
+size   = 0x8000
+crc32  = 0xed793841
+
+[[region.file]]
+name   = "rt_r-30.3k"
+offset = 0x60000
+size   = 0x10000
+crc32  = 0xeb02a1cb
+
+[[region.file]]
+name   = "rt_r-31.3l"
+offset = 0x70000
+size   = 0x8000
+crc32  = 0x8558355d
+
+[[region.file]]
+name   = "rt_r-31.3l"
+offset = 0x78000
+size   = 0x8000
+crc32  = 0x8558355d
+
+[[region]]
+name = "tiles_a"
+size = 0x20000
+
+[[region.file]]
+name   = "rt_b-a0.3c"
+offset = 0x00000
+size   = 0x8000
+crc32  = 0x4e212fb0
+
+[[region.file]]
+name   = "rt_b-a1.3d"
+offset = 0x08000
+size   = 0x8000
+crc32  = 0x8a65bdff
+
+[[region.file]]
+name   = "rt_b-a2.3a"
+offset = 0x10000
+size   = 0x8000
+crc32  = 0x5a4ae5b9
+
+[[region.file]]
+name   = "rt_b-a3.3e"
+offset = 0x18000
+size   = 0x8000
+crc32  = 0x73327606
+
+[[region]]
+name = "tiles_b"
+size = 0x20000
+
+[[region.file]]
+name   = "rt_b-b0.3j"
+offset = 0x00000
+size   = 0x8000
+crc32  = 0xa7b17491
+
+[[region.file]]
+name   = "rt_b-b1.3k"
+offset = 0x08000
+size   = 0x8000
+crc32  = 0xb9709686
+
+[[region.file]]
+name   = "rt_b-b2.3h"
+offset = 0x10000
+size   = 0x8000
+crc32  = 0x433b229a
+
+[[region.file]]
+name   = "rt_b-b3.3f"
+offset = 0x18000
+size   = 0x8000
+crc32  = 0xad89b072

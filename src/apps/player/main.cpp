@@ -149,6 +149,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::family_names;
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::load_rom;
+    using mnemos::apps::player::adapters::load_rom_verbatim;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_mapper_arg;
@@ -200,7 +201,10 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         const system_family family = *family_opt;
-        auto loaded = load_rom(rom_paths.front());
+        // Arcade sets ARE their archive: the adapter resolves the dump
+        // entries through the game declaration inside, so no unwrapping.
+        auto loaded = family == system_family::irem_m72 ? load_rom_verbatim(rom_paths.front())
+                                                        : load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_paths.front().c_str());
             return 1;
