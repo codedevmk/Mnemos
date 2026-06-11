@@ -54,7 +54,7 @@
         "budget": 6000,
         "file": "src/chips/cpu/z80/CAPSULE.md",
         "over_budget": false,
-        "tokens": 527
+        "tokens": 537
       },
       {
         "budget": 6000,
@@ -78,7 +78,7 @@
     "p95_s": 538,
     "runs": 16
   },
-  "M15_onboarding_reads_median": null,
+  "M15_onboarding_reads_median": 0,
   "M16_ratifications_7d": 18,
   "M1_capsule_drift": 0,
   "M2_dead_references": 0,
@@ -96,9 +96,9 @@
   },
   "M7_context_escape": null,
   "M8_first_pass": {
-    "clean": 183,
+    "clean": 129,
     "rate": 1.0,
-    "total": 183
+    "total": 129
   },
   "M9_oracle_state": {
     "suite_high_water": {
@@ -107,10 +107,10 @@
     },
     "total_suites": 19
   },
-  "commit": "f3f1c223b45afe6423d940d894625ee29c08be2b",
+  "commit": "568212363b004ea369f163a0e4fd8ce25672be94",
   "sessions": {
     "capture_omissions": 0,
-    "sessions_logged": 0
+    "sessions_logged": 1
   },
   "snapshot": "2026-06-11"
 }
