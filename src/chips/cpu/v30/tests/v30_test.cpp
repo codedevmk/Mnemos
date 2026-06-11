@@ -16,9 +16,11 @@ namespace {
     using mnemos::chips::cpu::v30;
 
     // Flat 1 MiB physical memory covering the V30's full 20-bit space.
+    // Heap-backed: a megabyte std::array would overflow the default thread
+    // stack the moment a test creates the bus as a local.
     class flat_bus final : public ibus {
       public:
-        std::array<std::uint8_t, 0x100000U> memory{};
+        std::vector<std::uint8_t> memory = std::vector<std::uint8_t>(0x100000U, 0U);
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override {
             return memory[address & 0xFFFFFU];

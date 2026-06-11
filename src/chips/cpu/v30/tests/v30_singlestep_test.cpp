@@ -136,6 +136,10 @@ namespace {
 
 TEST_CASE("v30 passes the public per-instruction 8088/V20 conformance corpus",
           "[conformance][v30]") {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: data-gated test knobs
+#endif
     const char* dir = std::getenv("MNEMOS_V30_TESTS_DIR");
     if (dir == nullptr || std::string{dir}.empty() || !std::filesystem::is_directory(dir)) {
         SKIP("set MNEMOS_V30_TESTS_DIR to a directory of per-instruction 8088/V20 "
@@ -147,6 +151,9 @@ TEST_CASE("v30 passes the public per-instruction 8088/V20 conformance corpus",
         mask_env != nullptr && *mask_env != '\0') {
         flags_mask = static_cast<std::uint16_t>(std::strtoul(mask_env, nullptr, 16));
     }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
     std::size_t passed = 0;
     std::size_t failed = 0;
