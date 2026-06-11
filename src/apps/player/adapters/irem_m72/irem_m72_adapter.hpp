@@ -67,7 +67,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
       private:
         std::unique_ptr<manifests::irem_m72::m72_system> sys_;
-        std::array<chips::ichip*, 3> chip_view_{};
+        std::vector<chips::ichip*> chip_view_{};
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
         std::uint64_t frames_stepped_{};
