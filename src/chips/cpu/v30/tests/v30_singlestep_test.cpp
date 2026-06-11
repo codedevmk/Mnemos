@@ -349,7 +349,7 @@ TEST_CASE("v30 passes the public per-instruction 8088/V20 conformance corpus",
         total.failed += tally.failed;
         total.skipped += tally.skipped;
         if (tally.failed > 0U) {
-            per_file += " " + stem + "=" + std::to_string(tally.failed);
+            per_file += " " + path.filename().string() + "=" + std::to_string(tally.failed);
         }
     }
 

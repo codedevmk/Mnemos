@@ -518,7 +518,7 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t v30::shift_rotate8(int op, std::uint8_t value, unsigned count) noexcept {
-        count &= 0x1FU; // the V-series masks shift counts to 5 bits
+        // Raw count: the V20 predates the 186's 5-bit masking (corpus-verified).
         if (count == 0U) {
             return value;
         }
@@ -566,8 +566,8 @@ namespace mnemos::chips::cpu {
         // multi-bit counts; we leave the single-shift value in place).
         if (op == 1 || op == 3) { // right rotates: top two result bits differ
             assign_flag(flag_o, (((v >> 7U) ^ (v >> 6U)) & 1U) != 0U);
-        } else if (op == 5) { // SHR: MSB of the original value
-            assign_flag(flag_o, (value & 0x80U) != 0U);
+        } else if (op == 5) { // SHR: MSB of the value before the final shift
+            assign_flag(flag_o, (v & 0x40U) != 0U);
         } else if (op == 7) { // SAR
             assign_flag(flag_o, false);
         } else { // left shifts/rotates: MSB(result) xor CF
@@ -580,7 +580,7 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint16_t v30::shift_rotate16(int op, std::uint16_t value, unsigned count) noexcept {
-        count &= 0x1FU;
+        // Raw count: the V20 predates the 186's 5-bit masking (corpus-verified).
         if (count == 0U) {
             return value;
         }
@@ -626,8 +626,8 @@ namespace mnemos::chips::cpu {
         assign_flag(flag_c, carry);
         if (op == 1 || op == 3) {
             assign_flag(flag_o, (((v >> 15U) ^ (v >> 14U)) & 1U) != 0U);
-        } else if (op == 5) {
-            assign_flag(flag_o, (value & 0x8000U) != 0U);
+        } else if (op == 5) { // SHR: MSB of the value before the final shift
+            assign_flag(flag_o, (v & 0x4000U) != 0U);
         } else if (op == 7) {
             assign_flag(flag_o, false);
         } else {
@@ -869,15 +869,18 @@ namespace mnemos::chips::cpu {
             take_cycles(4);
             break;
         }
-        case 0x2FU: { // DAS
+        case 0x2FU: { // DAS (V20: AF raises the high-adjust threshold to 0x9F)
             const std::uint8_t old_al = get_reg8(0);
             const bool old_cf = flag(flag_c);
+            const bool old_af = flag(flag_a);
             std::uint8_t al = old_al;
-            if ((al & 0x0FU) > 9U || flag(flag_a)) {
+            if ((al & 0x0FU) > 9U || old_af) {
                 al = static_cast<std::uint8_t>(al - 6U);
                 assign_flag(flag_a, true);
+            } else {
+                assign_flag(flag_a, false);
             }
-            if (old_al > 0x99U || old_cf) {
+            if (old_al > (old_af ? 0x9FU : 0x99U) || old_cf) {
                 al = static_cast<std::uint8_t>(al - 0x60U);
                 assign_flag(flag_c, true);
             } else {
@@ -1038,7 +1041,10 @@ namespace mnemos::chips::cpu {
             take_cycles(22 + ea_cycles());
             break;
         }
-        case 0x63U: // undefined on the V30: no-op (bring-up convention)
+        case 0x63U: // undefined on the V30, but the modrm operand is consumed
+            fetch_modrm();
+            take_cycles(2);
+            break;
         case 0x66U: // FPO2 (no coprocessor fitted)
         case 0x67U:
             take_cycles(2);
