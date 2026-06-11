@@ -170,7 +170,12 @@ def build_capsule(module: Path) -> str:
     intent, intent_sha = intent_fragment(module)
 
     digest_input = "".join(
-        f"{p.relative_to(REPO).as_posix()}:{sha(p.read_bytes())}\n" for p in sorted(tracked(module))
+        # CRLF-normalize so the digest derives from the canonical (committed)
+        # content: with core.autocrlf the same tracked text file has different
+        # working-tree bytes on Windows vs Linux, and a capsule generated on one
+        # platform would permanently "drift" on the other.
+        f"{p.relative_to(REPO).as_posix()}:{sha(p.read_bytes().replace(b'\r\n', b'\n'))}\n"
+        for p in sorted(tracked(module))
     )
     source_digest = sha(digest_input.encode("utf-8"))
 

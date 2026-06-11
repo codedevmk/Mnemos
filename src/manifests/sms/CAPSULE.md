@@ -1,7 +1,7 @@
 ---
 capsule: src/manifests/sms
 generator: gen_capsule/0.1
-source_digest: sha256:9cc933fea7a2cc7a049f6f1d0e6af7550152bc86eee3c9c1e1aabfd98afc9a7f
+source_digest: sha256:33ea752685fe38e4dd41b1d6be0b650e0fa907e17eda857b12e0f213f8633b3f
 intent_ratified: sha256:56e5f692e00a1f40db9b40b416ef31ce8f226ea2e274343bc33760e4c282bb17
 token_estimate: 930
 ---
