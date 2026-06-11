@@ -2052,12 +2052,16 @@ namespace mnemos::chips::cpu {
             take_cycles(15 + ea_cycles());
             break;
         }
-        case 6: // PUSH r/m16
-            push16(read_rm16());
+        case 6:  // PUSH r/m16
+        default: // 7 decodes as PUSH too (corpus-verified V20 alias)
+            if (rm_is_reg_ && modrm_rm_ == 4) {
+                // PUSH SP pushes the decremented value (8086 semantics)
+                sp_ = static_cast<std::uint16_t>(sp_ - 2U);
+                ww(ss_, sp_, sp_);
+            } else {
+                push16(read_rm16());
+            }
             take_cycles(10 + ea_cycles());
-            break;
-        default: // 7: undefined: no-op
-            take_cycles(2);
             break;
         }
     }
