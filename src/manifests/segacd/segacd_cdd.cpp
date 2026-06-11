@@ -410,9 +410,13 @@ namespace mnemos::manifests::segacd {
                 cdc_decoder_update(0U); // audio track -- CD-DA pump handles output
                 ++cdd_lba;
             }
-        } else {
-            cdc_decoder_update(0U); // keep the decoder ticking between sectors
         }
+        // NOT playing (PAUSE/SEEK/idle): the decoder does NOT run -- the reference
+        // updates it only from the PLAY branch. Ticking it here injected a phantom
+        // zero-header sector into the CDC ring every 75 Hz frame (DECI raised, ring
+        // pointers advanced, garbage written), so the BIOS's IP load read junk
+        // between the real sectors, failed validation, and re-read the same span
+        // forever (Play->stream->Pause->retry at lba 9).
 
         if (cdd_pending_status != 0 && cdd_latency == 0) {
             cdd_drive_status = cdd_pending_status;
