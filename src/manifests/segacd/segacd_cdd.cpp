@@ -389,6 +389,10 @@ namespace mnemos::manifests::segacd {
             if (total == 0U || (cdd_lba >= 0 && static_cast<std::uint32_t>(cdd_lba) >= total)) {
                 cdd_drive_status = cdd_end;
             } else if (disc_lba_is_data(cdd_lba)) {
+                if (segacd_trace_enabled() && cdd_lba >= -6 && cdd_lba <= 15) {
+                    std::fprintf(stderr, "[dec] lba=%d sub=%llu\n", cdd_lba,
+                                 static_cast<unsigned long long>(sub_cpu.elapsed_cycles()));
+                }
                 const auto msf = static_cast<std::uint32_t>(cdd_lba + 150);
                 const std::uint8_t hm = bcd_byte((msf / 75U) / 60U);
                 const std::uint8_t hs = bcd_byte((msf / 75U) % 60U);

@@ -228,6 +228,7 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     std::array<std::uint32_t, 64> main_pc_path{};
     std::size_t main_ring_idx = 0;
     bool main_path_captured = false;
+    int rt_frame = 0; // current frame, for gating the round-latency stamps
     std::uint8_t wp_5837 = adapter.machine().sub->prg_ram[0x5837U]; // op-accept latch ($5837.0)
     std::uint8_t wp_583b = adapter.machine().sub->prg_ram[0x583BU]; // op-active flag ($583B.7)
     std::uint8_t wp_583e =
@@ -323,6 +324,20 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                                  adapter.machine().sub->prg_ram[0x9826U]);
                 }
             }
+            if (pc == 0x002362U && rt_frame >= 120 && rt_frame < 200) {
+                // Just returned from $74E (the queue put): d1 = verdict, and the
+                // 'CDCD' queue descriptor lives at $5A6E.
+                static int qput = 0;
+                if (qput++ < 12) {
+                    const auto& r = adapter.machine().sub->sub_cpu.cpu_registers();
+                    const auto* q = adapter.machine().sub->prg_ram.data() + 0x5A6EU;
+                    std::fprintf(stderr,
+                                 "[qput] d1=%04X q5A6E=%02X%02X%02X%02X %02X%02X%02X%02X "
+                                 "%02X%02X%02X%02X %02X%02X%02X%02X\n",
+                                 r.d[1] & 0xFFFFU, q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7],
+                                 q[8], q[9], q[10], q[11], q[12], q[13], q[14], q[15]);
+                }
+            }
             if (pc == 0x006274U) { // a0 = the CDBSTAT struct the comm cycle posts from
                 static int cdbstat_logged = 0;
                 if (cdbstat_logged < 8) {
@@ -339,11 +354,64 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                 }
                 pc_path_captured = true;
             }
+            // Round-latency timeline (SUB side): stamp the comm-cycle phase writers
+            // and the CDC sweep start in MAIN-cycle terms so one load-loop
+            // iteration reads as a single clock-aligned timeline.
+            if (rt_frame >= 120 && rt_frame < 200 && (pc == 0x1EF2U)) {
+                static int round_ev = 0;
+                if (round_ev++ < 400) {
+                    std::fprintf(stderr, "[rt] sub %04X M=%llu dec#%llu\n", pc,
+                                 static_cast<unsigned long long>(
+                                     adapter.machine().genesis->cpu.elapsed_cycles()),
+                                 static_cast<unsigned long long>(
+                                     adapter.machine().sub->cdc_sectors_decoded));
+                }
+            }
+            // Who arms/disarms the CDC service ($5A30 bit 7)?
+            static std::uint8_t wp_5a30 = 0xEE;
+            const std::uint8_t v5a30 = adapter.machine().sub->prg_ram[0x5A30U];
+            if (v5a30 != wp_5a30 && rt_frame >= 120 && rt_frame < 200) {
+                std::fprintf(stderr, "[wp5A30] sub pc=%06X $5A30 %02X->%02X M=%llu\n", pc, wp_5a30,
+                             v5a30,
+                             static_cast<unsigned long long>(
+                                 adapter.machine().genesis->cpu.elapsed_cycles()));
+            }
+            wp_5a30 = v5a30;
+            // The read-driver error-flag byte: each checker sets a distinct bit;
+            // the writer PC names the failing validation directly.
+            static std::uint8_t wp_5a31 = 0xEE;
+            const std::uint8_t v5a31 = adapter.machine().sub->prg_ram[0x5A31U];
+            if (v5a31 != wp_5a31 && rt_frame >= 120 && rt_frame < 200) {
+                std::fprintf(stderr, "[wp5A31] sub pc=%06X $5A31 %02X->%02X\n", pc, wp_5a31, v5a31);
+            }
+            wp_5a31 = v5a31;
         });
         // Main-CPU PC histogram: pinpoints the BootROM loop the main spins in while
         // it fails to post the CDBIOS disc-read command to gate comm words $10-$1F.
         adapter.machine().genesis->cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++main_pc_hist[pc];
+            // Round-latency timeline (MAIN side): stamp the $1288/$1290 wait entry
+            // and exit plus the pump entry ($1252), in elapsed main cycles.
+            {
+                static bool in_wait = false;
+                static int main_ev = 0;
+                const bool at_wait =
+                    (pc == 0x1288U || pc == 0x128CU || pc == 0x1290U || pc == 0x1294U);
+                if (rt_frame >= 120 && rt_frame < 200 && at_wait != in_wait && main_ev < 260) {
+                    ++main_ev;
+                    std::fprintf(stderr, "[rt] main %s pc=%06X M=%llu\n",
+                                 at_wait ? "wait+" : "wait-", pc,
+                                 static_cast<unsigned long long>(
+                                     adapter.machine().genesis->cpu.elapsed_cycles()));
+                }
+                in_wait = at_wait;
+                if (rt_frame >= 120 && rt_frame < 200 && pc == 0x1252U && main_ev < 260) {
+                    ++main_ev;
+                    std::fprintf(stderr, "[rt] main pump M=%llu\n",
+                                 static_cast<unsigned long long>(
+                                     adapter.machine().genesis->cpu.elapsed_cycles()));
+                }
+            }
             // The BIOS round-phase byte ($FDDE, bchg #0 per comm round): its
             // toggle sequence vs the comm edges exposes a lost-round parity break.
             static std::uint8_t wp_fdde = 0xEE;
@@ -377,6 +445,12 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         if (i == 450) { // tail-window the histograms: what still RUNS while parked?
             sub_pc_hist.clear();
             main_pc_hist.clear();
+        }
+        rt_frame = i;
+        if (pchist_trace && i >= 100 && i < 220) {
+            std::fprintf(
+                stderr, "[frame] %d M=%llu\n", i,
+                static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()));
         }
         adapter.step_one_frame();
     }
