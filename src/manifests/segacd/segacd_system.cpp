@@ -253,6 +253,17 @@ namespace mnemos::manifests::segacd {
             std::fprintf(stderr, "[comm] pc=%06X sub writes gate $%02X = %02X\n",
                          sub_cpu.cpu_registers().pc, offset, value);
         }
+        // $00 (sub side) is the LED-control register; gate $00 itself is
+        // MAIN-side only (the IFL2 request flag). Falling through to
+        // gate_write_main here routed the sub's own LED writes into the IFL2
+        // trigger: the sub interrupted ITSELF with bogus L2 command-accepts,
+        // each running an extra comm cycle that flipped the round-phase
+        // handshake ($FDDE bchg vs $0F.1) out of step -- the game-load
+        // rendezvous then deadlocked (main $1288 / sub $6194).
+        if (offset == 0x00U) {
+            sub_led = value;
+            return;
+        }
         // $01 (sub-CPU RESET / BUSREQ) is MAIN-side ONLY -- the sub-CPU cannot
         // reset or halt itself. The sub-CPU BIOS writes $FF8001 (e.g. `bclr #0`)
         // during init; routing that into gate_write_main's reset logic would make

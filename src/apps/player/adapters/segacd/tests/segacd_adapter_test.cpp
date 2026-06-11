@@ -362,7 +362,17 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
             }
         });
     }
-    constexpr int kBootFrames = 600; // ~10 s of emulated boot
+    // ~10 s of emulated boot by default; MNEMOS_SEGACD_FRAMES overrides for
+    // long-horizon runs (game IP load + title).
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* frames_env = std::getenv("MNEMOS_SEGACD_FRAMES");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    const int kBootFrames = (frames_env != nullptr) ? std::atoi(frames_env) : 600;
     for (int i = 0; i < kBootFrames; ++i) {
         if (i == 450) { // tail-window the histograms: what still RUNS while parked?
             sub_pc_hist.clear();
@@ -503,6 +513,7 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         REQUIRE(adapter.machine().genesis->cpu.cpu_registers().pc !=
                 0x001AFAU); // main past RET deadlock
     }
-    REQUIRE(adapter.frames_stepped() == static_cast<std::uint64_t>(kBootFrames));
+    REQUIRE(adapter.frames_stepped() ==
+            static_cast<std::uint64_t>(static_cast<unsigned>(kBootFrames)));
     (void)nonzero;
 }

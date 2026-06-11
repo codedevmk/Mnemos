@@ -37,6 +37,7 @@ namespace mnemos::manifests::segacd {
 
         bool sub_reset_asserted{true}; // held in reset until the main CPU releases it
         bool sub_busreq{false};        // main CPU holds the sub-CPU bus ($01 bit 1)
+        std::uint8_t sub_led{};        // sub-side $00 write target (LED control)
 
         // Sub-CPU IRQ source bits (pending/mask). The gate-array $33 mask uses
         // bit N = level N (bit 0 unused), so the pending bits use the same
