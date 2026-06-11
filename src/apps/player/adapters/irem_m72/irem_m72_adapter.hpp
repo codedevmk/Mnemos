@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,11 +36,17 @@ namespace mnemos::apps::player::adapters::irem_m72 {
     class irem_m72_adapter final : public frontend_sdk::player_system {
       public:
         explicit irem_m72_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
-                                  frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
+                                  frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
+                                  std::optional<std::uint16_t> dip_override = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
             // 8 MHz pixel clock over a 512x284 raster: 55.0176... Hz.
-            return {.frames_per_second_x1000 = 55018U};
+            return {.frames_per_second_x1000 = 55018U, .orientation = orientation_};
+        }
+        // Vertical (TATE) games set this from driver metadata; default
+        // horizontal (R-Type, Mr. Heli).
+        void set_orientation(frontend_sdk::display_orientation orientation) noexcept {
+            orientation_ = orientation;
         }
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
         system_spec() const noexcept override {
@@ -67,6 +74,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         std::vector<frontend_sdk::spec_field> spec_{};
         std::vector<std::int16_t> audio_buf_{};
         std::uint64_t samples_drained_{};
+        frontend_sdk::display_orientation orientation_{
+            frontend_sdk::display_orientation::horizontal};
     };
 
 } // namespace mnemos::apps::player::adapters::irem_m72

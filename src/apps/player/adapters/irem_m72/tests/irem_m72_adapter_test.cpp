@@ -106,3 +106,21 @@ TEST_CASE("irem_m72_adapter drains YM2151-clocked audio frames", "[irem_m72][ada
     // Nothing stepped since the last drain: nothing further is due.
     CHECK(adapter.drain_audio().frame_count == 0U);
 }
+
+TEST_CASE("irem_m72_adapter applies the DIP override and reports orientation",
+          "[irem_m72][adapter]") {
+    mnemos::frontend_sdk::adapter_options options{};
+    options.rom = make_program();
+    options.dip_override = 0xA5C3U;
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    REQUIRE(system != nullptr);
+    auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
+    CHECK(adapter.machine().dip_switches == 0xA5C3U);
+
+    // Horizontal by default (R-Type); vertical games flip it from driver
+    // metadata and the frontend rotates presentation.
+    CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::horizontal);
+    adapter.set_orientation(mnemos::frontend_sdk::display_orientation::vertical);
+    CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::vertical);
+}

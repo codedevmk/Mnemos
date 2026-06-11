@@ -48,10 +48,14 @@ namespace mnemos::apps::player::adapters::irem_m72 {
     } // namespace
 
     irem_m72_adapter::irem_m72_adapter(std::vector<std::uint8_t> rom, std::string display_name,
-                                       frontend_sdk::scheduler_factory* scheduler_factory)
+                                       frontend_sdk::scheduler_factory* scheduler_factory,
+                                       std::optional<std::uint16_t> dip_override)
         : sys_(manifests::irem_m72::assemble_m72(load_set(std::move(rom)))),
           scheduler_(frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_),
                                                   &sys_->video)) {
+        if (dip_override.has_value()) {
+            sys_->dip_switches = *dip_override;
+        }
         chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu};
         spec_ = {{"System", "Arcade"},
                  {"Board", "Irem M72"},
@@ -146,9 +150,9 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                 "irem_m72",
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
-                    return std::make_unique<irem_m72_adapter>(std::move(opts.rom),
-                                                              std::move(opts.display_name),
-                                                              opts.scheduler_factory_override);
+                    return std::make_unique<irem_m72_adapter>(
+                        std::move(opts.rom), std::move(opts.display_name),
+                        opts.scheduler_factory_override, opts.dip_override);
                 });
             return 0;
         }();

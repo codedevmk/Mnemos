@@ -35,6 +35,10 @@ namespace mnemos::apps::player::adapters {
     // an unrecognised name leaves the adapter on auto-detect.
     [[nodiscard]] std::optional<std::string> parse_mapper_arg(int argc, char* argv[]);
 
+    // Scan argv for `--dip <value>` (hex with 0x prefix, or decimal) and
+    // return the 16-bit DIP bank, or nullopt when absent/malformed.
+    [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);
+
     // --screenshot <path.ppm> --frames N: headless run, dump the resulting
     // VDP framebuffer as PPM, exit. Both flags must be present together; a
     // missing or unparseable value disables the headless path.

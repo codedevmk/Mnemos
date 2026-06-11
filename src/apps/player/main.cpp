@@ -47,10 +47,12 @@ namespace {
     constexpr int kInitialWindowWidth = 1280;
     constexpr int kInitialWindowHeight = 960;
 
-    // Streaming texture is sized for the worst-case Genesis VDP frame
-    // (320x240 V30, x2 for interlace); per-frame uploads only touch the
-    // active subregion the adapter reports.
-    constexpr std::uint32_t kMaxFbWidth = 320U;
+    // Streaming texture is sized for the worst-case frame across supported
+    // systems: Genesis VDP 320x240 V30 (x2 rows for interlace) and the Irem
+    // M72's 384x256 (256x384 once a vertical game is rotated for TATE
+    // presentation); per-frame uploads only touch the active subregion the
+    // adapter reports.
+    constexpr std::uint32_t kMaxFbWidth = 384U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
 
     // Status overlay: two lines of 8x8 monospaced text, anchored to the
@@ -166,6 +168,7 @@ int main(int argc, char* argv[]) {
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
+    const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
     const auto extract_audio = parse_extract_audio_args(argc, argv);
@@ -340,6 +343,7 @@ int main(int argc, char* argv[]) {
                                 .display_name = clean_rom_name(loaded->name),
                                 .additional_media = std::move(additional_media),
                                 .autostart = autostart,
+                                .dip_override = dip_arg,
                                 .mapper_override = mapper_arg.value_or(std::string{}),
                                 .disc_path = std::move(disc_path),
                                 .bios_images = std::move(bios_images)});
@@ -790,6 +794,11 @@ int main(int argc, char* argv[]) {
         // and just re-presents the same VDP framebuffer -- keeping the game
         // and its audio at the right rate. While paused we skip stepping
         // entirely but keep rendering / accepting input.
+        // Vertical (TATE) systems are rotated 90 degrees clockwise at the
+        // transfer-buffer copy; downstream (upload/letterbox/blit) then sees
+        // the swapped dimensions.
+        const bool rotate_vertical =
+            system->region().orientation == mnemos::frontend_sdk::display_orientation::vertical;
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
         const Uint64 now_ticks = SDL_GetPerformanceCounter();
@@ -847,11 +856,23 @@ int main(int argc, char* argv[]) {
 
             if (fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
                 // Copy framebuffer into the transfer buffer as a packed
-                // src_w*src_h image. When stride > width (H32 mode etc.) the
-                // per-row copy avoids bleeding the stale stride tail.
+                // image. When stride > width (H32 mode etc.) the per-row copy
+                // avoids bleeding the stale stride tail. A vertical (TATE)
+                // system is rotated 90 degrees clockwise here, so everything
+                // downstream just sees a src_h x src_w image.
                 void* mapped = SDL_MapGPUTransferBuffer(device, xfer, true);
                 if (mapped != nullptr) {
-                    if (src_stride == src_w) {
+                    if (rotate_vertical) {
+                        auto* out = static_cast<std::uint32_t*>(mapped);
+                        for (std::uint32_t y = 0; y < src_w; ++y) {
+                            for (std::uint32_t x = 0; x < src_h; ++x) {
+                                out[static_cast<std::size_t>(y) * src_h + x] =
+                                    fb.pixels[static_cast<std::size_t>(src_h - 1U - x) *
+                                                  src_stride +
+                                              y];
+                            }
+                        }
+                    } else if (src_stride == src_w) {
                         SDL_memcpy(mapped, fb.pixels,
                                    static_cast<size_t>(src_w) * src_h * sizeof(std::uint32_t));
                     } else {
@@ -864,6 +885,11 @@ int main(int argc, char* argv[]) {
                         }
                     }
                     SDL_UnmapGPUTransferBuffer(device, xfer);
+                }
+                if (rotate_vertical) {
+                    const std::uint32_t rotated_w = src_h;
+                    src_h = src_w;
+                    src_w = rotated_w;
                 }
             }
         }

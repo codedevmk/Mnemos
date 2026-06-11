@@ -24,6 +24,20 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--dip") {
+                char* end = nullptr;
+                const unsigned long value = std::strtoul(argv[i + 1], &end, 0);
+                if (end != argv[i + 1] && *end == '\0' && value <= 0xFFFFUL) {
+                    return static_cast<std::uint16_t>(value);
+                }
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+
     std::optional<std::string> parse_rom_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc - 1; ++i) {
             const std::string_view a{argv[i]};

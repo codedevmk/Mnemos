@@ -22,6 +22,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -50,6 +51,10 @@ namespace mnemos::frontend_sdk {
         // concept ignore it. Defaults on; the frontend clears it to drop to a
         // bare prompt instead.
         bool autostart{true};
+        // Optional DIP-switch override for arcade families (the raw bank
+        // bits the board's DSW ports read); nullopt = the adapter's factory
+        // defaults. Console families ignore it.
+        std::optional<std::uint16_t> dip_override{};
         // Optional cartridge-mapper override, interpreted by the family adapter
         // (e.g. the SMS adapter accepts "sega" / "codemasters" / "korean").
         // Empty = let the adapter auto-detect. Families without selectable
