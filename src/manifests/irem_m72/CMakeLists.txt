@@ -20,6 +20,7 @@ target_link_libraries(
         mnemos::chips::cpu::v30
         mnemos::chips::cpu::z80
         mnemos::chips::cpu::mcs51
+        mnemos::chips::bus_controller::pic_8259
         mnemos::chips::video::irem_m72_video
         mnemos::chips::audio::ym2151
         mnemos::chips::audio::dac8

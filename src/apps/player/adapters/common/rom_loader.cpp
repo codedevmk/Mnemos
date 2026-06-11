@@ -46,6 +46,14 @@ namespace mnemos::apps::player::adapters {
         return loaded_rom{.bytes = std::move(*extracted), .name = best->name};
     }
 
+    std::optional<loaded_rom> load_rom_verbatim(const std::string& path) {
+        auto bytes = mnemos::io::read_file(path);
+        if (!bytes) {
+            return std::nullopt;
+        }
+        return loaded_rom{.bytes = std::move(*bytes), .name = path};
+    }
+
     std::string clean_rom_name(const std::string& path) {
         const auto slash = path.find_last_of("/\\");
         const auto begin = slash == std::string::npos ? 0U : slash + 1U;

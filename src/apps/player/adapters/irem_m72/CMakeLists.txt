@@ -40,6 +40,6 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_apps_player_irem_m72_adapter_test
         SOURCES tests/irem_m72_adapter_test.cpp
-        LIBRARIES mnemos::apps::player::irem_m72_adapter
+        LIBRARIES mnemos::apps::player::irem_m72_adapter mnemos::io
     )
 endif()
