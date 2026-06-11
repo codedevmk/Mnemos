@@ -171,7 +171,7 @@ namespace mnemos::apps::player::adapters::segacd {
                 machine_->sub->cdd_update();
                 cd_frame_frac_ -= 1.0;
             }
-            machine_->catch_up_sub();                   // sub-CPU runs up to the slice end
+            machine_->catch_up_sub(); // sub-CPU runs up to the slice end
             // PCM is paced independently of the sub-CPU (it must run even while the
             // sub is held in reset), so keep its own master-derived cycle budget.
             const double sub_exact =

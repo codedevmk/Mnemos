@@ -1274,9 +1274,9 @@ TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of cr
                (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
                (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
     };
-    wr32(0xFFFFFF00U, 0xFFFFFFFFU); // DVSR = -1
-    wr32(0xFFFFFF10U, 0x80000000U); // DVDNTH
-    wr32(0xFFFFFF14U, 0x00000000U); // DVDNTL -> divide fires
+    wr32(0xFFFFFF00U, 0xFFFFFFFFU);          // DVSR = -1
+    wr32(0xFFFFFF10U, 0x80000000U);          // DVDNTH
+    wr32(0xFFFFFF14U, 0x00000000U);          // DVDNTL -> divide fires
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U); // DVCR.OVF
     // Negative dividend, negative divisor: positive overflow saturates high.
     CHECK(rd32(0xFFFFFF14U) == 0x7FFFFFFFU);
