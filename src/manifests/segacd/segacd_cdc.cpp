@@ -43,6 +43,16 @@ namespace mnemos::manifests::segacd {
             return; // transfer not armed
         }
         cdc_dma_dest = gate_array[0x04] & 0x07U;
+        if (segacd_trace_enabled()) {
+            const auto o = static_cast<std::uint16_t>(cdc_dac & 0x3FFEU);
+            std::fprintf(stderr,
+                         "[cdcx] init dest=%u dac=%04X dbc=%04X "
+                         "src8=%02X%02X%02X%02X%02X%02X%02X%02X\n",
+                         cdc_dma_dest, cdc_dac, cdc_dbc, cdc_ram[o], cdc_ram[(o + 1U) & 0x3FFFU],
+                         cdc_ram[(o + 2U) & 0x3FFFU], cdc_ram[(o + 3U) & 0x3FFFU],
+                         cdc_ram[(o + 4U) & 0x3FFFU], cdc_ram[(o + 5U) & 0x3FFFU],
+                         cdc_ram[(o + 6U) & 0x3FFFU], cdc_ram[(o + 7U) & 0x3FFFU]);
+        }
         switch (cdc_dma_dest) {
         case 2: // MAIN-CPU host read
         case 3: // SUB-CPU host read
@@ -84,6 +94,16 @@ namespace mnemos::manifests::segacd {
         }
         const std::uint32_t len = static_cast<std::uint32_t>(cdc_dbc) + 1U;
         const std::uint32_t src = cdc_dac;
+        if (segacd_trace_enabled()) {
+            std::fprintf(stderr,
+                         "[cdcx] dest=%u dac=%04X dbc=%04X len=%u $0A0B=%02X%02X "
+                         "src8=%02X%02X%02X%02X%02X%02X%02X%02X\n",
+                         cdc_dma_dest, cdc_dac, cdc_dbc, len, gate_array[0x0A], gate_array[0x0B],
+                         cdc_ram[src & 0x3FFFU], cdc_ram[(src + 1U) & 0x3FFFU],
+                         cdc_ram[(src + 2U) & 0x3FFFU], cdc_ram[(src + 3U) & 0x3FFFU],
+                         cdc_ram[(src + 4U) & 0x3FFFU], cdc_ram[(src + 5U) & 0x3FFFU],
+                         cdc_ram[(src + 6U) & 0x3FFFU], cdc_ram[(src + 7U) & 0x3FFFU]);
+        }
 
         switch (cdc_dma_dest) {
         case 5: { // PRG-RAM (word index in $0A..$0B)
@@ -179,6 +199,12 @@ namespace mnemos::manifests::segacd {
                                                  (static_cast<std::uint16_t>(value) << 8U));
             break;
         case 0x06: // DTRG -- start data transfer
+            if (segacd_trace_enabled()) {
+                std::fprintf(stderr,
+                             "[cdcw] DTRG ifctrl=%02X douten=%d dest=%u dac=%04X dbc=%04X\n",
+                             cdc_ifctrl, (cdc_ifctrl & ifctrl_douten) != 0U,
+                             gate_array[0x04] & 0x07U, cdc_dac, cdc_dbc);
+            }
             if ((cdc_ifctrl & ifctrl_douten) != 0U) {
                 cdc_ifstat &= static_cast<std::uint8_t>(~(ifstat_dtbsy | ifstat_dten));
                 gate_array[0x04] &= 0x07U; // clear DSR + EDT
@@ -301,6 +327,12 @@ namespace mnemos::manifests::segacd {
         default:
             data = 0xFF;
             break;
+        }
+        if (segacd_trace_enabled()) {
+            static int n = 0;
+            if (n++ < 400) {
+                std::fprintf(stderr, "[cdcr] ar=%02X -> %02X\n", cdc_ar, data);
+            }
         }
         if (cdc_ar != 0U) {
             cdc_ar = static_cast<std::uint8_t>((cdc_ar + 1U) & 0x1FU);
