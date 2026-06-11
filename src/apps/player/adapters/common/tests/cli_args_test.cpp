@@ -223,3 +223,31 @@ TEST_CASE("cli_args: input_for_frame with no events is all-released") {
     CHECK_FALSE(s.a);
     CHECK_FALSE(s.up);
 }
+
+TEST_CASE("cli_args: --dip parses hex and decimal DIP banks") {
+    using mnemos::apps::player::adapters::parse_dip_arg;
+    {
+        auto h = make_argv({"player", "--dip", "0xFE7F"});
+        const auto dips = parse_dip_arg(h.argc(), h.argv.data());
+        REQUIRE(dips.has_value());
+        CHECK(*dips == 0xFE7FU);
+    }
+    {
+        auto h = make_argv({"player", "--dip", "4096"});
+        const auto dips = parse_dip_arg(h.argc(), h.argv.data());
+        REQUIRE(dips.has_value());
+        CHECK(*dips == 4096U);
+    }
+    {
+        auto h = make_argv({"player", "--rom", "x.zip"});
+        CHECK_FALSE(parse_dip_arg(h.argc(), h.argv.data()).has_value());
+    }
+    {
+        auto h = make_argv({"player", "--dip", "0x10000"}); // out of 16-bit range
+        CHECK_FALSE(parse_dip_arg(h.argc(), h.argv.data()).has_value());
+    }
+    {
+        auto h = make_argv({"player", "--dip", "bogus"});
+        CHECK_FALSE(parse_dip_arg(h.argc(), h.argv.data()).has_value());
+    }
+}

@@ -31,11 +31,18 @@
 
 namespace mnemos::frontend_sdk {
 
+    // How the system's framebuffer is meant to face the player. Vertical
+    // (TATE) arcade games render a portrait image on a rotated monitor; the
+    // frontend rotates presentation 90 degrees clockwise. Consoles are
+    // horizontal.
+    enum class display_orientation : std::uint8_t { horizontal, vertical };
+
     // Video timing of the booted system. `frames_per_second_x1000` is the
     // refresh rate scaled by 1000 so NTSC (~59.94) and PAL (50.00) both fit
     // an integer without losing the meaningful decimal places.
     struct video_region final {
         std::uint32_t frames_per_second_x1000{60000U};
+        display_orientation orientation{display_orientation::horizontal};
     };
 
     // System-agnostic controller state; the canonical definition lives in
