@@ -292,10 +292,13 @@ namespace mnemos::manifests::segacd {
             cdd_report_toc();
             return;
         case 0x03: { // Play
+            // The target may be NEGATIVE (down to -150): the BIOS deliberately seeks
+            // into the track-1 pregap (e.g. 00:01:70 = lba -5) and then polls the
+            // reported position until the drive is paused THERE. Clamping to 0 makes
+            // the position reports disagree with the commanded target, the BIOS's
+            // seek-completion check never passes, its disc-init op stays busy, and
+            // the main<->sub comm handshake deadlocks (main $1288 / sub $6194).
             std::int32_t lba = cdd_seek_target_lba();
-            if (lba < 0) {
-                lba = 0;
-            }
             // Seek window = the reference's CD-drive latency model: base 2 + 10*cd_latency
             // (cd_latency=1) plus a distance term (max seek ~1.5 s = 120 CDD interrupts over
             // 270000 sectors). The drive reports CD_SEEK + RS1=$0F for this whole window and
@@ -321,10 +324,8 @@ namespace mnemos::manifests::segacd {
             return;
         }
         case 0x04: { // Seek
+            // Negative pregap targets are honored, exactly as in Play (cmd $03).
             std::int32_t lba = cdd_seek_target_lba();
-            if (lba < 0) {
-                lba = 0;
-            }
             // Distance-based seek window (see Play, cmd $03).
             const std::int32_t seek_dist = (lba > cdd_lba) ? (lba - cdd_lba) : (cdd_lba - lba);
             cdd_latency = 12 + (seek_dist * 120) / 270000;
@@ -393,7 +394,7 @@ namespace mnemos::manifests::segacd {
                 const std::uint8_t hs = bcd_byte((msf / 75U) % 60U);
                 const std::uint8_t hf = bcd_byte(msf % 75U);
                 std::uint8_t mode = 0x01U;
-                if (disc != nullptr) {
+                if (disc != nullptr && cdd_lba >= 0) { // pregap (lba<0) has no real sector
                     mode = (disc->mode_at(static_cast<std::uint32_t>(cdd_lba)) ==
                             mnemos::disc::sector_mode::mode1)
                                ? std::uint8_t{0x01U}

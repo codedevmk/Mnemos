@@ -198,12 +198,24 @@ namespace mnemos::manifests::segacd {
         // L2 is masked is IGNORED, not latched; otherwise it fires spuriously the instant
         // the BIOS later unmasks L2 and enables interrupts -- the boot diverged off the
         // disc-read driver at sub PC $3FA into the L2 handler in exactly that way.
+        if (offset == 0x00U && segacd_trace_enabled()) {
+            std::fprintf(stderr, "[ifl2] main $00 = %02X (mask=%02X)\n", value, gate_array[0x33]);
+        }
         if (offset == 0x00U && (value & 0x01U) != 0U && (gate_array[0x33] & irq_ifl2) != 0U) {
             raise_sub_irq(irq_ifl2);
         }
         // $33 sub-CPU IRQ mask.
         if (offset == 0x33U) {
             sub_irq_mask = value;
+            // IFL2 is a LEVEL the gate array holds (gate $00 bit 0, driven
+            // high/low by the main); enabling L2 while the flag is high delivers
+            // the pending request. Without this, a main command pulse landing in
+            // the sub's re-init window (mask momentarily 0) is silently lost, the
+            // round-phase handshake ($FDDE bchg / $0F.1 toggle) loses one beat,
+            // and the game-load rendezvous deadlocks (main $1288 / sub $6194).
+            if ((value & irq_ifl2) != 0U && (gate_array[0x00] & 0x01U) != 0U) {
+                raise_sub_irq(irq_ifl2);
+            }
             update_sub_irq();
         }
         // $42-$4B CDD command buffer. The BIOS commits by writing $4A: $42-$49 hold
@@ -274,6 +286,11 @@ namespace mnemos::manifests::segacd {
         if (offset == 0x33U) {
             sub_irq_mask = value;
             gate_array[0x33] = value;
+            // Level-held IFL2: deliver a pending main request on unmask (see the
+            // main-side $33 handler for the full rationale).
+            if ((value & irq_ifl2) != 0U && (gate_array[0x00] & 0x01U) != 0U) {
+                raise_sub_irq(irq_ifl2);
+            }
             update_sub_irq();
             return;
         }
