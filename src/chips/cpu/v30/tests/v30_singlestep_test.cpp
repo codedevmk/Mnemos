@@ -309,7 +309,14 @@ namespace {
 
 TEST_CASE("v30 passes the public per-instruction 8088/V20 conformance corpus",
           "[conformance][v30]") {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in test data path
+#endif
     const char* dir_env = std::getenv("MNEMOS_V30_TESTS_DIR");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
     if (dir_env == nullptr || std::string{dir_env}.empty() ||
         !std::filesystem::is_directory(dir_env)) {
         SKIP("set MNEMOS_V30_TESTS_DIR to a directory of per-instruction 8088/V20 "
@@ -318,8 +325,15 @@ TEST_CASE("v30 passes the public per-instruction 8088/V20 conformance corpus",
     const std::filesystem::path dir{dir_env};
 
     std::uint16_t global_mask = 0xFFFFU;
-    if (const char* mask_env = std::getenv("MNEMOS_V30_FLAGS_MASK");
-        mask_env != nullptr && *mask_env != '\0') {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* mask_env = std::getenv("MNEMOS_V30_FLAGS_MASK");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (mask_env != nullptr && *mask_env != '\0') {
         global_mask = static_cast<std::uint16_t>(std::strtoul(mask_env, nullptr, 16));
     }
 

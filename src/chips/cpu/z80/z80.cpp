@@ -1358,6 +1358,13 @@ namespace mnemos::chips::cpu {
     int z80::step_instruction() {
         step_cycles_ = 0;
 
+        // /RESET held: the CPU performs no work; cycles still elapse so the
+        // system schedule keeps its pacing.
+        if (reset_line_) {
+            elapsed_ += 4U;
+            return 4;
+        }
+
         if (nmi_pending_) {
             nmi_pending_ = false;
             halted_ = false;
@@ -1375,19 +1382,32 @@ namespace mnemos::chips::cpu {
             halted_ = false;
             iff1_ = iff2_ = false;
             inc_r(); // the IACK cycle refreshes R
-            push16(pc_);
             switch (im_) {
             case 2: {
                 // The device supplies the vector byte during IACK; with no
                 // vector source the floating bus reads 0xFF (the MSX/Spectrum
                 // convention IM2 software relies on: I*256 + 0xFF).
+                push16(pc_);
                 const std::uint8_t vec = irq_vector_ ? irq_vector_() : 0xFFU;
                 const auto vec_addr = static_cast<std::uint16_t>((i_ << 8U) | vec);
                 pc_ = rw(vec_addr);
                 step_cycles_ += 19;
                 break;
             }
-            default: // IM 0 and IM 1 both vector to $0038
+            case 0: {
+                // The device jams an opcode on the bus during IACK; only
+                // single-byte instructions are supported (the RST family in
+                // practice -- interrupt controllers drive RST n per source).
+                // The floating-bus default 0xFF is RST 38h, matching IM 1.
+                // The jammed instruction does its own stacking; the IACK adds
+                // two wait states over a normal fetch.
+                const std::uint8_t op = irq_vector_ ? irq_vector_() : 0xFFU;
+                exec_main(op);
+                step_cycles_ += 2;
+                break;
+            }
+            default: // IM 1: fixed RST to $0038
+                push16(pc_);
                 pc_ = 0x0038U;
                 step_cycles_ += 13;
                 break;
@@ -1437,6 +1457,22 @@ namespace mnemos::chips::cpu {
             halted_ = false;
         }
         nmi_line_ = asserted;
+    }
+
+    void z80::set_reset_line(bool asserted) noexcept {
+        // The /RESET pin. Asserting resets the architectural state and parks
+        // the CPU; releasing starts execution from $0000. Boards whose CPU
+        // program lives in host-uploaded RAM (e.g. a main CPU loading a sound
+        // program) hold this until the upload completes. The cycle pacing
+        // counters survive so the system schedule stays anchored.
+        if (asserted && !reset_line_) {
+            const std::int64_t debt = cycle_debt_;
+            const std::uint64_t elapsed = elapsed_;
+            reset(reset_kind::soft);
+            cycle_debt_ = debt;
+            elapsed_ = elapsed;
+        }
+        reset_line_ = asserted;
     }
 
     void z80::reset(reset_kind /*kind*/) {
@@ -1519,6 +1555,7 @@ namespace mnemos::chips::cpu {
         writer.boolean(irq_line_);
         writer.boolean(nmi_pending_);
         writer.boolean(nmi_line_);
+        writer.boolean(reset_line_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
         writer.u64(elapsed_);
     }
@@ -1546,6 +1583,7 @@ namespace mnemos::chips::cpu {
         irq_line_ = reader.boolean();
         nmi_pending_ = reader.boolean();
         nmi_line_ = reader.boolean();
+        reset_line_ = reader.boolean();
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());
         elapsed_ = reader.u64();
     }
