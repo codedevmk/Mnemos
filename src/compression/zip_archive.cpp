@@ -117,8 +117,8 @@ namespace mnemos::compression {
         constexpr std::uint64_t max_expansion = 1032U;
         if (entry.uncompressed_size > max_entry_size ||
             (entry.method == zip_method::deflated &&
-             entry.uncompressed_size > (static_cast<std::uint64_t>(entry.compressed_size) + 64U) *
-                                           max_expansion)) {
+             entry.uncompressed_size >
+                 (static_cast<std::uint64_t>(entry.compressed_size) + 64U) * max_expansion)) {
             return std::nullopt;
         }
         std::vector<std::uint8_t> out(entry.uncompressed_size);

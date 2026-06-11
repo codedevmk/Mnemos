@@ -15,8 +15,8 @@ namespace mnemos::manifests::segacd {
 
     void segacd_system::stamp_reg_write(std::uint8_t offset, std::uint8_t value) {
         if (segacd_trace_enabled()) {
-            std::fprintf(stderr, "[stamp] sub_pc=%06X $%02X=%02X\n",
-                         sub_cpu.cpu_registers().pc, offset, value);
+            std::fprintf(stderr, "[stamp] sub_pc=%06X $%02X=%02X\n", sub_cpu.cpu_registers().pc,
+                         offset, value);
         }
         if (offset == 0x58U) {
             stamp_size = static_cast<std::uint16_t>((stamp_size & 0x00FFU) |

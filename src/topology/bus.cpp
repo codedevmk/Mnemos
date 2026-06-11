@@ -168,8 +168,7 @@ namespace mnemos::topology {
                 r = nullptr;
                 value = handler ? handler(addr) : 0xFFU;
             } else {
-                value = r->backing == kind::ram ? r->ram[addr - r->start]
-                                                : r->rom[addr - r->start];
+                value = r->backing == kind::ram ? r->ram[addr - r->start] : r->rom[addr - r->start];
                 update_fast_path(addr, r);
             }
         }
