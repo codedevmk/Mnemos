@@ -241,3 +241,49 @@ TEST_CASE("m72 Z80 streams sample bytes from the sample ROM into the DAC", "[m72
     CHECK(system->sample_address == 6U);
     CHECK(system->dac.output() == (0xA0 - 0x80) * 64);
 }
+
+TEST_CASE("m72 protection MCU answers the V30 through the latch pair", "[m72]") {
+    // MCU program: poll the main->MCU latch, reply with value+1.
+    //   loop: MOV DPTR,#E000; MOVX A,@DPTR; ADD A,#1;
+    //         MOV DPTR,#E001; MOVX @DPTR,A; SJMP loop
+    rom_set_image image;
+    image.regions["mcu"] = {
+        0x90U, 0xE0U, 0x00U, // MOV DPTR,#E000
+        0xE0U,               // MOVX A,@DPTR
+        0x24U, 0x01U,        // ADD A,#1
+        0x90U, 0xE0U, 0x01U, // MOV DPTR,#E001
+        0xF0U,               // MOVX @DPTR,A
+        0x80U, 0xF4U,        // SJMP loop
+    };
+    auto& main = image.regions["maincpu"];
+    main.assign(mnemos::manifests::irem_m72::main_rom_size, 0xFFU);
+    main[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+    main[0xFFFF1U] = 0x00U;
+    main[0xFFFF2U] = 0x02U;
+    main[0xFFFF3U] = 0x00U;
+    main[0xFFFF4U] = 0x00U;
+    // MOV AL,41; OUT C0,AL (latch + INT1 knock); HLT
+    const std::vector<std::uint8_t> program{0xB0U, 0x41U, 0xE6U, 0xC0U, 0xF4U};
+    for (std::size_t i = 0; i < program.size(); ++i) {
+        main[0x200U + i] = program[i];
+    }
+
+    auto system = assemble_m72(std::move(image));
+    REQUIRE(system->mcu_present);
+
+    run_until_halt(system->main_cpu, 8);
+    CHECK(system->main_to_mcu == 0x41U);
+
+    system->mcu.tick(64U); // a few echo-loop iterations
+    CHECK(system->mcu_to_main == 0x42U);
+
+    // The MCU's polling loop keeps tracking new latch values.
+    system->main_to_mcu = 0x10U;
+    system->mcu.tick(64U);
+    CHECK(system->mcu_to_main == 0x11U);
+}
+
+TEST_CASE("m72 without an mcu region schedules no MCU", "[m72]") {
+    auto system = assemble_m72(rom_set_image{});
+    CHECK_FALSE(system->mcu_present);
+}

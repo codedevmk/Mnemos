@@ -3,6 +3,7 @@
 #include "bus.hpp"            // topology bus
 #include "dac8.hpp"           // sample-playback DAC
 #include "irem_m72_video.hpp" // tilemap video unit
+#include "mcs51.hpp"          // optional protection MCU
 #include "rom_set.hpp"        // arcade ROM-set image
 #include "v30.hpp"            // main CPU
 #include "ym2151.hpp"         // FM synth on the Z80 ports
@@ -53,9 +54,19 @@ namespace mnemos::manifests::irem_m72 {
     // INT vector the board's interrupt controller drives during the V30
     // acknowledge cycle; games program it at boot.
     inline constexpr std::uint16_t port_out_irq_base = 0x40U;
+    // V30 <-> protection-MCU latch pair (first-cut port; present only when
+    // the set carries an "mcu" program region). An OUT writes the
+    // main-to-MCU latch and pulses the MCU's INT1; an IN reads the MCU's
+    // reply latch.
+    inline constexpr std::uint16_t port_mcu_latch = 0xC0U;
     // Scroll registers as four little-endian words: +0/+2 = playfield A Y/X,
     // +4/+6 = playfield B Y/X (first-cut layout).
     inline constexpr std::uint16_t port_out_scroll_base = 0x80U;
+
+    // Protection-MCU external (MOVX) map: the sample ROM low, the latch
+    // pair at the top (first-cut layout).
+    inline constexpr std::uint32_t mcu_latch_in = 0xE000U;  // main -> MCU
+    inline constexpr std::uint32_t mcu_latch_out = 0xE001U; // MCU -> main
 
     // Z80-side ports (first-cut): YM2151 address/data (status readable at
     // the data port), the sound latch readable at 2, the sample path at
@@ -89,8 +100,10 @@ namespace mnemos::manifests::irem_m72 {
         chips::video::irem_m72_video video;
         chips::audio::ym2151 fm;
         chips::audio::dac8 dac;
+        chips::cpu::mcs51 mcu; // live only when the set carries an "mcu" region
         topology::bus main_bus{20U, topology::endianness::little};
         topology::bus sound_bus{16U, topology::endianness::little};
+        topology::bus mcu_bus{16U, topology::endianness::little};
 
         // The loaded ROM set; the buses map spans into its region vectors, so
         // it must not be mutated after construction. Missing program regions
@@ -119,6 +132,10 @@ namespace mnemos::manifests::irem_m72 {
         // Sample-ROM read cursor (Z80 ports 0x80/0x81 set it, reads at 0x84
         // auto-increment it through the "samples" region).
         std::uint16_t sample_address{};
+        // V30 <-> protection-MCU latch pair.
+        std::uint8_t main_to_mcu{};
+        std::uint8_t mcu_to_main{};
+        bool mcu_present{};
 
         void update_sound_irq() noexcept {
             sound_cpu.set_irq_line(sound_latch_irq || fm.irq_asserted());

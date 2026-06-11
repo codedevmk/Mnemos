@@ -39,10 +39,16 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             // divider, so it runs on the rational rate (715909 chip cycles per
             // 6400000 master cycles). Video first so the CPUs observe the
             // advanced beam.
-            return {{.chip = &sys.video, .divider = 4U},
-                    {.chip = &sys.main_cpu, .divider = 4U},
-                    {.chip = &sys.sound_cpu, .divider = 8U},
-                    {.chip = &sys.fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U}};
+            std::vector<runtime::scheduled_chip> chips{
+                {.chip = &sys.video, .divider = 4U},
+                {.chip = &sys.main_cpu, .divider = 4U},
+                {.chip = &sys.sound_cpu, .divider = 8U},
+                {.chip = &sys.fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U}};
+            if (sys.mcu_present) {
+                // 8 MHz MCU crystal, 12 clocks per machine cycle: 32 MHz / 48.
+                chips.push_back({.chip = &sys.mcu, .divider = 48U});
+            }
+            return chips;
         }
 
     } // namespace
@@ -57,6 +63,9 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             sys_->dip_switches = *dip_override;
         }
         chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu};
+        if (sys_->mcu_present) {
+            chip_view_.push_back(&sys_->mcu);
+        }
         spec_ = {{"System", "Arcade"},
                  {"Board", "Irem M72"},
                  {"Game", display_name.empty() ? std::string{"unknown"} : std::move(display_name)}};

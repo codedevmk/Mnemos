@@ -49,6 +49,8 @@ namespace mnemos::manifests::irem_m72 {
                 return static_cast<std::uint8_t>(dip_switches);
             case port_in_dsw_hi:
                 return static_cast<std::uint8_t>(dip_switches >> 8U);
+            case port_mcu_latch:
+                return mcu_to_main;
             default:
                 return 0xFFU; // open bus
             }
@@ -75,6 +77,13 @@ namespace mnemos::manifests::irem_m72 {
                 break;
             case port_out_irq_base:
                 irq_vector_base = value;
+                break;
+            case port_mcu_latch:
+                main_to_mcu = value;
+                if (mcu_present) { // knock: edge-pulse the MCU's INT1
+                    mcu.set_int1_line(true);
+                    mcu.set_int1_line(false);
+                }
                 break;
             default:
                 break; // remaining board ports land with their subsystems
@@ -128,6 +137,32 @@ namespace mnemos::manifests::irem_m72 {
             }
         });
         fm.set_irq([this](bool) { update_sound_irq(); });
+
+        // --- optional protection MCU: program from the "mcu" region, the
+        // sample ROM and the latch pair on its external (MOVX) bus ---
+        const auto& mcu_program = roms.regions["mcu"];
+        mcu_present = !mcu_program.empty();
+        if (mcu_present) {
+            mcu.attach_program(mcu_program);
+            const auto& samples = roms.regions["samples"];
+            if (!samples.empty()) {
+                mcu_bus.map_rom(0x0000U, samples);
+            }
+            mcu_bus.map_mmio(
+                mcu_latch_in, 2U,
+                [this](std::uint32_t address) -> std::uint8_t {
+                    return address == mcu_latch_in ? main_to_mcu : mcu_to_main;
+                },
+                [this](std::uint32_t address, std::uint8_t value) {
+                    if (address == mcu_latch_out) {
+                        mcu_to_main = value;
+                    } else {
+                        main_to_mcu = value;
+                    }
+                },
+                1);
+            mcu.attach_bus(mcu_bus);
+        }
 
         // --- video: VRAM/palette/tile spans + vblank INT into the V30 ---
         video.attach_vram_a(vram_a);
