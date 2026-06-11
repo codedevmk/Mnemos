@@ -77,8 +77,9 @@ namespace mnemos::chips::cpu {
 
         // The separate Z80 I/O space (IN/OUT). Optional; unset ports read 0xFF.
         void set_port_in(port_in_fn handler) noexcept { port_in_ = std::move(handler); }
-        // IM2 vector byte supplied by the interrupting device during IACK.
-        // Unset: the floating-bus convention 0xFF.
+        // The byte the interrupting device drives during IACK: the IM2 vector,
+        // or in IM0 the jammed opcode (single-byte only -- RST in practice).
+        // Unset: the floating-bus convention 0xFF (= RST 38h in IM0).
         void set_irq_vector(irq_vector_fn handler) noexcept { irq_vector_ = std::move(handler); }
         void set_port_out(port_out_fn handler) noexcept { port_out_ = std::move(handler); }
 
@@ -95,6 +96,10 @@ namespace mnemos::chips::cpu {
         // Interrupt inputs.
         void set_irq_line(bool asserted) noexcept { irq_line_ = asserted; }
         void set_nmi_line(bool asserted) noexcept;
+        // The /RESET pin: assert to reset-and-park, release to run from $0000
+        // (boards holding the CPU while its program RAM is uploaded).
+        void set_reset_line(bool asserted) noexcept;
+        [[nodiscard]] bool reset_line_held() const noexcept { return reset_line_; }
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -250,7 +255,8 @@ namespace mnemos::chips::cpu {
         bool ei_pending_{};
         bool irq_line_{};
         bool nmi_pending_{};
-        bool nmi_line_{}; // previous /NMI level for edge detection
+        bool nmi_line_{};   // previous /NMI level for edge detection
+        bool reset_line_{}; // /RESET held: parked, no execution
 
         int step_cycles_{};         // cycles of the instruction in flight
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()

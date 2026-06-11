@@ -300,3 +300,62 @@ TEST_CASE("z80 register_view returns the live register snapshot") {
     CHECK(saw_pc);
     CHECK(saw_af);
 }
+
+TEST_CASE("z80 IM 0 executes the jammed RST opcode from the vector callback") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.im = 0U;
+    r.iff1 = r.iff2 = true;
+    r.pc = 0x0100U;
+    r.sp = 0x8000U;
+    m.cpu.set_registers(r);
+    m.cpu.set_irq_vector([] { return std::uint8_t{0xDF}; }); // RST 18h
+
+    m.cpu.set_irq_line(true);
+    m.cpu.step_instruction();
+    const auto after = m.cpu.cpu_registers();
+    CHECK(after.pc == 0x0018U);
+    CHECK(after.sp == 0x7FFEU);
+    // The interrupted PC was stacked by the jammed RST.
+    CHECK(m.ram[0x7FFEU] == 0x00U);
+    CHECK(m.ram[0x7FFFU] == 0x01U);
+    CHECK_FALSE(after.iff1);
+}
+
+TEST_CASE("z80 IM 0 without a vector source falls back to RST 38h") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.im = 0U;
+    r.iff1 = r.iff2 = true;
+    r.pc = 0x0200U;
+    r.sp = 0x8000U;
+    m.cpu.set_registers(r);
+
+    m.cpu.set_irq_line(true);
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x0038U);
+}
+
+TEST_CASE("z80 /RESET hold parks the CPU and release restarts from $0000") {
+    machine m;
+    m.load(0x0000U, {0x3EU, 0x42U, 0x76U}); // LD A,$42 ; HALT
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().af >> 8U) == 0x42U);
+
+    m.cpu.set_reset_line(true);
+    CHECK(m.cpu.reset_line_held());
+    const auto held = m.cpu.cpu_registers();
+    CHECK(held.pc == 0x0000U);
+
+    // Held: ticks burn cycles without touching state.
+    m.cpu.tick(64U);
+    CHECK(m.cpu.cpu_registers().pc == 0x0000U);
+    CHECK((m.cpu.cpu_registers().af >> 8U) != 0x42U);
+
+    // Release: runs the program from $0000 again.
+    m.cpu.set_reset_line(false);
+    CHECK_FALSE(m.cpu.reset_line_held());
+    m.cpu.step_instruction();
+    CHECK((m.cpu.cpu_registers().af >> 8U) == 0x42U);
+    CHECK(m.cpu.cpu_registers().pc == 0x0002U);
+}
