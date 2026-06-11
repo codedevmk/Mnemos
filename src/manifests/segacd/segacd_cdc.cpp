@@ -330,7 +330,7 @@ namespace mnemos::manifests::segacd {
         }
         if (segacd_trace_enabled()) {
             static int n = 0;
-            if (n++ < 400) {
+            if (n++ < 4000) {
                 std::fprintf(stderr, "[cdcr] pc=%06X ar=%02X -> %02X\n", sub_cpu.cpu_registers().pc,
                              cdc_ar, data);
                 if (cdc_ar == 0x0FU) { // end of a poll sweep: dump the read-driver work vars
