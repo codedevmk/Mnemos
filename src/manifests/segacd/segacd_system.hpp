@@ -77,6 +77,13 @@ namespace mnemos::manifests::segacd {
         std::uint8_t cdd_drive_status{cdd_nodisc};
         std::uint8_t cdd_pending_status{};
         int cdd_latency{};
+        // One CD frame of sector-sync acquisition between the PLAY promotion and
+        // the first decode: a real drive reports 'playing' first, then the first
+        // complete sector passes under the pickup a frame later. The BIOS read
+        // driver arms its per-sector (DECI) service in that gap; without it the
+        // first sector's snapshot is consumed by the arm itself and the driver
+        // misses its approach window.
+        int cdd_play_warmup{};
         std::int32_t cdd_lba{};
         int cdd_track{};
         bool cdd_loaded{};
