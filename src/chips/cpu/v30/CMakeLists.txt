@@ -30,7 +30,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_cpu_v30_singlestep_test
         SOURCES tests/v30_singlestep_test.cpp
-        LIBRARIES mnemos::chips::cpu::v30 nlohmann_json::nlohmann_json
+        LIBRARIES mnemos::chips::cpu::v30 mnemos::compression nlohmann_json::nlohmann_json
     )
     set_tests_properties(
         mnemos_chips_cpu_v30_singlestep_test

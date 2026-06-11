@@ -220,6 +220,7 @@ namespace mnemos::chips::cpu {
         void exec_group_ff();
         void exec_string(std::uint8_t opcode);
         void exec_0f();
+        void exec_ins_ext(bool extract, bool immediate_length);
         // Packed-BCD string primitive shared by ADD4S/SUB4S/CMP4S: applies
         // `subtract` digit arithmetic from DS:SI into ES:DI over CL digits,
         // optionally writing the result back, and sets CF (digit borrow/carry

@@ -847,15 +847,18 @@ namespace mnemos::chips::cpu {
         case 0x0FU:
             exec_0f();
             break;
-        case 0x27U: { // DAA
+        case 0x27U: { // DAA (V20: AF raises the high-adjust threshold to 0x9F)
             const std::uint8_t old_al = get_reg8(0);
             const bool old_cf = flag(flag_c);
+            const bool old_af = flag(flag_a);
             std::uint8_t al = old_al;
-            if ((al & 0x0FU) > 9U || flag(flag_a)) {
+            if ((al & 0x0FU) > 9U || old_af) {
                 al = static_cast<std::uint8_t>(al + 6U);
                 assign_flag(flag_a, true);
+            } else {
+                assign_flag(flag_a, false);
             }
-            if (old_al > 0x99U || old_cf) {
+            if (old_al > (old_af ? 0x9FU : 0x99U) || old_cf) {
                 al = static_cast<std::uint8_t>(al + 0x60U);
                 assign_flag(flag_c, true);
             } else {
@@ -1407,8 +1410,9 @@ namespace mnemos::chips::cpu {
         case 0xD4U: { // AAM imm8 (NEC: CVTBD)
             const std::uint8_t divisor = fetch8();
             take_cycles(16);
-            if (divisor == 0U) {
-                interrupt(0U);
+            if (divisor == 0U) { // V series: no divide trap; AH saturates
+                set_reg8(4, 0xFFU);
+                set_szp8(get_reg8(0));
                 break;
             }
             const std::uint8_t al = get_reg8(0);
@@ -1417,12 +1421,11 @@ namespace mnemos::chips::cpu {
             set_szp8(get_reg8(0));
             break;
         }
-        case 0xD5U: { // AAD imm8 (NEC: CVTDB)
-            const std::uint8_t multiplier = fetch8();
-            const auto al = static_cast<std::uint8_t>(get_reg8(0) + get_reg8(4) * multiplier);
-            set_reg8(0, al);
+        case 0xD5U: { // AAD (NEC: CVTDB) -- the V series ignores the immediate
+            static_cast<void>(fetch8());
+            const auto addend = static_cast<std::uint8_t>(get_reg8(4) * 10U);
+            set_reg8(0, alu8(alu_add, get_reg8(0), addend)); // full ADD flags
             set_reg8(4, 0U);
-            set_szp8(al);
             take_cycles(6);
             break;
         }
@@ -1606,9 +1609,10 @@ namespace mnemos::chips::cpu {
 
     void v30::bcd_string_op(bool subtract, bool write_back) noexcept {
         // ADD4S/SUB4S/CMP4S: packed-BCD strings of CL digits, source DS:SI
-        // (segment-overridable), destination ES:DI; an odd digit count
-        // processes the full top byte (first-cut). CF carries out of the top
-        // digit; ZF reflects the whole result.
+        // (segment-overridable), destination ES:DI. Corpus-verified: the
+        // hardware loops a byte-wise ADC/SBB followed by DAA/DAS (with the
+        // V20's AF-raised high-adjust threshold), chaining CF between bytes.
+        // CF is the final byte's carry/borrow; ZF reflects the whole result.
         const std::uint16_t source_segment = data_segment(ds_);
         const unsigned digits = get_reg8(1); // CL
         const unsigned bytes = (digits + 1U) / 2U;
@@ -1617,36 +1621,33 @@ namespace mnemos::chips::cpu {
         for (unsigned i = 0; i < bytes; ++i) {
             const std::uint8_t src = rb(source_segment, static_cast<std::uint16_t>(si_ + i));
             const std::uint8_t dst = rb(es_, static_cast<std::uint16_t>(di_ + i));
-            unsigned lo = 0U;
-            unsigned hi = 0U;
+            unsigned value = 0U;
+            unsigned binary_carry = 0U;
+            unsigned nibble_carry = 0U;
             if (subtract) {
-                lo = static_cast<unsigned>(dst & 0x0FU) - (src & 0x0FU) - carry;
-                carry = 0U;
-                if (lo > 9U) { // unsigned underflow == digit borrow
-                    lo = (lo + 10U) & 0x0FU;
-                    carry = 1U;
-                }
-                hi = static_cast<unsigned>(dst >> 4U) - (src >> 4U) - carry;
-                carry = 0U;
-                if (hi > 9U) {
-                    hi = (hi + 10U) & 0x0FU;
-                    carry = 1U;
-                }
+                const unsigned wide = static_cast<unsigned>(dst) - src - carry;
+                value = wide & 0xFFU;
+                binary_carry = (static_cast<unsigned>(src) + carry > dst) ? 1U : 0U;
+                nibble_carry = ((dst & 0x0FU) < (src & 0x0FU) + carry) ? 1U : 0U;
             } else {
-                lo = static_cast<unsigned>(dst & 0x0FU) + (src & 0x0FU) + carry;
-                carry = 0U;
-                if (lo > 9U) {
-                    lo -= 10U;
-                    carry = 1U;
-                }
-                hi = static_cast<unsigned>(dst >> 4U) + (src >> 4U) + carry;
-                carry = 0U;
-                if (hi > 9U) {
-                    hi -= 10U;
-                    carry = 1U;
-                }
+                const unsigned wide = static_cast<unsigned>(dst) + src + carry;
+                value = wide & 0xFFU;
+                binary_carry = wide > 0xFFU ? 1U : 0U;
+                nibble_carry = ((dst & 0x0FU) + (src & 0x0FU) + carry) > 0x0FU ? 1U : 0U;
             }
-            const auto result = static_cast<std::uint8_t>((hi << 4U) | lo);
+            // DAA/DAS over the binary byte result.
+            const unsigned before_adjust = value;
+            const bool low_adjust = (value & 0x0FU) > 9U || nibble_carry != 0U;
+            if (low_adjust) {
+                value = subtract ? ((value - 6U) & 0xFFU) : ((value + 6U) & 0xFFU);
+            }
+            carry = 0U;
+            if (binary_carry != 0U ||
+                before_adjust > (low_adjust && nibble_carry != 0U ? 0x9FU : 0x99U)) {
+                value = subtract ? ((value - 0x60U) & 0xFFU) : ((value + 0x60U) & 0xFFU);
+                carry = 1U;
+            }
+            const auto result = static_cast<std::uint8_t>(value);
             if (result != 0U) {
                 all_zero = false;
             }
@@ -1681,10 +1682,8 @@ namespace mnemos::chips::cpu {
             const unsigned bit_source = (extension & 0x08U) != 0U ? fetch8() : get_reg8(1);
             const std::uint8_t mask = static_cast<std::uint8_t>(1U << (bit_source & 7U));
             switch (extension & 0x06U) {
-            case 0x00U: // TEST1: ZF = bit is clear; CF/OF cleared
-                assign_flag(flag_z, (value & mask) == 0U);
-                assign_flag(flag_c, false);
-                assign_flag(flag_o, false);
+            case 0x00U: // TEST1: AND-style flags from the masked value
+                static_cast<void>(alu8(alu_and, value, mask));
                 break;
             case 0x02U: // CLR1
                 write_rm8(static_cast<std::uint8_t>(value & ~mask));
@@ -1713,9 +1712,7 @@ namespace mnemos::chips::cpu {
             const auto mask = static_cast<std::uint16_t>(1U << (bit_source & 15U));
             switch (extension & 0x06U) {
             case 0x00U:
-                assign_flag(flag_z, (value & mask) == 0U);
-                assign_flag(flag_c, false);
-                assign_flag(flag_o, false);
+                static_cast<void>(alu16(alu_and, value, mask));
                 break;
             case 0x02U:
                 write_rm16(static_cast<std::uint16_t>(value & ~mask));
@@ -1739,40 +1736,92 @@ namespace mnemos::chips::cpu {
         case 0x26U: // CMP4S
             bcd_string_op(true, false);
             break;
-        case 0x28U: { // ROL4 r/m8: AL low nibble rotates in from the right
+        case 0x28U: { // ROL4 r/m8 (dataflow verified against the V20 corpus)
             fetch_modrm();
             const std::uint8_t value = read_rm8();
             const std::uint8_t al = get_reg8(0);
             write_rm8(static_cast<std::uint8_t>((value << 4U) | (al & 0x0FU)));
-            set_reg8(0, static_cast<std::uint8_t>((al & 0xF0U) | (value >> 4U)));
+            set_reg8(0, static_cast<std::uint8_t>(((al & 0x0FU) << 4U) | (value >> 4U)));
             take_cycles(13 + ea_cycles());
             break;
         }
-        case 0x2AU: { // ROR4 r/m8: AL low nibble rotates in from the left
+        case 0x2AU: { // ROR4 r/m8: AL takes the whole operand byte
             fetch_modrm();
             const std::uint8_t value = read_rm8();
             const std::uint8_t al = get_reg8(0);
             write_rm8(static_cast<std::uint8_t>(((al & 0x0FU) << 4U) | (value >> 4U)));
-            set_reg8(0, static_cast<std::uint8_t>((al & 0xF0U) | (value & 0x0FU)));
+            set_reg8(0, value);
             take_cycles(13 + ea_cycles());
             break;
         }
-        case 0x31U:        // INS reg, reg (bitfield insert)
-        case 0x33U:        // EXT reg, reg (bitfield extract)
-            fetch_modrm(); // operands consumed; no-op until needed
-            take_cycles(2);
+        case 0x31U: // INS reg, reg (bitfield insert)
+            exec_ins_ext(false, false);
+            break;
+        case 0x33U: // EXT reg, reg (bitfield extract)
+            exec_ins_ext(true, false);
             break;
         case 0x39U: // INS reg, imm4
+            exec_ins_ext(false, true);
+            break;
         case 0x3BU: // EXT reg, imm4
-            fetch_modrm();
-            static_cast<void>(fetch8());
-            take_cycles(2);
+            exec_ins_ext(true, true);
             break;
         default:
             // FPO2 forms, BRKEM, and the remaining encodings: no-op.
             take_cycles(2);
             break;
         }
+    }
+
+    void v30::exec_ins_ext(bool extract, bool immediate_length) {
+        // V-series bitfield insert/extract (corpus-verified semantics): the
+        // modrm rm register's low nibble is a 0-15 bit offset within the word
+        // at ES:DI (insert) / segment:SI (extract); the length is the reg
+        // register's low nibble + 1 (or imm4 + 1). The offset register is
+        // updated before AX is sampled (insert) and the index register
+        // advances by whole words; AX is written last on extract.
+        fetch_modrm();
+        const int offset_reg = modrm_rm_;
+        unsigned length = 0U;
+        if (immediate_length) {
+            length = (fetch8() & 0x0FU) + 1U;
+        } else {
+            length = (get_reg8(modrm_reg_) & 0x0FU) + 1U;
+        }
+        const unsigned offset = get_reg8(offset_reg) & 0x0FU;
+        const unsigned total = offset + length;
+        const std::uint16_t mask =
+            length >= 16U ? 0xFFFFU : static_cast<std::uint16_t>((1U << length) - 1U);
+
+        if (!extract) {
+            set_reg8(offset_reg, static_cast<std::uint8_t>(total & 15U));
+            const std::uint16_t value = ax_ & mask; // sampled after the offset write
+            for (unsigned k = 0; k < length; ++k) {
+                const unsigned position = offset + k;
+                const auto address = static_cast<std::uint16_t>(di_ + 2U * (position >> 4U) +
+                                                                ((position & 15U) >> 3U));
+                const unsigned bit = position & 7U;
+                std::uint8_t byte = rb(es_, address);
+                byte =
+                    static_cast<std::uint8_t>((byte & ~(1U << bit)) | (((value >> k) & 1U) << bit));
+                wb(es_, address, byte);
+            }
+            di_ = static_cast<std::uint16_t>(di_ + 2U * (total >> 4U));
+        } else {
+            const std::uint16_t segment = data_segment(ds_);
+            std::uint16_t value = 0U;
+            for (unsigned k = 0; k < length; ++k) {
+                const unsigned position = offset + k;
+                const auto address = static_cast<std::uint16_t>(si_ + 2U * (position >> 4U) +
+                                                                ((position & 15U) >> 3U));
+                value = static_cast<std::uint16_t>(
+                    value | (((rb(segment, address) >> (position & 7U)) & 1U) << k));
+            }
+            set_reg8(offset_reg, static_cast<std::uint8_t>(total & 15U));
+            si_ = static_cast<std::uint16_t>(si_ + 2U * (total >> 4U));
+            ax_ = value; // written last: wins when the offset register aliases AX
+        }
+        take_cycles(35);
     }
 
     void v30::exec_group_80_83(std::uint8_t opcode) {

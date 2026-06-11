@@ -435,14 +435,14 @@ TEST_CASE("v30 ROL4 and ROR4 rotate nibbles through AL", "[v30]") {
                   0xF4U});
     cpu.step_instruction();
     cpu.step_instruction();
-    cpu.step_instruction(); // ROL4: BL 0x34, AL 0x0A -> BL = 0x4A, AL = 0x03
+    cpu.step_instruction(); // ROL4: BL 34, AL 0A -> BL = 4A, AL = A3
     auto regs = cpu.cpu_registers();
     CHECK((regs.bx & 0xFFU) == 0x4AU);
-    CHECK((regs.ax & 0xFFU) == 0x03U);
-    cpu.step_instruction(); // ROR4: BL 0x4A, AL 0x03 -> BL = 0x34, AL = 0x0A
+    CHECK((regs.ax & 0xFFU) == 0xA3U);
+    cpu.step_instruction(); // ROR4: BL 4A, AL A3 -> BL = 34, AL = 4A (whole byte)
     regs = cpu.cpu_registers();
     CHECK((regs.bx & 0xFFU) == 0x34U);
-    CHECK((regs.ax & 0xFFU) == 0x0AU);
+    CHECK((regs.ax & 0xFFU) == 0x4AU);
 }
 
 TEST_CASE("v30 packed-BCD string arithmetic", "[v30]") {
