@@ -175,7 +175,10 @@ def build_capsule(module: Path) -> str:
         # working-tree bytes on Windows vs Linux, and a capsule generated on one
         # platform would permanently "drift" on the other.
         f"{p.relative_to(REPO).as_posix()}:{sha(p.read_bytes().replace(b'\r\n', b'\n'))}\n"
-        for p in sorted(tracked(module))
+        # Sort by the posix path STRING: sorting Path objects is case-insensitive
+        # on Windows but case-sensitive on Linux, so mixed-case modules would
+        # digest in a different order per platform.
+        for p in sorted(tracked(module), key=lambda q: q.relative_to(REPO).as_posix())
     )
     source_digest = sha(digest_input.encode("utf-8"))
 

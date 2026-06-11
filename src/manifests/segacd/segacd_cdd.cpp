@@ -256,8 +256,8 @@ namespace mnemos::manifests::segacd {
                          cdd_command[2], cdd_command[3], cdd_command[4], cdd_command[5],
                          cdd_command[6], cdd_drive_status, cdd_lba);
             const std::uint32_t sp = sub_cpu.cpu_registers().a[7];
-            const std::uint32_t m = prg_ram_size - 1U;
-            auto rd = [this, m](std::uint32_t a) -> std::uint32_t {
+            constexpr std::uint32_t m = prg_ram_size - 1U;
+            auto rd = [this](std::uint32_t a) -> std::uint32_t {
                 return (static_cast<std::uint32_t>(prg_ram[a & m]) << 24) |
                        (static_cast<std::uint32_t>(prg_ram[(a + 1U) & m]) << 16) |
                        (static_cast<std::uint32_t>(prg_ram[(a + 2U) & m]) << 8) |

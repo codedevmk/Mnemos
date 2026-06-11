@@ -75,6 +75,12 @@ namespace mnemos::manifests::segacd {
                     std::fprintf(stderr, "[park] main_pc=%06X writes gate $01=%02X\n",
                                  m->genesis->cpu.cpu_registers().pc, v);
                 }
+                if (segacd_trace_enabled() && off == 0x00U) {
+                    // The IFL2 pulse writer's PC names the BIOS routine driving the
+                    // round pump (per-round vs per-frame paths).
+                    std::fprintf(stderr, "[ifl2pc] main_pc=%06X $00=%02X\n",
+                                 m->genesis->cpu.cpu_registers().pc, v);
+                }
                 m->sub->gate_write_main(off, v);
             },
             1);
