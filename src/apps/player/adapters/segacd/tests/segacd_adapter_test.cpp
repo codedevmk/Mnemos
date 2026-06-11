@@ -230,6 +230,19 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     bool main_path_captured = false;
     std::uint8_t wp_5837 = adapter.machine().sub->prg_ram[0x5837U]; // op-accept latch ($5837.0)
     std::uint8_t wp_583b = adapter.machine().sub->prg_ram[0x583BU]; // op-active flag ($583B.7)
+    std::uint8_t wp_583e =
+        adapter.machine().sub->prg_ram[0x583EU]; // op-arm flags ($583E.1 gates $62F4)
+    // The comm-driver dispatcher's command word; cmd $10 -> the $621E op-arm handler.
+    std::uint16_t wp_582e = static_cast<std::uint16_t>(
+        (adapter.machine().sub->prg_ram[0x582EU] << 8) | adapter.machine().sub->prg_ram[0x582FU]);
+    // The CDBSTAT status word the comm cycle posts; its $E000 bits gate the
+    // $62F4 handshake-advance arm consumption.
+    std::uint16_t wp_5844 = static_cast<std::uint16_t>(
+        (adapter.machine().sub->prg_ram[0x5844U] << 8) | adapter.machine().sub->prg_ram[0x5845U]);
+    // The BIOS status word itself (CDBSTAT struct word 0): $8000/$2000 = op-busy
+    // bits; the writer PCs reveal the op-completion code + its gating condition.
+    std::uint16_t wp_5e80 = static_cast<std::uint16_t>(
+        (adapter.machine().sub->prg_ram[0x5E80U] << 8) | adapter.machine().sub->prg_ram[0x5E81U]);
     if (pchist_trace || subtrace != nullptr) {
         adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++sub_pc_hist[pc];
@@ -249,6 +262,75 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                 std::fprintf(stderr, "[wp583B] sub pc=%06X $583B %02X->%02X\n", pc, wp_583b, v583b);
                 wp_583b = v583b;
             }
+            const std::uint8_t v583e = adapter.machine().sub->prg_ram[0x583EU];
+            if (v583e != wp_583e) { // who arms $583E (bit1 gates the $62F4 handshake advance)?
+                std::fprintf(stderr, "[wp583E] sub pc=%06X $583E %02X->%02X\n", pc, wp_583e, v583e);
+                wp_583e = v583e;
+            }
+            const std::uint16_t v582e =
+                static_cast<std::uint16_t>((adapter.machine().sub->prg_ram[0x582EU] << 8) |
+                                           adapter.machine().sub->prg_ram[0x582FU]);
+            if (v582e != wp_582e) { // the dispatcher's command word (cmd $10 -> $621E)
+                std::fprintf(stderr, "[wp582E] sub pc=%06X $582E %04X->%04X\n", pc, wp_582e, v582e);
+                wp_582e = v582e;
+            }
+            const std::uint16_t v5844 =
+                static_cast<std::uint16_t>((adapter.machine().sub->prg_ram[0x5844U] << 8) |
+                                           adapter.machine().sub->prg_ram[0x5845U]);
+            if (v5844 != wp_5844) { // the posted CDBSTAT word ($E000 = busy bits)
+                std::fprintf(stderr, "[wp5844] sub pc=%06X $5844 %04X->%04X\n", pc, wp_5844, v5844);
+                wp_5844 = v5844;
+            }
+            const std::uint16_t v5e80 =
+                static_cast<std::uint16_t>((adapter.machine().sub->prg_ram[0x5E80U] << 8) |
+                                           adapter.machine().sub->prg_ram[0x5E81U]);
+            if (v5e80 != wp_5e80) { // the BIOS status word (op-busy bits live here)
+                std::fprintf(stderr, "[wp5E80] sub pc=%06X $5E80 %04X->%04X\n", pc, wp_5e80, v5e80);
+                wp_5e80 = v5e80;
+            }
+            static std::uint8_t wp_5878 = 0xEE; // validated drive-status mirror ($11B6 reads it)
+            const std::uint8_t v5878 = adapter.machine().sub->prg_ram[0x5878U];
+            if (v5878 != wp_5878) {
+                std::fprintf(stderr, "[wp5878] sub pc=%06X $5878 %02X->%02X\n", pc, wp_5878, v5878);
+                wp_5878 = v5878;
+            }
+            static std::uint16_t wp_5afc = 0xEEEE; // the CD-driver status word itself
+            const std::uint16_t v5afc =
+                static_cast<std::uint16_t>((adapter.machine().sub->prg_ram[0x5AFCU] << 8) |
+                                           adapter.machine().sub->prg_ram[0x5AFDU]);
+            if (v5afc != wp_5afc) {
+                std::fprintf(stderr, "[wp5AFC] sub pc=%06X $5AFC %04X->%04X\n", pc, wp_5afc, v5afc);
+                wp_5afc = v5afc;
+            }
+            static std::uint16_t wp_5b0a = 0xEEEE; // CD-driver state index
+            const std::uint16_t v5b0a =
+                static_cast<std::uint16_t>((adapter.machine().sub->prg_ram[0x5B0AU] << 8) |
+                                           adapter.machine().sub->prg_ram[0x5B0BU]);
+            if (v5b0a != wp_5b0a) {
+                std::fprintf(stderr, "[wp5B0A] sub pc=%06X $5B0A %04X->%04X\n", pc, wp_5b0a, v5b0a);
+                wp_5b0a = v5b0a;
+            }
+            // Comm-cycle register snapshot: a6 = the comm driver's work base (the
+            // $3E(a6) arm-consume target), a3 = the posting queue, d0 = the posted
+            // status word whose $E000 busy bits gate the $62F4 advance.
+            if (pc == 0x0062DCU) { // the comm cycle just popped the word it will post
+                static std::uint32_t last_d0 = 0xEEEEEEEEU;
+                const auto& r = adapter.machine().sub->sub_cpu.cpu_registers();
+                const std::uint32_t d0 = r.d[0] & 0xFFFFU;
+                if (d0 != last_d0) {
+                    last_d0 = d0;
+                    std::fprintf(stderr, "[commpost] d0=%04X arm9826=%02X\n", d0,
+                                 adapter.machine().sub->prg_ram[0x9826U]);
+                }
+            }
+            if (pc == 0x006274U) { // a0 = the CDBSTAT struct the comm cycle posts from
+                static int cdbstat_logged = 0;
+                if (cdbstat_logged < 8) {
+                    ++cdbstat_logged;
+                    const auto& r = adapter.machine().sub->sub_cpu.cpu_registers();
+                    std::fprintf(stderr, "[cdbstat] a0=%06X\n", r.a[0]);
+                }
+            }
             pc_ring[pc_ring_idx % pc_ring.size()] = pc;
             ++pc_ring_idx;
             if (pc == 0x618EU) {
@@ -262,6 +344,14 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
         // it fails to post the CDBIOS disc-read command to gate comm words $10-$1F.
         adapter.machine().genesis->cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++main_pc_hist[pc];
+            // The BIOS round-phase byte ($FDDE, bchg #0 per comm round): its
+            // toggle sequence vs the comm edges exposes a lost-round parity break.
+            static std::uint8_t wp_fdde = 0xEE;
+            const std::uint8_t v = adapter.machine().genesis->work_ram[0xFDDEU];
+            if (v != wp_fdde) {
+                std::fprintf(stderr, "[wpFDDE] main pc=%06X $FDDE %02X->%02X\n", pc, wp_fdde, v);
+                wp_fdde = v;
+            }
             main_pc_ring[main_ring_idx % main_pc_ring.size()] = pc;
             ++main_ring_idx;
             if (pc == 0x000A0CU) { // the logo/delay sub entry -- capture its caller
@@ -274,6 +364,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     }
     constexpr int kBootFrames = 600; // ~10 s of emulated boot
     for (int i = 0; i < kBootFrames; ++i) {
+        if (i == 450) { // tail-window the histograms: what still RUNS while parked?
+            sub_pc_hist.clear();
+            main_pc_hist.clear();
+        }
         adapter.step_one_frame();
     }
 
@@ -294,6 +388,10 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                  adapter.machine().genesis->cpu.cpu_registers().pc,
                  static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()),
                  adapter.machine().sub->sub_cpu.cpu_registers().pc, sub.sub_irq_mask);
+    // Why is the parked main not taking VBlank? SR.IPL + the VDP's IE0 tell.
+    std::fprintf(stderr, "[segacd-boot] main_sr=%04X vdp_reg0=%02X vdp_reg1=%02X\n",
+                 adapter.machine().genesis->cpu.cpu_registers().sr,
+                 adapter.machine().genesis->vdp.reg(0), adapter.machine().genesis->vdp.reg(1));
     // Main BootROM CD-driver state ($FFFDDC region): $FDDC bit7 = the $1D62 busy
     // wait the main spins on; $FDDE bit1 = CD-op active; $FDDF bit2 = busy; $FDF0 =
     // the $1480 dispatch function index. Reveals whether the main ever issues a read.

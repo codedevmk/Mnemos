@@ -55,26 +55,22 @@ namespace mnemos::manifests::segacd {
             0xA12000U, 0x100U,
             [m](std::uint32_t a) {
                 const auto off = static_cast<std::uint8_t>(a & 0xFFU);
-                // Poll-sync on READS of sub-written registers (sub comm flag $0F, sub
-                // comm words $20-$2F, CDD status $38-$4B): run the sub up to the main's
-                // cycle so the main reads the sub's CURRENT value, not a stale one. The
-                // write-side sync alone misses sub state the main polls read-only
-                // between its own writes -- the boot CDBIOS handshake reads $0F that
-                // way. Matches the reference syncing the other CPU on comm access.
-                if ((off >= 0x0EU && off <= 0x2FU) || (off >= 0x38U && off <= 0x4BU)) {
-                    m->catch_up_sub();
-                }
+                // Fence EVERY gate read: run the sub up to the main's cycle so the
+                // main reads the sub's CURRENT state, never a stale one. The whole
+                // window is shared protocol state (comm flags/words, DMNA/RET in
+                // $03, CDD/CDC status), and a partial fence leaves orderings where
+                // the two sides each act on the other's past -- the post-logo
+                // word-RAM handshake converges deadlocked that way.
+                m->catch_up_sub();
                 return m->sub->gate_read(off);
             },
             [m](std::uint32_t a, std::uint8_t v) {
                 const auto off = static_cast<std::uint8_t>(a & 0xFFU);
-                // Poll-sync: before the main commits a comm-register write, run the
-                // sub up to the main's current cycle so it observes intermediate flag
-                // values. Without this the sub misses the main's $0E bit-2 clear->set
-                // pulse and the boot deadlocks at sub PC $6194 (its $0E.2 poll loop).
-                if (off == 0x0EU || off == 0x0FU || (off >= 0x10U && off <= 0x1FU)) {
-                    m->catch_up_sub();
-                }
+                // Fence EVERY gate write: the sub must consume its timeline up to
+                // "now" BEFORE the write lands, or it observes the main's future
+                // early (an IFL2 pulse via $00 or a DMNA grant via $03 becoming
+                // visible mid-burst inverts the protocol order the BIOS relies on).
+                m->catch_up_sub();
                 if (segacd_trace_enabled() && off == 0x01U && (v & 0x01U) == 0U) {
                     std::fprintf(stderr, "[park] main_pc=%06X writes gate $01=%02X\n",
                                  m->genesis->cpu.cpu_registers().pc, v);
@@ -96,7 +92,7 @@ namespace mnemos::manifests::segacd {
                 const std::uint32_t base =
                     ((static_cast<std::uint32_t>(sub->gate_array[0x03]) >> 6U) & 0x03U) * 0x20000U;
                 const std::uint32_t off = (base + (a & 0x1FFFFU)) & (prg_ram_size - 1U);
-                if (segacd_trace_enabled() && off >= 0x100U && off <= 0x57FFU) {
+                if (segacd_trace_enabled() && off >= 0x100U && off <= 0x5FFFU) {
                     std::fprintf(stderr, "[prgw] main_pc=%06X prg[%05X]=%02X\n",
                                  gen->cpu.cpu_registers().pc, off, v);
                 }
