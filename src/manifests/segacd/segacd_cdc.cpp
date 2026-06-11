@@ -331,7 +331,17 @@ namespace mnemos::manifests::segacd {
         if (segacd_trace_enabled()) {
             static int n = 0;
             if (n++ < 400) {
-                std::fprintf(stderr, "[cdcr] ar=%02X -> %02X\n", cdc_ar, data);
+                std::fprintf(stderr, "[cdcr] pc=%06X ar=%02X -> %02X\n", sub_cpu.cpu_registers().pc,
+                             cdc_ar, data);
+                if (cdc_ar == 0x0FU) { // end of a poll sweep: dump the read-driver work vars
+                    std::fprintf(stderr,
+                                 "[cdcv] cur=%02X%02X%02X%02X tgt=%02X%02X%02X%02X "
+                                 "dac?=%02X%02X%02X%02X\n",
+                                 prg_ram[0x5A52], prg_ram[0x5A53], prg_ram[0x5A54], prg_ram[0x5A55],
+                                 prg_ram[0x5A56], prg_ram[0x5A57], prg_ram[0x5A58], prg_ram[0x5A59],
+                                 prg_ram[0x5A5A], prg_ram[0x5A5B], prg_ram[0x5A5C],
+                                 prg_ram[0x5A5D]);
+                }
             }
         }
         if (cdc_ar != 0U) {
