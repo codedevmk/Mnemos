@@ -120,11 +120,24 @@ namespace mnemos::manifests::segacd {
             break;
         }
         case 7: { // Word-RAM
-            const std::uint32_t dst =
-                (static_cast<std::uint32_t>((gate_array[0x0A] << 8) | gate_array[0x0B]) << 3) &
-                0x3FFFFU;
-            for (std::uint32_t i = 0; i < len; ++i) {
-                word_ram[(dst + i) & (word_ram_size - 1U)] = cdc_ram[(src + i) & 0x3FFFU];
+            if (word_ram_1m()) {
+                // 1M mode: the DMA lands in the SUB's current 128 KB bank (the
+                // loader streams sectors into its half while the main reads the
+                // other), routed through the interleaved bank view.
+                const std::uint32_t dst =
+                    (static_cast<std::uint32_t>((gate_array[0x0A] << 8) | gate_array[0x0B]) << 3) &
+                    0x1FFFFU;
+                for (std::uint32_t i = 0; i < len; ++i) {
+                    word_ram[word_bank_offset(sub_word_bank(), (dst + i) & 0x1FFFFU)] =
+                        cdc_ram[(src + i) & 0x3FFFU];
+                }
+            } else {
+                const std::uint32_t dst =
+                    (static_cast<std::uint32_t>((gate_array[0x0A] << 8) | gate_array[0x0B]) << 3) &
+                    0x3FFFFU;
+                for (std::uint32_t i = 0; i < len; ++i) {
+                    word_ram[(dst + i) & (word_ram_size - 1U)] = cdc_ram[(src + i) & 0x3FFFU];
+                }
             }
             auto a = static_cast<std::uint16_t>((gate_array[0x0A] << 8) | gate_array[0x0B]);
             a = static_cast<std::uint16_t>(a + (len >> 3));

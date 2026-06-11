@@ -102,17 +102,6 @@ namespace mnemos::manifests::segacd {
         cdc_ar = 0;
         cdc_irq = 0;
         cdc_dma_dest = 0;
-        // Stamp / rotation ASIC config (the gate registers were cleared above).
-        stamp_size = 0;
-        stamp_map_addr = 0;
-        img_buf_v_cell = 0;
-        img_buf_vector = 0;
-        img_v_step = 0;
-        img_h_step = 0;
-        img_buf_width = 0;
-        img_buf_height = 0;
-        img_buf_offset = 0;
-        trace_vector_addr = 0;
         pcm.reset(chips::reset_kind::power_on);
     }
 
@@ -125,6 +114,7 @@ namespace mnemos::manifests::segacd {
         backup_ram.fill(0);
         gate_array.fill(0);
         gate_array[0x03] = 0x01; // RET=1: the main CPU owns word RAM at power-on
+        dmna_pending = false;
         // Sub-side gate-register power-on defaults (match the reference): $08/$0A =
         // $FFFF, $36 = $0100, $40 = $000F (status RS9 trailer), $42-$4B = $FFFF -- the
         // CDD-command "idle" sentinel the BIOS sees before issuing a new command.
@@ -164,16 +154,6 @@ namespace mnemos::manifests::segacd {
         cdc_ar = 0;
         cdc_irq = 0;
         cdc_dma_dest = 0;
-        stamp_size = 0;
-        stamp_map_addr = 0;
-        img_buf_v_cell = 0;
-        img_buf_vector = 0;
-        img_v_step = 0;
-        img_h_step = 0;
-        img_buf_width = 0;
-        img_buf_height = 0;
-        img_buf_offset = 0;
-        trace_vector_addr = 0;
         timer_word = 0;
         timer_cycle_acc = 0;
         pcm.reset(chips::reset_kind::power_on);
@@ -191,6 +171,25 @@ namespace mnemos::manifests::segacd {
             const std::uint8_t lo = gate_array[0x09];
             cdc_host_advance();
             return lo;
+        }
+        // $50-$57: the font expander. The glyph word at $4E-$4F holds 16 1bpp
+        // pixels; each expanded word maps 4 of them to the two 4-bit colors in
+        // $4D. The BIOS/games render text through this unit -- raw register
+        // bytes here garble every glyph.
+        if (offset >= 0x50U && offset <= 0x57U) {
+            const auto font =
+                static_cast<std::uint16_t>((gate_array[0x4E] << 8) | gate_array[0x4F]);
+            const std::uint8_t code = gate_array[0x4D];
+            auto bits = static_cast<std::uint8_t>((font >> (((offset & 6U) ^ 6U) << 1U)) << 2U);
+            auto data = static_cast<std::uint16_t>((code >> (bits & 4U)) & 0x0FU);
+            bits = static_cast<std::uint8_t>(bits >> 1U);
+            data = static_cast<std::uint16_t>(data | (((code >> (bits & 4U)) << 4U) & 0xF0U));
+            bits = static_cast<std::uint8_t>(bits >> 1U);
+            data = static_cast<std::uint16_t>(data | (((code >> (bits & 4U)) << 8U) & 0xF00U));
+            bits = static_cast<std::uint8_t>(bits >> 1U);
+            data = static_cast<std::uint16_t>(data | (((code >> (bits & 4U)) << 12U) & 0xF000U));
+            return ((offset & 1U) != 0U) ? static_cast<std::uint8_t>(data)
+                                         : static_cast<std::uint8_t>(data >> 8U);
         }
         // Diagnostic: the sub copies the main->sub comm payload $10-$1F (the CDBIOS
         // $6162 copy). Log any NONZERO read to confirm whether the sub ever captures
@@ -227,22 +226,30 @@ namespace mnemos::manifests::segacd {
             }
             return;
         }
-        // $03 memory mode (main side): RET (bit 0) is read-only here; the main
-        // CPU writes the PRG-RAM bank (bits 6-7), the 1M/2M mode (bit 2), and
-        // DMNA (bit 1, hand word RAM to the sub-CPU).
+        // $03 memory mode (main side): RET (bit 0) + MODE (bit 2) are sub-owned;
+        // the main CPU writes the PRG-RAM bank (bits 6-7) and DMNA (bit 1),
+        // whose meaning depends on the mode.
         if (offset == 0x03U) {
-            // Word-RAM ownership (2M): the main owns the PRG bank (bits 6-7) and sets
-            // DMNA (bit 1, hand word RAM to the sub). RET (bit 0) + MODE (bit 2) are
-            // sub-controlled and preserved here; RET is cleared ONLY by the main
-            // setting DMNA, never by a plain bank write.
+            // 2M: DMNA=1 hands word RAM to the sub (DMNA set, RET cleared);
+            // DMNA=0 is a no-op (bank-bits-only update). 1M: DMNA=1 only ARMS
+            // the "return word RAM to the sub on the 2M exit" request, readback
+            // unchanged; DMNA=0 quirk-SETS the readback DMNA bit (hardware
+            // behavior the BIOS relies on) without any swap.
             const std::uint8_t cur = gate_array[0x03];
-            std::uint8_t next = static_cast<std::uint8_t>((cur & 0x07U) | (value & 0xC0U));
-            if ((value & 0x02U) != 0U) {
+            std::uint8_t next = static_cast<std::uint8_t>((cur & 0x3FU) | (value & 0xC0U));
+            if ((cur & 0x04U) != 0U) { // 1M mode
+                if ((value & 0x02U) != 0U) {
+                    dmna_pending = true;
+                } else {
+                    next |= 0x02U;
+                }
+            } else if ((value & 0x02U) != 0U) {
                 next = static_cast<std::uint8_t>((next & 0xFEU) |
                                                  0x02U); // DMNA: take word RAM, clear RET
             }
             if (segacd_trace_enabled()) {
-                std::fprintf(stderr, "[wram] main $03 %02X->%02X\n", value, next);
+                std::fprintf(stderr, "[wram] main $03 %02X->%02X pend=%d\n", value, next,
+                             static_cast<int>(dmna_pending));
             }
             gate_array[0x03] = next;
             return;
@@ -311,8 +318,9 @@ namespace mnemos::manifests::segacd {
             timer_word = value;
             timer_cycle_acc = 0U;
         }
-        // $58-$6B stamp / rotation ASIC config (ROT triggers on $59 bit 0).
-        if (offset >= 0x58U && offset <= 0x6BU) {
+        // $58-$67 stamp / rotation ASIC config (GO = the $66 trace-vector-base
+        // word commit, i.e. the $67 low-byte write).
+        if (offset >= 0x58U && offset <= 0x67U) {
             stamp_reg_write(offset, value);
         }
     }
@@ -352,23 +360,45 @@ namespace mnemos::manifests::segacd {
             }
             return;
         }
-        // $03 memory mode (sub side): the sub-CPU writes RET (bit 0) and MODE
-        // (bit 2); the PRG bank + DMNA are main-side and preserved.
-        if (offset == 0x03U) {
-            // Word-RAM ownership (2M): the sub owns MODE (bit 2) and sets RET (bit 0,
-            // return word RAM to the main). The PRG bank + DMNA are main-controlled
-            // and preserved; crucially RET is PRESERVED on a sub write that does not
-            // set it (RET is cleared only by the main's DMNA) -- otherwise a sub
-            // $03=0 write wrongly drops RET and the main hangs at its RET-wait.
+        // $03 memory mode (sub side): the sub-CPU writes RET (bit 0), MODE
+        // (bit 2) and the write-protect bits (3-4); the PRG bank + DMNA are
+        // main-side. The gate-array ignores the byte lane for this write, so
+        // $FF8002 and $FF8003 both drive the low memory-mode byte.
+        if (offset == 0x02U || offset == 0x03U) {
             const std::uint8_t cur = gate_array[0x03];
-            std::uint8_t next = static_cast<std::uint8_t>((cur & 0xC3U) | (value & 0x04U));
-            if ((value & 0x01U) != 0U) {
-                next = static_cast<std::uint8_t>((next & 0xFDU) |
-                                                 0x01U); // RET: return word RAM, clear DMNA
+            std::uint8_t next;
+            if ((value & 0x04U) != 0U) {
+                // 1M mode (enter or stay): RET is the live bank-split select --
+                // the strided bank views over the canonical 2M image re-route
+                // instantly, so no content rearrangement is needed. DMNA
+                // readback clears (swap completed); RET=1 also disarms a
+                // pending 2M-exit return-to-sub.
+                if ((value & 0x01U) != 0U) {
+                    dmna_pending = false;
+                }
+                next = static_cast<std::uint8_t>((cur & 0xC0U) | (value & 0x1DU));
+            } else {
+                // 2M mode. On the 1M->2M exit RET comes back SET (word RAM to
+                // the main) unless the main armed a return-to-sub via DMNA=1 in
+                // 1M. Within 2M: the sub can only SET RET (return word RAM,
+                // clearing DMNA); a write that does not set it preserves RET --
+                // RET is cleared only by the main's DMNA -- otherwise a sub
+                // $03=0 write wrongly drops RET and the main hangs at its
+                // RET-wait.
+                std::uint8_t v = value;
+                if ((cur & 0x04U) != 0U) {
+                    v = static_cast<std::uint8_t>(v | (dmna_pending ? 0x00U : 0x01U));
+                    dmna_pending = false;
+                }
+                next = static_cast<std::uint8_t>(cur & 0xC3U);
+                if ((v & 0x01U) != 0U) {
+                    next = static_cast<std::uint8_t>((next & 0xFDU) |
+                                                     0x01U); // RET: return word RAM, clear DMNA
+                }
             }
             if (segacd_trace_enabled()) {
-                std::fprintf(stderr, "[wram] sub  $03 %02X->%02X pc=%06X\n", value, next,
-                             sub_cpu.cpu_registers().pc);
+                std::fprintf(stderr, "[wram] sub  $03 %02X->%02X pend=%d pc=%06X\n", value, next,
+                             static_cast<int>(dmna_pending), sub_cpu.cpu_registers().pc);
             }
             gate_array[0x03] = next;
             return;
@@ -460,9 +490,41 @@ namespace mnemos::manifests::segacd {
         // with the MAIN entry -- whose stack lives in main work RAM, unmapped on
         // the sub bus -- crashing the sub. So there is intentionally NO overlay.
         bus.map_ram(0x000000U, s->prg_ram, 0);
-        // Word RAM $080000-$0BFFFF. The sub side always sees the full 256 KB;
-        // 2M/1M ownership (RET/DMNA) is tracked in the gate-array $03 register.
-        bus.map_ram(0x080000U, s->word_ram, 0);
+        // Word RAM, sub side. 2M mode: $080000-$0BFFFF is the full 256 KB
+        // linearly (ownership tracked in gate $03). 1M mode: the sub's current
+        // bank appears linearly at $0C0000-$0DFFFF (the window the BIOS->game
+        // handoff streams the IP through) while $080000-$0BFFFF becomes the
+        // dot-image view of that bank (one 4-bit pixel per window byte, writes
+        // through the $03 PM priority mode).
+        bus.map_mmio(
+            0x080000U, 0x40000U,
+            [s](std::uint32_t a) -> std::uint8_t {
+                const std::uint32_t off = a - 0x080000U;
+                return s->word_ram_1m() ? s->word_dot_read(off) : s->word_ram[off];
+            },
+            [s](std::uint32_t a, std::uint8_t v) {
+                const std::uint32_t off = a - 0x080000U;
+                if (s->word_ram_1m()) {
+                    s->word_dot_write(off, v);
+                } else {
+                    s->word_ram[off] = v;
+                }
+            },
+            0);
+        bus.map_mmio(
+            0x0C0000U, 0x20000U,
+            [s](std::uint32_t a) -> std::uint8_t {
+                return s->word_ram_1m() ? s->word_ram[segacd_system::word_bank_offset(
+                                              s->sub_word_bank(), a - 0x0C0000U)]
+                                        : std::uint8_t{0xFF};
+            },
+            [s](std::uint32_t a, std::uint8_t v) {
+                if (s->word_ram_1m()) {
+                    s->word_ram[segacd_system::word_bank_offset(s->sub_word_bank(),
+                                                                a - 0x0C0000U)] = v;
+                }
+            },
+            0);
         // RF5C164 register window $FF0000-$FF0FFF ($00-$08).
         bus.map_mmio(
             0xFF0000U, 0x1000U,

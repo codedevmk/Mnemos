@@ -244,6 +244,38 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
     // bits; the writer PCs reveal the op-completion code + its gating condition.
     std::uint16_t wp_5e80 = static_cast<std::uint16_t>(
         (adapter.machine().sub->prg_ram[0x5E80U] << 8) | adapter.machine().sub->prg_ram[0x5E81U]);
+    // Does the 1M-mode bank window receive the IP deposit? The handoff streams
+    // through $0C0000-$0DFFFF; watching this window distinguishes a missing
+    // deposit from a later main-side bank-view failure.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const bool wordwin_trace = std::getenv("MNEMOS_SEGACD_WORDWIN") != nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    static std::uint64_t ww_bank = 0; // writes into $0C0000-$0DFFFF (1M bank window)
+    static std::uint64_t ww_word = 0; // writes into $080000-$0BFFFF (mapped word RAM)
+    if (wordwin_trace) {
+        auto* subp = adapter.machine().sub.get();
+        subp->sub_bus.set_access_observer([subp, &rt_frame](const auto& ev) {
+            if (!ev.write) {
+                return;
+            }
+            if (ev.address >= 0x0C0000U && ev.address <= 0x0DFFFFU) {
+                ++ww_bank;
+                static int shown = 0;
+                if (shown < 24) {
+                    ++shown;
+                    std::fprintf(stderr, "[wordwin] f=%d sub w $%06X=%02X pc=%06X\n", rt_frame,
+                                 ev.address, ev.value, subp->sub_cpu.cpu_registers().pc);
+                }
+            } else if (ev.address >= 0x080000U && ev.address <= 0x0BFFFFU) {
+                ++ww_word;
+            }
+        });
+    }
     if (pchist_trace || subtrace != nullptr) {
         adapter.machine().sub->sub_cpu.diagnostics().set_trace_callback([&](std::uint32_t pc) {
             ++sub_pc_hist[pc];
@@ -385,6 +417,18 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                 std::fprintf(stderr, "[wp5A31] sub pc=%06X $5A31 %02X->%02X\n", pc, wp_5a31, v5a31);
             }
             wp_5a31 = v5a31;
+            // Post-read verdict byte: the main's $206 re-init/error entry follows
+            // PRG $5A2E reading $FF. Ungated -- every transition matters; the
+            // last sub pc before the flip names (or brackets) the writer.
+            static std::uint8_t wp_5a2e = 0xEE;
+            const std::uint8_t v5a2e = adapter.machine().sub->prg_ram[0x5A2EU];
+            if (v5a2e != wp_5a2e) {
+                std::fprintf(stderr, "[wp5A2E] f=%d sub pc=%06X $5A2E %02X->%02X M=%llu\n",
+                             rt_frame, pc, wp_5a2e, v5a2e,
+                             static_cast<unsigned long long>(
+                                 adapter.machine().genesis->cpu.elapsed_cycles()));
+            }
+            wp_5a2e = v5a2e;
         });
         // Main-CPU PC histogram: pinpoints the BootROM loop the main spins in while
         // it fails to post the CDBIOS disc-read command to gate comm words $10-$1F.
@@ -411,6 +455,20 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                                  static_cast<unsigned long long>(
                                      adapter.machine().genesis->cpu.elapsed_cycles()));
                 }
+            }
+            // Word-RAM arbitration ($03: RET/DMNA/MODE): the reference's main
+            // grants DMNA every splash-animation frame; ours stops. The frame
+            // where toggling dies + the attributed pc = the diverging driver.
+            static std::uint8_t wp_gate03 = 0xEE;
+            const std::uint8_t vg03 = adapter.machine().sub->gate_array[0x03];
+            if (vg03 != wp_gate03) {
+                static int g03_ev = 0;
+                if (g03_ev < 60 || (g03_ev % 250) == 0 || rt_frame >= 580) {
+                    std::fprintf(stderr, "[dmna] f=%d main pc=%06X $03 %02X->%02X\n", rt_frame, pc,
+                                 wp_gate03, vg03);
+                }
+                ++g03_ev;
+                wp_gate03 = vg03;
             }
             // The BIOS round-phase byte ($FDDE, bchg #0 per comm round): its
             // toggle sequence vs the comm edges exposes a lost-round parity break.
@@ -472,6 +530,14 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                 static_cast<unsigned long long>(adapter.machine().genesis->cpu.elapsed_cycles()));
         }
         adapter.step_one_frame();
+    }
+
+    if (wordwin_trace) {
+        std::fprintf(stderr,
+                     "[wordwin] total sub writes: $0C0000-$0DFFFF=%llu (bank) "
+                     "$080000-$0BFFFF=%llu (mapped)\n",
+                     static_cast<unsigned long long>(ww_bank),
+                     static_cast<unsigned long long>(ww_word));
     }
 
     const auto& sub = *adapter.machine().sub;
@@ -547,6 +613,60 @@ TEST_CASE("segacd_adapter boots a real Sega CD BIOS", "[segacd][adapter][.bios]"
                     std::fprintf(stderr, "\n");
                 }
             }
+        }
+    }
+
+    // Optional end-of-run main work-RAM dump (MNEMOS_SEGACD_WRAMDUMP = .bin):
+    // the BIOS variable space ($FD00-$FE00) holds the boot/CD-driver state;
+    // diffing it against the reference's at the same frame names the frozen
+    // variable driving the splash stall.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* wram_dump = std::getenv("MNEMOS_SEGACD_WRAMDUMP");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (wram_dump != nullptr) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::fopen: opt-in diagnostic dump
+#endif
+        std::FILE* wf = std::fopen(wram_dump, "wb");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (wf != nullptr) {
+            const auto& wr = adapter.machine().genesis->work_ram;
+            std::fwrite(wr.data(), 1, wr.size(), wf);
+            std::fclose(wf);
+        }
+    }
+    // Optional end-of-run word-RAM dump (MNEMOS_SEGACD_WORDDUMP = .bin): the
+    // BIOS->game handoff stages the IP here; comparing against the reference
+    // shows whether the sub's deposit or the main's bank view is at fault.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char* word_dump = std::getenv("MNEMOS_SEGACD_WORDDUMP");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    if (word_dump != nullptr) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::fopen: opt-in diagnostic dump
+#endif
+        std::FILE* df = std::fopen(word_dump, "wb");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (df != nullptr) {
+            const auto& wr2 = adapter.machine().sub->word_ram;
+            std::fwrite(wr2.data(), 1, wr2.size(), df);
+            std::fclose(df);
         }
     }
 
