@@ -1,0 +1,103 @@
+{
+  "schema": "mnemos-ci-durations/1",
+  "captured": "2026-06-11T05:04:16+00:00",
+  "window_days": 7,
+  "runs": [
+    {
+      "id": 27324473416,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 511
+    },
+    {
+      "id": 27324472471,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 520
+    },
+    {
+      "id": 27324031291,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 496
+    },
+    {
+      "id": 27324030485,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 538
+    },
+    {
+      "id": 27322734960,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 12
+    },
+    {
+      "id": 27322728232,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 14
+    },
+    {
+      "id": 26960263689,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 438
+    },
+    {
+      "id": 26959983373,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 416
+    },
+    {
+      "id": 26959749775,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 411
+    },
+    {
+      "id": 26959176551,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 411
+    },
+    {
+      "id": 26936520691,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 450
+    },
+    {
+      "id": 26936106485,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 529
+    },
+    {
+      "id": 26933740315,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 412
+    },
+    {
+      "id": 26933440310,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 449
+    },
+    {
+      "id": 26932605647,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 446
+    },
+    {
+      "id": 26932334782,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 453
+    }
+  ]
+}
