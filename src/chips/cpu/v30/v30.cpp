@@ -839,10 +839,7 @@ namespace mnemos::chips::cpu {
             take_cycles(8);
             break;
         case 0x0FU:
-            // V30 extension group (TEST1/SET1/CLR1/NOT1, BCD strings, ...).
-            // Deferred increment A2: consume the extension byte, no-op.
-            static_cast<void>(fetch8());
-            take_cycles(2);
+            exec_0f();
             break;
         case 0x27U: { // DAA
             const std::uint8_t old_al = get_reg8(0);
@@ -1596,6 +1593,177 @@ namespace mnemos::chips::cpu {
         default:
             // Remaining undefined encodings execute as no-ops during bring-up
             // (the m68000 / SH-2 convention).
+            take_cycles(2);
+            break;
+        }
+    }
+
+    void v30::bcd_string_op(bool subtract, bool write_back) noexcept {
+        // ADD4S/SUB4S/CMP4S: packed-BCD strings of CL digits, source DS:SI
+        // (segment-overridable), destination ES:DI; an odd digit count
+        // processes the full top byte (first-cut). CF carries out of the top
+        // digit; ZF reflects the whole result.
+        const std::uint16_t source_segment = data_segment(ds_);
+        const unsigned digits = get_reg8(1); // CL
+        const unsigned bytes = (digits + 1U) / 2U;
+        unsigned carry = 0U;
+        bool all_zero = true;
+        for (unsigned i = 0; i < bytes; ++i) {
+            const std::uint8_t src = rb(source_segment, static_cast<std::uint16_t>(si_ + i));
+            const std::uint8_t dst = rb(es_, static_cast<std::uint16_t>(di_ + i));
+            unsigned lo = 0U;
+            unsigned hi = 0U;
+            if (subtract) {
+                lo = static_cast<unsigned>(dst & 0x0FU) - (src & 0x0FU) - carry;
+                carry = 0U;
+                if (lo > 9U) { // unsigned underflow == digit borrow
+                    lo = (lo + 10U) & 0x0FU;
+                    carry = 1U;
+                }
+                hi = static_cast<unsigned>(dst >> 4U) - (src >> 4U) - carry;
+                carry = 0U;
+                if (hi > 9U) {
+                    hi = (hi + 10U) & 0x0FU;
+                    carry = 1U;
+                }
+            } else {
+                lo = static_cast<unsigned>(dst & 0x0FU) + (src & 0x0FU) + carry;
+                carry = 0U;
+                if (lo > 9U) {
+                    lo -= 10U;
+                    carry = 1U;
+                }
+                hi = static_cast<unsigned>(dst >> 4U) + (src >> 4U) + carry;
+                carry = 0U;
+                if (hi > 9U) {
+                    hi -= 10U;
+                    carry = 1U;
+                }
+            }
+            const auto result = static_cast<std::uint8_t>((hi << 4U) | lo);
+            if (result != 0U) {
+                all_zero = false;
+            }
+            if (write_back) {
+                wb(es_, static_cast<std::uint16_t>(di_ + i), result);
+            }
+        }
+        assign_flag(flag_c, carry != 0U);
+        assign_flag(flag_z, all_zero);
+        take_cycles(7 + static_cast<int>(bytes) * 12);
+    }
+
+    void v30::exec_0f() {
+        // The V20/V30 extension group. Implemented: the bit-manipulation set
+        // (TEST1/CLR1/SET1/NOT1 by CL or immediate), the nibble rotates
+        // (ROL4/ROR4), and the packed-BCD strings (ADD4S/SUB4S/CMP4S). The
+        // bitfield ops (INS/EXT), FPO2 forms, and BRKEM 8080-emulation entry
+        // execute as no-ops (their operand bytes are consumed) until a title
+        // demands them.
+        const std::uint8_t extension = fetch8();
+        switch (extension) {
+        case 0x10U:   // TEST1 r/m8, CL
+        case 0x12U:   // CLR1 r/m8, CL
+        case 0x14U:   // SET1 r/m8, CL
+        case 0x16U:   // NOT1 r/m8, CL
+        case 0x18U:   // TEST1 r/m8, imm3
+        case 0x1AU:   // CLR1 r/m8, imm3
+        case 0x1CU:   // SET1 r/m8, imm3
+        case 0x1EU: { // NOT1 r/m8, imm3
+            fetch_modrm();
+            const std::uint8_t value = read_rm8();
+            const unsigned bit_source = (extension & 0x08U) != 0U ? fetch8() : get_reg8(1);
+            const std::uint8_t mask = static_cast<std::uint8_t>(1U << (bit_source & 7U));
+            switch (extension & 0x06U) {
+            case 0x00U: // TEST1: ZF = bit is clear; CF/OF cleared
+                assign_flag(flag_z, (value & mask) == 0U);
+                assign_flag(flag_c, false);
+                assign_flag(flag_o, false);
+                break;
+            case 0x02U: // CLR1
+                write_rm8(static_cast<std::uint8_t>(value & ~mask));
+                break;
+            case 0x04U: // SET1
+                write_rm8(static_cast<std::uint8_t>(value | mask));
+                break;
+            default: // 0x06: NOT1
+                write_rm8(static_cast<std::uint8_t>(value ^ mask));
+                break;
+            }
+            take_cycles(4 + ea_cycles());
+            break;
+        }
+        case 0x11U:   // TEST1 r/m16, CL
+        case 0x13U:   // CLR1 r/m16, CL
+        case 0x15U:   // SET1 r/m16, CL
+        case 0x17U:   // NOT1 r/m16, CL
+        case 0x19U:   // TEST1 r/m16, imm4
+        case 0x1BU:   // CLR1 r/m16, imm4
+        case 0x1DU:   // SET1 r/m16, imm4
+        case 0x1FU: { // NOT1 r/m16, imm4
+            fetch_modrm();
+            const std::uint16_t value = read_rm16();
+            const unsigned bit_source = (extension & 0x08U) != 0U ? fetch8() : get_reg8(1);
+            const auto mask = static_cast<std::uint16_t>(1U << (bit_source & 15U));
+            switch (extension & 0x06U) {
+            case 0x00U:
+                assign_flag(flag_z, (value & mask) == 0U);
+                assign_flag(flag_c, false);
+                assign_flag(flag_o, false);
+                break;
+            case 0x02U:
+                write_rm16(static_cast<std::uint16_t>(value & ~mask));
+                break;
+            case 0x04U:
+                write_rm16(static_cast<std::uint16_t>(value | mask));
+                break;
+            default:
+                write_rm16(static_cast<std::uint16_t>(value ^ mask));
+                break;
+            }
+            take_cycles(4 + ea_cycles());
+            break;
+        }
+        case 0x20U: // ADD4S
+            bcd_string_op(false, true);
+            break;
+        case 0x22U: // SUB4S
+            bcd_string_op(true, true);
+            break;
+        case 0x26U: // CMP4S
+            bcd_string_op(true, false);
+            break;
+        case 0x28U: { // ROL4 r/m8: AL low nibble rotates in from the right
+            fetch_modrm();
+            const std::uint8_t value = read_rm8();
+            const std::uint8_t al = get_reg8(0);
+            write_rm8(static_cast<std::uint8_t>((value << 4U) | (al & 0x0FU)));
+            set_reg8(0, static_cast<std::uint8_t>((al & 0xF0U) | (value >> 4U)));
+            take_cycles(13 + ea_cycles());
+            break;
+        }
+        case 0x2AU: { // ROR4 r/m8: AL low nibble rotates in from the left
+            fetch_modrm();
+            const std::uint8_t value = read_rm8();
+            const std::uint8_t al = get_reg8(0);
+            write_rm8(static_cast<std::uint8_t>(((al & 0x0FU) << 4U) | (value >> 4U)));
+            set_reg8(0, static_cast<std::uint8_t>((al & 0xF0U) | (value & 0x0FU)));
+            take_cycles(13 + ea_cycles());
+            break;
+        }
+        case 0x31U:        // INS reg, reg (bitfield insert)
+        case 0x33U:        // EXT reg, reg (bitfield extract)
+            fetch_modrm(); // operands consumed; no-op until needed
+            take_cycles(2);
+            break;
+        case 0x39U: // INS reg, imm4
+        case 0x3BU: // EXT reg, imm4
+            fetch_modrm();
+            static_cast<void>(fetch8());
+            take_cycles(2);
+            break;
+        default:
+            // FPO2 forms, BRKEM, and the remaining encodings: no-op.
             take_cycles(2);
             break;
         }

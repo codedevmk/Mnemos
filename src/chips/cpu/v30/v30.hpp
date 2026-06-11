@@ -28,10 +28,13 @@ namespace mnemos::chips::cpu {
     // (unset -> reads 0xFF, writes dropped). INTR vector acquisition routes
     // through an injected acknowledge callback (unset -> vector 0).
     //
-    // Deferred to later increments (docs/plans/2026-06-10-irem-m72-port.md):
-    // the V30 0F-prefix extension group (executes as a no-op), the 8080
-    // emulation mode, exact V30 cycle timing (costs here are first-order
-    // documented 8086-family values), and REP interruptibility.
+    // The V30 0F-prefix extension group implements the bit-manipulation set
+    // (TEST1/CLR1/SET1/NOT1), the nibble rotates (ROL4/ROR4), and the
+    // packed-BCD strings (ADD4S/SUB4S/CMP4S); the bitfield ops (INS/EXT) and
+    // BRKEM 8080-emulation entry are consumed as no-ops. Deferred to later
+    // increments (docs/plans/2026-06-10-irem-m72-port.md): those no-op forms,
+    // exact V30 cycle timing (costs here are first-order documented
+    // 8086-family values), and REP interruptibility.
     class v30 final : public icpu {
       public:
         // PSW (FLAGS) bits.
@@ -216,6 +219,12 @@ namespace mnemos::chips::cpu {
         void exec_group_fe();
         void exec_group_ff();
         void exec_string(std::uint8_t opcode);
+        void exec_0f();
+        // Packed-BCD string primitive shared by ADD4S/SUB4S/CMP4S: applies
+        // `subtract` digit arithmetic from DS:SI into ES:DI over CL digits,
+        // optionally writing the result back, and sets CF (digit borrow/carry
+        // out) and ZF (whole result zero).
+        void bcd_string_op(bool subtract, bool write_back) noexcept;
         void take_cycles(int cycles) noexcept { step_cycles_ += cycles; }
         // Cost of one resolved memory effective address (first-order).
         [[nodiscard]] int ea_cycles() const noexcept { return rm_is_reg_ ? 0 : 5; }
