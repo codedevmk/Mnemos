@@ -6,6 +6,12 @@
 // flags-mask fields drive test selection and the flags compare; the optional
 // MNEMOS_V30_FLAGS_MASK (hex) is ANDed on top. Cycle-count and bus-order
 // comparison arrive with the timing increment (plan A3/A4).
+//
+// Known deviation (the corpus's remaining red): on a divide fault the V20
+// pushes flags carrying the internal division algorithm's residue; Mnemos
+// pushes the pre-instruction flags. Only the two pushed flag bytes differ
+// (DIV/IDIV trap cases in F6.6/F6.7/F7.6/F7.7). Modelling the microcoded
+// division flag residue is deferred with the cycle-accuracy work.
 
 #include "v30.hpp"
 
