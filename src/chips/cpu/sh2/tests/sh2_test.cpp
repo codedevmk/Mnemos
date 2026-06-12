@@ -666,6 +666,66 @@ TEST_CASE("sh2 load-use interlock adds one cycle when the next op reads the load
     }
 }
 
+TEST_CASE("sh2 load-use interlock covers LDC.L @Rn+,SR feeding T consumers") {
+    struct result final {
+        int load_cycles{};
+        int use_cycles{};
+        sh2::registers regs{};
+    };
+
+    const auto run_pair = [](std::uint16_t consumer, bool model,
+                             std::uint32_t sr_value = sh2::sr_t) {
+        machine m;
+        m.cpu.set_load_use_interlock(model);
+        auto r = m.cpu.cpu_registers();
+        r.r[1] = 0x3000U;
+        r.r[2] = 5U;
+        r.r[3] = 7U;
+        r.pc = 0x1000U;
+        m.cpu.set_registers(r);
+        m.w32(0x3000U, sr_value);
+        m.load(0x1000U, {0x4107U, consumer}); // LDC.L @R1+,SR ; <consumer>
+
+        result out;
+        out.load_cycles = m.cpu.step_instruction();
+        out.use_cycles = m.cpu.step_instruction();
+        out.regs = m.cpu.cpu_registers();
+        return out;
+    };
+
+    SECTION("MOVT reads the loaded T bit") {
+        const result res = run_pair(0x0229U, true); // MOVT R2
+        CHECK(res.load_cycles == 3);
+        CHECK(res.use_cycles == 2);
+        CHECK(res.regs.r[1] == 0x3004U);
+        CHECK(res.regs.r[2] == 1U);
+    }
+    SECTION("the SR/T interlock is off by default") {
+        const result res = run_pair(0x0229U, false); // MOVT R2
+        CHECK(res.load_cycles == 3);
+        CHECK(res.use_cycles == 1);
+        CHECK(res.regs.r[2] == 1U);
+    }
+    SECTION("ADDC consumes T as carry-in") {
+        const result res = run_pair(0x323EU, true); // ADDC R3,R2
+        CHECK(res.load_cycles == 3);
+        CHECK(res.use_cycles == 2);
+        CHECK(res.regs.r[2] == 13U);
+    }
+    SECTION("BT consumes T for branch direction") {
+        const result res = run_pair(0x8900U, true); // BT +0
+        CHECK(res.load_cycles == 3);
+        CHECK(res.use_cycles == 4); // taken branch base 3 + load-use interlock
+        CHECK(res.regs.pc == 0x1006U);
+    }
+    SECTION("T producers that do not read old T are not charged") {
+        const result res = run_pair(0x0008U, true); // CLRT
+        CHECK(res.load_cycles == 3);
+        CHECK(res.use_cycles == 1);
+        CHECK((res.regs.sr & sh2::sr_t) == 0U);
+    }
+}
+
 TEST_CASE("sh2 load-use interlock exempts a following MAC") {
     machine m;
     m.cpu.set_load_use_interlock(true);
