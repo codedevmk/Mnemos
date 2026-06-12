@@ -102,6 +102,12 @@ namespace mnemos::chips::cpu {
         constexpr int divu_normal_cycles = 39;
         constexpr int divu_overflow_cycles = 6;
 
+        // SBYCR ($FFFFFE91, window offset 0x91): the standby control register.
+        // MSTP2 (bit 2) module-stops the DIVU -- its clock halts, so an in-flight
+        // divide freezes (state preserved) until the bit clears.
+        constexpr std::uint32_t sbycr_off = 0x91U;
+        constexpr std::uint8_t sbycr_mstp2 = 0x04U;
+
         // Bump on EVERY save_state layout change (per ADR-0021: pre-release
         // states need not stay loadable, but save/load must change together and
         // old blobs must fail the ok() gate, not load wrong). v4 covers SCI,
@@ -551,8 +557,8 @@ namespace mnemos::chips::cpu {
     }
 
     void sh2_peripherals::divu_advance(std::uint64_t cycles) noexcept {
-        if (divu_cycles_remaining_ <= 0) {
-            return;
+        if (divu_cycles_remaining_ <= 0 || (regs_[sbycr_off] & sbycr_mstp2) != 0U) {
+            return; // nothing pending, or the DIVU clock is module-stopped
         }
         if (cycles < static_cast<std::uint64_t>(divu_cycles_remaining_)) {
             divu_cycles_remaining_ -= static_cast<int>(cycles);
@@ -728,8 +734,8 @@ namespace mnemos::chips::cpu {
 
     std::uint64_t sh2_peripherals::consume_divu_access_wait(std::uint32_t addr,
                                                             bool is_read) noexcept {
-        if (!in_divu_registers(addr)) {
-            return 0U;
+        if (!in_divu_registers(addr) || (regs_[sbycr_off] & sbycr_mstp2) != 0U) {
+            return 0U; // not DIVU, or the DIVU is module-stopped (frozen, no stall)
         }
         // An access during an in-flight divide stalls until it completes; this
         // dominates and consumes the write-then-read penalty.

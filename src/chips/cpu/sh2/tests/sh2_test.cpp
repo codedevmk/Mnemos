@@ -2193,6 +2193,19 @@ TEST_CASE("sh2_peripherals DIVU pending result survives state round-trip") {
     CHECK(read_peripheral32(q, 0xFFFFFF10U) == 2U);
 }
 
+TEST_CASE("sh2_peripherals DIVU module-stop (SBYCR.MSTP2) freezes the divider") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    write_peripheral32(p, 0xFFFFFF00U, 7U);           // DVSR
+    write_peripheral32(p, 0xFFFFFF04U, 100U);         // DVDNT -> starts a 39-cycle divide
+    p.write8(0xFFFFFE91U, 0x04U);                     // SBYCR.MSTP2: stop the DIVU clock
+    p.tick(100U);                                     // would normally complete; frozen instead
+    CHECK(read_peripheral32(p, 0xFFFFFF04U) == 100U); // not yet divided
+    p.write8(0xFFFFFE91U, 0x00U);                     // clear MSTP2: the clock resumes
+    p.tick(39U);
+    CHECK(read_peripheral32(p, 0xFFFFFF04U) == 14U); // now it completes
+    CHECK(read_peripheral32(p, 0xFFFFFF10U) == 2U);  // remainder
+}
+
 TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of crashing") {
     // $80000000:00000000 / $FFFFFFFF asks for +2^63: the one quotient that does
     // not fit the host's int64 either. The divider must take the overflow path
