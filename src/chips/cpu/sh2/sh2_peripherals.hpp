@@ -76,7 +76,8 @@ namespace mnemos::chips::cpu {
         std::uint64_t tick(std::uint64_t cycles) noexcept;
         [[nodiscard]] onchip_irq pending_onchip_irq() const noexcept;
         [[nodiscard]] watchdog_reset_request consume_watchdog_reset() noexcept;
-        [[nodiscard]] std::uint64_t consume_divu_access_wait(std::uint32_t addr) noexcept;
+        [[nodiscard]] std::uint64_t consume_divu_access_wait(std::uint32_t addr,
+                                                             bool is_read) noexcept;
         void reset() noexcept;
         void reset_preserving_watchdog_status() noexcept;
 
@@ -93,15 +94,20 @@ namespace mnemos::chips::cpu {
         std::array<std::uint8_t, window_size> regs_{};
 
         // SCI -- serial communication interface ($FE00-$FE05). This slice models
-        // software-visible data/status flag generation; byte-rate baud scheduling
-        // and board-level links are kept outside this on-chip block.
-        std::uint8_t sci_smr_{};      // FE00 serial mode
-        std::uint8_t sci_brr_{0xFFU}; // FE01 bit-rate
-        std::uint8_t sci_scr_{};      // FE02 control
-        std::uint8_t sci_tdr_{0xFFU}; // FE03 transmit data
-        std::uint8_t sci_ssr_{0x84U}; // FE04 status (TDRE | TEND after reset)
-        std::uint8_t sci_rdr_{};      // FE05 receive data
-        int sci_tx_cycles_{};         // remaining coarse transmit-complete ticks
+        // software-visible data/status flag generation with hardware-accurate
+        // SSR read-then-write-0 clear semantics. NOT modelled (no 32X host
+        // surface): the master<->slave serial LINK (TxD/RxD/SCK between the two
+        // SH-2s -- a real board wire, but 32X software uses the COMM registers
+        // for inter-CPU traffic), and bit-rate BRR/baud waveform pacing. Tracked
+        // under X5; revisit only if a title is found driving the SCI link.
+        std::uint8_t sci_smr_{};                    // FE00 serial mode
+        std::uint8_t sci_brr_{0xFFU};               // FE01 bit-rate
+        std::uint8_t sci_scr_{};                    // FE02 control
+        std::uint8_t sci_tdr_{0xFFU};               // FE03 transmit data
+        std::uint8_t sci_ssr_{0x84U};               // FE04 status (TDRE | TEND after reset)
+        std::uint8_t sci_rdr_{};                    // FE05 receive data
+        int sci_tx_cycles_{};                       // remaining coarse transmit-complete ticks
+        mutable std::uint8_t sci_ssr_read_flags_{}; // SSR status bits observed by a read
 
         // FRT -- free-running timer ($FE10-$FE17). A 16-bit counter clocked off a
         // TCR-selected prescale of the SH-2 clock; matches against OCRA/OCRB and
@@ -192,6 +198,7 @@ namespace mnemos::chips::cpu {
         bool divu_pending_overflow_{};
         std::uint32_t divu_pending_quotient_{};
         std::uint32_t divu_pending_remainder_{};
+        bool divu_post_write_{}; // a DIVU read right after a write costs +1 cycle
         void divu_run_32() noexcept;
         void divu_run_64() noexcept;
         void divu_start(bool overflow, std::uint32_t quotient, std::uint32_t remainder) noexcept;

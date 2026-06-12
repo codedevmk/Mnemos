@@ -42,12 +42,12 @@ and the `R#` cross-reference to the risk register where one exists.
 
 ## Progress
 
-- **Implemented-system hardware items: 0 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
+- **Implemented-system hardware items: 1 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
 - **Unbuilt systems: 0 / 9 complete**
 
 ---
 
-## Sega 32X — 0 / 8
+## Sega 32X — 1 / 8
 
 The heaviest cluster and the shortest path to 32X correctness: the SH-2 timing tail +
 on-chip interrupt delivery. This is why Star Wars / Space Harrier / After Burner stay
@@ -55,15 +55,15 @@ black. Ties to the hard-problems board (SH-2 cycle-true).
 
 #### CPU — core / timing
 - [~] **X2** Per-instruction cycle-accurate SH-2 timing — local slice wires fixed-state costs for delayed/non-delayed branches, TRAPA/RTE/SLEEP, system-register memory forms, TAS, MAC/multiply minima, and GBR byte-immediate ops; load-use/cache/bus waits and variable multiplier upper bounds remain · PARTIAL · **CRIT** · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp`
-- [~] **X1** SH-2 address-error exception — local slices vector odd fetches, normal and delay-slot misaligned word/long data accesses, PC-relative on-chip loads, and SH7604 on-chip byte/long access-class faults through vector 9; cache/address-array spaces and stacking-fault recursion remain unmodeled · PARTIAL · HIGH · M · vs Emu · R6 · Evidence: `progress-analysis.md` R6 + `src/chips/cpu/sh2/sh2.cpp`
+- [~] **X1** SH-2 address-error exception — vectors odd fetches, normal and delay-slot misaligned word/long data accesses, PC-relative on-chip loads, and SH7604 on-chip byte/long access-class faults through vector 9. Deferred (no/low 32X surface): stacking-fault recursion (pathological — a misaligned SP during exception entry; no game path) and cache purge/address-array access-class faults (no 32X code touches `$40000000`/`$60000000`, and the `$C0000000` data array is the 32X's cache-as-RAM scratch which must **not** fault) · PARTIAL · HIGH · M · vs Emu · R6 · Evidence: `progress-analysis.md` R6 + `src/chips/cpu/sh2/sh2.cpp`
 - [~] **X3** SH-2 ↔ SH-2 bus-lock / contention stall timing — local slices add a board-provided bus-wait hook, charge `TAS.B` locks on shared 32X SDRAM/framebuffer/COMM ranges, and deterministically arbitrate same-cycle dual-SH-2 TAS locks; ordinary memory waits, full DMA/VDP contention, and cache-hit penalties remain · PARTIAL · HIGH · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/manifests/sega32x/sega32x_system.cpp`
 
 #### CPU — on-chip peripherals
-- [~] **X4** INTC full interrupt delivery — local slice wires DMAC-end, DIVU-OVFI, WDT ITI, and raw SCI flag delivery · PARTIAL · **CRIT** · M · vs Emu · R1 · Evidence: `progress-analysis.md` R1 + `src/chips/cpu/sh2/sh2_peripherals.hpp`
-- [~] **X5** SCI serial controller — local slice models SMR/BRR/SCR/SSR/TDR/RDR defaults/storage, coarse TDR transmit completion flags, RDR receive/error/overrun latching through `sci_receive_byte`, and ERI/RXI/TXI/TEI delivery; exact BRR/baud pacing, serial pin/link integration, and full SSR read-clear semantics remain · PARTIAL · MED · M · vs Emu · R10 · Evidence: `progress-analysis.md` R10 + `src/chips/cpu/sh2/sh2_peripherals.hpp`
+- [x] **X4** INTC full interrupt delivery — the on-chip INTC arbitrates and delivers FRT, DIVU-OVFI, DMAC transfer-end, WDT ITI, and SCI ERI/RXI/TXI/TEI by IPRA/IPRB priority + VCR vectors (a zero VCR is a valid vector, masked only by IPR). The 32X's VINT/HINT/CMD/PWM are the manifest's external `set_irq`/IRL path and NMI has no Mars consumer · DONE · **CRIT** · M · vs Emu · R1 · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp` `pending_onchip_irq`
+- [~] **X5** SCI serial controller — register-visible SMR/BRR/SCR/SSR/TDR/RDR, coarse TDR transmit completion, RDR receive/error/overrun via `sci_receive_byte`, ERI/RXI/TXI/TEI delivery, and hardware-accurate SSR read-then-write-0 clear (TEND read-only). Deferred (no 32X host surface): the master/slave serial LINK (TxD/RxD/SCK between the cores — 32X software uses the COMM registers for inter-CPU traffic) and BRR baud-rate waveform pacing · PARTIAL · MED · M · vs Emu · R10 · Evidence: `progress-analysis.md` R10 + `src/chips/cpu/sh2/sh2_peripherals.cpp`
 - [~] **X6** DMAC request/channel timing + bus-wait metering — local slices report per-unit source/destination bus waits through the board callback, pace cycle-steal as one transfer unit per tick, cap burst-mode units per tick (resuming until the block drains), arbitrate DMAOR fixed/round-robin channel priority, and latch normalized DREQ edges; external pin electrical timing/DACK handshakes and full 32X DMA/VDP/shared-bus contention policy remain · PARTIAL · MED · M · vs Emu · R11 · Evidence: `progress-analysis.md` R11 + `src/chips/cpu/sh2/sh2_peripherals.cpp`
-- [~] **X7** WDT watchdog reset output — local slice sets RSTCSR.WOVF, resets WTCNT/WTCSR when RSTE is clear, and requests a power-on/manual SH-2 internal reset when RSTE is set; external 128-cycle WDTOVF pin pulse/system-reset wiring remains · PARTIAL · MED · S · vs Emu · R11 · Evidence: `progress-analysis.md` R11 + `src/chips/cpu/sh2/sh2_peripherals.cpp`
-- [~] **X8** DIVU busy-cycle model — local slice delays normal results for 39 cycles and overflow results/OVFI for 6 cycles, serializes in-flight divides, and stalls SH-2 DIVU register accesses until completion; undefined sub-32-bit DIVU accesses, post-write one-cycle read extension, and module-stop behavior remain · PARTIAL · MED · S · vs Emu · Evidence: `src/chips/cpu/sh2/sh2_peripherals.hpp`
+- [~] **X7** WDT watchdog reset output — sets RSTCSR.WOVF, resets WTCNT/WTCSR when RSTE is clear, requests a power-on/manual SH-2 internal reset when RSTE is set, and the 32X machine rebases its pacing anchors across that self-reset. Deferred (no 32X board wire): the external 128-cycle WDTOVF pin pulse + board-level system-reset circuit · PARTIAL · MED · S · vs Emu · R11 · Evidence: `progress-analysis.md` R11 + `src/chips/cpu/sh2/sh2_peripherals.cpp`
+- [~] **X8** DIVU busy-cycle model — 39-cycle normal / 6-cycle overflow result maturation, serialized in-flight divides, register-access stall until completion, and the SH7604 write-then-read +1-cycle penalty. Deferred (undefined / low value): sub-32-bit byte/word DIVU lanes (hardware-undefined — not a contract) and MSTP2 module-stop (standby-register gated, no game consumer) · PARTIAL · MED · S · vs Emu · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp`
 
 > Done (no action): SH-2 ISA (60 mnemonics), both CPUs (threaded), all VDP modes,
 > palette/autofill/double-buffer, PWM, comm/adapter bridge, VINT/HINT/CMD/PWM, MARS, FRT.
@@ -184,7 +184,7 @@ parity-grade for the new machine. Listed prerequisites still apply.
 
 ## Suggested critical path (correctness before breadth)
 
-1. **32X timing/INTC cluster** — X4, X2, X1, X3 (2 CRIT + 2 HIGH in one subsystem).
+1. **32X timing cluster** — X2, X1, X3 (X4 INTC delivery done; X2 cycle-true timing + X3 contention are the remaining CRIT/HIGH tail, ADR-0011-deferred).
 2. **Sega CD CHD** — D1 (unblocks the common modern disc format).
 3. **SMS YM2413** — S1 (restores FM audio; self-contained).
 4. **Address-error exceptions** — G1 + X1 (shared 68K + SH-2 work; G1 also fixes Sega CD sub-CPU).

@@ -48,7 +48,7 @@ namespace mnemos::chips::cpu {
     // before the external bus so each core keeps its own peripheral state.
     std::uint8_t sh2::rd8(std::uint32_t a) noexcept {
         if (sh2_peripherals::in_window(a)) {
-            account_onchip_access_wait(a);
+            account_onchip_access_wait(a, true);
             return peripherals_.read8(a);
         }
         return bus_ != nullptr ? bus_->read8(a) : 0xFFU;
@@ -66,7 +66,7 @@ namespace mnemos::chips::cpu {
         const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
-                account_onchip_access_wait(a);
+                account_onchip_access_wait(a, true);
             }
             const auto read_byte = [this](std::uint32_t addr) noexcept {
                 return sh2_peripherals::in_window(addr)
@@ -82,7 +82,7 @@ namespace mnemos::chips::cpu {
         const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
-                account_onchip_access_wait(a);
+                account_onchip_access_wait(a, false);
             }
             const auto write_byte = [this](std::uint32_t addr, std::uint8_t value) noexcept {
                 if (sh2_peripherals::in_window(addr)) {
@@ -103,7 +103,7 @@ namespace mnemos::chips::cpu {
         const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
-                account_onchip_access_wait(a);
+                account_onchip_access_wait(a, true);
             }
             const auto read_byte = [this](std::uint32_t addr) noexcept {
                 return sh2_peripherals::in_window(addr)
@@ -120,7 +120,7 @@ namespace mnemos::chips::cpu {
         const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
-                account_onchip_access_wait(a);
+                account_onchip_access_wait(a, false);
             }
             const auto write_byte = [this](std::uint32_t addr, std::uint8_t value) noexcept {
                 if (sh2_peripherals::in_window(addr)) {
@@ -1142,8 +1142,8 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    void sh2::account_onchip_access_wait(std::uint32_t address) noexcept {
-        const std::uint64_t wait = peripherals_.consume_divu_access_wait(address);
+    void sh2::account_onchip_access_wait(std::uint32_t address, bool is_read) noexcept {
+        const std::uint64_t wait = peripherals_.consume_divu_access_wait(address, is_read);
         if (wait != 0U) {
             cycles_ = add_bounded_wait_cycles(cycles_, wait);
         }

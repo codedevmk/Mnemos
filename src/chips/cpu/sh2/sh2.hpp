@@ -206,7 +206,7 @@ namespace mnemos::chips::cpu {
             }
         }
         void add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes, bool locked);
-        void account_onchip_access_wait(std::uint32_t address) noexcept;
+        void account_onchip_access_wait(std::uint32_t address, bool is_read) noexcept;
 
         // ---- exceptions + interrupts ----
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
