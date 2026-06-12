@@ -584,6 +584,44 @@ TEST_CASE("sh2 TAS.B adds board-provided locked bus wait states") {
     CHECK(m.ram[0x3000] == 0x80U);
 }
 
+TEST_CASE("sh2 charges ordinary-access bus contention only when metering is enabled") {
+    // X3: an ordinary load/store reports an UNLOCKED access through the bus-wait
+    // callback, but only when the board opted into contention metering. The
+    // callback is otherwise reserved for locked TAS reservations, so the default
+    // hot path stays free of per-access metering.
+    machine m;
+    int calls = 0;
+    std::uint8_t seen_bytes = 0U;
+    bool seen_locked = true;
+    m.cpu.set_bus_wait_callback([&](std::uint32_t, std::uint8_t bytes, bool locked) {
+        ++calls;
+        seen_bytes = bytes;
+        seen_locked = locked;
+        return 5;
+    });
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x3000U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.w32(0x3000U, 0x12345678U);
+    m.load(0x1000U, {0x6212U}); // MOV.L @R1,R2
+
+    SECTION("metering off (default): ordinary access is not metered") {
+        CHECK(m.cpu.step_instruction() == 1); // base load only, no wait charged
+        CHECK(calls == 0);
+        CHECK(m.cpu.cpu_registers().r[2] == 0x12345678U);
+    }
+
+    SECTION("metering on: the unlocked long access is charged") {
+        m.cpu.set_shared_contention_metering(true);
+        CHECK(m.cpu.step_instruction() == 6); // base 1 + 5-cycle bus wait
+        CHECK(calls == 1);
+        CHECK(seen_bytes == 4U);
+        CHECK_FALSE(seen_locked);
+        CHECK(m.cpu.cpu_registers().r[2] == 0x12345678U);
+    }
+}
+
 TEST_CASE("sh2 DIV1 performs one non-restoring divide step") {
     machine m;
     auto r = m.cpu.cpu_registers();

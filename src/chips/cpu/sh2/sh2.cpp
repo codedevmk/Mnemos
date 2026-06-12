@@ -181,6 +181,7 @@ namespace mnemos::chips::cpu {
             (tas && sh2_peripherals::in_window(address))) {
             return signal_address_error();
         }
+        record_data_access(address, 1U, tas);
         return true;
     }
 
@@ -192,6 +193,7 @@ namespace mnemos::chips::cpu {
              (sh2_peripherals::in_window(address) || sh2_peripherals::in_window(address + 1U)))) {
             return signal_address_error();
         }
+        record_data_access(address, 2U, false);
         return true;
     }
 
@@ -207,6 +209,7 @@ namespace mnemos::chips::cpu {
             in_low_onchip_space(address) || in_low_onchip_space(address + 3U)) {
             return signal_address_error();
         }
+        record_data_access(address, 4U, false);
         return true;
     }
 
@@ -660,7 +663,7 @@ namespace mnemos::chips::cpu {
                 set_t(v == 0U);
                 wr8(addr, static_cast<std::uint8_t>(v | 0x80U));
                 account_cycles(4);
-                add_external_wait_cycles(addr, 1U, true);
+                add_external_wait_cycles(addr, 1U, true); // locked RMW bus reservation
                 return;
             }
             case 0x0B: // JSR @Rn -- call (delayed)
@@ -1163,6 +1166,19 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    void sh2::record_data_access(std::uint32_t address, std::uint8_t bytes, bool locked) noexcept {
+        // Locked (TAS) reservations are charged inline at the access site; only
+        // ordinary accesses are logged here, and only when the board opted in.
+        if (!meter_shared_contention_ || locked) {
+            return;
+        }
+        if (shared_access_count_ < static_cast<int>(shared_accesses_.size())) {
+            shared_accesses_[static_cast<std::size_t>(shared_access_count_)] = {address, bytes,
+                                                                                locked};
+            ++shared_access_count_;
+        }
+    }
+
     void sh2::account_onchip_access_wait(std::uint32_t address, bool is_read) noexcept {
         const std::uint64_t wait = peripherals_.consume_divu_access_wait(address, is_read);
         if (wait != 0U) {
@@ -1318,7 +1334,8 @@ namespace mnemos::chips::cpu {
     }
 
     int sh2::step_instruction() {
-        cycles_ = 1; // SH-2 base: one instruction per cycle on a hit
+        cycles_ = 1;              // SH-2 base: one instruction per cycle on a hit
+        shared_access_count_ = 0; // X3: per-instruction shared-access log
 
         // Interrupt acceptance happens at the instruction boundary, unless a
         // preceding control-register load inhibits it for one instruction (code
@@ -1366,6 +1383,14 @@ namespace mnemos::chips::cpu {
                 : fetch_slow(pc_);
         pc_ += 2U;
         exec(op);
+
+        // X3: charge shared-bus contention now that all base-cycle floors are
+        // applied, so the board's wait adds on top (charging inside the access
+        // would be swallowed by a later account_cycles floor).
+        for (int i = 0; i < shared_access_count_; ++i) {
+            const shared_access& a = shared_accesses_[static_cast<std::size_t>(i)];
+            add_external_wait_cycles(a.address, a.bytes, a.locked);
+        }
 
         const std::uint64_t wait = peripherals_.tick(static_cast<std::uint64_t>(cycles_));
         cycles_ = add_bounded_wait_cycles(cycles_, wait);
