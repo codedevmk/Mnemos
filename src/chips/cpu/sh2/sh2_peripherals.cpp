@@ -878,8 +878,12 @@ namespace mnemos::chips::cpu {
 
     sh2_peripherals::onchip_irq sh2_peripherals::pending_onchip_irq() const noexcept {
         onchip_irq best{};
+        // A source is masked by its IPR priority (level 0 = masked), not by its
+        // vector: VCR/VCRDIV = 0 is a legal vector (VBR + 0), so it must not be
+        // suppressed here. Callers only consider() a source that is actually
+        // requesting (enable bit + flag), so level alone gates acceptance.
         const auto consider = [&best](int level, std::uint8_t vector) noexcept {
-            if (level > best.level && vector != 0U) {
+            if (level > best.level) {
                 best = {level, vector};
             }
         };

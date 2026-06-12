@@ -1265,7 +1265,7 @@ TEST_CASE("sh2_peripherals INTC presents the FRT overflow interrupt") {
     CHECK(irq.vector == 0x70U);
 }
 
-TEST_CASE("sh2_peripherals INTC gates the FRT interrupt on TIER, priority and vector") {
+TEST_CASE("sh2_peripherals INTC gates the FRT interrupt on TIER and priority") {
     auto overflow = [] {
         mnemos::chips::cpu::sh2_peripherals q;
         q.write8(0xFFFFFE60U, 0x05U); // priority 5
@@ -1289,9 +1289,13 @@ TEST_CASE("sh2_peripherals INTC gates the FRT interrupt on TIER, priority and ve
         CHECK(p.pending_onchip_irq().level == 0);
     }
     {
+        // A zero vector (VBR + 0) is still a legal vector, not a mask: TIER and
+        // priority gate delivery, VCR does not -- the source is still presented.
         auto p = overflow();
-        p.write8(0xFFFFFE68U, 0x00U); // vector 0
-        CHECK(p.pending_onchip_irq().level == 0);
+        p.write8(0xFFFFFE68U, 0x00U); // VCRD overflow vector = 0
+        const auto irq = p.pending_onchip_irq();
+        CHECK(irq.level == 5);
+        CHECK(irq.vector == 0x00U);
     }
 }
 
