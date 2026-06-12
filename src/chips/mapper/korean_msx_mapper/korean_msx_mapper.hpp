@@ -12,7 +12,7 @@ namespace mnemos::chips::mapper {
     // Korean MSX 8 KiB memory mapper for the Sega Master System (the "Korean MSX"
     // mapper used by the Korean MSX-to-SMS ports -- Cyborg Z, Penguin Adventure,
     // the Zemina titles). Spec per SMS Power and the community emulator references
-    // (see THIRD-PARTY.md):
+    // (see THIRD-PARTY-REFERENCES.md):
     //
     //   - 8 KiB banks (not the Sega/Codemasters 16 KiB).
     //   - $0000-$3FFF is fixed to ROM bank 0 (the first 16 KiB).

@@ -1,6 +1,6 @@
 // Functional V30 conformance against the public per-instruction JSON corpus
 // for the 8088/V20 CPU family (initial/final register + RAM images per test).
-// Data-gated by MNEMOS_V30_TESTS_DIR (see THIRD-PARTY.md); files may be plain
+// Data-gated by MNEMOS_V30_TESTS_DIR (see THIRD-PARTY-REFERENCES.md); files may be plain
 // .json or gzipped .json.gz (decoded with the in-tree inflate). When the
 // corpus ships a metadata.json, its per-opcode (and per-group-reg) status and
 // flags-mask fields drive test selection and the flags compare; the optional
@@ -320,7 +320,7 @@ TEST_CASE("v30 passes the public per-instruction 8088/V20 conformance corpus",
     if (dir_env == nullptr || std::string{dir_env}.empty() ||
         !std::filesystem::is_directory(dir_env)) {
         SKIP("set MNEMOS_V30_TESTS_DIR to a directory of per-instruction 8088/V20 "
-             "test JSON files (see THIRD-PARTY.md)");
+             "test JSON files (see THIRD-PARTY-REFERENCES.md)");
     }
     const std::filesystem::path dir{dir_env};
 

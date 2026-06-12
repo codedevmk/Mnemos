@@ -7,7 +7,7 @@ and /EXROM lines — select one chip-select region per area of the address map.
 ## Behavioral references
 
 - MOS 906114-01 / 82S100 truth table.
-- Community-documented open-bus / ultimax conventions (see THIRD-PARTY.md).
+- Community-documented open-bus / ultimax conventions (see THIRD-PARTY-REFERENCES.md).
 - *Mapping the C64*, Appendix H.
 
 ## Coverage

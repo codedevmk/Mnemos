@@ -103,14 +103,14 @@ Files: `genesis_vdp.cpp` (lines 899, 912, 914, 933–934 region); `tests/genesis
 Proves: IM2 sprites at SAT Y=256 render at screen top; IM1 sprites render at field-line Y with identical fields; non-interlace output unchanged (harness corpus configs with interlace off must be bit-identical to phase 1); golden boot hashes unchanged (boot screens are non-interlaced).
 
 **Phase 3 — Interlace plane audit (investigation PR, fixes only if confirmed).**
-Scope: the three suspects in §3 (IM2 hscroll indexing, IM2 VSRAM units, SAT Y/X masks), each backed by a hardware reference (behavioral references only — no code lifting; acknowledge sources in `THIRD-PARTY.md` per AGENTS.md). Each confirmed fix gets a directed TEST_CASE and a lockstep harness-reference update, as in phase 2.
+Scope: the three suspects in §3 (IM2 hscroll indexing, IM2 VSRAM units, SAT Y/X masks), each backed by a hardware reference (behavioral references only — no code lifting; acknowledge sources in `THIRD-PARTY-REFERENCES.md` per AGENTS.md). Each confirmed fix gets a directed TEST_CASE and a lockstep harness-reference update, as in phase 2.
 Proves: every interlace plane-path change is individually pinned by a directed test and leaves non-interlace harness configs bit-identical.
 
 Sequencing rule: **never change semantics and structure in the same PR** — phase 1 is structure-only under the unchanged-semantics oracle; phases 2–3 are semantics-only with directed tests as the new oracle.
 
 ### 5. Other hot-path / correctness observations (candidate follow-ups, explicitly out of scope)
 
-1. **Per-line SAT re-walk:** `render_sprites` walks up to 80 SAT entries with 4 `vram_read16` each on every line (genesis_vdp.cpp:892–897), fetching all four words even for off-line sprites. Hardware does a Y-only pre-scan; fetching `w0`/`w1` first and deferring `w2`/`w3` (or a per-frame Y-cache rebuilt on SAT writes — must be a *view*, not storage, per `OPTIMIZATIONS.md`) is the next hot-path win.
+1. **Per-line SAT re-walk:** `render_sprites` walks up to 80 SAT entries with 4 `vram_read16` each on every line (genesis_vdp.cpp:892–897), fetching all four words even for off-line sprites. Hardware does a Y-only pre-scan; fetching `w0`/`w1` first and deferring `w2`/`w3` (or a per-frame Y-cache rebuilt on SAT writes — must be a *view*, not storage, per `docs/architecture/OPTIMIZATIONS.md`) is the next hot-path win.
 2. **Per-pixel `cram_to_rgb`:** the final resolve (genesis_vdp.cpp:1097–1101) recomputes the 5:6:5 pack per pixel; a 64×3-shade LUT rebuilt on `cram_write` would be a legitimate derived view.
 3. **Sprite-overflow early `break`** (line 920) abandons SAT evaluation entirely, which also skips later X=0 mask sprites; hardware semantics differ subtly.
 4. **H-scroll mode 1** (prohibited mode) is treated as full-screen (genesis_vdp.cpp:768–770); hardware behaves like a masked per-line fetch.

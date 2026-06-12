@@ -79,7 +79,7 @@ TEST_CASE("z80 passes the ZEXALL-SMS instruction exerciser", "[conformance][z80]
     const auto rom_path = get_env("MNEMOS_SMS_ZEXALL_ROM");
     if (!rom_path) {
         SKIP("set MNEMOS_SMS_ZEXALL_ROM to a zexall.sms / zexdoc.sms image "
-             "(GPLv2, not committed; see THIRD-PARTY.md)");
+             "(GPLv2, not committed; see THIRD-PARTY-REFERENCES.md)");
     }
 
     auto rom = read_file(fs::path(*rom_path));

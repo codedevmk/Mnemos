@@ -11,7 +11,7 @@ namespace mnemos::chips::mapper {
 
     // Korean "4x8K" multicart mapper for the Sega Master System (the single-
     // register XOR multicarts -- 128 Hap, Game Mo-eumjip 188 Hap). Spec per SMS
-    // Power and the community emulator references (see THIRD-PARTY.md):
+    // Power and the community emulator references (see THIRD-PARTY-REFERENCES.md):
     //
     //   - 8 KiB banks. $0000-$3FFF is fixed to ROM banks 0/1 (the first 16 KiB).
     //   - A single register at $2000 banks all four 8 KiB windows at once, each

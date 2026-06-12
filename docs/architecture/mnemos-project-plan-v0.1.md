@@ -30,7 +30,7 @@ This plan does not assign calendar dates. Effort is expressed in T-shirt sizes (
 
 - **Pure rewrite.** Mnemos is built green-field, not by porting an existing codebase.
 - **Single canonical workspace.** Mnemos lives in its own monorepo with no implicit dependency on any prior codebase.
-- **No code lift without re-review.** Any external code carried over MUST be re-evaluated against the Mnemos architecture and conventions before landing, and its source acknowledged in `THIRD-PARTY.md`.
+- **No code lift without re-review.** Any external code carried over MUST be re-evaluated against the Mnemos architecture and conventions before landing, and its source acknowledged in `THIRD-PARTY-REFERENCES.md`.
 - **AI agent participation is expected.** Multiple agents will contribute. Governance, naming, and layering rules are enforced via CI gates, not goodwill.
 
 ---

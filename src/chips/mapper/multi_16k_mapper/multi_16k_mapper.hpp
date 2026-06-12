@@ -11,7 +11,7 @@ namespace mnemos::chips::mapper {
 
     // Korean "Multi 16K" multicart mapper for the Sega Master System (the cart
     // "4-Pak All Action"). Spec per SMS Power and the community emulator
-    // references (see THIRD-PARTY.md):
+    // references (see THIRD-PARTY-REFERENCES.md):
     //
     //   - 16 KiB banks. THREE banked slots, with NO fixed region (even the first
     //     1 KiB at $0000-$03FF banks with slot 0, unlike the Sega mapper):

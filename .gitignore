@@ -11,15 +11,9 @@ compile_commands.json
 roms/
 firmware/
 
-# Scratch / debug artifacts. Canonical home is scratch/ -- headless --screenshot
-# framebuffers, VRAM/CRAM dumps, trace CSVs, ad-hoc logs, and coverage profraw
-# all belong there (see AGENTS.md "Scratch artifacts"). Cleared by
-# scripts/clean-scratch.ps1. Never committed.
-/scratch/
-# Legacy / session-specific scratch dirs: kept locally for in-flight debugging
-# (e.g. Genesis A/B traces) but never committed.
-scratch_sms/
-diverge_scratch/
+# Transient build/debug artifacts: canonical home is build/ (ADR-0025 rule 1) --
+# build/scratch/ holds headless --screenshot framebuffers, VRAM/CRAM dumps, trace
+# CSVs, ad-hoc logs, and coverage profraw. build/ is ignored above.
 # Catch-all for stray framebuffer dumps written outside scratch/.
 *.ppm
 
@@ -55,13 +49,19 @@ conan.lock
 *.profraw
 *.profdata
 
-# Local developer tooling lives in scripts/ and is not part of the committed
-# source -- machine-specific paths, ad-hoc diagnostic harnesses, build helpers.
-scripts/
+# Scripts are tracked + organized under scripts/{sub}/ (ADR-0025 rule 5). Only
+# machine-specific / local-only scripts stay out of history, by naming convention:
+scripts/local-*
+scripts/**/local-*
+scripts/**/*.local.*
+/scripts/local/
+# GPGX differential runners: local-only reference tooling. They name a third-party
+# oracle, so they stay out of committed history (THIRD-PARTY-REFERENCES.md / no-3rd-party-names
+# rule). Version a name-scrubbed copy under tools/ only if explicitly wanted.
+scripts/gpgx_*.c
 
 # Working/scratch documents that are not part of the public history
-docs/genesis-cycle-parity-audit.md
-docs/genesis-chipset-gap-audit.md
+docs/audit/
 *.obj
 
 # Session-local agent tooling (Ralph loop) — but the decision-capture

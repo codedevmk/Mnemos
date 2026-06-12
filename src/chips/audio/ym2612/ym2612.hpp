@@ -26,7 +26,7 @@ namespace mnemos::chips::audio {
     // key-scaling and SSG-EG), the eight FM algorithms with operator-0 feedback, LFO
     // tremolo, and the log-sine/exp output pipeline -- mixed per channel, soft-clipped,
     // and run through the analog low-pass into stereo samples. Built from the canonical
-    // hardware-verified model and tables (see THIRD-PARTY.md).
+    // hardware-verified model and tables (see THIRD-PARTY-REFERENCES.md).
     //
     // tick(cycles) advances the timer prescalers by that many YM master clocks; games
     // poll read_status() for timer overflow. step()/update() render audio (one stereo

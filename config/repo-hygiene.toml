@@ -1,0 +1,49 @@
+# Repository hygiene ruleset — the single source of truth for the structure
+# linter (tools/governance/repo_hygiene.py) and its three triggers: the Claude
+# PreToolUse write hook, the git pre-commit hook, and the CI gate. See ADR-0025.
+#
+# Editing a rule here changes all three enforcers at once (DRY). Keep it boring
+# and high-signal: the goal is to catch the common mess (a stray artifact, doc,
+# or source file in the wrong place), not to litigate every byte.
+
+# Rule 7: files whose top-level directory is listed here are exempt from rules 1-5.
+exempt_roots = [".claude", ".github", ".git"]
+
+# Rule 3 (root): the ONLY files permitted directly at the repository root.
+root_allowlist = [
+  ".clang-format", ".clang-tidy", ".editorconfig", ".gitattributes",
+  ".gitignore", ".gitmodules",
+  "CMakeLists.txt", "CMakePresets.json",
+  "README.md", "AGENTS.md", "CONSTITUTION.md",
+  "CODE_OF_CONDUCT.md", "CONTRIBUTING.md", "SECURITY.md",
+  "LICENSE", "LICENSE-chips", "THIRD-PARTY-REFERENCES.md", "THIRD_PARTY_NOTICES.md",
+]
+
+# Rule 1/6: transient build/debug artifacts. Never tracked; their only home is build/.
+transient_globs = [
+  "*.log", "*.ppm", "*.obj", "*.o", "*.tmp", "*.temp",
+  "*.profraw", "*.profdata", "*.exe", "*.dll", "*.pdb",
+]
+
+# Rule 2: compile/link source extensions must live under one of these roots.
+source_exts  = [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl"]
+source_roots = ["src/", "tests/", "tools/", "apm/", "extern/"]
+
+# Rule 3: loose documentation (*.md) belongs under docs/{category}/. Co-located
+# module docs (these basenames) and these established homes are exempt (pragmatic
+# reading per ADR-0025 — module NOTES/CAPSULE and the governance/metrics dirs stay).
+doc_exts              = [".md"]
+doc_allowed_basenames = ["README.md", "AGENTS.md", "NOTES.md", "CAPSULE.md", "ROMS.md"]
+doc_allowed_roots     = ["docs/", "constitution/", "metrics/", "cmake/", "extern/", "src/", "tests/", "tools/", "apm/"]
+
+# Rule 5: shell scripts belong under scripts/{sub}/ or a tooling/test/ci home.
+# (Python tooling is treated as tooling, not "scripts"; the root allowlist still
+# catches a stray root .py. Tighten here later if desired.)
+script_exts  = [".ps1", ".sh", ".bat", ".cmd"]
+script_roots = ["scripts/", "tools/", "tests/", "cmake/"]
+
+# Baseline ratchet: legacy violations grandfathered until relocated. Drained to
+# zero by the ADR-0025 cleanup pass (OPTIMIZATIONS.md -> docs/architecture/,
+# todo.md -> docs/architecture/apm-tracer-tasks.md). The linter now fails on ANY
+# violation; never add to this list.
+baseline = []

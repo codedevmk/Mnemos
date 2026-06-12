@@ -3,7 +3,7 @@
 #
 # Several tests need copyrighted material that is NEVER committed (system ROMs,
 # cartridge images, conformance corpora). Each one self-SKIPs unless an
-# environment variable points at the data (see THIRD-PARTY.md for corpus refs):
+# environment variable points at the data (see THIRD-PARTY-REFERENCES.md for corpus refs):
 #
 #   MNEMOS_SMS_ROM            an SMS cartridge image                  -> sms_boot_test
 #   MNEMOS_C64_ROM_DIR        dir with the three C64 system ROMs      -> c64_basic_boot_test

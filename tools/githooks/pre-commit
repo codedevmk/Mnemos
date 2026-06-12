@@ -1,0 +1,19 @@
+#!/bin/sh
+# Repo-hygiene pre-commit gate (ADR-0025). Rejects a commit that stages a file in
+# a non-compliant location. Single ruleset: config/repo-hygiene.toml.
+# Emergency bypass (discouraged): git commit --no-verify
+#
+# Installed by scripts/dev/install-hooks.* (sets core.hooksPath -> tools/githooks).
+
+# Fail open if python3 is unavailable; CI remains the authoritative backstop.
+command -v python3 >/dev/null 2>&1 || exit 0
+
+root=$(git rev-parse --show-toplevel) || exit 0
+python3 "$root/tools/governance/repo_hygiene.py" --staged
+# Block only on a real violation (exit 1). Exit 2 = linter/config error in a
+# degraded env (no tomllib, missing ruleset) -> fail open; CI is the backstop.
+if [ "$?" -eq 1 ]; then
+  echo "repo-hygiene: commit blocked -- relocate the file(s) above (ADR-0025; config/repo-hygiene.toml)." >&2
+  exit 1
+fi
+exit 0

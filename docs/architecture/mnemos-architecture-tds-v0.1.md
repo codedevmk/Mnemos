@@ -719,7 +719,7 @@ Three test tiers, all required to be green in CI:
 2. **Integration tests** — system-level. Boot a manifest, run N frames, assert state invariants.
 3. **Golden frame tests** — per known ROM. Boot, run recorded inputs, hash framebuffer at checkpoints, compare against committed hashes.
 
-A CPU implementation MUST pass its public conformance test suite (see `THIRD-PARTY.md` for the corpora used) before its containing system is considered viable.
+A CPU implementation MUST pass its public conformance test suite (see `THIRD-PARTY-REFERENCES.md` for the corpora used) before its containing system is considered viable.
 
 Sanitizer builds (ASan, UBSan, TSan) run nightly.
 

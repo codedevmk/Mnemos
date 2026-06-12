@@ -1,7 +1,7 @@
 # APM tracer sidecar -- a self-contained capability, deliberately outside src/
 # (the engine). It loads the emulator as a runtime plugin, injects a tagged
 # memory allocator, and observes execution from the outside. See
-# docs/architecture/apm-tracer-sidecar-spec.md and todo.md.
+# docs/architecture/apm-tracer-sidecar-spec.md and docs/architecture/apm-tracer-tasks.md.
 add_subdirectory(abi)
 add_subdirectory(memory)
 
