@@ -73,6 +73,7 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t rstcsr_reserved = 0x1FU;
         constexpr std::uint8_t wdt_key_wtcsr = 0xA5U; // write WTCSR / clear RSTCSR.WOVF
         constexpr std::uint8_t wdt_key_wtcnt = 0x5AU; // write WTCNT / RSTCSR.RSTE,RSTS
+        constexpr int wdtovf_pulse_cycles = 128;      // external WDTOVF pin low-pulse width
 
         // SCI ($FE00-$FE05) request bits. This block models register-visible
         // byte/status flag production; exact baud pacing is a later slice.
@@ -669,6 +670,12 @@ namespace mnemos::chips::cpu {
     void sh2_peripherals::advance_time(std::uint64_t cycles) noexcept {
         divu_advance(cycles);
 
+        if (wdtovf_pin_cycles_ > 0) { // the external WDTOVF pin pulse decays
+            wdtovf_pin_cycles_ = cycles >= static_cast<std::uint64_t>(wdtovf_pin_cycles_)
+                                     ? 0
+                                     : wdtovf_pin_cycles_ - static_cast<int>(cycles);
+        }
+
         // FRT: a free-running counter unless TCR selects the (unmodelled) external
         // clock.
         const int frt_prescale = frt_prescale_from_tcr(tcr_);
@@ -717,6 +724,11 @@ namespace mnemos::chips::cpu {
                     } else {
                         rstcsr_ =
                             static_cast<std::uint8_t>(rstcsr_ | rstcsr_wovf | rstcsr_reserved);
+                        // The external WDTOVF pin pulses low for 128 cycles on a
+                        // watchdog overflow (independent of RSTE). The 32X does
+                        // not wire it to a board reset, but the pin state is
+                        // pollable so a board/test can observe the edge.
+                        wdtovf_pin_cycles_ = wdtovf_pulse_cycles;
                         const bool internal_reset = (rstcsr_ & rstcsr_rste) != 0U;
                         const bool manual_reset = (rstcsr_ & rstcsr_rsts) != 0U;
                         reset_watchdog_counter_control();
@@ -1004,6 +1016,7 @@ namespace mnemos::chips::cpu {
         wtcsr_ovf_read_ = false;
         watchdog_reset_pending_ = false;
         watchdog_reset_kind_ = reset_kind::power_on;
+        wdtovf_pin_cycles_ = 0;
         dma_ = {};
         vcrdma_ = {};
         dmaor_ = 0U;

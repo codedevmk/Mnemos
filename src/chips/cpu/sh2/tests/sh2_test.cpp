@@ -1697,6 +1697,21 @@ TEST_CASE("sh2_peripherals WDT ignores a data write without the matching key") {
     CHECK(p.read8(0xFFFFFE81U) == 0x00U); // WTCNT unchanged
 }
 
+TEST_CASE("sh2_peripherals WDTOVF pin pulses on a watchdog overflow and decays") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    CHECK_FALSE(p.wdtovf_pin_asserted());
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU); // WTCNT = 0xFF
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U); // watchdog mode, TME, prescale 2
+    p.tick(2U);                   // overflow -> the WDTOVF pin asserts (128-cycle pulse)
+    CHECK(p.wdtovf_pin_asserted());
+    p.tick(127U);
+    CHECK(p.wdtovf_pin_asserted()); // still within the pulse
+    p.tick(1U);
+    CHECK_FALSE(p.wdtovf_pin_asserted()); // pulse elapsed
+}
+
 namespace {
     // A peripherals instance backed by a flat RAM bus the DMAC can transfer over.
     struct dmac_fixture final {
