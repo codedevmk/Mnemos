@@ -20,6 +20,16 @@ namespace mnemos::chips::cpu {
             return address >= onchip_high_base;
         }
 
+        // SH7604 cache-control address spaces: the associative purge area
+        // ($40000000-$5FFFFFFF) and the address-array area ($60000000-$7FFFFFFF,
+        // longword-only). Byte/word access (and any PC-relative or TAS access)
+        // to these is an address error. The data-array area ($C0000000) is NOT
+        // included: the 32X locks the cache and uses it as scratch RAM there, so
+        // an access is valid RAM, not a fault.
+        [[nodiscard]] constexpr bool in_cache_control_space(std::uint32_t address) noexcept {
+            return address >= 0x40000000U && address < 0x80000000U;
+        }
+
         [[nodiscard]] int add_bounded_wait_cycles(int cycles, std::uint64_t wait) noexcept {
             const auto room = static_cast<std::uint64_t>(std::numeric_limits<int>::max() - cycles);
             return wait > room ? std::numeric_limits<int>::max() : cycles + static_cast<int>(wait);
@@ -165,24 +175,35 @@ namespace mnemos::chips::cpu {
     }
 
     bool sh2::require_byte_data_access(std::uint32_t address, bool tas) {
-        if (in_high_onchip_space(address) || (tas && sh2_peripherals::in_window(address))) {
+        // Byte access to high on-chip space or a cache-control space faults; TAS
+        // additionally faults anywhere in the on-chip window.
+        if (in_high_onchip_space(address) || in_cache_control_space(address) ||
+            (tas && sh2_peripherals::in_window(address))) {
             return signal_address_error();
         }
         return true;
     }
 
     bool sh2::require_word_data_access(std::uint32_t address, bool pc_relative) {
-        if ((address & 1U) != 0U || (pc_relative && (sh2_peripherals::in_window(address) ||
-                                                     sh2_peripherals::in_window(address + 1U)))) {
+        // Word access faults when misaligned, in a cache-control space (those are
+        // longword-only), or PC-relative into the on-chip window.
+        if ((address & 1U) != 0U || in_cache_control_space(address) ||
+            (pc_relative &&
+             (sh2_peripherals::in_window(address) || sh2_peripherals::in_window(address + 1U)))) {
             return signal_address_error();
         }
         return true;
     }
 
     bool sh2::require_long_data_access(std::uint32_t address, bool pc_relative) {
+        // Longword access is the valid size for the address-array, so a normal
+        // long access there is fine; only a PC-relative long into a cache-control
+        // space or the on-chip window faults (alongside misalignment and the
+        // low on-chip space).
         if ((address & 3U) != 0U ||
             (pc_relative &&
-             (sh2_peripherals::in_window(address) || sh2_peripherals::in_window(address + 3U))) ||
+             (sh2_peripherals::in_window(address) || sh2_peripherals::in_window(address + 3U) ||
+              in_cache_control_space(address))) ||
             in_low_onchip_space(address) || in_low_onchip_space(address + 3U)) {
             return signal_address_error();
         }
@@ -1225,11 +1246,22 @@ namespace mnemos::chips::cpu {
     void sh2::raise_exception(std::uint8_t vector, std::uint32_t saved_pc) {
         // Architectural exception entry: push SR then PC to @-R15 (frame is
         // [R15]=PC, [R15+4]=SR) and vector through the table at VBR.
+        //
+        // Stacking fault: a misaligned SP makes the SR/PC push itself
+        // address-error. The SH7604 still completes the (now-undefined) stack
+        // writes, then takes the address-error exception (vector 9) WITHOUT
+        // recursing or resetting -- the stacking fault is suppressed for that
+        // nested entry (so the vector-9 frame can stack onto the same bad SP).
+        const bool stacking_fault = (r_[15] & 3U) != 0U && vector != 9U;
         const std::uint32_t saved_sr = sr_ & sr_mask;
         r_[15] -= 4U;
         wr32(r_[15], saved_sr);
         r_[15] -= 4U;
         wr32(r_[15], saved_pc);
+        if (stacking_fault) {
+            raise_exception(9U, saved_pc); // one nested entry; vector 9 won't re-fault
+            return;
+        }
         pc_ = rd32(vbr_ + (static_cast<std::uint32_t>(vector) << 2U));
         exception_taken_ = true;
     }
