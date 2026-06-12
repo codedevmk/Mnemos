@@ -46,6 +46,24 @@ namespace mnemos::manifests::sega32x {
 #endif
             return enabled;
         }
+
+        // X2: model the SH7604 load-use interlock (+1 cycle when an instruction
+        // reads a register the previous one loaded). Opt-in, manual-grounded, with
+        // no cycle-accurate reference to validate against -- off by default.
+        [[nodiscard]] bool load_use_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in timing knob
+#endif
+            static const bool enabled = [] {
+                const char* v = std::getenv("MNEMOS_32X_LOAD_USE");
+                return v != nullptr && v[0] != '\0' && v[0] != '0';
+            }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return enabled;
+        }
         // PWM FIFO primitives. A push into a full FIFO drops the value (the
         // hardware rejects the write); a pop from an empty FIFO returns the
         // held DAC value so the carrier keeps running on the last duty.
@@ -963,6 +981,10 @@ namespace mnemos::manifests::sega32x {
         const bool contention = bus_contention_enabled();
         s->master_cpu.set_shared_contention_metering(contention);
         s->slave_cpu.set_shared_contention_metering(contention);
+        // X2: enable the SH-2 load-use interlock on both cores (opt-in).
+        const bool load_use = load_use_enabled();
+        s->master_cpu.set_load_use_interlock(load_use);
+        s->slave_cpu.set_load_use_interlock(load_use);
 
         // A WDT internal reset zeroes the firing core's elapsed counter; rebase
         // the shared pacing anchors before that happens so the schedule stays

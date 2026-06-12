@@ -34,6 +34,148 @@ namespace mnemos::chips::cpu {
             const auto room = static_cast<std::uint64_t>(std::numeric_limits<int>::max() - cycles);
             return wait > room ? std::numeric_limits<int>::max() : cycles + static_cast<int>(wait);
         }
+
+        // ---- X2 load-use interlock classifiers (pure; mirror sh2::exec decode) ----
+        // SH-2 register fields: Rn = bits 8-11, Rm = bits 4-7; R0 / R15 are
+        // implicit operands. Bit i in a mask = general register Ri.
+        [[nodiscard]] constexpr std::uint32_t rn_bit(std::uint16_t op) noexcept {
+            return 1U << ((op >> 8U) & 0xFU);
+        }
+        [[nodiscard]] constexpr std::uint32_t rm_bit(std::uint16_t op) noexcept {
+            return 1U << ((op >> 4U) & 0xFU);
+        }
+        constexpr std::uint32_t r0_bit = 1U << 0U;
+        constexpr std::uint32_t r15_bit = 1U << 15U;
+
+        // GPR a memory LOAD writes its loaded value into, or -1 if the opcode is
+        // not a register-target memory load (so it produces no load-use latency).
+        // Register-register MOV and the @Rm+ pointer write-back are NOT loads.
+        [[nodiscard]] constexpr int load_destination(std::uint16_t op) noexcept {
+            const unsigned n0 = (op >> 12U) & 0xFU;
+            const unsigned lo = op & 0xFU;
+            const unsigned sub = (op >> 8U) & 0xFU;
+            const int rn = static_cast<int>((op >> 8U) & 0xFU);
+            switch (n0) {
+            case 0x0: // MOV.B/W/L @(R0,Rm),Rn
+                return (lo == 0xCU || lo == 0xDU || lo == 0xEU) ? rn : -1;
+            case 0x5: // MOV.L @(disp,Rm),Rn
+                return rn;
+            case 0x6: // MOV.B/W/L @Rm,Rn (0/1/2) and @Rm+,Rn (4/5/6); lo 3 = MOV Rm,Rn
+                return (lo <= 0x2U || lo == 0x4U || lo == 0x5U || lo == 0x6U) ? rn : -1;
+            case 0x8: // MOV.B/W @(disp,Rm),R0
+                return (sub == 0x4U || sub == 0x5U) ? 0 : -1;
+            case 0x9: // MOV.W @(disp,PC),Rn
+                return rn;
+            case 0xC: // MOV.B/W/L @(disp,GBR),R0
+                return (sub == 0x4U || sub == 0x5U || sub == 0x6U) ? 0 : -1;
+            case 0xD: // MOV.L @(disp,PC),Rn
+                return rn;
+            default:
+                return -1;
+            }
+        }
+
+        // Set of GPRs an opcode READS as a source consumed in EX/MA (addresses,
+        // ALU operands, store data, index regs). Write-only destinations (e.g.
+        // MOV #imm,Rn, the value half of a load) are excluded.
+        [[nodiscard]] constexpr std::uint32_t source_reg_mask(std::uint16_t op) noexcept {
+            const unsigned n0 = (op >> 12U) & 0xFU;
+            const unsigned lo = op & 0xFU;
+            const unsigned sub = (op >> 8U) & 0xFU;
+            switch (n0) {
+            case 0x0:
+                switch (op & 0xFFU) {
+                case 0x02U: // STC SR,Rn
+                case 0x12U: // STC GBR,Rn
+                case 0x22U: // STC VBR,Rn
+                case 0x0AU: // STS MACH,Rn
+                case 0x1AU: // STS MACL,Rn
+                case 0x2AU: // STS PR,Rn
+                case 0x29U: // MOVT Rn
+                    return 0U;
+                default:
+                    break;
+                }
+                if (op == 0x002BU) {
+                    return r15_bit; // RTE pops PC/SR from the stack
+                }
+                switch (lo) {
+                case 0x3U: // BSRF Rn / BRAF Rn
+                    return rn_bit(op);
+                case 0x4U: // MOV.B/W/L Rm,@(R0,Rn): base Rn, data Rm, index R0
+                case 0x5U:
+                case 0x6U:
+                    return rn_bit(op) | rm_bit(op) | r0_bit;
+                case 0x7U: // MUL.L Rm,Rn
+                    return rn_bit(op) | rm_bit(op);
+                case 0xCU: // MOV.B/W/L @(R0,Rm),Rn: base Rm, index R0
+                case 0xDU:
+                case 0xEU:
+                    return rm_bit(op) | r0_bit;
+                case 0xFU: // MAC.L @Rm+,@Rn+
+                    return rn_bit(op) | rm_bit(op);
+                default:
+                    return 0U;
+                }
+            case 0x1: // MOV.L Rm,@(disp,Rn): base Rn, data Rm
+                return rn_bit(op) | rm_bit(op);
+            case 0x2: // stores @Rn/@-Rn read Rn(addr)+Rm(data); ALU ops read both
+            case 0x3:
+                return rn_bit(op) | rm_bit(op);
+            case 0x4: { // group-4 single-operand ops read Rn(8-11); MAC.W also Rm
+                std::uint32_t m = rn_bit(op);
+                if (lo == 0xFU) { // MAC.W @Rm+,@Rn+
+                    m |= rm_bit(op);
+                }
+                return m;
+            }
+            case 0x5: // MOV.L @(disp,Rm),Rn
+                return rm_bit(op);
+            case 0x6: // @Rm/@Rm+ loads and the unary ALU ops all read Rm
+                return rm_bit(op);
+            case 0x7: // ADD #imm,Rn
+                return rn_bit(op);
+            case 0x8:
+                switch (sub) {
+                case 0x0U: // MOV.B/W R0,@(disp,Rn): base Rn(bits 4-7), data R0
+                case 0x1U:
+                    return rm_bit(op) | r0_bit;
+                case 0x4U: // MOV.B/W @(disp,Rm),R0
+                case 0x5U:
+                    return rm_bit(op);
+                case 0x8U: // CMP/EQ #imm,R0
+                    return r0_bit;
+                default: // BT/BF/BT.S/BF.S
+                    return 0U;
+                }
+            case 0xC:
+                switch (sub) {
+                case 0x0U: // MOV.B/W/L R0,@(disp,GBR)
+                case 0x1U:
+                case 0x2U:
+                    return r0_bit;
+                case 0x3U: // TRAPA #imm
+                case 0x4U: // MOV.B/W/L @(disp,GBR),R0 (loads to R0)
+                case 0x5U:
+                case 0x6U:
+                case 0x7U: // MOVA @(disp,PC),R0 (writes R0)
+                    return 0U;
+                default: // TST/AND/XOR/OR #imm,R0 and the .B RMW @(R0,GBR) forms
+                    return r0_bit;
+                }
+            default:
+                // 0x9 MOV.W @(disp,PC),Rn / 0xA BRA / 0xB BSR / 0xD MOV.L @(disp,PC),Rn /
+                // 0xE MOV #imm,Rn / 0xF FPU: no GPR source consumed in EX.
+                return 0U;
+            }
+        }
+
+        // MAC.L (0x0nmF) / MAC.W (0x4nmF): the multiply-accumulate absorbs a
+        // preceding load's latency, so it is exempt from the load-use stall.
+        [[nodiscard]] constexpr bool is_mac(std::uint16_t op) noexcept {
+            const unsigned n0 = (op >> 12U) & 0xFU;
+            return (n0 == 0x0U || n0 == 0x4U) && (op & 0xFU) == 0xFU;
+        }
     } // namespace
 
     chip_metadata sh2::metadata() const noexcept {
@@ -233,8 +375,9 @@ namespace mnemos::chips::cpu {
         // addressing modes, SLEEP, and the TRAPA/RTE + external-interrupt path
         // (see step_instruction). Any undecoded encoding (including the FPU
         // opcodes, absent on the SH7604) raises the illegal-instruction
-        // exception via illegal(). Still deferred: delayed-slot/peripheral-class
-        // address-error tails, cache/load-use penalties, and bus contention.
+        // exception via illegal(). Opt-in timing models add the load-use
+        // interlock and shared-bus contention; cache-miss timing stays deferred.
+        last_exec_op_ = op; // X2: producer for the next instruction's load-use check
         const auto n0 = static_cast<unsigned>(op >> 12U);
         const auto rn = static_cast<std::size_t>((op >> 8U) & 0xFU);
         const auto rm = static_cast<std::size_t>((op >> 4U) & 0xFU);
@@ -1346,6 +1489,7 @@ namespace mnemos::chips::cpu {
             --interrupt_inhibit_;
         } else if (try_service_irq()) {
             sleeping_ = false;
+            pending_load_reg_ = -1; // the exception sequence absorbs any load latency
         }
 
         if (sleeping_) {
@@ -1381,6 +1525,17 @@ namespace mnemos::chips::cpu {
                       (static_cast<std::uint16_t>(fetch_data_[fetch_off]) << 8U) |
                       fetch_data_[fetch_off + 1U])
                 : fetch_slow(pc_);
+        // X2: decide the load-use stall from the instruction about to run and the
+        // previous instruction's load destination, BEFORE exec overwrites either.
+        // The stall is charged after exec (an add, so a base-cycle floor cannot
+        // swallow it). Exempt load->load to the same destination and load->MAC.
+        bool load_use_stall = false;
+        if (model_load_use_ && pending_load_reg_ >= 0 &&
+            (source_reg_mask(op) & (1U << static_cast<unsigned>(pending_load_reg_))) != 0U &&
+            load_destination(op) != pending_load_reg_ && !is_mac(op)) {
+            load_use_stall = true;
+        }
+
         pc_ += 2U;
         exec(op);
 
@@ -1390,6 +1545,17 @@ namespace mnemos::chips::cpu {
         for (int i = 0; i < shared_access_count_; ++i) {
             const shared_access& a = shared_accesses_[static_cast<std::size_t>(i)];
             add_external_wait_cycles(a.address, a.bytes, a.locked);
+        }
+
+        // X2: charge the +1 interlock and arm the producer for the next step (the
+        // last executed op = the delay slot for a taken delayed branch). An
+        // exception this step vectors away and clears pending via try_service_irq
+        // next boundary; the rare faulting-load case self-corrects within a step.
+        if (model_load_use_) {
+            if (load_use_stall) {
+                cycles_ = add_bounded_wait_cycles(cycles_, 1U);
+            }
+            pending_load_reg_ = load_destination(last_exec_op_);
         }
 
         const std::uint64_t wait = peripherals_.tick(static_cast<std::uint64_t>(cycles_));
@@ -1474,6 +1640,8 @@ namespace mnemos::chips::cpu {
         pending_irq_level_ = 0;
         pending_irq_vector_ = 0;
         interrupt_inhibit_ = 0;
+        last_exec_op_ = 0U;
+        pending_load_reg_ = -1;
         if (preserve_watchdog_status) {
             peripherals_.reset_preserving_watchdog_status();
         } else {
