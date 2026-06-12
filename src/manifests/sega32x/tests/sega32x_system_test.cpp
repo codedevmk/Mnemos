@@ -46,6 +46,23 @@ TEST_CASE("sega32x_system shares SDRAM and the COMM bank across both buses") {
     CHECK(sys->master_bus.read8(0x20004020U) == 0x12U);
 }
 
+TEST_CASE("sega32x_system links the two SH-2 serial controllers (master TX -> slave RX)") {
+    auto sys = assemble_sega32x();
+    auto& tx = sys->master_cpu.peripherals();
+    auto& rx = sys->slave_cpu.peripherals();
+
+    rx.write8(0xFFFFFE02U, 0x10U); // slave SCR: RE (receiver enable)
+    tx.write8(0xFFFFFE01U, 0x00U); // master BRR = 0, SMR = 0 (8N1) -> 320-cycle frame
+    tx.write8(0xFFFFFE02U, 0x20U); // master SCR: TE (transmitter enable)
+    tx.write8(0xFFFFFE03U, 0xC3U); // master TDR -> starts a transmit frame
+
+    tx.tick(319U);
+    CHECK((rx.read8(0xFFFFFE04U) & 0x40U) == 0x00U); // not delivered before the frame ends
+    tx.tick(1U);
+    CHECK(rx.read8(0xFFFFFE05U) == 0xC3U);           // delivered to the slave's RDR
+    CHECK((rx.read8(0xFFFFFE04U) & 0x40U) == 0x40U); // slave RDRF set
+}
+
 TEST_CASE("sega32x_system charges TAS bus-lock waits on shared 32X ranges") {
     auto sys = assemble_sega32x();
 
