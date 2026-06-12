@@ -1627,7 +1627,6 @@ namespace {
         static constexpr std::uint32_t tcr1 = 0xFFFFFF98U;
         static constexpr std::uint32_t chcr1 = 0xFFFFFF9CU;
         static constexpr std::uint32_t vcrdma0 = 0xFFFFFFA0U;
-        static constexpr std::uint32_t vcrdma1 = 0xFFFFFFA8U;
         static constexpr std::uint32_t dmaor = 0xFFFFFFB0U;
         void w32reg(std::uint32_t addr, std::uint32_t v) {
             p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
