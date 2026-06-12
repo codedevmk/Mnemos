@@ -84,6 +84,23 @@ TEST_CASE("segacd_machine 1M handoff: a sub $0C0000 deposit reaches the main aft
     REQUIRE(bus.read8(0x200002U) == 0x43);
 }
 
+TEST_CASE("segacd_machine H-INT vector register supplies the level-4 vector low word",
+          "[segacd][machine]") {
+    auto m = assemble_segacd_machine(make_bios());
+    auto& bus = m->genesis->bus;
+    // Cold boot: the register reads $FFFF.
+    REQUIRE(bus.read8(0xA12006U) == 0xFF);
+    REQUIRE(bus.read8(0xA12007U) == 0xFF);
+    // Writing $A12006 patches the BIOS ROM's level-4 vector low word ($72),
+    // so the H-blank IRQ vectors into the address games park here.
+    bus.write8(0xA12006U, 0x13U);
+    bus.write8(0xA12007U, 0x86U);
+    REQUIRE(bus.read8(0x000072U) == 0x13);
+    REQUIRE(bus.read8(0x000073U) == 0x86);
+    REQUIRE(bus.read8(0xA12006U) == 0x13);
+    REQUIRE(bus.read8(0xA12007U) == 0x86);
+}
+
 TEST_CASE("segacd_machine PRG window follows the bank register", "[segacd][machine]") {
     auto m = assemble_segacd_machine(make_bios());
     auto& bus = m->genesis->bus;

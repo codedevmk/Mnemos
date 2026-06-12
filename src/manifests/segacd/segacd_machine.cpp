@@ -42,6 +42,10 @@ namespace mnemos::manifests::segacd {
         machine->sub = assemble_segacd();
         // The Genesis main side boots the BIOS as its cartridge.
         machine->genesis = genesis::assemble_genesis(std::move(bios), config);
+        // H-INT default vector: the gate array supplies the BIOS ROM's level-4
+        // vector low word (the $A12006 register); it reads $FFFF until written.
+        machine->genesis->rom[0x72] = 0xFF;
+        machine->genesis->rom[0x73] = 0xFF;
 
         segacd_system* sub = machine->sub.get();
         genesis::genesis_system* gen = machine->genesis.get();
@@ -55,6 +59,12 @@ namespace mnemos::manifests::segacd {
             0xA12000U, 0x100U,
             [m](std::uint32_t a) {
                 const auto off = static_cast<std::uint8_t>(a & 0xFFU);
+                // $06: the H-INT vector register. The BIOS ROM's level-4 vector
+                // low word (ROM $72) IS this register -- the gate array supplies
+                // it, so games point the H-blank IRQ at work RAM by writing here.
+                if (off == 0x06U || off == 0x07U) {
+                    return m->genesis->rom[0x72U + (off & 1U)];
+                }
                 // Fence EVERY gate read: run the sub up to the main's cycle so the
                 // main reads the sub's CURRENT state, never a stale one. The whole
                 // window is shared protocol state (comm flags/words, DMNA/RET in
@@ -66,6 +76,10 @@ namespace mnemos::manifests::segacd {
             },
             [m](std::uint32_t a, std::uint8_t v) {
                 const auto off = static_cast<std::uint8_t>(a & 0xFFU);
+                if (off == 0x06U || off == 0x07U) {
+                    m->genesis->rom[0x72U + (off & 1U)] = v; // H-INT vector low word
+                    return;
+                }
                 // Fence EVERY gate write: the sub must consume its timeline up to
                 // "now" BEFORE the write lands, or it observes the main's future
                 // early (an IFL2 pulse via $00 or a DMNA grant via $03 becoming
