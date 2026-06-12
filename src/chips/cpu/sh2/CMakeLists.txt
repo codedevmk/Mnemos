@@ -23,4 +23,17 @@ if(BUILD_TESTING)
         SOURCES tests/sh2_test.cpp
         LIBRARIES mnemos::chips::cpu::sh2 mnemos::topology
     )
+
+    # Functional conformance against the public SH4 single-step corpus (see
+    # THIRD-PARTY-REFERENCES.md). The corpus is never committed; the test SKIPs
+    # (Catch2 exits 4) unless MNEMOS_SH2_TESTS_DIR points at the transcoded JSON.
+    mnemos_add_test(
+        mnemos_chips_cpu_sh2_conformance_test
+        SOURCES tests/sh2_conformance_test.cpp
+        LIBRARIES mnemos::chips::cpu::sh2 mnemos::topology nlohmann_json::nlohmann_json
+    )
+    set_tests_properties(
+        mnemos_chips_cpu_sh2_conformance_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
 endif()
