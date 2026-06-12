@@ -561,14 +561,13 @@ TEST_CASE("sh2 TAS.B adds board-provided locked bus wait states") {
     std::uint32_t seen_addr = 0U;
     std::uint8_t seen_bytes = 0U;
     bool seen_locked = false;
-    m.cpu.set_bus_wait_callback(
-        [&](std::uint32_t address, std::uint8_t bytes, bool locked) {
-            ++calls;
-            seen_addr = address;
-            seen_bytes = bytes;
-            seen_locked = locked;
-            return 3;
-        });
+    m.cpu.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t bytes, bool locked) {
+        ++calls;
+        seen_addr = address;
+        seen_bytes = bytes;
+        seen_locked = locked;
+        return 3;
+    });
 
     auto r = m.cpu.cpu_registers();
     r.r[1] = 0x3000U;
@@ -651,12 +650,12 @@ TEST_CASE("sh2 BRA executes the delay slot then branches") {
 TEST_CASE("sh2 BSR sets PR and RTS returns through it") {
     machine m;
     m.set_pc(0x1000U);
-    m.load(0x1000U, {0xB006U, 0x0009U}); // BSR +6 ; (delay) NOP
-    m.load(0x1010U, {0x000BU, 0x0009U}); // RTS ; (delay) NOP
+    m.load(0x1000U, {0xB006U, 0x0009U});  // BSR +6 ; (delay) NOP
+    m.load(0x1010U, {0x000BU, 0x0009U});  // RTS ; (delay) NOP
     CHECK(m.cpu.step_instruction() == 2); // BSR
     auto r = m.cpu.cpu_registers();
     CHECK(r.pc == 0x1010U);
-    CHECK(r.pr == 0x1004U);   // return address = instruction after the delay slot
+    CHECK(r.pr == 0x1004U);               // return address = instruction after the delay slot
     CHECK(m.cpu.step_instruction() == 2); // RTS
     CHECK(m.cpu.cpu_registers().pc == 0x1004U);
 }
@@ -872,10 +871,10 @@ TEST_CASE("sh2 TRAPA pushes a frame and RTE returns through it") {
     m.w32(0x4000U + 0x20U * 4U, 0x5000U); // vector 0x20 handler -> 0x5000
     m.load(0x1000U, {0xC320U});           // TRAPA #0x20
     m.load(0x5000U, {0x002BU, 0x0009U});  // RTE ; (delay) NOP
-    CHECK(m.cpu.step_instruction() == 8);  // TRAPA
+    CHECK(m.cpu.step_instruction() == 8); // TRAPA
     auto a = m.cpu.cpu_registers();
-    CHECK(a.pc == 0x5000U);    // vectored through VBR + 0x20*4
-    CHECK(a.r[15] == 0x3008U); // SR + PC pushed
+    CHECK(a.pc == 0x5000U);               // vectored through VBR + 0x20*4
+    CHECK(a.r[15] == 0x3008U);            // SR + PC pushed
     CHECK(m.cpu.step_instruction() == 4); // RTE
     const auto b = m.cpu.cpu_registers();
     CHECK(b.pc == 0x1002U);    // returned to the instruction after TRAPA
@@ -1089,8 +1088,8 @@ TEST_CASE("sh2 SLEEP halts until an interrupt wakes it") {
     r.sr = 0U;
     m.cpu.set_registers(r);
     m.w32(0x4000U + 0x44U * 4U, 0x6000U);
-    m.load(0x1000U, {0x001BU, 0xE509U}); // SLEEP ; MOV #9,R5 (resumes here after RTE)
-    m.load(0x6000U, {0x0009U});          // handler: NOP
+    m.load(0x1000U, {0x001BU, 0xE509U});  // SLEEP ; MOV #9,R5 (resumes here after RTE)
+    m.load(0x6000U, {0x0009U});           // handler: NOP
     CHECK(m.cpu.step_instruction() == 3); // SLEEP -> halted
     CHECK(m.cpu.cpu_registers().pc == 0x1002U);
     m.cpu.step_instruction(); // still halted (no interrupt): nothing runs
@@ -1517,7 +1516,7 @@ TEST_CASE("sh2_peripherals WDT flags overflow and resets WDT when RSTE is clear"
     CHECK(p.read8(0xFFFFFE81U) == 0x00U);        // WTCNT reset within WDT
     CHECK_FALSE(p.consume_watchdog_reset().asserted);
     p.write8(0xFFFFFE82U, 0xA5U);
-    p.write8(0xFFFFFE83U, 0x00U);                // clear WOVF; RSTE/RSTS unaffected
+    p.write8(0xFFFFFE83U, 0x00U); // clear WOVF; RSTE/RSTS unaffected
     CHECK((p.read8(0xFFFFFE82U) & 0x80U) == 0U);
 }
 
@@ -1696,19 +1695,18 @@ TEST_CASE("sh2_peripherals DMAC reports source and destination bus waits") {
         f.ram[0x1000U + i] = static_cast<std::uint8_t>(0xA0U + i);
     }
     int calls = 0;
-    f.p.set_bus_wait_callback(
-        [&](std::uint32_t address, std::uint8_t bytes, bool locked) {
-            CHECK_FALSE(locked);
-            CHECK(bytes == 4U);
-            ++calls;
-            if (address == 0x1000U) {
-                return 2;
-            }
-            if (address == 0x2000U) {
-                return 3;
-            }
-            return 0;
-        });
+    f.p.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t bytes, bool locked) {
+        CHECK_FALSE(locked);
+        CHECK(bytes == 4U);
+        ++calls;
+        if (address == 0x1000U) {
+            return 2;
+        }
+        if (address == 0x2000U) {
+            return 3;
+        }
+        return 0;
+    });
     f.w32reg(f.sar0, 0x00001000U);
     f.w32reg(f.dar0, 0x00002000U);
     f.w32reg(f.tcr0, 1U);
@@ -1733,18 +1731,17 @@ TEST_CASE("sh2 DMAC bus waits extend the owning CPU instruction") {
     write_peripheral32(m.cpu.peripherals(), dmac_fixture::tcr0, 1U);
     write_peripheral32(m.cpu.peripherals(), dmac_fixture::dmaor, 0x00000001U);
     write_peripheral32(m.cpu.peripherals(), dmac_fixture::chcr0, 0x4201U); // byte unit
-    m.cpu.set_bus_wait_callback(
-        [](std::uint32_t address, std::uint8_t bytes, bool locked) {
-            CHECK_FALSE(locked);
-            CHECK(bytes == 1U);
-            if (address == 0x2000U) {
-                return 2;
-            }
-            if (address == 0x3000U) {
-                return 3;
-            }
-            return 0;
-        });
+    m.cpu.set_bus_wait_callback([](std::uint32_t address, std::uint8_t bytes, bool locked) {
+        CHECK_FALSE(locked);
+        CHECK(bytes == 1U);
+        if (address == 0x2000U) {
+            return 2;
+        }
+        if (address == 0x3000U) {
+            return 3;
+        }
+        return 0;
+    });
 
     CHECK(m.cpu.step_instruction() == 6);
     CHECK(m.cpu.elapsed_cycles() == 6U);
@@ -1944,10 +1941,10 @@ TEST_CASE("sh2_peripherals DIVU performs signed 32/32 division on the DVDNT writ
                (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
     };
 
-    wr32(0xFFFFFF00U, 7U);                   // DVSR
-    wr32(0xFFFFFF04U, 100U);                 // DVDNT -> divide fires
+    wr32(0xFFFFFF00U, 7U);   // DVSR
+    wr32(0xFFFFFF04U, 100U); // DVDNT -> divide fires
     p.tick(38U);
-    CHECK(rd32(0xFFFFFF04U) == 100U);        // not complete before cycle 39
+    CHECK(rd32(0xFFFFFF04U) == 100U); // not complete before cycle 39
     p.tick(1U);
     CHECK(rd32(0xFFFFFF04U) == 14U);         // quotient
     CHECK(rd32(0xFFFFFF14U) == 14U);         // DVDNTL mirror
@@ -2106,9 +2103,9 @@ TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of cr
                (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
                (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
     };
-    wr32(0xFFFFFF00U, 0xFFFFFFFFU);          // DVSR = -1
-    wr32(0xFFFFFF10U, 0x80000000U);          // DVDNTH
-    wr32(0xFFFFFF14U, 0x00000000U);          // DVDNTL -> divide fires
+    wr32(0xFFFFFF00U, 0xFFFFFFFFU); // DVSR = -1
+    wr32(0xFFFFFF10U, 0x80000000U); // DVDNTH
+    wr32(0xFFFFFF14U, 0x00000000U); // DVDNTL -> divide fires
     p.tick(6U);
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U); // DVCR.OVF
     // Negative dividend, negative divisor: positive overflow saturates high.

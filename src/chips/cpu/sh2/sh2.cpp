@@ -21,10 +21,8 @@ namespace mnemos::chips::cpu {
         }
 
         [[nodiscard]] int add_bounded_wait_cycles(int cycles, std::uint64_t wait) noexcept {
-            const auto room =
-                static_cast<std::uint64_t>(std::numeric_limits<int>::max() - cycles);
-            return wait > room ? std::numeric_limits<int>::max()
-                               : cycles + static_cast<int>(wait);
+            const auto room = static_cast<std::uint64_t>(std::numeric_limits<int>::max() - cycles);
+            return wait > room ? std::numeric_limits<int>::max() : cycles + static_cast<int>(wait);
         }
     } // namespace
 
@@ -65,8 +63,7 @@ namespace mnemos::chips::cpu {
         }
     }
     std::uint16_t sh2::rd16(std::uint32_t a) noexcept {
-        const bool onchip =
-            sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
+        const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
                 account_onchip_access_wait(a);
@@ -76,14 +73,13 @@ namespace mnemos::chips::cpu {
                            ? peripherals_.read8(addr)
                            : (bus_ != nullptr ? bus_->read8(addr) : 0xFFU);
             };
-            return static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(read_byte(a)) << 8U) | read_byte(a + 1U));
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(read_byte(a)) << 8U) |
+                                              read_byte(a + 1U));
         }
         return bus_->read16_be(a);
     }
     void sh2::wr16(std::uint32_t a, std::uint16_t v) noexcept {
-        const bool onchip =
-            sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
+        const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
                 account_onchip_access_wait(a);
@@ -104,8 +100,7 @@ namespace mnemos::chips::cpu {
         bus_->write16_be(a, v);
     }
     std::uint32_t sh2::rd32(std::uint32_t a) noexcept {
-        const bool onchip =
-            sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
+        const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
                 account_onchip_access_wait(a);
@@ -122,8 +117,7 @@ namespace mnemos::chips::cpu {
         return bus_->read32_be(a);
     }
     void sh2::wr32(std::uint32_t a, std::uint32_t v) noexcept {
-        const bool onchip =
-            sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
+        const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
                 account_onchip_access_wait(a);
@@ -178,9 +172,8 @@ namespace mnemos::chips::cpu {
     }
 
     bool sh2::require_word_data_access(std::uint32_t address, bool pc_relative) {
-        if ((address & 1U) != 0U ||
-            (pc_relative && (sh2_peripherals::in_window(address) ||
-                             sh2_peripherals::in_window(address + 1U)))) {
+        if ((address & 1U) != 0U || (pc_relative && (sh2_peripherals::in_window(address) ||
+                                                     sh2_peripherals::in_window(address + 1U)))) {
             return signal_address_error();
         }
         return true;
@@ -188,8 +181,8 @@ namespace mnemos::chips::cpu {
 
     bool sh2::require_long_data_access(std::uint32_t address, bool pc_relative) {
         if ((address & 3U) != 0U ||
-            (pc_relative && (sh2_peripherals::in_window(address) ||
-                             sh2_peripherals::in_window(address + 3U))) ||
+            (pc_relative &&
+             (sh2_peripherals::in_window(address) || sh2_peripherals::in_window(address + 3U))) ||
             in_low_onchip_space(address) || in_low_onchip_space(address + 3U)) {
             return signal_address_error();
         }
@@ -323,7 +316,7 @@ namespace mnemos::chips::cpu {
                 wr32(addr, r_[rm]);
                 return; // MOV.L Rm,@(R0,Rn)
             }
-            case 0x7:   // MUL.L Rm,Rn -> MACL
+            case 0x7: // MUL.L Rm,Rn -> MACL
                 macl_ = static_cast<std::uint32_t>(static_cast<std::uint64_t>(r_[rn]) *
                                                    static_cast<std::uint64_t>(r_[rm]));
                 account_cycles(2);
@@ -674,7 +667,7 @@ namespace mnemos::chips::cpu {
                 return; // LDS Rn,MACL
             case 0x2A:
                 pr_ = r_[rn];
-                return; // LDS Rn,PR
+                return;  // LDS Rn,PR
             case 0x02: { // STS.L MACH,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
                 if (!require_long_data_access(addr)) {
@@ -895,7 +888,7 @@ namespace mnemos::chips::cpu {
                 wr8(addr, static_cast<std::uint8_t>(r_[0]));
                 return; // MOV.B R0,@(disp,Rn)
             }
-            case 0x1:   // MOV.W R0,@(disp,Rn)
+            case 0x1: // MOV.W R0,@(disp,Rn)
             {
                 const std::uint32_t addr = r_[rm] + d4 * 2U;
                 if (!require_word_data_access(addr)) {
@@ -983,7 +976,7 @@ namespace mnemos::chips::cpu {
                 wr8(addr, static_cast<std::uint8_t>(r_[0]));
                 return; // MOV.B R0,@(disp,GBR)
             }
-            case 0x1:   // MOV.W R0,@(disp,GBR)
+            case 0x1: // MOV.W R0,@(disp,GBR)
             {
                 const std::uint32_t addr = gbr_ + imm * 2U;
                 if (!require_word_data_access(addr)) {

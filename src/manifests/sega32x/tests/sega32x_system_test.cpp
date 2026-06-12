@@ -139,9 +139,9 @@ TEST_CASE("sega32x_system absorbs a master WDT internal reset without desyncing 
     // sh2_position() jumped backwards and run_cycles()'s PWM delta underflowed.
     sys->run_cycles(64U);
 
-    CHECK(sys->sh2_position() >= pos_before);                       // pacing stays monotone
-    CHECK((p.read8(0xFFFFFE82U) & 0xC0U) == 0xC0U);                 // WOVF | RSTE preserved
-    CHECK(sys->master_cpu.cpu_registers().pc == 0x00000000U);      // re-fetched the reset vector
+    CHECK(sys->sh2_position() >= pos_before);                 // pacing stays monotone
+    CHECK((p.read8(0xFFFFFE82U) & 0xC0U) == 0xC0U);           // WOVF | RSTE preserved
+    CHECK(sys->master_cpu.cpu_registers().pc == 0x00000000U); // re-fetched the reset vector
 }
 
 TEST_CASE("sega32x_system drives each CPU's IRQ mask from its own register window") {

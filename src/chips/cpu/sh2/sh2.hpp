@@ -122,9 +122,7 @@ namespace mnemos::chips::cpu {
         // Invoked just before a WDT-driven internal reset zeroes this core's
         // elapsed counter, so a board pacing its schedule on elapsed_cycles()
         // can absorb the discarded count (the same way an external /RES does).
-        void set_self_reset_callback(std::function<void()> cb) {
-            self_reset_ = std::move(cb);
-        }
+        void set_self_reset_callback(std::function<void()> cb) { self_reset_ = std::move(cb); }
 
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();

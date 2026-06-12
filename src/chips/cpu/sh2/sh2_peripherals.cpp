@@ -121,8 +121,7 @@ namespace mnemos::chips::cpu {
         // Realistic per-call counts are tiny, so this only bites at the edge.
         [[nodiscard]] int add_bounded_acc(int acc, std::uint64_t cycles) noexcept {
             const auto room = static_cast<std::uint64_t>(std::numeric_limits<int>::max() - acc);
-            return cycles > room ? std::numeric_limits<int>::max()
-                                 : acc + static_cast<int>(cycles);
+            return cycles > room ? std::numeric_limits<int>::max() : acc + static_cast<int>(cycles);
         }
 
         [[nodiscard]] bool in_divu_registers(std::uint32_t addr) noexcept {
@@ -287,7 +286,7 @@ namespace mnemos::chips::cpu {
         case 0x03U: // TDR
             sci_tdr_ = value;
             sci_ssr_ = static_cast<std::uint8_t>(
-            sci_ssr_ & static_cast<std::uint8_t>(~(sci_ssr_tdre | sci_ssr_tend)));
+                sci_ssr_ & static_cast<std::uint8_t>(~(sci_ssr_tdre | sci_ssr_tend)));
             sci_tx_cycles_ = 0;
             start_sci_transmit_if_ready();
             return;
@@ -494,8 +493,7 @@ namespace mnemos::chips::cpu {
         sci_tx_cycles_ = sci_transmit_cycles;
     }
 
-    void sh2_peripherals::sci_receive_byte(std::uint8_t value,
-                                           std::uint8_t error_flags) noexcept {
+    void sh2_peripherals::sci_receive_byte(std::uint8_t value, std::uint8_t error_flags) noexcept {
         if ((sci_scr_ & sci_scr_re) == 0U) {
             return;
         }
@@ -697,8 +695,8 @@ namespace mnemos::chips::cpu {
                     if ((wtcsr_ & wtcsr_wtit) == 0U) {
                         wtcsr_ |= wtcsr_ovf; // interval-timer flag
                     } else {
-                        rstcsr_ = static_cast<std::uint8_t>(rstcsr_ | rstcsr_wovf |
-                                                            rstcsr_reserved);
+                        rstcsr_ =
+                            static_cast<std::uint8_t>(rstcsr_ | rstcsr_wovf | rstcsr_reserved);
                         const bool internal_reset = (rstcsr_ & rstcsr_rste) != 0U;
                         const bool manual_reset = (rstcsr_ & rstcsr_rsts) != 0U;
                         reset_watchdog_counter_control();
@@ -1086,8 +1084,8 @@ namespace mnemos::chips::cpu {
         const std::uint32_t magic = reader.u32();
         const std::uint16_t version = reader.u16();
         const std::uint16_t reserved = reader.u16();
-        if (magic != sh2_peripherals_state_magic ||
-            version != sh2_peripherals_state_version || reserved != 0U) {
+        if (magic != sh2_peripherals_state_magic || version != sh2_peripherals_state_version ||
+            reserved != 0U) {
             reader.fail();
             return;
         }

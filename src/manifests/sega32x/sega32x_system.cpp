@@ -122,9 +122,9 @@ namespace mnemos::manifests::sega32x {
         }
 
         template <std::size_t N>
-        [[nodiscard]] constexpr bool in_partitioned_range(
-            std::uint32_t address, const std::array<std::uint32_t, N>& bases,
-            std::uint32_t offset, std::uint32_t size) noexcept {
+        [[nodiscard]] constexpr bool
+        in_partitioned_range(std::uint32_t address, const std::array<std::uint32_t, N>& bases,
+                             std::uint32_t offset, std::uint32_t size) noexcept {
             for (const std::uint32_t base : bases) {
                 if (in_range(address, base + offset, size)) {
                     return true;
@@ -736,11 +736,10 @@ namespace mnemos::manifests::sega32x {
             return 0;
         }
 
-        const bool shared_sdram =
-            in_partitioned_range(address, p0_bases, sdram_base,
-                                 static_cast<std::uint32_t>(sdram_size)) ||
-            in_partitioned_range(address, p1_bases, sdram_base,
-                                 static_cast<std::uint32_t>(sdram_size));
+        const bool shared_sdram = in_partitioned_range(address, p0_bases, sdram_base,
+                                                       static_cast<std::uint32_t>(sdram_size)) ||
+                                  in_partitioned_range(address, p1_bases, sdram_base,
+                                                       static_cast<std::uint32_t>(sdram_size));
         const bool shared_framebuffer =
             in_partitioned_range(address, p0_bases, framebuffer_base,
                                  static_cast<std::uint32_t>(framebuffer_size)) ||
@@ -763,8 +762,7 @@ namespace mnemos::manifests::sega32x {
         const std::uint64_t grant = std::max(start, shared_bus_lock_until);
         const std::uint64_t wait =
             static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles) + (grant - start);
-        shared_bus_lock_until =
-            grant + static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles);
+        shared_bus_lock_until = grant + static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles);
 
         return wait > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
                    ? std::numeric_limits<int>::max()
@@ -782,10 +780,9 @@ namespace mnemos::manifests::sega32x {
         master_cpu.grant_cycles(cycles);
         slave_cpu.grant_cycles(cycles);
         while (master_cpu.has_cycle_credit() || slave_cpu.has_cycle_credit()) {
-            const bool step_master =
-                master_cpu.has_cycle_credit() &&
-                (!slave_cpu.has_cycle_credit() ||
-                 master_cpu.elapsed_cycles() <= slave_cpu.elapsed_cycles());
+            const bool step_master = master_cpu.has_cycle_credit() &&
+                                     (!slave_cpu.has_cycle_credit() ||
+                                      master_cpu.elapsed_cycles() <= slave_cpu.elapsed_cycles());
             if (step_master) {
                 master_cpu.step_credited_instruction();
             } else {

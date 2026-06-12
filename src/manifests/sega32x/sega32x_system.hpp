@@ -284,7 +284,7 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::uint64_t sh2_position() const noexcept {
             return sh2_elapsed_base + master_cpu.elapsed_cycles();
         }
-        std::uint64_t sh2_elapsed_base{0}; // accumulated pre-release elapsed counts
+        std::uint64_t sh2_elapsed_base{0};     // accumulated pre-release elapsed counts
         std::uint64_t shared_bus_lock_until{}; // SH-2-local cycle when shared TAS lock releases
         // Advance both SH-2s when not held in reset, interleaving whole
         // instructions by each CPU's elapsed-cycle position.

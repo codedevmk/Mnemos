@@ -95,13 +95,13 @@ namespace mnemos::chips::cpu {
         // SCI -- serial communication interface ($FE00-$FE05). This slice models
         // software-visible data/status flag generation; byte-rate baud scheduling
         // and board-level links are kept outside this on-chip block.
-        std::uint8_t sci_smr_{};        // FE00 serial mode
-        std::uint8_t sci_brr_{0xFFU};   // FE01 bit-rate
-        std::uint8_t sci_scr_{};        // FE02 control
-        std::uint8_t sci_tdr_{0xFFU};   // FE03 transmit data
-        std::uint8_t sci_ssr_{0x84U};   // FE04 status (TDRE | TEND after reset)
-        std::uint8_t sci_rdr_{};        // FE05 receive data
-        int sci_tx_cycles_{};           // remaining coarse transmit-complete ticks
+        std::uint8_t sci_smr_{};      // FE00 serial mode
+        std::uint8_t sci_brr_{0xFFU}; // FE01 bit-rate
+        std::uint8_t sci_scr_{};      // FE02 control
+        std::uint8_t sci_tdr_{0xFFU}; // FE03 transmit data
+        std::uint8_t sci_ssr_{0x84U}; // FE04 status (TDRE | TEND after reset)
+        std::uint8_t sci_rdr_{};      // FE05 receive data
+        int sci_tx_cycles_{};         // remaining coarse transmit-complete ticks
 
         // FRT -- free-running timer ($FE10-$FE17). A 16-bit counter clocked off a
         // TCR-selected prescale of the SH-2 clock; matches against OCRA/OCRB and
@@ -134,13 +134,13 @@ namespace mnemos::chips::cpu {
         // interval-timer flag (WTCSR.OVF) or, in watchdog mode, RSTCSR.WOVF and
         // the optional internal reset request selected by RSTCSR.RSTE/RSTS.
         // Writes are keyed (a high-byte key selects the register).
-        std::uint8_t wtcsr_{0x18U};                    // FE80 control/status
-        std::uint8_t wtcnt_{};                         // FE80/81 counter
-        std::uint8_t rstcsr_{0x1FU};                   // FE82/83 reset control/status
-        int wdt_prescale_acc_{};                       // accumulated source clocks
-        std::uint8_t wdt_key_{};                       // latched high-byte key
-        mutable bool wtcsr_ovf_read_{};                // WTCSR.OVF observed by a read
-        bool watchdog_reset_pending_{};                // internal reset to consume
+        std::uint8_t wtcsr_{0x18U};     // FE80 control/status
+        std::uint8_t wtcnt_{};          // FE80/81 counter
+        std::uint8_t rstcsr_{0x1FU};    // FE82/83 reset control/status
+        int wdt_prescale_acc_{};        // accumulated source clocks
+        std::uint8_t wdt_key_{};        // latched high-byte key
+        mutable bool wtcsr_ovf_read_{}; // WTCSR.OVF observed by a read
+        bool watchdog_reset_pending_{}; // internal reset to consume
         reset_kind watchdog_reset_kind_{reset_kind::power_on};
 
         // DMAC -- 2-channel DMA controller ($FF80-$FFAF channel regs, $FFB0 DMAOR).
@@ -157,8 +157,8 @@ namespace mnemos::chips::cpu {
         };
         std::array<dma_channel, 2> dma_{};
         std::array<std::uint32_t, 2> vcrdma_{}; // FFA0/FFA8 transfer-end vectors
-        std::uint32_t dmaor_{}; // DMA operation register (master enable + flags)
-        ibus* bus_{};           // bus the DMAC transfers over (set by the owning sh2)
+        std::uint32_t dmaor_{};                 // DMA operation register (master enable + flags)
+        ibus* bus_{}; // bus the DMAC transfers over (set by the owning sh2)
         std::function<bool(int)> dreq_query_{}; // module-request DREQ level per channel
         std::function<int(std::uint32_t, std::uint8_t, bool)> bus_wait_{};
         std::array<bool, 2> dreq_active_{};       // last sampled normalized request level
