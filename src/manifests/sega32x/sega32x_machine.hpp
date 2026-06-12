@@ -38,6 +38,11 @@ namespace mnemos::manifests::sega32x {
         // positions). Consumes the delta without running while the SH-2s are
         // held in reset.
         void catch_up_sh2();
+        // 68000-side /RES write path: parks any threaded SH-2 batch, applies
+        // the hardware reset edge, then rebases the shared schedule anchors.
+        // Distinct from sega32x_system::set_sh2_reset (which this wraps): callers
+        // holding a machine must use this so the worker is parked first.
+        void apply_sh2_reset(bool asserted);
 
         ~sega32x_machine(); // parks and joins the SH-2 worker
 

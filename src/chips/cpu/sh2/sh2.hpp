@@ -20,16 +20,17 @@ namespace mnemos::chips::cpu {
     // slave); the chip itself carries no 32X knowledge -- the 32X manifest
     // instantiates two and wires them.
     //
-    // Built in phases (see docs/plans/2026-06-09-sega-32x-port.md), cannibalized
-    // from the Emu reference (chips/sh2). Implemented: the programming model,
+    // Built in phases (see docs/plans/2026-06-09-sega-32x-port.md) against the
+    // Hitachi SH7604 hardware manual. Implemented: the programming model,
     // reset (PC + SP loaded big-endian from the vector table at VBR=0), the full
     // instruction set (data transfer, ALU, logical, shift/rotate, multiply,
     // divide-step, control flow with delay slots, system-register ops, all
-    // addressing modes), and the TRAPA/RTE + external-interrupt model (set_irq /
-    // an accept callback, with a one-instruction inhibit after SR loads). Still to
-    // come: the illegal-instruction / address-error exceptions, SLEEP, and the
-    // on-chip peripherals the 32X drives (FRT/WDT timer, DMAC, INTC, serial).
-    // Undecoded opcodes execute as 1-cycle no-ops, the m68000 bring-up convention.
+    // addressing modes), illegal-instruction exceptions, SLEEP, on-chip
+    // FRT/WDT/DMAC/DIVU/INTC interrupt delivery, and the TRAPA/RTE +
+    // external-interrupt model (set_irq / an accept callback, with a
+    // one-instruction inhibit after SR loads). Still to come: delayed-slot and
+    // peripheral-class address-error tails, cache/load-use penalties, bus
+    // contention, and full SCI.
     //
     // Instruction-stepped like the m68000: step_instruction() runs one
     // instruction and returns its cycle cost; tick(cycles) catches up by running
@@ -80,6 +81,19 @@ namespace mnemos::chips::cpu {
             peripherals_.set_dreq_query(std::move(query));
         }
 
+        // Board-supplied external wait states. The CPU core reports candidate
+        // memory accesses; manifests decide which addresses are shared hardware
+        // and how many cycles to add. `locked` marks an atomic-style RMW such as
+        // TAS.B; the on-chip DMAC uses the same hook with locked=false.
+        void set_bus_wait_callback(
+            std::function<int(std::uint32_t address, std::uint8_t bytes, bool locked)> cb) {
+            bus_wait_ = std::move(cb);
+            peripherals_.set_bus_wait_callback(
+                [this](std::uint32_t address, std::uint8_t bytes, bool locked) {
+                    return bus_wait_ ? bus_wait_(address, bytes, locked) : 0;
+                });
+        }
+
         // The on-chip peripheral block (board glue + tests program the DMAC /
         // timers directly; CPU code reaches it through the $FFFFFE00 window).
         [[nodiscard]] sh2_peripherals& peripherals() noexcept { return peripherals_; }
@@ -105,9 +119,19 @@ namespace mnemos::chips::cpu {
         void set_irq_accept_callback(std::function<void(int level, std::uint8_t vector)> cb) {
             irq_accept_ = std::move(cb);
         }
+        // Invoked just before a WDT-driven internal reset zeroes this core's
+        // elapsed counter, so a board pacing its schedule on elapsed_cycles()
+        // can absorb the discarded count (the same way an external /RES does).
+        void set_self_reset_callback(std::function<void()> cb) { self_reset_ = std::move(cb); }
 
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();
+        // Scheduler-facing credit API. `tick()` uses this internally; board
+        // manifests can grant both CPUs credit, then interleave credited
+        // instructions by elapsed-cycle position without discarding overshoot.
+        void grant_cycles(std::uint64_t cycles) noexcept;
+        [[nodiscard]] bool has_cycle_credit() const noexcept;
+        int step_credited_instruction();
 
         [[nodiscard]] registers cpu_registers() const noexcept;
         void set_registers(const registers& values) noexcept;
@@ -154,11 +178,11 @@ namespace mnemos::chips::cpu {
         };
 
         // ---- raw memory (24/32-bit address, big-endian) ----
-        [[nodiscard]] std::uint8_t rd8(std::uint32_t a) const noexcept;
+        [[nodiscard]] std::uint8_t rd8(std::uint32_t a) noexcept;
         void wr8(std::uint32_t a, std::uint8_t v) noexcept;
-        [[nodiscard]] std::uint16_t rd16(std::uint32_t a) const noexcept;
+        [[nodiscard]] std::uint16_t rd16(std::uint32_t a) noexcept;
         void wr16(std::uint32_t a, std::uint16_t v) noexcept;
-        [[nodiscard]] std::uint32_t rd32(std::uint32_t a) const noexcept;
+        [[nodiscard]] std::uint32_t rd32(std::uint32_t a) noexcept;
         void wr32(std::uint32_t a, std::uint32_t v) noexcept;
 
         // ---- status-register T bit ----
@@ -170,14 +194,34 @@ namespace mnemos::chips::cpu {
         void mac_word(std::size_t rn, std::size_t rm) noexcept;
 
         // ---- control transfer: run the delay-slot instruction, then redirect ----
-        void branch_delayed(std::uint32_t target);
+        void branch_delayed(std::uint32_t target, int minimum_cycles = 2);
+        // Cycle accounting comes in two flavours, kept distinct on purpose:
+        //  - account_cycles raises a FLOOR (the instruction's base issue cost);
+        //  - add_external_wait_cycles / account_onchip_access_wait ADD stall
+        //    cycles on top, saturating at INT_MAX (never wrapping) like the
+        //    free add_bounded_wait_cycles helper.
+        void account_cycles(int minimum_cycles) noexcept {
+            if (cycles_ < minimum_cycles) {
+                cycles_ = minimum_cycles;
+            }
+        }
+        void add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes, bool locked);
+        void account_onchip_access_wait(std::uint32_t address) noexcept;
 
         // ---- exceptions + interrupts ----
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
         void raise_exception(std::uint8_t vector, std::uint32_t saved_pc);
+        bool raise_address_error(std::uint32_t saved_pc);
+        bool signal_address_error();
+        bool require_fetch_access(std::uint32_t address);
+        bool require_byte_data_access(std::uint32_t address, bool tas = false);
+        bool require_word_data_access(std::uint32_t address, bool pc_relative = false);
+        bool require_long_data_access(std::uint32_t address, bool pc_relative = false);
         // Accept the presented external IRQ if level > SR.IMASK (called at the
         // instruction boundary). Returns true if an interrupt was taken.
         bool try_service_irq();
+        bool service_watchdog_reset();
+        void reset_core(reset_kind kind, bool preserve_watchdog_status);
         // Raise the illegal-instruction exception for an undecoded opcode
         // (slot-illegal, vector 6, inside a delay slot; general-illegal, vector
         // 4, otherwise).
@@ -198,6 +242,7 @@ namespace mnemos::chips::cpu {
         bool in_delay_slot_{};                // transient: running a branch's delay slot
         bool sleeping_{};                     // halted by SLEEP until an interrupt arrives
         bool exception_taken_{};              // transient: an exception vectored this step
+        bool deferred_address_error_{};       // transient: delay-slot address fault
         std::uint32_t delay_resume_target_{}; // transient: a delayed branch's target
         int pending_irq_level_{};             // 0 = none; else presented IRQ level (1-15)
         std::uint8_t pending_irq_vector_{};
@@ -209,6 +254,8 @@ namespace mnemos::chips::cpu {
 
         std::function<void(std::uint32_t)> trace_callback_{};
         std::function<void(int, std::uint8_t)> irq_accept_{};
+        std::function<int(std::uint32_t, std::uint8_t, bool)> bus_wait_{};
+        std::function<void()> self_reset_{}; // board hook: WDT internal reset is imminent
 
         ibus* bus_{};
         sh2_peripherals peripherals_{}; // on-chip SH7604 peripherals ($FFFFFE00 window)

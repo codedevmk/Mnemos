@@ -17,6 +17,7 @@
 
 namespace {
     using mnemos::chips::cpu::sh2;
+    using mnemos::chips::cpu::sh2_peripherals;
     using reset_kind = mnemos::chips::reset_kind;
 
     struct machine final {
@@ -36,6 +37,11 @@ namespace {
             w16(a, static_cast<std::uint16_t>(v >> 16U));
             w16(a + 2U, static_cast<std::uint16_t>(v));
         }
+        [[nodiscard]] std::uint32_t r32(std::uint32_t a) const {
+            return (static_cast<std::uint32_t>(ram[a]) << 24U) |
+                   (static_cast<std::uint32_t>(ram[a + 1U]) << 16U) |
+                   (static_cast<std::uint32_t>(ram[a + 2U]) << 8U) | ram[a + 3U];
+        }
         void load(std::uint32_t a, std::initializer_list<std::uint16_t> words) {
             for (const std::uint16_t w : words) {
                 w16(a, w);
@@ -48,6 +54,19 @@ namespace {
             cpu.set_registers(r);
         }
     };
+
+    void write_peripheral32(sh2_peripherals& p, std::uint32_t addr, std::uint32_t v) {
+        p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
+        p.write8(addr + 1U, static_cast<std::uint8_t>(v >> 16U));
+        p.write8(addr + 2U, static_cast<std::uint8_t>(v >> 8U));
+        p.write8(addr + 3U, static_cast<std::uint8_t>(v));
+    }
+
+    std::uint32_t read_peripheral32(const sh2_peripherals& p, std::uint32_t addr) {
+        return (static_cast<std::uint32_t>(p.read8(addr)) << 24U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
+               (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
+    }
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::icpu, sh2>);
@@ -396,6 +415,40 @@ TEST_CASE("sh2 multiply: MUL.L, MULU.W, MULS.W, DMULU.L, DMULS.L") {
     CHECK(m.cpu.cpu_registers().macl == 1U); // (-1) * (-1)
 }
 
+TEST_CASE("sh2 fixed-state timing covers multiply and read-modify-write instructions") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[0] = 0x2000U;
+    r.r[1] = 0x2008U;
+    r.r[2] = 6U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.w32(0x2000U, 7U);
+    m.w32(0x2008U, static_cast<std::uint32_t>(-2));
+    m.load(0x1000U, {0x0127U, 0x3125U, 0x010FU}); // MUL.L ; DMULU.L ; MAC.L
+    CHECK(m.cpu.step_instruction() == 2);
+    CHECK(m.cpu.step_instruction() == 2);
+    CHECK(m.cpu.step_instruction() == 3);
+
+    r = m.cpu.cpu_registers();
+    r.r[0] = 0x2010U;
+    r.r[1] = 0x2014U;
+    r.pc = 0x1100U;
+    m.cpu.set_registers(r);
+    m.w16(0x2010U, 3U);
+    m.w16(0x2014U, 4U);
+    m.load(0x1100U, {0x410FU}); // MAC.W
+    CHECK(m.cpu.step_instruction() == 3);
+
+    r = m.cpu.cpu_registers();
+    r.r[3] = 0x3000U;
+    r.pc = 0x1200U;
+    m.cpu.set_registers(r);
+    m.ram[0x3000] = 0x00U;
+    m.load(0x1200U, {0x431BU}); // TAS.B @R3
+    CHECK(m.cpu.step_instruction() == 4);
+}
+
 TEST_CASE("sh2 MAC.L accumulates signed 32x32 products") {
     machine m;
     m.w32(0x2000U, 7U);
@@ -502,6 +555,35 @@ TEST_CASE("sh2 TAS.B tests and sets bit 7") {
     CHECK(m.ram[0x3000] == 0x80U);
 }
 
+TEST_CASE("sh2 TAS.B adds board-provided locked bus wait states") {
+    machine m;
+    int calls = 0;
+    std::uint32_t seen_addr = 0U;
+    std::uint8_t seen_bytes = 0U;
+    bool seen_locked = false;
+    m.cpu.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t bytes, bool locked) {
+        ++calls;
+        seen_addr = address;
+        seen_bytes = bytes;
+        seen_locked = locked;
+        return 3;
+    });
+
+    auto r = m.cpu.cpu_registers();
+    r.r[1] = 0x3000U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.ram[0x3000] = 0x00U;
+    m.load(0x1000U, {0x411BU}); // TAS.B @R1
+
+    CHECK(m.cpu.step_instruction() == 7);
+    CHECK(calls == 1);
+    CHECK(seen_addr == 0x3000U);
+    CHECK(seen_bytes == 1U);
+    CHECK(seen_locked);
+    CHECK(m.ram[0x3000] == 0x80U);
+}
+
 TEST_CASE("sh2 DIV1 performs one non-restoring divide step") {
     machine m;
     auto r = m.cpu.cpu_registers();
@@ -559,7 +641,7 @@ TEST_CASE("sh2 BRA executes the delay slot then branches") {
     machine m;
     m.set_pc(0x1000U);
     m.load(0x1000U, {0xA006U, 0xE105U}); // BRA +6 ; (delay) MOV #5,R1
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 2);
     const auto r = m.cpu.cpu_registers();
     CHECK(r.r[1] == 5U);    // delay slot executed before the branch landed
     CHECK(r.pc == 0x1010U); // 0x1002 + 6*2 + 2
@@ -568,13 +650,13 @@ TEST_CASE("sh2 BRA executes the delay slot then branches") {
 TEST_CASE("sh2 BSR sets PR and RTS returns through it") {
     machine m;
     m.set_pc(0x1000U);
-    m.load(0x1000U, {0xB006U, 0x0009U}); // BSR +6 ; (delay) NOP
-    m.load(0x1010U, {0x000BU, 0x0009U}); // RTS ; (delay) NOP
-    m.cpu.step_instruction();            // BSR
+    m.load(0x1000U, {0xB006U, 0x0009U});  // BSR +6 ; (delay) NOP
+    m.load(0x1010U, {0x000BU, 0x0009U});  // RTS ; (delay) NOP
+    CHECK(m.cpu.step_instruction() == 2); // BSR
     auto r = m.cpu.cpu_registers();
     CHECK(r.pc == 0x1010U);
-    CHECK(r.pr == 0x1004U);   // return address = instruction after the delay slot
-    m.cpu.step_instruction(); // RTS
+    CHECK(r.pr == 0x1004U);               // return address = instruction after the delay slot
+    CHECK(m.cpu.step_instruction() == 2); // RTS
     CHECK(m.cpu.cpu_registers().pc == 0x1004U);
 }
 
@@ -582,13 +664,13 @@ TEST_CASE("sh2 BT branches only when T is set") {
     machine m;
     m.set_pc(0x1000U);
     m.load(0x1000U, {0x0018U, 0x8901U}); // SETT ; BT +1
-    m.cpu.step_instruction();
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 1);
+    CHECK(m.cpu.step_instruction() == 3);
     CHECK(m.cpu.cpu_registers().pc == 0x1008U); // 0x1004 + 1*2 + 2
     m.set_pc(0x2000U);
     m.load(0x2000U, {0x0008U, 0x8901U}); // CLRT ; BT +1 (not taken)
-    m.cpu.step_instruction();
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 1);
+    CHECK(m.cpu.step_instruction() == 1);
     CHECK(m.cpu.cpu_registers().pc == 0x2004U); // fell through
 }
 
@@ -596,8 +678,8 @@ TEST_CASE("sh2 BT/S runs its delay slot when taken") {
     machine m;
     m.set_pc(0x1000U);
     m.load(0x1000U, {0x0018U, 0x8D01U, 0xE207U}); // SETT ; BT/S +1 ; (delay) MOV #7,R2
-    m.cpu.step_instruction();
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 1);
+    CHECK(m.cpu.step_instruction() == 2);
     const auto r = m.cpu.cpu_registers();
     CHECK(r.r[2] == 7U);
     CHECK(r.pc == 0x1008U);
@@ -610,14 +692,14 @@ TEST_CASE("sh2 JMP and JSR transfer through a register with a delay slot") {
     r.pc = 0x1000U;
     m.cpu.set_registers(r);
     m.load(0x1000U, {0x432BU, 0x0009U}); // JMP @R3 ; (delay) NOP
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 2);
     CHECK(m.cpu.cpu_registers().pc == 0x1010U);
     auto r2 = m.cpu.cpu_registers();
     r2.r[4] = 0x2000U;
     r2.pc = 0x1100U;
     m.cpu.set_registers(r2);
     m.load(0x1100U, {0x440BU, 0x0009U}); // JSR @R4 ; (delay) NOP
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 2);
     const auto rr = m.cpu.cpu_registers();
     CHECK(rr.pc == 0x2000U);
     CHECK(rr.pr == 0x1104U);
@@ -630,7 +712,7 @@ TEST_CASE("sh2 BRAF computes a PC-relative branch") {
     r.pc = 0x1000U;
     m.cpu.set_registers(r);
     m.load(0x1000U, {0x0123U, 0x0009U}); // BRAF R1 ; (delay) NOP
-    m.cpu.step_instruction();
+    CHECK(m.cpu.step_instruction() == 2);
     CHECK(m.cpu.cpu_registers().pc == 0x1024U); // 0x1002 + 2 + 0x20
 }
 
@@ -683,6 +765,25 @@ TEST_CASE("sh2 STS.L/LDS.L push and pop PR through the stack") {
     CHECK(r2.r[15] == 0x3010U);
 }
 
+TEST_CASE("sh2 fixed-state timing covers system-register memory transfers") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.r[15] = 0x3010U;
+    r.sr = 0x000000F0U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x4F03U, 0x4F07U}); // STC.L SR,@-R15 ; LDC.L @R15+,SR
+    CHECK(m.cpu.step_instruction() == 2);
+    auto a = m.cpu.cpu_registers();
+    CHECK(a.r[15] == 0x300CU);
+    CHECK(m.ram[0x300C] == 0x00U);
+    CHECK(m.ram[0x300F] == 0xF0U);
+    CHECK(m.cpu.step_instruction() == 3);
+    const auto b = m.cpu.cpu_registers();
+    CHECK(b.r[15] == 0x3010U);
+    CHECK(b.sr == 0x000000F0U);
+}
+
 TEST_CASE("sh2 displacement and R0-indexed addressing modes") {
     machine m;
     auto r = m.cpu.cpu_registers();
@@ -715,6 +816,26 @@ TEST_CASE("sh2 GBR-relative store/load and immediate AND") {
     CHECK(m.cpu.cpu_registers().r[0] == 0x0DU); // AND #imm zero-extends
     m.cpu.step_instruction();
     CHECK(m.cpu.cpu_registers().r[0] == 0x0000ABCDU); // reloaded from GBR
+}
+
+TEST_CASE("sh2 fixed-state timing covers GBR byte-immediate logical ops") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.gbr = 0x3200U;
+    r.r[0] = 0x10U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.ram[0x3210] = 0xF0U;
+    m.load(0x1000U, {0xCC0FU, 0xCD0FU, 0xCE0FU, 0xCF0FU});
+
+    CHECK(m.cpu.step_instruction() == 3); // TST.B #0x0F,@(R0,GBR)
+    CHECK((m.cpu.cpu_registers().sr & sh2::sr_t) != 0U);
+    CHECK(m.cpu.step_instruction() == 3); // AND.B #0x0F,@(R0,GBR)
+    CHECK(m.ram[0x3210] == 0x00U);
+    CHECK(m.cpu.step_instruction() == 3); // XOR.B #0x0F,@(R0,GBR)
+    CHECK(m.ram[0x3210] == 0x0FU);
+    CHECK(m.cpu.step_instruction() == 3); // OR.B #0x0F,@(R0,GBR)
+    CHECK(m.ram[0x3210] == 0x0FU);
 }
 
 TEST_CASE("sh2 MOVA computes a PC-relative address into R0") {
@@ -750,14 +871,147 @@ TEST_CASE("sh2 TRAPA pushes a frame and RTE returns through it") {
     m.w32(0x4000U + 0x20U * 4U, 0x5000U); // vector 0x20 handler -> 0x5000
     m.load(0x1000U, {0xC320U});           // TRAPA #0x20
     m.load(0x5000U, {0x002BU, 0x0009U});  // RTE ; (delay) NOP
-    m.cpu.step_instruction();             // TRAPA
+    CHECK(m.cpu.step_instruction() == 8); // TRAPA
     auto a = m.cpu.cpu_registers();
-    CHECK(a.pc == 0x5000U);    // vectored through VBR + 0x20*4
-    CHECK(a.r[15] == 0x3008U); // SR + PC pushed
-    m.cpu.step_instruction();  // RTE
+    CHECK(a.pc == 0x5000U);               // vectored through VBR + 0x20*4
+    CHECK(a.r[15] == 0x3008U);            // SR + PC pushed
+    CHECK(m.cpu.step_instruction() == 4); // RTE
     const auto b = m.cpu.cpu_registers();
     CHECK(b.pc == 0x1002U);    // returned to the instruction after TRAPA
     CHECK(b.r[15] == 0x3010U); // stack restored
+}
+
+TEST_CASE("sh2 address-error exception vectors odd instruction fetches") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1001U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 9U * 4U, 0x7000U); // CPU address-error handler -> 0x7000
+
+    CHECK(m.cpu.step_instruction() == 1);
+    const auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);
+    CHECK(a.r[15] == 0x3008U);
+    CHECK(m.ram[0x3008] == 0x00U);
+    CHECK(m.ram[0x300B] == 0x01U); // saved PC = odd fetch address 0x1001
+}
+
+TEST_CASE("sh2 address-error exception vectors misaligned word and long data accesses") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[1] = 0x2001U;
+    r.r[2] = 0xAAAAAAAAU;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 9U * 4U, 0x7000U);
+    m.load(0x1000U, {0x6211U}); // MOV.W @R1,R2
+
+    m.cpu.step_instruction();
+    auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);
+    CHECK(a.r[2] == 0xAAAAAAAAU);
+    CHECK(a.r[15] == 0x3008U);
+    CHECK(m.ram[0x300B] == 0x02U); // saved PC = instruction after the faulting op
+
+    r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[3] = 0x3002U;
+    r.r[4] = 0x12345678U;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1100U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.load(0x1100U, {0x2346U}); // MOV.L R4,@-R3, target 0x2FFE is not long-aligned
+    m.cpu.step_instruction();
+    const auto b = m.cpu.cpu_registers();
+    CHECK(b.pc == 0x7000U);
+    CHECK(b.r[3] == 0x3002U); // predecrement did not retire
+    CHECK(m.ram[0x2FFE] == 0x00U);
+    CHECK(m.ram[0x300B] == 0x02U);
+}
+
+TEST_CASE("sh2 address-error exception is deferred from delay-slot data access") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[1] = 0x2001U;
+    r.r[2] = 0xAAAAAAAAU;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 9U * 4U, 0x7000U);
+    m.load(0x1000U, {0xA006U, 0x6211U}); // BRA 0x1010 ; (slot) MOV.W @R1,R2
+
+    CHECK(m.cpu.step_instruction() == 2);
+    const auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);
+    CHECK(a.r[2] == 0xAAAAAAAAU);
+    CHECK(a.r[15] == 0x3008U);
+    CHECK(m.r32(0x3008U) == 0x00001010U); // saved PC = committed branch target
+}
+
+TEST_CASE("sh2 address-error exception enforces on-chip access classes") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[1] = 0xFFFFFF00U;
+    r.r[2] = 0xAAAAAAAAU;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1200U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 9U * 4U, 0x7000U);
+    m.load(0x1200U, {0x6210U}); // MOV.B @R1,R2: byte access in high on-chip space
+    m.cpu.step_instruction();
+    auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);
+    CHECK(a.r[2] == 0xAAAAAAAAU);
+    CHECK(m.r32(0x3008U) == 0x00001202U);
+
+    r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[1] = 0xFFFFFE00U;
+    r.r[2] = 0xBBBBBBBBU;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1300U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.load(0x1300U, {0x6212U}); // MOV.L @R1,R2: long access in low on-chip space
+    m.cpu.step_instruction();
+    const auto b = m.cpu.cpu_registers();
+    CHECK(b.pc == 0x7000U);
+    CHECK(b.r[2] == 0xBBBBBBBBU);
+    CHECK(m.r32(0x3008U) == 0x00001302U);
+}
+
+TEST_CASE("sh2 address-error exception rejects PC-relative loads into on-chip space") {
+    machine m;
+    std::array<std::uint8_t, 0x1000> high_ram{};
+    m.bus.map_ram(0xFFFFF000U, std::span<std::uint8_t>(high_ram), 1);
+    high_ram[0xDFCU] = 0x92U; // MOV.W @(0,PC),R2 at 0xFFFFFDFC
+    high_ram[0xDFDU] = 0x00U;
+
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[2] = 0xAAAAAAAAU;
+    r.r[15] = 0x3010U;
+    r.pc = 0xFFFFFDFCU;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 9U * 4U, 0x7000U);
+
+    m.cpu.step_instruction();
+    const auto a = m.cpu.cpu_registers();
+    CHECK(a.pc == 0x7000U);
+    CHECK(a.r[2] == 0xAAAAAAAAU);
+    CHECK(m.r32(0x3008U) == 0xFFFFFDFEU);
 }
 
 TEST_CASE("sh2 accepts an external IRQ above the mask") {
@@ -834,9 +1088,9 @@ TEST_CASE("sh2 SLEEP halts until an interrupt wakes it") {
     r.sr = 0U;
     m.cpu.set_registers(r);
     m.w32(0x4000U + 0x44U * 4U, 0x6000U);
-    m.load(0x1000U, {0x001BU, 0xE509U}); // SLEEP ; MOV #9,R5 (resumes here after RTE)
-    m.load(0x6000U, {0x0009U});          // handler: NOP
-    m.cpu.step_instruction();            // SLEEP -> halted
+    m.load(0x1000U, {0x001BU, 0xE509U});  // SLEEP ; MOV #9,R5 (resumes here after RTE)
+    m.load(0x6000U, {0x0009U});           // handler: NOP
+    CHECK(m.cpu.step_instruction() == 3); // SLEEP -> halted
     CHECK(m.cpu.cpu_registers().pc == 0x1002U);
     m.cpu.step_instruction(); // still halted (no interrupt): nothing runs
     CHECK(m.cpu.cpu_registers().pc == 0x1002U);
@@ -898,6 +1152,14 @@ TEST_CASE("sh2_peripherals round-trips and resets its register window") {
     mnemos::chips::cpu::sh2_peripherals p;
     p.write8(0xFFFFFE92U, 0xA5U); // CCR (raw-storage region, not a modelled timer)
     p.write8(0xFFFFFFFFU, 0x3CU); // top of the window
+    p.write8(0xFFFFFE00U, 0x1BU); // modelled SCI fields are explicit state
+    p.write8(0xFFFFFE01U, 0x22U);
+    p.write8(0xFFFFFE02U, 0x50U);
+    p.write8(0xFFFFFE03U, 0x5AU);
+    p.write8(0xFFFFFE04U, 0x40U);
+    p.write8(0xFFFFFE05U, 0x42U);
+    p.write8(0xFFFFFEE2U, 0x80U); // IPRA extension-era fields are first-class state
+    write_peripheral32(p, 0xFFFFFFA0U, 0x55U);
     CHECK(p.read8(0xFFFFFE92U) == 0xA5U);
 
     std::vector<std::uint8_t> blob;
@@ -909,9 +1171,25 @@ TEST_CASE("sh2_peripherals round-trips and resets its register window") {
     REQUIRE(reader.ok());
     CHECK(q.read8(0xFFFFFE92U) == 0xA5U);
     CHECK(q.read8(0xFFFFFFFFU) == 0x3CU);
+    CHECK(q.read8(0xFFFFFE00U) == 0x1BU);
+    CHECK(q.read8(0xFFFFFE01U) == 0x22U);
+    CHECK(q.read8(0xFFFFFE02U) == 0x50U);
+    CHECK(q.read8(0xFFFFFE03U) == 0x5AU);
+    CHECK(q.read8(0xFFFFFE04U) == 0x40U);
+    CHECK(q.read8(0xFFFFFE05U) == 0x42U);
+    CHECK(q.read8(0xFFFFFEE2U) == 0x80U);
+    CHECK(read_peripheral32(q, 0xFFFFFFA0U) == 0x00000055U);
 
     q.reset();
     CHECK(q.read8(0xFFFFFE92U) == 0x00U);
+}
+
+TEST_CASE("sh2_peripherals rejects unversioned state chunks") {
+    std::vector<std::uint8_t> blob(32U, 0U);
+    mnemos::chips::cpu::sh2_peripherals q;
+    mnemos::chips::state_reader reader(blob);
+    q.load_state(reader);
+    CHECK_FALSE(reader.ok());
 }
 
 TEST_CASE("sh2_peripherals FRT counts at the TCR-selected prescale") {
@@ -1033,6 +1311,159 @@ TEST_CASE("sh2_peripherals INTC: output-compare outranks overflow") {
     CHECK(irq.vector == 0x60U); // the output-compare vector wins
 }
 
+TEST_CASE("sh2_peripherals INTC masks priority and vector registers") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFEE2U, 0xFFU); // IPRA high: DIVU + DMAC priorities
+    p.write8(0xFFFFFEE3U, 0xFFU); // IPRA low: WDT priority, reserved low nibble
+    CHECK(p.read8(0xFFFFFEE2U) == 0xFFU);
+    CHECK(p.read8(0xFFFFFEE3U) == 0xF0U);
+
+    p.write8(0xFFFFFE62U, 0xFFU); // VCRA high: SCI ERI vector
+    p.write8(0xFFFFFE63U, 0xFFU); // VCRA low: SCI RXI vector
+    CHECK(p.read8(0xFFFFFE62U) == 0x7FU);
+    CHECK(p.read8(0xFFFFFE63U) == 0x7FU);
+
+    p.write8(0xFFFFFEE4U, 0xFFU); // VCRWDT high: ITI vector
+    p.write8(0xFFFFFEE5U, 0xFFU); // VCRWDT low: BSC CMI vector storage
+    CHECK(p.read8(0xFFFFFEE4U) == 0x7FU);
+    CHECK(p.read8(0xFFFFFEE5U) == 0x7FU);
+
+    write_peripheral32(p, 0xFFFFFFA0U, 0xFFFFFFFFU); // VCRDMA0
+    CHECK(read_peripheral32(p, 0xFFFFFFA0U) == 0x0000007FU);
+}
+
+TEST_CASE("sh2_peripherals SCI resets and round-trips registers") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE00U, 0x1BU);
+    p.write8(0xFFFFFE01U, 0x22U);
+    p.write8(0xFFFFFE02U, 0x50U);
+    p.write8(0xFFFFFE03U, 0x5AU);
+    p.write8(0xFFFFFE04U, 0x40U);
+    p.write8(0xFFFFFE05U, 0x42U);
+
+    CHECK(p.read8(0xFFFFFE00U) == 0x1BU);
+    CHECK(p.read8(0xFFFFFE01U) == 0x22U);
+    CHECK(p.read8(0xFFFFFE02U) == 0x50U);
+    CHECK(p.read8(0xFFFFFE03U) == 0x5AU);
+    CHECK(p.read8(0xFFFFFE04U) == 0x40U);
+    CHECK(p.read8(0xFFFFFE05U) == 0x42U);
+
+    p.reset();
+    CHECK(p.read8(0xFFFFFE00U) == 0x00U);
+    CHECK(p.read8(0xFFFFFE01U) == 0xFFU);
+    CHECK(p.read8(0xFFFFFE02U) == 0x00U);
+    CHECK(p.read8(0xFFFFFE03U) == 0xFFU);
+    CHECK(p.read8(0xFFFFFE04U) == 0x84U);
+    CHECK(p.read8(0xFFFFFE05U) == 0x00U);
+}
+
+TEST_CASE("sh2_peripherals SCI transmit completion presents TXI and TEI") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE60U, 0xA0U); // SCI priority 10
+    p.write8(0xFFFFFE64U, 0x33U); // TXI vector
+    p.write8(0xFFFFFE65U, 0x34U); // TEI vector
+    p.write8(0xFFFFFE02U, 0xA4U); // SCR: TIE | TE | TEIE
+
+    p.write8(0xFFFFFE03U, 0x5AU); // TDR write starts a coarse transmit
+    CHECK(p.read8(0xFFFFFE03U) == 0x5AU);
+    CHECK((p.read8(0xFFFFFE04U) & 0x84U) == 0x00U);
+    CHECK(p.pending_onchip_irq().level == 0);
+
+    p.tick(1U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x84U) == 0x84U);
+    auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x33U); // TXI outranks TEI in the SCI group
+
+    p.write8(0xFFFFFE04U, 0x04U); // clear TDRE, leave TEND
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x34U);
+}
+
+TEST_CASE("sh2_peripherals SCI receive latches RXI, ERI, and overrun") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE60U, 0xA0U); // SCI priority 10
+    p.write8(0xFFFFFE62U, 0x31U); // ERI vector
+    p.write8(0xFFFFFE63U, 0x32U); // RXI vector
+    p.sci_receive_byte(0x11U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x40U) == 0x00U); // receiver disabled
+
+    p.write8(0xFFFFFE02U, 0x50U); // SCR: RIE | RE
+    p.sci_receive_byte(0x42U);
+    CHECK(p.read8(0xFFFFFE05U) == 0x42U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x40U) == 0x40U);
+    auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x32U);
+
+    p.write8(0xFFFFFE04U, 0x00U); // clear RDRF
+    CHECK(p.pending_onchip_irq().level == 0);
+
+    p.sci_receive_byte(0x43U, 0x10U); // framing error
+    CHECK(p.read8(0xFFFFFE05U) == 0x43U);
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x31U);
+
+    p.write8(0xFFFFFE04U, 0x40U); // keep unread data but clear the framing flag
+    p.sci_receive_byte(0x44U);
+    CHECK(p.read8(0xFFFFFE05U) == 0x43U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x20U) == 0x20U);
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x31U);
+}
+
+TEST_CASE("sh2_peripherals INTC presents raw SCI status interrupts") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE60U, 0xA0U); // SCI priority 10, FRT priority 0
+    p.write8(0xFFFFFE62U, 0x31U); // ERI vector
+    p.write8(0xFFFFFE63U, 0x32U); // RXI vector
+    p.write8(0xFFFFFE64U, 0x33U); // TXI vector
+    p.write8(0xFFFFFE65U, 0x34U); // TEI vector
+    p.write8(0xFFFFFE02U, 0xC4U); // SCR: TIE | RIE | TEIE
+
+    p.write8(0xFFFFFE04U, 0xE4U); // SSR: TDRE | RDRF | ORER | TEND
+    auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x31U); // ERI outranks the other SCI sources
+
+    p.write8(0xFFFFFE04U, 0xC4U); // no error, RXI still pending
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x32U);
+
+    p.write8(0xFFFFFE04U, 0x84U); // TXI before TEI
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x33U);
+
+    p.write8(0xFFFFFE04U, 0x04U); // TEI only
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 10);
+    CHECK(irq.vector == 0x34U);
+}
+
+TEST_CASE("sh2_peripherals INTC presents the WDT interval interrupt") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFEE3U, 0x60U); // IPRA[7:4]: WDT priority 6
+    p.write8(0xFFFFFEE4U, 0x55U); // VCRWDT high: ITI vector
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU); // WTCNT = 0xFF
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x20U); // interval mode, TME, prescale 2
+    p.tick(2U);
+    auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 6);
+    CHECK(irq.vector == 0x55U);
+
+    CHECK((p.read8(0xFFFFFE80U) & 0x80U) != 0U); // observe WTCSR.OVF
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x20U); // write 0 to the observed OVF bit
+    CHECK(p.pending_onchip_irq().level == 0);
+}
+
 TEST_CASE("sh2 accepts an on-chip FRT interrupt through the INTC") {
     machine m;
     m.w32(0x60U * 4U, 0x3000U);          // output-compare vector 0x60 -> handler
@@ -1073,7 +1504,7 @@ TEST_CASE("sh2_peripherals WDT counts in interval mode and flags overflow") {
     CHECK(p.read8(0xFFFFFE81U) == 0x00U);        // WTCNT wrapped
 }
 
-TEST_CASE("sh2_peripherals WDT flags the reset latch in watchdog mode") {
+TEST_CASE("sh2_peripherals WDT flags overflow and resets WDT when RSTE is clear") {
     mnemos::chips::cpu::sh2_peripherals p;
     p.write8(0xFFFFFE80U, 0x5AU);
     p.write8(0xFFFFFE81U, 0xFFU); // WTCNT = 0xFF
@@ -1081,6 +1512,91 @@ TEST_CASE("sh2_peripherals WDT flags the reset latch in watchdog mode") {
     p.write8(0xFFFFFE81U, 0x60U); // WTCSR: TME | WTIT (watchdog mode)
     p.tick(2U);
     CHECK((p.read8(0xFFFFFE82U) & 0x80U) != 0U); // RSTCSR.WOVF
+    CHECK(p.read8(0xFFFFFE80U) == 0x18U);        // WTCSR reset within WDT
+    CHECK(p.read8(0xFFFFFE81U) == 0x00U);        // WTCNT reset within WDT
+    CHECK_FALSE(p.consume_watchdog_reset().asserted);
+    p.write8(0xFFFFFE82U, 0xA5U);
+    p.write8(0xFFFFFE83U, 0x00U); // clear WOVF; RSTE/RSTS unaffected
+    CHECK((p.read8(0xFFFFFE82U) & 0x80U) == 0U);
+}
+
+TEST_CASE("sh2_peripherals WDT requests the selected internal reset when RSTE is set") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE82U, 0x5AU);
+    p.write8(0xFFFFFE83U, 0x40U); // RSTCSR.RSTE=1, RSTS=0 -> power-on reset
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU);
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U);
+    p.tick(2U);
+    auto request = p.consume_watchdog_reset();
+    REQUIRE(request.asserted);
+    CHECK(request.kind == reset_kind::power_on);
+    CHECK_FALSE(p.consume_watchdog_reset().asserted);
+
+    p.write8(0xFFFFFE82U, 0x5AU);
+    p.write8(0xFFFFFE83U, 0x60U); // RSTE=1, RSTS=1 -> hard/manual reset
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU);
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U);
+    p.tick(2U);
+    request = p.consume_watchdog_reset();
+    REQUIRE(request.asserted);
+    CHECK(request.kind == reset_kind::hard);
+}
+
+TEST_CASE("sh2_peripherals WDT serializes a pending internal reset request") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE82U, 0x5AU);
+    p.write8(0xFFFFFE83U, 0x60U); // RSTE=1, RSTS=1 -> hard/manual reset
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU);
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U);
+    p.tick(2U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    p.save_state(writer);
+
+    mnemos::chips::cpu::sh2_peripherals q;
+    mnemos::chips::state_reader reader(blob);
+    q.load_state(reader);
+    REQUIRE(reader.ok());
+    const auto request = q.consume_watchdog_reset();
+    REQUIRE(request.asserted);
+    CHECK(request.kind == reset_kind::hard);
+    CHECK((q.read8(0xFFFFFE82U) & 0xE0U) == 0xE0U);
+}
+
+TEST_CASE("sh2 WDT internal reset reloads vectors and preserves RSTCSR") {
+    machine m;
+    m.w32(0x0000U, 0x2000U);
+    m.w32(0x0004U, 0x0000FFF0U);
+    m.set_pc(0x1000U);
+    m.load(0x1000U, {0x001BU}); // SLEEP gives the WDT enough cycles to overflow
+
+    auto r = m.cpu.cpu_registers();
+    r.sr = 0U;
+    r.r[3] = 0x12345678U;
+    m.cpu.set_registers(r);
+
+    sh2_peripherals& p = m.cpu.peripherals();
+    p.write8(0xFFFFFE82U, 0x5AU);
+    p.write8(0xFFFFFE83U, 0x40U); // enable internal reset, power-on type
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU);
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U); // watchdog mode, TME, prescale 2
+
+    CHECK(m.cpu.step_instruction() == 3);
+    const auto after = m.cpu.cpu_registers();
+    CHECK(after.pc == 0x2000U);
+    CHECK(after.r[15] == 0x0000FFF0U);
+    CHECK(after.r[3] == 0U);
+    CHECK(after.sr == sh2::sr_imask);
+    CHECK((m.cpu.peripherals().read8(0xFFFFFE82U) & 0xC0U) == 0xC0U);
 }
 
 TEST_CASE("sh2_peripherals WDT ignores a data write without the matching key") {
@@ -1101,11 +1617,16 @@ namespace {
             bus.map_ram(0x0000U, std::span<std::uint8_t>(ram), 0);
             p.set_bus(&bus);
         }
-        // DMAC channel-0 registers are 32-bit, big-endian byte lanes.
+        // DMAC channel registers are 32-bit, big-endian byte lanes.
         static constexpr std::uint32_t sar0 = 0xFFFFFF80U;
         static constexpr std::uint32_t dar0 = 0xFFFFFF84U;
         static constexpr std::uint32_t tcr0 = 0xFFFFFF88U;
         static constexpr std::uint32_t chcr0 = 0xFFFFFF8CU;
+        static constexpr std::uint32_t sar1 = 0xFFFFFF90U;
+        static constexpr std::uint32_t dar1 = 0xFFFFFF94U;
+        static constexpr std::uint32_t tcr1 = 0xFFFFFF98U;
+        static constexpr std::uint32_t chcr1 = 0xFFFFFF9CU;
+        static constexpr std::uint32_t vcrdma0 = 0xFFFFFFA0U;
         static constexpr std::uint32_t dmaor = 0xFFFFFFB0U;
         void w32reg(std::uint32_t addr, std::uint32_t v) {
             p.write8(addr, static_cast<std::uint8_t>(v >> 24U));
@@ -1131,13 +1652,226 @@ TEST_CASE("sh2_peripherals DMAC auto-request copies a long-word block") {
     f.w32reg(f.dar0, 0x00002000U);
     f.w32reg(f.tcr0, 4U);           // 4 long-word units = 16 bytes
     f.w32reg(f.dmaor, 0x00000001U); // DME
-    f.w32reg(f.chcr0, 0x5A01U);     // DE | AR | TS=long | SM=inc | DM=inc
+    f.w32reg(f.chcr0, 0x5A11U);     // DE | TB | AR | TS=long | SM=inc | DM=inc
     f.p.tick(1U);
     for (std::uint32_t i = 0; i < 16U; ++i) {
         CHECK(f.ram[0x2000U + i] == static_cast<std::uint8_t>(0xA0U + i));
     }
     CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U); // CHCR.TE set on completion
     CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC burst is bounded per tick and resumes across ticks") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0x5AU;
+    constexpr std::uint32_t total = 0x4000U; // 16384 byte units -- far above any per-tick cap
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, total);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x4211U);     // DE | TB(burst) | AR | TS=byte | SM=fixed | DM=inc
+
+    // A single tick must NOT drain the whole block (the pre-fix wedge): the
+    // burst is capped per tick, leaves CHCR.TE clear, and makes partial progress.
+    f.p.tick(1U);
+    const std::uint32_t after_first = f.r32reg(f.tcr0) & 0x00FFFFFFU;
+    CHECK(after_first > 0U);
+    CHECK(after_first < total);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) == 0U);
+
+    // It resumes on later ticks and eventually completes the full transfer.
+    for (int i = 0; i < 4096 && (f.r32reg(f.chcr0) & 0x02U) == 0U; ++i) {
+        f.p.tick(1U);
+    }
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 0U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);    // TE set after completing
+    CHECK(f.ram[0x2000U + total - 1U] == 0x5AU); // last unit landed
+}
+
+TEST_CASE("sh2_peripherals DMAC reports source and destination bus waits") {
+    dmac_fixture f;
+    for (std::uint32_t i = 0; i < 4U; ++i) {
+        f.ram[0x1000U + i] = static_cast<std::uint8_t>(0xA0U + i);
+    }
+    int calls = 0;
+    f.p.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t bytes, bool locked) {
+        CHECK_FALSE(locked);
+        CHECK(bytes == 4U);
+        ++calls;
+        if (address == 0x1000U) {
+            return 2;
+        }
+        if (address == 0x2000U) {
+            return 3;
+        }
+        return 0;
+    });
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x5A11U);     // DE | TB | AR | TS=long | SM=inc | DM=inc
+
+    CHECK(f.p.tick(1U) == 5U);
+    CHECK(calls == 2);
+    CHECK(f.ram[0x2000U] == 0xA0U);
+    CHECK(f.ram[0x2003U] == 0xA3U);
+}
+
+TEST_CASE("sh2 DMAC bus waits extend the owning CPU instruction") {
+    machine m;
+    m.ram[0x2000U] = 0x5AU;
+    m.load(0x1000U, {0x0009U}); // NOP; DMAC work runs during the peripheral tick
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    write_peripheral32(m.cpu.peripherals(), dmac_fixture::sar0, 0x00002000U);
+    write_peripheral32(m.cpu.peripherals(), dmac_fixture::dar0, 0x00003000U);
+    write_peripheral32(m.cpu.peripherals(), dmac_fixture::tcr0, 1U);
+    write_peripheral32(m.cpu.peripherals(), dmac_fixture::dmaor, 0x00000001U);
+    write_peripheral32(m.cpu.peripherals(), dmac_fixture::chcr0, 0x4201U); // byte unit
+    m.cpu.set_bus_wait_callback([](std::uint32_t address, std::uint8_t bytes, bool locked) {
+        CHECK_FALSE(locked);
+        CHECK(bytes == 1U);
+        if (address == 0x2000U) {
+            return 2;
+        }
+        if (address == 0x3000U) {
+            return 3;
+        }
+        return 0;
+    });
+
+    CHECK(m.cpu.step_instruction() == 6);
+    CHECK(m.cpu.elapsed_cycles() == 6U);
+    CHECK(m.ram[0x3000U] == 0x5AU);
+}
+
+TEST_CASE("sh2_peripherals DMAC cycle-steal transfers one unit per tick") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0xA0U;
+    f.ram[0x1001U] = 0xA1U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x5201U);     // DE | AR | TS=byte | SM=inc | DM=inc, cycle-steal
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2000U] == 0xA0U);
+    CHECK(f.ram[0x2001U] == 0x00U);
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) == 0U);
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2001U] == 0xA1U);
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 0U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC fixed priority selects channel zero first") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0xA0U;
+    f.ram[0x1100U] = 0xB0U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.chcr0, 0x5201U);
+    f.w32reg(f.sar1, 0x00001100U);
+    f.w32reg(f.dar1, 0x00002100U);
+    f.w32reg(f.tcr1, 1U);
+    f.w32reg(f.chcr1, 0x5201U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME, fixed priority
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2000U] == 0xA0U);
+    CHECK(f.ram[0x2100U] == 0x00U);
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2100U] == 0xB0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC round-robin starts at channel one and alternates") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0xA0U;
+    f.ram[0x1001U] = 0xA1U;
+    f.ram[0x1100U] = 0xB0U;
+    f.ram[0x1101U] = 0xB1U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.chcr0, 0x5201U);
+    f.w32reg(f.sar1, 0x00001100U);
+    f.w32reg(f.dar1, 0x00002100U);
+    f.w32reg(f.tcr1, 2U);
+    f.w32reg(f.chcr1, 0x5201U);
+    f.w32reg(f.dmaor, 0x00000009U); // DME | PR
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2100U] == 0xB0U);
+    CHECK(f.ram[0x2000U] == 0x00U);
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2000U] == 0xA0U);
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x2101U] == 0xB1U);
+}
+
+TEST_CASE("sh2_peripherals DMAC edge request consumes one latched edge") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0xA0U;
+    f.ram[0x1001U] = 0xA1U;
+    bool dreq = false;
+    f.p.set_dreq_query([&](int channel) {
+        CHECK(channel == 0);
+        return dreq;
+    });
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x4441U);     // DE | DS=edge | TS=word | DM=inc, AR=0
+
+    dreq = true;
+    f.p.tick(1U);
+    CHECK(f.ram[0x2000U] == 0xA0U);
+    CHECK(f.ram[0x2001U] == 0xA1U);
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+
+    f.ram[0x1000U] = 0xB0U;
+    f.ram[0x1001U] = 0xB1U;
+    f.p.tick(1U); // held-active edge line does not retrigger
+    CHECK(f.ram[0x2002U] == 0x00U);
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+
+    dreq = false;
+    f.p.tick(1U);
+    dreq = true;
+    f.p.tick(1U);
+    CHECK(f.ram[0x2002U] == 0xB0U);
+    CHECK(f.ram[0x2003U] == 0xB1U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);
+}
+
+TEST_CASE("sh2_peripherals INTC presents DMAC transfer-end interrupts") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0xA5U;
+    f.p.write8(0xFFFFFEE2U, 0x09U); // IPRA[11:8]: DMAC priority 9
+    f.w32reg(f.vcrdma0, 0x00000051U);
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x4205U);     // DE | IE | AR | TS=byte | DM=inc
+    f.p.tick(1U);
+
+    const auto irq = f.p.pending_onchip_irq();
+    CHECK(irq.level == 9);
+    CHECK(irq.vector == 0x51U);
+
+    f.w32reg(f.chcr0, f.r32reg(f.chcr0) & ~0x04U); // CHCR.IE gates the request
+    CHECK(f.p.pending_onchip_irq().level == 0);
 }
 
 TEST_CASE("sh2_peripherals DMAC honours fixed-source / incrementing-dest modes") {
@@ -1147,7 +1881,7 @@ TEST_CASE("sh2_peripherals DMAC honours fixed-source / incrementing-dest modes")
     f.w32reg(f.dar0, 0x00003000U);
     f.w32reg(f.tcr0, 4U);
     f.w32reg(f.dmaor, 0x00000001U);
-    f.w32reg(f.chcr0, 0x4201U); // DE | AR | TS=byte | SM=fixed | DM=inc
+    f.w32reg(f.chcr0, 0x4211U); // DE | TB | AR | TS=byte | SM=fixed | DM=inc
     f.p.tick(1U);
     for (std::uint32_t i = 0; i < 4U; ++i) {
         CHECK(f.ram[0x3000U + i] == 0x5AU);
@@ -1206,8 +1940,11 @@ TEST_CASE("sh2_peripherals DIVU performs signed 32/32 division on the DVDNT writ
                (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
     };
 
-    wr32(0xFFFFFF00U, 7U);                   // DVSR
-    wr32(0xFFFFFF04U, 100U);                 // DVDNT -> divide fires
+    wr32(0xFFFFFF00U, 7U);   // DVSR
+    wr32(0xFFFFFF04U, 100U); // DVDNT -> divide fires
+    p.tick(38U);
+    CHECK(rd32(0xFFFFFF04U) == 100U); // not complete before cycle 39
+    p.tick(1U);
     CHECK(rd32(0xFFFFFF04U) == 14U);         // quotient
     CHECK(rd32(0xFFFFFF14U) == 14U);         // DVDNTL mirror
     CHECK(rd32(0xFFFFFF10U) == 2U);          // remainder in DVDNTH
@@ -1215,14 +1952,82 @@ TEST_CASE("sh2_peripherals DIVU performs signed 32/32 division on the DVDNT writ
 
     // Negative dividend: -100 / 7 = -14 rem -2 (truncating like the hardware).
     wr32(0xFFFFFF04U, static_cast<std::uint32_t>(-100));
+    p.tick(39U);
     CHECK(rd32(0xFFFFFF04U) == static_cast<std::uint32_t>(-14));
     CHECK(rd32(0xFFFFFF10U) == static_cast<std::uint32_t>(-2));
 
     // Divide by zero saturates and sets DVCR.OVF.
     wr32(0xFFFFFF00U, 0U);
     wr32(0xFFFFFF04U, 5U);
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 0U);
+    p.tick(5U);
+    CHECK((rd32(0xFFFFFF08U) & 0x1U) == 0U);
+    p.tick(1U);
     CHECK(rd32(0xFFFFFF04U) == 0x7FFFFFFFU);
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U);
+}
+
+TEST_CASE("sh2 DIVU register read stalls until the pending operation completes") {
+    machine m;
+    m.load(0x1000U, {0x2102U, 0x6212U}); // MOV.L R0,@R1 ; MOV.L @R1,R2
+
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    r.r[0] = 100U;
+    r.r[1] = 0xFFFFFF04U; // DVDNT
+    m.cpu.set_registers(r);
+    write_peripheral32(m.cpu.peripherals(), 0xFFFFFF00U, 7U);
+
+    CHECK(m.cpu.step_instruction() == 1); // write starts the divider
+    CHECK(read_peripheral32(m.cpu.peripherals(), 0xFFFFFF04U) == 100U);
+    CHECK(m.cpu.step_instruction() == 39); // 38-cycle DIVU wait + 1-cycle load
+    const auto after = m.cpu.cpu_registers();
+    CHECK(after.r[2] == 14U);
+    CHECK(m.cpu.elapsed_cycles() == 40U);
+}
+
+TEST_CASE("sh2_peripherals INTC presents DIVU overflow interrupts") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFEE2U, 0x80U);              // IPRA[15:12]: DIVU priority 8
+    write_peripheral32(p, 0xFFFFFF0CU, 0x42U); // VCRDIV
+    write_peripheral32(p, 0xFFFFFF08U, 0x02U); // DVCR.OVFIE
+    write_peripheral32(p, 0xFFFFFF00U, 0U);    // DVSR = 0 -> overflow
+    write_peripheral32(p, 0xFFFFFF04U, 5U);    // DVDNT write starts 32/32 divide
+
+    auto irq = p.pending_onchip_irq();
+    CHECK(irq.level == 0);
+    p.tick(5U);
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 0);
+    p.tick(1U);
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 8);
+    CHECK(irq.vector == 0x42U);
+
+    write_peripheral32(p, 0xFFFFFF08U, 0x01U); // OVF remains, OVFIE cleared
+    irq = p.pending_onchip_irq();
+    CHECK(irq.level == 0);
+}
+
+TEST_CASE("sh2 accepts a DIVU overflow interrupt through the INTC") {
+    machine m;
+    m.w32(0x42U * 4U, 0x3000U);          // DIVU vector 0x42 -> handler
+    m.load(0x3000U, {0xAFFEU, 0x0009U}); // handler: BRA self ; (delay) NOP
+    auto& p = m.cpu.peripherals();
+    p.write8(0xFFFFFEE2U, 0x80U);              // level 8 DIVU
+    write_peripheral32(p, 0xFFFFFF0CU, 0x42U); // VCRDIV
+    write_peripheral32(p, 0xFFFFFF08U, 0x02U); // DVCR.OVFIE
+    write_peripheral32(p, 0xFFFFFF00U, 0U);    // DVSR = 0
+    write_peripheral32(p, 0xFFFFFF04U, 5U);    // overflow is now pending
+    p.tick(6U);
+
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    r.sr = 0U; // IMASK = 0 so the level-8 IRQ is accepted
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x0009U});
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x3000U); // vectored into the handler loop
 }
 
 TEST_CASE("sh2_peripherals DIVU performs signed 64/32 division on the DVDNTL write") {
@@ -1243,6 +2048,7 @@ TEST_CASE("sh2_peripherals DIVU performs signed 64/32 division on the DVDNTL wri
     wr32(0xFFFFFF00U, 32U);         // DVSR
     wr32(0xFFFFFF10U, 0x00000008U); // DVDNTH
     wr32(0xFFFFFF14U, 0x00000000U); // DVDNTL -> divide fires
+    p.tick(39U);
     CHECK(rd32(0xFFFFFF14U) == 0x40000000U);
     CHECK(rd32(0xFFFFFF10U) == 0U);
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 0U);
@@ -1254,8 +2060,30 @@ TEST_CASE("sh2_peripherals DIVU performs signed 64/32 division on the DVDNTL wri
     wr32(0xFFFFFF00U, 2U);
     wr32(0xFFFFFF10U, 0x00000008U);
     wr32(0xFFFFFF14U, 0x00000000U);
+    p.tick(6U);
     CHECK(rd32(0xFFFFFF14U) == 0x7FFFFFFFU);
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U);
+}
+
+TEST_CASE("sh2_peripherals DIVU pending result survives state round-trip") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    write_peripheral32(p, 0xFFFFFF00U, 7U);
+    write_peripheral32(p, 0xFFFFFF04U, 100U);
+    p.tick(10U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    p.save_state(writer);
+
+    mnemos::chips::cpu::sh2_peripherals q;
+    mnemos::chips::state_reader reader(blob);
+    q.load_state(reader);
+    REQUIRE(reader.ok());
+    q.tick(28U);
+    CHECK(read_peripheral32(q, 0xFFFFFF04U) == 100U);
+    q.tick(1U);
+    CHECK(read_peripheral32(q, 0xFFFFFF04U) == 14U);
+    CHECK(read_peripheral32(q, 0xFFFFFF10U) == 2U);
 }
 
 TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of crashing") {
@@ -1274,9 +2102,10 @@ TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of cr
                (static_cast<std::uint32_t>(p.read8(addr + 1U)) << 16U) |
                (static_cast<std::uint32_t>(p.read8(addr + 2U)) << 8U) | p.read8(addr + 3U);
     };
-    wr32(0xFFFFFF00U, 0xFFFFFFFFU);          // DVSR = -1
-    wr32(0xFFFFFF10U, 0x80000000U);          // DVDNTH
-    wr32(0xFFFFFF14U, 0x00000000U);          // DVDNTL -> divide fires
+    wr32(0xFFFFFF00U, 0xFFFFFFFFU); // DVSR = -1
+    wr32(0xFFFFFF10U, 0x80000000U); // DVDNTH
+    wr32(0xFFFFFF14U, 0x00000000U); // DVDNTL -> divide fires
+    p.tick(6U);
     CHECK((rd32(0xFFFFFF08U) & 0x1U) == 1U); // DVCR.OVF
     // Negative dividend, negative divisor: positive overflow saturates high.
     CHECK(rd32(0xFFFFFF14U) == 0x7FFFFFFFU);

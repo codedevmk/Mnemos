@@ -41,6 +41,7 @@ namespace mnemos::manifests::sega32x {
     inline constexpr std::uint32_t vdp_reg_size = 0x100U;
     inline constexpr std::uint32_t vdp_pal_base = 0x00004200U; // 32X VDP palette CRAM
     inline constexpr std::uint32_t vdp_pal_size = 0x200U;
+    inline constexpr int shared_tas_bus_lock_wait_cycles = 2;
 
     // Partition bases. p0: cached + cacheable alias + shadow (boot ROM at $0);
     // p1: cache-through views (cart at $0, the M_BIOS reads the header via
@@ -92,7 +93,7 @@ namespace mnemos::manifests::sega32x {
         // fixed SH-2 IRL level + vector. An edge latches on both CPUs regardless of
         // the mask; the mask only gates CPU-visible delivery, so a mask 0->1 write
         // or an IRQ-accept rescan re-delivers a still-latched edge (the Mars
-        // interrupt-controller flip-flop semantics, from the Emu reference).
+        // interrupt-controller flip-flop semantics).
         // The SH-2s take the Mars sources as IRL AUTO-VECTORED interrupts
         // (SH7604 INTC, VECMD=0): vector = 64 + the level pair, so VRES/V/H/
         // CMD/PWM land on $47/$46/$45/$44/$43. Retail code installs its real
@@ -283,10 +284,21 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::uint64_t sh2_position() const noexcept {
             return sh2_elapsed_base + master_cpu.elapsed_cycles();
         }
-        std::uint64_t sh2_elapsed_base{0}; // accumulated pre-release elapsed counts
-        // Advance both SH-2s when not held in reset (lockstep; real interleaving
-        // is a phase-D scheduling concern).
+        std::uint64_t sh2_elapsed_base{0};     // accumulated pre-release elapsed counts
+        std::uint64_t shared_bus_lock_until{}; // SH-2-local cycle when shared TAS lock releases
+        // Advance both SH-2s when not held in reset, interleaving whole
+        // instructions by each CPU's elapsed-cycle position.
         void run_cycles(std::uint64_t cycles);
+        // SH-2 core callback: charge waits for external accesses that hold a 32X
+        // shared bus resource. Same-cycle dual-SH-2 TAS locks are arbitrated
+        // deterministically (master wins ties); ordinary memory, full DMA, and
+        // VDP contention are still timing work.
+        [[nodiscard]] int shared_bus_wait(bool master, std::uint32_t address, std::uint8_t bytes,
+                                          bool locked) noexcept;
+        // SH-2 core callback fired just before a WDT internal reset zeroes a
+        // core's elapsed counter: rebase the shared pacing anchors so the
+        // schedule stays monotone across the per-CPU reset edge.
+        void absorb_self_reset(bool is_master) noexcept;
 
       private:
         // Latch a source on both CPUs and deliver it to each whose mask enables it

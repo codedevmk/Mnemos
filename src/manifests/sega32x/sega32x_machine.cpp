@@ -126,9 +126,9 @@ namespace mnemos::manifests::sega32x {
                     }
                 }
                 if (aden && res_release) {
-                    tx.set_sh2_reset(false);
+                    m.apply_sh2_reset(false);
                 } else if (!res_release) {
-                    tx.set_sh2_reset(true);
+                    m.apply_sh2_reset(true);
                 }
                 return;
             }
@@ -236,6 +236,20 @@ namespace mnemos::manifests::sega32x {
         }
     }
 
+    void sega32x_machine::apply_sh2_reset(bool asserted) {
+        // The 68000 writes /RES through the adapter register while the worker
+        // may be between scanline batches. Park it, apply the hardware reset
+        // edge, then make the next batch start from the post-reset timeline.
+        join_sh2();
+        sega32x->set_sh2_reset(asserted);
+        sched_main_base_ = genesis->cpu.elapsed_cycles();
+        sched_target_ = sega32x->sh2_position();
+        sh2_target_.store(sched_target_, std::memory_order_release);
+        sh2_done_.store(sched_target_, std::memory_order_release);
+        sh2_done_.notify_all();
+        sh2_target_.notify_one();
+    }
+
     sega32x_machine::~sega32x_machine() {
         if (worker_.joinable()) {
             worker_quit_.store(true, std::memory_order_release);
@@ -246,7 +260,9 @@ namespace mnemos::manifests::sega32x {
     }
 
     void sega32x_machine::worker_main() {
-        std::uint64_t seen = sh2_target_.load(std::memory_order_acquire);
+        // Start from the completed marker, not the current target: the worker
+        // thread may begin after the main thread publishes its first batch.
+        std::uint64_t seen = sh2_done_.load(std::memory_order_acquire);
         for (;;) {
             // The next batch arrives within a scanline of host time; spin
             // briefly before sleeping so the line cadence stays syscall-free.
@@ -266,9 +282,9 @@ namespace mnemos::manifests::sega32x {
                 return;
             }
             // sh2_position() reads sh2_elapsed_base, which the main thread only
-            // writes on a /RES release edge -- always with the worker parked
-            // (the register window joins first) and before the next target is
-            // published, so the acquire on sh2_target_ orders the read.
+            // writes through apply_sh2_reset() with the worker parked and before
+            // the next target is published, so the acquire on sh2_target_
+            // orders the read.
             const std::uint64_t cur = sega32x->sh2_position();
             if (seen > cur) {
                 sega32x->run_cycles(seen - cur);
