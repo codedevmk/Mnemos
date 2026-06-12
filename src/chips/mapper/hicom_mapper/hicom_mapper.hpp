@@ -11,7 +11,7 @@ namespace mnemos::chips::mapper {
 
     // HiCom "188-in-1" Korean multicart mapper for the Sega Master System (the
     // Hi-Com pirate compilation carts). Spec per the community emulator references
-    // (Genesis Plus GX MAPPER_HICOM; see THIRD-PARTY.md):
+    // (Genesis Plus GX MAPPER_HICOM; see THIRD-PARTY-REFERENCES.md):
     //
     //   - 32 KiB pages. A single register at $FFFF selects which 32 KiB page is
     //     mapped at $0000-$7FFF; $8000-$BFFF mirrors the page's lower 16 KiB

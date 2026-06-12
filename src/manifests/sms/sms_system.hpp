@@ -143,7 +143,7 @@ namespace mnemos::manifests::sms {
 
     // Look up a cartridge's zlib CRC-32 in the Korean-mapper database; returns the
     // mapper it needs, or nullopt if the CRC is unknown. Catalogues the known Korean
-    // carts whose mapper Mnemos implements (see THIRD-PARTY.md).
+    // carts whose mapper Mnemos implements (see THIRD-PARTY-REFERENCES.md).
     [[nodiscard]] std::optional<sms_config::mapper>
     korean_mapper_for_crc(std::uint32_t crc) noexcept;
 
@@ -163,7 +163,7 @@ namespace mnemos::manifests::sms {
     // True when a cartridge image's zlib CRC-32 matches a known 93C46-EEPROM cart
     // (all Game Gear). The EEPROM is an add-on to the standard Sega mapper, not a
     // mapper kind, so this is resolved separately from resolve_mapper. CRCs are
-    // catalogued in THIRD-PARTY.md.
+    // catalogued in THIRD-PARTY-REFERENCES.md.
     [[nodiscard]] bool detect_93c46(std::span<const std::uint8_t> rom) noexcept;
 
     // Overlay the 93C46 serial EEPROM onto an already-wired Sega-mapper bus: a

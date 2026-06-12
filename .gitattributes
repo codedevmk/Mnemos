@@ -5,6 +5,9 @@
 *.ps1 text eol=crlf
 *.sh text eol=lf
 
+# Git hooks are extensionless shell scripts — force LF so the shebang works on Linux.
+tools/githooks/* text eol=lf
+
 *.bin binary
 *.bmp binary
 *.d64 binary

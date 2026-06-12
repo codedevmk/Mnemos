@@ -15,7 +15,7 @@ namespace mnemos::manifests::sms {
     // A Codemasters cart carries its own checksum header (the Sega BIOS routine
     // can't validate it through the different mapper): the 16-bit word at $7FE6
     // plus the complement word at $7FE8 sum to $10000. That doubles as the mapper
-    // signature (community-documented header convention; see THIRD-PARTY.md).
+    // signature (community-documented header convention; see THIRD-PARTY-REFERENCES.md).
     bool detect_codemasters(std::span<const std::uint8_t> rom) noexcept {
         if (rom.size() < 0x8000U) {
             return false;
@@ -28,7 +28,7 @@ namespace mnemos::manifests::sms {
     }
 
     // Korean carts carry no header signature, so they are auto-detected by ROM
-    // CRC-32 against a database of known images (CRCs catalogued in THIRD-PARTY.md).
+    // CRC-32 against a database of known images (CRCs catalogued in THIRD-PARTY-REFERENCES.md).
     // Each entry maps a cart's zlib CRC-32 (over the whole image) to the mapper it
     // needs; only carts whose mapper Mnemos implements are listed.
     namespace {
@@ -91,7 +91,7 @@ namespace mnemos::manifests::sms {
     namespace {
         // Carts that carry a 93C46 serial EEPROM for saves (all Game Gear). The
         // EEPROM rides on top of the standard Sega mapper, so it is detected by ROM
-        // CRC-32 rather than being a mapper kind (CRCs catalogued in THIRD-PARTY.md).
+        // CRC-32 rather than being a mapper kind (CRCs catalogued in THIRD-PARTY-REFERENCES.md).
         constexpr std::array<std::uint32_t, 5> eeprom_93c46_crc_db{
             0x36EBCD6DU, // Majors Pro Baseball
             0x2DA8E943U, // Pro Yakyuu GG League

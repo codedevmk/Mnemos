@@ -1,12 +1,23 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/governance/claude_hooks.py\" pre-tool-use"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Read|Glob|Grep|Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 tools/governance/claude_hooks.py post-tool-use"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/governance/claude_hooks.py\" post-tool-use"
           }
         ]
       }
@@ -16,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 tools/governance/claude_hooks.py session-end"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/governance/claude_hooks.py\" session-end"
           }
         ]
       }

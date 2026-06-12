@@ -11,7 +11,7 @@ namespace mnemos::chips::mapper {
 
     // "Janggun" 8 KiB memory mapper for the Sega Master System (the Korean cart
     // "Janggun-ui Adeul"). Spec per SMS Power and the community emulator
-    // references (see THIRD-PARTY.md):
+    // references (see THIRD-PARTY-REFERENCES.md):
     //
     //   - 8 KiB banks. $0000-$3FFF is fixed to ROM banks 0/1 (the first 16 KiB).
     //   - Four banked 8 KiB windows, each a frame-control register (FCR):

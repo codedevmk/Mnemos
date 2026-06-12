@@ -1,7 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 // Per-cycle Z80 conformance against a public per-instruction JSON corpus.
-// Data-gated by MNEMOS_Z80_TESTS_DIR (see THIRD-PARTY.md).
+// Data-gated by MNEMOS_Z80_TESTS_DIR (see THIRD-PARTY-REFERENCES.md).
 
 #include "z80.hpp"
 
@@ -248,7 +248,7 @@ TEST_CASE("z80 passes the public per-cycle Z80 conformance corpus", "[conformanc
     const char* dir = std::getenv("MNEMOS_Z80_TESTS_DIR");
     if (dir == nullptr || std::string{dir}.empty() || !std::filesystem::is_directory(dir)) {
         SKIP("set MNEMOS_Z80_TESTS_DIR to a directory of per-instruction Z80 test "
-             "JSON files (see THIRD-PARTY.md)");
+             "JSON files (see THIRD-PARTY-REFERENCES.md)");
     }
 
     std::size_t passed = 0;

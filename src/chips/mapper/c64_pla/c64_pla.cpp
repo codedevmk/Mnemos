@@ -65,7 +65,7 @@ namespace mnemos::chips::mapper {
     c64_pla::region c64_pla::decode_cpu_address(std::uint16_t address) const noexcept {
         if (ultimax()) {
             // The cart owns most of the space; $C000-$CFFF is left open to match
-            // the documented open-bus / ultimax convention (see THIRD-PARTY.md).
+            // the documented open-bus / ultimax convention (see THIRD-PARTY-REFERENCES.md).
             if (address < 0x1000U) {
                 return region::ram;
             }

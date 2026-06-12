@@ -1,6 +1,6 @@
 // Z80 conformance via a public CP/M instruction-exerciser .com image.
 //
-// The community-standard Z80 exercisers (see THIRD-PARTY.md) are CP/M .com
+// The community-standard Z80 exercisers (see THIRD-PARTY-REFERENCES.md) are CP/M .com
 // programs that run every Z80 instruction against thousands of operand
 // combinations and CRC-check the results. This harness runs one in a minimal
 // CP/M environment and asserts it reports no errors.
@@ -65,7 +65,7 @@ TEST_CASE("z80 passes the public CP/M instruction exerciser", "[conformance][z80
     const auto rom = get_env("MNEMOS_Z80_TEST_ROM");
     if (!rom) {
         SKIP("set MNEMOS_Z80_TEST_ROM to a CP/M .com exerciser image (not committed; "
-             "see THIRD-PARTY.md)");
+             "see THIRD-PARTY-REFERENCES.md)");
     }
     auto image = mnemos::io::read_file(fs::path(*rom).string());
     if (!image || image->empty() || image->size() > 0xFF00U) {

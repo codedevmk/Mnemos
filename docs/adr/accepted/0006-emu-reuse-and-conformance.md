@@ -2,7 +2,7 @@
 id: ADR-0006
 title: "Emu Reuse and Conformance (reconstructed)"
 status: accepted
-version: 1.0.0
+version: 1.0.1
 supersedes: []
 superseded_by: null
 proposed: 2026-06-10
@@ -16,7 +16,7 @@ ratified: 2026-06-10
 > reconstructed on 2026-06-10 (per ADR-0011's directive and ADR-0013's
 > findings) from the policy's visible applications: `src/disc/NOTES.md`,
 > `src/chips/audio/rf5c68/NOTES.md`, `src/chips/video/sega32x_vdp/NOTES.md`,
-> `src/manifests/segacd/NOTES.md`, `THIRD-PARTY.md` §Emu, ADR-0011 ("Note on
+> `src/manifests/segacd/NOTES.md`, `THIRD-PARTY-REFERENCES.md` §Emu, ADR-0011 ("Note on
 > ADR-0006"), ADR-0012, and `docs/architecture/mnemos-todos-v0.1.md` (M1–M8
 > entries). It records the policy as practiced; it does not invent new policy.
 > If the original text resurfaces and differs, supersede this document.
@@ -47,7 +47,7 @@ license question — may be used, and how ported cores are kept honest.
    (env-var paths, CI skip code 4) and validated locally or on data-equipped
    runners.
 4. **Provenance is recorded per module** in the module's `NOTES.md` and, for
-   utility code, in `THIRD-PARTY.md`.
+   utility code, in `THIRD-PARTY-REFERENCES.md`.
 
 ## Consequences
 

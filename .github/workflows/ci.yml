@@ -22,6 +22,18 @@ jobs:
       - name: Naming validator (G1)
         run: python3 tools/governance/naming_validator.py
 
+      - name: Repo hygiene (G12)
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            # Pull request: lint only the files changed vs the PR base.
+            python3 tools/governance/repo_hygiene.py --diff "origin/${{ github.base_ref }}"
+          else
+            # Push: lint only the files changed in this push (fall back to last commit).
+            BEFORE="${{ github.event.before }}"
+            git rev-parse -q --verify "$BEFORE^{commit}" >/dev/null 2>&1 || BEFORE="HEAD~1"
+            python3 tools/governance/repo_hygiene.py --diff "$BEFORE"
+          fi
+
       - name: ADR / front-matter lint (G9)
         run: |
           if [ -n "${{ github.base_ref }}" ]; then

@@ -19,7 +19,7 @@
 - Mnemos is a standalone multi-system emulator framework and developer toolkit.
 - It is not an Eliot Engine module and must not take Eliot runtime, UI, allocator, or namespace dependencies unless a future approved ADR introduces an integration boundary.
 - Use the `mnemos` namespace and the tiered layout described in the architecture TDS.
-- Any external code, sample, or test corpus brought in is reference material only. Do not lift code into Mnemos without re-review against the architecture, licensing, determinism, and test requirements, and acknowledge the source in `THIRD-PARTY.md`.
+- Any external code, sample, or test corpus brought in is reference material only. Do not lift code into Mnemos without re-review against the architecture, licensing, determinism, and test requirements, and acknowledge the source in `THIRD-PARTY-REFERENCES.md`.
 
 ## Architecture Rules
 
@@ -34,7 +34,7 @@
 
 - Follow TDS section 6.5 for v0.1 dependencies. Use pinned CMake `FetchContent` entries for approved third-party code.
 - Do not add new third-party libraries without an ADR covering need, license, isolation, and maintenance risk.
-- No GPL code may enter Apache- or MIT-licensed tiers. Open-source emulator projects may be used as behavioral references only when provenance is acknowledged in `THIRD-PARTY.md`.
+- No GPL code may enter Apache- or MIT-licensed tiers. Open-source emulator projects may be used as behavioral references only when provenance is acknowledged in `THIRD-PARTY-REFERENCES.md`.
 - ROMs, firmware dumps, build outputs, and generated logs are never committed.
 
 ## Implementation Workflow
@@ -48,11 +48,12 @@
 - Do not overgenerate comments. Add comments only when they explain a non-obvious invariant, constraint, or tradeoff.
 - No low-signal generated filler: avoid placeholder prose, broad abstractions, and scaffolding beyond the current milestone's acceptance needs.
 
-## Scratch artifacts
+## Repository hygiene (ADR-0025) — enforced
 
-- Every debug artifact a session produces goes under the git-ignored `scratch/` dir at the repo root: headless `--screenshot` framebuffers, VRAM/CRAM dumps, trace CSVs, ad-hoc logs, coverage `profraw`. Do not write them to the repo root.
-- Examples: `mnemos_player --screenshot scratch/boot.ppm --frames 120`; redirect logs with `... > scratch/dma.log`; for ad-hoc coverage set `LLVM_PROFILE_FILE=scratch/cov/%p.profraw` (the foundation coverage script already scopes its own profraw under the build dir).
-- Clear it with `scripts/clean-scratch.ps1` (supports `-OlderThanDays N` and `-Deep`). The whole dir is git-ignored, so a stale `scratch/` never dirties `git status`.
+- **All transient build/debug artifacts live under `build/`**, organized by subfolder (`build/scratch/`, `build/logs/`, `build/reports/`, `build/artifacts/`, `build/test/`). Never write them to the repo root or ad-hoc top-level dirs, and never track them.
+- Examples: `mnemos_player --screenshot build/scratch/boot.ppm --frames 120`; redirect logs with `... > build/scratch/dma.log`; ad-hoc coverage `LLVM_PROFILE_FILE=build/scratch/cov/%p.profraw`. All of `build/` is git-ignored, so it never dirties `git status`.
+- Source under `src/{name}/` (also `tests/`, `tools/`, `apm/`); loose docs under `docs/{category}/` (module `README/NOTES/CAPSULE` may stay co-located); scripts under `scripts/{sub}/`; relocatable lint/config under `config/`. `.claude/**` and `.github/**` are exempt.
+- This is mechanically enforced: a Claude PreToolUse hook blocks a non-compliant write in real time; `tools/githooks/pre-commit` blocks it at commit (install once via `scripts/dev/install-hooks.ps1`/`.sh`); the CI `governance` job (`repo_hygiene.py --diff`, on the files changed in the PR/push) is the backstop. One ruleset: `config/repo-hygiene.toml`. Read ADR-0025 before reorganizing anything.
 
 ## Current Bootstrap State
 

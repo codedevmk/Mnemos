@@ -6,7 +6,7 @@ observes execution from the **outside** — like a Dynatrace/Datadog APM agent. 
 logging, observer, or DB logic; it just runs.
 
 Design of record: [`docs/architecture/apm-tracer-sidecar-spec.md`](../docs/architecture/apm-tracer-sidecar-spec.md).
-Task list / build order: [`todo.md`](../todo.md).
+Task list / build order: [`apm-tracer-tasks.md`](../docs/architecture/apm-tracer-tasks.md).
 
 ## Modules
 

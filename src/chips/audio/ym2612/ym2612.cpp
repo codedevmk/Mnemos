@@ -1,6 +1,7 @@
 #include "ym2612.hpp"
 
 #include "chip_registry.hpp"
+#include "fm_tables.hpp"
 #include "state.hpp"
 
 #include <algorithm>
@@ -15,13 +16,16 @@ namespace mnemos::chips::audio {
         // The YM2612 numbers its operator registers in "slot" order S1,S2,S3,S4 but
         // wires them internally as M1,C1,M2,C2 = S1,S3,S2,S4 -- every per-operator
         // ($30-$9F), key-on ($28), and channel-3 special-mode ($A8) access is remapped
-        // through this table. Matches published hardware studies (see THIRD-PARTY.md).
+        // through this table. Matches published hardware studies (see THIRD-PARTY-REFERENCES.md).
         constexpr std::array<int, 4> op_map = {0, 2, 1, 3};
 
-        constexpr double pi = 3.14159265358979323846;
+        // OPN/OPM output-pipeline tables shared with the YM2151 (fm_tables.hpp).
+        using fm::exp_table;
+        using fm::pi;
+        using fm::sin_table;
 
         // DT1 detune table (YM2608 Application Manual), indexed [kcode & 31][detune & 3].
-        // Hardware-exact values (see THIRD-PARTY.md).
+        // Hardware-exact values (see THIRD-PARTY-REFERENCES.md).
         constexpr std::uint8_t dt1_table[32][4] = {
             {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 0, 1, 2},   {0, 1, 2, 2},
             {0, 1, 2, 3},   {0, 1, 2, 3},   {0, 1, 2, 3},   {0, 1, 2, 4},   {0, 1, 3, 4},
@@ -43,8 +47,9 @@ namespace mnemos::chips::audio {
             {0, 0, 16, 24, 32, 32, 40, 48}, {0, 0, 32, 48, 64, 64, 80, 96},
         };
 
-        // Envelope-rate increment pattern (community hardware tests; see THIRD-PARTY.md),
-        // indexed eg_pattern[eg_rate_select[rate]][(eg_cnt >> shift) & 7].
+        // Envelope-rate increment pattern (community hardware tests; see
+        // THIRD-PARTY-REFERENCES.md), indexed eg_pattern[eg_rate_select[rate]][(eg_cnt >> shift) &
+        // 7].
         constexpr std::uint8_t eg_pattern[19][8] = {
             {0, 1, 0, 1, 0, 1, 0, 1}, {0, 1, 0, 1, 1, 1, 0, 1}, {0, 1, 1, 1, 0, 1, 1, 1},
             {0, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 2, 1, 1, 1, 2},
@@ -60,40 +65,6 @@ namespace mnemos::chips::audio {
             2,  3,  0, 1, 2, 3, 0, 1, 2, 3, 0,  1,  2,  3,  0,  1,  2,  3,  0,  1,  2, 3,
             0,  1,  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 16, 16, 16,
         };
-
-        // Log-sine (first quadrant folded across all four) and exp tables, built once
-        // at static init. sin_table: 10-bit phase -> 12-bit log-sin. exp_table:
-        // 2^(13 - i/256) -- converts the summed log attenuation back to linear.
-        const std::array<std::uint16_t, 1024> sin_table = [] {
-            std::array<std::uint16_t, 1024> t{};
-            for (std::size_t i = 0; i < 256; ++i) {
-                const double phase = (static_cast<double>(i) + 0.5) / 256.0 * (pi / 2.0);
-                double s = std::sin(phase);
-                if (s < 0.000001) {
-                    s = 0.000001;
-                }
-                auto v = static_cast<std::uint16_t>(-std::log2(s) * 256.0 + 0.5);
-                if (v > 0x0FFFU) {
-                    v = 0x0FFFU;
-                }
-                t[i] = v;
-            }
-            for (std::size_t i = 0; i < 256; ++i) {
-                t[256 + i] = t[255 - i]; // Q2 mirror
-                t[512 + i] = t[i];       // Q3 (sign handled separately)
-                t[768 + i] = t[255 - i]; // Q4 mirror
-            }
-            return t;
-        }();
-
-        const std::array<std::uint16_t, 1024> exp_table = [] {
-            std::array<std::uint16_t, 1024> t{};
-            for (std::size_t i = 0; i < 1024; ++i) {
-                const double e = std::pow(2.0, 13.0 - static_cast<double>(i) / 256.0);
-                t[i] = static_cast<std::uint16_t>(e + 0.5);
-            }
-            return t;
-        }();
 
         // Hardware key-code: a full 5-bit KCODE from BLOCK + the top FNUM bits.
         [[nodiscard]] std::uint8_t ym_kcode(std::uint8_t block, std::uint16_t fnum) noexcept {

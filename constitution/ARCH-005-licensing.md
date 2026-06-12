@@ -2,7 +2,7 @@
 id: ARCH-005
 title: "Licensing Boundaries"
 status: accepted
-version: 1.0.0
+version: 1.0.1
 supersedes: []
 superseded_by: null
 ratified: 2026-06-10
@@ -39,7 +39,7 @@ ratified refinement and remains accepted authority.
   GPL accordingly.
 - No third-party emulator source is vendored in this repository. Open-source
   emulator projects are behavioral references only, with provenance
-  acknowledged in `THIRD-PARTY.md` (and they are L5 authority — advisory,
+  acknowledged in `THIRD-PARTY-REFERENCES.md` (and they are L5 authority — advisory,
   never an oracle; see `CONSTITUTION.md` standing rules).
 
 ## Dependency policy

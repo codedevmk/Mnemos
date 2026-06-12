@@ -13,7 +13,7 @@ namespace mnemos::chips::mapper {
     //
     // The simplest of the Korean cartridge designs (used by Daou / Zemina / Sang-Il
     // originals such as Dodgeball King and the Sangokushi titles). Spec per
-    // SMS Power and the community emulator references (see THIRD-PARTY.md):
+    // SMS Power and the community emulator references (see THIRD-PARTY-REFERENCES.md):
     //
     //   - Three 16 KiB ROM slots: $0000-$3FFF, $4000-$7FFF, $8000-$BFFF.
     //   - Slots 0 and 1 are FIXED to ROM banks 0 and 1; only slot 2 banks.

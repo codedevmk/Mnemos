@@ -4,7 +4,7 @@
 // 6502 / m6510 conformance harness.
 //
 // Validates the m6510 core against a public per-cycle 6502 test corpus (see
-// THIRD-PARTY.md): each test fixes an initial CPU + RAM state, runs exactly one
+// THIRD-PARTY-REFERENCES.md): each test fixes an initial CPU + RAM state, runs exactly one
 // instruction, and checks the final CPU + RAM state and the exact per-cycle bus
 // trace.
 //
@@ -161,7 +161,7 @@ TEST_CASE("m6510 passes the public 6502 conformance corpus", "[conformance]") {
     const char* dir = std::getenv("MNEMOS_M6510_TESTS_DIR");
     if (dir == nullptr || std::string{dir}.empty() || !std::filesystem::is_directory(dir)) {
         SKIP("set MNEMOS_M6510_TESTS_DIR to a directory of per-instruction 6502 test JSON files "
-             "(see THIRD-PARTY.md)");
+             "(see THIRD-PARTY-REFERENCES.md)");
     }
 
     std::size_t passed = 0;

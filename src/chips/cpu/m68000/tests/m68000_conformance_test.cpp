@@ -4,7 +4,7 @@
 // 680x0 conformance harness for the m68000.
 //
 // Validates the core against a public per-instruction 68000 test corpus (see
-// THIRD-PARTY.md): each test
+// THIRD-PARTY-REFERENCES.md): each test
 // fixes an initial CPU + RAM state, runs exactly one instruction, and checks the
 // final register file and memory. The corpus is large and never committed; the
 // test is data-gated and SKIPs unless MNEMOS_M68000_TESTS_DIR points at the
@@ -278,7 +278,7 @@ TEST_CASE("m68000 passes the public 680x0 conformance corpus", "[conformance]") 
     const char* dir = std::getenv("MNEMOS_M68000_TESTS_DIR");
     if (dir == nullptr || std::string{dir}.empty() || !std::filesystem::is_directory(dir)) {
         SKIP("set MNEMOS_M68000_TESTS_DIR to a directory of per-instruction 68000 test JSON files "
-             "(see THIRD-PARTY.md)");
+             "(see THIRD-PARTY-REFERENCES.md)");
     }
 
     std::size_t max_tests = 0; // 0 = all

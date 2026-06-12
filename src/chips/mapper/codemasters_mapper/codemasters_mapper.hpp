@@ -13,7 +13,7 @@ namespace mnemos::chips::mapper {
     //
     // A simpler, distinct design from the Sega mapper (it is genuinely different
     // hardware, so it is a separate chip rather than a mode of sms_mapper). Spec per
-    // Community-documented mapper notes (see THIRD-PARTY.md):
+    // Community-documented mapper notes (see THIRD-PARTY-REFERENCES.md):
     //
     //   - Three fully-banked 16 KiB ROM slots: $0000-$3FFF, $4000-$7FFF, $8000-$BFFF.
     //     Unlike the Sega mapper there is NO fixed first 1 KiB -- slot 0 banks whole.

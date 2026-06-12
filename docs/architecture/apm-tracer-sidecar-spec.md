@@ -1,6 +1,6 @@
 # APM Tracer Sidecar — Architecture Spec
 
-Status: design of record (pre-implementation). Companion to the task list in `todo.md`.
+Status: design of record (pre-implementation). Companion to the task list in `apm-tracer-tasks.md`.
 
 A **self-contained tracer capability** that loads the emulator as a **plugin**, gives it a
 **custom tagged memory allocator**, and observes/records execution from the **outside as a
@@ -169,7 +169,7 @@ DAG); only `src/foundation/imemory_allocator` participates, at tier 0.
 4. `apm/bindings/genesis` DLL + `apm/host` tracer that loads it and arms a write-watch on
    `$FFF809` → prints writer PC. That is the current bug's tool, end-to-end.
 
-## Build order (max leverage), cross-referenced to `todo.md`
+## Build order (max leverage), cross-referenced to `apm-tracer-tasks.md`
 
 1. **Phase 0** — pluginnable + allocator-fed engine (unblocks everything; clean DI refactor).
 2. **Phase 1 + Phase 2 page-protection read/write watchpoints** — cracks the current bug seam-free.

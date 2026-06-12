@@ -18,4 +18,4 @@ Reading order:
   a separate host process that loads the emulator as a plugin, injects a tagged memory
   allocator, and observes execution from the outside (page-protection watchpoints, boundary
   diffs, lockstep cross-engine diff). Folder/module layout, dependency direction, and build
-  order. Companion to `todo.md` at the repo root.
+  order. Companion to `apm-tracer-tasks.md`.

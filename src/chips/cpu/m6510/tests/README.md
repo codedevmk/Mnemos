@@ -11,7 +11,7 @@ the stable illegals, and register-snapshot introspection. Always built and run.
 
 Validates the core against a public per-instruction 6502 test corpus — for each
 vector it checks the final CPU state *and* the exact per-cycle bus trace. See
-[`THIRD-PARTY.md`](../../../../../THIRD-PARTY.md) for the corpus reference.
+[`THIRD-PARTY-REFERENCES.md`](../../../../../THIRD-PARTY-REFERENCES.md) for the corpus reference.
 
 The corpus is large and **never committed**. The test is data-gated: it reports
 *skipped* (CTest `SKIP_RETURN_CODE`) when the corpus directory is not provided,

@@ -80,14 +80,59 @@ def session_end(payload: dict) -> None:
         append(session_id, {"event": "capture_omission"})
 
 
+WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+
+
+def _hygiene_message(path: str) -> str | None:
+    """Return a repo-hygiene violation for `path`, or None (ADR-0025).
+
+    Fails open: any error (missing ruleset, old Python, import failure) allows the
+    write. CI is the authoritative backstop, and a broken linter must never wedge a
+    session.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import repo_hygiene  # sibling module
+
+        cfg = repo_hygiene.load_cfg()
+        rel = repo_hygiene._normalize_arg_path(str(path))
+        if rel is None:
+            return None  # outside the repository: not this linter's jurisdiction
+        if rel.lstrip("/") in set(cfg.get("baseline", [])):
+            return None  # grandfathered file: editing it is fine
+        return repo_hygiene.check(rel, cfg)
+    except (Exception, SystemExit):
+        return None
+
+
+def pre_tool_use(payload: dict) -> int:
+    """PreToolUse gate: block a Write/Edit aimed at a non-compliant path (ADR-0025)."""
+    if payload.get("tool_name", "") not in WRITE_TOOLS:
+        return 0
+    tool_input = payload.get("tool_input") or {}
+    path = tool_input.get("file_path") or tool_input.get("notebook_path")
+    if not path:
+        return 0
+    message = _hygiene_message(str(path))
+    if message:
+        sys.stderr.write(
+            "Repo-hygiene block (ADR-0025): " + message + "\n"
+            "Write it to the correct location instead. Ruleset: config/repo-hygiene.toml.\n"
+        )
+        return 2  # exit code 2 -> Claude Code denies the tool call
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) < 2:
-        print("usage: claude_hooks.py {post-tool-use|session-end}", file=sys.stderr)
+        print("usage: claude_hooks.py {pre-tool-use|post-tool-use|session-end}", file=sys.stderr)
         return 2
     try:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         return 0  # malformed hook input must never break a session
+    if sys.argv[1] == "pre-tool-use":
+        return pre_tool_use(payload)
     try:
         if sys.argv[1] == "post-tool-use":
             post_tool_use(payload)
