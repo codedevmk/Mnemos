@@ -286,11 +286,13 @@ namespace mnemos::chips::cpu {
 
         // X2 load-use interlock. last_exec_op_ is the most recently executed
         // opcode (the delay slot for a taken delayed branch), so its load
-        // destination is the producer for the NEXT step. pending_load_reg_ is that
-        // destination (-1 = none), consumed once by the following instruction.
+        // destination is the producer for the NEXT step. pending_load_reg_ is the
+        // GPR producer (-1 = none); pending_load_t_ covers LDC.L @Rn+,SR loading
+        // T from memory. Both are consumed once by the following instruction.
         bool model_load_use_{}; // board opt-in; gates all load-use tracking
         std::uint16_t last_exec_op_{};
         int pending_load_reg_ = -1;
+        bool pending_load_t_{};
 
         std::function<void(std::uint32_t)> trace_callback_{};
         std::function<void(int, std::uint8_t)> irq_accept_{};

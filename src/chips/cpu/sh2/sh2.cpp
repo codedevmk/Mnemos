@@ -75,6 +75,12 @@ namespace mnemos::chips::cpu {
             }
         }
 
+        // LDC.L @Rm+,SR loads SR from memory; the loaded bit 0 is T, which can
+        // feed the very next instruction just like a GPR memory-load result.
+        [[nodiscard]] constexpr bool loads_t_from_memory(std::uint16_t op) noexcept {
+            return (op & 0xF0FFU) == 0x4007U;
+        }
+
         // Set of GPRs an opcode READS as a source consumed in EX/MA (addresses,
         // ALU operands, store data, index regs). Write-only destinations (e.g.
         // MOV #imm,Rn, the value half of a load) are excluded.
@@ -167,6 +173,28 @@ namespace mnemos::chips::cpu {
                 // 0x9 MOV.W @(disp,PC),Rn / 0xA BRA / 0xB BSR / 0xD MOV.L @(disp,PC),Rn /
                 // 0xE MOV #imm,Rn / 0xF FPU: no GPR source consumed in EX.
                 return 0U;
+            }
+        }
+
+        // True for instructions that consume the current T bit as input. T
+        // producers such as CMP/TST/DT/TAS/SETT/CLRT are intentionally excluded.
+        [[nodiscard]] constexpr bool consumes_t_bit(std::uint16_t op) noexcept {
+            const unsigned n0 = (op >> 12U) & 0xFU;
+            const unsigned lo = op & 0xFU;
+            const unsigned sub = (op >> 8U) & 0xFU;
+            switch (n0) {
+            case 0x0:
+                return (op & 0xFFU) == 0x29U; // MOVT Rn
+            case 0x3:
+                return lo == 0x4U || lo == 0xAU || lo == 0xEU; // DIV1/SUBC/ADDC
+            case 0x4:
+                return (op & 0xFFU) == 0x24U || (op & 0xFFU) == 0x25U; // ROTCL/ROTCR
+            case 0x6:
+                return lo == 0xAU; // NEGC
+            case 0x8:
+                return sub == 0x9U || sub == 0xBU || sub == 0xDU || sub == 0xFU; // BT/BF
+            default:
+                return false;
             }
         }
 
@@ -1490,6 +1518,7 @@ namespace mnemos::chips::cpu {
         } else if (try_service_irq()) {
             sleeping_ = false;
             pending_load_reg_ = -1; // the exception sequence absorbs any load latency
+            pending_load_t_ = false;
         }
 
         if (sleeping_) {
@@ -1535,6 +1564,9 @@ namespace mnemos::chips::cpu {
             load_destination(op) != pending_load_reg_ && !is_mac(op)) {
             load_use_stall = true;
         }
+        if (model_load_use_ && pending_load_t_ && consumes_t_bit(op)) {
+            load_use_stall = true;
+        }
 
         pc_ += 2U;
         exec(op);
@@ -1556,6 +1588,7 @@ namespace mnemos::chips::cpu {
                 cycles_ = add_bounded_wait_cycles(cycles_, 1U);
             }
             pending_load_reg_ = load_destination(last_exec_op_);
+            pending_load_t_ = loads_t_from_memory(last_exec_op_);
         }
 
         const std::uint64_t wait = peripherals_.tick(static_cast<std::uint64_t>(cycles_));
