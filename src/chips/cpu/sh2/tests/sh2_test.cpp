@@ -622,6 +622,66 @@ TEST_CASE("sh2 charges ordinary-access bus contention only when metering is enab
     }
 }
 
+TEST_CASE("sh2 load-use interlock adds one cycle when the next op reads the loaded reg") {
+    // X2: MOV.L @R1,R2 loads R2; the instruction that follows pays +1 cycle iff
+    // it reads R2 as a source (and is not exempt).
+    const auto run_pair = [](std::uint16_t consumer, bool model) {
+        machine m;
+        m.cpu.set_load_use_interlock(model);
+        auto r = m.cpu.cpu_registers();
+        r.r[1] = 0x3000U;
+        r.pc = 0x1000U;
+        m.cpu.set_registers(r);
+        m.w32(0x3000U, 0x00003000U);          // value doubles as a valid @R2 pointer
+        m.load(0x1000U, {0x6212U, consumer}); // MOV.L @R1,R2 ; <consumer>
+        const int load_cycles = m.cpu.step_instruction();
+        const int use_cycles = m.cpu.step_instruction();
+        return std::pair{load_cycles, use_cycles};
+    };
+
+    SECTION("ALU use of the loaded register stalls one cycle") {
+        const auto [ld, use] = run_pair(0x332CU, true); // ADD R2,R3
+        CHECK(ld == 1);
+        CHECK(use == 2); // base 1 + load-use interlock
+    }
+    SECTION("interlock is off by default (bit-identical)") {
+        const auto [ld, use] = run_pair(0x332CU, false); // ADD R2,R3
+        CHECK(ld == 1);
+        CHECK(use == 1);
+    }
+    SECTION("an unrelated next instruction does not stall") {
+        const auto [ld, use] = run_pair(0x334CU, true); // ADD R4,R3 (does not read R2)
+        CHECK(ld == 1);
+        CHECK(use == 1);
+    }
+    SECTION("using the loaded register as an address stalls") {
+        const auto [ld, use] = run_pair(0x6422U, true); // MOV.L @R2,R4
+        CHECK(ld == 1);
+        CHECK(use == 2);
+    }
+    SECTION("load -> load to the same destination is exempt") {
+        const auto [ld, use] = run_pair(0x6222U, true); // MOV.L @R2,R2 (dest == loaded reg)
+        CHECK(ld == 1);
+        CHECK(use == 1);
+    }
+}
+
+TEST_CASE("sh2 load-use interlock exempts a following MAC") {
+    machine m;
+    m.cpu.set_load_use_interlock(true);
+    auto r = m.cpu.cpu_registers();
+    r.r[3] = 0x3000U;
+    r.r[1] = 0x4000U;
+    r.pc = 0x1000U;
+    m.cpu.set_registers(r);
+    m.w32(0x3000U, 0x2000U); // -> R0 (a valid @R0 pointer)
+    m.w32(0x2000U, 2U);
+    m.w32(0x4000U, 3U);
+    m.load(0x1000U, {0x6032U, 0x010FU});  // MOV.L @R3,R0 ; MAC.L @R0+,@R1+
+    CHECK(m.cpu.step_instruction() == 1); // load R0
+    CHECK(m.cpu.step_instruction() == 3); // MAC base only; no +1 despite reading R0
+}
+
 TEST_CASE("sh2 DIV1 performs one non-restoring divide step") {
     machine m;
     auto r = m.cpu.cpu_registers();

@@ -28,9 +28,9 @@ namespace mnemos::chips::cpu {
     // addressing modes), illegal-instruction exceptions, SLEEP, on-chip
     // FRT/WDT/DMAC/DIVU/INTC interrupt delivery, and the TRAPA/RTE +
     // external-interrupt model (set_irq / an accept callback, with a
-    // one-instruction inhibit after SR loads). Still to come: delayed-slot and
-    // peripheral-class address-error tails, cache/load-use penalties, bus
-    // contention, and full SCI.
+    // one-instruction inhibit after SR loads), address-error exceptions, and
+    // opt-in timing models for the load-use interlock and shared-bus contention.
+    // Still deferred: cache-miss timing.
     //
     // Instruction-stepped like the m68000: step_instruction() runs one
     // instruction and returns its cycle cost; tick(cycles) catches up by running
@@ -130,6 +130,13 @@ namespace mnemos::chips::cpu {
         // turns it on only when its opt-in contention model is enabled. Locked
         // TAS reservations are charged regardless of this flag.
         void set_shared_contention_metering(bool on) noexcept { meter_shared_contention_ = on; }
+
+        // X2: when enabled, model the SH7604 load-use interlock -- a register
+        // loaded from memory by one instruction and read as a source by the next
+        // costs +1 cycle. Off by default (an opt-in, manual-grounded timing model
+        // with no cycle-accurate reference to validate against); when off, the
+        // load-use state is never touched, so the hot path is unchanged.
+        void set_load_use_interlock(bool on) noexcept { model_load_use_ = on; }
 
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();
@@ -276,6 +283,14 @@ namespace mnemos::chips::cpu {
         std::array<shared_access, 2> shared_accesses_{};
         int shared_access_count_{};
         bool meter_shared_contention_{}; // board opt-in; gates ordinary-access logging
+
+        // X2 load-use interlock. last_exec_op_ is the most recently executed
+        // opcode (the delay slot for a taken delayed branch), so its load
+        // destination is the producer for the NEXT step. pending_load_reg_ is that
+        // destination (-1 = none), consumed once by the following instruction.
+        bool model_load_use_{}; // board opt-in; gates all load-use tracking
+        std::uint16_t last_exec_op_{};
+        int pending_load_reg_ = -1;
 
         std::function<void(std::uint32_t)> trace_callback_{};
         std::function<void(int, std::uint8_t)> irq_accept_{};
