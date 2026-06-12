@@ -124,6 +124,13 @@ namespace mnemos::chips::cpu {
         // can absorb the discarded count (the same way an external /RES does).
         void set_self_reset_callback(std::function<void()> cb) { self_reset_ = std::move(cb); }
 
+        // X3: when enabled, ordinary (non-locked) data loads/stores are logged and
+        // charged shared-bus contention through the bus-wait callback. Off by
+        // default so the hot path takes no per-access metering cost; the board
+        // turns it on only when its opt-in contention model is enabled. Locked
+        // TAS reservations are charged regardless of this flag.
+        void set_shared_contention_metering(bool on) noexcept { meter_shared_contention_ = on; }
+
         // Execute exactly one instruction; returns the cycles it consumed.
         int step_instruction();
         // Scheduler-facing credit API. `tick()` uses this internally; board
@@ -207,6 +214,12 @@ namespace mnemos::chips::cpu {
         }
         void add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes, bool locked);
         void account_onchip_access_wait(std::uint32_t address, bool is_read) noexcept;
+        // X3 shared-bus contention: require_*_data_access records each permitted
+        // data access here (pure -- no cycle side effect), and step_instruction
+        // charges the board bus-wait for them AFTER exec applies the base-cycle
+        // floors, so the contention wait adds on top instead of being swallowed by
+        // account_cycles' max-floor. SH-2 ops touch memory at most twice (MAC).
+        void record_data_access(std::uint32_t address, std::uint8_t bytes, bool locked) noexcept;
 
         // ---- exceptions + interrupts ----
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
@@ -251,6 +264,18 @@ namespace mnemos::chips::cpu {
         int cycles_{};              // cycles of the instruction in flight
         std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
         std::uint64_t elapsed_{};   // total cycles executed
+
+        // Shared data accesses this instruction made, charged for contention at
+        // the end of the step (see record_data_access). Capacity 2 = the SH-2 max
+        // (MAC.x reads two operands); further accesses are dropped (metering only).
+        struct shared_access final {
+            std::uint32_t address{};
+            std::uint8_t bytes{};
+            bool locked{};
+        };
+        std::array<shared_access, 2> shared_accesses_{};
+        int shared_access_count_{};
+        bool meter_shared_contention_{}; // board opt-in; gates ordinary-access logging
 
         std::function<void(std::uint32_t)> trace_callback_{};
         std::function<void(int, std::uint8_t)> irq_accept_{};

@@ -25,6 +25,27 @@ namespace mnemos::manifests::sega32x {
 #endif
             return enabled;
         }
+
+        // X3: charge SH-2<->SH-2 contention on ORDINARY shared-bus data accesses
+        // (not just locked TAS). Off by default -- the per-access reservation
+        // shifts every shared-SDRAM load/store's timing, and we have no
+        // cycle-accurate SH-2 reference to validate it against, so it stays an
+        // opt-in model until A/B'd against working titles. The locked-TAS lock is
+        // always charged regardless (it is a correctness lock, not a timing tweak).
+        [[nodiscard]] bool bus_contention_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in timing knob
+#endif
+            static const bool enabled = [] {
+                const char* v = std::getenv("MNEMOS_32X_BUS_CONTENTION");
+                return v != nullptr && v[0] != '\0' && v[0] != '0';
+            }();
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return enabled;
+        }
         // PWM FIFO primitives. A push into a full FIFO drops the value (the
         // hardware rejects the write); a pop from an empty FIFO returns the
         // held DAC value so the carrier keeps running on the last duty.
@@ -732,7 +753,10 @@ namespace mnemos::manifests::sega32x {
 
     int sega32x_system::shared_bus_wait(bool master, std::uint32_t address, std::uint8_t bytes,
                                         bool locked) noexcept {
-        if (!locked || bytes == 0U) {
+        // Locked TAS reservations always charge (the atomic-RMW bus lock is a
+        // correctness mechanism); ordinary load/store contention is the opt-in X3
+        // timing model (see bus_contention_enabled).
+        if (bytes == 0U || (!locked && !bus_contention_enabled())) {
             return 0;
         }
 
@@ -757,12 +781,16 @@ namespace mnemos::manifests::sega32x {
             return 0;
         }
 
+        // Reserve a bus slot: a locked RMW (TAS) holds it for the full lock
+        // window; an ordinary access holds it one beat for byte/word and two for
+        // a longword. wait = own beats + however long the slot was already held.
+        const auto beats = static_cast<std::uint64_t>(locked ? shared_tas_bus_lock_wait_cycles
+                                                             : (bytes >= 4U ? 2 : 1));
         const std::uint64_t start =
             master ? master_cpu.elapsed_cycles() : slave_cpu.elapsed_cycles();
         const std::uint64_t grant = std::max(start, shared_bus_lock_until);
-        const std::uint64_t wait =
-            static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles) + (grant - start);
-        shared_bus_lock_until = grant + static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles);
+        const std::uint64_t wait = beats + (grant - start);
+        shared_bus_lock_until = grant + beats;
 
         return wait > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
                    ? std::numeric_limits<int>::max()
@@ -930,6 +958,11 @@ namespace mnemos::manifests::sega32x {
             [s](std::uint32_t address, std::uint8_t bytes, bool locked) {
                 return s->shared_bus_wait(false, address, bytes, locked);
             });
+        // X3: enable ordinary-access contention metering on both cores only when
+        // the opt-in model is on, so the default path keeps zero per-access cost.
+        const bool contention = bus_contention_enabled();
+        s->master_cpu.set_shared_contention_metering(contention);
+        s->slave_cpu.set_shared_contention_metering(contention);
 
         // A WDT internal reset zeroes the firing core's elapsed counter; rebase
         // the shared pacing anchors before that happens so the schedule stays
