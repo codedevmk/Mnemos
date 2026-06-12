@@ -1014,6 +1014,68 @@ TEST_CASE("sh2 address-error exception rejects PC-relative loads into on-chip sp
     CHECK(m.r32(0x3008U) == 0xFFFFFDFEU);
 }
 
+TEST_CASE("sh2 stacking fault on a misaligned SP vectors through 9 without recursing") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[15] = 0x3011U; // misaligned SP: the exception-frame push address-errors
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.w32(0x4000U + 4U * 4U, 0x5000U); // general-illegal handler (vector 4)
+    m.w32(0x4000U + 9U * 4U, 0x7000U); // address-error handler (vector 9)
+    m.load(0x1000U, {0x0000U});        // illegal opcode -> vector 4, but the push faults
+
+    m.cpu.step_instruction();
+    const auto a = m.cpu.cpu_registers();
+    // The stacking fault diverts to vector 9 (not the illegal handler) and does
+    // not recurse or reset; SP is still decremented by the stacked frames.
+    CHECK(a.pc == 0x7000U);
+    CHECK(a.pc != 0x5000U);
+    CHECK(a.r[15] < 0x3011U);
+}
+
+TEST_CASE("sh2 address-error faults byte/word access to cache-control spaces") {
+    machine m;
+    m.w32(0x4000U + 9U * 4U, 0x7000U); // address-error handler
+
+    auto r = m.cpu.cpu_registers();
+    r.vbr = 0x4000U;
+    r.r[1] = 0x60000000U; // address-array space (longword-only)
+    r.r[2] = 0xAAAAAAAAU;
+    r.r[15] = 0x3010U;
+    r.pc = 0x1000U;
+    r.sr = 0U;
+    m.cpu.set_registers(r);
+    m.load(0x1000U, {0x6210U}); // MOV.B @R1,R2 -- byte access to the address array
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x7000U);
+    CHECK(m.cpu.cpu_registers().r[2] == 0xAAAAAAAAU); // the load did not retire
+
+    auto r2 = m.cpu.cpu_registers();
+    r2.vbr = 0x4000U;
+    r2.r[1] = 0x40000000U; // purge space
+    r2.r[15] = 0x3010U;
+    r2.pc = 0x1100U;
+    r2.sr = 0U;
+    m.cpu.set_registers(r2);
+    m.load(0x1100U, {0x6211U}); // MOV.W @R1,R2 -- word access to the purge space
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x7000U);
+
+    // The 32X data array ($C0000000) is the cache-as-RAM scratch, NOT a fault: a
+    // long access there proceeds normally to the (unmapped here) external bus.
+    auto r3 = m.cpu.cpu_registers();
+    r3.vbr = 0x4000U;
+    r3.r[1] = 0xC0000000U;
+    r3.pc = 0x1200U;
+    r3.sr = 0U;
+    m.cpu.set_registers(r3);
+    m.load(0x1200U, {0x6212U}); // MOV.L @R1,R2
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().pc == 0x1202U); // advanced normally, no vector-9
+}
+
 TEST_CASE("sh2 accepts an external IRQ above the mask") {
     machine m;
     auto r = m.cpu.cpu_registers();
@@ -1635,6 +1697,21 @@ TEST_CASE("sh2_peripherals WDT ignores a data write without the matching key") {
     CHECK(p.read8(0xFFFFFE81U) == 0x00U); // WTCNT unchanged
 }
 
+TEST_CASE("sh2_peripherals WDTOVF pin pulses on a watchdog overflow and decays") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    CHECK_FALSE(p.wdtovf_pin_asserted());
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU); // WTCNT = 0xFF
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U); // watchdog mode, TME, prescale 2
+    p.tick(2U);                   // overflow -> the WDTOVF pin asserts (128-cycle pulse)
+    CHECK(p.wdtovf_pin_asserted());
+    p.tick(127U);
+    CHECK(p.wdtovf_pin_asserted()); // still within the pulse
+    p.tick(1U);
+    CHECK_FALSE(p.wdtovf_pin_asserted()); // pulse elapsed
+}
+
 namespace {
     // A peripherals instance backed by a flat RAM bus the DMAC can transfer over.
     struct dmac_fixture final {
@@ -2129,6 +2206,19 @@ TEST_CASE("sh2_peripherals DIVU pending result survives state round-trip") {
     q.tick(1U);
     CHECK(read_peripheral32(q, 0xFFFFFF04U) == 14U);
     CHECK(read_peripheral32(q, 0xFFFFFF10U) == 2U);
+}
+
+TEST_CASE("sh2_peripherals DIVU module-stop (SBYCR.MSTP2) freezes the divider") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    write_peripheral32(p, 0xFFFFFF00U, 7U);           // DVSR
+    write_peripheral32(p, 0xFFFFFF04U, 100U);         // DVDNT -> starts a 39-cycle divide
+    p.write8(0xFFFFFE91U, 0x04U);                     // SBYCR.MSTP2: stop the DIVU clock
+    p.tick(100U);                                     // would normally complete; frozen instead
+    CHECK(read_peripheral32(p, 0xFFFFFF04U) == 100U); // not yet divided
+    p.write8(0xFFFFFE91U, 0x00U);                     // clear MSTP2: the clock resumes
+    p.tick(39U);
+    CHECK(read_peripheral32(p, 0xFFFFFF04U) == 14U); // now it completes
+    CHECK(read_peripheral32(p, 0xFFFFFF10U) == 2U);  // remainder
 }
 
 TEST_CASE("sh2_peripherals DIVU 64/32 of INT64_MIN by -1 overflows instead of crashing") {

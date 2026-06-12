@@ -76,6 +76,10 @@ namespace mnemos::chips::cpu {
         std::uint64_t tick(std::uint64_t cycles) noexcept;
         [[nodiscard]] onchip_irq pending_onchip_irq() const noexcept;
         [[nodiscard]] watchdog_reset_request consume_watchdog_reset() noexcept;
+        // The external WDTOVF pin (low-pulsed for 128 cycles on a watchdog
+        // overflow). The 32X leaves it unconnected; exposed so a board can wire
+        // it. Transient -- not part of the save-state.
+        [[nodiscard]] bool wdtovf_pin_asserted() const noexcept { return wdtovf_pin_cycles_ > 0; }
         [[nodiscard]] std::uint64_t consume_divu_access_wait(std::uint32_t addr,
                                                              bool is_read) noexcept;
         void reset() noexcept;
@@ -148,6 +152,7 @@ namespace mnemos::chips::cpu {
         mutable bool wtcsr_ovf_read_{}; // WTCSR.OVF observed by a read
         bool watchdog_reset_pending_{}; // internal reset to consume
         reset_kind watchdog_reset_kind_{reset_kind::power_on};
+        int wdtovf_pin_cycles_{}; // external WDTOVF pin low-pulse remaining (transient)
 
         // DMAC -- 2-channel DMA controller ($FF80-$FFAF channel regs, $FFB0 DMAOR).
         // Requests are arbitrated by DMAOR.PR, cycle-steal mode transfers one
