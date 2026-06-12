@@ -20,6 +20,7 @@
 - It is not an Eliot Engine module and must not take Eliot runtime, UI, allocator, or namespace dependencies unless a future approved ADR introduces an integration boundary.
 - Use the `mnemos` namespace and the tiered layout described in the architecture TDS.
 - Any external code, sample, or test corpus brought in is reference material only. Do not lift code into Mnemos without re-review against the architecture, licensing, determinism, and test requirements, and acknowledge the source in `THIRD-PARTY.md`.
+- **Emu ports are re-architected, not transcribed (ADR-0006 §1; mandate sharpened by ADR-0024).** The owner's earlier project Emu is a sanctioned *behavioural* reference and test oracle, not a code donor. Every cannibalized / ported / migrated core is re-implemented to Mnemos-or-better standards: correct tier (ARCH-001), chip/runtime contracts (ADR-0004) rather than Emu's callback shape, STD-001/002 naming + error model, one canonical reusable home (ADR-0009), determinism + the instrumentation surface, conformance-gated, provenance in the module `NOTES.md`. "Or better" is a duty: do not inherit Emu's C-isms (raw pointers, global state, macro tables, callback-only seams). If a port's structure is recognizably Emu's rather than Mnemos's, it is not done.
 
 ## Architecture Rules
 
