@@ -23,6 +23,7 @@ expected end state. None of these corpora are committed.
 | Public Z80 instruction exerciser CP/M `.com` images (full-flag and documented-flag variants) | `z80_conformance_test` | `MNEMOS_Z80_TEST_ROM` |
 | Public per-instruction Z80 test corpus (one JSON file per opcode, per-cycle bus trace) | `z80_singlestep_test` | `MNEMOS_Z80_TESTS_DIR` |
 | Public per-instruction 8088/V20 test corpus (one JSON or gzipped JSON file per opcode, initial/final register + RAM images; the corpus metadata.json drives per-opcode flag masks) | `v30_singlestep_test` | `MNEMOS_V30_TESTS_DIR` |
+| Public per-instruction **SH4** single-step corpus (one JSON file per encoding, four-instruction frame, initial/final register + memory) — used as a _functional_ cross-check for the shared SH-2/SH-4 integer ISA | `mnemos_chips_cpu_sh2_conformance_test` | `MNEMOS_SH2_TESTS_DIR` |
 | **ZEXALL-SMS** — Z80 instruction exerciser as a Sega Master System ROM (renders to the SMS VDP / SDSC console) | _SMS-native; no committed harness yet_ | _n/a_ |
 
 These corpora are the de-facto standard for verifying 8-/16-bit CPU cores; we
@@ -36,6 +37,23 @@ exercisers above, it reports results to the SMS VDP / SDSC debug console rather
 than via BDOS, so it exercises the whole SMS (Z80 + VDP) rather than the bare
 Z80 core — running it therefore needs the system harness, not the `.com`-loading
 `z80_conformance_test`.
+
+**SH4 single-step corpus** — there is no public SH-2 single-step corpus, so the
+SH-2 core is cross-checked against the public **SH4** corpus, which was generated
+by a software SH4 interpreter (Reicast) rather than from hardware. It is used
+purely as a *functional* (instruction-semantics) reference for the integer
+instructions the SH-2 and SH-4 share: the harness compares the final SH-2
+register file (R0–R15, PC, PR, GBR, VBR, MACH, MACL, and SR masked to the
+SH-2-defined bits) and memory writes, and **ignores** the SH-4 superscalar
+cycle counts, FP/group-`F` encodings, SH-4-only control ops, and the SH-4-only
+register state (FP banks, SSR/SPC/SGR/DBR, FPSCR). `MAC.L`/`MAC.W` are absent
+from the corpus by construction. Cases where the SH-2 raises an address error
+(misaligned word/long, on-chip, or cache-control accesses) that the SH4 source
+does not model are excluded rather than counted, since our core is the more
+correct of the two there. This is **not** a cycle-timing reference; SH-2
+cycle-exact timing remains validated separately. The corpus is transcoded to
+plain JSON by the corpus's own `transcode_json.py`; the `.json.bin` form is not
+read. It is **not** committed.
 
 ## Hardware-reverse-engineering references
 
