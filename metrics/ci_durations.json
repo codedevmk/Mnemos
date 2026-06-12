@@ -1,8 +1,242 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-06-11T05:04:16+00:00",
+  "captured": "2026-06-12T05:03:41+00:00",
   "window_days": 7,
   "runs": [
+    {
+      "id": 27394705059,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 608
+    },
+    {
+      "id": 27394400068,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 517
+    },
+    {
+      "id": 27394239108,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 491
+    },
+    {
+      "id": 27394131567,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 541
+    },
+    {
+      "id": 27393858606,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 13
+    },
+    {
+      "id": 27393557760,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 13
+    },
+    {
+      "id": 27391339769,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 528
+    },
+    {
+      "id": 27390208708,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 588
+    },
+    {
+      "id": 27387927290,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 534
+    },
+    {
+      "id": 27385724862,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 729
+    },
+    {
+      "id": 27385718489,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 553
+    },
+    {
+      "id": 27384022609,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 825
+    },
+    {
+      "id": 27384007557,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 702
+    },
+    {
+      "id": 27384002150,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 582
+    },
+    {
+      "id": 27383579133,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 523
+    },
+    {
+      "id": 27380300133,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 514
+    },
+    {
+      "id": 27380218595,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 548
+    },
+    {
+      "id": 27377799306,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 657
+    },
+    {
+      "id": 27377797382,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 511
+    },
+    {
+      "id": 27376996114,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 486
+    },
+    {
+      "id": 27375924830,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 443
+    },
+    {
+      "id": 27375923098,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 586
+    },
+    {
+      "id": 27366118162,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 441
+    },
+    {
+      "id": 27364255502,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 501
+    },
+    {
+      "id": 27355143790,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 488
+    },
+    {
+      "id": 27354643031,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 464
+    },
+    {
+      "id": 27351521454,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 524
+    },
+    {
+      "id": 27350818945,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 487
+    },
+    {
+      "id": 27350327525,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 548
+    },
+    {
+      "id": 27331716118,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 502
+    },
+    {
+      "id": 27331716133,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 2026
+    },
+    {
+      "id": 27328954553,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 503
+    },
+    {
+      "id": 27328954325,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 596
+    },
+    {
+      "id": 27327610965,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 665
+    },
+    {
+      "id": 27327609407,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 501
+    },
+    {
+      "id": 27325702135,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 670
+    },
+    {
+      "id": 27325701210,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 524
+    },
+    {
+      "id": 27324959222,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 539
+    },
+    {
+      "id": 27324958269,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 515
+    },
     {
       "id": 27324473416,
       "event": "push",
@@ -38,66 +272,6 @@
       "event": "pull_request",
       "conclusion": "failure",
       "seconds": 14
-    },
-    {
-      "id": 26960263689,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 438
-    },
-    {
-      "id": 26959983373,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 416
-    },
-    {
-      "id": 26959749775,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 411
-    },
-    {
-      "id": 26959176551,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 411
-    },
-    {
-      "id": 26936520691,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 450
-    },
-    {
-      "id": 26936106485,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 529
-    },
-    {
-      "id": 26933740315,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 412
-    },
-    {
-      "id": 26933440310,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 449
-    },
-    {
-      "id": 26932605647,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 446
-    },
-    {
-      "id": 26932334782,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 453
     }
   ]
 }
