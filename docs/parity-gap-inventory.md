@@ -42,12 +42,12 @@ and the `R#` cross-reference to the risk register where one exists.
 
 ## Progress
 
-- **Implemented-system hardware items: 4 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
+- **Implemented-system hardware items: 5 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
 - **Unbuilt systems: 0 / 9 complete**
 
 ---
 
-## Sega 32X — 4 / 8
+## Sega 32X — 5 / 8
 
 The heaviest cluster and the shortest path to 32X correctness: the SH-2 timing tail +
 on-chip interrupt delivery. This is why Star Wars / Space Harrier / After Burner stay
@@ -60,7 +60,7 @@ black. Ties to the hard-problems board (SH-2 cycle-true).
 
 #### CPU — on-chip peripherals
 - [x] **X4** INTC full interrupt delivery — the on-chip INTC arbitrates and delivers FRT, DIVU-OVFI, DMAC transfer-end, WDT ITI, and SCI ERI/RXI/TXI/TEI by IPRA/IPRB priority + VCR vectors (a zero VCR is a valid vector, masked only by IPR). The 32X's VINT/HINT/CMD/PWM are the manifest's external `set_irq`/IRL path and NMI has no Mars consumer · DONE · **CRIT** · M · vs Emu · R1 · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp` `pending_onchip_irq`
-- [~] **X5** SCI serial controller — register-visible SMR/BRR/SCR/SSR/TDR/RDR, coarse TDR transmit completion, RDR receive/error/overrun via `sci_receive_byte`, ERI/RXI/TXI/TEI delivery, and hardware-accurate SSR read-then-write-0 clear (TEND read-only). Remaining: the master/slave serial LINK (TxD/RxD/SCK between the cores) and BRR baud-rate pacing — real hardware (the schematic routes it) with no known 32X game consumer, since titles use the COMM registers for inter-CPU traffic · PARTIAL · MED · M · vs Emu · R10 · Evidence: `progress-analysis.md` R10 + `src/chips/cpu/sh2/sh2_peripherals.cpp`
+- [x] **X5** SCI serial controller — register-visible SMR/BRR/SCR/SSR/TDR/RDR, RDR receive/error/overrun via `sci_receive_byte`, ERI/RXI/TXI/TEI delivery, hardware-accurate SSR read-then-write-0 clear (TEND read-only), frame-level BRR/SMR transmit timing, and the master↔slave serial LINK (a completed TX frame delivers TDR to the peer's RX; wired in the manifest). Bit-level SCK waveform + external-clock peer gating are approximated at frame level (ample — titles use COMM, not SCI) · DONE · MED · M · vs Emu · R10 · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp` + `src/manifests/sega32x/sega32x_system.cpp`
 - [~] **X6** DMAC request/channel timing + bus-wait metering — local slices report per-unit source/destination bus waits through the board callback, pace cycle-steal as one transfer unit per tick, cap burst-mode units per tick (resuming until the block drains), arbitrate DMAOR fixed/round-robin channel priority, and latch normalized DREQ edges; external pin electrical timing/DACK handshakes and full 32X DMA/VDP/shared-bus contention policy remain · PARTIAL · MED · M · vs Emu · R11 · Evidence: `progress-analysis.md` R11 + `src/chips/cpu/sh2/sh2_peripherals.cpp`
 - [x] **X7** WDT watchdog reset output — sets RSTCSR.WOVF, resets WTCNT/WTCSR when RSTE is clear, requests a power-on/manual SH-2 internal reset when RSTE is set (the 32X machine rebases its pacing anchors across that self-reset), and low-pulses the external WDTOVF pin for 128 cycles (pollable via `wdtovf_pin_asserted()`; the 32X leaves the pin unconnected) · DONE · MED · S · vs Emu · R11 · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp`
 - [x] **X8** DIVU — 39/6-cycle busy model, serialized in-flight divides, register-access stall, the SH7604 write-then-read +1-cycle penalty, and SBYCR.MSTP2 ($FFFFFE91 bit 2) module-stop that freezes the divider clock. Sub-32-bit CPU access faults per the on-chip access class (hardware leaves the byte-lane value undefined, so no contract is made) · DONE · MED · S · vs Emu · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp`

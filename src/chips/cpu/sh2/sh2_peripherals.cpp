@@ -97,7 +97,6 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t sci_ssr_status = static_cast<std::uint8_t>(
             sci_ssr_tdre | sci_ssr_rdrf | sci_ssr_orer | sci_ssr_fer | sci_ssr_per);
         constexpr std::uint8_t sci_ssr_mpbt = 0x01U;
-        constexpr int sci_transmit_cycles = 1;
 
         constexpr std::uint32_t sh2_peripherals_state_magic = 0x46503253U; // "S2PF"
         constexpr int divu_normal_cycles = 39;
@@ -506,12 +505,27 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    int sh2_peripherals::sci_frame_cycles() const noexcept {
+        // Frame-level (not bit-level) transmit timing. Async SCI: clocks/bit =
+        // divisor(SMR.CKS) * (BRR+1); a frame is start + 7/8 data + optional
+        // parity + 1/2 stop bits. Clocked-synchronous mode (SMR.C/A) carries 8
+        // data bits with no start/stop -- approximated with the same divisor.
+        static constexpr std::array<int, 4> divisors{{32, 128, 512, 2048}};
+        const int clocks_per_bit = divisors[sci_smr_ & 0x03U] * (static_cast<int>(sci_brr_) + 1);
+        const int data_bits = (sci_smr_ & 0x40U) != 0U ? 7 : 8; // CHR
+        const int frame_bits = (sci_smr_ & 0x80U) != 0U         // C/A: clocked synchronous
+                                   ? data_bits
+                                   : 1 + data_bits + ((sci_smr_ & 0x20U) != 0U ? 1 : 0) +
+                                         ((sci_smr_ & 0x08U) != 0U ? 2 : 1);
+        return clocks_per_bit * frame_bits;
+    }
+
     void sh2_peripherals::start_sci_transmit_if_ready() noexcept {
         if ((sci_scr_ & sci_scr_te) == 0U || (sci_ssr_ & sci_ssr_tdre) != 0U ||
             sci_tx_cycles_ > 0) {
             return;
         }
-        sci_tx_cycles_ = sci_transmit_cycles;
+        sci_tx_cycles_ = sci_frame_cycles();
     }
 
     void sh2_peripherals::sci_receive_byte(std::uint8_t value, std::uint8_t error_flags) noexcept {
@@ -703,7 +717,11 @@ namespace mnemos::chips::cpu {
         if (sci_tx_cycles_ > 0) {
             if (cycles >= static_cast<std::uint64_t>(sci_tx_cycles_)) {
                 sci_tx_cycles_ = 0;
+                const std::uint8_t transmitted = sci_tdr_;
                 sci_ssr_ = static_cast<std::uint8_t>(sci_ssr_ | sci_ssr_tdre | sci_ssr_tend);
+                if (sci_transmit_callback_) {
+                    sci_transmit_callback_(transmitted); // deliver to the linked peer's RX
+                }
             } else {
                 sci_tx_cycles_ -= static_cast<int>(cycles);
             }

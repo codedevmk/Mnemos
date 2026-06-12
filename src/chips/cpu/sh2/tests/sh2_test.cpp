@@ -1428,12 +1428,15 @@ TEST_CASE("sh2_peripherals SCI transmit completion presents TXI and TEI") {
     p.write8(0xFFFFFE60U, 0xA0U); // SCI priority 10
     p.write8(0xFFFFFE64U, 0x33U); // TXI vector
     p.write8(0xFFFFFE65U, 0x34U); // TEI vector
+    p.write8(0xFFFFFE01U, 0x00U); // BRR = 0, SMR = 0 (8N1) -> a 320-cycle frame
     p.write8(0xFFFFFE02U, 0xA4U); // SCR: TIE | TE | TEIE
 
-    p.write8(0xFFFFFE03U, 0x5AU); // TDR write starts a coarse transmit
+    p.write8(0xFFFFFE03U, 0x5AU); // TDR write starts a transmit
     CHECK(p.read8(0xFFFFFE03U) == 0x5AU);
     CHECK((p.read8(0xFFFFFE04U) & 0x84U) == 0x00U);
     CHECK(p.pending_onchip_irq().level == 0);
+    p.tick(319U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x84U) == 0x00U); // not complete before the frame ends
 
     p.tick(1U);
     CHECK((p.read8(0xFFFFFE04U) & 0x84U) == 0x84U);

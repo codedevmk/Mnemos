@@ -67,6 +67,11 @@ namespace mnemos::chips::cpu {
         // the byte only while receiver-enable is set; pending RX/ERI interrupts
         // then flow through the normal INTC priority/vector registers.
         void sci_receive_byte(std::uint8_t value, std::uint8_t error_flags = 0U) noexcept;
+        // Serial link: the byte just transmitted (TDR) when a frame completes.
+        // The 32X manifest wires master TX -> slave RX and vice versa.
+        void set_sci_transmit_callback(std::function<void(std::uint8_t value)> cb) {
+            sci_transmit_callback_ = std::move(cb);
+        }
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t addr) const noexcept;
         void write8(std::uint32_t addr, std::uint8_t value) noexcept;
@@ -94,24 +99,26 @@ namespace mnemos::chips::cpu {
             return (tocr_ & 0x10U) != 0U ? ocrb_ : ocra_;
         }
         void start_sci_transmit_if_ready() noexcept;
+        [[nodiscard]] int sci_frame_cycles() const noexcept;
 
         std::array<std::uint8_t, window_size> regs_{};
 
-        // SCI -- serial communication interface ($FE00-$FE05). This slice models
-        // software-visible data/status flag generation with hardware-accurate
-        // SSR read-then-write-0 clear semantics. NOT modelled (no 32X host
-        // surface): the master<->slave serial LINK (TxD/RxD/SCK between the two
-        // SH-2s -- a real board wire, but 32X software uses the COMM registers
-        // for inter-CPU traffic), and bit-rate BRR/baud waveform pacing. Tracked
-        // under X5; revisit only if a title is found driving the SCI link.
+        // SCI -- serial communication interface ($FE00-$FE05). Models the
+        // software-visible data/status flags with hardware-accurate SSR
+        // read-then-write-0 clear, frame-level BRR/SMR transmit timing, and the
+        // master<->slave serial LINK (a completed TX frame delivers TDR to the
+        // peer's RX via set_sci_transmit_callback). Bit-level SCK waveform and
+        // external-clock peer gating are approximated (frame-level), which is
+        // ample given 32X software uses the COMM registers for inter-CPU traffic.
         std::uint8_t sci_smr_{};                    // FE00 serial mode
         std::uint8_t sci_brr_{0xFFU};               // FE01 bit-rate
         std::uint8_t sci_scr_{};                    // FE02 control
         std::uint8_t sci_tdr_{0xFFU};               // FE03 transmit data
         std::uint8_t sci_ssr_{0x84U};               // FE04 status (TDRE | TEND after reset)
         std::uint8_t sci_rdr_{};                    // FE05 receive data
-        int sci_tx_cycles_{};                       // remaining coarse transmit-complete ticks
+        int sci_tx_cycles_{};                       // remaining transmit-frame cycles
         mutable std::uint8_t sci_ssr_read_flags_{}; // SSR status bits observed by a read
+        std::function<void(std::uint8_t)> sci_transmit_callback_{}; // link peer RX (transient)
 
         // FRT -- free-running timer ($FE10-$FE17). A 16-bit counter clocked off a
         // TCR-selected prescale of the SH-2 clock; matches against OCRA/OCRB and

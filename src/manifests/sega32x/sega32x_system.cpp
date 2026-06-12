@@ -947,6 +947,13 @@ namespace mnemos::manifests::sega32x {
         // it through the $4012 port, so the transfer self-regulates).
         s->master_cpu.set_dmac_dreq_query([s](int) { return s->dreq_pending(); });
         s->slave_cpu.set_dmac_dreq_query([s](int) { return s->dreq_pending(); });
+
+        // SH-2 serial link: a completed TX frame on one core delivers its byte to
+        // the other core's SCI receiver (master TxD -> slave RxD and vice versa).
+        s->master_cpu.peripherals().set_sci_transmit_callback(
+            [s](std::uint8_t byte) { s->slave_cpu.peripherals().sci_receive_byte(byte); });
+        s->slave_cpu.peripherals().set_sci_transmit_callback(
+            [s](std::uint8_t byte) { s->master_cpu.peripherals().sci_receive_byte(byte); });
         return sys;
     }
 
