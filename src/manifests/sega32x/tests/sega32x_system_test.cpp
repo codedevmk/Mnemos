@@ -46,6 +46,104 @@ TEST_CASE("sega32x_system shares SDRAM and the COMM bank across both buses") {
     CHECK(sys->master_bus.read8(0x20004020U) == 0x12U);
 }
 
+TEST_CASE("sega32x_system charges TAS bus-lock waits on shared 32X ranges") {
+    auto sys = assemble_sega32x();
+
+    auto r = sys->master_cpu.cpu_registers();
+    r.r[1] = 0x06000010U;
+    r.pc = 0x06000100U;
+    sys->master_cpu.set_registers(r);
+    sys->master_bus.write8(0x06000010U, 0x00U);
+    sys->master_bus.write8(0x06000100U, 0x41U); // TAS.B @R1
+    sys->master_bus.write8(0x06000101U, 0x1BU);
+
+    CHECK(sys->master_cpu.step_instruction() ==
+          4 + mnemos::manifests::sega32x::shared_tas_bus_lock_wait_cycles);
+    CHECK(sys->master_bus.read8(0x06000010U) == 0x80U);
+
+    r = sys->master_cpu.cpu_registers();
+    r.r[1] = 0xC0000000U; // per-CPU cache-data scratch, not shared external bus
+    r.pc = 0x06000102U;
+    sys->master_cpu.set_registers(r);
+    sys->master_bus.write8(0x06000102U, 0x41U); // TAS.B @R1
+    sys->master_bus.write8(0x06000103U, 0x1BU);
+    sys->master_bus.write8(0xC0000000U, 0x00U);
+
+    CHECK(sys->master_cpu.step_instruction() == 4);
+    CHECK(sys->master_bus.read8(0xC0000000U) == 0x80U);
+}
+
+TEST_CASE("sega32x_system arbitrates simultaneous SH-2 TAS bus locks") {
+    auto sys = assemble_sega32x();
+    sys->set_sh2_reset(false);
+
+    auto master = sys->master_cpu.cpu_registers();
+    master.r[1] = 0x06000010U;
+    master.pc = 0x06000100U;
+    sys->master_cpu.set_registers(master);
+
+    auto slave = sys->slave_cpu.cpu_registers();
+    slave.r[1] = 0x06000020U;
+    slave.pc = 0x06000200U;
+    sys->slave_cpu.set_registers(slave);
+
+    sys->master_bus.write8(0x06000100U, 0x41U); // TAS.B @R1
+    sys->master_bus.write8(0x06000101U, 0x1BU);
+    sys->slave_bus.write8(0x06000200U, 0x41U); // TAS.B @R1
+    sys->slave_bus.write8(0x06000201U, 0x1BU);
+    sys->master_bus.write8(0x06000010U, 0x00U);
+    sys->slave_bus.write8(0x06000020U, 0x00U);
+
+    sys->run_cycles(1U);
+
+    CHECK(sys->master_cpu.elapsed_cycles() ==
+          4U + mnemos::manifests::sega32x::shared_tas_bus_lock_wait_cycles);
+    CHECK(sys->slave_cpu.elapsed_cycles() ==
+          4U + 2U * mnemos::manifests::sega32x::shared_tas_bus_lock_wait_cycles);
+    CHECK(sys->master_bus.read8(0x06000010U) == 0x80U);
+    CHECK(sys->slave_bus.read8(0x06000020U) == 0x80U);
+}
+
+TEST_CASE("sega32x_system absorbs a master WDT internal reset without desyncing pacing") {
+    auto sys = assemble_sega32x();
+    sys->set_sh2_reset(false);
+
+    // Both cores loop on a self-branch in shared SDRAM so the batch consumes
+    // real cycles deterministically.
+    sys->master_bus.write8(0x06000000U, 0xAFU); // BRA self
+    sys->master_bus.write8(0x06000001U, 0xFEU);
+    sys->master_bus.write8(0x06000002U, 0x00U); // (delay) NOP
+    sys->master_bus.write8(0x06000003U, 0x09U);
+    auto master = sys->master_cpu.cpu_registers();
+    master.pc = 0x06000000U;
+    sys->master_cpu.set_registers(master);
+    auto slave = sys->slave_cpu.cpu_registers();
+    slave.pc = 0x06000000U;
+    sys->slave_cpu.set_registers(slave);
+
+    sys->run_cycles(20U);
+    const std::uint64_t pos_before = sys->sh2_position();
+    CHECK(pos_before > 0U);
+
+    // Arm the master's watchdog to drive an internal power-on reset on overflow.
+    auto& p = sys->master_cpu.peripherals();
+    p.write8(0xFFFFFE82U, 0x5AU);
+    p.write8(0xFFFFFE83U, 0x40U); // RSTCSR: RSTE=1, RSTS=0 -> power-on reset
+    p.write8(0xFFFFFE80U, 0x5AU);
+    p.write8(0xFFFFFE81U, 0xFFU); // WTCNT = 0xFF (one tick from overflow)
+    p.write8(0xFFFFFE80U, 0xA5U);
+    p.write8(0xFFFFFE81U, 0x60U); // WTCSR: watchdog mode, TME, prescale 2
+
+    // The watchdog overflows mid-batch and self-resets the master. Pre-fix this
+    // zeroed master_cpu.elapsed_cycles() without rebasing sh2_elapsed_base, so
+    // sh2_position() jumped backwards and run_cycles()'s PWM delta underflowed.
+    sys->run_cycles(64U);
+
+    CHECK(sys->sh2_position() >= pos_before);                       // pacing stays monotone
+    CHECK((p.read8(0xFFFFFE82U) & 0xC0U) == 0xC0U);                 // WOVF | RSTE preserved
+    CHECK(sys->master_cpu.cpu_registers().pc == 0x00000000U);      // re-fetched the reset vector
+}
+
 TEST_CASE("sega32x_system drives each CPU's IRQ mask from its own register window") {
     auto sys = assemble_sega32x();
     sys->set_sh2_reset(false);

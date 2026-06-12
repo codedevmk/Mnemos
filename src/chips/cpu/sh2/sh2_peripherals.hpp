@@ -1,5 +1,7 @@
 #pragma once
 
+#include "chip.hpp"
+
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -20,10 +22,9 @@ namespace mnemos::chips::cpu {
     // intercepts the window before its external bus -- mapping it on a shared bus
     // would alias the master and slave CPUs' private peripheral state.
     //
-    // This is the register-window shell (phase B, increment 1): the window reads
-    // and writes back as storage. The FRT/WDT/DMAC/INTC behaviour (timers,
-    // transfers, on-chip interrupt resolution) lands in later phase-B increments
-    // (see docs/plans/2026-06-09-sega-32x-port.md).
+    // Implemented behaviour covers the register-window shell plus the 32X-visible
+    // SCI, FRT, WDT, DMAC, DIVU, and INTC request delivery. Unmodelled modules
+    // still read and write back as storage until their behaviour lands.
     class sh2_peripherals final {
       public:
         static constexpr std::uint32_t window_base = 0xFFFFFE00U; // on-chip register base
@@ -42,6 +43,10 @@ namespace mnemos::chips::cpu {
             int level{};
             std::uint8_t vector{};
         };
+        struct watchdog_reset_request final {
+            bool asserted{};
+            reset_kind kind{reset_kind::power_on};
+        };
 
         // The DMAC moves data over the same bus the CPU sees; the owning sh2
         // supplies the handle when it attaches its bus.
@@ -53,14 +58,27 @@ namespace mnemos::chips::cpu {
         void set_dreq_query(std::function<bool(int channel)> query) noexcept {
             dreq_query_ = std::move(query);
         }
+        void set_bus_wait_callback(
+            std::function<int(std::uint32_t address, std::uint8_t bytes, bool locked)> cb) {
+            bus_wait_ = std::move(cb);
+        }
+
+        // External serial input from the owning board/manifest. The SCI latches
+        // the byte only while receiver-enable is set; pending RX/ERI interrupts
+        // then flow through the normal INTC priority/vector registers.
+        void sci_receive_byte(std::uint8_t value, std::uint8_t error_flags = 0U) noexcept;
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t addr) const noexcept;
         void write8(std::uint32_t addr, std::uint8_t value) noexcept;
-        // Advance the time-driven peripherals (currently the FRT) by `cycles`
-        // SH-2 clocks. Called every instruction step, including during SLEEP.
-        void tick(std::uint64_t cycles) noexcept;
+        // Advance time-driven peripherals by `cycles` SH-2 clocks, run any
+        // active DMAC work, and return peripheral-generated wait cycles that
+        // must stall the owning CPU.
+        std::uint64_t tick(std::uint64_t cycles) noexcept;
         [[nodiscard]] onchip_irq pending_onchip_irq() const noexcept;
+        [[nodiscard]] watchdog_reset_request consume_watchdog_reset() noexcept;
+        [[nodiscard]] std::uint64_t consume_divu_access_wait(std::uint32_t addr) noexcept;
         void reset() noexcept;
+        void reset_preserving_watchdog_status() noexcept;
 
         void save_state(state_writer& writer) const;
         void load_state(state_reader& reader);
@@ -70,14 +88,25 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint16_t selected_ocr() const noexcept {
             return (tocr_ & 0x10U) != 0U ? ocrb_ : ocra_;
         }
+        void start_sci_transmit_if_ready() noexcept;
 
         std::array<std::uint8_t, window_size> regs_{};
 
+        // SCI -- serial communication interface ($FE00-$FE05). This slice models
+        // software-visible data/status flag generation; byte-rate baud scheduling
+        // and board-level links are kept outside this on-chip block.
+        std::uint8_t sci_smr_{};        // FE00 serial mode
+        std::uint8_t sci_brr_{0xFFU};   // FE01 bit-rate
+        std::uint8_t sci_scr_{};        // FE02 control
+        std::uint8_t sci_tdr_{0xFFU};   // FE03 transmit data
+        std::uint8_t sci_ssr_{0x84U};   // FE04 status (TDRE | TEND after reset)
+        std::uint8_t sci_rdr_{};        // FE05 receive data
+        int sci_tx_cycles_{};           // remaining coarse transmit-complete ticks
+
         // FRT -- free-running timer ($FE10-$FE17). A 16-bit counter clocked off a
         // TCR-selected prescale of the SH-2 clock; matches against OCRA/OCRB and
-        // wraps, latching status flags in FTCSR. The timer interrupts (gated by
-        // TIER) are delivered once the on-chip INTC lands; for now the flags are
-        // pollable. Input capture (FICR) is not modelled.
+        // wraps, latching status flags in FTCSR. Input capture (FICR) is not
+        // modelled.
         std::uint16_t frc_{};                     // FE12/13 free-running counter
         std::uint16_t ocra_{0xFFFFU};             // FE14/15 output compare A
         std::uint16_t ocrb_{0xFFFFU};             // FE14/15 output compare B
@@ -89,31 +118,37 @@ namespace mnemos::chips::cpu {
         mutable std::uint8_t frt_temp_{};         // 16-bit access byte latch
         mutable std::uint8_t ftcsr_read_flags_{}; // flags observed by a read
 
-        // INTC -- interrupt controller. The FRT priority lives in IPRB[11:8]; its
-        // vectors in VCRC (low byte = output-compare, shared by OCFA/OCFB) and
-        // VCRD (high byte = overflow). WDT/DMAC/SCI priorities + vectors stay raw
-        // in the window until those interrupts land.
-        std::uint16_t iprb_{}; // FE60 interrupt priority B
-        std::uint16_t vcrc_{}; // FE66 FRT ICI/OCI vectors
-        std::uint16_t vcrd_{}; // FE68 FRT OVI vector
+        // INTC -- interrupt controller. IPRA covers DIVU/DMAC/WDT priorities;
+        // IPRB covers SCI/FRT priorities. VCRA/B are SCI vectors, VCRC/D are FRT
+        // vectors, and VCRWDT holds the WDT interval vector.
+        std::uint16_t ipra_{};   // FEE2 interrupt priority A
+        std::uint16_t iprb_{};   // FE60 interrupt priority B
+        std::uint16_t vcra_{};   // FE62 SCI ERI/RXI vectors
+        std::uint16_t vcrb_{};   // FE64 SCI TXI/TEI vectors
+        std::uint16_t vcrc_{};   // FE66 FRT ICI/OCI vectors
+        std::uint16_t vcrd_{};   // FE68 FRT OVI vector
+        std::uint16_t vcrwdt_{}; // FEE4 WDT ITI vector
 
         // WDT -- watchdog / interval timer ($FE80-$FE83). An 8-bit counter
         // (WTCNT) clocked off a WTCSR-selected prescale; on overflow it sets the
-        // interval-timer flag (WTCSR.OVF) or, in watchdog mode, the reset flag
-        // (RSTCSR.WOVF). Writes are keyed (a high-byte key selects the register).
-        // The ITI interrupt and the watchdog reset are deferred; the flags are
-        // pollable.
-        std::uint8_t wtcsr_{0x18U};     // FE80 control/status
-        std::uint8_t wtcnt_{};          // FE80/81 counter
-        std::uint8_t rstcsr_{0x1FU};    // FE82/83 reset control/status
-        int wdt_prescale_acc_{};        // accumulated source clocks
-        std::uint8_t wdt_key_{};        // latched high-byte key of a keyed write
-        mutable bool wtcsr_ovf_read_{}; // WTCSR.OVF observed by a read
+        // interval-timer flag (WTCSR.OVF) or, in watchdog mode, RSTCSR.WOVF and
+        // the optional internal reset request selected by RSTCSR.RSTE/RSTS.
+        // Writes are keyed (a high-byte key selects the register).
+        std::uint8_t wtcsr_{0x18U};                    // FE80 control/status
+        std::uint8_t wtcnt_{};                         // FE80/81 counter
+        std::uint8_t rstcsr_{0x1FU};                   // FE82/83 reset control/status
+        int wdt_prescale_acc_{};                       // accumulated source clocks
+        std::uint8_t wdt_key_{};                       // latched high-byte key
+        mutable bool wtcsr_ovf_read_{};                // WTCSR.OVF observed by a read
+        bool watchdog_reset_pending_{};                // internal reset to consume
+        reset_kind watchdog_reset_kind_{reset_kind::power_on};
 
         // DMAC -- 2-channel DMA controller ($FF80-$FFAF channel regs, $FFB0 DMAOR).
-        // Auto-request transfers move TCR units of 1/2/4/16 bytes from SAR to DAR
-        // (each address fixed/incrementing/decrementing per CHCR), setting CHCR.TE
-        // on completion. The transfer-end interrupt + external DREQ are deferred.
+        // Requests are arbitrated by DMAOR.PR, cycle-steal mode transfers one
+        // unit per peripheral tick, and burst mode keeps the bus until the active
+        // request drains. CHCR.TE/IE present transfer-end interrupts through INTC.
+        // Bus-wait metering is reported through bus_wait_; exact shared-bus
+        // contention remains board policy.
         struct dma_channel final {
             std::uint32_t sar{};  // source address
             std::uint32_t dar{};  // destination address
@@ -121,21 +156,30 @@ namespace mnemos::chips::cpu {
             std::uint32_t chcr{}; // channel control
         };
         std::array<dma_channel, 2> dma_{};
+        std::array<std::uint32_t, 2> vcrdma_{}; // FFA0/FFA8 transfer-end vectors
         std::uint32_t dmaor_{}; // DMA operation register (master enable + flags)
         ibus* bus_{};           // bus the DMAC transfers over (set by the owning sh2)
         std::function<bool(int)> dreq_query_{}; // module-request DREQ level per channel
+        std::function<int(std::uint32_t, std::uint8_t, bool)> bus_wait_{};
+        std::array<bool, 2> dreq_active_{};       // last sampled normalized request level
+        std::array<bool, 2> dreq_edge_pending_{}; // latched inactive->active request edge
+        std::uint8_t dmac_rr_top_{1U};            // DMAOR.PR first transfer after reset: ch1
 
-        // Run any active auto-request DMA channel to completion (called per tick).
-        void run_dmac() noexcept;
+        // Advance non-DMA time-driven on-chip units.
+        void advance_time(std::uint64_t cycles) noexcept;
+        void reset_watchdog_counter_control() noexcept;
+        // Run active DMA work for this peripheral tick and return generated wait cycles.
+        [[nodiscard]] std::uint64_t run_dmac() noexcept;
 
         // DIVU -- the division unit ($FF00-$FF1F, mirrored at $FF20-$FF3F).
         // Completing a DVDNT write starts a signed 32/32 divide (quotient ->
         // DVDNT/DVDNTL, remainder -> DVDNTH); completing a DVDNTL write starts
         // a signed 64/32 divide of DVDNTH:DVDNTL by DVSR. Divide-by-zero and a
         // quotient outside 32 bits set DVCR.OVF and yield the partial-iteration
-        // hardware result. Results complete immediately (the 39-cycle latency
-        // is below what retail polling observes); DVDNTUH/UL shadow the last
-        // result. The overflow interrupt (OVFIE + VCRDIV) is storage-only.
+        // hardware result. Results mature after 39 cycles, or after 6 cycles for
+        // overflow; a DIVU register access while busy waits until completion.
+        // DVDNTUH/UL shadow the last result. The overflow interrupt is delivered
+        // when DVCR.OVFIE and VCRDIV are set.
         std::uint32_t dvsr_{};    // FF00 divisor
         std::uint32_t dvdnt_{};   // FF04 32-bit dividend / quotient
         std::uint32_t dvcr_{};    // FF08 control (bit 0 OVF, bit 1 OVFIE)
@@ -144,9 +188,16 @@ namespace mnemos::chips::cpu {
         std::uint32_t dvdntl_{};  // FF14 dividend low / quotient
         std::uint32_t dvdntuh_{}; // FF18 shadow of the last remainder
         std::uint32_t dvdntul_{}; // FF1C shadow of the last quotient
+        int divu_cycles_remaining_{};
+        bool divu_pending_overflow_{};
+        std::uint32_t divu_pending_quotient_{};
+        std::uint32_t divu_pending_remainder_{};
         void divu_run_32() noexcept;
         void divu_run_64() noexcept;
+        void divu_start(bool overflow, std::uint32_t quotient, std::uint32_t remainder) noexcept;
         void divu_finish(bool overflow, std::uint32_t quotient, std::uint32_t remainder) noexcept;
+        void divu_advance(std::uint64_t cycles) noexcept;
+        void divu_complete_pending() noexcept;
     };
 
 } // namespace mnemos::chips::cpu

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 
 namespace mnemos::manifests::sega32x {
 
@@ -113,6 +114,23 @@ namespace mnemos::manifests::sega32x {
                 hw |= 0x01U;
             }
             return hw;
+        }
+
+        [[nodiscard]] constexpr bool in_range(std::uint32_t address, std::uint32_t base,
+                                              std::uint32_t size) noexcept {
+            return address >= base && address - base < size;
+        }
+
+        template <std::size_t N>
+        [[nodiscard]] constexpr bool in_partitioned_range(
+            std::uint32_t address, const std::array<std::uint32_t, N>& bases,
+            std::uint32_t offset, std::uint32_t size) noexcept {
+            for (const std::uint32_t base : bases) {
+                if (in_range(address, base + offset, size)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         struct irq_source {
@@ -593,13 +611,27 @@ namespace mnemos::manifests::sega32x {
             sh2_elapsed_base += master_cpu.elapsed_cycles();
             master_cpu.reset(chips::reset_kind::power_on);
             slave_cpu.reset(chips::reset_kind::power_on);
+            shared_bus_lock_until = 0U;
         }
         sh2_reset_asserted = asserted;
+    }
+
+    void sega32x_system::absorb_self_reset(bool is_master) noexcept {
+        // A WDT internal reset zeroes only the firing core's elapsed counter
+        // mid-run -- a per-CPU /RES edge. Mirror set_sh2_reset()'s fold so the
+        // master's discarded count enters the pacing base (sh2_position() must
+        // stay monotone) and drop the shared TAS lock, whose release deadline
+        // lived in the now-reset elapsed domain.
+        if (is_master) {
+            sh2_elapsed_base += master_cpu.elapsed_cycles();
+        }
+        shared_bus_lock_until = 0U;
     }
 
     void sega32x_system::reset() {
         sh2_reset_asserted = true;
         sh2_elapsed_base = 0U;
+        shared_bus_lock_until = 0U;
         adapter_ctrl = 0U;
         adapter_enabled = false;
         hcount = 0U;
@@ -698,16 +730,71 @@ namespace mnemos::manifests::sega32x {
         return frames;
     }
 
+    int sega32x_system::shared_bus_wait(bool master, std::uint32_t address, std::uint8_t bytes,
+                                        bool locked) noexcept {
+        if (!locked || bytes == 0U) {
+            return 0;
+        }
+
+        const bool shared_sdram =
+            in_partitioned_range(address, p0_bases, sdram_base,
+                                 static_cast<std::uint32_t>(sdram_size)) ||
+            in_partitioned_range(address, p1_bases, sdram_base,
+                                 static_cast<std::uint32_t>(sdram_size));
+        const bool shared_framebuffer =
+            in_partitioned_range(address, p0_bases, framebuffer_base,
+                                 static_cast<std::uint32_t>(framebuffer_size)) ||
+            in_partitioned_range(address, p1_bases, framebuffer_base,
+                                 static_cast<std::uint32_t>(framebuffer_size));
+        const bool shared_comm =
+            in_partitioned_range(address, p0_bases, sysreg_base + comm_offset,
+                                 static_cast<std::uint32_t>(comm_words * 2U)) ||
+            in_partitioned_range(address, p1_bases, sysreg_base + comm_offset,
+                                 static_cast<std::uint32_t>(comm_words * 2U)) ||
+            in_range(address, 0x40000000U + comm_offset,
+                     static_cast<std::uint32_t>(comm_words * 2U));
+
+        if (!shared_sdram && !shared_framebuffer && !shared_comm) {
+            return 0;
+        }
+
+        const std::uint64_t start =
+            master ? master_cpu.elapsed_cycles() : slave_cpu.elapsed_cycles();
+        const std::uint64_t grant = std::max(start, shared_bus_lock_until);
+        const std::uint64_t wait =
+            static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles) + (grant - start);
+        shared_bus_lock_until =
+            grant + static_cast<std::uint64_t>(shared_tas_bus_lock_wait_cycles);
+
+        return wait > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+                   ? std::numeric_limits<int>::max()
+                   : static_cast<int>(wait);
+    }
+
     void sega32x_system::run_cycles(std::uint64_t cycles) {
         if (sh2_reset_asserted) {
             return; // both SH-2s held inactive
         }
-        const std::uint64_t before = master_cpu.elapsed_cycles();
-        master_cpu.tick(cycles);
-        slave_cpu.tick(cycles);
+        // Measure progress against the monotone pacing position, not the raw
+        // elapsed counter: a guest WDT internal reset can zero a core's elapsed
+        // mid-batch, and sh2_position() absorbs that edge (see absorb_self_reset).
+        const std::uint64_t before = sh2_position();
+        master_cpu.grant_cycles(cycles);
+        slave_cpu.grant_cycles(cycles);
+        while (master_cpu.has_cycle_credit() || slave_cpu.has_cycle_credit()) {
+            const bool step_master =
+                master_cpu.has_cycle_credit() &&
+                (!slave_cpu.has_cycle_credit() ||
+                 master_cpu.elapsed_cycles() <= slave_cpu.elapsed_cycles());
+            if (step_master) {
+                master_cpu.step_credited_instruction();
+            } else {
+                slave_cpu.step_credited_instruction();
+            }
+        }
         // The PWM unit advances on the SH-2 clock; drive it with the master's
         // actual progress (instruction-atomic stepping can overshoot `cycles`).
-        step_pwm(master_cpu.elapsed_cycles() - before);
+        step_pwm(sh2_position() - before);
     }
 
     std::unique_ptr<sega32x_system> assemble_sega32x() {
@@ -837,6 +924,21 @@ namespace mnemos::manifests::sega32x {
 
         s->master_cpu.attach_bus(s->master_bus);
         s->slave_cpu.attach_bus(s->slave_bus);
+
+        s->master_cpu.set_bus_wait_callback(
+            [s](std::uint32_t address, std::uint8_t bytes, bool locked) {
+                return s->shared_bus_wait(true, address, bytes, locked);
+            });
+        s->slave_cpu.set_bus_wait_callback(
+            [s](std::uint32_t address, std::uint8_t bytes, bool locked) {
+                return s->shared_bus_wait(false, address, bytes, locked);
+            });
+
+        // A WDT internal reset zeroes the firing core's elapsed counter; rebase
+        // the shared pacing anchors before that happens so the schedule stays
+        // monotone (otherwise step_pwm()/sh2_position() see a backward jump).
+        s->master_cpu.set_self_reset_callback([s]() { s->absorb_self_reset(true); });
+        s->slave_cpu.set_self_reset_callback([s]() { s->absorb_self_reset(false); });
 
         // When a CPU accepts an IRQ, re-scan its latched sources so a waiting
         // lower-priority edge is delivered rather than stranded.
