@@ -89,9 +89,13 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t sci_ssr_tend = 0x04U;
         constexpr std::uint8_t sci_ssr_errors =
             static_cast<std::uint8_t>(sci_ssr_orer | sci_ssr_fer | sci_ssr_per);
-        constexpr std::uint8_t sci_ssr_valid = 0xFFU;
         constexpr std::uint8_t sci_ssr_reset =
             static_cast<std::uint8_t>(sci_ssr_tdre | sci_ssr_tend);
+        // Status flags cleared by the SH7604 "read while set, then write 0"
+        // protocol (TEND is read-only; MPBT bit 0 is the only freely-writable bit).
+        constexpr std::uint8_t sci_ssr_status = static_cast<std::uint8_t>(
+            sci_ssr_tdre | sci_ssr_rdrf | sci_ssr_orer | sci_ssr_fer | sci_ssr_per);
+        constexpr std::uint8_t sci_ssr_mpbt = 0x01U;
         constexpr int sci_transmit_cycles = 1;
 
         constexpr std::uint32_t sh2_peripherals_state_magic = 0x46503253U; // "S2PF"
@@ -102,8 +106,9 @@ namespace mnemos::chips::cpu {
         // states need not stay loadable, but save/load must change together and
         // old blobs must fail the ok() gate, not load wrong). v4 covers SCI,
         // IPRA/VCRA/VCRB/VCRWDT, VCRDMA, the watchdog-reset request, DREQ-edge +
-        // round-robin DMAC state, and the in-flight DIVU result.
-        constexpr std::uint16_t sh2_peripherals_state_version = 4U;
+        // round-robin DMAC state, and the in-flight DIVU result. v5 adds the SSR
+        // read-observation flags and the DIVU write-then-read penalty arm.
+        constexpr std::uint16_t sh2_peripherals_state_version = 5U;
 
         [[nodiscard]] int wdt_prescale_from_wtcsr(std::uint8_t wtcsr) noexcept {
             constexpr std::array<int, 8> prescales{{2, 64, 128, 256, 512, 1024, 4096, 8192}};
@@ -156,8 +161,10 @@ namespace mnemos::chips::cpu {
             return sci_scr_;
         case 0x03U: // TDR
             return sci_tdr_;
-        case 0x04U: // SSR
+        case 0x04U: { // SSR -- reading observes the status flags (write-0 clears)
+            sci_ssr_read_flags_ |= static_cast<std::uint8_t>(sci_ssr_ & sci_ssr_status);
             return sci_ssr_;
+        }
         case 0x05U: // RDR
             return sci_rdr_;
         case 0x10U: // TIER
@@ -290,12 +297,18 @@ namespace mnemos::chips::cpu {
             sci_tx_cycles_ = 0;
             start_sci_transmit_if_ready();
             return;
-        case 0x04U: // SSR
-            sci_ssr_ = static_cast<std::uint8_t>(value & sci_ssr_valid);
-            if ((sci_ssr_ & sci_ssr_tdre) != 0U) {
-                sci_tx_cycles_ = 0;
-            }
+        case 0x04U: { // SSR -- a status flag clears only if a read observed it
+                      // (read while set) and the write puts 0 there. TEND is
+                      // read-only; MPBT (bit 0) is freely writable. Transmit is
+                      // driven by TDR writes, so the status clear has no side effect.
+            const auto observed =
+                static_cast<std::uint8_t>(value | static_cast<std::uint8_t>(~sci_ssr_read_flags_));
+            const auto preserved = static_cast<std::uint8_t>(sci_ssr_ & observed & sci_ssr_status);
+            sci_ssr_ = static_cast<std::uint8_t>(preserved | (sci_ssr_ & sci_ssr_tend) |
+                                                 (value & sci_ssr_mpbt));
+            sci_ssr_read_flags_ &= value;
             return;
+        }
         case 0x05U: // RDR storage for state/debug writes; receive uses sci_receive_byte().
             sci_rdr_ = value;
             return;
@@ -417,6 +430,7 @@ namespace mnemos::chips::cpu {
             return;
         default:
             if (off >= 0x100U && off < 0x140U) { // DIVU (mirrored at +$20)
+                divu_post_write_ = true;         // arm the SH7604 write-then-read +1 penalty
                 const std::uint32_t canon = off >= 0x120U ? off - 0x20U : off;
                 // The divide fires when the LAST byte of the trigger register
                 // completes (a 32-bit store arrives as four byte writes here).
@@ -712,13 +726,25 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    std::uint64_t sh2_peripherals::consume_divu_access_wait(std::uint32_t addr) noexcept {
-        if (!in_divu_registers(addr) || divu_cycles_remaining_ <= 0) {
+    std::uint64_t sh2_peripherals::consume_divu_access_wait(std::uint32_t addr,
+                                                            bool is_read) noexcept {
+        if (!in_divu_registers(addr)) {
             return 0U;
         }
-        const auto wait = static_cast<std::uint64_t>(divu_cycles_remaining_);
-        divu_complete_pending();
-        return wait;
+        // An access during an in-flight divide stalls until it completes; this
+        // dominates and consumes the write-then-read penalty.
+        if (divu_cycles_remaining_ > 0) {
+            divu_post_write_ = false;
+            const auto wait = static_cast<std::uint64_t>(divu_cycles_remaining_);
+            divu_complete_pending();
+            return wait;
+        }
+        // Idle DIVU: a read in the access immediately after a register write
+        // costs one extra cycle (the SH7604 write-then-read penalty). Any DIVU
+        // access (read or write) consumes the armed state.
+        const bool extension = is_read && divu_post_write_;
+        divu_post_write_ = false;
+        return extension ? 1U : 0U;
     }
 
     void sh2_peripherals::reset_watchdog_counter_control() noexcept {
@@ -946,6 +972,7 @@ namespace mnemos::chips::cpu {
         sci_ssr_ = sci_ssr_reset;
         sci_rdr_ = 0U;
         sci_tx_cycles_ = 0;
+        sci_ssr_read_flags_ = 0U;
         frc_ = 0U;
         ocra_ = 0xFFFFU;
         ocrb_ = 0xFFFFU;
@@ -989,6 +1016,7 @@ namespace mnemos::chips::cpu {
         divu_pending_overflow_ = false;
         divu_pending_quotient_ = 0U;
         divu_pending_remainder_ = 0U;
+        divu_post_write_ = false;
         // bus_ is the attached handle, not reset state -- leave it intact.
     }
 
@@ -1023,6 +1051,7 @@ namespace mnemos::chips::cpu {
         writer.u8(sci_ssr_);
         writer.u8(sci_rdr_);
         writer.u32(static_cast<std::uint32_t>(sci_tx_cycles_));
+        writer.u8(sci_ssr_read_flags_);
 
         writer.u16(frc_);
         writer.u16(ocra_);
@@ -1082,6 +1111,7 @@ namespace mnemos::chips::cpu {
         writer.u8(divu_pending_overflow_ ? 1U : 0U);
         writer.u32(divu_pending_quotient_);
         writer.u32(divu_pending_remainder_);
+        writer.u8(divu_post_write_ ? 1U : 0U);
     }
 
     void sh2_peripherals::load_state(state_reader& reader) {
@@ -1103,6 +1133,7 @@ namespace mnemos::chips::cpu {
         sci_ssr_ = reader.u8();
         sci_rdr_ = reader.u8();
         sci_tx_cycles_ = bounded_state_int(reader.u32());
+        sci_ssr_read_flags_ = reader.u8();
 
         frc_ = reader.u16();
         ocra_ = reader.u16();
@@ -1175,6 +1206,7 @@ namespace mnemos::chips::cpu {
         divu_pending_overflow_ = reader.u8() != 0U;
         divu_pending_quotient_ = reader.u32();
         divu_pending_remainder_ = reader.u32();
+        divu_post_write_ = reader.u8() != 0U;
     }
 
 } // namespace mnemos::chips::cpu

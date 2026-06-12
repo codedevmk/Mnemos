@@ -1156,7 +1156,7 @@ TEST_CASE("sh2_peripherals round-trips and resets its register window") {
     p.write8(0xFFFFFE01U, 0x22U);
     p.write8(0xFFFFFE02U, 0x50U);
     p.write8(0xFFFFFE03U, 0x5AU);
-    p.write8(0xFFFFFE04U, 0x40U);
+    p.sci_receive_byte(0x77U); // SSR is not plain storage: set RDRF (0x40) via receive
     p.write8(0xFFFFFE05U, 0x42U);
     p.write8(0xFFFFFEE2U, 0x80U); // IPRA extension-era fields are first-class state
     write_peripheral32(p, 0xFFFFFFA0U, 0x55U);
@@ -1342,7 +1342,7 @@ TEST_CASE("sh2_peripherals SCI resets and round-trips registers") {
     p.write8(0xFFFFFE01U, 0x22U);
     p.write8(0xFFFFFE02U, 0x50U);
     p.write8(0xFFFFFE03U, 0x5AU);
-    p.write8(0xFFFFFE04U, 0x40U);
+    p.sci_receive_byte(0x77U); // SSR is not plain storage: set RDRF (0x40) via receive
     p.write8(0xFFFFFE05U, 0x42U);
 
     CHECK(p.read8(0xFFFFFE00U) == 0x1BU);
@@ -1410,13 +1410,30 @@ TEST_CASE("sh2_peripherals SCI receive latches RXI, ERI, and overrun") {
     CHECK(irq.level == 10);
     CHECK(irq.vector == 0x31U);
 
-    p.write8(0xFFFFFE04U, 0x40U); // keep unread data but clear the framing flag
+    // FER was not read since it was set, so write-0 cannot clear it (the SH7604
+    // read-then-write-0 protocol); the next receive overruns and raises ORER, so
+    // ERI stays asserted on the error group either way.
+    p.write8(0xFFFFFE04U, 0x40U);
     p.sci_receive_byte(0x44U);
     CHECK(p.read8(0xFFFFFE05U) == 0x43U);
     CHECK((p.read8(0xFFFFFE04U) & 0x20U) == 0x20U);
     irq = p.pending_onchip_irq();
     CHECK(irq.level == 10);
     CHECK(irq.vector == 0x31U);
+}
+
+TEST_CASE("sh2_peripherals SCI SSR clears a status flag only after a read observes it") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    p.write8(0xFFFFFE02U, 0x10U); // SCR: RE (receiver enable)
+    p.sci_receive_byte(0x42U);    // sets RDRF
+    // Write 0 to RDRF before any SSR read: the flag is NOT cleared.
+    p.write8(0xFFFFFE04U, 0x00U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x40U) == 0x40U); // still set (this read observes it)
+    // Now that a read has observed RDRF, a write-0 clears it.
+    p.write8(0xFFFFFE04U, 0x00U);
+    CHECK((p.read8(0xFFFFFE04U) & 0x40U) == 0x00U); // cleared
+    // TEND is read-only: a write-1 to it does nothing, a write-0 cannot clear it.
+    CHECK((p.read8(0xFFFFFE04U) & 0x04U) == 0x04U);
 }
 
 TEST_CASE("sh2_peripherals INTC presents raw SCI status interrupts") {
@@ -1426,24 +1443,32 @@ TEST_CASE("sh2_peripherals INTC presents raw SCI status interrupts") {
     p.write8(0xFFFFFE63U, 0x32U); // RXI vector
     p.write8(0xFFFFFE64U, 0x33U); // TXI vector
     p.write8(0xFFFFFE65U, 0x34U); // TEI vector
-    p.write8(0xFFFFFE02U, 0xC4U); // SCR: TIE | RIE | TEIE
+    p.write8(0xFFFFFE02U, 0xD4U); // SCR: TIE | RIE | RE | TEIE
 
-    p.write8(0xFFFFFE04U, 0xE4U); // SSR: TDRE | RDRF | ORER | TEND
+    // SSR status flags cannot be set by a register write; reach TDRE|RDRF|ORER|
+    // TEND through real paths (TDRE|TEND after reset, a receive sets RDRF, a
+    // second receive overruns to set ORER).
+    p.sci_receive_byte(0x11U);
+    p.sci_receive_byte(0x22U);
     auto irq = p.pending_onchip_irq();
     CHECK(irq.level == 10);
     CHECK(irq.vector == 0x31U); // ERI outranks the other SCI sources
 
-    p.write8(0xFFFFFE04U, 0xC4U); // no error, RXI still pending
+    // Step down the priority by clearing one flag at a time (read-then-write-0).
+    static_cast<void>(p.read8(0xFFFFFE04U)); // observe the flags before clearing
+    p.write8(0xFFFFFE04U, 0xC4U);            // clear ORER -> RXI
     irq = p.pending_onchip_irq();
     CHECK(irq.level == 10);
     CHECK(irq.vector == 0x32U);
 
-    p.write8(0xFFFFFE04U, 0x84U); // TXI before TEI
+    static_cast<void>(p.read8(0xFFFFFE04U)); // observe the flags before clearing
+    p.write8(0xFFFFFE04U, 0x84U);            // clear RDRF -> TXI
     irq = p.pending_onchip_irq();
     CHECK(irq.level == 10);
     CHECK(irq.vector == 0x33U);
 
-    p.write8(0xFFFFFE04U, 0x04U); // TEI only
+    static_cast<void>(p.read8(0xFFFFFE04U)); // observe the flags before clearing
+    p.write8(0xFFFFFE04U, 0x04U);            // clear TDRE -> TEI
     irq = p.pending_onchip_irq();
     CHECK(irq.level == 10);
     CHECK(irq.vector == 0x34U);
@@ -1988,6 +2013,22 @@ TEST_CASE("sh2 DIVU register read stalls until the pending operation completes")
     const auto after = m.cpu.cpu_registers();
     CHECK(after.r[2] == 14U);
     CHECK(m.cpu.elapsed_cycles() == 40U);
+}
+
+TEST_CASE("sh2 DIVU read right after a write costs one extra cycle when idle") {
+    machine m;
+    // MOV.L R0,@R1 (write DVSR -- no divide) ; MOV.L @R1,R2 ; MOV.L @R1,R2
+    m.load(0x1000U, {0x2102U, 0x6212U, 0x6212U});
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    r.r[0] = 7U;
+    r.r[1] = 0xFFFFFF00U; // DVSR: a write here arms the penalty without dividing
+    m.cpu.set_registers(r);
+
+    CHECK(m.cpu.step_instruction() == 1); // the write arms the write-then-read +1
+    CHECK(m.cpu.step_instruction() == 2); // read right after the write: 1 + 1 penalty
+    CHECK(m.cpu.cpu_registers().r[2] == 7U);
+    CHECK(m.cpu.step_instruction() == 1); // second read: penalty already consumed
 }
 
 TEST_CASE("sh2_peripherals INTC presents DIVU overflow interrupts") {
