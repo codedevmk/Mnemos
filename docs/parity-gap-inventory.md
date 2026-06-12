@@ -54,7 +54,7 @@ on-chip interrupt delivery. This is why Star Wars / Space Harrier / After Burner
 black. Ties to the hard-problems board (SH-2 cycle-true).
 
 #### CPU — core / timing
-- [~] **X2** Per-instruction cycle-accurate SH-2 timing — local slice wires fixed-state costs for delayed/non-delayed branches, TRAPA/RTE/SLEEP, system-register memory forms, TAS, MAC/multiply minima, and GBR byte-immediate ops; load-use/cache/bus waits and variable multiplier upper bounds remain · PARTIAL · **CRIT** · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp`
+- [~] **X2** Per-instruction cycle-accurate SH-2 timing — local slice wires fixed-state costs for delayed/non-delayed branches, TRAPA/RTE/SLEEP, system-register memory forms, TAS, MAC/multiply minima, and GBR byte-immediate ops; load-use/cache/bus waits and variable multiplier upper bounds remain. A **functional** conformance harness now cross-checks SH-2 instruction *semantics* against the public SH4 single-step corpus (PR #131) — the reference the cycle-true work asked for — but that corpus is software-generated/superscalar, so it does **not** settle the cycle counts; closing X2 still needs a cycle-accurate hardware reference · PARTIAL · **CRIT** · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/chips/cpu/sh2/tests/sh2_conformance_test.cpp`
 - [x] **X1** SH-2 address-error exception — vectors odd fetches, normal and delay-slot misaligned word/long data accesses, PC-relative on-chip loads, SH7604 on-chip byte/long access-class faults, the stacking fault on a misaligned exception-frame SP (diverts to vector 9 once, no recurse/reset), and byte/word/PC-relative/TAS access to the cache purge (`$40000000`) and address-array (`$60000000`, longword-only) spaces — all through vector 9. The `$C0000000` data array (32X cache-as-RAM scratch) is correctly excluded · DONE · HIGH · M · vs Emu · R6 · Evidence: `src/chips/cpu/sh2/sh2.cpp`
 - [~] **X3** SH-2 ↔ SH-2 bus-lock / contention stall timing — local slices add a board-provided bus-wait hook, charge `TAS.B` locks on shared 32X SDRAM/framebuffer/COMM ranges, and deterministically arbitrate same-cycle dual-SH-2 TAS locks; ordinary memory waits, full DMA/VDP contention, and cache-hit penalties remain · PARTIAL · HIGH · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/manifests/sega32x/sega32x_system.cpp`
 
@@ -67,6 +67,11 @@ black. Ties to the hard-problems board (SH-2 cycle-true).
 
 > Done (no action): SH-2 ISA (60 mnemonics), both CPUs (threaded), all VDP modes,
 > palette/autofill/double-buffer, PWM, comm/adapter bridge, VINT/HINT/CMD/PWM, MARS, FRT.
+>
+> Verification: a data-gated SH-2 conformance harness (`sh2_conformance_test`,
+> `MNEMOS_SH2_TESTS_DIR`) cross-checks the SH-2 ISA against the public SH4
+> single-step corpus — *functional* validation only; SH-2 cycle-exact timing
+> (X2/X3) remains gated on a cycle-accurate hardware reference.
 
 ---
 
