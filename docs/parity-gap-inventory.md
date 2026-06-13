@@ -121,7 +121,7 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 - [ ] **G6** Multitap (4-Way Play / Team Player), Menacer & Justifier light guns, Sega Mouse · MISSING · LOW · M · beyond Emu · Evidence: `progress-analysis.md` Genesis controller gap
 
 #### System / save
-- [ ] **G7** Whole-system deterministic save target — assemble existing per-chip serialization into a Genesis machine path · PARTIAL · HIGH · M · vs Emu · R8 · ⇄ T4 · Evidence: `progress-analysis.md` R8 + `tooling-gap-inventory.md` T4
+- [~] **G7** Whole-system deterministic save target — assemble existing per-chip serialization into a Genesis machine path. **Increment 1 done:** `genesis_system::save_state/load_state` serialize the non-chip board state (I/O sub-controller regs, VDP word latches, Z80 bus-arbitration lines + bank window, SRAM enable/WP, SSF2 banks, EEPROM pins) with a version marker; loading into a system assembled from the same cart needs no bus re-wiring (every MMIO closure reads the latches live). Round-trip + version-reject unit tests pass. **Remaining (increment 2):** the machine-path assembly that builds a `runtime::save_target` (the 5 chips + work/Z80 RAM + SRAM bytes as chunks + the system latch chunk) and the EEPROM device's in-flight I2C state (`eeprom_i2c` exposes `bytes()` but no save_state yet) · PARTIAL · HIGH · M · vs Emu · R8 · ⇄ T4 · Evidence: `src/manifests/genesis/genesis_system.cpp` save_state/load_state + `tests/genesis_system_test.cpp`
 
 > Done: M68000 (except G1), Z80, VDP (render + FIFO + DMA timing), YM2612, SN76489,
 > SRAM/EEPROM/SSF2 banking, region/IO, Z80 bus arbitration.
