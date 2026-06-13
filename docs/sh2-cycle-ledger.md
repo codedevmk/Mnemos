@@ -55,6 +55,43 @@ Current implementation (pre-X2/X3-default) and the rules every increment keeps:
    load-use state (`pending_load_reg_`/`pending_load_t_`, version bump in Z4) and
    cache state, or `load()` desyncs timing.
 
+## Authoritative cycle values (SH-1/SH-2 Programming Manual)
+
+Source: Hitachi SuperH RISC Engine **SH-1/SH-2 Programming Manual** (ADE-602-063),
+Chapter 7 "Pipeline Operation". Per **§7.3 "Number of Instruction Execution
+States"**: states are the **EX-to-EX interval** and are **summed** across
+instructions (the manual's worked example: "execution time between instructions 1
+and 3 ... is seven states (5 + 1 + 1)"). The Table 7.2 "execution states" column
+(states, not stages):
+
+| Instruction(s) | States |
+|---|---|
+| Register MOV/ADD/logic/shift (EX-only) | 1 |
+| Memory load/store (MOV.x @…) | 1 (+1 load-use contention, below) |
+| MUL.L / DMULx | 2 |
+| **Unconditional branch** BRA/BSR/BRAF/BSRF/JMP/JSR/RTS | **2** |
+| **Conditional** BT, BF | **3 taken / 1 not taken** |
+| **Delayed conditional** BT/S, BF/S (SH-2) | 2 taken / 1 not taken |
+| TAS.B @Rn | 4 |
+| RTE | 4 |
+| TRAPA #imm | 8 |
+| SLEEP | 3 |
+
+**Delayed-branch total (the decisive rule):** a delayed branch and its delay-slot
+instruction are two separate instructions; by §7.3 their states **add**. So
+`BRA;NOP` = branch(2) + delay-slot(1) = **3**, not 2. Verified divergence:
+Mnemos's `branch_delayed` (sh2.cpp ~1321-1328) runs the delay slot via `exec(slot)`
+then applies `account_cycles(minimum)` as a **max-floor**, so it drops the
+delay-slot states and returns 2 — an undercount for every unconditional delayed
+branch (BRA/BSR/BRAF/BSRF/JMP/JSR/RTS, and RTE by the same mechanism). The Z4 fix
+makes the folded step return branch_states + delay_slot_states. ⚠ This is BASE
+timing (not behind the X2/X3 opt-in) — see the plan for gating so the default 32X
+stays bit-identical until the Z8 regression gate.
+
+**Load-use contention (X2):** Table 7.2 / §7.5 — "if an instruction that uses the
+same destination register … is placed immediately after [a memory load],
+contention will occur" (+1). Validated green.
+
 ## Vector schema (`*.json`, one array of cases per file)
 
 Each case fixes an initial register file, a fetch frame, the per-step expected

@@ -129,17 +129,23 @@ namespace {
             load_state(init, cpu);
 
             bool ok = true;
+            std::string detail;
             const auto& steps = test.at("steps");
+            int step_index = 0;
             for (const auto& step : steps) {
                 const int got = cpu.step_instruction();
                 const int expected = step.at("cycles").get<int>();
                 if (got != expected) {
                     ok = false;
+                    detail = " step " + std::to_string(step_index) + " got " + std::to_string(got) +
+                             " expected " + std::to_string(expected);
                     break;
                 }
+                ++step_index;
             }
-            if (ok && test.contains("final")) {
-                ok = final_state_matches(test.at("final"), cpu);
+            if (ok && test.contains("final") && !final_state_matches(test.at("final"), cpu)) {
+                ok = false;
+                detail = " final-state mismatch";
             }
 
             if (ok) {
@@ -147,7 +153,7 @@ namespace {
             } else {
                 ++result.failed;
                 if (failures.size() < 40U) {
-                    failures.push_back(name);
+                    failures.push_back(name + detail);
                 }
             }
         }
