@@ -82,15 +82,16 @@ namespace mnemos::chips::cpu {
         }
 
         // Board-supplied external wait states. The CPU core reports candidate
-        // memory accesses; manifests decide which addresses are shared hardware
-        // and how many cycles to add. `locked` marks an atomic-style RMW such as
-        // TAS.B; the on-chip DMAC uses the same hook with locked=false.
+        // memory accesses with their kind (read/write/rmw, or the locked atomic
+        // TAS.B); manifests decide which addresses are shared hardware and how many
+        // cycles to add. The on-chip DMAC uses the same hook (currently `read`).
         void set_bus_wait_callback(
-            std::function<int(std::uint32_t address, std::uint8_t bytes, bool locked)> cb) {
+            std::function<int(std::uint32_t address, std::uint8_t bytes, data_access_kind kind)>
+                cb) {
             bus_wait_ = std::move(cb);
             peripherals_.set_bus_wait_callback(
-                [this](std::uint32_t address, std::uint8_t bytes, bool locked) {
-                    return bus_wait_ ? bus_wait_(address, bytes, locked) : 0;
+                [this](std::uint32_t address, std::uint8_t bytes, data_access_kind kind) {
+                    return bus_wait_ ? bus_wait_(address, bytes, kind) : 0;
                 });
         }
 
@@ -225,22 +226,24 @@ namespace mnemos::chips::cpu {
                 cycles_ = minimum_cycles;
             }
         }
-        void add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes, bool locked);
+        void add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes,
+                                      data_access_kind kind);
         void account_onchip_access_wait(std::uint32_t address, bool is_read) noexcept;
         // X3 shared-bus contention: require_*_data_access records each permitted
         // data access here (pure -- no cycle side effect), and step_instruction
         // charges the board bus-wait for them AFTER exec applies the base-cycle
         // floors, so the contention wait adds on top instead of being swallowed by
         // account_cycles' max-floor. SH-2 ops touch memory at most twice (MAC).
-        void record_data_access(std::uint32_t address, std::uint8_t bytes, bool locked) noexcept {
+        void record_data_access(std::uint32_t address, std::uint8_t bytes,
+                                data_access_kind kind = data_access_kind::read) noexcept {
             // Locked (TAS) reservations are charged inline at the access site; only
             // ordinary accesses are logged here, and only when the board opted in.
-            if (!meter_shared_contention_ || locked) {
+            if (!meter_shared_contention_ || kind == data_access_kind::tas) {
                 return;
             }
             if (shared_access_count_ < static_cast<int>(shared_accesses_.size())) {
                 shared_accesses_[static_cast<std::size_t>(shared_access_count_)] = {address, bytes,
-                                                                                    locked};
+                                                                                    kind};
                 ++shared_access_count_;
             }
         }
@@ -251,34 +254,40 @@ namespace mnemos::chips::cpu {
         bool raise_address_error(std::uint32_t saved_pc);
         bool signal_address_error();
         bool require_fetch_access(std::uint32_t address);
-        bool require_byte_data_access(std::uint32_t address, bool tas = false);
-        bool require_word_data_access(std::uint32_t address, bool pc_relative = false);
-        bool require_long_data_access(std::uint32_t address, bool pc_relative = false);
+        bool require_byte_data_access(std::uint32_t address,
+                                      data_access_kind kind = data_access_kind::read);
+        bool require_word_data_access(std::uint32_t address, bool pc_relative = false,
+                                      data_access_kind kind = data_access_kind::read);
+        bool require_long_data_access(std::uint32_t address, bool pc_relative = false,
+                                      data_access_kind kind = data_access_kind::read);
         [[nodiscard]] static constexpr bool
         fast_offchip_data_space(std::uint32_t address) noexcept {
             return address < 0x40000000U ||
                    (address >= 0x80000000U && address < sh2_peripherals::window_base);
         }
-        bool require_byte_data_access_fast(std::uint32_t address, bool tas = false) {
+        bool require_byte_data_access_fast(std::uint32_t address,
+                                           data_access_kind kind = data_access_kind::read) {
             if (fast_offchip_data_space(address)) {
-                record_data_access(address, 1U, tas);
+                record_data_access(address, 1U, kind);
                 return true;
             }
-            return require_byte_data_access(address, tas);
+            return require_byte_data_access(address, kind);
         }
-        bool require_word_data_access_fast(std::uint32_t address, bool pc_relative = false) {
+        bool require_word_data_access_fast(std::uint32_t address, bool pc_relative = false,
+                                           data_access_kind kind = data_access_kind::read) {
             if ((address & 1U) == 0U && fast_offchip_data_space(address)) {
-                record_data_access(address, 2U, false);
+                record_data_access(address, 2U, kind);
                 return true;
             }
-            return require_word_data_access(address, pc_relative);
+            return require_word_data_access(address, pc_relative, kind);
         }
-        bool require_long_data_access_fast(std::uint32_t address, bool pc_relative = false) {
+        bool require_long_data_access_fast(std::uint32_t address, bool pc_relative = false,
+                                           data_access_kind kind = data_access_kind::read) {
             if ((address & 3U) == 0U && fast_offchip_data_space(address)) {
-                record_data_access(address, 4U, false);
+                record_data_access(address, 4U, kind);
                 return true;
             }
-            return require_long_data_access(address, pc_relative);
+            return require_long_data_access(address, pc_relative, kind);
         }
         // Accept the presented external IRQ if level > SR.IMASK (called at the
         // instruction boundary). Returns true if an interrupt was taken.
@@ -321,7 +330,7 @@ namespace mnemos::chips::cpu {
         struct shared_access final {
             std::uint32_t address{};
             std::uint8_t bytes{};
-            bool locked{};
+            data_access_kind kind{data_access_kind::read};
         };
         std::array<shared_access, 2> shared_accesses_{};
         int shared_access_count_{};
@@ -339,7 +348,7 @@ namespace mnemos::chips::cpu {
 
         std::function<void(std::uint32_t)> trace_callback_{};
         std::function<void(int, std::uint8_t)> irq_accept_{};
-        std::function<int(std::uint32_t, std::uint8_t, bool)> bus_wait_{};
+        std::function<int(std::uint32_t, std::uint8_t, data_access_kind)> bus_wait_{};
         std::function<void()> self_reset_{}; // board hook: WDT internal reset is imminent
 
         ibus* bus_{};

@@ -294,7 +294,7 @@ namespace mnemos::manifests::sega32x {
         // deterministically (master wins ties); ordinary memory, full DMA, and
         // VDP contention are still timing work.
         [[nodiscard]] int shared_bus_wait(bool master, std::uint32_t address, std::uint8_t bytes,
-                                          bool locked) noexcept;
+                                          chips::cpu::data_access_kind kind) noexcept;
         // SH-2 core callback fired just before a WDT internal reset zeroes a
         // core's elapsed counter: rebase the shared pacing anchors so the
         // schedule stays monotone across the per-CPU reset edge.

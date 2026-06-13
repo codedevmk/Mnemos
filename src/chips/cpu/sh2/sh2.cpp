@@ -344,18 +344,19 @@ namespace mnemos::chips::cpu {
         return true;
     }
 
-    bool sh2::require_byte_data_access(std::uint32_t address, bool tas) {
+    bool sh2::require_byte_data_access(std::uint32_t address, data_access_kind kind) {
         // Byte access to high on-chip space or a cache-control space faults; TAS
         // additionally faults anywhere in the on-chip window.
         if (in_high_onchip_space(address) || in_cache_control_space(address) ||
-            (tas && sh2_peripherals::in_window(address))) {
+            (kind == data_access_kind::tas && sh2_peripherals::in_window(address))) {
             return signal_address_error();
         }
-        record_data_access(address, 1U, tas);
+        record_data_access(address, 1U, kind);
         return true;
     }
 
-    bool sh2::require_word_data_access(std::uint32_t address, bool pc_relative) {
+    bool sh2::require_word_data_access(std::uint32_t address, bool pc_relative,
+                                       data_access_kind kind) {
         // Word access faults when misaligned, in a cache-control space (those are
         // longword-only), or PC-relative into the on-chip window.
         if ((address & 1U) != 0U || in_cache_control_space(address) ||
@@ -363,11 +364,12 @@ namespace mnemos::chips::cpu {
              (sh2_peripherals::in_window(address) || sh2_peripherals::in_window(address + 1U)))) {
             return signal_address_error();
         }
-        record_data_access(address, 2U, false);
+        record_data_access(address, 2U, kind);
         return true;
     }
 
-    bool sh2::require_long_data_access(std::uint32_t address, bool pc_relative) {
+    bool sh2::require_long_data_access(std::uint32_t address, bool pc_relative,
+                                       data_access_kind kind) {
         // Longword access is the valid size for the address-array, so a normal
         // long access there is fine; only a PC-relative long into a cache-control
         // space or the on-chip window faults (alongside misalignment and the
@@ -379,7 +381,7 @@ namespace mnemos::chips::cpu {
             in_low_onchip_space(address) || in_low_onchip_space(address + 3U)) {
             return signal_address_error();
         }
-        record_data_access(address, 4U, false);
+        record_data_access(address, 4U, kind);
         return true;
     }
 
@@ -828,14 +830,14 @@ namespace mnemos::chips::cpu {
                 return;  // CMP/PL
             case 0x1B: { // TAS.B @Rn -- locked byte RMW; board glue owns wait states
                 const std::uint32_t addr = r_[rn];
-                if (!require_byte_data_access_fast(addr, true)) {
+                if (!require_byte_data_access_fast(addr, data_access_kind::tas)) {
                     return;
                 }
                 const std::uint8_t v = rd8(addr);
                 set_t(v == 0U);
                 wr8(addr, static_cast<std::uint8_t>(v | 0x80U));
                 account_cycles(4);
-                add_external_wait_cycles(addr, 1U, true); // locked RMW bus reservation
+                add_external_wait_cycles(addr, 1U, data_access_kind::tas); // locked RMW reservation
                 return;
             }
             case 0x0B: // JSR @Rn -- call (delayed)
@@ -1341,11 +1343,12 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    void sh2::add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes, bool locked) {
+    void sh2::add_external_wait_cycles(std::uint32_t address, std::uint8_t bytes,
+                                       data_access_kind kind) {
         if (!bus_wait_) {
             return;
         }
-        const int wait = bus_wait_(address, bytes, locked);
+        const int wait = bus_wait_(address, bytes, kind);
         if (wait > 0) {
             cycles_ = add_bounded_wait_cycles(cycles_, static_cast<std::uint64_t>(wait));
         }
@@ -1593,7 +1596,7 @@ namespace mnemos::chips::cpu {
         // would be swallowed by a later account_cycles floor).
         for (int i = 0; i < shared_access_count_; ++i) {
             const shared_access& a = shared_accesses_[static_cast<std::size_t>(i)];
-            add_external_wait_cycles(a.address, a.bytes, a.locked);
+            add_external_wait_cycles(a.address, a.bytes, a.kind);
         }
 
         // X2: charge the +1 interlock and arm the producer for the next step (the

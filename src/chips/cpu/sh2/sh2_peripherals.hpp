@@ -14,6 +14,12 @@ namespace mnemos::chips {
 
 namespace mnemos::chips::cpu {
 
+    // Classifies a data bus access for the X3 region/contention timing model:
+    // direction (read/write) plus read-modify-write, and the locked atomic TAS.B.
+    // `tas` is charged inline as a bus lock and is not logged for contention; the
+    // on-chip DMAC currently uses `read` (its read/write split is a later refinement).
+    enum class data_access_kind : std::uint8_t { read, write, rmw, tas };
+
     // Hitachi SH7604 on-chip peripherals, mapped at $FFFFFE00..$FFFFFFFF: the
     // interrupt controller (INTC), free-running timer (FRT), watchdog timer
     // (WDT), bus state controller (BSC), DMA controller (DMAC), serial
@@ -85,7 +91,8 @@ namespace mnemos::chips::cpu {
             dack_device_port_ = std::move(cb);
         }
         void set_bus_wait_callback(
-            std::function<int(std::uint32_t address, std::uint8_t bytes, bool locked)> cb) {
+            std::function<int(std::uint32_t address, std::uint8_t bytes, data_access_kind kind)>
+                cb) {
             bus_wait_ = std::move(cb);
         }
 
@@ -221,7 +228,7 @@ namespace mnemos::chips::cpu {
         mutable std::uint8_t dmaor_flags_read_{};            // DMAOR.NMIF/AE observed by a read
         ibus* bus_{}; // bus the DMAC transfers over (set by the owning sh2)
         std::function<bool(int)> dreq_query_{}; // module-request DREQ level per channel
-        std::function<int(std::uint32_t, std::uint8_t, bool)> bus_wait_{};
+        std::function<int(std::uint32_t, std::uint8_t, data_access_kind)> bus_wait_{};
         std::function<void(int, std::uint32_t, std::uint8_t, bool)> dack_strobe_{};
         std::function<std::uint8_t(int, bool, std::uint8_t)> dack_device_port_{};
         std::array<bool, 2> dreq_active_{};       // last sampled normalized request level

@@ -954,7 +954,8 @@ namespace mnemos::chips::cpu {
             if (!bus_wait_ || bytes == 0U) {
                 return current;
             }
-            const int wait = bus_wait_(address, static_cast<std::uint8_t>(bytes), false);
+            const int wait =
+                bus_wait_(address, static_cast<std::uint8_t>(bytes), data_access_kind::read);
             if (wait <= 0) {
                 return current;
             }
