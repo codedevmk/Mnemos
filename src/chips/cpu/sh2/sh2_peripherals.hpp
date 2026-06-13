@@ -52,11 +52,37 @@ namespace mnemos::chips::cpu {
         // supplies the handle when it attaches its bus.
         void set_bus(ibus* bus) noexcept { bus_ = bus; }
 
-        // Module-request (CHCR.AR = 0) DREQ level per channel: the board answers
-        // whether the requesting device still has data. Queried per transferred
-        // unit, so a source whose read drains the device self-regulates.
+        // Module-request (CHCR.AR = 0, DRCR.RS = DREQ) request level per channel:
+        // the board answers whether the requesting device still has data. Queried
+        // per transferred unit, so a source whose read drains the device
+        // self-regulates. The contract is the *normalized* request (asserted /
+        // not asserted): CHCR.DL only selects which electrical pin level means
+        // "asserted", so it is unobservable at this boundary -- DS edge detection
+        // on the normalized request is exactly the DL-selected pin edge.
         void set_dreq_query(std::function<bool(int channel)> query) noexcept {
             dreq_query_ = std::move(query);
+        }
+        // External-request DACK handshake, reported once per transferred unit at
+        // the unit's memory-side bus access: `address`/`bytes` identify that
+        // access (the CHCR.AM-selected read or write cycle in dual address mode,
+        // the single memory cycle in single address mode) and `active_high` is
+        // the CHCR.AL-resolved electrical level. Per-bus-cycle electrical timing
+        // is below this abstraction (the 32X wires no DACK consumer). Transient
+        // -- not part of the save-state.
+        void set_dack_strobe(std::function<void(int channel, std::uint32_t address,
+                                                std::uint8_t bytes, bool active_high)>
+                                 cb) {
+            dack_strobe_ = std::move(cb);
+        }
+        // Single-address-mode (CHCR.TA = 1) device data port: the external
+        // device the DACK strobe addresses, one call per byte. memory-to-device
+        // delivers each byte read from memory (return ignored); device-to-memory
+        // asks the device for the byte to write. With no port wired the hardware
+        // data bus would be undriven -- no value contract is made; reads yield
+        // $FF deterministically. Transient -- not part of the save-state.
+        void set_dack_device_port(
+            std::function<std::uint8_t(int channel, bool device_to_memory, std::uint8_t data)> cb) {
+            dack_device_port_ = std::move(cb);
         }
         void set_bus_wait_callback(
             std::function<int(std::uint32_t address, std::uint8_t bytes, bool locked)> cb) {
@@ -80,6 +106,10 @@ namespace mnemos::chips::cpu {
         // must stall the owning CPU.
         std::uint64_t tick(std::uint64_t cycles) noexcept;
         [[nodiscard]] onchip_irq pending_onchip_irq() const noexcept;
+        [[nodiscard]] bool onchip_irq_priority_can_exceed(int level) const noexcept {
+            const int mask = level < 0 ? 0 : (level > 15 ? 15 : level);
+            return max_onchip_irq_priority_ > mask;
+        }
         [[nodiscard]] watchdog_reset_request consume_watchdog_reset() noexcept;
         // The external WDTOVF pin (low-pulsed for 128 cycles on a watchdog
         // overflow). The 32X leaves it unconnected; exposed so a board can wire
@@ -98,6 +128,7 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint16_t selected_ocr() const noexcept {
             return (tocr_ & 0x10U) != 0U ? ocrb_ : ocra_;
         }
+        void refresh_max_onchip_irq_priority() noexcept;
         void start_sci_transmit_if_ready() noexcept;
         [[nodiscard]] int sci_frame_cycles() const noexcept;
 
@@ -130,6 +161,7 @@ namespace mnemos::chips::cpu {
         std::uint8_t tier_{0x01U};                // FE10 timer interrupt enable
         std::uint8_t ftcsr_{};                    // FE11 control/status flags
         std::uint8_t tcr_{};                      // FE16 timer control (clock select)
+        int frt_prescale_{8};                     // derived from TCR[1:0]
         std::uint8_t tocr_{0xE0U};                // FE17 output-compare control
         int frt_prescale_acc_{};                  // accumulated source clocks
         mutable std::uint8_t frt_temp_{};         // 16-bit access byte latch
@@ -138,13 +170,14 @@ namespace mnemos::chips::cpu {
         // INTC -- interrupt controller. IPRA covers DIVU/DMAC/WDT priorities;
         // IPRB covers SCI/FRT priorities. VCRA/B are SCI vectors, VCRC/D are FRT
         // vectors, and VCRWDT holds the WDT interval vector.
-        std::uint16_t ipra_{};   // FEE2 interrupt priority A
-        std::uint16_t iprb_{};   // FE60 interrupt priority B
-        std::uint16_t vcra_{};   // FE62 SCI ERI/RXI vectors
-        std::uint16_t vcrb_{};   // FE64 SCI TXI/TEI vectors
-        std::uint16_t vcrc_{};   // FE66 FRT ICI/OCI vectors
-        std::uint16_t vcrd_{};   // FE68 FRT OVI vector
-        std::uint16_t vcrwdt_{}; // FEE4 WDT ITI vector
+        std::uint16_t ipra_{};          // FEE2 interrupt priority A
+        std::uint16_t iprb_{};          // FE60 interrupt priority B
+        int max_onchip_irq_priority_{}; // derived max IPRA/IPRB source priority
+        std::uint16_t vcra_{};          // FE62 SCI ERI/RXI vectors
+        std::uint16_t vcrb_{};          // FE64 SCI TXI/TEI vectors
+        std::uint16_t vcrc_{};          // FE66 FRT ICI/OCI vectors
+        std::uint16_t vcrd_{};          // FE68 FRT OVI vector
+        std::uint16_t vcrwdt_{};        // FEE4 WDT ITI vector
 
         // WDT -- watchdog / interval timer ($FE80-$FE83). An 8-bit counter
         // (WTCNT) clocked off a WTCSR-selected prescale; on overflow it sets the
@@ -161,12 +194,19 @@ namespace mnemos::chips::cpu {
         reset_kind watchdog_reset_kind_{reset_kind::power_on};
         int wdtovf_pin_cycles_{}; // external WDTOVF pin low-pulse remaining (transient)
 
-        // DMAC -- 2-channel DMA controller ($FF80-$FFAF channel regs, $FFB0 DMAOR).
-        // Requests are arbitrated by DMAOR.PR, cycle-steal mode transfers one
-        // unit per peripheral tick, and burst mode keeps the bus until the active
-        // request drains. CHCR.TE/IE present transfer-end interrupts through INTC.
-        // Bus-wait metering is reported through bus_wait_; exact shared-bus
-        // contention remains board policy.
+        // DMAC -- 2-channel DMA controller ($FF80-$FFAF channel regs, $FFB0 DMAOR,
+        // $FE71/$FE72 DRCR request-source select). Requests come from DREQ
+        // (normalized level/edge per CHCR.DS), the on-chip SCI (DRCR RS = RXI/TXI,
+        // gated on SCR.RIE/TIE; a DMAC RDR read / TDR write auto-clears
+        // RDRF/TDRE per the SCI chapter), or auto-request (CHCR.AR). Channels
+        // are arbitrated by DMAOR.PR, cycle-steal mode transfers one unit per
+        // peripheral tick, and burst mode keeps the bus until the active request
+        // drains. Dual address mode moves memory-to-memory; single address mode
+        // (CHCR.TA, external request only) runs one memory bus cycle per unit
+        // with the device on the DACK strobe. CHCR.TE/IE present transfer-end
+        // interrupts through INTC; TE and DMAOR.NMIF/AE clear by the
+        // read-then-write-0 protocol. Bus-wait metering is reported through
+        // bus_wait_; exact shared-bus contention remains board policy.
         struct dma_channel final {
             std::uint32_t sar{};  // source address
             std::uint32_t dar{};  // destination address
@@ -176,14 +216,20 @@ namespace mnemos::chips::cpu {
         std::array<dma_channel, 2> dma_{};
         std::array<std::uint32_t, 2> vcrdma_{}; // FFA0/FFA8 transfer-end vectors
         std::uint32_t dmaor_{};                 // DMA operation register (master enable + flags)
+        std::array<std::uint8_t, 2> drcr_{};    // FE71/FE72 request-source select (RS1:0)
+        mutable std::array<std::uint8_t, 2> chcr_te_read_{}; // CHCR.TE observed by a read
+        mutable std::uint8_t dmaor_flags_read_{};            // DMAOR.NMIF/AE observed by a read
         ibus* bus_{}; // bus the DMAC transfers over (set by the owning sh2)
         std::function<bool(int)> dreq_query_{}; // module-request DREQ level per channel
         std::function<int(std::uint32_t, std::uint8_t, bool)> bus_wait_{};
+        std::function<void(int, std::uint32_t, std::uint8_t, bool)> dack_strobe_{};
+        std::function<std::uint8_t(int, bool, std::uint8_t)> dack_device_port_{};
         std::array<bool, 2> dreq_active_{};       // last sampled normalized request level
         std::array<bool, 2> dreq_edge_pending_{}; // latched inactive->active request edge
         std::uint8_t dmac_rr_top_{1U};            // DMAOR.PR first transfer after reset: ch1
 
         // Advance non-DMA time-driven on-chip units.
+        void advance_frt(std::uint64_t cycles) noexcept;
         void advance_time(std::uint64_t cycles) noexcept;
         void reset_watchdog_counter_control() noexcept;
         // Run active DMA work for this peripheral tick and return generated wait cycles.

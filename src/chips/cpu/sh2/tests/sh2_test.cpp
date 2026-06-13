@@ -2169,6 +2169,272 @@ TEST_CASE("sh2_peripherals DMAC stays idle until the master enable is set") {
     CHECK(f.ram[0x4000U] == 0x11U); // now it runs
 }
 
+TEST_CASE("sh2_peripherals DRCR keeps only the resource-select bits") {
+    mnemos::chips::cpu::sh2_peripherals p;
+    CHECK(p.read8(0xFFFFFE71U) == 0x00U); // reset value
+    CHECK(p.read8(0xFFFFFE72U) == 0x00U);
+    p.write8(0xFFFFFE71U, 0xFDU); // reserved bits 7..2 are not storage
+    p.write8(0xFFFFFE72U, 0xFEU);
+    CHECK(p.read8(0xFFFFFE71U) == 0x01U);
+    CHECK(p.read8(0xFFFFFE72U) == 0x02U);
+    p.reset();
+    CHECK(p.read8(0xFFFFFE71U) == 0x00U);
+}
+
+TEST_CASE("sh2_peripherals DMAC RXI request drains RDR and auto-clears RDRF") {
+    dmac_fixture f;
+    f.p.write8(0xFFFFFE02U, 0x50U); // SCR: RE | RIE (RIE gates the request)
+    f.p.write8(0xFFFFFE71U, 0x01U); // DRCR0: RS = RXI
+    f.w32reg(f.sar0, 0xFFFFFE05U);  // RDR, SM=fixed
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x4001U);     // DE | TS=byte | SM=fixed | DM=inc, module request
+
+    f.p.tick(1U); // no received byte yet -> no request
+    CHECK(f.ram[0x2000U] == 0x00U);
+
+    f.p.sci_receive_byte(0x11U);
+    f.p.tick(1U);
+    CHECK(f.ram[0x2000U] == 0x11U);
+    CHECK((f.p.read8(0xFFFFFE04U) & 0x40U) == 0U); // the DMAC's RDR read cleared RDRF
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+
+    f.p.tick(1U); // the request self-regulates: no RDRF, no transfer
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+
+    f.p.sci_receive_byte(0x22U);                   // no overrun: the previous byte was consumed
+    CHECK((f.p.read8(0xFFFFFE04U) & 0x20U) == 0U); // ORER clear
+    f.p.tick(1U);
+    CHECK(f.ram[0x2001U] == 0x22U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U); // TE on completion
+}
+
+TEST_CASE("sh2_peripherals DMAC TXI request feeds TDR a frame at a time") {
+    dmac_fixture f;
+    std::vector<std::uint8_t> sent;
+    f.p.set_sci_transmit_callback([&](std::uint8_t value) { sent.push_back(value); });
+    f.p.write8(0xFFFFFE01U, 0x00U); // BRR = 0 keeps the frame short
+    f.p.write8(0xFFFFFE02U, 0xA0U); // SCR: TE | TIE (TIE gates the request)
+    f.p.write8(0xFFFFFE71U, 0x02U); // DRCR0: RS = TXI
+    f.ram[0x1000U] = 0x33U;
+    f.ram[0x1001U] = 0x44U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0xFFFFFE03U); // TDR, DM=fixed
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x1001U);     // DE | TS=byte | SM=inc | DM=fixed, module request
+
+    f.p.tick(1U); // reset-state TDRE is set, so the first unit moves at once
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+    CHECK((f.p.read8(0xFFFFFE04U) & 0x80U) == 0U); // the TDR write cleared TDRE
+
+    f.p.tick(1U); // TDRE still clear mid-frame: the request self-regulates
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+
+    for (int i = 0; i < 4096 && sent.size() < 2U; ++i) {
+        f.p.tick(64U); // frames complete, TDRE re-arms, the DMAC feeds the next byte
+    }
+    REQUIRE(sent.size() == 2U);
+    CHECK(sent[0] == 0x33U);
+    CHECK(sent[1] == 0x44U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC DACK strobe rides the AM-selected cycle with AL polarity") {
+    dmac_fixture f;
+    struct strobe final {
+        int channel;
+        std::uint32_t address;
+        std::uint8_t bytes;
+        bool active_high;
+    };
+    std::vector<strobe> strobes;
+    f.p.set_dack_strobe(
+        [&](int channel, std::uint32_t address, std::uint8_t bytes, bool active_high) {
+            strobes.push_back({channel, address, bytes, active_high});
+        });
+    f.p.set_dreq_query([](int) { return true; }); // held-active level request
+    f.ram[0x1000U] = 0xA0U;
+    f.ram[0x1001U] = 0xA1U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U); // DME
+    f.w32reg(f.chcr0, 0x5001U);     // DE | TS=byte | SM=inc | DM=inc, AM=0 (read cycle), AL=0
+
+    f.p.tick(1U);
+    f.p.tick(1U);
+    REQUIRE(strobes.size() == 2U);
+    CHECK(strobes[0].channel == 0);
+    CHECK(strobes[0].address == 0x1000U); // AM=0: the source read cycle
+    CHECK(strobes[0].bytes == 1U);
+    CHECK_FALSE(strobes[0].active_high); // AL=0: active-low
+    CHECK(strobes[1].address == 0x1001U);
+
+    strobes.clear();
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U); // observe TE so the rewrite clears it
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.chcr0, 0x5181U); // AM=1 (write cycle) | AL=1 (active-high) | DE
+    f.p.tick(1U);
+    REQUIRE(strobes.size() == 1U);
+    CHECK(strobes[0].address == 0x2002U); // AM=1: the destination write cycle
+    CHECK(strobes[0].active_high);
+}
+
+TEST_CASE("sh2_peripherals DMAC auto-request and SCI-sourced transfers emit no DACK") {
+    dmac_fixture f;
+    int strobe_calls = 0;
+    f.p.set_dack_strobe([&](int, std::uint32_t, std::uint8_t, bool) { ++strobe_calls; });
+    f.ram[0x1000U] = 0xA0U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x5201U); // DE | AR | TS=byte | SM=inc | DM=inc
+    f.p.tick(1U);
+    CHECK(f.ram[0x2000U] == 0xA0U);
+    CHECK(strobe_calls == 0); // auto-request: no external device, no DACK
+
+    f.p.write8(0xFFFFFE02U, 0x50U); // SCR: RE | RIE
+    f.p.write8(0xFFFFFE72U, 0x01U); // DRCR1: RS = RXI
+    f.w32reg(f.sar1, 0xFFFFFE05U);
+    f.w32reg(f.dar1, 0x00002100U);
+    f.w32reg(f.tcr1, 1U);
+    f.w32reg(f.chcr1, 0x4001U); // DE | TS=byte | DM=inc, module request
+    f.p.sci_receive_byte(0x5AU);
+    f.p.tick(1U);
+    CHECK(f.ram[0x2100U] == 0x5AU);
+    CHECK(strobe_calls == 0); // SCI-sourced: on-chip, no DACK
+}
+
+TEST_CASE("sh2_peripherals DMAC single-address memory-to-device reads one cycle per unit") {
+    dmac_fixture f;
+    std::vector<std::uint8_t> device;
+    f.p.set_dack_device_port([&](int channel, bool device_to_memory, std::uint8_t data) {
+        CHECK(channel == 0);
+        CHECK_FALSE(device_to_memory);
+        device.push_back(data);
+        return std::uint8_t{0U};
+    });
+    f.p.set_dreq_query([](int) { return true; });
+    f.ram[0x1000U] = 0xA0U;
+    f.ram[0x1001U] = 0xA1U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U); // device side: never addressed
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x1009U); // DE | TA | TS=byte | SM=inc, AM=0: memory -> device
+
+    f.p.tick(1U);
+    f.p.tick(1U);
+    REQUIRE(device.size() == 2U);
+    CHECK(device[0] == 0xA0U);
+    CHECK(device[1] == 0xA1U);
+    CHECK(f.ram[0x2000U] == 0x00U); // no memory write cycle exists in this mode
+    CHECK((f.r32reg(f.sar0)) == 0x1002U);
+    CHECK((f.r32reg(f.dar0)) == 0x2000U); // DM is ignored: the device has no address
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC single-address device-to-memory writes the port byte") {
+    dmac_fixture f;
+    f.p.set_dack_device_port([](int, bool device_to_memory, std::uint8_t) {
+        CHECK(device_to_memory);
+        return std::uint8_t{0x77U};
+    });
+    f.p.set_dreq_query([](int) { return true; });
+    f.w32reg(f.sar0, 0x00001000U); // memory side is DAR; SAR/SM are ignored
+    f.w32reg(f.dar0, 0x00003000U);
+    f.w32reg(f.tcr0, 2U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x4109U); // DE | TA | AM=1 | TS=byte | DM=inc: device -> memory
+
+    f.p.tick(1U);
+    CHECK(f.ram[0x3000U] == 0x77U);
+    CHECK((f.r32reg(f.sar0)) == 0x1000U); // SM is ignored in this direction
+
+    f.p.set_dack_device_port({}); // unwired device: the bus is undriven -- no
+                                  // value contract; $FF is the deterministic stand-in
+    f.p.tick(1U);
+    CHECK(f.ram[0x3001U] == 0xFFU);
+    CHECK((f.r32reg(f.dar0)) == 0x3002U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAC single-address mode requires an external request") {
+    dmac_fixture f;
+    f.ram[0x1000U] = 0xA0U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x5209U); // DE | TA | AR -- prohibited: single address + auto-request
+    f.p.tick(1U);
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U); // nothing moved
+    CHECK(f.ram[0x2000U] == 0x00U);
+
+    f.p.write8(0xFFFFFE71U, 0x01U); // prohibited: single address + RXI source
+    f.p.write8(0xFFFFFE02U, 0x50U);
+    f.p.sci_receive_byte(0x5AU);
+    f.w32reg(f.chcr0, 0x5009U); // DE | TA, module request
+    f.p.tick(1U);
+    CHECK((f.r32reg(f.tcr0) & 0x00FFFFFFU) == 1U);
+}
+
+TEST_CASE("sh2_peripherals CHCR.TE clears only by the read-then-write-0 protocol") {
+    dmac_fixture f;
+    f.w32reg(f.chcr0, 0x4203U); // a plain write cannot set TE
+    CHECK((f.r32reg(f.chcr0) & 0x02U) == 0U);
+
+    f.ram[0x1000U] = 0xA0U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x4201U); // DE | AR | TS=byte
+    f.p.tick(1U);               // completes -> TE sets
+
+    f.w32reg(f.chcr0, 0x4201U); // write 0 to TE *without* a fresh read: TE stays
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U);
+    // That CHECK read observed TE, so a write-0 now clears it.
+    f.w32reg(f.chcr0, 0x4201U);
+    CHECK((f.r32reg(f.chcr0) & 0x02U) == 0U);
+}
+
+TEST_CASE("sh2_peripherals DMAOR NMIF/AE cannot be set by a register write") {
+    dmac_fixture f;
+    f.w32reg(f.dmaor, 0x0000000FU);    // attempt DME | NMIF | AE | PR
+    CHECK(f.r32reg(f.dmaor) == 0x09U); // the status flags refuse the write
+}
+
+TEST_CASE("sh2_peripherals DRCR and the DMAC flag latches survive a save/load round-trip") {
+    dmac_fixture f;
+    f.p.write8(0xFFFFFE71U, 0x01U);
+    f.p.write8(0xFFFFFE72U, 0x02U);
+    f.ram[0x1000U] = 0xA0U;
+    f.w32reg(f.sar0, 0x00001000U);
+    f.w32reg(f.dar0, 0x00002000U);
+    f.w32reg(f.tcr0, 1U);
+    f.w32reg(f.dmaor, 0x00000001U);
+    f.w32reg(f.chcr0, 0x4201U);
+    f.p.tick(1U);                             // TE sets
+    CHECK((f.r32reg(f.chcr0) & 0x02U) != 0U); // observe TE before saving
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    f.p.save_state(writer);
+    mnemos::chips::cpu::sh2_peripherals q;
+    mnemos::chips::state_reader reader(blob);
+    q.load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(q.read8(0xFFFFFE71U) == 0x01U);
+    CHECK(q.read8(0xFFFFFE72U) == 0x02U);
+    // The pre-save read observation was preserved: write-0 clears TE.
+    q.write8(0xFFFFFF8FU, 0x01U);
+    CHECK((q.read8(0xFFFFFF8FU) & 0x02U) == 0U);
+}
+
 TEST_CASE("sh2 exposes its register file and trace hook via introspection") {
     machine m;
     auto& intro = m.cpu.introspection();

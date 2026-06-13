@@ -10,13 +10,25 @@ namespace mnemos::chips::cpu {
 
     namespace {
         // DMAC bits + byte-access helpers for its 32-bit registers.
-        constexpr std::uint32_t chcr_de = 0x01U;              // channel enable
-        constexpr std::uint32_t chcr_te = 0x02U;              // transfer end
-        constexpr std::uint32_t chcr_ie = 0x04U;              // transfer-end IRQ enable
-        constexpr std::uint32_t chcr_tb = 0x10U;              // burst (1) vs cycle-steal (0)
-        constexpr std::uint32_t chcr_ds = 0x40U;              // DREQ edge (1) vs level (0)
-        constexpr std::uint32_t chcr_ar = 0x200U;             // auto (1) vs module (0) request
-        constexpr std::uint32_t chcr_valid = 0xFFFFU;         // CHCR writable bits
+        constexpr std::uint32_t chcr_de = 0x01U; // channel enable
+        constexpr std::uint32_t chcr_te = 0x02U; // transfer end
+        constexpr std::uint32_t chcr_ie = 0x04U; // transfer-end IRQ enable
+        constexpr std::uint32_t chcr_ta = 0x08U; // single (1) vs dual (0) address
+        constexpr std::uint32_t chcr_tb = 0x10U; // burst (1) vs cycle-steal (0)
+        constexpr std::uint32_t chcr_ds = 0x40U; // DREQ edge (1) vs level (0)
+        constexpr std::uint32_t chcr_al = 0x80U; // DACK active-high (1) vs -low (0)
+        // Dual address mode: DACK strobes the write (1) or read (0) cycle.
+        // Single address mode: device-to-memory (1) or memory-to-device (0).
+        constexpr std::uint32_t chcr_am = 0x100U;
+        constexpr std::uint32_t chcr_ar = 0x200U;     // auto (1) vs module (0) request
+        constexpr std::uint32_t chcr_valid = 0xFFFFU; // CHCR writable bits
+        // DRCR ($FE71/$FE72) resource select: 0 DREQ pin, 1 SCI RXI, 2 SCI TXI,
+        // 3 prohibited. Reserved bits 7..2 read 0.
+        constexpr std::uint8_t drcr_rs = 0x03U;
+        constexpr std::uint8_t drcr_rs_dreq = 0U;
+        constexpr std::uint8_t drcr_rs_rxi = 1U;
+        constexpr std::uint8_t drcr_rs_txi = 2U;
+        constexpr std::uint32_t sci_rdr_off = 0x05U; // RDR window offset (DMAC RDRF auto-clear)
         constexpr std::uint32_t dmac_tcr_valid = 0x00FFFFFFU; // 24-bit transfer count
         constexpr std::uint32_t dmaor_dme = 0x01U;            // DMA master enable
         constexpr std::uint32_t dmaor_nmif = 0x02U;           // NMI flag (blocks DMA)
@@ -113,8 +125,10 @@ namespace mnemos::chips::cpu {
         // old blobs must fail the ok() gate, not load wrong). v4 covers SCI,
         // IPRA/VCRA/VCRB/VCRWDT, VCRDMA, the watchdog-reset request, DREQ-edge +
         // round-robin DMAC state, and the in-flight DIVU result. v5 adds the SSR
-        // read-observation flags and the DIVU write-then-read penalty arm.
-        constexpr std::uint16_t sh2_peripherals_state_version = 5U;
+        // read-observation flags and the DIVU write-then-read penalty arm. v6
+        // adds the DMAC DRCR request-source registers and the CHCR.TE /
+        // DMAOR.NMIF/AE read-observation latches.
+        constexpr std::uint16_t sh2_peripherals_state_version = 6U;
 
         [[nodiscard]] int wdt_prescale_from_wtcsr(std::uint8_t wtcsr) noexcept {
             constexpr std::array<int, 8> prescales{{2, 64, 128, 256, 512, 1024, 4096, 8192}};
@@ -213,6 +227,9 @@ namespace mnemos::chips::cpu {
             return static_cast<std::uint8_t>(vcrd_ >> 8U);
         case 0x69U: // VCRD low
             return static_cast<std::uint8_t>(vcrd_);
+        case 0x71U: // DRCR0
+        case 0x72U: // DRCR1
+            return drcr_[off - 0x71U];
         case 0x80U: // WTCSR -- reading observes the overflow flag
             if ((wtcsr_ & wtcsr_ovf) != 0U) {
                 wtcsr_ovf_read_ = true;
@@ -254,7 +271,8 @@ namespace mnemos::chips::cpu {
                 }
             }
             if (off >= 0x180U && off < 0x1A0U) { // DMAC channel registers (32-bit)
-                const dma_channel& ch = dma_[(off >> 4U) & 1U];
+                const std::size_t chan = (off >> 4U) & 1U;
+                const dma_channel& ch = dma_[chan];
                 switch ((off >> 2U) & 3U) {
                 case 0U:
                     return reg_byte(ch.sar, off);
@@ -262,7 +280,11 @@ namespace mnemos::chips::cpu {
                     return reg_byte(ch.dar, off);
                 case 2U:
                     return reg_byte(ch.tcr, off);
-                default:
+                default: // CHCR -- reading the low byte observes TE (write-0 clears)
+                    if ((off & 3U) == 3U) {
+                        chcr_te_read_[chan] =
+                            static_cast<std::uint8_t>(chcr_te_read_[chan] | (ch.chcr & chcr_te));
+                    }
                     return reg_byte(ch.chcr, off);
                 }
             }
@@ -270,7 +292,12 @@ namespace mnemos::chips::cpu {
                 const std::size_t chan = (off >= 0x1A8U) ? 1U : 0U;
                 return reg_byte(vcrdma_[chan] & vcrdma_valid, off);
             }
-            if (off >= 0x1B0U && off < 0x1B4U) { // DMAOR
+            if (off >= 0x1B0U && off < 0x1B4U) { // DMAOR -- reading the low byte
+                                                 // observes NMIF/AE (write-0 clears)
+                if ((off & 3U) == 3U) {
+                    dmaor_flags_read_ = static_cast<std::uint8_t>(
+                        dmaor_flags_read_ | (dmaor_ & (dmaor_nmif | dmaor_ae)));
+                }
                 return reg_byte(dmaor_, off);
             }
             return regs_[off];
@@ -347,6 +374,7 @@ namespace mnemos::chips::cpu {
         }
         case 0x16U: // TCR -- changing the clock source restarts the prescaler
             tcr_ = static_cast<std::uint8_t>(value & 0x83U);
+            frt_prescale_ = frt_prescale_from_tcr(tcr_);
             frt_prescale_acc_ = 0;
             return;
         case 0x17U: // TOCR
@@ -355,9 +383,11 @@ namespace mnemos::chips::cpu {
         case 0x60U: // IPRB high
             iprb_ = static_cast<std::uint16_t>(
                 ((iprb_ & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U)) & iprb_valid);
+            refresh_max_onchip_irq_priority();
             return;
         case 0x61U: // IPRB low
             iprb_ = static_cast<std::uint16_t>(((iprb_ & 0xFF00U) | value) & iprb_valid);
+            refresh_max_onchip_irq_priority();
             return;
         case 0x62U: // VCRA high
             vcra_ = static_cast<std::uint16_t>(
@@ -387,6 +417,16 @@ namespace mnemos::chips::cpu {
         case 0x69U: // VCRD low
             vcrd_ = static_cast<std::uint16_t>(((vcrd_ & 0xFF00U) | value) & vcrd_valid);
             return;
+        case 0x71U:   // DRCR0 -- the manual requires changing RS only while
+        case 0x72U: { // DRCR1 -- CHCR.DE = 0; hardware makes no contract
+                      // otherwise, so the write is accepted as-is. The latched
+                      // DREQ edge is dropped: it belongs to the previous source
+                      // selection, not the new one.
+            const std::size_t chan = off - 0x71U;
+            drcr_[chan] = static_cast<std::uint8_t>(value & drcr_rs);
+            dreq_edge_pending_[chan] = false;
+            return;
+        }
         case 0x80U: // WTCSR/WTCNT keyed write: latch the high-byte key
         case 0x82U: // RSTCSR keyed write: latch the key
             wdt_key_ = value;
@@ -423,9 +463,11 @@ namespace mnemos::chips::cpu {
         case 0xE2U: // IPRA high
             ipra_ = static_cast<std::uint16_t>(
                 ((ipra_ & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U)) & ipra_valid);
+            refresh_max_onchip_irq_priority();
             return;
         case 0xE3U: // IPRA low
             ipra_ = static_cast<std::uint16_t>(((ipra_ & 0xFF00U) | value) & ipra_valid);
+            refresh_max_onchip_irq_priority();
             return;
         case 0xE4U: // VCRWDT high
             vcrwdt_ = static_cast<std::uint16_t>(
@@ -486,9 +528,22 @@ namespace mnemos::chips::cpu {
                 case 2U:
                     ch.tcr = set_reg_byte(ch.tcr, off, value) & dmac_tcr_valid;
                     return;
-                default:
-                    ch.chcr = set_reg_byte(ch.chcr, off, value) & chcr_valid;
+                default: { // CHCR -- TE is a status flag: it sets only on
+                           // completion and clears only by the read-then-write-0
+                           // protocol, never by a plain register write.
+                    std::uint32_t next = set_reg_byte(ch.chcr, off, value) & chcr_valid;
+                    if ((off & 3U) == 3U) {
+                        const std::size_t chan = (off >> 4U) & 1U;
+                        const bool te = (ch.chcr & chcr_te) != 0U;
+                        const bool clears =
+                            te && (chcr_te_read_[chan] & chcr_te) != 0U && (value & chcr_te) == 0U;
+                        next = (next & ~chcr_te) | ((te && !clears) ? chcr_te : 0U);
+                        chcr_te_read_[chan] =
+                            static_cast<std::uint8_t>(chcr_te_read_[chan] & value);
+                    }
+                    ch.chcr = next;
                     return;
+                }
                 }
             }
             if ((off >= 0x1A0U && off < 0x1A4U) || (off >= 0x1A8U && off < 0x1ACU)) {
@@ -496,8 +551,19 @@ namespace mnemos::chips::cpu {
                 vcrdma_[chan] = set_reg_byte(vcrdma_[chan], off, value) & vcrdma_valid;
                 return;
             }
-            if (off >= 0x1B0U && off < 0x1B4U) { // DMAOR
-                dmaor_ = set_reg_byte(dmaor_, off, value) & dmaor_valid;
+            if (off >= 0x1B0U && off < 0x1B4U) { // DMAOR -- NMIF/AE are status
+                                                 // flags: read-then-write-0 to
+                                                 // clear, never settable by a write.
+                std::uint32_t next = set_reg_byte(dmaor_, off, value) & dmaor_valid;
+                if ((off & 3U) == 3U) {
+                    constexpr std::uint32_t flags = dmaor_nmif | dmaor_ae;
+                    const std::uint32_t set_now = dmaor_ & flags;
+                    const std::uint32_t cleared =
+                        set_now & dmaor_flags_read_ & ~static_cast<std::uint32_t>(value);
+                    next = (next & ~flags) | (set_now & ~cleared);
+                    dmaor_flags_read_ = static_cast<std::uint8_t>(dmaor_flags_read_ & value);
+                }
+                dmaor_ = next;
                 return;
             }
             regs_[off] = value;
@@ -668,6 +734,11 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint64_t sh2_peripherals::tick(std::uint64_t cycles) noexcept {
+        if (divu_cycles_remaining_ == 0 && wdtovf_pin_cycles_ == 0 && sci_tx_cycles_ == 0 &&
+            (wtcsr_ & wtcsr_tme) == 0U && !watchdog_reset_pending_ && (dmaor_ & dmaor_dme) == 0U) {
+            advance_frt(cycles);
+            return 0U;
+        }
         advance_time(cycles);
         if (watchdog_reset_pending_) {
             return 0U;
@@ -681,6 +752,32 @@ namespace mnemos::chips::cpu {
         return wait;
     }
 
+    void sh2_peripherals::advance_frt(std::uint64_t cycles) noexcept {
+        // FRT: a free-running counter unless TCR selects the (unmodelled) external
+        // clock.
+        if (frt_prescale_ <= 0) {
+            return;
+        }
+        frt_prescale_acc_ = add_bounded_acc(frt_prescale_acc_, cycles);
+        while (frt_prescale_acc_ >= frt_prescale_) {
+            frt_prescale_acc_ -= frt_prescale_;
+            const std::uint16_t prev = frc_;
+            frc_ = static_cast<std::uint16_t>(frc_ + 1U);
+            if (frc_ < prev) {
+                ftcsr_ |= ftcsr_ovf; // wrapped $FFFF -> $0000
+            }
+            if (frc_ == ocra_) {
+                ftcsr_ |= ftcsr_ocfa;
+                if ((ftcsr_ & ftcsr_cclr) != 0U) {
+                    frc_ = 0U; // compare-clear cadence
+                }
+            }
+            if (frc_ == ocrb_) {
+                ftcsr_ |= ftcsr_ocfb;
+            }
+        }
+    }
+
     void sh2_peripherals::advance_time(std::uint64_t cycles) noexcept {
         divu_advance(cycles);
 
@@ -690,29 +787,7 @@ namespace mnemos::chips::cpu {
                                      : wdtovf_pin_cycles_ - static_cast<int>(cycles);
         }
 
-        // FRT: a free-running counter unless TCR selects the (unmodelled) external
-        // clock.
-        const int frt_prescale = frt_prescale_from_tcr(tcr_);
-        if (frt_prescale > 0) {
-            frt_prescale_acc_ = add_bounded_acc(frt_prescale_acc_, cycles);
-            while (frt_prescale_acc_ >= frt_prescale) {
-                frt_prescale_acc_ -= frt_prescale;
-                const std::uint16_t prev = frc_;
-                frc_ = static_cast<std::uint16_t>(frc_ + 1U);
-                if (frc_ < prev) {
-                    ftcsr_ |= ftcsr_ovf; // wrapped $FFFF -> $0000
-                }
-                if (frc_ == ocra_) {
-                    ftcsr_ |= ftcsr_ocfa;
-                    if ((ftcsr_ & ftcsr_cclr) != 0U) {
-                        frc_ = 0U; // compare-clear cadence
-                    }
-                }
-                if (frc_ == ocrb_) {
-                    ftcsr_ |= ftcsr_ocfb;
-                }
-            }
-        }
+        advance_frt(cycles);
 
         if (sci_tx_cycles_ > 0) {
             if (cycles >= static_cast<std::uint64_t>(sci_tx_cycles_)) {
@@ -783,6 +858,16 @@ namespace mnemos::chips::cpu {
         return extension ? 1U : 0U;
     }
 
+    void sh2_peripherals::refresh_max_onchip_irq_priority() noexcept {
+        int best = 0;
+        best = std::max(best, static_cast<int>((ipra_ >> 12U) & 0x0FU));
+        best = std::max(best, static_cast<int>((ipra_ >> 8U) & 0x0FU));
+        best = std::max(best, static_cast<int>((ipra_ >> 4U) & 0x0FU));
+        best = std::max(best, static_cast<int>((iprb_ >> 12U) & 0x0FU));
+        best = std::max(best, static_cast<int>((iprb_ >> 8U) & 0x0FU));
+        max_onchip_irq_priority_ = best;
+    }
+
     void sh2_peripherals::reset_watchdog_counter_control() noexcept {
         wtcsr_ = wtcsr_reserved;
         wtcnt_ = 0U;
@@ -806,20 +891,29 @@ namespace mnemos::chips::cpu {
             if ((ch.chcr & chcr_ar) != 0U) {
                 return true;
             }
-            if (!dreq_query_) {
+            switch (drcr_[chan] & drcr_rs) {
+            case drcr_rs_dreq: {
+                if (!dreq_query_) {
+                    return false;
+                }
+                const bool active = dreq_query_(static_cast<int>(chan));
+                if (active && !dreq_active_[chan]) {
+                    dreq_edge_pending_[chan] = true;
+                }
+                dreq_active_[chan] = active;
+                if ((ch.chcr & chcr_ds) != 0U) {
+                    return dreq_edge_pending_[chan];
+                }
+                return active;
+            }
+            case drcr_rs_rxi: // SCI receive-data-full; the manual requires
+                              // SCR.RIE set for the SCI to output the request
+                return (sci_scr_ & sci_scr_rie) != 0U && (sci_ssr_ & sci_ssr_rdrf) != 0U;
+            case drcr_rs_txi: // SCI transmit-data-empty, gated on SCR.TIE
+                return (sci_scr_ & sci_scr_tie) != 0U && (sci_ssr_ & sci_ssr_tdre) != 0U;
+            default: // RS = 11 is a prohibited setting -- no request, no contract
                 return false;
             }
-
-            const bool active = dreq_query_(static_cast<int>(chan));
-            if (active && !dreq_active_[chan]) {
-                dreq_edge_pending_[chan] = true;
-            }
-            dreq_active_[chan] = active;
-
-            if ((ch.chcr & chcr_ds) != 0U) {
-                return dreq_edge_pending_[chan];
-            }
-            return active;
         };
 
         const auto channel_ready = [this, &request_ready](std::size_t chan) noexcept {
@@ -828,6 +922,13 @@ namespace mnemos::chips::cpu {
                 return false;
             }
             if ((ch.tcr & dmac_tcr_valid) == 0U) {
+                return false;
+            }
+            // Single address mode is defined only for external (DREQ-pin)
+            // requests (manual section 9.3.4); a prohibited combination makes
+            // no contract, so it transfers nothing.
+            if ((ch.chcr & chcr_ta) != 0U &&
+                ((ch.chcr & chcr_ar) != 0U || (drcr_[chan] & drcr_rs) != drcr_rs_dreq)) {
                 return false;
             }
             return request_ready(chan);
@@ -862,7 +963,31 @@ namespace mnemos::chips::cpu {
             return add > room ? std::numeric_limits<std::uint64_t>::max() : current + add;
         };
 
-        const auto transfer_one = [this, &account_wait, &unit_bytes](std::size_t chan) noexcept {
+        // DMAC bus accesses route back through the on-chip window so SCI-driven
+        // transfers reach RDR/TDR; a DMAC read of RDR auto-clears RDRF and a
+        // DMAC write of TDR clears TDRE and starts the transmitter, per the SCI
+        // chapter (the CPU clears those flags via SSR instead).
+        const auto dma_read8 = [this](std::uint32_t addr) noexcept -> std::uint8_t {
+            if (in_window(addr)) {
+                const std::uint8_t value = read8(addr);
+                if ((addr & (window_size - 1U)) == sci_rdr_off) {
+                    sci_ssr_ = static_cast<std::uint8_t>(sci_ssr_ &
+                                                         static_cast<std::uint8_t>(~sci_ssr_rdrf));
+                }
+                return value;
+            }
+            return bus_->read8(addr);
+        };
+        const auto dma_write8 = [this](std::uint32_t addr, std::uint8_t value) noexcept {
+            if (in_window(addr)) {
+                write8(addr, value);
+                return;
+            }
+            bus_->write8(addr, value);
+        };
+
+        const auto transfer_one = [this, &account_wait, &unit_bytes, &dma_read8,
+                                   &dma_write8](std::size_t chan) noexcept {
             std::uint64_t wait_cycles = 0U;
             dma_channel& ch = dma_[chan];
             std::uint32_t count = ch.tcr & dmac_tcr_valid;
@@ -873,33 +998,86 @@ namespace mnemos::chips::cpu {
             const std::uint32_t sm = (ch.chcr >> 12U) & 3U;
             const std::uint32_t dm = (ch.chcr >> 14U) & 3U;
             const std::uint32_t bpu = unit_bytes[ts];
+            const bool external =
+                (ch.chcr & chcr_ar) == 0U && (drcr_[chan] & drcr_rs) == drcr_rs_dreq;
+            std::uint32_t strobe_addr = 0U;
 
-            wait_cycles = account_wait(wait_cycles, ch.sar, bpu);
-            for (std::uint32_t i = 0; i < bpu; ++i) {
-                bus_->write8(ch.dar + i, bus_->read8(ch.sar + i));
-            }
-            wait_cycles = account_wait(wait_cycles, ch.dar, bpu);
-
-            if ((ch.chcr & chcr_ar) == 0U && (ch.chcr & chcr_ds) != 0U) {
-                dreq_edge_pending_[chan] = false;
-            }
-
-            // In 16-byte mode the source advances by +16 regardless of SM, per
-            // the SH7604 DMAC rules; destination keeps its selected mode.
-            if (ts == 3U) {
-                ch.sar += bpu;
+            if ((ch.chcr & chcr_ta) != 0U) {
+                // Single address mode: one memory bus cycle per unit while DACK
+                // strobes the device (manual figures 9.6/9.7). CHCR.AM selects
+                // the direction; the device side has no address, so the ignored
+                // SM/DM mode bits follow the CHCR notes.
+                if ((ch.chcr & chcr_am) == 0U) { // memory -> device: SAR addresses memory
+                    wait_cycles = account_wait(wait_cycles, ch.sar, bpu);
+                    strobe_addr = ch.sar;
+                    for (std::uint32_t i = 0; i < bpu; ++i) {
+                        const std::uint8_t value = dma_read8(ch.sar + i);
+                        if (dack_device_port_) {
+                            (void)dack_device_port_(static_cast<int>(chan), false, value);
+                        }
+                    }
+                    if (ts == 3U) { // 16-byte units force source +16 regardless of SM
+                        ch.sar += bpu;
+                    } else if (sm == 1U) {
+                        ch.sar += bpu;
+                    } else if (sm == 2U) {
+                        ch.sar -= bpu;
+                    }
+                } else { // device -> memory: DAR addresses memory
+                    wait_cycles = account_wait(wait_cycles, ch.dar, bpu);
+                    strobe_addr = ch.dar;
+                    for (std::uint32_t i = 0; i < bpu; ++i) {
+                        // With no device port wired the hardware data bus would
+                        // be undriven (no value contract); $FF is the
+                        // deterministic stand-in.
+                        const std::uint8_t value =
+                            dack_device_port_ ? dack_device_port_(static_cast<int>(chan), true, 0U)
+                                              : 0xFFU;
+                        dma_write8(ch.dar + i, value);
+                    }
+                    if (dm == 1U) {
+                        ch.dar += bpu;
+                    } else if (dm == 2U) {
+                        ch.dar -= bpu;
+                    }
+                }
             } else {
-                if (sm == 1U) {
+                // Dual address mode: a read cycle from SAR then a write cycle
+                // to DAR; DACK rides the CHCR.AM-selected cycle.
+                wait_cycles = account_wait(wait_cycles, ch.sar, bpu);
+                for (std::uint32_t i = 0; i < bpu; ++i) {
+                    dma_write8(ch.dar + i, dma_read8(ch.sar + i));
+                }
+                wait_cycles = account_wait(wait_cycles, ch.dar, bpu);
+                strobe_addr = (ch.chcr & chcr_am) != 0U ? ch.dar : ch.sar;
+
+                // In 16-byte mode the source advances by +16 regardless of SM,
+                // per the SH7604 DMAC rules; destination keeps its selected mode.
+                if (ts == 3U) {
                     ch.sar += bpu;
-                } else if (sm == 2U) {
-                    ch.sar -= bpu;
+                } else {
+                    if (sm == 1U) {
+                        ch.sar += bpu;
+                    } else if (sm == 2U) {
+                        ch.sar -= bpu;
+                    }
+                }
+
+                if (dm == 1U) {
+                    ch.dar += bpu;
+                } else if (dm == 2U) {
+                    ch.dar -= bpu;
                 }
             }
 
-            if (dm == 1U) {
-                ch.dar += bpu;
-            } else if (dm == 2U) {
-                ch.dar -= bpu;
+            // DACK accompanies external-request (DREQ-sourced) transfers only;
+            // auto-request and SCI-sourced transfers involve no external device.
+            if (external && dack_strobe_) {
+                dack_strobe_(static_cast<int>(chan), strobe_addr, static_cast<std::uint8_t>(bpu),
+                             (ch.chcr & chcr_al) != 0U);
+            }
+            if (external && (ch.chcr & chcr_ds) != 0U) {
+                dreq_edge_pending_[chan] = false;
             }
 
             count = count > 0U ? count - 1U : 0U;
@@ -1015,12 +1193,14 @@ namespace mnemos::chips::cpu {
         tier_ = 0x01U;
         ftcsr_ = 0U;
         tcr_ = 0U;
+        frt_prescale_ = frt_prescale_from_tcr(tcr_);
         tocr_ = 0xE0U;
         frt_prescale_acc_ = 0;
         frt_temp_ = 0U;
         ftcsr_read_flags_ = 0U;
         ipra_ = 0U;
         iprb_ = 0U;
+        max_onchip_irq_priority_ = 0;
         vcra_ = 0U;
         vcrb_ = 0U;
         vcrc_ = 0U;
@@ -1038,6 +1218,9 @@ namespace mnemos::chips::cpu {
         dma_ = {};
         vcrdma_ = {};
         dmaor_ = 0U;
+        drcr_ = {};
+        chcr_te_read_ = {};
+        dmaor_flags_read_ = 0U;
         dreq_active_.fill(false);
         dreq_edge_pending_.fill(false);
         dmac_rr_top_ = 1U;
@@ -1128,6 +1311,13 @@ namespace mnemos::chips::cpu {
             writer.u32(ch.chcr);
         }
         writer.u32(dmaor_);
+        for (const std::uint8_t drcr : drcr_) {
+            writer.u8(drcr);
+        }
+        for (const std::uint8_t observed : chcr_te_read_) {
+            writer.u8(observed);
+        }
+        writer.u8(dmaor_flags_read_);
         for (const bool active : dreq_active_) {
             writer.u8(active ? 1U : 0U);
         }
@@ -1178,6 +1368,7 @@ namespace mnemos::chips::cpu {
         tier_ = reader.u8();
         ftcsr_ = reader.u8();
         tcr_ = reader.u8();
+        frt_prescale_ = frt_prescale_from_tcr(tcr_);
         tocr_ = reader.u8();
         frt_prescale_acc_ = bounded_state_int(reader.u32());
         frt_temp_ = reader.u8();
@@ -1185,6 +1376,7 @@ namespace mnemos::chips::cpu {
 
         ipra_ = reader.u16();
         iprb_ = reader.u16();
+        refresh_max_onchip_irq_priority();
         vcra_ = reader.u16();
         vcrb_ = reader.u16();
         vcrc_ = reader.u16();
@@ -1223,6 +1415,13 @@ namespace mnemos::chips::cpu {
             ch.chcr = reader.u32();
         }
         dmaor_ = reader.u32();
+        for (std::uint8_t& drcr : drcr_) {
+            drcr = static_cast<std::uint8_t>(reader.u8() & drcr_rs);
+        }
+        for (std::uint8_t& observed : chcr_te_read_) {
+            observed = reader.u8();
+        }
+        dmaor_flags_read_ = reader.u8();
         for (bool& active : dreq_active_) {
             active = reader.u8() != 0U;
         }

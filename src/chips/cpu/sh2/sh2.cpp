@@ -439,7 +439,8 @@ namespace mnemos::chips::cpu {
                 return;
             }
             if (op == 0x002BU) { // RTE -- pop PC + SR, then a delayed branch
-                if (!require_long_data_access(r_[15]) || !require_long_data_access(r_[15] + 4U)) {
+                if (!require_long_data_access_fast(r_[15]) ||
+                    !require_long_data_access_fast(r_[15] + 4U)) {
                     return;
                 }
                 const std::uint32_t new_pc = rd32(r_[15]);
@@ -489,7 +490,7 @@ namespace mnemos::chips::cpu {
             switch (lo) {
             case 0x4: {
                 const std::uint32_t addr = r_[rn] + r_[0];
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 wr8(addr, static_cast<std::uint8_t>(r_[rm]));
@@ -497,7 +498,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x5: {
                 const std::uint32_t addr = r_[rn] + r_[0];
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 wr16(addr, static_cast<std::uint16_t>(r_[rm]));
@@ -505,7 +506,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x6: {
                 const std::uint32_t addr = r_[rn] + r_[0];
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 wr32(addr, r_[rm]);
@@ -518,7 +519,7 @@ namespace mnemos::chips::cpu {
                 return;
             case 0xC: {
                 const std::uint32_t addr = r_[rm] + r_[0];
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = sx_b(rd8(addr));
@@ -526,7 +527,7 @@ namespace mnemos::chips::cpu {
             }
             case 0xD: {
                 const std::uint32_t addr = r_[rm] + r_[0];
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = sx_w(rd16(addr));
@@ -534,7 +535,7 @@ namespace mnemos::chips::cpu {
             }
             case 0xE: {
                 const std::uint32_t addr = r_[rm] + r_[0];
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = rd32(addr);
@@ -549,7 +550,7 @@ namespace mnemos::chips::cpu {
             }
         case 0x1: { // MOV.L Rm,@(disp,Rn) -- disp*4 store
             const std::uint32_t addr = r_[rn] + (static_cast<std::uint32_t>(op & 0xFU) * 4U);
-            if (!require_long_data_access(addr)) {
+            if (!require_long_data_access_fast(addr)) {
                 return;
             }
             wr32(addr, r_[rm]);
@@ -558,26 +559,26 @@ namespace mnemos::chips::cpu {
         case 0x2:
             switch (lo) {
             case 0x0:
-                if (!require_byte_data_access(r_[rn])) {
+                if (!require_byte_data_access_fast(r_[rn])) {
                     return;
                 }
                 wr8(r_[rn], static_cast<std::uint8_t>(r_[rm]));
                 return; // MOV.B Rm,@Rn
             case 0x1:
-                if (!require_word_data_access(r_[rn])) {
+                if (!require_word_data_access_fast(r_[rn])) {
                     return;
                 }
                 wr16(r_[rn], static_cast<std::uint16_t>(r_[rm]));
                 return; // MOV.W Rm,@Rn
             case 0x2:
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 wr32(r_[rn], r_[rm]);
                 return; // MOV.L Rm,@Rn
             case 0x4: { // MOV.B Rm,@-Rn
                 const std::uint32_t addr = r_[rn] - 1U;
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -586,7 +587,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x5: { // MOV.W Rm,@-Rn
                 const std::uint32_t addr = r_[rn] - 2U;
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -595,7 +596,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x6: { // MOV.L Rm,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -827,7 +828,7 @@ namespace mnemos::chips::cpu {
                 return;  // CMP/PL
             case 0x1B: { // TAS.B @Rn -- locked byte RMW; board glue owns wait states
                 const std::uint32_t addr = r_[rn];
-                if (!require_byte_data_access(addr, true)) {
+                if (!require_byte_data_access_fast(addr, true)) {
                     return;
                 }
                 const std::uint8_t v = rd8(addr);
@@ -865,7 +866,7 @@ namespace mnemos::chips::cpu {
                 return;  // LDS Rn,PR
             case 0x02: { // STS.L MACH,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -874,7 +875,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x12: { // STS.L MACL,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -883,7 +884,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x22: { // STS.L PR,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -892,7 +893,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x03: { // STC.L SR,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -902,7 +903,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x13: { // STC.L GBR,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -912,7 +913,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x23: { // STC.L VBR,@-Rn
                 const std::uint32_t addr = r_[rn] - 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[rn] = addr;
@@ -921,28 +922,28 @@ namespace mnemos::chips::cpu {
                 return;
             }
             case 0x06: // LDS.L @Rn+,MACH
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 mach_ = rd32(r_[rn]);
                 r_[rn] += 4U;
                 return;
             case 0x16: // LDS.L @Rn+,MACL
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 macl_ = rd32(r_[rn]);
                 r_[rn] += 4U;
                 return;
             case 0x26: // LDS.L @Rn+,PR
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 pr_ = rd32(r_[rn]);
                 r_[rn] += 4U;
                 return;
             case 0x07: // LDC.L @Rn+,SR
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 sr_ = rd32(r_[rn]) & sr_mask;
@@ -951,7 +952,7 @@ namespace mnemos::chips::cpu {
                 account_cycles(3);
                 return;
             case 0x17: // LDC.L @Rn+,GBR
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 gbr_ = rd32(r_[rn]);
@@ -959,7 +960,7 @@ namespace mnemos::chips::cpu {
                 account_cycles(3);
                 return;
             case 0x27: // LDC.L @Rn+,VBR
-                if (!require_long_data_access(r_[rn])) {
+                if (!require_long_data_access_fast(r_[rn])) {
                     return;
                 }
                 vbr_ = rd32(r_[rn]);
@@ -973,7 +974,7 @@ namespace mnemos::chips::cpu {
         }
         case 0x5: { // MOV.L @(disp,Rm),Rn -- disp*4 load
             const std::uint32_t addr = r_[rm] + (static_cast<std::uint32_t>(op & 0xFU) * 4U);
-            if (!require_long_data_access(addr)) {
+            if (!require_long_data_access_fast(addr)) {
                 return;
             }
             r_[rn] = rd32(addr);
@@ -982,19 +983,19 @@ namespace mnemos::chips::cpu {
         case 0x6:
             switch (lo) {
             case 0x0:
-                if (!require_byte_data_access(r_[rm])) {
+                if (!require_byte_data_access_fast(r_[rm])) {
                     return;
                 }
                 r_[rn] = sx_b(rd8(r_[rm]));
                 return; // MOV.B @Rm,Rn
             case 0x1:
-                if (!require_word_data_access(r_[rm])) {
+                if (!require_word_data_access_fast(r_[rm])) {
                     return;
                 }
                 r_[rn] = sx_w(rd16(r_[rm]));
                 return; // MOV.W @Rm,Rn
             case 0x2:
-                if (!require_long_data_access(r_[rm])) {
+                if (!require_long_data_access_fast(r_[rm])) {
                     return;
                 }
                 r_[rn] = rd32(r_[rm]);
@@ -1003,7 +1004,7 @@ namespace mnemos::chips::cpu {
                 r_[rn] = r_[rm];
                 return; // MOV Rm,Rn
             case 0x4: { // MOV.B @Rm+,Rn (load wins when Rm == Rn)
-                if (!require_byte_data_access(r_[rm])) {
+                if (!require_byte_data_access_fast(r_[rm])) {
                     return;
                 }
                 const std::uint32_t v = sx_b(rd8(r_[rm]));
@@ -1012,7 +1013,7 @@ namespace mnemos::chips::cpu {
                 return;
             }
             case 0x5: { // MOV.W @Rm+,Rn
-                if (!require_word_data_access(r_[rm])) {
+                if (!require_word_data_access_fast(r_[rm])) {
                     return;
                 }
                 const std::uint32_t v = sx_w(rd16(r_[rm]));
@@ -1021,7 +1022,7 @@ namespace mnemos::chips::cpu {
                 return;
             }
             case 0x6: { // MOV.L @Rm+,Rn
-                if (!require_long_data_access(r_[rm])) {
+                if (!require_long_data_access_fast(r_[rm])) {
                     return;
                 }
                 const std::uint32_t v = rd32(r_[rm]);
@@ -1077,7 +1078,7 @@ namespace mnemos::chips::cpu {
             switch (rn) {
             case 0x0: {
                 const std::uint32_t addr = r_[rm] + d4;
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 wr8(addr, static_cast<std::uint8_t>(r_[0]));
@@ -1086,7 +1087,7 @@ namespace mnemos::chips::cpu {
             case 0x1: // MOV.W R0,@(disp,Rn)
             {
                 const std::uint32_t addr = r_[rm] + d4 * 2U;
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 wr16(addr, static_cast<std::uint16_t>(r_[0]));
@@ -1094,7 +1095,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x4: {
                 const std::uint32_t addr = r_[rm] + d4;
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 r_[0] = sx_b(rd8(addr));
@@ -1102,7 +1103,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x5: {
                 const std::uint32_t addr = r_[rm] + d4 * 2U;
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 r_[0] = sx_w(rd16(addr));
@@ -1140,7 +1141,7 @@ namespace mnemos::chips::cpu {
         }
         case 0x9: { // MOV.W @(disp,PC),Rn -- PC-relative word load (sign-extended)
             const std::uint32_t addr = pc_ + (static_cast<std::uint32_t>(op & 0xFFU) * 2U) + 2U;
-            if (!require_word_data_access(addr, true)) {
+            if (!require_word_data_access_fast(addr, true)) {
                 return;
             }
             r_[rn] = sx_w(rd16(addr));
@@ -1165,7 +1166,7 @@ namespace mnemos::chips::cpu {
             switch (rn) { // sub-opcode in bits 8-11
             case 0x0: {
                 const std::uint32_t addr = gbr_ + imm;
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 wr8(addr, static_cast<std::uint8_t>(r_[0]));
@@ -1174,7 +1175,7 @@ namespace mnemos::chips::cpu {
             case 0x1: // MOV.W R0,@(disp,GBR)
             {
                 const std::uint32_t addr = gbr_ + imm * 2U;
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 wr16(addr, static_cast<std::uint16_t>(r_[0]));
@@ -1182,7 +1183,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x2: {
                 const std::uint32_t addr = gbr_ + imm * 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 wr32(addr, r_[0]);
@@ -1190,7 +1191,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x4: {
                 const std::uint32_t addr = gbr_ + imm;
-                if (!require_byte_data_access(addr)) {
+                if (!require_byte_data_access_fast(addr)) {
                     return;
                 }
                 r_[0] = sx_b(rd8(addr));
@@ -1198,7 +1199,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x5: {
                 const std::uint32_t addr = gbr_ + imm * 2U;
-                if (!require_word_data_access(addr)) {
+                if (!require_word_data_access_fast(addr)) {
                     return;
                 }
                 r_[0] = sx_w(rd16(addr));
@@ -1206,7 +1207,7 @@ namespace mnemos::chips::cpu {
             }
             case 0x6: {
                 const std::uint32_t addr = gbr_ + imm * 4U;
-                if (!require_long_data_access(addr)) {
+                if (!require_long_data_access_fast(addr)) {
                     return;
                 }
                 r_[0] = rd32(addr);
@@ -1228,7 +1229,7 @@ namespace mnemos::chips::cpu {
                 r_[0] |= imm;
                 return; // OR #imm,R0
             case 0xC:
-                if (!require_byte_data_access(gbr_ + r_[0])) {
+                if (!require_byte_data_access_fast(gbr_ + r_[0])) {
                     return;
                 }
                 set_t((rd8(gbr_ + r_[0]) & imm) == 0U);
@@ -1236,7 +1237,7 @@ namespace mnemos::chips::cpu {
                 return; // TST.B #imm,@(R0,GBR)
             case 0xD: { // AND.B #imm,@(R0,GBR)
                 const std::uint32_t a = gbr_ + r_[0];
-                if (!require_byte_data_access(a)) {
+                if (!require_byte_data_access_fast(a)) {
                     return;
                 }
                 wr8(a, static_cast<std::uint8_t>(rd8(a) & imm));
@@ -1245,7 +1246,7 @@ namespace mnemos::chips::cpu {
             }
             case 0xE: { // XOR.B #imm,@(R0,GBR)
                 const std::uint32_t a = gbr_ + r_[0];
-                if (!require_byte_data_access(a)) {
+                if (!require_byte_data_access_fast(a)) {
                     return;
                 }
                 wr8(a, static_cast<std::uint8_t>(rd8(a) ^ imm));
@@ -1254,7 +1255,7 @@ namespace mnemos::chips::cpu {
             }
             case 0xF: { // OR.B #imm,@(R0,GBR)
                 const std::uint32_t a = gbr_ + r_[0];
-                if (!require_byte_data_access(a)) {
+                if (!require_byte_data_access_fast(a)) {
                     return;
                 }
                 wr8(a, static_cast<std::uint8_t>(rd8(a) | imm));
@@ -1273,7 +1274,7 @@ namespace mnemos::chips::cpu {
         case 0xD: { // MOV.L @(disp,PC),Rn -- PC-relative long load
             const std::uint32_t addr =
                 ((pc_ + 2U) & ~3U) + (static_cast<std::uint32_t>(op & 0xFFU) * 4U);
-            if (!require_long_data_access(addr, true)) {
+            if (!require_long_data_access_fast(addr, true)) {
                 return;
             }
             r_[rn] = rd32(addr);
@@ -1301,7 +1302,11 @@ namespace mnemos::chips::cpu {
         in_delay_slot_ = true;
         deferred_address_error_ = false;
         delay_resume_target_ = target;
-        if (!require_fetch_access(pc_)) {
+        const std::uint32_t fetch_addr = pc_;
+        const bool fetch_access_ok = (fetch_addr & 1U) == 0U &&
+                                     !sh2_peripherals::in_window(fetch_addr) &&
+                                     !sh2_peripherals::in_window(fetch_addr + 1U);
+        if (!fetch_access_ok && !require_fetch_access(fetch_addr)) {
             in_delay_slot_ = false;
             pc_ = target;
             account_cycles(minimum_cycles);
@@ -1337,19 +1342,6 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    void sh2::record_data_access(std::uint32_t address, std::uint8_t bytes, bool locked) noexcept {
-        // Locked (TAS) reservations are charged inline at the access site; only
-        // ordinary accesses are logged here, and only when the board opted in.
-        if (!meter_shared_contention_ || locked) {
-            return;
-        }
-        if (shared_access_count_ < static_cast<int>(shared_accesses_.size())) {
-            shared_accesses_[static_cast<std::size_t>(shared_access_count_)] = {address, bytes,
-                                                                                locked};
-            ++shared_access_count_;
-        }
-    }
-
     void sh2::account_onchip_access_wait(std::uint32_t address, bool is_read) noexcept {
         const std::uint64_t wait = peripherals_.consume_divu_access_wait(address, is_read);
         if (wait != 0U) {
@@ -1360,7 +1352,7 @@ namespace mnemos::chips::cpu {
     void sh2::mac_long(std::size_t rn, std::size_t rm) noexcept {
         // MAC.L @Rm+,@Rn+ : signed 32x32 multiply, accumulate into MACH:MACL.
         // SR.S saturates the accumulator to the signed 48-bit range.
-        if (!require_long_data_access(r_[rm]) || !require_long_data_access(r_[rn])) {
+        if (!require_long_data_access_fast(r_[rm]) || !require_long_data_access_fast(r_[rn])) {
             return;
         }
         const std::uint32_t a = rd32(r_[rm]);
@@ -1398,7 +1390,7 @@ namespace mnemos::chips::cpu {
         // MAC.W @Rm+,@Rn+ : signed 16x16 multiply-accumulate. SR.S clamps to a
         // 32-bit MACL (MACH bit 0 latches overflow); otherwise the 64-bit
         // MACH:MACL accumulates.
-        if (!require_word_data_access(r_[rm]) || !require_word_data_access(r_[rn])) {
+        if (!require_word_data_access_fast(r_[rm]) || !require_word_data_access_fast(r_[rn])) {
             return;
         }
         const auto a = static_cast<std::int16_t>(rd16(r_[rm]));
@@ -1472,16 +1464,23 @@ namespace mnemos::chips::cpu {
         std::uint8_t vector = pending_irq_vector_;
         bool external = level > 0;
 
-        const sh2_peripherals::onchip_irq onchip = peripherals_.pending_onchip_irq();
-        if (onchip.level > level) {
-            level = onchip.level;
-            vector = onchip.vector;
-            external = false;
+        const auto imask = static_cast<int>((sr_ & sr_imask) >> 4U);
+        const int scan_threshold = level > imask ? level : imask;
+        if (!peripherals_.onchip_irq_priority_can_exceed(scan_threshold)) {
+            if (level <= imask) {
+                return false;
+            }
+        } else {
+            const sh2_peripherals::onchip_irq onchip = peripherals_.pending_onchip_irq();
+            if (onchip.level > level) {
+                level = onchip.level;
+                vector = onchip.vector;
+                external = false;
+            }
         }
         if (level == 0) {
             return false;
         }
-        const auto imask = static_cast<int>((sr_ & sr_imask) >> 4U);
         if (level <= imask) {
             return false;
         }
@@ -1515,10 +1514,15 @@ namespace mnemos::chips::cpu {
         // SLEEP.
         if (interrupt_inhibit_ > 0) {
             --interrupt_inhibit_;
-        } else if (try_service_irq()) {
-            sleeping_ = false;
-            pending_load_reg_ = -1; // the exception sequence absorbs any load latency
-            pending_load_t_ = false;
+        } else {
+            const auto imask = static_cast<int>((sr_ & sr_imask) >> 4U);
+            if ((pending_irq_level_ > imask ||
+                 peripherals_.onchip_irq_priority_can_exceed(imask)) &&
+                try_service_irq()) {
+                sleeping_ = false;
+                pending_load_reg_ = -1; // the exception sequence absorbs any load latency
+                pending_load_t_ = false;
+            }
         }
 
         if (sleeping_) {
@@ -1536,7 +1540,11 @@ namespace mnemos::chips::cpu {
         if (trace_callback_) {
             trace_callback_(pc_);
         }
-        if (!require_fetch_access(pc_)) {
+        const std::uint32_t fetch_addr = pc_;
+        const bool fetch_access_ok = (fetch_addr & 1U) == 0U &&
+                                     !sh2_peripherals::in_window(fetch_addr) &&
+                                     !sh2_peripherals::in_window(fetch_addr + 1U);
+        if (!fetch_access_ok && !require_fetch_access(fetch_addr)) {
             const std::uint64_t wait = peripherals_.tick(static_cast<std::uint64_t>(cycles_));
             cycles_ = add_bounded_wait_cycles(cycles_, wait);
             const int consumed = cycles_;
@@ -1627,18 +1635,6 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    void sh2::grant_cycles(std::uint64_t cycles) noexcept {
-        cycle_debt_ += static_cast<std::int64_t>(cycles);
-    }
-
-    bool sh2::has_cycle_credit() const noexcept { return cycle_debt_ > 0; }
-
-    int sh2::step_credited_instruction() {
-        const int consumed = step_instruction();
-        cycle_debt_ -= consumed;
-        return consumed;
-    }
-
     bool sh2::service_watchdog_reset() {
         const auto request = peripherals_.consume_watchdog_reset();
         if (!request.asserted) {
@@ -1675,6 +1671,7 @@ namespace mnemos::chips::cpu {
         interrupt_inhibit_ = 0;
         last_exec_op_ = 0U;
         pending_load_reg_ = -1;
+        pending_load_t_ = false;
         if (preserve_watchdog_status) {
             peripherals_.reset_preserving_watchdog_status();
         } else {

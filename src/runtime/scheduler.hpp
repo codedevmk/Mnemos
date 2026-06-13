@@ -2,6 +2,7 @@
 
 #include "chip.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -63,7 +64,10 @@ namespace mnemos::runtime {
         std::vector<std::uint32_t> accumulator_;
         chips::ivideo* frame_source_{};
         std::uint64_t master_cycle_{};
-        bool uniform_lockstep_{}; // every divider == 1: tick all chips together
+        bool uniform_lockstep_{};    // every divider == 1: tick all chips together
+        bool fixed_divider_batch_{}; // fixed dividers with batch-safe divider-1 prefix
+        std::size_t divider_one_prefix_count_{};
+        std::vector<std::size_t> fixed_divider_indices_;
     };
 
 } // namespace mnemos::runtime

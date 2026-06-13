@@ -1241,6 +1241,11 @@ namespace mnemos::chips::video {
 
     void genesis_vdp::tick(std::uint64_t cycles) {
         line_accumulator_ += static_cast<std::int64_t>(cycles);
+        if (line_accumulator_ < master_clocks_per_line && vint_pending_delay_master_ <= 0 &&
+            dma_stall_master_cycles_ == 0 && fifo_stall_master_cycles_ == 0 &&
+            dma_busy_master_cycles_ == 0) {
+            return;
+        }
         while (line_accumulator_ >= master_clocks_per_line) {
             line_accumulator_ -= master_clocks_per_line;
             run_scanline();

@@ -30,6 +30,32 @@ namespace {
         introspection_stub intro_;
     };
 
+    struct recorded_tick final {
+        char chip{};
+        std::uint64_t cycles{};
+    };
+
+    struct recording_chip : chips::ichip {
+        char name{};
+        std::vector<recorded_tick>* log{};
+        std::uint64_t ticks{};
+
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override { return {}; }
+        void tick(std::uint64_t cycles) override {
+            ticks += cycles;
+            log->push_back({name, cycles});
+        }
+        void reset(chips::reset_kind) override {}
+        void save_state(chips::state_writer&) const override {}
+        void load_state(chips::state_reader&) override {}
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return intro_;
+        }
+
+      private:
+        introspection_stub intro_;
+    };
+
     // A video chip that completes a frame every `period` ticks.
     struct fake_video final : chips::ivideo {
         std::uint32_t period{1U};
@@ -83,6 +109,39 @@ TEST_CASE("scheduler honours per-chip dividers") {
     CHECK(sched.master_cycle() == 12U);
     CHECK(fast.ticks == 12U);
     CHECK(slow.ticks == 4U);
+}
+
+TEST_CASE("scheduler batches fixed dividers at dispatch boundaries") {
+    std::vector<recorded_tick> log;
+    recording_chip beam;
+    recording_chip cpu;
+    recording_chip audio;
+    beam.name = 'v';
+    cpu.name = 'c';
+    audio.name = 'a';
+    beam.log = &log;
+    cpu.log = &log;
+    audio.log = &log;
+    runtime::scheduler sched({{&beam, 1U}, {&cpu, 3U}, {&audio, 5U}}, nullptr);
+
+    sched.run_master_cycles(6U);
+
+    REQUIRE(log.size() == 6U);
+    CHECK(log[0].chip == 'v');
+    CHECK(log[0].cycles == 3U);
+    CHECK(log[1].chip == 'c');
+    CHECK(log[1].cycles == 1U);
+    CHECK(log[2].chip == 'v');
+    CHECK(log[2].cycles == 2U);
+    CHECK(log[3].chip == 'a');
+    CHECK(log[3].cycles == 1U);
+    CHECK(log[4].chip == 'v');
+    CHECK(log[4].cycles == 1U);
+    CHECK(log[5].chip == 'c');
+    CHECK(log[5].cycles == 1U);
+    CHECK(beam.ticks == 6U);
+    CHECK(cpu.ticks == 2U);
+    CHECK(audio.ticks == 1U);
 }
 
 TEST_CASE("scheduler advances exactly one frame at a time") {

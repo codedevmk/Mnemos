@@ -7,10 +7,24 @@ namespace mnemos::runtime {
     scheduler::scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept
         : chips_(std::move(chips)), accumulator_(chips_.size(), 0U), frame_source_(frame_source) {
         uniform_lockstep_ = !chips_.empty();
-        for (const auto& sc : chips_) {
+        fixed_divider_batch_ = !chips_.empty();
+        bool seen_divided = false;
+        for (std::size_t i = 0; i < chips_.size(); ++i) {
+            const auto& sc = chips_[i];
             if (sc.divider != 1U || sc.rate_num != 0U) {
                 uniform_lockstep_ = false;
-                break;
+            }
+            if (sc.rate_num != 0U) {
+                fixed_divider_batch_ = false;
+            } else if (sc.divider == 1U) {
+                if (seen_divided) {
+                    fixed_divider_batch_ = false;
+                } else {
+                    ++divider_one_prefix_count_;
+                }
+            } else {
+                seen_divided = true;
+                fixed_divider_indices_.push_back(i);
             }
         }
     }
@@ -27,6 +41,34 @@ namespace mnemos::runtime {
         if (uniform_lockstep_) {
             for (const auto& sc : chips_) {
                 sc.chip->tick(cycles);
+            }
+            return;
+        }
+
+        if (fixed_divider_batch_) {
+            std::uint64_t remaining = cycles;
+            while (remaining > 0U) {
+                std::uint64_t step = remaining;
+                for (const std::size_t i : fixed_divider_indices_) {
+                    const scheduled_chip& sc = chips_[i];
+                    const auto wait = static_cast<std::uint64_t>(sc.divider - accumulator_[i]);
+                    if (wait < step) {
+                        step = wait;
+                    }
+                }
+
+                for (std::size_t i = 0; i < divider_one_prefix_count_; ++i) {
+                    chips_[i].chip->tick(step);
+                }
+                for (const std::size_t i : fixed_divider_indices_) {
+                    const scheduled_chip& sc = chips_[i];
+                    accumulator_[i] += static_cast<std::uint32_t>(step);
+                    if (accumulator_[i] >= sc.divider) {
+                        accumulator_[i] = 0U;
+                        sc.chip->tick(1U);
+                    }
+                }
+                remaining -= step;
             }
             return;
         }

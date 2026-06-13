@@ -143,9 +143,15 @@ namespace mnemos::chips::cpu {
         // Scheduler-facing credit API. `tick()` uses this internally; board
         // manifests can grant both CPUs credit, then interleave credited
         // instructions by elapsed-cycle position without discarding overshoot.
-        void grant_cycles(std::uint64_t cycles) noexcept;
-        [[nodiscard]] bool has_cycle_credit() const noexcept;
-        int step_credited_instruction();
+        void grant_cycles(std::uint64_t cycles) noexcept {
+            cycle_debt_ += static_cast<std::int64_t>(cycles);
+        }
+        [[nodiscard]] bool has_cycle_credit() const noexcept { return cycle_debt_ > 0; }
+        int step_credited_instruction() {
+            const int consumed = step_instruction();
+            cycle_debt_ -= consumed;
+            return consumed;
+        }
 
         [[nodiscard]] registers cpu_registers() const noexcept;
         void set_registers(const registers& values) noexcept;
@@ -226,7 +232,18 @@ namespace mnemos::chips::cpu {
         // charges the board bus-wait for them AFTER exec applies the base-cycle
         // floors, so the contention wait adds on top instead of being swallowed by
         // account_cycles' max-floor. SH-2 ops touch memory at most twice (MAC).
-        void record_data_access(std::uint32_t address, std::uint8_t bytes, bool locked) noexcept;
+        void record_data_access(std::uint32_t address, std::uint8_t bytes, bool locked) noexcept {
+            // Locked (TAS) reservations are charged inline at the access site; only
+            // ordinary accesses are logged here, and only when the board opted in.
+            if (!meter_shared_contention_ || locked) {
+                return;
+            }
+            if (shared_access_count_ < static_cast<int>(shared_accesses_.size())) {
+                shared_accesses_[static_cast<std::size_t>(shared_access_count_)] = {address, bytes,
+                                                                                    locked};
+                ++shared_access_count_;
+            }
+        }
 
         // ---- exceptions + interrupts ----
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
@@ -237,6 +254,32 @@ namespace mnemos::chips::cpu {
         bool require_byte_data_access(std::uint32_t address, bool tas = false);
         bool require_word_data_access(std::uint32_t address, bool pc_relative = false);
         bool require_long_data_access(std::uint32_t address, bool pc_relative = false);
+        [[nodiscard]] static constexpr bool
+        fast_offchip_data_space(std::uint32_t address) noexcept {
+            return address < 0x40000000U ||
+                   (address >= 0x80000000U && address < sh2_peripherals::window_base);
+        }
+        bool require_byte_data_access_fast(std::uint32_t address, bool tas = false) {
+            if (fast_offchip_data_space(address)) {
+                record_data_access(address, 1U, tas);
+                return true;
+            }
+            return require_byte_data_access(address, tas);
+        }
+        bool require_word_data_access_fast(std::uint32_t address, bool pc_relative = false) {
+            if ((address & 1U) == 0U && fast_offchip_data_space(address)) {
+                record_data_access(address, 2U, false);
+                return true;
+            }
+            return require_word_data_access(address, pc_relative);
+        }
+        bool require_long_data_access_fast(std::uint32_t address, bool pc_relative = false) {
+            if ((address & 3U) == 0U && fast_offchip_data_space(address)) {
+                record_data_access(address, 4U, false);
+                return true;
+            }
+            return require_long_data_access(address, pc_relative);
+        }
         // Accept the presented external IRQ if level > SR.IMASK (called at the
         // instruction boundary). Returns true if an interrupt was taken.
         bool try_service_irq();
