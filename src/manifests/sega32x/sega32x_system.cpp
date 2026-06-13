@@ -810,14 +810,24 @@ namespace mnemos::manifests::sega32x {
         }
 
         // Per-access wait states (32X HW manual sec 4.4), charged on top of the
-        // instruction's base MA. A locked RMW (TAS) holds the slot for its full
-        // lock window. VDP regs are a constant 5 wait/word; COMM/SDRAM/FB stay
-        // 1/word here -- accurate SDRAM/FB read vs write timing (2/word write,
-        // 8-word-burst read) is the next, cache-coupled increment (ADR-0026; see
-        // docs/sh2-cycle-ledger.md). Long (4B) = two word cycles on the 16-bit bus.
+        // instruction's base MA; a locked RMW (TAS) holds the slot for its full
+        // lock window. VDP regs = 5 wait/word; SDRAM WRITE = 2 wait/word. SDRAM
+        // READ is cache-coupled (12 clock/8-word burst on a fill, ~0 on a hit) and
+        // FB read (5-12) / cart (6-15) / palette are condition-dependent ranges --
+        // all left at 1/word here, deferred to the cache phase (Z7) and the range
+        // scoreboard (ADR-0026; docs/sh2-cycle-ledger.md). Long (4B) = two 16-bit
+        // bus cycles, so the per-word cost doubles.
         const int words = (bytes >= 4U) ? 2 : 1;
-        const auto beats = static_cast<std::uint64_t>(locked ? shared_tas_bus_lock_wait_cycles
-                                                             : (shared_vdp ? 5 : 1) * words);
+        const bool is_write = kind == chips::cpu::data_access_kind::write ||
+                              kind == chips::cpu::data_access_kind::rmw;
+        int per_word = 1;
+        if (shared_vdp) {
+            per_word = 5;
+        } else if (shared_sdram && is_write) {
+            per_word = 2;
+        }
+        const auto beats =
+            static_cast<std::uint64_t>(locked ? shared_tas_bus_lock_wait_cycles : per_word * words);
         const std::uint64_t start =
             master ? master_cpu.elapsed_cycles() : slave_cpu.elapsed_cycles();
         const std::uint64_t grant = std::max(start, shared_bus_lock_until);

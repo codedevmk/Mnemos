@@ -126,21 +126,25 @@ namespace {
                 struct wait_range final {
                     std::uint32_t start;
                     std::uint32_t size;
-                    int wait;
+                    int read_wait;
+                    int write_wait;
                 };
                 std::vector<wait_range> ranges;
                 for (const auto& rg : test.at("bus")) {
+                    const int both = rg.value("wait", 0);
                     ranges.push_back({rg.at("start").get<std::uint32_t>(),
                                       rg.at("size").get<std::uint32_t>(),
-                                      rg.at("wait").get<int>()});
+                                      rg.value("read_wait", both), rg.value("write_wait", both)});
                 }
                 cpu.set_bus_wait_callback(
                     [ranges](std::uint32_t addr, std::uint8_t bytes,
-                             mnemos::chips::cpu::data_access_kind /*kind*/) -> int {
+                             mnemos::chips::cpu::data_access_kind kind) -> int {
                         const int words = (bytes >= 4U) ? 2 : 1;
+                        const bool is_write = kind == mnemos::chips::cpu::data_access_kind::write ||
+                                              kind == mnemos::chips::cpu::data_access_kind::rmw;
                         for (const auto& rg : ranges) {
                             if (addr >= rg.start && addr < rg.start + rg.size) {
-                                return rg.wait * words;
+                                return (is_write ? rg.write_wait : rg.read_wait) * words;
                             }
                         }
                         return 0;
