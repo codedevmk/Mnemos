@@ -1,4 +1,4 @@
-# Mnemos hardware parity-gap inventory & tracking checklist (2026-06-11; re-audited 2026-06-12)
+# Mnemos hardware parity-gap inventory & tracking checklist (2026-06-11; re-audited 2026-06-12, 2026-06-13)
 
 Actionable checklist of **missing or incomplete** hardware implementation found
 by the 2026-06-11 parity audit. Companion to
@@ -13,6 +13,20 @@ and the `R#` cross-reference to the risk register where one exists.
 > wording was freshened — the SMS cart-RAM bank-select is implemented and
 > unit-tested, not merely "to verify". Counters (5/28, 0/9) and the severity
 > tally are unchanged; the fix is wording, not a state change.
+
+> **Update 2026-06-13 (the SH-2 X2/X3 cycle-true campaign closed at the opt-in
+> stage):** **X2 and X3 flip `[~]`→`[x]`** (32X 6/8 → **8/8**; implemented 6/28 →
+> **8/28**). The campaign (ADR-0026) resolved the long-standing "needs a
+> cycle-accurate reference" blocker by making the **official manuals the authority**
+> (Emu/Ymir are L5 cross-check only, never an expected value): X2 internal+load-use
+> timing was validated complete vs the SH-1/SH-2 PM, X3 grew region access-cycle
+> timing + a per-resource SH-2↔SH-2/DMAC contention model, and the SH7604 cache got
+> an operand + instruction-fetch hit/miss timing shadow (PRs #139, #141-143, #146,
+> #147, #148). All ship **OPT-IN, default-off → the 32X stays bit-identical**. The
+> **default-ON flip (Z8) is deliberately deferred**, not a remaining gap: there is
+> no cycle-accurate reference to validate a flip and no 32X frame-hash parity
+> harness to A/B it, so opt-in is the honest end state. The multiplier-contention
+> upper bound (X2) stays unmodeled — its magnitude has no manual grounding.
 
 > **Active porting mandate (ADR-0006 §1):** every Emu→Mnemos port is
 > restructured into Mnemos C++23 conventions and is never copied wholesale.
@@ -48,21 +62,25 @@ and the `R#` cross-reference to the risk register where one exists.
 
 ## Progress
 
-- **Implemented-system hardware items: 6 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
+- **Implemented-system hardware items: 8 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
+  (X2 + X3 completed 2026-06-13 as opt-in models; see the update note above)
 - **Unbuilt systems: 0 / 9 complete**
 
 ---
 
-## Sega 32X — 6 / 8
+## Sega 32X — 8 / 8
 
-The heaviest cluster and the shortest path to 32X correctness: the SH-2 timing tail +
-on-chip interrupt delivery. This is why Star Wars / Space Harrier / After Burner stay
-black. Ties to the hard-problems board (SH-2 cycle-true).
+All eight tracked SH-2 / 32X hardware items are implemented. The SH-2 cycle-true
+timing tail (X2/X3) closed 2026-06-13 as **opt-in** models (ADR-0026,
+manual-grounded; default-on deferred — no validation reference). The remaining 32X
+correctness work is the boot/feature chain that keeps Star Wars / Space Harrier /
+After Burner black — those are boot-sequence + VDP/feature bugs (tracked on the
+hard-problems board / per-title tasks), NOT the opt-in timing tail.
 
 #### CPU — core / timing
-- [~] **X2** Per-instruction cycle-accurate SH-2 timing — fixed-state costs for delayed/non-delayed branches, TRAPA/RTE/SLEEP, system-register memory forms, TAS, MAC/multiply minima, and GBR byte-immediate ops are wired, and an **opt-in load-use interlock** (`MNEMOS_32X_LOAD_USE`, PR #134) adds the +1 cycle when an instruction reads a GPR the previous one loaded, plus the deferred `LDC.L @Rn+,SR` -> next-instruction T-consumer case. Remaining: the multiplier-contention upper-bound scoreboard (magnitude not manual-grounded) and cache-miss timing. A **functional** conformance harness cross-checks SH-2 *semantics* against the public SH4 single-step corpus (PR #131), but that software-generated/superscalar corpus does **not** settle cycle counts — so the load-use model ships opt-in, and closing X2 still needs a cycle-accurate hardware reference · PARTIAL · **CRIT** · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/chips/cpu/sh2/tests/sh2_conformance_test.cpp`
+- [x] **X2** Per-instruction cycle-accurate SH-2 timing — **complete as an opt-in model (ADR-0026, manual-grounded).** Fixed-state costs for delayed/non-delayed branches, TRAPA/RTE/SLEEP, system-register memory forms, TAS, MAC/multiply minima, and GBR byte-immediate ops are wired and **validated complete vs the SH-1/SH-2 Programming Manual** (the only fix was the delayed-branch fold undercount — BRA/BSR/JMP/JSR/RTS=3, RTE=5, BT/S BF/S=3 taken; PR #139). The **load-use interlock** (`MNEMOS_32X_LOAD_USE`, PRs #134/#136) adds the +1 cycle when an instruction reads a GPR the previous one loaded, incl. the `LDC.L @Rn+,SR`→T-consumer case, and **cache-miss timing is now modelled** (the SH7604 operand + instruction-fetch cache shadow, PRs #146/#147). The reference blocker is RESOLVED by ADR-0026 (manuals are authority; Emu/Ymir L5 cross-check only); a manual-derived **cycle** conformance harness (`MNEMOS_SH2_CYCLE_TESTS_DIR`) joins the functional one (PR #131). Ships **OPT-IN** (default-off = bit-identical); default-ON is deferred by decision (no cycle-accurate reference / no parity harness). Only the multiplier-contention upper bound stays unmodelled — its magnitude has no manual grounding · DONE (opt-in) · **CRIT** · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/chips/cpu/sh2/tests/sh2_cycle_conformance_test.cpp` + `docs/plans/2026-06-12-sh2-x2-x3-cycle-true.md`
 - [x] **X1** SH-2 address-error exception — vectors odd fetches, normal and delay-slot misaligned word/long data accesses, PC-relative on-chip loads, SH7604 on-chip byte/long access-class faults, the stacking fault on a misaligned exception-frame SP (diverts to vector 9 once, no recurse/reset), and byte/word/PC-relative/TAS access to the cache purge (`$40000000`) and address-array (`$60000000`, longword-only) spaces — all through vector 9. The `$C0000000` data array (32X cache-as-RAM scratch) is correctly excluded · DONE · HIGH · M · vs Emu · R6 · Evidence: `src/chips/cpu/sh2/sh2.cpp`
-- [~] **X3** SH-2 ↔ SH-2 bus-lock / contention stall timing — a board-provided bus-wait hook charges `TAS.B` locks on shared 32X SDRAM/framebuffer/COMM ranges and arbitrates same-cycle dual-SH-2 TAS locks; an **opt-in model** (`MNEMOS_32X_BUS_CONTENTION`, PR #133) extends the reservation to all ordinary shared data accesses (byte/word = 1 beat, long = 2). Remaining: 68000/VDP/DMA multi-master contention and a cycle-accurate reference to validate the counts (it ships opt-in for the same reason as X2) · PARTIAL · HIGH · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/manifests/sega32x/sega32x_system.cpp`
+- [x] **X3** SH-2 ↔ SH-2 bus-lock / contention stall timing — **complete as an opt-in model.** A board bus-wait hook charges `TAS.B` locks on shared 32X ranges; the opt-in model (`MNEMOS_32X_BUS_CONTENTION`, PRs #133/#141-143) adds **region access-cycle timing** (VDP regs = 5/word, SDRAM write = 2/word, COMM = 1, SDRAM read = the 12-clock cache line-fill burst) via a `data_access_kind` enum + address-matched store re-tag, and **per-resource cross-CPU + DMAC contention** (PR #148): the reservation is held per hardware block (SDRAM / frame buffer / VDP / COMM), so distinct-block accesses on the two SH-2s do not falsely serialize; cross-CPU ties resolve deterministically (master before slave; a CPU's instruction before its own DMAC). The 68000 and 32X VDP as bus masters are scoped-out + logged (not a silent cap); the intra-instruction MA offset is not modelled. Ships **OPT-IN** for the same reason as X2 (no cycle-accurate reference); default-ON deferred by decision · DONE (opt-in) · HIGH · L · vs Emu · R2 · Evidence: `progress-analysis.md` R2 + `src/chips/cpu/sh2/sh2.cpp` + `src/manifests/sega32x/sega32x_system.cpp`
 
 #### CPU — on-chip peripherals
 - [x] **X4** INTC full interrupt delivery — the on-chip INTC arbitrates and delivers FRT, DIVU-OVFI, DMAC transfer-end, WDT ITI, and SCI ERI/RXI/TXI/TEI by IPRA/IPRB priority + VCR vectors (a zero VCR is a valid vector, masked only by IPR). The 32X's VINT/HINT/CMD/PWM are the manifest's external `set_irq`/IRL path and NMI has no Mars consumer · DONE · **CRIT** · M · vs Emu · R1 · Evidence: `src/chips/cpu/sh2/sh2_peripherals.cpp` `pending_onchip_irq`
@@ -74,10 +92,15 @@ black. Ties to the hard-problems board (SH-2 cycle-true).
 > Done (no action): SH-2 ISA (60 mnemonics), both CPUs (threaded), all VDP modes,
 > palette/autofill/double-buffer, PWM, comm/adapter bridge, VINT/HINT/CMD/PWM, MARS, FRT.
 >
-> Verification: a data-gated SH-2 conformance harness (`sh2_conformance_test`,
-> `MNEMOS_SH2_TESTS_DIR`) cross-checks the SH-2 ISA against the public SH4
-> single-step corpus — *functional* validation only; SH-2 cycle-exact timing
-> (X2/X3) remains gated on a cycle-accurate hardware reference.
+> Verification: TWO data-gated harnesses — `sh2_conformance_test`
+> (`MNEMOS_SH2_TESTS_DIR`) cross-checks the SH-2 ISA *semantics* against the public
+> SH4 single-step corpus, and `sh2_cycle_conformance_test`
+> (`MNEMOS_SH2_CYCLE_TESTS_DIR`, ADR-0026) checks per-instruction **cycle counts**
+> against manual-derived vectors. The "cycle timing needs a cycle-accurate hardware
+> reference" blocker is RESOLVED by ADR-0026 (the official manuals are the
+> authority; Emu/Ymir are L5 cross-check only). X2/X3 cycle timing is modelled +
+> validated against the manual and ships OPT-IN; only the default-ON flip stays
+> deferred (it would need a 32X frame-hash parity harness to A/B safely).
 
 ---
 
@@ -195,7 +218,7 @@ parity-grade for the new machine. Listed prerequisites still apply.
 
 ## Suggested critical path (correctness before breadth)
 
-1. **32X timing cluster** — X2, X1, X3 (X4 INTC delivery done; X2 cycle-true timing + X3 contention are the remaining CRIT/HIGH tail, ADR-0011-deferred).
+1. ~~**32X timing cluster** — X2, X1, X3~~ **DONE (2026-06-13):** X1 address-error + X4 INTC + the X2/X3 cycle-true timing tail are all implemented (X2/X3 as opt-in, manual-grounded models; default-on deferred). 32X is 8/8. The next 32X correctness work is the boot/feature chain (per-title tasks), not this cluster.
 2. **Sega CD CHD** — D1 (unblocks the common modern disc format).
 3. **SMS YM2413** — S1 (restores FM audio; self-contained).
 4. **Address-error exceptions** — G1 + X1 (shared 68K + SH-2 work; G1 also fixes Sega CD sub-CPU).

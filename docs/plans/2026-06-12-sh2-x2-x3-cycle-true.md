@@ -8,6 +8,19 @@
 SH-2↔SH-2 bus access/contention timing (X3) cycle-true and **default-on**,
 validated against an authoritative reference and the full regression gate.
 
+> **STATUS — CLOSED at the opt-in stage (Marius, 2026-06-13).** The modeling is
+> complete and on master: X2 internal+load-use (PR #139), X3 region access timing
+> (#141-143), the operand-cache shadow (Z7a #146), the instruction-fetch cache
+> (Z7b #147), and per-resource cross-CPU + DMAC contention (Z6 #148) — all
+> **OPT-IN, default-off → 32X stays bit-identical**. **Z8 (the default-ON flip) is
+> deliberately NOT taken**: there is no cycle-accurate SH-2 reference to validate a
+> flip against (the very reason these models are opt-in), and a flip can't be
+> A/B-checked without the 32X frame-hash parity harness (a separate infra gap), so
+> turning it on by default would risk the working titles with nothing to catch a
+> regression. Opt-in is the honest, defensible end state. **Z7c (cache TW two-way)
+> is skipped** — no 32X title is known to need it. Reopen Z8 only if a
+> cycle-accurate reference and the parity harness both exist.
+
 **Reference posture (decided 2026-06-12, after a Codex cross-check + source
 verification):** Per `CONSTITUTION.md` §2.3, *other emulators are L5 — advisory,
 never an oracle; behavioral authority for silicon is official documentation plus
@@ -210,13 +223,18 @@ write purges the shadow + self-clears. Do NOT reuse `p0_bases` for `$C0000000`
   ctest 108/108, sh2 126 cases, cycle corpus 41/41; new C++ test asserts the
   miss→7×hit→new-line-miss pattern + metering-off bit-identical. (Cache-disabled
   CE=0 fetch timing is intentionally not modeled — the 32X always runs CE=1.)
-- [ ] **Z7c** TW two-way + address/data-array coherence (only if a title needs it).
+- [~] **Z7c** TW two-way + address/data-array coherence — SKIPPED (decision
+  2026-06-13): no 32X title is known to use the cache two-way (half-RAM) mode, so
+  this stays unbuilt until one does.
 
 ---
 
 ## Stage D — default-on (gated)
 
-### Increment Z8: regression + flip
+### Increment Z8: regression + flip — DEFERRED BY DECISION (2026-06-13)
+The default-ON flip is intentionally not taken (see the STATUS block at the top):
+no cycle-accurate reference validates a flip, and it can't be A/B-checked without
+the 32X frame-hash parity harness. The gate below stands as the reopen criteria.
 - [ ] Z8.1 **Gate (all required):** cycle corpus green · functional corpus still
   green · sync-vs-threaded equivalence under X2/X3-on (`MNEMOS_32X_THREAD=0` and
   threaded) · save-state coverage (pending-load + cache) · 32X title-sweep
