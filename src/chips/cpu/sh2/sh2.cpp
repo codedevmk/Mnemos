@@ -1325,7 +1325,16 @@ namespace mnemos::chips::cpu {
             return;
         }
         pc_ = target;
-        account_cycles(minimum_cycles);
+        if (model_load_use_) {
+            // X2 accurate timing (ADR-0026): a delayed branch and its delay slot
+            // are separate instructions whose execution states SUM (SH-1/SH-2 PM
+            // 7.3). cycles_ holds the delay-slot states (exec(slot) floored it
+            // from the base); add the branch's. Default path keeps the pre-X2
+            // max-floor so the 32X stays bit-identical until the Z8 gate.
+            cycles_ = add_bounded_wait_cycles(cycles_, static_cast<std::uint64_t>(minimum_cycles));
+        } else {
+            account_cycles(minimum_cycles);
+        }
         if (deferred_address_error_) {
             deferred_address_error_ = false;
             raise_address_error(pc_);
