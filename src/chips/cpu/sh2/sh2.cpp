@@ -1330,6 +1330,9 @@ namespace mnemos::chips::cpu {
             }
             return;
         }
+        // X3 (Z7b): the delay-slot fetch is the step's second fetch; look it up in
+        // program order (after the branch fetch, before the slot's operand MA).
+        record_fetch_access(pc_);
         const std::uint16_t slot = rd16(pc_);
         pc_ += 2U;
         exec(slot);
@@ -1373,7 +1376,7 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    bool sh2::cache_operand_lookup(std::uint32_t address) noexcept {
+    bool sh2::cache_lookup(std::uint32_t address, bool is_instruction) noexcept {
         // SH7604 cache geometry: 64 sets x 4 ways x 16-byte lines. The set index
         // is A9-A4 and the tag is A28-A10 (A31-29 = 0 selects the cacheable area;
         // the caller already gated on that). LRU is a per-set MRU->LRU way order.
@@ -1395,9 +1398,11 @@ namespace mnemos::chips::cpu {
                 return true; // hit: the line is resident, no SDRAM burst
             }
         }
-        // Miss: fill the least-recently-used way (the back of the order) unless the
-        // operand cache is disabled (OD=1), in which case no line is allocated.
-        if ((ccr_ & ccr_od) == 0U) {
+        // Miss: fill the least-recently-used way (the back of the order) unless
+        // replacement is disabled -- ID for an instruction fetch, OD for an operand
+        // (the unified cache still HITS resident lines under either disable bit).
+        const std::uint8_t replace_disable = is_instruction ? ccr_id : ccr_od;
+        if ((ccr_ & replace_disable) == 0U) {
             const std::size_t victim = order[cache_ways - 1U];
             cache_tag_[base + victim] = tag;
             cache_valid_[base + victim] = true;
@@ -1581,6 +1586,7 @@ namespace mnemos::chips::cpu {
     int sh2::step_instruction() {
         cycles_ = 1;              // SH-2 base: one instruction per cycle on a hit
         shared_access_count_ = 0; // X3: per-instruction shared-access log
+        fetch_access_count_ = 0;  // X3 (Z7b): per-instruction fetch-miss log
 
         // Interrupt acceptance happens at the instruction boundary, unless a
         // preceding control-register load inhibits it for one instruction (code
@@ -1637,6 +1643,10 @@ namespace mnemos::chips::cpu {
                       (static_cast<std::uint16_t>(fetch_data_[fetch_off]) << 8U) |
                       fetch_data_[fetch_off + 1U])
                 : fetch_slow(pc_);
+        // X3 (Z7b): the instruction fetch hits/misses the unified cache shadow
+        // (independent of the host-side fetch_data_ span). Lookup runs now, in
+        // program order; a miss's burst is charged at end-of-step.
+        record_fetch_access(fetch_addr);
         // X2: decide the load-use stall from the instruction about to run and the
         // previous instruction's load destination, BEFORE exec overwrites either.
         // The stall is charged after exec (an add, so a base-cycle floor cannot
@@ -1656,7 +1666,13 @@ namespace mnemos::chips::cpu {
 
         // X3: charge shared-bus contention now that all base-cycle floors are
         // applied, so the board's wait adds on top (charging inside the access
-        // would be swallowed by a later account_cycles floor).
+        // would be swallowed by a later account_cycles floor). Fetch misses are
+        // charged FIRST -- IF precedes MA on the bus, so a fetch fill reserves the
+        // shared bus ahead of this instruction's operand accesses.
+        for (int i = 0; i < fetch_access_count_; ++i) {
+            add_external_wait_cycles(fetch_accesses_[static_cast<std::size_t>(i)], 2U,
+                                     data_access_kind::read);
+        }
         for (int i = 0; i < shared_access_count_; ++i) {
             const shared_access& a = shared_accesses_[static_cast<std::size_t>(i)];
             // Operand-cache shadow: a cacheable read that hits costs no bus cycles
@@ -1664,7 +1680,7 @@ namespace mnemos::chips::cpu {
             // line-fill burst the board charges. Writes are write-through /
             // no-allocate, and non-cacheable space (A31-29 != 0) bypasses the cache.
             if (a.kind == data_access_kind::read && (ccr_ & ccr_ce) != 0U &&
-                a.address < cache_area_limit && cache_operand_lookup(a.address)) {
+                a.address < cache_area_limit && cache_lookup(a.address, /*is_instruction=*/false)) {
                 continue; // hit: no external SDRAM access this access
             }
             add_external_wait_cycles(a.address, a.bytes, a.kind);

@@ -54,8 +54,14 @@ Current implementation (pre-X2/X3-default) and the rules every increment keeps:
    gated by the X3 metering flag; a cacheable operand read (A31-29=0, CE=1) that
    hits skips the bus, a miss fills the LRU way (unless OD=1) and the board charges
    the flat **12-clock SDRAM line-fill burst** (`sdram_read_burst_cycles`).
-   CP purges + self-clears. Serialized at save-state **v3**. Instruction-fetch
-   cache timing (Z7b, the dominant loop effect) and TW two-way (Z7c) still pending.
+   CP purges + self-clears. Serialized at save-state **v3**. **Z7b shipped:**
+   instruction fetches hit/miss the SAME unified shadow (no-fill bit = ID for a
+   fetch, OD for an operand); the lookup runs in program order (IF before MA) and a
+   miss's 12-clock burst is charged at end-of-step before the operand charges. So a
+   16-byte line (8 instructions) pays one fill then 7 free fetches — the dominant
+   loop effect. Pipeline IF/EX overlap is approximated as a flat additive miss
+   penalty (the manual-grounded target, not bit-exact). TW two-way (Z7c) still
+   pending. CE=0 (cache-disabled) fetch timing is not modeled (the 32X runs CE=1).
 7. **Determinism.** Timing changes cycle *counts*, never observable *values*.
    Guard: sync-vs-threaded equivalence under X2/X3-on; `save_state` must carry the
    load-use state (`pending_load_reg_`/`pending_load_t_`, version bump in Z4) and
@@ -110,7 +116,8 @@ timing is validated complete against the manual.** The only X2 items left are
 (a) the multiplier-contention upper-bound scoreboard — the manual's "1 to 3" /
 "2 to 4" / MAC contention ranges, where the exact value within the range needs
 pipeline-contention modeling (deferred) — and (b) cache-miss timing (Z7: the
-operand-read shadow is shipped in Z7a; instruction-fetch cache timing is Z7b).
+operand-read shadow shipped in Z7a and the instruction-fetch shadow in Z7b; only
+TW two-way mode (Z7c) remains).
 
 **Load-use contention (X2):** Table 7.2 / §7.5 — "if an instruction that uses the
 same destination register … is placed immediately after [a memory load],

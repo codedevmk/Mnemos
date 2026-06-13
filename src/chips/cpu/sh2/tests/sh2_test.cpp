@@ -773,6 +773,63 @@ TEST_CASE("sh2 X3 operand-cache shadow survives a save/load round-trip") {
     CHECK(calls2 == 0);
 }
 
+TEST_CASE("sh2 X3 fetch-cache shadow charges an SDRAM fetch only on a line miss") {
+    // Z7b: instruction fetches hit/miss the same unified shadow. A 16-byte line
+    // holds 8 instructions, so a straight run pays one line-fill burst then 7 free
+    // fetches; crossing into the next line misses again. This is the dominant loop
+    // effect. NOP has no operand, so only the fetch is timed.
+    using kind = mnemos::chips::cpu::data_access_kind;
+    machine m;
+    int fetch_calls = 0;
+    m.cpu.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t, kind k) {
+        // Stand in for the board: a cacheable read/fetch in the program region pays
+        // the SDRAM line-fill burst; the on-chip CCR store costs nothing.
+        if (address >= 0x1000U && address < 0x2000U && k == kind::read) {
+            ++fetch_calls;
+            return 12;
+        }
+        return 0;
+    });
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    r.r[0] = 0x01U;       // CCR = CE
+    r.r[1] = 0xFFFFFE92U; // CCR address
+    m.cpu.set_registers(r);
+    // MOV.B R0,@R1 (CCR <- CE) then eight NOPs spanning two 16-byte lines.
+    m.load(0x1000U,
+           {0x2100U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U, 0x0009U});
+
+    SECTION("metering on: first fetch of a line misses, the rest hit") {
+        m.cpu.set_shared_contention_metering(true);
+        // CCR store: fetched with the cache still off -> not cached, not charged.
+        CHECK(m.cpu.step_instruction() == 1);
+        CHECK(fetch_calls == 0);
+        // First NOP (0x1002) misses its line -> the line-fill burst.
+        CHECK(m.cpu.step_instruction() == 1 + 12);
+        CHECK(fetch_calls == 1);
+        // 0x1004, 0x1006, 0x1008 are in the same line -> fetch hits, no burst.
+        CHECK(m.cpu.step_instruction() == 1);
+        CHECK(m.cpu.step_instruction() == 1);
+        CHECK(m.cpu.step_instruction() == 1);
+        CHECK(fetch_calls == 1);
+        // Finish the line (0x100A..0x100E) -- still hits.
+        m.cpu.step_instruction();
+        m.cpu.step_instruction();
+        m.cpu.step_instruction();
+        CHECK(fetch_calls == 1);
+        // 0x1010 crosses into the next line -> a fresh miss.
+        CHECK(m.cpu.step_instruction() == 1 + 12);
+        CHECK(fetch_calls == 2);
+    }
+
+    SECTION("metering off (default): fetches are neither cached nor metered") {
+        for (int i = 0; i < 9; ++i) {
+            CHECK(m.cpu.step_instruction() == 1);
+        }
+        CHECK(fetch_calls == 0);
+    }
+}
+
 TEST_CASE("sh2 load-use interlock adds one cycle when the next op reads the loaded reg") {
     // X2: MOV.L @R1,R2 loads R2; the instruction that follows pays +1 cycle iff
     // it reads R2 as a source (and is not exempt).

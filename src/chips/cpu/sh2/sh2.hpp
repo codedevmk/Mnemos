@@ -30,8 +30,8 @@ namespace mnemos::chips::cpu {
     // external-interrupt model (set_irq / an accept callback, with a
     // one-instruction inhibit after SR loads), address-error exceptions, and
     // opt-in timing models for the load-use interlock, shared-bus contention, and
-    // the operand-cache hit/miss shadow. Still deferred: instruction-fetch cache
-    // timing and TW two-way mode.
+    // the unified cache hit/miss shadow (instruction fetch + operand read). Still
+    // deferred: the cache TW two-way mode and cross-CPU bus arbitration.
     //
     // Instruction-stepped like the m68000: step_instruction() runs one
     // instruction and returns its cycle cost; tick(cycles) catches up by running
@@ -264,16 +264,35 @@ namespace mnemos::chips::cpu {
             }
         }
 
-        // ---- X3 operand-cache timing shadow (SH7604: 4 KiB, 4-way, 64-set) ----
+        // ---- X3 cache timing shadow (SH7604: 4 KiB, 4-way, 64-set, UNIFIED) ----
         // A timing-ONLY model: tags + valid + LRU predict hit/miss so the board
         // charges the SDRAM line-fill burst on a miss and nothing on a hit. Data
         // still flows through the bus (correctness unchanged); the shadow holds no
         // data. Live only while metering is on (ccr_ stays 0 otherwise, so the
-        // hit/miss gate below never fires and the default path is bit-identical).
-        // Returns true on a hit (no external SDRAM access); a miss fills the line.
-        [[nodiscard]] bool cache_operand_lookup(std::uint32_t address) noexcept;
+        // hit/miss gate never fires and the default path is bit-identical). The
+        // cache is unified: instruction fetches and operand reads share one array;
+        // the no-fill (replacement-disable) bit is ID for a fetch, OD for an
+        // operand. Returns true on a hit (no SDRAM burst); a miss fills the line.
+        [[nodiscard]] bool cache_lookup(std::uint32_t address, bool is_instruction) noexcept;
         void cache_purge() noexcept;                       // invalidate all lines, reset LRU
         void cache_write_ccr(std::uint8_t value) noexcept; // CCR store; CP self-clears
+
+        // X3 fetch-cache (Z7b): an instruction fetch from cacheable SDRAM hits/
+        // misses the same unified shadow. Fetches dominate loop timing (a 16-byte
+        // line = 8 instructions: 1 miss + 7 hits). The lookup runs at the fetch
+        // site (program order: IF before MA), but a miss's burst is logged here and
+        // charged at end-of-step BEFORE the operand charges (the floor-safe ADD
+        // discipline + bus order). Transient per step, so it needs no save-state.
+        void record_fetch_access(std::uint32_t address) noexcept {
+            if (!meter_shared_contention_ || (ccr_ & ccr_ce) == 0U || address >= cache_area_limit) {
+                return;
+            }
+            if (!cache_lookup(address, /*is_instruction=*/true) &&
+                fetch_access_count_ < static_cast<int>(fetch_accesses_.size())) {
+                fetch_accesses_[static_cast<std::size_t>(fetch_access_count_)] = address;
+                ++fetch_access_count_;
+            }
+        }
 
         // ---- exceptions + interrupts ----
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
@@ -368,7 +387,8 @@ namespace mnemos::chips::cpu {
         // metering, so the default path leaves it to the peripheral register file.
         static constexpr std::uint32_t cache_ccr_address = 0xFFFFFE92U;
         static constexpr std::uint8_t ccr_ce = 0x01U; // cache enable
-        static constexpr std::uint8_t ccr_od = 0x04U; // operand-cache disable
+        static constexpr std::uint8_t ccr_id = 0x02U; // instruction-replacement disable
+        static constexpr std::uint8_t ccr_od = 0x04U; // operand-replacement disable
         static constexpr std::uint8_t ccr_cp = 0x10U; // cache purge (self-clearing)
         static constexpr std::uint32_t cache_area_limit = 0x20000000U; // A31-29=000 cacheable
         static constexpr std::size_t cache_sets = 64U;
@@ -378,6 +398,10 @@ namespace mnemos::chips::cpu {
         std::array<std::uint32_t, cache_lines> cache_tag_{}; // [set*ways + way]
         std::array<bool, cache_lines> cache_valid_{};        // line validity
         std::array<std::array<std::uint8_t, cache_ways>, cache_sets> cache_order_{}; // MRU->LRU
+        // Fetch-miss bursts deferred to the end-of-step charge (Z7b). Capacity 2 =
+        // a step's max fetches (a delayed branch + its delay slot). Transient.
+        std::array<std::uint32_t, 2> fetch_accesses_{};
+        int fetch_access_count_{};
 
         // X2 load-use interlock. last_exec_op_ is the most recently executed
         // opcode (the delay slot for a taken delayed branch), so its load

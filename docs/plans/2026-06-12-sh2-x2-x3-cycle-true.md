@@ -186,9 +186,19 @@ write purges the shadow + self-clears. Do NOT reuse `p0_bases` for `$C0000000`
   Validated by C++ tests in `sh2_test.cpp` (miss→hit, CE-off all-miss, CP-purge
   re-miss, metering-off bit-identical, save/load round-trip) — the JSON harness's
   CCR-setup is awkward, so the C++ surface is the committed cycle check here.
-- [ ] **Z7b** instruction-fetch cache timing on the same shadow (Codex: fetches
-  dominate loop timing; required before "Z7 done"/default-on). `fetch_slow`
-  records no fetch wait today.
+- [x] **Z7b** instruction-fetch cache timing — SHIPPED. Fetches hit/miss the SAME
+  unified shadow (`cache_operand_lookup` generalized to `cache_lookup(addr,
+  is_instruction)`; the no-fill bit is **ID** for a fetch, **OD** for an operand).
+  `record_fetch_access` runs the lookup at the fetch site in program order (IF
+  before MA) but logs a miss's burst to a transient 2-entry fetch log, charged at
+  **end-of-step BEFORE the operand charges** (floor-safe ADD + correct bus order).
+  Two call sites: the main fetch in `step_instruction` (independent of the
+  host-side `fetch_data_` span) and the delay-slot fetch in `branch_delayed` (a
+  step's 2nd fetch). Gated on CE like operands, so CE=0 corpus vectors are
+  unperturbed (no save-state bump — fetch state is per-step transient). Validated:
+  ctest 108/108, sh2 126 cases, cycle corpus 41/41; new C++ test asserts the
+  miss→7×hit→new-line-miss pattern + metering-off bit-identical. (Cache-disabled
+  CE=0 fetch timing is intentionally not modeled — the 32X always runs CE=1.)
 - [ ] **Z7c** TW two-way + address/data-array coherence (only if a title needs it).
 
 ---
