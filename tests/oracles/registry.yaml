@@ -110,9 +110,33 @@ chips:
         provenance: in-tree Catch2 suite (SH7604 hardware manual-derived)
         pass_criteria: all assertions pass
         data_gated: false
-    # gap — risk R3 (MNE-CTX-PLAN-001 §15): no public conformance corpus.
-    # SH7604-manual-derived micro-vectors are scheduled P2+ authoring work;
-    # SH-2 chip ratification is blocked on that oracle floor, not on schedule.
+      - id: ORC-SH2-FN
+        ctest: mnemos_chips_cpu_sh2_conformance_test
+        kind: conformance
+        provenance: >
+          public SH-4 (Reicast-generated) single-step corpus; FUNCTIONAL
+          (semantics) cross-check on the shared SH-2/SH-4 integer instructions
+          only -- the superscalar SH-4 cycle data is ignored (see
+          THIRD-PARTY-REFERENCES.md and ADR-0026).
+        pass_criteria: final state matches every vector (FPU / SH-4-only and
+          our-address-error cases excluded)
+        data_gated: true
+        data_env: MNEMOS_SH2_TESTS_DIR
+      - id: ORC-SH2-CYCLES
+        ctest: mnemos_chips_cpu_sh2_cycle_conformance_test
+        kind: conformance
+        provenance: >
+          SH7600 Programming Manual instruction states + load-use rule, SH7604
+          Hardware Manual bus/cache, 32X Hardware Manual CPU-access-timing table
+          (ADR-0026). Emu/Ymir are L5 advisory cross-checks only
+          (CONSTITUTION 2.3), never the source of an expected value.
+        pass_criteria: per-instruction cycle count and final state match every vector
+        data_gated: true
+        data_env: MNEMOS_SH2_CYCLE_TESTS_DIR
+    # SH-2 cycle-timing authority = official docs (ADR-0026): SH7600/SH7604 +
+    # the 32X access-timing table, encoded into the data-gated ORC-SH2-CYCLES
+    # corpus. The functional ORC-SH2-FN corpus (PR #131) covers semantics only;
+    # the old "no conformance corpus" gap (risk R3) is closed by these two.
 
   nec.v30:
     module: src/chips/cpu/v30
