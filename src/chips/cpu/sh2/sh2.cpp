@@ -1726,7 +1726,15 @@ namespace mnemos::chips::cpu {
         macl_ = values.macl;
     }
 
+    // sh2 save-state format version. v1 = the original flat layout (no marker);
+    // v2 prepends this marker and appends the X2 load-use interlock state.
+    constexpr std::uint32_t sh2_save_state_version = 2U;
+
     void sh2::save_state(state_writer& writer) const {
+        // sh2 state-format version. v2 adds the X2 load-use interlock state so a
+        // snapshot taken between a load and its consumer reloads with identical
+        // timing (the timing models are opt-in; under them this state is live).
+        writer.u32(sh2_save_state_version);
         for (const std::uint32_t v : r_) {
             writer.u32(v);
         }
@@ -1743,10 +1751,16 @@ namespace mnemos::chips::cpu {
         writer.u32(static_cast<std::uint32_t>(pending_irq_vector_));
         writer.u32(static_cast<std::uint32_t>(interrupt_inhibit_));
         writer.u32(sleeping_ ? 1U : 0U);
+        // X2 load-use interlock: pending_load_reg_ (-1 = none) + the SR/T variant,
+        // the only cross-instruction timing state. last_exec_op_ is recomputed each
+        // step (overwritten before it is read), so it needs no serialization.
+        writer.u32(static_cast<std::uint32_t>(pending_load_reg_));
+        writer.u32(pending_load_t_ ? 1U : 0U);
         peripherals_.save_state(writer);
     }
 
     void sh2::load_state(state_reader& reader) {
+        const std::uint32_t version = reader.u32();
         for (std::uint32_t& v : r_) {
             v = reader.u32();
         }
@@ -1763,6 +1777,10 @@ namespace mnemos::chips::cpu {
         pending_irq_vector_ = static_cast<std::uint8_t>(reader.u32());
         interrupt_inhibit_ = static_cast<int>(reader.u32());
         sleeping_ = reader.u32() != 0U;
+        if (version >= 2U) {
+            pending_load_reg_ = static_cast<int>(reader.u32());
+            pending_load_t_ = reader.u32() != 0U;
+        }
         peripherals_.load_state(reader);
     }
 

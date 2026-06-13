@@ -154,6 +154,34 @@ TEST_CASE("sh2 round-trips its state") {
     CHECK(restored.cpu_registers().pc == 0x1002U);
 }
 
+TEST_CASE("sh2 X2 load-use interlock state survives a save/load round-trip") {
+    // A memory load arms the load-use producer; a snapshot taken between the load
+    // and its consumer must reload so the consumer still pays the +1 stall.
+    machine m;
+    m.cpu.set_load_use_interlock(true);
+    m.set_pc(0x1000U);
+    auto regs = m.cpu.cpu_registers();
+    regs.r[2] = 0x3000U;
+    m.cpu.set_registers(regs);
+    m.w32(0x3000U, 0x12345678U);
+    m.load(0x1000U, {0x6022U}); // MOV.L @R2,R0 -- loads R0, arms the interlock
+    CHECK(m.cpu.step_instruction() == 1);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    m.cpu.save_state(writer);
+
+    machine m2;
+    m2.cpu.set_load_use_interlock(true);
+    mnemos::chips::state_reader reader(blob);
+    m2.cpu.load_state(reader);
+    REQUIRE(reader.ok());
+    // ADD R0,R1 reads the just-loaded R0, so it pays the +1 load-use stall (base
+    // 1 + 1 = 2) only if pending_load_reg_ survived the round-trip.
+    m2.load(0x1002U, {0x310CU}); // ADD R0,R1 at the restored PC
+    CHECK(m2.cpu.step_instruction() == 2);
+}
+
 TEST_CASE("sh2 register ALU: ADD/SUB/NEG") {
     machine m;
     m.set_pc(0x1000U);
