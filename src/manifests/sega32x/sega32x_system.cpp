@@ -795,15 +795,28 @@ namespace mnemos::manifests::sega32x {
             in_range(address, 0x40000000U + comm_offset,
                      static_cast<std::uint32_t>(comm_words * 2U));
 
-        if (!shared_sdram && !shared_framebuffer && !shared_comm) {
+        // 32X VDP register window ($4100 in each partition; $40000100 in the
+        // direct $40000000 block). Constant 5-wait region (32X HW manual sec 4.4).
+        const bool shared_vdp =
+            in_partitioned_range(address, p0_bases, vdp_reg_base,
+                                 static_cast<std::uint32_t>(vdp_reg_size)) ||
+            in_partitioned_range(address, p1_bases, vdp_reg_base,
+                                 static_cast<std::uint32_t>(vdp_reg_size)) ||
+            in_range(address, 0x40000100U, static_cast<std::uint32_t>(vdp_reg_size));
+
+        if (!shared_sdram && !shared_framebuffer && !shared_comm && !shared_vdp) {
             return 0;
         }
 
-        // Reserve a bus slot: a locked RMW (TAS) holds it for the full lock
-        // window; an ordinary access holds it one beat for byte/word and two for
-        // a longword. wait = own beats + however long the slot was already held.
+        // Per-access wait states (32X HW manual sec 4.4), charged on top of the
+        // instruction's base MA. A locked RMW (TAS) holds the slot for its full
+        // lock window. VDP regs are a constant 5 wait/word; COMM/SDRAM/FB stay
+        // 1/word here -- accurate SDRAM/FB read vs write timing (2/word write,
+        // 8-word-burst read) is the next, cache-coupled increment (ADR-0026; see
+        // docs/sh2-cycle-ledger.md). Long (4B) = two word cycles on the 16-bit bus.
+        const int words = (bytes >= 4U) ? 2 : 1;
         const auto beats = static_cast<std::uint64_t>(locked ? shared_tas_bus_lock_wait_cycles
-                                                             : (bytes >= 4U ? 2 : 1));
+                                                             : (shared_vdp ? 5 : 1) * words);
         const std::uint64_t start =
             master ? master_cpu.elapsed_cycles() : slave_cpu.elapsed_cycles();
         const std::uint64_t grant = std::max(start, shared_bus_lock_until);
