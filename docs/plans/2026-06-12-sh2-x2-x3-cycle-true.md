@@ -142,11 +142,44 @@ SDRAM read is cache-coupled → folds into **Z5b/Z7**.
   contention corpus green. Multi-master (68K/VDP) scoped + logged, not silently capped.
   **PR: "sh2(X3b): SH-2↔SH-2 + DMAC contention".**
 
-### Increment Z7: cache (hit AND miss)
-- [ ] Z7.1 Model CCR/LRU/direct-array/purge + **miss/fill timing** (the 32X SDRAM
-  model is built around 8-word miss fills — hit-only is NOT enough for default-on);
-  cache state in save/load. Vectors clear/serialize/prime cache per case.
-- [ ] Z7.2 Cache corpus green. **PR: "sh2: SH7604 cache timing + state".**
+### Increment Z7: SH7604 cache timing (Codex-validated, sourced; split Z7a-c)
+
+**Premise (Codex, resolved):** the 32X boot ROM purges + enables the cache (4-way,
+`CCR=#$11`) and leaves it on, so SDRAM *is* cached — a real hit/miss model is
+needed, NOT "SDRAM read = always 12". The `sh2.cpp:23` cache-as-RAM comment is too
+broad (the `$C0000000` data-array scratch is separate, already real RAM).
+
+**Authoritative CCR (`$FFFFFE92`), SH7604 HW manual Table 8.1 / §8.3
+(`build/scratch/SH7604_Hardware_Manual.txt`):** bit0 CE (enable), bit1 ID
+(instruction *replacement*-disable — hits still work), bit2 OD (data
+replacement-disable — hits still work), bit3 TW (two-way: ways 2-3 cache, ways
+0-1 = 2 KB RAM), bit4 CP (purge — zeroes entries/valid/LRU, self-clears, reads 0),
+bits6-7 W1/W0 (way for direct array access). Partitions (A31-29): `000` cache area
+(cached iff CE=1), `001` cache-through (never cached), `010` associative-purge.
+
+**Design (timing-only shadow):** the SH-2 owns a per-CPU shadow (64 sets × 4 ways,
+16-byte lines: valid + tag + LRU); it predicts hit/miss only — data still comes
+from the bus (correctness unchanged; documented timing-only). Seam (Codex): an
+operand read to a cacheable address with CE=1 does a shadow lookup; a **hit is not
+recorded** (no shared-bus access → no wait, no contention); a **miss is recorded**
+(the board charges the SDRAM 8-word-burst line fill = 12, flat) and fills the
+shadow (LRU evict) unless OD=1. Cache-through and CE=0 always record (always burst,
+no shadow touch / no fill). Writes stay write-through, no-write-allocate (the b2
+2/word always applies; a write never fills, only touches LRU on a hit). A `CP`
+write purges the shadow + self-clears. Do NOT reuse `p0_bases` for `$C0000000`
+(it is the data-array partition; the hpp also treats it as a general mirror).
+
+- [x] **Z7-pre** save-state versioning (v2) + serialize the load-use state (PR #144)
+  — the prerequisite so cache-shadow state serializes (v3) without piling more
+  untracked timing history onto an unversioned format.
+- [ ] **Z7a** operand-read shadow: CCR CE/OD/CP side-effects + the partition
+  classifier + tag/LRU shadow + record-gate-on-miss + board SDRAM-read-miss = 12 +
+  cache-through always-burst + serialize the shadow (v3) + vectors (miss=12,
+  repeat=hit=0, cache-through=12). Harness gains a `ccr` vector field to set CE.
+- [ ] **Z7b** instruction-fetch cache timing on the same shadow (Codex: fetches
+  dominate loop timing; required before "Z7 done"/default-on). `fetch_slow`
+  records no fetch wait today.
+- [ ] **Z7c** TW two-way + address/data-array coherence (only if a title needs it).
 
 ---
 
