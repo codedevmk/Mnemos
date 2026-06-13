@@ -135,7 +135,8 @@ namespace {
                                       rg.at("wait").get<int>()});
                 }
                 cpu.set_bus_wait_callback(
-                    [ranges](std::uint32_t addr, std::uint8_t bytes, bool /*locked*/) -> int {
+                    [ranges](std::uint32_t addr, std::uint8_t bytes,
+                             mnemos::chips::cpu::data_access_kind /*kind*/) -> int {
                         const int words = (bytes >= 4U) ? 2 : 1;
                         for (const auto& rg : ranges) {
                             if (addr >= rg.start && addr < rg.start + rg.size) {

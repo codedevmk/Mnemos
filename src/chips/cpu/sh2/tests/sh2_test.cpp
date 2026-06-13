@@ -561,13 +561,14 @@ TEST_CASE("sh2 TAS.B adds board-provided locked bus wait states") {
     std::uint32_t seen_addr = 0U;
     std::uint8_t seen_bytes = 0U;
     bool seen_locked = false;
-    m.cpu.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t bytes, bool locked) {
-        ++calls;
-        seen_addr = address;
-        seen_bytes = bytes;
-        seen_locked = locked;
-        return 3;
-    });
+    m.cpu.set_bus_wait_callback(
+        [&](std::uint32_t address, std::uint8_t bytes, mnemos::chips::cpu::data_access_kind kind) {
+            ++calls;
+            seen_addr = address;
+            seen_bytes = bytes;
+            seen_locked = kind == mnemos::chips::cpu::data_access_kind::tas;
+            return 3;
+        });
 
     auto r = m.cpu.cpu_registers();
     r.r[1] = 0x3000U;
@@ -593,12 +594,13 @@ TEST_CASE("sh2 charges ordinary-access bus contention only when metering is enab
     int calls = 0;
     std::uint8_t seen_bytes = 0U;
     bool seen_locked = true;
-    m.cpu.set_bus_wait_callback([&](std::uint32_t, std::uint8_t bytes, bool locked) {
-        ++calls;
-        seen_bytes = bytes;
-        seen_locked = locked;
-        return 5;
-    });
+    m.cpu.set_bus_wait_callback(
+        [&](std::uint32_t, std::uint8_t bytes, mnemos::chips::cpu::data_access_kind kind) {
+            ++calls;
+            seen_bytes = bytes;
+            seen_locked = kind == mnemos::chips::cpu::data_access_kind::tas;
+            return 5;
+        });
     auto r = m.cpu.cpu_registers();
     r.r[1] = 0x3000U;
     r.pc = 0x1000U;
@@ -1961,18 +1963,19 @@ TEST_CASE("sh2_peripherals DMAC reports source and destination bus waits") {
         f.ram[0x1000U + i] = static_cast<std::uint8_t>(0xA0U + i);
     }
     int calls = 0;
-    f.p.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t bytes, bool locked) {
-        CHECK_FALSE(locked);
-        CHECK(bytes == 4U);
-        ++calls;
-        if (address == 0x1000U) {
-            return 2;
-        }
-        if (address == 0x2000U) {
-            return 3;
-        }
-        return 0;
-    });
+    f.p.set_bus_wait_callback(
+        [&](std::uint32_t address, std::uint8_t bytes, mnemos::chips::cpu::data_access_kind kind) {
+            CHECK_FALSE(kind == mnemos::chips::cpu::data_access_kind::tas);
+            CHECK(bytes == 4U);
+            ++calls;
+            if (address == 0x1000U) {
+                return 2;
+            }
+            if (address == 0x2000U) {
+                return 3;
+            }
+            return 0;
+        });
     f.w32reg(f.sar0, 0x00001000U);
     f.w32reg(f.dar0, 0x00002000U);
     f.w32reg(f.tcr0, 1U);
@@ -1997,17 +2000,18 @@ TEST_CASE("sh2 DMAC bus waits extend the owning CPU instruction") {
     write_peripheral32(m.cpu.peripherals(), dmac_fixture::tcr0, 1U);
     write_peripheral32(m.cpu.peripherals(), dmac_fixture::dmaor, 0x00000001U);
     write_peripheral32(m.cpu.peripherals(), dmac_fixture::chcr0, 0x4201U); // byte unit
-    m.cpu.set_bus_wait_callback([](std::uint32_t address, std::uint8_t bytes, bool locked) {
-        CHECK_FALSE(locked);
-        CHECK(bytes == 1U);
-        if (address == 0x2000U) {
-            return 2;
-        }
-        if (address == 0x3000U) {
-            return 3;
-        }
-        return 0;
-    });
+    m.cpu.set_bus_wait_callback(
+        [](std::uint32_t address, std::uint8_t bytes, mnemos::chips::cpu::data_access_kind kind) {
+            CHECK_FALSE(kind == mnemos::chips::cpu::data_access_kind::tas);
+            CHECK(bytes == 1U);
+            if (address == 0x2000U) {
+                return 2;
+            }
+            if (address == 0x3000U) {
+                return 3;
+            }
+            return 0;
+        });
 
     CHECK(m.cpu.step_instruction() == 6);
     CHECK(m.cpu.elapsed_cycles() == 6U);

@@ -770,10 +770,11 @@ namespace mnemos::manifests::sega32x {
     }
 
     int sega32x_system::shared_bus_wait(bool master, std::uint32_t address, std::uint8_t bytes,
-                                        bool locked) noexcept {
+                                        chips::cpu::data_access_kind kind) noexcept {
         // Locked TAS reservations always charge (the atomic-RMW bus lock is a
         // correctness mechanism); ordinary load/store contention is the opt-in X3
         // timing model (see bus_contention_enabled).
+        const bool locked = kind == chips::cpu::data_access_kind::tas;
         if (bytes == 0U || (!locked && !bus_contention_enabled())) {
             return 0;
         }
@@ -982,12 +983,12 @@ namespace mnemos::manifests::sega32x {
         s->slave_cpu.attach_bus(s->slave_bus);
 
         s->master_cpu.set_bus_wait_callback(
-            [s](std::uint32_t address, std::uint8_t bytes, bool locked) {
-                return s->shared_bus_wait(true, address, bytes, locked);
+            [s](std::uint32_t address, std::uint8_t bytes, chips::cpu::data_access_kind kind) {
+                return s->shared_bus_wait(true, address, bytes, kind);
             });
         s->slave_cpu.set_bus_wait_callback(
-            [s](std::uint32_t address, std::uint8_t bytes, bool locked) {
-                return s->shared_bus_wait(false, address, bytes, locked);
+            [s](std::uint32_t address, std::uint8_t bytes, chips::cpu::data_access_kind kind) {
+                return s->shared_bus_wait(false, address, bytes, kind);
             });
         // X3: enable ordinary-access contention metering on both cores only when
         // the opt-in model is on, so the default path keeps zero per-access cost.
