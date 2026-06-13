@@ -652,6 +652,127 @@ TEST_CASE("sh2 charges ordinary-access bus contention only when metering is enab
     }
 }
 
+TEST_CASE("sh2 X3 operand-cache shadow charges an SDRAM read only on a miss") {
+    // X3 cache shadow: with CCR.CE set, a cacheable read (A31-29 = 0) that misses
+    // forwards to the board (which charges the line-fill burst); a subsequent read
+    // of the same line hits and never calls the board. The shadow holds no data --
+    // it only predicts hit/miss for timing. Gated by metering; off it is inert.
+    using kind = mnemos::chips::cpu::data_access_kind;
+    machine m;
+    int read_calls = 0;
+    m.cpu.set_bus_wait_callback([&](std::uint32_t address, std::uint8_t, kind k) {
+        // Stand in for the board: only a cacheable SDRAM read pays a burst; the
+        // CCR store and anything else cost nothing here.
+        if (address == 0x3000U && k == kind::read) {
+            ++read_calls;
+            return 12;
+        }
+        return 0;
+    });
+    auto r = m.cpu.cpu_registers();
+    r.pc = 0x1000U;
+    r.r[0] = 0x01U;       // CCR = CE (cache enable, operand cache on)
+    r.r[1] = 0xFFFFFE92U; // CCR address
+    r.r[2] = 0x00003000U; // a cacheable data address
+    r.r[4] = 0x11U;       // CCR = CE | CP (purge)
+    m.cpu.set_registers(r);
+    m.w32(0x3000U, 0x12345678U);
+    m.load(0x1000U, {
+                        0x2100U, // MOV.B R0,@R1  -> CCR = R0
+                        0x6322U, // MOV.L @R2,R3  -> read #1
+                        0x6322U, // MOV.L @R2,R3  -> read #2
+                        0x2140U, // MOV.B R4,@R1  -> CCR = R4 (purge)
+                        0x6322U, // MOV.L @R2,R3  -> read #3
+                    });
+
+    SECTION("metering on, cache enabled: miss then hit") {
+        m.cpu.set_shared_contention_metering(true);
+        m.cpu.step_instruction();                  // CCR <- CE
+        CHECK(m.cpu.step_instruction() == 1 + 12); // read #1: miss -> burst
+        CHECK(read_calls == 1);
+        CHECK(m.cpu.step_instruction() == 1); // read #2: hit -> no bus access
+        CHECK(read_calls == 1);
+        CHECK(m.cpu.cpu_registers().r[3] == 0x12345678U); // data still correct
+    }
+
+    SECTION("metering on, cache disabled: every read misses") {
+        r.r[0] = 0x00U; // CCR cleared: CE off
+        m.cpu.set_registers(r);
+        m.cpu.set_shared_contention_metering(true);
+        m.cpu.step_instruction();                  // CCR <- 0
+        CHECK(m.cpu.step_instruction() == 1 + 12); // read #1: miss
+        CHECK(m.cpu.step_instruction() == 1 + 12); // read #2: still a miss (no caching)
+        CHECK(read_calls == 2);
+    }
+
+    SECTION("CP purge forces the next read to miss again") {
+        m.cpu.set_shared_contention_metering(true);
+        m.cpu.step_instruction(); // CCR <- CE
+        m.cpu.step_instruction(); // read #1: miss (fills the line)
+        m.cpu.step_instruction(); // read #2: hit
+        CHECK(read_calls == 1);
+        m.cpu.step_instruction();                  // CCR <- CE | CP: purge
+        CHECK(m.cpu.step_instruction() == 1 + 12); // read #3: miss after purge
+        CHECK(read_calls == 2);
+    }
+
+    SECTION("metering off (default): reads are neither cached nor metered") {
+        m.cpu.step_instruction();             // CCR store routes to the register file
+        CHECK(m.cpu.step_instruction() == 1); // read #1: no metering, base cycle only
+        CHECK(m.cpu.step_instruction() == 1); // read #2: identical
+        CHECK(read_calls == 0);
+    }
+}
+
+TEST_CASE("sh2 X3 operand-cache shadow survives a save/load round-trip") {
+    // The shadow is history-dependent (a loaded line predicts a later hit), so a
+    // snapshot must carry it: after restoring a state taken with a line resident,
+    // the read hits without calling the board.
+    using kind = mnemos::chips::cpu::data_access_kind;
+    const auto build = [](machine& m, int& read_calls) {
+        m.cpu.set_bus_wait_callback([&read_calls](std::uint32_t address, std::uint8_t, kind k) {
+            if (address == 0x3000U && k == kind::read) {
+                ++read_calls;
+                return 12;
+            }
+            return 0;
+        });
+        m.cpu.set_shared_contention_metering(true);
+        auto r = m.cpu.cpu_registers();
+        r.pc = 0x1000U;
+        r.r[0] = 0x01U;
+        r.r[1] = 0xFFFFFE92U;
+        r.r[2] = 0x00003000U;
+        m.cpu.set_registers(r);
+        m.w32(0x3000U, 0x12345678U);
+        m.load(0x1000U, {0x2100U, 0x6322U, 0x6322U}); // CCR<-CE ; read ; read
+    };
+
+    machine m;
+    int calls = 0;
+    build(m, calls);
+    m.cpu.step_instruction(); // CCR <- CE
+    m.cpu.step_instruction(); // read #1: miss, fills the line
+    CHECK(calls == 1);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    m.cpu.save_state(writer);
+
+    machine m2;
+    int calls2 = 0;
+    build(m2, calls2);
+    mnemos::chips::state_reader reader(blob);
+    m2.cpu.load_state(reader);
+    CHECK(reader.ok());
+
+    // The restored CPU resumes at read #2 with the line resident -> a hit.
+    auto r2 = m2.cpu.cpu_registers();
+    CHECK(r2.pc == 0x1004U);
+    CHECK(m2.cpu.step_instruction() == 1); // hit: no board call
+    CHECK(calls2 == 0);
+}
+
 TEST_CASE("sh2 load-use interlock adds one cycle when the next op reads the loaded reg") {
     // X2: MOV.L @R1,R2 loads R2; the instruction that follows pays +1 cycle iff
     // it reads R2 as a source (and is not exempt).

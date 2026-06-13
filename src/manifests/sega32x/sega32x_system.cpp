@@ -812,22 +812,27 @@ namespace mnemos::manifests::sega32x {
         // Per-access wait states (32X HW manual sec 4.4), charged on top of the
         // instruction's base MA; a locked RMW (TAS) holds the slot for its full
         // lock window. VDP regs = 5 wait/word; SDRAM WRITE = 2 wait/word. SDRAM
-        // READ is cache-coupled (12 clock/8-word burst on a fill, ~0 on a hit) and
-        // FB read (5-12) / cart (6-15) / palette are condition-dependent ranges --
-        // all left at 1/word here, deferred to the cache phase (Z7) and the range
-        // scoreboard (ADR-0026; docs/sh2-cycle-ledger.md). Long (4B) = two 16-bit
-        // bus cycles, so the per-word cost doubles.
+        // READ is cache-coupled = a 12-clock / 8-word line-fill burst; the SH-2
+        // operand-cache shadow only forwards reads that MISS (or non-cacheable /
+        // cache-through reads), so every SDRAM read that reaches here pays the
+        // full burst (a hit costs nothing and never calls in). FB read (5-12) /
+        // cart (6-15) / palette are condition-dependent ranges, left at 1/word and
+        // deferred to the range scoreboard (ADR-0026; docs/sh2-cycle-ledger.md).
+        // Long (4B) = two 16-bit bus cycles, so the per-word cost doubles.
         const int words = (bytes >= 4U) ? 2 : 1;
         const bool is_write = kind == chips::cpu::data_access_kind::write ||
                               kind == chips::cpu::data_access_kind::rmw;
-        int per_word = 1;
-        if (shared_vdp) {
-            per_word = 5;
+        int access_beats = words; // 1/word baseline (COMM, FB, cart, ...)
+        if (locked) {
+            access_beats = shared_tas_bus_lock_wait_cycles;
+        } else if (shared_vdp) {
+            access_beats = 5 * words;
         } else if (shared_sdram && is_write) {
-            per_word = 2;
+            access_beats = 2 * words;
+        } else if (shared_sdram) {
+            access_beats = sdram_read_burst_cycles; // flat line-fill burst
         }
-        const auto beats =
-            static_cast<std::uint64_t>(locked ? shared_tas_bus_lock_wait_cycles : per_word * words);
+        const auto beats = static_cast<std::uint64_t>(access_beats);
         const std::uint64_t start =
             master ? master_cpu.elapsed_cycles() : slave_cpu.elapsed_cycles();
         const std::uint64_t grant = std::max(start, shared_bus_lock_until);
