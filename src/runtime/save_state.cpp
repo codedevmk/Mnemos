@@ -81,10 +81,18 @@ namespace mnemos::runtime {
         for (const save_memory& sm : target.memory) {
             write_chunk(bw, sm.id, 1U, std::span<const std::uint8_t>(sm.bytes));
         }
+        for (const save_component& sc : target.components) {
+            std::vector<std::uint8_t> chunk;
+            chips::state_writer cw(chunk);
+            if (sc.save) {
+                sc.save(cw);
+            }
+            write_chunk(bw, sc.id, 1U, chunk);
+        }
 
         const std::vector<std::uint8_t> compressed = zstd_compress(body);
-        const auto chunk_count =
-            static_cast<std::uint32_t>(target.chips.size() + target.memory.size());
+        const auto chunk_count = static_cast<std::uint32_t>(
+            target.chips.size() + target.memory.size() + target.components.size());
 
         std::vector<std::uint8_t> out;
         out.insert(out.end(), magic.begin(), magic.end());
@@ -166,7 +174,9 @@ namespace mnemos::runtime {
             br.bytes(chunk);
             const std::string chunk_id(chunk_id_bytes.begin(), chunk_id_bytes.end());
 
-            // Dispatch to the matching chip or memory region; skip unknown chunks.
+            // Dispatch to the matching chip, memory region, or component; skip
+            // unknown chunks (forward compatibility). Ids are unique across the
+            // three sets, so the first match wins.
             bool handled = false;
             for (const save_chip& sc : target.chips) {
                 if (sc.id == chunk_id && sc.chip != nullptr) {
@@ -183,6 +193,19 @@ namespace mnemos::runtime {
                         if (n > 0U) {
                             std::memcpy(sm.bytes.data(), chunk.data(), n);
                         }
+                        handled = true;
+                        break;
+                    }
+                }
+            }
+            if (!handled) {
+                for (const save_component& sc : target.components) {
+                    if (sc.id == chunk_id) {
+                        if (sc.load) {
+                            chips::state_reader cr(chunk);
+                            sc.load(cr);
+                        }
+                        handled = true;
                         break;
                     }
                 }

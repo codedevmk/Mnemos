@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "state.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -51,6 +52,14 @@ namespace mnemos::runtime {
 
         // Advance `count` whole frames.
         void run_frames(std::uint64_t count);
+
+        // Serialise the pacing state (master cycle + per-chip accumulators) so a
+        // save/restore resumes at the exact sub-divider phase. The chip set and
+        // dividers are fixed at construction and recomputed there, so only the
+        // mutable counters are stored. load_state fails (state_reader::fail) if the
+        // accumulator count does not match this scheduler's chip set.
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
 
         [[nodiscard]] std::uint64_t master_cycle() const noexcept { return master_cycle_; }
         [[nodiscard]] std::uint64_t frame_index() const noexcept;

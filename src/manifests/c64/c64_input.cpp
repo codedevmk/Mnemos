@@ -47,6 +47,22 @@ namespace mnemos::manifests::c64 {
         return static_cast<std::uint8_t>(rows & ~joy1_); // joystick 1 overlays PRB 0-4
     }
 
+    void c64_input::save_state(chips::state_writer& writer) const {
+        writer.bytes(std::span<const std::uint8_t>(matrix_));
+        writer.u8(joy1_);
+        writer.u8(joy2_);
+        writer.bytes(std::span<const std::uint8_t>(paddle_x_));
+        writer.bytes(std::span<const std::uint8_t>(paddle_y_));
+    }
+
+    void c64_input::load_state(chips::state_reader& reader) {
+        reader.bytes(std::span<std::uint8_t>(matrix_));
+        joy1_ = reader.u8();
+        joy2_ = reader.u8();
+        reader.bytes(std::span<std::uint8_t>(paddle_x_));
+        reader.bytes(std::span<std::uint8_t>(paddle_y_));
+    }
+
     std::uint8_t c64_input::read_columns(std::uint8_t row_strobe) const noexcept {
         std::uint8_t columns = 0xFFU;
         for (std::uint8_t column = 0; column < 8U; ++column) {

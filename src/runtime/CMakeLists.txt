@@ -21,6 +21,7 @@ add_library(
     scheduler.cpp
     input.cpp
     save_state.cpp
+    machine_save.cpp
     rewind.cpp
 )
 add_library(mnemos::runtime ALIAS mnemos_runtime)
@@ -65,5 +66,15 @@ if(BUILD_TESTING)
             tests/save_state_test.cpp
             tests/rewind_test.cpp
         LIBRARIES mnemos::runtime
+    )
+
+    # Whole-machine save/load/rewind/input determinism, exercised end-to-end on a
+    # real C64 built through the manifest path (tier 4, linked test-only -- a
+    # downward dependency). No ROM is required or committed: the machine evolves
+    # deterministically from reset with zero-filled system images.
+    mnemos_add_test(
+        mnemos_runtime_c64_save_state_test
+        SOURCES tests/c64_save_state_roundtrip_test.cpp
+        LIBRARIES mnemos::runtime mnemos::manifests::c64
     )
 endif()

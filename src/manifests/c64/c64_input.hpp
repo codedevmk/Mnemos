@@ -1,5 +1,7 @@
 #pragma once
 
+#include "state.hpp" // chips::state_writer / state_reader
+
 #include <array>
 #include <cstdint>
 
@@ -53,6 +55,12 @@ namespace mnemos::manifests::c64 {
         // fold in the matching joystick.
         [[nodiscard]] std::uint8_t read_rows(std::uint8_t column_strobe) const noexcept;
         [[nodiscard]] std::uint8_t read_columns(std::uint8_t row_strobe) const noexcept;
+
+        // Save-state: the keyboard matrix, joystick overlays, and paddle positions.
+        // This state lives outside the chip set (the CIA1 read callbacks close over
+        // it), so a whole-machine save must capture it explicitly.
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
 
       private:
         std::array<std::uint8_t, 8> matrix_{};   // matrix_[column] bit `row` = pressed

@@ -114,4 +114,25 @@ namespace mnemos::runtime {
         }
     }
 
+    void scheduler::save_state(chips::state_writer& writer) const {
+        writer.u64(master_cycle_);
+        writer.u32(static_cast<std::uint32_t>(accumulator_.size()));
+        for (const std::uint32_t accumulator : accumulator_) {
+            writer.u32(accumulator);
+        }
+    }
+
+    void scheduler::load_state(chips::state_reader& reader) {
+        const std::uint64_t master_cycle = reader.u64();
+        const std::uint32_t count = reader.u32();
+        if (!reader.ok() || count != accumulator_.size()) {
+            reader.fail();
+            return;
+        }
+        master_cycle_ = master_cycle;
+        for (std::uint32_t& accumulator : accumulator_) {
+            accumulator = reader.u32();
+        }
+    }
+
 } // namespace mnemos::runtime
