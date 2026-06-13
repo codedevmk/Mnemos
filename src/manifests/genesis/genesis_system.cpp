@@ -1,6 +1,7 @@
 #include "genesis_system.hpp"
 
 #include "genesis_region.hpp" // parse_market (cart territory for $A10001)
+#include "state.hpp"          // state_writer / state_reader (G7 system save/load)
 
 #include "mk1653.hpp" // default controller-port peripheral
 
@@ -80,6 +81,55 @@ namespace mnemos::manifests::genesis {
                 }
             }
         }
+    }
+
+    namespace {
+        // Genesis system-state (non-chip) format version. Bump when the layout
+        // below changes; load rejects an unknown version via reader.fail().
+        constexpr std::uint32_t genesis_system_state_version = 1U;
+    } // namespace
+
+    void genesis_system::save_state(chips::state_writer& writer) const {
+        writer.u32(genesis_system_state_version);
+        writer.u8(version_register);
+        writer.bytes(io_regs);
+        writer.u8(vdp_write_high);
+        writer.u8(vdp_read_low);
+        writer.boolean(z80_bus_requested);
+        writer.boolean(z80_reset_released);
+        writer.u16(z80_bank);
+        // Cartridge mapper control latches (the bytes/SRAM contents ride the
+        // machine-save memory chunks; only the routing-control state is here).
+        writer.boolean(sram.enabled);
+        writer.boolean(sram.write_protect);
+        writer.boolean(banking.active);
+        writer.bytes(banking.bank);
+        writer.boolean(eeprom.scl);
+        writer.boolean(eeprom.sda);
+        // z80_running is derived (reset released AND bus not requested), so it is
+        // reconstructed on load rather than serialized.
+    }
+
+    void genesis_system::load_state(chips::state_reader& reader) {
+        if (reader.u32() != genesis_system_state_version) {
+            reader.fail(); // unknown layout; leave the system at its assembled state
+            return;
+        }
+        version_register = reader.u8();
+        reader.bytes(io_regs);
+        vdp_write_high = reader.u8();
+        vdp_read_low = reader.u8();
+        z80_bus_requested = reader.boolean();
+        z80_reset_released = reader.boolean();
+        z80_bank = reader.u16();
+        sram.enabled = reader.boolean();
+        sram.write_protect = reader.boolean();
+        banking.active = reader.boolean();
+        reader.bytes(banking.bank);
+        eeprom.scl = reader.boolean();
+        eeprom.sda = reader.boolean();
+        // Reconstruct the derived Z80 run gate (the gated_chip reads it live).
+        z80_running = z80_reset_released && !z80_bus_requested;
     }
 
     std::unique_ptr<genesis_system> assemble_genesis(std::vector<std::uint8_t> rom,

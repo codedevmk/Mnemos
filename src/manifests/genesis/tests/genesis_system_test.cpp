@@ -1,5 +1,7 @@
 #include "genesis_system.hpp"
 
+#include "state.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -266,4 +268,69 @@ TEST_CASE("genesis z80 v-int ticks a slow handler exactly once per frame") {
     // frame_index without a pulse; every later entry pulses exactly once.
     CHECK(sys->frame_index >= 2U);
     CHECK(static_cast<unsigned>(sys->z80_ram[0x1F00]) == sys->frame_index - 1U);
+}
+
+TEST_CASE("genesis_system round-trips its non-chip state (G7)") {
+    auto sys = assemble_genesis(make_rom());
+
+    // Perturb every serialized non-chip latch away from its assembled default.
+    sys->version_register = 0xA5U;
+    sys->io_regs[3] = 0x42U; // a controller data-port latch
+    sys->io_regs[9] = 0x40U; // a control-direction latch
+    sys->vdp_write_high = 0x3CU;
+    sys->vdp_read_low = 0x5AU;
+    sys->z80_bus_requested = false;
+    sys->z80_reset_released = true; // -> z80_running should reconstruct to true
+    sys->z80_bank = 0x0153U;
+    sys->sram.enabled = true;
+    sys->sram.write_protect = true;
+    sys->banking.active = true;
+    sys->banking.bank[3] = 0x04U;
+    sys->banking.bank[7] = 0x09U;
+    sys->eeprom.scl = false;
+    sys->eeprom.sda = false;
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    // Restore into a fresh system assembled from the SAME cartridge.
+    auto restored = assemble_genesis(make_rom());
+    mnemos::chips::state_reader reader(blob);
+    restored->load_state(reader);
+    CHECK(reader.ok());
+
+    CHECK(restored->version_register == 0xA5U);
+    CHECK(restored->io_regs[3] == 0x42U);
+    CHECK(restored->io_regs[9] == 0x40U);
+    CHECK(restored->vdp_write_high == 0x3CU);
+    CHECK(restored->vdp_read_low == 0x5AU);
+    CHECK_FALSE(restored->z80_bus_requested);
+    CHECK(restored->z80_reset_released);
+    CHECK(restored->z80_running); // derived: released && !requested
+    CHECK(restored->z80_bank == 0x0153U);
+    CHECK(restored->sram.enabled);
+    CHECK(restored->sram.write_protect);
+    CHECK(restored->banking.active);
+    CHECK(restored->banking.bank[3] == 0x04U);
+    CHECK(restored->banking.bank[7] == 0x09U);
+    CHECK_FALSE(restored->eeprom.scl);
+    CHECK_FALSE(restored->eeprom.sda);
+
+    // The mapper control latches drive live bus closures, so the restored system
+    // routes accordingly with no re-wiring: $A130F1 reads back the SRAM-enable bit.
+    CHECK((restored->bus.read8(0xA130F1U) & 1U) == 1U);
+}
+
+TEST_CASE("genesis_system load rejects an unknown state version (G7)") {
+    auto sys = assemble_genesis(make_rom());
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+    blob[0] = 0xFFU; // corrupt the little-endian version marker's low byte
+
+    auto restored = assemble_genesis(make_rom());
+    mnemos::chips::state_reader reader(blob);
+    restored->load_state(reader);
+    CHECK_FALSE(reader.ok()); // load_state called reader.fail()
 }

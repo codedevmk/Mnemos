@@ -159,6 +159,17 @@ namespace mnemos::manifests::genesis {
         // layer (the 32X machine) can re-wire the callback to its own wrapper and
         // still invoke the stock behaviour.
         void on_vblank(bool in_vblank);
+
+        // System-level (non-chip) save/load (G7): the architectural state that
+        // lives on the board rather than in a chip -- the I/O sub-controller
+        // registers, the VDP word-access latches, the Z80 bus-arbitration lines +
+        // bank window, and the cartridge mapper control latches (SRAM enable/WP,
+        // SSF2 banks, EEPROM pins). The 5 chips + the work/Z80 RAM + SRAM bytes are
+        // serialized separately by the machine-save path. Loading into a system
+        // assembled from the SAME cartridge needs no bus re-wiring: every MMIO
+        // closure reads these fields live, so restoring them is sufficient.
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
     };
 
     // 68000 boots from the ROM's reset vectors ($0 SSP, $4 PC). The caller is
