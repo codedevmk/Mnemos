@@ -248,6 +248,21 @@ namespace mnemos::chips::cpu {
             }
         }
 
+        // A store re-tags the access require_*_data_access just logged for this
+        // address as a write, so the board charges write-specific region timing
+        // (e.g. SDRAM 2 cycles/word vs a read). Address-matched: it never re-tags
+        // an unrelated prior access (a TAS isn't logged; an exception push targets
+        // a different address). No call-site tagging needed -- wr8/16/32 call this.
+        void note_write_access(std::uint32_t address) noexcept {
+            if (shared_access_count_ <= 0) {
+                return;
+            }
+            shared_access& a = shared_accesses_[static_cast<std::size_t>(shared_access_count_ - 1)];
+            if (a.address == address && a.kind == data_access_kind::read) {
+                a.kind = data_access_kind::write;
+            }
+        }
+
         // ---- exceptions + interrupts ----
         // Push SR then PC to @-R15 and vector through VBR + vector*4.
         void raise_exception(std::uint8_t vector, std::uint32_t saved_pc);

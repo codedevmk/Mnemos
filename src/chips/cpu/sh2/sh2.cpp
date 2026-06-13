@@ -234,6 +234,7 @@ namespace mnemos::chips::cpu {
         return bus_ != nullptr ? bus_->read8(a) : 0xFFU;
     }
     void sh2::wr8(std::uint32_t a, std::uint8_t v) noexcept {
+        note_write_access(a);
         if (sh2_peripherals::in_window(a)) {
             peripherals_.write8(a, v);
             return;
@@ -259,6 +260,7 @@ namespace mnemos::chips::cpu {
         return bus_->read16_be(a);
     }
     void sh2::wr16(std::uint32_t a, std::uint16_t v) noexcept {
+        note_write_access(a);
         const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 1U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
@@ -297,6 +299,7 @@ namespace mnemos::chips::cpu {
         return bus_->read32_be(a);
     }
     void sh2::wr32(std::uint32_t a, std::uint32_t v) noexcept {
+        note_write_access(a);
         const bool onchip = sh2_peripherals::in_window(a) || sh2_peripherals::in_window(a + 3U);
         if (onchip || bus_ == nullptr) {
             if (onchip) {
