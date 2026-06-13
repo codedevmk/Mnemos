@@ -53,6 +53,14 @@
       "ctest": "mnemos_chips_video_irem_m72_video_test",
       "high_water": "passed"
     },
+    "ORC-SH2-CYCLES": {
+      "ctest": "mnemos_chips_cpu_sh2_cycle_conformance_test",
+      "high_water": "skipped"
+    },
+    "ORC-SH2-FN": {
+      "ctest": "mnemos_chips_cpu_sh2_conformance_test",
+      "high_water": "skipped"
+    },
     "ORC-SMS-PARITY": {
       "ctest": "mnemos_manifests_sms_manifest_parity_test",
       "high_water": "skipped"
