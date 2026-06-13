@@ -46,7 +46,13 @@ Current implementation (pre-X2/X3-default) and the rules every increment keeps:
    `account_cycles` floor swallowing it (the PR #133 hazard), but the offset above
    models *when* the access happens.
 5. **Contention tie-breaks (X3).** Deterministic: master SH-2 before slave, then
-   same-owner DMAC. Fixed, tested, never time-of-day.
+   same-owner DMAC. Fixed, tested, never time-of-day. **Z6 shipped:** reservation
+   is **per resource** (SDRAM / frame buffer / VDP regs / COMM are physically
+   distinct blocks, so they don't falsely serialize); both SH-2s + their DMACs
+   arbitrate through one path; cross-CPU ties resolve by the scheduler's fixed order
+   (master first; a CPU's instruction accesses before its own DMAC). The 68000 and
+   32X VDP as bus masters are out of scope (logged, not silently capped); the
+   intra-instruction MA offset is not modelled (a documented simplification).
 6. **Cache (Z7).** Hit vs miss/fill timing per the SH7604 cache; cache state is
    part of save/load. Hit-only is NOT a valid default-on state (the 32X SDRAM
    model is built around 8-word miss fills). **Z7a shipped:** the SH-2 owns CCR
