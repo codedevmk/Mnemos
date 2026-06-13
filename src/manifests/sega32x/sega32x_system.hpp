@@ -42,6 +42,10 @@ namespace mnemos::manifests::sega32x {
     inline constexpr std::uint32_t vdp_pal_base = 0x00004200U; // 32X VDP palette CRAM
     inline constexpr std::uint32_t vdp_pal_size = 0x200U;
     inline constexpr int shared_tas_bus_lock_wait_cycles = 2;
+    // SDRAM read = a 12-clock / 8-word burst that fills one 16-byte cache line
+    // (32X HW manual sec 4.4). Charged flat per read that reaches the bus (a cache
+    // hit never does); see sega32x_system::shared_bus_wait and the SH-2 shadow.
+    inline constexpr int sdram_read_burst_cycles = 12;
 
     // Partition bases. p0: cached + cacheable alias + shadow (boot ROM at $0);
     // p1: cache-through views (cart at $0, the M_BIOS reads the header via

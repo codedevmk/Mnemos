@@ -227,6 +227,11 @@ namespace mnemos::chips::cpu {
     // The on-chip peripheral window ($FFFFFE00..) is CPU-internal: intercept it
     // before the external bus so each core keeps its own peripheral state.
     std::uint8_t sh2::rd8(std::uint32_t a) noexcept {
+        // X3 cache shadow owns CCR (the SH-2's own register) while metering; the
+        // default path leaves it in the peripheral register file (bit-identical).
+        if (meter_shared_contention_ && a == cache_ccr_address) {
+            return ccr_;
+        }
         if (sh2_peripherals::in_window(a)) {
             account_onchip_access_wait(a, true);
             return peripherals_.read8(a);
@@ -235,6 +240,10 @@ namespace mnemos::chips::cpu {
     }
     void sh2::wr8(std::uint32_t a, std::uint8_t v) noexcept {
         note_write_access(a);
+        if (meter_shared_contention_ && a == cache_ccr_address) {
+            cache_write_ccr(v);
+            return;
+        }
         if (sh2_peripherals::in_window(a)) {
             peripherals_.write8(a, v);
             return;
@@ -1364,6 +1373,57 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    bool sh2::cache_operand_lookup(std::uint32_t address) noexcept {
+        // SH7604 cache geometry: 64 sets x 4 ways x 16-byte lines. The set index
+        // is A9-A4 and the tag is A28-A10 (A31-29 = 0 selects the cacheable area;
+        // the caller already gated on that). LRU is a per-set MRU->LRU way order.
+        const std::size_t set = (address >> 4U) & (cache_sets - 1U);
+        const std::uint32_t tag = (address >> 10U) & 0x7FFFFU;
+        auto& order = cache_order_[set];
+        const std::size_t base = set * cache_ways;
+        const auto promote = [&order](std::size_t rank) noexcept {
+            const std::uint8_t way = order[rank];
+            for (std::size_t i = rank; i > 0U; --i) {
+                order[i] = order[i - 1U];
+            }
+            order[0] = way; // move-to-front: most-recently-used
+        };
+        for (std::size_t rank = 0U; rank < cache_ways; ++rank) {
+            const std::size_t way = order[rank];
+            if (cache_valid_[base + way] && cache_tag_[base + way] == tag) {
+                promote(rank);
+                return true; // hit: the line is resident, no SDRAM burst
+            }
+        }
+        // Miss: fill the least-recently-used way (the back of the order) unless the
+        // operand cache is disabled (OD=1), in which case no line is allocated.
+        if ((ccr_ & ccr_od) == 0U) {
+            const std::size_t victim = order[cache_ways - 1U];
+            cache_tag_[base + victim] = tag;
+            cache_valid_[base + victim] = true;
+            promote(cache_ways - 1U);
+        }
+        return false;
+    }
+
+    void sh2::cache_purge() noexcept {
+        cache_valid_.fill(false);
+        for (auto& order : cache_order_) {
+            for (std::size_t way = 0U; way < cache_ways; ++way) {
+                order[way] = static_cast<std::uint8_t>(way);
+            }
+        }
+    }
+
+    void sh2::cache_write_ccr(std::uint8_t value) noexcept {
+        // CP (cache purge) is write-only and self-clearing: writing 1 invalidates
+        // the array and reads back 0. The other bits latch.
+        ccr_ = static_cast<std::uint8_t>(value & ~ccr_cp);
+        if ((value & ccr_cp) != 0U) {
+            cache_purge();
+        }
+    }
+
     void sh2::mac_long(std::size_t rn, std::size_t rm) noexcept {
         // MAC.L @Rm+,@Rn+ : signed 32x32 multiply, accumulate into MACH:MACL.
         // SR.S saturates the accumulator to the signed 48-bit range.
@@ -1599,6 +1659,14 @@ namespace mnemos::chips::cpu {
         // would be swallowed by a later account_cycles floor).
         for (int i = 0; i < shared_access_count_; ++i) {
             const shared_access& a = shared_accesses_[static_cast<std::size_t>(i)];
+            // Operand-cache shadow: a cacheable read that hits costs no bus cycles
+            // (the line is on-chip); only a miss fills a line and pays the SDRAM
+            // line-fill burst the board charges. Writes are write-through /
+            // no-allocate, and non-cacheable space (A31-29 != 0) bypasses the cache.
+            if (a.kind == data_access_kind::read && (ccr_ & ccr_ce) != 0U &&
+                a.address < cache_area_limit && cache_operand_lookup(a.address)) {
+                continue; // hit: no external SDRAM access this access
+            }
             add_external_wait_cycles(a.address, a.bytes, a.kind);
         }
 
@@ -1687,6 +1755,9 @@ namespace mnemos::chips::cpu {
         last_exec_op_ = 0U;
         pending_load_reg_ = -1;
         pending_load_t_ = false;
+        ccr_ = 0U; // reset disables the cache; CP-style purge inits valid + LRU
+        cache_tag_.fill(0U);
+        cache_purge();
         if (preserve_watchdog_status) {
             peripherals_.reset_preserving_watchdog_status();
         } else {
@@ -1728,12 +1799,14 @@ namespace mnemos::chips::cpu {
 
     // sh2 save-state format version. v1 = the original flat layout (no marker);
     // v2 prepends this marker and appends the X2 load-use interlock state.
-    constexpr std::uint32_t sh2_save_state_version = 2U;
+    constexpr std::uint32_t sh2_save_state_version = 3U;
 
     void sh2::save_state(state_writer& writer) const {
         // sh2 state-format version. v2 adds the X2 load-use interlock state so a
         // snapshot taken between a load and its consumer reloads with identical
-        // timing (the timing models are opt-in; under them this state is live).
+        // timing; v3 adds the X3 operand-cache timing shadow (CCR + tags + valid +
+        // LRU) so a snapshot under the cache model reloads with identical hit/miss
+        // history (the timing models are opt-in; under them this state is live).
         writer.u32(sh2_save_state_version);
         for (const std::uint32_t v : r_) {
             writer.u32(v);
@@ -1756,6 +1829,20 @@ namespace mnemos::chips::cpu {
         // step (overwritten before it is read), so it needs no serialization.
         writer.u32(static_cast<std::uint32_t>(pending_load_reg_));
         writer.u32(pending_load_t_ ? 1U : 0U);
+        // X3 operand-cache timing shadow (v3): CCR, then per-line tag + valid, then
+        // the per-set MRU->LRU way order. History-dependent, so it must round-trip.
+        writer.u8(ccr_);
+        for (const std::uint32_t tag : cache_tag_) {
+            writer.u32(tag);
+        }
+        for (const bool valid : cache_valid_) {
+            writer.boolean(valid);
+        }
+        for (const auto& order : cache_order_) {
+            for (const std::uint8_t way : order) {
+                writer.u8(way);
+            }
+        }
         peripherals_.save_state(writer);
     }
 
@@ -1780,6 +1867,20 @@ namespace mnemos::chips::cpu {
         if (version >= 2U) {
             pending_load_reg_ = static_cast<int>(reader.u32());
             pending_load_t_ = reader.u32() != 0U;
+        }
+        if (version >= 3U) {
+            ccr_ = reader.u8();
+            for (std::uint32_t& tag : cache_tag_) {
+                tag = reader.u32();
+            }
+            for (bool& valid : cache_valid_) {
+                valid = reader.boolean();
+            }
+            for (auto& order : cache_order_) {
+                for (std::uint8_t& way : order) {
+                    way = reader.u8();
+                }
+            }
         }
         peripherals_.load_state(reader);
     }

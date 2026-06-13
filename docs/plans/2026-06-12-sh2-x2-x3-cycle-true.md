@@ -172,10 +172,20 @@ write purges the shadow + self-clears. Do NOT reuse `p0_bases` for `$C0000000`
 - [x] **Z7-pre** save-state versioning (v2) + serialize the load-use state (PR #144)
   — the prerequisite so cache-shadow state serializes (v3) without piling more
   untracked timing history onto an unversioned format.
-- [ ] **Z7a** operand-read shadow: CCR CE/OD/CP side-effects + the partition
-  classifier + tag/LRU shadow + record-gate-on-miss + board SDRAM-read-miss = 12 +
-  cache-through always-burst + serialize the shadow (v3) + vectors (miss=12,
-  repeat=hit=0, cache-through=12). Harness gains a `ccr` vector field to set CE.
+- [x] **Z7a** operand-read shadow — SHIPPED (PR #146). SH-2 owns CCR (`$FFFFFE92`,
+  intercepted in `rd8`/`wr8` only while metering; CE/OD honoured, CP purges +
+  self-clears) and a per-CPU timing-only shadow (64×4, 16-byte lines, MRU→LRU);
+  `cache_operand_lookup` filters cacheable reads (A31-29=0, CE=1) at the
+  end-of-step charge loop — a **hit** skips the board call (no wait, no
+  contention reservation), a **miss** fills the LRU way (unless OD=1) then charges
+  the board, which now returns the flat 12-clock SDRAM line-fill burst for any
+  read that reaches it (`sdram_read_burst_cycles`). Cache-through / CE=0 reads
+  always reach the board (always burst, no shadow touch). Writes stay
+  write-through / no-allocate (2/word unchanged; write-LRU-touch deferred to Z7c).
+  Shadow serialized at save-state **v3**; `reset` inits LRU + clears valid.
+  Validated by C++ tests in `sh2_test.cpp` (miss→hit, CE-off all-miss, CP-purge
+  re-miss, metering-off bit-identical, save/load round-trip) — the JSON harness's
+  CCR-setup is awkward, so the C++ surface is the committed cycle check here.
 - [ ] **Z7b** instruction-fetch cache timing on the same shadow (Codex: fetches
   dominate loop timing; required before "Z7 done"/default-on). `fetch_slow`
   records no fetch wait today.

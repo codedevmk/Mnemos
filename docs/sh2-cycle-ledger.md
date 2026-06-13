@@ -49,7 +49,13 @@ Current implementation (pre-X2/X3-default) and the rules every increment keeps:
    same-owner DMAC. Fixed, tested, never time-of-day.
 6. **Cache (Z7).** Hit vs miss/fill timing per the SH7604 cache; cache state is
    part of save/load. Hit-only is NOT a valid default-on state (the 32X SDRAM
-   model is built around 8-word miss fills).
+   model is built around 8-word miss fills). **Z7a shipped:** the SH-2 owns CCR
+   (`$FFFFFE92`) and a per-CPU timing-only shadow (64×4, 16-byte lines, MRU→LRU)
+   gated by the X3 metering flag; a cacheable operand read (A31-29=0, CE=1) that
+   hits skips the bus, a miss fills the LRU way (unless OD=1) and the board charges
+   the flat **12-clock SDRAM line-fill burst** (`sdram_read_burst_cycles`).
+   CP purges + self-clears. Serialized at save-state **v3**. Instruction-fetch
+   cache timing (Z7b, the dominant loop effect) and TW two-way (Z7c) still pending.
 7. **Determinism.** Timing changes cycle *counts*, never observable *values*.
    Guard: sync-vs-threaded equivalence under X2/X3-on; `save_state` must carry the
    load-use state (`pending_load_reg_`/`pending_load_t_`, version bump in Z4) and
@@ -103,7 +109,8 @@ AND.B/OR.B/TST.B/XOR.B @(R0,GBR)=3, TAS.B=4. ⇒ **X2 internal per-instruction
 timing is validated complete against the manual.** The only X2 items left are
 (a) the multiplier-contention upper-bound scoreboard — the manual's "1 to 3" /
 "2 to 4" / MAC contention ranges, where the exact value within the range needs
-pipeline-contention modeling (deferred) — and (b) cache-miss timing (Z7).
+pipeline-contention modeling (deferred) — and (b) cache-miss timing (Z7: the
+operand-read shadow is shipped in Z7a; instruction-fetch cache timing is Z7b).
 
 **Load-use contention (X2):** Table 7.2 / §7.5 — "if an instruction that uses the
 same destination register … is placed immediately after [a memory load],
