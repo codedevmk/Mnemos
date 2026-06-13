@@ -281,6 +281,14 @@ namespace mnemos::manifests::sega32x {
         // Hold (true) or release (false) the two SH-2s. A release edge restarts
         // both CPUs from their BIOS reset vectors (the /RES pin behaviour).
         void set_sh2_reset(bool asserted);
+        // X3 opt-in: enable the ordinary-access shared-bus contention model on the
+        // board AND both SH-2 cores together (assemble wires this from the env; a
+        // test forces it). Off = bit-identical (only locked TAS reserves the bus).
+        void set_bus_contention_metering(bool on) noexcept {
+            meter_bus_contention_ = on;
+            master_cpu.set_shared_contention_metering(on);
+            slave_cpu.set_shared_contention_metering(on);
+        }
         // Monotone SH-2 timeline position for pacing. cpu.reset() zeroes the
         // CPU's elapsed counter on every /RES release edge, so pacing anchors
         // must not read elapsed_cycles() directly: a release would replay every
@@ -288,15 +296,28 @@ namespace mnemos::manifests::sega32x {
         [[nodiscard]] std::uint64_t sh2_position() const noexcept {
             return sh2_elapsed_base + master_cpu.elapsed_cycles();
         }
-        std::uint64_t sh2_elapsed_base{0};     // accumulated pre-release elapsed counts
-        std::uint64_t shared_bus_lock_until{}; // SH-2-local cycle when shared TAS lock releases
+        std::uint64_t sh2_elapsed_base{0}; // accumulated pre-release elapsed counts
+        // Per-resource shared-bus reservation (Z6). The two SH-2s + their DMACs
+        // contend per HARDWARE BLOCK, not on one global bus: SDRAM, the frame
+        // buffer, the 32X VDP register file, and the COMM port are physically
+        // distinct, so an SDRAM access on one CPU does not stall a frame-buffer
+        // access on the other. Each entry is the cycle (the shared SH-2 elapsed
+        // domain) the resource next frees. The 68000 and the 32X VDP as bus masters
+        // are NOT modelled (their arbitration needs a reference Mnemos lacks; see
+        // shared_bus_wait) -- a documented scope limit, not a silent cap.
+        enum class bus_resource : std::size_t { sdram, framebuffer, vdp, comm, count };
+        std::array<std::uint64_t, static_cast<std::size_t>(bus_resource::count)>
+            resource_busy_until_{};
+        bool meter_bus_contention_{}; // board opt-in (env at assemble); gates ordinary contention
         // Advance both SH-2s when not held in reset, interleaving whole
         // instructions by each CPU's elapsed-cycle position.
         void run_cycles(std::uint64_t cycles);
         // SH-2 core callback: charge waits for external accesses that hold a 32X
-        // shared bus resource. Same-cycle dual-SH-2 TAS locks are arbitrated
-        // deterministically (master wins ties); ordinary memory, full DMA, and
-        // VDP contention are still timing work.
+        // shared bus resource, reserved PER RESOURCE (resource_busy_until_) so only
+        // accesses to the same block contend. Both SH-2s and their DMACs arbitrate
+        // through here; cross-CPU ties resolve deterministically by scheduler order
+        // (master before slave). Locked TAS always reserves; ordinary accesses only
+        // under meter_bus_contention_.
         [[nodiscard]] int shared_bus_wait(bool master, std::uint32_t address, std::uint8_t bytes,
                                           chips::cpu::data_access_kind kind) noexcept;
         // SH-2 core callback fired just before a WDT internal reset zeroes a

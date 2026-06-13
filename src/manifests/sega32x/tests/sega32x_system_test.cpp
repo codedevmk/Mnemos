@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 namespace {
     using mnemos::manifests::sega32x::assemble_sega32x;
@@ -119,6 +120,48 @@ TEST_CASE("sega32x_system arbitrates simultaneous SH-2 TAS bus locks") {
           4U + 2U * mnemos::manifests::sega32x::shared_tas_bus_lock_wait_cycles);
     CHECK(sys->master_bus.read8(0x06000010U) == 0x80U);
     CHECK(sys->slave_bus.read8(0x06000020U) == 0x80U);
+}
+
+TEST_CASE("sega32x_system arbitrates ordinary cross-SH-2 bus contention per resource") {
+    // Z6: with the opt-in contention model on, two SH-2s reading the SAME resource
+    // (SDRAM) serialize -- the slave waits behind the master's 12-clock line-fill
+    // burst -- but accesses to DIFFERENT resources (SDRAM vs the frame buffer) do
+    // NOT contend, because they are physically distinct hardware blocks. The
+    // scheduler steps the master first on a tie, so the order is deterministic.
+    const auto run_pair = [](std::uint32_t slave_ptr) {
+        auto sys = assemble_sega32x();
+        sys->set_sh2_reset(false);
+        sys->set_bus_contention_metering(true);
+
+        auto master = sys->master_cpu.cpu_registers();
+        master.r[1] = 0x06000010U; // SDRAM operand
+        master.pc = 0x06000100U;
+        sys->master_cpu.set_registers(master);
+        auto slave = sys->slave_cpu.cpu_registers();
+        slave.r[1] = slave_ptr;
+        slave.pc = 0x06000200U;
+        sys->slave_cpu.set_registers(slave);
+
+        sys->master_bus.write8(0x06000100U, 0x62U); // MOV.L @R1,R2
+        sys->master_bus.write8(0x06000101U, 0x12U);
+        sys->slave_bus.write8(0x06000200U, 0x62U); // MOV.L @R1,R2
+        sys->slave_bus.write8(0x06000201U, 0x12U);
+
+        sys->run_cycles(1U); // one instruction each (the SDRAM read exhausts credit)
+        return std::pair{sys->master_cpu.elapsed_cycles(), sys->slave_cpu.elapsed_cycles()};
+    };
+
+    SECTION("same resource (both read SDRAM): the slave serializes behind the master") {
+        const auto [m, s] = run_pair(0x06000020U); // slave also reads SDRAM
+        CHECK(m == 1U + 12U);                      // base + the line-fill burst, granted at cycle 0
+        CHECK(s == 1U + 12U + 12U); // base + own burst + the 12 it waited for the bus
+    }
+
+    SECTION("different resources (SDRAM vs frame buffer): no contention") {
+        const auto [m, s] = run_pair(0x04000000U); // slave reads the frame buffer
+        CHECK(m == 1U + 12U);                      // SDRAM line-fill burst
+        CHECK(s == 1U + 2U); // FB long = 2 beats, granted immediately (independent block)
+    }
 }
 
 TEST_CASE("sega32x_system absorbs a master WDT internal reset without desyncing pacing") {

@@ -650,7 +650,7 @@ namespace mnemos::manifests::sega32x {
             sh2_elapsed_base += master_cpu.elapsed_cycles();
             master_cpu.reset(chips::reset_kind::power_on);
             slave_cpu.reset(chips::reset_kind::power_on);
-            shared_bus_lock_until = 0U;
+            resource_busy_until_.fill(0U);
         }
         sh2_reset_asserted = asserted;
     }
@@ -659,18 +659,18 @@ namespace mnemos::manifests::sega32x {
         // A WDT internal reset zeroes only the firing core's elapsed counter
         // mid-run -- a per-CPU /RES edge. Mirror set_sh2_reset()'s fold so the
         // master's discarded count enters the pacing base (sh2_position() must
-        // stay monotone) and drop the shared TAS lock, whose release deadline
-        // lived in the now-reset elapsed domain.
+        // stay monotone) and drop the per-resource bus reservations, whose release
+        // deadlines lived in the now-reset elapsed domain.
         if (is_master) {
             sh2_elapsed_base += master_cpu.elapsed_cycles();
         }
-        shared_bus_lock_until = 0U;
+        resource_busy_until_.fill(0U);
     }
 
     void sega32x_system::reset() {
         sh2_reset_asserted = true;
         sh2_elapsed_base = 0U;
-        shared_bus_lock_until = 0U;
+        resource_busy_until_.fill(0U);
         adapter_ctrl = 0U;
         adapter_enabled = false;
         hcount = 0U;
@@ -773,9 +773,9 @@ namespace mnemos::manifests::sega32x {
                                         chips::cpu::data_access_kind kind) noexcept {
         // Locked TAS reservations always charge (the atomic-RMW bus lock is a
         // correctness mechanism); ordinary load/store contention is the opt-in X3
-        // timing model (see bus_contention_enabled).
+        // timing model (set_bus_contention_metering, wired from the env at assemble).
         const bool locked = kind == chips::cpu::data_access_kind::tas;
-        if (bytes == 0U || (!locked && !bus_contention_enabled())) {
+        if (bytes == 0U || (!locked && !meter_bus_contention_)) {
             return 0;
         }
 
@@ -833,11 +833,22 @@ namespace mnemos::manifests::sega32x {
             access_beats = sdram_read_burst_cycles; // flat line-fill burst
         }
         const auto beats = static_cast<std::uint64_t>(access_beats);
+        // Reserve the targeted resource only (the regions are disjoint, so exactly
+        // one matched). access_cycle = the requester's instruction-start elapsed
+        // (the intra-instruction MA offset is not modelled -- a documented
+        // simplification, ADR-0026). Cross-CPU ties resolve by the scheduler's fixed
+        // order (master before slave; a CPU's instruction accesses before its own
+        // DMAC, which ticks after the instruction), so the grant is deterministic.
+        const bus_resource resource = shared_sdram         ? bus_resource::sdram
+                                      : shared_framebuffer ? bus_resource::framebuffer
+                                      : shared_vdp         ? bus_resource::vdp
+                                                           : bus_resource::comm;
+        std::uint64_t& busy_until = resource_busy_until_[static_cast<std::size_t>(resource)];
         const std::uint64_t start =
             master ? master_cpu.elapsed_cycles() : slave_cpu.elapsed_cycles();
-        const std::uint64_t grant = std::max(start, shared_bus_lock_until);
+        const std::uint64_t grant = std::max(start, busy_until);
         const std::uint64_t wait = beats + (grant - start);
-        shared_bus_lock_until = grant + beats;
+        busy_until = grant + beats;
 
         return wait > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
                    ? std::numeric_limits<int>::max()
@@ -1005,11 +1016,10 @@ namespace mnemos::manifests::sega32x {
             [s](std::uint32_t address, std::uint8_t bytes, chips::cpu::data_access_kind kind) {
                 return s->shared_bus_wait(false, address, bytes, kind);
             });
-        // X3: enable ordinary-access contention metering on both cores only when
-        // the opt-in model is on, so the default path keeps zero per-access cost.
-        const bool contention = bus_contention_enabled();
-        s->master_cpu.set_shared_contention_metering(contention);
-        s->slave_cpu.set_shared_contention_metering(contention);
+        // X3: enable ordinary-access contention metering on the board + both cores
+        // only when the opt-in model is on, so the default path keeps zero
+        // per-access cost (and the board's shared_bus_wait stays a no-op).
+        s->set_bus_contention_metering(bus_contention_enabled());
         // X2: enable the SH-2 load-use interlock on both cores (opt-in).
         const bool load_use = load_use_enabled();
         s->master_cpu.set_load_use_interlock(load_use);

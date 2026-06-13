@@ -138,9 +138,20 @@ SDRAM read is cache-coupled → folds into **Z5b/Z7**.
 - [ ] Z5.3 Bus-timing corpus (single CPU) green. **PR: "sh2(X3a): region access-cycle timing".**
 
 ### Increment Z6: two-SH-2 contention
-- [ ] Z6.1 Extend the reservation across both SH-2 + DMAC with fixed tie-breaks;
-  contention corpus green. Multi-master (68K/VDP) scoped + logged, not silently capped.
-  **PR: "sh2(X3b): SH-2↔SH-2 + DMAC contention".**
+- [x] Z6.1 SHIPPED (PR #148). The single `shared_bus_lock_until` became a
+  **per-resource** reservation (`resource_busy_until_` over {SDRAM, frame buffer,
+  VDP regs, COMM}) — distinct hardware blocks don't falsely serialize (an SDRAM
+  access on one CPU no longer stalls a frame-buffer access on the other). Both
+  SH-2s and their DMACs already arbitrate through `shared_bus_wait`; cross-CPU ties
+  resolve deterministically by the scheduler's fixed order (master before slave; a
+  CPU's instruction accesses before its own DMAC, which ticks after the
+  instruction). The board's contention gate moved from an env-static to a settable
+  member (`set_bus_contention_metering`, wired from the env at assemble) so a
+  **two-core harness** can force it: the new test proves same-resource SDRAM reads
+  serialize (master 13 / slave 25) while SDRAM-vs-FB do NOT (master 13 / slave 3).
+  The 68000 and 32X VDP as bus masters are **scoped out + logged** in code/docs (no
+  silent cap). The intra-instruction MA offset is still 0 (a documented
+  simplification). **PR: "sh2(X3b): per-resource SH-2↔SH-2 + DMAC contention".**
 
 ### Increment Z7: SH7604 cache timing (Codex-validated, sourced; split Z7a-c)
 
