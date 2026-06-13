@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -116,6 +117,33 @@ namespace {
                 const auto& m = test.at("model");
                 cpu.set_load_use_interlock(m.value("load_use", false));
                 cpu.set_shared_contention_metering(m.value("bus_contention", false));
+            }
+            // Optional region-bus map: install a wait-state callback so X3 vectors
+            // can charge per-region waits (mirrors the board's bus_wait hook). X2
+            // internal vectors omit "bus" and run on the plain uniform bus. The
+            // callback returns wait*words (a 4-byte access = two 16-bit bus cycles).
+            if (test.contains("bus")) {
+                struct wait_range final {
+                    std::uint32_t start;
+                    std::uint32_t size;
+                    int wait;
+                };
+                std::vector<wait_range> ranges;
+                for (const auto& rg : test.at("bus")) {
+                    ranges.push_back({rg.at("start").get<std::uint32_t>(),
+                                      rg.at("size").get<std::uint32_t>(),
+                                      rg.at("wait").get<int>()});
+                }
+                cpu.set_bus_wait_callback(
+                    [ranges](std::uint32_t addr, std::uint8_t bytes, bool /*locked*/) -> int {
+                        const int words = (bytes >= 4U) ? 2 : 1;
+                        for (const auto& rg : ranges) {
+                            if (addr >= rg.start && addr < rg.start + rg.size) {
+                                return rg.wait * words;
+                            }
+                        }
+                        return 0;
+                    });
             }
 
             const auto& init = test.at("initial");

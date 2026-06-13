@@ -33,24 +33,28 @@ the oracle registry.* So:
 
 ---
 
-## 32X access timing (authority table — to be transcribed from the manual)
+## 32X access timing (authority: official 32X Hardware Manual §4.4)
 
-From the 32X hardware manual "access timing of each CPU to 32X block" (cross-check
-ref: matiaszanolli/sega-vr-disasm `docs/32x-hardware-manual.md#41`). All values =
-wait states + the SH-2 2-clock access minimum, to be confirmed against the manual
-PDF during Z3:
+SOURCED 2026-06-13 from the official **32X Hardware Manual (1994, Sega)** §4.4
+"Access Timing of each CPU to 32X Block" (archive.org full text), cross-checked
+against the L5 matiaszanolli transcription — they agree. These are SH-2 **wait
+states** the 32X board inserts, **added on top of the instruction's base MA cycle**
+(Table 7.2 already counts MA=1 for a no-wait access — do NOT double-count the base):
 
-| Region | Read | Write |
-|---|---|---|
-| Cart ROM | 8–17 | — |
-| Framebuffer `$04000000` | 7–14 | 3–5 (FIFO-state dependent) |
-| SDRAM `$06000000` | 12 / 8-word burst | 2 / word |
-| System / COMM | 3 | 3 |
-| 32X VDP regs | 7 | 7 |
-| Boot ROM | 3 | — |
+| Region | Read | Write | Kind |
+|---|---|---|---|
+| System / COMM regs | 1 | 1 | **constant** |
+| 32X VDP regs | 5 | 5 | **constant** |
+| Boot ROM | 1 | — | **constant** |
+| SDRAM `$06000000` | 12 / 8-word burst (cache-line fill) | 2 / word | **cache-coupled (read)** |
+| Frame buffer `$04000000` | 5–12 | 1–3 (5 if FIFO full) | range |
+| Cart ROM | 6–15 | 6–15 | range |
+| Palette | 5 → up to 64µs on VDP conflict | same | range |
 
-Cache-through aliases (`$20000000`) pay the same physical-target timing
-(SDRAM cache-through reads still pay the 8-word burst).
+SDRAM cache-through (`$20000000`) reads still pay the 8-word burst. **Z5a** models
+the constants (COMM/VDP/boot) + SDRAM-write (2/word) + FB-write (min); the ranges
+(cart/FB-read/palette) are condition-dependent like the X2 multiplier scoreboard;
+SDRAM read is cache-coupled → folds into **Z5b/Z7**.
 
 ---
 
