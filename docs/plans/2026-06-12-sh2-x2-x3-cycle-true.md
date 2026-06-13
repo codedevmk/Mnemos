@@ -186,7 +186,7 @@ write purges the shadow + self-clears. Do NOT reuse `p0_bases` for `$C0000000`
   Validated by C++ tests in `sh2_test.cpp` (miss→hit, CE-off all-miss, CP-purge
   re-miss, metering-off bit-identical, save/load round-trip) — the JSON harness's
   CCR-setup is awkward, so the C++ surface is the committed cycle check here.
-- [x] **Z7b** instruction-fetch cache timing — SHIPPED. Fetches hit/miss the SAME
+- [x] **Z7b** instruction-fetch cache timing — SHIPPED (PR #147). Fetches hit/miss the SAME
   unified shadow (`cache_operand_lookup` generalized to `cache_lookup(addr,
   is_instruction)`; the no-fill bit is **ID** for a fetch, **OD** for an operand).
   `record_fetch_access` runs the lookup at the fetch site in program order (IF
