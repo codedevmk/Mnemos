@@ -51,3 +51,9 @@ add_subdirectory(apm)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+# Whole-graph tier audit (ARCH-001): now that every target is declared, assert no
+# target links a higher tier than its own. This reads each target's real link
+# libraries, so an upward dependency is caught even if it is missing from the
+# DEPENDS list passed to mnemos_declare_tier.
+mnemos_validate_tier_graph()
