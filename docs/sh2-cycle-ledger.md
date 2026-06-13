@@ -88,6 +88,23 @@ makes the folded step return branch_states + delay_slot_states. ⚠ This is BASE
 timing (not behind the X2/X3 opt-in) — see the plan for gating so the default 32X
 stays bit-identical until the Z8 regression gate.
 
+**Validated 2026-06-13 (PR #139 gate + cycle corpus):** the gated additive fix
+covers the WHOLE `branch_delayed` family, confirmed against the manual:
+BRA/BSR/JMP/JSR/RTS = 3 (2+slot), **RTE = 5 (4+slot)**, **BT/S, BF/S = 3 taken
+(2+slot) / 1 not taken** — all under the X2 flag, all unchanged (2/4/1) with it
+off. **TRAPA = 8** (exception, no fold) and **BT/BF = 3/1** are correct and
+flag-independent. The delayed/exception class of X2 internal timing is closed.
+
+**Multiply/MAC + system-register + RMW validated 2026-06-13 (no fix needed):**
+the base table already matches the manual — MULS.W/MULU.W=1, MUL.L/DMULx=2,
+MAC.W/MAC.L=3 (normal minima); register-form LDC/STC/LDS/STS=1, LDC.L=3,
+STC.L=2, **LDS.L=1** (the manual distinguishes it from LDC.L=3), STS.L=1; RMW
+AND.B/OR.B/TST.B/XOR.B @(R0,GBR)=3, TAS.B=4. ⇒ **X2 internal per-instruction
+timing is validated complete against the manual.** The only X2 items left are
+(a) the multiplier-contention upper-bound scoreboard — the manual's "1 to 3" /
+"2 to 4" / MAC contention ranges, where the exact value within the range needs
+pipeline-contention modeling (deferred) — and (b) cache-miss timing (Z7).
+
 **Load-use contention (X2):** Table 7.2 / §7.5 — "if an instruction that uses the
 same destination register … is placed immediately after [a memory load],
 contention will occur" (+1). Validated green.
