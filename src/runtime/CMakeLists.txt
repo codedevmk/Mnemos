@@ -77,4 +77,12 @@ if(BUILD_TESTING)
         SOURCES tests/c64_save_state_roundtrip_test.cpp
         LIBRARIES mnemos::runtime mnemos::manifests::c64
     )
+
+    # Threaded-vs-synchronous determinism for the 32X dual-SH-2 scheduling
+    # (tier-4 manifests::sega32x linked test-only -- a downward dependency).
+    mnemos_add_test(
+        mnemos_runtime_sega32x_determinism_test
+        SOURCES tests/sega32x_determinism_test.cpp
+        LIBRARIES mnemos::runtime mnemos::manifests::sega32x
+    )
 endif()
