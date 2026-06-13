@@ -172,7 +172,7 @@ write purges the shadow + self-clears. Do NOT reuse `p0_bases` for `$C0000000`
 - [x] **Z7-pre** save-state versioning (v2) + serialize the load-use state (PR #144)
   — the prerequisite so cache-shadow state serializes (v3) without piling more
   untracked timing history onto an unversioned format.
-- [x] **Z7a** operand-read shadow — SHIPPED. SH-2 owns CCR (`$FFFFFE92`,
+- [x] **Z7a** operand-read shadow — SHIPPED (PR #146). SH-2 owns CCR (`$FFFFFE92`,
   intercepted in `rd8`/`wr8` only while metering; CE/OD honoured, CP purges +
   self-clears) and a per-CPU timing-only shadow (64×4, 16-byte lines, MRU→LRU);
   `cache_operand_lookup` filters cacheable reads (A31-29=0, CE=1) at the
