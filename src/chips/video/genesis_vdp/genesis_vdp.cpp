@@ -390,6 +390,7 @@ namespace mnemos::chips::video {
                 // the fill. Some titles defensively poll dma_busy after the
                 // command and would deadlock if we claimed busy here.
                 dma_fill_pending_ = true;
+                dma_fill_increment_ = autoincrement();
             } else if (type == 3) {
                 // VRAM copy (runs immediately in this functional model).
                 std::uint16_t len = dma_length();
@@ -538,7 +539,7 @@ namespace mnemos::chips::video {
         } else if (dma_fill_code_ == 5) {
             vsram_write(static_cast<int>((cmd_addr_ >> 1U) & 0x3FU), dma_fill_word_);
         }
-        cmd_addr_ = (cmd_addr_ + autoincrement()) & 0xFFFFU;
+        cmd_addr_ = (cmd_addr_ + dma_fill_increment_) & 0xFFFFU;
     }
 
     void genesis_vdp::data_write(std::uint16_t value) noexcept {
@@ -554,9 +555,11 @@ namespace mnemos::chips::video {
             dma_fill_byte_ = static_cast<std::uint8_t>(value >> 8U);
             dma_fill_code_ = static_cast<std::uint8_t>(code_low);
             dma_fill_word_ = value;
-            // The trigger write lands as a normal write first.
+            // The trigger write lands as a normal write first. Both it and the
+            // fill steps stride by the auto-increment latched when the fill was
+            // armed, not the live reg $0F (see dma_fill_increment_).
             write_target_word(code_low, value);
-            cmd_addr_ = (cmd_addr_ + autoincrement()) & 0xFFFFU;
+            cmd_addr_ = (cmd_addr_ + dma_fill_increment_) & 0xFFFFU;
             for (std::uint32_t i = 0; i < len; ++i) {
                 dma_fill_step();
             }
@@ -1402,6 +1405,7 @@ namespace mnemos::chips::video {
         dma_fill_byte_ = 0;
         dma_fill_code_ = 0;
         dma_fill_word_ = 0;
+        dma_fill_increment_ = 0;
         dma_source_ = 0;
         dma_busy_ = false;
         dma_busy_master_cycles_ = 0;
@@ -1488,6 +1492,7 @@ namespace mnemos::chips::video {
         writer.u8(dma_fill_byte_);
         writer.u8(dma_fill_code_);
         writer.u16(dma_fill_word_);
+        writer.u8(dma_fill_increment_);
         writer.u32(dma_source_);
         writer.boolean(dma_busy_);
 
@@ -1556,6 +1561,7 @@ namespace mnemos::chips::video {
         dma_fill_byte_ = reader.u8();
         dma_fill_code_ = reader.u8();
         dma_fill_word_ = reader.u16();
+        dma_fill_increment_ = reader.u8();
         dma_source_ = reader.u32();
         dma_busy_ = reader.boolean();
 

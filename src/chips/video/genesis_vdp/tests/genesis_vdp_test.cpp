@@ -158,6 +158,34 @@ TEST_CASE("genesis_vdp performs a VRAM fill DMA") {
     CHECK_FALSE(vdp.dma_busy());
 }
 
+TEST_CASE("genesis_vdp VRAM fill strides by the auto-increment latched when armed") {
+    // Regression: a boot ROM arms a clear-fill with auto-increment 1, then
+    // rewrites reg $0F to 2 (for its following normal writes) BEFORE the
+    // triggering data-port write lands. The fill must stride by the arm-time
+    // value (1) and touch every byte; striding by the live reg $0F (2) writes
+    // only one byte lane, so each filled word keeps its other (here zero) lane
+    // -- which on a nametable clear leaves a stray tile in every other cell.
+    genesis_vdp vdp;
+    set_reg(vdp, 1, 0x14);  // M5 + DMA enable
+    set_reg(vdp, 15, 0x01); // auto-increment 1 when the fill is armed
+    set_reg(vdp, 19, 0x10); // fill length = 16 bytes
+    set_reg(vdp, 20, 0x00);
+    set_reg(vdp, 23, 0x80);         // type 2 -> VRAM fill
+    set_command(vdp, 0x4000, 0x21); // arms the fill, latching auto-increment 1
+
+    set_reg(vdp, 15, 0x02);         // the ROM bumps reg $0F AFTER arming
+    set_command(vdp, 0x4000, 0x01); // ...and re-points the data port (a register
+                                    // write clobbers the code bits); this neither
+                                    // re-arms the pending fill nor re-latches.
+    vdp.write16(0x00, 0xAB00);      // data-port write triggers the fill with byte 0xAB
+
+    // Stride 1 writes both lanes of every word in the run -> 0xABAB. The
+    // stride-2 bug would fill only one lane, reading 0xAB00 / 0x00AB.
+    CHECK(vdp.vram16(0x4002) == 0xABAB);
+    CHECK(vdp.vram16(0x4004) == 0xABAB);
+    CHECK(vdp.vram16(0x4006) == 0xABAB);
+}
+
 TEST_CASE("genesis_vdp performs a VRAM copy DMA") {
     genesis_vdp vdp;
     set_reg(vdp, 1, 0x14);

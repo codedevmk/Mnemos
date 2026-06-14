@@ -4,6 +4,7 @@ cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 compile_commands.json
+_scratch/
 
 # Binaries, ROMs, and firmware dumps
 *.bin
