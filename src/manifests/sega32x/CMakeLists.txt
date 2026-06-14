@@ -41,6 +41,7 @@ if(BUILD_TESTING)
             tests/sega32x_system_test.cpp
             tests/sega32x_machine_test.cpp
             tests/sega32x_save_state_test.cpp
+            tests/sega32x_pwm_dc_blocker_test.cpp
         LIBRARIES mnemos::manifests::sega32x
     )
 endif()

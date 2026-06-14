@@ -1,7 +1,8 @@
 #pragma once
 
 #include "bus.hpp"         // topology bus
-#include "sega32x_vdp.hpp" // the 32X VDP (palette + autofill + composition)
+#include "sega32x_vdp.hpp"           // the 32X VDP (palette + autofill + composition)
+#include "sega32x_pwm_dc_blocker.hpp" // deterministic fixed-point PWM DC blocker
 #include "sh2.hpp"         // master + slave CPUs
 #include "state.hpp"   // chips::state_writer / state_reader
 
@@ -123,10 +124,11 @@ namespace mnemos::manifests::sega32x {
         // the counter reaches the CNTL TM field the PWM interrupt latches.
         std::uint16_t pwm_cntl{};
         std::uint16_t pwm_cycle{};
-        // DC-blocker state (per channel): the hardware PWM output is
-        // AC-coupled into the mix, so a held duty decays to silence.
-        float pwm_dcb_x_l{}, pwm_dcb_y_l{};
-        float pwm_dcb_x_r{}, pwm_dcb_y_r{};
+        // DC-blocker state (per channel): the hardware PWM output is AC-coupled
+        // into the mix, so a held duty decays to silence. Fixed-point so the
+        // audio sample sequence is bit-identical across platforms (ARCH-004 §16).
+        pwm_dc_blocker pwm_dcb_l{};
+        pwm_dc_blocker pwm_dcb_r{};
         std::array<std::uint16_t, pwm_fifo_depth> pwm_fifo_l{};
         std::array<std::uint16_t, pwm_fifo_depth> pwm_fifo_r{};
         std::uint8_t pwm_fifo_l_count{};
