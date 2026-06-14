@@ -40,6 +40,7 @@ if(BUILD_TESTING)
         SOURCES
             tests/sega32x_system_test.cpp
             tests/sega32x_machine_test.cpp
+            tests/sega32x_save_state_test.cpp
         LIBRARIES mnemos::manifests::sega32x
     )
 endif()

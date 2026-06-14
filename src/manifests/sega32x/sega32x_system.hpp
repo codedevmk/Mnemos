@@ -3,6 +3,7 @@
 #include "bus.hpp"         // topology bus
 #include "sega32x_vdp.hpp" // the 32X VDP (palette + autofill + composition)
 #include "sh2.hpp"         // master + slave CPUs
+#include "state.hpp"   // chips::state_writer / state_reader
 
 #include <array>
 #include <cstddef>
@@ -281,6 +282,15 @@ namespace mnemos::manifests::sega32x {
         // Hold (true) or release (false) the two SH-2s. A release edge restarts
         // both CPUs from their BIOS reset vectors (the /RES pin behaviour).
         void set_sh2_reset(bool asserted);
+
+        // Whole-board save-state: the two SH-2s + 32X VDP, all writable board RAM
+        // (SDRAM, frame buffer, cache scratch, COMM), the adapter/IRQ/PWM glue, and
+        // the host-side pacing anchors (sh2_elapsed_base + the per-resource bus
+        // scoreboard). The pacing lives OUTSIDE the chip set, so without it a 32X
+        // save/load resumes at a different inter-CPU phase (review B3/F3).
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
+
         // X3 opt-in: enable the ordinary-access shared-bus contention model on the
         // board AND both SH-2 cores together (assemble wires this from the env; a
         // test forces it). Off = bit-identical (only locked TAS reserves the bus).

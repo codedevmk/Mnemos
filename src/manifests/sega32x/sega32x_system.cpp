@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -1049,6 +1050,132 @@ namespace mnemos::manifests::sega32x {
         s->slave_cpu.peripherals().set_sci_transmit_callback(
             [s](std::uint8_t byte) { s->master_cpu.peripherals().sci_receive_byte(byte); });
         return sys;
+    }
+
+
+    // Board save-state format version (bump on any layout change below).
+    constexpr std::uint32_t sega32x_system_state_version = 1U;
+
+    void sega32x_system::save_state(chips::state_writer& writer) const {
+        writer.u32(sega32x_system_state_version);
+
+        // Chips: each serialises its own register/timing state.
+        master_cpu.save_state(writer);
+        slave_cpu.save_state(writer);
+        vdp.save_state(writer);
+
+        // Writable board RAM (BIOS/cart ROM is immutable and rides no chunk).
+        writer.bytes(std::span<const std::uint8_t>(sdram));
+        writer.bytes(std::span<const std::uint8_t>(framebuffer));
+        writer.bytes(std::span<const std::uint8_t>(master_cache_data));
+        writer.bytes(std::span<const std::uint8_t>(slave_cache_data));
+        for (const std::uint16_t word : comm) {
+            writer.u16(word);
+        }
+
+        // Adapter + interrupt glue.
+        writer.u16(adapter_ctrl);
+        writer.boolean(adapter_enabled);
+        writer.u16(hcount);
+        writer.boolean(sh2_reset_asserted);
+        writer.u8(master_irq_mask);
+        writer.u8(slave_irq_mask);
+        writer.u8(master_irq_latch);
+        writer.u8(slave_irq_latch);
+
+        // PWM unit. The DC-blocker accumulators are floats: serialise the exact
+        // bit pattern so the byte stream is reproducible.
+        writer.u16(pwm_cntl);
+        writer.u16(pwm_cycle);
+        writer.u32(std::bit_cast<std::uint32_t>(pwm_dcb_x_l));
+        writer.u32(std::bit_cast<std::uint32_t>(pwm_dcb_y_l));
+        writer.u32(std::bit_cast<std::uint32_t>(pwm_dcb_x_r));
+        writer.u32(std::bit_cast<std::uint32_t>(pwm_dcb_y_r));
+        for (const std::uint16_t sample : pwm_fifo_l) {
+            writer.u16(sample);
+        }
+        for (const std::uint16_t sample : pwm_fifo_r) {
+            writer.u16(sample);
+        }
+        writer.u8(pwm_fifo_l_count);
+        writer.u8(pwm_fifo_r_count);
+        writer.u16(pwm_current_l);
+        writer.u16(pwm_current_r);
+        writer.u16(static_cast<std::uint16_t>(pwm_audio_l));
+        writer.u16(static_cast<std::uint16_t>(pwm_audio_r));
+        writer.u64(pwm_cycle_acc);
+        writer.u8(pwm_irq_step_count);
+        writer.u8(pwm_lch_high);
+        writer.u8(pwm_rch_high);
+        writer.u8(pwm_mono_high);
+
+        // Host-side pacing anchors (review B3/F3): the monotone SH-2 base and the
+        // per-resource bus-contention scoreboard. Neither lives in a chip.
+        writer.u64(sh2_elapsed_base);
+        for (const std::uint64_t until : resource_busy_until_) {
+            writer.u64(until);
+        }
+        writer.boolean(meter_bus_contention_);
+    }
+
+    void sega32x_system::load_state(chips::state_reader& reader) {
+        if (reader.u32() != sega32x_system_state_version) {
+            reader.fail(); // unknown layout; leave the board at its assembled state
+            return;
+        }
+        master_cpu.load_state(reader);
+        slave_cpu.load_state(reader);
+        vdp.load_state(reader);
+
+        reader.bytes(std::span<std::uint8_t>(sdram));
+        reader.bytes(std::span<std::uint8_t>(framebuffer));
+        reader.bytes(std::span<std::uint8_t>(master_cache_data));
+        reader.bytes(std::span<std::uint8_t>(slave_cache_data));
+        for (std::uint16_t& word : comm) {
+            word = reader.u16();
+        }
+
+        adapter_ctrl = reader.u16();
+        adapter_enabled = reader.boolean();
+        hcount = reader.u16();
+        sh2_reset_asserted = reader.boolean();
+        master_irq_mask = reader.u8();
+        slave_irq_mask = reader.u8();
+        master_irq_latch = reader.u8();
+        slave_irq_latch = reader.u8();
+
+        pwm_cntl = reader.u16();
+        pwm_cycle = reader.u16();
+        pwm_dcb_x_l = std::bit_cast<float>(reader.u32());
+        pwm_dcb_y_l = std::bit_cast<float>(reader.u32());
+        pwm_dcb_x_r = std::bit_cast<float>(reader.u32());
+        pwm_dcb_y_r = std::bit_cast<float>(reader.u32());
+        for (std::uint16_t& sample : pwm_fifo_l) {
+            sample = reader.u16();
+        }
+        for (std::uint16_t& sample : pwm_fifo_r) {
+            sample = reader.u16();
+        }
+        pwm_fifo_l_count = reader.u8();
+        pwm_fifo_r_count = reader.u8();
+        pwm_current_l = reader.u16();
+        pwm_current_r = reader.u16();
+        pwm_audio_l = static_cast<std::int16_t>(reader.u16());
+        pwm_audio_r = static_cast<std::int16_t>(reader.u16());
+        pwm_cycle_acc = reader.u64();
+        pwm_irq_step_count = reader.u8();
+        pwm_lch_high = reader.u8();
+        pwm_rch_high = reader.u8();
+        pwm_mono_high = reader.u8();
+
+        sh2_elapsed_base = reader.u64();
+        for (std::uint64_t& until : resource_busy_until_) {
+            until = reader.u64();
+        }
+        meter_bus_contention_ = reader.boolean();
+        // Keep the cores' contention metering consistent with the restored flag.
+        master_cpu.set_shared_contention_metering(meter_bus_contention_);
+        slave_cpu.set_shared_contention_metering(meter_bus_contention_);
     }
 
 } // namespace mnemos::manifests::sega32x
