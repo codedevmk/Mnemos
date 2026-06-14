@@ -10,7 +10,7 @@ if(NOT TARGET libzstd_static)
     FetchContent_Declare(
         zstd
         GIT_REPOSITORY https://github.com/facebook/zstd.git
-        GIT_TAG v1.5.6
+        GIT_TAG 794ea1b0afca0f020f4e57b6732332231fb23c70 # v1.5.6
         SOURCE_SUBDIR build/cmake
     )
     FetchContent_MakeAvailable(zstd)

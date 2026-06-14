@@ -21,7 +21,7 @@ function(mnemos_fetch_sdl3)
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG release-3.2.0
+        GIT_TAG 535d80badefc83c5c527ec5748f2a20d6a9310fe # release-3.2.0
         GIT_SHALLOW TRUE
     )
 

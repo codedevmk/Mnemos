@@ -4,7 +4,7 @@ if(NOT TARGET tomlplusplus::tomlplusplus)
     FetchContent_Declare(
         tomlplusplus
         GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-        GIT_TAG v3.4.0
+        GIT_TAG 30172438cee64926dc41fdd9c11fb3ba5b2ba9de # v3.4.0
     )
     FetchContent_MakeAvailable(tomlplusplus)
 endif()
