@@ -411,6 +411,11 @@ namespace mnemos::chips::video {
         std::uint8_t dma_fill_byte_{};
         std::uint8_t dma_fill_code_{};
         std::uint16_t dma_fill_word_{};
+        // Auto-increment latched when the fill is armed: a fill runs at the
+        // triggering data-port write, but the program may rewrite reg $0F (for
+        // its following normal writes) before that write lands, so the live
+        // value would stride the fill wrong. The arm-time value is what clears.
+        std::uint8_t dma_fill_increment_{};
         std::uint32_t dma_source_{};
         bool dma_busy_{};
         // Remaining master-clock cycles the VDP's DMA is conceptually still
