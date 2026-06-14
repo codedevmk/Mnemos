@@ -77,7 +77,7 @@ TEST_CASE("PWM DC blocker removes a held DC level") {
 TEST_CASE("PWM DC blocker passes an AC edge") {
     pwm_dc_blocker f;
     for (int i = 0; i < 5000; ++i) {
-        f.step(8000); // settle: the DC component is removed
+        static_cast<void>(f.step(8000)); // settle: the DC component is removed
     }
     const int before = std::abs(static_cast<int>(f.step(8000)));   // ~0
     const int edge = std::abs(static_cast<int>(f.step(-8000)));    // a 16000 swing
