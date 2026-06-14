@@ -287,29 +287,9 @@ namespace mnemos::chips::cpu {
 
     void m68000::attach_bus(ibus& bus) noexcept {
         bus_ = &bus;
-        fetch_len_ = 0U;
-        bus.add_invalidation_listener([this]() noexcept { fetch_len_ = 0U; });
+        install_fetch_invalidation(bus);
     }
 
-    std::uint16_t m68000::fetch_slow(std::uint32_t a) noexcept {
-        // Refill the fetch span from the bus, then read through it. MMIO and
-        // observer-guarded buses give no span -- plain rd16.
-        if (bus_ != nullptr) {
-            chips::ibus::direct_span span;
-            if (bus_->direct_read_span(a, span)) {
-                const std::uint32_t len = span.end - span.start;
-                fetch_data_ = span.data;
-                fetch_lo_ = span.start;
-                fetch_len_ = len == 0xFFFFFFFFU ? len : len + 1U;
-                const std::uint32_t off = a - span.start;
-                if (off + 2U <= fetch_len_) {
-                    return static_cast<std::uint16_t>(
-                        (static_cast<std::uint16_t>(span.data[off]) << 8U) | span.data[off + 1U]);
-                }
-            }
-        }
-        return rd16(a);
-    }
 
     std::uint16_t m68000::fetch16() noexcept {
         cycles_ += 4;
@@ -323,7 +303,7 @@ namespace mnemos::chips::cpu {
             return static_cast<std::uint16_t>((static_cast<std::uint16_t>(fetch_data_[off]) << 8U) |
                                               fetch_data_[off + 1U]);
         }
-        return fetch_slow(a);
+        return fetch_span_refill(a);
     }
     std::uint32_t m68000::fetch32() noexcept {
         const std::uint32_t hi = fetch16();
@@ -335,7 +315,7 @@ namespace mnemos::chips::cpu {
             (off < fetch_len_ && off + 2U <= fetch_len_)
                 ? static_cast<std::uint32_t>((static_cast<std::uint32_t>(fetch_data_[off]) << 8U) |
                                              fetch_data_[off + 1U])
-                : fetch_slow(a);
+                : fetch_span_refill(a);
         return (hi << 16U) | lo;
     }
 

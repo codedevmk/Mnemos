@@ -2,6 +2,7 @@
 
 #include "chip.hpp"
 #include "introspection_adapters.hpp"
+#include "cpu_fetch_span.hpp"
 #include "m68000_diagnostics.hpp"
 
 #include <array>
@@ -34,7 +35,7 @@ namespace mnemos::chips::cpu {
     // returns its cycle cost; tick(cycles) catches up by running whole instructions.
     // Memory is the attached ibus (byte-addressed; 16/32-bit accesses are assembled
     // big-endian).
-    class m68000 final : public icpu {
+    class m68000 final : public icpu, public cpu_fetch_span<m68000> {
       public:
         // Status-register bits (68000 CCR layout: note N is bit 3, not bit 7).
         static constexpr std::uint16_t sr_c = 1U << 0U;   // carry
@@ -290,14 +291,10 @@ namespace mnemos::chips::cpu {
 
         ibus* bus_{};
 
-        // Fetch fast path: a direct span over the region the PC executes from
-        // (fetch_len_ = 0 means none). Writes through the bus land in the same
-        // storage, so self-modifying code stays visible; only remap/retarget
-        // moves storage, and the bus listener clears the span then.
-        [[nodiscard]] std::uint16_t fetch_slow(std::uint32_t a) noexcept;
-        const std::uint8_t* fetch_data_{};
-        std::uint32_t fetch_lo_{};
-        std::uint32_t fetch_len_{};
+        // Instruction-fetch fast path (span state + refill) lives in
+        // cpu_fetch_span; the 68000 serves every address from a span.
+        friend class cpu_fetch_span<m68000>;
+        [[nodiscard]] ibus* fetch_bus() const noexcept { return bus_; }
 
         std::array<register_descriptor, 20> register_view_{};
         instrumentation::introspection_builder introspection_;

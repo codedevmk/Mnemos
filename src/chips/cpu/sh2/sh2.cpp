@@ -219,8 +219,7 @@ namespace mnemos::chips::cpu {
     void sh2::attach_bus(ibus& bus) noexcept {
         bus_ = &bus;
         peripherals_.set_bus(&bus);
-        fetch_len_ = 0U;
-        bus.add_invalidation_listener([this]() noexcept { fetch_len_ = 0U; });
+        install_fetch_invalidation(bus);
     }
 
     // ---- raw memory: big-endian assembly over the byte bus ----
@@ -1642,7 +1641,7 @@ namespace mnemos::chips::cpu {
                 ? static_cast<std::uint16_t>(
                       (static_cast<std::uint16_t>(fetch_data_[fetch_off]) << 8U) |
                       fetch_data_[fetch_off + 1U])
-                : fetch_slow(pc_);
+                : fetch_span_refill(pc_);
         // X3 (Z7b): the instruction fetch hits/misses the unified cache shadow
         // (independent of the host-side fetch_data_ span). Lookup runs now, in
         // program order; a miss's burst is charged at end-of-step.
@@ -1706,26 +1705,6 @@ namespace mnemos::chips::cpu {
         return consumed;
     }
 
-    std::uint16_t sh2::fetch_slow(std::uint32_t a) {
-        // Refill the fetch span from the bus, then read through it. MMIO / the
-        // on-chip window / observer-guarded buses give no span -- plain rd16.
-        if (bus_ != nullptr && !sh2_peripherals::in_window(a) &&
-            !sh2_peripherals::in_window(a + 1U)) {
-            chips::ibus::direct_span span;
-            if (bus_->direct_read_span(a, span)) {
-                const std::uint32_t len = span.end - span.start;
-                fetch_data_ = span.data;
-                fetch_lo_ = span.start;
-                fetch_len_ = len == 0xFFFFFFFFU ? len : len + 1U;
-                const std::uint32_t off = a - span.start;
-                if (off + 2U <= fetch_len_) {
-                    return static_cast<std::uint16_t>(
-                        (static_cast<std::uint16_t>(span.data[off]) << 8U) | span.data[off + 1U]);
-                }
-            }
-        }
-        return rd16(a);
-    }
 
     void sh2::tick(std::uint64_t cycles) {
         grant_cycles(cycles);
