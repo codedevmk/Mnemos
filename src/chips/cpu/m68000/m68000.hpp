@@ -1,9 +1,9 @@
 #pragma once
 
 #include "chip.hpp"
-#include "introspection_adapters.hpp"
 #include "cpu_catch_up.hpp"
 #include "cpu_fetch_span.hpp"
+#include "introspection_adapters.hpp"
 #include "m68000_diagnostics.hpp"
 
 #include <array>
@@ -262,10 +262,10 @@ namespace mnemos::chips::cpu {
         bool stopped_{};
         bool halted_{};
 
-        int cycles_{};              // cycles of the instruction in flight
+        int cycles_{}; // cycles of the instruction in flight
         // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
         friend class cpu_catch_up<m68000>;
-        std::uint64_t elapsed_{};   // total cycles executed
+        std::uint64_t elapsed_{}; // total cycles executed
 
         // Genesis / Mega Drive 68K bus DRAM refresh tracking. Every 128 68K
         // cycles (= 896 master cycles) the bus takes 2 extra 68K cycles

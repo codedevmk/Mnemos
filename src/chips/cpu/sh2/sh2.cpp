@@ -1705,7 +1705,6 @@ namespace mnemos::chips::cpu {
         return consumed;
     }
 
-
     void sh2::tick(std::uint64_t cycles) {
         grant_cycles(cycles);
         while (has_cycle_credit()) {
@@ -1899,7 +1898,6 @@ namespace mnemos::chips::cpu {
         register_view_[22] = {"MACL", macl_, 32U, fmt::unsigned_integer};
         return register_view_;
     }
-
 
     namespace {
         [[maybe_unused]] const auto sh2_registration =

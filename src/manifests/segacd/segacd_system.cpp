@@ -586,7 +586,6 @@ namespace mnemos::manifests::segacd {
         return sys;
     }
 
-
     // Sub-board save-state format version (bump on any layout change below).
     constexpr std::uint32_t segacd_system_state_version = 1U;
 

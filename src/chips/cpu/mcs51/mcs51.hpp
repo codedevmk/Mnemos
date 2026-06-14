@@ -1,8 +1,8 @@
 #pragma once
 
 #include "chip.hpp"
-#include "introspection_adapters.hpp"
 #include "cpu_catch_up.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -113,7 +113,6 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-
         // ---- spaces ----
         [[nodiscard]] std::uint8_t fetch8() noexcept;
         [[nodiscard]] std::uint8_t code_read(std::uint16_t address) const noexcept {

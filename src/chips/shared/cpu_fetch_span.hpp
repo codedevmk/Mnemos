@@ -21,8 +21,7 @@ namespace mnemos::chips {
     // and may shadow:
     //   bool fetch_span_excluded(std::uint32_t) const noexcept -- addresses that
     //       must never be served from a span (e.g. SH-2's on-chip register window).
-    template <typename Derived>
-    class cpu_fetch_span {
+    template <typename Derived> class cpu_fetch_span {
       protected:
         cpu_fetch_span() = default;
 
@@ -51,7 +50,8 @@ namespace mnemos::chips {
                     const std::uint32_t off = a - span.start;
                     if (off + 2U <= fetch_len_) {
                         return static_cast<std::uint16_t>(
-                            (static_cast<std::uint16_t>(span.data[off]) << 8U) | span.data[off + 1U]);
+                            (static_cast<std::uint16_t>(span.data[off]) << 8U) |
+                            span.data[off + 1U]);
                     }
                 }
             }

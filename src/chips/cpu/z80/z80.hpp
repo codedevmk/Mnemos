@@ -1,8 +1,8 @@
 #pragma once
 
 #include "chip.hpp"
-#include "introspection_adapters.hpp"
 #include "cpu_catch_up.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -234,10 +234,10 @@ namespace mnemos::chips::cpu {
         bool nmi_line_{};   // previous /NMI level for edge detection
         bool reset_line_{}; // /RESET held: parked, no execution
 
-        int step_cycles_{};         // cycles of the instruction in flight
+        int step_cycles_{}; // cycles of the instruction in flight
         // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
         friend class cpu_catch_up<z80>;
-        std::uint64_t elapsed_{};   // total cycles executed
+        std::uint64_t elapsed_{}; // total cycles executed
 
         ibus* bus_{};
         port_in_fn port_in_{};
@@ -249,7 +249,6 @@ namespace mnemos::chips::cpu {
         // cycles trace_event) onto this PC-only slot; the chip queries its
         // own elapsed_cycles() at fire time.
         std::function<void(std::uint32_t pc)> trace_callback_{};
-
 
         std::array<register_descriptor, 16> register_view_{};
         instrumentation::introspection_builder introspection_;

@@ -157,7 +157,8 @@ namespace mnemos::debug {
         [[nodiscard]] virtual std::uint64_t frame_index() const noexcept = 0;
 
         virtual breakpoint_id add_breakpoint(breakpoint_spec spec) = 0;
-        [[nodiscard]] virtual foundation::status<debug_error> remove_breakpoint(breakpoint_id id) = 0;
+        [[nodiscard]] virtual foundation::status<debug_error>
+        remove_breakpoint(breakpoint_id id) = 0;
         [[nodiscard]] virtual foundation::status<debug_error>
         set_breakpoint_enabled(breakpoint_id id, bool enabled) = 0;
         virtual void clear_breakpoints() noexcept = 0;
@@ -166,7 +167,8 @@ namespace mnemos::debug {
         // Memory watchpoints (require a bus to observe; otherwise add_watchpoint
         // still records the spec but it can never fire).
         virtual watchpoint_id add_watchpoint(watchpoint_spec spec) = 0;
-        [[nodiscard]] virtual foundation::status<debug_error> remove_watchpoint(watchpoint_id id) = 0;
+        [[nodiscard]] virtual foundation::status<debug_error>
+        remove_watchpoint(watchpoint_id id) = 0;
         [[nodiscard]] virtual foundation::status<debug_error>
         set_watchpoint_enabled(watchpoint_id id, bool enabled) = 0;
         virtual void clear_watchpoints() noexcept = 0;
@@ -174,7 +176,8 @@ namespace mnemos::debug {
 
         // Event subscription: `sink` receives every event whose kind is in `filter`.
         virtual subscription_handle subscribe(event_filter filter, event_sink& sink) = 0;
-        [[nodiscard]] virtual foundation::status<debug_error> unsubscribe(subscription_handle handle) = 0;
+        [[nodiscard]] virtual foundation::status<debug_error>
+        unsubscribe(subscription_handle handle) = 0;
 
         // Advance exactly one CPU instruction (returns reason step_complete).
         virtual stop_event step_instruction() = 0;
@@ -206,20 +209,21 @@ namespace mnemos::debug {
 
         breakpoint_id add_breakpoint(breakpoint_spec spec) override;
         [[nodiscard]] foundation::status<debug_error> remove_breakpoint(breakpoint_id id) override;
-        [[nodiscard]] foundation::status<debug_error>
-        set_breakpoint_enabled(breakpoint_id id, bool enabled) override;
+        [[nodiscard]] foundation::status<debug_error> set_breakpoint_enabled(breakpoint_id id,
+                                                                             bool enabled) override;
         void clear_breakpoints() noexcept override;
         [[nodiscard]] std::size_t breakpoint_count() const noexcept override;
 
         watchpoint_id add_watchpoint(watchpoint_spec spec) override;
         [[nodiscard]] foundation::status<debug_error> remove_watchpoint(watchpoint_id id) override;
-        [[nodiscard]] foundation::status<debug_error>
-        set_watchpoint_enabled(watchpoint_id id, bool enabled) override;
+        [[nodiscard]] foundation::status<debug_error> set_watchpoint_enabled(watchpoint_id id,
+                                                                             bool enabled) override;
         void clear_watchpoints() noexcept override;
         [[nodiscard]] std::size_t watchpoint_count() const noexcept override;
 
         subscription_handle subscribe(event_filter filter, event_sink& sink) override;
-        [[nodiscard]] foundation::status<debug_error> unsubscribe(subscription_handle handle) override;
+        [[nodiscard]] foundation::status<debug_error>
+        unsubscribe(subscription_handle handle) override;
 
         stop_event step_instruction() override;
         std::uint64_t step_frame() override;

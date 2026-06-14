@@ -152,7 +152,6 @@ namespace mnemos::manifests::segacd {
         return machine;
     }
 
-
     void segacd_machine::save_state(chips::state_writer& writer) const {
         writer.u64(slice_base_main_);
         writer.u64(slice_base_sub_);

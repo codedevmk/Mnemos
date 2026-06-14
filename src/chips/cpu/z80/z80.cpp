@@ -1440,9 +1440,7 @@ namespace mnemos::chips::cpu {
         return step_cycles_;
     }
 
-    void z80::tick(std::uint64_t cycles) {
-        run_catch_up(cycles);
-    }
+    void z80::tick(std::uint64_t cycles) { run_catch_up(cycles); }
 
     void z80::set_nmi_line(bool asserted) noexcept {
         // Edge-triggered: latch one NMI per inactive->active transition, like
@@ -1627,7 +1625,6 @@ namespace mnemos::chips::cpu {
         register_view_[15] = {"F", f(), 8U, fmt::flags};
         return register_view_;
     }
-
 
     namespace {
         [[maybe_unused]] const auto z80_registration =

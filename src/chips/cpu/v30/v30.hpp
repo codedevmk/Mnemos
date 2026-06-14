@@ -1,8 +1,8 @@
 #pragma once
 
 #include "chip.hpp"
-#include "introspection_adapters.hpp"
 #include "cpu_catch_up.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -242,10 +242,10 @@ namespace mnemos::chips::cpu {
         std::uint16_t rm_segment_{};
         std::uint16_t rm_offset_{};
 
-        int step_cycles_{};         // cycles of the instruction in flight
+        int step_cycles_{}; // cycles of the instruction in flight
         // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
         friend class cpu_catch_up<v30>;
-        std::uint64_t elapsed_{};   // total cycles executed
+        std::uint64_t elapsed_{}; // total cycles executed
 
         ibus* bus_{};
         port_in_fn port_in_{};
@@ -255,7 +255,6 @@ namespace mnemos::chips::cpu {
         // Per-instruction trace hook installed via the introspection surface;
         // fired with the physical CS:IP of each instruction start.
         std::function<void(std::uint32_t pc)> trace_callback_{};
-
 
         std::array<register_descriptor, 14> register_view_{};
         instrumentation::introspection_builder introspection_;

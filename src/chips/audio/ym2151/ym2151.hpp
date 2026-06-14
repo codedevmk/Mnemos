@@ -130,7 +130,6 @@ namespace mnemos::chips::audio {
             std::uint8_t rl{}; // bit0 = left enable, bit1 = right enable
         };
 
-
         void step_timer_a() noexcept;
         void step_timer_b() noexcept;
         void update_irq() noexcept;

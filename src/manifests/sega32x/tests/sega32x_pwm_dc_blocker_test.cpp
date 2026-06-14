@@ -70,8 +70,8 @@ TEST_CASE("PWM DC blocker removes a held DC level") {
     }
     const int late = std::abs(static_cast<int>(out));
     CHECK(early > 1000); // the held level was genuinely there
-    CHECK(late < early);  // and it decays...
-    CHECK(late <= 1);     // ...to silence
+    CHECK(late < early); // and it decays...
+    CHECK(late <= 1);    // ...to silence
 }
 
 TEST_CASE("PWM DC blocker passes an AC edge") {
@@ -79,8 +79,8 @@ TEST_CASE("PWM DC blocker passes an AC edge") {
     for (int i = 0; i < 5000; ++i) {
         static_cast<void>(f.step(8000)); // settle: the DC component is removed
     }
-    const int before = std::abs(static_cast<int>(f.step(8000)));   // ~0
-    const int edge = std::abs(static_cast<int>(f.step(-8000)));    // a 16000 swing
+    const int before = std::abs(static_cast<int>(f.step(8000))); // ~0
+    const int edge = std::abs(static_cast<int>(f.step(-8000)));  // a 16000 swing
     CHECK(edge > before + 10000);
 }
 

@@ -1557,7 +1557,6 @@ namespace mnemos::chips::cpu {
         }
     }
 
-
     namespace {
         [[maybe_unused]] const auto m6510_registration =
             register_factory("mos.6510", chip_class::cpu,

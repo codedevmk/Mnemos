@@ -60,9 +60,7 @@ namespace mnemos::chips::cpu {
         elapsed_ = 0U;
     }
 
-    void v30::tick(std::uint64_t cycles) {
-        run_catch_up(cycles);
-    }
+    void v30::tick(std::uint64_t cycles) { run_catch_up(cycles); }
 
     void v30::set_nmi_line(bool asserted) noexcept {
         // Edge-triggered: latch on assertion only.
@@ -2283,7 +2281,6 @@ namespace mnemos::chips::cpu {
     }
 
     instrumentation::ichip_introspection& v30::introspection() noexcept { return introspection_; }
-
 
     namespace {
         [[maybe_unused]] const auto v30_registration =

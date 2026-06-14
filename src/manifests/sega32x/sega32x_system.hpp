@@ -1,10 +1,10 @@
 #pragma once
 
-#include "bus.hpp"         // topology bus
-#include "sega32x_vdp.hpp"           // the 32X VDP (palette + autofill + composition)
+#include "bus.hpp"                    // topology bus
 #include "sega32x_pwm_dc_blocker.hpp" // deterministic fixed-point PWM DC blocker
-#include "sh2.hpp"         // master + slave CPUs
-#include "state.hpp"   // chips::state_writer / state_reader
+#include "sega32x_vdp.hpp"            // the 32X VDP (palette + autofill + composition)
+#include "sh2.hpp"                    // master + slave CPUs
+#include "state.hpp"                  // chips::state_writer / state_reader
 
 #include <array>
 #include <cstddef>

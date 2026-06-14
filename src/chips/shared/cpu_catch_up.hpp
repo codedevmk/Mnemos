@@ -12,8 +12,7 @@ namespace mnemos::chips {
     //
     // The Derived core provides (private; befriend this template):
     //   int step_instruction()  -- run exactly one instruction; return its cycles.
-    template <typename Derived>
-    class cpu_catch_up {
+    template <typename Derived> class cpu_catch_up {
       protected:
         cpu_catch_up() = default;
 
