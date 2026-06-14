@@ -42,7 +42,7 @@ namespace mnemos::chips::audio {
     }
 
     void sn76489::write(std::uint8_t value) noexcept {
-        introspection_.note_write(0U, value); // log the register write (VGM port 0)
+        note_write(0U, value); // log the register write (VGM port 0)
         if ((value & 0x80U) != 0U) {
             // Latch + data.
             const int ch = (value >> 5U) & 3;
@@ -141,7 +141,7 @@ namespace mnemos::chips::audio {
     }
 
     void sn76489::write_stereo(std::uint8_t value) noexcept {
-        introspection_.note_write(1U, value); // Game Gear stereo port (VGM port 1)
+        note_write(1U, value); // Game Gear stereo port (VGM port 1)
         stereo_ = value;
     }
 

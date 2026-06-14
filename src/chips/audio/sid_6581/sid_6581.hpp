@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstddef>
@@ -26,7 +27,10 @@ namespace mnemos::chips::audio {
         static constexpr std::uint8_t register_count = 32U;
         static constexpr std::int32_t default_sample_rate_hz = 985'248; // PAL φ2
 
-        sid_6581() { reset(reset_kind::power_on); }
+        sid_6581() {
+            introspection_.with_registers([this] { return register_snapshot(); });
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -84,27 +88,6 @@ namespace mnemos::chips::audio {
         // Exposes the chip's register file (register_snapshot) through the
         // introspection register_view, so debuggers and the audio exporter can
         // read voice state without downcasting.
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(sid_6581& owner) noexcept : registers_(owner) {}
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_;
-            }
-
-          private:
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(sid_6581& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override {
-                    return owner_->register_snapshot();
-                }
-
-              private:
-                sid_6581* owner_;
-            };
-
-            registers_impl registers_;
-        };
 
         struct voice_state final {
             std::uint16_t frequency{};
@@ -156,7 +139,7 @@ namespace mnemos::chips::audio {
         std::uint8_t env3_{};
 
         std::array<register_descriptor, 4> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
 
         // Host-side audio capture buffer (see enable_audio_capture). Transient
         // playback state: not part of save/load and not cleared by reset(), so

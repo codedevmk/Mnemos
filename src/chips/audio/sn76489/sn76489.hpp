@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstddef>
@@ -25,7 +26,13 @@ namespace mnemos::chips::audio {
         static constexpr int channel_count = 4;
         static constexpr int default_clock_divider = 16;
 
-        sn76489() { reset(reset_kind::power_on); }
+        sn76489() {
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_reg_writes([this](instrumentation::reg_write_trace::callback cb) {
+                    reg_write_callback_ = std::move(cb);
+                });
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -84,49 +91,14 @@ namespace mnemos::chips::audio {
         // Exposes the chip's register file (register_snapshot) through the
         // introspection register_view, so debuggers and the audio exporter can
         // read voice state without downcasting.
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(sn76489& owner) noexcept : registers_(owner) {}
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_;
+
+        // Fire a live register write (port 0 = data, port 1 = GG stereo port) to
+        // the installed reg_write_trace subscriber, if one is attached.
+        void note_write(std::uint16_t port, std::uint8_t value) {
+            if (reg_write_callback_) {
+                reg_write_callback_({.port = port, .value = value});
             }
-            [[nodiscard]] instrumentation::reg_write_trace* reg_writes() override {
-                return &reg_trace_;
-            }
-            // Called from the chip's write paths to log a register write live:
-            // port 0 = the main data port, port 1 = the Game Gear stereo port.
-            void note_write(std::uint16_t port, std::uint8_t value) {
-                reg_trace_.fire(port, value);
-            }
-
-          private:
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(sn76489& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override {
-                    return owner_->register_snapshot();
-                }
-
-              private:
-                sn76489* owner_;
-            };
-
-            class reg_write_trace_impl final : public instrumentation::reg_write_trace {
-              public:
-                void install(callback cb) override { cb_ = std::move(cb); }
-                void fire(std::uint16_t port, std::uint8_t value) const {
-                    if (cb_) {
-                        cb_({.port = port, .value = value});
-                    }
-                }
-
-              private:
-                callback cb_{};
-            };
-
-            registers_impl registers_;
-            reg_write_trace_impl reg_trace_;
-        };
+        }
 
         std::array<std::uint16_t, 3> tone_{};    // 10-bit tone period registers
         std::array<std::uint16_t, 4> counter_{}; // internal countdown timers
@@ -153,7 +125,8 @@ namespace mnemos::chips::audio {
         std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 10> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
+        instrumentation::reg_write_trace::callback reg_write_callback_{};
     };
 
 } // namespace mnemos::chips::audio

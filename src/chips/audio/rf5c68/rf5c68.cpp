@@ -297,7 +297,7 @@ namespace mnemos::chips::audio {
     // ---- audio sample extraction ----
 
     std::span<const instrumentation::sample_view>
-    rf5c68::introspection_surface::audio_source_impl::samples() const {
+    rf5c68::audio_source_impl::samples() const {
         // The chip's native step rate at unity pitch (~32.55 kHz, per the Mega-CD
         // manual). The stored waveform's natural playback rate; per-voice pitch
         // (freq_divider) is a playback parameter, not a property of the sample.

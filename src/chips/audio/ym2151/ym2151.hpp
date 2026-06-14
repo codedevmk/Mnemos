@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -58,7 +59,10 @@ namespace mnemos::chips::audio {
 
         using irq_fn = std::function<void(bool asserted)>;
 
-        ym2151() { reset(reset_kind::power_on); }
+        ym2151() {
+            introspection_.with_registers([this] { return register_snapshot(); });
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override; // advance by chip clocks
@@ -84,6 +88,10 @@ namespace mnemos::chips::audio {
             return registers_[address];
         }
         [[nodiscard]] std::uint64_t elapsed_clocks() const noexcept { return elapsed_; }
+
+        // Debug view of the register file, surfaced through the introspection
+        // register_view (rebuilt per call into register_view_).
+        [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
         // Render one stereo sample (advances the envelope/phase generators).
         [[nodiscard]] stereo_sample step() noexcept;
@@ -122,25 +130,6 @@ namespace mnemos::chips::audio {
             std::uint8_t rl{}; // bit0 = left enable, bit1 = right enable
         };
 
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(ym2151& owner) noexcept : registers_impl_(owner) {}
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_impl_;
-            }
-
-          private:
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(ym2151& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override;
-
-              private:
-                ym2151* owner_;
-            };
-
-            registers_impl registers_impl_;
-        };
 
         void step_timer_a() noexcept;
         void step_timer_b() noexcept;
@@ -180,9 +169,8 @@ namespace mnemos::chips::audio {
 
         irq_fn irq_{};
 
-        friend class introspection_surface;
         std::array<register_descriptor, 6> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::audio

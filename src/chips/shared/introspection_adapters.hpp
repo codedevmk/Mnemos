@@ -103,6 +103,12 @@ namespace mnemos::instrumentation {
             reg_writes_.emplace(std::move(install_fn));
             return *this;
         }
+        // Capability surfaces a chip implements directly (audio PCM export, etc.)
+        // are registered by borrowed pointer; the chip owns the implementation.
+        introspection_builder& with_audio(audio_source* source) {
+            audio_ = source;
+            return *this;
+        }
 
         [[nodiscard]] register_view* registers() override {
             return registers_ ? &*registers_ : nullptr;
@@ -111,11 +117,13 @@ namespace mnemos::instrumentation {
         [[nodiscard]] reg_write_trace* reg_writes() override {
             return reg_writes_ ? &*reg_writes_ : nullptr;
         }
+        [[nodiscard]] audio_source* audio() override { return audio_; }
 
       private:
         std::optional<callback_register_view> registers_;
         std::optional<function_trace_target> trace_;
         std::optional<function_reg_write_trace> reg_writes_;
+        audio_source* audio_ = nullptr;
     };
 
 } // namespace mnemos::instrumentation

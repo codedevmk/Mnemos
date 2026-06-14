@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstddef>
@@ -48,7 +49,10 @@ namespace mnemos::chips::audio {
             std::int16_t right{};
         };
 
-        ym2612() { reset(reset_kind::power_on); }
+        ym2612() {
+            introspection_.with_registers([this] { return register_snapshot(); });
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override; // advance the timers by master clocks
@@ -119,27 +123,6 @@ namespace mnemos::chips::audio {
         // Exposes the chip's register file (register_snapshot) through the
         // introspection register_view, so debuggers and the audio exporter can
         // read voice state without downcasting.
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(ym2612& owner) noexcept : registers_(owner) {}
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_;
-            }
-
-          private:
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(ym2612& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override {
-                    return owner_->register_snapshot();
-                }
-
-              private:
-                ym2612* owner_;
-            };
-
-            registers_impl registers_;
-        };
 
         struct operator_state final {
             // Register-programmed parameters.
@@ -265,7 +248,7 @@ namespace mnemos::chips::audio {
         std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 14> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::audio

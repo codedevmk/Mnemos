@@ -578,18 +578,17 @@ namespace mnemos::chips::audio {
         return introspection_;
     }
 
-    std::span<const register_descriptor>
-    ym2151::introspection_surface::registers_impl::registers() {
+    std::span<const register_descriptor> ym2151::register_snapshot() noexcept {
         using fmt = register_value_format;
-        ym2151& chip = *owner_;
-        chip.register_view_[0] = {"ADDR", chip.address_, 8U, fmt::unsigned_integer};
-        chip.register_view_[1] = {"STATUS", chip.read_status(), 8U, fmt::flags};
-        chip.register_view_[2] = {"CLKA", chip.timer_a_load(), 10U, fmt::unsigned_integer};
-        chip.register_view_[3] = {"CLKB", chip.registers_[0x12], 8U, fmt::unsigned_integer};
-        chip.register_view_[4] = {"TA", chip.timer_a_counter_, 10U, fmt::unsigned_integer};
-        chip.register_view_[5] = {"TB", chip.timer_b_counter_, 8U, fmt::unsigned_integer};
-        return chip.register_view_;
+        register_view_[0] = {"ADDR", address_, 8U, fmt::unsigned_integer};
+        register_view_[1] = {"STATUS", read_status(), 8U, fmt::flags};
+        register_view_[2] = {"CLKA", timer_a_load(), 10U, fmt::unsigned_integer};
+        register_view_[3] = {"CLKB", registers_[0x12], 8U, fmt::unsigned_integer};
+        register_view_[4] = {"TA", timer_a_counter_, 10U, fmt::unsigned_integer};
+        register_view_[5] = {"TB", timer_b_counter_, 8U, fmt::unsigned_integer};
+        return register_view_;
     }
+
 
     namespace {
         [[maybe_unused]] const auto ym2151_registration =
