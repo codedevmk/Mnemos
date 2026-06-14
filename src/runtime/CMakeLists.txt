@@ -22,6 +22,7 @@ add_library(
     input.cpp
     save_state.cpp
     machine_save.cpp
+    session.cpp
     rewind.cpp
 )
 add_library(mnemos::runtime ALIAS mnemos_runtime)
@@ -74,7 +75,9 @@ if(BUILD_TESTING)
     # deterministically from reset with zero-filled system images.
     mnemos_add_test(
         mnemos_runtime_c64_save_state_test
-        SOURCES tests/c64_save_state_roundtrip_test.cpp
+        SOURCES
+            tests/c64_save_state_roundtrip_test.cpp
+            tests/session_c64_test.cpp
         LIBRARIES mnemos::runtime mnemos::manifests::c64
     )
 
