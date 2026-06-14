@@ -1557,26 +1557,6 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    m6510::introspection_surface::introspection_surface(m6510& owner) noexcept
-        : trace_impl_(owner), registers_impl_(owner) {}
-
-    void m6510::introspection_surface::trace_impl::install(callback cb) {
-        if (cb) {
-            // Wrap the generic (pc + cycles) trace_target callback onto the
-            // 6510's PC-only trace_callback_ slot; cycles are queried at fire
-            // time from the chip's own elapsed counter.
-            m6510* cpu = owner_;
-            owner_->trace_callback_ = [cpu, cb = std::move(cb)](std::uint32_t pc) {
-                cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
-            };
-        } else {
-            owner_->trace_callback_ = {};
-        }
-    }
-
-    std::span<const register_descriptor> m6510::introspection_surface::registers_impl::registers() {
-        return owner_->register_snapshot();
-    }
 
     namespace {
         [[maybe_unused]] const auto m6510_registration =

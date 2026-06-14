@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -157,7 +158,11 @@ namespace mnemos::chips::cpu {
         // CPU-visible address of the RES vector low byte ($FFFC/$FFFD).
         static constexpr std::uint16_t reset_vector = 0xFFFCU;
 
-        m6510() = default;
+        m6510() {
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_trace(instrumentation::pc_trace_installer(
+                    trace_callback_, [this] { return elapsed_cycles(); }));
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -211,37 +216,6 @@ namespace mnemos::chips::cpu {
         // target (per-instruction PC + cycles, fired only at instruction-
         // boundary cycles where tcu_==0 and no IRQ/NMI service is starting)
         // and a register view (`register_snapshot()`).
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(m6510& owner) noexcept;
-
-            [[nodiscard]] instrumentation::trace_target* trace() override { return &trace_impl_; }
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_impl_;
-            }
-
-          private:
-            class trace_impl final : public instrumentation::trace_target {
-              public:
-                explicit trace_impl(m6510& owner) noexcept : owner_(&owner) {}
-                void install(callback cb) override;
-
-              private:
-                m6510* owner_;
-            };
-
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(m6510& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override;
-
-              private:
-                m6510* owner_;
-            };
-
-            trace_impl trace_impl_;
-            registers_impl registers_impl_;
-        };
 
         // Pins configured as inputs read high through the default pull.
         static constexpr std::uint8_t port_input_pull = 0xFFU;
@@ -316,10 +290,9 @@ namespace mnemos::chips::cpu {
         // this PC-only slot.
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
-        friend class introspection_surface;
 
         std::array<register_descriptor, 6> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::cpu

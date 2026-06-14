@@ -1042,20 +1042,6 @@ namespace mnemos::chips::cpu {
 
     instrumentation::ichip_introspection& mcs51::introspection() noexcept { return introspection_; }
 
-    void mcs51::introspection_surface::trace_impl::install(callback cb) {
-        if (cb) {
-            mcs51* cpu = owner_;
-            owner_->trace_callback_ = [cpu, cb = std::move(cb)](std::uint32_t pc) {
-                cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
-            };
-        } else {
-            owner_->trace_callback_ = {};
-        }
-    }
-
-    std::span<const register_descriptor> mcs51::introspection_surface::registers_impl::registers() {
-        return owner_->register_snapshot();
-    }
 
     namespace {
         [[maybe_unused]] const auto mcs51_registration =

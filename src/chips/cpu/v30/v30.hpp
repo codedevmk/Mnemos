@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -70,7 +71,12 @@ namespace mnemos::chips::cpu {
         using port_out_fn = std::function<void(std::uint16_t port, std::uint8_t value)>;
         using irq_ack_fn = std::function<std::uint8_t()>;
 
-        v30() { reset(reset_kind::power_on); }
+        v30() {
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_trace(instrumentation::pc_trace_installer(
+                    trace_callback_, [this] { return elapsed_cycles(); }));
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -114,37 +120,6 @@ namespace mnemos::chips::cpu {
         // Bridges the chip's diagnostic surface into the generic
         // `instrumentation::ichip_introspection`: a trace target (per-
         // instruction PC + cycles hook) and a register view.
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(v30& owner) noexcept;
-
-            [[nodiscard]] instrumentation::trace_target* trace() override { return &trace_impl_; }
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_impl_;
-            }
-
-          private:
-            class trace_impl final : public instrumentation::trace_target {
-              public:
-                explicit trace_impl(v30& owner) noexcept : owner_(&owner) {}
-                void install(callback cb) override;
-
-              private:
-                v30* owner_;
-            };
-
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(v30& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override;
-
-              private:
-                v30* owner_;
-            };
-
-            trace_impl trace_impl_;
-            registers_impl registers_impl_;
-        };
 
         // ---- flags ----
         // Stored PSW with the fixed bits normalised the way the V30 reads
@@ -279,10 +254,9 @@ namespace mnemos::chips::cpu {
         // fired with the physical CS:IP of each instruction start.
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
-        friend class introspection_surface;
 
         std::array<register_descriptor, 14> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::cpu

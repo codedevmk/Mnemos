@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -57,7 +58,12 @@ namespace mnemos::chips::cpu {
             std::uint16_t pc{};
         };
 
-        mcs51() { reset(reset_kind::power_on); }
+        mcs51() {
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_trace(instrumentation::pc_trace_installer(
+                    trace_callback_, [this] { return elapsed_cycles(); }));
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override; // machine cycles
@@ -106,37 +112,6 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(mcs51& owner) noexcept
-                : trace_impl_(owner), registers_impl_(owner) {}
-            [[nodiscard]] instrumentation::trace_target* trace() override { return &trace_impl_; }
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_impl_;
-            }
-
-          private:
-            class trace_impl final : public instrumentation::trace_target {
-              public:
-                explicit trace_impl(mcs51& owner) noexcept : owner_(&owner) {}
-                void install(callback cb) override;
-
-              private:
-                mcs51* owner_;
-            };
-
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(mcs51& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override;
-
-              private:
-                mcs51* owner_;
-            };
-
-            trace_impl trace_impl_;
-            registers_impl registers_impl_;
-        };
 
         // ---- spaces ----
         [[nodiscard]] std::uint8_t fetch8() noexcept;
@@ -194,9 +169,8 @@ namespace mnemos::chips::cpu {
         port_out_fn port_out_{};
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
-        friend class introspection_surface;
         std::array<register_descriptor, 6> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::cpu

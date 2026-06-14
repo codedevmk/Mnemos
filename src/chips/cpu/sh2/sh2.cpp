@@ -1921,23 +1921,6 @@ namespace mnemos::chips::cpu {
         return register_view_;
     }
 
-    sh2::introspection_surface::introspection_surface(sh2& owner) noexcept
-        : trace_impl_(owner), registers_impl_(owner) {}
-
-    void sh2::introspection_surface::trace_impl::install(callback cb) {
-        if (cb) {
-            sh2* cpu = owner_;
-            owner_->trace_callback_ = [cpu, cb = std::move(cb)](std::uint32_t pc) {
-                cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
-            };
-        } else {
-            owner_->trace_callback_ = {};
-        }
-    }
-
-    std::span<const register_descriptor> sh2::introspection_surface::registers_impl::registers() {
-        return owner_->register_snapshot();
-    }
 
     namespace {
         [[maybe_unused]] const auto sh2_registration =

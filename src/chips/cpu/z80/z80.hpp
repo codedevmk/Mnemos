@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 
 #include <array>
 #include <cstdint>
@@ -60,7 +61,12 @@ namespace mnemos::chips::cpu {
         using port_out_fn = std::function<void(std::uint16_t port, std::uint8_t value)>;
         using irq_vector_fn = std::function<std::uint8_t()>;
 
-        z80() { reset(reset_kind::power_on); }
+        z80() {
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_trace(instrumentation::pc_trace_installer(
+                    trace_callback_, [this] { return elapsed_cycles(); }));
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -110,37 +116,6 @@ namespace mnemos::chips::cpu {
         // (`register_snapshot()`). Operational hooks (port_in/port_out, IRQ
         // line, NMI) stay on z80 itself because the system needs them set
         // for correct emulation.
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(z80& owner) noexcept;
-
-            [[nodiscard]] instrumentation::trace_target* trace() override { return &trace_impl_; }
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_impl_;
-            }
-
-          private:
-            class trace_impl final : public instrumentation::trace_target {
-              public:
-                explicit trace_impl(z80& owner) noexcept : owner_(&owner) {}
-                void install(callback cb) override;
-
-              private:
-                z80* owner_;
-            };
-
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(z80& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override;
-
-              private:
-                z80* owner_;
-            };
-
-            trace_impl trace_impl_;
-            registers_impl registers_impl_;
-        };
 
         // ---- 8-bit halves of the 16-bit pair registers (little-endian pairs) ----
         [[nodiscard]] std::uint8_t a() const noexcept {
@@ -273,10 +248,9 @@ namespace mnemos::chips::cpu {
         // own elapsed_cycles() at fire time.
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
-        friend class introspection_surface;
 
         std::array<register_descriptor, 16> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::cpu

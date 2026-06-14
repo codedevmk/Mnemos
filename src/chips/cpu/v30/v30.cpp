@@ -2287,23 +2287,6 @@ namespace mnemos::chips::cpu {
 
     instrumentation::ichip_introspection& v30::introspection() noexcept { return introspection_; }
 
-    v30::introspection_surface::introspection_surface(v30& owner) noexcept
-        : trace_impl_(owner), registers_impl_(owner) {}
-
-    void v30::introspection_surface::trace_impl::install(callback cb) {
-        if (cb) {
-            v30* cpu = owner_;
-            owner_->trace_callback_ = [cpu, cb = std::move(cb)](std::uint32_t pc) {
-                cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
-            };
-        } else {
-            owner_->trace_callback_ = {};
-        }
-    }
-
-    std::span<const register_descriptor> v30::introspection_surface::registers_impl::registers() {
-        return owner_->register_snapshot();
-    }
 
     namespace {
         [[maybe_unused]] const auto v30_registration =

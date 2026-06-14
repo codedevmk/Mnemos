@@ -28,6 +28,7 @@ if(BUILD_TESTING)
             tests/asset_views_test.cpp
             tests/audio_views_test.cpp
             tests/callbacks_test.cpp
+            tests/introspection_adapters_test.cpp
         LIBRARIES mnemos::chips::shared
     )
 endif()

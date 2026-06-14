@@ -2506,27 +2506,6 @@ namespace mnemos::chips::cpu {
         return owner_->last_cycle_sources_;
     }
 
-    m68000::introspection_surface::introspection_surface(m68000& owner) noexcept
-        : trace_impl_(owner), registers_impl_(owner) {}
-
-    void m68000::introspection_surface::trace_impl::install(callback cb) {
-        if (cb) {
-            // Wrap the generic trace_target callback (pc + cycles) onto the
-            // m68000's existing PC-only trace hook. The chip provides cycles
-            // by querying its own elapsed counter at fire time.
-            m68000* cpu = owner_;
-            owner_->trace_callback_ = [cpu, cb = std::move(cb)](std::uint32_t pc) {
-                cb({.pc = pc, .cycles = cpu->elapsed_cycles()});
-            };
-        } else {
-            owner_->trace_callback_ = {};
-        }
-    }
-
-    std::span<const register_descriptor>
-    m68000::introspection_surface::registers_impl::registers() {
-        return owner_->register_snapshot();
-    }
 
     namespace {
         [[maybe_unused]] const auto m68000_registration =

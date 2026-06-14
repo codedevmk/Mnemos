@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chip.hpp"
+#include "introspection_adapters.hpp"
 #include "sh2_peripherals.hpp"
 
 #include <array>
@@ -59,7 +60,12 @@ namespace mnemos::chips::cpu {
             std::uint32_t macl{};
         };
 
-        sh2() { reset(reset_kind::power_on); }
+        sh2() {
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_trace(instrumentation::pc_trace_installer(
+                    trace_callback_, [this] { return elapsed_cycles(); }));
+            reset(reset_kind::power_on);
+        }
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -167,37 +173,6 @@ namespace mnemos::chips::cpu {
         // Bridges the chip's diagnostic surface into the generic
         // `instrumentation::ichip_introspection` capability container: a
         // per-instruction PC+cycles trace target and a register view.
-        class introspection_surface final : public instrumentation::ichip_introspection {
-          public:
-            explicit introspection_surface(sh2& owner) noexcept;
-
-            [[nodiscard]] instrumentation::trace_target* trace() override { return &trace_impl_; }
-            [[nodiscard]] instrumentation::register_view* registers() override {
-                return &registers_impl_;
-            }
-
-          private:
-            class trace_impl final : public instrumentation::trace_target {
-              public:
-                explicit trace_impl(sh2& owner) noexcept : owner_(&owner) {}
-                void install(callback cb) override;
-
-              private:
-                sh2* owner_;
-            };
-
-            class registers_impl final : public instrumentation::register_view {
-              public:
-                explicit registers_impl(sh2& owner) noexcept : owner_(&owner) {}
-                [[nodiscard]] std::span<const register_descriptor> registers() override;
-
-              private:
-                sh2* owner_;
-            };
-
-            trace_impl trace_impl_;
-            registers_impl registers_impl_;
-        };
 
         // ---- raw memory (24/32-bit address, big-endian) ----
         [[nodiscard]] std::uint8_t rd8(std::uint32_t a) noexcept;
@@ -431,7 +406,7 @@ namespace mnemos::chips::cpu {
         std::uint32_t fetch_len_{};
 
         std::array<register_descriptor, 23> register_view_{};
-        introspection_surface introspection_{*this};
+        instrumentation::introspection_builder introspection_;
     };
 
 } // namespace mnemos::chips::cpu
