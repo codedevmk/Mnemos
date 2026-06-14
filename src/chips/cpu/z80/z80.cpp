@@ -1441,10 +1441,7 @@ namespace mnemos::chips::cpu {
     }
 
     void z80::tick(std::uint64_t cycles) {
-        cycle_debt_ += static_cast<std::int64_t>(cycles);
-        while (cycle_debt_ > 0) {
-            cycle_debt_ -= step_instruction();
-        }
+        run_catch_up(cycles);
     }
 
     void z80::set_nmi_line(bool asserted) noexcept {

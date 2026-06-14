@@ -2,6 +2,7 @@
 
 #include "chip.hpp"
 #include "introspection_adapters.hpp"
+#include "cpu_catch_up.hpp"
 
 #include <array>
 #include <cstdint>
@@ -35,7 +36,7 @@ namespace mnemos::chips::cpu {
     // (one machine cycle = 12 oscillator clocks on the classic part);
     // tick(cycles) catches up by whole instructions and advances the timers
     // per machine cycle.
-    class mcs51 final : public icpu {
+    class mcs51 final : public icpu, public cpu_catch_up<mcs51> {
       public:
         // PSW bits.
         static constexpr std::uint8_t psw_cy = 0x80U;
@@ -161,7 +162,8 @@ namespace mnemos::chips::cpu {
         bool in_interrupt_{}; // single in-service level (RETI clears)
 
         int step_cycles_{};
-        std::int64_t cycle_debt_{};
+        // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
+        friend class cpu_catch_up<mcs51>;
         std::uint64_t elapsed_{};
 
         ibus* bus_{};

@@ -2,6 +2,7 @@
 
 #include "chip.hpp"
 #include "introspection_adapters.hpp"
+#include "cpu_catch_up.hpp"
 #include "cpu_fetch_span.hpp"
 #include "m68000_diagnostics.hpp"
 
@@ -35,7 +36,7 @@ namespace mnemos::chips::cpu {
     // returns its cycle cost; tick(cycles) catches up by running whole instructions.
     // Memory is the attached ibus (byte-addressed; 16/32-bit accesses are assembled
     // big-endian).
-    class m68000 final : public icpu, public cpu_fetch_span<m68000> {
+    class m68000 final : public icpu, public cpu_fetch_span<m68000>, public cpu_catch_up<m68000> {
       public:
         // Status-register bits (68000 CCR layout: note N is bit 3, not bit 7).
         static constexpr std::uint16_t sr_c = 1U << 0U;   // carry
@@ -262,7 +263,8 @@ namespace mnemos::chips::cpu {
         bool halted_{};
 
         int cycles_{};              // cycles of the instruction in flight
-        std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
+        // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
+        friend class cpu_catch_up<m68000>;
         std::uint64_t elapsed_{};   // total cycles executed
 
         // Genesis / Mega Drive 68K bus DRAM refresh tracking. Every 128 68K

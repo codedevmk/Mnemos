@@ -2,6 +2,7 @@
 
 #include "chip.hpp"
 #include "introspection_adapters.hpp"
+#include "cpu_catch_up.hpp"
 
 #include <array>
 #include <cstdint>
@@ -23,7 +24,7 @@ namespace mnemos::chips::cpu {
     // whole instructions until the requested cycles are consumed. Memory is the
     // attached ibus; the Z80's separate 64K I/O space (IN/OUT) routes through
     // injected port callbacks (unset -> reads 0xFF, writes dropped).
-    class z80 final : public icpu {
+    class z80 final : public icpu, public cpu_catch_up<z80> {
       public:
         // F-register flag bits.
         static constexpr std::uint8_t flag_c = 0x01U; // carry
@@ -234,7 +235,8 @@ namespace mnemos::chips::cpu {
         bool reset_line_{}; // /RESET held: parked, no execution
 
         int step_cycles_{};         // cycles of the instruction in flight
-        std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
+        // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
+        friend class cpu_catch_up<z80>;
         std::uint64_t elapsed_{};   // total cycles executed
 
         ibus* bus_{};

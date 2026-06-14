@@ -2,6 +2,7 @@
 
 #include "chip.hpp"
 #include "introspection_adapters.hpp"
+#include "cpu_catch_up.hpp"
 
 #include <array>
 #include <cstdint>
@@ -36,7 +37,7 @@ namespace mnemos::chips::cpu {
     // increments (docs/plans/2026-06-10-irem-m72-port.md): those no-op forms,
     // exact V30 cycle timing (costs here are first-order documented
     // 8086-family values), and REP interruptibility.
-    class v30 final : public icpu {
+    class v30 final : public icpu, public cpu_catch_up<v30> {
       public:
         // PSW (FLAGS) bits.
         static constexpr std::uint16_t flag_c = 0x0001U; // carry
@@ -242,7 +243,8 @@ namespace mnemos::chips::cpu {
         std::uint16_t rm_offset_{};
 
         int step_cycles_{};         // cycles of the instruction in flight
-        std::int64_t cycle_debt_{}; // catch-up accumulator for tick()
+        // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
+        friend class cpu_catch_up<v30>;
         std::uint64_t elapsed_{};   // total cycles executed
 
         ibus* bus_{};
