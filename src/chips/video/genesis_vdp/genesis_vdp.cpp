@@ -162,16 +162,26 @@ namespace mnemos::chips::video {
     int genesis_vdp::visible_width() const noexcept { return h40_mode() ? 320 : 256; }
 
     int genesis_vdp::field_height() const noexcept {
+        // The internal active-display height for raster TIMING (VBL entry, VINT,
+        // frame pacing, reset phase) -- V30-driven and M5-independent. The
+        // M5-clear 192-line viewport is a host-facing geometry detail only
+        // (visible_height); folding it in here would shift VBL/VINT timing every
+        // boot (every game starts M5-clear), perturbing the raster phase.
+        //
         // V30 enables 240 visible scanlines per field. On real hardware V30 is
-        // only fully supported on PAL (NTSC garbles the bottom 16 lines on
-        // a CRT), but many games enable V30 on NTSC for non-gameplay screens
-        // (credits, intros) and the VDP still renders all 240 lines into the
-        // framebuffer. We honour that so the emulated frame matches what the
-        // game wrote -- the bottom 16 rows are no worse than on hardware.
+        // only fully supported on PAL (NTSC garbles the bottom 16 lines on a CRT),
+        // but many games enable V30 on NTSC for non-gameplay screens (credits,
+        // intros) and the VDP still renders all 240 lines into the framebuffer.
         return v30_mode() ? 240 : 224;
     }
 
     int genesis_vdp::visible_height() const noexcept {
+        // Reported framebuffer height. Mode 5 is required for the 224/240-line
+        // (and interlace-doubled) display; with M5 clear the VDP shows the legacy
+        // 192-line viewport, regardless of V30 / a stale interlace bit.
+        if (!m5_mode()) {
+            return 192;
+        }
         return interlace_enabled() ? field_height() * 2 : field_height();
     }
 

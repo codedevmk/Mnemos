@@ -278,12 +278,37 @@ TEST_CASE("genesis_vdp HINT counter is held at R10 during V-blank") {
 
 TEST_CASE("genesis_vdp advances the V counter readback") {
     genesis_vdp vdp;
-    // Reset starts at the VBL entry line (= field_height(), 224 for
-    // default H40 mode 5). After 10 scanline ticks, V counter is 234.
+    // Reset starts at the VBL entry line (= field_height(), the mode-5-shaped
+    // 224 timing height -- field_height drives the internal raster timing and is
+    // M5-independent). After 10 scanline ticks, V counter is 234.
     CHECK((vdp.read16(0x08) >> 8U) == 224U); // power-on at VBL entry line
     vdp.tick(10U * genesis_vdp::master_clocks_per_line);
     CHECK((vdp.read16(0x08) >> 8U) == 234U);
     CHECK(vdp.mmio_read(0x08) == 234U); // mmio byte path agrees
+}
+
+TEST_CASE("genesis_vdp reported viewport height tracks M5 (mode-5 select)") {
+    // The REPORTED framebuffer height reflects M5: Mode 5 is required for the
+    // 224/240-line display; with M5 clear the VDP shows the legacy 192-line
+    // viewport, regardless of V30. The internal timing height (field_height)
+    // stays mode-5-shaped regardless, so toggling M5 changes only the geometry
+    // the host samples -- not the raster timing (and nothing the game reads).
+    genesis_vdp vdp;
+
+    // Power-on: reg1 = 0 -> M5 clear -> 192-line viewport. Timing height = 224.
+    CHECK(vdp.visible_height() == 192);
+    CHECK(vdp.field_height() == 224);
+
+    set_reg(vdp, 1, 0x04); // M5
+    CHECK(vdp.visible_height() == 224);
+    CHECK(vdp.field_height() == 224);
+
+    set_reg(vdp, 1, 0x0C); // M5 + V30 (240-line)
+    CHECK(vdp.visible_height() == 240);
+
+    // A stale V30 with M5 cleared must collapse the reported height back to 192.
+    set_reg(vdp, 1, 0x08); // V30 set, M5 clear
+    CHECK(vdp.visible_height() == 192);
 }
 
 TEST_CASE("genesis_vdp round-trips its state") {
