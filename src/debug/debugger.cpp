@@ -32,24 +32,24 @@ namespace mnemos::debug {
         return id;
     }
 
-    bool debugger::remove_breakpoint(breakpoint_id id) {
+    foundation::status<debug_error> debugger::remove_breakpoint(breakpoint_id id) {
         for (auto it = breakpoints_.begin(); it != breakpoints_.end(); ++it) {
             if (it->id == id) {
                 breakpoints_.erase(it);
-                return true;
+                return {};
             }
         }
-        return false;
+        return foundation::unexpected(debug_error::no_such_breakpoint);
     }
 
-    bool debugger::set_breakpoint_enabled(breakpoint_id id, bool enabled) {
+    foundation::status<debug_error> debugger::set_breakpoint_enabled(breakpoint_id id, bool enabled) {
         for (auto& e : breakpoints_) {
             if (e.id == id) {
                 e.spec.enabled = enabled;
-                return true;
+                return {};
             }
         }
-        return false;
+        return foundation::unexpected(debug_error::no_such_breakpoint);
     }
 
     void debugger::clear_breakpoints() noexcept { breakpoints_.clear(); }
@@ -64,24 +64,24 @@ namespace mnemos::debug {
         return id;
     }
 
-    bool debugger::remove_watchpoint(watchpoint_id id) {
+    foundation::status<debug_error> debugger::remove_watchpoint(watchpoint_id id) {
         for (auto it = watchpoints_.begin(); it != watchpoints_.end(); ++it) {
             if (it->id == id) {
                 watchpoints_.erase(it);
-                return true;
+                return {};
             }
         }
-        return false;
+        return foundation::unexpected(debug_error::no_such_watchpoint);
     }
 
-    bool debugger::set_watchpoint_enabled(watchpoint_id id, bool enabled) {
+    foundation::status<debug_error> debugger::set_watchpoint_enabled(watchpoint_id id, bool enabled) {
         for (auto& e : watchpoints_) {
             if (e.id == id) {
                 e.spec.enabled = enabled;
-                return true;
+                return {};
             }
         }
-        return false;
+        return foundation::unexpected(debug_error::no_such_watchpoint);
     }
 
     void debugger::clear_watchpoints() noexcept { watchpoints_.clear(); }
@@ -96,14 +96,14 @@ namespace mnemos::debug {
         return handle;
     }
 
-    bool debugger::unsubscribe(subscription_handle handle) {
+    foundation::status<debug_error> debugger::unsubscribe(subscription_handle handle) {
         for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ++it) {
             if (it->handle == handle) {
                 subscriptions_.erase(it);
-                return true;
+                return {};
             }
         }
-        return false;
+        return foundation::unexpected(debug_error::no_such_subscription);
     }
 
     void debugger::emit(event_kind kind, breakpoint_id id, debug_address pc) {

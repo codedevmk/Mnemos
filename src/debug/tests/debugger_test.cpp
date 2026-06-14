@@ -13,6 +13,7 @@
 namespace {
     using mnemos::chips::cpu::m6510;
     using mnemos::debug::cpu_probe;
+    using mnemos::debug::debug_error;
     using mnemos::debug::debugger;
     using mnemos::debug::halt_reason;
     using mnemos::debug::watch_kind;
@@ -113,15 +114,17 @@ TEST_CASE("debugger disables and removes breakpoints") {
     const auto id = dbg.add_breakpoint({.address = 0x1005U});
     CHECK(dbg.breakpoint_count() == 1U);
 
-    REQUIRE(dbg.set_breakpoint_enabled(id, false));
+    REQUIRE(dbg.set_breakpoint_enabled(id, false).has_value());
     CHECK(dbg.run(40U).reason == halt_reason::budget_exhausted); // disabled -> no hit
 
-    REQUIRE(dbg.set_breakpoint_enabled(id, true));
+    REQUIRE(dbg.set_breakpoint_enabled(id, true).has_value());
     CHECK(dbg.run(40U).reason == halt_reason::breakpoint); // re-enabled -> hit
 
-    REQUIRE(dbg.remove_breakpoint(id));
+    REQUIRE(dbg.remove_breakpoint(id).has_value());
     CHECK(dbg.breakpoint_count() == 0U);
-    CHECK_FALSE(dbg.remove_breakpoint(id)); // already gone
+    const auto gone = dbg.remove_breakpoint(id); // already gone
+    CHECK_FALSE(gone.has_value());
+    CHECK(gone.error() == debug_error::no_such_breakpoint);
 }
 
 TEST_CASE("debugger reports scheduler progress") {
@@ -253,8 +256,10 @@ TEST_CASE("debugger delivers filtered events to subscribers") {
         debugger dbg(sched, m.probe());
         recording_sink sink;
         const auto handle = dbg.subscribe(mnemos::debug::all_events, sink);
-        REQUIRE(dbg.unsubscribe(handle));
-        CHECK_FALSE(dbg.unsubscribe(handle)); // already gone
+        REQUIRE(dbg.unsubscribe(handle).has_value());
+        const auto missing = dbg.unsubscribe(handle); // already gone
+        CHECK_FALSE(missing.has_value());
+        CHECK(missing.error() == debug_error::no_such_subscription);
         dbg.add_breakpoint({.address = 0x1004U});
         (void)dbg.run(100U);
         CHECK(sink.events.empty());
