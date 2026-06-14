@@ -4,6 +4,7 @@
 #include "disc_image.hpp" // CD media
 #include "m68000.hpp"     // sub-CPU
 #include "rf5c68.hpp"     // PCM
+#include "state.hpp"     // chips::state_writer / state_reader
 
 #include <array>
 #include <cstddef>
@@ -210,6 +211,13 @@ namespace mnemos::manifests::segacd {
         std::uint64_t sub_elapsed_base{0}; // accumulated pre-release elapsed counts
         void assert_sub_reset() noexcept { sub_reset_asserted = true; }
         void reset();
+
+        // Whole sub-board save-state: the sub-CPU + PCM, all writable RAM
+        // (PRG/word/backup/gate-array), the CDC/CDD/CD-DA state, and the host-side
+        // pacing anchor sub_elapsed_base. The pacing lives outside the chip set, so
+        // without it a Sega CD save/load resumes at a drifted sub-CPU phase (F3).
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
 
         // Gate-array register access. The sub side ($FF8000 / $0FF800 on the
         // sub-bus) and the main side ($A12000, wired in phase D) differ on the

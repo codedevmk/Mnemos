@@ -30,6 +30,13 @@ namespace mnemos::manifests::segacd {
         void begin_comm_slice() noexcept;
         void catch_up_sub();
 
+        // Machine-level pacing anchors (review F3): the comm-slice baselines and
+        // the fractional sub-cycle carry the 87.5/53.69 MHz ratio leaves between
+        // slices. These live outside the sub-board, so a save must capture them or
+        // the sub-CPU resumes at a drifted phase.
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
+
       private:
         std::uint64_t slice_base_main_ = 0; // main 68k cycles at the slice baseline
         std::uint64_t slice_base_sub_ = 0;  // sub 68k cycles at the slice baseline

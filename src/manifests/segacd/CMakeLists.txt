@@ -44,6 +44,7 @@ if(BUILD_TESTING)
         SOURCES
             tests/segacd_system_test.cpp
             tests/segacd_machine_test.cpp
+            tests/segacd_save_state_test.cpp
         LIBRARIES mnemos::manifests::segacd
     )
 endif()

@@ -152,4 +152,17 @@ namespace mnemos::manifests::segacd {
         return machine;
     }
 
+
+    void segacd_machine::save_state(chips::state_writer& writer) const {
+        writer.u64(slice_base_main_);
+        writer.u64(slice_base_sub_);
+        writer.u64(sub_cycle_carry_);
+    }
+
+    void segacd_machine::load_state(chips::state_reader& reader) {
+        slice_base_main_ = reader.u64();
+        slice_base_sub_ = reader.u64();
+        sub_cycle_carry_ = reader.u64();
+    }
+
 } // namespace mnemos::manifests::segacd

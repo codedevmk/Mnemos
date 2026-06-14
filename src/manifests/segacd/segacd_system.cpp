@@ -586,4 +586,136 @@ namespace mnemos::manifests::segacd {
         return sys;
     }
 
+
+    // Sub-board save-state format version (bump on any layout change below).
+    constexpr std::uint32_t segacd_system_state_version = 1U;
+
+    void segacd_system::save_state(chips::state_writer& writer) const {
+        writer.u32(segacd_system_state_version);
+
+        sub_cpu.save_state(writer);
+        pcm.save_state(writer);
+
+        writer.bytes(std::span<const std::uint8_t>(prg_ram));
+        writer.bytes(std::span<const std::uint8_t>(word_ram));
+        writer.bytes(std::span<const std::uint8_t>(backup_ram));
+        writer.bytes(std::span<const std::uint8_t>(gate_array));
+
+        writer.boolean(sub_reset_asserted);
+        writer.boolean(sub_busreq);
+        writer.u8(sub_led);
+        writer.boolean(dmna_pending);
+        writer.u8(sub_irq_mask);
+        writer.u8(sub_irq_pending);
+        writer.u8(timer_word);
+        writer.u32(timer_cycle_acc);
+
+        // CDD drive.
+        writer.bytes(std::span<const std::uint8_t>(cdd_command));
+        writer.bytes(std::span<const std::uint8_t>(cdd_status));
+        writer.u8(cdd_drive_status);
+        writer.u8(cdd_pending_status);
+        writer.u32(static_cast<std::uint32_t>(cdd_latency));
+        writer.u32(static_cast<std::uint32_t>(cdd_play_warmup));
+        writer.u32(static_cast<std::uint32_t>(cdd_lba));
+        writer.u32(static_cast<std::uint32_t>(cdd_track));
+        writer.boolean(cdd_loaded);
+
+        // CD-DA.
+        writer.u64(cdc_sectors_decoded);
+        writer.u32(last_sector_header);
+        writer.boolean(cdda_active);
+        writer.u32(cdda_start_lba);
+        writer.u32(cdda_end_lba);
+        writer.u32(cdda_current_lba);
+        writer.u16(cdda_sample_in_sector);
+        writer.boolean(cdda_loop);
+        writer.bytes(std::span<const std::uint8_t>(cdda_sector));
+        writer.u32(cdda_sector_lba);
+        writer.boolean(cdda_sector_valid);
+
+        // CDC (LC8951).
+        writer.bytes(std::span<const std::uint8_t>(cdc_ram));
+        writer.u8(cdc_ifstat);
+        writer.u8(cdc_ifctrl);
+        writer.u16(cdc_dbc);
+        writer.u16(cdc_dac);
+        writer.u16(cdc_pt);
+        writer.u16(cdc_wa);
+        writer.bytes(std::span<const std::uint8_t>(cdc_ctrl));
+        for (const auto& row : cdc_head) {
+            writer.bytes(std::span<const std::uint8_t>(row));
+        }
+        writer.bytes(std::span<const std::uint8_t>(cdc_stat));
+        writer.u8(cdc_ar);
+        writer.u8(cdc_irq);
+        writer.u32(static_cast<std::uint32_t>(cdc_dma_dest));
+
+        // Host-side pacing anchor (F3): the monotone sub-CPU base.
+        writer.u64(sub_elapsed_base);
+    }
+
+    void segacd_system::load_state(chips::state_reader& reader) {
+        if (reader.u32() != segacd_system_state_version) {
+            reader.fail(); // unknown layout; leave the board at its assembled state
+            return;
+        }
+        sub_cpu.load_state(reader);
+        pcm.load_state(reader);
+
+        reader.bytes(std::span<std::uint8_t>(prg_ram));
+        reader.bytes(std::span<std::uint8_t>(word_ram));
+        reader.bytes(std::span<std::uint8_t>(backup_ram));
+        reader.bytes(std::span<std::uint8_t>(gate_array));
+
+        sub_reset_asserted = reader.boolean();
+        sub_busreq = reader.boolean();
+        sub_led = reader.u8();
+        dmna_pending = reader.boolean();
+        sub_irq_mask = reader.u8();
+        sub_irq_pending = reader.u8();
+        timer_word = reader.u8();
+        timer_cycle_acc = reader.u32();
+
+        reader.bytes(std::span<std::uint8_t>(cdd_command));
+        reader.bytes(std::span<std::uint8_t>(cdd_status));
+        cdd_drive_status = reader.u8();
+        cdd_pending_status = reader.u8();
+        cdd_latency = static_cast<int>(reader.u32());
+        cdd_play_warmup = static_cast<int>(reader.u32());
+        cdd_lba = static_cast<std::int32_t>(reader.u32());
+        cdd_track = static_cast<int>(reader.u32());
+        cdd_loaded = reader.boolean();
+
+        cdc_sectors_decoded = reader.u64();
+        last_sector_header = reader.u32();
+        cdda_active = reader.boolean();
+        cdda_start_lba = reader.u32();
+        cdda_end_lba = reader.u32();
+        cdda_current_lba = reader.u32();
+        cdda_sample_in_sector = reader.u16();
+        cdda_loop = reader.boolean();
+        reader.bytes(std::span<std::uint8_t>(cdda_sector));
+        cdda_sector_lba = reader.u32();
+        cdda_sector_valid = reader.boolean();
+
+        reader.bytes(std::span<std::uint8_t>(cdc_ram));
+        cdc_ifstat = reader.u8();
+        cdc_ifctrl = reader.u8();
+        cdc_dbc = reader.u16();
+        cdc_dac = reader.u16();
+        cdc_pt = reader.u16();
+        cdc_wa = reader.u16();
+        reader.bytes(std::span<std::uint8_t>(cdc_ctrl));
+        for (auto& row : cdc_head) {
+            reader.bytes(std::span<std::uint8_t>(row));
+        }
+        reader.bytes(std::span<std::uint8_t>(cdc_stat));
+        cdc_ar = reader.u8();
+        cdc_irq = reader.u8();
+        cdc_dma_dest = static_cast<int>(reader.u32());
+
+        sub_elapsed_base = reader.u64();
+    }
+
 } // namespace mnemos::manifests::segacd
