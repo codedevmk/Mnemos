@@ -29,9 +29,8 @@ namespace mnemos::manifests::sega32x {
         std::int64_t y_accum = 0; // y[n-1] in Q16
 
         [[nodiscard]] std::int16_t step(std::int16_t x) noexcept {
-            const std::int64_t y =
-                (static_cast<std::int64_t>(x - prev_x) << accum_frac_bits) +
-                ((coeff_r * y_accum) >> coeff_frac_bits);
+            const std::int64_t y = (static_cast<std::int64_t>(x - prev_x) << accum_frac_bits) +
+                                   ((coeff_r * y_accum) >> coeff_frac_bits);
             prev_x = x;
             y_accum = y;
             const std::int64_t sample = y / (std::int64_t{1} << accum_frac_bits); // trunc toward 0

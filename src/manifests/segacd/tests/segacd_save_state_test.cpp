@@ -17,29 +17,29 @@
 
 namespace {
 
-using mnemos::manifests::segacd::assemble_segacd_machine;
-using mnemos::manifests::segacd::segacd_machine;
-using mnemos::manifests::segacd::segacd_system;
+    using mnemos::manifests::segacd::assemble_segacd_machine;
+    using mnemos::manifests::segacd::segacd_machine;
+    using mnemos::manifests::segacd::segacd_system;
 
-std::vector<std::uint8_t> make_bios() {
-    std::vector<std::uint8_t> bios(0x20000U, 0U); // 128 KiB
-    bios[1] = 0xFFU;                              // SSP = $00FF0000
-    bios[6] = 0x02U;                              // PC  = $00000200
-    return bios;
-}
+    std::vector<std::uint8_t> make_bios() {
+        std::vector<std::uint8_t> bios(0x20000U, 0U); // 128 KiB
+        bios[1] = 0xFFU;                              // SSP = $00FF0000
+        bios[6] = 0x02U;                              // PC  = $00000200
+        return bios;
+    }
 
-std::unique_ptr<segacd_machine> booted() {
-    std::unique_ptr<segacd_machine> m = assemble_segacd_machine(make_bios());
-    m->sub->release_sub_reset(); // run the sub-CPU from its PRG-RAM vectors
-    return m;
-}
+    std::unique_ptr<segacd_machine> booted() {
+        std::unique_ptr<segacd_machine> m = assemble_segacd_machine(make_bios());
+        m->sub->release_sub_reset(); // run the sub-CPU from its PRG-RAM vectors
+        return m;
+    }
 
-std::vector<std::uint8_t> snapshot(const segacd_system& sub) {
-    std::vector<std::uint8_t> buffer;
-    mnemos::chips::state_writer writer(buffer);
-    sub.save_state(writer);
-    return buffer;
-}
+    std::vector<std::uint8_t> snapshot(const segacd_system& sub) {
+        std::vector<std::uint8_t> buffer;
+        mnemos::chips::state_writer writer(buffer);
+        sub.save_state(writer);
+        return buffer;
+    }
 
 } // namespace
 

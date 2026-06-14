@@ -7,8 +7,8 @@
 #include <span>
 
 namespace {
-using namespace mnemos::instrumentation;
-using mnemos::chips::register_descriptor;
+    using namespace mnemos::instrumentation;
+    using mnemos::chips::register_descriptor;
 } // namespace
 
 TEST_CASE("callback_register_view forwards to its provider") {

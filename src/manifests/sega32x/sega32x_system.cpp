@@ -1043,7 +1043,6 @@ namespace mnemos::manifests::sega32x {
         return sys;
     }
 
-
     // Board save-state format version (bump on any layout change below).
     constexpr std::uint32_t sega32x_system_state_version = 1U;
 

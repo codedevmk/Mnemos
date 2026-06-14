@@ -11,8 +11,8 @@
 // the 32X VDP, SDRAM, and the framebuffer. It deliberately excludes the PWM
 // DC-blocker (float; a separate audio-determinism concern, review F8).
 
-#include "sega32x_machine.hpp" // assemble_sega32x_machine, sega32x_machine, sega32x_system
 #include "scheduler.hpp"       // runtime::scheduler
+#include "sega32x_machine.hpp" // assemble_sega32x_machine, sega32x_machine, sega32x_system
 
 #include "chip.hpp"
 #include "state.hpp"
@@ -33,9 +33,9 @@ namespace {
     // so the 68000 advances deterministically when ticked (mirrors the machine test).
     std::vector<std::uint8_t> make_cart() {
         std::vector<std::uint8_t> cart(0x10000U, 0U);
-        cart[1] = 0xFFU;             // SSP = $00FF0000
-        cart[6] = 0x02U;             // PC  = $00000200
-        cart[0x200] = 0x60U;         // BRA.B *  (idle loop)
+        cart[1] = 0xFFU;     // SSP = $00FF0000
+        cart[6] = 0x02U;     // PC  = $00000200
+        cart[0x200] = 0x60U; // BRA.B *  (idle loop)
         cart[0x201] = 0xFEU;
         return cart;
     }
@@ -44,7 +44,7 @@ namespace {
     // PSG). The SH-2s are NOT scheduler chips; the machine paces them per slice.
     std::vector<runtime::scheduled_chip> build_schedule(manifests::genesis::genesis_system& g) {
         return {
-            {.chip = &g.vdp, .divider = 1U},     {.chip = &g.cpu_gate, .divider = 7U},
+            {.chip = &g.vdp, .divider = 1U},       {.chip = &g.cpu_gate, .divider = 7U},
             {.chip = &g.z80_gate, .divider = 15U}, {.chip = &g.fm, .divider = 7U},
             {.chip = &g.psg, .divider = 15U},
         };

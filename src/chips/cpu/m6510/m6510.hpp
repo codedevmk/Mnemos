@@ -290,7 +290,6 @@ namespace mnemos::chips::cpu {
         // this PC-only slot.
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
-
         std::array<register_descriptor, 6> register_view_{};
         instrumentation::introspection_builder introspection_;
     };

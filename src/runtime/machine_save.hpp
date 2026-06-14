@@ -24,8 +24,7 @@
 namespace mnemos::runtime {
 
     [[nodiscard]] save_target build_save_target(const manifests::system_graph& graph,
-                                                std::string manifest_id,
-                                                std::uint32_t manifest_rev,
+                                                std::string manifest_id, std::uint32_t manifest_rev,
                                                 std::uint64_t master_cycle,
                                                 std::span<const std::string_view> ram_regions);
 

@@ -1,9 +1,9 @@
 ---
 capsule: src/chips/cpu/z80
 generator: gen_capsule/0.1
-source_digest: sha256:9fe67da55ed8e98449ded2f041b7003b48445ce7460fabcfae89f211bfc71ac6
+source_digest: sha256:e188afa19583fcde3aa3f7ff1049183edae7a0ba9bddb88a4169f81dbca9ac00
 intent_ratified: sha256:5851e3ff1e19107caf90632468e9e5e5e94261a8cd8ea86c59ff109f5afd885a
-token_estimate: 472
+token_estimate: 495
 ---
 # Capsule — `src/chips/cpu/z80`
 
@@ -38,7 +38,9 @@ link targets:
 product include edges (header <- owning module):
 - `chip.hpp <- src/chips/shared`
 - `chip_registry.hpp <- src/chips/shared`
+- `cpu_catch_up.hpp <- src/chips/shared`
 - `ibus.hpp <- src/chips/shared`
+- `introspection_adapters.hpp <- src/chips/shared`
 - `state.hpp <- src/chips/shared`
 
 test-only include edges:

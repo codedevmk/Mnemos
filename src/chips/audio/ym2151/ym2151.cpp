@@ -589,7 +589,6 @@ namespace mnemos::chips::audio {
         return register_view_;
     }
 
-
     namespace {
         [[maybe_unused]] const auto ym2151_registration =
             register_factory("yamaha.ym2151", chip_class::audio_synth,

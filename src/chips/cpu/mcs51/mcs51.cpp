@@ -87,9 +87,7 @@ namespace mnemos::chips::cpu {
         elapsed_ = 0U;
     }
 
-    void mcs51::tick(std::uint64_t cycles) {
-        run_catch_up(cycles);
-    }
+    void mcs51::tick(std::uint64_t cycles) { run_catch_up(cycles); }
 
     // ---- spaces ---------------------------------------------------------------
 
@@ -1038,7 +1036,6 @@ namespace mnemos::chips::cpu {
     }
 
     instrumentation::ichip_introspection& mcs51::introspection() noexcept { return introspection_; }
-
 
     namespace {
         [[maybe_unused]] const auto mcs51_registration =

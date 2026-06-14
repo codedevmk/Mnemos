@@ -42,7 +42,8 @@ namespace mnemos::debug {
         return foundation::unexpected(debug_error::no_such_breakpoint);
     }
 
-    foundation::status<debug_error> debugger::set_breakpoint_enabled(breakpoint_id id, bool enabled) {
+    foundation::status<debug_error> debugger::set_breakpoint_enabled(breakpoint_id id,
+                                                                     bool enabled) {
         for (auto& e : breakpoints_) {
             if (e.id == id) {
                 e.spec.enabled = enabled;
@@ -74,7 +75,8 @@ namespace mnemos::debug {
         return foundation::unexpected(debug_error::no_such_watchpoint);
     }
 
-    foundation::status<debug_error> debugger::set_watchpoint_enabled(watchpoint_id id, bool enabled) {
+    foundation::status<debug_error> debugger::set_watchpoint_enabled(watchpoint_id id,
+                                                                     bool enabled) {
         for (auto& e : watchpoints_) {
             if (e.id == id) {
                 e.spec.enabled = enabled;

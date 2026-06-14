@@ -31,9 +31,9 @@ namespace mnemos::runtime {
     // decode through the same chunk framing as chips, so machine state that lives
     // outside the chip set is no longer unserialisable.
     struct save_component final {
-        std::string id;                                  // chunk id (unique across the target)
-        std::function<void(chips::state_writer&)> save;  // read component state on save
-        std::function<void(chips::state_reader&)> load;  // restore component state on load
+        std::string id;                                 // chunk id (unique across the target)
+        std::function<void(chips::state_writer&)> save; // read component state on save
+        std::function<void(chips::state_reader&)> load; // restore component state on load
     };
 
     // The pieces of a machine a save state captures. master_cycle is recorded in

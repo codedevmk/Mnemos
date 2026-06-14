@@ -123,8 +123,7 @@ namespace mnemos::chips::audio {
         class audio_source_impl final : public instrumentation::audio_source {
           public:
             explicit audio_source_impl(rf5c68& owner) noexcept : owner_(&owner) {}
-            [[nodiscard]] std::span<const instrumentation::sample_view>
-            samples() const override;
+            [[nodiscard]] std::span<const instrumentation::sample_view> samples() const override;
 
           private:
             rf5c68* owner_;

@@ -4,7 +4,7 @@
 #include "disc_image.hpp" // CD media
 #include "m68000.hpp"     // sub-CPU
 #include "rf5c68.hpp"     // PCM
-#include "state.hpp"     // chips::state_writer / state_reader
+#include "state.hpp"      // chips::state_writer / state_reader
 
 #include <array>
 #include <cstddef>

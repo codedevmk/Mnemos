@@ -290,7 +290,6 @@ namespace mnemos::chips::cpu {
         install_fetch_invalidation(bus);
     }
 
-
     std::uint16_t m68000::fetch16() noexcept {
         cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
@@ -2306,9 +2305,7 @@ namespace mnemos::chips::cpu {
         return cycles_;
     }
 
-    void m68000::tick(std::uint64_t cycles) {
-        run_catch_up(cycles);
-    }
+    void m68000::tick(std::uint64_t cycles) { run_catch_up(cycles); }
 
     void m68000::reset(reset_kind /*kind*/) {
         d_.fill(0U);
@@ -2482,7 +2479,6 @@ namespace mnemos::chips::cpu {
     m68000_diagnostics::last_cycle_sources() const noexcept {
         return owner_->last_cycle_sources_;
     }
-
 
     namespace {
         [[maybe_unused]] const auto m68000_registration =

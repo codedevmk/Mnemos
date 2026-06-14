@@ -1,8 +1,8 @@
 #pragma once
 
 #include "chip.hpp"
-#include "introspection_adapters.hpp"
 #include "cpu_fetch_span.hpp"
+#include "introspection_adapters.hpp"
 #include "sh2_peripherals.hpp"
 
 #include <array>

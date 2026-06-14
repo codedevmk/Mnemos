@@ -44,18 +44,19 @@ namespace {
     constexpr std::uint32_t k_manifest_rev = 1U;
 
     std::unique_ptr<manifests::c64::c64_runtime> make_c64() {
-        return manifests::c64::build_c64_runtime(std::vector<std::uint8_t>(0x2000U), // BASIC 8K
-                                                 std::vector<std::uint8_t>(0x2000U), // KERNAL 8K
+        return manifests::c64::build_c64_runtime(std::vector<std::uint8_t>(0x2000U),  // BASIC 8K
+                                                 std::vector<std::uint8_t>(0x2000U),  // KERNAL 8K
                                                  std::vector<std::uint8_t>(0x1000U)); // CHARGEN 4K
     }
 
     runtime::scheduler make_scheduler(manifests::c64::c64_runtime& rt) {
         std::vector<runtime::scheduled_chip> slots;
         for (const manifests::c64::c64_scheduled_entry& entry : rt.schedule()) {
-            slots.push_back(runtime::scheduled_chip{.chip = entry.chip,
-                                                    .divider = entry.weight == 0U ? 1U : entry.weight,
-                                                    .rate_num = 0U,
-                                                    .rate_den = 0U});
+            slots.push_back(
+                runtime::scheduled_chip{.chip = entry.chip,
+                                        .divider = entry.weight == 0U ? 1U : entry.weight,
+                                        .rate_num = 0U,
+                                        .rate_den = 0U});
         }
         return runtime::scheduler(std::move(slots), rt.video());
     }
@@ -232,7 +233,5 @@ TEST_CASE("C64 save-state load rejects corruption and mismatch") {
             a->graph, std::string(k_manifest_id), k_manifest_rev, sa.master_cycle(), regions);
         CHECK(runtime::read_save_state(good, partial).ok());
     }
-    SECTION("a valid load still succeeds") {
-        CHECK(runtime::read_save_state(good, target).ok());
-    }
+    SECTION("a valid load still succeeds") { CHECK(runtime::read_save_state(good, target).ok()); }
 }
