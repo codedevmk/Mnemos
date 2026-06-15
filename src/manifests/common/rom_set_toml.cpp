@@ -226,9 +226,15 @@ namespace mnemos::manifests::common {
             }
             // Optional CPS-B board / PAL profile id (capcom_cps1 selects its
             // hardware profile by this id; ignored by families that don't use it).
+            // The id is a 16-bit value: diagnose out-of-range rather than silently
+            // truncating (mirrors read_crc32's range handling).
             if (const toml::node* node = set->get("cps_b_profile")) {
                 if (auto profile = read_unsigned(ctx, *node, "cps_b_profile", "[set]")) {
-                    decl.cps_b_profile = static_cast<std::uint16_t>(*profile);
+                    if (*profile > 0xFFFFU) {
+                        ctx.error("'cps_b_profile' in [set] is out of 16-bit range", node);
+                    } else {
+                        decl.cps_b_profile = static_cast<std::uint16_t>(*profile);
+                    }
                 }
             }
         } else {

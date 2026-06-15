@@ -2,7 +2,7 @@
 // synthetic cart (boot, render one frame to the black backdrop, route the
 // CPS-A/CPS-B register windows). Increment 2 adds the per-frame CPS-A -> video
 // decode, the reg5 palette DMA (GFX RAM -> palette buffer), and the vblank
-// level-6 IRQ that drives the game's main loop. Increment 3 adds the Z80 sound
+// level-2 IRQ that drives the game's main loop. Increment 3 adds the Z80 sound
 // subsystem: the 68K -> Z80 sound latch, a running sound Z80 driving the
 // YM2151 + OKIM6295, the bank window, and the two CPUs + sound chips scheduled
 // together across the frame. Increment 4 adds the controls / DIP read windows,
@@ -147,19 +147,19 @@ TEST_CASE("cps1 reg5 palette DMA fills the palette from GFX RAM", "[cps1]") {
     CHECK((backdrop_rgb & 0x00FFFFU) == 0U);           // no green/blue
 }
 
-TEST_CASE("cps1 raises and acknowledges the level-6 vblank IRQ each frame", "[cps1]") {
+TEST_CASE("cps1 raises and acknowledges the level-2 vblank IRQ each frame", "[cps1]") {
     rom_set_image image;
     auto& main = image.regions["maincpu"];
     main.assign(cps1::main_rom_size, 0xFFU);
     poke32(main, 0x0U, 0x01000000U); // SSP -> top of work RAM (predecrement lands inside)
     poke32(main, 0x4U, 0x00000400U); // PC -> the program below
 
-    // Autovector level 6 = vector 30 -> address $78. Point it at the handler.
-    poke32(main, 0x78U, 0x00000500U);
+    // Autovector level 2 = vector 26 -> address $68. Point it at the handler.
+    poke32(main, 0x68U, 0x00000500U);
 
     // Program @ $400: drop the interrupt mask (MOVE #$2000,SR) then BRA *.
     poke16(main, 0x400U, 0x46FCU); // MOVE #imm,SR
-    poke16(main, 0x402U, 0x2000U); // S=1, IPM=0 -> level-6 IRQ now accepted
+    poke16(main, 0x402U, 0x2000U); // S=1, IPM=0 -> level-2 IRQ now accepted
     poke16(main, 0x404U, 0x60FEU); // BRA * (branch to self)
 
     // Handler @ $500: ADDQ.L #1,D0 then RTE. D0 counts serviced vblanks.
@@ -175,7 +175,7 @@ TEST_CASE("cps1 raises and acknowledges the level-6 vblank IRQ each frame", "[cp
     system->run_frame();
 
     // The vblank callback raised the IRQ; the CPU accepted it (IACK fired) and
-    // vectored through autovector 6 into the handler.
+    // vectored through autovector 2 ($68) into the handler.
     CHECK(system->vblank_irq_raised == 1U);
     CHECK(system->vblank_irq_acked == 1U);
     CHECK(system->main_cpu.cpu_registers().d[0] == 1U); // handler ran once
@@ -186,7 +186,7 @@ TEST_CASE("cps1 raises and acknowledges the level-6 vblank IRQ each frame", "[cp
     CHECK(system->main_cpu.cpu_registers().d[0] == 2U);
 }
 
-TEST_CASE("cps1 drives the CPS-A scroll1 base + palette page to the video", "[cps1]") {
+TEST_CASE("cps1 drives the CPS-A scroll1 base (0x4000-aligned) to the video", "[cps1]") {
     auto system = assemble_cps1(make_image());
 
     // GFX ROM: make scroll1 tile code 0 opaque pen 1 across its whole 8x8 cell.
@@ -199,16 +199,18 @@ TEST_CASE("cps1 drives the CPS-A scroll1 base + palette page to the video", "[cp
     }
     system->video.attach_gfx(std::span<const std::uint8_t>(gfx));
 
-    // Stage two scroll1 name-table tile-index-0 entries: one at GFX offset 0
-    // (what a zero scroll1_base reads) with attr -> palette page 32, and one at
-    // the based offset 0x200 with attr -> palette page 33. Both code 0.
-    constexpr std::uint16_t scroll1_base_reg = 0x0002U; // base = reg << 8 = 0x200
+    // The hardware aligns the scroll name-table base to 0x4000 (the low bits of
+    // the CPS-A base register are masked off). Stage two scroll1 tile-index-0
+    // entries: one at GFX offset 0 (what a zero base reads) with attr -> palette
+    // page 32, and one at the aligned base 0x4000 with attr -> palette page 33.
+    constexpr std::uint16_t scroll1_base_reg = 0x0041U; // raw base = reg << 8 = 0x4100
+    constexpr std::uint32_t aligned_base = 0x4000U;     // masked to the 0x4000 boundary
     auto stage_entry = [&](std::uint32_t base, std::uint16_t attr) {
         poke16(system->gfx_ram, base + 0U, 0x0000U); // tile code 0
         poke16(system->gfx_ram, base + 2U, attr);    // attribute
     };
-    stage_entry(0x000U, 0x0000U); // page 32 entry at offset 0
-    stage_entry(0x200U, 0x0001U); // page 33 entry at the based offset
+    stage_entry(0x0000U, 0x0000U);      // page 32 entry at offset 0 (the unaligned target)
+    stage_entry(aligned_base, 0x0001U); // page 33 entry at the 0x4000-aligned base
 
     // Colour palette page 32 red and page 33 green directly (focus this case on
     // the scroll wiring, not the DMA path). pal_num = 32 + (attr & 0x1F); the
@@ -225,13 +227,14 @@ TEST_CASE("cps1 drives the CPS-A scroll1 base + palette page to the video", "[cp
 
     system->run_frame();
 
-    // The visible image is the scroll1 layer. With the scroll offsets landing on
-    // tile-index 0 and the base register reaching the chip, the lookup used the
-    // page-33 entry -> green; had the base stayed 0 it would be the page-32 entry
-    // -> red. Green proves both the base and the scroll offsets drove the render.
+    // The visible image is the scroll1 layer. The base register's low bits
+    // (0x0100) are masked off to the 0x4000 boundary, so the lookup used the
+    // page-33 entry at 0x4000 -> green; an unaligned (raw 0x4100) base would read
+    // the page-32 entry at offset 0 -> red. Green proves the base reached the
+    // chip AND that the low bits were masked to the 0x4000 alignment.
     const std::uint32_t pixel = system->video.framebuffer().pixels[0];
-    CHECK((pixel & 0x00FF00U) != 0U); // green present
-    CHECK((pixel & 0xFF0000U) == 0U); // not red -> the CPS-A registers drove it
+    CHECK((pixel & 0x00FF00U) != 0U); // green present -> aligned base addressing
+    CHECK((pixel & 0xFF0000U) == 0U); // not red -> not the unaligned offset
 }
 
 namespace {

@@ -85,8 +85,11 @@ namespace mnemos::manifests::capcom_cps1 {
     // GFX-RAM base decode: a CPS-A base word addresses GFX RAM as `reg << 8`; if
     // that lands inside the GFX-RAM window it is rebased to a GFX-RAM offset, else
     // it is taken as a raw `reg * 256` offset. Aligned variants mask to a power-of-
-    // two boundary. The object table aligns to 0x800; the palette source to a page.
+    // two boundary. The object table aligns to 0x800; the scroll name-table bases
+    // to 0x4000; the row-scroll table base to 0x800; the palette source to a page.
     inline constexpr std::uint32_t object_base_align = 0x0800U;
+    inline constexpr std::uint32_t scroll_base_align = 0x4000U;
+    inline constexpr std::uint32_t other_base_align = 0x0800U;
 
     // reg5 palette DMA: the GFX-RAM palette source is copied into the board's
     // palette buffer one page at a time, gated by the CPS-B palette-control mask.
@@ -207,8 +210,9 @@ namespace mnemos::manifests::capcom_cps1 {
 
         // Sound-command latches. The 68K writes $800180 (primary) / $800188
         // (secondary); the Z80 reads them at $F008 / $F00A. `sound_latch_pending`
-        // mirrors the hardware's latch-armed flag (cleared on the Z80's read).
-        std::uint8_t sound_latch{};
+        // mirrors the hardware's latch-armed flag (cleared on the Z80's read). The
+        // primary latch powers on to 0xFF (its hardware reset value).
+        std::uint8_t sound_latch{0xFFU};
         std::uint8_t sound_latch2{};
         bool sound_latch_pending{};
         // The $F004 bank register (one bit selects the banked $8000 window).
@@ -217,7 +221,7 @@ namespace mnemos::manifests::capcom_cps1 {
         std::uint32_t sound_rom_size{};
 
         // Vblank IRQ bookkeeping (observable, not architectural). The video's
-        // vblank callback raises the 68K level-6 autovector IRQ and bumps the
+        // vblank callback raises the 68K level-2 autovector ($68) IRQ and bumps the
         // raise count; the CPU's IACK clears the line and bumps the ack count.
         std::uint64_t vblank_irq_raised{};
         std::uint64_t vblank_irq_acked{};

@@ -93,18 +93,11 @@ namespace mnemos::manifests::capcom_cps1 {
         // Sound-command latches ($800180 primary, $800188 secondary). The 68K
         // pokes commands here; the Z80 reads them at $F008 / $F00A. A primary
         // write arms the pending flag (cleared on the Z80 read). Only the low
-        // byte of the secondary latch carries data on hardware.
+        // byte of the secondary latch carries data on hardware. These ports are
+        // write-only on the 68K side -- a read returns open bus (0xFF).
         main_bus.map_mmio(
             sound_latch_addr, sound_latch_window,
-            [this](std::uint32_t address) -> std::uint8_t {
-                if (address >= sound_latch_addr && address < sound_latch_addr + 8U) {
-                    return sound_latch;
-                }
-                if (address >= sound_latch2_addr && address < sound_latch2_addr + 8U) {
-                    return sound_latch2;
-                }
-                return 0xFFU;
-            },
+            [](std::uint32_t) -> std::uint8_t { return 0xFFU; },
             [this](std::uint32_t address, std::uint8_t value) {
                 if (address >= sound_latch_addr && address < sound_latch_addr + 8U) {
                     sound_latch = value;
@@ -169,11 +162,13 @@ namespace mnemos::manifests::capcom_cps1 {
         sound_bus.map_rom(z80_rom_base,
                           std::span<const std::uint8_t>(sound_rom).first(z80_rom_window), 0);
         // Banked 16 KiB window: a register-selected slice of the upper sound ROM.
+        // Capture the ROM as a span by value (not a reference into the ROM map).
+        const std::span<const std::uint8_t> sound_rom_span{sound_rom};
         sound_bus.map_mmio(
             z80_bank_base, z80_bank_window,
-            [this, &sound_rom](std::uint32_t address) -> std::uint8_t {
+            [this, sound_rom_span](std::uint32_t address) -> std::uint8_t {
                 const std::uint32_t rom_addr = z80_bank_rom_base() + (address - z80_bank_base);
-                return rom_addr < sound_rom.size() ? sound_rom[rom_addr] : 0xFFU;
+                return rom_addr < sound_rom_span.size() ? sound_rom_span[rom_addr] : 0xFFU;
             },
             [](std::uint32_t, std::uint8_t) {}, 0);
         // Z80 sound work RAM.
@@ -235,10 +230,11 @@ namespace mnemos::manifests::capcom_cps1 {
         fm.set_irq([this](bool) { sync_sound_irq(); });
 
         // Vblank IRQ: the beam entering vblank (after the frame renders) raises the
-        // 68K level-6 autovector; the CPU clears the line at its IACK. Vectoring is
-        // through autovector 6 ($78). Wired before reset so the settings survive it.
+        // 68K level-2 autovector ($68); the CPU clears the line at its IACK. The
+        // v1 (non-raster) video interrupt is level 2 (the 6/4 split is the raster
+        // path, out of v1 scope). Wired before reset so the settings survive it.
         video.set_vblank_callback([this](std::uint32_t /*line*/) {
-            main_cpu.set_irq_level(6);
+            main_cpu.set_irq_level(2);
             ++vblank_irq_raised;
         });
         main_cpu.set_irq_ack_callback([this](int /*level*/) {
@@ -344,11 +340,15 @@ namespace mnemos::manifests::capcom_cps1 {
     }
 
     void cps1_system::push_cps_a_to_video() noexcept {
-        // Name-table bases (object aligned to its table boundary; scroll bases raw).
+        // Name-table bases, each aligned to its table boundary: object 0x800,
+        // scroll1/2/3 0x4000.
         video.set_object_base(gfx_ram_base_aligned(cps_a_regs[cps_a_obj_base], object_base_align));
-        video.set_scroll1_base(gfx_ram_base_from_reg(cps_a_regs[cps_a_scroll1_base]));
-        video.set_scroll2_base(gfx_ram_base_from_reg(cps_a_regs[cps_a_scroll2_base]));
-        video.set_scroll3_base(gfx_ram_base_from_reg(cps_a_regs[cps_a_scroll3_base]));
+        video.set_scroll1_base(
+            gfx_ram_base_aligned(cps_a_regs[cps_a_scroll1_base], scroll_base_align));
+        video.set_scroll2_base(
+            gfx_ram_base_aligned(cps_a_regs[cps_a_scroll2_base], scroll_base_align));
+        video.set_scroll3_base(
+            gfx_ram_base_aligned(cps_a_regs[cps_a_scroll3_base], scroll_base_align));
 
         // Scroll offsets (signed pixel offsets, passed as raw 16-bit words).
         video.set_scroll1(cps_a_regs[cps_a_scroll1_x], cps_a_regs[cps_a_scroll1_y]);
@@ -356,11 +356,12 @@ namespace mnemos::manifests::capcom_cps1 {
         video.set_scroll3(cps_a_regs[cps_a_scroll3_x], cps_a_regs[cps_a_scroll3_y]);
 
         // Scroll2 row-scroll: video-control bit0 enables it; reg4 is the table base
-        // and reg16 the per-line index bias.
+        // (aligned to 0x800) and reg16 the per-line index bias.
         const std::uint16_t video_control = cps_a_regs[cps_a_video_control];
-        video.set_rowscroll((video_control & 0x0001U) != 0U,
-                            gfx_ram_base_from_reg(cps_a_regs[cps_a_rowscroll_base]),
-                            cps_a_regs[cps_a_rowscroll_offset]);
+        video.set_rowscroll(
+            (video_control & 0x0001U) != 0U,
+            gfx_ram_base_aligned(cps_a_regs[cps_a_rowscroll_base], other_base_align),
+            cps_a_regs[cps_a_rowscroll_offset]);
 
         // Video-control latch (flip-screen bit15, layer-enable bits 2/3) drives
         // both flip and the per-layer enable gates inside the mixer.
@@ -407,7 +408,7 @@ namespace mnemos::manifests::capcom_cps1 {
         // CPS1: ~10 MHz 68K at ~59.6 Hz. Frame-at-vblank model: decode the CPS-A
         // latch to the video, run the two CPUs + the sound chips across the
         // visible field, tick the video into vblank (which renders + raises the
-        // level-6 IRQ via the callback), then run the CPUs through the vblank tail
+        // level-2 IRQ via the callback), then run the CPUs through the vblank tail
         // so the IRQ is serviced. Exact CPU<->beam cycle sync is a later increment.
         constexpr std::uint64_t cpu_cycles_per_frame = m68k_clock_hz / frame_rate_hz;
         constexpr std::uint32_t visible_lines = chips::video::cps_a_b::vblank_start;

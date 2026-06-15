@@ -85,9 +85,6 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
             sys_->dip_a = static_cast<std::uint8_t>(*dip_override & 0xFFU);
             sys_->dip_b = static_cast<std::uint8_t>((*dip_override >> 8U) & 0xFFU);
         }
-        // The OKIM6295 queues ADPCM frames for the per-frame drain.
-        sys_->oki.enable_audio_capture(true);
-
         chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->fm, &sys_->oki};
         spec_ = {{"System", "Arcade"},
                  {"Board", "Capcom CPS1"},

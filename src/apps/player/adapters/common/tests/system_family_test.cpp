@@ -38,7 +38,8 @@ TEST_CASE("system_family: unknown names are rejected, never guessed") {
 
 TEST_CASE("system_family: family_from_name and family_id round-trip") {
     for (const auto family : {system_family::genesis, system_family::sms, system_family::gg,
-                              system_family::c64, system_family::segacd, system_family::sega32x}) {
+                              system_family::c64, system_family::segacd, system_family::sega32x,
+                              system_family::irem_m72, system_family::capcom_cps1}) {
         CHECK(family_from_name(family_id(family)) == family);
     }
 }
@@ -46,7 +47,8 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
 TEST_CASE("system_family: family_names lists every accepted id") {
     const std::string names = family_names();
     for (const auto family : {system_family::genesis, system_family::sms, system_family::gg,
-                              system_family::c64, system_family::segacd, system_family::sega32x}) {
+                              system_family::c64, system_family::segacd, system_family::sega32x,
+                              system_family::irem_m72, system_family::capcom_cps1}) {
         CHECK(names.find(family_id(family)) != std::string::npos);
     }
 }
