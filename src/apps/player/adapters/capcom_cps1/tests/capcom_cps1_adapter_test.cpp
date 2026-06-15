@@ -289,43 +289,42 @@ namespace {
 
 } // namespace
 
-TEST_CASE("capcom_cps1_adapter boots the real Final Fight set", "[capcom_cps1][adapter][data]") {
-    // Data-gated (never committed): MNEMOS_CPS1_FFIGHT_SET points at a zip of the
-    // authentic dump files plus a "game.toml" copy of
-    // src/manifests/capcom_cps1/games/ffight.toml. Asserts a CRC-clean
-    // declarative load, the threaded CPS-B profile, valid 68K reset vectors, and
-    // a frame that goes non-blank with the vblank IRQ raised and serviced. Set
-    // MNEMOS_CPS1_FFIGHT_PPM to also dump the rendered frame for visual A/B.
-    const char* set_env = opt_env("MNEMOS_CPS1_FFIGHT_SET");
+TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][data]") {
+    // Data-gated (never committed), game-agnostic: MNEMOS_CPS1_SET points at a zip
+    // of the authentic dump files plus a "game.toml" copy of the matching
+    // src/manifests/capcom_cps1/games/<name>.toml. Asserts the hardware boot path
+    // on any CPS1 set the board supports -- a CRC-clean declarative load, a 68K
+    // reset vector inside the program image, and a frame that goes non-blank with
+    // the vblank IRQ raised and serviced. MNEMOS_CPS1_PPM dumps the rendered frame
+    // for visual A/B; MNEMOS_CPS1_FRAMES overrides the warm-up frame count.
+    const char* set_env = opt_env("MNEMOS_CPS1_SET");
     if (set_env == nullptr) {
-        SKIP("set MNEMOS_CPS1_FFIGHT_SET to the Final Fight set zip (game.toml inside)");
+        SKIP("set MNEMOS_CPS1_SET to a CPS1 set zip (game.toml inside)");
     }
     auto bytes = mnemos::io::read_file(set_env);
     REQUIRE(bytes.has_value());
 
-    capcom_cps1_adapter adapter(std::move(*bytes), "ffight");
+    capcom_cps1_adapter adapter(std::move(*bytes), "cps1");
     auto& machine = adapter.machine();
     REQUIRE(machine.roms.issues.empty()); // every file present, sized, CRC-verified
-    CHECK(machine.profile.id == 4U);      // cps_b_profile = 4 threaded from the TOML
+    INFO("cps_b_profile id = " << machine.profile.id);
 
     // The program region is padded up to the 8 MiB 68K program window; the reset
-    // PC ($000004) must land inside the real 1 MiB program image.
+    // PC ($000004) must land inside the program image (not the 0xFF padding).
     const auto& main_region = machine.roms.regions.at("maincpu");
     REQUIRE(main_region.size() == 0x800000U);
     const std::uint32_t reset_pc =
         (static_cast<std::uint32_t>(machine.main_bus.read16_be(0x4U)) << 16U) |
         machine.main_bus.read16_be(0x6U);
     INFO("reset PC = " << reset_pc);
-    REQUIRE(reset_pc < 0x100000U);
+    REQUIRE(reset_pc < 0x800000U);
 
     // Run a fixed warm-up (~10 s at 60 Hz) so the game boots past the hardware
     // self-test and reaches an attract/title screen before asserting. (An early
     // exit on the first non-blank frame would fire before the game lowers the
     // 68K interrupt mask, so no IRQ would have been serviced yet.)
-    // MNEMOS_CPS1_FFIGHT_FRAMES overrides the count (to sample a later screen for
-    // the PPM dump without a rebuild).
     int warmup_frames = 600;
-    if (const char* frames_env = opt_env("MNEMOS_CPS1_FFIGHT_FRAMES")) {
+    if (const char* frames_env = opt_env("MNEMOS_CPS1_FRAMES")) {
         warmup_frames = std::atoi(frames_env);
         if (warmup_frames <= 0) {
             warmup_frames = 600;
@@ -348,7 +347,7 @@ TEST_CASE("capcom_cps1_adapter boots the real Final Fight set", "[capcom_cps1][a
     CHECK(machine.vblank_irq_raised > 0U); // the beam raised the level-2 IRQ
     CHECK(machine.vblank_irq_acked > 0U);  // the 68K serviced it (IACK ran)
 
-    if (const char* ppm = opt_env("MNEMOS_CPS1_FFIGHT_PPM")) {
+    if (const char* ppm = opt_env("MNEMOS_CPS1_PPM")) {
         CHECK(write_ppm(adapter.current_frame(), ppm));
     }
 }

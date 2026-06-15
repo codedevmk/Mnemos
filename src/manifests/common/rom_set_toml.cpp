@@ -237,7 +237,8 @@ namespace mnemos::manifests::common {
 
         rom_set_decl decl;
         if (const auto* set = root.get_as<toml::table>("set")) {
-            check_keys(ctx, *set, {"schema", "name", "board", "cps_b_profile"}, "[set]");
+            check_keys(ctx, *set, {"schema", "name", "board", "cps_b_profile", "orientation"},
+                       "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
                     ctx.error("unsupported schema '" + *schema + "' (expected '" +
@@ -263,6 +264,22 @@ namespace mnemos::manifests::common {
                     } else {
                         decl.cps_b_profile = static_cast<std::uint16_t>(*profile);
                     }
+                }
+            }
+            // Optional monitor orientation ("horizontal" / "vertical"); the
+            // frontend rotates a vertical set. Absent => horizontal.
+            if (const toml::node* node = set->get("orientation")) {
+                if (const auto* value = node->as_string()) {
+                    if (value->get() == "vertical") {
+                        decl.orientation = screen_orientation::vertical;
+                    } else if (value->get() == "horizontal") {
+                        decl.orientation = screen_orientation::horizontal;
+                    } else {
+                        ctx.error("'orientation' in [set] must be \"horizontal\" or \"vertical\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'orientation' in [set] must be a string", node);
                 }
             }
         } else {

@@ -151,6 +151,9 @@ namespace mnemos::manifests::capcom_cps1 {
     // the chip's legacy default profile). Later increments add DIP defaults etc.
     struct cps1_board_params final {
         std::uint16_t cps_b_profile_id{0U};
+        // Vertical (TATE) cabinet: the frontend rotates the framebuffer upright.
+        // Presentation only -- the board renders the same 384x224 field either way.
+        bool vertical{false};
     };
 
     // The board parameters for a declared set name; the default params when the

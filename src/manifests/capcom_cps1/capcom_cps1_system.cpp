@@ -31,7 +31,8 @@ namespace mnemos::manifests::capcom_cps1 {
     }
 
     cps1_board_params board_params_from_decl(const common::rom_set_decl& decl) {
-        return {.cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U})};
+        return {.cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U}),
+                .vertical = decl.orientation == common::screen_orientation::vertical};
     }
 
     cps1_system::cps1_system(common::rom_set_image image, cps1_board_params board_params)

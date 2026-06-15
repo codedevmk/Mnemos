@@ -38,9 +38,13 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
                                      std::optional<std::uint16_t> dip_override = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
-            // ~59.6 Hz progressive raster; CPS1 monitors are horizontal.
+            // ~59.6 Hz progressive raster. Most CPS1 monitors are horizontal; a
+            // vertical (TATE) set declares it in its game.toml and the frontend
+            // rotates the framebuffer upright.
             return {.frames_per_second_x1000 = 59600U,
-                    .orientation = frontend_sdk::display_orientation::horizontal};
+                    .orientation = sys_->params.vertical
+                                       ? frontend_sdk::display_orientation::vertical
+                                       : frontend_sdk::display_orientation::horizontal};
         }
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
         system_spec() const noexcept override {
