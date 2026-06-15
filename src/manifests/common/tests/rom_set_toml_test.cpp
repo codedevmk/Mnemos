@@ -85,6 +85,29 @@ TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]")
     }
 }
 
+TEST_CASE("rom_set_toml parses the optional orientation", "[rom_set_toml]") {
+    using mnemos::manifests::common::screen_orientation;
+    SECTION("vertical") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\norientation = \"vertical\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->orientation == screen_orientation::vertical);
+    }
+    SECTION("absent defaults to horizontal") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->orientation == screen_orientation::horizontal);
+    }
+    SECTION("invalid value is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\norientation = \"sideways\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
 TEST_CASE("rom_set_toml parses the CPS1 layout keys", "[rom_set_toml]") {
     const auto result = parse_rom_set_decl(R"(
 [set]
