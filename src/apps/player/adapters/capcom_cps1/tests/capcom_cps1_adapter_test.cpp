@@ -6,6 +6,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -330,6 +332,26 @@ TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][d
             warmup_frames = 600;
         }
     }
+    // Opt-in: MNEMOS_CPS1_HALT=<hex pc> captures the instruction trail INTO that PC
+    // (the first time it executes) -- the path a boot takes into a fatal halt loop.
+    std::array<std::uint32_t, 512> pc_ring{};
+    std::size_t pc_ring_pos = 0U;
+    std::array<std::uint32_t, 512> pc_trail{};
+    bool trail_captured = false;
+    if (const char* halt_env = opt_env("MNEMOS_CPS1_HALT")) {
+        const auto halt_pc = static_cast<std::uint32_t>(std::strtoul(halt_env, nullptr, 16));
+        machine.main_cpu.diagnostics().set_trace_callback([&, halt_pc](std::uint32_t pc) {
+            pc_ring[pc_ring_pos % pc_ring.size()] = pc;
+            ++pc_ring_pos;
+            if (pc == halt_pc && !trail_captured) {
+                trail_captured = true;
+                for (std::size_t i = 0; i < pc_ring.size(); ++i) {
+                    pc_trail[i] = pc_ring[(pc_ring_pos + i) % pc_ring.size()];
+                }
+            }
+        });
+    }
+
     bool frame_lit = false;
     for (int frame = 0; frame < warmup_frames; ++frame) {
         adapter.step_one_frame();
@@ -343,6 +365,62 @@ TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][d
             }
         }
     }
+    if (trail_captured) {
+        machine.main_cpu.diagnostics().set_trace_callback({});
+        std::fprintf(stderr, "[trace] path into halt (consecutive repeats collapsed):\n ");
+        std::uint32_t prev = 0xFFFFFFFFU;
+        int col = 0;
+        for (std::uint32_t pc : pc_trail) {
+            if (pc == prev) {
+                continue;
+            }
+            prev = pc;
+            std::fprintf(stderr, " %06X", pc);
+            if (++col % 12 == 0) {
+                std::fprintf(stderr, "\n ");
+            }
+        }
+        std::fprintf(stderr, "\n");
+    }
+    // Opt-in boot diagnostic: sample the 68K PC/SR over a few extra frames so a
+    // hung set (a tight early-boot wait loop) shows its PC cluster + whether the
+    // interrupt mask is still raised -- the lead for a bring-up that stalls.
+    if (opt_env("MNEMOS_CPS1_TRACE") != nullptr) {
+        for (int i = 0; i < 8; ++i) {
+            adapter.step_one_frame();
+            const auto r = machine.main_cpu.cpu_registers();
+            std::fprintf(stderr, "[trace] frame +%d  pc=%06X  sr=%04X  ipm=%u\n", i, r.pc, r.sr,
+                         static_cast<unsigned>((r.sr >> 8U) & 7U));
+        }
+        const auto r = machine.main_cpu.cpu_registers();
+        // Memory window to dump: MNEMOS_CPS1_DUMP="start:len" (hex), else around pc.
+        std::uint32_t dump_start = r.pc - 0x10U;
+        std::uint32_t dump_len = 0x30U;
+        if (const char* d = opt_env("MNEMOS_CPS1_DUMP")) {
+            char* rest = nullptr;
+            dump_start = static_cast<std::uint32_t>(std::strtoul(d, &rest, 16));
+            if (rest != nullptr && *rest == ':') {
+                dump_len = static_cast<std::uint32_t>(std::strtoul(rest + 1, nullptr, 16));
+            }
+        }
+        std::fprintf(stderr, "[trace] mem @ %06X..%06X:", dump_start, dump_start + dump_len);
+        for (std::uint32_t a = dump_start; a < dump_start + dump_len; ++a) {
+            if (((a - dump_start) & 0xFU) == 0U) {
+                std::fprintf(stderr, "\n  %06X:", a);
+            }
+            std::fprintf(stderr, " %02X", machine.main_bus.read8(a));
+        }
+        std::fprintf(stderr, "\n[trace] A-regs:");
+        for (int i = 0; i < 8; ++i) {
+            std::fprintf(stderr, " a%d=%06X", i, r.a[static_cast<std::size_t>(i)]);
+        }
+        std::fprintf(stderr, "\n[trace] D-regs:");
+        for (int i = 0; i < 8; ++i) {
+            std::fprintf(stderr, " d%d=%08X", i, r.d[static_cast<std::size_t>(i)]);
+        }
+        std::fprintf(stderr, "\n");
+    }
+
     CHECK(frame_lit);
     CHECK(machine.vblank_irq_raised > 0U); // the beam raised the level-2 IRQ
     CHECK(machine.vblank_irq_acked > 0U);  // the 68K serviced it (IACK ran)

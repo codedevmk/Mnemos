@@ -120,6 +120,31 @@ id_to_config = {}
 for m in re.finditer(r"CPS1_CPS_B_PROFILE_(\w+)\)\s*\{\s*return &k_cps1_cps_b_(\w+);", disp):
     id_to_config[prof_id[m.group(1)]] = m.group(2)
 
+# Mnemos correction (not in the reference): the upstream core aliases PS63B
+# (profile 25, The Punisher) to the bt3 config, which drops the board's CPS-B-21
+# protection ID port -- punisher's boot reads register $0E expecting $0C00 and
+# halts at a branch-to-self without it (the reference does not boot punisher
+# either). Inject the hardware-faithful CPS-B-21 "QS3" config + the PS63B gfx
+# mapper so the generated census matches real hardware, not the lossy alias.
+mapper_ranges["ps63b"] = [
+    (GFX_BITS["CPS1_GFX_SCROLL1"], 0x0000, 0x0FFF, 0),
+    (GFX_BITS["CPS1_GFX_SPRITES"], 0x1000, 0x7FFF, 0),
+    (GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL2"], 0x8000, 0xDBFF, 1),
+    (GFX_BITS["CPS1_GFX_SCROLL3"], 0xDC00, 0xFFFF, 1),
+]
+mapper["ps63b"] = ([0x8000, 0x8000, 0, 0], "ps63b")
+config["ps63b"] = dict(
+    id_offset=0x0E,
+    id_value=0x0C00,
+    mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x12,
+    priority=[0x14, 0x16, 0x08, 0x0A],
+    palette=0x0C,
+    enable=[0x04, 0x02, 0x20, 0, 0],
+    mapper="ps63b",
+)
+id_to_config[25] = "ps63b"
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"
@@ -206,8 +231,8 @@ L.append("// Transcribed from the reference CPS1 CPS-B config + gfx-mapper hardw
 L.append("// mechanically (to avoid hand-transcription error) into this faithful, uniform")
 L.append("// shape. Keyed by the numeric CPS-B profile id (a board / PAL identity); the PAL")
 L.append("// / board names in comments are documentation only (see THIRD-PARTY-REFERENCES.md),")
-L.append("// never lookup keys. Some ids share a register layout / mapper (e.g. 23 and 25,")
-L.append("// cd63b and tk263b); each is kept as its own row to mirror the per-board census")
+L.append("// never lookup keys. Some ids share a register layout / mapper (e.g. cd63b and")
+L.append("// tk263b); each is kept as its own row to mirror the per-board census")
 L.append("// 1:1 -- the duplication is intentional, not a DRY slip.")
 L.append("namespace mnemos::manifests::capcom_cps1 {")
 L.append("    namespace {")
