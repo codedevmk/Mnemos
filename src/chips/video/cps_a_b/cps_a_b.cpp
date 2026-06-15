@@ -222,9 +222,63 @@ namespace mnemos::chips::video {
         }
     }
 
-    std::uint32_t cps_a_b::map_gfx_code(gfx_type /*type*/, std::uint32_t code) const noexcept {
-        // Identity until the per-board CPS-B graphics mapper (profile data) lands.
-        return code;
+    std::uint8_t cps_a_b::gfx_type_bit(gfx_type type) noexcept {
+        switch (type) {
+        case gfx_type::sprites:
+            return 0x01U;
+        case gfx_type::scroll1:
+            return 0x02U;
+        case gfx_type::scroll2:
+            return 0x04U;
+        case gfx_type::scroll3:
+            return 0x08U;
+        }
+        return 0U;
+    }
+
+    int cps_a_b::gfx_type_shift(gfx_type type) noexcept {
+        switch (type) {
+        case gfx_type::scroll1:
+            return 0;
+        case gfx_type::scroll2:
+        case gfx_type::sprites:
+            return 1;
+        case gfx_type::scroll3:
+            return 3;
+        }
+        return 0;
+    }
+
+    std::uint32_t cps_a_b::map_gfx_code(gfx_type type, std::uint32_t code) const noexcept {
+        const gfx_mapper& mapper = profile_.mapper;
+        if (mapper.ranges.empty()) {
+            return code; // legacy / no board mapper: identity
+        }
+        const int shift = gfx_type_shift(type);
+        const std::uint32_t expanded = code << static_cast<std::uint32_t>(shift);
+        const std::uint8_t type_bit = gfx_type_bit(type);
+        for (const gfx_bank_range& range : mapper.ranges) {
+            if ((range.type_mask & type_bit) == 0U) {
+                continue; // this range does not serve this layer
+            }
+            if (expanded < range.start || expanded > range.end) {
+                continue;
+            }
+            if (range.bank >= mapper.bank_size.size()) {
+                continue;
+            }
+            const std::uint32_t bank_size = mapper.bank_size[range.bank];
+            if (bank_size == 0U || (bank_size & (bank_size - 1U)) != 0U) {
+                return gfx_code_absent; // matched range names an invalid bank
+            }
+            // Banks are concatenated end-to-end; the code wraps inside its bank.
+            std::uint32_t bank_base = 0U;
+            for (std::uint8_t b = 0; b < range.bank; ++b) {
+                bank_base += mapper.bank_size[b];
+            }
+            return (bank_base + (expanded & (bank_size - 1U))) >> static_cast<std::uint32_t>(shift);
+        }
+        return gfx_code_absent; // no range matched: tile/sprite absent
     }
 
     std::uint16_t cps_a_b::read_tile16(std::uint32_t offset) const noexcept {
@@ -255,6 +309,9 @@ namespace mnemos::chips::video {
             return transparent_pen;
         }
         const std::uint32_t mapped = map_gfx_code(type, code);
+        if (mapped == gfx_code_absent) {
+            return transparent_pen;
+        }
         const int rom_x = x + x_bias;
         if (tile_size == 8) {
             return decode_packed(mapped * 64U, 8U, rom_x, y);
@@ -481,6 +538,9 @@ namespace mnemos::chips::video {
         // The original code is mapped once; the per-cell block tiles derive from
         // the mapped code and decode directly (no second remap).
         const std::uint32_t mapped = map_gfx_code(gfx_type::sprites, code);
+        if (mapped == gfx_code_absent) {
+            return;
+        }
         const int sx = static_cast<int>(raw_x & 0x01FFU);
         const int sy = static_cast<int>(raw_y & 0x01FFU);
         const int blocks_x = static_cast<int>((attr >> 8U) & 0x0FU) + 1;
@@ -592,6 +652,15 @@ namespace mnemos::chips::video {
         for (const std::uint16_t mask : profile_.layer_enable_mask) {
             writer.u16(mask);
         }
+        // The gfx-mapper ranges are a borrowed span into the board's static
+        // tables (re-attached on load like the gfx/palette spans), so only the
+        // scalar profile identity is serialized here.
+        writer.u16(profile_.id);
+        writer.u8(profile_.id_offset);
+        writer.u16(profile_.id_value);
+        for (const std::uint8_t off : profile_.mult_offset) {
+            writer.u8(off);
+        }
     }
 
     void cps_a_b::load_state(state_reader& reader) {
@@ -628,6 +697,12 @@ namespace mnemos::chips::video {
         profile_.palette_control_offset = reader.u8();
         for (std::uint16_t& mask : profile_.layer_enable_mask) {
             mask = reader.u16();
+        }
+        profile_.id = reader.u16();
+        profile_.id_offset = reader.u8();
+        profile_.id_value = reader.u16();
+        for (std::uint8_t& off : profile_.mult_offset) {
+            off = reader.u8();
         }
     }
 
