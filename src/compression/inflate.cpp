@@ -331,4 +331,21 @@ namespace mnemos::compression {
         return out_pos;
     }
 
+    std::optional<std::size_t> inflate_raw(std::span<const std::uint8_t> src,
+                                           std::span<std::uint8_t> dst,
+                                           std::size_t& bytes_consumed) noexcept {
+        bit_reader br{.src = src};
+        std::size_t out_pos = 0;
+        bool done = false;
+        while (!done) {
+            if (!inflate_block(br, dst, out_pos, done)) {
+                return std::nullopt;
+            }
+        }
+        // `pos` is the next unread input byte; whole bytes still buffered but
+        // unconsumed (nbits / 8) belong to the next stream, so back them out.
+        bytes_consumed = br.pos - (br.nbits / 8U);
+        return out_pos;
+    }
+
 } // namespace mnemos::compression

@@ -4,6 +4,7 @@
 
 #include "disc_image.hpp"
 
+#include "chd_reader.hpp"
 #include "file.hpp"
 
 #include <algorithm>
@@ -207,6 +208,32 @@ namespace mnemos::disc {
         return img;
     }
 
+    std::optional<disc_image> disc_image::open_chd(std::vector<std::uint8_t> data) {
+        auto decoded = chd::decode(data);
+        if (!decoded || decoded->tracks.empty()) {
+            return std::nullopt;
+        }
+        disc_image img;
+        img.format_ = disc_format::chd;
+        img.total_sectors_ = decoded->total_sectors;
+        // The whole CHD is decompressed into one flat raw-2352 buffer; every
+        // track indexes into that single backing file.
+        img.files_.push_back(std::move(decoded->data));
+        for (const chd::chd_track& ct : decoded->tracks) {
+            track t;
+            t.type = ct.is_audio ? track_type::audio : track_type::mode1_2352;
+            t.start_lba = ct.start_lba;
+            t.sector_count = ct.sector_count;
+            t.file_offset = ct.data_offset;
+            t.sector_size = disc_image::raw_sector_size; // flat image is raw 2352
+            t.number = static_cast<std::uint8_t>(ct.number);
+            t.ctrl_adr = ct.is_audio ? 0x01U : 0x41U;
+            t.file_index = 0;
+            img.tracks_.push_back(t);
+        }
+        return img;
+    }
+
     std::optional<disc_image> disc_image::open(const std::string& path) {
         if (ends_with_ci(path, ".cue")) {
             const auto bytes = io::read_file(path);
@@ -219,12 +246,12 @@ namespace mnemos::disc {
             }
             return img;
         }
-        if (ends_with_ci(path, ".chd")) {
-            return std::nullopt; // CHD deferred (needs chd_image port)
-        }
         auto bytes = io::read_file(path);
         if (!bytes || bytes->empty()) {
             return std::nullopt;
+        }
+        if (ends_with_ci(path, ".chd")) {
+            return open_chd(std::move(*bytes));
         }
         if (ends_with_ci(path, ".iso")) {
             return open_iso(std::move(*bytes));

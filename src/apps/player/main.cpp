@@ -295,20 +295,6 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             disc_path = rom_paths.front();
-            // disc_image::open() cannot read .chd yet; reject it with a clear
-            // message instead of silently booting the BIOS to its no-disc screen.
-            {
-                const auto dot = disc_path.find_last_of('.');
-                std::string ext =
-                    (dot == std::string::npos) ? std::string{} : disc_path.substr(dot + 1);
-                std::transform(ext.begin(), ext.end(), ext.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (ext == "chd") {
-                    std::fprintf(stderr, "[mnemos_player] CHD disc images are not supported yet; "
-                                         "use a .cue (+.bin) or .iso image\n");
-                    return 1;
-                }
-            }
             primary_rom = std::move(bios->bytes);
         }
         // The 32X boots through three adapter ROMs (master SH-2 / slave SH-2 /
