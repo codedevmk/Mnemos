@@ -112,6 +112,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Content-addressed compiler cache persisted across runs via the Actions
+      # cache. sccache caches every object (incl. the SDL3 / Catch2 / zstd
+      # FetchContent deps, whose sources are stable), so warm runs skip almost
+      # all recompilation -- the cold first run still pays full price.
+      - name: Set up sccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          variant: sccache
+          key: ${{ matrix.preset }}
+
       - name: Install Linux tools
         if: runner.os == 'Linux'
         run: |
@@ -135,13 +145,14 @@ jobs:
           set VSDEVCMD=%VSINSTALL%\Common7\Tools\VsDevCmd.bat
           if not exist "%VSDEVCMD%" exit /b 1
           call "%VSDEVCMD%" -arch=x64
-          cmake --preset %PRESET%
+          cmake --preset %PRESET% -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded
           cmake --build --preset %PRESET%
           ctest --preset %PRESET% --output-on-failure
 
       - name: Configure
         if: runner.os == 'Linux'
-        run: cmake --preset ${{ matrix.preset }}
+        run: cmake --preset ${{ matrix.preset }} -DCMAKE_C_COMPILER_LAUNCHER=sccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build
         if: runner.os == 'Linux'
