@@ -85,6 +85,63 @@ TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]")
     }
 }
 
+TEST_CASE("rom_set_toml parses the CPS1 layout keys", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "x"
+
+[[region]]
+name = "gfx"
+size = 0x100
+
+[[region.file]]
+name = "g0"
+offset = 0
+stride = 8
+unit = 2
+
+[[region.file]]
+name = "prog"
+offset = 0x80
+stride = 2
+unit = 2
+swap = true
+
+[[region.file]]
+name = "snd"
+offset = 0x40
+source_offset = 0x20
+length = 0x10
+)");
+    REQUIRE(result.ok());
+    const auto& files = result.value->regions[0].files;
+    REQUIRE(files.size() == 3U);
+    CHECK(files[0].unit == 2U);
+    CHECK(files[0].stride == 8U);
+    CHECK_FALSE(files[0].swap);
+    CHECK(files[1].unit == 2U);
+    CHECK(files[1].swap);
+    CHECK(files[2].source_offset == 0x20U);
+    CHECK(files[2].length == 0x10U);
+    CHECK(files[2].unit == 1U); // default
+}
+
+TEST_CASE("rom_set_toml rejects bad CPS1 layout keys", "[rom_set_toml]") {
+    SECTION("unit zero") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[region]]\nname = "
+            "\"a\"\nsize = 8\n[[region.file]]\nname = \"f\"\nunit = 0\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("swap not a boolean") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[region]]\nname = "
+            "\"a\"\nsize = 8\n[[region.file]]\nname = \"f\"\nswap = 1\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
 TEST_CASE("rom_set_toml rejects bad declarations with located diagnostics", "[rom_set_toml]") {
     SECTION("missing schema and regions") {
         const auto result = parse_rom_set_decl("[set]\nname = \"x\"\n");
