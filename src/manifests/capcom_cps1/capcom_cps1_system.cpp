@@ -1,5 +1,6 @@
 #include "capcom_cps1_system.hpp"
 
+#include <algorithm>
 #include <span>
 #include <utility>
 
@@ -53,6 +54,11 @@ namespace mnemos::manifests::capcom_cps1 {
                 word = (address & 1U) == 0U
                            ? static_cast<std::uint16_t>((word & 0x00FFU) | (value << 8U))
                            : static_cast<std::uint16_t>((word & 0xFF00U) | value);
+                // reg5 (the palette source pointer) triggers the palette DMA on
+                // its low-byte write -- the point the full 16-bit pointer is set.
+                if (idx == cps_a_palette_base && (address & 1U) != 0U) {
+                    copy_palette_from_gfx_ram();
+                }
             },
             1);
 
@@ -87,8 +93,21 @@ namespace mnemos::manifests::capcom_cps1 {
         video.attach_tile_ram(gfx_ram);
         video.attach_object_ram(gfx_ram);
         video.attach_palette(palette);
-        video.set_cps_b_profile(profile_for_id(params.cps_b_profile_id)
-                                    .value_or(chips::video::cps_a_b::cps_b_profile{}));
+        profile = profile_for_id(params.cps_b_profile_id)
+                      .value_or(chips::video::cps_a_b::cps_b_profile{});
+        video.set_cps_b_profile(profile);
+
+        // Vblank IRQ: the beam entering vblank (after the frame renders) raises the
+        // 68K level-6 autovector; the CPU clears the line at its IACK. Vectoring is
+        // through autovector 6 ($78). Wired before reset so the settings survive it.
+        video.set_vblank_callback([this](std::uint32_t /*line*/) {
+            main_cpu.set_irq_level(6);
+            ++vblank_irq_raised;
+        });
+        main_cpu.set_irq_ack_callback([this](int /*level*/) {
+            main_cpu.set_irq_level(0);
+            ++vblank_irq_acked;
+        });
 
         // Construction order: ROM mapped + bus attached, then power-on reset so the
         // 68K loads SSP/PC from the cart's reset vectors.
@@ -96,15 +115,108 @@ namespace mnemos::manifests::capcom_cps1 {
         video.reset(chips::reset_kind::power_on);
     }
 
+    std::uint32_t cps1_system::gfx_ram_base_from_reg(std::uint16_t reg) const noexcept {
+        const std::uint32_t addr = static_cast<std::uint32_t>(reg) << 8U;
+        if (addr >= gfx_ram_base && addr < gfx_ram_base + gfx_ram_size) {
+            return addr - gfx_ram_base;
+        }
+        return static_cast<std::uint32_t>(reg) * 256U;
+    }
+
+    std::uint32_t cps1_system::gfx_ram_base_aligned(std::uint16_t reg,
+                                                    std::uint32_t boundary) const noexcept {
+        std::uint32_t base = gfx_ram_base_from_reg(reg);
+        if (boundary > 1U) {
+            base &= ~(boundary - 1U);
+        }
+        return base;
+    }
+
+    void cps1_system::push_cps_a_to_video() noexcept {
+        // Name-table bases (object aligned to its table boundary; scroll bases raw).
+        video.set_object_base(gfx_ram_base_aligned(cps_a_regs[cps_a_obj_base], object_base_align));
+        video.set_scroll1_base(gfx_ram_base_from_reg(cps_a_regs[cps_a_scroll1_base]));
+        video.set_scroll2_base(gfx_ram_base_from_reg(cps_a_regs[cps_a_scroll2_base]));
+        video.set_scroll3_base(gfx_ram_base_from_reg(cps_a_regs[cps_a_scroll3_base]));
+
+        // Scroll offsets (signed pixel offsets, passed as raw 16-bit words).
+        video.set_scroll1(cps_a_regs[cps_a_scroll1_x], cps_a_regs[cps_a_scroll1_y]);
+        video.set_scroll2(cps_a_regs[cps_a_scroll2_x], cps_a_regs[cps_a_scroll2_y]);
+        video.set_scroll3(cps_a_regs[cps_a_scroll3_x], cps_a_regs[cps_a_scroll3_y]);
+
+        // Scroll2 row-scroll: video-control bit0 enables it; reg4 is the table base
+        // and reg16 the per-line index bias.
+        const std::uint16_t video_control = cps_a_regs[cps_a_video_control];
+        video.set_rowscroll((video_control & 0x0001U) != 0U,
+                            gfx_ram_base_from_reg(cps_a_regs[cps_a_rowscroll_base]),
+                            cps_a_regs[cps_a_rowscroll_offset]);
+
+        // Video-control latch (flip-screen bit15, layer-enable bits 2/3) drives
+        // both flip and the per-layer enable gates inside the mixer.
+        video.set_video_control(video_control);
+        video.set_display_enable(true);
+    }
+
+    void cps1_system::copy_palette_from_gfx_ram() noexcept {
+        const std::uint16_t reg = cps_a_regs[cps_a_palette_base];
+        if (reg == 0U) {
+            return;
+        }
+        // The page-enable mask is the active CPS-B profile's palette-control
+        // register; an unmapped offset means "all pages" (the legacy default).
+        const std::uint8_t pal_ctrl_off = profile.palette_control_offset;
+        const std::uint16_t ctrl =
+            (pal_ctrl_off != chips::video::cps_a_b::reg_none && (pal_ctrl_off & 1U) == 0U)
+                ? video.cps_b_reg(static_cast<std::uint8_t>(pal_ctrl_off >> 1U))
+                : palette_control_default;
+
+        // Source is the reg5 pointer aligned to a palette page; copy enabled pages
+        // into the contiguous palette buffer, advancing the source across skipped
+        // pages once any page has been copied (matches the hardware page walk).
+        std::uint32_t source = gfx_ram_base_from_reg(reg) & ~(palette_page_bytes - 1U);
+        bool source_advanced = false;
+        for (std::uint32_t page = 0U; page < palette_copy_pages; ++page) {
+            const bool copy_page = (ctrl & static_cast<std::uint16_t>(1U << page)) != 0U;
+            if (copy_page) {
+                const std::uint32_t dest = page * palette_page_bytes;
+                if (source + palette_page_bytes <= gfx_ram_size &&
+                    dest + palette_page_bytes <= palette.size()) {
+                    std::copy_n(gfx_ram.begin() + source, palette_page_bytes,
+                                palette.begin() + dest);
+                }
+                source += palette_page_bytes;
+                source_advanced = true;
+            } else if (source_advanced) {
+                source += palette_page_bytes;
+            }
+        }
+    }
+
     void cps1_system::run_frame() {
-        // CPS1: ~10 MHz 68K at ~59.6 Hz. Exact CPU<->beam sync is a later
-        // increment; the two chips tick a frame's worth decoupled here.
+        // CPS1: ~10 MHz 68K at ~59.6 Hz. Frame-at-vblank model: decode the CPS-A
+        // latch to the video, run the CPU across the visible field, tick the video
+        // into vblank (which renders + raises the level-6 IRQ via the callback),
+        // then run the CPU through the vblank tail so the IRQ is serviced. Exact
+        // CPU<->beam cycle sync is a later increment.
         constexpr std::uint64_t cpu_cycles_per_frame = 10'000'000ULL / 60ULL;
-        constexpr std::uint64_t video_dots_per_frame =
+        constexpr std::uint32_t visible_lines = chips::video::cps_a_b::vblank_start;
+        constexpr std::uint64_t dots_total =
             static_cast<std::uint64_t>(chips::video::cps_a_b::frame_lines) *
             chips::video::cps_a_b::line_pixels;
-        main_cpu.tick(cpu_cycles_per_frame);
-        video.tick(video_dots_per_frame);
+        // The vblank render + IRQ fire on the dot that lands the beam at the start
+        // of the first vblank line; tick the video that far so the IRQ is raised
+        // before the CPU tail runs (one dot past the visible field).
+        constexpr std::uint64_t dots_to_vblank =
+            static_cast<std::uint64_t>(visible_lines) * chips::video::cps_a_b::line_pixels + 1U;
+        // Split the CPU budget either side of vblank in proportion to the field.
+        constexpr std::uint64_t cpu_visible =
+            cpu_cycles_per_frame * visible_lines / chips::video::cps_a_b::frame_lines;
+
+        push_cps_a_to_video();
+        main_cpu.tick(cpu_visible);
+        video.tick(dots_to_vblank);                        // renders + raises the vblank IRQ
+        main_cpu.tick(cpu_cycles_per_frame - cpu_visible); // services the pending vblank IRQ
+        video.tick(dots_total - dots_to_vblank);           // finish the frame back to line 0
     }
 
     common::rom_set_decl cps1_rom_skeleton(std::string set_name) {
