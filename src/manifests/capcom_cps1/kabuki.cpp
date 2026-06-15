@@ -86,6 +86,12 @@ namespace mnemos::manifests::capcom_cps1 {
                     .swap_key2 = 0x54163072U,
                     .addr_key = 0x5151U,
                     .xor_key = 0x51U};
+        case kabuki_game::slammast:
+            // Shared by Saturday Night Slam Masters + Muscle Bomber Duo (mbombrd).
+            return {.swap_key1 = 0x54321076U,
+                    .swap_key2 = 0x65432107U,
+                    .addr_key = 0x3131U,
+                    .xor_key = 0x19U};
         }
         return {};
     }

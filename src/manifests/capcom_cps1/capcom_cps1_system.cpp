@@ -44,6 +44,9 @@ namespace mnemos::manifests::capcom_cps1 {
                 params.kabuki = kabuki_game::wof;
             } else if (*decl.kabuki == "punisher") {
                 params.kabuki = kabuki_game::punisher;
+            } else if (*decl.kabuki == "slammast" || *decl.kabuki == "mbombrd") {
+                // Muscle Bomber Duo shares Slam Masters' Kabuki key.
+                params.kabuki = kabuki_game::slammast;
             }
         }
         return params;
@@ -138,6 +141,30 @@ namespace mnemos::manifests::capcom_cps1 {
             };
             map_comm(qsound_comm0_base, 0U);
             map_comm(qsound_comm1_base, 1U);
+
+            // C-board I/O window: player 3/4 inputs (read-only, all-released until a
+            // 4-player adapter drives them) + the serial 93C46 EEPROM at $F1C006.
+            // 2-player QSound sets simply never read/write this window.
+            main_bus.map_mmio(
+                qsound_io_base, qsound_io_window,
+                [this](std::uint32_t address) -> std::uint8_t {
+                    if ((address & 0xFEU) == (qsound_eeprom_addr & 0xFEU)) {
+                        // EEPROM data-out in bit0 of the low (odd) byte.
+                        return (address & 1U) != 0U
+                                   ? static_cast<std::uint8_t>(eeprom.data_out() ? 0x01U : 0x00U)
+                                   : 0xFFU;
+                    }
+                    return 0xFFU; // IN2/IN3 all-released; coin2 is write-only
+                },
+                [this](std::uint32_t address, std::uint8_t value) {
+                    if (address == qsound_eeprom_addr + 1U) {
+                        // EEPROMOUT (low/odd byte): DI bit0, CLK bit6, CS bit7.
+                        eeprom.update((value & qsound_eeprom_cs) != 0U,
+                                      (value & qsound_eeprom_clk) != 0U,
+                                      (value & qsound_eeprom_di) != 0U);
+                    }
+                },
+                1);
         } else {
             // Sound-command latches ($800180 primary, $800188 secondary). The 68K
             // pokes commands here; the Z80 reads them at $F008 / $F00A. A primary
@@ -305,6 +332,7 @@ namespace mnemos::manifests::capcom_cps1 {
         fm.reset(chips::reset_kind::power_on);
         oki.reset(chips::reset_kind::power_on);
         qdsp.reset(chips::reset_kind::power_on);
+        eeprom.reset();
         video.reset(chips::reset_kind::power_on);
     }
 

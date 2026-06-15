@@ -418,6 +418,13 @@ TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][d
         for (int i = 0; i < 8; ++i) {
             std::fprintf(stderr, " d%d=%08X", i, r.d[static_cast<std::size_t>(i)]);
         }
+        std::fprintf(stderr, "\n[trace] eeprom[0..16]:");
+        {
+            const auto eep = machine.eeprom.bytes();
+            for (std::size_t i = 0; i < 16U && i < eep.size(); ++i) {
+                std::fprintf(stderr, " %02X", eep[i]);
+            }
+        }
         std::fprintf(stderr, "\n");
     }
 

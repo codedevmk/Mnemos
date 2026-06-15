@@ -21,8 +21,9 @@ namespace mnemos::manifests::capcom_cps1 {
         std::uint8_t xor_key{};
     };
 
-    // The CPS1 QSound games whose sound CPU is Kabuki-encrypted.
-    enum class kabuki_game : std::uint8_t { dino, wof, punisher };
+    // The CPS1 QSound games whose sound CPU is Kabuki-encrypted. `slammast` is
+    // shared by Saturday Night Slam Masters + Muscle Bomber Duo (same key).
+    enum class kabuki_game : std::uint8_t { dino, wof, punisher, slammast };
 
     [[nodiscard]] kabuki_keys kabuki_keys_for(kabuki_game game) noexcept;
 
