@@ -306,7 +306,9 @@ TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][d
     auto bytes = mnemos::io::read_file(set_env);
     REQUIRE(bytes.has_value());
 
-    capcom_cps1_adapter adapter(std::move(*bytes), "cps1");
+    // Pass the set's own path so a clone set (game.toml with a `parent` key)
+    // resolves its parent zip from the same directory and merges the shared ROMs.
+    capcom_cps1_adapter adapter(std::move(*bytes), "cps1", nullptr, {}, set_env);
     auto& machine = adapter.machine();
     REQUIRE(machine.roms.issues.empty()); // every file present, sized, CRC-verified
     INFO("cps_b_profile id = " << machine.profile.id);

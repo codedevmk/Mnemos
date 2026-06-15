@@ -35,7 +35,8 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
       public:
         explicit capcom_cps1_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
                                      frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
-                                     std::optional<std::uint16_t> dip_override = {});
+                                     std::optional<std::uint16_t> dip_override = {},
+                                     std::string rom_path = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
             // ~59.6 Hz progressive raster. Most CPS1 monitors are horizontal; a

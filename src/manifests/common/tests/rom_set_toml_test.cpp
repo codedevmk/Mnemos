@@ -66,6 +66,44 @@ fill = 0x00
     CHECK(decl.regions[1].fill == 0x00U);
     CHECK(decl.regions[1].files.empty());
     CHECK_FALSE(decl.cps_b_profile.has_value()); // optional key, absent here
+    CHECK_FALSE(decl.parent.has_value());        // optional key, absent here
+}
+
+TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"sf2hf\"\nboard = \"capcom_cps1\"\n"
+            "parent = \"sf2ce\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->parent.has_value());
+        CHECK(*result.value->parent == "sf2ce");
+    }
+    SECTION("absent leaves it unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->parent.has_value());
+    }
+    SECTION("empty string is rejected") {
+        const auto result =
+            parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = \"\"\n"
+                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("non-string is rejected") {
+        const auto result =
+            parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = 7\n"
+                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("path separators / traversal are rejected at the trust boundary") {
+        for (const char* bad : {"../sf2ce", "..\\sf2ce", "/etc/passwd", "a/b", "c:foo"}) {
+            const auto result = parse_rom_set_decl(
+                std::string("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = \"") +
+                bad + "\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+            CHECK_FALSE(result.ok());
+        }
+    }
 }
 
 TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]") {

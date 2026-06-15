@@ -5,6 +5,7 @@
 #include "rom_set_toml.hpp"
 
 #include <cstdio>
+#include <string>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::capcom_cps1 {
@@ -19,13 +20,58 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
             cps1::cps1_board_params params; // CPS-B profile etc. from the declaration
         };
 
+        // Resolve a clone set's parent zip beside the clone on disk and compose
+        // a fallback provider (clone first, then parent) so the parent's shared
+        // dumps fill in. `rom_path` is the clone zip's own path; the parent zip
+        // is `<dir>/<parent>.zip`. On any failure the clone provider is returned
+        // unchanged -- load_rom_set then reports the missing shared files.
+        [[nodiscard]] mnemos::manifests::common::rom_file_provider
+        with_parent_fallback(const mnemos::manifests::common::rom_file_provider& clone,
+                             const std::string& parent, const std::string& rom_path) {
+            if (rom_path.empty()) {
+                std::fprintf(stderr,
+                             "[capcom_cps1] set declares parent '%s' but no path is known to "
+                             "locate it; shared ROMs will be missing\n",
+                             parent.c_str());
+                return clone;
+            }
+            // Defence in depth: the loader already constrains `parent` to a plain
+            // set id, but never build a path from one carrying a separator / "..".
+            if (parent.find('/') != std::string::npos || parent.find('\\') != std::string::npos ||
+                parent.find("..") != std::string::npos) {
+                std::fprintf(stderr,
+                             "[capcom_cps1] refusing to resolve parent '%s': not a plain "
+                             "set id\n",
+                             parent.c_str());
+                return clone;
+            }
+            const auto slash = rom_path.find_last_of("/\\");
+            const std::string dir =
+                slash == std::string::npos ? std::string{} : rom_path.substr(0, slash + 1);
+            const std::string parent_path = dir + parent + ".zip";
+            bool unreadable_zip = false;
+            auto parent_provider = mnemos::manifests::common::make_zip_rom_provider_from_path(
+                parent_path, &unreadable_zip);
+            if (!parent_provider.has_value()) {
+                std::fprintf(stderr, "[capcom_cps1] parent set %s: %s\n",
+                             unreadable_zip ? "is not a readable zip" : "not found",
+                             parent_path.c_str());
+                return clone;
+            }
+            return mnemos::manifests::common::make_fallback_rom_provider(
+                clone, std::move(*parent_provider));
+        }
+
         // Set loader. A .zip carrying a "game.toml" declaration (schema
         // mnemos-romset/1) loads declaratively -- per-file placement, interleave,
         // CRC verification -- with loader issues reported to stderr; the declared
-        // `cps_b_profile` selects the board's hardware profile. Without a manifest
-        // the development format applies: region-named entries ("maincpu", "gfx",
-        // "audiocpu", "oki") loaded whole. A bare binary is the 68000 program.
-        [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom) {
+        // `cps_b_profile` selects the board's hardware profile. A clone set names
+        // a `parent`, whose zip (beside the clone, via `rom_path`) supplies the
+        // shared dumps. Without a manifest the development format applies:
+        // region-named entries ("maincpu", "gfx", "audiocpu", "oki") loaded
+        // whole. A bare binary is the 68000 program.
+        [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
+                                          const std::string& rom_path) {
             loaded_set result;
             const bool is_zip = rom.size() >= 4U && rom[0] == 'P' && rom[1] == 'K';
             if (is_zip) {
@@ -43,8 +89,12 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
                             }
                             return result; // declared but invalid: boot an empty board
                         }
+                        const auto effective =
+                            parsed.value->parent.has_value()
+                                ? with_parent_fallback(*provider, *parsed.value->parent, rom_path)
+                                : *provider;
                         result.image =
-                            mnemos::manifests::common::load_rom_set(*parsed.value, *provider);
+                            mnemos::manifests::common::load_rom_set(*parsed.value, effective);
                         // Thread the declared CPS-B profile id from the TOML into the
                         // board params (absent => the chip's legacy default profile).
                         result.params = cps1::board_params_from_decl(*parsed.value);
@@ -75,11 +125,12 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
     capcom_cps1_adapter::capcom_cps1_adapter(std::vector<std::uint8_t> rom,
                                              std::string display_name,
                                              frontend_sdk::scheduler_factory* /*scheduler_factory*/,
-                                             std::optional<std::uint16_t> dip_override)
+                                             std::optional<std::uint16_t> dip_override,
+                                             std::string rom_path)
         // The CPS1 board integrates both CPUs + the sound chips + the beam in its
         // own run_frame(), so there is no per-chip master-clock schedule to build;
         // the scheduler_factory override (a multi-clock pacing hook) does not apply.
-        : sys_(assemble_from(load_set(std::move(rom)))) {
+        : sys_(assemble_from(load_set(std::move(rom), rom_path))) {
         if (dip_override.has_value()) {
             // The arcade DIP override packs DSW A/B/C into the low three bytes.
             sys_->dip_a = static_cast<std::uint8_t>(*dip_override & 0xFFU);
@@ -220,7 +271,8 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
                     return std::make_unique<capcom_cps1_adapter>(
                         std::move(opts.rom), std::move(opts.display_name),
-                        opts.scheduler_factory_override, opts.dip_override);
+                        opts.scheduler_factory_override, opts.dip_override,
+                        std::move(opts.rom_path));
                 });
             return 0;
         }();
