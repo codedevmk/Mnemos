@@ -28,6 +28,20 @@ and the `R#` cross-reference to the risk register where one exists.
 > harness to A/B it, so opt-in is the honest end state. The multiplier-contention
 > upper bound (X2) stays unmodeled — its magnitude has no manual grounding.
 
+> **Update 2026-06-14 (Genesis VDP Mode-4 viewport geometry, PR #153):** a new
+> Genesis item **G8** is tracked. The VDP reported `field_height` (224/240) as the
+> framebuffer height regardless of **M5** (reg1 bit2); with M5 clear the hardware
+> uses the legacy **192-line** viewport. PR #153 gates `visible_height()` on M5
+> (192 when M5 clear) — a pure host-facing geometry change (`framebuffer()`-only),
+> leaving the M5-independent raster-timing height untouched so the universal boot
+> M5 0→1 transition does not perturb VBL/VINT phase. Full 2784 sweep vs a
+> *current-master* baseline: **+6 byte-perfect, 0 regressions**. G8 stays `[~]`:
+> full Mode-4 *content* rendering remains (deferred — a 2026-06-14 scope found NO
+> corpus game renders M5-clear+display-on content, and a faithful implementation
+> needs GPGX's high-risk 64K↔16K VRAM re-decode that runs on every boot). (Methodology
+> note: the pinned `results_on.txt` baseline is weeks stale; isolating a change now
+> requires a same-tree current-HEAD baseline player, not that file.)
+
 > **Active porting mandate (ADR-0006 §1):** every Emu→Mnemos port is
 > restructured into Mnemos C++23 conventions and is never copied wholesale.
 > Proposed ADR-0024 sharpens this into an explicit "Mnemos-or-better"
@@ -62,8 +76,8 @@ and the `R#` cross-reference to the risk register where one exists.
 
 ## Progress
 
-- **Implemented-system hardware items: 8 / 28 complete** — 2 CRIT · 8 HIGH · 12 MED · 6 LOW
-  (X2 + X3 completed 2026-06-13 as opt-in models; see the update note above)
+- **Implemented-system hardware items: 8 / 29 complete** — 2 CRIT · 8 HIGH · 12 MED · 7 LOW
+  (X2 + X3 completed 2026-06-13 as opt-in models; G8 added 2026-06-14 as `[~]`; see the update notes above)
 - **Unbuilt systems: 0 / 9 complete**
 
 ---
@@ -104,7 +118,7 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 
 ---
 
-## Genesis / Mega Drive — 0 / 7
+## Genesis / Mega Drive — 0 / 8
 
 #### CPU
 - [ ] **G1** M68000 address-error / bus-error (group-0) exceptions *(also fixes the Sega CD sub-CPU — shared core)* · MISSING · HIGH · M · vs Emu · R7 · Evidence: `progress-analysis.md` R7 + `src/chips/cpu/m68000/tests/m68000_conformance_test.cpp`
@@ -120,11 +134,15 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 - [ ] **G5** J-Cart extra controller ports (4-player) · MISSING · MED · S · vs Emu · R12 · Evidence: `progress-analysis.md` R12
 - [ ] **G6** Multitap (4-Way Play / Team Player), Menacer & Justifier light guns, Sega Mouse · MISSING · LOW · M · beyond Emu · Evidence: `progress-analysis.md` Genesis controller gap
 
+#### Video — legacy / SMS-compat mode
+- [~] **G8** Mode 4 (M5-clear / legacy) display — the M5-clear **192-line viewport geometry** is now reported correctly: `visible_height()` returns 192 when reg1 bit2 (M5) is clear (Mode 5 is required for the 224/240-line display), a pure `framebuffer()`-only change that leaves the M5-independent raster-timing height untouched (folding it into timing would shift VBL/VINT on every boot). Fixes the M5-clear size-mismatch cluster — Clue [h1], Bubba N Stix [h2], Wrestle War [h2], SegaCD BIOS, Pro Action Replay ×2 (+6 byte-perfect, **0 regressions** on the full 2784 sweep vs a current-master baseline; PR #153). **Remaining (deferred):** full Mode-4 (SMS-compat) BG/sprite **content** rendering for the M5-clear + display-on case (Mnemos still composites Mode-5 planes from non-Mode-5 VRAM, and stores CRAM in the MD 9-bit form rather than the Mode-4 6-bit `00BBGGRR`/`pixel_lut_m4` path). A 2026-06-14 scope found **no corpus game** renders M5-clear + display-on content (it is purely a few-frame boot transient every game leaves), and a faithful implementation needs GPGX's 64K↔16K VRAM address re-decode (`vdp_ctrl.c:1773-1896`) that runs on **every** boot M5 0→1 — a corpus-wide regression risk disproportionate to the (cosmetic, idle-frame-only) benefit. A "M5-down-toggle stale-height latch" was considered and **rejected as a non-gap**: GPGX also collapses to 192 on M5-clear (`system.c:1080-1100`, just frame-deferred), so there is no stale-height divergence to model · PARTIAL · LOW · M · vs Emu · Evidence: `src/chips/video/genesis_vdp/genesis_vdp.cpp` `visible_height()` + `tests/genesis_vdp_test.cpp`
+
 #### System / save
 - [~] **G7** Whole-system deterministic save target — assemble existing per-chip serialization into a Genesis machine path. **Increment 1 done:** `genesis_system::save_state/load_state` serialize the non-chip board state (I/O sub-controller regs, VDP word latches, Z80 bus-arbitration lines + bank window, SRAM enable/WP, SSF2 banks, EEPROM pins) with a version marker; loading into a system assembled from the same cart needs no bus re-wiring (every MMIO closure reads the latches live). Round-trip + version-reject unit tests pass. **Remaining (increment 2):** the machine-path assembly that builds a `runtime::save_target` (the 5 chips + work/Z80 RAM + SRAM bytes as chunks + the system latch chunk) and the EEPROM device's in-flight I2C state (`eeprom_i2c` exposes `bytes()` but no save_state yet) · PARTIAL · HIGH · M · vs Emu · R8 · ⇄ T4 · Evidence: `src/manifests/genesis/genesis_system.cpp` save_state/load_state + `tests/genesis_system_test.cpp`
 
-> Done: M68000 (except G1), Z80, VDP (render + FIFO + DMA timing), YM2612, SN76489,
-> SRAM/EEPROM/SSF2 banking, region/IO, Z80 bus arbitration.
+> Done: M68000 (except G1), Z80, VDP (render + FIFO + DMA timing; M5-clear 192-line
+> viewport geometry via PR #153 — Mode-4 *content* rendering is the open part of G8),
+> YM2612, SN76489, SRAM/EEPROM/SSF2 banking, region/IO, Z80 bus arbitration.
 
 ---
 

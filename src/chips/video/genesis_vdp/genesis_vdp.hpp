@@ -310,6 +310,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] bool display_enabled() const noexcept { return (reg_[1] & 0x40U) != 0U; }
         [[nodiscard]] bool vint_enabled() const noexcept { return (reg_[1] & 0x20U) != 0U; }
         [[nodiscard]] bool dma_enabled() const noexcept { return (reg_[1] & 0x10U) != 0U; }
+        [[nodiscard]] bool m5_mode() const noexcept { return (reg_[1] & 0x04U) != 0U; }
         [[nodiscard]] bool v30_mode() const noexcept { return (reg_[1] & 0x08U) != 0U; }
         [[nodiscard]] bool h40_mode() const noexcept { return (reg_[12] & 0x81U) != 0U; }
         [[nodiscard]] int interlace_field() const noexcept { return (reg_[12] >> 1U) & 0x03; }
