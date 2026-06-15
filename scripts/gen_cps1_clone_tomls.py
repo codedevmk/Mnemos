@@ -31,10 +31,13 @@ parent = {}
 for m in re.finditer(r"^GAME\(\s*\d+,\s*(\w+),\s*(\w+),", MAME, re.M):
     parent[m.group(1)] = None if m.group(2) == "0" else m.group(2)
 
-# cps1_config_table: set -> (cpsb_macro, mapper_macro)
+# cps1_config_table: set -> FULL field tuple after the name (cpsb, mapper, in2,
+# in3, out2, bootleg_kludge...). Capture every comma-separated field up to the
+# closing brace, not just (cpsb, mapper): the trailing in2/in3/out2/kludge fields
+# distinguish bootleg boards from their parent and MUST gate profile reuse.
 config = {}
-for m in re.finditer(r'\{\s*"(\w+)",\s*(\w+),\s*(mapper_\w+)', MAMEV):
-    config[m.group(1)] = (m.group(2), m.group(3))
+for m in re.finditer(r'\{\s*"(\w+)"\s*,([^}]*)\}', MAMEV):
+    config[m.group(1)] = tuple(f.strip() for f in m.group(2).split(",") if f.strip())
 
 # ROM_START blocks -> ordered region/file layout
 def parse_sets():
@@ -106,17 +109,25 @@ def gen(clone):
     par = parent.get(cand)
     if par is None or par not in HAVE:
         return None, f"parent '{par}' not ported"
-    # profile: reuse parent's iff configs match
-    if config.get(cand) and config.get(par) and config[cand] != config[par]:
-        return None, f"config {config[cand]} != parent {config[par]} (needs new profile)"
+    # Reuse the parent's profile ONLY if the clone's FULL board config (incl.
+    # in2/in3/out2/bootleg_kludge) matches the parent's. A missing table entry
+    # is not "matches" -- skip it (the bootleg sets that differ only in the
+    # trailing kludge need a profile Mnemos does not model yet).
+    ccfg, pcfg = config.get(cand), config.get(par)
+    if ccfg is None or pcfg is None or ccfg != pcfg:
+        return None, f"config {ccfg} != parent {pcfg} (needs new profile/kludge)"
     ptoml = open(os.path.join(GAMES, par + ".toml"), encoding="utf-8").read()
+    # The parent must itself be standalone -- the fallback is single-level.
+    if re.search(r"^\s*parent\s*=", ptoml, re.M):
+        return None, f"parent '{par}' is itself a clone (grandparent chains unsupported)"
     pm = re.search(r"cps_b_profile = (\d+)", ptoml)
     if not pm:
         return None, "parent has no cps_b_profile"
     profile = pm.group(1)
-    orient = re.search(r'orientation = "(\w+)"', ptoml)
-    psound = re.search(r'sound  = "(\w+)"', ptoml)
-    pkabuki = re.search(r'kabuki = "(\w+)"', ptoml)
+    # whitespace-tolerant: parent tomls vary in key alignment (some are wide-padded)
+    orient = re.search(r'^\s*orientation\s*=\s*"(\w+)"', ptoml, re.M)
+    psound = re.search(r'^\s*sound\s*=\s*"(\w+)"', ptoml, re.M)
+    pkabuki = re.search(r'^\s*kabuki\s*=\s*"(\w+)"', ptoml, re.M)
     par_names = zip_names(os.path.join(ZIPDIR, par + ".zip"))
     # build toml regions
     body = []

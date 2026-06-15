@@ -4,6 +4,7 @@
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
 
+#include <algorithm>
 #include <charconv>
 #include <string>
 #include <utility>
@@ -256,14 +257,26 @@ namespace mnemos::manifests::common {
                 }
             }
             // Optional parent set name (MAME-style clone -> parent): the board
-            // adapter loads the shared dumps from the parent set's zip. Absent
-            // => standalone.
+            // adapter loads the shared dumps from the parent set's zip. The value
+            // is concatenated into a filesystem path (<dir>/<parent>.zip) and the
+            // toml lives inside an untrusted ROM zip, so constrain it to a plain
+            // set id here at the trust boundary -- reject path separators, "..",
+            // and absolute/drive paths (every real CPS1 set id is [A-Za-z0-9_]).
             if (const toml::node* node = set->get("parent")) {
                 if (const auto* value = node->as_string()) {
-                    if (value->get().empty()) {
+                    const std::string& p = value->get();
+                    const auto plain_id = [](char c) {
+                        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                               (c >= '0' && c <= '9') || c == '_';
+                    };
+                    if (p.empty()) {
                         ctx.error("'parent' in [set] must be a non-empty string", node);
+                    } else if (!std::all_of(p.begin(), p.end(), plain_id)) {
+                        ctx.error("'parent' in [set] must be a plain set id [A-Za-z0-9_] "
+                                  "(no path separators)",
+                                  node);
                     } else {
-                        decl.parent = value->get();
+                        decl.parent = p;
                     }
                 } else {
                     ctx.error("'parent' in [set] must be a string", node);

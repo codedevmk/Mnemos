@@ -66,6 +66,12 @@ namespace mnemos::manifests::common {
         // set's zip. The board adapter composes a fallback provider (the clone's
         // own files first, then the parent's) -- every file is still CRC-verified
         // regardless of which zip supplied it. Absent => a standalone set.
+        // Constrained to a plain set id by the loader (no path separators).
+        // NOTE: only the capcom_cps1 adapter currently consumes this (it threads
+        // adapter_options.rom_path and composes the fallback); other boards parse
+        // it but ignore it, so a `parent` there would report the shared files
+        // missing. Single level only -- the parent set must be standalone, not
+        // itself a clone.
         std::optional<std::string> parent;
         // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
         // hardware profile by this numeric id; absent on families that don't use it.

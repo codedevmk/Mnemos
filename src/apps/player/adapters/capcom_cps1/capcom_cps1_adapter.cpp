@@ -35,6 +35,16 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
                              parent.c_str());
                 return clone;
             }
+            // Defence in depth: the loader already constrains `parent` to a plain
+            // set id, but never build a path from one carrying a separator / "..".
+            if (parent.find('/') != std::string::npos || parent.find('\\') != std::string::npos ||
+                parent.find("..") != std::string::npos) {
+                std::fprintf(stderr,
+                             "[capcom_cps1] refusing to resolve parent '%s': not a plain "
+                             "set id\n",
+                             parent.c_str());
+                return clone;
+            }
             const auto slash = rom_path.find_last_of("/\\");
             const std::string dir =
                 slash == std::string::npos ? std::string{} : rom_path.substr(0, slash + 1);

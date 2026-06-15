@@ -96,6 +96,14 @@ TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") 
                                "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
         CHECK_FALSE(result.ok());
     }
+    SECTION("path separators / traversal are rejected at the trust boundary") {
+        for (const char* bad : {"../sf2ce", "..\\sf2ce", "/etc/passwd", "a/b", "c:foo"}) {
+            const auto result = parse_rom_set_decl(
+                std::string("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = \"") +
+                bad + "\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+            CHECK_FALSE(result.ok());
+        }
+    }
 }
 
 TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]") {
