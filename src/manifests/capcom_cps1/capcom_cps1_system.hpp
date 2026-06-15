@@ -4,7 +4,10 @@
 #include "cps_a_b.hpp"        // CPS-A/CPS-B custom video
 #include "cps_b_profiles.hpp" // hardware-keyed CPS-B profile census
 #include "m68000.hpp"         // main CPU
+#include "okim6295.hpp"       // ADPCM sample voice (sound board)
 #include "rom_set.hpp"        // arcade ROM-set image
+#include "ym2151.hpp"         // FM synth (sound board)
+#include "z80.hpp"            // sound CPU
 
 #include <array>
 #include <cstddef>
@@ -15,14 +18,16 @@
 
 namespace mnemos::manifests::capcom_cps1 {
 
-    // CPS1 board, increment 2: the 68000 main CPU + the cps_a_b video chip, now
-    // with the per-frame CPS-A -> video decode, the reg5 palette DMA, and the
-    // vblank IRQ. The Z80 sound bus, YM2151/OKIM6295, IO/DIP inputs, sprite-latch
-    // DMA, CPS-B protection read-back, and the player adapter all land in later
-    // increments. The board maps the program ROM low across the 8 MiB program
-    // window with the work / GFX RAM overlaid above it, and exposes the
-    // CPS-A/CPS-B register windows so the video chip's logical state is reachable
-    // from the 68K.
+    // CPS1 board, increment 3: the 68000 main CPU + the cps_a_b video chip (the
+    // increment-2 per-frame CPS-A -> video decode, reg5 palette DMA, and vblank
+    // IRQ) plus the Z80 sound subsystem -- a sound Z80 driving a YM2151 + an
+    // OKIM6295 on its own little-endian bus, fed sound commands the 68K writes to
+    // $800180/$800188 and read back by the Z80 at $F008/$F00A. IO/DIP inputs,
+    // sprite-latch DMA, CPS-B protection read-back, the romset TOML key, and the
+    // player adapter all land in later increments. The board maps the program ROM
+    // low across the 8 MiB program window with the work / GFX RAM overlaid above
+    // it, and exposes the CPS-A/CPS-B register windows so the video chip's
+    // logical state is reachable from the 68K.
 
     // Program ROM window: $000000-$7FFFFF (the 68K's lower 8 MiB; absent dumps
     // read 0xFF). Work RAM: $FF0000-$FFFFFF (64 KiB). Unified GFX RAM (tilemap
@@ -79,6 +84,50 @@ namespace mnemos::manifests::capcom_cps1 {
     // appends it.
     inline constexpr std::size_t main_rom_size = program_rom_window;
 
+    // --- Z80 sound subsystem (YM2151 + OKIM6295 path) ---
+    // The sound board is a Z80 on a 16-bit little-endian bus: program ROM
+    // ($0000-$7FFF) + a banked 16 KiB window ($8000-$BFFF) into the upper sound
+    // ROM + 2 KiB work RAM ($D000-$D7FF) + the memory-mapped sound I/O at $F000+.
+    inline constexpr std::uint16_t z80_rom_base = 0x0000U;
+    inline constexpr std::uint32_t z80_rom_window = 0x8000U; // fixed low 32 KiB
+    inline constexpr std::uint16_t z80_bank_base = 0x8000U;
+    inline constexpr std::uint32_t z80_bank_window = 0x4000U; // 16 KiB banked
+    inline constexpr std::uint16_t z80_ram_base = 0xD000U;
+    inline constexpr std::size_t z80_ram_size = 0x800U; // 2 KiB
+    inline constexpr std::uint16_t z80_io_base = 0xF000U;
+    inline constexpr std::uint32_t z80_io_window = 0x1000U; // $F000-$FFFF
+
+    // Sound I/O port offsets within the $F000 window.
+    inline constexpr std::uint16_t z80_io_ym_addr = 0xF000U;  // YM2151 address (W) / status (R)
+    inline constexpr std::uint16_t z80_io_ym_data = 0xF001U;  // YM2151 data (W) / status (R)
+    inline constexpr std::uint16_t z80_io_oki = 0xF002U;      // OKIM6295 command (W) / status (R)
+    inline constexpr std::uint16_t z80_io_bank = 0xF004U;     // sound ROM bank select (W)
+    inline constexpr std::uint16_t z80_io_oki_pin7 = 0xF006U; // OKIM6295 pin-7 clock select (W)
+    inline constexpr std::uint16_t z80_io_latch = 0xF008U;    // primary sound latch (R)
+    inline constexpr std::uint16_t z80_io_latch2 = 0xF00AU;   // secondary sound latch (R)
+
+    // The non-QSound bank register is a single bit (two banks). Banked window
+    // base into the sound ROM: real ZIP-loaded sets carry two 16 KiB banks from
+    // $10000; smaller compact program ROMs are laid out linearly from $8000.
+    inline constexpr std::uint8_t z80_bank_mask = 0x01U;
+    inline constexpr std::uint32_t z80_bank_split_threshold = 0x18000U;
+    inline constexpr std::uint32_t z80_bank_base_large = 0x10000U;
+    inline constexpr std::uint32_t z80_bank_base_small = 0x8000U;
+
+    // 68K-side sound-command latches the Z80 reads at $F008/$F00A. A byte/word
+    // write to $800180 sets the primary latch (and arms it pending); a write to
+    // $800188 (low byte) sets the secondary timer/fade latch.
+    inline constexpr std::uint32_t sound_latch_addr = 0x800180U;
+    inline constexpr std::uint32_t sound_latch2_addr = 0x800188U;
+    inline constexpr std::uint32_t sound_latch_window = 0x10U; // $800180-$80018F
+
+    // Clocks: 68K ~10 MHz, sound Z80 ~3.579545 MHz. The OKIM6295 runs from a
+    // 1 MHz input clock (its chip default); pin-7 high = input/132.
+    inline constexpr std::uint32_t m68k_clock_hz = 10'000'000U;
+    inline constexpr std::uint32_t z80_clock_hz = 3'579'545U;
+    inline constexpr std::uint32_t oki_clock_hz = 1'000'000U;
+    inline constexpr std::uint32_t frame_rate_hz = 60U;
+
     // Per-board wiring the ROM-set declaration's name selects. Increment 1 carries
     // only the CPS-B profile id (a board / PAL identity, never a game name; 0 =
     // the chip's legacy default profile). Later increments add DIP defaults etc.
@@ -96,8 +145,12 @@ namespace mnemos::manifests::capcom_cps1 {
     // after construction.
     struct cps1_system final {
         chips::cpu::m68000 main_cpu;
+        chips::cpu::z80 sound_cpu;
         chips::video::cps_a_b video;
+        chips::audio::ym2151 fm;
+        chips::audio::okim6295 oki;
         topology::bus main_bus{24U, topology::endianness::big};
+        topology::bus sound_bus{16U, topology::endianness::little};
 
         common::rom_set_image roms;
         cps1_board_params params;
@@ -115,6 +168,20 @@ namespace mnemos::manifests::capcom_cps1 {
         // into the video chip's scroll/object/control state each frame.
         std::array<std::uint16_t, cps_a_reg_count> cps_a_regs{};
 
+        // Z80 sound work RAM ($D000-$D7FF).
+        std::array<std::uint8_t, z80_ram_size> z80_ram{};
+
+        // Sound-command latches. The 68K writes $800180 (primary) / $800188
+        // (secondary); the Z80 reads them at $F008 / $F00A. `sound_latch_pending`
+        // mirrors the hardware's latch-armed flag (cleared on the Z80's read).
+        std::uint8_t sound_latch{};
+        std::uint8_t sound_latch2{};
+        bool sound_latch_pending{};
+        // The $F004 bank register (one bit selects the banked $8000 window).
+        std::uint8_t sound_bank{};
+        // The size of the loaded sound program ROM; selects the bank-window math.
+        std::uint32_t sound_rom_size{};
+
         // Vblank IRQ bookkeeping (observable, not architectural). The video's
         // vblank callback raises the 68K level-6 autovector IRQ and bumps the
         // raise count; the CPU's IACK clears the line and bumps the ack count.
@@ -123,14 +190,30 @@ namespace mnemos::manifests::capcom_cps1 {
 
         explicit cps1_system(common::rom_set_image image, cps1_board_params board_params = {});
 
-        // Tick the 68K and the video chip for one frame; video.framebuffer() then
-        // holds the rendered frame. The CPS-A latch is decoded to the video at
-        // frame start, the video renders + raises the vblank IRQ on entering
-        // vblank, and the CPU runs across the frame so the IRQ is serviced. Exact
-        // CPU<->beam cycle sync is a later increment.
+        // Tick the 68K, the sound Z80, the YM2151 + OKIM6295, and the video chip
+        // for one frame; video.framebuffer() then holds the rendered frame. The
+        // CPS-A latch is decoded to the video at frame start; the two CPUs and the
+        // sound chips advance together in interleaved slices at the 68K:Z80 clock
+        // ratio; the video renders + raises the vblank IRQ on entering vblank and
+        // the CPU runs across the frame so the IRQ is serviced. Exact CPU<->beam
+        // cycle sync is a later increment.
         void run_frame();
 
+        // Recompute the Z80 sound INT from the YM2151's timer-IRQ line (the chip
+        // owns the (timerA & enA) | (timerB & enB) edge; this routes it to /INT).
+        void sync_sound_irq() noexcept;
+
       private:
+        // The banked-window base into the sound ROM for the current bank.
+        [[nodiscard]] std::uint32_t z80_bank_rom_base() const noexcept;
+        // Run the 68K + sound Z80 + sound chips for `cpu_cycles` of 68K time,
+        // interleaved in slices at the 68K:Z80 clock ratio.
+        void run_cpus(std::uint64_t cpu_cycles);
+
+        // Fractional-cycle accumulators that keep the long-run clock ratios exact
+        // across frames: 68K cycles -> Z80 cycles, and Z80 cycles -> OKI cycles.
+        std::uint64_t cpu_cycle_accum_{};
+        std::uint64_t oki_cycle_accum_{};
         // Decode the raw CPS-A latch into the video chip's logical state (scroll/
         // object bases, scroll offsets, row-scroll, video-control, display enable).
         void push_cps_a_to_video() noexcept;

@@ -2,7 +2,10 @@
 // synthetic cart (boot, render one frame to the black backdrop, route the
 // CPS-A/CPS-B register windows). Increment 2 adds the per-frame CPS-A -> video
 // decode, the reg5 palette DMA (GFX RAM -> palette buffer), and the vblank
-// level-6 IRQ that drives the game's main loop.
+// level-6 IRQ that drives the game's main loop. Increment 3 adds the Z80 sound
+// subsystem: the 68K -> Z80 sound latch, a running sound Z80 driving the
+// YM2151 + OKIM6295, the bank window, and the two CPUs + sound chips scheduled
+// together across the frame.
 
 #include "capcom_cps1_system.hpp"
 
@@ -226,4 +229,150 @@ TEST_CASE("cps1 drives the CPS-A scroll1 base + palette page to the video", "[cp
     const std::uint32_t pixel = system->video.framebuffer().pixels[0];
     CHECK((pixel & 0x00FF00U) != 0U); // green present
     CHECK((pixel & 0xFF0000U) == 0U); // not red -> the CPS-A registers drove it
+}
+
+namespace {
+
+    // Add an "audiocpu" sound-program region to an image, with `program` placed
+    // at $0000 (the Z80 reset entry) and the rest padded so the bank window has
+    // backing. `total` sizes the region (>= 0x18000 makes the bank window decode
+    // from $10000, the real-set layout; smaller stays in the linear layout).
+    void add_sound_rom(rom_set_image& image, const std::vector<std::uint8_t>& program,
+                       std::size_t total = 0x8000U) {
+        auto& rom = image.regions["audiocpu"];
+        rom.assign(total, 0x00U);
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+    }
+
+    // A minimal OKIM6295 sample ROM: one phrase whose 8-byte table entry points
+    // at an ADPCM byte stream long enough to still be sounding at frame end (a
+    // frame is ~126 native OKI steps, so a 0x200-byte phrase outlasts it).
+    [[nodiscard]] std::vector<std::uint8_t> make_oki_rom() {
+        std::vector<std::uint8_t> rom(0x400U, 0x00U);
+        // Phrase 1 table entry (offset 8): start 0x000100, end 0x0002FF.
+        rom[8] = 0x00;
+        rom[9] = 0x01;
+        rom[10] = 0x00;
+        rom[11] = 0x00;
+        rom[12] = 0x02;
+        rom[13] = 0xFF;
+        for (std::size_t i = 0; i < 0x200U; ++i) {
+            rom[0x100U + i] = static_cast<std::uint8_t>(0x11U * (i + 1U)); // non-silent ADPCM
+        }
+        return rom;
+    }
+
+} // namespace
+
+TEST_CASE("cps1 routes a 68K sound command to the Z80 via the sound latch", "[cps1][sound]") {
+    // Sound program @ $0000: LD A,($F008); LD ($D000),A; JR $ (loop).
+    auto image = make_image();
+    add_sound_rom(image, {
+                             0x3A,
+                             0x08,
+                             0xF0, // LD A,($F008)  -- read the primary latch
+                             0x32,
+                             0x00,
+                             0xD0, // LD ($D000),A  -- store into Z80 work RAM
+                             0x18,
+                             0xFE, // JR $          -- spin
+                         });
+    auto system = assemble_cps1(std::move(image));
+
+    // The 68K pokes a sound command into the primary latch ($800180).
+    system->main_bus.write8(cps1::sound_latch_addr, 0x5AU);
+    CHECK(system->sound_latch == 0x5AU);
+    CHECK(system->sound_latch_pending);
+
+    // After a frame the Z80 has run, read the latch (clearing pending), and
+    // copied it into its work RAM.
+    system->run_frame();
+    CHECK(system->z80_ram[0] == 0x5AU);
+    CHECK_FALSE(system->sound_latch_pending); // the Z80 read consumed the latch
+
+    // The secondary latch routes through $800188 (low byte) to $F00A.
+    system->main_bus.write16_be(cps1::sound_latch2_addr, 0x00C3U);
+    CHECK(system->sound_latch2 == 0xC3U);
+    CHECK(system->sound_bus.read8(cps1::z80_io_latch2) == 0xC3U);
+}
+
+TEST_CASE("cps1 runs the sound Z80 and the bank register selects the window", "[cps1][sound]") {
+    // Sound program @ $0000: select bank 1, then read the banked window byte at
+    // $8000 into B, and spin. With the linear (small) layout, bank 1's window
+    // base is $8000 + 1*$4000 = $C000.
+    auto image = make_image();
+    add_sound_rom(image,
+                  {
+                      0x3E,
+                      0x01, // LD A,1
+                      0x32,
+                      0x04,
+                      0xF0, // LD ($F004),A -- bank = 1
+                      0x3A,
+                      0x00,
+                      0x80, // LD A,($8000) -- read the banked window
+                      0x32,
+                      0x01,
+                      0xD0, // LD ($D001),A -- observe the fetched byte
+                      0x18,
+                      0xFE, // JR $
+                  },
+                  0x10000U);
+    // Stamp a sentinel at the bank-1 window source ($C000 in the linear layout).
+    image.regions["audiocpu"][0xC000U] = 0xA7U;
+
+    auto system = assemble_cps1(std::move(image));
+    system->run_frame();
+
+    // The Z80 executed: PC advanced past reset and the bank register latched.
+    CHECK(system->sound_bank == 0x01U);
+    CHECK(system->sound_cpu.cpu_registers().pc != 0x0000U);
+    // The banked window fetched the sentinel from the selected bank.
+    CHECK(system->z80_ram[1] == 0xA7U);
+}
+
+TEST_CASE("cps1 reaches the YM2151 + OKIM6295 from the Z80 and drains audio", "[cps1][sound]") {
+    // Sound program @ $0000: program a YM2151 register, fire an OKIM6295 phrase,
+    // then spin. The YM write exercises the address/data port pair; the OKI
+    // command (2 bytes) plays phrase 1 on channel 0.
+    auto image = make_image();
+    add_sound_rom(image, {
+                             0x3E, 0x20,       // LD A,$20      -- a YM2151 register addr
+                             0x32, 0x00, 0xF0, // LD ($F000),A  -- YM address port
+                             0x3E, 0xC0,       // LD A,$C0      -- some data
+                             0x32, 0x01, 0xF0, // LD ($F001),A  -- YM data port
+                             0x3E, 0x81,       // LD A,$81      -- OKI: play phrase 1
+                             0x32, 0x02, 0xF0, // LD ($F002),A  -- OKI command port
+                             0x3E, 0x10,       // LD A,$10      -- channel 0, full volume
+                             0x32, 0x02, 0xF0, // LD ($F002),A  -- OKI command port
+                             0x18, 0xFE,       // JR $
+                         });
+    image.regions["oki"] = make_oki_rom();
+
+    auto system = assemble_cps1(std::move(image));
+    // Capture OKI output so a frame's worth of native steps queues samples.
+    system->oki.enable_audio_capture(true);
+
+    system->run_frame();
+
+    // The YM2151 register the Z80 wrote is reflected in the chip's register file.
+    CHECK(system->fm.register_value(0x20U) == 0xC0U);
+    // The OKIM6295 accepted the play command (channel 0 busy in its status).
+    CHECK((system->oki.read_status() & 0x01U) != 0U);
+    // The OKI advanced and queued audio over the frame; drain a non-empty buffer.
+    const std::size_t pending = system->oki.pending_samples();
+    REQUIRE(pending > 0U);
+    std::vector<std::int16_t> buf(pending * 2U);
+    const std::size_t pairs = system->oki.drain_samples(buf.data(), pending);
+    CHECK(pairs == pending);
+    bool any_nonzero = false;
+    for (std::int16_t s : buf) {
+        if (s != 0) {
+            any_nonzero = true;
+            break;
+        }
+    }
+    CHECK(any_nonzero); // the decoded ADPCM stream is audible, not silence
 }

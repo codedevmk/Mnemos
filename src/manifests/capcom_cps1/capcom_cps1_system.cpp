@@ -85,6 +85,32 @@ namespace mnemos::manifests::capcom_cps1 {
             },
             1);
 
+        // Sound-command latches ($800180 primary, $800188 secondary). The 68K
+        // pokes commands here; the Z80 reads them at $F008 / $F00A. A primary
+        // write arms the pending flag (cleared on the Z80 read). Only the low
+        // byte of the secondary latch carries data on hardware.
+        main_bus.map_mmio(
+            sound_latch_addr, sound_latch_window,
+            [this](std::uint32_t address) -> std::uint8_t {
+                if (address >= sound_latch_addr && address < sound_latch_addr + 8U) {
+                    return sound_latch;
+                }
+                if (address >= sound_latch2_addr && address < sound_latch2_addr + 8U) {
+                    return sound_latch2;
+                }
+                return 0xFFU;
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                if (address >= sound_latch_addr && address < sound_latch_addr + 8U) {
+                    sound_latch = value;
+                    sound_latch_pending = true;
+                } else if (address >= sound_latch2_addr && address < sound_latch2_addr + 8U &&
+                           (address & 1U) != 0U) {
+                    sound_latch2 = value;
+                }
+            },
+            1);
+
         main_cpu.attach_bus(main_bus);
 
         // --- video: GFX ROM + unified GFX RAM + the board-owned palette ---
@@ -96,6 +122,79 @@ namespace mnemos::manifests::capcom_cps1 {
         profile = profile_for_id(params.cps_b_profile_id)
                       .value_or(chips::video::cps_a_b::cps_b_profile{});
         video.set_cps_b_profile(profile);
+
+        // --- sound subsystem: Z80 + YM2151 + OKIM6295 on the sound bus ---
+        auto& sound_rom = pinned_region(roms, "audiocpu", z80_rom_window);
+        sound_rom_size = static_cast<std::uint32_t>(sound_rom.size());
+
+        // Fixed low 32 KiB of the sound program.
+        sound_bus.map_rom(z80_rom_base,
+                          std::span<const std::uint8_t>(sound_rom).first(z80_rom_window), 0);
+        // Banked 16 KiB window: a register-selected slice of the upper sound ROM.
+        sound_bus.map_mmio(
+            z80_bank_base, z80_bank_window,
+            [this, &sound_rom](std::uint32_t address) -> std::uint8_t {
+                const std::uint32_t rom_addr = z80_bank_rom_base() + (address - z80_bank_base);
+                return rom_addr < sound_rom.size() ? sound_rom[rom_addr] : 0xFFU;
+            },
+            [](std::uint32_t, std::uint8_t) {}, 0);
+        // Z80 sound work RAM.
+        sound_bus.map_ram(z80_ram_base, z80_ram, 0);
+        // Sound I/O ($F000+): YM2151, OKIM6295, the bank + pin-7 registers, and
+        // the two read-only sound latches.
+        sound_bus.map_mmio(
+            z80_io_base, z80_io_window,
+            [this](std::uint32_t address) -> std::uint8_t {
+                switch (address) {
+                case z80_io_ym_addr:
+                case z80_io_ym_data:
+                    return fm.read_status();
+                case z80_io_oki:
+                    return oki.read_status();
+                case z80_io_latch:
+                    sound_latch_pending = false; // the read consumes the armed latch
+                    return sound_latch;
+                case z80_io_latch2:
+                    return sound_latch2;
+                default:
+                    return 0xFFU;
+                }
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                switch (address) {
+                case z80_io_ym_addr:
+                    fm.write_address(value);
+                    break;
+                case z80_io_ym_data:
+                    fm.write_data(value);
+                    sync_sound_irq(); // a data write can clear/raise a timer flag
+                    break;
+                case z80_io_oki:
+                    oki.write_command(value);
+                    break;
+                case z80_io_bank:
+                    sound_bank = static_cast<std::uint8_t>(value & z80_bank_mask);
+                    break;
+                case z80_io_oki_pin7:
+                    oki.set_pin7((value & 0x01U) != 0U);
+                    break;
+                default:
+                    break;
+                }
+            },
+            0);
+        sound_cpu.attach_bus(sound_bus);
+
+        // OKIM6295 sample voice: the "oki" region is its external sample ROM; run
+        // it from a 1 MHz input clock (pin-7 high = input/132 native rate).
+        const auto& oki_rom = pinned_region(roms, "oki", 0U);
+        oki.set_sample_rom(std::span<const std::uint8_t>(oki_rom));
+        oki.set_input_clock(oki_clock_hz);
+        oki.set_pin7(true);
+
+        // The YM2151's timer-IRQ line drives the Z80 /INT (the edge callback
+        // re-asserts on every timer-flag change).
+        fm.set_irq([this](bool) { sync_sound_irq(); });
 
         // Vblank IRQ: the beam entering vblank (after the frame renders) raises the
         // 68K level-6 autovector; the CPU clears the line at its IACK. Vectoring is
@@ -110,10 +209,26 @@ namespace mnemos::manifests::capcom_cps1 {
         });
 
         // Construction order: ROM mapped + bus attached, then power-on reset so the
-        // 68K loads SSP/PC from the cart's reset vectors.
+        // 68K loads SSP/PC from the cart's reset vectors. The sound Z80 runs from
+        // $0000 immediately (CPS1 has no sound-CPU reset gate on this path).
         main_cpu.reset(chips::reset_kind::power_on);
+        sound_cpu.reset(chips::reset_kind::power_on);
+        fm.reset(chips::reset_kind::power_on);
+        oki.reset(chips::reset_kind::power_on);
         video.reset(chips::reset_kind::power_on);
     }
+
+    std::uint32_t cps1_system::z80_bank_rom_base() const noexcept {
+        if (sound_rom_size <= z80_rom_window) {
+            return z80_rom_window; // no upper banks: clamp to the fixed window edge
+        }
+        const std::uint32_t bank = sound_bank & z80_bank_mask;
+        const std::uint32_t base =
+            sound_rom_size >= z80_bank_split_threshold ? z80_bank_base_large : z80_bank_base_small;
+        return base + bank * z80_bank_window;
+    }
+
+    void cps1_system::sync_sound_irq() noexcept { sound_cpu.set_irq_line(fm.irq_asserted()); }
 
     std::uint32_t cps1_system::gfx_ram_base_from_reg(std::uint16_t reg) const noexcept {
         const std::uint32_t addr = static_cast<std::uint32_t>(reg) << 8U;
@@ -194,11 +309,11 @@ namespace mnemos::manifests::capcom_cps1 {
 
     void cps1_system::run_frame() {
         // CPS1: ~10 MHz 68K at ~59.6 Hz. Frame-at-vblank model: decode the CPS-A
-        // latch to the video, run the CPU across the visible field, tick the video
-        // into vblank (which renders + raises the level-6 IRQ via the callback),
-        // then run the CPU through the vblank tail so the IRQ is serviced. Exact
-        // CPU<->beam cycle sync is a later increment.
-        constexpr std::uint64_t cpu_cycles_per_frame = 10'000'000ULL / 60ULL;
+        // latch to the video, run the two CPUs + the sound chips across the
+        // visible field, tick the video into vblank (which renders + raises the
+        // level-6 IRQ via the callback), then run the CPUs through the vblank tail
+        // so the IRQ is serviced. Exact CPU<->beam cycle sync is a later increment.
+        constexpr std::uint64_t cpu_cycles_per_frame = m68k_clock_hz / frame_rate_hz;
         constexpr std::uint32_t visible_lines = chips::video::cps_a_b::vblank_start;
         constexpr std::uint64_t dots_total =
             static_cast<std::uint64_t>(chips::video::cps_a_b::frame_lines) *
@@ -213,10 +328,44 @@ namespace mnemos::manifests::capcom_cps1 {
             cpu_cycles_per_frame * visible_lines / chips::video::cps_a_b::frame_lines;
 
         push_cps_a_to_video();
-        main_cpu.tick(cpu_visible);
-        video.tick(dots_to_vblank);                        // renders + raises the vblank IRQ
-        main_cpu.tick(cpu_cycles_per_frame - cpu_visible); // services the pending vblank IRQ
-        video.tick(dots_total - dots_to_vblank);           // finish the frame back to line 0
+        run_cpus(cpu_visible);                        // 68K + Z80 + sound chips, visible field
+        video.tick(dots_to_vblank);                   // renders + raises the vblank IRQ
+        run_cpus(cpu_cycles_per_frame - cpu_visible); // services the pending vblank IRQ
+        video.tick(dots_total - dots_to_vblank);      // finish the frame back to line 0
+    }
+
+    void cps1_system::run_cpus(std::uint64_t cpu_cycles) {
+        // Interleave the 68K and the sound Z80 in fixed slices so a sound command
+        // the 68K latches mid-field is seen by the Z80 within the same frame, and
+        // the YM2151 timers / OKIM6295 advance in step. The Z80 budget tracks the
+        // 68K via a cycle accumulator (z80 += cpu * z80_clock / m68k_clock), so the
+        // long-run ratio is exact even though each slice is rounded.
+        constexpr std::uint64_t slice_cycles = 256U; // ~one scanline of 68K time
+        std::uint64_t remaining = cpu_cycles;
+        while (remaining > 0U) {
+            const std::uint64_t slice = remaining < slice_cycles ? remaining : slice_cycles;
+            remaining -= slice;
+
+            main_cpu.tick(slice);
+
+            cpu_cycle_accum_ += slice * z80_clock_hz;
+            const std::uint64_t z80_cycles = cpu_cycle_accum_ / m68k_clock_hz;
+            cpu_cycle_accum_ -= z80_cycles * m68k_clock_hz;
+            if (z80_cycles > 0U) {
+                sound_cpu.tick(z80_cycles);
+                fm.tick(z80_cycles); // YM2151 shares the Z80 clock; advance timers
+                sync_sound_irq();
+
+                // OKIM6295 runs from its own 1 MHz input clock; advance it for the
+                // equivalent wall-clock span of this Z80 slice.
+                oki_cycle_accum_ += z80_cycles * oki_clock_hz;
+                const std::uint64_t oki_cycles = oki_cycle_accum_ / z80_clock_hz;
+                oki_cycle_accum_ -= oki_cycles * z80_clock_hz;
+                if (oki_cycles > 0U) {
+                    oki.tick(oki_cycles);
+                }
+            }
+        }
     }
 
     common::rom_set_decl cps1_rom_skeleton(std::string set_name) {
