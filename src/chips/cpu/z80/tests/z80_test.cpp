@@ -34,6 +34,19 @@ namespace {
             }
         }
     };
+
+    // A bus whose opcode (M1 fetch) stream differs from its data (read8) stream at
+    // the same address -- the Kabuki opcode/data split. The CPU must take opcodes
+    // from fetch_opcode8 and operands/data from read8.
+    struct split_bus final : mnemos::chips::ibus {
+        std::array<std::uint8_t, 0x10000> opcode{};
+        std::array<std::uint8_t, 0x10000> data{};
+        [[nodiscard]] std::uint8_t read8(std::uint32_t a) override { return data[a & 0xFFFFU]; }
+        void write8(std::uint32_t a, std::uint8_t v) override { data[a & 0xFFFFU] = v; }
+        [[nodiscard]] std::uint8_t fetch_opcode8(std::uint32_t a) override {
+            return opcode[a & 0xFFFFU];
+        }
+    };
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::icpu, z80>);
@@ -69,6 +82,32 @@ TEST_CASE("z80 loads immediates and moves registers") {
     CHECK((m.cpu.cpu_registers().bc >> 8U) == 0x10U);
     m.cpu.step_instruction();
     CHECK((m.cpu.cpu_registers().af >> 8U) == 0x10U); // A <- B
+}
+
+TEST_CASE("z80 fetches opcodes from fetch_opcode8 and operands from read8") {
+    split_bus bus;
+    z80 cpu;
+    cpu.attach_bus(bus);
+    cpu.reset(reset_kind::power_on);
+
+    // LD A,$42 : the opcode 0x3E comes from the opcode stream, the immediate 0x42
+    // from the data stream. Sentinels in the other stream would corrupt the result
+    // if the CPU fetched from the wrong one.
+    bus.opcode[0x0000U] = 0x3EU; // LD A,n  (M1 opcode -> opcode stream)
+    bus.opcode[0x0001U] = 0xFFU; // if the operand wrongly used the opcode stream
+    bus.data[0x0000U] = 0x00U;   // if the opcode wrongly used the data stream (NOP)
+    bus.data[0x0001U] = 0x42U;   // the immediate operand (data stream)
+
+    cpu.step_instruction();
+    CHECK((cpu.cpu_registers().af >> 8U) == 0x42U);
+    CHECK(cpu.cpu_registers().pc == 0x0002U);
+
+    // A second instruction proves prefixed opcodes also use the opcode stream:
+    // LD B,$10 -> 0x06 (opcode), 0x10 (operand).
+    bus.opcode[0x0002U] = 0x06U;
+    bus.data[0x0003U] = 0x10U;
+    cpu.step_instruction();
+    CHECK((cpu.cpu_registers().bc >> 8U) == 0x10U);
 }
 
 TEST_CASE("z80 ADD sets carry/half/zero flags") {
