@@ -16,7 +16,7 @@ namespace mnemos::chips::audio {
         // Step-index movement keyed by the magnitude bits of the nibble.
         constexpr std::array<int, 8> index_adjust = {-1, -1, -1, -1, 2, 4, 6, 8};
         // The 49-entry ADPCM step ladder.
-        constexpr std::array<int, 49> step_table = {
+        constexpr std::array<int, okim6295::max_step_index + 1> step_table = {
             16,  17,  19,  21,  23,  25,  28,  31,  34,  37,  41,   45,   50,   55,   60,  66,  73,
             80,  88,  97,  107, 118, 130, 143, 157, 173, 185, 204,  224,  247,  272,  300, 330, 363,
             399, 439, 483, 532, 585, 622, 684, 752, 828, 910, 1002, 1102, 1212, 1333, 1466};
@@ -48,8 +48,8 @@ namespace mnemos::chips::audio {
             step_index += index_adjust[nibble & 0x7U];
             if (step_index < 0) {
                 step_index = 0;
-            } else if (step_index > 48) {
-                step_index = 48;
+            } else if (step_index > okim6295::max_step_index) {
+                step_index = okim6295::max_step_index;
             }
         }
 
@@ -286,22 +286,28 @@ namespace mnemos::chips::audio {
     }
 
     void okim6295::load_state(state_reader& reader) {
+        // Clamp decoded values to their valid ranges (mirroring the live setters):
+        // a corrupt or forward-incompatible blob must not yield an out-of-ladder
+        // step index (OOB read), a predictor that overflows in adpcm_apply, a
+        // volume that overflows the mix, or (below) a 0 divider that makes tick()
+        // step every cycle.
         for (auto& ch : channels_) {
             ch.active = reader.boolean();
             ch.current_addr = reader.u32();
             ch.end_addr = reader.u32();
             ch.nibble_high = reader.boolean();
-            ch.predictor = static_cast<std::int32_t>(reader.u32());
-            ch.step_index = static_cast<int>(reader.u32());
+            ch.predictor = std::clamp(static_cast<std::int32_t>(reader.u32()), -2048, 2047);
+            ch.step_index = std::clamp(static_cast<int>(reader.u32()), 0, max_step_index);
             ch.volume_code = reader.u8();
-            ch.volume = static_cast<int>(reader.u32());
+            ch.volume = std::clamp(static_cast<int>(reader.u32()), 0, 256);
         }
         command_pending_ = reader.boolean();
         pending_phrase_ = reader.u8();
         last_sample_ = static_cast<std::int16_t>(reader.u16());
         pin7_high_ = reader.boolean();
         input_clock_hz_ = reader.u32();
-        clock_divider_ = static_cast<int>(reader.u32());
+        const int loaded_divider = static_cast<int>(reader.u32());
+        clock_divider_ = loaded_divider > 0 ? loaded_divider : default_clock_divider;
         prescaler_ = static_cast<int>(reader.u32());
     }
 
