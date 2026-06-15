@@ -1,4 +1,5 @@
 add_subdirectory(okim6295)
+add_subdirectory(qsound)
 add_subdirectory(rf5c68)
 add_subdirectory(sid_6581)
 add_subdirectory(sn76489)
