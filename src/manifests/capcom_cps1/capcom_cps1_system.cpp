@@ -2,16 +2,21 @@
 
 #include <algorithm>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace mnemos::manifests::capcom_cps1 {
 
     namespace {
         // The named region's bytes, padded to `size` so the bus map always has
-        // full-size backing (absent dumps read 0xFF).
+        // full-size backing (absent dumps read 0xFF). `name` is a string_view (not
+        // a const std::string&) so a literal callsite does not bind a temporary to
+        // a reference param -- which GCC's -Wdangling-reference flags as a (false)
+        // alias of the returned reference.
         [[nodiscard]] std::vector<std::uint8_t>&
-        pinned_region(common::rom_set_image& image, const std::string& name, std::size_t size) {
-            auto& bytes = image.regions[name];
+        pinned_region(common::rom_set_image& image, std::string_view name, std::size_t size) {
+            auto& bytes = image.regions[std::string(name)];
             if (bytes.size() < size) {
                 bytes.resize(size, 0xFFU);
             }
