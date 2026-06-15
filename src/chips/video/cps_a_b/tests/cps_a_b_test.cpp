@@ -760,3 +760,29 @@ TEST_CASE("cps_a_b legacy flag controls the zero-layer-control fallback", "[cps_
         REQUIRE(chip.framebuffer().pixels[0] == 0x000055U); // backdrop, scroll2 not in the order
     }
 }
+
+TEST_CASE("cps_a_b retains the board profile + gfx mapper across reset", "[cps_a_b]") {
+    // Regression: reset() used to wipe profile_ back to default, dropping the
+    // board's gfx-code mapper -- so every game silently ran on an identity mapper
+    // (and the legacy layer order), which only renders correctly for boards whose
+    // mapper happens to be identity. The profile is board configuration set once
+    // by the board and must survive reset, like the attached gfx / palette spans.
+    static constexpr std::array<cps_a_b::gfx_bank_range, 1> ranges{{
+        {0x04U /* scroll2 */, 0x0000U, 0x7FFFU, 1U}, // route scroll2 codes into bank 1
+    }};
+    cps_a_b::cps_b_profile profile;
+    profile.legacy = false;
+    profile.mapper.bank_size = {0x8000U, 0x8000U, 0U, 0U};
+    profile.mapper.ranges = ranges;
+
+    cps_a_b chip;
+    chip.set_cps_b_profile(profile);
+    // scroll2 shift = 1: code 0x1000 -> expanded 0x2000 -> bank 1 (base 0x8000)
+    // -> (0x8000 + 0x2000) >> 1 = 0x5000, i.e. non-identity.
+    const std::uint32_t mapped = chip.mapped_gfx_code(cps_a_b::gfx_type::scroll2, 0x1000U);
+    REQUIRE(mapped == 0x5000U);
+
+    chip.reset(reset_kind::power_on);
+    // The mapper must still apply after reset (the bug returned the identity code).
+    CHECK(chip.mapped_gfx_code(cps_a_b::gfx_type::scroll2, 0x1000U) == 0x5000U);
+}
