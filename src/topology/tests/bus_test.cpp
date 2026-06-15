@@ -34,6 +34,31 @@ TEST_CASE("bus ROM reads back and ignores writes") {
     CHECK(b.read8(0xE000U) == 0x11U);
 }
 
+TEST_CASE("bus opcode overlay serves fetch_opcode8, read8 sees the data ROM") {
+    // Opcode/data-split memory (Kabuki): the same address yields a different byte
+    // when fetched as an opcode vs read as data.
+    const std::array<std::uint8_t, 4> data_rom{0xD0U, 0xD1U, 0xD2U, 0xD3U};
+    const std::array<std::uint8_t, 4> opcode_rom{0x0AU, 0x0BU, 0x0CU, 0x0DU};
+    bus b(16U);
+    b.map_rom(0x0000U, std::span<const std::uint8_t>(data_rom));
+    b.map_opcode_rom(0x0000U, std::span<const std::uint8_t>(opcode_rom));
+
+    CHECK(b.read8(0x0002U) == 0xD2U);         // data stream
+    CHECK(b.fetch_opcode8(0x0002U) == 0x0CU); // opcode stream
+    // Outside the overlay range, fetch_opcode8 falls back to read8.
+    std::array<std::uint8_t, 4> ram{};
+    b.map_ram(0x8000U, ram);
+    b.write8(0x8001U, 0x77U);
+    CHECK(b.fetch_opcode8(0x8001U) == 0x77U);
+}
+
+TEST_CASE("bus without an opcode overlay fetches opcodes from read8") {
+    const std::array<std::uint8_t, 2> rom{0x12U, 0x34U};
+    bus b(16U);
+    b.map_rom(0x0000U, std::span<const std::uint8_t>(rom));
+    CHECK(b.fetch_opcode8(0x0001U) == b.read8(0x0001U)); // default: identical
+}
+
 TEST_CASE("bus MMIO routes to the supplied handlers") {
     std::uint8_t last_write = 0U;
     const std::uint8_t reg_value = 0x5AU;

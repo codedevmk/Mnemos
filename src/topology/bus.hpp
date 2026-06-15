@@ -68,9 +68,20 @@ namespace mnemos::topology {
         // ROM flavour of the same primitive (the 32X $900000 cart bank window).
         void retarget_rom(std::uint32_t start, std::span<const std::uint8_t> storage) noexcept;
 
+        // Opcode-fetch overlay: a ROM span served to fetch_opcode8 over
+        // [start, start+size) instead of read8 -- for opcode/data-split program
+        // memory (an encrypted Z80 whose decrypted M1 opcode bytes differ from
+        // data reads at the same address, e.g. Kabuki on CPS1 QSound). The data
+        // side is mapped normally (map_rom/map_ram) and served by read8; one
+        // overlay region suffices. Default (none registered) leaves fetch_opcode8
+        // == read8, so every other bus is unchanged.
+        void map_opcode_rom(std::uint32_t start, std::span<const std::uint8_t> storage) noexcept;
+
         // ibus: unmapped reads return 0xFF (open bus); unmapped writes are dropped.
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override;
         void write8(std::uint32_t address, std::uint8_t value) override;
+        // Serves the opcode overlay (if mapped over `address`), else read8.
+        [[nodiscard]] std::uint8_t fetch_opcode8(std::uint32_t address) override;
 
         // Wide big-endian accesses: a single fast-span resolution when the whole
         // access fits one cached RAM/ROM span and no observer is installed;
@@ -156,6 +167,12 @@ namespace mnemos::topology {
         std::uint32_t address_mask_{0xFFFFU};
         std::vector<region> regions_;
         access_observer observer_{};
+
+        // Optional opcode-fetch overlay (see map_opcode_rom): served by
+        // fetch_opcode8 over [opcode_rom_start_, +opcode_rom_.size()); empty by
+        // default so fetch_opcode8 degenerates to read8.
+        std::span<const std::uint8_t> opcode_rom_{};
+        std::uint32_t opcode_rom_start_{};
     };
 
 } // namespace mnemos::topology

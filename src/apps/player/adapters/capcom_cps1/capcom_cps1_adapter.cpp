@@ -54,7 +54,7 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
                         }
                         return result;
                     }
-                    for (const char* region : {"maincpu", "gfx", "audiocpu", "oki"}) {
+                    for (const char* region : {"maincpu", "gfx", "audiocpu", "oki", "qsound"}) {
                         if (auto bytes = (*provider)(std::string{region} + ".bin")) {
                             result.image.regions.emplace(region, std::move(*bytes));
                         }
@@ -85,7 +85,11 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
             sys_->dip_a = static_cast<std::uint8_t>(*dip_override & 0xFFU);
             sys_->dip_b = static_cast<std::uint8_t>((*dip_override >> 8U) & 0xFFU);
         }
-        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->fm, &sys_->oki};
+        if (sys_->uses_qsound()) {
+            chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->qdsp};
+        } else {
+            chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->fm, &sys_->oki};
+        }
         spec_ = {{"System", "Arcade"},
                  {"Board", "Capcom CPS1"},
                  {"Game", display_name.empty() ? std::string{"unknown"} : std::move(display_name)}};
@@ -99,6 +103,24 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
     }
 
     frontend_sdk::audio_chunk capcom_cps1_adapter::drain_audio() noexcept {
+        if (sys_->uses_qsound()) {
+            // QSound emits a fixed ~24 kHz stereo stream independent of the CPU
+            // clock; pace the drain off the frame clock (native rate / fps) and
+            // step the HLE mixer once per output frame via generate().
+            constexpr std::uint32_t rate = chips::audio::qsound::native_sample_rate;
+            const std::uint64_t due =
+                frames_stepped_ * rate / manifests::capcom_cps1::frame_rate_hz;
+            const std::uint64_t pending = due - samples_drained_;
+            samples_drained_ = due;
+            if (pending == 0U) {
+                return {};
+            }
+            audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
+            sys_->qdsp.generate(audio_buf_);
+            return {.samples = audio_buf_.data(),
+                    .frame_count = static_cast<std::uint32_t>(pending),
+                    .sample_rate = rate};
+        }
         // The YM2151 is the musical voice (one stereo frame per 64 chip clocks);
         // its elapsed-clock counter is the sample clock, so drains never drift.
         // The OKIM6295's held sample (DAC level) is mixed into both lanes -- its

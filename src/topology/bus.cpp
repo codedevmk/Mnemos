@@ -48,6 +48,20 @@ namespace mnemos::topology {
         invalidate_fast_path();
     }
 
+    void bus::map_opcode_rom(std::uint32_t start, std::span<const std::uint8_t> storage) noexcept {
+        opcode_rom_start_ = start;
+        opcode_rom_ = storage;
+    }
+
+    std::uint8_t bus::fetch_opcode8(std::uint32_t address) {
+        const std::uint32_t addr = address & address_mask_;
+        if (!opcode_rom_.empty() && addr >= opcode_rom_start_ &&
+            (addr - opcode_rom_start_) < opcode_rom_.size()) {
+            return opcode_rom_[addr - opcode_rom_start_];
+        }
+        return read8(address);
+    }
+
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                        write_handler on_write, int priority, active_predicate active) {
         if (size == 0U) {

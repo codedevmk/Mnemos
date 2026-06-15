@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <span>
 #include <utility>
 #include <vector>
@@ -381,6 +382,123 @@ TEST_CASE("cps1 reaches the YM2151 + OKIM6295 from the Z80 and drains audio", "[
         }
     }
     CHECK(any_nonzero); // the decoded ADPCM stream is audible, not silence
+}
+
+TEST_CASE("cps1 QSound board runs the sound Z80, programs a voice, and passes comm",
+          "[cps1][sound][qsound]") {
+    // A QSound CPS1 board: the sound Z80 drives the DL-1425 through the $D000 port
+    // window (no YM2151 / OKIM6295), and the 68K + Z80 pass bytes through the two
+    // 4 KiB shared-RAM banks. The Z80 program below programs voice 0 (addr/rate/
+    // end/volume) then copies one byte from shared bank 0 ($C000) to bank 1
+    // ($F000) so both the comm path and the DSP wiring are exercised.
+    auto image = make_image();
+
+    // Program builder. emit_port stores "LD A,val; LD ($D0pp),A"; write_reg drives
+    // the DL-1425 three-port sequence (data hi -> $D000, data lo -> $D001, commit
+    // the register -> $D002).
+    std::vector<std::uint8_t> prog;
+    const auto emit = [&prog](std::initializer_list<std::uint8_t> bytes) {
+        for (std::uint8_t b : bytes) {
+            prog.push_back(b);
+        }
+    };
+    const auto emit_port = [&emit](std::uint8_t port, std::uint8_t val) {
+        emit({0x3EU, val});         // LD A,val
+        emit({0x32U, port, 0xD0U}); // LD ($D0pp),A
+    };
+    const auto write_reg = [&emit_port](std::uint8_t reg, std::uint16_t data) {
+        emit_port(0x00U, static_cast<std::uint8_t>(data >> 8U));   // data hi
+        emit_port(0x01U, static_cast<std::uint8_t>(data & 0xFFU)); // data lo
+        emit_port(0x02U, reg);                                     // commit register
+    };
+    write_reg(0x01U, 0x0010U);   // voice0 addr = 0x0010
+    write_reg(0x02U, 0x1000U);   // voice0 rate = 1.0 sample/step
+    write_reg(0x05U, 0x0200U);   // voice0 end  = 0x0200
+    write_reg(0x06U, 0x4000U);   // voice0 vol  = large, non-zero
+    emit({0x3AU, 0x00U, 0xC0U}); // LD A,($C000)  -- read shared bank 0
+    emit({0x32U, 0x00U, 0xF0U}); // LD ($F000),A  -- write shared bank 1
+    emit({0x18U, 0xFEU});        // JR $          -- spin
+    add_sound_rom(image, prog);
+
+    // The DL-1425 sample ROM: voice 0's default bank (0x8000) maps to ROM bank 0,
+    // so reads address the ROM directly. Stage a positive PCM run over the voice's
+    // play span so the mixer output is audibly non-zero.
+    auto& qrom = image.regions["qsound"];
+    qrom.assign(0x400U, 0x00U);
+    for (std::size_t i = 0x10U; i < 0x300U; ++i) {
+        qrom[i] = 0x40U; // positive 8-bit PCM -> non-silent
+    }
+
+    auto system = assemble_cps1(std::move(image),
+                                cps1::cps1_board_params{.sound = cps1::sound_system::qsound});
+    REQUIRE(system->uses_qsound());
+
+    // The 68K stages a comm byte in shared bank 0 (odd/low byte of the word at
+    // $F18000); the Z80 will read it at $C000 during the frame.
+    system->main_bus.write8(0xF18001U, 0x5AU);
+
+    system->run_frame();
+
+    // The sound Z80 executed (PC advanced out of reset into the spin loop).
+    CHECK(system->sound_cpu.cpu_registers().pc != 0x0000U);
+    // The Z80 copied the comm byte across to shared bank 1; the 68K reads it back
+    // through its $F1E000 window (odd/low byte).
+    CHECK(system->qsound_shared[1][0] == 0x5AU);
+    CHECK(system->main_bus.read8(0xF1E001U) == 0x5AU);
+    // The even byte of a comm word is open bus on the 68K side.
+    CHECK(system->main_bus.read8(0xF1E000U) == 0xFFU);
+
+    // The voice the Z80 programmed produces audible output: drain a buffer from
+    // the HLE mixer and confirm it is not pure silence.
+    std::vector<std::int16_t> buf(64U, 0);
+    system->qdsp.generate(buf);
+    bool any_nonzero = false;
+    for (std::int16_t s : buf) {
+        if (s != 0) {
+            any_nonzero = true;
+            break;
+        }
+    }
+    CHECK(any_nonzero);
+}
+
+TEST_CASE("cps1 QSound Kabuki board decrypts the sound program into two streams",
+          "[cps1][sound][qsound][kabuki]") {
+    // With a Kabuki key the encrypted low $0000-$7FFF window decodes into distinct
+    // opcode (M1-fetch) and data (read) streams. Drive a known plaintext through
+    // the reference encoder is out of scope here; instead confirm the board wires
+    // the split (the bus serves a different opcode byte than data byte) by checking
+    // the decoded buffers are populated and the sound bus fetch/read diverge.
+    auto image = make_image();
+    auto& rom = image.regions["audiocpu"];
+    rom.assign(0x8000U, 0x00U);
+    for (std::size_t i = 0; i < rom.size(); ++i) {
+        rom[i] = static_cast<std::uint8_t>(i * 7U + 1U); // arbitrary encrypted bytes
+    }
+
+    auto system = assemble_cps1(
+        std::move(image),
+        cps1::cps1_board_params{.sound = cps1::sound_system::qsound,
+                                .kabuki = mnemos::manifests::capcom_cps1::kabuki_game::dino});
+    REQUIRE(system->uses_qsound());
+
+    // Both decode buffers cover the encrypted low window.
+    REQUIRE(system->sound_opcode_rom.size() == 0x8000U);
+    REQUIRE(system->sound_data_rom.size() == 0x8000U);
+
+    // The sound bus serves the opcode stream to fetch_opcode8 and the data stream
+    // to read8; over the low window they are the decoded buffers, which differ.
+    bool any_split = false;
+    for (std::uint32_t addr = 0; addr < 0x8000U; ++addr) {
+        if (system->sound_bus.fetch_opcode8(addr) != system->sound_bus.read8(addr)) {
+            any_split = true;
+            break;
+        }
+    }
+    CHECK(any_split);
+    // And the bus's data side matches the decoded data buffer at a sample address.
+    CHECK(system->sound_bus.read8(0x0040U) == system->sound_data_rom[0x40U]);
+    CHECK(system->sound_bus.fetch_opcode8(0x0040U) == system->sound_opcode_rom[0x40U]);
 }
 
 TEST_CASE("cps1 exposes player inputs + system/DIP through the read windows", "[cps1][input]") {

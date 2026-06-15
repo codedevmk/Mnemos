@@ -31,6 +31,7 @@ target_link_libraries(
         mnemos::chips::video::cps_a_b
         mnemos::chips::audio::ym2151
         mnemos::chips::audio::okim6295
+        mnemos::chips::audio::qsound
         mnemos::topology
         mnemos::manifests::common
 )
@@ -45,6 +46,7 @@ mnemos_declare_tier(
         mnemos_chips_video_cps_a_b
         mnemos_chips_audio_ym2151
         mnemos_chips_audio_okim6295
+        mnemos_chips_audio_qsound
         mnemos_topology
         mnemos_manifests_common
         mnemos_chips_shared
