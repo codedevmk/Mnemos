@@ -126,7 +126,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build \
+          sudo apt-get install -y ninja-build mold \
             libasound2-dev libpulse-dev libaudio-dev libjack-jackd2-dev libsndio-dev \
             libusb-1.0-0-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
             libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
@@ -145,14 +145,16 @@ jobs:
           set VSDEVCMD=%VSINSTALL%\Common7\Tools\VsDevCmd.bat
           if not exist "%VSDEVCMD%" exit /b 1
           call "%VSDEVCMD%" -arch=x64
-          cmake --preset %PRESET% -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded
+          rem LLVM (lld-link) ships preinstalled on the runner image; put it on PATH.
+          set "PATH=C:\Program Files\LLVM\bin;%PATH%"
+          cmake --preset %PRESET% -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DCMAKE_LINKER_TYPE=LLD
           cmake --build --preset %PRESET%
           ctest --preset %PRESET% --output-on-failure
 
       - name: Configure
         if: runner.os == 'Linux'
         run: cmake --preset ${{ matrix.preset }} -DCMAKE_C_COMPILER_LAUNCHER=sccache
-          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_LINKER_TYPE=MOLD
 
       - name: Build
         if: runner.os == 'Linux'
