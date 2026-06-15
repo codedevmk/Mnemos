@@ -3,6 +3,7 @@
 #include "bus.hpp"            // topology bus
 #include "cps_a_b.hpp"        // CPS-A/CPS-B custom video
 #include "cps_b_profiles.hpp" // hardware-keyed CPS-B profile census
+#include "eeprom_93c46.hpp"   // serial NVRAM (QSound 3/4-player boards)
 #include "kabuki.hpp"         // encrypted-Z80 (QSound sound CPU) key + decode
 #include "m68000.hpp"         // main CPU
 #include "okim6295.hpp"       // ADPCM sample voice (sound board)
@@ -172,6 +173,20 @@ namespace mnemos::manifests::capcom_cps1 {
     inline constexpr std::uint32_t qsound_z80_clock_hz = 8'000'000U;
     inline constexpr std::uint32_t qsound_irq_hz = 250U; // periodic sound-CPU /INT
 
+    // C-board I/O on the 3/4-player QSound boards (slammast / mbombrd): player 3/4
+    // inputs + a serial 93C46 EEPROM, at $F1C000-$F1C007. The EEPROM lines sit in
+    // the low (odd) byte of the $F1C006 word: DI bit0, CLK bit6, CS bit7; the read
+    // returns the device DO in bit0. 2-player QSound sets never touch this window.
+    inline constexpr std::uint32_t qsound_io_base = 0xF1C000U;
+    inline constexpr std::uint32_t qsound_io_window = 0x08U;
+    inline constexpr std::uint32_t qsound_in2_addr = 0xF1C000U;    // player 3
+    inline constexpr std::uint32_t qsound_in3_addr = 0xF1C002U;    // player 4
+    inline constexpr std::uint32_t qsound_coin2_addr = 0xF1C004U;  // coin control 2 (stub)
+    inline constexpr std::uint32_t qsound_eeprom_addr = 0xF1C006U; // serial 93C46
+    inline constexpr std::uint8_t qsound_eeprom_di = 0x01U;
+    inline constexpr std::uint8_t qsound_eeprom_clk = 0x40U;
+    inline constexpr std::uint8_t qsound_eeprom_cs = 0x80U;
+
     // Which sound board the set is wired for: the YM2151 + OKIM6295 path (the
     // CPS1 default) or the QSound DL-1425 path (later CPS1 + all of CPS2).
     enum class sound_system : std::uint8_t { okim6295, qsound };
@@ -212,6 +227,10 @@ namespace mnemos::manifests::capcom_cps1 {
         chips::audio::ym2151 fm;
         chips::audio::okim6295 oki;
         chips::audio::qsound qdsp; // QSound DL-1425 (idle unless params.sound == qsound)
+        // Serial 93C46 NVRAM at $F1C006 on the QSound 3/4-player boards (slammast /
+        // mbombrd); idle on every other set. The board wires the ORG pin low (8-bit
+        // org: 128 x 8). Init 0xFF (blank) -> the game writes its defaults on boot.
+        chips::storage::eeprom_93c46 eeprom{chips::storage::eeprom_93c46::organization::byte8};
         topology::bus main_bus{24U, topology::endianness::big};
         topology::bus sound_bus{16U, topology::endianness::little};
 

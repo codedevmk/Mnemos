@@ -1,0 +1,262 @@
+# Muscle Bomber Duo: Ultimate Team Battle (World 931206) -- Capcom CPS1 (QSound).
+# Transcribed from the MAME ROM tables (the Emu reference lacks this set); CRCs from
+# the local ROM zip. QSound + Kabuki sound (shares Slam Masters' key); CPS-B-21
+# "QS5" profile + the MB63B gfx mapper. Shares gfx + QSound samples with slammast.
+
+[set]
+schema        = "mnemos-romset/1"
+name          = "mbombrd"
+board         = "capcom_cps1"
+cps_b_profile = 42
+sound         = "qsound"
+kabuki        = "mbombrd"
+
+[[region]]
+name = "maincpu"
+size = 0x200000
+
+[[region.file]]
+name   = "mbd_26.bin"
+offset = 0x0
+stride = 2
+size   = 0x20000
+crc32  = 0x72b7451c
+
+[[region.file]]
+name   = "mbde_30.rom"
+offset = 0x1
+stride = 2
+size   = 0x20000
+crc32  = 0xa036dc16
+
+[[region.file]]
+name   = "mbd_27.bin"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x4086f534
+
+[[region.file]]
+name   = "mbd_31.bin"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x085f47f0
+
+[[region.file]]
+name   = "mbd_24.bin"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0xc20895a5
+
+[[region.file]]
+name   = "mbd_28.bin"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0x2618d5e1
+
+[[region.file]]
+name   = "mbd_25.bin"
+offset = 0xc0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9bdb6b11
+
+[[region.file]]
+name   = "mbd_29.bin"
+offset = 0xc0001
+stride = 2
+size   = 0x20000
+crc32  = 0x3f52d5e5
+
+[[region.file]]
+name   = "mbd_21.bin"
+offset = 0x100000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x690c026a
+
+[[region.file]]
+name   = "mbd_20.bin"
+offset = 0x180000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xb8b2139b
+
+[[region]]
+name = "gfx"
+size = 0x600000
+
+[[region.file]]
+name   = "mb_gfx01.rom"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x41468e06
+
+[[region.file]]
+name   = "mb_gfx03.rom"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xf453aa9e
+
+[[region.file]]
+name   = "mb_gfx02.rom"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x2ffbfea8
+
+[[region.file]]
+name   = "mb_gfx04.rom"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x1eb9841d
+
+[[region.file]]
+name   = "mb_05.bin"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x506b9dc9
+
+[[region.file]]
+name   = "mb_07.bin"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xaff8c2fb
+
+[[region.file]]
+name   = "mb_06.bin"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xb76c70e9
+
+[[region.file]]
+name   = "mb_08.bin"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xe60c9556
+
+[[region.file]]
+name   = "mb_10.bin"
+offset = 0x400000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x97976ff5
+
+[[region.file]]
+name   = "mb_12.bin"
+offset = 0x400002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xb350a840
+
+[[region.file]]
+name   = "mb_11.bin"
+offset = 0x400004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x8fb94743
+
+[[region.file]]
+name   = "mb_13.bin"
+offset = 0x400006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xda810d5f
+
+[[region]]
+name = "audiocpu"
+size = 0x28000
+
+[[region.file]]
+name          = "mb_q.bin"
+offset        = 0x0
+source_offset = 0x0
+length        = 0x8000
+size          = 0x20000
+crc32         = 0xd6fa76d1
+
+[[region.file]]
+name          = "mb_q.bin"
+offset        = 0x10000
+source_offset = 0x8000
+length        = 0x18000
+size          = 0x20000
+crc32         = 0xd6fa76d1
+
+[[region]]
+name = "qsound"
+size = 0x400000
+
+[[region.file]]
+name   = "mb_q1.bin"
+offset = 0x0
+size   = 0x80000
+crc32  = 0x0630c3ce
+
+[[region.file]]
+name   = "mb_q2.bin"
+offset = 0x80000
+size   = 0x80000
+crc32  = 0x354f9c21
+
+[[region.file]]
+name   = "mb_q3.bin"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x7838487c
+
+[[region.file]]
+name   = "mb_q4.bin"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0xab66e087
+
+[[region.file]]
+name   = "mb_q5.bin"
+offset = 0x200000
+size   = 0x80000
+crc32  = 0xc789fef2
+
+[[region.file]]
+name   = "mb_q6.bin"
+offset = 0x280000
+size   = 0x80000
+crc32  = 0xecb81b61
+
+[[region.file]]
+name   = "mb_q7.bin"
+offset = 0x300000
+size   = 0x80000
+crc32  = 0x041e49ba
+
+[[region.file]]
+name   = "mb_q8.bin"
+offset = 0x380000
+size   = 0x80000
+crc32  = 0x59fe702a

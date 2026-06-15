@@ -145,6 +145,47 @@ config["ps63b"] = dict(
 )
 id_to_config[25] = "ps63b"
 
+# Mnemos additions (absent from the reference core entirely): the QSound clones
+# wofu / slammast / mbombrd. Their CPS-B-21 configs ("QS1", "QS4", "QS5") + the
+# MB63B 3-bank gfx mapper are transcribed from the hardware-faithful CPS-B-21
+# census. wofu (QS1) reuses the existing tk263b mapper; slammast (QS4) + mbombrd
+# (QS5) share MB63B. slammast/mbombrd carry a board-ID protection port (like
+# punisher) the games read at boot. IDs 40-42 sit above the reference enum range.
+# (Extra player-3/4 input ports the QS4/QS5 configs also define are not modelled
+# here -- attract/boot does not need them; they are a gameplay refinement.)
+# MB63B (verified from a PAL dump): all four layer types share the full 3-bank
+# range (0x8000 codes per bank). An earlier/lossy table restricted scroll1 to
+# 0x0-0xfff, which garbled slammast's scroll1-heavy screens (its codes reach
+# bank 1); mbombrd's blank scroll1 hid the bug.
+_mb63b_all4 = (
+    GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL1"] |
+    GFX_BITS["CPS1_GFX_SCROLL2"] | GFX_BITS["CPS1_GFX_SCROLL3"]
+)
+mapper_ranges["mb63b"] = [
+    (_mb63b_all4, 0x00000, 0x07FFF, 0),
+    (_mb63b_all4, 0x08000, 0x0FFFF, 1),
+    (_mb63b_all4, 0x10000, 0x17FFF, 2),
+]
+mapper["mb63b"] = ([0x8000, 0x8000, 0x8000, 0], "mb63b")
+config["qs1_tk263b"] = dict(
+    id_offset=REG_NONE, id_value=0x0000, mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x22, priority=[0x24, 0x26, 0x28, 0x2A], palette=0x2C,
+    enable=[0x10, 0x08, 0x04, 0, 0], mapper="tk263b",
+)
+config["qs4_mb63b"] = dict(
+    id_offset=0x2E, id_value=0x0C01, mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x16, priority=[0x00, 0x02, 0x28, 0x2A], palette=0x2C,
+    enable=[0x04, 0x08, 0x10, 0, 0], mapper="mb63b",
+)
+config["qs5_mb63b"] = dict(
+    id_offset=0x1E, id_value=0x0C02, mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x2A, priority=[0x2C, 0x2E, 0x30, 0x32], palette=0x1C,
+    enable=[0x04, 0x08, 0x10, 0, 0], mapper="mb63b",
+)
+id_to_config[40] = "qs1_tk263b"
+id_to_config[41] = "qs4_mb63b"
+id_to_config[42] = "qs5_mb63b"
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"

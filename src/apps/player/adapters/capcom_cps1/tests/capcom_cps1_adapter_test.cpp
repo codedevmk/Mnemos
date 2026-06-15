@@ -418,6 +418,27 @@ TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][d
         for (int i = 0; i < 8; ++i) {
             std::fprintf(stderr, " d%d=%08X", i, r.d[static_cast<std::size_t>(i)]);
         }
+        std::fprintf(stderr, "\n[trace] eeprom[0..16]:");
+        {
+            const auto eep = machine.eeprom.bytes();
+            for (std::size_t i = 0; i < 16U && i < eep.size(); ++i) {
+                std::fprintf(stderr, " %02X", eep[i]);
+            }
+        }
+        std::fprintf(stderr, "\n[trace] cps_a_regs[0..18]:");
+        for (std::size_t i = 0; i < 18U && i < machine.cps_a_regs.size(); ++i) {
+            std::fprintf(stderr, " %04X", machine.cps_a_regs[i]);
+        }
+        std::fprintf(stderr, "\n[trace] profile id=%u layer_ctrl=%02X palette_ctrl=%02X\n",
+                     static_cast<unsigned>(machine.profile.id),
+                     static_cast<unsigned>(machine.profile.layer_control_offset),
+                     static_cast<unsigned>(machine.profile.palette_control_offset));
+        std::fprintf(stderr, "[trace] palette_ctrl_reg=%04X palette[0..16]:",
+                     machine.video.cps_b_reg(
+                         static_cast<std::uint8_t>(machine.profile.palette_control_offset >> 1U)));
+        for (std::size_t i = 0; i < 32U && i < machine.palette.size(); ++i) {
+            std::fprintf(stderr, " %02X", machine.palette[i]);
+        }
         std::fprintf(stderr, "\n");
     }
 
