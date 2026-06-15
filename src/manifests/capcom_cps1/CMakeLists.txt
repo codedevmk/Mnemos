@@ -9,6 +9,7 @@ add_library(
     mnemos_manifests_capcom_cps1
     cps_b_profiles.cpp
     capcom_cps1_system.cpp
+    kabuki.cpp
 )
 add_library(mnemos::manifests::capcom_cps1 ALIAS mnemos_manifests_capcom_cps1)
 
@@ -59,6 +60,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_capcom_cps1_system_test
         SOURCES tests/capcom_cps1_system_test.cpp
+        LIBRARIES mnemos::manifests::capcom_cps1
+    )
+    mnemos_add_test(
+        mnemos_manifests_capcom_cps1_kabuki_test
+        SOURCES tests/kabuki_test.cpp
         LIBRARIES mnemos::manifests::capcom_cps1
     )
 endif()
