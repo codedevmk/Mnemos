@@ -22,6 +22,16 @@ namespace mnemos::chips {
         [[nodiscard]] virtual std::uint8_t read8(std::uint32_t address) = 0;
         virtual void write8(std::uint32_t address, std::uint8_t value) = 0;
 
+        // Instruction (M1 opcode) fetch. Defaults to read8 -- identical for every
+        // system whose program memory reads the same whether a byte is fetched as
+        // an opcode or as data. A board with opcode/data-split program memory --
+        // an encrypted Z80 whose decrypted M1 opcode bytes differ from data reads
+        // at the same address (Kabuki on CPS1 QSound) -- overrides this to serve
+        // the opcode stream while read8 serves the data stream.
+        [[nodiscard]] virtual std::uint8_t fetch_opcode8(std::uint32_t address) {
+            return read8(address);
+        }
+
         // Big-endian wide accesses. The defaults compose byte accesses, so
         // every implementation keeps byte-exact semantics (MMIO side effects,
         // watchpoints); a concrete bus may override them with a single

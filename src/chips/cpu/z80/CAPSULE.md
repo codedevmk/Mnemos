@@ -1,7 +1,7 @@
 ---
 capsule: src/chips/cpu/z80
 generator: gen_capsule/0.1
-source_digest: sha256:e188afa19583fcde3aa3f7ff1049183edae7a0ba9bddb88a4169f81dbca9ac00
+source_digest: sha256:8f0a39acf48432b16ed87c21755a779c4a890f46a41b3bf1bc6af8595831442e
 intent_ratified: sha256:5851e3ff1e19107caf90632468e9e5e5e94261a8cd8ea86c59ff109f5afd885a
 token_estimate: 495
 ---
