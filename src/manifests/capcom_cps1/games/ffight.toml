@@ -1,0 +1,135 @@
+# Final Fight (World) -- Capcom CPS1, the board family's first real-ROM set.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# cps_b_profile 4 is the CPS-B-04 board profile (the s224b graphics mapper, the
+# ID protection port at 0x20 reading 0x0004, no multiplier). The 68K program is
+# 1 MiB: the low 512 KiB is an even/odd 8-bit ROM pair, the top 512 KiB a single
+# 16-bit ROM stored word-swapped relative to the big-endian bus. Graphics are
+# four 16-bit ROMs, each feeding one 2-byte lane of every 64-bit tile word. The
+# 64 KiB sound program is split into the Z80's fixed low 32 KiB and one 32 KiB
+# bank lifted to 0x10000. Two 128 KiB ROMs hold the OKIM6295 samples.
+
+[set]
+schema        = "mnemos-romset/1"
+name          = "ffight"
+board         = "capcom_cps1"
+cps_b_profile = 4
+
+# --- 68K program: 1 MiB ---
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ff_36.11f"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xf9a5ce83
+
+[[region.file]]
+name   = "ff_42.11h"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x65f11215
+
+[[region.file]]
+name   = "ff_37.12f"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xe1033784
+
+[[region.file]]
+name   = "ffe_43.12h"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x995e968a
+
+# Word-swapped 16-bit ROM filling the top half of the program window.
+[[region.file]]
+name   = "ff-32m.8h"
+offset = 0x80000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xc747696e
+
+# --- Graphics: 2 MiB, four 16-bit ROMs interleaved into 64-bit tile words ---
+[[region]]
+name = "gfx"
+size = 0x200000
+
+[[region.file]]
+name   = "ff-5m.7a"
+offset = 0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x9c284108
+
+[[region.file]]
+name   = "ff-7m.9a"
+offset = 2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xa7584dfb
+
+[[region.file]]
+name   = "ff-1m.3a"
+offset = 4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x0b605e44
+
+[[region.file]]
+name   = "ff-3m.5a"
+offset = 6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x52291cd2
+
+# --- Sound Z80 program: 96 KiB (fixed low 32 KiB + one 32 KiB bank at 0x10000)
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name          = "ff_09.12b"
+offset        = 0x00000
+source_offset = 0x00000
+length        = 0x8000
+size          = 0x10000
+crc32         = 0xb8367eb5
+
+[[region.file]]
+name          = "ff_09.12b"
+offset        = 0x10000
+source_offset = 0x08000
+length        = 0x8000
+size          = 0x10000
+crc32         = 0xb8367eb5
+
+# --- OKIM6295 samples: 256 KiB ---
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "ff_18.11c"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x375c66e7
+
+[[region.file]]
+name   = "ff_19.12c"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x1ef137f9

@@ -116,7 +116,9 @@ namespace mnemos::manifests::common {
 
         void parse_file(const parse_context& ctx, const toml::table& table,
                         rom_set_region& region) {
-            check_keys(ctx, table, {"name", "offset", "stride", "size", "crc32"},
+            check_keys(ctx, table,
+                       {"name", "offset", "stride", "unit", "swap", "source_offset", "length",
+                        "size", "crc32"},
                        "[[region.file]]");
             rom_set_file file;
             if (auto name = require_string(ctx, table, "name", "[[region.file]]")) {
@@ -134,6 +136,32 @@ namespace mnemos::manifests::common {
                     } else {
                         file.stride = static_cast<std::size_t>(*stride);
                     }
+                }
+            }
+            if (const toml::node* node = table.get("unit")) {
+                if (auto unit = read_unsigned(ctx, *node, "unit", "[[region.file]]")) {
+                    if (*unit == 0U) {
+                        ctx.error("'unit' in [[region.file]] must be at least 1", node);
+                    } else {
+                        file.unit = static_cast<std::size_t>(*unit);
+                    }
+                }
+            }
+            if (const toml::node* node = table.get("swap")) {
+                if (const auto* value = node->as_boolean()) {
+                    file.swap = value->get();
+                } else {
+                    ctx.error("'swap' in [[region.file]] must be a boolean", node);
+                }
+            }
+            if (const toml::node* node = table.get("source_offset")) {
+                if (auto so = read_unsigned(ctx, *node, "source_offset", "[[region.file]]")) {
+                    file.source_offset = static_cast<std::size_t>(*so);
+                }
+            }
+            if (const toml::node* node = table.get("length")) {
+                if (auto length = read_unsigned(ctx, *node, "length", "[[region.file]]")) {
+                    file.length = static_cast<std::size_t>(*length);
                 }
             }
             if (const toml::node* node = table.get("size")) {

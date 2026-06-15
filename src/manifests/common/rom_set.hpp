@@ -24,15 +24,26 @@
 
 namespace mnemos::manifests::common {
 
-    // One dump file's placement within a region. `stride` is the byte
-    // interleave: 1 = contiguous, 2 = every other byte (the even/odd pairing
-    // of a 16-bit CPU's program ROM pair).
+    // One dump file's placement within a region. The source span (`length`
+    // bytes from `source_offset`, defaulting to the whole file) is copied in
+    // `unit`-byte chunks; each chunk lands at `offset` and advances the
+    // destination by `stride`. So the defaults (unit 1, stride 1) are a plain
+    // contiguous copy; unit 1 / stride 2 is the even/odd pairing of a 16-bit
+    // CPU's program ROM pair; unit 2 / stride 8 is a 16-bit graphics ROM
+    // dropped into one lane of a 64-bit tile word; `source_offset` + `length`
+    // place a slice of a larger dump. `swap` reverses the byte order within
+    // each unit -- a word-swapped 16-bit ROM whose endianness is flipped
+    // relative to the region.
     struct rom_set_file final {
         std::string name;
-        std::size_t offset{};
-        std::size_t stride{1U};
-        std::size_t size{};                 // expected byte count; 0 = accept any
-        std::optional<std::uint32_t> crc32; // verified when set
+        std::size_t offset{};                 // first destination byte
+        std::size_t stride{1U};               // destination step per source unit
+        std::size_t unit{1U};                 // source bytes per chunk (contiguous)
+        bool swap{};                          // reverse byte order within each unit
+        std::size_t source_offset{};          // first source byte to read
+        std::size_t length{};                 // source bytes to place; 0 = rest of file
+        std::size_t size{};                   // expected file byte count; 0 = accept any
+        std::optional<std::uint32_t> crc32{}; // verified when set
     };
 
     struct rom_set_region final {
