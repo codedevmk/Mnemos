@@ -2,10 +2,13 @@
 
 #include "adapter_registry.hpp"
 #include "cps_b_profiles.hpp"
+#include "file.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <utility>
 #include <vector>
@@ -234,6 +237,120 @@ TEST_CASE("capcom_cps1_adapter maps pads onto the board's input words",
 
     adapter.apply_input(2, p1); // out-of-range port ignored
     CHECK(machine.input_p == static_cast<std::uint16_t>((p2_byte << 8U) | p1_byte));
+}
+
+namespace {
+
+    // Minimal binary PPM (P6) writer for the optional visual-A/B dump. Packs the
+    // visible region of an XRGB framebuffer row-by-row (storage may be strided).
+    [[nodiscard]] bool write_ppm(const mnemos::chips::frame_buffer_view& fb,
+                                 const std::string& path) {
+        if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
+            return false;
+        }
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::fopen: opt-in test artifact path
+#endif
+        std::FILE* out = std::fopen(path.c_str(), "wb");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (out == nullptr) {
+            return false;
+        }
+        std::fprintf(out, "P6\n%u %u\n255\n", fb.width, fb.height);
+        const std::uint32_t stride = fb.effective_stride();
+        for (std::uint32_t y = 0; y < fb.height; ++y) {
+            const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
+            for (std::uint32_t x = 0; x < fb.width; ++x) {
+                const std::uint32_t p = row[x];
+                const unsigned char rgb[3] = {static_cast<unsigned char>((p >> 16U) & 0xFFU),
+                                              static_cast<unsigned char>((p >> 8U) & 0xFFU),
+                                              static_cast<unsigned char>(p & 0xFFU)};
+                std::fwrite(rgb, 1U, 3U, out);
+            }
+        }
+        std::fclose(out);
+        return true;
+    }
+
+    [[nodiscard]] const char* opt_env(const char* name) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in test data path
+#endif
+        const char* value = std::getenv(name);
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        return (value != nullptr && *value != '\0') ? value : nullptr;
+    }
+
+} // namespace
+
+TEST_CASE("capcom_cps1_adapter boots the real Final Fight set", "[capcom_cps1][adapter][data]") {
+    // Data-gated (never committed): MNEMOS_CPS1_FFIGHT_SET points at a zip of the
+    // authentic dump files plus a "game.toml" copy of
+    // src/manifests/capcom_cps1/games/ffight.toml. Asserts a CRC-clean
+    // declarative load, the threaded CPS-B profile, valid 68K reset vectors, and
+    // a frame that goes non-blank with the vblank IRQ raised and serviced. Set
+    // MNEMOS_CPS1_FFIGHT_PPM to also dump the rendered frame for visual A/B.
+    const char* set_env = opt_env("MNEMOS_CPS1_FFIGHT_SET");
+    if (set_env == nullptr) {
+        SKIP("set MNEMOS_CPS1_FFIGHT_SET to the Final Fight set zip (game.toml inside)");
+    }
+    auto bytes = mnemos::io::read_file(set_env);
+    REQUIRE(bytes.has_value());
+
+    capcom_cps1_adapter adapter(std::move(*bytes), "ffight");
+    auto& machine = adapter.machine();
+    REQUIRE(machine.roms.issues.empty()); // every file present, sized, CRC-verified
+    CHECK(machine.profile.id == 4U);      // cps_b_profile = 4 threaded from the TOML
+
+    // The program region is padded up to the 8 MiB 68K program window; the reset
+    // PC ($000004) must land inside the real 1 MiB program image.
+    const auto& main_region = machine.roms.regions.at("maincpu");
+    REQUIRE(main_region.size() == 0x800000U);
+    const std::uint32_t reset_pc =
+        (static_cast<std::uint32_t>(machine.main_bus.read16_be(0x4U)) << 16U) |
+        machine.main_bus.read16_be(0x6U);
+    INFO("reset PC = " << reset_pc);
+    REQUIRE(reset_pc < 0x100000U);
+
+    // Run a fixed warm-up (~10 s at 60 Hz) so the game boots past the hardware
+    // self-test and reaches an attract/title screen before asserting. (An early
+    // exit on the first non-blank frame would fire before the game lowers the
+    // 68K interrupt mask, so no IRQ would have been serviced yet.)
+    // MNEMOS_CPS1_FFIGHT_FRAMES overrides the count (to sample a later screen for
+    // the PPM dump without a rebuild).
+    int warmup_frames = 600;
+    if (const char* frames_env = opt_env("MNEMOS_CPS1_FFIGHT_FRAMES")) {
+        warmup_frames = std::atoi(frames_env);
+        if (warmup_frames <= 0) {
+            warmup_frames = 600;
+        }
+    }
+    bool frame_lit = false;
+    for (int frame = 0; frame < warmup_frames; ++frame) {
+        adapter.step_one_frame();
+        if (!frame_lit) {
+            const auto view = adapter.current_frame();
+            for (std::uint32_t i = 1; i < view.width * view.height; ++i) {
+                if (view.pixels[i] != view.pixels[0]) {
+                    frame_lit = true;
+                    break;
+                }
+            }
+        }
+    }
+    CHECK(frame_lit);
+    CHECK(machine.vblank_irq_raised > 0U); // the beam raised the level-2 IRQ
+    CHECK(machine.vblank_irq_acked > 0U);  // the 68K serviced it (IACK ran)
+
+    if (const char* ppm = opt_env("MNEMOS_CPS1_FFIGHT_PPM")) {
+        CHECK(write_ppm(adapter.current_frame(), ppm));
+    }
 }
 
 TEST_CASE("capcom_cps1_adapter advances frames and drains YM2151-clocked audio",
