@@ -31,8 +31,22 @@ namespace mnemos::manifests::capcom_cps1 {
     }
 
     cps1_board_params board_params_from_decl(const common::rom_set_decl& decl) {
-        return {.cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U}),
-                .vertical = decl.orientation == common::screen_orientation::vertical};
+        cps1_board_params params{.cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U}),
+                                 .vertical =
+                                     decl.orientation == common::screen_orientation::vertical};
+        if (decl.sound && *decl.sound == "qsound") {
+            params.sound = sound_system::qsound;
+        }
+        if (decl.kabuki) {
+            if (*decl.kabuki == "dino") {
+                params.kabuki = kabuki_game::dino;
+            } else if (*decl.kabuki == "wof") {
+                params.kabuki = kabuki_game::wof;
+            } else if (*decl.kabuki == "punisher") {
+                params.kabuki = kabuki_game::punisher;
+            }
+        }
+        return params;
     }
 
     cps1_system::cps1_system(common::rom_set_image image, cps1_board_params board_params)
@@ -96,24 +110,54 @@ namespace mnemos::manifests::capcom_cps1 {
             },
             1);
 
-        // Sound-command latches ($800180 primary, $800188 secondary). The 68K
-        // pokes commands here; the Z80 reads them at $F008 / $F00A. A primary
-        // write arms the pending flag (cleared on the Z80 read). Only the low
-        // byte of the secondary latch carries data on hardware. These ports are
-        // write-only on the 68K side -- a read returns open bus (0xFF).
-        main_bus.map_mmio(
-            sound_latch_addr, sound_latch_window,
-            [](std::uint32_t) -> std::uint8_t { return 0xFFU; },
-            [this](std::uint32_t address, std::uint8_t value) {
-                if (address >= sound_latch_addr && address < sound_latch_addr + 8U) {
-                    sound_latch = value;
-                    sound_latch_pending = true;
-                } else if (address >= sound_latch2_addr && address < sound_latch2_addr + 8U &&
-                           (address & 1U) != 0U) {
-                    sound_latch2 = value;
-                }
-            },
-            1);
+        if (uses_qsound()) {
+            // QSound 68K<->Z80 comm: two shared-RAM windows ($F18000 -> bank 0,
+            // $F1E000 -> bank 1). The 68K is 16-bit big-endian, so each shared byte
+            // is the low (odd) byte of a word; the even byte reads open bus and its
+            // writes are dropped (the data lane the hardware leaves unconnected).
+            const auto map_comm = [this](std::uint32_t base, std::size_t bank) {
+                main_bus.map_mmio(
+                    base, qsound_comm_window,
+                    [this, base, bank](std::uint32_t address) -> std::uint8_t {
+                        if ((address & 1U) == 0U) {
+                            return 0xFFU;
+                        }
+                        const std::size_t index = (address - base) >> 1U;
+                        return index < qsound_shared_size ? qsound_shared[bank][index] : 0xFFU;
+                    },
+                    [this, base, bank](std::uint32_t address, std::uint8_t value) {
+                        if ((address & 1U) == 0U) {
+                            return;
+                        }
+                        const std::size_t index = (address - base) >> 1U;
+                        if (index < qsound_shared_size) {
+                            qsound_shared[bank][index] = value;
+                        }
+                    },
+                    1);
+            };
+            map_comm(qsound_comm0_base, 0U);
+            map_comm(qsound_comm1_base, 1U);
+        } else {
+            // Sound-command latches ($800180 primary, $800188 secondary). The 68K
+            // pokes commands here; the Z80 reads them at $F008 / $F00A. A primary
+            // write arms the pending flag (cleared on the Z80 read). Only the low
+            // byte of the secondary latch carries data on hardware. These ports are
+            // write-only on the 68K side -- a read returns open bus (0xFF).
+            main_bus.map_mmio(
+                sound_latch_addr, sound_latch_window,
+                [](std::uint32_t) -> std::uint8_t { return 0xFFU; },
+                [this](std::uint32_t address, std::uint8_t value) {
+                    if (address >= sound_latch_addr && address < sound_latch_addr + 8U) {
+                        sound_latch = value;
+                        sound_latch_pending = true;
+                    } else if (address >= sound_latch2_addr && address < sound_latch2_addr + 8U &&
+                               (address & 1U) != 0U) {
+                        sound_latch2 = value;
+                    }
+                },
+                1);
+        }
 
         // Player-input word, mirrored across $800000-$800007 (P2 high byte, P1
         // low byte). Read-only; writes here are ignored.
@@ -160,80 +204,85 @@ namespace mnemos::manifests::capcom_cps1 {
                       .value_or(chips::video::cps_a_b::cps_b_profile{});
         video.set_cps_b_profile(profile);
 
-        // --- sound subsystem: Z80 + YM2151 + OKIM6295 on the sound bus ---
-        auto& sound_rom = pinned_region(roms, "audiocpu", z80_rom_window);
-        sound_rom_size = static_cast<std::uint32_t>(sound_rom.size());
+        // --- sound subsystem ---
+        if (uses_qsound()) {
+            setup_qsound();
+        } else {
+            // Z80 + YM2151 + OKIM6295 on the sound bus.
+            auto& sound_rom = pinned_region(roms, "audiocpu", z80_rom_window);
+            sound_rom_size = static_cast<std::uint32_t>(sound_rom.size());
 
-        // Fixed low 32 KiB of the sound program.
-        sound_bus.map_rom(z80_rom_base,
-                          std::span<const std::uint8_t>(sound_rom).first(z80_rom_window), 0);
-        // Banked 16 KiB window: a register-selected slice of the upper sound ROM.
-        // Capture the ROM as a span by value (not a reference into the ROM map).
-        const std::span<const std::uint8_t> sound_rom_span{sound_rom};
-        sound_bus.map_mmio(
-            z80_bank_base, z80_bank_window,
-            [this, sound_rom_span](std::uint32_t address) -> std::uint8_t {
-                const std::uint32_t rom_addr = z80_bank_rom_base() + (address - z80_bank_base);
-                return rom_addr < sound_rom_span.size() ? sound_rom_span[rom_addr] : 0xFFU;
-            },
-            [](std::uint32_t, std::uint8_t) {}, 0);
-        // Z80 sound work RAM.
-        sound_bus.map_ram(z80_ram_base, z80_ram, 0);
-        // Sound I/O ($F000+): YM2151, OKIM6295, the bank + pin-7 registers, and
-        // the two read-only sound latches.
-        sound_bus.map_mmio(
-            z80_io_base, z80_io_window,
-            [this](std::uint32_t address) -> std::uint8_t {
-                switch (address) {
-                case z80_io_ym_addr:
-                case z80_io_ym_data:
-                    return fm.read_status();
-                case z80_io_oki:
-                    return oki.read_status();
-                case z80_io_latch:
-                    sound_latch_pending = false; // the read consumes the armed latch
-                    return sound_latch;
-                case z80_io_latch2:
-                    return sound_latch2;
-                default:
-                    return 0xFFU;
-                }
-            },
-            [this](std::uint32_t address, std::uint8_t value) {
-                switch (address) {
-                case z80_io_ym_addr:
-                    fm.write_address(value);
-                    break;
-                case z80_io_ym_data:
-                    fm.write_data(value);
-                    sync_sound_irq(); // a data write can clear/raise a timer flag
-                    break;
-                case z80_io_oki:
-                    oki.write_command(value);
-                    break;
-                case z80_io_bank:
-                    sound_bank = static_cast<std::uint8_t>(value & z80_bank_mask);
-                    break;
-                case z80_io_oki_pin7:
-                    oki.set_pin7((value & 0x01U) != 0U);
-                    break;
-                default:
-                    break;
-                }
-            },
-            0);
-        sound_cpu.attach_bus(sound_bus);
+            // Fixed low 32 KiB of the sound program.
+            sound_bus.map_rom(z80_rom_base,
+                              std::span<const std::uint8_t>(sound_rom).first(z80_rom_window), 0);
+            // Banked 16 KiB window: a register-selected slice of the upper sound ROM.
+            // Capture the ROM as a span by value (not a reference into the ROM map).
+            const std::span<const std::uint8_t> sound_rom_span{sound_rom};
+            sound_bus.map_mmio(
+                z80_bank_base, z80_bank_window,
+                [this, sound_rom_span](std::uint32_t address) -> std::uint8_t {
+                    const std::uint32_t rom_addr = z80_bank_rom_base() + (address - z80_bank_base);
+                    return rom_addr < sound_rom_span.size() ? sound_rom_span[rom_addr] : 0xFFU;
+                },
+                [](std::uint32_t, std::uint8_t) {}, 0);
+            // Z80 sound work RAM.
+            sound_bus.map_ram(z80_ram_base, z80_ram, 0);
+            // Sound I/O ($F000+): YM2151, OKIM6295, the bank + pin-7 registers, and
+            // the two read-only sound latches.
+            sound_bus.map_mmio(
+                z80_io_base, z80_io_window,
+                [this](std::uint32_t address) -> std::uint8_t {
+                    switch (address) {
+                    case z80_io_ym_addr:
+                    case z80_io_ym_data:
+                        return fm.read_status();
+                    case z80_io_oki:
+                        return oki.read_status();
+                    case z80_io_latch:
+                        sound_latch_pending = false; // the read consumes the armed latch
+                        return sound_latch;
+                    case z80_io_latch2:
+                        return sound_latch2;
+                    default:
+                        return 0xFFU;
+                    }
+                },
+                [this](std::uint32_t address, std::uint8_t value) {
+                    switch (address) {
+                    case z80_io_ym_addr:
+                        fm.write_address(value);
+                        break;
+                    case z80_io_ym_data:
+                        fm.write_data(value);
+                        sync_sound_irq(); // a data write can clear/raise a timer flag
+                        break;
+                    case z80_io_oki:
+                        oki.write_command(value);
+                        break;
+                    case z80_io_bank:
+                        sound_bank = static_cast<std::uint8_t>(value & z80_bank_mask);
+                        break;
+                    case z80_io_oki_pin7:
+                        oki.set_pin7((value & 0x01U) != 0U);
+                        break;
+                    default:
+                        break;
+                    }
+                },
+                0);
+            sound_cpu.attach_bus(sound_bus);
 
-        // OKIM6295 sample voice: the "oki" region is its external sample ROM; run
-        // it from a 1 MHz input clock (pin-7 high = input/132 native rate).
-        const auto& oki_rom = pinned_region(roms, "oki", 0U);
-        oki.set_sample_rom(std::span<const std::uint8_t>(oki_rom));
-        oki.set_input_clock(oki_clock_hz);
-        oki.set_pin7(true);
+            // OKIM6295 sample voice: the "oki" region is its external sample ROM; run
+            // it from a 1 MHz input clock (pin-7 high = input/132 native rate).
+            const auto& oki_rom = pinned_region(roms, "oki", 0U);
+            oki.set_sample_rom(std::span<const std::uint8_t>(oki_rom));
+            oki.set_input_clock(oki_clock_hz);
+            oki.set_pin7(true);
 
-        // The YM2151's timer-IRQ line drives the Z80 /INT (the edge callback
-        // re-asserts on every timer-flag change).
-        fm.set_irq([this](bool) { sync_sound_irq(); });
+            // The YM2151's timer-IRQ line drives the Z80 /INT (the edge callback
+            // re-asserts on every timer-flag change).
+            fm.set_irq([this](bool) { sync_sound_irq(); });
+        } // end OKIM6295 sound path
 
         // Vblank IRQ: the beam entering vblank (after the frame renders) raises the
         // 68K level-2 autovector ($68); the CPU clears the line at its IACK. The
@@ -255,7 +304,70 @@ namespace mnemos::manifests::capcom_cps1 {
         sound_cpu.reset(chips::reset_kind::power_on);
         fm.reset(chips::reset_kind::power_on);
         oki.reset(chips::reset_kind::power_on);
+        qdsp.reset(chips::reset_kind::power_on);
         video.reset(chips::reset_kind::power_on);
+    }
+
+    void cps1_system::setup_qsound() {
+        // The QSound sound CPU program ROM. Its low $0000-$7FFF window is fixed; on
+        // a Kabuki-encrypted set that window is decrypted into two streams (opcode
+        // for M1 fetches, data for reads) the bus serves separately. The banked
+        // $8000-$BFFF window selects one of 16 slices from $10000 up, plain.
+        auto& sound_rom = pinned_region(roms, "audiocpu", z80_rom_window);
+        sound_rom_size = static_cast<std::uint32_t>(sound_rom.size());
+        const std::size_t low = std::min<std::size_t>(sound_rom.size(), z80_rom_window);
+
+        if (params.kabuki) {
+            // Decrypt the encrypted low window into the opcode + data streams.
+            sound_opcode_rom.assign(low, 0x00U);
+            sound_data_rom.assign(low, 0x00U);
+            kabuki_decode(std::span<const std::uint8_t>(sound_rom).first(low),
+                          kabuki_keys_for(*params.kabuki), sound_opcode_rom, sound_data_rom);
+            sound_bus.map_rom(z80_rom_base, std::span<const std::uint8_t>(sound_data_rom), 0);
+            sound_bus.map_opcode_rom(z80_rom_base, std::span<const std::uint8_t>(sound_opcode_rom));
+        } else {
+            // Plain QSound program: the low window is read directly (no split).
+            sound_bus.map_rom(z80_rom_base, std::span<const std::uint8_t>(sound_rom).first(low), 0);
+        }
+
+        // Banked 16 KiB window ($8000-$BFFF): a $D003-selected 16 KiB slice from
+        // $10000 in the sound ROM. Capture the ROM span by value.
+        const std::span<const std::uint8_t> sound_rom_span{sound_rom};
+        sound_bus.map_mmio(
+            z80_bank_base, z80_bank_window,
+            [this, sound_rom_span](std::uint32_t address) -> std::uint8_t {
+                const std::uint32_t rom_addr = qsound_bank_base +
+                                               (sound_bank & qsound_bank_mask) * z80_bank_window +
+                                               (address - z80_bank_base);
+                return rom_addr < sound_rom_span.size() ? sound_rom_span[rom_addr] : 0xFFU;
+            },
+            [](std::uint32_t, std::uint8_t) {}, 0);
+
+        // The two 4 KiB shared-RAM comm banks ($C000 / $F000 on the Z80).
+        sound_bus.map_ram(qsound_shared0_base, qsound_shared[0], 0);
+        sound_bus.map_ram(qsound_shared1_base, qsound_shared[1], 0);
+
+        // DL-1425 port window + the bank register ($D000-$D7FF). $D000-$D002 write
+        // = the DSP 3-port interface (data hi / data lo / commit); $D003 write =
+        // the banked-window select; $D007 read = the DSP ready flag.
+        sound_bus.map_mmio(
+            qsound_port_base, qsound_port_window,
+            [this](std::uint32_t address) -> std::uint8_t {
+                return address == qsound_ready_reg ? qdsp.read_status() : 0xFFU;
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                if (address == qsound_bank_reg) {
+                    sound_bank = static_cast<std::uint8_t>(value & qsound_bank_mask);
+                } else if (address >= qsound_port_base && address < qsound_bank_reg) {
+                    qdsp.write_port(static_cast<std::uint8_t>(address - qsound_port_base), value);
+                }
+            },
+            0);
+        sound_cpu.attach_bus(sound_bus);
+
+        // The DL-1425's external sample ROM (8-bit PCM, addressed as bank:addr).
+        const auto& qsound_rom = pinned_region(roms, "qsound", 0U);
+        qdsp.set_sample_rom(std::span<const std::uint8_t>(qsound_rom));
     }
 
     std::uint32_t cps1_system::z80_bank_rom_base() const noexcept {
@@ -443,6 +555,10 @@ namespace mnemos::manifests::capcom_cps1 {
     }
 
     void cps1_system::run_cpus(std::uint64_t cpu_cycles) {
+        if (uses_qsound()) {
+            run_qsound_cpus(cpu_cycles);
+            return;
+        }
         // Interleave the 68K and the sound Z80 in fixed slices so a sound command
         // the 68K latches mid-field is seen by the Z80 within the same frame, and
         // the YM2151 timers / OKIM6295 advance in step. The Z80 budget tracks the
@@ -471,6 +587,40 @@ namespace mnemos::manifests::capcom_cps1 {
                 oki_cycle_accum_ -= oki_cycles * z80_clock_hz;
                 if (oki_cycles > 0U) {
                     oki.tick(oki_cycles);
+                }
+            }
+        }
+    }
+
+    void cps1_system::run_qsound_cpus(std::uint64_t cpu_cycles) {
+        // The QSound run path: the 68K + the 8 MHz sound Z80, interleaved in fixed
+        // slices (the QSound DSP is HLE-drained in the adapter, so no per-cycle
+        // chip ticking here). The sound Z80 takes a periodic 250 Hz /INT: assert
+        // the line when a period elapses and deassert it after that slice -- a
+        // bounded pulse (the established Z80-IRQ pattern) so the handler runs once
+        // per period rather than re-entering while the level stays high.
+        constexpr std::uint64_t slice_cycles = 256U; // ~one scanline of 68K time
+        constexpr std::uint64_t irq_period = qsound_z80_clock_hz / qsound_irq_hz; // 32000
+        std::uint64_t remaining = cpu_cycles;
+        while (remaining > 0U) {
+            const std::uint64_t slice = remaining < slice_cycles ? remaining : slice_cycles;
+            remaining -= slice;
+
+            main_cpu.tick(slice);
+
+            cpu_cycle_accum_ += slice * qsound_z80_clock_hz;
+            const std::uint64_t z80_cycles = cpu_cycle_accum_ / m68k_clock_hz;
+            cpu_cycle_accum_ -= z80_cycles * m68k_clock_hz;
+            if (z80_cycles > 0U) {
+                qsound_irq_accum_ += z80_cycles;
+                const bool fire = qsound_irq_accum_ >= irq_period;
+                if (fire) {
+                    qsound_irq_accum_ -= irq_period;
+                    sound_cpu.set_irq_line(true);
+                }
+                sound_cpu.tick(z80_cycles);
+                if (fire) {
+                    sound_cpu.set_irq_line(false);
                 }
             }
         }

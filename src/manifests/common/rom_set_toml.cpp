@@ -237,8 +237,10 @@ namespace mnemos::manifests::common {
 
         rom_set_decl decl;
         if (const auto* set = root.get_as<toml::table>("set")) {
-            check_keys(ctx, *set, {"schema", "name", "board", "cps_b_profile", "orientation"},
-                       "[set]");
+            check_keys(
+                ctx, *set,
+                {"schema", "name", "board", "cps_b_profile", "orientation", "sound", "kabuki"},
+                "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
                     ctx.error("unsupported schema '" + *schema + "' (expected '" +
@@ -280,6 +282,22 @@ namespace mnemos::manifests::common {
                     }
                 } else {
                     ctx.error("'orientation' in [set] must be a string", node);
+                }
+            }
+            // Optional board-interpreted sound + Kabuki selectors (capcom_cps1
+            // reads "qsound" + a game key; ignored by families that don't use them).
+            if (const toml::node* node = set->get("sound")) {
+                if (const auto* value = node->as_string()) {
+                    decl.sound = value->get();
+                } else {
+                    ctx.error("'sound' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("kabuki")) {
+                if (const auto* value = node->as_string()) {
+                    decl.kabuki = value->get();
+                } else {
+                    ctx.error("'kabuki' in [set] must be a string", node);
                 }
             }
         } else {

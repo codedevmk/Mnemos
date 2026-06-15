@@ -67,6 +67,13 @@ namespace mnemos::manifests::common {
         // Display orientation (default horizontal); the frontend rotates a
         // vertical set's framebuffer for upright presentation.
         screen_orientation orientation{screen_orientation::horizontal};
+        // Optional sound subsystem selector (board-interpreted): capcom_cps1 reads
+        // "qsound" to wire its QSound DSP path instead of the OKIM6295 path; absent
+        // => the board default.
+        std::optional<std::string> sound;
+        // Optional Kabuki-encrypted-sound key name (board-interpreted): capcom_cps1
+        // reads "dino" / "wof" / "punisher" to decrypt the QSound Z80 program.
+        std::optional<std::string> kabuki;
         std::vector<rom_set_region> regions;
     };
 
