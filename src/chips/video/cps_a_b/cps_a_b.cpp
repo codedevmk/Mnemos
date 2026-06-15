@@ -97,7 +97,12 @@ namespace mnemos::chips::video {
         sprite_buffer_.fill(0U);
         sprite_buffer_valid_ = false;
         cps_b_regs_.fill(0U);
-        profile_ = cps_b_profile{};
+        // profile_ is board configuration (the CPS-B PAL identity: register
+        // scramble, layer-enable masks, protection ports, gfx-code mapper), set
+        // once by the board via set_cps_b_profile -- like the attached gfx /
+        // palette spans, it survives reset. Clearing it here left every game
+        // running on the legacy-default profile + an identity gfx mapper, which
+        // only renders correctly for boards whose mapper happens to be identity.
         video_control_ = 0U;
         display_enabled_ = true;
         raster_compare_ = -1;
