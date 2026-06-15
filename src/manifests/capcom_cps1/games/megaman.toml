@@ -1,0 +1,210 @@
+# Mega Man: The Power Battle (Asia 951006) -- Capcom CPS1. Hand-authored from the
+# reference part tables; CRCs from the local ROM zip (the rcma_* program + rcm_09
+# audio identify this as the Asia revision; gfx/oki are shared with the parent).
+# Runs the default CPS-B-21 register layout with the RCM63B 4-bank gfx mapper
+# (all four layer types span the full four 0x8000-code banks; see profile 44).
+
+[set]
+schema = "mnemos-romset/1"
+name   = "megaman"
+board  = "capcom_cps1"
+cps_b_profile = 44
+
+[[region]]
+name = "maincpu"
+size = 0x180000
+
+[[region.file]]
+name   = "rcma_23b.rom"
+offset = 0x0
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x61e4a397
+
+[[region.file]]
+name   = "rcma_22b.rom"
+offset = 0x80000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x708268c4
+
+[[region.file]]
+name   = "rcma_21a.rom"
+offset = 0x100000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x4376ea95
+
+[[region]]
+name = "gfx"
+size = 0x800000
+
+[[region.file]]
+name   = "rcm_01.rom"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x6ecdf13f
+
+[[region.file]]
+name   = "rcm_02.rom"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x944d4f0f
+
+[[region.file]]
+name   = "rcm_03.rom"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x36f3073c
+
+[[region.file]]
+name   = "rcm_04.rom"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x54e622ff
+
+[[region.file]]
+name   = "rcm_05.rom"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x5dd131fd
+
+[[region.file]]
+name   = "rcm_06.rom"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xf0faf813
+
+[[region.file]]
+name   = "rcm_07.rom"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x826de013
+
+[[region.file]]
+name   = "rcm_08.rom"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xfbff64cf
+
+[[region.file]]
+name   = "rcm_10.rom"
+offset = 0x400000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4dc8ada9
+
+[[region.file]]
+name   = "rcm_11.rom"
+offset = 0x400002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xf2b9ee06
+
+[[region.file]]
+name   = "rcm_12.rom"
+offset = 0x400004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xfed5f203
+
+[[region.file]]
+name   = "rcm_13.rom"
+offset = 0x400006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x5069d4a9
+
+[[region.file]]
+name   = "rcm_14.rom"
+offset = 0x600000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x303be3bd
+
+[[region.file]]
+name   = "rcm_15.rom"
+offset = 0x600002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4f2d372f
+
+[[region.file]]
+name   = "rcm_16.rom"
+offset = 0x600004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x93d97fde
+
+[[region.file]]
+name   = "rcm_17.rom"
+offset = 0x600006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x92371042
+
+[[region]]
+name = "audiocpu"
+size = 0x28000
+
+[[region.file]]
+name   = "rcm_09.rom"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x20000
+crc32  = 0x9632d6ef
+
+[[region.file]]
+name   = "rcm_09.rom"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x18000
+size   = 0x20000
+crc32  = 0x9632d6ef
+
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "rcm_18.rom"
+offset = 0x0
+size   = 0x20000
+crc32  = 0x80f1f8aa
+
+[[region.file]]
+name   = "rcm_19.rom"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xf257dbe1

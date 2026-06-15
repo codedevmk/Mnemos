@@ -186,6 +186,42 @@ id_to_config[40] = "qs1_tk263b"
 id_to_config[41] = "qs4_mb63b"
 id_to_config[42] = "qs5_mb63b"
 
+# The reference core later gained a profile 32 (cps_b 21_mb63b) that is
+# byte-identical to the QS4 config already carried as profile 41 (slammast's
+# board); nothing references id 32, so drop it to keep the census free of a
+# duplicate row.
+id_to_config.pop(32, None)
+
+# Mnemos additions (two more CPS1 parents). sf2 (the original Street Fighter II)
+# runs the CPS_B_11 register layout with the STF29 gfx mapper -- and STF29 is
+# byte-identical to the S9263B mapper already transcribed (profile 21 / sf2ce),
+# so it is reused here. megaman runs the default CPS-B-21 layout with the RCM63B
+# 4-bank gfx mapper (all four layer types span the full four 0x8000-code banks),
+# which is absent from the reference core.
+_all4 = (
+    GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL1"] |
+    GFX_BITS["CPS1_GFX_SCROLL2"] | GFX_BITS["CPS1_GFX_SCROLL3"]
+)
+config["b11_s9263b"] = dict(
+    id_offset=0x32, id_value=0x0401, mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x26, priority=[0x28, 0x2A, 0x2C, 0x2E], palette=0x30,
+    enable=[0x08, 0x10, 0x20, 0, 0], mapper="s9263b",
+)
+mapper_ranges["rcm63b"] = [
+    (_all4, 0x00000, 0x07FFF, 0),
+    (_all4, 0x08000, 0x0FFFF, 1),
+    (_all4, 0x10000, 0x17FFF, 2),
+    (_all4, 0x18000, 0x1FFFF, 3),
+]
+mapper["rcm63b"] = ([0x8000, 0x8000, 0x8000, 0x8000], "rcm63b")
+config["def_rcm63b"] = dict(
+    id_offset=REG_NONE, id_value=0x0000, mult=[0x00, 0x02, 0x04, 0x06],
+    layer_control=0x26, priority=[0x28, 0x2A, 0x2C, 0x2E], palette=0x30,
+    enable=[0x02, 0x04, 0x08, 0x30, 0x30], mapper="rcm63b",
+)
+id_to_config[43] = "b11_s9263b"
+id_to_config[44] = "def_rcm63b"
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"
