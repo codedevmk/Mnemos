@@ -15,30 +15,48 @@ namespace {
     using gfx = cps_a_b::gfx_type;
 
     constexpr std::uint32_t absent = cps_a_b::gfx_code_absent;
+    constexpr std::uint8_t reg_none = cps_a_b::reg_none;
 
-    // One (layer, code) -> mapped golden. The expected values below are computed
-    // by an INDEPENDENT reimplementation of the mapper algorithm over the same
-    // reference tables, so matching them cross-checks the C++ map_gfx_code rather
-    // than echoing the census data back at itself.
+    // One (layer, code) -> mapped golden. The expected values are computed by a
+    // separate Python port of the mapper algorithm over the same reference tables,
+    // so the sweep cross-checks the transcribed DATA against the source (both sides
+    // port the same algorithm: this verifies data fidelity, not the algorithm spec).
     struct gfx_golden {
         gfx type;
         std::uint32_t code;
         std::uint32_t mapped;
     };
 
-    struct golden_row {
+    // The expected transcription of one board profile (register scramble + masks +
+    // protection ports + mapper bank sizes) plus its golden gfx mappings.
+    struct profile_row {
         std::uint16_t id;
+        std::uint8_t layer_control_offset;
+        std::array<std::uint8_t, 4> priority_offset;
+        std::uint8_t palette_control_offset;
+        std::array<std::uint16_t, 5> layer_enable_mask;
+        std::uint8_t id_offset;
+        std::uint16_t id_value;
+        std::array<std::uint8_t, 4> mult_offset;
+        std::array<std::uint32_t, 4> bank_size;
         std::size_t range_count;
         std::vector<gfx_golden> goldens;
     };
 
-    // Generated sweep: every census profile, two goldens per gfx range (range
-    // start + end, so identity, bank-wrap, and bank concatenation are all hit)
-    // plus an out-of-range reject. Regenerate from the reference tables; do not
-    // hand-edit individual rows.
-    std::vector<golden_row> golden_rows() {
+    // Generated from the reference tables (regenerate via scripts/gen_cps_b_profiles.py;
+    // do not hand-edit rows). Two goldens per gfx range per layer it serves (range
+    // start + end -> identity, bank-wrap, concatenation) plus an out-of-range reject.
+    std::vector<profile_row> profile_rows() {
         return {
             {1U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x2000U, 0x2000U, 0U},
              3U,
              {{gfx::scroll3, 0x1000U, 0x1000U},
               {gfx::scroll3, 0x17FFU, 0x13FFU},
@@ -46,8 +64,22 @@ namespace {
               {gfx::sprites, 0x1FFFU, 0x5FFFU},
               {gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0xFFFFU, 0x3FFFU},
+              {gfx::scroll1, 0x0U, 0x0U},
+              {gfx::scroll1, 0x1FFFFU, 0x7FFFU},
+              {gfx::scroll2, 0x0U, 0x0U},
+              {gfx::scroll2, 0xFFFFU, 0x3FFFU},
+              {gfx::scroll3, 0x0U, 0x0U},
+              {gfx::scroll3, 0x3FFFU, 0xFFFU},
               {gfx::sprites, 0x10FFFU, absent}}},
             {2U,
+             0x2CU,
+             {0x2AU, 0x28U, 0x26U, 0x24U},
+             0x22U,
+             {0x02U, 0x04U, 0x08U, 0U, 0U},
+             0x20U,
+             0x0002U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x8000U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x2FFFU, 0x2FFFU},
@@ -59,6 +91,14 @@ namespace {
               {gfx::scroll3, 0x7FFU, 0x17FFU},
               {gfx::scroll3, 0x1FFFU, absent}}},
             {3U,
+             0x30U,
+             {0x2EU, 0x2CU, 0x2AU, 0x28U},
+             0x26U,
+             {0x20U, 0x10U, 0x08U, 0U, 0U},
+             0x24U,
+             0x0003U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x4000U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x27FFU, 0x27FFU},
@@ -70,6 +110,14 @@ namespace {
               {gfx::scroll2, 0x1FFFU, 0x5FFFU},
               {gfx::scroll2, 0x4FFFU, absent}}},
             {4U,
+             0x2EU,
+             {0x26U, 0x30U, 0x28U, 0x32U},
+             0x2AU,
+             {0x02U, 0x04U, 0x08U, 0U, 0U},
+             0x20U,
+             0x0004U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x21FFU, 0x21FFU},
@@ -81,6 +129,14 @@ namespace {
               {gfx::scroll2, 0x3FFFU, 0x3FFFU},
               {gfx::scroll2, 0x4FFFU, absent}}},
             {5U,
+             0x28U,
+             {0x2AU, 0x2CU, 0x2EU, 0x30U},
+             0x32U,
+             {0x02U, 0x08U, 0x20U, 0x14U, 0x14U},
+             0x20U,
+             0x0005U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0xFFFU, 0xFFFU},
@@ -92,6 +148,14 @@ namespace {
               {gfx::scroll2, 0x3FFFU, 0x3FFFU},
               {gfx::scroll2, 0x4FFFU, absent}}},
             {11U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x08U, 0x10U, 0x20U, 0U, 0U},
+             0x32U,
+             0x0401U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x17FFU, 0x17FFU},
@@ -103,6 +167,14 @@ namespace {
               {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::scroll3, 0x1FFFU, absent}}},
             {12U,
+             0x2CU,
+             {0x2AU, 0x28U, 0x26U, 0x24U},
+             0x22U,
+             {0x02U, 0x04U, 0x08U, 0U, 0U},
+             0x20U,
+             0x0402U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x4000U, 0U, 0U},
              7U,
              {{gfx::scroll1, 0x0U, 0x0U},
               {gfx::scroll1, 0xBFFU, 0xBFFU},
@@ -120,6 +192,14 @@ namespace {
               {gfx::scroll3, 0x17FFU, 0x17FFU},
               {gfx::scroll3, 0x27FFU, absent}}},
             {13U,
+             0x22U,
+             {0x24U, 0x26U, 0x28U, 0x2AU},
+             0x2CU,
+             {0x20U, 0x02U, 0x04U, 0U, 0U},
+             0x2EU,
+             0x0403U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x1FFFU, 0x1FFFU},
@@ -131,6 +211,14 @@ namespace {
               {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::scroll3, 0x1FFFU, absent}}},
             {14U,
+             0x12U,
+             {0x14U, 0x16U, 0x18U, 0x1AU},
+             0x1CU,
+             {0x08U, 0x20U, 0x10U, 0U, 0U},
+             0x1EU,
+             0x0404U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x17FFU, 0x17FFU},
@@ -142,6 +230,14 @@ namespace {
               {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::scroll3, 0x1FFFU, absent}}},
             {15U,
+             0x02U,
+             {0x04U, 0x06U, 0x08U, 0x0AU},
+             0x0CU,
+             {0x04U, 0x02U, 0x20U, 0U, 0U},
+             0x0EU,
+             0x0405U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x1FFFU, 0x1FFFU},
@@ -157,6 +253,14 @@ namespace {
               {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::scroll3, 0x1FFFU, absent}}},
             {16U,
+             0x0CU,
+             {0x0AU, 0x08U, 0x06U, 0x04U},
+             0x02U,
+             {0x10U, 0x0AU, 0x0AU, 0U, 0U},
+             0x00U,
+             0x0406U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x17FFU, 0x17FFU},
@@ -172,6 +276,14 @@ namespace {
               {gfx::scroll2, 0x3FFFU, 0x3FFFU},
               {gfx::scroll2, 0x4FFFU, absent}}},
             {21U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {0x00U, 0x02U, 0x04U, 0x06U},
+             {0x8000U, 0x8000U, 0x8000U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -187,6 +299,14 @@ namespace {
               {gfx::scroll2, 0x3FFFU, 0xBFFFU},
               {gfx::scroll2, 0x9FFFU, absent}}},
             {22U,
+             0x20U,
+             {0x2EU, 0x2CU, 0x2AU, 0x28U},
+             0x30U,
+             {0x30U, 0x08U, 0x30U, 0U, 0U},
+             reg_none,
+             0x0000U,
+             {0x1EU, 0x1CU, 0x1AU, 0x18U},
+             {0x8000U, 0x8000U, 0U, 0U},
              5U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -200,6 +320,14 @@ namespace {
               {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::scroll3, 0x2FFFU, absent}}},
             {23U,
+             0x20U,
+             {0x2EU, 0x2CU, 0x2AU, 0x28U},
+             0x30U,
+             {0x20U, 0x12U, 0x12U, 0U, 0U},
+             reg_none,
+             0x0000U,
+             {0x06U, 0x04U, 0x02U, 0x00U},
+             {0x8000U, 0x8000U, 0U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -215,6 +343,14 @@ namespace {
               {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::scroll3, 0x2FFFU, absent}}},
             {24U,
+             0x28U,
+             {0x26U, 0x24U, 0x22U, 0x20U},
+             0x30U,
+             {0x20U, 0x04U, 0x08U, 0x12U, 0x12U},
+             0x32U,
+             0x0800U,
+             {0x0EU, 0x0CU, 0x0AU, 0x08U},
+             {0x8000U, 0x8000U, 0U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x29FFU, 0x29FFU},
@@ -230,6 +366,14 @@ namespace {
               {gfx::sprites, 0x3FFFU, 0x7FFFU},
               {gfx::sprites, 0x4FFFU, absent}}},
             {25U,
+             0x20U,
+             {0x2EU, 0x2CU, 0x2AU, 0x28U},
+             0x30U,
+             {0x20U, 0x12U, 0x12U, 0U, 0U},
+             reg_none,
+             0x0000U,
+             {0x06U, 0x04U, 0x02U, 0x00U},
+             {0x8000U, 0x8000U, 0U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -245,15 +389,33 @@ namespace {
               {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::scroll3, 0x2FFFU, absent}}},
             {26U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {0x00U, 0x02U, 0x04U, 0x06U},
+             {0x8000U, 0U, 0U, 0U},
              3U,
              {{gfx::scroll1, 0x0U, 0x0U},
               {gfx::scroll1, 0xFFFU, 0xFFFU},
               {gfx::sprites, 0x800U, 0x800U},
               {gfx::sprites, 0x2FFFU, 0x2FFFU},
+              {gfx::scroll2, 0x800U, 0x800U},
+              {gfx::scroll2, 0x2FFFU, 0x2FFFU},
               {gfx::scroll3, 0xC00U, 0xC00U},
               {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::scroll3, 0x1FFFU, absent}}},
             {27U,
+             0x2CU,
+             {reg_none, reg_none, reg_none, reg_none},
+             0x12U,
+             {0x14U, 0x02U, 0x14U, 0U, 0U},
+             reg_none,
+             0x0000U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x4000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x1FFFU, 0x1FFFU},
@@ -265,20 +427,68 @@ namespace {
               {gfx::scroll3, 0x7FFU, 0x7FFU},
               {gfx::scroll3, 0x17FFU, absent}}},
             {28U,
+             0x0AU,
+             {0x0CU, 0x0EU, 0x00U, 0x02U},
+             0x04U,
+             {0x16U, 0x16U, 0x16U, 0U, 0U},
+             reg_none,
+             0x0000U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x8000U, 0U, 0U},
              2U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
+              {gfx::scroll1, 0x0U, 0x0U},
+              {gfx::scroll1, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll2, 0x0U, 0x0U},
+              {gfx::scroll2, 0x3FFFU, 0x3FFFU},
+              {gfx::scroll3, 0x0U, 0x0U},
+              {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::sprites, 0x4000U, 0x4000U},
               {gfx::sprites, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll1, 0x8000U, 0x8000U},
+              {gfx::scroll1, 0xFFFFU, 0xFFFFU},
+              {gfx::scroll2, 0x4000U, 0x4000U},
+              {gfx::scroll2, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll3, 0x1000U, 0x1000U},
+              {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::sprites, 0x8FFFU, absent}}},
             {29U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {0x00U, 0x02U, 0x04U, 0x06U},
+             {0x8000U, 0x8000U, 0U, 0U},
              2U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
+              {gfx::scroll1, 0x0U, 0x0U},
+              {gfx::scroll1, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll2, 0x0U, 0x0U},
+              {gfx::scroll2, 0x3FFFU, 0x3FFFU},
+              {gfx::scroll3, 0x0U, 0x0U},
+              {gfx::scroll3, 0xFFFU, 0xFFFU},
               {gfx::sprites, 0x4000U, 0x4000U},
               {gfx::sprites, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll1, 0x8000U, 0x8000U},
+              {gfx::scroll1, 0xFFFFU, 0xFFFFU},
+              {gfx::scroll2, 0x4000U, 0x4000U},
+              {gfx::scroll2, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll3, 0x1000U, 0x1000U},
+              {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::sprites, 0x8FFFU, absent}}},
             {30U,
+             0x28U,
+             {0x26U, 0x24U, 0x22U, 0x20U},
+             0x30U,
+             {0x20U, 0x10U, 0x02U, 0U, 0U},
+             reg_none,
+             0x0000U,
+             {0x06U, 0x04U, 0x02U, 0x00U},
+             {0x8000U, 0x8000U, 0U, 0U},
              6U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -294,6 +504,14 @@ namespace {
               {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::scroll3, 0x2FFFU, absent}}},
             {31U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {0x00U, 0x02U, 0x04U, 0x06U},
+             {0x8000U, 0x8000U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x1FFFU, 0x1FFFU},
@@ -305,6 +523,14 @@ namespace {
               {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::scroll3, 0x2FFFU, absent}}},
             {101U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x8000U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x27FFU, 0x27FFU},
@@ -316,6 +542,14 @@ namespace {
               {gfx::scroll1, 0x7FFFU, 0xFFFFU},
               {gfx::scroll1, 0x8FFFU, absent}}},
             {102U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0x8000U, 0U, 0U},
              3U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -323,8 +557,18 @@ namespace {
               {gfx::scroll1, 0x1FFFFU, 0x7FFFU},
               {gfx::scroll2, 0x0U, 0x4000U},
               {gfx::scroll2, 0xFFFFU, 0x7FFFU},
+              {gfx::scroll3, 0x0U, 0x1000U},
+              {gfx::scroll3, 0x3FFFU, 0x1FFFU},
               {gfx::scroll2, 0x10FFFU, absent}}},
             {104U,
+             0x2EU,
+             {0x26U, 0x30U, 0x28U, 0x32U},
+             0x2AU,
+             {0x02U, 0x04U, 0x08U, 0U, 0U},
+             0x20U,
+             0x0004U,
+             {reg_none, reg_none, reg_none, reg_none},
+             {0x8000U, 0U, 0U, 0U},
              4U,
              {{gfx::sprites, 0x0U, 0x0U},
               {gfx::sprites, 0x3FFFU, 0x3FFFU},
@@ -339,15 +583,23 @@ namespace {
     }
 } // namespace
 
-TEST_CASE("capcom_cps1 census maps gfx codes per profile (generated golden sweep)") {
-    for (const golden_row& row : golden_rows()) {
-        const auto profile = profile_for_id(row.id);
-        REQUIRE(profile.has_value());
-        CHECK_FALSE(profile->legacy);
-        CHECK(profile->id == row.id);
-        CHECK(profile->mapper.ranges.size() == row.range_count);
+TEST_CASE("capcom_cps1 census transcribes registers + maps gfx for every profile") {
+    for (const profile_row& row : profile_rows()) {
+        const auto p = profile_for_id(row.id);
+        REQUIRE(p.has_value());
+        CHECK_FALSE(p->legacy);
+        CHECK(p->id == row.id);
+        CHECK(p->layer_control_offset == row.layer_control_offset);
+        CHECK(p->priority_offset == row.priority_offset);
+        CHECK(p->palette_control_offset == row.palette_control_offset);
+        CHECK(p->layer_enable_mask == row.layer_enable_mask);
+        CHECK(p->id_offset == row.id_offset);
+        CHECK(p->id_value == row.id_value);
+        CHECK(p->mult_offset == row.mult_offset);
+        CHECK(p->mapper.bank_size == row.bank_size);
+        CHECK(p->mapper.ranges.size() == row.range_count);
         cps_a_b chip;
-        chip.set_cps_b_profile(*profile);
+        chip.set_cps_b_profile(*p);
         for (const gfx_golden& g : row.goldens) {
             INFO("profile " << row.id << " layer " << static_cast<int>(g.type) << " code "
                             << g.code);
@@ -357,19 +609,15 @@ TEST_CASE("capcom_cps1 census maps gfx codes per profile (generated golden sweep
 }
 
 // Anchor: three profiles whose register transcription was verified BY HAND
-// against the reference source (one single-bank, one multi-bank-wrap, one
-// all-layer). These non-circular checks certify the generated census.
+// against the reference source (single-bank, multi-bank-wrap, all-layer). These
+// non-circular checks certify the generated census above.
 TEST_CASE("capcom_cps1 anchor profiles transcribe the register map exactly") {
-    const std::uint8_t none = cps_a_b::reg_none;
-
     const auto p1 = profile_for_id(1U);
     REQUIRE(p1.has_value());
     CHECK(p1->layer_control_offset == 0x26U);
     CHECK(p1->priority_offset == std::array<std::uint8_t, 4>{0x28U, 0x2AU, 0x2CU, 0x2EU});
     CHECK(p1->palette_control_offset == 0x30U);
     CHECK(p1->layer_enable_mask == std::array<std::uint16_t, 5>{0x02U, 0x04U, 0x08U, 0x30U, 0x30U});
-    CHECK(p1->id_offset == none);
-    CHECK(p1->mult_offset == std::array<std::uint8_t, 4>{none, none, none, none});
     CHECK(p1->mapper.bank_size == std::array<std::uint32_t, 4>{0x8000U, 0x2000U, 0x2000U, 0U});
 
     const auto p16 = profile_for_id(16U);
@@ -402,5 +650,5 @@ TEST_CASE("capcom_cps1 chip default profile maps codes identically") {
 }
 
 TEST_CASE("capcom_cps1 every census profile has a conformance row") {
-    CHECK(profile_count() == golden_rows().size());
+    CHECK(profile_count() == profile_rows().size());
 }

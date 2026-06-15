@@ -9,6 +9,11 @@ mechanically, plus golden gfx-mapping tuples computed by an INDEPENDENT
 reimplementation of the mapper algorithm (so the conformance test cross-checks
 the C++ map_gfx_code instead of echoing the data back at itself).
 
+The goldens are computed by a separate Python port of the mapper algorithm, so
+the conformance test cross-checks the transcribed DATA against the reference
+tables (both sides port the same algorithm, so this verifies data fidelity, not
+the algorithm spec).
+
 It is a transcription aid, not part of the build: the reference cps1.c lives in a
 separate local checkout, so this does not run in CI. Re-run it (then clang-format)
 when the reference tables change or to extend coverage (e.g. CPS2).
@@ -67,7 +72,8 @@ def split_top(s):
     return [t for t in out if t.strip()]
 
 
-src = open(SRC, "r", encoding="utf-8", errors="replace").read()
+with open(SRC, "r", encoding="utf-8", errors="replace") as _f:
+    src = _f.read()
 
 # profile enum: suffix-name -> numeric id
 enum_block = re.search(r"typedef enum cps1_cps_b_profile\s*\{(.*?)\}", src, re.S).group(1)
@@ -156,14 +162,18 @@ def goldens_for(banks, ranges):
     max_end = 0
     for (tmask, start, end, bank) in ranges:
         max_end = max(max_end, end)
-        bit = next(b for b, _ in BITNAME if tmask & b)
-        shift = SHIFT[bit]
-        for edge in (start, end):
-            code = edge >> shift
-            if (code << shift) < start:
-                code += 1
-            if start <= (code << shift) <= end:
-                add(bit, code)
+        # probe every layer the range serves, so a per-layer bug in a shared
+        # range (all4 / spr|sc2 / sc2|sc3) cannot hide behind one layer bit.
+        for bit, _ in BITNAME:
+            if not (tmask & bit):
+                continue
+            shift = SHIFT[bit]
+            for edge in (start, end):
+                code = edge >> shift
+                if (code << shift) < start:
+                    code += 1
+                if start <= (code << shift) <= end:
+                    add(bit, code)
     last_bit = next(b for b, _ in BITNAME if ranges[-1][0] & b)
     probe = (max_end >> SHIFT[last_bit]) + 0x1000
     if map_code(banks, ranges, last_bit, probe) == ABSENT:
@@ -196,7 +206,9 @@ L.append("// Transcribed from the reference CPS1 CPS-B config + gfx-mapper hardw
 L.append("// mechanically (to avoid hand-transcription error) into this faithful, uniform")
 L.append("// shape. Keyed by the numeric CPS-B profile id (a board / PAL identity); the PAL")
 L.append("// / board names in comments are documentation only (see THIRD-PARTY-REFERENCES.md),")
-L.append("// never lookup keys.")
+L.append("// never lookup keys. Some ids share a register layout / mapper (e.g. 23 and 25,")
+L.append("// cd63b and tk263b); each is kept as its own row to mirror the per-board census")
+L.append("// 1:1 -- the duplication is intentional, not a DRY slip.")
 L.append("namespace mnemos::manifests::capcom_cps1 {")
 L.append("    namespace {")
 L.append("        using gfx_bank_range = chips::video::cps_a_b::gfx_bank_range;")
@@ -255,19 +267,28 @@ L.append("    std::size_t profile_count() noexcept { return board_db.size(); }")
 L.append("")
 L.append("} // namespace mnemos::manifests::capcom_cps1")
 L.append("")
-open(os.path.join(OUT_DIR, "cps_b_profiles.cpp"), "w", encoding="utf-8", newline="\n").write("\n".join(L))
+with open(os.path.join(OUT_DIR, "cps_b_profiles.cpp"), "w", encoding="utf-8", newline="\n") as f:
+    f.write("\n".join(L))
 
-# print the golden_rows() body for the maintainer to paste into the test
+# print the profile_rows() body for the maintainer to paste into the test: each
+# row carries the full register transcription + bank sizes + golden gfx mappings,
+# so the test sweep guards every profile's scramble against drift.
 GTYPE = {"sprites": "gfx::sprites", "scroll1": "gfx::scroll1", "scroll2": "gfx::scroll2",
          "scroll3": "gfx::scroll3"}
-print("// --- paste into cps_b_profile_test.cpp golden_rows(), then clang-format ---")
+print("// --- paste into cps_b_profile_test.cpp profile_rows(), then clang-format ---")
 for pid in ids:
     c = config[id_to_config[pid]]
     banks = mapper[c["mapper"]][0]
     rs = mapper_ranges[mapper[c["mapper"]][1]]
+    pr = ", ".join(reg(x) for x in c["priority"])
+    en = ", ".join(hx(x, 2) if x else "0U" for x in c["enable"])
+    mu = ", ".join(reg(x) for x in c["mult"])
+    bs = ", ".join(hx(b, 4) if b else "0U" for b in banks)
     gtext = ", ".join(
         "{%s, 0x%XU, %s}" % (GTYPE[t], code, ("absent" if mp == ABSENT else "0x%XU" % mp))
         for (t, code, mp) in goldens_for(banks, rs)
     )
-    print("        {%dU, %dU, {%s}}," % (pid, len(rs), gtext))
+    print("        {%dU, %s, {%s}, %s, {%s}, %s, %s, {%s}, {%s}, %dU, {%s}}," % (
+        pid, reg(c["layer_control"]), pr, reg(c["palette"]), en, reg(c["id_offset"]),
+        hx(c["id_value"], 4), mu, bs, len(rs), gtext))
 print(f"// profiles: {len(ids)}  ids: {ids}", file=sys.stderr)

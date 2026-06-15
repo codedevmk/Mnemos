@@ -6,7 +6,9 @@
 // mechanically (to avoid hand-transcription error) into this faithful, uniform
 // shape. Keyed by the numeric CPS-B profile id (a board / PAL identity); the PAL
 // / board names in comments are documentation only (see THIRD-PARTY-REFERENCES.md),
-// never lookup keys.
+// never lookup keys. Some ids share a register layout / mapper (e.g. 23 and 25,
+// cd63b and tk263b); each is kept as its own row to mirror the per-board census
+// 1:1 -- the duplication is intentional, not a DRY slip.
 namespace mnemos::manifests::capcom_cps1 {
     namespace {
         using gfx_bank_range = chips::video::cps_a_b::gfx_bank_range;
