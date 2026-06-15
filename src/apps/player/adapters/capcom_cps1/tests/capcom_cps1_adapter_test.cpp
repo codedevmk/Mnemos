@@ -343,6 +343,32 @@ TEST_CASE("capcom_cps1_adapter boots a real CPS1 set", "[capcom_cps1][adapter][d
             }
         }
     }
+    // Opt-in boot diagnostic: sample the 68K PC/SR over a few extra frames so a
+    // hung set (a tight early-boot wait loop) shows its PC cluster + whether the
+    // interrupt mask is still raised -- the lead for a bring-up that stalls.
+    if (opt_env("MNEMOS_CPS1_TRACE") != nullptr) {
+        for (int i = 0; i < 8; ++i) {
+            adapter.step_one_frame();
+            const auto r = machine.main_cpu.cpu_registers();
+            std::fprintf(stderr, "[trace] frame +%d  pc=%06X  sr=%04X  ipm=%u\n", i, r.pc, r.sr,
+                         static_cast<unsigned>((r.sr >> 8U) & 7U));
+        }
+        const auto r = machine.main_cpu.cpu_registers();
+        std::fprintf(stderr, "[trace] code @ pc-0x10:");
+        for (std::uint32_t a = r.pc - 0x10U; a < r.pc + 0x20U; ++a) {
+            std::fprintf(stderr, " %02X", machine.main_bus.read8(a));
+        }
+        std::fprintf(stderr, "\n[trace] A-regs:");
+        for (int i = 0; i < 8; ++i) {
+            std::fprintf(stderr, " a%d=%06X", i, r.a[static_cast<std::size_t>(i)]);
+        }
+        std::fprintf(stderr, "\n[trace] D-regs:");
+        for (int i = 0; i < 8; ++i) {
+            std::fprintf(stderr, " d%d=%08X", i, r.d[static_cast<std::size_t>(i)]);
+        }
+        std::fprintf(stderr, "\n");
+    }
+
     CHECK(frame_lit);
     CHECK(machine.vblank_irq_raised > 0U); // the beam raised the level-2 IRQ
     CHECK(machine.vblank_irq_acked > 0U);  // the 68K serviced it (IACK ran)
