@@ -192,7 +192,7 @@ namespace mnemos::manifests::capcom_cps1 {
             {sc3, 0x0000U, 0x7FFFU, 0U},
         }};
 
-        constexpr std::array<cps_b_profile, 30> board_db{{
+        constexpr std::array<cps_b_profile, 36> board_db{{
             // profile 1 (cps_b 01, mapper dm620)
             cps_b_profile{
                 .legacy = false,
@@ -544,6 +544,84 @@ namespace mnemos::manifests::capcom_cps1 {
                 .mult_offset = {0x00U, 0x02U, 0x04U, 0x06U},
                 .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0x8000U},
                            .ranges = ranges_rcm63b},
+            },
+            // profile 45 (cps_b b05_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x28U,
+                .priority_offset = {0x2AU, 0x2CU, 0x2EU, 0x30U},
+                .palette_control_offset = 0x32U,
+                .layer_enable_mask = {0x02U, 0x08U, 0x20U, 0x14U, 0x14U},
+                .id = 45U,
+                .id_offset = 0x20U,
+                .id_value = 0x0005U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 46 (cps_b b12_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x2CU,
+                .priority_offset = {0x2AU, 0x28U, 0x26U, 0x24U},
+                .palette_control_offset = 0x22U,
+                .layer_enable_mask = {0x02U, 0x04U, 0x08U, 0U, 0U},
+                .id = 46U,
+                .id_offset = 0x20U,
+                .id_value = 0x0402U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 47 (cps_b b13_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x22U,
+                .priority_offset = {0x24U, 0x26U, 0x28U, 0x2AU},
+                .palette_control_offset = 0x2CU,
+                .layer_enable_mask = {0x20U, 0x02U, 0x04U, 0U, 0U},
+                .id = 47U,
+                .id_offset = 0x2EU,
+                .id_value = 0x0403U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 48 (cps_b b14_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x12U,
+                .priority_offset = {0x14U, 0x16U, 0x18U, 0x1AU},
+                .palette_control_offset = 0x1CU,
+                .layer_enable_mask = {0x08U, 0x20U, 0x10U, 0U, 0U},
+                .id = 48U,
+                .id_offset = 0x1EU,
+                .id_value = 0x0404U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 49 (cps_b b15_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x02U,
+                .priority_offset = {0x04U, 0x06U, 0x08U, 0x0AU},
+                .palette_control_offset = 0x0CU,
+                .layer_enable_mask = {0x04U, 0x02U, 0x20U, 0U, 0U},
+                .id = 49U,
+                .id_offset = 0x0EU,
+                .id_value = 0x0405U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 50 (cps_b b17_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x14U,
+                .priority_offset = {0x12U, 0x10U, 0x0EU, 0x0CU},
+                .palette_control_offset = 0x0AU,
+                .layer_enable_mask = {0x08U, 0x14U, 0x02U, 0U, 0U},
+                .id = 50U,
+                .id_offset = 0x08U,
+                .id_value = 0x0407U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
             },
             // profile 101 (cps_b 01_st24m1, mapper st24m1)
             cps_b_profile{
