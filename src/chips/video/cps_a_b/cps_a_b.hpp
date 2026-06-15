@@ -80,11 +80,33 @@ namespace mnemos::chips::video {
 
         enum class sprite_order : std::uint8_t { ascending, descending };
 
+        // map_gfx_code returns this when the active board mapper rejects a code
+        // (no range matches / invalid bank); callers skip that tile or sprite.
+        static constexpr std::uint32_t gfx_code_absent = 0xFFFFFFFFU;
+
+        // One (layer-type, code-range) -> bank route in a board's gfx-code mapper.
+        // type_mask is a bitset over gfx_type bits (sprites=1, scroll1=2,
+        // scroll2=4, scroll3=8); start/end are in the per-layer shifted element
+        // space, and bank indexes bank_size.
+        struct gfx_bank_range {
+            std::uint8_t type_mask;
+            std::uint32_t start;
+            std::uint32_t end;
+            std::uint8_t bank;
+        };
+        // Per-board graphics-code remap: up to four banks laid end-to-end plus an
+        // ordered range list (first match wins). An empty range span is identity.
+        struct gfx_mapper {
+            std::array<std::uint32_t, 4> bank_size{};
+            std::span<const gfx_bank_range> ranges{};
+        };
+
         // The CPS-B per-board configuration: where each logical register sits in
-        // the scrambled physical register file, plus the per-layer enable masks.
-        // Defaults are the synthetic "legacy" profile (no scramble, no priority).
-        // The id/multiplier/gfx-mapper fields the full profile carries are board /
-        // later-increment concerns and are not part of the render path here.
+        // the scrambled physical register file, the per-layer enable masks, the
+        // board-identity / 68k-protection ports, and the graphics-code mapper.
+        // Defaults are the synthetic "legacy" profile (no scramble, no priority,
+        // identity mapper). The protection ports (id/multiplier) are carried as
+        // data here; their bus read-decode is wired at the board/manifest layer.
         struct cps_b_profile {
             // The synthetic default: a zero layer-control latch falls back to the
             // canonical layer order. A real board profile clears this, so an
@@ -94,6 +116,16 @@ namespace mnemos::chips::video {
             std::array<std::uint8_t, 4> priority_offset{0x08U, 0x0AU, 0x0CU, 0x0EU};
             std::uint8_t palette_control_offset{reg_none};
             std::array<std::uint16_t, 5> layer_enable_mask{};
+            // Board identity (the numeric profile id, for traceability / save
+            // state) and the 68k protection ports: the chip-ID register
+            // (id_offset reads back id_value) and the 16x16 multiplier latch byte
+            // offsets (factor1, factor2, result-lo, result-hi).
+            std::uint16_t id{0U};
+            std::uint8_t id_offset{reg_none};
+            std::uint16_t id_value{0U};
+            std::array<std::uint8_t, 4> mult_offset{reg_none, reg_none, reg_none, reg_none};
+            // Per-board graphics-code remap (non-owning; empty => identity).
+            gfx_mapper mapper{};
         };
 
         using line_callback = std::function<void(std::uint32_t line)>;
@@ -207,6 +239,14 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint16_t read_palette(std::uint16_t pal_num,
                                                  std::uint8_t pen) const noexcept;
 
+        // Map a graphics code through the active profile's mapper (identity when
+        // the profile carries no mapper; gfx_code_absent when a mapper rejects
+        // it). Exposed for board tooling and conformance tests.
+        [[nodiscard]] std::uint32_t mapped_gfx_code(gfx_type type,
+                                                    std::uint32_t code) const noexcept {
+            return map_gfx_code(type, code);
+        }
+
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
@@ -231,9 +271,13 @@ namespace mnemos::chips::video {
                                                              int blocks_y, int bx, int by,
                                                              bool flip_x, bool flip_y) noexcept;
 
-        // Per-board CPS-B graphics-code remap; identity until the profile mapper
-        // data lands.
+        // Per-board CPS-B graphics-code remap driven by the active profile's
+        // mapper (identity when the profile carries no mapper; gfx_code_absent
+        // when a present mapper rejects the code).
         [[nodiscard]] std::uint32_t map_gfx_code(gfx_type type, std::uint32_t code) const noexcept;
+        // gfx_type as a mapper bitset bit / its per-layer code-expansion shift.
+        [[nodiscard]] static std::uint8_t gfx_type_bit(gfx_type type) noexcept;
+        [[nodiscard]] static int gfx_type_shift(gfx_type type) noexcept;
         [[nodiscard]] std::uint8_t tile_pixel(gfx_type type, std::uint32_t code, int x, int y,
                                               int tile_size, int x_bias) const noexcept;
         [[nodiscard]] std::uint8_t decode_packed(std::uint32_t tile_base, std::uint32_t row_stride,

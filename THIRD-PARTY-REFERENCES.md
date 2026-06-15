@@ -93,6 +93,16 @@ multiple independent open-source implementations.
   (`src/manifests/sms/sms_system.cpp`), compiled from the community Game Gear
   cartridge database and cross-checked against open-source Sega emulators' game
   lists. The 93C46 Microwire protocol is the published Microchip datasheet.
+- **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
+  CPS-B custom chip has a per-board scrambled register map (layer-control,
+  priority, palette-control, layer-enable, protection ports) and a graphics-code
+  mapper PAL. The hardware-keyed census (`src/manifests/capcom_cps1/cps_b_profiles.cpp`)
+  was transcribed from the community reverse-engineering of those per-board
+  register offsets and gfx bank ranges, via the author's first-party Emu
+  reference core (see "Code adapted from sibling first-party projects"). It is
+  keyed by the numeric CPS-B profile / PAL identity, never a game name, was
+  transcribed mechanically to avoid error, and is cross-checked against an
+  independent reimplementation of the mapper algorithm. No code was copied.
 
 ## Cross-check emulators
 
