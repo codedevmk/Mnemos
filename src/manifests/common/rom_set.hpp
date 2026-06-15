@@ -36,14 +36,14 @@ namespace mnemos::manifests::common {
     // relative to the region.
     struct rom_set_file final {
         std::string name;
-        std::size_t offset{};               // first destination byte
-        std::size_t stride{1U};             // destination step per source unit
-        std::size_t unit{1U};               // source bytes per chunk (contiguous)
-        bool swap{};                        // reverse byte order within each unit
-        std::size_t source_offset{};        // first source byte to read
-        std::size_t length{};               // source bytes to place; 0 = rest of file
-        std::size_t size{};                 // expected file byte count; 0 = accept any
-        std::optional<std::uint32_t> crc32; // verified when set
+        std::size_t offset{};                 // first destination byte
+        std::size_t stride{1U};               // destination step per source unit
+        std::size_t unit{1U};                 // source bytes per chunk (contiguous)
+        bool swap{};                          // reverse byte order within each unit
+        std::size_t source_offset{};          // first source byte to read
+        std::size_t length{};                 // source bytes to place; 0 = rest of file
+        std::size_t size{};                   // expected file byte count; 0 = accept any
+        std::optional<std::uint32_t> crc32{}; // verified when set
     };
 
     struct rom_set_region final {
