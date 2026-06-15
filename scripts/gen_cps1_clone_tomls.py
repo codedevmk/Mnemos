@@ -26,6 +26,20 @@ GAMES = r"C:/dev/emu/Mnemos-qsboard/src/manifests/capcom_cps1/games"
 WRITE = "--write" in sys.argv
 HAVE = set(os.path.splitext(f)[0] for f in os.listdir(GAMES) if f.endswith(".toml"))
 
+# Cross-board profile map: a clone may run a DIFFERENT CPS-B board than its
+# parent (the sf2 World/US/JP variants run CPS_B_05/12/13/14/15/17 on the same
+# S9263B/STF29 gfx mapper as the CPS_B_11 parent). Map (cpsb, mapper) -> the
+# Mnemos profile id that encodes exactly that board+mapper. STF29 and S9263B are
+# byte-identical mappers, so both spellings map to the same profile.
+CONFIG_PROFILE = {
+    ("CPS_B_05", "mapper_STF29"): 45, ("CPS_B_05", "mapper_S9263B"): 45,
+    ("CPS_B_12", "mapper_STF29"): 46, ("CPS_B_12", "mapper_S9263B"): 46,
+    ("CPS_B_13", "mapper_STF29"): 47, ("CPS_B_13", "mapper_S9263B"): 47,
+    ("CPS_B_14", "mapper_STF29"): 48, ("CPS_B_14", "mapper_S9263B"): 48,
+    ("CPS_B_15", "mapper_STF29"): 49, ("CPS_B_15", "mapper_S9263B"): 49,
+    ("CPS_B_17", "mapper_STF29"): 50, ("CPS_B_17", "mapper_S9263B"): 50,
+}
+
 # clone -> parent
 parent = {}
 for m in re.finditer(r"^GAME\(\s*\d+,\s*(\w+),\s*(\w+),", MAME, re.M):
@@ -114,16 +128,25 @@ def gen(clone):
     # is not "matches" -- skip it (the bootleg sets that differ only in the
     # trailing kludge need a profile Mnemos does not model yet).
     ccfg, pcfg = config.get(cand), config.get(par)
-    if ccfg is None or pcfg is None or ccfg != pcfg:
-        return None, f"config {ccfg} != parent {pcfg} (needs new profile/kludge)"
+    if ccfg is None or pcfg is None:
+        return None, f"config unknown: clone {ccfg} parent {pcfg}"
     ptoml = open(os.path.join(GAMES, par + ".toml"), encoding="utf-8").read()
     # The parent must itself be standalone -- the fallback is single-level.
     if re.search(r"^\s*parent\s*=", ptoml, re.M):
         return None, f"parent '{par}' is itself a clone (grandparent chains unsupported)"
-    pm = re.search(r"cps_b_profile = (\d+)", ptoml)
-    if not pm:
-        return None, "parent has no cps_b_profile"
-    profile = pm.group(1)
+    # Pick the profile id. Identical board config -> reuse the parent's. A
+    # different CPS-B board but the SAME trailing I/O fields (in2/in3/out2/kludge)
+    # -> the board-specific profile from CONFIG_PROFILE (the sf2 regional case).
+    # Any other difference (e.g. a bootleg kludge) -> skip, needs a new profile.
+    if ccfg == pcfg:
+        pm = re.search(r"cps_b_profile = (\d+)", ptoml)
+        if not pm:
+            return None, "parent has no cps_b_profile"
+        profile = pm.group(1)
+    elif ccfg[2:] == pcfg[2:] and (ccfg[0], ccfg[1]) in CONFIG_PROFILE:
+        profile = str(CONFIG_PROFILE[(ccfg[0], ccfg[1])])
+    else:
+        return None, f"config {ccfg} != parent {pcfg} (needs new profile/kludge)"
     # whitespace-tolerant: parent tomls vary in key alignment (some are wide-padded)
     orient = re.search(r'^\s*orientation\s*=\s*"(\w+)"', ptoml, re.M)
     psound = re.search(r'^\s*sound\s*=\s*"(\w+)"', ptoml, re.M)

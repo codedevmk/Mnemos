@@ -222,6 +222,26 @@ config["def_rcm63b"] = dict(
 id_to_config[43] = "b11_s9263b"
 id_to_config[44] = "def_rcm63b"
 
+# Mnemos additions: the SF2 regional CPS-B boards, each paired with the S9263B
+# (== STF29, byte-identical) gfx mapper -- the board variants the sf2 World/US/JP
+# program clones run on. The register layouts are the stock CPS_B_05/12/13/14/15
+# (identical to profiles 5/12/13/14/15, whose boards differ only in the gfx
+# mapper) plus CPS_B_17 (new); transcribed from the reference CPS_B_xx tables.
+# (id_offset, id_value, layer_control, priority[4], palette, enable[5])
+_sf2_boards = {
+    45: ("b05_s9263b", 0x20, 0x0005, 0x28, [0x2A, 0x2C, 0x2E, 0x30], 0x32, [0x02, 0x08, 0x20, 0x14, 0x14]),
+    46: ("b12_s9263b", 0x20, 0x0402, 0x2C, [0x2A, 0x28, 0x26, 0x24], 0x22, [0x02, 0x04, 0x08, 0, 0]),
+    47: ("b13_s9263b", 0x2E, 0x0403, 0x22, [0x24, 0x26, 0x28, 0x2A], 0x2C, [0x20, 0x02, 0x04, 0, 0]),
+    48: ("b14_s9263b", 0x1E, 0x0404, 0x12, [0x14, 0x16, 0x18, 0x1A], 0x1C, [0x08, 0x20, 0x10, 0, 0]),
+    49: ("b15_s9263b", 0x0E, 0x0405, 0x02, [0x04, 0x06, 0x08, 0x0A], 0x0C, [0x04, 0x02, 0x20, 0, 0]),
+    50: ("b17_s9263b", 0x08, 0x0407, 0x14, [0x12, 0x10, 0x0E, 0x0C], 0x0A, [0x08, 0x14, 0x02, 0, 0]),
+}
+for _pid, (_cn, _io, _iv, _lc, _pr, _pa, _en) in _sf2_boards.items():
+    config[_cn] = dict(id_offset=_io, id_value=_iv,
+                       mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+                       layer_control=_lc, priority=_pr, palette=_pa, enable=_en, mapper="s9263b")
+    id_to_config[_pid] = _cn
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"
