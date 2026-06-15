@@ -38,6 +38,11 @@ CONFIG_PROFILE = {
     ("CPS_B_14", "mapper_STF29"): 48, ("CPS_B_14", "mapper_S9263B"): 48,
     ("CPS_B_15", "mapper_STF29"): 49, ("CPS_B_15", "mapper_S9263B"): 49,
     ("CPS_B_17", "mapper_STF29"): 50, ("CPS_B_17", "mapper_S9263B"): 50,
+    # The QSound "QS1" board (wofu/wofj). The wof parent boots on a DEF profile
+    # (29) because its program reads the multiply-protection, but the US/JP
+    # revisions read the QS1 protection and need the QS1 profile (40) -- verified
+    # empirically: wofu/wofj render only on 40, wof only on 29.
+    ("CPS_B_21_QS1", "mapper_TK263B"): 40,
 }
 
 # clone -> parent
@@ -138,13 +143,18 @@ def gen(clone):
     # different CPS-B board but the SAME trailing I/O fields (in2/in3/out2/kludge)
     # -> the board-specific profile from CONFIG_PROFILE (the sf2 regional case).
     # Any other difference (e.g. a bootleg kludge) -> skip, needs a new profile.
-    if ccfg == pcfg:
+    if (ccfg[0], ccfg[1]) in CONFIG_PROFILE and ccfg[2:] == pcfg[2:]:
+        # The clone's board has a known Mnemos profile -> use it directly. This is
+        # authoritative even when the parent toml is profiled differently (the
+        # QSound parent wof boots on a DEF profile, but its QS1 clones need the QS1
+        # profile). The trailing I/O fields must still match the parent so an
+        # unmodelled bootleg kludge cannot slip through.
+        profile = str(CONFIG_PROFILE[(ccfg[0], ccfg[1])])
+    elif ccfg == pcfg:
         pm = re.search(r"cps_b_profile = (\d+)", ptoml)
         if not pm:
             return None, "parent has no cps_b_profile"
         profile = pm.group(1)
-    elif ccfg[2:] == pcfg[2:] and (ccfg[0], ccfg[1]) in CONFIG_PROFILE:
-        profile = str(CONFIG_PROFILE[(ccfg[0], ccfg[1])])
     else:
         return None, f"config {ccfg} != parent {pcfg} (needs new profile/kludge)"
     # whitespace-tolerant: parent tomls vary in key alignment (some are wide-padded)
