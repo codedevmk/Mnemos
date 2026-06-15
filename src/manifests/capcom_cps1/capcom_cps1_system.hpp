@@ -18,16 +18,19 @@
 
 namespace mnemos::manifests::capcom_cps1 {
 
-    // CPS1 board, increment 3: the 68000 main CPU + the cps_a_b video chip (the
+    // CPS1 board, increment 4: the 68000 main CPU + the cps_a_b video chip (the
     // increment-2 per-frame CPS-A -> video decode, reg5 palette DMA, and vblank
     // IRQ) plus the Z80 sound subsystem -- a sound Z80 driving a YM2151 + an
     // OKIM6295 on its own little-endian bus, fed sound commands the 68K writes to
-    // $800180/$800188 and read back by the Z80 at $F008/$F00A. IO/DIP inputs,
-    // sprite-latch DMA, CPS-B protection read-back, the romset TOML key, and the
-    // player adapter all land in later increments. The board maps the program ROM
-    // low across the 8 MiB program window with the work / GFX RAM overlaid above
-    // it, and exposes the CPS-A/CPS-B register windows so the video chip's
-    // logical state is reachable from the 68K.
+    // $800180/$800188 and read back by the Z80 at $F008/$F00A. Increment 4 adds
+    // the controls / DIP read windows ($800000 player word, $800018 system+DIP),
+    // the coin-control write stub ($800030), the per-frame sprite-latch DMA, and
+    // the CPS-B protection read-back (board ID + 16x16 multiplier) decoded through
+    // the active profile. The romset TOML key and the player adapter land in later
+    // increments. The board maps the program ROM low across the 8 MiB program
+    // window with the work / GFX RAM overlaid above it, and exposes the
+    // CPS-A/CPS-B register windows so the video chip's logical state is reachable
+    // from the 68K.
 
     // Program ROM window: $000000-$7FFFFF (the 68K's lower 8 MiB; absent dumps
     // read 0xFF). Work RAM: $FF0000-$FFFFFF (64 KiB). Unified GFX RAM (tilemap
@@ -47,6 +50,18 @@ namespace mnemos::manifests::capcom_cps1 {
     inline constexpr std::uint32_t cps_b_reg_base = 0x800140U;
     inline constexpr std::uint32_t cps_b_reg_size = 0x40U;
     inline constexpr std::size_t cps_a_reg_count = 32U;
+
+    // Controls / DIP read windows. The player-input word (P2 high byte, P1 low
+    // byte) mirrors across $800000-$800007; the system word + the three DIP-switch
+    // words sit at $800018-$80001F (word 0 = system inputs, words 1-3 = DIP A/B/C,
+    // each as `value << 8 | 0xFF`). Coin counters/lockout latch at $800030-$800037
+    // (a write-only stub here; counters are not modelled in v1).
+    inline constexpr std::uint32_t player_input_base = 0x800000U;
+    inline constexpr std::uint32_t player_input_window = 0x08U;
+    inline constexpr std::uint32_t system_dsw_base = 0x800018U;
+    inline constexpr std::uint32_t system_dsw_window = 0x08U;
+    inline constexpr std::uint32_t coin_control_base = 0x800030U;
+    inline constexpr std::uint32_t coin_control_window = 0x08U;
 
     // CPS-A output-register word indices (the chip latches one 16-bit value per
     // index). Each *_base word is a GFX-RAM name-table pointer the board decodes;
@@ -168,6 +183,19 @@ namespace mnemos::manifests::capcom_cps1 {
         // into the video chip's scroll/object/control state each frame.
         std::array<std::uint16_t, cps_a_reg_count> cps_a_regs{};
 
+        // Controls / DIP state the read windows expose. Active-low (all-released =
+        // 0xFF per byte); the Phase-6 player adapter drives these. `input_p` packs
+        // P2 in the high byte and P1 in the low byte; `input_sys` is the system
+        // word; `dip_a/b/c` are the three DIP-switch bytes.
+        std::uint16_t input_p{0xFFFFU};
+        std::uint16_t input_sys{0xFFFFU};
+        std::uint8_t dip_a{0xFFU};
+        std::uint8_t dip_b{0xFFU};
+        std::uint8_t dip_c{0xFFU};
+        // Coin-control latch ($800030-$800037 high byte). Stub: counters/lockout
+        // are not modelled in v1, so writes only land here for traceability.
+        std::uint8_t coin_control{};
+
         // Z80 sound work RAM ($D000-$D7FF).
         std::array<std::uint8_t, z80_ram_size> z80_ram{};
 
@@ -203,6 +231,17 @@ namespace mnemos::manifests::capcom_cps1 {
         // owns the (timerA & enA) | (timerB & enB) edge; this routes it to /INT).
         void sync_sound_irq() noexcept;
 
+        // Drive the controls / DIP state the read windows expose (active-low). The
+        // Phase-6 player adapter calls this; tests may also set the members.
+        void set_inputs(std::uint16_t player, std::uint16_t system, std::uint8_t dsw_a,
+                        std::uint8_t dsw_b, std::uint8_t dsw_c) noexcept {
+            input_p = player;
+            input_sys = system;
+            dip_a = dsw_a;
+            dip_b = dsw_b;
+            dip_c = dsw_c;
+        }
+
       private:
         // The banked-window base into the sound ROM for the current bank.
         [[nodiscard]] std::uint32_t z80_bank_rom_base() const noexcept;
@@ -224,6 +263,15 @@ namespace mnemos::manifests::capcom_cps1 {
         [[nodiscard]] std::uint32_t gfx_ram_base_from_reg(std::uint16_t reg) const noexcept;
         [[nodiscard]] std::uint32_t gfx_ram_base_aligned(std::uint16_t reg,
                                                          std::uint32_t boundary) const noexcept;
+
+        // CPS-B window word read decoded through the active profile: the board-ID
+        // value, the 16x16 multiplier result (lo/hi), else the raw register. The
+        // 68K can only read the board-specific ID / protection ports; raster
+        // read-back is out of v1 (returns the raw register at those offsets).
+        [[nodiscard]] std::uint16_t cps_b_read_word(std::uint8_t offset) const noexcept;
+        // The system / DIP word at a given word offset (0 = system inputs, 1-3 =
+        // DIP A/B/C), as `byte << 8 | 0xFF` to match the hardware lane layout.
+        [[nodiscard]] std::uint16_t system_dsw_word(std::uint32_t word_offset) const noexcept;
     };
 
     // The board's canonical ROM-set declaration skeleton: the program region with

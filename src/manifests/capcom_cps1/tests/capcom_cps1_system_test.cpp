@@ -5,9 +5,12 @@
 // level-6 IRQ that drives the game's main loop. Increment 3 adds the Z80 sound
 // subsystem: the 68K -> Z80 sound latch, a running sound Z80 driving the
 // YM2151 + OKIM6295, the bank window, and the two CPUs + sound chips scheduled
-// together across the frame.
+// together across the frame. Increment 4 adds the controls / DIP read windows,
+// the coin-control write stub, the per-frame sprite-latch DMA, and the CPS-B
+// protection read-back (board ID + 16x16 multiplier) through the active profile.
 
 #include "capcom_cps1_system.hpp"
+#include "cps_b_profiles.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -375,4 +378,136 @@ TEST_CASE("cps1 reaches the YM2151 + OKIM6295 from the Z80 and drains audio", "[
         }
     }
     CHECK(any_nonzero); // the decoded ADPCM stream is audible, not silence
+}
+
+TEST_CASE("cps1 exposes player inputs + system/DIP through the read windows", "[cps1][input]") {
+    auto system = assemble_cps1(make_image());
+
+    // Inputs default to all-released (active-low 0xFFFF / 0xFF per byte).
+    CHECK(system->main_bus.read16_be(cps1::player_input_base) == 0xFFFFU);
+    CHECK(system->main_bus.read16_be(cps1::system_dsw_base) == 0xFFFFU);
+
+    // Drive a board input value: P2 = 0xAA (high byte), P1 = 0x55 (low byte);
+    // system word low byte = 0x3C; the three DIP bytes 0x12 / 0x34 / 0x56.
+    system->set_inputs(0xAA55U, 0xFF3CU, 0x12U, 0x34U, 0x56U);
+
+    // The player word reads back, and mirrors across the $800000-$800007 window.
+    CHECK(system->main_bus.read16_be(cps1::player_input_base) == 0xAA55U);
+    CHECK(system->main_bus.read16_be(cps1::player_input_base + 2U) == 0xAA55U);
+    CHECK(system->main_bus.read16_be(cps1::player_input_base + 6U) == 0xAA55U);
+
+    // The system word is `(sys_low << 8) | 0xFF`; the DIP words `(dip << 8) | 0xFF`.
+    CHECK(system->main_bus.read16_be(cps1::system_dsw_base + 0U) == 0x3CFFU); // system
+    CHECK(system->main_bus.read16_be(cps1::system_dsw_base + 2U) == 0x12FFU); // DIP A
+    CHECK(system->main_bus.read16_be(cps1::system_dsw_base + 4U) == 0x34FFU); // DIP B
+    CHECK(system->main_bus.read16_be(cps1::system_dsw_base + 6U) == 0x56FFU); // DIP C
+
+    // Coin control is a write-only stub: the high-byte write lands in the latch.
+    system->main_bus.write8(cps1::coin_control_base, 0x0CU);
+    CHECK(system->coin_control == 0x0CU);
+}
+
+TEST_CASE("cps1 CPS-B protection returns the board ID and 16x16 product", "[cps1][protection]") {
+    // Profile 24 (board / PAL "BT1") carries both an ID port and a multiplier:
+    // id_offset 0x32 -> id_value 0x0800; mult_offset {factor1=0x0E, factor2=0x0C,
+    // result-lo=0x0A, result-hi=0x08}. Assemble the board on that profile.
+    constexpr std::uint16_t profile_id = 24U;
+    const auto profile = cps1::profile_for_id(profile_id);
+    REQUIRE(profile.has_value());
+
+    auto system =
+        assemble_cps1(make_image(), cps1::cps1_board_params{.cps_b_profile_id = profile_id});
+    REQUIRE(system->profile.id == profile_id);
+
+    // Byte offset -> CPS-B window address; a word read decodes through the profile.
+    const auto cps_b_addr = [](std::uint8_t byte_off) { return cps1::cps_b_reg_base + byte_off; };
+
+    // The ID port returns the fixed identity value (the game's protection check).
+    CHECK(system->main_bus.read16_be(cps_b_addr(profile->id_offset)) == profile->id_value);
+
+    // Write the two 16-bit factors through the CPS-B window, then read the result
+    // ports: lo = (f1 * f2) & 0xFFFF, hi = (f1 * f2) >> 16.
+    constexpr std::uint16_t factor1 = 0x1234U;
+    constexpr std::uint16_t factor2 = 0x0010U;
+    constexpr std::uint32_t product = static_cast<std::uint32_t>(factor1) * factor2; // 0x00012340
+    system->main_bus.write16_be(cps_b_addr(profile->mult_offset[0]), factor1);
+    system->main_bus.write16_be(cps_b_addr(profile->mult_offset[1]), factor2);
+
+    CHECK(system->main_bus.read16_be(cps_b_addr(profile->mult_offset[2])) ==
+          static_cast<std::uint16_t>(product & 0xFFFFU)); // result-lo = 0x2340
+    CHECK(system->main_bus.read16_be(cps_b_addr(profile->mult_offset[3])) ==
+          static_cast<std::uint16_t>(product >> 16U)); // result-hi = 0x0001
+
+    // A CPS-B offset with no special port returns the raw register the 68K wrote
+    // (here the layer-control latch -- render registers are write latches).
+    system->main_bus.write16_be(cps_b_addr(profile->layer_control_offset), 0x1357U);
+    CHECK(system->main_bus.read16_be(cps_b_addr(profile->layer_control_offset)) == 0x1357U);
+}
+
+TEST_CASE("cps1 sprite-latch DMA snapshots the object table at end of frame", "[cps1][sprite]") {
+    auto system = assemble_cps1(make_image());
+
+    // GFX ROM: make sprite tile code 0 opaque pen 1 across its whole cell. A
+    // sprite cell decodes 4bpp planar bytes via decode_packed(code*128, 8, ...);
+    // setting plane-0 bytes (stride 4) and clearing the rest yields pen 1.
+    auto& gfx = system->roms.regions["gfx"];
+    gfx.assign(0x100U, 0x00U);
+    for (std::size_t off = 0U; off < 128U; off += 4U) {
+        gfx[off + 0U] = 0xFFU; // plane 0 set -> pen bit0
+    }
+    system->video.attach_gfx(std::span<const std::uint8_t>(gfx));
+
+    // Colour sprite palette page 0 pen 1 red so a drawn sprite pixel is visible.
+    poke16(system->palette, (0U * 16U + 1U) * 2U, 0x0F00U);
+
+    // Drive an object-table base into GFX RAM via CPS-A reg0 (aligned to 0x800).
+    constexpr std::uint16_t obj_base_reg = 0x0008U; // base = reg << 8 = 0x800
+    constexpr std::uint32_t obj_base = static_cast<std::uint32_t>(obj_base_reg) << 8U;
+    system->main_bus.write16_be(0x800100U + cps1::cps_a_obj_base * 2U, obj_base_reg);
+
+    // Helper: stage one object entry (x, y, code, attr) at the table base; a
+    // 0xFFxx attribute on the next entry terminates the list.
+    const auto stage_sprite = [&](std::uint16_t x, std::uint16_t y, std::uint16_t code,
+                                  std::uint16_t attr) {
+        poke16(system->gfx_ram, obj_base + 0U, x);
+        poke16(system->gfx_ram, obj_base + 2U, y);
+        poke16(system->gfx_ram, obj_base + 4U, code);
+        poke16(system->gfx_ram, obj_base + 6U, attr);
+        poke16(system->gfx_ram, obj_base + 8U, 0xFF00U); // terminator entry
+    };
+    const auto clear_table = [&]() {
+        poke16(system->gfx_ram, obj_base + 6U, 0xFF00U); // first entry terminates
+    };
+
+    // A sprite at world (visible_x_start, visible_y_start) = (64, 16) lands its
+    // top-left at visible pixel (0, 0). Pen-1, palette page 0.
+    constexpr std::uint16_t sx = 64U;
+    constexpr std::uint16_t sy = 16U;
+
+    // Frame 1: empty table -> the renderer latches an empty table and draws no
+    // sprite; the board's end-of-frame latch also snapshots the empty table.
+    clear_table();
+    system->run_frame();
+    CHECK(system->video.framebuffer().pixels[0] == 0x000000U); // backdrop, no sprite
+
+    // Stage the sprite now. Frame 2 renders from the buffer the board latched at
+    // the end of frame 1 (still empty) -> no sprite yet; the board then latches
+    // the staged sprite at the end of frame 2.
+    stage_sprite(sx, sy, 0x0000U, 0x0000U);
+    system->run_frame();
+    CHECK(system->video.framebuffer().pixels[0] == 0x000000U); // latch lags one frame
+
+    // Frame 3 renders from the end-of-frame-2 snapshot -> the sprite appears. This
+    // is observable only because the board re-latched the object table each frame.
+    system->run_frame();
+    const std::uint32_t pixel = system->video.framebuffer().pixels[0];
+    CHECK((pixel & 0xFF0000U) != 0U); // red sprite pixel present
+    CHECK((pixel & 0x00FFFFU) == 0U); // pure red
+
+    // Clearing the table and running another frame drains it back out (the latch
+    // tracks the live table, not a one-shot copy).
+    clear_table();
+    system->run_frame(); // end-of-frame snapshot = empty
+    system->run_frame(); // renders the empty snapshot
+    CHECK(system->video.framebuffer().pixels[0] == 0x000000U);
 }

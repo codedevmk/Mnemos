@@ -62,14 +62,15 @@ namespace mnemos::manifests::capcom_cps1 {
             },
             1);
 
-        // CPS-B register file: reads/writes go through the video chip's raw
-        // register file (the active profile interprets it).
+        // CPS-B register file: writes go to the video chip's raw register file;
+        // reads decode through the active profile (board ID + 16x16 multiplier),
+        // since the render registers are write latches the 68K can't read back.
         main_bus.map_mmio(
             cps_b_reg_base, cps_b_reg_size,
             [this](std::uint32_t address) -> std::uint8_t {
-                const std::uint8_t idx =
-                    static_cast<std::uint8_t>((address - cps_b_reg_base) >> 1U);
-                const std::uint16_t word = video.cps_b_reg(idx);
+                const std::uint8_t offset =
+                    static_cast<std::uint8_t>((address - cps_b_reg_base) & 0xFEU);
+                const std::uint16_t word = cps_b_read_word(offset);
                 return (address & 1U) == 0U ? static_cast<std::uint8_t>(word >> 8U)
                                             : static_cast<std::uint8_t>(word);
             },
@@ -107,6 +108,39 @@ namespace mnemos::manifests::capcom_cps1 {
                 } else if (address >= sound_latch2_addr && address < sound_latch2_addr + 8U &&
                            (address & 1U) != 0U) {
                     sound_latch2 = value;
+                }
+            },
+            1);
+
+        // Player-input word, mirrored across $800000-$800007 (P2 high byte, P1
+        // low byte). Read-only; writes here are ignored.
+        main_bus.map_mmio(
+            player_input_base, player_input_window,
+            [this](std::uint32_t address) -> std::uint8_t {
+                return (address & 1U) != 0U ? static_cast<std::uint8_t>(input_p & 0x00FFU)
+                                            : static_cast<std::uint8_t>((input_p >> 8U) & 0x00FFU);
+            },
+            [](std::uint32_t, std::uint8_t) {}, 1);
+
+        // System input word + the three DIP-switch words at $800018-$80001F (word
+        // 0 = system, words 1-3 = DIP A/B/C). Read-only.
+        main_bus.map_mmio(
+            system_dsw_base, system_dsw_window,
+            [this](std::uint32_t address) -> std::uint8_t {
+                const std::uint16_t word = system_dsw_word((address - system_dsw_base) >> 1U);
+                return (address & 1U) != 0U ? static_cast<std::uint8_t>(word & 0x00FFU)
+                                            : static_cast<std::uint8_t>((word >> 8U) & 0x00FFU);
+            },
+            [](std::uint32_t, std::uint8_t) {}, 1);
+
+        // Coin control ($800030-$800037). Stub: latch the high-byte write so it
+        // doesn't fall through; counters/lockout are not modelled in v1.
+        main_bus.map_mmio(
+            coin_control_base, coin_control_window,
+            [](std::uint32_t) -> std::uint8_t { return 0xFFU; },
+            [this](std::uint32_t address, std::uint8_t value) {
+                if ((address & 1U) == 0U) {
+                    coin_control = value;
                 }
             },
             1);
@@ -247,6 +281,64 @@ namespace mnemos::manifests::capcom_cps1 {
         return base;
     }
 
+    std::uint16_t cps1_system::cps_b_read_word(std::uint8_t offset) const noexcept {
+        // Odd offsets and the absent sentinel never name a readable port.
+        if ((offset & 1U) != 0U) {
+            return 0xFFFFU;
+        }
+        // Board-ID port: a fixed identity value (a board / PAL discriminator the
+        // game's 68K protection check reads back).
+        if (offset == profile.id_offset && profile.id_offset != chips::video::cps_a_b::reg_none) {
+            return profile.id_value;
+        }
+        // 16x16 multiplier: factor1/factor2 are the raw CPS-B registers the 68K
+        // wrote at the profile's factor offsets; the result lo/hi ports return the
+        // product halves. mult_offset = {factor1, factor2, result-lo, result-hi}.
+        const auto raw_reg = [this](std::uint8_t off) -> std::uint16_t {
+            return (off != chips::video::cps_a_b::reg_none && (off & 1U) == 0U)
+                       ? video.cps_b_reg(static_cast<std::uint8_t>(off >> 1U))
+                       : 0U;
+        };
+        const std::uint8_t result_lo_off = profile.mult_offset[2];
+        const std::uint8_t result_hi_off = profile.mult_offset[3];
+        if (result_lo_off != chips::video::cps_a_b::reg_none && offset == result_lo_off) {
+            const std::uint32_t product =
+                static_cast<std::uint32_t>(raw_reg(profile.mult_offset[0])) *
+                static_cast<std::uint32_t>(raw_reg(profile.mult_offset[1]));
+            return static_cast<std::uint16_t>(product & 0xFFFFU);
+        }
+        if (result_hi_off != chips::video::cps_a_b::reg_none && offset == result_hi_off) {
+            const std::uint32_t product =
+                static_cast<std::uint32_t>(raw_reg(profile.mult_offset[0])) *
+                static_cast<std::uint32_t>(raw_reg(profile.mult_offset[1]));
+            return static_cast<std::uint16_t>(product >> 16U);
+        }
+        // No special port at this offset: the raw register (raster read-back is
+        // out of v1, so its offsets fall here and return the raw latch).
+        return video.cps_b_reg(static_cast<std::uint8_t>(offset >> 1U));
+    }
+
+    std::uint16_t cps1_system::system_dsw_word(std::uint32_t word_offset) const noexcept {
+        std::uint8_t input = 0xFFU;
+        switch (word_offset & 3U) {
+        case 0U:
+            input = static_cast<std::uint8_t>(input_sys & 0x00FFU);
+            break;
+        case 1U:
+            input = dip_a;
+            break;
+        case 2U:
+            input = dip_b;
+            break;
+        case 3U:
+            input = dip_c;
+            break;
+        default:
+            break;
+        }
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(input) << 8U) | 0x00FFU);
+    }
+
     void cps1_system::push_cps_a_to_video() noexcept {
         // Name-table bases (object aligned to its table boundary; scroll bases raw).
         video.set_object_base(gfx_ram_base_aligned(cps_a_regs[cps_a_obj_base], object_base_align));
@@ -328,8 +420,13 @@ namespace mnemos::manifests::capcom_cps1 {
             cpu_cycles_per_frame * visible_lines / chips::video::cps_a_b::frame_lines;
 
         push_cps_a_to_video();
-        run_cpus(cpu_visible);                        // 68K + Z80 + sound chips, visible field
-        video.tick(dots_to_vblank);                   // renders + raises the vblank IRQ
+        run_cpus(cpu_visible);      // 68K + Z80 + sound chips, visible field
+        video.tick(dots_to_vblank); // renders + raises the vblank IRQ
+        // Sprite-latch DMA: the hardware snapshots the object table into the
+        // renderer's holding buffer at end-of-frame, double-buffering it for the
+        // next frame's draw. Latch here (right after the render) to reproduce that
+        // one-frame lag in the frame-at-vblank model.
+        video.latch_sprites();
         run_cpus(cpu_cycles_per_frame - cpu_visible); // services the pending vblank IRQ
         video.tick(dots_total - dots_to_vblank);      // finish the frame back to line 0
     }
