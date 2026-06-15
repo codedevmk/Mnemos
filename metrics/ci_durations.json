@@ -1,8 +1,230 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-06-13T04:58:52+00:00",
+  "captured": "2026-06-15T05:07:50+00:00",
   "window_days": 7,
   "runs": [
+    {
+      "id": 27521736847,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 631
+    },
+    {
+      "id": 27521376767,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 622
+    },
+    {
+      "id": 27520324822,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 638
+    },
+    {
+      "id": 27515848751,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 635
+    },
+    {
+      "id": 27515077210,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 608
+    },
+    {
+      "id": 27515037130,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 619
+    },
+    {
+      "id": 27491033268,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 619
+    },
+    {
+      "id": 27490808687,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 623
+    },
+    {
+      "id": 27490727531,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 17
+    },
+    {
+      "id": 27490671870,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 16
+    },
+    {
+      "id": 27488791730,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 15
+    },
+    {
+      "id": 27485007053,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 11
+    },
+    {
+      "id": 27482216829,
+      "event": "push",
+      "conclusion": "failure",
+      "seconds": 13
+    },
+    {
+      "id": 27478438112,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 532
+    },
+    {
+      "id": 27478188120,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 580
+    },
+    {
+      "id": 27463166056,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 566
+    },
+    {
+      "id": 27462969988,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 537
+    },
+    {
+      "id": 27462807316,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 569
+    },
+    {
+      "id": 27462588795,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 546
+    },
+    {
+      "id": 27462071475,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 593
+    },
+    {
+      "id": 27461865418,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 574
+    },
+    {
+      "id": 27461860948,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 555
+    },
+    {
+      "id": 27461640797,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 584
+    },
+    {
+      "id": 27461431473,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 578
+    },
+    {
+      "id": 27461426870,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 586
+    },
+    {
+      "id": 27460614667,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 669
+    },
+    {
+      "id": 27460613335,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 535
+    },
+    {
+      "id": 27460389947,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 742
+    },
+    {
+      "id": 27460387585,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 552
+    },
+    {
+      "id": 27459700893,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 673
+    },
+    {
+      "id": 27459698543,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 589
+    },
+    {
+      "id": 27459546527,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 640
+    },
+    {
+      "id": 27459543382,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 539
+    },
+    {
+      "id": 27459134057,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 524
+    },
+    {
+      "id": 27459131112,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 572
+    },
+    {
+      "id": 27457312974,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 561
+    },
+    {
+      "id": 27457310898,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 582
+    },
     {
       "id": 27455772863,
       "event": "push",
@@ -380,72 +602,6 @@
       "event": "push",
       "conclusion": "success",
       "seconds": 665
-    },
-    {
-      "id": 27327609407,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 501
-    },
-    {
-      "id": 27325702135,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 670
-    },
-    {
-      "id": 27325701210,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 524
-    },
-    {
-      "id": 27324959222,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 539
-    },
-    {
-      "id": 27324958269,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 515
-    },
-    {
-      "id": 27324473416,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 511
-    },
-    {
-      "id": 27324472471,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 520
-    },
-    {
-      "id": 27324031291,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 496
-    },
-    {
-      "id": 27324030485,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 538
-    },
-    {
-      "id": 27322734960,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 12
-    },
-    {
-      "id": 27322728232,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 14
     }
   ]
 }
