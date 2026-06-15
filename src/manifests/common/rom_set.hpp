@@ -45,6 +45,9 @@ namespace mnemos::manifests::common {
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
         std::string board; // board family id, e.g. "irem_m72" (informational)
+        // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
+        // hardware profile by this numeric id; absent on families that don't use it.
+        std::optional<std::uint16_t> cps_b_profile;
         std::vector<rom_set_region> regions;
     };
 

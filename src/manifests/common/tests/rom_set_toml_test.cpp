@@ -65,6 +65,24 @@ fill = 0x00
     CHECK(*main.files[1].crc32 == 0xDEADBEEFU);
     CHECK(decl.regions[1].fill == 0x00U);
     CHECK(decl.regions[1].files.empty());
+    CHECK_FALSE(decl.cps_b_profile.has_value()); // optional key, absent here
+}
+
+TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nboard = \"capcom_cps1\"\n"
+            "cps_b_profile = 24\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->cps_b_profile.has_value());
+        CHECK(*result.value->cps_b_profile == 24U);
+    }
+    SECTION("absent leaves it unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->cps_b_profile.has_value());
+    }
 }
 
 TEST_CASE("rom_set_toml rejects bad declarations with located diagnostics", "[rom_set_toml]") {

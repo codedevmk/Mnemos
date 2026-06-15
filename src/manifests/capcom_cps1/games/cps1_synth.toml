@@ -1,0 +1,49 @@
+# Synthetic CPS1 set -- a non-game placeholder used to exercise the board
+# manifest + the player adapter end-to-end without a real dump. Schema
+# mnemos-romset/1; drop a copy of this file into a set zip as "game.toml" next
+# to the (here invented) region dumps it names.
+#
+# `cps_b_profile` selects the CPS-B board / PAL identity (a hardware id, never a
+# game name); profile 24 carries both an ID protection port and the 16x16
+# multiplier, so the adapter's profile-selection path is observable through a
+# CPS-B protection read-back. The four regions are the CPS1 board's canonical
+# names: the 68000 program (maincpu), the packed graphics (gfx), the sound
+# Z80 program (audiocpu), and the OKIM6295 sample ROM (oki).
+
+[set]
+schema       = "mnemos-romset/1"
+name         = "cps1_synth"
+board        = "capcom_cps1"
+cps_b_profile = 24
+
+[[region]]
+name = "maincpu"
+size = 0x800000
+
+[[region.file]]
+name   = "cps1_synth.prog"
+offset = 0x000000
+
+[[region]]
+name = "gfx"
+size = 0x400
+
+[[region.file]]
+name   = "cps1_synth.gfx"
+offset = 0x000000
+
+[[region]]
+name = "audiocpu"
+size = 0x8000
+
+[[region.file]]
+name   = "cps1_synth.snd"
+offset = 0x000000
+
+[[region]]
+name = "oki"
+size = 0x400
+
+[[region.file]]
+name   = "cps1_synth.oki"
+offset = 0x000000

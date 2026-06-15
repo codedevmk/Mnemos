@@ -1,15 +1,16 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x) with the --rom media (zip
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1) with the --rom media (zip
 // archives are extracted transparently), presents its framebuffer at integer
 // scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
-#include "asset_export.hpp" // --extract-assets: decoded graphics -> PNG + JSON
-#include "audio_export.hpp" // --extract-audio: decoded PCM samples -> WAV + JSON
-#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
-#include "c64_adapter.hpp"  // force_link (the C64 has no cart-header region byte)
+#include "asset_export.hpp"        // --extract-assets: decoded graphics -> PNG + JSON
+#include "audio_export.hpp"        // --extract-audio: decoded PCM samples -> WAV + JSON
+#include "battery_save.hpp"        // .srm load/save (cartridge battery RAM persistence)
+#include "c64_adapter.hpp"         // force_link (the C64 has no cart-header region byte)
+#include "capcom_cps1_adapter.hpp" // force_link (arcade: no cart region byte)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -203,8 +204,10 @@ int main(int argc, char* argv[]) {
         const system_family family = *family_opt;
         // Arcade sets ARE their archive: the adapter resolves the dump
         // entries through the game declaration inside, so no unwrapping.
-        auto loaded = family == system_family::irem_m72 ? load_rom_verbatim(rom_paths.front())
-                                                        : load_rom(rom_paths.front());
+        const bool arcade_family =
+            family == system_family::irem_m72 || family == system_family::capcom_cps1;
+        auto loaded =
+            arcade_family ? load_rom_verbatim(rom_paths.front()) : load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_paths.front().c_str());
             return 1;
@@ -249,8 +252,9 @@ int main(int argc, char* argv[]) {
             // NTSC default set above (also silences -Wswitch on this enum).
             break;
         case system_family::irem_m72:
+        case system_family::capcom_cps1:
             // Arcade boards have no region byte; the adapter reports the
-            // board's own 55 Hz raster through region().
+            // board's own raster through region().
             break;
         }
         const auto video = resolve_video(cart_default);
@@ -269,6 +273,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::segacd::force_link();
         mnemos::apps::player::adapters::sega32x::force_link();
         mnemos::apps::player::adapters::irem_m72::force_link();
+        mnemos::apps::player::adapters::capcom_cps1::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
