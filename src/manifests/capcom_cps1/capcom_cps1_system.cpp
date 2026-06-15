@@ -25,6 +25,10 @@ namespace mnemos::manifests::capcom_cps1 {
         return {};
     }
 
+    cps1_board_params board_params_from_decl(const common::rom_set_decl& decl) {
+        return {.cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U})};
+    }
+
     cps1_system::cps1_system(common::rom_set_image image, cps1_board_params board_params)
         : roms(std::move(image)), params(board_params) {
         // --- main bus: program ROM low, RAM overlays above it ---

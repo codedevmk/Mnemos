@@ -154,6 +154,12 @@ namespace mnemos::manifests::capcom_cps1 {
     // name is unknown.
     [[nodiscard]] cps1_board_params board_params_for(std::string_view set_name);
 
+    // The board parameters carried by a parsed ROM-set declaration: the optional
+    // `[set] cps_b_profile` id selects the CPS-B board / PAL profile (absent => 0,
+    // the chip's legacy default). The single source of truth the player adapter
+    // uses to thread the TOML profile id into assemble_cps1.
+    [[nodiscard]] cps1_board_params board_params_from_decl(const common::rom_set_decl& decl);
+
     // Heap-allocated, never-moved CPS1 board: chips and RAM blocks as value
     // members, the bus holding spans into them, the MMIO closures capturing
     // `this`. The loaded ROM set backs the bus spans, so it must not be mutated
