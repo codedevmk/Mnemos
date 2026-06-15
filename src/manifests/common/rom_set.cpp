@@ -138,4 +138,33 @@ namespace mnemos::manifests::common {
             }};
     }
 
+    std::optional<rom_file_provider> make_zip_rom_provider_from_path(const std::string& path,
+                                                                     bool* unreadable_zip) {
+        if (unreadable_zip != nullptr) {
+            *unreadable_zip = false;
+        }
+        auto bytes = io::read_file(path);
+        if (!bytes.has_value()) {
+            return std::nullopt; // missing / unreadable file
+        }
+        auto provider = make_zip_rom_provider(std::move(*bytes));
+        if (!provider.has_value() && unreadable_zip != nullptr) {
+            *unreadable_zip = true; // read, but not a valid zip
+        }
+        return provider;
+    }
+
+    rom_file_provider make_fallback_rom_provider(rom_file_provider primary,
+                                                 rom_file_provider fallback) {
+        return [primary = std::move(primary), fallback = std::move(fallback)](
+                   std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
+            if (primary) {
+                if (auto bytes = primary(name)) {
+                    return bytes;
+                }
+            }
+            return fallback ? fallback(name) : std::nullopt;
+        };
+    }
+
 } // namespace mnemos::manifests::common

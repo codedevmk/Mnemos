@@ -237,10 +237,10 @@ namespace mnemos::manifests::common {
 
         rom_set_decl decl;
         if (const auto* set = root.get_as<toml::table>("set")) {
-            check_keys(
-                ctx, *set,
-                {"schema", "name", "board", "cps_b_profile", "orientation", "sound", "kabuki"},
-                "[set]");
+            check_keys(ctx, *set,
+                       {"schema", "name", "board", "parent", "cps_b_profile", "orientation",
+                        "sound", "kabuki"},
+                       "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
                     ctx.error("unsupported schema '" + *schema + "' (expected '" +
@@ -253,6 +253,20 @@ namespace mnemos::manifests::common {
             if (set->get("board") != nullptr) {
                 if (auto board = require_string(ctx, *set, "board", "[set]")) {
                     decl.board = std::move(*board);
+                }
+            }
+            // Optional parent set name (MAME-style clone -> parent): the board
+            // adapter loads the shared dumps from the parent set's zip. Absent
+            // => standalone.
+            if (const toml::node* node = set->get("parent")) {
+                if (const auto* value = node->as_string()) {
+                    if (value->get().empty()) {
+                        ctx.error("'parent' in [set] must be a non-empty string", node);
+                    } else {
+                        decl.parent = value->get();
+                    }
+                } else {
+                    ctx.error("'parent' in [set] must be a string", node);
                 }
             }
             // Optional CPS-B board / PAL profile id (capcom_cps1 selects its

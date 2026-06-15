@@ -355,6 +355,7 @@ int main(int argc, char* argv[]) {
                                 .dip_override = dip_arg,
                                 .mapper_override = mapper_arg.value_or(std::string{}),
                                 .disc_path = std::move(disc_path),
+                                .rom_path = rom_paths.front(),
                                 .bios_images = std::move(bios_images)});
         if (system && system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",

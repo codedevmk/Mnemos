@@ -61,6 +61,12 @@ namespace mnemos::manifests::common {
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
         std::string board; // board family id, e.g. "irem_m72" (informational)
+        // Optional parent set name (MAME-style clone -> parent). A clone set's
+        // zip ships only its unique dumps; the shared dumps come from the parent
+        // set's zip. The board adapter composes a fallback provider (the clone's
+        // own files first, then the parent's) -- every file is still CRC-verified
+        // regardless of which zip supplied it. Absent => a standalone set.
+        std::optional<std::string> parent;
         // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
         // hardware profile by this numeric id; absent on families that don't use it.
         std::optional<std::uint16_t> cps_b_profile;
@@ -109,5 +115,20 @@ namespace mnemos::manifests::common {
     // readable zip.
     [[nodiscard]] std::optional<rom_file_provider>
     make_zip_rom_provider(std::vector<std::uint8_t> archive);
+
+    // Open a .zip set from a filesystem path (read_file + make_zip_rom_provider).
+    // nullopt when the path is unreadable; `*unreadable_zip` (when provided) is
+    // set true if the file was read but is not a valid zip, so a caller can tell
+    // "missing" from "corrupt".
+    [[nodiscard]] std::optional<rom_file_provider>
+    make_zip_rom_provider_from_path(const std::string& path, bool* unreadable_zip = nullptr);
+
+    // Compose two providers into one: a name is resolved from `primary` first
+    // and, only if `primary` lacks it, from `fallback`. This is the mechanism
+    // behind MAME-style clone/parent merging -- the clone's zip is `primary`
+    // (its unique dumps win), the parent's zip is `fallback` (the shared ones).
+    // A null sub-provider contributes nothing.
+    [[nodiscard]] rom_file_provider make_fallback_rom_provider(rom_file_provider primary,
+                                                               rom_file_provider fallback);
 
 } // namespace mnemos::manifests::common

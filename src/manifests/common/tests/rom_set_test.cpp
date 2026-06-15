@@ -17,6 +17,7 @@ namespace {
 
     using mnemos::manifests::common::load_rom_set;
     using mnemos::manifests::common::make_directory_rom_provider;
+    using mnemos::manifests::common::make_fallback_rom_provider;
     using mnemos::manifests::common::make_zip_rom_provider;
     using mnemos::manifests::common::rom_file_provider;
     using mnemos::manifests::common::rom_set_decl;
@@ -400,4 +401,66 @@ TEST_CASE("rom_set reports a source slice that exceeds the file", "[rom_set]") {
     REQUIRE(region != nullptr);
     CHECK((*region)[0] == 0x01U);
     CHECK((*region)[1] == 0x02U);
+}
+
+TEST_CASE("rom_set fallback provider resolves clone-first then parent", "[rom_set]") {
+    // The clone/parent merge mechanism: a name is served by the clone provider
+    // when present, otherwise by the parent. A name in both resolves to the
+    // clone's copy (the clone's unique dump wins); an unknown name is nullopt.
+    const std::vector<std::uint8_t> clone_prg{0xC0U, 0xC1U};
+    const std::vector<std::uint8_t> parent_gfx{0xA0U, 0xA1U};
+    const std::vector<std::uint8_t> clone_collide{0x11U};
+    const std::vector<std::uint8_t> parent_collide{0x22U};
+
+    auto clone = map_provider({{"clone.prg", clone_prg}, {"collide.bin", clone_collide}});
+    auto parent = map_provider({{"shared.gfx", parent_gfx}, {"collide.bin", parent_collide}});
+    auto merged = make_fallback_rom_provider(std::move(clone), std::move(parent));
+
+    CHECK(merged("clone.prg") == clone_prg);       // only the clone has it
+    CHECK(merged("shared.gfx") == parent_gfx);     // only the parent has it
+    CHECK(merged("collide.bin") == clone_collide); // both: clone wins
+    CHECK_FALSE(merged("absent.rom").has_value());
+}
+
+TEST_CASE("rom_set fallback provider tolerates a null sub-provider", "[rom_set]") {
+    const std::vector<std::uint8_t> only{0x7AU};
+    // Null primary => fall straight through to the secondary.
+    auto p1 = make_fallback_rom_provider({}, map_provider({{"a", only}}));
+    CHECK(p1("a") == only);
+    CHECK_FALSE(p1("b").has_value());
+    // Null secondary => primary only, no crash on a miss.
+    auto p2 = make_fallback_rom_provider(map_provider({{"a", only}}), {});
+    CHECK(p2("a") == only);
+    CHECK_FALSE(p2("b").has_value());
+}
+
+TEST_CASE("rom_set merges a clone's unique ROM with a parent's shared ROM", "[rom_set]") {
+    // End-to-end clone/parent load: the clone zip supplies its program, the
+    // parent zip the shared gfx; every file is CRC-verified regardless of source.
+    const std::vector<std::uint8_t> clone_prg{0xC0U, 0xC1U, 0xC2U, 0xC3U};
+    const std::vector<std::uint8_t> parent_gfx{0x90U, 0x91U, 0x92U, 0x93U};
+    auto clone = make_zip_rom_provider(make_stored_zip({{"clone.prg", clone_prg}}));
+    auto parent = make_zip_rom_provider(make_stored_zip({{"shared.gfx", parent_gfx}}));
+    REQUIRE(clone.has_value());
+    REQUIRE(parent.has_value());
+    auto merged = make_fallback_rom_provider(std::move(*clone), std::move(*parent));
+
+    rom_set_decl decl;
+    decl.name = "clone";
+    decl.parent = "parent";
+    decl.regions.push_back(
+        {.name = "maincpu",
+         .size = 4U,
+         .fill = 0xFFU,
+         .files = {{.name = "clone.prg", .offset = 0U, .size = 4U, .crc32 = crc32(clone_prg)}}});
+    decl.regions.push_back(
+        {.name = "gfx",
+         .size = 4U,
+         .fill = 0xFFU,
+         .files = {{.name = "shared.gfx", .offset = 0U, .size = 4U, .crc32 = crc32(parent_gfx)}}});
+
+    const auto image = load_rom_set(decl, merged);
+    REQUIRE(image.ok());
+    CHECK(*image.region("maincpu") == clone_prg);
+    CHECK(*image.region("gfx") == parent_gfx);
 }
