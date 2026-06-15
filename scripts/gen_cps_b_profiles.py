@@ -153,12 +153,18 @@ id_to_config[25] = "ps63b"
 # punisher) the games read at boot. IDs 40-42 sit above the reference enum range.
 # (Extra player-3/4 input ports the QS4/QS5 configs also define are not modelled
 # here -- attract/boot does not need them; they are a gameplay refinement.)
+# MB63B (verified from a PAL dump): all four layer types share the full 3-bank
+# range (0x8000 codes per bank). An earlier/lossy table restricted scroll1 to
+# 0x0-0xfff, which garbled slammast's scroll1-heavy screens (its codes reach
+# bank 1); mbombrd's blank scroll1 hid the bug.
+_mb63b_all4 = (
+    GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL1"] |
+    GFX_BITS["CPS1_GFX_SCROLL2"] | GFX_BITS["CPS1_GFX_SCROLL3"]
+)
 mapper_ranges["mb63b"] = [
-    (GFX_BITS["CPS1_GFX_SCROLL1"], 0x00000, 0x00FFF, 0),
-    (GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL2"], 0x01000, 0x07FFF, 0),
-    (GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL2"], 0x08000, 0x0FFFF, 1),
-    (GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL2"], 0x10000, 0x167FF, 2),
-    (GFX_BITS["CPS1_GFX_SCROLL3"], 0x16800, 0x17FFF, 2),
+    (_mb63b_all4, 0x00000, 0x07FFF, 0),
+    (_mb63b_all4, 0x08000, 0x0FFFF, 1),
+    (_mb63b_all4, 0x10000, 0x17FFF, 2),
 ]
 mapper["mb63b"] = ([0x8000, 0x8000, 0x8000, 0], "mb63b")
 config["qs1_tk263b"] = dict(

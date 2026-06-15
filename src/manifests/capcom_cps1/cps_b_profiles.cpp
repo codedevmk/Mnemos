@@ -163,12 +163,10 @@ namespace mnemos::manifests::capcom_cps1 {
             {sc2, 0x8000U, 0xBFFFU, 1U},
             {sc3, 0xC000U, 0xFFFFU, 1U},
         }};
-        constexpr std::array<gfx_bank_range, 5> ranges_mb63b{{
-            {sc1, 0x0000U, 0x0FFFU, 0U},
-            {spr | sc2, 0x1000U, 0x7FFFU, 0U},
-            {spr | sc2, 0x8000U, 0xFFFFU, 1U},
-            {spr | sc2, 0x10000U, 0x167FFU, 2U},
-            {sc3, 0x16800U, 0x17FFFU, 2U},
+        constexpr std::array<gfx_bank_range, 3> ranges_mb63b{{
+            {all4, 0x0000U, 0x7FFFU, 0U},
+            {all4, 0x8000U, 0xFFFFU, 1U},
+            {all4, 0x10000U, 0x17FFFU, 2U},
         }};
         constexpr std::array<gfx_bank_range, 4> ranges_st24m1{{
             {spr, 0x0000U, 0x4FFFU, 0U},
