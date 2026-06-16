@@ -179,6 +179,14 @@ namespace mnemos::manifests::capcom_cps1 {
     inline constexpr std::uint32_t qsound_z80_clock_hz = 8'000'000U;
     inline constexpr std::uint32_t qsound_irq_hz = 250U; // periodic sound-CPU /INT
 
+    // QSound boards expose the RAW (un-Kabuki-decoded) sound program ROM to the
+    // 68K at $F00000-$F0FFFF -- one ROM byte per 68K word ((addr-base)>>1), so the
+    // window covers the program's first 32 KiB (its fixed/encrypted bank). Some
+    // sets checksum it as a protection (e.g. slammast verifies its Kabuki program
+    // here before building attract layouts); serving open bus fails the check.
+    inline constexpr std::uint32_t qsound_prog_window_base = 0xF00000U;
+    inline constexpr std::uint32_t qsound_prog_window_size = 0x10000U;
+
     // C-board I/O on the 3/4-player QSound boards (slammast / mbombrd): player 3/4
     // inputs + a serial 93C46 EEPROM, at $F1C000-$F1C007. The EEPROM lines sit in
     // the low (odd) byte of the $F1C006 word: DI bit0, CLK bit6, CS bit7; the read
