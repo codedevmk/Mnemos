@@ -120,6 +120,25 @@ id_to_config = {}
 for m in re.finditer(r"CPS1_CPS_B_PROFILE_(\w+)\)\s*\{\s*return &k_cps1_cps_b_(\w+);", disp):
     id_to_config[prof_id[m.group(1)]] = m.group(2)
 
+# Which profile id wires a serial 93C46 EEPROM to the CPS-B chip's $80017A port
+# (instead of the QSound C-board's $F1C006). The board reads this flag to route
+# that port to the NVRAM device. Parsed from the reference predicate so it tracks
+# the source rather than being hand-pinned.
+_eeprom = re.search(
+    r"cps1_profile_uses_cps_b_eeprom[^{]*\{[^}]*return\s+profile\s*==\s*CPS1_CPS_B_PROFILE_(\w+)",
+    src,
+)
+eeprom_id = prof_id[_eeprom.group(1)] if _eeprom else None
+
+# Profiles the reference core has since grown that Mnemos defers to a later PR so
+# each lands with its game(s): RCM63B (34) is superseded for now by the Mnemos
+# def_rcm63b row (44, megaman's board); TN2292 (35) has no Mnemos game yet. They
+# are dropped from the census here (not skipped in the source) so a regen stays
+# scoped; re-add by removing the id when its games are brought up.
+SKIP_IDS = {34, 35}
+for _sid in SKIP_IDS:
+    id_to_config.pop(_sid, None)
+
 # Mnemos correction (not in the reference): the upstream core aliases PS63B
 # (profile 25, The Punisher) to the bt3 config, which drops the board's CPS-B-21
 # protection ID port -- punisher's boot reads register $0E expecting $0C00 and
@@ -383,6 +402,8 @@ for pid in ids:
     L.append(f"                .mult_offset = {{{mu}}},")
     if c.get("kludge", 0):
         L.append(f"                .bootleg_kludge = {hx(c['kludge'], 2)},")
+    if pid == eeprom_id:
+        L.append("                .cps_b_eeprom = true,")
     L.append(f"                .mapper = {{.bank_size = {{{bs}}}, .ranges = ranges_{c['mapper']}}},")
     L.append("            },")
 L.append("        }};")
@@ -422,10 +443,17 @@ for pid in ids:
         "{%s, 0x%XU, %s}" % (GTYPE[t], code, ("absent" if mp == ABSENT else "0x%XU" % mp))
         for (t, code, mp) in goldens_for(banks, rs)
     )
-    # bootleg_kludge is the profile_row's trailing member (default 0); only emit
-    # it when set, so non-bootleg rows stay byte-identical.
+    # bootleg_kludge then cps_b_eeprom are the profile_row's trailing members
+    # (defaults 0 / false). They are positional, so an eeprom row must spell out
+    # the (default) kludge before it; otherwise emit only what is set so the
+    # common rows stay byte-identical.
     kludge = c.get("kludge", 0)
-    tail = (", %s" % hx(kludge, 2)) if kludge else ""
+    if pid == eeprom_id:
+        tail = ", %s, true" % hx(kludge, 2)
+    elif kludge:
+        tail = ", %s" % hx(kludge, 2)
+    else:
+        tail = ""
     print("        {%dU, %s, {%s}, %s, {%s}, %s, %s, {%s}, {%s}, %dU, {%s}%s}," % (
         pid, reg(c["layer_control"]), pr, reg(c["palette"]), en, reg(c["id_offset"]),
         hx(c["id_value"], 4), mu, bs, len(rs), gtext, tail))

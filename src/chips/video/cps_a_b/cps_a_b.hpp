@@ -129,6 +129,11 @@ namespace mnemos::chips::video {
             // forces the object port to 0x9100 and nudges the scroll layers (the
             // sf2 hacks); bit 6 reverses sprite draw order.
             std::uint8_t bootleg_kludge{0U};
+            // Set on boards that wire a serial 93C46 EEPROM to the CPS-B chip's
+            // $80017A port (the CP1B1F board) instead of the QSound C-board's
+            // $F1C006. The board reads the flag to route that port to the NVRAM
+            // device; real CPS-B-only boards leave it false (no behaviour change).
+            bool cps_b_eeprom{false};
             // Per-board graphics-code remap (non-owning; empty => identity).
             gfx_mapper mapper{};
         };
