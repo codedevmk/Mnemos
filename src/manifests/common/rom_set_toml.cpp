@@ -240,7 +240,7 @@ namespace mnemos::manifests::common {
         if (const auto* set = root.get_as<toml::table>("set")) {
             check_keys(ctx, *set,
                        {"schema", "name", "board", "parent", "cps_b_profile", "orientation",
-                        "sound", "kabuki"},
+                        "sprite_order", "sound", "kabuki"},
                        "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
@@ -309,6 +309,22 @@ namespace mnemos::manifests::common {
                     }
                 } else {
                     ctx.error("'orientation' in [set] must be a string", node);
+                }
+            }
+            // Optional sprite-list draw order ("ascending" / "descending"); a few
+            // bootleg sets relocate the object list. Absent => ascending.
+            if (const toml::node* node = set->get("sprite_order")) {
+                if (const auto* value = node->as_string()) {
+                    if (value->get() == "descending") {
+                        decl.sprite_order = sprite_draw_order::descending;
+                    } else if (value->get() == "ascending") {
+                        decl.sprite_order = sprite_draw_order::ascending;
+                    } else {
+                        ctx.error("'sprite_order' in [set] must be \"ascending\" or \"descending\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'sprite_order' in [set] must be a string", node);
                 }
             }
             // Optional board-interpreted sound + Kabuki selectors (capcom_cps1

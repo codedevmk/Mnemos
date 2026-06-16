@@ -31,9 +31,10 @@ namespace mnemos::manifests::capcom_cps1 {
     }
 
     cps1_board_params board_params_from_decl(const common::rom_set_decl& decl) {
-        cps1_board_params params{.cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U}),
-                                 .vertical =
-                                     decl.orientation == common::screen_orientation::vertical};
+        cps1_board_params params{
+            .cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U}),
+            .vertical = decl.orientation == common::screen_orientation::vertical,
+            .descending_sprites = decl.sprite_order == common::sprite_draw_order::descending};
         if (decl.sound && *decl.sound == "qsound") {
             params.sound = sound_system::qsound;
         }
@@ -253,6 +254,12 @@ namespace mnemos::manifests::capcom_cps1 {
         if (profile.cps_b_eeprom) {
             eeprom.set_organization(chips::storage::eeprom_93c46::organization::word16);
         }
+
+        // Sprite-list draw order (default ascending; a few bootleg sets relocate
+        // the object list and declare "descending").
+        video.set_sprite_order(params.descending_sprites
+                                   ? chips::video::cps_a_b::sprite_order::descending
+                                   : chips::video::cps_a_b::sprite_order::ascending);
 
         // --- sound subsystem ---
         if (uses_qsound()) {

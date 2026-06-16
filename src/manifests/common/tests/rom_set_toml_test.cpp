@@ -146,6 +146,29 @@ TEST_CASE("rom_set_toml parses the optional orientation", "[rom_set_toml]") {
     }
 }
 
+TEST_CASE("rom_set_toml parses the optional sprite_order", "[rom_set_toml]") {
+    using mnemos::manifests::common::sprite_draw_order;
+    SECTION("descending") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nsprite_order = \"descending\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->sprite_order == sprite_draw_order::descending);
+    }
+    SECTION("absent defaults to ascending") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->sprite_order == sprite_draw_order::ascending);
+    }
+    SECTION("invalid value is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nsprite_order = \"sideways\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
 TEST_CASE("rom_set_toml parses the CPS1 layout keys", "[rom_set_toml]") {
     const auto result = parse_rom_set_decl(R"(
 [set]
