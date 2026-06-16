@@ -124,6 +124,11 @@ namespace mnemos::chips::video {
             std::uint8_t id_offset{reg_none};
             std::uint16_t id_value{0U};
             std::array<std::uint8_t, 4> mult_offset{reg_none, reg_none, reg_none, reg_none};
+            // Bootleg-board behaviour selector (0 = none; real boards leave it 0,
+            // so the engine is byte-for-byte unchanged for them). Low nibble 1
+            // forces the object port to 0x9100 and nudges the scroll layers (the
+            // sf2 hacks); bit 6 reverses sprite draw order.
+            std::uint8_t bootleg_kludge{0U};
             // Per-board graphics-code remap (non-owning; empty => identity).
             gfx_mapper mapper{};
         };

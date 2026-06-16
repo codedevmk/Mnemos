@@ -611,7 +611,11 @@ namespace mnemos::chips::video {
             latch_sprites();
         }
         const std::uint32_t count = sprite_entry_count();
-        if (sprite_order_ == sprite_order::descending) {
+        // A bootleg board may draw the list in reverse (kludge bit 6); otherwise
+        // the board's normal order applies (CPS1 = ascending).
+        const bool reverse = (profile_.bootleg_kludge & 0x40U) != 0U;
+        const sprite_order order = reverse ? sprite_order::descending : sprite_order_;
+        if (order == sprite_order::descending) {
             for (std::uint32_t remaining = count; remaining > 0U; --remaining) {
                 draw_sprite_entry(remaining - 1U, layer_below, flip);
             }
@@ -666,6 +670,7 @@ namespace mnemos::chips::video {
         for (const std::uint8_t off : profile_.mult_offset) {
             writer.u8(off);
         }
+        writer.u8(profile_.bootleg_kludge);
     }
 
     void cps_a_b::load_state(state_reader& reader) {
@@ -709,6 +714,7 @@ namespace mnemos::chips::video {
         for (std::uint8_t& off : profile_.mult_offset) {
             off = reader.u8();
         }
+        profile_.bootleg_kludge = reader.u8();
     }
 
     instrumentation::ichip_introspection& cps_a_b::introspection() noexcept {

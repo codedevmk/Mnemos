@@ -45,6 +45,14 @@ CONFIG_PROFILE = {
     ("CPS_B_21_QS1", "mapper_TK263B"): 40,
 }
 
+# Bootleg/hack boards keyed by the FULL config tuple (they share (cpsb, mapper)
+# with a stock board and differ only in the trailing bootleg_kludge field, so the
+# (cpsb, mapper) map above cannot tell them apart). Profile 51 carries the kludge
+# (the sf2 koryu/m5/m7/yyc hacks).
+KLUDGE_PROFILE = {
+    ("CPS_B_21_DEF", "mapper_S9263B", "0x36", "0", "0", "0x41"): 51,
+}
+
 # clone -> parent
 parent = {}
 for m in re.finditer(r"^GAME\(\s*\d+,\s*(\w+),\s*(\w+),", MAME, re.M):
@@ -143,7 +151,10 @@ def gen(clone):
     # different CPS-B board but the SAME trailing I/O fields (in2/in3/out2/kludge)
     # -> the board-specific profile from CONFIG_PROFILE (the sf2 regional case).
     # Any other difference (e.g. a bootleg kludge) -> skip, needs a new profile.
-    if (ccfg[0], ccfg[1]) in CONFIG_PROFILE and ccfg[2:] == pcfg[2:]:
+    if ccfg in KLUDGE_PROFILE:
+        # A bootleg board distinguished by its full config (incl. bootleg_kludge).
+        profile = str(KLUDGE_PROFILE[ccfg])
+    elif (ccfg[0], ccfg[1]) in CONFIG_PROFILE and ccfg[2:] == pcfg[2:]:
         # The clone's board has a known Mnemos profile -> use it directly. This is
         # authoritative even when the parent toml is profiled differently (the
         # QSound parent wof boots on a DEF profile, but its QS1 clones need the QS1
