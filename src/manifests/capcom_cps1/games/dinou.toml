@@ -1,0 +1,159 @@
+# Cadillacs and Dinosaurs (US 930201) -- Capcom CPS1. Transcribed from the reference part tables; CRCs
+# from the local ROM zips. Clone of dino (parent-merge: shares its graphics/
+# sound/OKI), differing only in the region program ROMs.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "dinou"
+board  = "capcom_cps1"
+parent = "dino"
+cps_b_profile = 28
+sound  = "qsound"
+kabuki = "dino"
+
+[[region]]
+name = "maincpu"
+size = 0x180000
+
+[[region.file]]
+name   = "cdu.23a"
+offset = 0x0
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x7c2543cd
+
+[[region.file]]
+name   = "cdu.22a"
+offset = 0x80000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xfab740a9
+
+[[region.file]]
+name   = "cde_21a.rom"
+offset = 0x100000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x66d23de2
+
+[[region]]
+name = "gfx"
+size = 0x400000
+
+[[region.file]]
+name   = "cd_gfx01.rom"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x8da4f917
+
+[[region.file]]
+name   = "cd_gfx03.rom"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x6c40f603
+
+[[region.file]]
+name   = "cd_gfx02.rom"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x09c8fc2d
+
+[[region.file]]
+name   = "cd_gfx04.rom"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x637ff38f
+
+[[region.file]]
+name   = "cd_gfx05.rom"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x470befee
+
+[[region.file]]
+name   = "cd_gfx07.rom"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x22bfb7a3
+
+[[region.file]]
+name   = "cd_gfx06.rom"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xe7599ac4
+
+[[region.file]]
+name   = "cd_gfx08.rom"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x211b4b15
+
+[[region]]
+name = "audiocpu"
+size = 0x28000
+
+[[region.file]]
+name   = "cd_q.rom"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x20000
+crc32  = 0x605fdb0b
+
+[[region.file]]
+name   = "cd_q.rom"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x18000
+size   = 0x20000
+crc32  = 0x605fdb0b
+
+[[region]]
+name = "qsound"
+size = 0x200000
+
+[[region.file]]
+name   = "cd_q1.rom"
+offset = 0x0
+size   = 0x80000
+crc32  = 0x60927775
+
+[[region.file]]
+name   = "cd_q2.rom"
+offset = 0x80000
+size   = 0x80000
+crc32  = 0x770f4c47
+
+[[region.file]]
+name   = "cd_q3.rom"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x2f273ffc
+
+[[region.file]]
+name   = "cd_q4.rom"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0x2c67821d

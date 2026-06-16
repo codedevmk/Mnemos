@@ -1,0 +1,243 @@
+# Saturday Night Slam Masters (US 930713) -- Capcom CPS1. Transcribed from the reference part tables; CRCs
+# from the local ROM zips. Clone of slammast (parent-merge: shares its graphics/
+# sound/OKI), differing only in the region program ROMs.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "slammasu"
+board  = "capcom_cps1"
+parent = "slammast"
+cps_b_profile = 41
+sound  = "qsound"
+kabuki = "slammast"
+
+[[region]]
+name = "maincpu"
+size = 0x200000
+
+[[region.file]]
+name   = "mbu-23e.rom"
+offset = 0x0
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x224f0062
+
+[[region.file]]
+name   = "mbe_24b.rom"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x95d5e729
+
+[[region.file]]
+name   = "mbe_28b.rom"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0xb1c7cbcb
+
+[[region.file]]
+name   = "mbe_25b.rom"
+offset = 0xc0000
+stride = 2
+size   = 0x20000
+crc32  = 0xa50d3fd4
+
+[[region.file]]
+name   = "mbe_29b.rom"
+offset = 0xc0001
+stride = 2
+size   = 0x20000
+crc32  = 0x08e32e56
+
+[[region.file]]
+name   = "mbe_21a.rom"
+offset = 0x100000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xd5007b05
+
+[[region.file]]
+name   = "mbu-20a.rom"
+offset = 0x180000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xfc848af5
+
+[[region]]
+name = "gfx"
+size = 0x600000
+
+[[region.file]]
+name   = "mb_gfx01.rom"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x41468e06
+
+[[region.file]]
+name   = "mb_gfx03.rom"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xf453aa9e
+
+[[region.file]]
+name   = "mb_gfx02.rom"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x2ffbfea8
+
+[[region.file]]
+name   = "mb_gfx04.rom"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x1eb9841d
+
+[[region.file]]
+name   = "mb_05.bin"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x506b9dc9
+
+[[region.file]]
+name   = "mb_07.bin"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xaff8c2fb
+
+[[region.file]]
+name   = "mb_06.bin"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xb76c70e9
+
+[[region.file]]
+name   = "mb_08.bin"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xe60c9556
+
+[[region.file]]
+name   = "mb_10.bin"
+offset = 0x400000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x97976ff5
+
+[[region.file]]
+name   = "mb_12.bin"
+offset = 0x400002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xb350a840
+
+[[region.file]]
+name   = "mb_11.bin"
+offset = 0x400004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x8fb94743
+
+[[region.file]]
+name   = "mb_13.bin"
+offset = 0x400006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xda810d5f
+
+[[region]]
+name = "audiocpu"
+size = 0x28000
+
+[[region.file]]
+name          = "mb_qa.rom"
+offset        = 0x0
+source_offset = 0x0
+length        = 0x8000
+size          = 0x20000
+crc32         = 0xe21a03c4
+
+[[region.file]]
+name          = "mb_qa.rom"
+offset        = 0x10000
+source_offset = 0x8000
+length        = 0x18000
+size          = 0x20000
+crc32         = 0xe21a03c4
+
+[[region]]
+name = "qsound"
+size = 0x400000
+
+[[region.file]]
+name   = "mb_q1.bin"
+offset = 0x0
+size   = 0x80000
+crc32  = 0x0630c3ce
+
+[[region.file]]
+name   = "mb_q2.bin"
+offset = 0x80000
+size   = 0x80000
+crc32  = 0x354f9c21
+
+[[region.file]]
+name   = "mb_q3.bin"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x7838487c
+
+[[region.file]]
+name   = "mb_q4.bin"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0xab66e087
+
+[[region.file]]
+name   = "mb_q5.bin"
+offset = 0x200000
+size   = 0x80000
+crc32  = 0xc789fef2
+
+[[region.file]]
+name   = "mb_q6.bin"
+offset = 0x280000
+size   = 0x80000
+crc32  = 0xecb81b61
+
+[[region.file]]
+name   = "mb_q7.bin"
+offset = 0x300000
+size   = 0x80000
+crc32  = 0x041e49ba
+
+[[region.file]]
+name   = "mb_q8.bin"
+offset = 0x380000
+size   = 0x80000
+crc32  = 0x59fe702a
