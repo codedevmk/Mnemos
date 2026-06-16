@@ -486,9 +486,26 @@ namespace mnemos::manifests::capcom_cps1 {
     }
 
     void cps1_system::push_cps_a_to_video() noexcept {
+        // Bootleg-board kludge (profile.bootleg_kludge, 0 on real boards => no
+        // change): the sf2 hacks (low nibble 1) read sprites only from object
+        // port 0x9100 and nudge the scroll layers a few pixels. The forced port
+        // lives only in this local copy (re-applied every frame); cps_a_regs is
+        // left untouched -- the reference instead overwrites the shared register.
+        const std::uint8_t kludge_nibble = profile.bootleg_kludge & 0x0FU;
+        std::uint16_t obj_reg = cps_a_regs[cps_a_obj_base];
+        std::int16_t s1off = 0;
+        std::int16_t s2off = 0;
+        std::int16_t s3off = 0;
+        if (kludge_nibble == 1U) {
+            obj_reg = 0x9100U;
+            s1off = -0x0C;
+            s2off = -0x0E;
+            s3off = -0x10;
+        }
+
         // Name-table bases, each aligned to its table boundary: object 0x800,
         // scroll1/2/3 0x4000.
-        video.set_object_base(gfx_ram_base_aligned(cps_a_regs[cps_a_obj_base], object_base_align));
+        video.set_object_base(gfx_ram_base_aligned(obj_reg, object_base_align));
         video.set_scroll1_base(
             gfx_ram_base_aligned(cps_a_regs[cps_a_scroll1_base], scroll_base_align));
         video.set_scroll2_base(
@@ -496,10 +513,14 @@ namespace mnemos::manifests::capcom_cps1 {
         video.set_scroll3_base(
             gfx_ram_base_aligned(cps_a_regs[cps_a_scroll3_base], scroll_base_align));
 
-        // Scroll offsets (signed pixel offsets, passed as raw 16-bit words).
-        video.set_scroll1(cps_a_regs[cps_a_scroll1_x], cps_a_regs[cps_a_scroll1_y]);
-        video.set_scroll2(cps_a_regs[cps_a_scroll2_x], cps_a_regs[cps_a_scroll2_y]);
-        video.set_scroll3(cps_a_regs[cps_a_scroll3_x], cps_a_regs[cps_a_scroll3_y]);
+        // Scroll offsets (signed pixel offsets, passed as raw 16-bit words; the
+        // bootleg kludge nudges each layer by the offsets selected above).
+        video.set_scroll1(static_cast<std::uint16_t>(cps_a_regs[cps_a_scroll1_x] + s1off),
+                          cps_a_regs[cps_a_scroll1_y]);
+        video.set_scroll2(static_cast<std::uint16_t>(cps_a_regs[cps_a_scroll2_x] + s2off),
+                          cps_a_regs[cps_a_scroll2_y]);
+        video.set_scroll3(static_cast<std::uint16_t>(cps_a_regs[cps_a_scroll3_x] + s3off),
+                          cps_a_regs[cps_a_scroll3_y]);
 
         // Scroll2 row-scroll: video-control bit0 enables it; reg4 is the table base
         // (aligned to 0x800) and reg16 the per-line index bias.

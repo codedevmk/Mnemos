@@ -192,7 +192,7 @@ namespace mnemos::manifests::capcom_cps1 {
             {sc3, 0x0000U, 0x7FFFU, 0U},
         }};
 
-        constexpr std::array<cps_b_profile, 36> board_db{{
+        constexpr std::array<cps_b_profile, 37> board_db{{
             // profile 1 (cps_b 01, mapper dm620)
             cps_b_profile{
                 .legacy = false,
@@ -621,6 +621,20 @@ namespace mnemos::manifests::capcom_cps1 {
                 .id_offset = 0x08U,
                 .id_value = 0x0407U,
                 .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 51 (cps_b def_s9263b_k41, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x26U,
+                .priority_offset = {0x28U, 0x2AU, 0x2CU, 0x2EU},
+                .palette_control_offset = 0x30U,
+                .layer_enable_mask = {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+                .id = 51U,
+                .id_offset = reg_none,
+                .id_value = 0x0000U,
+                .mult_offset = {0x00U, 0x02U, 0x04U, 0x06U},
+                .bootleg_kludge = 0x41U,
                 .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
             },
             // profile 101 (cps_b 01_st24m1, mapper st24m1)

@@ -242,6 +242,16 @@ for _pid, (_cn, _io, _iv, _lc, _pr, _pa, _en) in _sf2_boards.items():
                        layer_control=_lc, priority=_pr, palette=_pa, enable=_en, mapper="s9263b")
     id_to_config[_pid] = _cn
 
+# Mnemos addition: the sf2 DEF/S9263B hacks (koryu/m5/m7/yyc) differ from the
+# stock CPS_B_21_DEF board only by a bootleg_kludge (0x41: forced object port
+# 0x9100 + scroll nudge + reverse sprite order).
+config["def_s9263b_k41"] = dict(
+    id_offset=REG_NONE, id_value=0x0000, mult=[0x00, 0x02, 0x04, 0x06],
+    layer_control=0x26, priority=[0x28, 0x2A, 0x2C, 0x2E], palette=0x30,
+    enable=[0x02, 0x04, 0x08, 0x30, 0x30], mapper="s9263b", kludge=0x41,
+)
+id_to_config[51] = "def_s9263b_k41"
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"
@@ -371,6 +381,8 @@ for pid in ids:
     L.append(f"                .id_offset = {reg(c['id_offset'])},")
     L.append(f"                .id_value = {hx(c['id_value'], 4)},")
     L.append(f"                .mult_offset = {{{mu}}},")
+    if c.get("kludge", 0):
+        L.append(f"                .bootleg_kludge = {hx(c['kludge'], 2)},")
     L.append(f"                .mapper = {{.bank_size = {{{bs}}}, .ranges = ranges_{c['mapper']}}},")
     L.append("            },")
 L.append("        }};")
@@ -410,7 +422,11 @@ for pid in ids:
         "{%s, 0x%XU, %s}" % (GTYPE[t], code, ("absent" if mp == ABSENT else "0x%XU" % mp))
         for (t, code, mp) in goldens_for(banks, rs)
     )
-    print("        {%dU, %s, {%s}, %s, {%s}, %s, %s, {%s}, {%s}, %dU, {%s}}," % (
+    # bootleg_kludge is the profile_row's trailing member (default 0); only emit
+    # it when set, so non-bootleg rows stay byte-identical.
+    kludge = c.get("kludge", 0)
+    tail = (", %s" % hx(kludge, 2)) if kludge else ""
+    print("        {%dU, %s, {%s}, %s, {%s}, %s, %s, {%s}, {%s}, %dU, {%s}%s}," % (
         pid, reg(c["layer_control"]), pr, reg(c["palette"]), en, reg(c["id_offset"]),
-        hx(c["id_value"], 4), mu, bs, len(rs), gtext))
+        hx(c["id_value"], 4), mu, bs, len(rs), gtext, tail))
 print(f"// profiles: {len(ids)}  ids: {ids}", file=sys.stderr)
