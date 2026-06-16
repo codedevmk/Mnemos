@@ -586,6 +586,14 @@ namespace mnemos::chips::video {
                         }
                         const std::size_t idx = static_cast<std::size_t>(vy) * visible_width +
                                                 static_cast<std::size_t>(vx);
+                        // First sprite to claim a pixel keeps it (MAME sprite-to-
+                        // sprite priority): a later entry in the list does not
+                        // overwrite an earlier one. A sprite marks its pixels with
+                        // layer 0 (tiles use 1-3, backdrop 0xFF), so a 0 here means
+                        // an earlier sprite already drew this pixel.
+                        if (pixel_layer_[idx] == 0U) {
+                            continue;
+                        }
                         // A high-priority tile pixel directly below the sprite
                         // (the layer drawn just before sprites) occludes it.
                         if (layer_below != -1 &&

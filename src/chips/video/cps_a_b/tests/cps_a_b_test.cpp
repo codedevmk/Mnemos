@@ -464,24 +464,27 @@ TEST_CASE("cps_a_b sprite order decides which overlapping object is on top", "[c
     set_pal(pal, 0U, 1U, 0xFF00U); // bank 0 -> red
     set_pal(pal, 1U, 1U, 0xF0F0U); // bank 1 -> green
 
-    SECTION("ascending: the later entry paints on top") {
+    // MAME sprite-to-sprite priority: the FIRST entry drawn keeps the pixel; a
+    // later overlapping entry does not paint over it. The draw order (ascending =
+    // 0..N, descending = N..0) therefore selects which list entry shows on top.
+    SECTION("ascending: the earlier entry stays on top (first sprite wins)") {
         cps_a_b chip;
         chip.attach_gfx(gfx);
         chip.attach_palette(pal);
         chip.attach_object_ram(obj);
         chip.set_sprite_order(cps_a_b::sprite_order::ascending);
         render_one_frame(chip);
-        REQUIRE(chip.framebuffer().pixels[30U * 384U + 50U] == 0x00FF00U); // entry 1 (green)
+        REQUIRE(chip.framebuffer().pixels[30U * 384U + 50U] == 0xFF0000U); // entry 0 (red)
     }
 
-    SECTION("descending: the earlier entry paints on top") {
+    SECTION("descending: the later entry stays on top (drawn first)") {
         cps_a_b chip;
         chip.attach_gfx(gfx);
         chip.attach_palette(pal);
         chip.attach_object_ram(obj);
         chip.set_sprite_order(cps_a_b::sprite_order::descending);
         render_one_frame(chip);
-        REQUIRE(chip.framebuffer().pixels[30U * 384U + 50U] == 0xFF0000U); // entry 0 (red)
+        REQUIRE(chip.framebuffer().pixels[30U * 384U + 50U] == 0x00FF00U); // entry 1 (green)
     }
 }
 

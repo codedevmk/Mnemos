@@ -368,6 +368,18 @@ namespace mnemos::manifests::capcom_cps1 {
         sound_rom_size = static_cast<std::uint32_t>(sound_rom.size());
         const std::size_t low = std::min<std::size_t>(sound_rom.size(), z80_rom_window);
 
+        // 68K window onto the RAW sound program ROM at $F00000 (one ROM byte per
+        // 68K word). The Kabuki decode (below) writes separate opcode/data streams,
+        // so this region stays the raw/encrypted bytes a protection checksum wants.
+        const std::span<const std::uint8_t> raw_sound_span{sound_rom};
+        main_bus.map_mmio(
+            qsound_prog_window_base, qsound_prog_window_size,
+            [raw_sound_span](std::uint32_t address) -> std::uint8_t {
+                const std::size_t index = (address - qsound_prog_window_base) >> 1U;
+                return index < raw_sound_span.size() ? raw_sound_span[index] : 0xFFU;
+            },
+            [](std::uint32_t, std::uint8_t) {}, 1);
+
         if (params.kabuki) {
             // Decrypt the encrypted low window into the opcode + data streams.
             sound_opcode_rom.assign(low, 0x00U);
