@@ -130,12 +130,14 @@ _eeprom = re.search(
 )
 eeprom_id = prof_id[_eeprom.group(1)] if _eeprom else None
 
-# Profiles the reference core has since grown that Mnemos defers to a later PR so
-# each lands with its game(s): RCM63B (34) is superseded for now by the Mnemos
-# def_rcm63b row (44, megaman's board); TN2292 (35) has no Mnemos game yet. They
-# are dropped from the census here (not skipped in the source) so a regen stays
-# scoped; re-add by removing the id when its games are brought up.
-SKIP_IDS = {34, 35}
+# Profiles the reference core has since grown that Mnemos defers so each lands
+# with its game(s), and that no Mnemos set needs because an existing row already
+# covers the same board: RCM63B (34) == the Mnemos def_rcm63b row (44, megaman);
+# STF29 (111, the reference's sf2 board) == the Mnemos b11_s9263b row (43, sf2 --
+# STF29 and S9263B are byte-identical). (TN2292 (35) IS now carried -- qtono2
+# uses it.) Dropped from the census here (not skipped in the source) so a regen
+# stays scoped; re-add by removing the id when a game needs that exact row.
+SKIP_IDS = {34, 111}
 for _sid in SKIP_IDS:
     id_to_config.pop(_sid, None)
 
