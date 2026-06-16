@@ -1,8 +1,260 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-06-15T05:07:50+00:00",
+  "captured": "2026-06-16T05:09:52+00:00",
   "window_days": 7,
   "runs": [
+    {
+      "id": 27592983634,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 278
+    },
+    {
+      "id": 27592795767,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 306
+    },
+    {
+      "id": 27586541887,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 279
+    },
+    {
+      "id": 27586351851,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 284
+    },
+    {
+      "id": 27585873448,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 322
+    },
+    {
+      "id": 27584336529,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 279
+    },
+    {
+      "id": 27584125313,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 255
+    },
+    {
+      "id": 27583513741,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 291
+    },
+    {
+      "id": 27583270566,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 308
+    },
+    {
+      "id": 27582304106,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 336
+    },
+    {
+      "id": 27582061789,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 306
+    },
+    {
+      "id": 27577083944,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 282
+    },
+    {
+      "id": 27576756094,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 313
+    },
+    {
+      "id": 27575862652,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 328
+    },
+    {
+      "id": 27575400836,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 333
+    },
+    {
+      "id": 27564183493,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 335
+    },
+    {
+      "id": 27562401474,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 319
+    },
+    {
+      "id": 27557896593,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 434
+    },
+    {
+      "id": 27557408784,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 465
+    },
+    {
+      "id": 27555191760,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 318
+    },
+    {
+      "id": 27554152952,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 299
+    },
+    {
+      "id": 27553658064,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 437
+    },
+    {
+      "id": 27553653942,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 301
+    },
+    {
+      "id": 27553503151,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 438
+    },
+    {
+      "id": 27552937835,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 449
+    },
+    {
+      "id": 27552437549,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 298
+    },
+    {
+      "id": 27550061826,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 300
+    },
+    {
+      "id": 27549211561,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 283
+    },
+    {
+      "id": 27547720160,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 329
+    },
+    {
+      "id": 27546854427,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 324
+    },
+    {
+      "id": 27541159112,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 379
+    },
+    {
+      "id": 27540765877,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 318
+    },
+    {
+      "id": 27540363119,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 341
+    },
+    {
+      "id": 27536738109,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 480
+    },
+    {
+      "id": 27536236894,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 802
+    },
+    {
+      "id": 27535335656,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 360
+    },
+    {
+      "id": 27534710089,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 622
+    },
+    {
+      "id": 27534159674,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 657
+    },
+    {
+      "id": 27533575407,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 634
+    },
+    {
+      "id": 27532850853,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 648
+    },
+    {
+      "id": 27527963163,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 586
+    },
+    {
+      "id": 27526608876,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 694
+    },
     {
       "id": 27521736847,
       "event": "push",
@@ -350,258 +602,6 @@
       "event": "push",
       "conclusion": "success",
       "seconds": 549
-    },
-    {
-      "id": 27430985051,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 517
-    },
-    {
-      "id": 27429012391,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 595
-    },
-    {
-      "id": 27428504839,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 533
-    },
-    {
-      "id": 27413139911,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 534
-    },
-    {
-      "id": 27412725514,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 498
-    },
-    {
-      "id": 27412048619,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 512
-    },
-    {
-      "id": 27411939436,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 474
-    },
-    {
-      "id": 27411751855,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 15
-    },
-    {
-      "id": 27394705059,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 608
-    },
-    {
-      "id": 27394400068,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 517
-    },
-    {
-      "id": 27394239108,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 491
-    },
-    {
-      "id": 27394131567,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 541
-    },
-    {
-      "id": 27393858606,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 13
-    },
-    {
-      "id": 27393557760,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 13
-    },
-    {
-      "id": 27391339769,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 528
-    },
-    {
-      "id": 27390208708,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 588
-    },
-    {
-      "id": 27387927290,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 534
-    },
-    {
-      "id": 27385724862,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 729
-    },
-    {
-      "id": 27385718489,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 553
-    },
-    {
-      "id": 27384022609,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 825
-    },
-    {
-      "id": 27384007557,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 702
-    },
-    {
-      "id": 27384002150,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 582
-    },
-    {
-      "id": 27383579133,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 523
-    },
-    {
-      "id": 27380300133,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 514
-    },
-    {
-      "id": 27380218595,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 548
-    },
-    {
-      "id": 27377799306,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 657
-    },
-    {
-      "id": 27377797382,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 511
-    },
-    {
-      "id": 27376996114,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 486
-    },
-    {
-      "id": 27375924830,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 443
-    },
-    {
-      "id": 27375923098,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 586
-    },
-    {
-      "id": 27366118162,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 441
-    },
-    {
-      "id": 27364255502,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 501
-    },
-    {
-      "id": 27355143790,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 488
-    },
-    {
-      "id": 27354643031,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 464
-    },
-    {
-      "id": 27351521454,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 524
-    },
-    {
-      "id": 27350818945,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 487
-    },
-    {
-      "id": 27350327525,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 548
-    },
-    {
-      "id": 27331716118,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 502
-    },
-    {
-      "id": 27331716133,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 2026
-    },
-    {
-      "id": 27328954553,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 503
-    },
-    {
-      "id": 27328954325,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 596
-    },
-    {
-      "id": 27327610965,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 665
     }
   ]
 }
