@@ -41,6 +41,7 @@ namespace {
         std::array<std::uint32_t, 4> bank_size;
         std::size_t range_count;
         std::vector<gfx_golden> goldens;
+        std::uint8_t bootleg_kludge{0U}; // omitted (=> 0) on every non-bootleg row
     };
 
     // Generated from the reference tables (regenerate via scripts/gen_cps_b_profiles.py;
@@ -803,7 +804,8 @@ namespace {
               {gfx::scroll1, 0x4FFFU, 0x14FFFU},
               {gfx::scroll2, 0x2800U, 0xA800U},
               {gfx::scroll2, 0x3FFFU, 0xBFFFU},
-              {gfx::scroll2, 0x9FFFU, absent}}},
+              {gfx::scroll2, 0x9FFFU, absent}},
+             0x41U},
             {101U,
              0x26U,
              {0x28U, 0x2AU, 0x2CU, 0x2EU},
@@ -878,6 +880,7 @@ TEST_CASE("capcom_cps1 census transcribes registers + maps gfx for every profile
         CHECK(p->id_offset == row.id_offset);
         CHECK(p->id_value == row.id_value);
         CHECK(p->mult_offset == row.mult_offset);
+        CHECK(p->bootleg_kludge == row.bootleg_kludge);
         CHECK(p->mapper.bank_size == row.bank_size);
         CHECK(p->mapper.ranges.size() == row.range_count);
         cps_a_b chip;

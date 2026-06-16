@@ -488,7 +488,9 @@ namespace mnemos::manifests::capcom_cps1 {
     void cps1_system::push_cps_a_to_video() noexcept {
         // Bootleg-board kludge (profile.bootleg_kludge, 0 on real boards => no
         // change): the sf2 hacks (low nibble 1) read sprites only from object
-        // port 0x9100 and nudge the scroll layers a few pixels.
+        // port 0x9100 and nudge the scroll layers a few pixels. The forced port
+        // lives only in this local copy (re-applied every frame); cps_a_regs is
+        // left untouched -- the reference instead overwrites the shared register.
         const std::uint8_t kludge_nibble = profile.bootleg_kludge & 0x0FU;
         std::uint16_t obj_reg = cps_a_regs[cps_a_obj_base];
         std::int16_t s1off = 0;

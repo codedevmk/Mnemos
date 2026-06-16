@@ -422,7 +422,11 @@ for pid in ids:
         "{%s, 0x%XU, %s}" % (GTYPE[t], code, ("absent" if mp == ABSENT else "0x%XU" % mp))
         for (t, code, mp) in goldens_for(banks, rs)
     )
-    print("        {%dU, %s, {%s}, %s, {%s}, %s, %s, {%s}, {%s}, %dU, {%s}}," % (
+    # bootleg_kludge is the profile_row's trailing member (default 0); only emit
+    # it when set, so non-bootleg rows stay byte-identical.
+    kludge = c.get("kludge", 0)
+    tail = (", %s" % hx(kludge, 2)) if kludge else ""
+    print("        {%dU, %s, {%s}, %s, {%s}, %s, %s, {%s}, {%s}, %dU, {%s}%s}," % (
         pid, reg(c["layer_control"]), pr, reg(c["palette"]), en, reg(c["id_offset"]),
-        hx(c["id_value"], 4), mu, bs, len(rs), gtext))
+        hx(c["id_value"], 4), mu, bs, len(rs), gtext, tail))
 print(f"// profiles: {len(ids)}  ids: {ids}", file=sys.stderr)

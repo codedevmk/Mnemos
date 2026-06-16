@@ -48,7 +48,10 @@ CONFIG_PROFILE = {
 # Bootleg/hack boards keyed by the FULL config tuple (they share (cpsb, mapper)
 # with a stock board and differ only in the trailing bootleg_kludge field, so the
 # (cpsb, mapper) map above cannot tell them apart). Profile 51 carries the kludge
-# (the sf2 koryu/m5/m7/yyc hacks).
+# (the sf2 koryu/m5/m7/yyc hacks). NOTE: the in2='0x36' element is incidental
+# input-mux wiring, not what selects the video kludge -- a same-board hack with a
+# different in2 would fall through to "needs new profile" (a safe skip, never a
+# mis-emit); add its own row pointing at 51 if one turns up.
 KLUDGE_PROFILE = {
     ("CPS_B_21_DEF", "mapper_S9263B", "0x36", "0", "0", "0x41"): 51,
 }
