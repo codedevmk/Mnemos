@@ -58,6 +58,12 @@ namespace mnemos::manifests::common {
     // horizontal.
     enum class screen_orientation : std::uint8_t { horizontal, vertical };
 
+    // Sprite-list draw order the board renders in (board-interpreted; capcom_cps1
+    // maps it to its video chip). Some bootleg sets relocate the object list and
+    // must be drawn in reverse; absent in the TOML => ascending (the hardware
+    // default for every official set).
+    enum class sprite_draw_order : std::uint8_t { ascending, descending };
+
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
         std::string board; // board family id, e.g. "irem_m72" (informational)
@@ -79,6 +85,9 @@ namespace mnemos::manifests::common {
         // Display orientation (default horizontal); the frontend rotates a
         // vertical set's framebuffer for upright presentation.
         screen_orientation orientation{screen_orientation::horizontal};
+        // Sprite-list draw order (default ascending); a few bootleg sets relocate
+        // the object list and declare "descending". Board-interpreted (capcom_cps1).
+        sprite_draw_order sprite_order{sprite_draw_order::ascending};
         // Optional sound subsystem selector (board-interpreted): capcom_cps1 reads
         // "qsound" to wire its QSound DSP path instead of the OKIM6295 path; absent
         // => the board default.

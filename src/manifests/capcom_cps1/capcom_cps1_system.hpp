@@ -222,6 +222,10 @@ namespace mnemos::manifests::capcom_cps1 {
         // When the QSound sound CPU is Kabuki-encrypted, which game's keys decrypt
         // its program ($0000-$7FFF); absent => the program is plain.
         std::optional<kabuki_game> kabuki{};
+        // Draw the sprite list back-to-front (a few bootleg sets relocate the
+        // object list); false => the hardware default (ascending), every official
+        // set. The board threads this to the video chip's sprite_order.
+        bool descending_sprites{false};
     };
 
     // The board parameters for a declared set name; the default params when the
