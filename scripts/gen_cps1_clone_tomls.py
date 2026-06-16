@@ -38,6 +38,11 @@ CONFIG_PROFILE = {
     ("CPS_B_14", "mapper_STF29"): 48, ("CPS_B_14", "mapper_S9263B"): 48,
     ("CPS_B_15", "mapper_STF29"): 49, ("CPS_B_15", "mapper_S9263B"): 49,
     ("CPS_B_17", "mapper_STF29"): 50, ("CPS_B_17", "mapper_S9263B"): 50,
+    # Regional clones that reuse an existing profile: varthu's VA63B PAL is
+    # byte-identical to varth's VA24B (profile 104); wofa runs the stock DEF board
+    # (profile 29) rather than its parent wof's QS1.
+    ("CPS_B_04", "mapper_VA63B"): 104,
+    ("CPS_B_21_DEF", "mapper_TK263B"): 29,
     # The QSound "QS1" board (wofu/wofj). The wof parent boots on a DEF profile
     # (29) because its program reads the multiply-protection, but the US/JP
     # revisions read the QS1 protection and need the QS1 profile (40) -- verified
