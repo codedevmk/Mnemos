@@ -56,6 +56,12 @@ namespace mnemos::manifests::capcom_cps1 {
     inline constexpr std::uint32_t cps_b_reg_size = 0x40U;
     inline constexpr std::size_t cps_a_reg_count = 32U;
 
+    // The CP1B1F board wires a serial 93C46 EEPROM to the CPS-B chip at $80017A
+    // (inside the CPS-B register window). Only boards whose active profile sets
+    // cps_b_eeprom route this word to the NVRAM device; the low (odd) byte
+    // carries the EEPROM control lines, the read returns DO in bit0.
+    inline constexpr std::uint32_t cps_b_eeprom_addr = 0x80017AU;
+
     // Controls / DIP read windows. The player-input word (P2 high byte, P1 low
     // byte) mirrors across $800000-$800007; the system word + the three DIP-switch
     // words sit at $800018-$80001F (word 0 = system inputs, words 1-3 = DIP A/B/C,
@@ -183,9 +189,13 @@ namespace mnemos::manifests::capcom_cps1 {
     inline constexpr std::uint32_t qsound_in3_addr = 0xF1C002U;    // player 4
     inline constexpr std::uint32_t qsound_coin2_addr = 0xF1C004U;  // coin control 2 (stub)
     inline constexpr std::uint32_t qsound_eeprom_addr = 0xF1C006U; // serial 93C46
-    inline constexpr std::uint8_t qsound_eeprom_di = 0x01U;
-    inline constexpr std::uint8_t qsound_eeprom_clk = 0x40U;
-    inline constexpr std::uint8_t qsound_eeprom_cs = 0x80U;
+
+    // Serial 93C46 pin mapping in the EEPROM control byte, shared by the QSound
+    // C-board port ($F1C006) and the CP1B1F board's CPS-B port ($80017A): DI
+    // bit0, CLK bit6, CS bit7; the read returns the device DO in bit0.
+    inline constexpr std::uint8_t eeprom_di = 0x01U;
+    inline constexpr std::uint8_t eeprom_clk = 0x40U;
+    inline constexpr std::uint8_t eeprom_cs = 0x80U;
 
     // Which sound board the set is wired for: the YM2151 + OKIM6295 path (the
     // CPS1 default) or the QSound DL-1425 path (later CPS1 + all of CPS2).

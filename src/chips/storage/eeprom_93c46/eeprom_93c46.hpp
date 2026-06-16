@@ -35,6 +35,15 @@ namespace mnemos::chips::storage {
             store_.fill(0xFFU);
         }
 
+        // Reselect the ORG pin level before use. The pin is strapped on the board,
+        // so a host that only learns the strap after construction (e.g. once its
+        // board profile resolves) sets it here; this resets the serial state but
+        // preserves the backing store. Same org family (93C46) either way.
+        void set_organization(organization org) noexcept {
+            org_ = org;
+            reset();
+        }
+
         // Backing store (erased state is 0xFF), exposed for .srm persistence. Words
         // are little-endian: word w occupies bytes [w*2] (low) and [w*2+1] (high).
         [[nodiscard]] std::span<std::uint8_t> bytes() noexcept { return store_; }

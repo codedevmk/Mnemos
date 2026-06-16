@@ -155,3 +155,19 @@ TEST_CASE("eeprom_93c46 reset returns to standby with DO released") {
     CHECK(e.data_out());
     CHECK_FALSE(e.chip_select());
 }
+
+TEST_CASE("eeprom_93c46 set_organization restraps a byte8 device to 16-bit (CP1B1F board)") {
+    // The CP1B1F board (e.g. pang3) straps ORG high (16-bit: 64 x 16, an 8-bit
+    // opcode of 2 command + 6 address bits). A host that constructs the device
+    // for the 8-bit QSound strap and only later learns it is on a CP1B1F board
+    // restraps via set_organization; the mw_host's 8-bit-opcode / 16-bit-word
+    // protocol must then round-trip (it would misalign by one bit in 8-bit org).
+    eeprom_93c46 e{eeprom_93c46::organization::byte8};
+    e.set_organization(eeprom_93c46::organization::word16);
+    mw_host h{e};
+    h.ewen();
+    h.write_word(7, 0xC0DEU);
+    CHECK(h.read_word(7) == 0xC0DEU);
+    CHECK(e.bytes()[14] == 0xDEU); // word 7 low byte
+    CHECK(e.bytes()[15] == 0xC0U); // word 7 high byte
+}

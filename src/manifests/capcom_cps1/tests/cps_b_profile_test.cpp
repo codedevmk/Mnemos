@@ -42,6 +42,7 @@ namespace {
         std::size_t range_count;
         std::vector<gfx_golden> goldens;
         std::uint8_t bootleg_kludge{0U}; // omitted (=> 0) on every non-bootleg row
+        bool cps_b_eeprom{false};        // omitted (=> false) on every non-EEPROM row
     };
 
     // Generated from the reference tables (regenerate via scripts/gen_cps_b_profiles.py;
@@ -521,6 +522,27 @@ namespace {
               {gfx::scroll3, 0x1800U, 0x1800U},
               {gfx::scroll3, 0x1FFFU, 0x1FFFU},
               {gfx::scroll3, 0x2FFFU, absent}}},
+            {33U,
+             0x26U,
+             {0x28U, 0x2AU, 0x2CU, 0x2EU},
+             0x30U,
+             {0x02U, 0x04U, 0x08U, 0x30U, 0x30U},
+             reg_none,
+             0x0000U,
+             {0x00U, 0x02U, 0x04U, 0x06U},
+             {0x10000U, 0U, 0U, 0U},
+             1U,
+             {{gfx::sprites, 0x0U, 0x0U},
+              {gfx::sprites, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll1, 0x0U, 0x0U},
+              {gfx::scroll1, 0xFFFFU, 0xFFFFU},
+              {gfx::scroll2, 0x0U, 0x0U},
+              {gfx::scroll2, 0x7FFFU, 0x7FFFU},
+              {gfx::scroll3, 0x0U, 0x0U},
+              {gfx::scroll3, 0x1FFFU, 0x1FFFU},
+              {gfx::sprites, 0x8FFFU, absent}},
+             0x00U,
+             true},
             {40U,
              0x22U,
              {0x24U, 0x26U, 0x28U, 0x2AU},
@@ -881,6 +903,7 @@ TEST_CASE("capcom_cps1 census transcribes registers + maps gfx for every profile
         CHECK(p->id_value == row.id_value);
         CHECK(p->mult_offset == row.mult_offset);
         CHECK(p->bootleg_kludge == row.bootleg_kludge);
+        CHECK(p->cps_b_eeprom == row.cps_b_eeprom);
         CHECK(p->mapper.bank_size == row.bank_size);
         CHECK(p->mapper.ranges.size() == row.range_count);
         cps_a_b chip;

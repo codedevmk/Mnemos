@@ -95,6 +95,13 @@ namespace mnemos::manifests::capcom_cps1 {
         main_bus.map_mmio(
             cps_b_reg_base, cps_b_reg_size,
             [this](std::uint32_t address) -> std::uint8_t {
+                if (profile.cps_b_eeprom && address >= cps_b_eeprom_addr &&
+                    address < cps_b_eeprom_addr + 2U) {
+                    // CP1B1F EEPROM data-out in bit0 of the low (odd) byte.
+                    return (address & 1U) != 0U
+                               ? static_cast<std::uint8_t>(eeprom.data_out() ? 0x01U : 0x00U)
+                               : 0x00U;
+                }
                 const std::uint8_t offset =
                     static_cast<std::uint8_t>((address - cps_b_reg_base) & 0xFEU);
                 const std::uint16_t word = cps_b_read_word(offset);
@@ -102,6 +109,15 @@ namespace mnemos::manifests::capcom_cps1 {
                                             : static_cast<std::uint8_t>(word);
             },
             [this](std::uint32_t address, std::uint8_t value) {
+                if (profile.cps_b_eeprom && address >= cps_b_eeprom_addr &&
+                    address < cps_b_eeprom_addr + 2U) {
+                    // CP1B1F EEPROM control in the low (odd) byte: CS bit7, CLK bit6, DI bit0.
+                    if ((address & 1U) != 0U) {
+                        eeprom.update((value & eeprom_cs) != 0U, (value & eeprom_clk) != 0U,
+                                      (value & eeprom_di) != 0U);
+                    }
+                    return;
+                }
                 const std::uint8_t idx =
                     static_cast<std::uint8_t>((address - cps_b_reg_base) >> 1U);
                 const std::uint16_t word = video.cps_b_reg(idx);
@@ -159,9 +175,8 @@ namespace mnemos::manifests::capcom_cps1 {
                 [this](std::uint32_t address, std::uint8_t value) {
                     if (address == qsound_eeprom_addr + 1U) {
                         // EEPROMOUT (low/odd byte): DI bit0, CLK bit6, CS bit7.
-                        eeprom.update((value & qsound_eeprom_cs) != 0U,
-                                      (value & qsound_eeprom_clk) != 0U,
-                                      (value & qsound_eeprom_di) != 0U);
+                        eeprom.update((value & eeprom_cs) != 0U, (value & eeprom_clk) != 0U,
+                                      (value & eeprom_di) != 0U);
                     }
                 },
                 1);
@@ -230,6 +245,14 @@ namespace mnemos::manifests::capcom_cps1 {
         profile = profile_for_id(params.cps_b_profile_id)
                       .value_or(chips::video::cps_a_b::cps_b_profile{});
         video.set_cps_b_profile(profile);
+
+        // The CP1B1F board straps the serial 93C46 ORG pin high (16-bit org:
+        // 64 x 16, 6-bit address) -- a wider word than the QSound C-board's
+        // 8-bit strap. Select it now that the profile is resolved; the device
+        // defaults to the 8-bit org the QSound boards use.
+        if (profile.cps_b_eeprom) {
+            eeprom.set_organization(chips::storage::eeprom_93c46::organization::word16);
+        }
 
         // --- sound subsystem ---
         if (uses_qsound()) {
