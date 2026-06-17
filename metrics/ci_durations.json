@@ -1,8 +1,152 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-06-16T05:09:52+00:00",
+  "captured": "2026-06-17T05:07:43+00:00",
   "window_days": 7,
   "runs": [
+    {
+      "id": 27666127646,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 641
+    },
+    {
+      "id": 27665946103,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 290
+    },
+    {
+      "id": 27663634823,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 294
+    },
+    {
+      "id": 27663418822,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 355
+    },
+    {
+      "id": 27663036897,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 279
+    },
+    {
+      "id": 27662583560,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 744
+    },
+    {
+      "id": 27662100229,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 298
+    },
+    {
+      "id": 27661898645,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 331
+    },
+    {
+      "id": 27660960269,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 314
+    },
+    {
+      "id": 27660746607,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 314
+    },
+    {
+      "id": 27650631591,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 661
+    },
+    {
+      "id": 27650367234,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 278
+    },
+    {
+      "id": 27640353422,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 330
+    },
+    {
+      "id": 27640049392,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 292
+    },
+    {
+      "id": 27631624395,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 615
+    },
+    {
+      "id": 27631234020,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 341
+    },
+    {
+      "id": 27619749181,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 308
+    },
+    {
+      "id": 27619340180,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 394
+    },
+    {
+      "id": 27601670040,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 263
+    },
+    {
+      "id": 27601380235,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 321
+    },
+    {
+      "id": 27599861903,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 286
+    },
+    {
+      "id": 27599608749,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 282
+    },
+    {
+      "id": 27598394291,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 307
+    },
+    {
+      "id": 27598143489,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 332
+    },
     {
       "id": 27592983634,
       "event": "push",
@@ -458,150 +602,6 @@
       "event": "push",
       "conclusion": "success",
       "seconds": 524
-    },
-    {
-      "id": 27459131112,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 572
-    },
-    {
-      "id": 27457312974,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 561
-    },
-    {
-      "id": 27457310898,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 582
-    },
-    {
-      "id": 27455772863,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 589
-    },
-    {
-      "id": 27455770190,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 505
-    },
-    {
-      "id": 27454641538,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 610
-    },
-    {
-      "id": 27454637154,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 525
-    },
-    {
-      "id": 27452978382,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 579
-    },
-    {
-      "id": 27452955369,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 507
-    },
-    {
-      "id": 27448952602,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 525
-    },
-    {
-      "id": 27448598465,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 527
-    },
-    {
-      "id": 27443237307,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 499
-    },
-    {
-      "id": 27442656381,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 608
-    },
-    {
-      "id": 27442596191,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 545
-    },
-    {
-      "id": 27442076501,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 608
-    },
-    {
-      "id": 27439826779,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 534
-    },
-    {
-      "id": 27439332549,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 579
-    },
-    {
-      "id": 27438132553,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 561
-    },
-    {
-      "id": 27437617760,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 597
-    },
-    {
-      "id": 27437564113,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 527
-    },
-    {
-      "id": 27437053793,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 568
-    },
-    {
-      "id": 27433370971,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 614
-    },
-    {
-      "id": 27432884615,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 537
-    },
-    {
-      "id": 27431569993,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 549
     }
   ]
 }
