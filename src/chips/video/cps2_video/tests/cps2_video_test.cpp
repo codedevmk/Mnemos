@@ -299,6 +299,66 @@ TEST_CASE("cps2 video draws a sprite from object RAM", "[cps2_video]") {
     CHECK(video.framebuffer().pixels[0] == 0x00000000U); // backdrop shows through
 }
 
+TEST_CASE("cps2 video decodes the CPS-B layer order + sprite priority masks", "[cps2_video]") {
+    std::array<int, 4> raw{};
+    // A zero control word selects the default layer order.
+    cps2_video::decode_layer_control(0U, raw);
+    CHECK(raw == std::array<int, 4>{3, 2, 0, 1});
+
+    // Per-slot ids come from bits 6/8/10/12.
+    cps2_video::decode_layer_control(0x0E40U, raw);
+    CHECK(raw == std::array<int, 4>{1, 2, 3, 0});
+
+    std::array<int, 3> scroll{};
+    std::array<std::uint16_t, 8> masks{};
+    cps2_video::build_sprite_priority_masks(0U, raw, scroll, masks);
+    CHECK(scroll == std::array<int, 3>{1, 2, 3}); // no disabled slot -> no collapse
+    CHECK(masks[0] == 0x00FFU);                   // priority-0 sprites sit behind everything
+
+    // A disabled (id 0) slot carries the following layer forward.
+    cps2_video::decode_layer_control(0x18C0U, raw);
+    CHECK(raw == std::array<int, 4>{3, 0, 2, 1});
+    cps2_video::build_sprite_priority_masks(0U, raw, scroll, masks);
+    CHECK(scroll == std::array<int, 3>{3, 2, 1});
+}
+
+TEST_CASE("cps2 video honours the CPS-B layer order when compositing scrolls", "[cps2_video]") {
+    cps2_video video;
+    std::vector<std::uint8_t> vram(0x20000U, 0U);
+    // scroll1 pal 32 pen 0xA -> byte 0x414 = red; scroll2 pal 64 pen 0xA -> byte
+    // 0x814 = green. Both layers cover pixel (0,0) with an opaque tile, so the
+    // front layer (per the CPS-B order) wins.
+    put16(vram, 0x10000U + 0x414U, 0xFF00U); // scroll1 red
+    put16(vram, 0x10000U + 0x814U, 0xF0F0U); // scroll2 green
+    put16(vram, 0x0200U, 0xFFFFU);           // scroll3 transparent entry 0
+    video.attach_video_ram(vram);
+
+    std::vector<std::uint8_t> gfx(0x800000U + 128U, 0U); // code 0 tile, texel (0,0) pen 0xA
+    gfx[0x800000U + 0U] = 0x80U;
+    gfx[0x800000U + 2U] = 0x80U;
+    video.attach_gfx(gfx);
+
+    video.set_scroll1_base(0x0000U);
+    video.set_scroll2_base(0x0000U);
+    video.set_scroll3_base(0x0200U);
+    video.set_scroll1(0xFFC0U, 0xFFF0U);
+    video.set_scroll2(0xFFC0U, 0xFFF0U);
+    video.set_scroll3(0xFFC0U, 0xFFF0U);
+    video.set_display_enable(true);
+
+    // layercontrol enabling scroll1+scroll2, order slot0=scroll2 (back), slot1=
+    // scroll1 (front): bits 6-7 = 2 (scroll2), bits 8-9 = 1 (scroll1). Enable bits
+    // 0x02|0x04. -> scroll1 in front -> pixel (0,0) is red.
+    video.set_cps_b_reg(0x13U, static_cast<std::uint16_t>((2U << 6U) | (1U << 8U) | 0x06U));
+    video.render(0x10000U, 0x003FU);
+    CHECK(video.framebuffer().pixels[0] == 0x00FF0000U);
+
+    // Swap the order: slot0=scroll1 (back), slot1=scroll2 (front) -> green wins.
+    video.set_cps_b_reg(0x13U, static_cast<std::uint16_t>((1U << 6U) | (2U << 8U) | 0x06U));
+    video.render(0x10000U, 0x003FU);
+    CHECK(video.framebuffer().pixels[0] == 0x0000FF00U);
+}
+
 TEST_CASE("cps2 video save/load round-trips the palette + frame index", "[cps2_video]") {
     cps2_video video;
     std::vector<std::uint8_t> vram(0x10000U, 0U);

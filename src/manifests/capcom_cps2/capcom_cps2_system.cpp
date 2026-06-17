@@ -335,6 +335,9 @@ namespace mnemos::manifests::capcom_cps2 {
         // sprite x/y coordinate base comes from control regs 0x08/0x0A.
         video_.set_object_base(static_cast<std::uint32_t>(object_bank_ & 1U) * object_bank_bytes);
         video_.set_sprite_offsets(control_reg_word(0x08U), control_reg_word(0x0AU));
+        // Priority compositor input: the object priority-control word (control reg
+        // 0x04). Scroll layer enable comes from the CPS-B layer-control word.
+        video_.set_object_priority(control_reg_word(0x04U));
         video_.set_scroll1_base(
             video_ram_base_aligned(cps_a_regs_[cps_a_scroll1_base], scroll_base_align));
         video_.set_scroll2_base(
