@@ -103,6 +103,18 @@ multiple independent open-source implementations.
   keyed by the numeric CPS-B profile / PAL identity, never a game name, was
   transcribed mechanically to avoid error, and is cross-checked against an
   independent reimplementation of the mapper algorithm. No code was copied.
+- **Capcom CPS2 68000 opcode cipher** — the CPS-2 board encrypts the 68000
+  instruction stream with two 4-round Feistel networks keyed by the address and a
+  64-bit master key. The algorithm and its s-box constants are the publicly
+  documented result of the CPS-2 hardware reverse-engineering, originally
+  published in MAME's `cps2crypt.cpp` under the **BSD-3-Clause** license
+  (copyright-holders: Paul Leaman, Andreas Naive, Nicola Salmoria, Charles
+  MacDonald; the encryption was broken by Andreas Naive). Mnemos's reimplementation
+  (`src/manifests/capcom_cps2/cps2_crypto.cpp`) was transcribed from that
+  documented algorithm via the author's first-party Emu reference core (see "Code
+  adapted from sibling first-party projects"), restructured into Mnemos style, and
+  cross-checked against the reference's output as a golden vector in its unit test.
+  The BSD-3-Clause attribution above is retained here per that license.
 
 ## Cross-check emulators
 
