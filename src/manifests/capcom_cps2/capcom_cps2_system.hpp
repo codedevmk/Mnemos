@@ -146,8 +146,10 @@ namespace mnemos::manifests::capcom_cps2 {
         [[nodiscard]] chips::video::cps2_video& video() noexcept { return video_; }
         [[nodiscard]] const chips::video::cps2_video& video() const noexcept { return video_; }
         [[nodiscard]] chips::cpu::z80& sound_cpu() noexcept { return sound_cpu_; }
+        [[nodiscard]] chips::audio::qsound& qsound_dsp() noexcept { return qdsp_; }
         [[nodiscard]] topology::bus& sound_bus() noexcept { return sound_bus_; }
         [[nodiscard]] bool has_sound() const noexcept { return sound_rom_size_ > 0U; }
+        [[nodiscard]] const common::rom_set_image& rom_set() const noexcept { return roms; }
         [[nodiscard]] std::uint64_t vblank_irq_raised() const noexcept {
             return vblank_irq_raised_;
         }
