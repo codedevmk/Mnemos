@@ -59,6 +59,46 @@ TEST_CASE("bus without an opcode overlay fetches opcodes from read8") {
     CHECK(b.fetch_opcode8(0x0001U) == b.read8(0x0001U)); // default: identical
 }
 
+TEST_CASE("bus opcode overlay serves the 16-bit BE opcode fetch + direct span") {
+    // The m68000 / CPS-2 case: instruction fetches see the decrypted opcode image,
+    // data reads see the encrypted ROM at the same address.
+    const std::array<std::uint8_t, 8> data_rom{0xDAU, 0x7AU, 0xDDU, 0x33U,
+                                               0xEEU, 0x55U, 0xFFU, 0x66U};
+    const std::array<std::uint8_t, 8> opcode_rom{0x4EU, 0x71U, 0x60U, 0xFEU,
+                                                 0x12U, 0x34U, 0x56U, 0x78U};
+    bus b(24U);
+    b.map_rom(0x000000U, std::span<const std::uint8_t>(data_rom));
+    b.map_opcode_rom(0x000000U, std::span<const std::uint8_t>(opcode_rom));
+
+    // 16-bit BE: data vs opcode at the same address.
+    CHECK(b.read16_be(0x000002U) == 0xDD33U);
+    CHECK(b.fetch16_be_opcode(0x000002U) == 0x60FEU);
+
+    // direct_opcode_span returns the decrypted image; direct_read_span the data.
+    mnemos::chips::ibus::direct_span op{};
+    REQUIRE(b.direct_opcode_span(0x000004U, op));
+    CHECK(op.data[0x000004U - op.start] == 0x12U);
+    mnemos::chips::ibus::direct_span dat{};
+    REQUIRE(b.direct_read_span(0x000004U, dat));
+    CHECK(dat.data[0x000004U - dat.start] == 0xEEU);
+
+    // Outside the overlay, the opcode path == the data path.
+    std::array<std::uint8_t, 4> ram{};
+    b.map_ram(0x800000U, ram);
+    b.write16_be(0x800000U, 0xABCDU);
+    CHECK(b.fetch16_be_opcode(0x800000U) == 0xABCDU);
+}
+
+TEST_CASE("bus without an opcode overlay: 16-bit opcode fetch == data read") {
+    const std::array<std::uint8_t, 4> rom{0x12U, 0x34U, 0x56U, 0x78U};
+    bus b(24U);
+    b.map_rom(0x000000U, std::span<const std::uint8_t>(rom));
+    CHECK(b.fetch16_be_opcode(0x000002U) == b.read16_be(0x000002U)); // default: identical
+    mnemos::chips::ibus::direct_span a{};
+    mnemos::chips::ibus::direct_span c{};
+    CHECK(b.direct_opcode_span(0x000000U, a) == b.direct_read_span(0x000000U, c));
+}
+
 TEST_CASE("bus MMIO routes to the supplied handlers") {
     std::uint8_t last_write = 0U;
     const std::uint8_t reg_value = 0x5AU;

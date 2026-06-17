@@ -82,6 +82,11 @@ namespace mnemos::topology {
         void write8(std::uint32_t address, std::uint8_t value) override;
         // Serves the opcode overlay (if mapped over `address`), else read8.
         [[nodiscard]] std::uint8_t fetch_opcode8(std::uint32_t address) override;
+        // Wide opcode-fetch counterparts (the 16-bit BE cores: m68000). Serve the
+        // opcode overlay when mapped over `address`, else the normal data path.
+        [[nodiscard]] std::uint16_t fetch16_be_opcode(std::uint32_t address) override;
+        [[nodiscard]] bool direct_opcode_span(std::uint32_t address,
+                                              chips::ibus::direct_span& out) override;
 
         // Wide big-endian accesses: a single fast-span resolution when the whole
         // access fits one cached RAM/ROM span and no observer is installed;
