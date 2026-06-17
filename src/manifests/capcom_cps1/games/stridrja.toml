@@ -1,0 +1,175 @@
+# Strider Hiryu (Japan) -- Capcom CPS1 clone of strider (parent-merge). Transcribed from the
+# reference part tables; CRCs from the local zips (clone-unique from stridrja.zip,
+# shared from strider.zip). Shares the parent's gfx ROMs, so it reuses the
+# parent's CPS-B profile (101).
+
+[set]
+schema = "mnemos-romset/1"
+name   = "stridrja"
+board  = "capcom_cps1"
+parent = "strider"
+cps_b_profile = 101
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "sth36.bin"
+offset = 0x0
+stride = 2
+size   = 0x20000
+crc32  = 0x53c7b006
+
+[[region.file]]
+name   = "sth42.bin"
+offset = 0x1
+stride = 2
+size   = 0x20000
+crc32  = 0x4037f65f
+
+[[region.file]]
+name   = "sth37.bin"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x80e8877d
+
+[[region.file]]
+name   = "sth43.bin"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x6b3fa466
+
+[[region.file]]
+name   = "sth34.bin"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0xbea770b5
+
+[[region.file]]
+name   = "sth40.bin"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0x43b922dc
+
+[[region.file]]
+name   = "sth35.bin"
+offset = 0xc0000
+stride = 2
+size   = 0x20000
+crc32  = 0x5cc429da
+
+[[region.file]]
+name   = "sth41.bin"
+offset = 0xc0001
+stride = 2
+size   = 0x20000
+crc32  = 0x50af457f
+
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name   = "strider.09"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x10000
+crc32  = 0x2ed403bc
+
+[[region.file]]
+name   = "strider.09"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x8000
+size   = 0x10000
+crc32  = 0x2ed403bc
+
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "strider.18"
+offset = 0x0
+size   = 0x20000
+crc32  = 0x4386bc80
+
+[[region.file]]
+name   = "strider.19"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x444536d7
+
+[[region]]
+name = "gfx"
+size = 0x400000
+
+[[region.file]]
+name   = "st-2.8a"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4eee9aea
+
+[[region.file]]
+name   = "st-11.10a"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x2d7f21e4
+
+[[region.file]]
+name   = "st-5.4a"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x7705aa46
+
+[[region.file]]
+name   = "st-9.6a"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x5b18b722
+
+[[region.file]]
+name   = "st-1.7a"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x005f000b
+
+[[region.file]]
+name   = "st-10.9a"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xb9441519
+
+[[region.file]]
+name   = "st-4.3a"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xb7d04e8b
+
+[[region.file]]
+name   = "st-8.5a"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x6b4713b4

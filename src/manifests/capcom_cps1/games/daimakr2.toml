@@ -1,0 +1,121 @@
+# Daimakaimura (Japan Resale Ver.) -- Capcom CPS1 clone of ghouls (parent-merge). Transcribed from the
+# reference part tables; CRCs from the local zips (clone-unique from daimakr2.zip,
+# shared from ghouls.zip). Runs its own board, so it carries its own
+# CPS-B profile (36), not the parent's.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "daimakr2"
+board  = "capcom_cps1"
+parent = "ghouls"
+cps_b_profile = 36
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "damj_23.8f"
+offset = 0x0
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xc3b248ec
+
+[[region.file]]
+name   = "damj_22.7f"
+offset = 0x80000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x595ff2f3
+
+[[region]]
+name = "audiocpu"
+size = 0x28000
+
+[[region.file]]
+name   = "dam_09.12a"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x20000
+crc32  = 0x0656ff53
+
+[[region.file]]
+name   = "dam_09.12a"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x18000
+size   = 0x20000
+crc32  = 0x0656ff53
+
+[[region]]
+name = "gfx"
+size = 0x400000
+
+[[region.file]]
+name   = "dm-05.3a"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x0ba9c0b0
+
+[[region.file]]
+name   = "dm-07.3f"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x5d760ab9
+
+[[region.file]]
+name   = "dm-06.3c"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4ba90b59
+
+[[region.file]]
+name   = "dm-08.3g"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4bdee9de
+
+[[region.file]]
+name   = "dam_05.7a"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x7dc61b94
+
+[[region.file]]
+name   = "dam_06.8a"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xfde89758
+
+[[region.file]]
+name   = "dam_07.9a"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xec351d78
+
+[[region.file]]
+name   = "dam_08.10a"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xee2acc1e
