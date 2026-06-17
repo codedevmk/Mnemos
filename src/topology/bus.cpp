@@ -62,6 +62,33 @@ namespace mnemos::topology {
         return read8(address);
     }
 
+    std::uint16_t bus::fetch16_be_opcode(std::uint32_t address) {
+        const std::uint32_t addr = address & address_mask_;
+        // Serve the word from the opcode overlay only when both bytes fall inside
+        // it; a word straddling the overlay edge falls back to the data path.
+        if (!opcode_rom_.empty() && addr >= opcode_rom_start_ &&
+            (addr - opcode_rom_start_) + 1U < opcode_rom_.size()) {
+            const std::size_t off = addr - opcode_rom_start_;
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(opcode_rom_[off]) << 8U) |
+                                              opcode_rom_[off + 1U]);
+        }
+        return read16_be(address);
+    }
+
+    bool bus::direct_opcode_span(std::uint32_t address, chips::ibus::direct_span& out) {
+        const std::uint32_t addr = address & address_mask_;
+        // The opcode overlay is a side-effect-free ROM image; serve it directly to
+        // instruction fetches (mirrors fetch_opcode8 bypassing the data path).
+        if (!opcode_rom_.empty() && addr >= opcode_rom_start_ &&
+            (addr - opcode_rom_start_) < opcode_rom_.size()) {
+            out = {.data = opcode_rom_.data(),
+                   .start = opcode_rom_start_,
+                   .end = opcode_rom_start_ + static_cast<std::uint32_t>(opcode_rom_.size()) - 1U};
+            return true;
+        }
+        return direct_read_span(address, out);
+    }
+
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                        write_handler on_write, int priority, active_predicate active) {
         if (size == 0U) {

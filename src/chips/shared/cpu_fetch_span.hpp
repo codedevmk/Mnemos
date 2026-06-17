@@ -42,7 +42,10 @@ namespace mnemos::chips {
             Derived* const self = static_cast<Derived*>(this);
             if (self->fetch_bus() != nullptr && !self->fetch_span_excluded(a)) {
                 ibus::direct_span span;
-                if (self->fetch_bus()->direct_read_span(a, span)) {
+                // Instruction fetch: an opcode/data-split board (CPS-2) serves a
+                // decrypted opcode image here; every other bus returns its data
+                // span unchanged (direct_opcode_span defaults to direct_read_span).
+                if (self->fetch_bus()->direct_opcode_span(a, span)) {
                     const std::uint32_t len = span.end - span.start;
                     fetch_data_ = span.data;
                     fetch_lo_ = span.start;

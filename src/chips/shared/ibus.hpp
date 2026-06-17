@@ -91,6 +91,22 @@ namespace mnemos::chips {
                                                     direct_span& /*out*/) {
             return false; // default: no direct access, callers use read8/...
         }
+
+        // Instruction-fetch counterparts of direct_read_span / read16_be. Default
+        // to the data path -- identical for every system whose opcode bytes equal
+        // its data bytes. A board with opcode/data-split program memory (an
+        // encrypted 68000 whose decrypted instruction stream differs from data
+        // reads at the same address -- CPS-2) overrides these to serve the
+        // decrypted opcode image to instruction fetches while read16_be /
+        // direct_read_span keep serving the encrypted data stream. The reset
+        // vector counts as an instruction fetch (it sources the initial PC).
+        [[nodiscard]] virtual bool direct_opcode_span(std::uint32_t address, direct_span& out) {
+            return direct_read_span(address, out);
+        }
+        [[nodiscard]] virtual std::uint16_t fetch16_be_opcode(std::uint32_t address) {
+            return read16_be(address);
+        }
+
         virtual void add_invalidation_listener(std::function<void()> /*listener*/) {}
     };
 
