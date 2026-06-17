@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace mnemos::manifests::capcom_cps2 {
@@ -10,12 +11,13 @@ namespace mnemos::manifests::capcom_cps2 {
         inline constexpr std::size_t cps_a_file_offset = 0x100U;
         inline constexpr std::size_t cps_b_file_offset = 0x140U;
 
-        // Pass the region name by value (see the CPS-1 assembler note: a string_view
-        // overload would bind a temporary to a reference param under
-        // GCC -Wdangling-reference).
+        // `name` is a string_view (not a std::string or const std::string&) so a
+        // literal callsite does not materialise a temporary at the call expression --
+        // which GCC's -Wdangling-reference would flag as a (false) alias of the
+        // returned reference.
         [[nodiscard]] std::vector<std::uint8_t>& region(common::rom_set_image& image,
-                                                        std::string name) {
-            return image.regions[std::move(name)];
+                                                        std::string_view name) {
+            return image.regions[std::string(name)];
         }
 
         // Resolve the board key: an explicit param wins; otherwise a 20-byte "key"
