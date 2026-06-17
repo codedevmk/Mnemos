@@ -273,6 +273,27 @@ config["def_s9263b_k41"] = dict(
 )
 id_to_config[51] = "def_s9263b_k41"
 
+# Mnemos additions: standalone Japanese regional clones that run their OWN gfx
+# ROMs on an early "22B"-series B-board -- a different gfx mapper than the parent's
+# "24B" board even when the CPS-B register layout matches. Each needs its own
+# profile (gfx data + mapper differ). Transcribed from the reference CPS_B_xx
+# register tables + the early-board mapper tables. (52 = dynwarj: CPS_B_02 like its
+# parent dynwar, but the TK22B 4-bank mapper instead of TK24B1.)
+mapper_ranges["tk22b"] = [
+    (GFX_BITS["CPS1_GFX_SPRITES"], 0x0000, 0x3FFF, 0),
+    (GFX_BITS["CPS1_GFX_SPRITES"], 0x4000, 0x5FFF, 1),
+    (GFX_BITS["CPS1_GFX_SCROLL1"], 0x6000, 0x7FFF, 1),
+    (GFX_BITS["CPS1_GFX_SCROLL3"], 0x0000, 0x3FFF, 2),
+    (GFX_BITS["CPS1_GFX_SCROLL2"], 0x4000, 0x7FFF, 3),
+]
+mapper["tk22b"] = ([0x4000, 0x4000, 0x4000, 0x4000], "tk22b")
+config["b02_tk22b"] = dict(
+    id_offset=0x20, id_value=0x0002, mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x2C, priority=[0x2A, 0x28, 0x26, 0x24], palette=0x22,
+    enable=[0x02, 0x04, 0x08, 0, 0], mapper="tk22b",
+)
+id_to_config[52] = "b02_tk22b"
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"
