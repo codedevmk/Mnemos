@@ -30,6 +30,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "cps1") {
             return system_family::capcom_cps1;
         }
+        if (id == "cps2") {
+            return system_family::capcom_cps2;
+        }
         return std::nullopt;
     }
 
@@ -49,6 +52,8 @@ namespace mnemos::apps::player::adapters {
             return "irem_m72";
         case system_family::capcom_cps1:
             return "cps1";
+        case system_family::capcom_cps2:
+            return "cps2";
         case system_family::genesis:
             break;
         }
@@ -71,6 +76,8 @@ namespace mnemos::apps::player::adapters {
             return "Irem M72";
         case system_family::capcom_cps1:
             return "CPS1";
+        case system_family::capcom_cps2:
+            return "CPS2";
         case system_family::genesis:
             break;
         }
@@ -78,7 +85,7 @@ namespace mnemos::apps::player::adapters {
     }
 
     const char* family_names() noexcept {
-        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, cps1";
+        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, cps1, cps2";
     }
 
 } // namespace mnemos::apps::player::adapters

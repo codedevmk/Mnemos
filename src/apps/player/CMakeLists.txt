@@ -15,6 +15,7 @@ add_subdirectory(adapters/segacd)
 add_subdirectory(adapters/sega32x)
 add_subdirectory(adapters/irem_m72)
 add_subdirectory(adapters/capcom_cps1)
+add_subdirectory(adapters/capcom_cps2)
 
 # Shared bitmap-font overlay helpers, kept in their own static lib so the
 # unit test can link against the same code the player binary uses.
@@ -41,6 +42,7 @@ target_link_libraries(
         mnemos::apps::player::sega32x_adapter
         mnemos::apps::player::irem_m72_adapter
         mnemos::apps::player::capcom_cps1_adapter
+        mnemos::apps::player::capcom_cps2_adapter
         mnemos::apps::player::text_overlay
         mnemos::debug::dump
 )

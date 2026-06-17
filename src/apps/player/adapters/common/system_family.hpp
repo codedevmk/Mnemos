@@ -6,12 +6,22 @@
 namespace mnemos::apps::player::adapters {
 
     // Which adapter to wire for a ROM. Extended as new systems land.
-    enum class system_family { genesis, sms, gg, c64, segacd, sega32x, irem_m72, capcom_cps1 };
+    enum class system_family {
+        genesis,
+        sms,
+        gg,
+        c64,
+        segacd,
+        sega32x,
+        irem_m72,
+        capcom_cps1,
+        capcom_cps2
+    };
 
     // Map a `--system` name to its family. The accepted names are exactly the
     // adapter-registry family ids -- genesis, sms, gg, c64, segacd, sega32x,
-    // irem_m72, cps1 -- case-insensitive. nullopt for anything else. The engine
-    // is always chosen by this name, never inferred from the ROM filename.
+    // irem_m72, cps1, cps2 -- case-insensitive. nullopt for anything else. The
+    // engine is always chosen by this name, never inferred from the ROM filename.
     [[nodiscard]] std::optional<system_family> family_from_name(const std::string& name) noexcept;
 
     // The adapter-registry id for `family` ("genesis", "sms", ...).

@@ -11,6 +11,7 @@
 #include "battery_save.hpp"        // .srm load/save (cartridge battery RAM persistence)
 #include "c64_adapter.hpp"         // force_link (the C64 has no cart-header region byte)
 #include "capcom_cps1_adapter.hpp" // force_link (arcade: no cart region byte)
+#include "capcom_cps2_adapter.hpp" // force_link (arcade: encrypted ROM-set board)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -206,8 +207,9 @@ int main(int argc, char* argv[]) {
         const system_family family = *family_opt;
         // Arcade sets ARE their archive: the adapter resolves the dump
         // entries through the game declaration inside, so no unwrapping.
-        const bool arcade_family =
-            family == system_family::irem_m72 || family == system_family::capcom_cps1;
+        const bool arcade_family = family == system_family::irem_m72 ||
+                                   family == system_family::capcom_cps1 ||
+                                   family == system_family::capcom_cps2;
         auto loaded =
             arcade_family ? load_rom_verbatim(rom_paths.front()) : load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
@@ -255,6 +257,7 @@ int main(int argc, char* argv[]) {
             break;
         case system_family::irem_m72:
         case system_family::capcom_cps1:
+        case system_family::capcom_cps2:
             // Arcade boards have no region byte; the adapter reports the
             // board's own raster through region().
             break;
@@ -276,6 +279,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::sega32x::force_link();
         mnemos::apps::player::adapters::irem_m72::force_link();
         mnemos::apps::player::adapters::capcom_cps1::force_link();
+        mnemos::apps::player::adapters::capcom_cps2::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
