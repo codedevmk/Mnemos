@@ -4,11 +4,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
 namespace {
+    namespace cps2 = mnemos::manifests::capcom_cps2;
+
     using mnemos::manifests::capcom_cps2::cps2_board_params;
     using mnemos::manifests::capcom_cps2::cps2_system;
     using mnemos::manifests::capcom_cps2::crypto_key_size;
@@ -24,8 +28,8 @@ namespace {
     }
 
     // A tiny 68000 program (big-endian): reset vector (SSP=$00FF0000, PC=$000008)
-    // then MOVEQ #$7F,D0. Padded to an even length.
-    std::vector<std::uint8_t> plain_program() {
+    // then one caller-selected instruction. Padded to an even length.
+    std::vector<std::uint8_t> plain_program(std::uint16_t opcode = 0x707FU) {
         std::vector<std::uint8_t> p(0x40U, 0x00U);
         const auto w16 = [&](std::size_t a, std::uint16_t v) {
             p[a] = static_cast<std::uint8_t>(v >> 8U);
@@ -35,20 +39,38 @@ namespace {
         w16(0x2U, 0x0000U); // SSP = 0x00FF0000
         w16(0x4U, 0x0000U);
         w16(0x6U, 0x0008U); // PC = 0x00000008
-        w16(0x8U, 0x707FU); // MOVEQ #$7F,D0
+        w16(0x8U, opcode);
         return p;
     }
 
     // The encrypted program a real CPS-2 board ships (encrypt the plaintext with
     // the board key); the machine must decrypt it back to boot.
-    std::vector<std::uint8_t>
-    encrypted_program(const std::array<std::uint8_t, crypto_key_size>& k) {
-        const std::vector<std::uint8_t> plain = plain_program();
+    std::vector<std::uint8_t> encrypted_program(const std::array<std::uint8_t, crypto_key_size>& k,
+                                                std::uint16_t opcode = 0x707FU) {
+        const std::vector<std::uint8_t> plain = plain_program(opcode);
         mnemos::manifests::capcom_cps2::cps2_crypto_key key{};
         REQUIRE(decode_key(k, key));
         std::vector<std::uint8_t> enc(plain.size());
         REQUIRE(encrypt_opcodes(plain, enc, key));
         return enc;
+    }
+
+    // Fill a tile's planar gfx bytes so every pixel decodes to `pen`.
+    void carve_solid_tile(std::vector<std::uint8_t>& gfx, std::size_t base, std::size_t bytes,
+                          std::uint8_t pen) {
+        for (std::size_t i = 0; i < bytes && base + i < gfx.size(); ++i) {
+            gfx[base + i] = ((pen >> (i & 3U)) & 1U) != 0U ? 0xFFU : 0x00U;
+        }
+    }
+
+    void fill_scroll2_nametable(cps2_system& sys, std::uint32_t base, std::size_t entries,
+                                std::uint16_t code, std::uint16_t attr) {
+        auto& bus = sys.bus();
+        for (std::size_t i = 0; i < entries; ++i) {
+            const std::uint32_t off = base + static_cast<std::uint32_t>(i * 4U);
+            bus.write16_be(cps2::video_ram_base + off, code);
+            bus.write16_be(cps2::video_ram_base + off + 2U, attr);
+        }
     }
 } // namespace
 
@@ -124,6 +146,7 @@ TEST_CASE("cps2 system maps RAM, CPS registers, inputs, and the EEPROM port",
         CHECK(bus.read16_be(cps2::cps_a_mirror_base) == 0xABCDU); // mirror sees the same latch
         bus.write16_be(cps2::cps_b_mirror_base, 0x1234U);
         CHECK(bus.read16_be(cps2::cps_b_base) == 0x1234U); // primary sees the mirror's write
+        CHECK(sys.video().cps_b_reg(0U) == 0x1234U);
     }
 
     SECTION("the input ports read the active-low controls + QSound volume status") {
@@ -140,6 +163,58 @@ TEST_CASE("cps2 system maps RAM, CPS registers, inputs, and the EEPROM port",
         CHECK((bus.read16_be(0x804020U) & 0x0001U) == 0x0001U);
         CHECK(((bus.read16_be(0x804020U) & 0x0001U) != 0U) == sys.eeprom().data_out());
     }
+}
+
+TEST_CASE("cps2 system decodes CPS-A latches into video while QSound advances",
+          "[capcom_cps2][system][video]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
+
+    auto& gfx = image.regions["gfx"];
+    gfx.assign(0x10000U, 0xFFU);                // transparent by default
+    carve_solid_tile(gfx, 1U * 128U, 128U, 1U); // scroll2 tile code 1 -> pen 1
+
+    // A tiny Z80 sound program: write $24 to shared comm RAM, then spin. The
+    // frame loop must run it when the 68K releases sound reset.
+    auto& audio = image.regions["audiocpu"];
+    audio.assign(0x8000U, 0x00U);
+    const std::array<std::uint8_t, 7> z80_prog{0x3EU, 0x24U,        // LD A,$24
+                                               0x32U, 0x00U, 0xC0U, // LD ($C000),A
+                                               0x18U, 0xFEU};       // JR $ (spin)
+    std::copy(z80_prog.begin(), z80_prog.end(), audio.begin());
+    image.regions["qsound"].assign(0x1000U, 0x00U);
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& bus = sys.bus();
+
+    fill_scroll2_nametable(sys, 0U, 4096U, 1U, 0U);
+
+    constexpr std::uint32_t palette_source = 0x20000U;
+    constexpr std::uint32_t scroll2_pen1 = (64U * 16U + 1U) * 2U;
+    constexpr std::uint32_t backdrop = 0xBFFU * 2U;
+    bus.write16_be(cps2::video_ram_base + palette_source + scroll2_pen1, 0xFF00U);
+    bus.write16_be(cps2::video_ram_base + palette_source + backdrop, 0x000FU);
+
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_scroll2_base * 2U,
+                   static_cast<std::uint16_t>(cps2::video_ram_base >> 8U));
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
+                   static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_video_control * 2U, 0x0004U);
+    bus.write8(cps2::sound_reset_port, 0x08U); // release sound CPU
+
+    REQUIRE(sys.video().frame_index() == 0U);
+    REQUIRE(sys.vblank_irq_raised() == 0U);
+
+    sys.run_frame();
+
+    CHECK(sys.video().frame_index() == 1U);
+    CHECK(sys.vblank_irq_raised() == 1U);
+    CHECK(sys.vblank_irq_acked() == 0U); // reset SR keeps IPM at 7 in this tiny program
+    CHECK(sys.sound_bus().read8(0xC000U) == 0x24U);
+    const auto fb = sys.video().framebuffer();
+    CHECK(fb.pixels[0] == 0xFF0000U);
+    CHECK(fb.pixels[120U * fb.width + 200U] == 0xFF0000U);
 }
 
 TEST_CASE("cps2 system QSound: shared comm RAM, Z80 boot, reset gating", "[capcom_cps2][system]") {
