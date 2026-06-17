@@ -106,9 +106,10 @@ TEST_CASE("cps2 system maps RAM, CPS registers, inputs, and the EEPROM port",
     auto& bus = sys.bus();
 
     SECTION("the RAM regions round-trip") {
-        const std::array<std::uint32_t, 6> ram_bases{
-            cps2::main_ram_base,  cps2::video_ram_base,   cps2::object_ram_base,
-            cps2::extra_ram_base, cps2::control_reg_base, cps2::qsound_shared_base};
+        // (The QSound comm RAM at $618000 is odd-byte, tested separately.)
+        const std::array<std::uint32_t, 5> ram_bases{cps2::main_ram_base, cps2::video_ram_base,
+                                                     cps2::object_ram_base, cps2::extra_ram_base,
+                                                     cps2::control_reg_base};
         std::uint16_t v = 0x1111U;
         for (const std::uint32_t base : ram_bases) {
             bus.write16_be(base, v);
@@ -139,4 +140,43 @@ TEST_CASE("cps2 system maps RAM, CPS registers, inputs, and the EEPROM port",
         CHECK((bus.read16_be(0x804020U) & 0x0001U) == 0x0001U);
         CHECK(((bus.read16_be(0x804020U) & 0x0001U) != 0U) == sys.eeprom().data_out());
     }
+}
+
+TEST_CASE("cps2 system QSound: shared comm RAM, Z80 boot, reset gating", "[capcom_cps2][system]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    // A tiny Z80 sound program at $0000: write $42 to the comm RAM ($C000), loop.
+    auto& audio = image.regions["audiocpu"];
+    audio.assign(0x8000U, 0x00U);
+    const std::array<std::uint8_t, 7> z80_prog{0x3EU, 0x42U,        // LD A,$42
+                                               0x32U, 0x00U, 0xC0U, // LD ($C000),A
+                                               0x18U, 0xFEU};       // JR $ (spin)
+    std::copy(z80_prog.begin(), z80_prog.end(), audio.begin());
+    image.regions["qsound"].assign(0x1000U, 0x00U); // DL-1425 sample ROM
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    REQUIRE(sys.has_sound());
+    auto& m68k = sys.bus();
+    auto& z80 = sys.sound_bus();
+
+    // The comm RAM is shared: the 68K sees the buffer on the ODD byte of $618000.
+    z80.write8(0xC000U, 0x5AU);
+    CHECK(m68k.read8(0x618001U) == 0x5AU); // 68K odd byte, index 0
+    CHECK(m68k.read8(0x618000U) == 0xFFU); // even byte is open bus
+    m68k.write8(0x618003U, 0xA5U);         // 68K writes index 1 (odd of $618002)
+    CHECK(z80.read8(0xC001U) == 0xA5U);    // Z80 sees it flat
+
+    // Held in reset, the Z80 does not run; once $804041 bit3 is set, it boots and
+    // executes its program, writing $42 into the comm RAM.
+    sys.run_cycles(100);
+    CHECK(z80.read8(0xC000U) == 0x5AU); // unchanged: Z80 still in reset
+    m68k.write8(0x804041U, 0x08U);      // release the sound-CPU reset
+    sys.run_cycles(200);
+    CHECK(z80.read8(0xC000U) == 0x42U);    // the Z80 ran its program
+    CHECK(m68k.read8(0x618001U) == 0x42U); // and the 68K sees it
+
+    // The DL-1425 ready flag is readable at $D007 (deterministic; not the scratch
+    // RAM that backs the rest of the $D000 window).
+    CHECK(z80.read8(0xD007U) == z80.read8(0xD007U));
 }

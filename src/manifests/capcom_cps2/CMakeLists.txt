@@ -23,6 +23,8 @@ target_link_libraries(
     mnemos_manifests_capcom_cps2
     PUBLIC
         mnemos::chips::cpu::m68000
+        mnemos::chips::cpu::z80
+        mnemos::chips::audio::qsound
         mnemos::chips::storage::eeprom_93c46
         mnemos::topology
         mnemos::manifests::common
@@ -34,6 +36,8 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_chips_cpu_m68000
+        mnemos_chips_cpu_z80
+        mnemos_chips_audio_qsound
         mnemos_chips_storage_eeprom_93c46
         mnemos_topology
         mnemos_manifests_common
