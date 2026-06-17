@@ -130,6 +130,8 @@ def emit_file(f, name):
         lines += ["unit   = 2", "stride = 2", "swap   = true"]
     elif f["macro"] == "ROM_LOAD64_WORD":
         lines += ["unit   = 2", "stride = 8"]
+    elif f["macro"] == "ROM_LOAD64_BYTE":
+        lines += ["unit   = 1", "stride = 8"]  # byte-lane gfx (e.g. 64K/128K parts)
     # plain ROM_LOAD (oki) = linear
     lines += [f"size   = 0x{fsize:x}", f"crc32  = 0x{f['crc']:08x}"]
     return "\n".join(lines)
