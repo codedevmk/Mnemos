@@ -1,4 +1,5 @@
 add_subdirectory(cps_a_b)
+add_subdirectory(cps2_video)
 add_subdirectory(genesis_vdp)
 add_subdirectory(sega32x_vdp)
 add_subdirectory(irem_m72_video)
