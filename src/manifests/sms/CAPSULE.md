@@ -1,9 +1,9 @@
 ---
 capsule: src/manifests/sms
 generator: gen_capsule/0.1
-source_digest: sha256:ed45f2921563dcd48c4f7573914e255fb680a79c937ce878ae2e263bce89940f
+source_digest: sha256:fc169cbde9062b5a9d992211c2dc676020905dd08121b706d0bc83cf7be4b325
 intent_ratified: sha256:56e5f692e00a1f40db9b40b416ef31ce8f226ea2e274343bc33760e4c282bb17
-token_estimate: 930
+token_estimate: 959
 ---
 # Capsule — `src/manifests/sms`
 
@@ -44,14 +44,14 @@ namespaces: `mnemos::manifests::sms`
 ### `sms_runtime.hpp`
 namespaces: `mnemos::manifests::sms`
 - struct `sms_runtime`
-  - public: `cpu`, `vdp`, `psg`, `port_device`, `set_reset_button`, `set_gg_start`, `battery_ram`
+  - public: `cpu`, `vdp`, `psg`, `fm`, `fm_unit_enabled`, `port_device`, `set_reset_button`, `set_gg_start`, `battery_ram`
 - function `build_sms_runtime`
 
 ### `sms_system.hpp`
 namespaces: `mnemos::manifests::sms`
 - struct `sms_config`
 - struct `sms_system`
-  - public: `attach`, `port_device`, `set_reset_button`, `set_gg_start`, `battery_ram`
+  - public: `attach`, `port_device`, `set_reset_button`, `set_gg_start`, `fm_unit_enabled`, `battery_ram`
 - function `assemble_sms`
 - function `detect_93c46`
 - function `detect_codemasters`
@@ -62,6 +62,7 @@ namespaces: `mnemos::manifests::sms`
 
 link targets:
 - `mnemos::chips::audio::sn76489`
+- `mnemos::chips::audio::ym2413`
 - `mnemos::chips::cpu::z80`
 - `mnemos::chips::mapper::codemasters_mapper`
 - `mnemos::chips::mapper::hicom_mapper`
@@ -99,6 +100,7 @@ product include edges (header <- owning module):
 - `sms_mapper.hpp <- src/chips/mapper/sms_mapper`
 - `sms_vdp.hpp <- src/chips/video/sms_vdp`
 - `sn76489.hpp <- src/chips/audio/sn76489`
+- `ym2413.hpp <- src/chips/audio/ym2413`
 - `z80.hpp <- src/chips/cpu/z80`
 
 test-only include edges:

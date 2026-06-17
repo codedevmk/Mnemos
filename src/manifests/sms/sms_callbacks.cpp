@@ -74,6 +74,9 @@ namespace mnemos::manifests::sms {
                     if (s->gg.enabled() && p <= 0x06U) {
                         return s->gg.read(p); // Game Gear handset ($00 mode + EXT link)
                     }
+                    if (s->fm_unit_active && s->fm != nullptr && p == 0xF2U) {
+                        return s->fm->read_audio_select();
+                    }
                     if (p <= 0x3FU) {
                         return 0xFFU; // open bus
                     }
@@ -95,6 +98,20 @@ namespace mnemos::manifests::sms {
                     if (s->gg.enabled() && p <= 0x06U) {
                         s->gg.write(p, value, *s->psg); // GG EXT link + $06 PSG stereo
                         return;
+                    }
+                    if (s->fm_unit_active && s->fm != nullptr) {
+                        if (p == 0xF0U) {
+                            s->fm->write_address(value);
+                            return;
+                        }
+                        if (p == 0xF1U) {
+                            s->fm->write_data(value);
+                            return;
+                        }
+                        if (p == 0xF2U) {
+                            s->fm->write_audio_select(value);
+                            return;
+                        }
                     }
                     if (p <= 0x3FU) {
                         if ((p & 1U) != 0U) {

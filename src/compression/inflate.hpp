@@ -18,4 +18,12 @@ namespace mnemos::compression {
     [[nodiscard]] std::optional<std::size_t> inflate_raw(std::span<const std::uint8_t> src,
                                                          std::span<std::uint8_t> dst) noexcept;
 
+    // As above, but also reports how many input bytes were consumed up to and
+    // including the final block (rounded up to the byte the bit reader stopped
+    // on). Lets a caller resume a second stream packed immediately after the
+    // first (e.g. a CHD CD hunk's subcode lane following its sector lane).
+    [[nodiscard]] std::optional<std::size_t> inflate_raw(std::span<const std::uint8_t> src,
+                                                         std::span<std::uint8_t> dst,
+                                                         std::size_t& bytes_consumed) noexcept;
+
 } // namespace mnemos::compression

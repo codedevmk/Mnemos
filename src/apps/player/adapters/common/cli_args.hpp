@@ -35,6 +35,10 @@ namespace mnemos::apps::player::adapters {
     // an unrecognised name leaves the adapter on auto-detect.
     [[nodiscard]] std::optional<std::string> parse_mapper_arg(int argc, char* argv[]);
 
+    // Enable an optional FM expansion where the selected system exposes one
+    // (currently SMS YM2413 via `--fm`). Other systems ignore the flag.
+    [[nodiscard]] bool parse_fm_unit_arg(int argc, char* argv[]);
+
     // Scan argv for `--dip <value>` (hex with 0x prefix, or decimal) and
     // return the 16-bit DIP bank, or nullopt when absent/malformed.
     [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);

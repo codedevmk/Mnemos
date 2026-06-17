@@ -1,13 +1,106 @@
 #include "scheduler.hpp"
 
+#include <limits>
 #include <utility>
 
 namespace mnemos::runtime {
 
-    scheduler::scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept
-        : chips_(std::move(chips)), accumulator_(chips_.size(), 0U), frame_source_(frame_source) {
+    namespace {
+
+        void record_first_error(schedule_error& target, schedule_error error) noexcept {
+            if (target == schedule_error::none) {
+                target = error;
+            }
+        }
+
+        bool contains_frame_source(std::span<const scheduled_chip> chips,
+                                   const chips::ivideo* frame_source) noexcept {
+            if (frame_source == nullptr) {
+                return true;
+            }
+            for (const scheduled_chip& chip : chips) {
+                if (chip.chip == frame_source) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        std::uint32_t accumulator_limit(const scheduled_chip& chip) noexcept {
+            return chip.rate_num != 0U ? chip.rate_num : chip.divider;
+        }
+
+    } // namespace
+
+    schedule_status validate_scheduled_chip(const scheduled_chip& chip) noexcept {
+        if (chip.chip == nullptr) {
+            return foundation::unexpected(schedule_error::null_chip);
+        }
+        if (chip.rate_num == 0U) {
+            if (chip.divider == 0U) {
+                return foundation::unexpected(schedule_error::zero_divider);
+            }
+            return {};
+        }
+        if (chip.rate_den == 0U) {
+            return foundation::unexpected(schedule_error::zero_rational_denominator);
+        }
+        if (chip.rate_den > std::numeric_limits<std::uint32_t>::max() - chip.rate_num) {
+            return foundation::unexpected(schedule_error::overflowing_rational_rate);
+        }
+        return {};
+    }
+
+    schedule_status validate_schedule(std::span<const scheduled_chip> chips,
+                                      const chips::ivideo* frame_source) noexcept {
+        for (const scheduled_chip& chip : chips) {
+            schedule_status status = validate_scheduled_chip(chip);
+            if (!status.has_value()) {
+                return status;
+            }
+        }
+        if (!contains_frame_source(chips, frame_source)) {
+            return foundation::unexpected(schedule_error::frame_source_not_scheduled);
+        }
+        return {};
+    }
+
+    scheduler::scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept {
+        configure(std::move(chips), frame_source);
+    }
+
+    void scheduler::configure(std::vector<scheduled_chip> chips,
+                              chips::ivideo* frame_source) noexcept {
+        chips_.clear();
+        fixed_divider_indices_.clear();
+        frame_source_ = frame_source;
+        config_error_ = schedule_error::none;
+
+        chips_.reserve(chips.size());
+        for (const scheduled_chip& chip : chips) {
+            schedule_status status = validate_scheduled_chip(chip);
+            if (status.has_value()) {
+                chips_.push_back(chip);
+            } else {
+                record_first_error(config_error_, status.error());
+            }
+        }
+
+        if (!contains_frame_source(chips_, frame_source_)) {
+            record_first_error(config_error_, schedule_error::frame_source_not_scheduled);
+            frame_source_ = nullptr;
+        }
+
+        accumulator_.assign(chips_.size(), 0U);
+        rebuild_dispatch_tables();
+    }
+
+    void scheduler::rebuild_dispatch_tables() noexcept {
         uniform_lockstep_ = !chips_.empty();
         fixed_divider_batch_ = !chips_.empty();
+        divider_one_prefix_count_ = 0U;
+        fixed_divider_indices_.clear();
+
         bool seen_divided = false;
         for (std::size_t i = 0; i < chips_.size(); ++i) {
             const auto& sc = chips_[i];
@@ -35,6 +128,9 @@ namespace mnemos::runtime {
 
     void scheduler::run_master_cycles(std::uint64_t cycles) {
         master_cycle_ += cycles;
+        if (chips_.empty() || cycles == 0U) {
+            return;
+        }
 
         // Fast path: all chips tick every cycle, so a single batched tick per chip
         // is exactly equivalent to `cycles` lockstep single-cycle ticks.
@@ -129,10 +225,28 @@ namespace mnemos::runtime {
             reader.fail();
             return;
         }
-        master_cycle_ = master_cycle;
-        for (std::uint32_t& accumulator : accumulator_) {
-            accumulator = reader.u32();
+        std::vector<std::uint32_t> restored;
+        restored.reserve(accumulator_.size());
+        for (std::size_t i = 0; i < accumulator_.size(); ++i) {
+            const std::uint32_t value = reader.u32();
+            if (!reader.ok() || value >= accumulator_limit(chips_[i])) {
+                reader.fail();
+                return;
+            }
+            restored.push_back(value);
         }
+        master_cycle_ = master_cycle;
+        accumulator_ = std::move(restored);
+    }
+
+    foundation::expected<scheduler, schedule_error>
+    make_scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept {
+        schedule_status status =
+            validate_schedule(std::span<const scheduled_chip>(chips), frame_source);
+        if (!status.has_value()) {
+            return foundation::unexpected(status.error());
+        }
+        return scheduler(std::move(chips), frame_source);
     }
 
 } // namespace mnemos::runtime

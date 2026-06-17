@@ -106,6 +106,21 @@ namespace mnemos::topology {
         invalidate_fast_path();
     }
 
+    void bus::map_bus_error(std::uint32_t start, std::uint32_t size, int priority,
+                            active_predicate active) {
+        if (size == 0U) {
+            return; // a zero size would underflow `end` and claim the whole space
+        }
+        region r;
+        r.start = start;
+        r.end = start + size - 1U;
+        r.backing = kind::fault;
+        r.priority = priority;
+        r.active = std::move(active);
+        regions_.push_back(std::move(r));
+        invalidate_fast_path();
+    }
+
     void bus::retarget_ram(std::uint32_t start, std::span<std::uint8_t> storage) noexcept {
         for (region& r : regions_) {
             if (r.backing == kind::ram && r.start == start && r.ram.size() == storage.size()) {
@@ -146,7 +161,8 @@ namespace mnemos::topology {
 
     void bus::update_fast_path(std::uint32_t address, const region* winner) noexcept {
         // Only a predicate-free RAM/ROM winner can be served without a resolve.
-        if (winner == nullptr || winner->backing == kind::mmio || winner->active) {
+        if (winner == nullptr || winner->backing == kind::mmio || winner->backing == kind::fault ||
+            winner->active) {
             return;
         }
         // Narrow the winner's span to the part around `address` where no other
@@ -200,7 +216,9 @@ namespace mnemos::topology {
         }
         const region* r = resolve(addr, false);
         if (r != nullptr) {
-            if (r->backing == kind::mmio) {
+            if (r->backing == kind::fault) {
+                record_bus_fault(addr, false);
+            } else if (r->backing == kind::mmio) {
                 // Copy the handler before invoking it: a handler may remap this
                 // bus (the 32X ADEN write maps a BIOS overlay), which can
                 // reallocate regions_ -- moving the stored std::function out
@@ -225,7 +243,7 @@ namespace mnemos::topology {
         }
         const std::uint32_t addr = address & address_mask_;
         const region* r = resolve(addr, false);
-        if (r == nullptr || r->backing == kind::mmio || r->active) {
+        if (r == nullptr || r->backing == kind::mmio || r->backing == kind::fault || r->active) {
             return false;
         }
         update_fast_path(addr, r);
@@ -394,7 +412,9 @@ namespace mnemos::topology {
         }
         const region* r = resolve(addr, true);
         if (r != nullptr) {
-            if (r->backing == kind::mmio) {
+            if (r->backing == kind::fault) {
+                record_bus_fault(addr, true);
+            } else if (r->backing == kind::mmio) {
                 // Copy the handler before invoking it: a handler may remap this
                 // bus, which can reallocate regions_ -- moving the stored
                 // std::function out from under its own call and dangling `r`.

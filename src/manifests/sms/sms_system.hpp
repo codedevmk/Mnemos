@@ -15,6 +15,7 @@
 #include "sms_mapper.hpp"         // Sega mapper
 #include "sms_vdp.hpp"            // video
 #include "sn76489.hpp"            // audio (PSG)
+#include "ym2413.hpp"             // audio (FM unit / OPLL)
 #include "z80.hpp"                // cpu
 
 #include <array>
@@ -60,6 +61,9 @@ namespace mnemos::manifests::sms {
         // the $FFFC enable/reset register). Otherwise auto-detected by ROM CRC; the
         // carts that use it are Game Gear.
         bool eeprom_93c46{};
+        // Optional Japanese Master System / FM Sound Unit OPLL at ports $F0/$F1
+        // plus the $F2 audio-select latch. Game Gear ignores this expansion.
+        bool fm_unit{};
     };
 
     // A fully wired Sega Master System: the Z80, the VDP, the SN76489 PSG, the Sega
@@ -70,6 +74,7 @@ namespace mnemos::manifests::sms {
         chips::cpu::z80 cpu;
         chips::video::sms_vdp vdp;
         chips::audio::sn76489 psg;
+        chips::audio::ym2413 fm;
         // All mappers are members; assembly wires exactly one into the bus based
         // on the cart. The Sega mapper, the HiCom multicart, and the Janggun cart
         // page through a register overlay above the cartridge window ($FFFC-$FFFF,
@@ -106,7 +111,8 @@ namespace mnemos::manifests::sms {
 
         std::uint8_t io_ctrl{0xFFU}; // I/O control latch (port $3F): TH/TR direction + level
         bool reset_pressed{};
-        gg_io gg; // Game Gear I/O ($00-$06); inert unless assembly enables it
+        gg_io gg;              // Game Gear I/O ($00-$06); inert unless assembly enables it
+        bool fm_unit_active{}; // YM2413 expansion ports are decoded while true
 
         chips::storage::eeprom_93c46 eeprom; // 93C46 serial save; inert unless active
         bool eeprom_93c46_active{};          // cart carries the 93C46 EEPROM
@@ -126,6 +132,8 @@ namespace mnemos::manifests::sms {
 
         // Game Gear START button (port $00 bit 7). No-op on a base Master System.
         void set_gg_start(bool pressed) noexcept { gg.set_start(pressed); }
+
+        [[nodiscard]] bool fm_unit_enabled() const noexcept { return fm_unit_active; }
 
         // Cartridge battery store for .srm persistence: the 93C46's 128 bytes when
         // the cart has one, else empty (no other SMS save medium is wired yet).

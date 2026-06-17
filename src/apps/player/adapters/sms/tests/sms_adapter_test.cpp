@@ -80,6 +80,27 @@ TEST_CASE("sms_adapter drain_audio resamples to 48 kHz output") {
     CHECK(audio.frame_count == 0U);
 }
 
+TEST_CASE("sms_adapter exposes optional FM chip and mixes through the audio path") {
+    sms_adapter adapter(tiny_rom(), {.fm_unit = true});
+    CHECK(adapter.system().fm_unit_enabled());
+    CHECK(adapter.chips().size() == 4U);
+
+    bool found_audio = false;
+    for (const auto& field : adapter.system_spec()) {
+        if (field.label == "Audio") {
+            found_audio = field.value == "PSG+FM";
+        }
+    }
+    CHECK(found_audio);
+
+    adapter.step_one_frame();
+    const auto audio = adapter.drain_audio();
+    CHECK(audio.sample_rate == 48000U);
+    CHECK(audio.frame_count >= 798U);
+    CHECK(audio.frame_count <= 802U);
+    REQUIRE(audio.samples != nullptr);
+}
+
 TEST_CASE("sms_adapter selects PAL pacing when configured") {
     sms_adapter adapter(tiny_rom(), {.video_region = mnemos::video_region::pal});
     CHECK(adapter.region().frames_per_second_x1000 == 50000U);

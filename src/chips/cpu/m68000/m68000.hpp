@@ -29,8 +29,8 @@ namespace mnemos::chips::cpu {
     // trace). Cycle counts are 4 clocks per bus access plus the documented internal
     // idles. Still to come: the trapping arithmetic (DIVU/DIVS/CHK), MOVE-to/from-SR,
     // BCD + the remaining misc ops (MOVEM/SWAP/PEA/...), the cycle-accurate two-word
-    // prefetch pipeline, and the address/bus-error group-0 frames. Opcodes not yet
-    // decoded execute as 4-cycle no-ops.
+    // prefetch pipeline, concrete system bus-error map policy, and prefetch-exact
+    // group-0 corpus parity. Opcodes not yet decoded execute as 4-cycle no-ops.
     //
     // Instruction-stepped like the Z80: step_instruction() runs one instruction and
     // returns its cycle cost; tick(cycles) catches up by running whole instructions.
@@ -166,6 +166,15 @@ namespace mnemos::chips::cpu {
 
         enum class op_size : std::uint8_t { byte, word, longword };
 
+        struct group0_fault {
+            bool pending = false;
+            int vector = 0;
+            std::uint32_t access_address = 0U;
+            std::uint32_t stacked_pc = 0U;
+            std::uint16_t instruction_register = 0U;
+            std::uint16_t status_word = 0U;
+        };
+
         [[nodiscard]] static std::uint32_t size_mask(op_size s) noexcept;
         [[nodiscard]] static std::uint32_t size_sign_bit(op_size s) noexcept;
         [[nodiscard]] static int size_bytes(op_size s) noexcept;
@@ -244,6 +253,14 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint16_t pop16() noexcept;
         [[nodiscard]] std::uint32_t pop32() noexcept;
         void raise_exception(int vector, std::uint32_t exc_pc) noexcept;
+        [[nodiscard]] std::uint16_t group0_status_word(bool instruction_fetch,
+                                                       bool read_access) const noexcept;
+        void queue_address_error(std::uint32_t access_address, std::uint32_t stacked_pc,
+                                 bool instruction_fetch, bool read_access) noexcept;
+        void queue_bus_error(std::uint32_t access_address, std::uint32_t stacked_pc,
+                             bool instruction_fetch, bool read_access) noexcept;
+        [[nodiscard]] ibus::bus_fault consume_bus_fault() noexcept;
+        void raise_group0_exception(int vector, const group0_fault& fault) noexcept;
         void process_interrupt() noexcept;
         [[nodiscard]] bool test_cc(int cc) const noexcept;
 
@@ -254,11 +271,15 @@ namespace mnemos::chips::cpu {
         std::uint32_t usp_{};
         std::uint32_t ssp_{};
         std::uint32_t inst_addr_{}; // address of the instruction in flight (for exception frames)
+        std::uint16_t current_opcode_{};
+        group0_fault group0_fault_{};
         int irq_level_{};
         int prev_irq_level_{}; // for the level-7 (NMI) edge
         std::function<void(int)> irq_ack_{};
         std::function<void(std::uint32_t)> tas_callback_{};
         std::function<void(std::uint32_t)> trace_callback_{};
+        bool exception_raised_{};
+        bool exception_entry_{};
         bool stopped_{};
         bool halted_{};
 

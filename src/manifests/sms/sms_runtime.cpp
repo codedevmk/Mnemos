@@ -65,6 +65,11 @@ namespace mnemos::manifests::sms {
         rt->state.cpu = dynamic_cast<chips::cpu::z80*>(rt->graph.chip("cpu"));
         rt->state.vdp = dynamic_cast<chips::video::sms_vdp*>(rt->graph.chip("video"));
         rt->state.psg = dynamic_cast<chips::audio::sn76489*>(rt->graph.chip("audio"));
+        rt->state.fm = dynamic_cast<chips::audio::ym2413*>(rt->graph.chip("fm"));
+        rt->state.fm_unit_active = config.fm_unit && !config.game_gear && rt->state.fm != nullptr;
+        if (rt->state.fm != nullptr) {
+            rt->state.fm->set_clock_divider(72);
+        }
 
         // Game Gear: 60 Hz NTSC only. Put the VDP in GG mode (12-bit CRAM +
         // 160x144 viewport), capture interleaved PSG stereo for the $06 register,

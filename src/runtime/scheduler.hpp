@@ -1,10 +1,13 @@
 #pragma once
 
 #include "chip.hpp"
+#include "expected_ext.hpp"
 #include "state.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
+#include <string_view>
 #include <vector>
 
 namespace mnemos::runtime {
@@ -26,6 +29,40 @@ namespace mnemos::runtime {
         std::uint32_t rate_num{0U}; // master cycles per `rate_den` chip cycles
         std::uint32_t rate_den{0U};
     };
+
+    enum class schedule_error : std::uint8_t {
+        none,
+        null_chip,
+        zero_divider,
+        zero_rational_denominator,
+        overflowing_rational_rate,
+        frame_source_not_scheduled,
+    };
+
+    [[nodiscard]] constexpr std::string_view schedule_error_name(schedule_error error) noexcept {
+        switch (error) {
+        case schedule_error::none:
+            return "none";
+        case schedule_error::null_chip:
+            return "null_chip";
+        case schedule_error::zero_divider:
+            return "zero_divider";
+        case schedule_error::zero_rational_denominator:
+            return "zero_rational_denominator";
+        case schedule_error::overflowing_rational_rate:
+            return "overflowing_rational_rate";
+        case schedule_error::frame_source_not_scheduled:
+            return "frame_source_not_scheduled";
+        }
+
+        return "unknown";
+    }
+
+    using schedule_status = foundation::status<schedule_error>;
+
+    [[nodiscard]] schedule_status validate_scheduled_chip(const scheduled_chip& chip) noexcept;
+    [[nodiscard]] schedule_status validate_schedule(std::span<const scheduled_chip> chips,
+                                                    const chips::ivideo* frame_source) noexcept;
 
     // Fixed-divider master-clock scheduler (TDS §11.2).
     //
@@ -64,8 +101,15 @@ namespace mnemos::runtime {
         [[nodiscard]] std::uint64_t master_cycle() const noexcept { return master_cycle_; }
         [[nodiscard]] std::uint64_t frame_index() const noexcept;
         [[nodiscard]] chips::ivideo* frame_source() const noexcept { return frame_source_; }
+        [[nodiscard]] bool config_valid() const noexcept {
+            return config_error_ == schedule_error::none;
+        }
+        [[nodiscard]] schedule_error config_error() const noexcept { return config_error_; }
 
       private:
+        void configure(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept;
+        void rebuild_dispatch_tables() noexcept;
+
         std::vector<scheduled_chip> chips_;
         // Per-chip progress toward the next tick: master cycles since the last
         // tick for divider chips, the rational accumulator (bounded below
@@ -77,6 +121,10 @@ namespace mnemos::runtime {
         bool fixed_divider_batch_{}; // fixed dividers with batch-safe divider-1 prefix
         std::size_t divider_one_prefix_count_{};
         std::vector<std::size_t> fixed_divider_indices_;
+        schedule_error config_error_{schedule_error::none};
     };
+
+    [[nodiscard]] foundation::expected<scheduler, schedule_error>
+    make_scheduler(std::vector<scheduled_chip> chips, chips::ivideo* frame_source) noexcept;
 
 } // namespace mnemos::runtime

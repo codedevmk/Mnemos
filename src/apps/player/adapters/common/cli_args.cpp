@@ -38,6 +38,15 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    bool parse_fm_unit_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            if (std::string_view{argv[i]} == "--fm") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::optional<std::string> parse_rom_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc - 1; ++i) {
             const std::string_view a{argv[i]};

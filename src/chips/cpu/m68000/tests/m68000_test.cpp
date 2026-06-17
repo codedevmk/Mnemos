@@ -49,6 +49,15 @@ namespace {
             cpu.set_registers(r);
         }
     };
+
+    std::uint16_t r16(machine& m, std::uint32_t a) {
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(m.bus.read8(a)) << 8U) |
+                                          m.bus.read8(a + 1U));
+    }
+
+    std::uint32_t r32(machine& m, std::uint32_t a) {
+        return (static_cast<std::uint32_t>(r16(m, a)) << 16U) | r16(m, a + 2U);
+    }
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::icpu, m68000>);
@@ -701,6 +710,189 @@ TEST_CASE("m68000 ILLEGAL ($4AFC) traps through vector 4 with the faulting PC") 
     CHECK(r.a[7] == 0x00002FFAU);         // pushed PC (4) + SR (2)
     CHECK(m.bus.read8(0x2FFEU) == 0x10U); // faulting PC $1000
     CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+}
+
+TEST_CASE("m68000 odd instruction fetch raises an address-error group-0 frame") {
+    machine m;
+    m.w32(0x000CU, 0x00004000U); // address-error vector (3) -> $4000
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1001U;
+    m.cpu.set_registers(s);
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r16(m, 0x2FF2U) == 0x0016U);     // read, instruction, supervisor program FC
+    CHECK(r32(m, 0x2FF4U) == 0x00001001U); // faulting fetch address
+    CHECK(r16(m, 0x2FF8U) == 0x0000U);     // no opcode word was fetched
+    CHECK(r16(m, 0x2FFAU) == 0x2000U);     // old SR
+    CHECK(r32(m, 0x2FFCU) == 0x00001001U); // saved PC for the aborted fetch
+}
+
+TEST_CASE("m68000 odd word read raises address error without committing the MOVE") {
+    machine m;
+    m.w32(0x000CU, 0x00004000U); // address-error vector (3) -> $4000
+    m.w16(0x2001U, 0x1234U);
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[0] = 0x00002001U;
+    s.a[7] = 0x00003000U;
+    s.d[0] = 0x89ABCDEFU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x3010U}); // MOVE.W (A0),D0
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r.a[0] == 0x00002001U);
+    CHECK(r.d[0] == 0x89ABCDEFU);
+    CHECK(r16(m, 0x2FF2U) == 0x001DU);     // read, not-instruction, supervisor data FC
+    CHECK(r32(m, 0x2FF4U) == 0x00002001U); // faulting data address
+    CHECK(r16(m, 0x2FF8U) == 0x3010U);     // instruction register
+    CHECK(r16(m, 0x2FFAU) == 0x2000U);     // old SR
+    CHECK(r32(m, 0x2FFCU) == 0x00001000U); // instruction PC restored into the frame
+}
+
+TEST_CASE("m68000 odd long read raises address error before mutating the destination") {
+    machine m;
+    m.w32(0x000CU, 0x00004000U); // address-error vector (3) -> $4000
+    m.w32(0x2001U, 0x12345678U);
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[0] = 0x00002001U;
+    s.a[7] = 0x00003000U;
+    s.d[0] = 0xCAFEBABEU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x2010U}); // MOVE.L (A0),D0
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r.d[0] == 0xCAFEBABEU);
+    CHECK(r16(m, 0x2FF2U) == 0x001DU);
+    CHECK(r32(m, 0x2FF4U) == 0x00002001U);
+    CHECK(r16(m, 0x2FF8U) == 0x2010U);
+}
+
+TEST_CASE("m68000 odd word write raises address error without writing memory") {
+    machine m;
+    m.w32(0x000CU, 0x00004000U); // address-error vector (3) -> $4000
+    m.ram[0x2001U] = 0xCCU;
+    m.ram[0x2002U] = 0xDDU;
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[0] = 0x00002001U;
+    s.a[7] = 0x00003000U;
+    s.d[0] = 0x0000A55AU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x3080U}); // MOVE.W D0,(A0)
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r.a[0] == 0x00002001U);
+    CHECK(r.d[0] == 0x0000A55AU);
+    CHECK(m.ram[0x2001U] == 0xCCU);
+    CHECK(m.ram[0x2002U] == 0xDDU);
+    CHECK(r16(m, 0x2FF2U) == 0x000DU);     // write, not-instruction, supervisor data FC
+    CHECK(r32(m, 0x2FF4U) == 0x00002001U); // faulting data address
+    CHECK(r16(m, 0x2FF8U) == 0x3080U);     // instruction register
+    CHECK(r16(m, 0x2FFAU) == 0x2000U);     // old SR
+    CHECK(r32(m, 0x2FFCU) == 0x00001000U);
+}
+
+TEST_CASE("m68000 bus-error fetch raises a vector-2 group-0 frame") {
+    machine m;
+    m.w32(0x0008U, 0x00004000U); // bus-error vector (2) -> $4000
+    m.bus.map_bus_error(0x1000U, 0x02U, 1);
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r16(m, 0x2FF2U) == 0x0016U);     // read, instruction, supervisor program FC
+    CHECK(r32(m, 0x2FF4U) == 0x00001000U); // faulting bus address
+    CHECK(r16(m, 0x2FF8U) == 0x0000U);     // no opcode word was acknowledged
+    CHECK(r16(m, 0x2FFAU) == 0x2000U);     // old SR
+    CHECK(r32(m, 0x2FFCU) == 0x00001000U);
+}
+
+TEST_CASE("m68000 bus-error word read raises vector 2 without committing the MOVE") {
+    machine m;
+    m.w32(0x0008U, 0x00004000U); // bus-error vector (2) -> $4000
+    m.w16(0x2000U, 0x1234U);
+    m.bus.map_bus_error(0x2000U, 0x02U, 1);
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[0] = 0x00002000U;
+    s.a[7] = 0x00003000U;
+    s.d[0] = 0x89ABCDEFU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x3010U}); // MOVE.W (A0),D0
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r.a[0] == 0x00002000U);
+    CHECK(r.d[0] == 0x89ABCDEFU);
+    CHECK(r16(m, 0x2FF2U) == 0x001DU);     // read, not-instruction, supervisor data FC
+    CHECK(r32(m, 0x2FF4U) == 0x00002000U); // faulting bus address
+    CHECK(r16(m, 0x2FF8U) == 0x3010U);
+    CHECK(r16(m, 0x2FFAU) == 0x2000U);
+    CHECK(r32(m, 0x2FFCU) == 0x00001000U);
+}
+
+TEST_CASE("m68000 bus-error word write raises vector 2 without writing the fault window") {
+    machine m;
+    m.w32(0x0008U, 0x00004000U); // bus-error vector (2) -> $4000
+    m.ram[0x2000U] = 0xCCU;
+    m.ram[0x2001U] = 0xDDU;
+    m.bus.map_bus_error(0x2000U, 0x02U, 1);
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[0] = 0x00002000U;
+    s.a[7] = 0x00003000U;
+    s.d[0] = 0x0000A55AU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x3080U}); // MOVE.W D0,(A0)
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FF2U);
+    CHECK(r.a[0] == 0x00002000U);
+    CHECK(r.d[0] == 0x0000A55AU);
+    CHECK(m.ram[0x2000U] == 0xCCU);
+    CHECK(m.ram[0x2001U] == 0xDDU);
+    CHECK(r16(m, 0x2FF2U) == 0x000DU);     // write, not-instruction, supervisor data FC
+    CHECK(r32(m, 0x2FF4U) == 0x00002000U); // faulting bus address
+    CHECK(r16(m, 0x2FF8U) == 0x3080U);
+    CHECK(r16(m, 0x2FFAU) == 0x2000U);
+    CHECK(r32(m, 0x2FFCU) == 0x00001000U);
 }
 
 TEST_CASE("m68000 RTE restores SR and PC from the stack frame") {

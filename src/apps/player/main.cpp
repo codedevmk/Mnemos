@@ -153,6 +153,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::load_rom_verbatim;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
+    using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
@@ -170,6 +171,7 @@ int main(int argc, char* argv[]) {
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
+    const bool fm_unit = parse_fm_unit_arg(argc, argv);
     const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
@@ -300,20 +302,6 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             disc_path = rom_paths.front();
-            // disc_image::open() cannot read .chd yet; reject it with a clear
-            // message instead of silently booting the BIOS to its no-disc screen.
-            {
-                const auto dot = disc_path.find_last_of('.');
-                std::string ext =
-                    (dot == std::string::npos) ? std::string{} : disc_path.substr(dot + 1);
-                std::transform(ext.begin(), ext.end(), ext.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (ext == "chd") {
-                    std::fprintf(stderr, "[mnemos_player] CHD disc images are not supported yet; "
-                                         "use a .cue (+.bin) or .iso image\n");
-                    return 1;
-                }
-            }
             primary_rom = std::move(bios->bytes);
         }
         // The 32X boots through three adapter ROMs (master SH-2 / slave SH-2 /
@@ -354,6 +342,7 @@ int main(int argc, char* argv[]) {
                                 .autostart = autostart,
                                 .dip_override = dip_arg,
                                 .mapper_override = mapper_arg.value_or(std::string{}),
+                                .fm_unit = fm_unit,
                                 .disc_path = std::move(disc_path),
                                 .rom_path = rom_paths.front(),
                                 .bios_images = std::move(bios_images)});

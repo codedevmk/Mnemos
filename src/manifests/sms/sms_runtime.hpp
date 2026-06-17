@@ -48,6 +48,8 @@ namespace mnemos::manifests::sms {
         [[nodiscard]] chips::cpu::z80* cpu() const noexcept { return state.cpu; }
         [[nodiscard]] chips::video::sms_vdp* vdp() const noexcept { return state.vdp; }
         [[nodiscard]] chips::audio::sn76489* psg() const noexcept { return state.psg; }
+        [[nodiscard]] chips::audio::ym2413* fm() const noexcept { return state.fm; }
+        [[nodiscard]] bool fm_unit_enabled() const noexcept { return state.fm_unit_active; }
 
         [[nodiscard]] peripheral::device* port_device(int port) noexcept {
             return (port >= 0 && port < 2) ? state.ports[static_cast<std::size_t>(port)].get()

@@ -85,6 +85,7 @@ target_link_libraries(
         mnemos::chips::cpu::z80
         mnemos::chips::video::sms_vdp
         mnemos::chips::audio::sn76489
+        mnemos::chips::audio::ym2413
         mnemos::chips::mapper::sms_mapper
         mnemos::chips::mapper::codemasters_mapper
         mnemos::chips::mapper::korean_mapper
@@ -106,6 +107,7 @@ mnemos_declare_tier(
         mnemos_topology
         mnemos_manifests_common
         mnemos_chips_shared
+        mnemos_chips_audio_ym2413
         mnemos_chips_storage_eeprom_93c46
         mnemos_foundation
         mnemos_peripheral_common
