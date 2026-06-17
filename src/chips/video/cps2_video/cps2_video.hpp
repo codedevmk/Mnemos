@@ -62,6 +62,17 @@ namespace mnemos::chips::video {
         }
         // The tile/sprite graphics ROM (the source for tile_pixel).
         void attach_gfx(std::span<const std::uint8_t> gfx) noexcept { gfx_ = gfx; }
+        // The object/sprite RAM (the board's $700000 window); the active bank is
+        // selected by set_object_base. Non-owning.
+        void attach_object_ram(std::span<const std::uint8_t> object_ram) noexcept {
+            object_ram_ = object_ram;
+        }
+        // The CPS-2 control-register words used to bias sprite coordinates
+        // (control reg 0x08 = x base, 0x0A = y base).
+        void set_sprite_offsets(std::uint16_t x_base, std::uint16_t y_base) noexcept {
+            sprite_x_base_ = x_base;
+            sprite_y_base_ = y_base;
+        }
 
         // Map a layer's graphics code to a tile index in the gfx ROM. Returns false
         // (no tile) for an out-of-bank code or when no gfx is attached.
@@ -145,6 +156,13 @@ namespace mnemos::chips::video {
         static constexpr std::uint8_t tile_priority_0 = 1U;
         // The CPS-B register file the board mirrors here (32 words covers it).
         static constexpr std::size_t cps_b_reg_count = 32U;
+        // Object/sprite RAM: one bank is 0x2000 bytes of 8-byte entries; sprites
+        // are positioned in a 512x256 full-screen space clipped to the visible
+        // window.
+        static constexpr std::uint32_t object_bank_bytes = 0x2000U;
+        static constexpr std::uint32_t object_entry_bytes = 8U;
+        static constexpr int full_screen_width = 512;
+        static constexpr int full_screen_height = 256;
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
         // One 4bpp texel from the gfx ROM at `tile_base`, rows `row_stride` bytes
@@ -171,19 +189,38 @@ namespace mnemos::chips::video {
         void draw_scroll2(std::uint8_t priority) noexcept;
         void draw_scroll3(std::uint8_t priority) noexcept;
 
+        // The big-endian word at `offset` in the active object-RAM bank.
+        [[nodiscard]] std::uint16_t object_read16(std::uint32_t offset) const noexcept;
+        // Count the live sprite entries (stop at a terminator / past the bank).
+        [[nodiscard]] std::uint32_t find_sprite_count() const noexcept;
+        // The gfx tile for one 16x16 block of a multi-block sprite.
+        [[nodiscard]] static std::uint32_t sprite_block_tile(std::uint32_t tile_code, int blocks_x,
+                                                             int blocks_y, int block_x, int block_y,
+                                                             bool flip_x, bool flip_y) noexcept;
+        // Draw one object-RAM sprite entry (front-most; composites against the
+        // per-pixel sprite-priority buffer). Sprites currently draw over the scroll
+        // layers (the CPS-B layer-priority mask lands with the priority compositor).
+        void draw_sprite_entry(std::uint32_t index, bool flip_screen) noexcept;
+        // Draw all live sprites (back-to-front by entry order).
+        void draw_sprites() noexcept;
+
         std::span<const std::uint8_t> video_ram_{};
         std::span<const std::uint8_t> gfx_{};
+        std::span<const std::uint8_t> object_ram_{};
         std::array<std::uint8_t, palette_bytes> palette_ram_{};
         static constexpr std::size_t pixel_count =
             static_cast<std::size_t>(visible_width) * visible_height;
         std::vector<std::uint32_t> pixels_ = std::vector<std::uint32_t>(pixel_count, 0U);
 
-        // Per-pixel compositor buffers (Emu pixel_layer/pen/group/priority): the
-        // metadata later scroll layers + sprites read to resolve priority.
+        // Per-pixel compositor buffers (Emu pixel_layer/pen/group/priority +
+        // sprite-priority): the metadata later scroll layers + sprites read to
+        // resolve priority. pixel_layer 0 = a sprite owns the pixel.
         std::vector<std::uint8_t> pixel_layer_ = std::vector<std::uint8_t>(pixel_count, 0xFFU);
         std::vector<std::uint8_t> pixel_pen_ = std::vector<std::uint8_t>(pixel_count, 0U);
         std::vector<std::uint8_t> pixel_group_ = std::vector<std::uint8_t>(pixel_count, 0U);
         std::vector<std::uint8_t> pixel_priority_ = std::vector<std::uint8_t>(pixel_count, 0U);
+        std::vector<std::uint8_t> pixel_sprite_priority_ =
+            std::vector<std::uint8_t>(pixel_count, 0U);
 
         // CPS-A scroll state (raw register words; signed when used).
         std::uint16_t scroll1_x_{}, scroll1_y_{};
@@ -196,6 +233,7 @@ namespace mnemos::chips::video {
         bool rowscroll_enabled_{};
         std::uint16_t video_control_{};
         bool display_enabled_{true};
+        std::uint16_t sprite_x_base_{}, sprite_y_base_{};
         std::array<std::uint16_t, cps_b_reg_count> cps_b_regs_{};
 
         std::uint64_t frame_index_{};

@@ -59,6 +59,7 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::size_t extra_ctrl_size = 0x2U;
     inline constexpr std::uint32_t object_ram_base = 0x700000U; // object/sprite RAM
     inline constexpr std::size_t object_ram_size = 0x10000U;    // 64 KiB (banks fold here)
+    inline constexpr std::uint32_t object_bank_bytes = 0x2000U; // one 8 KiB object-table bank
     inline constexpr std::uint32_t cps_a_base = 0x804100U;      // CPS-A register window
     inline constexpr std::uint32_t cps_b_base = 0x804140U;      // CPS-B register window
     inline constexpr std::uint32_t cps_a_mirror_base = 0x800100U;
@@ -213,6 +214,8 @@ namespace mnemos::manifests::capcom_cps2 {
         void map_cps_reg_window(std::uint32_t base, std::size_t file_offset);
         [[nodiscard]] std::uint16_t cps_reg_word(std::size_t file_offset,
                                                  std::size_t word_index) const noexcept;
+        // The big-endian word at `offset` in the CPS-2 control-register file.
+        [[nodiscard]] std::uint16_t control_reg_word(std::size_t offset) const noexcept;
         [[nodiscard]] std::uint32_t video_ram_base_from_reg(std::uint16_t reg) const noexcept;
         [[nodiscard]] std::uint32_t video_ram_base_aligned(std::uint16_t reg,
                                                            std::uint32_t boundary) const noexcept;
