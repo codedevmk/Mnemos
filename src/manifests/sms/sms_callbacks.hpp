@@ -64,7 +64,7 @@ namespace mnemos::manifests::sms {
         std::array<std::unique_ptr<peripheral::device>, 2> ports{};
         std::uint8_t io_ctrl{0xFFU};
         bool reset_pressed{};
-        gg_io gg; // Game Gear I/O ($00-$06); inert unless build enables it
+        gg_io gg;              // Game Gear I/O ($00-$06); inert unless build enables it
         bool fm_unit_active{}; // YM2413 expansion ports are decoded while true
     };
 

@@ -111,7 +111,7 @@ namespace mnemos::manifests::sms {
 
         std::uint8_t io_ctrl{0xFFU}; // I/O control latch (port $3F): TH/TR direction + level
         bool reset_pressed{};
-        gg_io gg; // Game Gear I/O ($00-$06); inert unless assembly enables it
+        gg_io gg;              // Game Gear I/O ($00-$06); inert unless assembly enables it
         bool fm_unit_active{}; // YM2413 expansion ports are decoded while true
 
         chips::storage::eeprom_93c46 eeprom; // 93C46 serial save; inert unless active

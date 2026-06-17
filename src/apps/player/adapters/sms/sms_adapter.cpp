@@ -75,8 +75,7 @@ namespace mnemos::apps::player::adapters::sms {
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]),
-          game_gear_(config.game_gear),
-          fm_unit_(sys_->fm_unit_enabled()) {
+          game_gear_(config.game_gear), fm_unit_(sys_->fm_unit_enabled()) {
         sys_->psg()->enable_audio_capture(true);
         if (fm_unit_) {
             sys_->fm()->enable_audio_capture(true);
