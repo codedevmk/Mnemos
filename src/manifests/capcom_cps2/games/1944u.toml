@@ -1,15 +1,17 @@
-# 1944: The Loop Master -- Capcom CPS2
+# 1944: The Loop Master (USA) -- Capcom CPS2
 #
-# CPS-2 board: encrypted 68000 program (the 20-byte board key is an external
-# asset -- supplied as a `keys/1944.key` sidecar beside the set zip, never
-# committed). Slot convention: .03/.04/.05 = program (word-swapped), .01 = the
-# QSound Z80, .11m/.12m = QSound samples (word-swapped), .13m-.20m = gfx (word-
-# lane interleaved; the board then unshuffles each 0x200000 bank). 1944 is a
-# vertical (TATE) game; the upright rotation is a later refinement.
+# CPS-2 board: encrypted 68000 program. This dump is the US program (nffu.03/
+# nffu.05), which is decrypted by the `1944u` board key -- so the set id is
+# `1944u` and the 20-byte key is resolved from the `keys/1944u.key` sidecar
+# beside the set zip (an external asset, never committed). Slot convention:
+# .03/.04/.05 = program (word-swapped), .01 = the QSound Z80, .11m/.12m = QSound
+# samples (word-swapped), .13m-.20m = gfx (word-lane interleaved; the board then
+# unshuffles each 0x200000 bank). 1944 is a vertical (TATE) game; the upright
+# rotation is a later refinement.
 
 [set]
 schema = "mnemos-romset/1"
-name   = "1944"
+name   = "1944u"
 board  = "capcom_cps2"
 
 # --- encrypted 68000 program: slots 3,4,5 word-swapped, concatenated ---
