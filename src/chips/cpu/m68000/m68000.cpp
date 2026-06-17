@@ -13,6 +13,8 @@ namespace mnemos::chips::cpu {
 
     namespace {
         // Exception vector numbers (the address is vector * 4).
+        constexpr int vec_bus_error = 2;
+        constexpr int vec_address_error = 3;
         constexpr int vec_illegal = 4; // illegal instruction ($4AFC)
         constexpr int vec_divzero = 5;
         constexpr int vec_chk = 6;
@@ -193,22 +195,51 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t m68000::read8(std::uint32_t a) noexcept {
+        if (group0_fault_.pending) {
+            return 0U;
+        }
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
-        return rd8(a);
+        const std::uint8_t value = rd8(a);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+            return 0U;
+        }
+        return value;
     }
     std::uint16_t m68000::read16(std::uint32_t a) noexcept {
+        if (group0_fault_.pending) {
+            return 0U;
+        }
+        if (!exception_entry_ && (a & 1U) != 0U) {
+            queue_address_error(a, inst_addr_, false, true);
+            return 0U;
+        }
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
-        return rd16(a);
+        const std::uint16_t value = rd16(a);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+            return 0U;
+        }
+        return value;
     }
     std::uint32_t m68000::read32(std::uint32_t a) noexcept {
+        if (group0_fault_.pending) {
+            return 0U;
+        }
+        if (!exception_entry_ && (a & 1U) != 0U) {
+            queue_address_error(a, inst_addr_, false, true);
+            return 0U;
+        }
         cycles_ += 8;
         if (z80_bus_latency_enabled_) {
             if (is_z80_bus_addr(a)) {
@@ -220,25 +251,56 @@ namespace mnemos::chips::cpu {
                 ++cycle_sources_.z80_bus_accesses;
             }
         }
-        return rd32(a);
+        const std::uint32_t value = rd32(a);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+            return 0U;
+        }
+        return value;
     }
     void m68000::write8(std::uint32_t a, std::uint8_t v) noexcept {
+        if (group0_fault_.pending) {
+            return;
+        }
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
         wr8(a, v);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+        }
     }
     void m68000::write16(std::uint32_t a, std::uint16_t v) noexcept {
+        if (group0_fault_.pending) {
+            return;
+        }
+        if (!exception_entry_ && (a & 1U) != 0U) {
+            queue_address_error(a, inst_addr_, false, false);
+            return;
+        }
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
         wr16(a, v);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+        }
     }
     void m68000::write32(std::uint32_t a, std::uint32_t v) noexcept {
+        if (group0_fault_.pending) {
+            return;
+        }
+        if (!exception_entry_ && (a & 1U) != 0U) {
+            queue_address_error(a, inst_addr_, false, false);
+            return;
+        }
         // A longword is two word bus transfers of 4 cycles each. Charge each word's
         // cost BEFORE its own wr16 so a mid-instruction observer (e.g. the VDP
         // write-timing trace) sees the correct cumulative cycles for each halfword
@@ -250,12 +312,21 @@ namespace mnemos::chips::cpu {
             ++cycle_sources_.z80_bus_accesses;
         }
         wr16(a, static_cast<std::uint16_t>(v >> 16U));
+        ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+            return;
+        }
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a + 2U)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
         wr16(a + 2U, static_cast<std::uint16_t>(v));
+        fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, inst_addr_, false, !fault.write);
+        }
     }
 
     std::uint32_t m68000::read_sized(std::uint32_t a, op_size s) noexcept {
@@ -291,21 +362,37 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint16_t m68000::fetch16() noexcept {
+        if (group0_fault_.pending) {
+            return 0U;
+        }
         cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
+        if (!exception_entry_ && (a & 1U) != 0U) {
+            queue_address_error(a, a, true, true);
+            return 0U;
+        }
         pc_ += 2U;
         // Fetch through the cached direct span when the PC is inside it (span
         // lengths sit far below 2^31, so an out-of-span subtraction always
         // fails the compare).
         const std::uint32_t off = a - fetch_lo_;
-        if (off < fetch_len_ && off + 2U <= fetch_len_) {
-            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(fetch_data_[off]) << 8U) |
-                                              fetch_data_[off + 1U]);
+        const std::uint16_t word =
+            (off < fetch_len_ && off + 2U <= fetch_len_)
+                ? static_cast<std::uint16_t>((static_cast<std::uint16_t>(fetch_data_[off]) << 8U) |
+                                             fetch_data_[off + 1U])
+                : fetch_span_refill(a);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, a, true, !fault.write);
+            return 0U;
         }
-        return fetch_span_refill(a);
+        return word;
     }
     std::uint32_t m68000::fetch32() noexcept {
         const std::uint32_t hi = fetch16();
+        if (group0_fault_.pending) {
+            return 0U;
+        }
         cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
         pc_ += 2U;
@@ -315,6 +402,11 @@ namespace mnemos::chips::cpu {
                 ? static_cast<std::uint32_t>((static_cast<std::uint32_t>(fetch_data_[off]) << 8U) |
                                              fetch_data_[off + 1U])
                 : fetch_span_refill(a);
+        const ibus::bus_fault fault = consume_bus_fault();
+        if (!exception_entry_ && fault.asserted) {
+            queue_bus_error(fault.address, a, true, !fault.write);
+            return 0U;
+        }
         return (hi << 16U) | lo;
     }
 
@@ -1809,12 +1901,16 @@ namespace mnemos::chips::cpu {
     }
 
     void m68000::raise_exception(int vector, std::uint32_t exc_pc) noexcept {
+        exception_raised_ = true;
         const std::uint16_t old_sr = sr_;
         set_supervisor(true);
         sr_ = static_cast<std::uint16_t>(sr_ & ~sr_t);
+        exception_entry_ = true;
         push32(exc_pc);
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+        (void)consume_bus_fault();
+        exception_entry_ = false;
         // Motorola 68000 internal-exception entry = 34 cycles (TRAP, TRAPV,
         // CHK trap, illegal, divzero, privilege). The bus model above counts
         // push32 + push16 + read32 = 20; add the remaining 10 of internal
@@ -1824,6 +1920,73 @@ namespace mnemos::chips::cpu {
         cycles_ += 10;
     }
 
+    std::uint16_t m68000::group0_status_word(bool instruction_fetch,
+                                             bool read_access) const noexcept {
+        const bool supervisor = (sr_ & sr_s) != 0U;
+        const std::uint16_t function_code =
+            instruction_fetch ? (supervisor ? 0x6U : 0x2U) : (supervisor ? 0x5U : 0x1U);
+        const std::uint16_t read_bit = read_access ? 0x0010U : 0U;
+        const std::uint16_t not_instruction_bit = instruction_fetch ? 0U : 0x0008U;
+        return static_cast<std::uint16_t>(read_bit | not_instruction_bit | function_code);
+    }
+
+    void m68000::queue_address_error(std::uint32_t access_address, std::uint32_t stacked_pc,
+                                     bool instruction_fetch, bool read_access) noexcept {
+        if (group0_fault_.pending) {
+            return;
+        }
+        group0_fault_ = {
+            .pending = true,
+            .vector = vec_address_error,
+            .access_address = access_address & address_mask,
+            .stacked_pc = stacked_pc & address_mask,
+            .instruction_register = current_opcode_,
+            .status_word = group0_status_word(instruction_fetch, read_access),
+        };
+    }
+
+    void m68000::queue_bus_error(std::uint32_t access_address, std::uint32_t stacked_pc,
+                                 bool instruction_fetch, bool read_access) noexcept {
+        if (group0_fault_.pending) {
+            return;
+        }
+        group0_fault_ = {
+            .pending = true,
+            .vector = vec_bus_error,
+            .access_address = access_address & address_mask,
+            .stacked_pc = stacked_pc & address_mask,
+            .instruction_register = current_opcode_,
+            .status_word = group0_status_word(instruction_fetch, read_access),
+        };
+    }
+
+    ibus::bus_fault m68000::consume_bus_fault() noexcept {
+        return bus_ != nullptr ? bus_->consume_bus_fault() : ibus::bus_fault{};
+    }
+
+    void m68000::raise_group0_exception(int vector, const group0_fault& fault) noexcept {
+        exception_raised_ = true;
+        const std::uint16_t old_sr = sr_;
+        set_supervisor(true);
+        sr_ = static_cast<std::uint16_t>(sr_ & ~sr_t);
+        exception_entry_ = true;
+
+        // MC68000 Figure 6-7 stack order, lowest address first after stacking:
+        // status word, access address, instruction register, old SR, saved PC.
+        push32(fault.stacked_pc);
+        push16(old_sr);
+        push16(fault.instruction_register);
+        push32(fault.access_address);
+        push16(fault.status_word);
+        pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+        (void)consume_bus_fault();
+        exception_entry_ = false;
+
+        // Address-error entry is 50 cycles on the MC68000. The bus helpers above
+        // have charged the five frame writes plus the vector read (36 cycles).
+        cycles_ += 14;
+    }
+
     void m68000::process_interrupt() noexcept {
         const int level = irq_level_;
         const std::uint16_t old_sr = sr_;
@@ -1831,9 +1994,12 @@ namespace mnemos::chips::cpu {
         sr_ = static_cast<std::uint16_t>(sr_ & ~sr_t);
         sr_ =
             static_cast<std::uint16_t>((sr_ & ~sr_ipm) | (static_cast<std::uint16_t>(level) << 8U));
+        exception_entry_ = true;
         push32(pc_);
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vec_autovector_base + level) * 4U);
+        (void)consume_bus_fault();
+        exception_entry_ = false;
         stopped_ = false;
         if (irq_ack_) {
             irq_ack_(level); // IACK cycle: let the device clear its interrupt request
@@ -2228,6 +2394,11 @@ namespace mnemos::chips::cpu {
     int m68000::step_instruction() {
         cycles_ = 0;
         cycle_sources_ = {};
+        exception_raised_ = false;
+        exception_entry_ = false;
+        group0_fault_ = {};
+        current_opcode_ = 0U;
+        (void)consume_bus_fault();
 
         // Interrupt dispatch. Level 7 is edge-triggered (NMI); the others are
         // accepted when the request level exceeds the SR interrupt-priority mask.
@@ -2274,14 +2445,39 @@ namespace mnemos::chips::cpu {
 
         const std::uint16_t pre_sr = sr_;
         inst_addr_ = pc_;
+        const auto saved_d = d_;
+        const auto saved_a = a_;
+        const std::uint32_t saved_pc = pc_;
+        const std::uint16_t saved_sr = sr_;
+        const std::uint32_t saved_usp = usp_;
+        const std::uint32_t saved_ssp = ssp_;
+        const bool saved_stopped = stopped_;
+        const bool saved_halted = halted_;
         if (trace_callback_) {
             trace_callback_(pc_);
         }
         const std::uint16_t op = fetch16();
-        exec(op);
+        current_opcode_ = op;
+        if (!group0_fault_.pending) {
+            exec(op);
+        }
+
+        if (group0_fault_.pending) {
+            const group0_fault fault = group0_fault_;
+            group0_fault_ = {};
+            d_ = saved_d;
+            a_ = saved_a;
+            pc_ = saved_pc;
+            sr_ = saved_sr;
+            usp_ = saved_usp;
+            ssp_ = saved_ssp;
+            stopped_ = saved_stopped;
+            halted_ = saved_halted;
+            raise_group0_exception(fault.vector, fault);
+        }
 
         // Trace: if T was set entering the instruction, take the trace exception.
-        if ((pre_sr & sr_t) != 0U && !halted_) {
+        if ((pre_sr & sr_t) != 0U && !halted_ && !exception_raised_) {
             raise_exception(vec_trace, pc_);
         }
         if (cycles_ < 4) {
@@ -2318,6 +2514,11 @@ namespace mnemos::chips::cpu {
         delayed_irq_level_ = 0;
         delayed_irq_counter_ = 0;
         inst_addr_ = 0U;
+        current_opcode_ = 0U;
+        group0_fault_ = {};
+        exception_raised_ = false;
+        exception_entry_ = false;
+        (void)consume_bus_fault();
         stopped_ = false;
         halted_ = false;
         cycles_ = 0;
@@ -2368,6 +2569,11 @@ namespace mnemos::chips::cpu {
         sr_ = values.sr;
         usp_ = values.usp;
         ssp_ = values.ssp;
+        current_opcode_ = 0U;
+        group0_fault_ = {};
+        exception_raised_ = false;
+        exception_entry_ = false;
+        (void)consume_bus_fault();
     }
 
     void m68000::save_state(state_writer& writer) const {
@@ -2416,6 +2622,11 @@ namespace mnemos::chips::cpu {
         bus_refresh_due_ = reader.u64();
         delayed_irq_level_ = reader.u8() & 0x7;
         delayed_irq_counter_ = reader.u8();
+        current_opcode_ = 0U;
+        group0_fault_ = {};
+        exception_raised_ = false;
+        exception_entry_ = false;
+        (void)consume_bus_fault();
     }
 
     instrumentation::ichip_introspection& m68000::introspection() noexcept {

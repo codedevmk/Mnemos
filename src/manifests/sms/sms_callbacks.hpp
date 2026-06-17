@@ -32,6 +32,7 @@
 #include "sms_mapper.hpp"
 #include "sms_vdp.hpp"
 #include "sn76489.hpp"
+#include "ym2413.hpp"
 #include "z80.hpp"
 
 #include <array>
@@ -49,6 +50,7 @@ namespace mnemos::manifests::sms {
         chips::cpu::z80* cpu{};
         chips::video::sms_vdp* vdp{};
         chips::audio::sn76489* psg{};
+        chips::audio::ym2413* fm{};
         chips::mapper::sms_mapper* mapper{};
         // Set instead of `mapper` when the HiCom / Janggun manifest is built; their
         // register overlays ($FFFF, $FFFE-$FFFF) write through these back-references.
@@ -63,6 +65,7 @@ namespace mnemos::manifests::sms {
         std::uint8_t io_ctrl{0xFFU};
         bool reset_pressed{};
         gg_io gg; // Game Gear I/O ($00-$06); inert unless build enables it
+        bool fm_unit_active{}; // YM2413 expansion ports are decoded while true
     };
 
     struct sms_host_tables final {

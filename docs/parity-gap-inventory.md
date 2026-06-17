@@ -107,7 +107,7 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 ## Genesis / Mega Drive — 0 / 7
 
 #### CPU
-- [ ] **G1** M68000 address-error / bus-error (group-0) exceptions *(also fixes the Sega CD sub-CPU — shared core)* · MISSING · HIGH · M · vs Emu · R7 · Evidence: `progress-analysis.md` R7 + `src/chips/cpu/m68000/tests/m68000_conformance_test.cpp`
+- [ ] **G1** M68000 address-error / bus-error (group-0) exceptions *(also fixes the Sega CD sub-CPU — shared core)* · PARTIAL (core mechanics complete) · HIGH · M · vs Emu · R7 · Address-error vector 3 handles odd instruction fetch plus odd word/long data accesses; explicit topology BERR windows now drive bus-error vector 2; both build MC68000 group-0 frames. Concrete Genesis/Sega CD BERR address-map policy and prefetch-exact corpus parity remain open · Evidence: `progress-analysis.md` R7 + `src/chips/cpu/m68000/tests/m68000_test.cpp` + `src/topology/tests/bus_test.cpp` + `src/chips/cpu/m68000/tests/m68000_conformance_test.cpp`
 
 #### Audio
 - [ ] **G4** Per-console-revision mix model (model-1/2 mix gains + low-pass cutoff) · MISSING · MED · M · vs Emu · R13 · Evidence: `progress-analysis.md` R13
@@ -128,10 +128,10 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 
 ---
 
-## SMS + Game Gear — 0 / 5
+## SMS + Game Gear — 1 / 5
 
 #### Audio
-- [ ] **S1** YM2413 FM Sound Unit (Japanese SMS FM, ports $F0/$F1/$F2) · MISSING · HIGH · M · vs Emu · R4 · Evidence: `progress-analysis.md` R4
+- [x] **S1** YM2413 FM Sound Unit (Japanese SMS FM, ports $F0/$F1/$F2) · DONE · HIGH · M · vs Emu · R4 · Existing `chips/audio/ym2413` is now wired into hand-built SMS, manifest-built SMS, and the player adapter behind `sms_config::fm_unit` / `mnemos_player --fm`; ports $F0/$F1/$F2 and audio capture/mixing are covered by focused tests · Evidence: `src/manifests/sms/tests/sms_system_test.cpp` + `src/manifests/sms/tests/sms_runtime_parity_test.cpp` + `src/apps/player/adapters/sms/tests/sms_adapter_test.cpp`
 
 #### Peripherals / IO
 - [ ] **S3** Pause button → Z80 NMI wiring (NMI exists on the core; not wired at the system level) · MISSING · MED · S · vs Emu · R14 · Evidence: `progress-analysis.md` R14
@@ -144,7 +144,7 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 - [ ] **S5** Deep cart-header validation (checksum / product-code / claimed-size) · PARTIAL · LOW · S · vs Emu · R15 · Evidence: `progress-analysis.md` R15
 
 > Done (mostly exceeding Emu): Z80, SMS VDP, GG VDP (12-bit CRAM + crop), SN76489 (+GG
-> stereo), all 8 mappers, 93C46 saves, GG $00–$06 handset, PAL/NTSC switch, controller IO.
+> stereo), YM2413 FM unit, all 8 mappers, 93C46 saves, GG $00–$06 handset, PAL/NTSC switch, controller IO.
 
 ---
 
@@ -220,7 +220,7 @@ parity-grade for the new machine. Listed prerequisites still apply.
 
 1. ~~**32X timing cluster** — X2, X1, X3~~ **DONE (2026-06-13):** X1 address-error + X4 INTC + the X2/X3 cycle-true timing tail are all implemented (X2/X3 as opt-in, manual-grounded models; default-on deferred). 32X is 8/8. The next 32X correctness work is the boot/feature chain (per-title tasks), not this cluster.
 2. **Sega CD CHD** — D1 (unblocks the common modern disc format).
-3. **SMS YM2413** — S1 (restores FM audio; self-contained).
+3. ~~**SMS YM2413** — S1~~ **DONE (2026-06-17):** SMS FM is wired through the hand-built path, manifest runtime, and player `--fm`.
 4. **Address-error exceptions** — G1 + X1 (shared 68K + SH-2 work; G1 also fixes Sega CD sub-CPU).
 5. **Genesis whole-system deterministic save target** — G7 ⇄ T4 (unlocks save-state/rewind).
 6. **C64 1541 GCR hardening** — C1 (gates disk-based software).

@@ -152,6 +152,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::load_rom_verbatim;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
+    using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
@@ -169,6 +170,7 @@ int main(int argc, char* argv[]) {
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
+    const bool fm_unit = parse_fm_unit_arg(argc, argv);
     const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
@@ -335,6 +337,7 @@ int main(int argc, char* argv[]) {
                                 .autostart = autostart,
                                 .dip_override = dip_arg,
                                 .mapper_override = mapper_arg.value_or(std::string{}),
+                                .fm_unit = fm_unit,
                                 .disc_path = std::move(disc_path),
                                 .bios_images = std::move(bios_images)});
         if (system && system->media_count() > 1U) {

@@ -308,6 +308,72 @@ TEST_CASE("assemble_sms routes Z80 OUT to the PSG", "[sms][psg]") {
     CHECK(sys->psg.volume(0) == 0x00U);
 }
 
+TEST_CASE("assemble_sms routes optional YM2413 FM ports", "[sms][fm]") {
+    auto rom = blank_rom();
+    // LD A,$30 ; OUT ($F0),A ; LD A,$70 ; OUT ($F1),A
+    // LD A,$01 ; OUT ($F2),A ; IN A,($F2) ; LD ($C000),A
+    rom[0] = 0x3EU;
+    rom[1] = 0x30U;
+    rom[2] = 0xD3U;
+    rom[3] = 0xF0U;
+    rom[4] = 0x3EU;
+    rom[5] = 0x70U;
+    rom[6] = 0xD3U;
+    rom[7] = 0xF1U;
+    rom[8] = 0x3EU;
+    rom[9] = 0x01U;
+    rom[10] = 0xD3U;
+    rom[11] = 0xF2U;
+    rom[12] = 0xDBU;
+    rom[13] = 0xF2U;
+    rom[14] = 0x32U;
+    rom[15] = 0x00U;
+    rom[16] = 0xC0U;
+
+    auto sys = assemble_sms(std::move(rom), {.fm_unit = true});
+    REQUIRE(sys->fm_unit_enabled());
+    for (int i = 0; i < 8; ++i) {
+        sys->cpu.step_instruction();
+    }
+
+    CHECK(sys->fm.address_latch() == 0x30U);
+    CHECK(sys->fm.read_audio_select() == 0x01U);
+    CHECK(sys->bus.read8(0xC000U) == 0x01U);
+
+    const auto regs = sys->fm.register_snapshot();
+    REQUIRE(regs.size() >= 7U);
+    CHECK(regs[5].value == 0x07U); // CH0 instrument nibble from register $30
+    CHECK(regs[6].value == 0x00U); // CH0 volume nibble from register $30
+}
+
+TEST_CASE("assemble_sms leaves YM2413 ports inert unless the FM unit is enabled", "[sms][fm]") {
+    auto rom = blank_rom();
+    // LD A,$30 ; OUT ($F0),A ; LD A,$01 ; OUT ($F2),A ; IN A,($F2) ; LD ($C000),A
+    rom[0] = 0x3EU;
+    rom[1] = 0x30U;
+    rom[2] = 0xD3U;
+    rom[3] = 0xF0U;
+    rom[4] = 0x3EU;
+    rom[5] = 0x01U;
+    rom[6] = 0xD3U;
+    rom[7] = 0xF2U;
+    rom[8] = 0xDBU;
+    rom[9] = 0xF2U;
+    rom[10] = 0x32U;
+    rom[11] = 0x00U;
+    rom[12] = 0xC0U;
+
+    auto sys = assemble_sms(std::move(rom));
+    REQUIRE_FALSE(sys->fm_unit_enabled());
+    for (int i = 0; i < 6; ++i) {
+        sys->cpu.step_instruction();
+    }
+
+    CHECK(sys->fm.address_latch() == 0x00U);
+    CHECK(sys->fm.read_audio_select() == 0x00U);
+    CHECK(sys->bus.read8(0xC000U) == 0xFFU); // port $F2 falls through to pad reads
+}
+
 TEST_CASE("assemble_sms reads the joypads on ports $DC/$DD", "[sms][input]") {
     auto rom = blank_rom();
     // IN A,($DC) ; LD ($C000),A

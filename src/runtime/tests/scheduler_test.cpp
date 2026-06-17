@@ -5,6 +5,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <limits>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -169,6 +171,73 @@ TEST_CASE("scheduler with no frame source treats run_frame as a no-op") {
     CHECK(sched.run_frame() == 0U);
     CHECK(a.ticks == 0U);
     CHECK(sched.frame_index() == 0U);
+}
+
+TEST_CASE("scheduler validation rejects invalid chip rates") {
+    counting_chip chip;
+
+    const auto null_status = runtime::validate_scheduled_chip({nullptr, 1U});
+    CHECK_FALSE(null_status.has_value());
+    CHECK(null_status.error() == runtime::schedule_error::null_chip);
+
+    const auto zero_divider = runtime::validate_scheduled_chip({&chip, 0U});
+    CHECK_FALSE(zero_divider.has_value());
+    CHECK(zero_divider.error() == runtime::schedule_error::zero_divider);
+
+    const auto zero_rational_den =
+        runtime::validate_scheduled_chip({.chip = &chip, .divider = 1U, .rate_num = 3U});
+    CHECK_FALSE(zero_rational_den.has_value());
+    CHECK(zero_rational_den.error() == runtime::schedule_error::zero_rational_denominator);
+
+    const auto overflowing_rational =
+        runtime::validate_scheduled_chip({.chip = &chip,
+                                          .divider = 1U,
+                                          .rate_num = std::numeric_limits<std::uint32_t>::max(),
+                                          .rate_den = 1U});
+    CHECK_FALSE(overflowing_rational.has_value());
+    CHECK(overflowing_rational.error() == runtime::schedule_error::overflowing_rational_rate);
+
+    const auto valid_rational = runtime::validate_scheduled_chip(
+        {.chip = &chip, .divider = 1U, .rate_num = 8U, .rate_den = 3U});
+    CHECK(valid_rational.has_value());
+}
+
+TEST_CASE("scheduler factory rejects a frame source that is not scheduled") {
+    counting_chip cpu;
+    fake_video video;
+    std::vector<runtime::scheduled_chip> chips = {{&cpu, 1U}};
+
+    const auto result = runtime::make_scheduler(std::move(chips), &video);
+
+    CHECK_FALSE(result.has_value());
+    CHECK(result.error() == runtime::schedule_error::frame_source_not_scheduled);
+}
+
+TEST_CASE("scheduler constructor filters invalid entries instead of hanging") {
+    counting_chip valid;
+    counting_chip invalid;
+    runtime::scheduler sched({{&valid, 1U}, {&invalid, 0U}}, nullptr);
+
+    CHECK_FALSE(sched.config_valid());
+    CHECK(sched.config_error() == runtime::schedule_error::zero_divider);
+
+    sched.run_master_cycles(5U);
+
+    CHECK(sched.master_cycle() == 5U);
+    CHECK(valid.ticks == 5U);
+    CHECK(invalid.ticks == 0U);
+}
+
+TEST_CASE("scheduler constructor disables an unscheduled frame source") {
+    counting_chip cpu;
+    fake_video video;
+    runtime::scheduler sched({{&cpu, 1U}}, &video);
+
+    CHECK_FALSE(sched.config_valid());
+    CHECK(sched.config_error() == runtime::schedule_error::frame_source_not_scheduled);
+    CHECK(sched.frame_source() == nullptr);
+    CHECK(sched.run_frame() == 0U);
+    CHECK(cpu.ticks == 0U);
 }
 
 TEST_CASE("scheduler spreads rational-rate chips evenly across master cycles") {

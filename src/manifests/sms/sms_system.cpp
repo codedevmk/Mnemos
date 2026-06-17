@@ -260,6 +260,8 @@ namespace mnemos::manifests::sms {
             s->psg.set_stereo_capture(true);
             s->gg.enable(true);
         }
+        s->fm_unit_active = config.fm_unit && !config.game_gear;
+        s->fm.set_clock_divider(72);
 
         // Pick the cartridge mapper: forced by config, otherwise auto-detected from
         // the cart's Codemasters checksum header (Korean is force-only).
@@ -446,6 +448,9 @@ namespace mnemos::manifests::sms {
             if (s->gg.enabled() && p <= 0x06U) {
                 return s->gg.read(p); // Game Gear handset ($00 mode + EXT link)
             }
+            if (s->fm_unit_active && p == 0xF2U) {
+                return s->fm.read_audio_select();
+            }
             if (p <= 0x3FU) {
                 return 0xFFU; // open bus
             }
@@ -462,6 +467,20 @@ namespace mnemos::manifests::sms {
             if (s->gg.enabled() && p <= 0x06U) {
                 s->gg.write(p, value, s->psg); // GG EXT link + $06 PSG stereo
                 return;
+            }
+            if (s->fm_unit_active) {
+                if (p == 0xF0U) {
+                    s->fm.write_address(value);
+                    return;
+                }
+                if (p == 0xF1U) {
+                    s->fm.write_data(value);
+                    return;
+                }
+                if (p == 0xF2U) {
+                    s->fm.write_audio_select(value);
+                    return;
+                }
             }
             if (p <= 0x3FU) {
                 if ((p & 1U) != 0U) {

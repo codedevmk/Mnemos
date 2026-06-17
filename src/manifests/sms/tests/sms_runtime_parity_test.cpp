@@ -37,6 +37,30 @@ namespace {
     // 32 KiB blank cart (no Codemasters header) -> resolves to the Sega mapper.
     std::vector<std::uint8_t> sega_rom() { return std::vector<std::uint8_t>(0x8000U, 0x00U); }
 
+    std::vector<std::uint8_t> fm_port_rom() {
+        auto rom = sega_rom();
+        // LD A,$30 ; OUT ($F0),A ; LD A,$70 ; OUT ($F1),A
+        // LD A,$01 ; OUT ($F2),A ; IN A,($F2) ; LD ($C000),A
+        rom[0] = 0x3EU;
+        rom[1] = 0x30U;
+        rom[2] = 0xD3U;
+        rom[3] = 0xF0U;
+        rom[4] = 0x3EU;
+        rom[5] = 0x70U;
+        rom[6] = 0xD3U;
+        rom[7] = 0xF1U;
+        rom[8] = 0x3EU;
+        rom[9] = 0x01U;
+        rom[10] = 0xD3U;
+        rom[11] = 0xF2U;
+        rom[12] = 0xDBU;
+        rom[13] = 0xF2U;
+        rom[14] = 0x32U;
+        rom[15] = 0x00U;
+        rom[16] = 0xC0U;
+        return rom;
+    }
+
     // 32 KiB cart with a valid Codemasters checksum header -> Codemasters mapper.
     std::vector<std::uint8_t> codies_rom() {
         std::vector<std::uint8_t> rom(0x8000U, 0U);
@@ -235,6 +259,22 @@ TEST_CASE("build_sms_runtime default-plugs both controller ports", "[sms][runtim
     REQUIRE(rt->port_device(1) != nullptr);
     CHECK(rt->port_device(0)->read_data() == 0xFFU); // idle pad, active-low
     CHECK(rt->port_device(2) == nullptr);            // out of range
+}
+
+TEST_CASE("build_sms_runtime routes optional YM2413 FM ports", "[sms][runtime][fm]") {
+    auto rt = build_sms_runtime(fm_port_rom(), {.fm_unit = true});
+    REQUIRE(rt->fm_unit_enabled());
+    REQUIRE(rt->fm() != nullptr);
+
+    for (int i = 0; i < 8; ++i) {
+        rt->cpu()->step_instruction();
+    }
+
+    CHECK(rt->fm()->address_latch() == 0x30U);
+    CHECK(rt->fm()->read_audio_select() == 0x01U);
+    auto* bus = rt->graph.bus("main");
+    REQUIRE(bus != nullptr);
+    CHECK(bus->read8(0xC000U) == 0x01U);
 }
 
 TEST_CASE("build_sms_runtime matches assemble_sms on a real BIOS", "[sms][runtime][bios][parity]") {

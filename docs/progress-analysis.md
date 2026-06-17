@@ -52,7 +52,7 @@ Verdict legend used in component tables:
 
 - **Breadth:** Mnemos implements **6 of Emu's 15 systems (40%)**. Emu is the broader
   portfolio; Mnemos is the deeper one on what it covers.
-- **Depth (shared systems):** average hardware parity **≈ 91%**. On all 6 shared
+- **Depth (shared systems):** average hardware parity **≈ 92%**. On all 6 shared
   systems Mnemos is at full-or-better parity on every core silicon block, and
   **net-ahead on 5 of 6** thanks to timing models Emu lacks.
 - **The inversion:** for **SMS/GG, Sega CD, and Irem M72, Mnemos substantially
@@ -64,7 +64,7 @@ Verdict legend used in component tables:
   (SNES, NeoGeo, Taito F2).
 
 **Portfolio metrics:** system breadth coverage **40%** (6/15) · shared-system hardware
-depth **≈ 91%** · total weighted portfolio (breadth × depth) **≈ 36%**.
+depth **≈ 92%** · total weighted portfolio (breadth × depth) **≈ 37%**.
 
 ---
 
@@ -73,7 +73,7 @@ depth **≈ 91%** · total weighted portfolio (breadth × depth) **≈ 36%**.
 | System | In Mnemos | HW parity vs Emu | Net | One-line gap / lead |
 |---|---|---|---|---|
 | **Genesis / Mega Drive** | yes | **88%** | ⬆ ahead | Leads on VDP FIFO/DMA timing; missing S&K lock-on, SVP, J-Cart, whole-system savestate, 68K address-error |
-| **SMS + Game Gear** | yes | **90%** | ⬆⬆ far ahead | +7 mappers, real GG video, 93C46 saves, PAL switch; only miss = YM2413 FM unit |
+| **SMS + Game Gear** | yes | **95%** | ⬆⬆ far ahead | +7 mappers, YM2413 FM, real GG video, 93C46 saves, PAL switch; remaining misses are pause→NMI + deeper cart-header validation |
 | **C64** | yes | **95% (HW)** | ⬌ even (HW) / ⬇ (tooling) | Every chip present + more cart types; Emu wins on dev tooling (disasm/debug/SID/sprite/movie) |
 | **Sega CD** | yes | **95%** | ⬆ ahead | Real stamp-rotation ASIC, 1M word-RAM, font expander; missing CHD disc format |
 | **Sega 32X** | yes | **88%** | ⬆ ahead | Threaded dual-SH2, PWM DC-block; missing addr-error, SCI, full INTC delivery, cycle-true timing |
@@ -96,7 +96,7 @@ depth **≈ 91%** · total weighted portfolio (breadth × depth) **≈ 36%**.
 
 | Component | Emu (LOC/notes) | Mnemos (LOC/notes) | Verdict | Difference |
 |---|---|---|---|---|
-| CPU M68000 | `chips/m68k/m68k.c` 3034 + dasm 1145; ~217 cycle markers; explicit address/bus-error group-0 exceptions | `chips/cpu/m68000/m68000.cpp` 2537 + 1452 LOC tests; instruction-atomic `cycle_debt_` model, prefetch/refresh-stall accounting | PARTIAL | Both cycle-aware. Emu surfaces address/bus-error group-0 stack frames; Mnemos does not. Mnemos richer test coverage |
+| CPU M68000 | `chips/m68k/m68k.c` 3034 + dasm 1145; ~217 cycle markers; explicit address/bus-error group-0 exceptions | `chips/cpu/m68000/m68000.cpp`; instruction-atomic `cycle_debt_` model, prefetch/refresh-stall accounting, functional vector-2/3 group-0 frames | PARTIAL | Both cycle-aware. Mnemos now has address-error and explicit-BERR group-0 mechanics; concrete Genesis/Sega CD BERR maps and prefetch-exact corpus parity remain open |
 | CPU Z80 | `chips/z80/z80.c` 1217 + dasm; ~20 undoc/MEMPTR markers | `chips/cpu/z80/z80.cpp` 1661 + 778 LOC tests; 48 undoc/MEMPTR/IM markers | EXCEEDS | More undoc-flag/WZ coverage + SingleStep JSON conformance |
 | VDP (render) | `chips/genesis_vdp/genesis_vdp.c` 1707 + hcounter 486; in-chip FIFO ring | `chips/video/genesis_vdp/genesis_vdp.cpp` 1929 + hcounter 509 | FULL | Both H32/H40, hcounter tables, sprites, windows. Comparable |
 | VDP write-timing / FIFO | system-side `sync_vdp_active_write_fifo`: release-period + 3-slot latency | in-chip 4-entry byte-accurate accept FIFO: `fifo_drain_[4]`, `next_accept_slot`; `write_accept` default-on | EXCEEDS | Mnemos byte-accurate FIFO (VRAM word = 2 slots) drove corpus 81%→87% |
@@ -122,19 +122,20 @@ region/IO/Z80-arbitration are FULL or EXCEEDS, empirically validated (87% byte-p
 across 2784 titles). The gap is concentrated in peripheral cartridge silicon (lock-on,
 SVP, J-Cart) and system conveniences (whole-machine savestate, per-revision mix),
 none of which affect the common-case library. Dragged from ~95% to 88% by those plus
-the M68000 address-error gap.
+the remaining M68000 BERR-map/prefetch-exact gap.
 
 **Mnemos EXCEEDS Emu in:** byte-accurate VDP write-accept FIFO; clean DMA-busy vs
 68K-stall split; Z80 undoc/MEMPTR coverage + JSON conformance; co-located test suites
 on every chip; pluggable peripheral SDK + explicit z80-bus latency.
 
 **Gaps (Emu has, Mnemos lacks):** S&K lock-on; SVP bus scaffolding; J-Cart 4-player;
-whole-system save state; M68000 address/bus-error (group-0) exceptions; per-revision
-audio mix. CD-DA is Genesis-core in Emu but segacd-only in Mnemos (architectural).
+whole-system save state; concrete Genesis/Sega CD BERR maps and prefetch-exact M68000
+group-0 parity; per-revision audio mix. CD-DA is Genesis-core in Emu but segacd-only in
+Mnemos (architectural).
 
 ---
 
-### 3.2 SMS + Game Gear — 90% ⬆⬆
+### 3.2 SMS + Game Gear — 95% ⬆⬆
 
 | Component | Emu (LOC/notes) | Mnemos (LOC/notes) | Verdict | Difference |
 |---|---|---|---|---|
@@ -143,7 +144,7 @@ audio mix. CD-DA is Genesis-core in Emu but segacd-only in Mnemos (architectural
 | **Game Gear VDP mode** | CRAM masked `& 0x1F` rendered as SMS 6-bit; **no 12-bit CRAM, no 160x144 crop** | `set_gg()`: real 12-bit `gg_cram_` (BGR444), central 160x144 crop, GG palette expand | **EXCEEDS** | Emu cannot render true GG color/viewport |
 | SN76489 PSG | `chips/sn76489/sn76489.c` 353 | `chips/audio/sn76489/sn76489.cpp` 300 | FULL | Equivalent PSG |
 | GG stereo PSG ($06) | `sn76489_update_stereo`: hi-nibble L / lo-nibble R | `write_stereo()` + `set_stereo_capture()`: bits 4-7 L / 0-3 R | FULL | Same bit layout. Parity |
-| **YM2413 FM unit** | `chips/ym2413/` present; wired ports `$F0/$F1/$F2`, `fm_enabled`, per-frame FM buffer | **Absent** from SMS path | **MISSING** | Emu emulates the Japanese SMS FM Sound Unit; Mnemos SMS has no FM at all |
+| **YM2413 FM unit** | `chips/ym2413/` present; wired ports `$F0/$F1/$F2`, `fm_enabled`, per-frame FM buffer | `chips/audio/ym2413` + optional SMS `fm_unit`: ports `$F0/$F1/$F2`, manifest chip id `fm`, player `--fm`, capture mixed into the SMS adapter | FULL | Parity for the Japanese SMS FM Sound Unit; Mnemos keeps it opt-in so base SMS/GG behavior stays unchanged |
 | Sega standard mapper | `sms.c` inline; `$FFFC`+`$FFFD/E/F` pages, cart-RAM, 1KB fixed page-0 | `mapper/sms_mapper` 247; `$FFFC-$FFFF` priority-1 overlay | FULL | Same mapper; Mnemos factors into chip + overlay |
 | **Codemasters mapper** | **Absent** | `mapper/codemasters_mapper` 214 + checksum auto-detect + `.toml` | **EXCEEDS** | Emu SMS has none |
 | **Korean mapper (std $A000)** | **Absent** | `mapper/korean_mapper` 173 | **EXCEEDS** | — |
@@ -159,21 +160,19 @@ audio mix. CD-DA is Genesis-core in Emu but segacd-only in Mnemos (architectural
 | **Pause button (NMI)** | `sms_pause()` → `z80_nmi()` | Z80 has `set_nmi_line` but **no SMS-system pause entry point wired** | PARTIAL (Emu ahead) | Mnemos pause button does nothing |
 | Controller IO ($DC/$DD, $3F) | inline pad read + TR/TH latch | `read_pad_dc/dd` + `io_ctrl` + pluggable peripherals (MK-3020 default) | EXCEEDS | Same model; Mnemos adds peripheral abstraction |
 
-**Parity justification (90%):** Mnemos covers everything Emu's SMS does at the
-core-chip level (Z80, VDP, PSG, Sega mapper, GG stereo, controller IO all FULL) and
-adds an 8-mapper family vs Emu's 1, real GG video, 93C46 saves, full GG handset, and
-runtime PAL/NTSC that Emu hard-locks. Emu leads in only two narrow areas: the YM2413
-FM unit (entirely absent from Mnemos) and deeper cart-header validation + a wired
-pause-NMI. Net capability strongly favours Mnemos.
+**Parity justification (95%):** Mnemos covers everything Emu's SMS does at the
+core-chip level (Z80, VDP, PSG, YM2413 FM, Sega mapper, GG stereo, controller IO all
+FULL) and adds an 8-mapper family vs Emu's 1, real GG video, 93C46 saves, full GG
+handset, and runtime PAL/NTSC that Emu hard-locks. Emu leads only in deeper
+cart-header validation and a wired pause-NMI. Net capability strongly favours Mnemos.
 
 **Mnemos EXCEEDS Emu in:** 8 mappers vs 1 (with CRC auto-detect); true 12-bit GG video
 + 160x144 crop; 93C46 battery saves; full GG `$00-$06` handset; runtime PAL/NTSC;
 pluggable controller-port peripherals.
 
-**Gaps (Emu has, Mnemos lacks):** **YM2413 FM Sound Unit** (largest functional gap —
-Japanese-SMS FM games have no FM audio); pause→NMI entry point; deep cart-header
-validation (checksum/product-code/size); Sega-mapper `$8000-$BFFF` cart-RAM bank-select
-detail unverified in Mnemos.
+**Gaps (Emu has, Mnemos lacks):** pause→NMI entry point; deep cart-header validation
+(checksum/product-code/size); Sega-mapper `$8000-$BFFF` cart-RAM bank-select detail
+needs real-ROM validation and `.srm` persistence for flat cart RAM.
 
 ---
 
@@ -404,10 +403,10 @@ likely impact on game compatibility / development if relied upon.
 | R1 | 32X | **INTC delivers ONLY FRT** | **CRITICAL** | DMAC-end, DIVU-OVFI, WDT, SCI interrupts set their flags but **never fire**. Any 32X title relying on DMAC transfer-end IRQ or SCI will hang or misbehave. Blocks 32X game-coverage expansion |
 | R2 | 32X | **Not cycle-true; DIVU completes instantly (no busy cycles); no bus-lock/contention timing** | **CRITICAL** | Timing-sensitive 32X titles may never converge. Star Wars / Space Harrier / After Burner already black (per project notes). On the hard-problems board (SH-2 cycle-true). ADR-0011 deferral |
 | R3 | Sega CD | **CHD disc images unsupported** | **HIGH** | `.chd open()` returns `std::nullopt` — any CHD file **fails to load entirely**. Emu has the full v5 codec stack to port. Most common modern disc-image format |
-| R4 | SMS | **No YM2413 FM Sound Unit** | **HIGH** | Japanese-SMS FM titles play with **no FM audio**. Entirely absent from the SMS path |
+| R4 | SMS | **YM2413 FM Sound Unit wired** | **RESOLVED** | SMS FM now routes ports `$F0/$F1/$F2` through the existing YM2413 chip, exposes player `--fm`, and mixes captured FM audio through the SMS adapter. Covered by focused SMS/runtime/player tests |
 | R5 | C64 | **1541 GCR read path "still being proven"** | **HIGH** | Self-flagged in code. Disk loading may be unreliable; could block disk-based software. Emu's 1541 is 3539 LOC vs Mnemos 1464 (more format/edge coverage) |
 | R6 | 32X | **SH-2 address-error exception deferred** | **HIGH** | Misaligned word/long access does not trap (Emu faults at vec 9). Software that deliberately faults, or buggy paths, behave wrong |
-| R7 | Genesis | **M68000 address/bus-error (group-0) exceptions absent** | **HIGH** | Same class as R6 — no group-0 stack frame built. Affects software that probes/relies on bus errors |
+| R7 | Genesis | **M68000 BERR map / prefetch-exact group-0 parity incomplete** | **HIGH** | Functional vector-2/3 group-0 frames exist, but concrete Genesis/Sega CD BERR address maps and prefetch-exact corpus parity remain open. Affects software that probes/relies on bus errors |
 | R8 | Genesis | **No whole-system save state** | **HIGH** | Per-chip serialization exists but there is **no assembled-Genesis save/load path**. Blocks save-state/rewind at the system level (Emu has `genesis_save_state`). Infra gap on hard-problems board |
 | R9 | M72 | **Protection MCU (8051) dormant + untested; only 1 game** | **HIGH** | Only R-Type (no protection) works. Other M72 boards need the 8051 protection MCU, which is wired but gated/unexercised. No Z80 `$8000` banking yet |
 | R10 | 32X | **SCI serial controller absent** | MEDIUM | `$FE00-$FE0F` is raw storage; no SMR/BRR/SCR/SSR behaviour, no link interrupts |
@@ -436,12 +435,10 @@ likely impact on game compatibility / development if relied upon.
    game coverage past the current rendering wins.
 2. **Sega CD CHD (R3)** — full codec stack exists in Emu to port; unblocks the common
    modern disc format. Self-contained.
-3. **SMS YM2413 FM (R4)** — isolated, self-contained port; restores FM audio for
-   Japanese SMS titles.
-4. **1541 GCR read path (R5)** — prove/harden it; it gates disk-based C64 software.
-5. **Genesis whole-system save state (R8)** — assemble the per-chip serialization into
+3. **1541 GCR read path (R5)** — prove/harden it; it gates disk-based C64 software.
+4. **Genesis whole-system save state (R8)** — assemble the per-chip serialization into
    a machine-level path; unlocks save-state/rewind.
-6. **Genesis exotics (R12)** — S&K lock-on is cheap + high-recognition; SVP needs the
+5. **Genesis exotics (R12)** — S&K lock-on is cheap + high-recognition; SVP needs the
    SSP1601 core (Emu also only stubs it).
 
 **Grow breadth (by ROI):** Spectrum (LOW) → CPS1 (MEDIUM) → NES (MEDIUM). These three

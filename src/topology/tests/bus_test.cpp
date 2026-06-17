@@ -62,6 +62,51 @@ TEST_CASE("bus resolves disjoint regions and their boundaries") {
     CHECK(b.read8(0x8100U) == 0xFFU); // past the high region -> open bus
 }
 
+TEST_CASE("bus error regions report faults without changing ordinary open-bus gaps") {
+    std::array<std::uint8_t, 0x100> ram{};
+    bus b(16U);
+    b.map_ram(0x0000U, ram);
+    b.map_bus_error(0x0200U, 0x10U);
+
+    CHECK(b.read8(0x0100U) == 0xFFU); // ordinary gap remains open bus
+    CHECK_FALSE(b.consume_bus_fault().asserted);
+
+    CHECK(b.read8(0x0204U) == 0xFFU); // faulting read still returns open-bus data
+    auto fault = b.consume_bus_fault();
+    CHECK(fault.asserted);
+    CHECK(fault.address == 0x0204U);
+    CHECK_FALSE(fault.write);
+    CHECK_FALSE(b.consume_bus_fault().asserted);
+
+    b.write8(0x0205U, 0xA5U);
+    fault = b.consume_bus_fault();
+    CHECK(fault.asserted);
+    CHECK(fault.address == 0x0205U);
+    CHECK(fault.write);
+}
+
+TEST_CASE("bus error regions participate in wide byte-exact accesses") {
+    std::array<std::uint8_t, 0x100> ram{};
+    ram[0x20U] = 0x12U;
+    bus b(16U, mnemos::topology::endianness::big);
+    b.map_ram(0x0000U, ram, 0);
+    b.map_bus_error(0x0021U, 0x01U, 1);
+
+    CHECK(b.read16_be(0x0020U) == 0x12FFU);
+    auto fault = b.consume_bus_fault();
+    CHECK(fault.asserted);
+    CHECK(fault.address == 0x0021U);
+    CHECK_FALSE(fault.write);
+
+    b.write16_be(0x0020U, 0xBEEFU);
+    fault = b.consume_bus_fault();
+    CHECK(fault.asserted);
+    CHECK(fault.address == 0x0021U);
+    CHECK(fault.write);
+    CHECK(ram[0x20U] == 0xBEU); // first byte completed before the second byte faulted
+    CHECK(ram[0x21U] == 0x00U);
+}
+
 TEST_CASE("bus masks addresses to its width") {
     std::array<std::uint8_t, 0x10> ram{};
     bus b(16U);

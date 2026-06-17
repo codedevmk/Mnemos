@@ -10,9 +10,9 @@
 
 using mnemos::dsp::clip_i16;
 using mnemos::dsp::kMixerGainOne;
-using mnemos::dsp::kMixerGainShift;
 using mnemos::dsp::kOutputRate;
 using mnemos::dsp::sample_channel_box;
+using mnemos::dsp::sample_channel_linear;
 using mnemos::dsp::scale_q12;
 
 namespace mnemos::apps::player::adapters::sms {
@@ -23,16 +23,47 @@ namespace mnemos::apps::player::adapters::sms {
         // the Z80 then samples. PSG ticks at the Z80 rate and applies its own
         // /16 internal divider.
         std::vector<runtime::scheduled_chip> build_schedule(manifests::sms::sms_runtime& sys) {
-            return {
+            std::vector<runtime::scheduled_chip> chips{
                 {sys.vdp(), 1U},
                 {sys.cpu(), 1U},
                 {sys.psg(), 1U},
             };
+            if (sys.fm_unit_enabled()) {
+                chips.push_back({sys.fm(), 1U});
+            }
+            return chips;
         }
 
-        // SMS-only PSG gain. The system-agnostic DSP helpers (clip_i16,
-        // scale_q12, sample_channel_*) live in mnemos::dsp.
+        // SMS mixer gains. Base SMS/GG PSG keeps the historical full-scale
+        // output; FM-enabled SMS gives the two sources headroom before summing.
         constexpr int kGainPsg = kMixerGainOne;
+        constexpr int kGainPsgWithFm = kMixerGainOne / 2;
+        constexpr int kGainFm = kMixerGainOne / 2;
+
+        // Resample one mono or stereo source into the output-frame accumulators.
+        void add_source(std::int32_t* acc_l, std::int32_t* acc_r, const std::int16_t* src,
+                        int chans, int count, int gain, int dst_count) noexcept {
+            if (src == nullptr || count <= 0 || dst_count <= 0) {
+                return;
+            }
+            const int stride = chans;
+            const double scale = static_cast<double>(count) / static_cast<double>(dst_count);
+            for (int i = 0; i < dst_count; ++i) {
+                int l = 0;
+                int r = 0;
+                if (scale > 1.0) {
+                    l = sample_channel_box(src, stride, 0, count, scale * i, scale * (i + 1));
+                    r = chans == 2
+                            ? sample_channel_box(src, stride, 1, count, scale * i, scale * (i + 1))
+                            : l;
+                } else {
+                    l = sample_channel_linear(src, stride, 0, count, scale * i);
+                    r = chans == 2 ? sample_channel_linear(src, stride, 1, count, scale * i) : l;
+                }
+                acc_l[i] += scale_q12(l, gain);
+                acc_r[i] += scale_q12(r, gain);
+            }
+        }
 
     } // namespace
 
@@ -44,19 +75,29 @@ namespace mnemos::apps::player::adapters::sms {
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]),
-          game_gear_(config.game_gear) {
+          game_gear_(config.game_gear),
+          fm_unit_(sys_->fm_unit_enabled()) {
         sys_->psg()->enable_audio_capture(true);
+        if (fm_unit_) {
+            sys_->fm()->enable_audio_capture(true);
+        }
 
         // Non-owning chip enumeration in scheduler order; matches build_schedule().
-        chip_view_[0] = sys_->vdp();
-        chip_view_[1] = sys_->cpu();
-        chip_view_[2] = sys_->psg();
+        chip_view_[chip_count_++] = sys_->vdp();
+        chip_view_[chip_count_++] = sys_->cpu();
+        chip_view_[chip_count_++] = sys_->psg();
+        if (fm_unit_) {
+            chip_view_[chip_count_++] = sys_->fm();
+        }
 
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = game_gear_ ? "Game Gear" : "Master System"});
         spec_.push_back(
             {.label = "Region",
              .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
+        if (fm_unit_) {
+            spec_.push_back({.label = "Audio", .value = "PSG+FM"});
+        }
         if (!display_name.empty()) {
             spec_.push_back({.label = "Cart", .value = std::move(display_name)});
         }
@@ -95,20 +136,28 @@ namespace mnemos::apps::player::adapters::sms {
 
     frontend_sdk::audio_chunk sms_adapter::drain_audio() noexcept {
         const std::size_t psg_count = sys_->psg()->pending_samples();
-        if (psg_count == 0U) {
+        const std::size_t fm_count = fm_unit_ ? sys_->fm()->pending_samples() : 0U;
+        if (psg_count == 0U && fm_count == 0U) {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
         }
-        psg_buf_.resize(psg_count);
-        sys_->psg()->drain_samples(psg_buf_.data(), psg_count);
+        if (psg_count > 0U) {
+            psg_buf_.resize(psg_count);
+            sys_->psg()->drain_samples(psg_buf_.data(), psg_count);
+        } else {
+            psg_buf_.clear();
+        }
+        if (fm_count > 0U) {
+            fm_buf_.resize(fm_count * 2U);
+            sys_->fm()->drain_samples(fm_buf_.data(), fm_count);
+        } else {
+            fm_buf_.clear();
+        }
 
         // The Game Gear PSG queues interleaved L/R (2 samples per step); the SMS
         // queues mono. Resample each source channel with the box filter, reading
         // the queue at the matching stride.
         const int stride = game_gear_ ? 2 : 1;
         const int src_frames = static_cast<int>(psg_count) / stride;
-        if (src_frames == 0) {
-            return {.samples = nullptr, .frame_count = 0U, .sample_rate = kOutputRate};
-        }
 
         // Accumulate the fractional sample so the long-term output rate is
         // exact even when (kOutputRate / target_fps_) is not an integer.
@@ -119,17 +168,21 @@ namespace mnemos::apps::player::adapters::sms {
         }
         audio_frac_ = exact - static_cast<double>(dst_pairs);
 
+        acc_l_.assign(static_cast<std::size_t>(dst_pairs), 0);
+        acc_r_.assign(static_cast<std::size_t>(dst_pairs), 0);
+        if (src_frames > 0) {
+            add_source(acc_l_.data(), acc_r_.data(), psg_buf_.data(), stride, src_frames,
+                       fm_unit_ ? kGainPsgWithFm : kGainPsg, dst_pairs);
+        }
+        if (fm_count > 0U) {
+            add_source(acc_l_.data(), acc_r_.data(), fm_buf_.data(), 2, static_cast<int>(fm_count),
+                       kGainFm, dst_pairs);
+        }
+
         mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
-        const double scale = static_cast<double>(src_frames) / static_cast<double>(dst_pairs);
-        for (int i = 0; i < dst_pairs; ++i) {
-            const int l = sample_channel_box(psg_buf_.data(), stride, 0, src_frames, scale * i,
-                                             scale * (i + 1));
-            // Mono duplicates its single lane into both outputs; GG samples L/R.
-            const int r = game_gear_ ? sample_channel_box(psg_buf_.data(), stride, 1, src_frames,
-                                                          scale * i, scale * (i + 1))
-                                     : l;
-            mix_buf_[i * 2 + 0] = clip_i16(scale_q12(l, kGainPsg));
-            mix_buf_[i * 2 + 1] = clip_i16(scale_q12(r, kGainPsg));
+        for (std::size_t i = 0; i < static_cast<std::size_t>(dst_pairs); ++i) {
+            mix_buf_[i * 2U + 0U] = clip_i16(acc_l_[i]);
+            mix_buf_[i * 2U + 1U] = clip_i16(acc_r_[i]);
         }
         return {.samples = mix_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(dst_pairs),
@@ -185,7 +238,8 @@ namespace mnemos::apps::player::adapters::sms {
                         std::move(opts.rom),
                         manifests::sms::sms_config{.video_region = opts.video_region,
                                                    .cartridge_mapper =
-                                                       mapper_from_override(opts.mapper_override)},
+                                                       mapper_from_override(opts.mapper_override),
+                                                   .fm_unit = opts.fm_unit},
                         std::move(opts.display_name), sched_factory);
                 });
             return 0;

@@ -60,6 +60,9 @@ namespace mnemos::frontend_sdk {
         // Empty = let the adapter auto-detect. Families without selectable
         // mappers ignore it.
         std::string mapper_override;
+        // Optional FM expansion. SMS uses this for the Japanese Master System /
+        // FM Sound Unit YM2413; families without an FM expansion ignore it.
+        bool fm_unit{};
         // Filesystem path of the primary CD/disk image, for media that loads by
         // path rather than a flat byte buffer (a .cue references sibling .bin
         // tracks; an .iso is read whole -- .chd is not supported yet). The Sega CD

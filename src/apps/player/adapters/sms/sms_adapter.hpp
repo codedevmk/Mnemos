@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -34,7 +35,7 @@ namespace mnemos::apps::player::adapters::sms {
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
-            return chip_view_;
+            return {chip_view_.data(), chip_count_};
         }
         // Cartridge battery store (the 93C46 EEPROM's 128 bytes when present, else
         // empty) the frontend persists to .srm.
@@ -48,7 +49,8 @@ namespace mnemos::apps::player::adapters::sms {
 
       private:
         std::unique_ptr<manifests::sms::sms_runtime> sys_;
-        std::array<chips::ichip*, 3> chip_view_{};
+        std::array<chips::ichip*, 4> chip_view_{};
+        std::size_t chip_count_{};
         runtime::scheduler scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
         // Video standard the adapter was built for. region() returns the
@@ -59,6 +61,7 @@ namespace mnemos::apps::player::adapters::sms {
         // Game Gear hardware: the PSG queues interleaved L/R stereo (drained as
         // two channels) and port 0's START feeds the GG $00 mode register.
         bool game_gear_;
+        bool fm_unit_;
         std::uint64_t frames_stepped_{};
 
         // Pull-once status spec (System / Region / Cart) the player reads
@@ -66,6 +69,9 @@ namespace mnemos::apps::player::adapters::sms {
         std::vector<frontend_sdk::spec_field> spec_{};
 
         std::vector<std::int16_t> psg_buf_{};
+        std::vector<std::int16_t> fm_buf_{};
+        std::vector<std::int32_t> acc_l_{};
+        std::vector<std::int32_t> acc_r_{};
         std::vector<std::int16_t> mix_buf_{};
         double audio_frac_{0.0};
     };

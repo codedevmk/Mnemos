@@ -14,6 +14,12 @@ namespace mnemos::chips {
     // pass their 16-bit addresses widened to 32 bits.
     class ibus {
       public:
+        struct bus_fault final {
+            bool asserted{};
+            std::uint32_t address{};
+            bool write{};
+        };
+
         ibus() = default;
         ibus(const ibus&) = delete;
         ibus& operator=(const ibus&) = delete;
@@ -82,6 +88,11 @@ namespace mnemos::chips {
             return false; // default: no direct access, callers use read8/...
         }
         virtual void add_invalidation_listener(std::function<void()> /*listener*/) {}
+
+        // Optional bus-error surface. Most systems leave unmapped addresses as
+        // open bus; hardware that asserts BERR reports the first faulting byte
+        // access here, and the observing CPU consumes it after the bus cycle.
+        [[nodiscard]] virtual bus_fault consume_bus_fault() noexcept { return {}; }
     };
 
 } // namespace mnemos::chips

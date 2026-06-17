@@ -41,6 +41,11 @@ type         = "ti.sn76489"
 attached_bus = "main"
 
 [[chip]]
+id           = "fm"
+type         = "yamaha.ym2413"
+attached_bus = "main"
+
+[[chip]]
 id           = "mapper"
 type         = "korean.msx_mapper"
 attached_bus = "main"

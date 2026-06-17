@@ -58,6 +58,10 @@ namespace mnemos::topology {
                      active_predicate active = {});
         void map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                       write_handler on_write, int priority = 0, active_predicate active = {});
+        // Explicit bus-error/BERR window. Unlike ordinary holes, which remain
+        // open bus by default, accesses resolved here report a consumable fault.
+        void map_bus_error(std::uint32_t start, std::uint32_t size, int priority = 0,
+                           active_predicate active = {});
 
         // Point an existing RAM region (matched by its exact `start`) at new
         // backing storage of the same size -- the bank-window primitive (the
@@ -105,9 +109,14 @@ namespace mnemos::topology {
         void add_invalidation_listener(std::function<void()> listener) override {
             invalidation_listeners_.push_back(std::move(listener));
         }
+        [[nodiscard]] chips::ibus::bus_fault consume_bus_fault() noexcept override {
+            const chips::ibus::bus_fault fault = bus_fault_;
+            bus_fault_ = {};
+            return fault;
+        }
 
       private:
-        enum class kind : std::uint8_t { ram, rom, mmio };
+        enum class kind : std::uint8_t { ram, rom, mmio, fault };
 
         struct region final {
             std::uint32_t start{};
@@ -122,6 +131,11 @@ namespace mnemos::topology {
         };
 
         [[nodiscard]] const region* resolve(std::uint32_t address, bool is_write) const noexcept;
+        void record_bus_fault(std::uint32_t address, bool is_write) noexcept {
+            if (!bus_fault_.asserted) {
+                bus_fault_ = {.asserted = true, .address = address, .write = is_write};
+            }
+        }
 
         // Hot-path cache: recently resolved RAM/ROM regions, each narrowed to
         // the maximal address span where it provably stays the winner (no
@@ -156,6 +170,7 @@ namespace mnemos::topology {
         std::uint32_t address_mask_{0xFFFFU};
         std::vector<region> regions_;
         access_observer observer_{};
+        chips::ibus::bus_fault bus_fault_{};
     };
 
 } // namespace mnemos::topology

@@ -16,8 +16,9 @@
 // it checks D0-D7, A0-A7/USP/SSP, SR, and the affected memory. That catches the
 // arithmetic/flag/addressing/memory bugs that matter for real software while the
 // cycle-exact prefetch pipeline remains future work. Cases that rely on the
-// 68000's address/bus-error (group-0) traps are expected to diverge here, since
-// the functional core completes unaligned accesses instead of trapping.
+// Full group-0 corpus cases are still filtered below: the unit suite covers the
+// functional vector-2/3 paths, while concrete BERR address-map policy, prefetch
+// queue state, exact stacked microstate, and cycle traces remain future work.
 
 #include "ibus.hpp"
 #include "m68000.hpp"
@@ -98,7 +99,7 @@ namespace {
     struct file_result final {
         std::size_t passed = 0;
         std::size_t failed = 0;
-        std::size_t skipped = 0; // group-0 (address/bus error) cases, not yet modelled
+        std::size_t skipped = 0; // full group-0 corpus cases are filtered below
         // Per-file cycle-count drift vs the corpus's `length` field (= Motorola
         // bus cycles). Tracked but does NOT fail the test, only reported, so
         // we can find the worst offenders without breaking the existing
@@ -157,8 +158,10 @@ namespace {
                     cell.at(1).get<std::uint8_t>();
             }
 
-            // Group-0 (address/bus error) handler addresses from the vector table,
-            // for filtering: the functional core does not raise these traps.
+            // Group-0 (address/bus error) handler addresses from the vector table.
+            // The hermetic unit suite pins functional vector-2/3 trapping, but the
+            // external corpus also observes hardware map, prefetch, and cycle details
+            // that this instruction-stepped harness intentionally does not compare yet.
             const std::uint32_t bus_error_handler = longword_at(0x08U);
             const std::uint32_t addr_error_handler = longword_at(0x0CU);
 
@@ -167,7 +170,8 @@ namespace {
 
             const auto& fin = test.at("final");
             // Skip cases the corpus resolves via an address/bus-error trap (vector to
-            // the group-0 handler) -- not modelled by the instruction-stepped core.
+            // the group-0 handler) until concrete system BERR maps and prefetch-exact
+            // group-0 microstate are modelled.
             // Done BEFORE the cycle compare so those cases (where the corpus's
             // 'length' includes ~50 cycles of exception entry we don't pay) don't
             // pollute the per-mnemonic drift metric.
