@@ -55,6 +55,11 @@ namespace mnemos::manifests::capcom_cps1 {
 
     cps1_system::cps1_system(common::rom_set_image image, cps1_board_params board_params)
         : roms(std::move(image)), params(board_params) {
+        // Resolve the board profile up front: the CPS-B register window base
+        // ($800140, or $8001C0 on the relocated CPS-B-18 board) must be known
+        // before the MMIO window is mapped below.
+        profile = profile_for_id(params.cps_b_profile_id)
+                      .value_or(chips::video::cps_a_b::cps_b_profile{});
         // --- main bus: program ROM low, RAM overlays above it ---
         auto& program = pinned_region(roms, "maincpu", main_rom_size);
         main_bus.map_rom(program_rom_base, std::span<const std::uint8_t>(program), 0);
@@ -94,7 +99,7 @@ namespace mnemos::manifests::capcom_cps1 {
         // reads decode through the active profile (board ID + 16x16 multiplier),
         // since the render registers are write latches the 68K can't read back.
         main_bus.map_mmio(
-            cps_b_reg_base, cps_b_reg_size,
+            profile.cps_b_base, cps_b_reg_size,
             [this](std::uint32_t address) -> std::uint8_t {
                 if (profile.cps_b_eeprom && address >= cps_b_eeprom_addr &&
                     address < cps_b_eeprom_addr + 2U) {
@@ -103,8 +108,9 @@ namespace mnemos::manifests::capcom_cps1 {
                                ? static_cast<std::uint8_t>(eeprom.data_out() ? 0x01U : 0x00U)
                                : 0x00U;
                 }
+                // Fold to the 0x40-byte register file (window-relative, even byte).
                 const std::uint8_t offset =
-                    static_cast<std::uint8_t>((address - cps_b_reg_base) & 0xFEU);
+                    static_cast<std::uint8_t>((address - profile.cps_b_base) & 0x3EU);
                 const std::uint16_t word = cps_b_read_word(offset);
                 return (address & 1U) == 0U ? static_cast<std::uint8_t>(word >> 8U)
                                             : static_cast<std::uint8_t>(word);
@@ -120,7 +126,7 @@ namespace mnemos::manifests::capcom_cps1 {
                     return;
                 }
                 const std::uint8_t idx =
-                    static_cast<std::uint8_t>((address - cps_b_reg_base) >> 1U);
+                    static_cast<std::uint8_t>(((address - profile.cps_b_base) & 0x3EU) >> 1U);
                 const std::uint16_t word = video.cps_b_reg(idx);
                 const std::uint16_t merged =
                     (address & 1U) == 0U
@@ -243,8 +249,8 @@ namespace mnemos::manifests::capcom_cps1 {
         video.attach_tile_ram(gfx_ram);
         video.attach_object_ram(gfx_ram);
         video.attach_palette(palette);
-        profile = profile_for_id(params.cps_b_profile_id)
-                      .value_or(chips::video::cps_a_b::cps_b_profile{});
+        // profile was resolved at the top of the constructor (the CPS-B window base
+        // is needed before the MMIO map); just hand it to the video chip here.
         video.set_cps_b_profile(profile);
 
         // The CP1B1F board straps the serial 93C46 ORG pin high (16-bit org:

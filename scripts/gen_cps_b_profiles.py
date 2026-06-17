@@ -294,6 +294,41 @@ config["b02_tk22b"] = dict(
 )
 id_to_config[52] = "b02_tk22b"
 
+# 53 = sf2ue (Street Fighter II, US rev E): CPS_B_18 register board, reusing the
+# STF29 (== S9263B) gfx mapper and sharing the sf2 parent's gfx ROMs. Same simple
+# register format as CPS_B_01/02. (Differs from the sf2 parent's CPS_B_11 board.)
+config["b18_s9263b"] = dict(
+    id_offset=0x10, id_value=0x0408, mult=[REG_NONE, REG_NONE, REG_NONE, REG_NONE],
+    layer_control=0x1C, priority=[0x1A, 0x18, 0x16, 0x14], palette=0x12,
+    enable=[0x10, 0x08, 0x02, 0, 0], mapper="s9263b",
+    # This board relocates the entire CPS-B register window to $8001C0 (the
+    # IOB2/C632B PAL case); the register offsets above stay window-relative.
+    base=0x8001C0,
+)
+id_to_config[53] = "b18_s9263b"
+
+# 54 = varthj (Varth, Japan): its own gfx on the 88622B-3 board -> the VA22B
+# 2-bank mapper (all four layer types span both 0x4000-code banks), on the
+# CPS_B_21_BT5 register board. BT5 uses the multiply protection (mult regs set),
+# not an id-value check (reference cpsb_value = -1 -> no id check, id_offset NONE).
+# Reference register fields 7-9 (input/output port wiring) are not modelled, like
+# every other CPS-B-21 board in the census. Parent varth runs CPS_B_04 / VA24B.
+_va_all4 = (
+    GFX_BITS["CPS1_GFX_SPRITES"] | GFX_BITS["CPS1_GFX_SCROLL1"] |
+    GFX_BITS["CPS1_GFX_SCROLL2"] | GFX_BITS["CPS1_GFX_SCROLL3"]
+)
+mapper_ranges["va22b"] = [
+    (_va_all4, 0x0000, 0x3FFF, 0),
+    (_va_all4, 0x4000, 0x7FFF, 1),
+]
+mapper["va22b"] = ([0x4000, 0x4000, 0, 0], "va22b")
+config["bt5_va22b"] = dict(
+    id_offset=REG_NONE, id_value=0x0000, mult=[0x0E, 0x0C, 0x0A, 0x08],
+    layer_control=0x20, priority=[0x2E, 0x2C, 0x2A, 0x28], palette=0x30,
+    enable=[0x20, 0x04, 0x02, 0, 0], mapper="va22b",
+)
+id_to_config[54] = "bt5_va22b"
+
 # independent reimplementation of map_gfx_code (the golden oracle)
 SHIFT = {1: 1, 2: 0, 4: 1, 8: 3}  # sprites, scroll1, scroll2, scroll3
 ABSENT = "absent"
@@ -427,6 +462,8 @@ for pid in ids:
         L.append(f"                .bootleg_kludge = {hx(c['kludge'], 2)},")
     if pid == eeprom_id:
         L.append("                .cps_b_eeprom = true,")
+    if c.get("base") is not None:
+        L.append(f"                .cps_b_base = {hx(c['base'], 6)},")
     L.append(f"                .mapper = {{.bank_size = {{{bs}}}, .ranges = ranges_{c['mapper']}}},")
     L.append("            },")
 L.append("        }};")
