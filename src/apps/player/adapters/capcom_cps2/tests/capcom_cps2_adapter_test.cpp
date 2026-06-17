@@ -43,6 +43,41 @@ namespace {
     }
 } // namespace
 
+TEST_CASE("capcom_cps2_adapter constructs from a bare program and reports board state",
+          "[capcom_cps2][adapter]") {
+    // A bare (non-zip) binary is treated as the encrypted 68000 program. With no
+    // board key it is a non-executable blocker, but the adapter still constructs,
+    // exposes a valid 384x224 framebuffer, and steps frames without crashing.
+    std::vector<std::uint8_t> program(0x40U, 0x00U);
+    capcom_cps2_adapter adapter(std::move(program), "test");
+    CHECK_FALSE(adapter.machine().executable());
+    const auto fb = adapter.current_frame();
+    CHECK(fb.width == 384U);
+    CHECK(fb.height == 224U);
+    REQUIRE(fb.pixels != nullptr);
+    adapter.step_one_frame();
+    CHECK(adapter.frames_stepped() == 1U);
+    CHECK(adapter.region().frames_per_second_x1000 == 59600U);
+}
+
+TEST_CASE("capcom_cps2_adapter maps pads onto the board's active-low input words",
+          "[capcom_cps2][adapter]") {
+    std::vector<std::uint8_t> program(0x40U, 0x00U);
+    capcom_cps2_adapter adapter(std::move(program));
+    auto& machine = adapter.machine();
+    CHECK(machine.input0 == 0xFFFFU); // idle: all released (active-low high)
+
+    mnemos::frontend_sdk::controller_state p1{};
+    p1.right = true;
+    p1.a = true;
+    p1.start = true;
+    adapter.apply_input(0, p1);
+    // P1 in the low byte: right clears bit0, button 1 clears bit4.
+    CHECK((machine.input0 & 0x00FFU) == static_cast<std::uint16_t>(0xFFU & ~0x11U));
+    CHECK((machine.input0 & 0xFF00U) == 0xFF00U);    // P2 untouched
+    CHECK((machine.input_sys & 0x0001U) == 0x0000U); // start 1 active-low
+}
+
 // Data-gated (never committed), game-agnostic: MNEMOS_CPS2_SET points at a zip of
 // the authentic CPS2 dump files plus a "game.toml" copy of the matching set
 // declaration and the 20-byte board key (a "key" region in the toml, or a
