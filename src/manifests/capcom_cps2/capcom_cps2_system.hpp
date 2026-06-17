@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace mnemos::manifests::capcom_cps2 {
@@ -124,6 +125,13 @@ namespace mnemos::manifests::capcom_cps2 {
         // real opcodes. False (a "missing key" blocker) leaves the opcode image as
         // the raw encrypted bytes; the board must not be treated as running.
         [[nodiscard]] bool executable() const noexcept { return executable_; }
+
+        // De-scramble a run of CPS-2 gfx (a multiple of 8 bytes, a power-of-two
+        // count of 8-byte units) in place: the mask ROMs load word/byte-lane
+        // interleaved, then each bank is recursively unshuffled into the linear
+        // tile layout the decoder reads. The board applies it per 0x200000 bank at
+        // load; exposed for unit testing on a small bank.
+        static void unshuffle_gfx_units(std::span<std::uint8_t> units) noexcept;
 
         // Run whole 68000 instructions until at least `cycles` have elapsed.
         void run_cycles(std::uint64_t cycles);
