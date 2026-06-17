@@ -32,6 +32,8 @@ CLONES = {
     "daimakai": ("ghouls",   "Daimakaimura (Japan)",                 None),
     "stridrja": ("strider",  "Strider Hiryu (Japan)",                None),
     "daimakr2": ("ghouls",   "Daimakaimura (Japan Resale Ver.)",     36),  # CPS-B-21 / DAM63B
+    "area88":   ("unsquad",  "Area 88 (Japan)",                      None),
+    "chikij":   ("mtwins",   "Chiki Chiki Boys (Japan)",             None),
 }
 
 REGION = {"MAIN": "maincpu", "SOUND": "audiocpu", "OKI": "oki", "GFX": "gfx"}

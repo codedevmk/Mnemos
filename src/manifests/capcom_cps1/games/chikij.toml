@@ -1,0 +1,124 @@
+# Chiki Chiki Boys (Japan) -- Capcom CPS1 clone of mtwins (parent-merge). Transcribed from the
+# reference part tables; CRCs from the local zips (clone-unique from chikij.zip,
+# shared from mtwins.zip). Shares the parent's gfx ROMs, so it reuses the
+# parent's CPS-B profile (14).
+
+[set]
+schema = "mnemos-romset/1"
+name   = "chikij"
+board  = "capcom_cps1"
+parent = "mtwins"
+cps_b_profile = 14
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "chj_36a.bin"
+offset = 0x0
+stride = 2
+size   = 0x20000
+crc32  = 0xec1328d8
+
+[[region.file]]
+name   = "chj_42a.bin"
+offset = 0x1
+stride = 2
+size   = 0x20000
+crc32  = 0x4ae13503
+
+[[region.file]]
+name   = "chj_37a.bin"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x46d2cf7b
+
+[[region.file]]
+name   = "chj_43a.bin"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x8d387fe8
+
+[[region.file]]
+name   = "ck-32m.8h"
+offset = 0x80000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x9b70bd41
+
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name   = "ch_09.12b"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x10000
+crc32  = 0x4d4255b7
+
+[[region.file]]
+name   = "ch_09.12b"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x8000
+size   = 0x10000
+crc32  = 0x4d4255b7
+
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "ch_18.12b"
+offset = 0x0
+size   = 0x20000
+crc32  = 0xf909e8de
+
+[[region.file]]
+name   = "ch_19.12c"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xfc158cf7
+
+[[region]]
+name = "gfx"
+size = 0x200000
+
+[[region.file]]
+name   = "ck-5m.7a"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4ec75f15
+
+[[region.file]]
+name   = "ck-7m.9a"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xd85d00d6
+
+[[region.file]]
+name   = "ck-1m.3a"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xf33ca9d4
+
+[[region.file]]
+name   = "ck-3m.5a"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x0ba2047f
