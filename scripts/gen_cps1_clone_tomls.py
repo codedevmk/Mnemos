@@ -48,6 +48,10 @@ CONFIG_PROFILE = {
     # revisions read the QS1 protection and need the QS1 profile (40) -- verified
     # empirically: wofu/wofj render only on 40, wof only on 29.
     ("CPS_B_21_QS1", "mapper_TK263B"): 40,
+    # Japanese regional clones with their OWN gfx on an early "22B" B-board: same
+    # CPS-B register layout as the parent, a different gfx mapper. Each maps to a
+    # dedicated Mnemos profile (gfx data + mapper differ from the parent's "24B").
+    ("CPS_B_02", "mapper_TK22B"): 52,  # dynwarj (parent dynwar / TK24B1)
 }
 
 # Bootleg/hack boards keyed by the FULL config tuple (they share (cpsb, mapper)
