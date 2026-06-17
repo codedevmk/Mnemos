@@ -8,6 +8,11 @@
 namespace mnemos::chips::video {
 
     namespace {
+        // The gfx mapper banks tile codes in 0x20000-tile units (the scroll layers
+        // address the upper bank, shifted per layer).
+        constexpr std::uint32_t gfx_bank_size_tiles = 0x20000U;
+        constexpr std::uint32_t gfx_bank_mask = gfx_bank_size_tiles - 1U;
+
         // A 4-bit channel scaled by the 4-bit brightness: c*0x11 expands the nibble
         // to 8 bits, then the (0x0F + 2*brightness)/0x2D factor dims/brightens it.
         [[nodiscard]] std::uint8_t scale_channel(std::uint8_t channel,
@@ -76,6 +81,70 @@ namespace mnemos::chips::video {
                 page_source += static_cast<std::uint32_t>(palette_page_bytes);
             }
         }
+    }
+
+    bool cps2_video::map_gfx_code(gfx_type type, std::uint32_t code,
+                                  std::uint32_t& mapped) const noexcept {
+        if (gfx_.empty()) {
+            return false;
+        }
+        if (type == gfx_type::sprites) {
+            mapped = code;
+            return true;
+        }
+        int shift = 0;
+        switch (type) {
+        case gfx_type::scroll1:
+            shift = 0;
+            break;
+        case gfx_type::scroll2:
+            shift = 1;
+            break;
+        case gfx_type::scroll3:
+            shift = 3;
+            break;
+        default:
+            return false;
+        }
+        const std::uint32_t shifted = code << shift;
+        if (shifted > gfx_bank_mask) {
+            return false;
+        }
+        mapped = (gfx_bank_size_tiles + (shifted & gfx_bank_mask)) >> shift;
+        return true;
+    }
+
+    std::uint8_t cps2_video::decode_packed_pixel(std::uint32_t tile_base, std::uint32_t row_stride,
+                                                 int x, int y) const noexcept {
+        const std::uint32_t group = static_cast<std::uint32_t>(x >> 3);
+        const std::uint32_t bit = static_cast<std::uint32_t>(7 - (x & 7));
+        const std::uint32_t offset =
+            tile_base + static_cast<std::uint32_t>(y) * row_stride + group * 4U;
+        if (gfx_.empty() || offset + 3U >= gfx_.size()) {
+            return transparent_pen;
+        }
+        return static_cast<std::uint8_t>(
+            (((gfx_[offset + 3U] >> bit) & 1U) << 0U) | (((gfx_[offset + 2U] >> bit) & 1U) << 1U) |
+            (((gfx_[offset + 1U] >> bit) & 1U) << 2U) | (((gfx_[offset + 0U] >> bit) & 1U) << 3U));
+    }
+
+    std::uint8_t cps2_video::tile_pixel(gfx_type type, std::uint32_t code, int x, int y,
+                                        int tile_size, int x_bias) const noexcept {
+        std::uint32_t mapped = 0U;
+        if (!map_gfx_code(type, code, mapped)) {
+            return transparent_pen;
+        }
+        const int rom_x = x + x_bias;
+        if (tile_size == 8 && x >= 0 && x < 8 && rom_x >= 0 && rom_x < 16 && y >= 0 && y < 8) {
+            return decode_packed_pixel(mapped * 64U, 8U, rom_x, y);
+        }
+        if (tile_size == 16 && x >= 0 && x < 16 && y >= 0 && y < 16) {
+            return decode_packed_pixel(mapped * 128U, 8U, x, y);
+        }
+        if (tile_size == 32 && x >= 0 && x < 32 && y >= 0 && y < 32) {
+            return decode_packed_pixel(mapped * 512U, 16U, x, y);
+        }
+        return transparent_pen;
     }
 
     void cps2_video::render(std::uint32_t palette_source, std::uint16_t palette_control) noexcept {

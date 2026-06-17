@@ -26,6 +26,18 @@ namespace mnemos::chips::video {
         static constexpr std::size_t palette_page_bytes = 0x400U;
         static constexpr std::size_t palette_copy_pages = 6U;
         static constexpr std::size_t palette_bytes = palette_page_bytes * palette_copy_pages;
+        // The pen the gfx decode returns for a transparent / out-of-range texel.
+        static constexpr std::uint8_t transparent_pen = 15U;
+
+        // Graphics-code categories. CPS-2 packs all tile/sprite art in one ROM; a
+        // layer's code is mapped into it differently per category (sprites use the
+        // code directly, the scroll layers shift + bank it).
+        enum class gfx_type : std::uint8_t {
+            sprites = 1U,
+            scroll1 = 2U,
+            scroll2 = 4U,
+            scroll3 = 8U,
+        };
 
         cps2_video() {
             introspection_.with_registers([this] { return register_snapshot(); });
@@ -47,6 +59,19 @@ namespace mnemos::chips::video {
         void attach_video_ram(std::span<const std::uint8_t> video_ram) noexcept {
             video_ram_ = video_ram;
         }
+        // The tile/sprite graphics ROM (the source for tile_pixel).
+        void attach_gfx(std::span<const std::uint8_t> gfx) noexcept { gfx_ = gfx; }
+
+        // Map a layer's graphics code to a tile index in the gfx ROM. Returns false
+        // (no tile) for an out-of-bank code or when no gfx is attached.
+        [[nodiscard]] bool map_gfx_code(gfx_type type, std::uint32_t code,
+                                        std::uint32_t& mapped) const noexcept;
+
+        // Decode one 4bpp texel of a tile. `tile_size` is 8, 16, or 32; `x_bias`
+        // selects the half of a 16-wide storage row for 8x8 tiles (0 or 8). Returns
+        // transparent_pen for an out-of-range texel / unmapped code.
+        [[nodiscard]] std::uint8_t tile_pixel(gfx_type type, std::uint32_t code, int x, int y,
+                                              int tile_size, int x_bias) const noexcept;
 
         // Copy the active palette pages from video RAM at `source_base` into the
         // palette buffer; `control` is the CPS-B palette-control word (one bit per
@@ -65,8 +90,15 @@ namespace mnemos::chips::video {
 
       private:
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
+        // One 4bpp texel from the gfx ROM at `tile_base`, rows `row_stride` bytes
+        // apart (16 pixels = 8 bytes for the 8x8/16x16 layouts; 32 pixels = 16
+        // bytes for 32x32). Transparent if out of range.
+        [[nodiscard]] std::uint8_t decode_packed_pixel(std::uint32_t tile_base,
+                                                       std::uint32_t row_stride, int x,
+                                                       int y) const noexcept;
 
         std::span<const std::uint8_t> video_ram_{};
+        std::span<const std::uint8_t> gfx_{};
         std::array<std::uint8_t, palette_bytes> palette_ram_{};
         static constexpr std::size_t pixel_count =
             static_cast<std::size_t>(visible_width) * visible_height;

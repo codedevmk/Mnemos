@@ -71,6 +71,53 @@ TEST_CASE("cps2 video palette-control gates which pages copy", "[cps2_video]") {
     CHECK(video.palette_color(0x200U) == 0xFF00U); // page 1 = palette byte 0x400 = source base
 }
 
+TEST_CASE("cps2 video maps graphics codes per layer category", "[cps2_video]") {
+    using gfx_type = cps2_video::gfx_type;
+    cps2_video video;
+    std::vector<std::uint8_t> gfx(0x1000U, 0U);
+    video.attach_gfx(gfx);
+    std::uint32_t mapped = 0U;
+
+    // Sprites use the code directly.
+    REQUIRE(video.map_gfx_code(gfx_type::sprites, 0x1234U, mapped));
+    CHECK(mapped == 0x1234U);
+
+    // Scroll layers address the upper bank, shifted per layer (0/1/3).
+    REQUIRE(video.map_gfx_code(gfx_type::scroll1, 0x00000U, mapped));
+    CHECK(mapped == 0x20000U);
+    REQUIRE(video.map_gfx_code(gfx_type::scroll1, 0x1FFFFU, mapped));
+    CHECK(mapped == 0x3FFFFU);
+    REQUIRE(video.map_gfx_code(gfx_type::scroll2, 0x00000U, mapped));
+    CHECK(mapped == 0x10000U); // (0x20000 + 0) >> 1
+    REQUIRE(video.map_gfx_code(gfx_type::scroll3, 0x00000U, mapped));
+    CHECK(mapped == 0x04000U); // (0x20000 + 0) >> 3
+
+    // Out-of-bank codes have no tile.
+    CHECK_FALSE(video.map_gfx_code(gfx_type::scroll1, 0x20000U, mapped));
+    CHECK_FALSE(video.map_gfx_code(gfx_type::scroll2, 0x10000U, mapped));
+
+    // No gfx attached -> no tile.
+    cps2_video bare;
+    CHECK_FALSE(bare.map_gfx_code(gfx_type::sprites, 0U, mapped));
+}
+
+TEST_CASE("cps2 video decodes 4bpp tile texels from the gfx ROM", "[cps2_video]") {
+    using gfx_type = cps2_video::gfx_type;
+    cps2_video video;
+    std::vector<std::uint8_t> gfx(0x1000U, 0U);
+    // Sprite tile (code 0 -> offset 0). Texel (0,0): bit 7 of each of the 4 planes
+    // at gfx[0..3]. Make pen = 0b1010 = 0xA: plane3(gfx[0]) and plane1(gfx[2]) set.
+    gfx[0] = 0x80U; // bit3 of the pen
+    gfx[2] = 0x80U; // bit1 of the pen
+    video.attach_gfx(gfx);
+
+    CHECK(video.tile_pixel(gfx_type::sprites, 0U, 0, 0, 16, 0) == 0x0AU);
+    CHECK(video.tile_pixel(gfx_type::sprites, 0U, 1, 0, 16, 0) == 0x00U); // bit 6 planes clear
+    // An off-tile coordinate / a code whose data is past the ROM -> transparent.
+    CHECK(video.tile_pixel(gfx_type::sprites, 0U, 20, 0, 16, 0) == cps2_video::transparent_pen);
+    CHECK(video.tile_pixel(gfx_type::sprites, 0x9999U, 0, 0, 16, 0) == cps2_video::transparent_pen);
+}
+
 TEST_CASE("cps2 video save/load round-trips the palette + frame index", "[cps2_video]") {
     cps2_video video;
     std::vector<std::uint8_t> vram(0x10000U, 0U);
