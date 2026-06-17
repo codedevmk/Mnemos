@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace {
@@ -55,7 +56,6 @@ namespace {
         return enc;
     }
 
-    // Fill a tile's planar gfx bytes so every pixel decodes to `pen`.
 } // namespace
 
 TEST_CASE("cps2 system boots the 68000 from the decrypted opcode image", "[capcom_cps2][system]") {
@@ -233,4 +233,29 @@ TEST_CASE("cps2 system QSound: shared comm RAM, Z80 boot, reset gating", "[capco
     // The DL-1425 ready flag is readable at $D007 (deterministic; not the scratch
     // RAM that backs the rest of the $D000 window).
     CHECK(z80.read8(0xD007U) == z80.read8(0xD007U));
+}
+
+TEST_CASE("cps2 gfx unshuffle de-interleaves 8-byte units recursively", "[capcom_cps2][gfx]") {
+    // Eight 8-byte units, unit i tagged with the value i in every byte. The
+    // recursive unshuffle is an inverse perfect-shuffle: the result orders the
+    // units [0,2,4,6,1,3,5,7] (evens then odds, computed by hand from the
+    // reference algorithm).
+    std::vector<std::uint8_t> buf(8U * 8U, 0U);
+    for (std::uint8_t unit = 0U; unit < 8U; ++unit) {
+        std::fill_n(buf.begin() + unit * 8U, 8U, unit);
+    }
+
+    cps2_system::unshuffle_gfx_units(std::span<std::uint8_t>(buf));
+
+    const std::array<std::uint8_t, 8> expected{0U, 2U, 4U, 6U, 1U, 3U, 5U, 7U};
+    for (std::size_t pos = 0U; pos < expected.size(); ++pos) {
+        // Every byte of the unit carries its tag, so checking the first suffices.
+        CHECK(buf[pos * 8U] == expected[pos]);
+    }
+
+    // A run of two units (or any count not a multiple of four) is already ordered.
+    std::vector<std::uint8_t> small{1U, 1U, 1U, 1U, 1U, 1U, 1U, 1U, 2U, 2U, 2U, 2U, 2U, 2U, 2U, 2U};
+    const std::vector<std::uint8_t> before = small;
+    cps2_system::unshuffle_gfx_units(std::span<std::uint8_t>(small));
+    CHECK(small == before);
 }

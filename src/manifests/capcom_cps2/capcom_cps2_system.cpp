@@ -1,6 +1,7 @@
 #include "capcom_cps2_system.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <span>
 #include <string>
 #include <string_view>
@@ -35,7 +36,34 @@ namespace mnemos::manifests::capcom_cps2 {
             }
             return std::nullopt;
         }
+        // One CPS-2 gfx bank: the recursive unshuffle is applied to each 0x200000
+        // span independently.
+        constexpr std::size_t gfx_bank_bytes = 0x200000U;
+        constexpr std::size_t gfx_unit_bytes = 8U; // an 8-byte (64-bit) gfx unit
     } // namespace
+
+    void cps2_system::unshuffle_gfx_units(std::span<std::uint8_t> units) noexcept {
+        // Recursive de-interleave on 8-byte units (transcribed from the reference):
+        // split in half, unshuffle each half, then swap the inner quarter of the
+        // first half with the outer quarter of the second. A run with <=2 units or
+        // a non-multiple-of-4 unit count is already in order.
+        const std::size_t n = units.size() / gfx_unit_bytes;
+        if (n <= 2U || (n & 3U) != 0U) {
+            return;
+        }
+        const std::size_t half = n / 2U;
+        unshuffle_gfx_units(units.subspan(0U, half * gfx_unit_bytes));
+        unshuffle_gfx_units(units.subspan(half * gfx_unit_bytes, half * gfx_unit_bytes));
+        std::uint8_t* buf = units.data();
+        for (std::size_t i = 0U; i < half / 2U; ++i) {
+            std::uint8_t tmp[gfx_unit_bytes];
+            std::uint8_t* a = buf + (half / 2U + i) * gfx_unit_bytes;
+            std::uint8_t* b = buf + (half + i) * gfx_unit_bytes;
+            std::memcpy(tmp, a, gfx_unit_bytes);
+            std::memcpy(a, b, gfx_unit_bytes);
+            std::memcpy(b, tmp, gfx_unit_bytes);
+        }
+    }
 
     void cps2_system::map_cps_reg_window(std::uint32_t base, std::size_t file_offset) {
         // Latch the CPS-A / CPS-B register file and forward the decoded side
@@ -185,7 +213,12 @@ namespace mnemos::manifests::capcom_cps2 {
         // Video: the CPS-2 chip reads the tile/attribute RAM ($900000) for the
         // scroll name tables + the palette DMA source, and the packed gfx ROM for
         // tile art. (The vblank IRQ is raised by run_frame, not the chip.)
-        const auto& gfx = region(roms, "gfx");
+        // The gfx mask ROMs load word/byte-lane interleaved; de-scramble each full
+        // 0x200000 bank in place into the linear tile layout the decoder reads.
+        auto& gfx = region(roms, "gfx");
+        for (std::size_t base = 0U; base + gfx_bank_bytes <= gfx.size(); base += gfx_bank_bytes) {
+            unshuffle_gfx_units(std::span<std::uint8_t>(gfx).subspan(base, gfx_bank_bytes));
+        }
         video_.attach_gfx(std::span<const std::uint8_t>(gfx));
         video_.attach_video_ram(std::span<const std::uint8_t>(video_ram_));
 
