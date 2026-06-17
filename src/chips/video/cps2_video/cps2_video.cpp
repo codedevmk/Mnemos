@@ -48,6 +48,7 @@ namespace mnemos::chips::video {
         cps_b_regs_.fill(0U);
         sprite_x_base_ = 0U;
         sprite_y_base_ = 0U;
+        object_priority_ = 0U;
         scroll1_x_ = scroll1_y_ = scroll2_x_ = scroll2_y_ = scroll3_x_ = scroll3_y_ = 0U;
         scroll1_base_ = scroll2_base_ = scroll3_base_ = 0U;
         object_base_ = 0U;
@@ -366,7 +367,8 @@ namespace mnemos::chips::video {
                0x10U * static_cast<std::uint32_t>(block_y);
     }
 
-    void cps2_video::draw_sprite_entry(std::uint32_t index, bool flip_screen) noexcept {
+    void cps2_video::draw_sprite_entry(std::uint32_t index, bool flip_screen,
+                                       const std::array<std::uint16_t, 8>& sprite_masks) noexcept {
         const std::uint32_t entry = index * object_entry_bytes;
         if (entry + object_entry_bytes > object_bank_bytes) {
             return;
@@ -384,6 +386,7 @@ namespace mnemos::chips::video {
             return;
         }
         const auto priority = static_cast<std::uint8_t>((raw_x >> 13U) & 0x07U);
+        const std::uint16_t sprite_mask = sprite_masks[priority];
         const int blocks_x = static_cast<int>((attr >> 8U) & 0x0FU) + 1;
         const int blocks_y = static_cast<int>((attr >> 12U) & 0x0FU) + 1;
         const bool flip_x = (attr & 0x0020U) != 0U;
@@ -431,10 +434,15 @@ namespace mnemos::chips::video {
                         }
                         const std::size_t pixel_index =
                             static_cast<std::size_t>(vy) * visible_width + vx;
+                        // Layer priority: a scroll layer whose priority bit is set in
+                        // this sprite's mask occludes the sprite.
+                        if (pixel_priority_[pixel_index] != 0U &&
+                            (sprite_mask & static_cast<std::uint16_t>(
+                                               1U << pixel_priority_[pixel_index])) != 0U) {
+                            continue;
+                        }
                         // Sprite-vs-sprite z: a sprite already here with >= priority
-                        // stays on top. (The CPS-B layer-priority mask -- sprites
-                        // behind a higher scroll layer -- lands with the priority
-                        // compositor; sprites draw over the scroll layers for now.)
+                        // stays on top.
                         if (pixel_layer_[pixel_index] == 0U &&
                             priority <= pixel_sprite_priority_[pixel_index]) {
                             continue;
@@ -453,7 +461,107 @@ namespace mnemos::chips::video {
         }
     }
 
-    void cps2_video::draw_sprites() noexcept {
+    std::uint16_t cps2_video::cps_b_layer_control() const noexcept {
+        return cps_b_regs_[cps_b_layer_control_word];
+    }
+
+    void cps2_video::decode_layer_control(std::uint16_t layer_control,
+                                          std::array<int, 4>& raw_layers) noexcept {
+        if (layer_control == 0U) {
+            raw_layers = {3, 2, 0, 1}; // default order when no control word is set
+            return;
+        }
+        raw_layers[0] = static_cast<int>((layer_control >> 6U) & 0x03U);
+        raw_layers[1] = static_cast<int>((layer_control >> 8U) & 0x03U);
+        raw_layers[2] = static_cast<int>((layer_control >> 10U) & 0x03U);
+        raw_layers[3] = static_cast<int>((layer_control >> 12U) & 0x03U);
+    }
+
+    void cps2_video::build_sprite_priority_masks(
+        std::uint16_t priority_control, const std::array<int, 4>& raw_layers,
+        std::array<int, 3>& scroll_layers, std::array<std::uint16_t, 8>& sprite_masks) noexcept {
+        const auto layer_priority = [priority_control](int layer) -> std::uint8_t {
+            return static_cast<std::uint8_t>(
+                (priority_control >> (4U * (static_cast<std::uint32_t>(layer) & 0x03U))) & 0x0FU);
+        };
+        auto l0 = static_cast<std::uint8_t>(raw_layers[0] & 0x03);
+        auto l1 = static_cast<std::uint8_t>(raw_layers[1] & 0x03);
+        auto l2 = static_cast<std::uint8_t>(raw_layers[2] & 0x03);
+        auto l3 = static_cast<std::uint8_t>(raw_layers[3] & 0x03);
+        std::uint8_t l0pri = layer_priority(l0);
+        std::uint8_t l1pri = layer_priority(l1);
+        std::uint8_t l2pri = layer_priority(l2);
+        const std::uint8_t l3pri = layer_priority(l3);
+        std::uint16_t mask0 = priority_mask_layer0;
+        std::uint16_t mask1 = priority_mask_layer1;
+        // Collapse out the disabled (id 0) slots, carrying the next layer forward.
+        if (l0 == 0U) {
+            l0 = l1;
+            l1 = 0U;
+            l0pri = l1pri;
+        }
+        if (l1 == 0U) {
+            l1 = l2;
+            l2 = 0U;
+            l1pri = l2pri;
+        }
+        if (l2 == 0U) {
+            l2 = l3;
+            l2pri = l3pri;
+        }
+        scroll_layers[0] = static_cast<int>(l0);
+        scroll_layers[1] = static_cast<int>(l1);
+        scroll_layers[2] = static_cast<int>(l2);
+
+        if (l0pri > l1pri) {
+            mask0 &= static_cast<std::uint16_t>(~0x0088U);
+        }
+        if (l0pri > l2pri) {
+            mask0 &= static_cast<std::uint16_t>(~0x00A0U);
+        }
+        if (l1pri > l2pri) {
+            mask1 &= static_cast<std::uint16_t>(~0x00C0U);
+        }
+        sprite_masks[0] = 0x00FFU;
+        for (std::uint32_t i = 1U; i < 8U; ++i) {
+            if (i <= l0pri && i <= l1pri && i <= l2pri) {
+                sprite_masks[i] = 0x00FEU;
+                continue;
+            }
+            sprite_masks[i] = 0U;
+            if (i <= l0pri) {
+                sprite_masks[i] |= mask0;
+            }
+            if (i <= l1pri) {
+                sprite_masks[i] |= mask1;
+            }
+            if (i <= l2pri) {
+                sprite_masks[i] |= priority_mask_layer2;
+            }
+        }
+    }
+
+    bool cps2_video::scroll_layer_enabled(int layer, std::uint16_t layer_control) const noexcept {
+        if (layer_control == 0U) {
+            return true; // no control word yet -> the default all-enabled order
+        }
+        // The CPS-B layer-control bits are the primary per-scroll enable. (The
+        // reference also AND-gates scroll2/3 with a CPS-A video-select bit, but its
+        // register placement is unverified here; the layer-control bits alone match
+        // the real sets observed so far.)
+        switch (layer) {
+        case 1:
+            return (layer_control & layer_enable_scroll1) != 0U;
+        case 2:
+            return (layer_control & layer_enable_scroll2) != 0U;
+        case 3:
+            return (layer_control & layer_enable_scroll3) != 0U;
+        default:
+            return true;
+        }
+    }
+
+    void cps2_video::draw_sprites(const std::array<std::uint16_t, 8>& sprite_masks) noexcept {
         if (object_ram_.empty() || gfx_.empty()) {
             return;
         }
@@ -461,7 +569,7 @@ namespace mnemos::chips::video {
         const std::uint32_t count = find_sprite_count();
         // Back-to-front: later entries draw first, entry 0 ends up on top.
         for (std::uint32_t r = count; r > 0U; --r) {
-            draw_sprite_entry(r - 1U, flip);
+            draw_sprite_entry(r - 1U, flip, sprite_masks);
         }
     }
 
@@ -470,13 +578,38 @@ namespace mnemos::chips::video {
         const std::uint32_t backdrop = decode_color(palette_color(backdrop_color_index));
         reset_pixel_buffers(backdrop);
         if (display_enabled_) {
-            // Fixed back-to-front order for now (scroll3 background -> scroll2 ->
-            // scroll1 foreground/text); the CPS-B layer-control priority order +
-            // sprite interleave land in later increments.
-            draw_scroll3(tile_priority_0);
-            draw_scroll2(tile_priority_0);
-            draw_scroll1(tile_priority_0);
-            draw_sprites();
+            // The CPS-B layer-control word drives the scroll draw order; each slot
+            // draws with its priority (1/2/4, back->front) so sprites can occlude
+            // or be occluded per the priority masks.
+            const std::uint16_t layer_control = cps_b_layer_control();
+            std::array<int, 4> raw_layers{};
+            decode_layer_control(layer_control, raw_layers);
+            std::array<int, 3> scroll_layers{};
+            std::array<std::uint16_t, 8> sprite_masks{};
+            build_sprite_priority_masks(object_priority_, raw_layers, scroll_layers, sprite_masks);
+
+            const std::array<std::uint8_t, 3> slot_priority{tile_priority_0, tile_priority_1,
+                                                            tile_priority_2};
+            for (std::size_t i = 0U; i < scroll_layers.size(); ++i) {
+                const int layer = scroll_layers[i];
+                if (!scroll_layer_enabled(layer, layer_control)) {
+                    continue;
+                }
+                switch (layer) {
+                case 1:
+                    draw_scroll1(slot_priority[i]);
+                    break;
+                case 2:
+                    draw_scroll2(slot_priority[i]);
+                    break;
+                case 3:
+                    draw_scroll3(slot_priority[i]);
+                    break;
+                default:
+                    break;
+                }
+            }
+            draw_sprites(sprite_masks);
         }
         ++frame_index_;
     }
