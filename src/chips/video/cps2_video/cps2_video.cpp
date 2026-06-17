@@ -39,7 +39,20 @@ namespace mnemos::chips::video {
 
     void cps2_video::reset(reset_kind /*kind*/) {
         std::fill(pixels_.begin(), pixels_.end(), 0U);
+        std::fill(pixel_layer_.begin(), pixel_layer_.end(), std::uint8_t{0xFFU});
+        std::fill(pixel_pen_.begin(), pixel_pen_.end(), std::uint8_t{0U});
+        std::fill(pixel_group_.begin(), pixel_group_.end(), std::uint8_t{0U});
+        std::fill(pixel_priority_.begin(), pixel_priority_.end(), std::uint8_t{0U});
         palette_ram_.fill(0U);
+        cps_b_regs_.fill(0U);
+        scroll1_x_ = scroll1_y_ = scroll2_x_ = scroll2_y_ = scroll3_x_ = scroll3_y_ = 0U;
+        scroll1_base_ = scroll2_base_ = scroll3_base_ = 0U;
+        object_base_ = 0U;
+        rowscroll_base_ = 0U;
+        rowscroll_line_offset_ = 0U;
+        rowscroll_enabled_ = false;
+        video_control_ = 0U;
+        display_enabled_ = true;
         frame_index_ = 0U;
     }
 
@@ -147,12 +160,89 @@ namespace mnemos::chips::video {
         return transparent_pen;
     }
 
+    std::uint16_t cps2_video::video_read16(std::uint32_t offset) const noexcept {
+        if (offset + 1U >= video_ram_.size()) {
+            return 0xFFFFU;
+        }
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(video_ram_[offset]) << 8U) |
+                                          video_ram_[offset + 1U]);
+    }
+
+    void cps2_video::reset_pixel_buffers(std::uint32_t backdrop) noexcept {
+        std::fill(pixels_.begin(), pixels_.end(), backdrop);
+        std::fill(pixel_layer_.begin(), pixel_layer_.end(), std::uint8_t{0xFFU});
+        std::fill(pixel_pen_.begin(), pixel_pen_.end(), std::uint8_t{0U});
+        std::fill(pixel_group_.begin(), pixel_group_.end(), std::uint8_t{0U});
+        std::fill(pixel_priority_.begin(), pixel_priority_.end(), std::uint8_t{0U});
+    }
+
+    void cps2_video::plot_layer_pixel(int x, int y, std::uint8_t layer, std::uint8_t pen,
+                                      std::uint8_t group, std::uint8_t priority,
+                                      std::uint32_t color) noexcept {
+        if (flip_screen()) {
+            x = static_cast<int>(visible_width) - 1 - x;
+            y = static_cast<int>(visible_height) - 1 - y;
+        }
+        if (x < 0 || x >= static_cast<int>(visible_width) || y < 0 ||
+            y >= static_cast<int>(visible_height)) {
+            return;
+        }
+        const std::size_t index = static_cast<std::size_t>(y) * visible_width + x;
+        pixels_[index] = color;
+        pixel_layer_[index] = layer;
+        pixel_pen_[index] = pen;
+        pixel_group_[index] = group;
+        pixel_priority_[index] |= priority;
+    }
+
+    void cps2_video::draw_scroll1(std::uint8_t priority) noexcept {
+        const std::uint32_t map_base = scroll1_base_;
+        const int scroll_x = static_cast<std::int16_t>(scroll1_x_);
+        const int scroll_y = static_cast<std::int16_t>(scroll1_y_);
+
+        for (int py = 0; py < static_cast<int>(visible_height); ++py) {
+            const int world_y = (py + visible_y_start + scroll_y) & 0x01FF;
+            const int row = world_y / 8;
+            const int ty = world_y % 8;
+            for (int px = 0; px < static_cast<int>(visible_width); ++px) {
+                const int world_x = (px + visible_x_start + scroll_x) & 0x01FF;
+                const int col = world_x / 8;
+                const int tx = world_x % 8;
+                // scroll1 name-table index: row in 0x1F, col in 0x3F, row bit5 banks.
+                const std::uint32_t tile_index = (static_cast<std::uint32_t>(row) & 0x1FU) +
+                                                 ((static_cast<std::uint32_t>(col) & 0x3FU) << 5U) +
+                                                 ((static_cast<std::uint32_t>(row) & 0x20U) << 6U);
+                const std::uint32_t map_offset = tile_index * 4U;
+                if (map_base + map_offset + 3U >= video_ram_.size()) {
+                    continue;
+                }
+                const std::uint16_t tile_code = video_read16(map_base + map_offset);
+                const std::uint16_t attr = video_read16(map_base + map_offset + 2U);
+                const int fetch_x = (attr & 0x0020U) != 0U ? (7 - tx) : tx;
+                const int fetch_y = (attr & 0x0040U) != 0U ? (7 - ty) : ty;
+                const int x_bias = (tile_index & 0x20U) != 0U ? 8 : 0;
+                const std::uint8_t pen =
+                    tile_pixel(gfx_type::scroll1, tile_code, fetch_x, fetch_y, 8, x_bias);
+                if (pen == transparent_pen) {
+                    continue;
+                }
+                const std::uint16_t pal_num =
+                    static_cast<std::uint16_t>(scroll1_palette_base + (attr & 0x001FU));
+                const std::uint32_t color =
+                    decode_color(palette_color(static_cast<std::uint16_t>(pal_num * 16U + pen)));
+                const auto group = static_cast<std::uint8_t>((attr & 0x0180U) >> 7U);
+                plot_layer_pixel(px, py, 1U, pen, group, priority, color);
+            }
+        }
+    }
+
     void cps2_video::render(std::uint32_t palette_source, std::uint16_t palette_control) noexcept {
         copy_palette(palette_source, palette_control);
-        // Increment 1: a flat backdrop from palette index 0. Tilemaps + sprites
-        // overwrite it in later increments.
-        const std::uint32_t backdrop = decode_color(palette_color(0U));
-        std::fill(pixels_.begin(), pixels_.end(), backdrop);
+        const std::uint32_t backdrop = decode_color(palette_color(backdrop_color_index));
+        reset_pixel_buffers(backdrop);
+        if (display_enabled_) {
+            draw_scroll1(tile_priority_0);
+        }
         ++frame_index_;
     }
 
@@ -168,12 +258,51 @@ namespace mnemos::chips::video {
         for (const std::uint8_t b : palette_ram_) {
             writer.u8(b);
         }
+        // Register state the board re-pushes each frame; serialised for a clean
+        // mid-frame round-trip. (The framebuffer + compositor buffers are render
+        // scratch, regenerated on the next render, so they are not saved.)
+        writer.u16(scroll1_x_);
+        writer.u16(scroll1_y_);
+        writer.u16(scroll2_x_);
+        writer.u16(scroll2_y_);
+        writer.u16(scroll3_x_);
+        writer.u16(scroll3_y_);
+        writer.u32(scroll1_base_);
+        writer.u32(scroll2_base_);
+        writer.u32(scroll3_base_);
+        writer.u32(object_base_);
+        writer.u32(rowscroll_base_);
+        writer.u16(rowscroll_line_offset_);
+        writer.u8(rowscroll_enabled_ ? 1U : 0U);
+        writer.u16(video_control_);
+        writer.u8(display_enabled_ ? 1U : 0U);
+        for (const std::uint16_t r : cps_b_regs_) {
+            writer.u16(r);
+        }
     }
 
     void cps2_video::load_state(state_reader& reader) {
         frame_index_ = reader.u64();
         for (std::uint8_t& b : palette_ram_) {
             b = reader.u8();
+        }
+        scroll1_x_ = reader.u16();
+        scroll1_y_ = reader.u16();
+        scroll2_x_ = reader.u16();
+        scroll2_y_ = reader.u16();
+        scroll3_x_ = reader.u16();
+        scroll3_y_ = reader.u16();
+        scroll1_base_ = reader.u32();
+        scroll2_base_ = reader.u32();
+        scroll3_base_ = reader.u32();
+        object_base_ = reader.u32();
+        rowscroll_base_ = reader.u32();
+        rowscroll_line_offset_ = reader.u16();
+        rowscroll_enabled_ = reader.u8() != 0U;
+        video_control_ = reader.u16();
+        display_enabled_ = reader.u8() != 0U;
+        for (std::uint16_t& r : cps_b_regs_) {
+            r = reader.u16();
         }
     }
 

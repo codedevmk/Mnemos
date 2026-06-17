@@ -43,7 +43,10 @@ TEST_CASE("cps2 video DMAs the palette from video RAM and reports it back", "[cp
 TEST_CASE("cps2 video renders the decoded backdrop into the framebuffer", "[cps2_video]") {
     cps2_video video;
     std::vector<std::uint8_t> vram(0x10000U, 0U);
-    put16(vram, 0x0000U, 0xFF00U); // backdrop = full red
+    // The CPS-2 backdrop is the last palette entry (pal_num 0xBF, pen 0xF) =
+    // palette byte 0xBF*16*2 + 0xF*2 = 0x17FE. No gfx attached, so the scroll1
+    // walk plots nothing transparent over it.
+    put16(vram, 0x17FEU, 0xFF00U); // backdrop = full red
     video.attach_video_ram(vram);
 
     const std::uint64_t before = video.frame_index();
@@ -116,6 +119,47 @@ TEST_CASE("cps2 video decodes 4bpp tile texels from the gfx ROM", "[cps2_video]"
     // An off-tile coordinate / a code whose data is past the ROM -> transparent.
     CHECK(video.tile_pixel(gfx_type::sprites, 0U, 20, 0, 16, 0) == cps2_video::transparent_pen);
     CHECK(video.tile_pixel(gfx_type::sprites, 0x9999U, 0, 0, 16, 0) == cps2_video::transparent_pen);
+}
+
+TEST_CASE("cps2 video draws the scroll1 playfield through the compositor", "[cps2_video]") {
+    using gfx_type = cps2_video::gfx_type;
+    cps2_video video;
+
+    // Video RAM holds both the palette DMA source (at 0) and the scroll1 name
+    // table (at 0x8000). 64 KiB is plenty for both.
+    std::vector<std::uint8_t> vram(0x10000U, 0U);
+    // scroll1 palette page is pal_num 32+; tile texel pen 0xA -> palette index
+    // 32*16 + 10 = 522 -> palette byte 0x414. Make that colour full red.
+    put16(vram, 0x0414U, 0xFF00U);
+    // scroll1 name table at 0x8000: tile entry 0 = code 0, attr 0 (pal 32, no flip).
+    put16(vram, 0x8000U, 0x0000U); // tile code
+    put16(vram, 0x8002U, 0x0000U); // attr
+    video.attach_video_ram(vram);
+
+    // scroll1 banks code 0 to tile 0x20000 (byte offset 0x20000*64 = 0x800000).
+    // Set that tile's texel (0,0) to pen 0xA: plane3 (gfx[base]) + plane1 (gfx[base+2]).
+    std::vector<std::uint8_t> gfx(0x800000U + 64U, 0U);
+    gfx[0x800000U + 0U] = 0x80U; // pen bit 3
+    gfx[0x800000U + 2U] = 0x80U; // pen bit 1
+    video.attach_gfx(gfx);
+
+    video.set_scroll1_base(0x8000U);
+    // Scroll -64,-16 so screen (0,0) maps to world (0,0) = tile 0, texel (0,0).
+    video.set_scroll1(0xFFC0U, 0xFFF0U);
+    video.set_display_enable(true);
+
+    video.render(0x0000U, 0x003FU);
+    const auto fb = video.framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    // Screen (0,0) shows the lit texel; (1,0) is texel (1,0) of the same tile (pen
+    // 0 -> palette index 512 -> black), proving the layer walk addresses per-pixel.
+    CHECK(fb.pixels[0] == 0x00FF0000U);
+    CHECK(fb.pixels[1] == 0x00000000U);
+
+    // Display disabled -> the playfield is suppressed, leaving the backdrop.
+    video.set_display_enable(false);
+    video.render(0x0000U, 0x003FU);
+    CHECK(video.framebuffer().pixels[0] == 0x00000000U);
 }
 
 TEST_CASE("cps2 video save/load round-trips the palette + frame index", "[cps2_video]") {
