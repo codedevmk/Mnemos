@@ -122,7 +122,6 @@ TEST_CASE("cps2 video decodes 4bpp tile texels from the gfx ROM", "[cps2_video]"
 }
 
 TEST_CASE("cps2 video draws the scroll1 playfield through the compositor", "[cps2_video]") {
-    using gfx_type = cps2_video::gfx_type;
     cps2_video video;
 
     // Video RAM holds both the palette DMA source (at 0) and the scroll1 name
