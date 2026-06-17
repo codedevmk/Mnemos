@@ -4,6 +4,7 @@
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
 
+#include <algorithm>
 #include <charconv>
 #include <string>
 #include <utility>
@@ -116,7 +117,9 @@ namespace mnemos::manifests::common {
 
         void parse_file(const parse_context& ctx, const toml::table& table,
                         rom_set_region& region) {
-            check_keys(ctx, table, {"name", "offset", "stride", "size", "crc32"},
+            check_keys(ctx, table,
+                       {"name", "offset", "stride", "unit", "swap", "source_offset", "length",
+                        "size", "crc32"},
                        "[[region.file]]");
             rom_set_file file;
             if (auto name = require_string(ctx, table, "name", "[[region.file]]")) {
@@ -134,6 +137,32 @@ namespace mnemos::manifests::common {
                     } else {
                         file.stride = static_cast<std::size_t>(*stride);
                     }
+                }
+            }
+            if (const toml::node* node = table.get("unit")) {
+                if (auto unit = read_unsigned(ctx, *node, "unit", "[[region.file]]")) {
+                    if (*unit == 0U) {
+                        ctx.error("'unit' in [[region.file]] must be at least 1", node);
+                    } else {
+                        file.unit = static_cast<std::size_t>(*unit);
+                    }
+                }
+            }
+            if (const toml::node* node = table.get("swap")) {
+                if (const auto* value = node->as_boolean()) {
+                    file.swap = value->get();
+                } else {
+                    ctx.error("'swap' in [[region.file]] must be a boolean", node);
+                }
+            }
+            if (const toml::node* node = table.get("source_offset")) {
+                if (auto so = read_unsigned(ctx, *node, "source_offset", "[[region.file]]")) {
+                    file.source_offset = static_cast<std::size_t>(*so);
+                }
+            }
+            if (const toml::node* node = table.get("length")) {
+                if (auto length = read_unsigned(ctx, *node, "length", "[[region.file]]")) {
+                    file.length = static_cast<std::size_t>(*length);
                 }
             }
             if (const toml::node* node = table.get("size")) {
@@ -209,7 +238,10 @@ namespace mnemos::manifests::common {
 
         rom_set_decl decl;
         if (const auto* set = root.get_as<toml::table>("set")) {
-            check_keys(ctx, *set, {"schema", "name", "board"}, "[set]");
+            check_keys(ctx, *set,
+                       {"schema", "name", "board", "parent", "cps_b_profile", "orientation",
+                        "sprite_order", "sound", "kabuki"},
+                       "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
                     ctx.error("unsupported schema '" + *schema + "' (expected '" +
@@ -222,6 +254,93 @@ namespace mnemos::manifests::common {
             if (set->get("board") != nullptr) {
                 if (auto board = require_string(ctx, *set, "board", "[set]")) {
                     decl.board = std::move(*board);
+                }
+            }
+            // Optional parent set name (MAME-style clone -> parent): the board
+            // adapter loads the shared dumps from the parent set's zip. The value
+            // is concatenated into a filesystem path (<dir>/<parent>.zip) and the
+            // toml lives inside an untrusted ROM zip, so constrain it to a plain
+            // set id here at the trust boundary -- reject path separators, "..",
+            // and absolute/drive paths (every real CPS1 set id is [A-Za-z0-9_]).
+            if (const toml::node* node = set->get("parent")) {
+                if (const auto* value = node->as_string()) {
+                    const std::string& p = value->get();
+                    const auto plain_id = [](char c) {
+                        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                               (c >= '0' && c <= '9') || c == '_';
+                    };
+                    if (p.empty()) {
+                        ctx.error("'parent' in [set] must be a non-empty string", node);
+                    } else if (!std::all_of(p.begin(), p.end(), plain_id)) {
+                        ctx.error("'parent' in [set] must be a plain set id [A-Za-z0-9_] "
+                                  "(no path separators)",
+                                  node);
+                    } else {
+                        decl.parent = p;
+                    }
+                } else {
+                    ctx.error("'parent' in [set] must be a string", node);
+                }
+            }
+            // Optional CPS-B board / PAL profile id (capcom_cps1 selects its
+            // hardware profile by this id; ignored by families that don't use it).
+            // The id is a 16-bit value: diagnose out-of-range rather than silently
+            // truncating (mirrors read_crc32's range handling).
+            if (const toml::node* node = set->get("cps_b_profile")) {
+                if (auto profile = read_unsigned(ctx, *node, "cps_b_profile", "[set]")) {
+                    if (*profile > 0xFFFFU) {
+                        ctx.error("'cps_b_profile' in [set] is out of 16-bit range", node);
+                    } else {
+                        decl.cps_b_profile = static_cast<std::uint16_t>(*profile);
+                    }
+                }
+            }
+            // Optional monitor orientation ("horizontal" / "vertical"); the
+            // frontend rotates a vertical set. Absent => horizontal.
+            if (const toml::node* node = set->get("orientation")) {
+                if (const auto* value = node->as_string()) {
+                    if (value->get() == "vertical") {
+                        decl.orientation = screen_orientation::vertical;
+                    } else if (value->get() == "horizontal") {
+                        decl.orientation = screen_orientation::horizontal;
+                    } else {
+                        ctx.error("'orientation' in [set] must be \"horizontal\" or \"vertical\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'orientation' in [set] must be a string", node);
+                }
+            }
+            // Optional sprite-list draw order ("ascending" / "descending"); a few
+            // bootleg sets relocate the object list. Absent => ascending.
+            if (const toml::node* node = set->get("sprite_order")) {
+                if (const auto* value = node->as_string()) {
+                    if (value->get() == "descending") {
+                        decl.sprite_order = sprite_draw_order::descending;
+                    } else if (value->get() == "ascending") {
+                        decl.sprite_order = sprite_draw_order::ascending;
+                    } else {
+                        ctx.error("'sprite_order' in [set] must be \"ascending\" or \"descending\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'sprite_order' in [set] must be a string", node);
+                }
+            }
+            // Optional board-interpreted sound + Kabuki selectors (capcom_cps1
+            // reads "qsound" + a game key; ignored by families that don't use them).
+            if (const toml::node* node = set->get("sound")) {
+                if (const auto* value = node->as_string()) {
+                    decl.sound = value->get();
+                } else {
+                    ctx.error("'sound' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("kabuki")) {
+                if (const auto* value = node->as_string()) {
+                    decl.kabuki = value->get();
+                } else {
+                    ctx.error("'kabuki' in [set] must be a string", node);
                 }
             }
         } else {

@@ -1,0 +1,174 @@
+# Quiz Tonosama no Yabou 2: Zenkoku-ban (Japan 950123) -- Capcom CPS1. Transcribed
+# from the reference part tables; CRCs from the local ROM zip. Standalone set on
+# the CPS-B-21 TN2292 board (profile 35: CPS-B-21 DEF registers + the TN2292
+# 3-bank gfx mapper). YM2151 + OKIM6295 sound.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "qtono2"
+board  = "capcom_cps1"
+cps_b_profile = 35
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "tn2j-30.11e"
+offset = 0x0
+stride = 2
+size   = 0x20000
+crc32  = 0x9226eb5e
+
+[[region.file]]
+name   = "tn2j-37.11f"
+offset = 0x1
+stride = 2
+size   = 0x20000
+crc32  = 0xd1d30da1
+
+[[region.file]]
+name   = "tn2j-31.12e"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x015e6a8a
+
+[[region.file]]
+name   = "tn2j-38.12f"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x1f139bcc
+
+[[region.file]]
+name   = "tn2j-28.9e"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x86d27f71
+
+[[region.file]]
+name   = "tn2j-35.9f"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0x7a1ab87d
+
+[[region.file]]
+name   = "tn2j-29.10e"
+offset = 0xc0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9c384e99
+
+[[region.file]]
+name   = "tn2j-36.10f"
+offset = 0xc0001
+stride = 2
+size   = 0x20000
+crc32  = 0x4c4b2a0a
+
+[[region]]
+name = "gfx"
+size = 0x400000
+
+[[region.file]]
+name   = "tn2-02m.4a"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xf2016a34
+
+[[region.file]]
+name   = "tn2-04m.6a"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x094e0fb1
+
+[[region.file]]
+name   = "tn2-01m.3a"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xcb950cf9
+
+[[region.file]]
+name   = "tn2-03m.5a"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x18a5bf59
+
+[[region.file]]
+name   = "tn2-11m.4c"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xd0edd30b
+
+[[region.file]]
+name   = "tn2-13m.6c"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x426621c3
+
+[[region.file]]
+name   = "tn2-10m.3c"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xa34ece70
+
+[[region.file]]
+name   = "tn2-12m.5c"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xe04ff2f4
+
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name          = "tn2j-09.12a"
+offset        = 0x0
+source_offset = 0x0
+length        = 0x8000
+size          = 0x8000
+crc32         = 0x6d8edcef
+
+[[region.file]]
+name          = "tn2j-09.12a"
+offset        = 0x10000
+source_offset = 0x0
+length        = 0x8000
+size          = 0x8000
+crc32         = 0x6d8edcef
+
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "tn2j-18.11c"
+offset = 0x0
+size   = 0x20000
+crc32  = 0xa40bf9a7
+
+[[region.file]]
+name   = "tn2j-19.12c"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x5b3b931e

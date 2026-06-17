@@ -65,6 +65,165 @@ fill = 0x00
     CHECK(*main.files[1].crc32 == 0xDEADBEEFU);
     CHECK(decl.regions[1].fill == 0x00U);
     CHECK(decl.regions[1].files.empty());
+    CHECK_FALSE(decl.cps_b_profile.has_value()); // optional key, absent here
+    CHECK_FALSE(decl.parent.has_value());        // optional key, absent here
+}
+
+TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"sf2hf\"\nboard = \"capcom_cps1\"\n"
+            "parent = \"sf2ce\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->parent.has_value());
+        CHECK(*result.value->parent == "sf2ce");
+    }
+    SECTION("absent leaves it unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->parent.has_value());
+    }
+    SECTION("empty string is rejected") {
+        const auto result =
+            parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = \"\"\n"
+                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("non-string is rejected") {
+        const auto result =
+            parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = 7\n"
+                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("path separators / traversal are rejected at the trust boundary") {
+        for (const char* bad : {"../sf2ce", "..\\sf2ce", "/etc/passwd", "a/b", "c:foo"}) {
+            const auto result = parse_rom_set_decl(
+                std::string("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nparent = \"") +
+                bad + "\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+            CHECK_FALSE(result.ok());
+        }
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nboard = \"capcom_cps1\"\n"
+            "cps_b_profile = 24\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->cps_b_profile.has_value());
+        CHECK(*result.value->cps_b_profile == 24U);
+    }
+    SECTION("absent leaves it unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->cps_b_profile.has_value());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional orientation", "[rom_set_toml]") {
+    using mnemos::manifests::common::screen_orientation;
+    SECTION("vertical") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\norientation = \"vertical\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->orientation == screen_orientation::vertical);
+    }
+    SECTION("absent defaults to horizontal") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->orientation == screen_orientation::horizontal);
+    }
+    SECTION("invalid value is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\norientation = \"sideways\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional sprite_order", "[rom_set_toml]") {
+    using mnemos::manifests::common::sprite_draw_order;
+    SECTION("descending") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nsprite_order = \"descending\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->sprite_order == sprite_draw_order::descending);
+    }
+    SECTION("absent defaults to ascending") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->sprite_order == sprite_draw_order::ascending);
+    }
+    SECTION("invalid value is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nsprite_order = \"sideways\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the CPS1 layout keys", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "x"
+
+[[region]]
+name = "gfx"
+size = 0x100
+
+[[region.file]]
+name = "g0"
+offset = 0
+stride = 8
+unit = 2
+
+[[region.file]]
+name = "prog"
+offset = 0x80
+stride = 2
+unit = 2
+swap = true
+
+[[region.file]]
+name = "snd"
+offset = 0x40
+source_offset = 0x20
+length = 0x10
+)");
+    REQUIRE(result.ok());
+    const auto& files = result.value->regions[0].files;
+    REQUIRE(files.size() == 3U);
+    CHECK(files[0].unit == 2U);
+    CHECK(files[0].stride == 8U);
+    CHECK_FALSE(files[0].swap);
+    CHECK(files[1].unit == 2U);
+    CHECK(files[1].swap);
+    CHECK(files[2].source_offset == 0x20U);
+    CHECK(files[2].length == 0x10U);
+    CHECK(files[2].unit == 1U); // default
+}
+
+TEST_CASE("rom_set_toml rejects bad CPS1 layout keys", "[rom_set_toml]") {
+    SECTION("unit zero") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[region]]\nname = "
+            "\"a\"\nsize = 8\n[[region.file]]\nname = \"f\"\nunit = 0\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("swap not a boolean") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[region]]\nname = "
+            "\"a\"\nsize = 8\n[[region.file]]\nname = \"f\"\nswap = 1\n");
+        CHECK_FALSE(result.ok());
+    }
 }
 
 TEST_CASE("rom_set_toml rejects bad declarations with located diagnostics", "[rom_set_toml]") {

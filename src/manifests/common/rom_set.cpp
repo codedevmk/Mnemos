@@ -50,18 +50,57 @@ namespace mnemos::manifests::common {
                 }
 
                 // Place what fits even when verification flagged the file --
-                // issues report the problem, the data still loads.
+                // issues report the problem, the data still loads. The source
+                // span (`length` bytes from `source_offset`, default = the rest
+                // of the file) is laid down in `unit`-byte chunks, each advancing
+                // the destination by `stride`; `swap` reverses the bytes within a
+                // chunk. unit 1 / stride 1 reproduces a plain contiguous copy.
                 const std::size_t stride = file.stride != 0U ? file.stride : 1U;
-                for (std::size_t i = 0; i < data->size(); ++i) {
-                    const std::size_t pos = file.offset + i * stride;
-                    if (pos >= region.size) {
-                        image.issues.push_back({file.name, "overflows region '" + region.name +
-                                                               "' at byte " + std::to_string(pos) +
-                                                               " (region size " +
-                                                               std::to_string(region.size) + ")"});
+                const std::size_t unit = file.unit != 0U ? file.unit : 1U;
+                const std::size_t src_start = file.source_offset;
+                const std::size_t available =
+                    data->size() > src_start ? data->size() - src_start : 0U;
+                std::size_t copy_len = file.length != 0U ? file.length : available;
+                // A source offset at/past the file end places nothing -- surface
+                // it rather than silently dropping the file (a default `length`
+                // would otherwise reduce the copy to zero with no diagnostic).
+                if (!data->empty() && src_start >= data->size()) {
+                    image.issues.push_back(
+                        {file.name, "source offset " + std::to_string(src_start) +
+                                        " is at or past the end of the file (size " +
+                                        std::to_string(data->size()) + ")"});
+                    copy_len = 0U;
+                } else if (copy_len > available) {
+                    image.issues.push_back(
+                        {file.name, "source range exceeds file: wanted " +
+                                        std::to_string(file.length) + " bytes from offset " +
+                                        std::to_string(src_start) + ", file holds " +
+                                        std::to_string(data->size())});
+                    copy_len = available;
+                }
+                if (copy_len % unit != 0U) {
+                    image.issues.push_back({file.name, "copy length " + std::to_string(copy_len) +
+                                                           " is not a multiple of unit " +
+                                                           std::to_string(unit)});
+                }
+                // Each unit occupies the contiguous destination span [base, base +
+                // unit); validate the whole span up-front so a unit straddling the
+                // region end is rejected atomically (swap permutes within the span,
+                // so a per-byte check could leave an in-range byte unwritten).
+                const std::size_t chunks = copy_len / unit;
+                for (std::size_t c = 0; c < chunks; ++c) {
+                    const std::size_t base = file.offset + c * stride;
+                    if (base + (unit - 1U) >= region.size) {
+                        image.issues.push_back(
+                            {file.name, "overflows region '" + region.name + "' at byte " +
+                                            std::to_string(base + (unit - 1U)) + " (region size " +
+                                            std::to_string(region.size) + ")"});
                         break;
                     }
-                    bytes[pos] = (*data)[i];
+                    for (std::size_t b = 0; b < unit; ++b) {
+                        bytes[base + (file.swap ? unit - 1U - b : b)] =
+                            (*data)[src_start + c * unit + b];
+                    }
                 }
             }
 
@@ -97,6 +136,35 @@ namespace mnemos::manifests::common {
                 }
                 return std::nullopt;
             }};
+    }
+
+    std::optional<rom_file_provider> make_zip_rom_provider_from_path(const std::string& path,
+                                                                     bool* unreadable_zip) {
+        if (unreadable_zip != nullptr) {
+            *unreadable_zip = false;
+        }
+        auto bytes = io::read_file(path);
+        if (!bytes.has_value()) {
+            return std::nullopt; // missing / unreadable file
+        }
+        auto provider = make_zip_rom_provider(std::move(*bytes));
+        if (!provider.has_value() && unreadable_zip != nullptr) {
+            *unreadable_zip = true; // read, but not a valid zip
+        }
+        return provider;
+    }
+
+    rom_file_provider make_fallback_rom_provider(rom_file_provider primary,
+                                                 rom_file_provider fallback) {
+        return [primary = std::move(primary), fallback = std::move(fallback)](
+                   std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
+            if (primary) {
+                if (auto bytes = primary(name)) {
+                    return bytes;
+                }
+            }
+            return fallback ? fallback(name) : std::nullopt;
+        };
     }
 
 } // namespace mnemos::manifests::common

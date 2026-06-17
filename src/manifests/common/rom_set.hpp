@@ -24,15 +24,26 @@
 
 namespace mnemos::manifests::common {
 
-    // One dump file's placement within a region. `stride` is the byte
-    // interleave: 1 = contiguous, 2 = every other byte (the even/odd pairing
-    // of a 16-bit CPU's program ROM pair).
+    // One dump file's placement within a region. The source span (`length`
+    // bytes from `source_offset`, defaulting to the whole file) is copied in
+    // `unit`-byte chunks; each chunk lands at `offset` and advances the
+    // destination by `stride`. So the defaults (unit 1, stride 1) are a plain
+    // contiguous copy; unit 1 / stride 2 is the even/odd pairing of a 16-bit
+    // CPU's program ROM pair; unit 2 / stride 8 is a 16-bit graphics ROM
+    // dropped into one lane of a 64-bit tile word; `source_offset` + `length`
+    // place a slice of a larger dump. `swap` reverses the byte order within
+    // each unit -- a word-swapped 16-bit ROM whose endianness is flipped
+    // relative to the region.
     struct rom_set_file final {
         std::string name;
-        std::size_t offset{};
-        std::size_t stride{1U};
-        std::size_t size{};                 // expected byte count; 0 = accept any
-        std::optional<std::uint32_t> crc32; // verified when set
+        std::size_t offset{};                 // first destination byte
+        std::size_t stride{1U};               // destination step per source unit
+        std::size_t unit{1U};                 // source bytes per chunk (contiguous)
+        bool swap{};                          // reverse byte order within each unit
+        std::size_t source_offset{};          // first source byte to read
+        std::size_t length{};                 // source bytes to place; 0 = rest of file
+        std::size_t size{};                   // expected file byte count; 0 = accept any
+        std::optional<std::uint32_t> crc32{}; // verified when set
     };
 
     struct rom_set_region final {
@@ -42,9 +53,48 @@ namespace mnemos::manifests::common {
         std::vector<rom_set_file> files;
     };
 
+    // Monitor orientation the board is wired for. A vertical (TATE) set is
+    // rotated by the frontend for upright presentation; absent in the TOML =>
+    // horizontal.
+    enum class screen_orientation : std::uint8_t { horizontal, vertical };
+
+    // Sprite-list draw order the board renders in (board-interpreted; capcom_cps1
+    // maps it to its video chip). Some bootleg sets relocate the object list and
+    // must be drawn in reverse; absent in the TOML => ascending (the hardware
+    // default for every official set).
+    enum class sprite_draw_order : std::uint8_t { ascending, descending };
+
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
         std::string board; // board family id, e.g. "irem_m72" (informational)
+        // Optional parent set name (MAME-style clone -> parent). A clone set's
+        // zip ships only its unique dumps; the shared dumps come from the parent
+        // set's zip. The board adapter composes a fallback provider (the clone's
+        // own files first, then the parent's) -- every file is still CRC-verified
+        // regardless of which zip supplied it. Absent => a standalone set.
+        // Constrained to a plain set id by the loader (no path separators).
+        // NOTE: only the capcom_cps1 adapter currently consumes this (it threads
+        // adapter_options.rom_path and composes the fallback); other boards parse
+        // it but ignore it, so a `parent` there would report the shared files
+        // missing. Single level only -- the parent set must be standalone, not
+        // itself a clone.
+        std::optional<std::string> parent;
+        // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
+        // hardware profile by this numeric id; absent on families that don't use it.
+        std::optional<std::uint16_t> cps_b_profile;
+        // Display orientation (default horizontal); the frontend rotates a
+        // vertical set's framebuffer for upright presentation.
+        screen_orientation orientation{screen_orientation::horizontal};
+        // Sprite-list draw order (default ascending); a few bootleg sets relocate
+        // the object list and declare "descending". Board-interpreted (capcom_cps1).
+        sprite_draw_order sprite_order{sprite_draw_order::ascending};
+        // Optional sound subsystem selector (board-interpreted): capcom_cps1 reads
+        // "qsound" to wire its QSound DSP path instead of the OKIM6295 path; absent
+        // => the board default.
+        std::optional<std::string> sound;
+        // Optional Kabuki-encrypted-sound key name (board-interpreted): capcom_cps1
+        // reads "dino" / "wof" / "punisher" to decrypt the QSound Z80 program.
+        std::optional<std::string> kabuki;
         std::vector<rom_set_region> regions;
     };
 
@@ -80,5 +130,20 @@ namespace mnemos::manifests::common {
     // readable zip.
     [[nodiscard]] std::optional<rom_file_provider>
     make_zip_rom_provider(std::vector<std::uint8_t> archive);
+
+    // Open a .zip set from a filesystem path (read_file + make_zip_rom_provider).
+    // nullopt when the path is unreadable; `*unreadable_zip` (when provided) is
+    // set true if the file was read but is not a valid zip, so a caller can tell
+    // "missing" from "corrupt".
+    [[nodiscard]] std::optional<rom_file_provider>
+    make_zip_rom_provider_from_path(const std::string& path, bool* unreadable_zip = nullptr);
+
+    // Compose two providers into one: a name is resolved from `primary` first
+    // and, only if `primary` lacks it, from `fallback`. This is the mechanism
+    // behind MAME-style clone/parent merging -- the clone's zip is `primary`
+    // (its unique dumps win), the parent's zip is `fallback` (the shared ones).
+    // A null sub-provider contributes nothing.
+    [[nodiscard]] rom_file_provider make_fallback_rom_provider(rom_file_provider primary,
+                                                               rom_file_provider fallback);
 
 } // namespace mnemos::manifests::common

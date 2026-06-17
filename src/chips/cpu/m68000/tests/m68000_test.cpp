@@ -88,6 +88,36 @@ TEST_CASE("m68000 resets from the SSP/PC vectors in supervisor mode") {
     CHECK((r.sr & m68000::sr_ipm) == m68000::sr_ipm);
 }
 
+TEST_CASE("m68000 opcode/data split: decrypted opcodes, encrypted data, opcode-path reset") {
+    // The CPS-2 case: instruction fetches (incl. the reset vector) see a decrypted
+    // opcode image; data reads at the same addresses see the encrypted ROM.
+    const std::array<std::uint8_t, 0x10> data_image{0xDEU, 0xADU, 0xBEU, 0xEFU, 0xCAU, 0xFEU,
+                                                    0xF0U, 0x0DU, 0xFFU, 0xFFU, 0U,    0U,
+                                                    0U,    0U,    0U,    0U};
+    const std::array<std::uint8_t, 0x10> opcode_image{
+        0x00U, 0x00U, 0x20U, 0x00U, // SSP = 0x00002000
+        0x00U, 0x00U, 0x00U, 0x08U, // PC  = 0x00000008
+        0x70U, 0x7FU,               // MOVEQ #$7F,D0
+        0U,    0U,    0U,    0U,    0U, 0U};
+    mnemos::topology::bus b{24U, mnemos::topology::endianness::big};
+    b.map_rom(0x000000U, std::span<const std::uint8_t>(data_image));
+    b.map_opcode_rom(0x000000U, std::span<const std::uint8_t>(opcode_image));
+    m68000 cpu;
+    cpu.attach_bus(b);
+    cpu.reset(reset_kind::power_on);
+
+    auto r = cpu.cpu_registers();
+    CHECK(r.pc == 0x00000008U);   // reset vector via the opcode path, not 0xCAFEF00D
+    CHECK(r.a[7] == 0x00002000U); // SSP via the opcode path, not 0xDEADBEEF
+
+    CHECK(b.read16_be(0x0008U) == 0xFFFFU);         // data stream (encrypted)
+    CHECK(b.fetch16_be_opcode(0x0008U) == 0x707FU); // opcode stream (decrypted)
+
+    cpu.step_instruction(); // executes the decrypted MOVEQ #$7F,D0
+    r = cpu.cpu_registers();
+    CHECK((r.d[0] & 0xFFU) == 0x7FU);
+}
+
 TEST_CASE("m68000 executes MOVEQ with sign extension and flags") {
     machine m;
     m.load(0x1000U, {0x7042U}); // MOVEQ #$42,D0

@@ -28,6 +28,16 @@ namespace mnemos::chips {
         [[nodiscard]] virtual std::uint8_t read8(std::uint32_t address) = 0;
         virtual void write8(std::uint32_t address, std::uint8_t value) = 0;
 
+        // Instruction (M1 opcode) fetch. Defaults to read8 -- identical for every
+        // system whose program memory reads the same whether a byte is fetched as
+        // an opcode or as data. A board with opcode/data-split program memory --
+        // an encrypted Z80 whose decrypted M1 opcode bytes differ from data reads
+        // at the same address (Kabuki on CPS1 QSound) -- overrides this to serve
+        // the opcode stream while read8 serves the data stream.
+        [[nodiscard]] virtual std::uint8_t fetch_opcode8(std::uint32_t address) {
+            return read8(address);
+        }
+
         // Big-endian wide accesses. The defaults compose byte accesses, so
         // every implementation keeps byte-exact semantics (MMIO side effects,
         // watchpoints); a concrete bus may override them with a single
@@ -87,6 +97,22 @@ namespace mnemos::chips {
                                                     direct_span& /*out*/) {
             return false; // default: no direct access, callers use read8/...
         }
+
+        // Instruction-fetch counterparts of direct_read_span / read16_be. Default
+        // to the data path -- identical for every system whose opcode bytes equal
+        // its data bytes. A board with opcode/data-split program memory (an
+        // encrypted 68000 whose decrypted instruction stream differs from data
+        // reads at the same address -- CPS-2) overrides these to serve the
+        // decrypted opcode image to instruction fetches while read16_be /
+        // direct_read_span keep serving the encrypted data stream. The reset
+        // vector counts as an instruction fetch (it sources the initial PC).
+        [[nodiscard]] virtual bool direct_opcode_span(std::uint32_t address, direct_span& out) {
+            return direct_read_span(address, out);
+        }
+        [[nodiscard]] virtual std::uint16_t fetch16_be_opcode(std::uint32_t address) {
+            return read16_be(address);
+        }
+
         virtual void add_invalidation_listener(std::function<void()> /*listener*/) {}
 
         // Optional bus-error surface. Most systems leave unmapped addresses as

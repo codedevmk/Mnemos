@@ -1,0 +1,102 @@
+# Pang! 3 (World 950511) -- Capcom CPS1. Transcribed from the reference part tables
+# (CRCs from the local ROM zip). Runs the CP1B1F board: a CPS-B-21 register
+# layout with the CP1B1F single-bank (0x10000-code) gfx mapper and a serial
+# 93C46 EEPROM wired to the CPS-B chip at $80017A (profile 33 -> cps_b_eeprom).
+
+[set]
+schema = "mnemos-romset/1"
+name   = "pang3"
+board  = "capcom_cps1"
+cps_b_profile = 33
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "pa3w-17.11l"
+offset = 0x0
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x12138234
+
+[[region.file]]
+name   = "pa3w-16.10l"
+offset = 0x80000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xd1ba585c
+
+[[region]]
+name = "gfx"
+size = 0x400000
+
+[[region.file]]
+name   = "pa3-01m.2c"
+offset = 0x0
+unit   = 2
+stride = 8
+source_offset = 0x0
+length        = 0x100000
+size   = 0x200000
+crc32  = 0x068a152c
+
+[[region.file]]
+name   = "pa3-07m.2f"
+offset = 0x2
+unit   = 2
+stride = 8
+source_offset = 0x0
+length        = 0x100000
+size   = 0x200000
+crc32  = 0x3a4a619d
+
+[[region.file]]
+name   = "pa3-01m.2c"
+offset = 0x4
+unit   = 2
+stride = 8
+source_offset = 0x100000
+length        = 0x100000
+size   = 0x200000
+crc32  = 0x068a152c
+
+[[region.file]]
+name   = "pa3-07m.2f"
+offset = 0x6
+unit   = 2
+stride = 8
+source_offset = 0x100000
+length        = 0x100000
+size   = 0x200000
+crc32  = 0x3a4a619d
+
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name   = "pa3-11.11f"
+offset = 0x0
+size   = 0x8000
+crc32  = 0x90a08c46
+
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "pa3-05.10d"
+offset = 0x0
+size   = 0x20000
+crc32  = 0x73a10d5d
+
+[[region.file]]
+name   = "pa3-06.11d"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xaffa4f82

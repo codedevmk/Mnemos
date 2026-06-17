@@ -69,6 +69,11 @@ namespace mnemos::frontend_sdk {
         // adapter opens this with disc_image::open while `rom` carries the boot
         // BIOS. Empty for byte-buffer media.
         std::string disc_path;
+        // Filesystem path of the primary `rom` itself (when it came from a file).
+        // Lets an adapter resolve sibling files beside it -- e.g. a CPS1 clone
+        // set whose game.toml names a `parent` set loads the parent's shared
+        // dumps from `<dir>/<parent>.zip`. Empty when the rom is not file-backed.
+        std::string rom_path;
         // System boot ROM images beyond the primary `rom`, in an adapter-defined
         // order (the 32X adapter takes master SH-2 / slave SH-2 / 68000 vector
         // overlay). Empty entries (or an empty vector) mean "boot without that

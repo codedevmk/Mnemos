@@ -1,0 +1,175 @@
+# Wonder 3 (Japan 910520) -- Capcom CPS1 clone of 3wonders (parent-merge). Transcribed from the
+# reference part tables; CRCs from the local zips (clone-unique from wonder3.zip,
+# shared from 3wonders.zip). Shares the parent's gfx ROMs, so it reuses the
+# parent's CPS-B profile (24).
+
+[set]
+schema = "mnemos-romset/1"
+name   = "wonder3"
+board  = "capcom_cps1"
+parent = "3wonders"
+cps_b_profile = 24
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rtj_36.12f"
+offset = 0x0
+stride = 2
+size   = 0x20000
+crc32  = 0xe3741247
+
+[[region.file]]
+name   = "rtj_42.12h"
+offset = 0x1
+stride = 2
+size   = 0x20000
+crc32  = 0xb4baa117
+
+[[region.file]]
+name   = "rtj_37.13f"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xa1f677b0
+
+[[region.file]]
+name   = "rtj_43.13h"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x85337a47
+
+[[region.file]]
+name   = "rt_28a.9f"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x054137c8
+
+[[region.file]]
+name   = "rt_33a.9h"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0x7264cb1b
+
+[[region.file]]
+name   = "rtj_35.11f"
+offset = 0xc0000
+stride = 2
+size   = 0x20000
+crc32  = 0xe72f9ea3
+
+[[region.file]]
+name   = "rtj_41.11h"
+offset = 0xc0001
+stride = 2
+size   = 0x20000
+crc32  = 0xa11ee998
+
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name   = "rt_9.12b"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x10000
+crc32  = 0xabfca165
+
+[[region.file]]
+name   = "rt_9.12b"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x8000
+size   = 0x10000
+crc32  = 0xabfca165
+
+[[region]]
+name = "oki"
+size = 0x40000
+
+[[region.file]]
+name   = "rt_18.11c"
+offset = 0x0
+size   = 0x20000
+crc32  = 0x26b211ab
+
+[[region.file]]
+name   = "rt_19.12c"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xdbe64ad0
+
+[[region]]
+name = "gfx"
+size = 0x400000
+
+[[region.file]]
+name   = "rt-5m.7a"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x86aef804
+
+[[region.file]]
+name   = "rt-7m.9a"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x4f057110
+
+[[region.file]]
+name   = "rt-1m.3a"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x902489d0
+
+[[region.file]]
+name   = "rt-3m.5a"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xe35ce720
+
+[[region.file]]
+name   = "rt-6m.8a"
+offset = 0x200000
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x13cb0e7c
+
+[[region.file]]
+name   = "rt-8m.10a"
+offset = 0x200002
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x1f055014
+
+[[region.file]]
+name   = "rt-2m.4a"
+offset = 0x200004
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xe9a034f4
+
+[[region.file]]
+name   = "rt-4m.6a"
+offset = 0x200006
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xdf0eea8b

@@ -15,9 +15,12 @@ namespace mnemos::chips::storage {
 
     void eeprom_93c46::decode_opcode() noexcept {
         // Top 2 bits select the command; for the "special" group (00) the next 2
-        // bits sub-select. The low 6 bits are the word address.
-        switch ((opcode_ >> 6U) & 0x3U) {
-        case 1U: // WRITE (single word): clock in 16 data bits next
+        // bits sub-select. The low addr_bits() are the word address. (8-bit org
+        // widens the address to 7 bits, so the sub-select / write-enable bits shift
+        // up with it.)
+        const unsigned ab = addr_bits();
+        switch ((opcode_ >> ab) & 0x3U) {
+        case 1U: // WRITE (single word): clock in the data bits next
             buffer_ = 0;
             cycles_ = 0;
             stage_ = stage::write_word;
@@ -26,7 +29,7 @@ namespace mnemos::chips::storage {
             buffer_ = word_at(opcode_);
             cycles_ = 0;
             stage_ = stage::read_word;
-            data_out_ = false; // leading dummy 0 before the 16 data bits
+            data_out_ = false; // leading dummy 0 before the data bits
             break;
         case 3U: // ERASE one word
             if (write_enable_) {
@@ -34,9 +37,9 @@ namespace mnemos::chips::storage {
             }
             stage_ = stage::standby;
             break;
-        default: // 00: special command, sub-selected by bits 5-4
-            switch ((opcode_ >> 4U) & 0x3U) {
-            case 1U: // WRITE ALL: 16 data bits next, broadcast to every word
+        default: // 00: special command, sub-selected by the top 2 address bits
+            switch ((opcode_ >> (ab - 2U)) & 0x3U) {
+            case 1U: // WRITE ALL: data bits next, broadcast to every word
                 buffer_ = 0;
                 cycles_ = 0;
                 stage_ = stage::write_word;
@@ -47,8 +50,8 @@ namespace mnemos::chips::storage {
                 }
                 stage_ = stage::standby;
                 break;
-            default: // EWEN (11) / EWDS (00): write-enable latch = bit 4
-                write_enable_ = ((opcode_ >> 4U) & 1U) != 0U;
+            default: // EWEN (11) / EWDS (00): write-enable latch
+                write_enable_ = ((opcode_ >> (ab - 2U)) & 1U) != 0U;
                 stage_ = stage::standby;
                 break;
             }
@@ -57,6 +60,8 @@ namespace mnemos::chips::storage {
     }
 
     void eeprom_93c46::update(bool cs, bool clk, bool di) noexcept {
+        const unsigned opcode_total = 2U + addr_bits();
+        const unsigned db = data_bits();
         if (cs) {
             if (clk && !clk_) { // DI sampled on the CLK low->high edge
                 switch (stage_) {
@@ -68,21 +73,21 @@ namespace mnemos::chips::storage {
                     }
                     break;
                 case stage::get_opcode:
-                    opcode_ =
-                        static_cast<std::uint8_t>(opcode_ | ((di ? 1U : 0U) << (7U - cycles_)));
-                    if (++cycles_ == 8U) {
+                    opcode_ = static_cast<std::uint16_t>(
+                        opcode_ | ((di ? 1U : 0U) << (opcode_total - 1U - cycles_)));
+                    if (++cycles_ == opcode_total) {
                         decode_opcode();
                     }
                     break;
                 case stage::write_word:
-                    buffer_ =
-                        static_cast<std::uint16_t>(buffer_ | ((di ? 1U : 0U) << (15U - cycles_)));
-                    if (++cycles_ == 16U) {
+                    buffer_ = static_cast<std::uint16_t>(buffer_ |
+                                                         ((di ? 1U : 0U) << (db - 1U - cycles_)));
+                    if (++cycles_ == db) {
                         if (write_enable_) {
-                            if ((opcode_ & 0x40U) != 0U) {
+                            if ((opcode_ & (1U << addr_bits())) != 0U) {
                                 set_word(opcode_, buffer_); // WRITE single word
                             } else {
-                                for (std::uint8_t w = 0; w < 64U; ++w) { // WRITE ALL
+                                for (std::uint8_t w = 0; w < word_count(); ++w) { // WRITE ALL
                                     set_word(w, buffer_);
                                 }
                             }
@@ -91,8 +96,8 @@ namespace mnemos::chips::storage {
                     }
                     break;
                 case stage::read_word:
-                    data_out_ = ((buffer_ >> (15U - cycles_)) & 1U) != 0U;
-                    if (++cycles_ == 16U) {
+                    data_out_ = ((buffer_ >> (db - 1U - cycles_)) & 1U) != 0U;
+                    if (++cycles_ == db) {
                         // Sequential read (93C46B): advance to the next word and continue.
                         ++opcode_;
                         cycles_ = 0;

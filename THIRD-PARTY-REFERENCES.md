@@ -93,6 +93,28 @@ multiple independent open-source implementations.
   (`src/manifests/sms/sms_system.cpp`), compiled from the community Game Gear
   cartridge database and cross-checked against open-source Sega emulators' game
   lists. The 93C46 Microwire protocol is the published Microchip datasheet.
+- **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
+  CPS-B custom chip has a per-board scrambled register map (layer-control,
+  priority, palette-control, layer-enable, protection ports) and a graphics-code
+  mapper PAL. The hardware-keyed census (`src/manifests/capcom_cps1/cps_b_profiles.cpp`)
+  was transcribed from the community reverse-engineering of those per-board
+  register offsets and gfx bank ranges, via the author's first-party Emu
+  reference core (see "Code adapted from sibling first-party projects"). It is
+  keyed by the numeric CPS-B profile / PAL identity, never a game name, was
+  transcribed mechanically to avoid error, and is cross-checked against an
+  independent reimplementation of the mapper algorithm. No code was copied.
+- **Capcom CPS2 68000 opcode cipher** — the CPS-2 board encrypts the 68000
+  instruction stream with two 4-round Feistel networks keyed by the address and a
+  64-bit master key. The algorithm and its s-box constants are the publicly
+  documented result of the CPS-2 hardware reverse-engineering, originally
+  published in MAME's `cps2crypt.cpp` under the **BSD-3-Clause** license
+  (copyright-holders: Paul Leaman, Andreas Naive, Nicola Salmoria, Charles
+  MacDonald; the encryption was broken by Andreas Naive). Mnemos's reimplementation
+  (`src/manifests/capcom_cps2/cps2_crypto.cpp`) was transcribed from that
+  documented algorithm via the author's first-party Emu reference core (see "Code
+  adapted from sibling first-party projects"), restructured into Mnemos style, and
+  cross-checked against the reference's output as a golden vector in its unit test.
+  The BSD-3-Clause attribution above is retained here per that license.
 
 ## Cross-check emulators
 

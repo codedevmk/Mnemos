@@ -1,15 +1,16 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x) with the --rom media (zip
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1) with the --rom media (zip
 // archives are extracted transparently), presents its framebuffer at integer
 // scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
-#include "asset_export.hpp" // --extract-assets: decoded graphics -> PNG + JSON
-#include "audio_export.hpp" // --extract-audio: decoded PCM samples -> WAV + JSON
-#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
-#include "c64_adapter.hpp"  // force_link (the C64 has no cart-header region byte)
+#include "asset_export.hpp"        // --extract-assets: decoded graphics -> PNG + JSON
+#include "audio_export.hpp"        // --extract-audio: decoded PCM samples -> WAV + JSON
+#include "battery_save.hpp"        // .srm load/save (cartridge battery RAM persistence)
+#include "c64_adapter.hpp"         // force_link (the C64 has no cart-header region byte)
+#include "capcom_cps1_adapter.hpp" // force_link (arcade: no cart region byte)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -205,8 +206,10 @@ int main(int argc, char* argv[]) {
         const system_family family = *family_opt;
         // Arcade sets ARE their archive: the adapter resolves the dump
         // entries through the game declaration inside, so no unwrapping.
-        auto loaded = family == system_family::irem_m72 ? load_rom_verbatim(rom_paths.front())
-                                                        : load_rom(rom_paths.front());
+        const bool arcade_family =
+            family == system_family::irem_m72 || family == system_family::capcom_cps1;
+        auto loaded =
+            arcade_family ? load_rom_verbatim(rom_paths.front()) : load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
             std::fprintf(stderr, "could not read ROM: %s\n", rom_paths.front().c_str());
             return 1;
@@ -251,8 +254,9 @@ int main(int argc, char* argv[]) {
             // NTSC default set above (also silences -Wswitch on this enum).
             break;
         case system_family::irem_m72:
+        case system_family::capcom_cps1:
             // Arcade boards have no region byte; the adapter reports the
-            // board's own 55 Hz raster through region().
+            // board's own raster through region().
             break;
         }
         const auto video = resolve_video(cart_default);
@@ -271,6 +275,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::segacd::force_link();
         mnemos::apps::player::adapters::sega32x::force_link();
         mnemos::apps::player::adapters::irem_m72::force_link();
+        mnemos::apps::player::adapters::capcom_cps1::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
@@ -339,6 +344,7 @@ int main(int argc, char* argv[]) {
                                 .mapper_override = mapper_arg.value_or(std::string{}),
                                 .fm_unit = fm_unit,
                                 .disc_path = std::move(disc_path),
+                                .rom_path = rom_paths.front(),
                                 .bios_images = std::move(bios_images)});
         if (system && system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
@@ -476,37 +482,37 @@ int main(int argc, char* argv[]) {
     }
 
     // We never create a shader (only SDL_BlitGPUTexture), but the format
-    // flags are required at device creation. GPU debug/validation only in
-    // debug builds -- it costs present-path performance and the pinned SDL3's
-    // Vulkan backend trips swapchain-semaphore validation (which can stall
-    // presentation on some drivers). On Windows prefer D3D12 for the same
-    // reason; MNEMOS_GPU_DRIVER overrides, and a failed named driver falls
-    // back to SDL's own choice.
-#if defined(NDEBUG)
-    constexpr bool kGpuDebug = false;
-#else
-    constexpr bool kGpuDebug = true;
-#endif
+    // flags are required at device creation. On Windows prefer D3D12;
+    // MNEMOS_GPU_DRIVER overrides, and a failed named driver falls back to
+    // SDL's own choice.
     constexpr SDL_GPUShaderFormat kGpuFormats =
         SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
 #if defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in override, not hot-path
+#pragma warning(disable : 4996) // std::getenv: opt-in overrides, not hot-path
 #endif
     const char* gpu_driver = std::getenv("MNEMOS_GPU_DRIVER");
+    // GPU debug/validation is opt-in (MNEMOS_GPU_DEBUG=1): it costs the present
+    // path heavily -- with it on, even the debug player drops well below 60 while
+    // the emulator still has headroom -- and the pinned SDL3's Vulkan backend
+    // trips swapchain-semaphore validation. Default off in every build; enable it
+    // only when actually debugging the GPU path.
+    const char* gpu_debug_env = std::getenv("MNEMOS_GPU_DEBUG");
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
+    const bool gpu_debug =
+        gpu_debug_env != nullptr && gpu_debug_env[0] != '\0' && gpu_debug_env[0] != '0';
 #if defined(_WIN32)
     if (gpu_driver == nullptr) {
         gpu_driver = "direct3d12";
     }
 #endif
-    SDL_GPUDevice* device = SDL_CreateGPUDevice(kGpuFormats, kGpuDebug, gpu_driver);
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(kGpuFormats, gpu_debug, gpu_driver);
     if (device == nullptr && gpu_driver != nullptr) {
         std::fprintf(stderr, "[mnemos_player] GPU driver '%s' unavailable (%s); falling back\n",
                      gpu_driver, SDL_GetError());
-        device = SDL_CreateGPUDevice(kGpuFormats, kGpuDebug, nullptr);
+        device = SDL_CreateGPUDevice(kGpuFormats, gpu_debug, nullptr);
     }
     if (device == nullptr) {
         std::fprintf(stderr, "SDL_CreateGPUDevice failed: %s\n", SDL_GetError());

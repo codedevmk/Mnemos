@@ -106,12 +106,22 @@ namespace mnemos::chips::cpu {
         wb(addr, static_cast<std::uint8_t>(value));
         wb(static_cast<std::uint16_t>(addr + 1U), static_cast<std::uint8_t>(value >> 8U));
     }
+    // M1 opcode fetch: routes through the bus's instruction-fetch path
+    // (fetch_opcode8, default = read8) so an opcode/data-split board (Kabuki on
+    // CPS1 QSound) can serve the decrypted opcode stream here while operand and
+    // data reads stay on read8. Identical to read8 for every normal system.
     std::uint8_t z80::op_fetch8() noexcept {
+        const std::uint8_t v = bus_ != nullptr ? bus_->fetch_opcode8(pc_) : 0xFFU;
+        pc_ = static_cast<std::uint16_t>(pc_ + 1U);
+        return v;
+    }
+    // Operand fetch (immediates, displacements): a non-M1 read, so it uses the
+    // data path (read8), distinct from op_fetch8's opcode path.
+    std::uint8_t z80::imm_fetch8() noexcept {
         const std::uint8_t v = rb(pc_);
         pc_ = static_cast<std::uint16_t>(pc_ + 1U);
         return v;
     }
-    std::uint8_t z80::imm_fetch8() noexcept { return op_fetch8(); }
     std::uint16_t z80::fetch16() noexcept {
         const std::uint8_t lo = imm_fetch8();
         const std::uint8_t hi = imm_fetch8();

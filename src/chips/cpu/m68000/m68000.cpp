@@ -2531,11 +2531,18 @@ namespace mnemos::chips::cpu {
         bus_refresh_due_ = 62U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
-        // (SSP) and $4 (PC), read big-endian off the bus.
+        // (SSP) and $4 (PC), read big-endian off the bus. The vector sources the
+        // initial PC, so it is an instruction fetch: on an opcode/data-split board
+        // (CPS-2) it must come from the decrypted opcode image. fetch16_be_opcode
+        // defaults to read16_be, so every other system is byte-for-byte unchanged.
         sr_ = static_cast<std::uint16_t>(sr_s | (7U << 8U));
         if (bus_ != nullptr) {
-            const std::uint32_t ssp = (static_cast<std::uint32_t>(rd16(0U)) << 16U) | rd16(2U);
-            const std::uint32_t pc = (static_cast<std::uint32_t>(rd16(4U)) << 16U) | rd16(6U);
+            const std::uint32_t ssp =
+                (static_cast<std::uint32_t>(bus_->fetch16_be_opcode(0U)) << 16U) |
+                bus_->fetch16_be_opcode(2U);
+            const std::uint32_t pc =
+                (static_cast<std::uint32_t>(bus_->fetch16_be_opcode(4U)) << 16U) |
+                bus_->fetch16_be_opcode(6U);
             a_[7] = ssp;
             ssp_ = ssp;
             pc_ = pc;
