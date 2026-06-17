@@ -221,6 +221,7 @@ namespace mnemos::manifests::capcom_cps2 {
         }
         video_.attach_gfx(std::span<const std::uint8_t>(gfx));
         video_.attach_video_ram(std::span<const std::uint8_t>(video_ram_));
+        video_.attach_object_ram(std::span<const std::uint8_t>(object_ram_));
 
         main_cpu.attach_bus(main_bus);
         main_cpu.set_irq_ack_callback([this](int /*level*/) {
@@ -330,8 +331,10 @@ namespace mnemos::manifests::capcom_cps2 {
 
     void cps2_system::push_cps_a_to_video() noexcept {
         // CPS-2 stores sprites in the dedicated $700000 object-RAM window; the
-        // object bank latch selects the active 0x800-byte object table.
-        video_.set_object_base(object_bank_ != 0U ? object_base_align : 0U);
+        // object bank latch selects the active 0x2000-byte object table. The
+        // sprite x/y coordinate base comes from control regs 0x08/0x0A.
+        video_.set_object_base(static_cast<std::uint32_t>(object_bank_ & 1U) * object_bank_bytes);
+        video_.set_sprite_offsets(control_reg_word(0x08U), control_reg_word(0x0AU));
         video_.set_scroll1_base(
             video_ram_base_aligned(cps_a_regs_[cps_a_scroll1_base], scroll_base_align));
         video_.set_scroll2_base(
@@ -350,6 +353,14 @@ namespace mnemos::manifests::capcom_cps2 {
             cps_a_regs_[cps_a_rowscroll_offset]);
         video_.set_video_control(video_control);
         video_.set_display_enable(true);
+    }
+
+    std::uint16_t cps2_system::control_reg_word(std::size_t offset) const noexcept {
+        if (offset + 1U >= control_regs_.size()) {
+            return 0U;
+        }
+        return static_cast<std::uint16_t>(
+            (static_cast<std::uint16_t>(control_regs_[offset]) << 8U) | control_regs_[offset + 1U]);
     }
 
     std::uint32_t cps2_system::palette_source() const noexcept {

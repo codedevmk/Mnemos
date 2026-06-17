@@ -261,6 +261,44 @@ TEST_CASE("cps2 video scroll2 row-scroll shifts a line horizontally", "[cps2_vid
     CHECK(fb.pixels[4] == 0x00FF0000U); // now lit at x=4
 }
 
+TEST_CASE("cps2 video draws a sprite from object RAM", "[cps2_video]") {
+    cps2_video video;
+    std::vector<std::uint8_t> vram(0x20000U, 0U);
+    // Sprite pal_num 2, pen 0xA -> palette index 2*16+10 = 42 -> byte 0x54. Red.
+    put16(vram, 0x10000U + 0x54U, 0xFF00U);
+    video.attach_video_ram(vram);
+
+    // Sprites address the gfx by code directly; 16x16 tile 1 -> byte 1*128 = 128.
+    // Texel (0,0) = pen 0xA.
+    std::vector<std::uint8_t> gfx(0x1000U, 0U);
+    gfx[128U + 0U] = 0x80U;
+    gfx[128U + 2U] = 0x80U;
+    video.attach_gfx(gfx);
+
+    // Object RAM: entry 0 = sprite x=0,y=0,tile=1,attr=2 (pal 2, single 16x16 block,
+    // no flip); entry 1's y = 0xFFFF terminates the list.
+    std::vector<std::uint8_t> obj(0x4000U, 0U);
+    put16(obj, 0x0U, 0x0000U); // raw_x
+    put16(obj, 0x2U, 0x0000U); // raw_y
+    put16(obj, 0x4U, 0x0001U); // raw_tile (-> tile_code 1)
+    put16(obj, 0x6U, 0x0002U); // attr: pal 2, 1x1, no flip
+    put16(obj, 0xAU, 0xFFFFU); // entry 1 raw_y = terminator
+    video.attach_object_ram(obj);
+
+    video.set_object_base(0U);
+    video.set_sprite_offsets(0U, 0U); // xoffs = 64, yoffs = 16 (the visible origin)
+    video.set_display_enable(true);
+
+    video.render(0x10000U, 0x003FU);
+    const auto fb = video.framebuffer();
+    // raw(0,0) + offset(64,16) - visible origin(64,16) -> the texel lands at (0,0).
+    CHECK(fb.pixels[0] == 0x00FF0000U);
+    // A tile_code 0 entry (the default-zero entries) draws nothing.
+    put16(obj, 0x4U, 0x0000U); // tile_code 0 -> skipped
+    video.render(0x10000U, 0x003FU);
+    CHECK(video.framebuffer().pixels[0] == 0x00000000U); // backdrop shows through
+}
+
 TEST_CASE("cps2 video save/load round-trips the palette + frame index", "[cps2_video]") {
     cps2_video video;
     std::vector<std::uint8_t> vram(0x10000U, 0U);
