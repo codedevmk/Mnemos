@@ -196,6 +196,10 @@ namespace mnemos::manifests::capcom_cps1 {
             {sc3, 0x0000U, 0x3FFFU, 2U},
             {sc2, 0x4000U, 0x7FFFU, 3U},
         }};
+        constexpr std::array<gfx_bank_range, 2> ranges_va22b{{
+            {all4, 0x0000U, 0x3FFFU, 0U},
+            {all4, 0x4000U, 0x7FFFU, 1U},
+        }};
         constexpr std::array<gfx_bank_range, 4> ranges_st24m1{{
             {spr, 0x0000U, 0x4FFFU, 0U},
             {sc2, 0x4000U, 0x7FFFU, 0U},
@@ -214,7 +218,7 @@ namespace mnemos::manifests::capcom_cps1 {
             {sc3, 0x0000U, 0x7FFFU, 0U},
         }};
 
-        constexpr std::array<cps_b_profile, 41> board_db{{
+        constexpr std::array<cps_b_profile, 43> board_db{{
             // profile 1 (cps_b 01, mapper dm620)
             cps_b_profile{
                 .legacy = false,
@@ -712,6 +716,33 @@ namespace mnemos::manifests::capcom_cps1 {
                 .mult_offset = {reg_none, reg_none, reg_none, reg_none},
                 .mapper = {.bank_size = {0x4000U, 0x4000U, 0x4000U, 0x4000U},
                            .ranges = ranges_tk22b},
+            },
+            // profile 53 (cps_b b18_s9263b, mapper s9263b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x1CU,
+                .priority_offset = {0x1AU, 0x18U, 0x16U, 0x14U},
+                .palette_control_offset = 0x12U,
+                .layer_enable_mask = {0x10U, 0x08U, 0x02U, 0U, 0U},
+                .id = 53U,
+                .id_offset = 0x10U,
+                .id_value = 0x0408U,
+                .mult_offset = {reg_none, reg_none, reg_none, reg_none},
+                .cps_b_base = 0x8001C0U,
+                .mapper = {.bank_size = {0x8000U, 0x8000U, 0x8000U, 0U}, .ranges = ranges_s9263b},
+            },
+            // profile 54 (cps_b bt5_va22b, mapper va22b)
+            cps_b_profile{
+                .legacy = false,
+                .layer_control_offset = 0x20U,
+                .priority_offset = {0x2EU, 0x2CU, 0x2AU, 0x28U},
+                .palette_control_offset = 0x30U,
+                .layer_enable_mask = {0x20U, 0x04U, 0x02U, 0U, 0U},
+                .id = 54U,
+                .id_offset = reg_none,
+                .id_value = 0x0000U,
+                .mult_offset = {0x0EU, 0x0CU, 0x0AU, 0x08U},
+                .mapper = {.bank_size = {0x4000U, 0x4000U, 0U, 0U}, .ranges = ranges_va22b},
             },
             // profile 101 (cps_b 01_st24m1, mapper st24m1)
             cps_b_profile{

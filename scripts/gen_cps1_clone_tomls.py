@@ -52,6 +52,7 @@ CONFIG_PROFILE = {
     # CPS-B register layout as the parent, a different gfx mapper. Each maps to a
     # dedicated Mnemos profile (gfx data + mapper differ from the parent's "24B").
     ("CPS_B_02", "mapper_TK22B"): 52,  # dynwarj (parent dynwar / TK24B1)
+    ("CPS_B_21_BT5", "mapper_VA22B"): 54,  # varthj (parent varth / CPS_B_04 / VA24B)
 }
 
 # Bootleg/hack boards keyed by the FULL config tuple (they share (cpsb, mapper)
@@ -63,6 +64,15 @@ CONFIG_PROFILE = {
 # mis-emit); add its own row pointing at 51 if one turns up.
 KLUDGE_PROFILE = {
     ("CPS_B_21_DEF", "mapper_S9263B", "0x36", "0", "0", "0x41"): 51,
+}
+
+# Legit (non-hack) clone boards that differ from the parent's FULL config -- a
+# different CPS-B register board AND incidental in2 input-mux wiring -- so the
+# (cpsb,mapper) map (which requires the trailing I/O fields to match the parent)
+# cannot apply, yet it is not a bootleg kludge. Keyed by the full config tuple ->
+# the dedicated Mnemos profile for that exact board.
+FULL_CONFIG_PROFILE = {
+    ("CPS_B_18", "mapper_STF29", "0x3c"): 53,  # sf2ue (parent sf2 / CPS_B_11 / in2 0x36)
 }
 
 # clone -> parent
@@ -168,6 +178,9 @@ def gen(clone):
     if ccfg in KLUDGE_PROFILE:
         # A bootleg board distinguished by its full config (incl. bootleg_kludge).
         profile = str(KLUDGE_PROFILE[ccfg])
+    elif ccfg in FULL_CONFIG_PROFILE:
+        # A legit board whose full config (incl. in2) differs from the parent's.
+        profile = str(FULL_CONFIG_PROFILE[ccfg])
     elif (ccfg[0], ccfg[1]) in CONFIG_PROFILE and ccfg[2:] == pcfg[2:]:
         # The clone's board has a known Mnemos profile -> use it directly. This is
         # authoritative even when the parent toml is profiled differently (the

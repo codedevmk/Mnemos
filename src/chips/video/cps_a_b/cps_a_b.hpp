@@ -134,6 +134,11 @@ namespace mnemos::chips::video {
             // $F1C006. The board reads the flag to route that port to the NVRAM
             // device; real CPS-B-only boards leave it false (no behaviour change).
             bool cps_b_eeprom{false};
+            // 68k address the board decodes the CPS-B register file at. Almost every
+            // board uses $800140; a few relocate the whole window (the CPS-B-18 /
+            // sf2 World-Warrior rev-E board decodes it at $8001C0). The register
+            // OFFSETS above stay window-relative; only this base moves.
+            std::uint32_t cps_b_base{0x800140U};
             // Per-board graphics-code remap (non-owning; empty => identity).
             gfx_mapper mapper{};
         };
