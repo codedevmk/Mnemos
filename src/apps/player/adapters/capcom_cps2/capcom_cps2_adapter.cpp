@@ -70,7 +70,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             const auto slash = rom_path.find_last_of("/\\");
             const std::string dir =
                 slash == std::string::npos ? std::string{} : rom_path.substr(0, slash + 1);
-            for (const std::string candidate :
+            for (const std::string& candidate :
                  {dir + "keys/" + set_name + ".key", dir + set_name + ".key"}) {
                 if (auto bytes = mnemos::io::read_file(candidate)) {
                     if (bytes->size() == cps2::crypto_key_size) {
