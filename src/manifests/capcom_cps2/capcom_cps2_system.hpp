@@ -11,7 +11,7 @@
 // mixing.
 
 #include "cps2_crypto.hpp"
-#include "cps_a_b.hpp"
+#include "cps2_video.hpp"
 #include "eeprom_93c46.hpp"
 #include "m68000.hpp"
 #include "qsound.hpp"
@@ -135,8 +135,8 @@ namespace mnemos::manifests::capcom_cps2 {
         [[nodiscard]] chips::cpu::m68000& cpu() noexcept { return main_cpu; }
         [[nodiscard]] topology::bus& bus() noexcept { return main_bus; }
         [[nodiscard]] chips::storage::eeprom_93c46& eeprom() noexcept { return eeprom_; }
-        [[nodiscard]] chips::video::cps_a_b& video() noexcept { return video_; }
-        [[nodiscard]] const chips::video::cps_a_b& video() const noexcept { return video_; }
+        [[nodiscard]] chips::video::cps2_video& video() noexcept { return video_; }
+        [[nodiscard]] const chips::video::cps2_video& video() const noexcept { return video_; }
         [[nodiscard]] chips::cpu::z80& sound_cpu() noexcept { return sound_cpu_; }
         [[nodiscard]] topology::bus& sound_bus() noexcept { return sound_bus_; }
         [[nodiscard]] bool has_sound() const noexcept { return sound_rom_size_ > 0U; }
@@ -157,7 +157,7 @@ namespace mnemos::manifests::capcom_cps2 {
         chips::cpu::m68000 main_cpu;
         chips::cpu::z80 sound_cpu_;
         chips::audio::qsound qdsp_;
-        chips::video::cps_a_b video_;
+        chips::video::cps2_video video_;
         // CPS-2 NVRAM: a serial 93C46 in 16-bit organisation (64 x 16).
         chips::storage::eeprom_93c46 eeprom_{chips::storage::eeprom_93c46::organization::word16};
 
@@ -173,7 +173,6 @@ namespace mnemos::manifests::capcom_cps2 {
         std::vector<std::uint8_t> work_ram_ = std::vector<std::uint8_t>(main_ram_size, 0U);
         std::vector<std::uint8_t> video_ram_ = std::vector<std::uint8_t>(video_ram_size, 0U);
         std::vector<std::uint8_t> object_ram_ = std::vector<std::uint8_t>(object_ram_size, 0U);
-        std::vector<std::uint8_t> palette_ = std::vector<std::uint8_t>(0x4000U, 0U);
         std::vector<std::uint8_t> extra_ram_ = std::vector<std::uint8_t>(extra_ram_size, 0U);
         std::array<std::uint8_t, control_reg_size> control_regs_{};
         std::array<std::uint8_t, extra_ctrl_size> extra_control_{};
@@ -208,7 +207,9 @@ namespace mnemos::manifests::capcom_cps2 {
         [[nodiscard]] std::uint32_t video_ram_base_aligned(std::uint16_t reg,
                                                            std::uint32_t boundary) const noexcept;
         void push_cps_a_to_video() noexcept;
-        void copy_palette_from_video_ram() noexcept;
+        // The current CPS-A reg5 palette source (page-aligned video-RAM offset) the
+        // video chip DMAs from at render time.
+        [[nodiscard]] std::uint32_t palette_source() const noexcept;
         // Wire the Z80 sound CPU + the 68K<->Z80 comm RAM + the DL-1425 QSound DSP.
         void setup_sound();
     };

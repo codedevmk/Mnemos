@@ -56,22 +56,6 @@ namespace {
     }
 
     // Fill a tile's planar gfx bytes so every pixel decodes to `pen`.
-    void carve_solid_tile(std::vector<std::uint8_t>& gfx, std::size_t base, std::size_t bytes,
-                          std::uint8_t pen) {
-        for (std::size_t i = 0; i < bytes && base + i < gfx.size(); ++i) {
-            gfx[base + i] = ((pen >> (i & 3U)) & 1U) != 0U ? 0xFFU : 0x00U;
-        }
-    }
-
-    void fill_scroll2_nametable(cps2_system& sys, std::uint32_t base, std::size_t entries,
-                                std::uint16_t code, std::uint16_t attr) {
-        auto& bus = sys.bus();
-        for (std::size_t i = 0; i < entries; ++i) {
-            const std::uint32_t off = base + static_cast<std::uint32_t>(i * 4U);
-            bus.write16_be(cps2::video_ram_base + off, code);
-            bus.write16_be(cps2::video_ram_base + off + 2U, attr);
-        }
-    }
 } // namespace
 
 TEST_CASE("cps2 system boots the 68000 from the decrypted opcode image", "[capcom_cps2][system]") {
@@ -170,10 +154,7 @@ TEST_CASE("cps2 system decodes CPS-A latches into video while QSound advances",
     const auto k = sample_key();
     rom_set_image image;
     image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
-
-    auto& gfx = image.regions["gfx"];
-    gfx.assign(0x10000U, 0xFFU);                // transparent by default
-    carve_solid_tile(gfx, 1U * 128U, 128U, 1U); // scroll2 tile code 1 -> pen 1
+    image.regions["gfx"].assign(0x10000U, 0xFFU);
 
     // A tiny Z80 sound program: write $24 to shared comm RAM, then spin. The
     // frame loop must run it when the 68K releases sound reset.
@@ -188,19 +169,15 @@ TEST_CASE("cps2 system decodes CPS-A latches into video while QSound advances",
     cps2_system sys(std::move(image), cps2_board_params{.key = k});
     auto& bus = sys.bus();
 
-    fill_scroll2_nametable(sys, 0U, 4096U, 1U, 0U);
-
+    // The CPS-2 backdrop is the last palette entry (pal_num 0xBF, pen 0xF). Stage
+    // the palette source in video RAM, write a full-red backdrop there (the 16-bit
+    // brightness:R:G:B word 0xFF00 = full red), and point the CPS-A reg5 palette
+    // base at it. cps2_video DMAs + decodes it at vblank.
     constexpr std::uint32_t palette_source = 0x20000U;
-    constexpr std::uint32_t scroll2_pen1 = (64U * 16U + 1U) * 2U;
     constexpr std::uint32_t backdrop = 0xBFFU * 2U;
-    bus.write16_be(cps2::video_ram_base + palette_source + scroll2_pen1, 0xFF00U);
-    bus.write16_be(cps2::video_ram_base + palette_source + backdrop, 0x000FU);
-
-    bus.write16_be(cps2::cps_a_base + cps2::cps_a_scroll2_base * 2U,
-                   static_cast<std::uint16_t>(cps2::video_ram_base >> 8U));
+    bus.write16_be(cps2::video_ram_base + palette_source + backdrop, 0xFF00U);
     bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
                    static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
-    bus.write16_be(cps2::cps_a_base + cps2::cps_a_video_control * 2U, 0x0004U);
     bus.write8(cps2::sound_reset_port, 0x08U); // release sound CPU
 
     REQUIRE(sys.video().frame_index() == 0U);
@@ -212,6 +189,8 @@ TEST_CASE("cps2 system decodes CPS-A latches into video while QSound advances",
     CHECK(sys.vblank_irq_raised() == 1U);
     CHECK(sys.vblank_irq_acked() == 0U); // reset SR keeps IPM at 7 in this tiny program
     CHECK(sys.sound_bus().read8(0xC000U) == 0x24U);
+    // The backdrop decodes through the CPS-A reg5 palette latch and reaches the
+    // framebuffer end-to-end (the scroll layers + sprites render in later increments).
     const auto fb = sys.video().framebuffer();
     CHECK(fb.pixels[0] == 0xFF0000U);
     CHECK(fb.pixels[120U * fb.width + 200U] == 0xFF0000U);

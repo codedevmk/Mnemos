@@ -123,6 +123,9 @@ namespace mnemos::chips::video {
                 cps_b_regs_[index] = value;
             }
         }
+        [[nodiscard]] std::uint16_t cps_b_reg(std::uint8_t index) const noexcept {
+            return index < cps_b_regs_.size() ? cps_b_regs_[index] : 0U;
+        }
         // CPS-A video-control register (bit 15 = flip screen).
         void set_video_control(std::uint16_t value) noexcept { video_control_ = value; }
         void set_display_enable(bool enabled) noexcept { display_enabled_ = enabled; }

@@ -53,9 +53,6 @@ namespace mnemos::manifests::capcom_cps2 {
                 const std::uint16_t word = cps_reg_word(file_offset, word_index);
                 if (file_offset == cps_a_file_offset && word_index < cps_a_regs_.size()) {
                     cps_a_regs_[word_index] = word;
-                    if (word_index == cps_a_palette_base && (rel & 1U) != 0U) {
-                        copy_palette_from_video_ram();
-                    }
                 } else if (file_offset == cps_b_file_offset) {
                     video_.set_cps_b_reg(static_cast<std::uint8_t>(word_index), word);
                 }
@@ -185,17 +182,12 @@ namespace mnemos::manifests::capcom_cps2 {
 
         setup_sound();
 
-        // Video: CPS-2 uses the same CPS-A/CPS-B mixer as CPS-1, with separate
-        // tile RAM and object RAM windows on the 68K bus.
+        // Video: the CPS-2 chip reads the tile/attribute RAM ($900000) for the
+        // scroll name tables + the palette DMA source, and the packed gfx ROM for
+        // tile art. (The vblank IRQ is raised by run_frame, not the chip.)
         const auto& gfx = region(roms, "gfx");
         video_.attach_gfx(std::span<const std::uint8_t>(gfx));
-        video_.attach_tile_ram(std::span<const std::uint8_t>(video_ram_));
-        video_.attach_object_ram(std::span<const std::uint8_t>(object_ram_));
-        video_.attach_palette(std::span<const std::uint8_t>(palette_));
-        video_.set_vblank_callback([this](std::uint32_t /*line*/) {
-            main_cpu.set_irq_level(2);
-            ++vblank_irq_raised_;
-        });
+        video_.attach_video_ram(std::span<const std::uint8_t>(video_ram_));
 
         main_cpu.attach_bus(main_bus);
         main_cpu.set_irq_ack_callback([this](int /*level*/) {
@@ -327,42 +319,16 @@ namespace mnemos::manifests::capcom_cps2 {
         video_.set_display_enable(true);
     }
 
-    void cps2_system::copy_palette_from_video_ram() noexcept {
+    std::uint32_t cps2_system::palette_source() const noexcept {
         const std::uint16_t reg = cps_a_regs_[cps_a_palette_base];
-        if (reg == 0U) {
-            return;
-        }
-
-        std::uint32_t source = video_ram_base_from_reg(reg) & ~(palette_page_bytes - 1U);
-        bool source_advanced = false;
-        for (std::uint32_t page = 0U; page < palette_copy_pages; ++page) {
-            const bool copy_page =
-                (palette_control_default & static_cast<std::uint16_t>(1U << page)) != 0U;
-            if (copy_page) {
-                const std::uint32_t dest = page * palette_page_bytes;
-                if (source + palette_page_bytes <= video_ram_size &&
-                    dest + palette_page_bytes <= palette_.size()) {
-                    std::copy_n(video_ram_.begin() + source, palette_page_bytes,
-                                palette_.begin() + dest);
-                }
-                source += palette_page_bytes;
-                source_advanced = true;
-            } else if (source_advanced) {
-                source += palette_page_bytes;
-            }
-        }
+        return video_ram_base_from_reg(reg) & ~(palette_page_bytes - 1U);
     }
 
     void cps2_system::run_frame() {
         constexpr std::uint64_t cpu_cycles_per_frame = m68k_clock_hz / frame_rate_hz;
-        constexpr std::uint32_t visible_lines = chips::video::cps_a_b::vblank_start;
-        constexpr std::uint64_t dots_total =
-            static_cast<std::uint64_t>(chips::video::cps_a_b::frame_lines) *
-            chips::video::cps_a_b::line_pixels;
-        constexpr std::uint64_t dots_to_vblank =
-            static_cast<std::uint64_t>(visible_lines) * chips::video::cps_a_b::line_pixels + 1U;
-        constexpr std::uint64_t cpu_visible =
-            cpu_cycles_per_frame * visible_lines / chips::video::cps_a_b::frame_lines;
+        constexpr std::uint32_t frame_lines = 262U; // total scanlines
+        constexpr std::uint32_t visible_lines = chips::video::cps2_video::visible_height;
+        constexpr std::uint64_t cpu_visible = cpu_cycles_per_frame * visible_lines / frame_lines;
 
         const auto run_main = [this](std::uint64_t cycles) {
             if (executable_) {
@@ -370,12 +336,15 @@ namespace mnemos::manifests::capcom_cps2 {
             }
         };
 
-        push_cps_a_to_video();
+        // Run the visible field, then at vblank latch the CPS-A state, render the
+        // frame from the current palette source, and raise the level-2 IRQ the game
+        // services during vblank.
         run_main(cpu_visible);
-        video_.tick(dots_to_vblank);
-        video_.latch_sprites();
+        push_cps_a_to_video();
+        video_.render(palette_source(), palette_control_default);
+        main_cpu.set_irq_level(2);
+        ++vblank_irq_raised_;
         run_main(cpu_cycles_per_frame - cpu_visible);
-        video_.tick(dots_total - dots_to_vblank);
     }
 
 } // namespace mnemos::manifests::capcom_cps2
