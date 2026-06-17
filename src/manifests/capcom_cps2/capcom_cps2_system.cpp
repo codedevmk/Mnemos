@@ -1,11 +1,15 @@
 #include "capcom_cps2_system.hpp"
 
+#include <algorithm>
 #include <span>
 #include <string>
 #include <utility>
 
 namespace mnemos::manifests::capcom_cps2 {
     namespace {
+        inline constexpr std::size_t cps_a_file_offset = 0x100U;
+        inline constexpr std::size_t cps_b_file_offset = 0x140U;
+
         // Pass the region name by value (see the CPS-1 assembler note: a string_view
         // overload would bind a temporary to a reference param under
         // GCC -Wdangling-reference).
@@ -32,14 +36,27 @@ namespace mnemos::manifests::capcom_cps2 {
     } // namespace
 
     void cps2_system::map_cps_reg_window(std::uint32_t base, std::size_t file_offset) {
-        // Latch the CPS-A / CPS-B register file (the video decode reads it later).
+        // Latch the CPS-A / CPS-B register file and forward the decoded side
+        // effects to the board-owned video chip.
         main_bus.map_mmio(
             base, static_cast<std::uint32_t>(cps_reg_block),
             [this, base, file_offset](std::uint32_t address) -> std::uint8_t {
                 return cps_regs_[file_offset + (address - base)];
             },
             [this, base, file_offset](std::uint32_t address, std::uint8_t value) {
-                cps_regs_[file_offset + (address - base)] = value;
+                const std::size_t rel = address - base;
+                cps_regs_[file_offset + rel] = value;
+
+                const std::size_t word_index = rel >> 1U;
+                const std::uint16_t word = cps_reg_word(file_offset, word_index);
+                if (file_offset == cps_a_file_offset && word_index < cps_a_regs_.size()) {
+                    cps_a_regs_[word_index] = word;
+                    if (word_index == cps_a_palette_base && (rel & 1U) != 0U) {
+                        copy_palette_from_video_ram();
+                    }
+                } else if (file_offset == cps_b_file_offset) {
+                    video_.set_cps_b_reg(static_cast<std::uint8_t>(word_index), word);
+                }
             },
             1);
     }
@@ -98,10 +115,10 @@ namespace mnemos::manifests::capcom_cps2 {
             1);
 
         // CPS-A / CPS-B register files, reachable via the primary + legacy mirror.
-        map_cps_reg_window(cps_a_base, 0x100U);
-        map_cps_reg_window(cps_b_base, 0x140U);
-        map_cps_reg_window(cps_a_mirror_base, 0x100U);
-        map_cps_reg_window(cps_b_mirror_base, 0x140U);
+        map_cps_reg_window(cps_a_base, cps_a_file_offset);
+        map_cps_reg_window(cps_b_base, cps_b_file_offset);
+        map_cps_reg_window(cps_a_mirror_base, cps_a_file_offset);
+        map_cps_reg_window(cps_b_mirror_base, cps_b_file_offset);
 
         // I/O: inputs (active-low) + QSound volume status + serial EEPROM. The byte
         // handlers mirror the reference's word ports decoded to bytes.
@@ -166,7 +183,23 @@ namespace mnemos::manifests::capcom_cps2 {
 
         setup_sound();
 
+        // Video: CPS-2 uses the same CPS-A/CPS-B mixer as CPS-1, with separate
+        // tile RAM and object RAM windows on the 68K bus.
+        const auto& gfx = region(roms, "gfx");
+        video_.attach_gfx(std::span<const std::uint8_t>(gfx));
+        video_.attach_tile_ram(std::span<const std::uint8_t>(video_ram_));
+        video_.attach_object_ram(std::span<const std::uint8_t>(object_ram_));
+        video_.attach_palette(std::span<const std::uint8_t>(palette_));
+        video_.set_vblank_callback([this](std::uint32_t /*line*/) {
+            main_cpu.set_irq_level(2);
+            ++vblank_irq_raised_;
+        });
+
         main_cpu.attach_bus(main_bus);
+        main_cpu.set_irq_ack_callback([this](int /*level*/) {
+            main_cpu.set_irq_level(0);
+            ++vblank_irq_acked_;
+        });
         // Reset reads the vector ($0 SSP / $4 PC) through the opcode path, so on a
         // keyed board it boots from the decrypted image.
         main_cpu.reset(chips::reset_kind::power_on);
@@ -242,6 +275,105 @@ namespace mnemos::manifests::capcom_cps2 {
                 qdsp_.tick(step);
             }
         }
+    }
+
+    std::uint16_t cps2_system::cps_reg_word(std::size_t file_offset,
+                                            std::size_t word_index) const noexcept {
+        const std::size_t off = file_offset + word_index * 2U;
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(cps_regs_[off]) << 8U) |
+                                          cps_regs_[off + 1U]);
+    }
+
+    std::uint32_t cps2_system::video_ram_base_from_reg(std::uint16_t reg) const noexcept {
+        const std::uint32_t addr = static_cast<std::uint32_t>(reg) << 8U;
+        if (addr >= video_ram_base && addr < video_ram_base + video_ram_size) {
+            return addr - video_ram_base;
+        }
+        return static_cast<std::uint32_t>(reg) * 256U;
+    }
+
+    std::uint32_t cps2_system::video_ram_base_aligned(std::uint16_t reg,
+                                                      std::uint32_t boundary) const noexcept {
+        std::uint32_t base = video_ram_base_from_reg(reg);
+        if (boundary > 1U) {
+            base &= ~(boundary - 1U);
+        }
+        return base;
+    }
+
+    void cps2_system::push_cps_a_to_video() noexcept {
+        // CPS-2 stores sprites in the dedicated $700000 object-RAM window; the
+        // object bank latch selects the active 0x800-byte object table.
+        video_.set_object_base(object_bank_ != 0U ? object_base_align : 0U);
+        video_.set_scroll1_base(
+            video_ram_base_aligned(cps_a_regs_[cps_a_scroll1_base], scroll_base_align));
+        video_.set_scroll2_base(
+            video_ram_base_aligned(cps_a_regs_[cps_a_scroll2_base], scroll_base_align));
+        video_.set_scroll3_base(
+            video_ram_base_aligned(cps_a_regs_[cps_a_scroll3_base], scroll_base_align));
+
+        video_.set_scroll1(cps_a_regs_[cps_a_scroll1_x], cps_a_regs_[cps_a_scroll1_y]);
+        video_.set_scroll2(cps_a_regs_[cps_a_scroll2_x], cps_a_regs_[cps_a_scroll2_y]);
+        video_.set_scroll3(cps_a_regs_[cps_a_scroll3_x], cps_a_regs_[cps_a_scroll3_y]);
+
+        const std::uint16_t video_control = cps_a_regs_[cps_a_video_control];
+        video_.set_rowscroll(
+            (video_control & 0x0001U) != 0U,
+            video_ram_base_aligned(cps_a_regs_[cps_a_rowscroll_base], other_base_align),
+            cps_a_regs_[cps_a_rowscroll_offset]);
+        video_.set_video_control(video_control);
+        video_.set_display_enable(true);
+    }
+
+    void cps2_system::copy_palette_from_video_ram() noexcept {
+        const std::uint16_t reg = cps_a_regs_[cps_a_palette_base];
+        if (reg == 0U) {
+            return;
+        }
+
+        std::uint32_t source = video_ram_base_from_reg(reg) & ~(palette_page_bytes - 1U);
+        bool source_advanced = false;
+        for (std::uint32_t page = 0U; page < palette_copy_pages; ++page) {
+            const bool copy_page =
+                (palette_control_default & static_cast<std::uint16_t>(1U << page)) != 0U;
+            if (copy_page) {
+                const std::uint32_t dest = page * palette_page_bytes;
+                if (source + palette_page_bytes <= video_ram_size &&
+                    dest + palette_page_bytes <= palette_.size()) {
+                    std::copy_n(video_ram_.begin() + source, palette_page_bytes,
+                                palette_.begin() + dest);
+                }
+                source += palette_page_bytes;
+                source_advanced = true;
+            } else if (source_advanced) {
+                source += palette_page_bytes;
+            }
+        }
+    }
+
+    void cps2_system::run_frame() {
+        constexpr std::uint64_t cpu_cycles_per_frame = m68k_clock_hz / frame_rate_hz;
+        constexpr std::uint32_t visible_lines = chips::video::cps_a_b::vblank_start;
+        constexpr std::uint64_t dots_total =
+            static_cast<std::uint64_t>(chips::video::cps_a_b::frame_lines) *
+            chips::video::cps_a_b::line_pixels;
+        constexpr std::uint64_t dots_to_vblank =
+            static_cast<std::uint64_t>(visible_lines) * chips::video::cps_a_b::line_pixels + 1U;
+        constexpr std::uint64_t cpu_visible =
+            cpu_cycles_per_frame * visible_lines / chips::video::cps_a_b::frame_lines;
+
+        const auto run_main = [this](std::uint64_t cycles) {
+            if (executable_) {
+                run_cycles(cycles);
+            }
+        };
+
+        push_cps_a_to_video();
+        run_main(cpu_visible);
+        video_.tick(dots_to_vblank);
+        video_.latch_sprites();
+        run_main(cpu_cycles_per_frame - cpu_visible);
+        video_.tick(dots_total - dots_to_vblank);
     }
 
 } // namespace mnemos::manifests::capcom_cps2
