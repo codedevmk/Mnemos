@@ -6,10 +6,12 @@
 // the decrypted image as the opcode overlay (the phase-3 m68000 split), wires the
 // full 68000 memory map (RAM / CPS-A-B registers / control / I-O / 93C46 EEPROM),
 // and the QSound sound subsystem (Z80 + the 68K<->Z80 comm RAM + the DL-1425 DSP).
-// Boots the 68000 from the decrypted reset vector. Remaining: a fresh CPS-2 video
-// chip + the vblank IRQ + the precise QSound /INT cadence and audio mixing.
+// Boots the 68000 from the decrypted reset vector and drives the shared CPS-A/B
+// video chip at frame-vblank. Remaining: precise QSound /INT cadence and audio
+// mixing.
 
 #include "cps2_crypto.hpp"
+#include "cps_a_b.hpp"
 #include "eeprom_93c46.hpp"
 #include "m68000.hpp"
 #include "qsound.hpp"
@@ -69,11 +71,39 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint32_t main_ram_base = 0xFF0000U;  // 64 KiB work RAM
     inline constexpr std::size_t main_ram_size = 0x10000U;     // (0xFF0000-0xFFFFFF)
 
+    // CPS-A output-register word indices. CPS-2 keeps tile RAM and object RAM in
+    // separate 68K windows, but the scroll/row-scroll/palette register decode is
+    // shared with CPS-1.
+    inline constexpr std::size_t cps_a_reg_count = 32U;
+    inline constexpr std::size_t cps_a_obj_base = 0U;
+    inline constexpr std::size_t cps_a_scroll1_base = 1U;
+    inline constexpr std::size_t cps_a_scroll2_base = 2U;
+    inline constexpr std::size_t cps_a_scroll3_base = 3U;
+    inline constexpr std::size_t cps_a_rowscroll_base = 4U;
+    inline constexpr std::size_t cps_a_palette_base = 5U;
+    inline constexpr std::size_t cps_a_scroll1_x = 6U;
+    inline constexpr std::size_t cps_a_scroll1_y = 7U;
+    inline constexpr std::size_t cps_a_scroll2_x = 8U;
+    inline constexpr std::size_t cps_a_scroll2_y = 9U;
+    inline constexpr std::size_t cps_a_scroll3_x = 10U;
+    inline constexpr std::size_t cps_a_scroll3_y = 11U;
+    inline constexpr std::size_t cps_a_rowscroll_offset = 16U;
+    inline constexpr std::size_t cps_a_video_control = 17U;
+
+    inline constexpr std::uint32_t object_base_align = 0x0800U;
+    inline constexpr std::uint32_t scroll_base_align = 0x4000U;
+    inline constexpr std::uint32_t other_base_align = 0x0800U;
+    inline constexpr std::uint32_t palette_page_bytes = 0x400U;
+    inline constexpr std::uint32_t palette_copy_pages = 6U;
+    inline constexpr std::uint16_t palette_control_default = 0x003FU; // all 6 pages
+
     // EEPROM pin bits at the $804040 write port, and the data-out bit on input 2.
     inline constexpr std::uint8_t eeprom_di_bit = 0x10U;
     inline constexpr std::uint8_t eeprom_clk_bit = 0x20U;
     inline constexpr std::uint8_t eeprom_cs_bit = 0x40U;
     inline constexpr std::uint16_t qsound_volume_status = 0xE021U;
+    inline constexpr std::uint32_t m68k_clock_hz = 11'800'000U;
+    inline constexpr std::uint32_t frame_rate_hz = 60U;
 
     struct cps2_board_params final {
         // The 20-byte board key (an external asset, never committed). Without it
@@ -81,9 +111,8 @@ namespace mnemos::manifests::capcom_cps2 {
         std::optional<std::array<std::uint8_t, crypto_key_size>> key;
     };
 
-    // Assembled CPS-2 machine (skeleton): a 68000 over the encrypted-data /
-    // decrypted-opcode split, plus work RAM. Never moved after construction (bus
-    // spans point into its owned storage).
+    // Assembled CPS-2 machine. Never moved after construction: the bus and video
+    // chip hold spans into owned ROM/RAM/palette storage.
     class cps2_system final {
       public:
         explicit cps2_system(common::rom_set_image image, cps2_board_params params = {});
@@ -98,13 +127,23 @@ namespace mnemos::manifests::capcom_cps2 {
 
         // Run whole 68000 instructions until at least `cycles` have elapsed.
         void run_cycles(std::uint64_t cycles);
+        // Tick one 60 Hz field: decode CPS-A latches, run the visible CPU slice
+        // (including QSound when released), render at vblank, latch sprites for
+        // the next frame, then finish vblank.
+        void run_frame();
 
         [[nodiscard]] chips::cpu::m68000& cpu() noexcept { return main_cpu; }
         [[nodiscard]] topology::bus& bus() noexcept { return main_bus; }
         [[nodiscard]] chips::storage::eeprom_93c46& eeprom() noexcept { return eeprom_; }
+        [[nodiscard]] chips::video::cps_a_b& video() noexcept { return video_; }
+        [[nodiscard]] const chips::video::cps_a_b& video() const noexcept { return video_; }
         [[nodiscard]] chips::cpu::z80& sound_cpu() noexcept { return sound_cpu_; }
         [[nodiscard]] topology::bus& sound_bus() noexcept { return sound_bus_; }
         [[nodiscard]] bool has_sound() const noexcept { return sound_rom_size_ > 0U; }
+        [[nodiscard]] std::uint64_t vblank_irq_raised() const noexcept {
+            return vblank_irq_raised_;
+        }
+        [[nodiscard]] std::uint64_t vblank_irq_acked() const noexcept { return vblank_irq_acked_; }
 
         // Active-low controls the player adapter drives (all-released = 0xFFFF).
         // input0 = P1(low)/P2(high), input1 = P3/P4, input_sys = start/coin bits.
@@ -118,6 +157,7 @@ namespace mnemos::manifests::capcom_cps2 {
         chips::cpu::m68000 main_cpu;
         chips::cpu::z80 sound_cpu_;
         chips::audio::qsound qdsp_;
+        chips::video::cps_a_b video_;
         // CPS-2 NVRAM: a serial 93C46 in 16-bit organisation (64 x 16).
         chips::storage::eeprom_93c46 eeprom_{chips::storage::eeprom_93c46::organization::word16};
 
@@ -133,14 +173,19 @@ namespace mnemos::manifests::capcom_cps2 {
         std::vector<std::uint8_t> work_ram_ = std::vector<std::uint8_t>(main_ram_size, 0U);
         std::vector<std::uint8_t> video_ram_ = std::vector<std::uint8_t>(video_ram_size, 0U);
         std::vector<std::uint8_t> object_ram_ = std::vector<std::uint8_t>(object_ram_size, 0U);
+        std::vector<std::uint8_t> palette_ = std::vector<std::uint8_t>(0x4000U, 0U);
         std::vector<std::uint8_t> extra_ram_ = std::vector<std::uint8_t>(extra_ram_size, 0U);
         std::array<std::uint8_t, control_reg_size> control_regs_{};
         std::array<std::uint8_t, extra_ctrl_size> extra_control_{};
-        // The CPS-A + CPS-B register file (latches; the video decode reads these in
-        // a later phase). Indexed by the reference layout (CPS-A at 0x100, CPS-B at
-        // 0x140), reachable through both the primary and the legacy mirror windows.
+        // The CPS-A + CPS-B register file, indexed by the reference layout (CPS-A
+        // at 0x100, CPS-B at 0x140) and reachable through both primary and legacy
+        // mirror windows. CPS-A words are mirrored into cps_a_regs_ for per-frame
+        // video decode; CPS-B writes are forwarded to the shared video chip.
         std::array<std::uint8_t, cps_reg_size> cps_regs_{};
+        std::array<std::uint16_t, cps_a_reg_count> cps_a_regs_{};
         std::uint8_t object_bank_{0U};
+        std::uint64_t vblank_irq_raised_{};
+        std::uint64_t vblank_irq_acked_{};
         bool executable_{false};
 
         // --- QSound sound subsystem ---
@@ -157,6 +202,13 @@ namespace mnemos::manifests::capcom_cps2 {
         // Map the CPS register file at one window (primary or mirror) onto cps_regs_
         // starting at file_offset (0x100 for CPS-A, 0x140 for CPS-B).
         void map_cps_reg_window(std::uint32_t base, std::size_t file_offset);
+        [[nodiscard]] std::uint16_t cps_reg_word(std::size_t file_offset,
+                                                 std::size_t word_index) const noexcept;
+        [[nodiscard]] std::uint32_t video_ram_base_from_reg(std::uint16_t reg) const noexcept;
+        [[nodiscard]] std::uint32_t video_ram_base_aligned(std::uint16_t reg,
+                                                           std::uint32_t boundary) const noexcept;
+        void push_cps_a_to_video() noexcept;
+        void copy_palette_from_video_ram() noexcept;
         // Wire the Z80 sound CPU + the 68K<->Z80 comm RAM + the DL-1425 QSound DSP.
         void setup_sound();
     };

@@ -1,8 +1,6 @@
-# CPS2 (Capcom Play System 2) board data + helpers. Phase 1 delivered the CPS-2
-# 68000 opcode cipher; phase 4 adds the board-assembler skeleton (cps2_system):
-# load the encrypted program, build the decrypted opcode image, map the
-# encrypted-data / decrypted-opcode split, wire work RAM, and boot the 68000.
-# The full video / I/O / EEPROM map and QSound land in later increments.
+# CPS2 (Capcom Play System 2) board data + helpers. The manifest owns the CPS-2
+# 68000 opcode cipher, encrypted-data / decrypted-opcode split, RAM / I/O /
+# EEPROM map, QSound sound subsystem, and the shared CPS-A/CPS-B video chip.
 add_library(
     mnemos_manifests_capcom_cps2
     cps2_crypto.cpp
@@ -25,6 +23,7 @@ target_link_libraries(
         mnemos::chips::cpu::m68000
         mnemos::chips::cpu::z80
         mnemos::chips::audio::qsound
+        mnemos::chips::video::cps_a_b
         mnemos::chips::storage::eeprom_93c46
         mnemos::topology
         mnemos::manifests::common
@@ -38,6 +37,7 @@ mnemos_declare_tier(
         mnemos_chips_cpu_m68000
         mnemos_chips_cpu_z80
         mnemos_chips_audio_qsound
+        mnemos_chips_video_cps_a_b
         mnemos_chips_storage_eeprom_93c46
         mnemos_topology
         mnemos_manifests_common
