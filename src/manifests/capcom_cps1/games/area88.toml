@@ -1,0 +1,137 @@
+# Area 88 (Japan) -- Capcom CPS1 clone of unsquad (parent-merge). Transcribed from the
+# reference part tables; CRCs from the local zips (clone-unique from area88.zip,
+# shared from unsquad.zip). Shares the parent's gfx ROMs, so it reuses the
+# parent's CPS-B profile (11).
+
+[set]
+schema = "mnemos-romset/1"
+name   = "area88"
+board  = "capcom_cps1"
+parent = "unsquad"
+cps_b_profile = 11
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ar_36.12f"
+offset = 0x0
+stride = 2
+size   = 0x20000
+crc32  = 0x65030392
+
+[[region.file]]
+name   = "ar_42.12h"
+offset = 0x1
+stride = 2
+size   = 0x20000
+crc32  = 0xc48170de
+
+[[region.file]]
+name   = "aru_31.12f"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x33e9694b
+
+[[region.file]]
+name   = "aru_36.12h"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x7cc8fb9e
+
+[[region.file]]
+name   = "ar_34.10f"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0xf6e80386
+
+[[region.file]]
+name   = "ar_40.10h"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0xbe36c145
+
+[[region.file]]
+name   = "ar_35.11f"
+offset = 0xc0000
+stride = 2
+size   = 0x20000
+crc32  = 0x86d98ff3
+
+[[region.file]]
+name   = "ar_41.11h"
+offset = 0xc0001
+stride = 2
+size   = 0x20000
+crc32  = 0x758893d3
+
+[[region]]
+name = "audiocpu"
+size = 0x18000
+
+[[region.file]]
+name   = "ar_09.12b"
+offset = 0x0
+source_offset = 0x0
+length        = 0x8000
+size   = 0x10000
+crc32  = 0xf3dd1367
+
+[[region.file]]
+name   = "ar_09.12b"
+offset = 0x10000
+source_offset = 0x8000
+length        = 0x8000
+size   = 0x10000
+crc32  = 0xf3dd1367
+
+[[region]]
+name = "oki"
+size = 0x20000
+
+[[region.file]]
+name   = "aru_18.11c"
+offset = 0x0
+size   = 0x20000
+crc32  = 0x584b43a9
+
+[[region]]
+name = "gfx"
+size = 0x200000
+
+[[region.file]]
+name   = "ar-5m.7a"
+offset = 0x0
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xbf4575d8
+
+[[region.file]]
+name   = "ar-7m.9a"
+offset = 0x2
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xa02945f4
+
+[[region.file]]
+name   = "ar-1m.3a"
+offset = 0x4
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0x5965ca8d
+
+[[region.file]]
+name   = "ar-3m.5a"
+offset = 0x6
+unit   = 2
+stride = 8
+size   = 0x80000
+crc32  = 0xac6db17d
