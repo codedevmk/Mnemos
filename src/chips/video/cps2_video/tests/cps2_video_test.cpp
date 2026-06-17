@@ -161,6 +161,106 @@ TEST_CASE("cps2 video draws the scroll1 playfield through the compositor", "[cps
     CHECK(video.framebuffer().pixels[0] == 0x00000000U);
 }
 
+TEST_CASE("cps2 video draws the scroll2 playfield (16x16 tiles)", "[cps2_video]") {
+    cps2_video video;
+    std::vector<std::uint8_t> vram(0x20000U, 0U);
+    // Palette source at 0x10000: scroll2 pal_num 64, pen 0xA -> index 1034 -> byte
+    // 0x814. Make it full red.
+    put16(vram, 0x10000U + 0x814U, 0xFF00U);
+    // scroll1 / scroll3 name-table entry 0 = an out-of-bank (transparent) code; all
+    // three layers share the same scroll so screen (0,0) maps to each layer's tile
+    // index 0, isolating scroll2 at the checked pixel.
+    put16(vram, 0x0100U, 0xFFFFU); // scroll1 base 0x100, entry 0
+    put16(vram, 0x0200U, 0xFFFFU); // scroll3 base 0x200, entry 0
+    // scroll2 name table at 0: entry 0 = code 0, attr 0 (defaults).
+    video.attach_video_ram(vram);
+
+    // code 0 maps to gfx byte 0x800000 for every scroll layer; the 16x16 tile reads
+    // mapped*128 = 0x800000. Texel (0,0) = pen 0xA.
+    std::vector<std::uint8_t> gfx(0x800000U + 128U, 0U);
+    gfx[0x800000U + 0U] = 0x80U;
+    gfx[0x800000U + 2U] = 0x80U;
+    video.attach_gfx(gfx);
+
+    video.set_scroll1_base(0x0100U);
+    video.set_scroll2_base(0x0000U);
+    video.set_scroll3_base(0x0200U);
+    video.set_scroll1(0xFFC0U, 0xFFF0U);
+    video.set_scroll2(0xFFC0U, 0xFFF0U);
+    video.set_scroll3(0xFFC0U, 0xFFF0U);
+    video.set_display_enable(true);
+
+    video.render(0x10000U, 0x003FU);
+    CHECK(video.framebuffer().pixels[0] == 0x00FF0000U); // scroll2 pen 0xA @ pal 64
+}
+
+TEST_CASE("cps2 video draws the scroll3 playfield (32x32 tiles, code masked to 14 bits)",
+          "[cps2_video]") {
+    cps2_video video;
+    std::vector<std::uint8_t> vram(0x20000U, 0U);
+    // scroll3 pal_num 96, pen 0xA -> index 1546 -> byte 0xC14. Make it full green.
+    put16(vram, 0x10000U + 0xC14U, 0xF0F0U);
+    put16(vram, 0x0100U, 0xFFFFU); // scroll1 transparent
+    put16(vram, 0x0200U, 0xFFFFU); // scroll2 transparent
+    // scroll3 name table at 0: entry 0 = code 0x4000 (masked to 0 -> code 0).
+    put16(vram, 0x0000U, 0x4000U);
+    video.attach_video_ram(vram);
+
+    std::vector<std::uint8_t> gfx(0x800000U + 512U, 0U); // 32x32 = mapped*512
+    gfx[0x800000U + 0U] = 0x80U;
+    gfx[0x800000U + 2U] = 0x80U;
+    video.attach_gfx(gfx);
+
+    video.set_scroll1_base(0x0100U);
+    video.set_scroll2_base(0x0200U);
+    video.set_scroll3_base(0x0000U);
+    video.set_scroll1(0xFFC0U, 0xFFF0U);
+    video.set_scroll2(0xFFC0U, 0xFFF0U);
+    video.set_scroll3(0xFFC0U, 0xFFF0U);
+    video.set_display_enable(true);
+
+    video.render(0x10000U, 0x003FU);
+    CHECK(video.framebuffer().pixels[0] == 0x0000FF00U); // scroll3 pen 0xA @ pal 96
+}
+
+TEST_CASE("cps2 video scroll2 row-scroll shifts a line horizontally", "[cps2_video]") {
+    cps2_video video;
+    std::vector<std::uint8_t> vram(0x20000U, 0U);
+    put16(vram, 0x10000U + 0x814U, 0xFF00U); // scroll2 pal 64 pen 0xA = red
+    put16(vram, 0x0100U, 0xFFFFU);           // scroll1 transparent
+    put16(vram, 0x0200U, 0xFFFFU);           // scroll3 transparent
+    // scroll2 name table entry 0 = code 0. Row-scroll table at 0x8000: shift the
+    // top visible line (screen_y 16) by -4 (content moves right) so the lit texel
+    // lands at x=4 instead of x=0.
+    constexpr std::uint32_t rs_base = 0x8000U;
+    put16(vram, rs_base + 16U * 2U, 0xFFFCU); // line 16 (screen row 0) -> -4
+    video.attach_video_ram(vram);
+
+    // The tile is transparent (pen 0xF) everywhere except texel (0,0) = pen 0xA, so
+    // the per-line shift is observable. Row 0 group 0: plane3/plane1 all set, plane2/
+    // plane0 set for texels 1-7 only (texel 0 = 0b1010, texels 1-7 = 0b1111).
+    std::vector<std::uint8_t> gfx(0x800000U + 128U, 0xFFU);
+    gfx[0x800000U + 0U] = 0xFFU; // plane3: all texels
+    gfx[0x800000U + 1U] = 0x7FU; // plane2: texel 0 clear
+    gfx[0x800000U + 2U] = 0xFFU; // plane1: all texels
+    gfx[0x800000U + 3U] = 0x7FU; // plane0: texel 0 clear
+    video.attach_gfx(gfx);
+
+    video.set_scroll1_base(0x0100U);
+    video.set_scroll2_base(0x0000U);
+    video.set_scroll3_base(0x0200U);
+    video.set_scroll1(0xFFC0U, 0xFFF0U);
+    video.set_scroll2(0xFFC0U, 0xFFF0U);
+    video.set_scroll3(0xFFC0U, 0xFFF0U);
+    video.set_rowscroll(true, rs_base, 0U);
+    video.set_display_enable(true);
+
+    video.render(0x10000U, 0x003FU);
+    const auto fb = video.framebuffer();
+    CHECK(fb.pixels[0] == 0x00000000U); // -4 shift moved the lit texel off x=0
+    CHECK(fb.pixels[4] == 0x00FF0000U); // now lit at x=4
+}
+
 TEST_CASE("cps2 video save/load round-trips the palette + frame index", "[cps2_video]") {
     cps2_video video;
     std::vector<std::uint8_t> vram(0x10000U, 0U);

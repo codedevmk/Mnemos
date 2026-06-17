@@ -137,6 +137,8 @@ namespace mnemos::chips::video {
         static constexpr int visible_y_start = 16;
         // Per-layer palette page bases (each pal_num is 16 colours).
         static constexpr std::uint16_t scroll1_palette_base = 32U;
+        static constexpr std::uint16_t scroll2_palette_base = 64U;
+        static constexpr std::uint16_t scroll3_palette_base = 96U;
         // The backdrop is palette colour (pal_num 0xBF, pen 0x0F) = last entry.
         static constexpr std::uint16_t backdrop_color_index = 0xBFU * 16U + 0x0FU;
         // Tile-layer priority bits (one per draw pass; ORed into pixel_priority_).
@@ -163,8 +165,11 @@ namespace mnemos::chips::video {
         void plot_layer_pixel(int x, int y, std::uint8_t layer, std::uint8_t pen,
                               std::uint8_t group, std::uint8_t priority,
                               std::uint32_t color) noexcept;
-        // Draw the scroll1 playfield (8x8 tiles) at the given priority.
+        // Draw a scroll playfield at the given priority. scroll1 = 8x8 tiles,
+        // scroll2 = 16x16 (with optional per-line row-scroll), scroll3 = 32x32.
         void draw_scroll1(std::uint8_t priority) noexcept;
+        void draw_scroll2(std::uint8_t priority) noexcept;
+        void draw_scroll3(std::uint8_t priority) noexcept;
 
         std::span<const std::uint8_t> video_ram_{};
         std::span<const std::uint8_t> gfx_{};

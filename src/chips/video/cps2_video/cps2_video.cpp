@@ -236,11 +236,107 @@ namespace mnemos::chips::video {
         }
     }
 
+    void cps2_video::draw_scroll2(std::uint8_t priority) noexcept {
+        const std::uint32_t map_base = scroll2_base_;
+        const int scroll_y = static_cast<std::int16_t>(scroll2_y_);
+        const std::uint16_t otheroffs = rowscroll_line_offset_;
+        for (int py = 0; py < static_cast<int>(visible_height); ++py) {
+            const int screen_y = py + visible_y_start;
+            int scroll_x = static_cast<std::int16_t>(scroll2_x_);
+            const int world_y = (screen_y + scroll_y) & 0x03FF;
+            const int row = world_y / 16;
+            const int ty = world_y % 16;
+            // Per-line horizontal row-scroll: a screen-line-indexed table of signed
+            // x offsets in video RAM (biased by the CPS-A "other" offset).
+            if (rowscroll_enabled_) {
+                const std::uint32_t n =
+                    (static_cast<std::uint32_t>(screen_y) + otheroffs) & 0x03FFU;
+                const std::uint32_t entry = rowscroll_base_ + n * 2U;
+                if (entry + 1U < video_ram_.size()) {
+                    scroll_x += static_cast<std::int16_t>(video_read16(entry));
+                }
+            }
+            for (int px = 0; px < static_cast<int>(visible_width); ++px) {
+                const int world_x = (px + visible_x_start + scroll_x) & 0x03FF;
+                const int col = world_x / 16;
+                const int tx = world_x % 16;
+                // scroll2 name-table index: row in 0x0F, col in 0x3F, row bits4-5 bank.
+                const std::uint32_t tile_index = (static_cast<std::uint32_t>(row) & 0x0FU) +
+                                                 ((static_cast<std::uint32_t>(col) & 0x3FU) << 4U) +
+                                                 ((static_cast<std::uint32_t>(row) & 0x30U) << 6U);
+                const std::uint32_t map_offset = tile_index * 4U;
+                if (map_base + map_offset + 3U >= video_ram_.size()) {
+                    continue;
+                }
+                const std::uint16_t tile_code = video_read16(map_base + map_offset);
+                const std::uint16_t attr = video_read16(map_base + map_offset + 2U);
+                const int fetch_x = (attr & 0x0020U) != 0U ? (15 - tx) : tx;
+                const int fetch_y = (attr & 0x0040U) != 0U ? (15 - ty) : ty;
+                const std::uint8_t pen =
+                    tile_pixel(gfx_type::scroll2, tile_code, fetch_x, fetch_y, 16, 0);
+                if (pen == transparent_pen) {
+                    continue;
+                }
+                const std::uint16_t pal_num =
+                    static_cast<std::uint16_t>(scroll2_palette_base + (attr & 0x001FU));
+                const std::uint32_t color =
+                    decode_color(palette_color(static_cast<std::uint16_t>(pal_num * 16U + pen)));
+                const auto group = static_cast<std::uint8_t>((attr & 0x0180U) >> 7U);
+                plot_layer_pixel(px, py, 2U, pen, group, priority, color);
+            }
+        }
+    }
+
+    void cps2_video::draw_scroll3(std::uint8_t priority) noexcept {
+        const std::uint32_t map_base = scroll3_base_;
+        const int scroll_x = static_cast<std::int16_t>(scroll3_x_);
+        const int scroll_y = static_cast<std::int16_t>(scroll3_y_);
+        for (int py = 0; py < static_cast<int>(visible_height); ++py) {
+            const int world_y = (py + visible_y_start + scroll_y) & 0x07FF;
+            const int row = world_y / 32;
+            const int ty = world_y % 32;
+            for (int px = 0; px < static_cast<int>(visible_width); ++px) {
+                const int world_x = (px + visible_x_start + scroll_x) & 0x07FF;
+                const int col = world_x / 32;
+                const int tx = world_x % 32;
+                // scroll3 name-table index: row in 0x07, col in 0x3F, row bits3-5 bank.
+                const std::uint32_t tile_index = (static_cast<std::uint32_t>(row) & 0x07U) +
+                                                 ((static_cast<std::uint32_t>(col) & 0x3FU) << 3U) +
+                                                 ((static_cast<std::uint32_t>(row) & 0x38U) << 6U);
+                const std::uint32_t map_offset = tile_index * 4U;
+                if (map_base + map_offset + 3U >= video_ram_.size()) {
+                    continue;
+                }
+                const std::uint16_t tile_code =
+                    static_cast<std::uint16_t>(video_read16(map_base + map_offset) & 0x3FFFU);
+                const std::uint16_t attr = video_read16(map_base + map_offset + 2U);
+                const int fetch_x = (attr & 0x0020U) != 0U ? (31 - tx) : tx;
+                const int fetch_y = (attr & 0x0040U) != 0U ? (31 - ty) : ty;
+                const std::uint8_t pen =
+                    tile_pixel(gfx_type::scroll3, tile_code, fetch_x, fetch_y, 32, 0);
+                if (pen == transparent_pen) {
+                    continue;
+                }
+                const std::uint16_t pal_num =
+                    static_cast<std::uint16_t>(scroll3_palette_base + (attr & 0x001FU));
+                const std::uint32_t color =
+                    decode_color(palette_color(static_cast<std::uint16_t>(pal_num * 16U + pen)));
+                const auto group = static_cast<std::uint8_t>((attr & 0x0180U) >> 7U);
+                plot_layer_pixel(px, py, 3U, pen, group, priority, color);
+            }
+        }
+    }
+
     void cps2_video::render(std::uint32_t palette_source, std::uint16_t palette_control) noexcept {
         copy_palette(palette_source, palette_control);
         const std::uint32_t backdrop = decode_color(palette_color(backdrop_color_index));
         reset_pixel_buffers(backdrop);
         if (display_enabled_) {
+            // Fixed back-to-front order for now (scroll3 background -> scroll2 ->
+            // scroll1 foreground/text); the CPS-B layer-control priority order +
+            // sprite interleave land in later increments.
+            draw_scroll3(tile_priority_0);
+            draw_scroll2(tile_priority_0);
             draw_scroll1(tile_priority_0);
         }
         ++frame_index_;
