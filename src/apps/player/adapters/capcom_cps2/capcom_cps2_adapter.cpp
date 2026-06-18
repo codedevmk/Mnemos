@@ -290,22 +290,26 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         sys_->input0 = static_cast<std::uint16_t>(
             (static_cast<std::uint16_t>(pack(ports_[1])) << 8U) | pack(ports_[0]));
 
-        // System byte (active low): start1/start2 in bits 0-1, coin1/coin2 (the
-        // pads' `select`) in bits 4-5.
-        std::uint8_t system_byte = 0xFFU;
+        // System word (active low): the CPS-2 IN2 layout puts START1-4 in bits
+        // 8-11 and COIN1-4 in bits 12-15 (bit 0 is the EEPROM data-out the board
+        // overlays at read time). The pads' `select` is the coin slot.
+        std::uint16_t system = 0xFFFFU;
+        const auto clear = [&system](std::uint16_t bit) {
+            system &= static_cast<std::uint16_t>(~bit);
+        };
         if (ports_[0].start) {
-            system_byte &= static_cast<std::uint8_t>(~0x01U);
+            clear(0x0100U); // START1
         }
         if (ports_[1].start) {
-            system_byte &= static_cast<std::uint8_t>(~0x02U);
+            clear(0x0200U); // START2
         }
         if (ports_[0].select) {
-            system_byte &= static_cast<std::uint8_t>(~0x10U);
+            clear(0x1000U); // COIN1
         }
         if (ports_[1].select) {
-            system_byte &= static_cast<std::uint8_t>(~0x20U);
+            clear(0x2000U); // COIN2
         }
-        sys_->input_sys = static_cast<std::uint16_t>(0xFF00U | system_byte);
+        sys_->input_sys = system;
     }
 
     void force_link() noexcept {}
