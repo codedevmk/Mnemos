@@ -164,7 +164,7 @@ namespace mnemos::debug {
     struct trace_csv_session::sink final {
         chips::ichip* target{};
         std::ofstream out{};
-        std::unique_ptr<state> state{};
+        std::unique_ptr<state> cb_state{};
     };
 
     trace_csv_session::trace_csv_session(frontend_sdk::player_system& sys,
@@ -196,12 +196,12 @@ namespace mnemos::debug {
 
             // Allocate per-sink callback state on the heap so captured pointers
             // remain stable even as the sink list grows.
-            sink->state = std::make_unique<state>();
-            sink->state->out = &sink->out;
-            sink->state->frame = &frame_counter;
-            sink->state->inst = 0;
+            sink->cb_state = std::make_unique<state>();
+            sink->cb_state->out = &sink->out;
+            sink->cb_state->frame = &frame_counter;
+            sink->cb_state->inst = 0;
 
-            state* s = sink->state.get();
+            state* s = sink->cb_state.get();
             trace->install([s](const instrumentation::trace_event& ev) {
                 char buf[80];
                 const std::uint64_t frame = s->frame != nullptr ? *s->frame : 0U;
