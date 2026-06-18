@@ -1,0 +1,238 @@
+#include "c64_adapter.hpp"
+#include "capability_discovery.hpp"
+#include "capcom_cps1_adapter.hpp"
+#include "genesis_adapter.hpp"
+#include "irem_m72_adapter.hpp"
+#include "sega32x_adapter.hpp"
+#include "segacd_adapter.hpp"
+#include "sms_adapter.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace {
+
+    namespace c64 = mnemos::apps::player::adapters::c64;
+    namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
+    namespace genesis = mnemos::apps::player::adapters::genesis;
+    namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
+    namespace sega32x = mnemos::apps::player::adapters::sega32x;
+    namespace segacd = mnemos::apps::player::adapters::segacd;
+    namespace sms = mnemos::apps::player::adapters::sms;
+
+    [[nodiscard]] std::vector<std::uint8_t> genesis_cart() {
+        std::vector<std::uint8_t> rom(0x100U, 0x00U);
+        const auto w16 = [&](std::size_t off, std::uint16_t v) {
+            rom[off] = static_cast<std::uint8_t>(v >> 8U);
+            rom[off + 1U] = static_cast<std::uint8_t>(v);
+        };
+        const auto w32 = [&](std::size_t off, std::uint32_t v) {
+            rom[off + 0U] = static_cast<std::uint8_t>(v >> 24U);
+            rom[off + 1U] = static_cast<std::uint8_t>(v >> 16U);
+            rom[off + 2U] = static_cast<std::uint8_t>(v >> 8U);
+            rom[off + 3U] = static_cast<std::uint8_t>(v);
+        };
+        w32(0x00U, 0x00FFF000U);
+        w32(0x04U, 0x00000008U);
+        w16(0x08U, 0x46FCU); // MOVE.W #$2000,SR
+        w16(0x0AU, 0x2000U);
+        w16(0x0CU, 0x60FEU); // BRA.S *
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> sms_cart() {
+        std::vector<std::uint8_t> rom(0x8000U, 0x00U);
+        rom[0x0000U] = 0xF3U; // DI
+        rom[0x0001U] = 0x76U; // HALT
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> c64_basic_rom() {
+        return std::vector<std::uint8_t>(0x2000U, 0x00U);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> c64_kernal_rom() {
+        return std::vector<std::uint8_t>(0x2000U, 0x00U);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> c64_chargen_rom() {
+        return std::vector<std::uint8_t>(0x1000U, 0x00U);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> c64_prg() {
+        std::vector<std::uint8_t> prg = {0x01U, 0x08U};
+        for (int i = 0; i < 64; ++i) {
+            prg.push_back(static_cast<std::uint8_t>(i));
+        }
+        return prg;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> segacd_bios() {
+        std::vector<std::uint8_t> bios(0x20000U, 0x00U);
+        bios[0] = 0x00U;
+        bios[1] = 0xFFU;
+        bios[2] = 0x00U;
+        bios[3] = 0x00U; // SSP = $00FF0000
+        bios[4] = 0x00U;
+        bios[5] = 0x00U;
+        bios[6] = 0x02U;
+        bios[7] = 0x00U; // PC = $000200
+        bios[0x200U] = 0x60U;
+        bios[0x201U] = 0xFEU; // BRA *
+        return bios;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> sega32x_cart() {
+        std::vector<std::uint8_t> cart(0x10000U, 0x00U);
+        cart[0] = 0x00U;
+        cart[1] = 0xFFU;
+        cart[6] = 0x02U;
+        cart[0x200U] = 0x60U;
+        cart[0x201U] = 0xFEU;
+        return cart;
+    }
+
+    void poke16_be(std::vector<std::uint8_t>& bytes, std::size_t at, std::uint16_t value) {
+        bytes[at + 0U] = static_cast<std::uint8_t>(value >> 8U);
+        bytes[at + 1U] = static_cast<std::uint8_t>(value);
+    }
+
+    void poke32_be(std::vector<std::uint8_t>& bytes, std::size_t at, std::uint32_t value) {
+        bytes[at + 0U] = static_cast<std::uint8_t>(value >> 24U);
+        bytes[at + 1U] = static_cast<std::uint8_t>(value >> 16U);
+        bytes[at + 2U] = static_cast<std::uint8_t>(value >> 8U);
+        bytes[at + 3U] = static_cast<std::uint8_t>(value);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> cps1_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::capcom_cps1::main_rom_size, 0xFFU);
+        poke32_be(rom, 0x0U, 0x00FF0000U);
+        poke32_be(rom, 0x4U, 0x00000400U);
+        poke16_be(rom, 0x400U, 0x33FCU);
+        poke16_be(rom, 0x402U, 0x4242U);
+        poke32_be(rom, 0x404U, 0x00FF0000U);
+        poke16_be(rom, 0x408U, 0x60FEU);
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m72_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m72::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::string summary_for(const mnemos::frontend_sdk::player_system& system) {
+        return mnemos::debug::format_capability_summary(
+            mnemos::debug::discover_dump_capabilities(system));
+    }
+
+    void require_line(const std::string& summary, std::string_view needle) {
+        INFO("missing capability line: " << needle);
+        INFO(summary);
+        CHECK(summary.find(needle) != std::string::npos);
+    }
+
+    void require_common_session_controls(const std::string& summary) {
+        require_line(summary, "schema=1 producer=mnemos.debug.capability_discovery@1");
+        require_line(summary,
+                     "capability session session.input.port.0 state=available control=enabled "
+                     "scope=session provider=mnemos.debug.session");
+        require_line(summary,
+                     "capability session session.mode.local state=available control=enabled "
+                     "scope=session provider=mnemos.debug.session");
+        require_line(summary,
+                     "capability session session.mode.lockstep state=available control=enabled "
+                     "scope=session provider=mnemos.debug.session");
+        require_line(summary,
+                     "capability session session.mode.input_delay state=available control=enabled "
+                     "scope=session provider=mnemos.debug.session");
+        require_line(summary,
+                     "capability session session.mode.rollback state=unavailable control=hidden "
+                     "scope=session provider=mnemos.debug.session");
+    }
+
+    void require_degraded_media(const std::string& summary, std::string_view media_id) {
+        const std::string line = "capability media " + std::string{media_id} +
+                                 " state=degraded control=disabled scope=media "
+                                 "provider=mnemos.debug.media";
+        require_line(summary, line);
+    }
+
+} // namespace
+
+TEST_CASE("player capability summaries expose real console adapter controls",
+          "[player][capabilities]") {
+    SECTION("Genesis") {
+        genesis::genesis_adapter adapter(genesis_cart(), {}, "Tiny Genesis");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.cart");
+    }
+
+    SECTION("Master System") {
+        sms::sms_adapter adapter(sms_cart(), {}, "Tiny SMS");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.cart");
+    }
+
+    SECTION("Game Gear") {
+        sms::sms_adapter adapter(sms_cart(), {.game_gear = true}, "Tiny GG");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.game_card");
+    }
+
+    SECTION("Sega CD") {
+        segacd::segacd_adapter adapter(segacd_bios(), {}, "Tiny BIOS");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.bios");
+    }
+
+    SECTION("Sega 32X") {
+        sega32x::sega32x_adapter adapter(sega32x_cart(), {}, {}, "Tiny 32X");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.cart");
+    }
+}
+
+TEST_CASE("player capability summaries expose computer and arcade adapter controls",
+          "[player][capabilities]") {
+    SECTION("C64 disk") {
+        c64::c64_adapter adapter(c64_basic_rom(), c64_kernal_rom(), c64_chargen_rom(), c64_prg(),
+                                 {}, false, {}, "Tiny Disk");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.disk_0");
+    }
+
+    SECTION("Irem M72") {
+        irem_m72::irem_m72_adapter adapter(irem_m72_program(), "Tiny M72");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.rom_set");
+    }
+
+    SECTION("Capcom CPS1") {
+        cps1::capcom_cps1_adapter adapter(cps1_program(), "Tiny CPS1");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.rom_set");
+    }
+}

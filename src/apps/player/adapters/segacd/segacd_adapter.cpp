@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
+#include <string_view>
 #include <utility>
 
 using mnemos::dsp::clip_i16;
@@ -60,6 +62,60 @@ namespace mnemos::apps::player::adapters::segacd {
         // CD-DA sample rate (Red Book).
         constexpr double kCddaHz = 44'100.0;
 
+        frontend_sdk::session_capability_info make_session_capabilities() {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports = {
+                {.port_index = 0U,
+                 .player_slot = 1U,
+                 .format = frontend_sdk::input_device_format::digital_pad,
+                 .device_id = "segacd.controller.port.1",
+                 .label = "Controller 1"},
+                {.port_index = 1U,
+                 .player_slot = 2U,
+                 .format = frontend_sdk::input_device_format::digital_pad,
+                 .device_id = "segacd.controller.port.2",
+                 .label = "Controller 2"},
+            };
+            session.deterministic_frame_input = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        frontend_sdk::media_capability_info make_bios_media_capabilities(std::uint64_t byte_count) {
+            frontend_sdk::media_capability_info media{};
+            media.media.push_back(frontend_sdk::media_image_info{
+                .id = "bios",
+                .label = "BIOS",
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = byte_count,
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = "segacd.adapter",
+                .revision = "loaded",
+                .cache_hint = "resident"});
+            return media;
+        }
+
+        [[nodiscard]] std::uint64_t file_size_or_zero(const std::string& path) noexcept {
+            std::error_code ec;
+            const auto size = std::filesystem::file_size(path, ec);
+            return ec ? 0U : static_cast<std::uint64_t>(size);
+        }
+
+        frontend_sdk::media_image_info make_disc_media(std::string_view display_name,
+                                                       const std::string& disc_path,
+                                                       const bool available) {
+            return frontend_sdk::media_image_info{
+                .id = "disc",
+                .label = display_name.empty() ? std::string{"Disc"} : std::string{display_name},
+                .residency = frontend_sdk::media_residency::streamed,
+                .byte_count = file_size_or_zero(disc_path),
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = "segacd.disc_image",
+                .provider_available = available,
+                .revision = "loaded",
+                .cache_hint = "sector_stream"};
+        }
+
         // Scheduler order: VDP first (it drives the raster the 68000 samples),
         // then the gated 68000 (DMA stall) + gated Z80 (BUSREQ), FM, PSG.
         std::vector<runtime::scheduled_chip> build_schedule(manifests::genesis::genesis_system& g) {
@@ -102,7 +158,8 @@ namespace mnemos::apps::player::adapters::segacd {
                                    std::string display_name,
                                    frontend_sdk::scheduler_factory* scheduler_factory,
                                    const std::string& disc_path)
-        : machine_(manifests::segacd::assemble_segacd_machine(std::move(bios), config)),
+        : session_(make_session_capabilities()), media_(make_bios_media_capabilities(bios.size())),
+          machine_(manifests::segacd::assemble_segacd_machine(std::move(bios), config)),
           work_ram_view_("work_ram", machine_->genesis->work_ram),
           prg_ram_view_("prg_ram", machine_->sub->prg_ram),
           scheduler_(frontend_sdk::make_scheduler(
@@ -122,6 +179,7 @@ namespace mnemos::apps::player::adapters::segacd {
         system_mem_view_[0] = &work_ram_view_;
         system_mem_view_[1] = &prg_ram_view_;
 
+        const std::string disc_label = display_name.empty() ? std::string{"Disc"} : display_name;
         spec_.push_back({.label = "System", .value = "Sega CD"});
         spec_.push_back(
             {.label = "Region",
@@ -137,6 +195,7 @@ namespace mnemos::apps::player::adapters::segacd {
                 disc_ = std::make_unique<mnemos::disc::disc_image>(std::move(*image));
                 machine_->sub->attach_disc(disc_.get());
             }
+            media_.media.push_back(make_disc_media(disc_label, disc_path, disc_ != nullptr));
         }
     }
 

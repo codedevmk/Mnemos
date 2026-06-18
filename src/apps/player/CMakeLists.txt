@@ -62,4 +62,17 @@ if(BUILD_TESTING)
         SOURCES tests/text_overlay_test.cpp
         LIBRARIES mnemos::apps::player::text_overlay
     )
+    mnemos_add_test(
+        mnemos_apps_player_capability_summary_test
+        SOURCES tests/capability_summary_test.cpp
+        LIBRARIES
+            mnemos::debug::dump
+            mnemos::apps::player::genesis_adapter
+            mnemos::apps::player::sms_adapter
+            mnemos::apps::player::c64_adapter
+            mnemos::apps::player::segacd_adapter
+            mnemos::apps::player::sega32x_adapter
+            mnemos::apps::player::irem_m72_adapter
+            mnemos::apps::player::capcom_cps1_adapter
+    )
 endif()

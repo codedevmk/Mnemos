@@ -147,6 +147,18 @@ TEST_CASE("capcom_cps1_adapter boots a bare program through the registry",
     CHECK(adapter.chips().size() == 5U);
     CHECK(adapter.system_spec().size() == 3U);
     CHECK(adapter.system_spec()[1].value == "Capcom CPS1");
+
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 2U);
+    CHECK(session.input_ports[0].format == mnemos::frontend_sdk::input_device_format::arcade_panel);
+    CHECK(session.input_ports[1].device_id == "cps1.panel.p2");
+    CHECK(session.deterministic_frame_input);
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "rom_set");
+    CHECK(media.media[0].label == "smoke");
+    CHECK(media.media[0].provider_id == "cps1.adapter");
 }
 
 TEST_CASE("capcom_cps1_adapter publishes board memory views", "[capcom_cps1][adapter]") {

@@ -59,6 +59,18 @@ TEST_CASE("sega32x_adapter steps frames and passes the Genesis picture through",
           "[sega32x][adapter]") {
     sega32x_adapter adapter{make_cart()};
 
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 2U);
+    CHECK(session.input_ports[0].device_id == "sega32x.controller.port.1");
+    CHECK(session.input_ports[1].device_id == "sega32x.controller.port.2");
+    CHECK(session.deterministic_frame_input);
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "cart");
+    CHECK(media.media[0].byte_count == make_cart().size());
+    CHECK(media.media[0].provider_id == "sega32x.adapter");
+
     adapter.step_one_frame();
     adapter.step_one_frame();
     CHECK(adapter.frames_stepped() == 2U);

@@ -59,6 +59,38 @@ TEST_CASE("sms_adapter ignores out-of-range input ports") {
     SUCCEED();
 }
 
+TEST_CASE("sms_adapter publishes console session and media capability metadata") {
+    sms_adapter adapter(tiny_rom(), {}, "Tiny SMS");
+
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 2U);
+    CHECK(session.input_ports[0].format == mnemos::frontend_sdk::input_device_format::digital_pad);
+    CHECK(session.input_ports[1].device_id == "sms.controller.port.2");
+    CHECK(session.deterministic_frame_input);
+    CHECK(session.max_input_delay_frames == 8U);
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "cart");
+    CHECK(media.media[0].label == "Tiny SMS");
+    CHECK(media.media[0].byte_count == tiny_rom().size());
+    CHECK(media.media[0].provider_id == "sms.adapter");
+}
+
+TEST_CASE("sms_adapter publishes handheld capability metadata for Game Gear") {
+    sms_adapter adapter(tiny_rom(), {.game_gear = true}, "Tiny GG");
+
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 1U);
+    CHECK(session.input_ports[0].device_id == "game_gear.handset");
+    CHECK(session.input_ports[0].label == "Handset");
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "game_card");
+    CHECK(media.media[0].provider_id == "game_gear.adapter");
+}
+
 TEST_CASE("sms_adapter drain_audio resamples to 48 kHz output") {
     sms_adapter adapter(tiny_rom());
     // Before stepping, no samples queued, but the adapter still reports the

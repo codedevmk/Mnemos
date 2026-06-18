@@ -6,13 +6,14 @@
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
-#include "animation_export.hpp"    // --record-gif / --record-movie
-#include "asset_export.hpp"        // --extract-assets: decoded graphics -> PNG + JSON
-#include "audio_export.hpp"        // --extract-audio: decoded PCM samples -> WAV + JSON
-#include "battery_save.hpp"        // .srm load/save (cartridge battery RAM persistence)
-#include "c64_adapter.hpp"         // force_link (the C64 has no cart-header region byte)
-#include "capcom_cps1_adapter.hpp" // force_link (arcade: no cart region byte)
-#include "capcom_cps2_adapter.hpp" // force_link (arcade: encrypted ROM-set board)
+#include "animation_export.hpp"     // --record-gif / --record-movie
+#include "asset_export.hpp"         // --extract-assets: decoded graphics -> PNG + JSON
+#include "audio_export.hpp"         // --extract-audio: decoded PCM samples -> WAV + JSON
+#include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
+#include "c64_adapter.hpp"          // force_link (the C64 has no cart-header region byte)
+#include "capability_discovery.hpp" // --capabilities: headless capability/control summary
+#include "capcom_cps1_adapter.hpp"  // force_link (arcade: no cart region byte)
+#include "capcom_cps2_adapter.hpp"  // force_link (arcade: encrypted ROM-set board)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -155,6 +156,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::load_rom;
     using mnemos::apps::player::adapters::load_rom_verbatim;
     using mnemos::apps::player::adapters::parse_animation_record_args;
+    using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
@@ -180,6 +182,7 @@ int main(int argc, char* argv[]) {
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
     const auto extract_audio = parse_extract_audio_args(argc, argv);
+    const bool capabilities = parse_capabilities_arg(argc, argv);
     const auto record_animation = parse_animation_record_args(argc, argv);
 
     const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
@@ -366,12 +369,26 @@ int main(int argc, char* argv[]) {
         // Load any existing .srm before the first frame; the guard writes it back
         // on exit, keyed off the on-disk ROM path (so it sits beside the cart even
         // when the image came from a .zip). Skipped under the headless
-        // --screenshot / --extract-assets / --extract-audio / recording paths:
-        // those diagnostic sweeps over a read-only ROM corpus must not drop
-        // saves beside the ROMs.
-        if (!screenshot && !extract && !extract_audio && !record_animation) {
+        // --screenshot / --extract-assets / --extract-audio / --capabilities /
+        // recording paths: those diagnostic sweeps over a read-only ROM corpus
+        // must not drop saves beside the ROMs.
+        if (!screenshot && !extract && !extract_audio && !capabilities && !record_animation) {
             srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
         }
+    }
+
+    // Headless capability path: the frontend consumes the same manifest future
+    // GUI/tooling controls will use, then exits before SDL startup.
+    if (capabilities) {
+        if (!system) {
+            std::fprintf(stderr, "--capabilities requires --rom\n");
+            return 1;
+        }
+        const auto manifest = mnemos::debug::discover_dump_capabilities(*system);
+        const std::string summary = mnemos::debug::format_capability_summary(manifest);
+        std::fwrite(summary.data(), 1U, summary.size(), stdout);
+        std::fflush(stdout);
+        return 0;
     }
 
     // Headless path: step --frames, dump PPM + per-chip sidecars, exit. No

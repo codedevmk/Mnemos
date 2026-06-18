@@ -72,6 +72,66 @@ namespace mnemos::frontend_sdk {
         std::string value;
     };
 
+    // Raw input-device shape published by an adapter. Discovery and frontends
+    // derive policy from this; adapters only report what the loaded system
+    // actually wires.
+    enum class input_device_format : std::uint8_t {
+        unknown,
+        digital_pad,
+        arcade_panel,
+        keyboard,
+        mouse,
+        lightgun,
+        analog
+    };
+
+    struct session_input_port final {
+        std::uint32_t port_index{};
+        std::uint8_t player_slot{};
+        input_device_format format{input_device_format::unknown};
+        std::string device_id{};
+        std::string label{};
+        bool connected{true};
+    };
+
+    struct session_capability_info final {
+        std::vector<session_input_port> input_ports{};
+        bool deterministic_frame_input{};
+        bool save_state_supported{};
+        bool frame_exact_save_state{};
+        std::uint32_t max_input_delay_frames{};
+    };
+
+    enum class media_residency : std::uint8_t { resident, paged, streamed };
+
+    enum class media_hash_algorithm : std::uint8_t { none, crc32, sha1, sha256 };
+
+    struct media_page_hash final {
+        std::uint64_t offset{};
+        std::uint32_t byte_count{};
+        std::string hash{};
+    };
+
+    struct media_image_info final {
+        std::string id{};
+        std::string label{};
+        media_residency residency{media_residency::resident};
+        std::uint64_t byte_count{};
+        std::uint32_t page_size{};
+        media_hash_algorithm hash_algorithm{media_hash_algorithm::none};
+        std::string full_hash{};
+        std::vector<media_page_hash> page_hashes{};
+        std::string provider_id{};
+        bool provider_available{true};
+        std::string revision{};
+        bool revision_supported{true};
+        std::string cache_hint{};
+    };
+
+    struct media_capability_info final {
+        std::vector<media_image_info> media{};
+    };
+
     // A bootable, frame-steppable, presentable, input-consuming system. The
     // windowed player owns one of these and drives it; everything system-
     // specific lives behind this interface.
@@ -103,6 +163,23 @@ namespace mnemos::frontend_sdk {
         // read of the controller MMIO. Adapters MAY ignore ports past their
         // hardware's controller count.
         virtual void apply_input(int port, const controller_state& state) noexcept = 0;
+
+        // Session/input metadata used by tooling to decide which multiplayer
+        // modes are possible. Default empty keeps existing adapters honest:
+        // unknown metadata is surfaced as unavailable/degraded capability data
+        // rather than guessed from apply_input().
+        [[nodiscard]] virtual const session_capability_info& session_capabilities() const noexcept {
+            static const session_capability_info empty{};
+            return empty;
+        }
+
+        // Descriptive media metadata for tooling. This does not imply a paging
+        // implementation: adapters report resident, paged, or streamed media
+        // facts here; bus reads and provider fetches remain system-specific.
+        [[nodiscard]] virtual const media_capability_info& media_capabilities() const noexcept {
+            static const media_capability_info empty{};
+            return empty;
+        }
 
         // Drain audio produced since the last drain (or since boot).
         // Returns an empty chunk (frame_count == 0) when the adapter has no

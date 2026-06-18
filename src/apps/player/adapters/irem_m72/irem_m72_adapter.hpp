@@ -59,6 +59,14 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         }
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
+        [[nodiscard]] const frontend_sdk::session_capability_info&
+        session_capabilities() const noexcept override {
+            return session_;
+        }
+        [[nodiscard]] const frontend_sdk::media_capability_info&
+        media_capabilities() const noexcept override {
+            return media_;
+        }
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
@@ -74,6 +82,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
       private:
         void publish_memory_views();
 
+        frontend_sdk::session_capability_info session_{};
+        frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::irem_m72::m72_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
         std::array<std::unique_ptr<instrumentation::span_memory_view>, 7> memory_view_storage_{};

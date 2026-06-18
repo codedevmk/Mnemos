@@ -119,6 +119,13 @@ TEST_CASE("c64_adapter with no media has no removable-media set") {
     CHECK(adapter.kind() == c64_adapter::media_kind::none);
     CHECK(adapter.media_count() == 0U);
     CHECK_FALSE(adapter.insert_media(0));
+
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 2U);
+    CHECK(session.input_ports[0].device_id == "c64.joystick.port.2");
+    CHECK(session.input_ports[1].device_id == "c64.joystick.port.1");
+    CHECK(session.deterministic_frame_input);
+    CHECK(adapter.media_capabilities().media.empty());
 }
 
 TEST_CASE("c64_adapter wraps a bare PRG as a disk and mounts it") {
@@ -126,6 +133,12 @@ TEST_CASE("c64_adapter wraps a bare PRG as a disk and mounts it") {
     CHECK(adapter.kind() == c64_adapter::media_kind::disk);
     REQUIRE(adapter.media_count() == 1U);
     CHECK(adapter.system().drive8.mounted());
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "disk.0");
+    CHECK(media.media[0].provider_id == "c64.drive8");
+    CHECK(media.media[0].residency == mnemos::frontend_sdk::media_residency::resident);
 }
 
 TEST_CASE("c64_adapter mounts a real D64 directly") {
@@ -166,6 +179,9 @@ TEST_CASE("c64_adapter loads a cartridge image") {
     CHECK(adapter.kind() == c64_adapter::media_kind::cartridge);
     CHECK(adapter.system().cart.inserted());
     CHECK(adapter.media_count() == 0U); // a cartridge is not removable disk media
+    REQUIRE(adapter.media_capabilities().media.size() == 1U);
+    CHECK(adapter.media_capabilities().media[0].id == "cart");
+    CHECK(adapter.media_capabilities().media[0].provider_id == "c64.cartridge");
 }
 
 TEST_CASE("c64_adapter supports a multi-disk set and swapping") {
@@ -176,6 +192,9 @@ TEST_CASE("c64_adapter supports a multi-disk set and swapping") {
     c64_adapter adapter(basic_rom(), kernal_rom(), chargen_rom(), sample_prg(), std::move(extra),
                         false);
     REQUIRE(adapter.media_count() == 3U);
+    REQUIRE(adapter.media_capabilities().media.size() == 3U);
+    CHECK(adapter.media_capabilities().media[2].id == "disk.2");
+    CHECK(adapter.media_capabilities().media[2].cache_hint == "resident_removable");
     CHECK(adapter.current_media_index() == 0U);
 
     CHECK(adapter.insert_media(2));

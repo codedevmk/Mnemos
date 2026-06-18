@@ -59,6 +59,14 @@ namespace mnemos::apps::player::adapters::sega32x {
         [[nodiscard]] chips::frame_buffer_view current_frame() const noexcept override;
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
+        [[nodiscard]] const frontend_sdk::session_capability_info&
+        session_capabilities() const noexcept override {
+            return session_;
+        }
+        [[nodiscard]] const frontend_sdk::media_capability_info&
+        media_capabilities() const noexcept override {
+            return media_;
+        }
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
@@ -82,6 +90,8 @@ namespace mnemos::apps::player::adapters::sega32x {
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
+        frontend_sdk::session_capability_info session_{};
+        frontend_sdk::media_capability_info media_{};
         // Per-scanline compose: after each slice completes a VDP line, copy
         // that Genesis row and overlay the 32X pixels for it with the 32X
         // state AT THAT RASTER POSITION. Mirrors the hardware beam: rows the

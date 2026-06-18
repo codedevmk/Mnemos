@@ -79,6 +79,10 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<extract_audio_request> parse_extract_audio_args(int argc,
                                                                                 char* argv[]);
 
+    // --capabilities: headless frontend query. Loads the requested system/media,
+    // prints a deterministic capability/control summary, and exits.
+    [[nodiscard]] bool parse_capabilities_arg(int argc, char* argv[]);
+
     enum class animation_record_format : std::uint8_t {
         gif,
         movie_frames,
