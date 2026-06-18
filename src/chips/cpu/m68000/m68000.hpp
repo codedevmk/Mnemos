@@ -188,14 +188,25 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint32_t rd32(std::uint32_t a) const noexcept;
 
         // ---- cycle-accounted accesses (4 clocks per word/byte bus cycle) ----
-        [[nodiscard]] std::uint8_t read8(std::uint32_t a) noexcept;
-        [[nodiscard]] std::uint16_t read16(std::uint32_t a) noexcept;
-        [[nodiscard]] std::uint32_t read32(std::uint32_t a) noexcept;
+        // `program` selects the program-space (opcode) read path: PC-relative
+        // addressing modes are program references on the 68000, so on an
+        // opcode/data-split board (encrypted 68000, e.g. CPS-2) they must read the
+        // decrypted instruction stream, not the encrypted data bus. No-op for every
+        // system whose opcode bytes equal its data bytes.
+        [[nodiscard]] std::uint8_t read8(std::uint32_t a, bool program = false) noexcept;
+        [[nodiscard]] std::uint16_t read16(std::uint32_t a, bool program = false) noexcept;
+        [[nodiscard]] std::uint32_t read32(std::uint32_t a, bool program = false) noexcept;
         void write8(std::uint32_t a, std::uint8_t v) noexcept;
         void write16(std::uint32_t a, std::uint16_t v) noexcept;
         void write32(std::uint32_t a, std::uint32_t v) noexcept;
-        [[nodiscard]] std::uint32_t read_sized(std::uint32_t a, op_size s) noexcept;
+        [[nodiscard]] std::uint32_t read_sized(std::uint32_t a, op_size s,
+                                               bool program = false) noexcept;
         void write_sized(std::uint32_t a, op_size s, std::uint32_t v) noexcept;
+        // PC-relative modes (mode 7 reg 2 = d16(PC), reg 3 = d8(PC,Xn)) are the only
+        // program-space EA reads; everything else uses the data bus.
+        [[nodiscard]] static constexpr bool is_pc_relative(int mode, int reg) noexcept {
+            return mode == 7 && (reg == 2 || reg == 3);
+        }
 
         // ---- instruction stream ----
         [[nodiscard]] std::uint16_t fetch16() noexcept;
