@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <vector>
 
 namespace {
     using mnemos::chips::storage::eeprom_i2c;
@@ -169,4 +170,51 @@ TEST_CASE("eeprom_i2c reset returns the bus to idle without erasing the store") 
     e.reset();
     CHECK(e.sda());                  // line released
     CHECK(e.bytes()[0x00] == 0x5AU); // contents survive a reset (battery-backed)
+}
+
+TEST_CASE("eeprom_i2c save_state/load_state captures an in-flight transaction") {
+    // Drive a device into the middle of a write (control + word address latched,
+    // mid-data), so the saved state carries the stage/address pointer -- not just
+    // the backing store, which already rides a memory chunk in the machine save.
+    eeprom_i2c live(256);
+    i2c_host hlive{live};
+    hlive.start();
+    CHECK(hlive.write_byte(0xA0)); // control: write
+    CHECK(hlive.write_byte(0x05)); // word address $05 -> stage=write_data, addr=$05
+
+    std::vector<std::uint8_t> buf;
+    mnemos::chips::state_writer writer(buf);
+    live.save_state(writer);
+
+    // Restore into a fresh device of the same capacity whose store has diverged.
+    eeprom_i2c loaded(256);
+    loaded.bytes()[0x05] = 0x11U;
+    mnemos::chips::state_reader reader(buf);
+    loaded.load_state(reader);
+    REQUIRE(reader.ok());
+
+    // Continue the identical remaining transaction on both: the next data byte must
+    // land at the latched address ($05) on the restored device just as on the live
+    // one -- proving the in-flight stage + address pointer survived the round-trip.
+    i2c_host hloaded{loaded};
+    CHECK(hlive.write_byte(0xCD));
+    CHECK(hloaded.write_byte(0xCD));
+    hlive.stop();
+    hloaded.stop();
+    CHECK(live.bytes()[0x05] == 0xCDU);
+    CHECK(loaded.bytes()[0x05] == live.bytes()[0x05]);
+}
+
+TEST_CASE("eeprom_i2c load_state rejects a truncated stream") {
+    eeprom_i2c e(256);
+    std::vector<std::uint8_t> buf;
+    mnemos::chips::state_writer writer(buf);
+    e.save_state(writer);
+    REQUIRE(buf.size() > 8U);
+
+    eeprom_i2c loaded(256);
+    const std::vector<std::uint8_t> truncated(buf.begin(), buf.begin() + 4); // store cut short
+    mnemos::chips::state_reader reader(truncated);
+    loaded.load_state(reader);
+    CHECK_FALSE(reader.ok());
 }

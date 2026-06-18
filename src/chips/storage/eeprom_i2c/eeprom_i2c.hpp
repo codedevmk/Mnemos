@@ -1,5 +1,7 @@
 #pragma once
 
+#include "state.hpp" // chips::state_writer / state_reader
+
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -36,6 +38,13 @@ namespace mnemos::chips::storage {
         [[nodiscard]] bool sda() const noexcept;
 
         void reset() noexcept;
+
+        // Serialize the backing store + the in-flight I2C transfer state (the
+        // fixed addressing config derives from the size the device is built with,
+        // so it is not part of the stream). load_state into a device built for the
+        // same capacity restores a transfer mid-flight bit-for-bit.
+        void save_state(state_writer& writer) const;
+        void load_state(state_reader& reader);
 
       private:
         // A received byte is complete: act on it per the current stage (control ->

@@ -134,4 +134,54 @@ namespace mnemos::manifests::genesis {
         return rt;
     }
 
+    namespace {
+        // Layout guard for the system-latch chunk. Independent of (but identical
+        // in value + field order to) genesis_system's marker, so a snapshot taken
+        // through either assembly path describes the same bytes.
+        constexpr std::uint32_t genesis_runtime_state_version = 1U;
+    } // namespace
+
+    void genesis_runtime::save_state(chips::state_writer& writer) const {
+        writer.u32(genesis_runtime_state_version);
+        writer.u8(state.version_register);
+        writer.bytes(state.io_regs);
+        writer.u8(state.vdp_write_high);
+        writer.u8(state.vdp_read_low);
+        writer.boolean(state.z80_bus_requested);
+        writer.boolean(state.z80_reset_released);
+        writer.u16(state.z80_bank);
+        // Cartridge mapper control latches (the bytes/SRAM contents ride the
+        // machine-save memory chunks; only the routing-control state is here).
+        writer.boolean(sram.enabled);
+        writer.boolean(sram.write_protect);
+        writer.boolean(banking.active);
+        writer.bytes(banking.bank);
+        writer.boolean(eeprom.scl);
+        writer.boolean(eeprom.sda);
+        // z80_running is derived (reset released AND bus not requested), so it is
+        // reconstructed on load rather than serialized.
+    }
+
+    void genesis_runtime::load_state(chips::state_reader& reader) {
+        if (reader.u32() != genesis_runtime_state_version) {
+            reader.fail(); // unknown layout; leave the system at its assembled state
+            return;
+        }
+        state.version_register = reader.u8();
+        reader.bytes(state.io_regs);
+        state.vdp_write_high = reader.u8();
+        state.vdp_read_low = reader.u8();
+        state.z80_bus_requested = reader.boolean();
+        state.z80_reset_released = reader.boolean();
+        state.z80_bank = reader.u16();
+        sram.enabled = reader.boolean();
+        sram.write_protect = reader.boolean();
+        banking.active = reader.boolean();
+        reader.bytes(banking.bank);
+        eeprom.scl = reader.boolean();
+        eeprom.sda = reader.boolean();
+        // Reconstruct the derived Z80 run gate (the gated_chip reads it live).
+        state.z80_running = state.z80_reset_released && !state.z80_bus_requested;
+    }
+
 } // namespace mnemos::manifests::genesis
