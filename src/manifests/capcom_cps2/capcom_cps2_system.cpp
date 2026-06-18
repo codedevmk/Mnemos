@@ -190,12 +190,16 @@ namespace mnemos::manifests::capcom_cps2 {
                             sound_cpu_.reset(chips::reset_kind::power_on);
                             sound_cpu_.set_irq_line(false);
                             sound_cycle_debt_ = 0;
+                            qsound_irq_line_ = false;
+                            qsound_irq_accum_ = 0U;
                         }
                         sound_reset_asserted_ = false;
                     } else {
                         sound_reset_asserted_ = true;
                         sound_cpu_.reset(chips::reset_kind::power_on);
                         sound_cpu_.set_irq_line(false);
+                        qsound_irq_line_ = false;
+                        qsound_irq_accum_ = 0U;
                     }
                     break;
                 case 0x8040E0U:
@@ -300,8 +304,10 @@ namespace mnemos::manifests::capcom_cps2 {
             return;
         }
         // The 68K (~11.8 MHz) drives; the sound Z80 (~8 MHz) catches up at the clock
-        // ratio when out of reset, and the DSP advances with it. (The exact QSound
-        // /INT cadence + audio mixing land with the first real-ROM bring-up.)
+        // ratio when out of reset, and the DSP advances with it. The Z80 sound
+        // driver does its work in the 250 Hz DL-1425 /INT handler, so the loop
+        // pulses that interrupt (raise on the period, release on the accept edge --
+        // a taken IM1 interrupt clears IFF1).
         std::uint64_t ran = 0U;
         while (ran < cycles) {
             const int spent = main_cpu.step_instruction();
@@ -311,8 +317,21 @@ namespace mnemos::manifests::capcom_cps2 {
                 // Z80 cycles owed ~= 68K cycles * 8 / 12 (11.8/8 ratio).
                 sound_cycle_debt_ += static_cast<std::int64_t>(step) * 8 / 12;
                 while (sound_cycle_debt_ > 0) {
+                    const bool ack_possible = qsound_irq_line_ && sound_cpu_.iff1();
+                    sound_cpu_.set_irq_line(qsound_irq_line_);
                     const int zc = sound_cpu_.step_instruction();
-                    sound_cycle_debt_ -= zc > 0 ? zc : 1;
+                    const int zstep = zc > 0 ? zc : 1;
+                    sound_cycle_debt_ -= zstep;
+                    // A taken /INT clears IFF1: release the level line so it is a pulse.
+                    if (ack_possible && !sound_cpu_.iff1()) {
+                        qsound_irq_line_ = false;
+                        sound_cpu_.set_irq_line(false);
+                    }
+                    qsound_irq_accum_ += static_cast<std::uint32_t>(zstep);
+                    while (qsound_irq_accum_ >= qsound_irq_period) {
+                        qsound_irq_accum_ -= qsound_irq_period;
+                        qsound_irq_line_ = true;
+                    }
                 }
                 qdsp_.tick(step);
             }

@@ -7,8 +7,8 @@
 // full 68000 memory map (RAM / CPS-A-B registers / control / I-O / 93C46 EEPROM),
 // and the QSound sound subsystem (Z80 + the 68K<->Z80 comm RAM + the DL-1425 DSP).
 // Boots the 68000 from the decrypted reset vector and drives the shared CPS-A/B
-// video chip at frame-vblank. Remaining: precise QSound /INT cadence and audio
-// mixing.
+// video chip at frame-vblank, and pulses the QSound Z80's 250 Hz DL-1425 /INT so
+// the sound driver programs the DSP voices.
 
 #include "cps2_crypto.hpp"
 #include "cps2_video.hpp"
@@ -108,6 +108,12 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint16_t qsound_volume_status = 0xE021U;
     inline constexpr std::uint32_t m68k_clock_hz = 11'800'000U;
     inline constexpr std::uint32_t frame_rate_hz = 60U;
+    // QSound sound CPU (Z80) clock + its DL-1425 /INT cadence. The sound driver
+    // does all its work in the 250 Hz interrupt handler (its main loop just idles
+    // waiting for /INT), so without this pulse the Z80 never programs the DSP.
+    inline constexpr std::uint32_t qsound_z80_clock_hz = 8'000'000U;
+    inline constexpr std::uint32_t qsound_irq_hz = 250U;
+    inline constexpr std::uint32_t qsound_irq_period = qsound_z80_clock_hz / qsound_irq_hz;
 
     struct cps2_board_params final {
         // The 20-byte board key (an external asset, never committed). Without it
@@ -239,8 +245,10 @@ namespace mnemos::manifests::capcom_cps2 {
         std::array<std::uint8_t, z80_work_window> qsound_work_ram_{};
         std::uint32_t sound_rom_size_{0U};
         std::uint8_t sound_bank_{0U};
-        bool sound_reset_asserted_{true};  // the Z80 powers up held in reset
-        std::int64_t sound_cycle_debt_{0}; // 68K cycles owed to the Z80 (clock-ratio scaled)
+        bool sound_reset_asserted_{true};    // the Z80 powers up held in reset
+        std::int64_t sound_cycle_debt_{0};   // 68K cycles owed to the Z80 (clock-ratio scaled)
+        bool qsound_irq_line_{false};        // DL-1425 /INT line into the Z80
+        std::uint32_t qsound_irq_accum_{0U}; // Z80 cycles toward the next /INT pulse
 
         // Map the CPS register file at one window (primary or mirror) onto cps_regs_
         // starting at file_offset (0x100 for CPS-A, 0x140 for CPS-B).
