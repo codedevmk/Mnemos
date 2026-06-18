@@ -1,9 +1,9 @@
 ---
 capsule: src/chips/cpu/z80
 generator: gen_capsule/0.1
-source_digest: sha256:8f0a39acf48432b16ed87c21755a779c4a890f46a41b3bf1bc6af8595831442e
+source_digest: sha256:2be66e99b923701e0e56840c54f78c18fed3fa26061e31722dba123f7a7594d7
 intent_ratified: sha256:5851e3ff1e19107caf90632468e9e5e5e94261a8cd8ea86c59ff109f5afd885a
-token_estimate: 495
+token_estimate: 497
 ---
 # Capsule — `src/chips/cpu/z80`
 
@@ -28,7 +28,7 @@ machines.
 ### `z80.hpp`
 namespaces: `mnemos::chips::cpu`
 - class `z80`
-  - public: `z80`, `metadata`, `tick`, `reset`, `save_state`, `load_state`, `introspection`, `configure`, `attach_bus`, `set_port_in`, `set_irq_vector`, `set_port_out`, `step_instruction`, `cpu_registers`, `set_registers`, `elapsed_cycles`, `at_instruction_boundary`, `set_irq_line`, `set_nmi_line`, `set_reset_line`, `reset_line_held`, `register_snapshot`
+  - public: `z80`, `metadata`, `tick`, `reset`, `save_state`, `load_state`, `introspection`, `configure`, `attach_bus`, `set_port_in`, `set_irq_vector`, `set_port_out`, `step_instruction`, `cpu_registers`, `set_registers`, `elapsed_cycles`, `at_instruction_boundary`, `set_irq_line`, `iff1`, `set_nmi_line`, `set_reset_line`, `reset_line_held`, `register_snapshot`
 
 ## Dependencies
 
