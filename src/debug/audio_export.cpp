@@ -44,7 +44,7 @@ namespace mnemos::debug {
             for (std::size_t i = 0; i < samples.size(); ++i) {
                 const instrumentation::sample_view& s = samples[i];
                 const std::string path =
-                    base_path + "." + chip_id + ".sample." + std::string(s.name) + ".wav";
+                    base_path + "." + chip_id + ".sample." + sanitize_id(s.name) + ".wav";
                 if (audio::write_wav(path, s.frames, s.sample_rate, s.channels)) {
                     ++written;
                 } else {

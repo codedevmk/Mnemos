@@ -8,28 +8,33 @@
 
 #include "player_system.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace mnemos::debug {
 
     // Writes the system's primary framebuffer to <base_path> as a PPM, then
     // for every chip in `sys.chips()`:
     //   - each `memory_view` is written as <base_path>.<chip_id>.<view_name>.bin
+    //   - register_view is written as <base_path>.<chip_id>.regs.txt
     //   - each `debug_layer` is written as <base_path>.<chip_id>.<layer_name>.ppm
-    // <chip_id> is the chip's metadata.part_number, lowercase, with non-alnum
-    // chars replaced by '_'. Returns true if the primary framebuffer wrote;
-    // sidecar failures are reported on stderr but don't fail the call (any
-    // dump that opened still gets the partial file flushed at scope-exit).
+    // Dynamic path segments (chip id, memory view, debug layer) are lowercase
+    // with non-alnum chars replaced by '_'. Returns true if the primary
+    // framebuffer wrote; sidecar failures are reported on stderr but don't fail
+    // the call (any dump that opened still gets the partial file flushed at
+    // scope-exit).
     bool dump_screenshot_artifacts(const frontend_sdk::player_system& sys,
                                    const std::string& base_path);
 
-    // RAII handle for a CSV trace session. Construction installs a trace_target
-    // callback on the first chip in `sys.chips()` that advertises one (the
-    // adapter publishes chips in scheduler order, so this is typically the
-    // primary CPU). Destruction clears the callback.
+    // RAII handle for CSV trace sessions. Construction installs a trace_target
+    // callback on every chip in `sys.chips()` that advertises one. The first
+    // traceable chip writes <csv_path> for compatibility; additional traceable
+    // chips write sibling CSVs named from their sanitized chip id and list order.
+    // Destruction clears every installed callback.
     //
     // The CSV format is `frame,inst,pc,cycles` -- columns supported by every
     // CPU through the generic `trace_target` capability. m68000-specific cycle-
@@ -52,15 +57,15 @@ namespace mnemos::debug {
         trace_csv_session& operator=(trace_csv_session&&) = delete;
         ~trace_csv_session();
 
-        [[nodiscard]] bool active() const noexcept { return target_ != nullptr; }
+        [[nodiscard]] bool active() const noexcept { return !sinks_.empty(); }
+        [[nodiscard]] std::size_t trace_count() const noexcept { return sinks_.size(); }
 
       private:
-        chips::ichip* target_{};
-        std::ofstream out_{};
         // Heap-allocated state shared with the installed callback so the
         // session can outlive the construction stack without lifetime games.
         struct state;
-        std::unique_ptr<state> state_{};
+        struct sink;
+        std::vector<std::unique_ptr<sink>> sinks_{};
     };
 
 } // namespace mnemos::debug

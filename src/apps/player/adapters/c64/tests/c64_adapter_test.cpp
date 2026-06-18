@@ -14,6 +14,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -71,6 +72,19 @@ TEST_CASE("c64_adapter enumerates its chips in scheduler order") {
     for (auto* c : chips) {
         CHECK(c != nullptr);
     }
+}
+
+TEST_CASE("c64_adapter publishes system RAM memory views") {
+    c64_adapter adapter = bare();
+
+    const auto views = adapter.memory_views();
+    REQUIRE(views.size() == 2U);
+    REQUIRE(views[0] != nullptr);
+    REQUIRE(views[1] != nullptr);
+    CHECK(views[0]->name() == std::string_view{"ram"});
+    CHECK(views[0]->bytes().size() == 0x10000U);
+    CHECK(views[1]->name() == std::string_view{"color_ram"});
+    CHECK(views[1]->bytes().size() == 0x0400U);
 }
 
 TEST_CASE("c64_adapter ignores out-of-range input ports") {

@@ -4,8 +4,11 @@
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 
+#include <cstddef>
 #include <cstdio>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::capcom_cps1 {
@@ -89,6 +92,13 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
                             }
                             return result; // declared but invalid: boot an empty board
                         }
+                        if (parsed.value->board != "capcom_cps1") {
+                            std::fprintf(stderr,
+                                         "[capcom_cps1] game.toml declares board '%s', expected "
+                                         "'capcom_cps1'\n",
+                                         parsed.value->board.c_str());
+                            return result;
+                        }
                         const auto effective =
                             parsed.value->parent.has_value()
                                 ? with_parent_fallback(*provider, *parsed.value->parent, rom_path)
@@ -141,9 +151,26 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
         } else {
             chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->fm, &sys_->oki};
         }
+        publish_memory_views();
         spec_ = {{"System", "Arcade"},
                  {"Board", "Capcom CPS1"},
                  {"Game", display_name.empty() ? std::string{"unknown"} : std::move(display_name)}};
+    }
+
+    void capcom_cps1_adapter::publish_memory_views() {
+        auto publish = [this](std::size_t index, std::string_view name,
+                              std::span<const std::uint8_t> bytes) {
+            memory_view_storage_[index] =
+                std::make_unique<instrumentation::span_memory_view>(name, bytes);
+            system_mem_view_[index] = memory_view_storage_[index].get();
+        };
+
+        publish(0U, "work_ram", sys_->work_ram);
+        publish(1U, "gfx_ram", sys_->gfx_ram);
+        publish(2U, "palette_ram", sys_->palette);
+        publish(3U, "z80_ram", sys_->z80_ram);
+        publish(4U, "qsound_shared0", sys_->qsound_shared[0]);
+        publish(5U, "qsound_shared1", sys_->qsound_shared[1]);
     }
 
     void capcom_cps1_adapter::step_one_frame() {

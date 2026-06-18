@@ -283,7 +283,21 @@ namespace mnemos::manifests::capcom_cps2 {
         qdsp_.set_sample_rom(std::span<const std::uint8_t>(region(roms, "qsound")));
     }
 
+    common::rom_set_decl cps2_rom_skeleton(std::string set_name) {
+        common::rom_set_decl decl;
+        decl.name = std::move(set_name);
+        decl.board = "capcom_cps2";
+        decl.regions.push_back(
+            {.name = "maincpu", .size = main_rom_size, .fill = 0xFFU, .files = {}});
+        decl.regions.push_back(
+            {.name = "key", .size = crypto_key_size, .fill = 0x00U, .files = {}});
+        return decl;
+    }
+
     void cps2_system::run_cycles(std::uint64_t cycles) {
+        if (!executable_) {
+            return;
+        }
         // The 68K (~11.8 MHz) drives; the sound Z80 (~8 MHz) catches up at the clock
         // ratio when out of reset, and the DSP advances with it. (The exact QSound
         // /INT cadence + audio mixing land with the first real-ROM bring-up.)

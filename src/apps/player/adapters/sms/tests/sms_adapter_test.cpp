@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -99,6 +100,16 @@ TEST_CASE("sms_adapter exposes optional FM chip and mixes through the audio path
     CHECK(audio.frame_count >= 798U);
     CHECK(audio.frame_count <= 802U);
     REQUIRE(audio.samples != nullptr);
+}
+
+TEST_CASE("sms_adapter publishes work_ram as a system memory view") {
+    sms_adapter adapter(tiny_rom());
+
+    const auto views = adapter.memory_views();
+    REQUIRE(views.size() == 1U);
+    REQUIRE(views[0] != nullptr);
+    CHECK(views[0]->name() == std::string_view{"work_ram"});
+    CHECK(views[0]->bytes().size() == 0x2000U);
 }
 
 TEST_CASE("sms_adapter selects PAL pacing when configured") {

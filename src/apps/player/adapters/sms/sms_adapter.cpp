@@ -71,6 +71,7 @@ namespace mnemos::apps::player::adapters::sms {
                              const manifests::sms::sms_config& config, std::string display_name,
                              frontend_sdk::scheduler_factory* scheduler_factory)
         : sys_(manifests::sms::build_sms_runtime(std::move(rom), config)),
+          work_ram_view_("work_ram", sys_->graph.region_span("work_ram")),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
@@ -88,6 +89,7 @@ namespace mnemos::apps::player::adapters::sms {
         if (fm_unit_) {
             chip_view_[chip_count_++] = sys_->fm();
         }
+        system_mem_view_[0] = &work_ram_view_;
 
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = game_gear_ ? "Game Gear" : "Master System"});

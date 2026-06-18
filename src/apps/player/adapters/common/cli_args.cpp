@@ -227,6 +227,15 @@ namespace mnemos::apps::player::adapters {
             }
             return std::nullopt;
         }
+
+        [[nodiscard]] std::optional<std::uint64_t> parse_positive_frame_count(const char* value) {
+            char* end = nullptr;
+            const unsigned long long parsed = std::strtoull(value, &end, 10);
+            if (end == value || *end != '\0' || parsed == 0ULL) {
+                return std::nullopt;
+            }
+            return static_cast<std::uint64_t>(parsed);
+        }
     } // namespace
 
     std::optional<extract_assets_request> parse_extract_assets_args(int argc, char* argv[]) {
@@ -239,6 +248,31 @@ namespace mnemos::apps::player::adapters {
     std::optional<extract_audio_request> parse_extract_audio_args(int argc, char* argv[]) {
         if (auto r = parse_base_and_frames(argc, argv, "--extract-audio")) {
             return extract_audio_request{r->first, r->second};
+        }
+        return std::nullopt;
+    }
+
+    std::optional<animation_record_request> parse_animation_record_args(int argc, char* argv[]) {
+        std::optional<std::string> output;
+        std::optional<animation_record_format> format;
+        std::optional<std::uint64_t> frames;
+        for (int i = 1; i < argc; ++i) {
+            const std::string_view a{argv[i]};
+            if ((a == "--record-gif" || a == "--record-movie") && i < argc - 1) {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    output = std::string{value};
+                    format = a == "--record-gif" ? animation_record_format::gif
+                                                 : animation_record_format::movie_frames;
+                    ++i; // skip the consumed value
+                }
+            } else if (a == "--frames" && i < argc - 1) {
+                frames = parse_positive_frame_count(argv[i + 1]);
+                ++i; // skip the consumed value
+            }
+        }
+        if (output && format && frames) {
+            return animation_record_request{*output, *frames, *format};
         }
         return std::nullopt;
     }

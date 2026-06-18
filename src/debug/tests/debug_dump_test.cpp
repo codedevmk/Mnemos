@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -19,6 +21,8 @@ namespace {
     using mnemos::chips::chip_metadata;
     using mnemos::chips::frame_buffer_view;
     using mnemos::chips::ichip;
+    using mnemos::chips::register_descriptor;
+    using mnemos::chips::register_value_format;
     using mnemos::chips::reset_kind;
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
@@ -30,6 +34,7 @@ namespace {
     using mnemos::instrumentation::debug_layer;
     using mnemos::instrumentation::ichip_introspection;
     using mnemos::instrumentation::memory_view;
+    using mnemos::instrumentation::register_view;
     using mnemos::instrumentation::span_memory_view;
     using mnemos::instrumentation::trace_event;
     using mnemos::instrumentation::trace_target;
@@ -59,19 +64,44 @@ namespace {
 
     class memory_intro final : public ichip_introspection {
       public:
-        memory_intro(std::span<const std::uint8_t> ram) : ram_("ram", ram) { table_[0] = &ram_; }
+        memory_intro(std::span<const std::uint8_t> ram) : ram_("RAM.0", ram) {
+            table_[0] = &ram_;
+        }
         [[nodiscard]] std::span<memory_view* const> memory_views() override { return table_; }
+        [[nodiscard]] register_view* registers() override { return &regs_; }
 
       private:
+        class fake_regs final : public register_view {
+          public:
+            [[nodiscard]] std::span<const register_descriptor> registers() override {
+                return regs_;
+            }
+
+          private:
+            std::array<register_descriptor, 2> regs_{
+                register_descriptor{.name = "PC",
+                                    .value = 0x1234U,
+                                    .bit_width = 16U,
+                                    .format = register_value_format::unsigned_integer},
+                register_descriptor{.name = "P",
+                                    .value = 0xA5U,
+                                    .bit_width = 8U,
+                                    .format = register_value_format::flags}};
+        };
+
         span_memory_view ram_;
         std::array<memory_view*, 1> table_{};
+        fake_regs regs_;
     };
 
     class trace_chip final : public ichip {
       public:
+        explicit trace_chip(std::string part_number = "cpu_x")
+            : part_number_(std::move(part_number)) {}
+
         [[nodiscard]] chip_metadata metadata() const noexcept override {
             return {.manufacturer = "test",
-                    .part_number = "cpu_x",
+                    .part_number = part_number_,
                     .family = "test",
                     .klass = chip_class::cpu,
                     .revision = 1U};
@@ -84,6 +114,7 @@ namespace {
         [[nodiscard]] trace_intro& intro_impl() noexcept { return intro_; }
 
       private:
+        std::string part_number_;
         trace_intro intro_;
     };
 
@@ -117,8 +148,10 @@ namespace {
             ram_ = {0xDEU, 0xADU, 0xBEU, 0xEFU};
             mem_chip_ = std::make_unique<memory_chip>(ram_);
             trace_chip_ = std::make_unique<trace_chip>();
+            secondary_trace_chip_ = std::make_unique<trace_chip>("cpu.y");
             chip_list_[0] = trace_chip_.get();
-            chip_list_[1] = mem_chip_.get();
+            chip_list_[1] = secondary_trace_chip_.get();
+            chip_list_[2] = mem_chip_.get();
             sys_mem_table_[0] = &sysram_view_;
         }
 
@@ -138,18 +171,22 @@ namespace {
         }
 
         [[nodiscard]] trace_chip& trace_chip_ref() noexcept { return *trace_chip_; }
+        [[nodiscard]] trace_chip& secondary_trace_chip_ref() noexcept {
+            return *secondary_trace_chip_;
+        }
 
       private:
         std::vector<std::uint32_t> framebuffer_{};
         std::vector<std::uint8_t> ram_{};
         std::unique_ptr<memory_chip> mem_chip_{};
         std::unique_ptr<trace_chip> trace_chip_{};
-        std::array<ichip*, 2> chip_list_{};
+        std::unique_ptr<trace_chip> secondary_trace_chip_{};
+        std::array<ichip*, 3> chip_list_{};
         std::vector<spec_field> spec_{};
         // System-level memory (not owned by a chip), exposed via the
         // player_system::memory_views() override above.
         std::vector<std::uint8_t> sysram_{0x11U, 0x22U, 0x33U, 0x44U};
-        span_memory_view sysram_view_{"work_ram", sysram_};
+        span_memory_view sysram_view_{"Work RAM", sysram_};
         std::array<memory_view*, 1> sys_mem_table_{};
     };
 
@@ -174,6 +211,11 @@ namespace {
         return out;
     }
 
+    [[nodiscard]] std::string read_text(const std::filesystem::path& p) {
+        const auto bytes = read_file(p);
+        return std::string(bytes.begin(), bytes.end());
+    }
+
 } // namespace
 
 TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars", "[debug_dump]") {
@@ -189,12 +231,20 @@ TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars"
     const std::string header = "P6\n4 2\n255\n";
     REQUIRE(ppm.size() == header.size() + 8U * 3U);
 
-    // The memory_chip's sole memory_view "ram" is dumped under the
-    // chip's sanitized part_number ("mem.chip-1" -> "mem_chip_1").
-    const auto mem_path = scratch / "shot.ppm.mem_chip_1.ram.bin";
+    // The memory_chip's sole memory_view "RAM.0" is dumped under sanitized
+    // path segments ("mem.chip-1" -> "mem_chip_1", "RAM.0" -> "ram_0").
+    const auto mem_path = scratch / "shot.ppm.mem_chip_1.ram_0.bin";
     REQUIRE(std::filesystem::exists(mem_path));
     const auto mem_bytes = read_file(mem_path);
     REQUIRE(mem_bytes == std::vector<std::uint8_t>{0xDEU, 0xADU, 0xBEU, 0xEFU});
+
+    // Register sidecar uses the same sanitized chip id and carries a stable
+    // text snapshot of the chip's register_view.
+    const auto regs_path = scratch / "shot.ppm.mem_chip_1.regs.txt";
+    REQUIRE(std::filesystem::exists(regs_path));
+    const std::string regs = read_text(regs_path);
+    CHECK(regs.find("PC bits=16 format=unsigned value=0x1234") != std::string::npos);
+    CHECK(regs.find("P bits=8 format=flags value=0xA5") != std::string::npos);
 
     // The trace_chip advertises only a trace_target, no memory_views -- so
     // there should be NO sidecar bin file for it.
@@ -219,7 +269,7 @@ TEST_CASE("dump_screenshot_artifacts writes system-level memory_views without a 
     REQUIRE(read_file(sys_path) == std::vector<std::uint8_t>{0x11U, 0x22U, 0x33U, 0x44U});
 }
 
-TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug_dump]") {
+TEST_CASE("trace_csv_session writes primary and secondary traceable chips", "[debug_dump]") {
     const auto scratch = make_scratch_dir("trace");
     const auto csv = (scratch / "t.csv").string();
 
@@ -228,15 +278,20 @@ TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug
     {
         mnemos::debug::trace_csv_session session(sys, csv, frame);
         REQUIRE(session.active());
+        CHECK(session.trace_count() == 2U);
 
-        // Fire two synthetic events as if the chip had executed two instructions.
+        // Fire synthetic events as if both traceable chips had executed.
         sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0x1234U, .cycles = 100U});
         sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0x5678U, .cycles = 220U});
+        sys.secondary_trace_chip_ref().intro_impl().trace_impl().fire(
+            {.pc = 0x00AAU, .cycles = 77U});
     }
 
-    // After the session ends, fire another event -- it must NOT appear in the
-    // CSV because the dtor cleared the callback.
+    // After the session ends, fire another event -- it must NOT appear because
+    // the dtor cleared every installed callback.
     sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0xDEADU, .cycles = 999U});
+    sys.secondary_trace_chip_ref().intro_impl().trace_impl().fire(
+        {.pc = 0xBEEFU, .cycles = 1000U});
 
     std::ifstream in(csv);
     std::string line;
@@ -248,6 +303,15 @@ TEST_CASE("trace_csv_session installs against the first traceable chip", "[debug
     CHECK(lines[0] == "frame,inst,pc,cycles");
     CHECK(lines[1] == "42,0,001234,100");
     CHECK(lines[2] == "42,1,005678,220");
+
+    std::ifstream secondary(scratch / "t.cpu_y.1.csv");
+    lines.clear();
+    while (std::getline(secondary, line)) {
+        lines.push_back(line);
+    }
+    REQUIRE(lines.size() == 2U); // header + 1 row
+    CHECK(lines[0] == "frame,inst,pc,cycles");
+    CHECK(lines[1] == "42,0,0000AA,77");
 }
 
 TEST_CASE("trace_csv_session is inactive when no chip advertises a trace_target", "[debug_dump]") {
