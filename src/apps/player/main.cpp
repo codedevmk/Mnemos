@@ -468,8 +468,8 @@ int main(int argc, char* argv[]) {
                          record_animation->output.c_str(),
                          static_cast<unsigned long long>(record_animation->frames));
         } else {
-            const auto result = mnemos::debug::write_movie_frame_sequence(
-                record_animation->output, frames, fps_x1000);
+            const auto result = mnemos::debug::write_movie_frame_sequence(record_animation->output,
+                                                                          frames, fps_x1000);
             if (result.frames_written != frames.size()) {
                 std::fprintf(stderr,
                              "[mnemos_player] incomplete movie frame sequence: %zu/%zu frames\n",

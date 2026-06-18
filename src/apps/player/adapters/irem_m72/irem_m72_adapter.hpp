@@ -76,8 +76,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
         std::unique_ptr<manifests::irem_m72::m72_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
-        std::array<std::unique_ptr<instrumentation::span_memory_view>, 7>
-            memory_view_storage_{};
+        std::array<std::unique_ptr<instrumentation::span_memory_view>, 7> memory_view_storage_{};
         std::array<instrumentation::memory_view*, 7> system_mem_view_{};
         std::optional<runtime::scheduler> scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};

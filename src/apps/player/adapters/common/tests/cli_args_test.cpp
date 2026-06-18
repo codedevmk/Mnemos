@@ -208,8 +208,7 @@ TEST_CASE("cli_args: recording rejects missing, zero, and option-shaped values")
     CHECK(parse_animation_record_args(no_frames.argc(), no_frames.argv.data()) == std::nullopt);
 
     auto zero_frames = make_argv({"player", "--record-gif", "scratch/clip.gif", "--frames", "0"});
-    CHECK(parse_animation_record_args(zero_frames.argc(), zero_frames.argv.data()) ==
-          std::nullopt);
+    CHECK(parse_animation_record_args(zero_frames.argc(), zero_frames.argv.data()) == std::nullopt);
 
     auto option_output = make_argv({"player", "--record-movie", "--frames", "60"});
     CHECK(parse_animation_record_args(option_output.argc(), option_output.argv.data()) ==

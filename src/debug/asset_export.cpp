@@ -193,8 +193,7 @@ namespace mnemos::debug {
                     ++written;
                 }
                 const std::string idx_path =
-                    base_path + "." + chip_id + "." + kind + "." + sanitize_id(a.name) +
-                    ".idx.png";
+                    base_path + "." + chip_id + "." + kind + "." + sanitize_id(a.name) + ".idx.png";
                 if (write_indexed_png(idx_path, a.image, pals)) {
                     ++written;
                 }

@@ -52,8 +52,7 @@ namespace mnemos::debug {
 
         void append_hex(std::string& out, std::uint64_t value, std::uint8_t bit_width) {
             static constexpr char hex[] = "0123456789ABCDEF";
-            const unsigned digits =
-                std::max(1U, (static_cast<unsigned>(bit_width) + 3U) / 4U);
+            const unsigned digits = std::max(1U, (static_cast<unsigned>(bit_width) + 3U) / 4U);
             if (bit_width > 0U && bit_width < 64U) {
                 value &= (std::uint64_t{1} << bit_width) - 1U;
             }
@@ -63,8 +62,7 @@ namespace mnemos::debug {
             }
         }
 
-        bool dump_registers(const std::string& path,
-                            instrumentation::register_view& registers) {
+        bool dump_registers(const std::string& path, instrumentation::register_view& registers) {
             std::string out = "# mnemos register dump v1\n";
             out += "# name bits format value\n";
             for (const chips::register_descriptor& reg : registers.registers()) {

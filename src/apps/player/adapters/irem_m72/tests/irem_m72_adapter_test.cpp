@@ -68,7 +68,8 @@ TEST_CASE("irem_m72_adapter publishes board RAM as system memory views", "[irem_
 
     irem_m72_adapter adapter(make_program());
 
-    const auto find_view = [&](std::string_view name) -> const mnemos::instrumentation::memory_view* {
+    const auto find_view =
+        [&](std::string_view name) -> const mnemos::instrumentation::memory_view* {
         for (const auto* view : adapter.memory_views()) {
             if (view != nullptr && view->name() == name) {
                 return view;

@@ -207,8 +207,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                     parsed.value->parent.has_value()
                         ? with_parent_fallback(*provider, *parsed.value->parent, rom_path)
                         : *provider;
-                result.image =
-                    mnemos::manifests::common::load_rom_set(*parsed.value, effective);
+                result.image = mnemos::manifests::common::load_rom_set(*parsed.value, effective);
                 for (const auto& issue : result.image.issues) {
                     std::fprintf(stderr, "[capcom_cps2] %s: %s\n", issue.file.c_str(),
                                  issue.message.c_str());
@@ -235,9 +234,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                                              frontend_sdk::scheduler_factory* /*scheduler_factory*/,
                                              std::optional<std::uint16_t> /*dip_override*/,
                                              std::string rom_path)
-        // The CPS2 board integrates the 68000 + the QSound Z80/DSP + the beam in
-        // its own run_frame(), so there is no per-chip master-clock schedule to
-        // build; the scheduler_factory override does not apply.
+    // The CPS2 board integrates the 68000 + the QSound Z80/DSP + the beam in
+    // its own run_frame(), so there is no per-chip master-clock schedule to
+    // build; the scheduler_factory override does not apply.
     {
         loaded_set set = load_set(std::move(rom), rom_path);
         orientation_ = set.orientation;
@@ -357,8 +356,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         sys_->input0 = static_cast<std::uint16_t>(
             (static_cast<std::uint16_t>(pack(ports_[1])) << 8U) | pack(ports_[0]));
         sys_->input1 = static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(pack_extra(ports_[1])) << 8U) |
-            pack_extra(ports_[0]));
+            (static_cast<std::uint16_t>(pack_extra(ports_[1])) << 8U) | pack_extra(ports_[0]));
 
         // System word (active low): the CPS-2 IN2 layout puts START1-4 in bits
         // 8-11 and COIN1-4 in bits 12-15 (bit 0 is the EEPROM data-out the board

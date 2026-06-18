@@ -72,10 +72,9 @@ namespace {
                                          std::istreambuf_iterator<char>()};
     }
 
-    [[nodiscard]] std::vector<std::uint8_t>
-    first_image_data(std::span<const std::uint8_t> gif) {
-        const std::vector<std::uint8_t> descriptor = {
-            0x2CU, 0x00U, 0x00U, 0x00U, 0x00U, 0x02U, 0x00U, 0x02U, 0x00U, 0x00U};
+    [[nodiscard]] std::vector<std::uint8_t> first_image_data(std::span<const std::uint8_t> gif) {
+        const std::vector<std::uint8_t> descriptor = {0x2CU, 0x00U, 0x00U, 0x00U, 0x00U,
+                                                      0x02U, 0x00U, 0x02U, 0x00U, 0x00U};
         const auto image = find_bytes(gif, descriptor);
         REQUIRE(image.has_value());
         std::size_t off = *image + descriptor.size();

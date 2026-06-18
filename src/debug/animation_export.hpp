@@ -42,7 +42,6 @@ namespace mnemos::debug {
     // `<base>.movie.json`. The manifest is the plugin seam for MP4/WebM/etc.
     [[nodiscard]] movie_sequence_result
     write_movie_frame_sequence(const std::string& base_path,
-                               std::span<const animation_frame> frames,
-                               std::uint32_t fps_x1000);
+                               std::span<const animation_frame> frames, std::uint32_t fps_x1000);
 
 } // namespace mnemos::debug

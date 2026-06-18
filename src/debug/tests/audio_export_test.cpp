@@ -202,8 +202,7 @@ TEST_CASE("export_audio manifest describes each sample", "[audio_export]") {
     CHECK(json.find("\"channels\": 1") != std::string::npos);
     CHECK(json.find("\"frames\": 3") != std::string::npos);
     CHECK(json.find("\"loop_start\": 2") != std::string::npos);
-    CHECK(json.find("\"file\": \"out.rf5c68.sample.sample_01_00.wav\"") !=
-          std::string::npos);
+    CHECK(json.find("\"file\": \"out.rf5c68.sample.sample_01_00.wav\"") != std::string::npos);
 
     // The chip's register file is folded into the same entry (A2: reuse
     // register_view; a synth's voice state is its registers).

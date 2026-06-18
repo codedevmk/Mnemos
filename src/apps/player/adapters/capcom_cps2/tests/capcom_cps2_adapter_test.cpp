@@ -191,8 +191,7 @@ offset = 0
     CHECK(main_region->size() == 64U);
 }
 
-TEST_CASE("capcom_cps2_adapter rejects a game.toml for another board",
-          "[capcom_cps2][adapter]") {
+TEST_CASE("capcom_cps2_adapter rejects a game.toml for another board", "[capcom_cps2][adapter]") {
     const std::string manifest = R"(
 [set]
 schema = "mnemos-romset/1"
@@ -247,15 +246,15 @@ TEST_CASE("capcom_cps2_adapter maps pads onto the board's active-low input words
     // P2 in the high byte: left clears bit1, button 3 clears bit6.
     const std::uint8_t p1_main = static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x10U);
     const std::uint8_t p2_main = static_cast<std::uint8_t>(0xFFU & ~0x02U & ~0x40U);
-    CHECK(machine.input0 == static_cast<std::uint16_t>(
-                                (static_cast<std::uint16_t>(p2_main) << 8U) | p1_main));
+    CHECK(machine.input0 ==
+          static_cast<std::uint16_t>((static_cast<std::uint16_t>(p2_main) << 8U) | p1_main));
     CHECK((machine.input0 & 0x00FFU) == static_cast<std::uint16_t>(0xFFU & ~0x11U));
     // Buttons 4/5/6 are exposed through the second input word: P1 low byte,
     // P2 high byte.
     const std::uint8_t p1_extra = static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x04U);
     const std::uint8_t p2_extra = static_cast<std::uint8_t>(0xFFU & ~0x02U);
-    CHECK(machine.input1 == static_cast<std::uint16_t>(
-                                (static_cast<std::uint16_t>(p2_extra) << 8U) | p1_extra));
+    CHECK(machine.input1 ==
+          static_cast<std::uint16_t>((static_cast<std::uint16_t>(p2_extra) << 8U) | p1_extra));
     CHECK(machine.bus().read16_be(cps2::cps_io_base + 0x10U) == machine.input1);
     // IN2 layout: START1-4 in bits 8-11, COIN1-4 in bits 12-15.
     CHECK((machine.input_sys & 0x0100U) == 0x0000U); // START1 (bit 8) active-low

@@ -39,8 +39,7 @@ namespace mnemos::debug {
 
     } // namespace
 
-    std::optional<animation_frame>
-    capture_animation_frame(const frontend_sdk::player_system& sys) {
+    std::optional<animation_frame> capture_animation_frame(const frontend_sdk::player_system& sys) {
         const chips::frame_buffer_view fb = sys.current_frame();
         if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
             return std::nullopt;
@@ -88,8 +87,9 @@ namespace mnemos::debug {
                                                      std::uint32_t fps_x1000) {
         movie_sequence_result result{.frames_written = 0U,
                                      .manifest_path = base_path + ".movie.json"};
-        std::string json = "{\n  \"format\": \"png_sequence\",\n  \"fps_x1000\": " +
-                           std::to_string(fps_x1000) + ",\n  \"frames\": [";
+        std::string json =
+            "{\n  \"format\": \"png_sequence\",\n  \"fps_x1000\": " + std::to_string(fps_x1000) +
+            ",\n  \"frames\": [";
 
         bool first = true;
         const std::uint32_t width = frames.empty() ? 0U : frames.front().width;

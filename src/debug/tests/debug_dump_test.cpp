@@ -64,9 +64,7 @@ namespace {
 
     class memory_intro final : public ichip_introspection {
       public:
-        memory_intro(std::span<const std::uint8_t> ram) : ram_("RAM.0", ram) {
-            table_[0] = &ram_;
-        }
+        memory_intro(std::span<const std::uint8_t> ram) : ram_("RAM.0", ram) { table_[0] = &ram_; }
         [[nodiscard]] std::span<memory_view* const> memory_views() override { return table_; }
         [[nodiscard]] register_view* registers() override { return &regs_; }
 
@@ -290,8 +288,7 @@ TEST_CASE("trace_csv_session writes primary and secondary traceable chips", "[de
     // After the session ends, fire another event -- it must NOT appear because
     // the dtor cleared every installed callback.
     sys.trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0xDEADU, .cycles = 999U});
-    sys.secondary_trace_chip_ref().intro_impl().trace_impl().fire(
-        {.pc = 0xBEEFU, .cycles = 1000U});
+    sys.secondary_trace_chip_ref().intro_impl().trace_impl().fire({.pc = 0xBEEFU, .cycles = 1000U});
 
     std::ifstream in(csv);
     std::string line;

@@ -234,8 +234,7 @@ offset = 0
     CHECK(adapter2.machine().profile.id == 0U);
 }
 
-TEST_CASE("capcom_cps1_adapter rejects a game.toml for another board",
-          "[capcom_cps1][adapter]") {
+TEST_CASE("capcom_cps1_adapter rejects a game.toml for another board", "[capcom_cps1][adapter]") {
     const std::string manifest = R"(
 [set]
 schema = "mnemos-romset/1"

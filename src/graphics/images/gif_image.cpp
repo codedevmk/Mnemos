@@ -81,8 +81,7 @@ namespace mnemos::graphics::images {
             std::size_t offset = 0;
             while (offset < pixels.size()) {
                 bits.write(kClearCode);
-                const std::size_t n =
-                    std::min(kMaxLiteralRunBeforeClear, pixels.size() - offset);
+                const std::size_t n = std::min(kMaxLiteralRunBeforeClear, pixels.size() - offset);
                 for (std::size_t i = 0; i < n; ++i) {
                     bits.write(quantize_rgb332(pixels[offset + i]));
                 }
@@ -106,7 +105,8 @@ namespace mnemos::graphics::images {
         }
 
         bool valid_image_dimensions(std::uint32_t width, std::uint32_t height) {
-            return width > 0U && height > 0U && width <= std::numeric_limits<std::uint16_t>::max() &&
+            return width > 0U && height > 0U &&
+                   width <= std::numeric_limits<std::uint16_t>::max() &&
                    height <= std::numeric_limits<std::uint16_t>::max();
         }
 

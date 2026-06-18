@@ -38,7 +38,7 @@ namespace {
       private:
         // Two visible pixels per row plus one stride-padding pixel to ignore.
         std::array<std::uint32_t, 6> pixels_{0x010203U, 0x040506U, 0xDEAD00U,
-                                            0x070809U, 0x0A0B0CU, 0xBEEF00U};
+                                             0x070809U, 0x0A0B0CU, 0xBEEF00U};
         std::vector<spec_field> spec_{};
     };
 
@@ -69,16 +69,13 @@ namespace {
     }
 
     [[nodiscard]] bool is_png(const std::vector<std::uint8_t>& b) {
-        return b.size() >= 8U && b[0] == 0x89U && b[1] == 0x50U && b[2] == 0x4EU &&
-               b[3] == 0x47U;
+        return b.size() >= 8U && b[0] == 0x89U && b[1] == 0x50U && b[2] == 0x4EU && b[3] == 0x47U;
     }
 
     [[nodiscard]] bool is_gif(const std::vector<std::uint8_t>& b) {
         return b.size() >= 6U && b[0] == static_cast<std::uint8_t>('G') &&
-               b[1] == static_cast<std::uint8_t>('I') &&
-               b[2] == static_cast<std::uint8_t>('F') &&
-               b[3] == static_cast<std::uint8_t>('8') &&
-               b[4] == static_cast<std::uint8_t>('9') &&
+               b[1] == static_cast<std::uint8_t>('I') && b[2] == static_cast<std::uint8_t>('F') &&
+               b[3] == static_cast<std::uint8_t>('8') && b[4] == static_cast<std::uint8_t>('9') &&
                b[5] == static_cast<std::uint8_t>('a');
     }
 
@@ -90,8 +87,7 @@ TEST_CASE("capture_animation_frame packs a strided framebuffer", "[animation_exp
     REQUIRE(frame.has_value());
     CHECK(frame->width == 2U);
     CHECK(frame->height == 2U);
-    CHECK(frame->pixels == std::vector<std::uint32_t>{0x010203U, 0x040506U, 0x070809U,
-                                                       0x0A0B0CU});
+    CHECK(frame->pixels == std::vector<std::uint32_t>{0x010203U, 0x040506U, 0x070809U, 0x0A0B0CU});
 }
 
 TEST_CASE("write_gif_animation writes an animated GIF", "[animation_export]") {
