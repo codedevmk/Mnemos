@@ -112,7 +112,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             namespace fs = std::filesystem;
             std::error_code ec;
             const fs::path dir = fs::path(rom_path).parent_path();
-            for (const fs::path key_dir : {dir / "keys", dir}) {
+            for (const fs::path& key_dir : {dir / "keys", dir}) {
                 if (!fs::is_directory(key_dir, ec)) {
                     continue;
                 }
