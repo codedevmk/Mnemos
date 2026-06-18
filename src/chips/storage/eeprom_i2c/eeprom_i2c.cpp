@@ -153,4 +153,41 @@ namespace mnemos::chips::storage {
         }
     }
 
+    void eeprom_i2c::save_state(state_writer& writer) const {
+        writer.bytes(store_); // capacity is fixed by the device the host built
+        writer.boolean(prev_scl_);
+        writer.boolean(prev_sda_);
+        writer.boolean(sda_out_);
+        writer.u8(static_cast<std::uint8_t>(stage_));
+        writer.u8(static_cast<std::uint8_t>(bit_count_));
+        writer.u8(shift_in_);
+        writer.u8(shift_out_);
+        writer.u32(addr_);
+        writer.u32(block_high_);
+        writer.boolean(reading_);
+        writer.boolean(transmitting_);
+        writer.boolean(master_ack_);
+    }
+
+    void eeprom_i2c::load_state(state_reader& reader) {
+        reader.bytes(store_); // store_ already sized; reads exactly its length
+        prev_scl_ = reader.boolean();
+        prev_sda_ = reader.boolean();
+        sda_out_ = reader.boolean();
+        const std::uint8_t stage = reader.u8();
+        if (stage > static_cast<std::uint8_t>(stage::read_data)) {
+            reader.fail();
+            return;
+        }
+        stage_ = static_cast<enum stage>(stage);
+        bit_count_ = static_cast<int>(reader.u8());
+        shift_in_ = reader.u8();
+        shift_out_ = reader.u8();
+        addr_ = reader.u32();
+        block_high_ = reader.u32();
+        reading_ = reader.boolean();
+        transmitting_ = reader.boolean();
+        master_ack_ = reader.boolean();
+    }
+
 } // namespace mnemos::chips::storage

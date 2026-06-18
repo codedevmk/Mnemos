@@ -81,6 +81,15 @@ if(BUILD_TESTING)
         LIBRARIES mnemos::runtime mnemos::manifests::c64
     )
 
+    # Whole-machine save/load/rewind determinism on a Genesis built through the
+    # manifest path (tier 4, linked test-only -- a downward dependency). No ROM is
+    # required: a synthetic self-loop cart evolves deterministically from reset.
+    mnemos_add_test(
+        mnemos_runtime_genesis_save_state_test
+        SOURCES tests/genesis_save_state_roundtrip_test.cpp
+        LIBRARIES mnemos::runtime mnemos::manifests::genesis
+    )
+
     # Threaded-vs-synchronous determinism for the 32X dual-SH-2 scheduling
     # (tier-4 manifests::sega32x linked test-only -- a downward dependency).
     mnemos_add_test(

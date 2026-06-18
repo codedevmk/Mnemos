@@ -21,6 +21,7 @@
 #include "genesis_cart.hpp"      // cart_sram (header SRAM descriptor)
 #include "genesis_eeprom.hpp"    // cart_eeprom_runtime (serial EEPROM)
 #include "genesis_system.hpp"    // genesis_config
+#include "state.hpp"             // chips::state_writer / state_reader (G7 system save/load)
 
 #include <array>
 #include <cstdint>
@@ -75,6 +76,17 @@ namespace mnemos::manifests::genesis {
                      {state.fm, 7U},
                      {state.psg, 15U}}};
         }
+
+        // System-level (non-chip) save/load (G7): the architectural state that
+        // lives on the board rather than in a chip -- the I/O sub-controller
+        // registers, the VDP word-access latches, the Z80 bus-arbitration lines +
+        // bank window, and the cartridge mapper control latches (SRAM enable/WP,
+        // SSF2 banks, EEPROM pins). The 5 graph chips + the work/Z80 RAM + SRAM
+        // bytes are serialized separately by the machine-save path. This is the
+        // manifest-path twin of genesis_system::save_state and shares its byte
+        // layout (the latches just live on `state` here rather than inline).
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
     };
 
     // Build a runnable Genesis from a cartridge image (moved in) via the manifest
