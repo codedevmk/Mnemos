@@ -6,14 +6,14 @@
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
-#include "animation_export.hpp"    // --record-gif / --record-movie
-#include "asset_export.hpp"        // --extract-assets: decoded graphics -> PNG + JSON
-#include "audio_export.hpp"        // --extract-audio: decoded PCM samples -> WAV + JSON
-#include "battery_save.hpp"        // .srm load/save (cartridge battery RAM persistence)
-#include "c64_adapter.hpp"         // force_link (the C64 has no cart-header region byte)
+#include "animation_export.hpp"     // --record-gif / --record-movie
+#include "asset_export.hpp"         // --extract-assets: decoded graphics -> PNG + JSON
+#include "audio_export.hpp"         // --extract-audio: decoded PCM samples -> WAV + JSON
+#include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
+#include "c64_adapter.hpp"          // force_link (the C64 has no cart-header region byte)
 #include "capability_discovery.hpp" // --capabilities: headless capability/control summary
-#include "capcom_cps1_adapter.hpp" // force_link (arcade: no cart region byte)
-#include "capcom_cps2_adapter.hpp" // force_link (arcade: encrypted ROM-set board)
+#include "capcom_cps1_adapter.hpp"  // force_link (arcade: no cart region byte)
+#include "capcom_cps2_adapter.hpp"  // force_link (arcade: encrypted ROM-set board)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
