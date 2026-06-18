@@ -43,7 +43,7 @@ namespace {
 
       private:
         std::array<std::int16_t, 3> pcm_{0, 1000, -1000};
-        std::array<sample_view, 1> table_{sample_view{.name = "sample_0100",
+        std::array<sample_view, 1> table_{sample_view{.name = "Sample 01/00",
                                                       .frames = pcm_,
                                                       .sample_rate = 32550U,
                                                       .channels = 1,
@@ -175,7 +175,7 @@ TEST_CASE("export_audio writes a WAV per sample and a JSON manifest", "[audio_ex
     audio_system sys;
     CHECK(mnemos::debug::export_audio(sys, base) == 1U);
 
-    const auto wav = scratch / "out.rf5c68.sample.sample_0100.wav";
+    const auto wav = scratch / "out.rf5c68.sample.sample_01_00.wav";
     REQUIRE(std::filesystem::exists(wav));
     CHECK(is_riff_wave(read_file(wav)));
 
@@ -197,12 +197,12 @@ TEST_CASE("export_audio manifest describes each sample", "[audio_export]") {
     const std::string json = read_text(manifest);
 
     CHECK(json.find("\"id\": \"rf5c68\"") != std::string::npos);
-    CHECK(json.find("\"name\": \"sample_0100\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"Sample 01/00\"") != std::string::npos);
     CHECK(json.find("\"sample_rate\": 32550") != std::string::npos);
     CHECK(json.find("\"channels\": 1") != std::string::npos);
     CHECK(json.find("\"frames\": 3") != std::string::npos);
     CHECK(json.find("\"loop_start\": 2") != std::string::npos);
-    CHECK(json.find("\"file\": \"out.rf5c68.sample.sample_0100.wav\"") != std::string::npos);
+    CHECK(json.find("\"file\": \"out.rf5c68.sample.sample_01_00.wav\"") != std::string::npos);
 
     // The chip's register file is folded into the same entry (A2: reuse
     // register_view; a synth's voice state is its registers).

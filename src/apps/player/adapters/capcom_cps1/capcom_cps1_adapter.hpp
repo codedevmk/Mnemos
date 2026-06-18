@@ -1,6 +1,7 @@
 #pragma once
 
 #include "capcom_cps1_system.hpp"
+#include "introspection_views.hpp"
 #include "player_system.hpp"
 #include "scheduler_factory.hpp"
 
@@ -68,6 +69,10 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
         }
+        [[nodiscard]] std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept override {
+            return system_mem_view_;
+        }
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::capcom_cps1::cps1_system& machine() noexcept { return *sys_; }
@@ -75,11 +80,14 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
       private:
         // Re-pack the latched pad state onto the board's active-low input words.
         void refresh_inputs() noexcept;
+        void publish_memory_views();
 
         frontend_sdk::session_capability_info session_{};
         frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::capcom_cps1::cps1_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
+        std::array<std::unique_ptr<instrumentation::span_memory_view>, 6> memory_view_storage_{};
+        std::array<instrumentation::memory_view*, 6> system_mem_view_{};
         std::array<frontend_sdk::controller_state, 2> ports_{};
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};

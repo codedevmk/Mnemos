@@ -28,6 +28,7 @@ mnemos_declare_tier(
 # introspection surface only.
 add_library(
     mnemos_debug_dump
+    animation_export.cpp
     debug_dump.cpp
     capability_discovery.cpp
     game_watch.cpp
@@ -81,6 +82,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_debug_dump_test
         SOURCES
+            tests/animation_export_test.cpp
             tests/debug_dump_test.cpp
             tests/capability_discovery_test.cpp
             tests/game_watch_test.cpp

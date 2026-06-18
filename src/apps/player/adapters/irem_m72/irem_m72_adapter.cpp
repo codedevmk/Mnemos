@@ -4,7 +4,11 @@
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 
+#include <cstddef>
 #include <cstdio>
+#include <memory>
+#include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -17,6 +21,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         struct loaded_set final {
             rom_set_image image;
             std::string set_name; // from the declaration; empty for dev formats
+            frontend_sdk::display_orientation orientation{
+                frontend_sdk::display_orientation::horizontal};
         };
 
         frontend_sdk::session_capability_info make_session_capabilities() {
@@ -53,6 +59,13 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             return media;
         }
 
+        [[nodiscard]] frontend_sdk::display_orientation
+        to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
+            return orientation == mnemos::manifests::common::screen_orientation::vertical
+                       ? frontend_sdk::display_orientation::vertical
+                       : frontend_sdk::display_orientation::horizontal;
+        }
+
         // Set loader. A .zip carrying a "game.toml" declaration (schema
         // mnemos-romset/1) loads declaratively -- per-file placement,
         // interleave, CRC verification -- with loader issues reported to
@@ -78,9 +91,17 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                             }
                             return result; // declared but invalid: boot an empty board
                         }
+                        if (parsed.value->board != "irem_m72") {
+                            std::fprintf(stderr,
+                                         "[irem_m72] game.toml declares board '%s', expected "
+                                         "'irem_m72'\n",
+                                         parsed.value->board.c_str());
+                            return result;
+                        }
                         result.image =
                             mnemos::manifests::common::load_rom_set(*parsed.value, *provider);
                         result.set_name = parsed.value->name;
+                        result.orientation = to_display_orientation(parsed.value->orientation);
                         for (const auto& issue : result.image.issues) {
                             std::fprintf(stderr, "[irem_m72] %s: %s\n", issue.file.c_str(),
                                          issue.message.c_str());
@@ -131,10 +152,12 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                                        frontend_sdk::scheduler_factory* scheduler_factory,
                                        std::optional<std::uint16_t> dip_override)
         : session_(make_session_capabilities()),
-          media_(make_media_capabilities(display_name, rom.size())),
-          sys_(assemble_from(load_set(std::move(rom)))),
-          scheduler_(frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_),
-                                                  &sys_->video)) {
+          media_(make_media_capabilities(display_name, rom.size())) {
+        loaded_set set = load_set(std::move(rom));
+        orientation_ = set.orientation;
+        sys_ = assemble_from(std::move(set));
+        scheduler_.emplace(
+            frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->video));
         if (dip_override.has_value()) {
             sys_->dip_switches = *dip_override;
         }
@@ -142,9 +165,27 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         if (sys_->mcu_present) {
             chip_view_.push_back(&sys_->mcu);
         }
+        publish_memory_views();
         spec_ = {{"System", "Arcade"},
                  {"Board", "Irem M72"},
                  {"Game", display_name.empty() ? std::string{"unknown"} : std::move(display_name)}};
+    }
+
+    void irem_m72_adapter::publish_memory_views() {
+        auto publish = [this](std::size_t index, std::string_view name,
+                              std::span<const std::uint8_t> bytes) {
+            memory_view_storage_[index] =
+                std::make_unique<instrumentation::span_memory_view>(name, bytes);
+            system_mem_view_[index] = memory_view_storage_[index].get();
+        };
+
+        publish(0U, "work_ram", sys_->work_ram);
+        publish(1U, "sound_ram", sys_->sound_ram);
+        publish(2U, "sprite_ram", sys_->sprite_ram);
+        publish(3U, "palette_a", sys_->palette_a);
+        publish(4U, "palette_b", sys_->palette_b);
+        publish(5U, "vram_a", sys_->vram_a);
+        publish(6U, "vram_b", sys_->vram_b);
     }
 
     frontend_sdk::audio_chunk irem_m72_adapter::drain_audio() noexcept {
@@ -175,7 +216,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
     }
 
     void irem_m72_adapter::step_one_frame() {
-        scheduler_.run_frame();
+        scheduler_->run_frame();
         ++frames_stepped_;
     }
 

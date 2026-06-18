@@ -1,5 +1,6 @@
 #pragma once
 
+#include "introspection_views.hpp"
 #include "m72_system.hpp"
 #include "player_system.hpp"
 #include "scheduler.hpp"
@@ -9,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -69,16 +71,24 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
         }
+        [[nodiscard]] std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept override {
+            return system_mem_view_;
+        }
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::irem_m72::m72_system& machine() noexcept { return *sys_; }
 
       private:
+        void publish_memory_views();
+
         frontend_sdk::session_capability_info session_{};
         frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::irem_m72::m72_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
-        runtime::scheduler scheduler_;
+        std::array<std::unique_ptr<instrumentation::span_memory_view>, 7> memory_view_storage_{};
+        std::array<instrumentation::memory_view*, 7> system_mem_view_{};
+        std::optional<runtime::scheduler> scheduler_;
         std::array<frontend_sdk::controller_state, 2> ports_{};
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};

@@ -1,17 +1,19 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1) with the --rom media (zip
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2) with the --rom media (zip
 // archives are extracted transparently), presents its framebuffer at integer
 // scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
 #include "adapter_registry.hpp"
-#include "asset_export.hpp" // --extract-assets: decoded graphics -> PNG + JSON
-#include "audio_export.hpp" // --extract-audio: decoded PCM samples -> WAV + JSON
-#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
-#include "c64_adapter.hpp"  // force_link (the C64 has no cart-header region byte)
-#include "capability_discovery.hpp"
+#include "animation_export.hpp"    // --record-gif / --record-movie
+#include "asset_export.hpp"        // --extract-assets: decoded graphics -> PNG + JSON
+#include "audio_export.hpp"        // --extract-audio: decoded PCM samples -> WAV + JSON
+#include "battery_save.hpp"        // .srm load/save (cartridge battery RAM persistence)
+#include "c64_adapter.hpp"         // force_link (the C64 has no cart-header region byte)
+#include "capability_discovery.hpp" // --capabilities: headless capability/control summary
 #include "capcom_cps1_adapter.hpp" // force_link (arcade: no cart region byte)
+#include "capcom_cps2_adapter.hpp" // force_link (arcade: encrypted ROM-set board)
 #include "chip.hpp"
 #include "cli_args.hpp"
 #include "debug_dump.hpp"
@@ -42,6 +44,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -152,6 +155,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::load_rom;
     using mnemos::apps::player::adapters::load_rom_verbatim;
+    using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
@@ -179,6 +183,7 @@ int main(int argc, char* argv[]) {
     const auto extract = parse_extract_assets_args(argc, argv);
     const auto extract_audio = parse_extract_audio_args(argc, argv);
     const bool capabilities = parse_capabilities_arg(argc, argv);
+    const auto record_animation = parse_animation_record_args(argc, argv);
 
     const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
         return resolve_video_region(region_arg, cart_default);
@@ -209,8 +214,9 @@ int main(int argc, char* argv[]) {
         const system_family family = *family_opt;
         // Arcade sets ARE their archive: the adapter resolves the dump
         // entries through the game declaration inside, so no unwrapping.
-        const bool arcade_family =
-            family == system_family::irem_m72 || family == system_family::capcom_cps1;
+        const bool arcade_family = family == system_family::irem_m72 ||
+                                   family == system_family::capcom_cps1 ||
+                                   family == system_family::capcom_cps2;
         auto loaded =
             arcade_family ? load_rom_verbatim(rom_paths.front()) : load_rom(rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
@@ -258,6 +264,7 @@ int main(int argc, char* argv[]) {
             break;
         case system_family::irem_m72:
         case system_family::capcom_cps1:
+        case system_family::capcom_cps2:
             // Arcade boards have no region byte; the adapter reports the
             // board's own raster through region().
             break;
@@ -279,6 +286,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::sega32x::force_link();
         mnemos::apps::player::adapters::irem_m72::force_link();
         mnemos::apps::player::adapters::capcom_cps1::force_link();
+        mnemos::apps::player::adapters::capcom_cps2::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
@@ -361,9 +369,10 @@ int main(int argc, char* argv[]) {
         // Load any existing .srm before the first frame; the guard writes it back
         // on exit, keyed off the on-disk ROM path (so it sits beside the cart even
         // when the image came from a .zip). Skipped under the headless
-        // --screenshot / --extract-assets paths: those diagnostic sweeps over a
-        // read-only ROM corpus must not drop saves beside the ROMs.
-        if (!screenshot && !extract && !extract_audio && !capabilities) {
+        // --screenshot / --extract-assets / --extract-audio / --capabilities /
+        // recording paths: those diagnostic sweeps over a read-only ROM corpus
+        // must not drop saves beside the ROMs.
+        if (!screenshot && !extract && !extract_audio && !capabilities && !record_animation) {
             srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
         }
     }
@@ -430,6 +439,65 @@ int main(int argc, char* argv[]) {
                      static_cast<unsigned long long>(screenshot->frames));
         if (trace && trace->active()) {
             std::fprintf(stderr, "[mnemos_player] wrote %s\n", trace_path.c_str());
+            if (trace->trace_count() > 1U) {
+                std::fprintf(stderr, "[mnemos_player] wrote %zu CPU trace files\n",
+                             trace->trace_count());
+            }
+        }
+        std::fflush(stderr);
+        return 0;
+    }
+
+    // Headless animation-record path: step N frames while capturing every
+    // framebuffer. GIF is a preview container; movie output is a lossless PNG
+    // sequence plus manifest that an external plugin can transcode.
+    if (record_animation) {
+        if (!system) {
+            std::fprintf(stderr, "--record-gif/--record-movie requires --rom\n");
+            return 1;
+        }
+        const auto press_events = parse_press_events(argc, argv);
+        std::vector<mnemos::debug::animation_frame> frames;
+        frames.reserve(static_cast<std::size_t>(record_animation->frames));
+        for (std::uint64_t i = 0; i < record_animation->frames; ++i) {
+            if (!press_events.empty()) {
+                system->apply_input(0, input_for_frame(press_events, i + 1U));
+            }
+            system->step_one_frame();
+            auto frame = mnemos::debug::capture_animation_frame(*system);
+            if (!frame) {
+                std::fprintf(stderr, "[mnemos_player] could not capture frame %llu\n",
+                             static_cast<unsigned long long>(i + 1U));
+                return 1;
+            }
+            frames.push_back(std::move(*frame));
+        }
+
+        const std::uint32_t fps_x1000 = system->region().frames_per_second_x1000;
+        if (record_animation->format ==
+            mnemos::apps::player::adapters::animation_record_format::gif) {
+            if (!mnemos::debug::write_gif_animation(record_animation->output, frames, fps_x1000)) {
+                std::fprintf(stderr, "[mnemos_player] could not write animated GIF: %s\n",
+                             record_animation->output.c_str());
+                return 1;
+            }
+            std::fprintf(stderr, "[mnemos_player] wrote animated GIF %s (%llu frames)\n",
+                         record_animation->output.c_str(),
+                         static_cast<unsigned long long>(record_animation->frames));
+        } else {
+            const auto result = mnemos::debug::write_movie_frame_sequence(record_animation->output,
+                                                                          frames, fps_x1000);
+            if (result.frames_written != frames.size()) {
+                std::fprintf(stderr,
+                             "[mnemos_player] incomplete movie frame sequence: %zu/%zu frames\n",
+                             result.frames_written, frames.size());
+                return 1;
+            }
+            std::fprintf(stderr,
+                         "[mnemos_player] wrote movie frame sequence %s.* (%zu frames, manifest "
+                         "%s)\n",
+                         record_animation->output.c_str(), result.frames_written,
+                         result.manifest_path.c_str());
         }
         std::fflush(stderr);
         return 0;

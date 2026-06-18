@@ -9,7 +9,9 @@
 #include <vector>
 
 namespace {
+    using mnemos::apps::player::adapters::animation_record_format;
     using mnemos::apps::player::adapters::input_for_frame;
+    using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
@@ -190,6 +192,36 @@ TEST_CASE("cli_args: --extract-audio defaults to 0 frames and rejects an option 
 
     auto b = make_argv({"player", "--extract-audio", "--extract-frames", "30"});
     CHECK(parse_extract_audio_args(b.argc(), b.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --record-gif + --frames returns the animation request") {
+    auto a = make_argv({"player", "--record-gif", "scratch/clip.gif", "--frames", "30"});
+    const auto req = parse_animation_record_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->output == "scratch/clip.gif");
+    CHECK(req->frames == 30U);
+    CHECK(req->format == animation_record_format::gif);
+}
+
+TEST_CASE("cli_args: --record-movie + --frames returns the sequence request") {
+    auto a = make_argv({"player", "--record-movie", "scratch/clip", "--frames", "120"});
+    const auto req = parse_animation_record_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->output == "scratch/clip");
+    CHECK(req->frames == 120U);
+    CHECK(req->format == animation_record_format::movie_frames);
+}
+
+TEST_CASE("cli_args: recording rejects missing, zero, and option-shaped values") {
+    auto no_frames = make_argv({"player", "--record-gif", "scratch/clip.gif"});
+    CHECK(parse_animation_record_args(no_frames.argc(), no_frames.argv.data()) == std::nullopt);
+
+    auto zero_frames = make_argv({"player", "--record-gif", "scratch/clip.gif", "--frames", "0"});
+    CHECK(parse_animation_record_args(zero_frames.argc(), zero_frames.argv.data()) == std::nullopt);
+
+    auto option_output = make_argv({"player", "--record-movie", "--frames", "60"});
+    CHECK(parse_animation_record_args(option_output.argc(), option_output.argv.data()) ==
+          std::nullopt);
 }
 
 TEST_CASE("cli_args: parse_press_events parses button@frame[+duration]") {

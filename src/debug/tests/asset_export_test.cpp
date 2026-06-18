@@ -48,11 +48,11 @@ namespace {
       private:
         std::array<std::uint32_t, 2> colors_{0xFF0000U, 0x0000FFU};
         std::array<palette_view, 1> pal_table_{
-            palette_view{.name = "main", .colors = colors_, .transparent_index = 0}};
+            palette_view{.name = "Main Pal", .colors = colors_, .transparent_index = 0}};
         std::array<std::uint8_t, 2> tile_px_{0U, 1U};
         std::array<graphic_asset, 1> asset_table_{
             graphic_asset{.kind = asset_kind::tileset,
-                          .name = "patterns",
+                          .name = "Pattern/Set",
                           .image = {.width = 2U, .height = 1U, .indices = tile_px_, .palette = 0U},
                           .tile_w = 1U,
                           .tile_h = 1U,
@@ -86,10 +86,10 @@ namespace {
         gfx_intro intro_;
     };
 
-    // A composed RGB scene (a 2x2 "plane_a" framebuffer).
+    // A composed RGB scene (a 2x2 "Plane A" framebuffer).
     class fake_layer final : public debug_layer {
       public:
-        [[nodiscard]] std::string_view name() const noexcept override { return "plane_a"; }
+        [[nodiscard]] std::string_view name() const noexcept override { return "Plane A"; }
         [[nodiscard]] frame_buffer_view view() const override {
             return {.pixels = px_.data(), .width = 2U, .height = 2U, .stride = 0U};
         }
@@ -215,10 +215,10 @@ TEST_CASE("export_assets writes a PNG per palette + asset and a JSON manifest", 
     CHECK(mnemos::debug::export_assets(sys, base) == 4U);
 
     // Files land under the chip's sanitized id ("vdp-1" -> "vdp_1").
-    const auto pal_png = scratch / "out.vdp_1.pal.main.png";
-    const auto tile_png = scratch / "out.vdp_1.tileset.patterns.png";
-    const auto tile_idx = scratch / "out.vdp_1.tileset.patterns.idx.png";
-    const auto pal_jasc = scratch / "out.vdp_1.pal.main.pal";
+    const auto pal_png = scratch / "out.vdp_1.pal.main_pal.png";
+    const auto tile_png = scratch / "out.vdp_1.tileset.pattern_set.png";
+    const auto tile_idx = scratch / "out.vdp_1.tileset.pattern_set.idx.png";
+    const auto pal_jasc = scratch / "out.vdp_1.pal.main_pal.pal";
     const auto layer_png = scratch / "out.vdp_2.layer.plane_a.png";
     REQUIRE(std::filesystem::exists(pal_png));
     REQUIRE(std::filesystem::exists(tile_png));
@@ -251,19 +251,19 @@ TEST_CASE("export_assets manifest describes palettes and assets", "[asset_export
 
     CHECK(json.find("\"id\": \"vdp_1\"") != std::string::npos);
     CHECK(json.find("\"part_number\": \"vdp-1\"") != std::string::npos);
-    CHECK(json.find("\"name\": \"main\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"Main Pal\"") != std::string::npos);
     CHECK(json.find("\"transparent_index\": 0") != std::string::npos);
     CHECK(json.find("\"kind\": \"tileset\"") != std::string::npos);
-    CHECK(json.find("\"name\": \"patterns\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"Pattern/Set\"") != std::string::npos);
     CHECK(json.find("\"width\": 2") != std::string::npos);
-    CHECK(json.find("\"file\": \"out.vdp_1.tileset.patterns.png\"") != std::string::npos);
-    CHECK(json.find("\"indexed_file\": \"out.vdp_1.tileset.patterns.idx.png\"") !=
+    CHECK(json.find("\"file\": \"out.vdp_1.tileset.pattern_set.png\"") != std::string::npos);
+    CHECK(json.find("\"indexed_file\": \"out.vdp_1.tileset.pattern_set.idx.png\"") !=
           std::string::npos);
-    CHECK(json.find("\"pal_file\": \"out.vdp_1.pal.main.pal\"") != std::string::npos);
+    CHECK(json.find("\"pal_file\": \"out.vdp_1.pal.main_pal.pal\"") != std::string::npos);
 
     // The layer-only chip is listed with its debug_layer scene.
     CHECK(json.find("\"id\": \"vdp_2\"") != std::string::npos);
-    CHECK(json.find("\"name\": \"plane_a\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"Plane A\"") != std::string::npos);
     CHECK(json.find("\"file\": \"out.vdp_2.layer.plane_a.png\"") != std::string::npos);
 }
 

@@ -162,7 +162,7 @@ namespace mnemos::debug {
             for (std::size_t i = 0; i < pals.size(); ++i) {
                 const instrumentation::palette_view& p = pals[i];
                 const std::string path =
-                    base_path + "." + chip_id + ".pal." + std::string(p.name) + ".png";
+                    base_path + "." + chip_id + ".pal." + sanitize_id(p.name) + ".png";
                 std::uint32_t w = 0;
                 std::uint32_t h = 0;
                 // Render first so w/h are set before write_png reads them:
@@ -173,7 +173,7 @@ namespace mnemos::debug {
                     ++written;
                 }
                 const std::string pal_path =
-                    base_path + "." + chip_id + ".pal." + std::string(p.name) + ".pal";
+                    base_path + "." + chip_id + ".pal." + sanitize_id(p.name) + ".pal";
                 (void)write_pal(pal_path, p);
                 json += i == 0 ? "\n" : ",\n";
                 json += "        {\"name\": " + json_string(p.name) +
@@ -188,12 +188,12 @@ namespace mnemos::debug {
                 const instrumentation::graphic_asset& a = assets[i];
                 const std::string kind = std::string(instrumentation::asset_kind_name(a.kind));
                 const std::string path =
-                    base_path + "." + chip_id + "." + kind + "." + std::string(a.name) + ".png";
+                    base_path + "." + chip_id + "." + kind + "." + sanitize_id(a.name) + ".png";
                 if (write_png(path, a.image.width, a.image.height, resolve(a.image, pals))) {
                     ++written;
                 }
                 const std::string idx_path =
-                    base_path + "." + chip_id + "." + kind + "." + std::string(a.name) + ".idx.png";
+                    base_path + "." + chip_id + "." + kind + "." + sanitize_id(a.name) + ".idx.png";
                 if (write_indexed_png(idx_path, a.image, pals)) {
                     ++written;
                 }
@@ -220,7 +220,7 @@ namespace mnemos::debug {
                 }
                 const chips::frame_buffer_view fb = layer->view();
                 const std::string path =
-                    base_path + "." + chip_id + ".layer." + std::string(layer->name()) + ".png";
+                    base_path + "." + chip_id + ".layer." + sanitize_id(layer->name()) + ".png";
                 // Only record a layer in the manifest after its PNG actually
                 // wrote -- an empty/invalid framebuffer or a write failure must
                 // not leave the manifest pointing at a missing file.

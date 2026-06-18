@@ -292,6 +292,8 @@ namespace mnemos::apps::player::adapters::c64 {
                              frontend_sdk::scheduler_factory* scheduler_factory)
         : sys_(manifests::c64::build_c64_runtime(std::move(basic_rom), std::move(kernal_rom),
                                                  std::move(chargen_rom), config)),
+          ram_view_("ram", sys_->graph.region_span("ram")),
+          color_ram_view_("color_ram", sys_->graph.region_span("color_ram")),
           scheduler_(frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_),
                                                   sys_->video())),
           region_(to_video_region(config.video_region)),
@@ -309,6 +311,8 @@ namespace mnemos::apps::player::adapters::c64 {
         chip_view_[2] = sys_->cia1;
         chip_view_[3] = sys_->cia2;
         chip_view_[4] = sys_->sid;
+        system_mem_view_[0] = &ram_view_;
+        system_mem_view_[1] = &color_ram_view_;
 
         // Route the primary media to the device that would carry it, then wire
         // any extra disks for swapping. The KERNAL does the actual loading.

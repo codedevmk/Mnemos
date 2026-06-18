@@ -194,7 +194,7 @@ namespace mnemos::chips::cpu {
         return (a & 0xFF0000U) == 0xA00000U;
     }
 
-    std::uint8_t m68000::read8(std::uint32_t a) noexcept {
+    std::uint8_t m68000::read8(std::uint32_t a, bool program) noexcept {
         if (group0_fault_.pending) {
             return 0U;
         }
@@ -203,7 +203,13 @@ namespace mnemos::chips::cpu {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
-        const std::uint8_t value = rd8(a);
+        // PC-relative byte read on a split board: take the byte from the decrypted
+        // word (the opcode bus has no byte strobe; the lane is selected by A0).
+        const std::uint8_t value =
+            (program && bus_ != nullptr)
+                ? static_cast<std::uint8_t>(bus_->fetch16_be_opcode(a & ~1U) >>
+                                            ((a & 1U) != 0U ? 0U : 8U))
+                : rd8(a);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
             queue_bus_error(fault.address, inst_addr_, false, !fault.write);
@@ -211,7 +217,7 @@ namespace mnemos::chips::cpu {
         }
         return value;
     }
-    std::uint16_t m68000::read16(std::uint32_t a) noexcept {
+    std::uint16_t m68000::read16(std::uint32_t a, bool program) noexcept {
         if (group0_fault_.pending) {
             return 0U;
         }
@@ -224,7 +230,8 @@ namespace mnemos::chips::cpu {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
-        const std::uint16_t value = rd16(a);
+        const std::uint16_t value =
+            (program && bus_ != nullptr) ? bus_->fetch16_be_opcode(a) : rd16(a);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
             queue_bus_error(fault.address, inst_addr_, false, !fault.write);
@@ -232,7 +239,7 @@ namespace mnemos::chips::cpu {
         }
         return value;
     }
-    std::uint32_t m68000::read32(std::uint32_t a) noexcept {
+    std::uint32_t m68000::read32(std::uint32_t a, bool program) noexcept {
         if (group0_fault_.pending) {
             return 0U;
         }
@@ -251,7 +258,11 @@ namespace mnemos::chips::cpu {
                 ++cycle_sources_.z80_bus_accesses;
             }
         }
-        const std::uint32_t value = rd32(a);
+        const std::uint32_t value =
+            (program && bus_ != nullptr)
+                ? ((static_cast<std::uint32_t>(bus_->fetch16_be_opcode(a)) << 16U) |
+                   bus_->fetch16_be_opcode(a + 2U))
+                : rd32(a);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
             queue_bus_error(fault.address, inst_addr_, false, !fault.write);
@@ -329,16 +340,16 @@ namespace mnemos::chips::cpu {
         }
     }
 
-    std::uint32_t m68000::read_sized(std::uint32_t a, op_size s) noexcept {
+    std::uint32_t m68000::read_sized(std::uint32_t a, op_size s, bool program) noexcept {
         switch (s) {
         case op_size::byte:
-            return read8(a);
+            return read8(a, program);
         case op_size::word:
-            return read16(a);
+            return read16(a, program);
         case op_size::longword:
             break;
         }
-        return read32(a);
+        return read32(a, program);
     }
     void m68000::write_sized(std::uint32_t a, op_size s, std::uint32_t v) noexcept {
         switch (s) {
@@ -498,7 +509,7 @@ namespace mnemos::chips::cpu {
             const std::uint16_t w = fetch16();
             return s == op_size::byte ? (w & 0xFFU) : w;
         }
-        return read_sized(ea_address(mode, reg, s, true), s);
+        return read_sized(ea_address(mode, reg, s, true), s, is_pc_relative(mode, reg));
     }
 
     void m68000::ea_write(int mode, int reg, op_size s, std::uint32_t value) noexcept {
@@ -529,7 +540,7 @@ namespace mnemos::chips::cpu {
             return a_[r] & size_mask(s);
         }
         addr = ea_address(mode, reg, s, true);
-        return read_sized(addr, s);
+        return read_sized(addr, s, is_pc_relative(mode, reg));
     }
 
     void m68000::ea_rmw_write(int mode, int reg, op_size s, std::uint32_t value,

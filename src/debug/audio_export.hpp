@@ -21,7 +21,8 @@ namespace mnemos::debug {
     // (name, sample_rate, channels, frame_count, loop_start, source_addr, file)
     // and its register file (name, value, bits) -- a synth's voice/instrument
     // state is its register file, so it reuses register_view rather than a
-    // bespoke type. <chip> is the chip's part_number sanitized to a path segment.
+    // bespoke type. Dynamic path segments are sanitized; manifest display fields
+    // keep their original introspection names.
     //
     // Returns the number of WAV files successfully written. A file that fails to
     // write is reported on stderr and skipped (omitted from the count but still

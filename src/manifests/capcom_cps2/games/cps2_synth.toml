@@ -1,0 +1,54 @@
+# Synthetic CPS2 set -- a non-game placeholder used to exercise the board
+# manifest + the player adapter end-to-end without a real dump. Schema
+# mnemos-romset/1; drop a copy of this file into a set zip as "game.toml" next
+# to the invented region dumps it names.
+#
+# The key region is a 20-byte external asset for CPS-2 opcode decryption. Real
+# game declarations should keep exact file sizes and CRCs for every dump.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "cps2_synth"
+board  = "capcom_cps2"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x400000
+
+[[region.file]]
+name   = "cps2_synth.prog"
+offset = 0x000000
+
+[[region]]
+name = "key"
+size = 20
+
+[[region.file]]
+name   = "cps2_synth.key"
+offset = 0x000000
+size   = 20
+
+[[region]]
+name = "gfx"
+size = 0x80
+
+[[region.file]]
+name   = "cps2_synth.gfx"
+offset = 0x000000
+
+[[region]]
+name = "audiocpu"
+size = 0x8000
+
+[[region.file]]
+name   = "cps2_synth.snd"
+offset = 0x000000
+
+[[region]]
+name = "qsound"
+size = 0x1000
+
+[[region.file]]
+name   = "cps2_synth.qsnd"
+offset = 0x000000

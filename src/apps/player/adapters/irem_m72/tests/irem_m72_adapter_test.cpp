@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -72,6 +73,36 @@ TEST_CASE("irem_m72_adapter boots a bare program through the registry", "[irem_m
     CHECK(media.media[0].id == "rom_set");
     CHECK(media.media[0].label == "smoke");
     CHECK(media.media[0].provider_id == "irem_m72.adapter");
+}
+
+TEST_CASE("irem_m72_adapter publishes board RAM as system memory views", "[irem_m72][adapter]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    irem_m72_adapter adapter(make_program());
+
+    const auto find_view =
+        [&](std::string_view name) -> const mnemos::instrumentation::memory_view* {
+        for (const auto* view : adapter.memory_views()) {
+            if (view != nullptr && view->name() == name) {
+                return view;
+            }
+        }
+        return nullptr;
+    };
+    const auto expect_view = [&](std::string_view name, std::size_t size) {
+        const auto* view = find_view(name);
+        REQUIRE(view != nullptr);
+        CHECK(view->bytes().size() == size);
+    };
+
+    CHECK(adapter.memory_views().size() == 7U);
+    expect_view("work_ram", m72::work_ram_size);
+    expect_view("sound_ram", m72::sound_ram_size);
+    expect_view("sprite_ram", m72::sprite_ram_size);
+    expect_view("palette_a", m72::palette_size);
+    expect_view("palette_b", m72::palette_size);
+    expect_view("vram_a", m72::vram_size);
+    expect_view("vram_b", m72::vram_size);
 }
 
 TEST_CASE("irem_m72_adapter maps pads onto the board's input bytes", "[irem_m72][adapter]") {
@@ -283,6 +314,7 @@ TEST_CASE("irem_m72_adapter loads a declarative game.toml set from a zip", "[ire
 schema = "mnemos-romset/1"
 name = "synthetic"
 board = "irem_m72"
+orientation = "vertical"
 
 [[region]]
 name = "maincpu"
@@ -305,6 +337,37 @@ stride = 2
     });
 
     irem_m72_adapter adapter(zip, "synthetic");
+    CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::vertical);
     adapter.step_one_frame();
     CHECK(adapter.machine().work_ram[0] == 0x42U); // the program ran
+}
+
+TEST_CASE("irem_m72_adapter rejects a game.toml for another board", "[irem_m72][adapter]") {
+    const std::string manifest = R"(
+[set]
+schema = "mnemos-romset/1"
+name = "wrong_board"
+board = "capcom_cps1"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name = "prog"
+offset = 0
+)";
+    const auto zip = make_stored_zip({
+        {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
+        {"prog", make_program()},
+    });
+
+    irem_m72_adapter adapter(zip, "wrong_board");
+
+    const auto& main_region = adapter.machine().roms.regions.at("maincpu");
+    REQUIRE(main_region.size() == mnemos::manifests::irem_m72::main_rom_size);
+    CHECK(main_region[0xFFFF0U] == 0xFFU);
+    adapter.step_one_frame();
+    adapter.step_one_frame();
+    CHECK(adapter.machine().work_ram[0] == 0x00U);
 }
