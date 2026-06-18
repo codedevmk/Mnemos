@@ -75,7 +75,8 @@ TEST_CASE("capcom_cps2_adapter maps pads onto the board's active-low input words
     // P1 in the low byte: right clears bit0, button 1 clears bit4.
     CHECK((machine.input0 & 0x00FFU) == static_cast<std::uint16_t>(0xFFU & ~0x11U));
     CHECK((machine.input0 & 0xFF00U) == 0xFF00U);    // P2 untouched
-    CHECK((machine.input_sys & 0x0001U) == 0x0000U); // start 1 active-low
+    CHECK((machine.input_sys & 0x0100U) == 0x0000U); // START1 (IN2 bit 8) active-low
+    CHECK((machine.input_sys & 0x00FFU) == 0x00FFU); // low byte (EEPROM/unused) untouched
 }
 
 // Data-gated (never committed), game-agnostic: MNEMOS_CPS2_SET points at a zip of
