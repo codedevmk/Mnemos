@@ -56,6 +56,14 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
         }
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
+        [[nodiscard]] const frontend_sdk::session_capability_info&
+        session_capabilities() const noexcept override {
+            return session_;
+        }
+        [[nodiscard]] const frontend_sdk::media_capability_info&
+        media_capabilities() const noexcept override {
+            return media_;
+        }
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
@@ -68,6 +76,8 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
         // Re-pack the latched pad state onto the board's active-low input words.
         void refresh_inputs() noexcept;
 
+        frontend_sdk::session_capability_info session_{};
+        frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::capcom_cps1::cps1_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
         std::array<frontend_sdk::controller_state, 2> ports_{};

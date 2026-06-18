@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <string_view>
 #include <utility>
 
 using mnemos::dsp::clip_i16;
@@ -38,6 +39,41 @@ namespace mnemos::apps::player::adapters::genesis {
         // 3:1 (~9.5 dB) FM bias.
         constexpr int kGainFm = 3072;
         constexpr int kGainPsg = 1024;
+
+        frontend_sdk::session_capability_info make_session_capabilities() {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports = {
+                {.port_index = 0U,
+                 .player_slot = 1U,
+                 .format = frontend_sdk::input_device_format::digital_pad,
+                 .device_id = "genesis.controller.port.1",
+                 .label = "Controller 1"},
+                {.port_index = 1U,
+                 .player_slot = 2U,
+                 .format = frontend_sdk::input_device_format::digital_pad,
+                 .device_id = "genesis.controller.port.2",
+                 .label = "Controller 2"},
+            };
+            session.deterministic_frame_input = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
+                                                                    std::uint64_t byte_count) {
+            frontend_sdk::media_capability_info media{};
+            media.media.push_back(frontend_sdk::media_image_info{
+                .id = "cart",
+                .label =
+                    display_name.empty() ? std::string{"Cartridge"} : std::string{display_name},
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = byte_count,
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = "genesis.adapter",
+                .revision = "loaded",
+                .cache_hint = "resident"});
+            return media;
+        }
 
         // Mix FM (stereo) + PSG (mono) into dst at dst_count samples, both
         // resampled from their respective source rates to the same target.
@@ -91,7 +127,9 @@ namespace mnemos::apps::player::adapters::genesis {
                                      const manifests::genesis::genesis_config& config,
                                      std::string display_name,
                                      frontend_sdk::scheduler_factory* scheduler_factory)
-        : sys_(manifests::genesis::build_genesis_runtime(std::move(rom), config)),
+        : session_(make_session_capabilities()),
+          media_(make_media_capabilities(display_name, rom.size())),
+          sys_(manifests::genesis::build_genesis_runtime(std::move(rom), config)),
           work_ram_view_("work_ram", sys_->graph.region_span("work_ram")),
           z80_ram_view_("z80_ram", sys_->state.z80_ram),
           scheduler_(

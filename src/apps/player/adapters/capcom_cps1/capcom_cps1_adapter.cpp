@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace mnemos::apps::player::adapters::capcom_cps1 {
@@ -19,6 +20,40 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
             rom_set_image image;
             cps1::cps1_board_params params; // CPS-B profile etc. from the declaration
         };
+
+        frontend_sdk::session_capability_info make_session_capabilities() {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports = {
+                {.port_index = 0U,
+                 .player_slot = 1U,
+                 .format = frontend_sdk::input_device_format::arcade_panel,
+                 .device_id = "cps1.panel.p1",
+                 .label = "Player 1 Panel"},
+                {.port_index = 1U,
+                 .player_slot = 2U,
+                 .format = frontend_sdk::input_device_format::arcade_panel,
+                 .device_id = "cps1.panel.p2",
+                 .label = "Player 2 Panel"},
+            };
+            session.deterministic_frame_input = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
+                                                                    std::uint64_t byte_count) {
+            frontend_sdk::media_capability_info media{};
+            media.media.push_back(frontend_sdk::media_image_info{
+                .id = "rom_set",
+                .label = display_name.empty() ? std::string{"ROM set"} : std::string{display_name},
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = byte_count,
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = "cps1.adapter",
+                .revision = "loaded",
+                .cache_hint = "resident"});
+            return media;
+        }
 
         // Resolve a clone set's parent zip beside the clone on disk and compose
         // a fallback provider (clone first, then parent) so the parent's shared
@@ -130,7 +165,9 @@ namespace mnemos::apps::player::adapters::capcom_cps1 {
         // The CPS1 board integrates both CPUs + the sound chips + the beam in its
         // own run_frame(), so there is no per-chip master-clock schedule to build;
         // the scheduler_factory override (a multi-clock pacing hook) does not apply.
-        : sys_(assemble_from(load_set(std::move(rom), rom_path))) {
+        : session_(make_session_capabilities()),
+          media_(make_media_capabilities(display_name, rom.size())),
+          sys_(assemble_from(load_set(std::move(rom), rom_path))) {
         if (dip_override.has_value()) {
             // The arcade DIP override packs DSW A/B/C into the low three bytes.
             sys_->dip_a = static_cast<std::uint8_t>(*dip_override & 0xFFU);

@@ -79,6 +79,10 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<extract_audio_request> parse_extract_audio_args(int argc,
                                                                                 char* argv[]);
 
+    // --capabilities: headless frontend query. Loads the requested system/media,
+    // prints a deterministic capability/control summary, and exits.
+    [[nodiscard]] bool parse_capabilities_arg(int argc, char* argv[]);
+
     // Frames a scripted button is held when `--press <button>@<frame>` gives no
     // explicit `+duration` (long enough for a 60 Hz poll to catch the press).
     inline constexpr std::uint64_t press_default_duration = 4U;

@@ -10,6 +10,7 @@
 
 namespace {
     using mnemos::apps::player::adapters::input_for_frame;
+    using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
@@ -99,6 +100,14 @@ TEST_CASE("cli_args: autostart defaults on, --no-autostart turns it off") {
 
     auto b = make_argv({"player", "--rom", "g.d64", "--no-autostart"});
     CHECK(parse_no_autostart(b.argc(), b.argv.data()));
+}
+
+TEST_CASE("cli_args: --capabilities enables the headless capability summary") {
+    auto a = make_argv({"player", "--system", "c64", "--rom", "g.d64"});
+    CHECK_FALSE(parse_capabilities_arg(a.argc(), a.argv.data()));
+
+    auto b = make_argv({"player", "--system", "c64", "--rom", "g.d64", "--capabilities"});
+    CHECK(parse_capabilities_arg(b.argc(), b.argv.data()));
 }
 
 TEST_CASE("cli_args: --fm enables the optional FM expansion") {

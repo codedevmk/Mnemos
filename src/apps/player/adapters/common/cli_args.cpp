@@ -91,6 +91,15 @@ namespace mnemos::apps::player::adapters {
         return false;
     }
 
+    bool parse_capabilities_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            if (std::string_view{argv[i]} == "--capabilities") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     namespace {
         // Set the named button on `s`; returns false for an unknown name.
         bool apply_button(mnemos::peripheral::controller_state& s, std::string_view b) {

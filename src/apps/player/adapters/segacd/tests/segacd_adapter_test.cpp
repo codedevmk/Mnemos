@@ -56,6 +56,17 @@ namespace {
 TEST_CASE("segacd_adapter boots the BIOS and runs both CPUs", "[segacd][adapter]") {
     segacd_adapter adapter(make_bios());
 
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 2U);
+    CHECK(session.input_ports[0].device_id == "segacd.controller.port.1");
+    CHECK(session.deterministic_frame_input);
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "bios");
+    CHECK(media.media[0].byte_count == make_bios().size());
+    CHECK(media.media[0].provider_id == "segacd.adapter");
+
     for (int i = 0; i < 3; ++i) {
         adapter.step_one_frame();
     }
@@ -99,6 +110,12 @@ TEST_CASE("segacd_adapter mounts a CD image from a path", "[segacd][adapter]") {
     segacd_adapter adapter(make_bios(), {}, "Test Disc", nullptr, iso.string());
     REQUIRE(adapter.machine().sub->disc != nullptr); // disc handed to the sub side
     REQUIRE(adapter.machine().sub->cdd_loaded);
+    REQUIRE(adapter.media_capabilities().media.size() == 2U);
+    CHECK(adapter.media_capabilities().media[1].id == "disc");
+    CHECK(adapter.media_capabilities().media[1].label == "Test Disc");
+    CHECK(adapter.media_capabilities().media[1].residency ==
+          mnemos::frontend_sdk::media_residency::streamed);
+    CHECK(adapter.media_capabilities().media[1].provider_available);
 
     std::error_code ec;
     fs::remove(iso, ec);

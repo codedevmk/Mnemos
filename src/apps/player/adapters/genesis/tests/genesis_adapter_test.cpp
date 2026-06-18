@@ -109,6 +109,26 @@ TEST_CASE("genesis_adapter publishes work_ram and z80_ram as system memory views
     CHECK(z80_ram_bytes == 0x2000U);   // 8 KiB Z80 RAM
 }
 
+TEST_CASE("genesis_adapter publishes session and media capability metadata") {
+    genesis_adapter adapter(tiny_rom(), {}, "Tiny Cart");
+
+    const auto& session = adapter.session_capabilities();
+    REQUIRE(session.input_ports.size() == 2U);
+    CHECK(session.input_ports[0].format == mnemos::frontend_sdk::input_device_format::digital_pad);
+    CHECK(session.input_ports[0].device_id == "genesis.controller.port.1");
+    CHECK(session.deterministic_frame_input);
+    CHECK(session.max_input_delay_frames == 8U);
+    CHECK_FALSE(session.save_state_supported);
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 1U);
+    CHECK(media.media[0].id == "cart");
+    CHECK(media.media[0].label == "Tiny Cart");
+    CHECK(media.media[0].residency == mnemos::frontend_sdk::media_residency::resident);
+    CHECK(media.media[0].byte_count == tiny_rom().size());
+    CHECK(media.media[0].provider_id == "genesis.adapter");
+}
+
 TEST_CASE("genesis_adapter ignores out-of-range input ports") {
     genesis_adapter adapter(tiny_rom());
     mnemos::frontend_sdk::controller_state pad{};

@@ -83,6 +83,69 @@ namespace mnemos::apps::player::adapters::c64 {
                    d.size() == c1541::d64_image::size_40_tracks;
         }
 
+        frontend_sdk::session_capability_info make_session_capabilities() {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports = {
+                {.port_index = 0U,
+                 .player_slot = 1U,
+                 .format = frontend_sdk::input_device_format::digital_pad,
+                 .device_id = "c64.joystick.port.2",
+                 .label = "Joystick Port 2"},
+                {.port_index = 1U,
+                 .player_slot = 2U,
+                 .format = frontend_sdk::input_device_format::digital_pad,
+                 .device_id = "c64.joystick.port.1",
+                 .label = "Joystick Port 1"},
+            };
+            session.deterministic_frame_input = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        frontend_sdk::media_image_info make_c64_media(std::string id, std::string label,
+                                                      std::uint64_t byte_count,
+                                                      std::string provider_id,
+                                                      std::string cache_hint) {
+            return frontend_sdk::media_image_info{
+                .id = std::move(id),
+                .label = std::move(label),
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = byte_count,
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = std::move(provider_id),
+                .revision = "loaded",
+                .cache_hint = std::move(cache_hint)};
+        }
+
+        void publish_media_capabilities(frontend_sdk::media_capability_info& media,
+                                        c64_adapter::media_kind kind, std::string_view label,
+                                        std::uint64_t primary_size,
+                                        const std::vector<std::vector<std::uint8_t>>& disks) {
+            media.media.clear();
+            switch (kind) {
+            case c64_adapter::media_kind::none:
+                return;
+            case c64_adapter::media_kind::cartridge:
+                media.media.push_back(make_c64_media("cart", std::string{label}, primary_size,
+                                                     "c64.cartridge", "resident"));
+                return;
+            case c64_adapter::media_kind::tape:
+                media.media.push_back(make_c64_media("tape", std::string{label}, primary_size,
+                                                     "c64.datasette", "resident"));
+                return;
+            case c64_adapter::media_kind::disk:
+                for (std::size_t i = 0U; i < disks.size(); ++i) {
+                    const std::string disk_label =
+                        disks.size() == 1U ? std::string{label}
+                                           : std::string{label} + " disk " + std::to_string(i + 1U);
+                    media.media.push_back(make_c64_media(
+                        "disk." + std::to_string(i), disk_label, disks[i].size(), "c64.drive8",
+                        disks.size() == 1U ? "resident" : "resident_removable"));
+                }
+                return;
+            }
+        }
+
         // A display name (path stem) reduced to a PETSCII directory name: ASCII
         // upper-cased, at most 16 chars. Cosmetic -- LOAD"*" finds the file
         // regardless -- so unmapped characters are simply dropped.
@@ -233,6 +296,11 @@ namespace mnemos::apps::player::adapters::c64 {
                                                   sys_->video())),
           region_(to_video_region(config.video_region)),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(region_)]) {
+        session_ = make_session_capabilities();
+        const std::uint64_t primary_media_size = media.size();
+        const std::string media_label =
+            display_name.empty() ? std::string{"Primary media"} : display_name;
+
         sys_->sid->enable_audio_capture(true);
 
         // Non-owning chip enumeration in scheduler order; matches build_schedule().
@@ -271,6 +339,8 @@ namespace mnemos::apps::player::adapters::c64 {
                 (void)sys_->drive8.mount(disks_.front());
             }
         }
+
+        publish_media_capabilities(media_, kind_, media_label, primary_media_size, disks_);
 
         // Publish the static description once, post-init.
         spec_.push_back({.label = "System", .value = "Commodore 64"});

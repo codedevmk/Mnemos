@@ -29,6 +29,8 @@ mnemos_declare_tier(
 add_library(
     mnemos_debug_dump
     debug_dump.cpp
+    capability_discovery.cpp
+    game_watch.cpp
     asset_export.cpp
     audio_export.cpp
     reg_write_log.cpp
@@ -80,6 +82,8 @@ if(BUILD_TESTING)
         mnemos_debug_dump_test
         SOURCES
             tests/debug_dump_test.cpp
+            tests/capability_discovery_test.cpp
+            tests/game_watch_test.cpp
             tests/asset_export_test.cpp
             tests/audio_export_test.cpp
             tests/reg_write_log_test.cpp

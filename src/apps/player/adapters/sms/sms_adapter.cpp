@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <string_view>
 #include <utility>
 
 using mnemos::dsp::clip_i16;
@@ -40,6 +41,45 @@ namespace mnemos::apps::player::adapters::sms {
         constexpr int kGainPsgWithFm = kMixerGainOne / 2;
         constexpr int kGainFm = kMixerGainOne / 2;
 
+        frontend_sdk::session_capability_info make_session_capabilities(const bool game_gear) {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports.push_back(frontend_sdk::session_input_port{
+                .port_index = 0U,
+                .player_slot = 1U,
+                .format = frontend_sdk::input_device_format::digital_pad,
+                .device_id = game_gear ? "game_gear.handset" : "sms.controller.port.1",
+                .label = game_gear ? "Handset" : "Controller 1"});
+            if (!game_gear) {
+                session.input_ports.push_back(frontend_sdk::session_input_port{
+                    .port_index = 1U,
+                    .player_slot = 2U,
+                    .format = frontend_sdk::input_device_format::digital_pad,
+                    .device_id = "sms.controller.port.2",
+                    .label = "Controller 2"});
+            }
+            session.deterministic_frame_input = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        frontend_sdk::media_capability_info make_media_capabilities(const bool game_gear,
+                                                                    std::string_view display_name,
+                                                                    std::uint64_t byte_count) {
+            frontend_sdk::media_capability_info media{};
+            media.media.push_back(frontend_sdk::media_image_info{
+                .id = game_gear ? "game_card" : "cart",
+                .label = display_name.empty()
+                             ? (game_gear ? std::string{"Game Card"} : std::string{"Cartridge"})
+                             : std::string{display_name},
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = byte_count,
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = game_gear ? "game_gear.adapter" : "sms.adapter",
+                .revision = "loaded",
+                .cache_hint = "resident"});
+            return media;
+        }
+
         // Resample one mono or stereo source into the output-frame accumulators.
         void add_source(std::int32_t* acc_l, std::int32_t* acc_r, const std::int16_t* src,
                         int chans, int count, int gain, int dst_count) noexcept {
@@ -70,7 +110,9 @@ namespace mnemos::apps::player::adapters::sms {
     sms_adapter::sms_adapter(std::vector<std::uint8_t> rom,
                              const manifests::sms::sms_config& config, std::string display_name,
                              frontend_sdk::scheduler_factory* scheduler_factory)
-        : sys_(manifests::sms::build_sms_runtime(std::move(rom), config)),
+        : session_(make_session_capabilities(config.game_gear)),
+          media_(make_media_capabilities(config.game_gear, display_name, rom.size())),
+          sys_(manifests::sms::build_sms_runtime(std::move(rom), config)),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), sys_->vdp())),
           region_(config.video_region),
