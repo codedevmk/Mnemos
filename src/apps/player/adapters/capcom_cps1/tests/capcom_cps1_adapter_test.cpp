@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -148,6 +149,30 @@ TEST_CASE("capcom_cps1_adapter boots a bare program through the registry",
     CHECK(adapter.system_spec()[1].value == "Capcom CPS1");
 }
 
+TEST_CASE("capcom_cps1_adapter publishes board memory views", "[capcom_cps1][adapter]") {
+    capcom_cps1_adapter adapter(make_program(), "smoke");
+
+    const auto expect_view = [&adapter](std::string_view name, std::size_t expected_bytes) {
+        bool saw = false;
+        for (const auto* view : adapter.memory_views()) {
+            REQUIRE(view != nullptr);
+            if (view->name() == name) {
+                saw = true;
+                CHECK(view->bytes().size() == expected_bytes);
+            }
+        }
+        CHECK(saw);
+    };
+
+    CHECK(adapter.memory_views().size() == 6U);
+    expect_view("work_ram", cps1::work_ram_size);
+    expect_view("gfx_ram", cps1::gfx_ram_size);
+    expect_view("palette_ram", 0x4000U);
+    expect_view("z80_ram", cps1::z80_ram_size);
+    expect_view("qsound_shared0", cps1::qsound_shared_size);
+    expect_view("qsound_shared1", cps1::qsound_shared_size);
+}
+
 TEST_CASE("capcom_cps1_adapter threads cps_b_profile from the game.toml into the board",
           "[capcom_cps1][adapter][profile]") {
     // Profile 24 carries an ID protection port + the 16x16 multiplier, so the
@@ -207,6 +232,35 @@ offset = 0
     });
     capcom_cps1_adapter adapter2(zip2, "cps1_synth");
     CHECK(adapter2.machine().profile.id == 0U);
+}
+
+TEST_CASE("capcom_cps1_adapter rejects a game.toml for another board", "[capcom_cps1][adapter]") {
+    const std::string manifest = R"(
+[set]
+schema = "mnemos-romset/1"
+name = "wrong_board"
+board = "irem_m72"
+
+[[region]]
+name = "maincpu"
+size = 0x800000
+
+[[region.file]]
+name = "prog"
+offset = 0
+)";
+    const auto zip = make_stored_zip({
+        {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
+        {"prog", make_program()},
+    });
+
+    capcom_cps1_adapter adapter(zip, "wrong_board");
+
+    REQUIRE(adapter.machine().roms.regions.at("maincpu").size() == cps1::main_rom_size);
+    CHECK(adapter.machine().roms.regions.at("maincpu")[0] == 0xFFU);
+    adapter.step_one_frame();
+    CHECK(adapter.machine().work_ram[0] == 0x00U);
+    CHECK(adapter.machine().work_ram[1] == 0x00U);
 }
 
 TEST_CASE("capcom_cps1_adapter maps pads onto the board's input words",

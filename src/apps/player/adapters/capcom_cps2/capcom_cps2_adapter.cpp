@@ -10,7 +10,9 @@
 #include <array>
 #include <cstdio>
 #include <filesystem>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -20,6 +22,19 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
         using mnemos::manifests::common::rom_set_image;
         namespace cps2 = mnemos::manifests::capcom_cps2;
+
+        struct loaded_set final {
+            rom_set_image image;
+            frontend_sdk::display_orientation orientation{
+                frontend_sdk::display_orientation::horizontal};
+        };
+
+        [[nodiscard]] frontend_sdk::display_orientation
+        to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
+            return orientation == mnemos::manifests::common::screen_orientation::vertical
+                       ? frontend_sdk::display_orientation::vertical
+                       : frontend_sdk::display_orientation::horizontal;
+        }
 
         // Resolve a clone set's parent zip beside the clone on disk and compose a
         // fallback provider (clone first, then parent). Identical in shape to the
@@ -157,17 +172,17 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         // declaratively; a clone names a `parent` whose zip supplies the shared
         // dumps. Without a manifest the development format applies (region-named
         // <region>.bin entries). A bare binary is the encrypted 68000 program.
-        [[nodiscard]] rom_set_image load_set(std::vector<std::uint8_t> rom,
-                                             const std::string& rom_path) {
-            rom_set_image image;
+        [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
+                                          const std::string& rom_path) {
+            loaded_set result;
             const bool is_zip = rom.size() >= 4U && rom[0] == 'P' && rom[1] == 'K';
             if (!is_zip) {
-                image.regions.emplace("maincpu", std::move(rom));
-                return image;
+                result.image.regions.emplace("maincpu", std::move(rom));
+                return result;
             }
             auto provider = mnemos::manifests::common::make_zip_rom_provider(std::move(rom));
             if (!provider.has_value()) {
-                return image;
+                return result;
             }
             if (auto manifest_bytes = (*provider)("game.toml")) {
                 const std::string text(manifest_bytes->begin(), manifest_bytes->end());
@@ -178,26 +193,34 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                         std::fprintf(stderr, "[capcom_cps2] %s:%u:%u: %s\n", error.source.c_str(),
                                      error.line, error.column, error.message.c_str());
                     }
-                    return image; // declared but invalid: boot an empty board
+                    return result; // declared but invalid: boot an empty board
                 }
+                if (parsed.value->board != "capcom_cps2") {
+                    std::fprintf(stderr,
+                                 "[capcom_cps2] game.toml declares board '%s', expected "
+                                 "'capcom_cps2'\n",
+                                 parsed.value->board.c_str());
+                    return result;
+                }
+                result.orientation = to_display_orientation(parsed.value->orientation);
                 const auto effective =
                     parsed.value->parent.has_value()
                         ? with_parent_fallback(*provider, *parsed.value->parent, rom_path)
                         : *provider;
-                image = mnemos::manifests::common::load_rom_set(*parsed.value, effective);
-                for (const auto& issue : image.issues) {
+                result.image = mnemos::manifests::common::load_rom_set(*parsed.value, effective);
+                for (const auto& issue : result.image.issues) {
                     std::fprintf(stderr, "[capcom_cps2] %s: %s\n", issue.file.c_str(),
                                  issue.message.c_str());
                 }
-                resolve_key_region(image, parsed.value->name, rom_path);
-                return image;
+                resolve_key_region(result.image, parsed.value->name, rom_path);
+                return result;
             }
             for (const char* region : {"maincpu", "gfx", "audiocpu", "qsound", "key"}) {
                 if (auto bytes = (*provider)(std::string{region} + ".bin")) {
-                    image.regions.emplace(region, std::move(*bytes));
+                    result.image.regions.emplace(region, std::move(*bytes));
                 }
             }
-            return image;
+            return result;
         }
 
         [[nodiscard]] std::unique_ptr<cps2::cps2_system> assemble_from(rom_set_image image) {
@@ -211,14 +234,38 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                                              frontend_sdk::scheduler_factory* /*scheduler_factory*/,
                                              std::optional<std::uint16_t> /*dip_override*/,
                                              std::string rom_path)
-        // The CPS2 board integrates the 68000 + the QSound Z80/DSP + the beam in
-        // its own run_frame(), so there is no per-chip master-clock schedule to
-        // build; the scheduler_factory override does not apply.
-        : sys_(assemble_from(load_set(std::move(rom), rom_path))) {
+    // The CPS2 board integrates the 68000 + the QSound Z80/DSP + the beam in
+    // its own run_frame(), so there is no per-chip master-clock schedule to
+    // build; the scheduler_factory override does not apply.
+    {
+        loaded_set set = load_set(std::move(rom), rom_path);
+        orientation_ = set.orientation;
+        sys_ = assemble_from(std::move(set.image));
         chip_view_ = {&sys_->video(), &sys_->cpu(), &sys_->sound_cpu(), &sys_->qsound_dsp()};
+        publish_memory_views();
         spec_ = {{"System", "Arcade"},
                  {"Board", "Capcom CPS2"},
                  {"Game", display_name.empty() ? std::string{"unknown"} : std::move(display_name)}};
+    }
+
+    void capcom_cps2_adapter::publish_memory_views() {
+        auto publish = [this](std::size_t index, std::string_view name,
+                              std::span<const std::uint8_t> bytes) {
+            memory_view_storage_[index] =
+                std::make_unique<instrumentation::span_memory_view>(name, bytes);
+            system_mem_view_[index] = memory_view_storage_[index].get();
+        };
+
+        publish(0U, "main_work_ram", sys_->main_work_ram());
+        publish(1U, "video_ram", sys_->video_ram());
+        publish(2U, "object_ram", sys_->object_ram());
+        publish(3U, "extra_ram", sys_->extra_ram());
+        publish(4U, "control_registers", sys_->control_registers());
+        publish(5U, "extra_control", sys_->extra_control());
+        publish(6U, "cps_registers", sys_->cps_registers());
+        publish(7U, "qsound_shared_ram", sys_->qsound_shared_ram());
+        publish(8U, "z80_ram", sys_->z80_ram());
+        publish(9U, "qsound_work_ram", sys_->qsound_work_ram());
     }
 
     void capcom_cps2_adapter::step_one_frame() {
@@ -257,7 +304,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
     void capcom_cps2_adapter::refresh_inputs() noexcept {
         // Player byte (active low): right/left/down/up in bits 0-3, buttons 1/2/3
-        // in bits 4-6 (a first-cut six-button map is a later refine).
+        // in bits 4-6.
         const auto pack = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
             std::uint8_t value = 0xFFU;
             const auto clear = [&value](std::uint8_t bit) {
@@ -286,9 +333,30 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             }
             return value;
         };
+        // Extra-button byte (active low): buttons 4/5/6 in bits 0-2. CPS2 fighting
+        // cabinets wire these through the second player input word rather than the
+        // joystick word above.
+        const auto pack_extra = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
+            std::uint8_t value = 0xFFU;
+            const auto clear = [&value](std::uint8_t bit) {
+                value &= static_cast<std::uint8_t>(~bit);
+            };
+            if (c.x) {
+                clear(0x01U);
+            }
+            if (c.y) {
+                clear(0x02U);
+            }
+            if (c.z) {
+                clear(0x04U);
+            }
+            return value;
+        };
         // P2 high byte, P1 low byte.
         sys_->input0 = static_cast<std::uint16_t>(
             (static_cast<std::uint16_t>(pack(ports_[1])) << 8U) | pack(ports_[0]));
+        sys_->input1 = static_cast<std::uint16_t>(
+            (static_cast<std::uint16_t>(pack_extra(ports_[1])) << 8U) | pack_extra(ports_[0]));
 
         // System word (active low): the CPS-2 IN2 layout puts START1-4 in bits
         // 8-11 and COIN1-4 in bits 12-15 (bit 0 is the EEPROM data-out the board

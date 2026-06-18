@@ -79,6 +79,25 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<extract_audio_request> parse_extract_audio_args(int argc,
                                                                                 char* argv[]);
 
+    enum class animation_record_format : std::uint8_t {
+        gif,
+        movie_frames,
+    };
+
+    // --record-gif <path.gif> --frames N: headless run that records N frames as
+    // an animated GIF. --record-movie <base> --frames N writes a PNG frame
+    // sequence and `<base>.movie.json` for an external video plugin/encoder.
+    // Both forms require a positive frame count; a missing or option-shaped
+    // output disables the path.
+    struct animation_record_request final {
+        std::string output;
+        std::uint64_t frames{};
+        animation_record_format format{animation_record_format::gif};
+    };
+
+    [[nodiscard]] std::optional<animation_record_request> parse_animation_record_args(int argc,
+                                                                                      char* argv[]);
+
     // Frames a scripted button is held when `--press <button>@<frame>` gives no
     // explicit `+duration` (long enough for a 60 Hz poll to catch the press).
     inline constexpr std::uint64_t press_default_duration = 4U;

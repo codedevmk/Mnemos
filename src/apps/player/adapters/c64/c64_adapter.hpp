@@ -35,6 +35,7 @@
 
 #include "c64_input.hpp"   // c64_input::key (autostart key translation)
 #include "c64_runtime.hpp" // manifest-path build (also pulls c64_config)
+#include "introspection_views.hpp"
 #include "player_system.hpp"
 #include "region.hpp" // chips/shared: video_region
 #include "scheduler.hpp"
@@ -44,6 +45,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -101,6 +103,10 @@ namespace mnemos::apps::player::adapters::c64 {
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return chip_view_;
         }
+        [[nodiscard]] std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept override {
+            return system_mem_view_;
+        }
 
         // Removable media: the mounted disk set (empty for tape/cart/bare boot).
         [[nodiscard]] std::size_t media_count() const noexcept override { return disks_.size(); }
@@ -119,6 +125,9 @@ namespace mnemos::apps::player::adapters::c64 {
         void tick_autostart();
 
         std::unique_ptr<manifests::c64::c64_runtime> sys_;
+        instrumentation::span_memory_view ram_view_;
+        instrumentation::span_memory_view color_ram_view_;
+        std::array<instrumentation::memory_view*, 2> system_mem_view_{};
         // Non-owning chip pointers in scheduler order (VIC, CPU, CIA1, CIA2,
         // SID). Exposed via player_system::chips() so generic debug tooling can
         // enumerate them without depending on c64_runtime.

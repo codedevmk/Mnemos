@@ -23,9 +23,10 @@ namespace mnemos::debug {
     //                          scene -- a full plane/nametable, palette-resolved)
     // and writes one <base>.assets.json manifest listing every chip's palettes,
     // assets, and layers (name, kind, dimensions, cell grid, palette ref, source
-    // address, and the written filenames). <chip> is the chip's part_number
-    // sanitized to a path-safe segment. The indexed PNG is lossless (raw indices
-    // + PLTE/tRNS) for tools that re-tint; the resolved PNG is for quick viewing.
+    // address, and the written filenames). Dynamic path segments are sanitized;
+    // manifest display fields keep their original introspection names. The
+    // indexed PNG is lossless (raw indices + PLTE/tRNS) for tools that re-tint;
+    // the resolved PNG is for quick viewing.
     //
     // Returns the number of PNG files successfully written (swatch + resolved +
     // indexed). A file that fails to write is reported on stderr and skipped (it

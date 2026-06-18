@@ -1,5 +1,6 @@
 #pragma once
 
+#include "introspection_views.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "scheduler.hpp"
@@ -37,6 +38,10 @@ namespace mnemos::apps::player::adapters::sms {
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return {chip_view_.data(), chip_count_};
         }
+        [[nodiscard]] std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept override {
+            return system_mem_view_;
+        }
         // Cartridge battery store (the 93C46 EEPROM's 128 bytes when present, else
         // empty) the frontend persists to .srm.
         [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
@@ -49,6 +54,8 @@ namespace mnemos::apps::player::adapters::sms {
 
       private:
         std::unique_ptr<manifests::sms::sms_runtime> sys_;
+        instrumentation::span_memory_view work_ram_view_;
+        std::array<instrumentation::memory_view*, 1> system_mem_view_{};
         std::array<chips::ichip*, 4> chip_view_{};
         std::size_t chip_count_{};
         runtime::scheduler scheduler_;

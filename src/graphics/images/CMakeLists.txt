@@ -1,5 +1,6 @@
 add_library(
     mnemos_graphics_images
+    gif_image.cpp
     image.cpp
     ppm_image.cpp
     png_image.cpp
@@ -34,6 +35,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_graphics_images_test
         SOURCES
+            tests/gif_image_test.cpp
             tests/ppm_image_test.cpp
             tests/png_image_test.cpp
         LIBRARIES

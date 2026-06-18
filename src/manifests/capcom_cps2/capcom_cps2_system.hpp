@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace mnemos::manifests::capcom_cps2 {
@@ -32,6 +33,7 @@ namespace mnemos::manifests::capcom_cps2 {
     // 68000 memory map (24-bit, big-endian), transcribed from the reference core.
     inline constexpr std::uint32_t program_base = 0x000000U;     // encrypted program ROM
     inline constexpr std::uint32_t control_reg_base = 0x400000U; // 16-byte CPS-2 control regs
+    inline constexpr std::size_t main_rom_size = control_reg_base - program_base;
     inline constexpr std::size_t control_reg_size = 0x10U;
     inline constexpr std::uint32_t qsound_shared_base = 0x618000U; // 68K side of the comm RAM
     inline constexpr std::size_t qsound_shared_window = 0x2000U;   // 8 KiB (odd-byte into 4 KiB)
@@ -151,13 +153,44 @@ namespace mnemos::manifests::capcom_cps2 {
         [[nodiscard]] topology::bus& sound_bus() noexcept { return sound_bus_; }
         [[nodiscard]] bool has_sound() const noexcept { return sound_rom_size_ > 0U; }
         [[nodiscard]] const common::rom_set_image& rom_set() const noexcept { return roms; }
+        [[nodiscard]] std::span<const std::uint8_t> main_work_ram() const noexcept {
+            return std::span<const std::uint8_t>(work_ram_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> video_ram() const noexcept {
+            return std::span<const std::uint8_t>(video_ram_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> object_ram() const noexcept {
+            return std::span<const std::uint8_t>(object_ram_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> extra_ram() const noexcept {
+            return std::span<const std::uint8_t>(extra_ram_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> control_registers() const noexcept {
+            return std::span<const std::uint8_t>(control_regs_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> extra_control() const noexcept {
+            return std::span<const std::uint8_t>(extra_control_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> cps_registers() const noexcept {
+            return std::span<const std::uint8_t>(cps_regs_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> qsound_shared_ram() const noexcept {
+            return std::span<const std::uint8_t>(qsound_shared_ram_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> z80_ram() const noexcept {
+            return std::span<const std::uint8_t>(z80_ram_);
+        }
+        [[nodiscard]] std::span<const std::uint8_t> qsound_work_ram() const noexcept {
+            return std::span<const std::uint8_t>(qsound_work_ram_);
+        }
         [[nodiscard]] std::uint64_t vblank_irq_raised() const noexcept {
             return vblank_irq_raised_;
         }
         [[nodiscard]] std::uint64_t vblank_irq_acked() const noexcept { return vblank_irq_acked_; }
 
         // Active-low controls the player adapter drives (all-released = 0xFFFF).
-        // input0 = P1(low)/P2(high), input1 = P3/P4, input_sys = start/coin bits.
+        // input0 = P1/P2 main controls, input1 = the board's second player input
+        // word (extra buttons or P3/P4 by game), input_sys = start/coin bits.
         std::uint16_t input0{0xFFFFU};
         std::uint16_t input1{0xFFFFU};
         std::uint16_t input_sys{0xFFFFU};
@@ -226,6 +259,8 @@ namespace mnemos::manifests::capcom_cps2 {
         // Wire the Z80 sound CPU + the 68K<->Z80 comm RAM + the DL-1425 QSound DSP.
         void setup_sound();
     };
+
+    [[nodiscard]] common::rom_set_decl cps2_rom_skeleton(std::string set_name);
 
 } // namespace mnemos::manifests::capcom_cps2
 

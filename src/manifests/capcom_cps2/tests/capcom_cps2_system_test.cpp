@@ -15,6 +15,7 @@ namespace {
     namespace cps2 = mnemos::manifests::capcom_cps2;
 
     using mnemos::manifests::capcom_cps2::cps2_board_params;
+    using mnemos::manifests::capcom_cps2::cps2_rom_skeleton;
     using mnemos::manifests::capcom_cps2::cps2_system;
     using mnemos::manifests::capcom_cps2::crypto_key_size;
     using mnemos::manifests::capcom_cps2::encrypt_opcodes;
@@ -58,6 +59,20 @@ namespace {
 
 } // namespace
 
+TEST_CASE("cps2 ROM skeleton declares the fixed executable regions", "[capcom_cps2][system]") {
+    const auto decl = cps2_rom_skeleton("cps2_synth");
+
+    CHECK(decl.name == "cps2_synth");
+    CHECK(decl.board == "capcom_cps2");
+    REQUIRE(decl.regions.size() == 2U);
+    CHECK(decl.regions[0].name == "maincpu");
+    CHECK(decl.regions[0].size == cps2::main_rom_size);
+    CHECK(decl.regions[0].fill == 0xFFU);
+    CHECK(decl.regions[1].name == "key");
+    CHECK(decl.regions[1].size == crypto_key_size);
+    CHECK(decl.regions[1].fill == 0x00U);
+}
+
 TEST_CASE("cps2 system boots the 68000 from the decrypted opcode image", "[capcom_cps2][system]") {
     const auto k = sample_key();
     rom_set_image image;
@@ -89,6 +104,22 @@ TEST_CASE("cps2 system without a key is a non-executable blocker", "[capcom_cps2
     CHECK_FALSE(sys.executable());
     // The opcode overlay is the raw encrypted bytes, so a fetch != the plaintext.
     CHECK(sys.bus().fetch16_be_opcode(0x0008U) != 0x707FU);
+}
+
+TEST_CASE("cps2 direct cycle stepping is blocked until a key makes the board executable",
+          "[capcom_cps2][system]") {
+    rom_set_image image;
+    image.regions["maincpu"] = plain_program();
+
+    cps2_system sys(std::move(image), cps2_board_params{});
+    REQUIRE_FALSE(sys.executable());
+    const auto before = sys.cpu().cpu_registers();
+
+    sys.run_cycles(64);
+
+    const auto after = sys.cpu().cpu_registers();
+    CHECK(after.pc == before.pc);
+    CHECK(after.d[0] == before.d[0]);
 }
 
 TEST_CASE("cps2 system reads the board key from a 'key' set region", "[capcom_cps2][system]") {
