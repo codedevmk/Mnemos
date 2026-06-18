@@ -1,15 +1,20 @@
 #include "capcom_cps2_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "cps2_crypto.hpp"
 #include "file.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstdio>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace mnemos::apps::player::adapters::capcom_cps2 {
 
@@ -68,37 +73,98 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                 clone, std::move(*parent_provider));
         }
 
+        // A 20-byte board key validates against the encrypted program when the
+        // decrypted reset vector is sane (even SSP/PC, PC inside the program). This
+        // is how a region/revision variant is picked when several keys share the
+        // set's name prefix (e.g. 1944.key vs 1944u.key).
+        [[nodiscard]] bool key_decrypts_program(std::span<const std::uint8_t> key_bytes,
+                                                const std::vector<std::uint8_t>& program) {
+            if (key_bytes.size() != cps2::crypto_key_size) {
+                return false;
+            }
+            std::array<std::uint8_t, cps2::crypto_key_size> raw{};
+            std::copy(key_bytes.begin(), key_bytes.end(), raw.begin());
+            cps2::cps2_crypto_key key{};
+            if (!cps2::decode_key(raw, key)) {
+                return false;
+            }
+            std::vector<std::uint8_t> opcode(program.size(), 0U);
+            if (!cps2::decrypt_opcodes(program, opcode, key) || opcode.size() < 8U) {
+                return false;
+            }
+            const auto be32 = [&opcode](std::size_t o) -> std::uint32_t {
+                return (static_cast<std::uint32_t>(opcode[o]) << 24U) |
+                       (static_cast<std::uint32_t>(opcode[o + 1U]) << 16U) |
+                       (static_cast<std::uint32_t>(opcode[o + 2U]) << 8U) | opcode[o + 3U];
+            };
+            const std::uint32_t reset_ssp = be32(0U);
+            const std::uint32_t reset_pc = be32(4U);
+            return (reset_ssp & 1U) == 0U && (reset_pc & 1U) == 0U && reset_pc < opcode.size();
+        }
+
         // CPS2 boards are encrypted; the board key is a 20-byte external asset. If
-        // the declaration did not place a "key" region, look for the key sidecar
-        // beside the zip: `<dir>/keys/<set>.key` first, then `<dir>/<set>.key`.
+        // the declaration did not place a "key" region, scan `<dir>/keys` and the
+        // zip's own dir for `.key` files whose name shares the set's prefix, and
+        // adopt the first that decrypts the program to a sane reset vector. (The
+        // zip name does not reliably encode the region, so the right variant is
+        // chosen by validation, mirroring the reference loader.)
         void resolve_key_region(rom_set_image& image, const std::string& set_name,
                                 const std::string& rom_path) {
             if (const auto* k = image.region("key");
                 k != nullptr && k->size() == cps2::crypto_key_size) {
                 return; // already supplied by the declaration
             }
+            const auto* program = image.region("maincpu");
+            if (program == nullptr || program->empty() || (program->size() & 1U) != 0U) {
+                return;
+            }
             if (set_name.empty() || rom_path.empty() || set_name.find('/') != std::string::npos ||
                 set_name.find('\\') != std::string::npos ||
                 set_name.find("..") != std::string::npos) {
                 return;
             }
-            const auto slash = rom_path.find_last_of("/\\");
-            const std::string dir =
-                slash == std::string::npos ? std::string{} : rom_path.substr(0, slash + 1);
-            for (const std::string& candidate :
-                 {dir + "keys/" + set_name + ".key", dir + set_name + ".key"}) {
-                if (auto bytes = mnemos::io::read_file(candidate)) {
-                    if (bytes->size() == cps2::crypto_key_size) {
+
+            namespace fs = std::filesystem;
+            std::error_code ec;
+            const fs::path dir = fs::path(rom_path).parent_path();
+            for (const fs::path& key_dir : {dir / "keys", dir}) {
+                if (!fs::is_directory(key_dir, ec)) {
+                    continue;
+                }
+                std::vector<fs::path> candidates;
+                for (const auto& entry : fs::directory_iterator(key_dir, ec)) {
+                    if (!entry.is_regular_file(ec) || entry.path().extension() != ".key") {
+                        continue;
+                    }
+                    const std::string stem = entry.path().stem().string();
+                    if (stem.rfind(set_name, 0U) == 0U || set_name.rfind(stem, 0U) == 0U) {
+                        candidates.push_back(entry.path());
+                    }
+                }
+                // Prefer an exact name match, then the shorter (base) names.
+                std::sort(candidates.begin(), candidates.end(),
+                          [&set_name](const fs::path& a, const fs::path& b) {
+                              const bool ea = a.stem().string() == set_name;
+                              const bool eb = b.stem().string() == set_name;
+                              if (ea != eb) {
+                                  return ea;
+                              }
+                              return a.stem().string().size() < b.stem().string().size();
+                          });
+                for (const auto& candidate : candidates) {
+                    auto bytes = mnemos::io::read_file(candidate.string());
+                    if (bytes && bytes->size() == cps2::crypto_key_size &&
+                        key_decrypts_program(*bytes, *program)) {
+                        std::fprintf(stderr, "[capcom_cps2] board key: %s\n",
+                                     candidate.string().c_str());
                         image.regions["key"] = std::move(*bytes);
                         return;
                     }
-                    std::fprintf(stderr, "[capcom_cps2] key %s: expected %zu bytes, got %zu\n",
-                                 candidate.c_str(), cps2::crypto_key_size, bytes->size());
                 }
             }
             std::fprintf(stderr,
-                         "[capcom_cps2] no board key for '%s' (looked beside %s) -- the board "
-                         "stays a non-executable blocker\n",
+                         "[capcom_cps2] no valid board key for '%s' beside %s -- the board stays "
+                         "a non-executable blocker\n",
                          set_name.c_str(), rom_path.c_str());
         }
 
@@ -294,22 +360,26 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             (static_cast<std::uint16_t>(pack_extra(ports_[1])) << 8U) |
             pack_extra(ports_[0]));
 
-        // System byte (active low): start1/start2 in bits 0-1, coin1/coin2 (the
-        // pads' `select`) in bits 4-5.
-        std::uint8_t system_byte = 0xFFU;
+        // System word (active low): the CPS-2 IN2 layout puts START1-4 in bits
+        // 8-11 and COIN1-4 in bits 12-15 (bit 0 is the EEPROM data-out the board
+        // overlays at read time). The pads' `select` is the coin slot.
+        std::uint16_t system = 0xFFFFU;
+        const auto clear = [&system](std::uint16_t bit) {
+            system &= static_cast<std::uint16_t>(~bit);
+        };
         if (ports_[0].start) {
-            system_byte &= static_cast<std::uint8_t>(~0x01U);
+            clear(0x0100U); // START1
         }
         if (ports_[1].start) {
-            system_byte &= static_cast<std::uint8_t>(~0x02U);
+            clear(0x0200U); // START2
         }
         if (ports_[0].select) {
-            system_byte &= static_cast<std::uint8_t>(~0x10U);
+            clear(0x1000U); // COIN1
         }
         if (ports_[1].select) {
-            system_byte &= static_cast<std::uint8_t>(~0x20U);
+            clear(0x2000U); // COIN2
         }
-        sys_->input_sys = static_cast<std::uint16_t>(0xFF00U | system_byte);
+        sys_->input_sys = system;
     }
 
     void force_link() noexcept {}

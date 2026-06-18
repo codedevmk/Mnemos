@@ -257,8 +257,10 @@ TEST_CASE("capcom_cps2_adapter maps pads onto the board's active-low input words
     CHECK(machine.input1 == static_cast<std::uint16_t>(
                                 (static_cast<std::uint16_t>(p2_extra) << 8U) | p1_extra));
     CHECK(machine.bus().read16_be(cps2::cps_io_base + 0x10U) == machine.input1);
-    CHECK((machine.input_sys & 0x0001U) == 0x0000U); // start 1 active-low
-    CHECK((machine.input_sys & 0x0020U) == 0x0000U); // coin 2 active-low
+    // IN2 layout: START1-4 in bits 8-11, COIN1-4 in bits 12-15.
+    CHECK((machine.input_sys & 0x0100U) == 0x0000U); // START1 (bit 8) active-low
+    CHECK((machine.input_sys & 0x2000U) == 0x0000U); // COIN2 (bit 13, P2 select) active-low
+    CHECK((machine.input_sys & 0x00FFU) == 0x00FFU); // low byte (EEPROM/unused) untouched
 }
 
 // Data-gated (never committed), game-agnostic: MNEMOS_CPS2_SET points at a zip of
