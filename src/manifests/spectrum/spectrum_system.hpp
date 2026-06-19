@@ -4,6 +4,7 @@
 #include "bus.hpp"               // topology::bus
 #include "region.hpp"            // mnemos::video_region
 #include "spectrum_snapshot.hpp" // spectrum_snapshot
+#include "ssg.hpp"               // chips::audio::ssg (AY-3-8910, 128K)
 #include "state.hpp"             // chips::state_writer / state_reader
 #include "ula.hpp"               // chips::video::ula
 #include "z80.hpp"               // chips::cpu::z80
@@ -37,6 +38,7 @@ namespace mnemos::manifests::spectrum {
         chips::cpu::z80 cpu;
         chips::video::ula ula;
         chips::audio::beeper beeper;
+        chips::audio::ssg ay; // AY-3-8910, 128K only (ports $FFFD/$BFFD)
         topology::bus bus{16U, topology::endianness::little};
 
         // Two 16 KiB ROM halves: [0] = 48K BASIC / 128K editor, [1] = 128K 48-BASIC.

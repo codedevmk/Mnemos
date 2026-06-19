@@ -24,13 +24,14 @@ namespace {
     using mnemos::manifests::spectrum::spectrum_system;
     using ula = mnemos::chips::video::ula;
 
-    // Drive the machine one frame the way the scheduler does: ULA, CPU, beeper,
+    // Drive the machine one frame the way the scheduler does: ULA, CPU, beeper, AY,
     // one T-state each, for a whole 69888-T-state frame.
     void run_frame(spectrum_system& s) {
         for (int t = 0; t < ula::tstates_per_frame; ++t) {
             s.ula.tick(1);
             s.cpu.tick(1);
             s.beeper.tick(1);
+            s.ay.tick(1);
         }
     }
 
@@ -136,6 +137,40 @@ TEST_CASE("spectrum 128K pages RAM banks + ROM halves via $7FFD", "[manifests][s
     sys->set_paging(0x20U | 1U);             // lock + bank 1 at $C000
     sys->set_paging(0x00U);                  // ignored while locked
     CHECK(sys->bus.read8(0xC000U) == 0x22U); // still bank 1
+}
+
+TEST_CASE("spectrum 128K routes AY writes to the sound chip", "[manifests][spectrum]") {
+    // 32 KiB ROM -> 128K. The program enables tone A at full volume via the AY
+    // register/data ports ($FFFD select, $BFFD write), then loops.
+    std::vector<std::uint8_t> rom(0x8000U, 0x00U);
+    const std::array<std::uint8_t, 44> prog = {
+        0x01, 0xFD, 0xFF, 0x3E, 0x07, 0xED, 0x79, // LD BC,$FFFD; LD A,7; OUT (C),A  (reg 7 mixer)
+        0x01, 0xFD, 0xBF, 0x3E, 0x3E, 0xED, 0x79, // LD BC,$BFFD; LD A,$3E; OUT (C),A (tone A on)
+        0x01, 0xFD, 0xFF, 0x3E, 0x08, 0xED, 0x79, // reg 8 (volume A)
+        0x01, 0xFD, 0xBF, 0x3E, 0x0F, 0xED, 0x79, // volume = 15 (max)
+        0x01, 0xFD, 0xFF, 0x3E, 0x00, 0xED, 0x79, // reg 0 (tone A fine)
+        0x01, 0xFD, 0xBF, 0x3E, 0x80, 0xED, 0x79, // period low = $80
+        0x18, 0xFE,                               // JR $  (self loop)
+    };
+    std::copy(prog.begin(), prog.end(), rom.begin());
+
+    const auto sys = assemble_spectrum(rom);
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->model == mnemos::manifests::spectrum::spectrum_model::k128);
+    sys->ay.enable_audio_capture(true);
+    for (int i = 0; i < 4; ++i) {
+        run_frame(*sys);
+    }
+
+    const std::size_t pairs = sys->ay.pending_samples();
+    REQUIRE(pairs > 50U);
+    std::vector<std::int16_t> buf(pairs * 2U);
+    sys->ay.drain_samples(buf.data(), pairs);
+    int peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, std::abs(static_cast<int>(s)));
+    }
+    CHECK(peak > 1000); // tone A at full volume is audible (not silence)
 }
 
 TEST_CASE("spectrum keyboard half-rows are active-low", "[manifests][spectrum]") {
