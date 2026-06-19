@@ -1,5 +1,6 @@
 #include "spectrum_snapshot.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace mnemos::manifests::spectrum {
@@ -29,6 +30,21 @@ namespace mnemos::manifests::spectrum {
 
         [[nodiscard]] std::uint16_t rd16(std::span<const std::uint8_t> d, std::size_t off) {
             return static_cast<std::uint16_t>(d[off] | (d[off + 1] << 8U));
+        }
+
+        // Split a 48 KiB linear image ($4000-$FFFF) into the three banks the 48K
+        // machine maps: $4000 -> bank 5, $8000 -> bank 2, $C000 -> bank 0.
+        void store_48k_linear(spectrum_snapshot& snap, std::span<const std::uint8_t> mem) {
+            const std::array<int, 3> banks = {5, 2, 0};
+            for (std::size_t i = 0; i < banks.size(); ++i) {
+                const std::size_t off = i * 0x4000U;
+                if (off >= mem.size()) {
+                    break;
+                }
+                const std::size_t n = std::min<std::size_t>(0x4000U, mem.size() - off);
+                std::memcpy(snap.bank[static_cast<std::size_t>(banks[i])].data(), mem.data() + off,
+                            n);
+            }
         }
     } // namespace
 
@@ -68,27 +84,37 @@ namespace mnemos::manifests::spectrum {
             r.pc = pc;
             const std::span<const std::uint8_t> mem = d.subspan(30);
             if (compressed_v1) {
-                rle_decompress(mem, snap.ram);
+                std::array<std::uint8_t, 0xC000> linear{};
+                rle_decompress(mem, linear);
+                store_48k_linear(snap, linear);
             } else {
-                if (mem.size() < snap.ram.size()) {
+                if (mem.size() < 0xC000U) {
                     return std::nullopt;
                 }
-                std::memcpy(snap.ram.data(), mem.data(), snap.ram.size());
+                store_48k_linear(snap, mem.first(0xC000U));
             }
             return snap;
         }
 
         // Version 2/3: an extended header, then page-numbered memory blocks.
-        if (d.size() < 34) {
+        if (d.size() < 35) {
             return std::nullopt;
         }
         const std::uint16_t ext_len = rd16(d, 30);
         r.pc = rd16(d, 32);
         const std::uint8_t hw_mode = d[34];
         const bool is_v2 = ext_len == 23U;
-        // 48K only: v2 hardware 0/1, v3 hardware 0. Anything else is 128K/SamRam.
-        if (is_v2 ? (hw_mode > 1U) : (hw_mode > 0U)) {
+        // 48K: v2 hardware 0/1, v3 hardware 0. 128K: v2 hardware 3/4, v3 hardware
+        // 4/5/6. Anything else (SamRam, +3, Pentagon...) is unsupported.
+        const bool is_48k = is_v2 ? (hw_mode <= 1U) : (hw_mode == 0U);
+        const bool is_128k = is_v2 ? (hw_mode == 3U || hw_mode == 4U)
+                                   : (hw_mode == 4U || hw_mode == 5U || hw_mode == 6U);
+        if (!is_48k && !is_128k) {
             return std::nullopt;
+        }
+        snap.is_128k = is_128k;
+        if (is_128k) {
+            snap.port_7ffd = d[35]; // last value written to $7FFD
         }
 
         std::size_t i = 32U + ext_len;
@@ -96,34 +122,35 @@ namespace mnemos::manifests::spectrum {
             const std::uint16_t blen = rd16(d, i);
             const std::uint8_t page = d[i + 2];
             i += 3U;
-            // 48K page -> RAM offset: 8 -> $4000, 4 -> $8000, 5 -> $C000.
-            int base = -1;
-            if (page == 8U) {
-                base = 0x0000;
+            // Page -> RAM bank. 48K: 8->5 ($4000), 4->2 ($8000), 5->0 ($C000).
+            // 128K: page n -> bank n-3 (pages 3..10 = banks 0..7). Other pages
+            // (ROM images) are skipped.
+            int target = -1;
+            if (is_128k) {
+                if (page >= 3U && page <= 10U) {
+                    target = page - 3;
+                }
+            } else if (page == 8U) {
+                target = 5;
             } else if (page == 4U) {
-                base = 0x4000;
+                target = 2;
             } else if (page == 5U) {
-                base = 0x8000;
+                target = 0;
             }
-            if (blen == 0xFFFFU) { // uncompressed 16 KiB
-                if (i + 0x4000U > d.size()) {
-                    return std::nullopt;
-                }
-                if (base >= 0) {
-                    std::memcpy(snap.ram.data() + base, d.data() + i, 0x4000U);
-                }
-                i += 0x4000U;
-            } else {
-                if (i + blen > d.size()) {
-                    return std::nullopt;
-                }
-                if (base >= 0) {
-                    std::array<std::uint8_t, 0x4000> tmp{};
-                    rle_decompress(d.subspan(i, blen), tmp);
-                    std::memcpy(snap.ram.data() + base, tmp.data(), tmp.size());
-                }
-                i += blen;
+
+            const std::size_t consumed = (blen == 0xFFFFU) ? 0x4000U : blen;
+            if (i + consumed > d.size()) {
+                return std::nullopt;
             }
+            if (target >= 0) {
+                auto& dst = snap.bank[static_cast<std::size_t>(target)];
+                if (blen == 0xFFFFU) {
+                    std::memcpy(dst.data(), d.data() + i, 0x4000U);
+                } else {
+                    rle_decompress(d.subspan(i, blen), dst);
+                }
+            }
+            i += consumed;
         }
         return snap;
     }
@@ -153,12 +180,14 @@ namespace mnemos::manifests::spectrum {
         std::uint16_t sp = rd16(d, 23);
         r.im = d[25] & 0x03U;
         snap.border = static_cast<std::uint8_t>(d[26] & 0x07U);
-        std::memcpy(snap.ram.data(), d.data() + 27, snap.ram.size());
+        store_48k_linear(snap, d.subspan(27, 0xC000U));
 
-        // PC is on the stack; a RETN pops it (SP += 2).
+        // PC is on the stack; a RETN pops it (SP += 2). For 48K the stack is RAM,
+        // so resolve it from the linear image we just stored (bank 0/2/5).
         if (sp >= 0x4000U && sp <= 0xFFFEU) {
-            const std::size_t off = sp - 0x4000U;
-            r.pc = static_cast<std::uint16_t>(snap.ram[off] | (snap.ram[off + 1] << 8U));
+            const std::uint8_t lo = d[27 + (sp - 0x4000U)];
+            const std::uint8_t hi = d[27 + (sp - 0x4000U) + 1];
+            r.pc = static_cast<std::uint16_t>(lo | (hi << 8U));
             sp = static_cast<std::uint16_t>(sp + 2U);
         }
         r.sp = sp;
