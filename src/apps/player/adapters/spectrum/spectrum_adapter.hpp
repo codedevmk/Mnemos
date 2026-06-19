@@ -39,9 +39,7 @@ namespace mnemos::apps::player::adapters::spectrum {
         }
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
-        [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override {
-            return {.samples = nullptr, .frame_count = 0U, .sample_rate = 44100U};
-        }
+        [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return {chip_view_.data(), chip_view_.size()};
         }
@@ -51,10 +49,14 @@ namespace mnemos::apps::player::adapters::spectrum {
 
       private:
         std::unique_ptr<manifests::spectrum::spectrum_system> sys_;
-        std::array<chips::ichip*, 2> chip_view_{};
+        std::array<chips::ichip*, 3> chip_view_{}; // ULA, CPU, beeper
         runtime::scheduler scheduler_;
         mnemos::video_region region_;
         std::vector<frontend_sdk::spec_field> spec_{};
+        // drain_audio scratch: the beeper queues mono samples; we hand the player
+        // interleaved stereo (both channels equal).
+        std::vector<std::int16_t> beeper_buf_{};
+        std::vector<std::int16_t> stereo_buf_{};
     };
 
 } // namespace mnemos::apps::player::adapters::spectrum

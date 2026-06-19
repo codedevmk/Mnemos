@@ -1,3 +1,4 @@
+add_subdirectory(beeper)
 add_subdirectory(okim6295)
 add_subdirectory(qsound)
 add_subdirectory(rf5c68)

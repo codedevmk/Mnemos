@@ -20,6 +20,7 @@ target_link_libraries(
         mnemos::topology
         mnemos::chips::cpu::z80
         mnemos::chips::video::ula
+        mnemos::chips::audio::beeper
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_spectrum PUBLIC)

@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -23,12 +24,13 @@ namespace {
     using mnemos::manifests::spectrum::spectrum_system;
     using ula = mnemos::chips::video::ula;
 
-    // Drive the machine one frame the way the scheduler does: ULA then CPU, one
-    // T-state each, for a whole 69888-T-state frame.
+    // Drive the machine one frame the way the scheduler does: ULA, CPU, beeper,
+    // one T-state each, for a whole 69888-T-state frame.
     void run_frame(spectrum_system& s) {
         for (int t = 0; t < ula::tstates_per_frame; ++t) {
             s.ula.tick(1);
             s.cpu.tick(1);
+            s.beeper.tick(1);
         }
     }
 
@@ -64,6 +66,43 @@ TEST_CASE("spectrum assembles and advances frames", "[manifests][spectrum]") {
     CHECK(fb.width == static_cast<std::uint32_t>(ula::frame_width));
     CHECK(fb.height == static_cast<std::uint32_t>(ula::frame_height));
     CHECK(fb.pixels != nullptr);
+}
+
+TEST_CASE("spectrum routes OUT ($FE) bit 4 to the beeper", "[manifests][spectrum]") {
+    // A ROM that toggles port $FE bit 4 (the speaker) in a loop, with a short
+    // DJNZ delay each half so the square is a few kHz.
+    std::vector<std::uint8_t> rom(0x4000U, 0x00U);
+    const std::array<std::uint8_t, 19> prog = {
+        0x3E, 0x10,       // LD A,$10   ; speaker high
+        0xD3, 0xFE,       // OUT ($FE),A
+        0x06, 0x20,       // LD B,$20
+        0x10, 0xFE,       // DJNZ $     ; delay
+        0x3E, 0x00,       // LD A,$00   ; speaker low
+        0xD3, 0xFE,       // OUT ($FE),A
+        0x06, 0x20,       // LD B,$20
+        0x10, 0xFE,       // DJNZ $
+        0xC3, 0x00, 0x00, // JP $0000
+    };
+    std::copy(prog.begin(), prog.end(), rom.begin());
+
+    const auto sys = assemble_spectrum(rom);
+    REQUIRE(sys != nullptr);
+    sys->beeper.enable_audio_capture(true);
+    for (int i = 0; i < 4; ++i) {
+        run_frame(*sys);
+    }
+
+    std::vector<std::int16_t> buf(sys->beeper.pending_samples());
+    REQUIRE(buf.size() > 100U);
+    sys->beeper.drain_samples(buf.data(), buf.size());
+    std::int16_t mn = 32767;
+    std::int16_t mx = -32768;
+    for (const std::int16_t s : buf) {
+        mn = std::min(mn, s);
+        mx = std::max(mx, s);
+    }
+    CHECK(mn < -1000); // toggling bit 4 produced an AC (audible) signal
+    CHECK(mx > 1000);
 }
 
 TEST_CASE("spectrum keyboard half-rows are active-low", "[manifests][spectrum]") {

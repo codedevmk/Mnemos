@@ -1,5 +1,6 @@
 #pragma once
 
+#include "beeper.hpp"            // chips::audio::beeper (1-bit speaker)
 #include "bus.hpp"               // topology::bus
 #include "region.hpp"            // mnemos::video_region
 #include "spectrum_snapshot.hpp" // spectrum_snapshot
@@ -28,6 +29,7 @@ namespace mnemos::manifests::spectrum {
     struct spectrum_system final {
         chips::cpu::z80 cpu;
         chips::video::ula ula;
+        chips::audio::beeper beeper;
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x4000> rom{}; // 16 KiB system ROM ($0000-$3FFF)

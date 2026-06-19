@@ -84,7 +84,8 @@ namespace mnemos::manifests::spectrum {
         });
         s->cpu.set_port_out([s](std::uint16_t port, std::uint8_t value) {
             if ((port & 0x0001U) == 0U) {
-                s->ula.set_border(value);
+                s->ula.set_border(value);                     // bits 0-2
+                s->beeper.set_speaker((value & 0x10U) != 0U); // bit 4 (speaker)
             }
         });
 

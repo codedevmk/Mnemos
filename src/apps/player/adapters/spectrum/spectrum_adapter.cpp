@@ -16,6 +16,7 @@ namespace mnemos::apps::player::adapters::spectrum {
             return {
                 {&sys.ula, 1U},
                 {&sys.cpu, 1U},
+                {&sys.beeper, 1U},
             };
         }
     } // namespace
@@ -31,6 +32,8 @@ namespace mnemos::apps::player::adapters::spectrum {
           region_(config.video_region) {
         chip_view_[0] = &sys_->ula;
         chip_view_[1] = &sys_->cpu;
+        chip_view_[2] = &sys_->beeper;
+        sys_->beeper.enable_audio_capture(true);
 
         // A snapshot (.z80/.sna) resumes a game mid-run on top of the system ROM.
         if (!snapshot.empty()) {
@@ -50,6 +53,24 @@ namespace mnemos::apps::player::adapters::spectrum {
     }
 
     void spectrum_adapter::step_one_frame() { scheduler_.run_frame(); }
+
+    frontend_sdk::audio_chunk spectrum_adapter::drain_audio() noexcept {
+        const std::size_t count = sys_->beeper.pending_samples();
+        if (count == 0U) {
+            return {
+                .samples = nullptr, .frame_count = 0U, .sample_rate = sys_->beeper.output_rate()};
+        }
+        beeper_buf_.resize(count);
+        const std::size_t got = sys_->beeper.drain_samples(beeper_buf_.data(), count);
+        stereo_buf_.resize(got * 2U);
+        for (std::size_t i = 0; i < got; ++i) {
+            stereo_buf_[i * 2U] = beeper_buf_[i];      // L
+            stereo_buf_[i * 2U + 1U] = beeper_buf_[i]; // R
+        }
+        return {.samples = stereo_buf_.data(),
+                .frame_count = static_cast<std::uint32_t>(got),
+                .sample_rate = sys_->beeper.output_rate()};
+    }
 
     void spectrum_adapter::apply_input(int port,
                                        const frontend_sdk::controller_state& state) noexcept {

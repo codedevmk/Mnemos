@@ -26,8 +26,8 @@ TEST_CASE("spectrum adapter constructs and steps frames", "[apps][player][spectr
     adapter.step_one_frame();
     adapter.step_one_frame();
 
-    // Two chips advertised in scheduler order: ULA (frame source) then CPU.
-    CHECK(adapter.chips().size() == 2U);
+    // Three chips advertised in scheduler order: ULA (frame source), CPU, beeper.
+    CHECK(adapter.chips().size() == 3U);
     CHECK(adapter.current_frame().pixels != nullptr);
 }
 
