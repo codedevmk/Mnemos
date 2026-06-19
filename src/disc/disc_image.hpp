@@ -9,9 +9,9 @@
 //   .iso        Mode-1, 2048-byte user-data sectors (size multiple of 2048).
 //   .bin/.img   Raw 2352-byte sectors (size multiple of 2352, sync at LBA 0).
 //   .cue        Cue sheet referencing one or more .bin tracks (multi-track).
-//   .chd        Compressed Hunks of Data, v5 data tracks (none/cdzl/cdlz).
-//               Decompressed to a flat raw-sector image at open time; FLAC
-//               (cdfl) audio is not yet handled.
+//   .chd        Compressed Hunks of Data, v5 (none/cdzl/cdlz data tracks +
+//               cdfl/FLAC CD-DA audio). Decompressed to a flat raw-sector image
+//               at open time.
 //
 // Deferred (not needed by the Sega CD, added when a consumer needs them):
 //   the Saturn IP.BIN parser and the ISO 9660 file walker. EDC/ECC of
@@ -76,8 +76,9 @@ namespace mnemos::disc {
         // In-memory single-file builders (tests + preloaded callers).
         [[nodiscard]] static std::optional<disc_image> open_bin(std::vector<std::uint8_t> data);
         [[nodiscard]] static std::optional<disc_image> open_iso(std::vector<std::uint8_t> data);
-        // Decode a whole CHD (v5 data tracks) held in memory into a flat
-        // raw-sector image. Returns nullopt on a non-CHD / unsupported codec.
+        // Decode a whole CHD (v5: none/cdzl/cdlz data + cdfl/FLAC audio) held in
+        // memory into a flat raw-sector image. Returns nullopt on a non-CHD /
+        // unsupported codec.
         [[nodiscard]] static std::optional<disc_image> open_chd(std::vector<std::uint8_t> data);
 
         [[nodiscard]] disc_format format() const noexcept { return format_; }
