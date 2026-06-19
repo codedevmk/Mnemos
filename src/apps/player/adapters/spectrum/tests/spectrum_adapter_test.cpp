@@ -26,9 +26,15 @@ TEST_CASE("spectrum adapter constructs and steps frames", "[apps][player][spectr
     adapter.step_one_frame();
     adapter.step_one_frame();
 
-    // Three chips advertised in scheduler order: ULA (frame source), CPU, beeper.
+    // 48K advertises three chips: ULA (frame source), CPU, beeper.
     CHECK(adapter.chips().size() == 3U);
     CHECK(adapter.current_frame().pixels != nullptr);
+}
+
+TEST_CASE("spectrum 128K adapter adds the AY chip", "[apps][player][spectrum]") {
+    // A 32 KiB ROM selects the 128K model, which schedules the AY-3-8910.
+    spectrum_adapter adapter(std::vector<std::uint8_t>(0x8000U, 0x00U));
+    CHECK(adapter.chips().size() == 4U); // ULA, CPU, beeper, AY
 }
 
 TEST_CASE("spectrum adapter maps the pad to Kempston + cursor keys", "[apps][player][spectrum]") {

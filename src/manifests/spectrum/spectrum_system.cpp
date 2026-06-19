@@ -88,6 +88,12 @@ namespace mnemos::manifests::spectrum {
         const std::size_t n = rom.size() < s->rom.size() ? rom.size() : s->rom.size();
         std::memcpy(s->rom.data(), rom.data(), n);
 
+        // 128K AY clock is CPU/2 with the chip's own /16 tone divider, i.e. one
+        // native sample every 32 master (T-state) cycles.
+        if (s->model == spectrum_model::k128) {
+            s->ay.set_clock_divider(32);
+        }
+
         // Initial layout (both models): $0000 = ROM half 0, $4000 = RAM bank 5 (the
         // screen), $8000 = bank 2, $C000 = bank 0. The 128K re-pages $0000/$C000 and
         // the screen through set_paging (retargeting these regions); the 48K leaves
@@ -106,6 +112,10 @@ namespace mnemos::manifests::spectrum {
         s->cpu.set_port_in([s](std::uint16_t port) -> std::uint8_t {
             if ((port & 0x00FFU) == 0x1FU) {
                 return s->kempston; // Kempston joystick
+            }
+            // 128K AY-3-8910 register read at $FFFD (A15=A14=1, A1=0).
+            if (s->model == spectrum_model::k128 && (port & 0xC002U) == 0xC000U) {
+                return s->ay.read();
             }
             if ((port & 0x0001U) != 0U) {
                 return 0xFFU; // unattached / floating bus (simplified)
@@ -126,9 +136,17 @@ namespace mnemos::manifests::spectrum {
                 s->ula.set_border(value);                     // bits 0-2
                 s->beeper.set_speaker((value & 0x10U) != 0U); // bit 4 (speaker)
             }
-            // 128K paging latch $7FFD: A15 = 0 and A1 = 0 (the machine's loose decode).
-            if (s->model == spectrum_model::k128 && (port & 0x8002U) == 0U) {
-                s->set_paging(value);
+            if (s->model == spectrum_model::k128) {
+                // $7FFD paging latch: A15 = 0 and A1 = 0 (the machine's loose decode).
+                if ((port & 0x8002U) == 0U) {
+                    s->set_paging(value);
+                }
+                // AY-3-8910: $FFFD = register select, $BFFD = data write.
+                if ((port & 0xC002U) == 0xC000U) {
+                    s->ay.address(value);
+                } else if ((port & 0xC002U) == 0x8000U) {
+                    s->ay.write(value);
+                }
             }
         });
 
