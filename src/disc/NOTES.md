@@ -15,17 +15,17 @@ emulator source consulted.
 | Mnemos file | Emu source | Notes |
 |---|---|---|
 | `circ_ecc.{hpp,cpp}` | `chips/circ_ecc/circ_ecc.{h,c}` | CD-ROM Mode-1 EDC (CRC-32) + P/Q Reed-Solomon parity regeneration, clean-room per ECMA-130. CRC table is a compile-time `constexpr`. |
-| `disc_image.{hpp,cpp}` | `chips/disc_image/disc_image.{h,c}` | BIN/CUE/ISO loader + LBA sector read. Buffer-backed (one `std::vector` per track file, loaded via `mnemos::io::read_file`) so it is testable without the filesystem. Single-file and multi-track CUE unified through one track table. |
+| `disc_image.{hpp,cpp}` | `chips/disc_image/disc_image.{h,c}` | BIN/CUE/ISO loader + LBA sector read. Buffer-backed (one `std::vector` per track file, loaded via `mnemos::io::read_file`) so it is testable without the filesystem. Single-file and multi-track CUE unified through one track table. `.chd` images open through `chd_reader`. |
+| `chd_reader.{hpp,cpp}` | `chips/chd_image/…` | CHD v5 compressed-disc reader (data tracks). Decodes the 124-byte header, the two-level canonical-Huffman hunk map, and the `cdzl` (DEFLATE) / `cdlz` (LZMA) / `none` / `self` codecs into one flat raw-2352 buffer; `cdfl` (FLAC, CD-DA audio) hunks are zero-filled for now. Synthesises `tracks_` from CHTR/CHT2 metadata; reuses `compression::{inflate_raw,lzma1_decode}` + `circ_ecc_regen_sector`. |
 
 ### Scoped to the Sega CD (deferred)
 
-The reference `disc_image` also carries a Saturn IP.BIN parser, an ISO 9660 file
-walker (`find_file`/`list_dir`/`root_dir`), and `.chd` support. The Sega CD
-addresses sectors by LBA directly and needs none of these, so they are **not yet
-ported** — add them when Saturn or a CHD consumer needs them. `.chd` `open()`
-returns `nullopt` for now. Synthesised raw sectors (ISO → 2352) leave EDC/ECC
-zeroed exactly as the reference does; `circ_ecc_regen_sector` can fill them when
-a caller requires valid ECC.
+The reference `disc_image` also carries a Saturn IP.BIN parser and an ISO 9660
+file walker (`find_file`/`list_dir`/`root_dir`). The Sega CD addresses sectors by
+LBA directly and needs neither, so they are **not yet ported** — add them when
+Saturn needs them. Synthesised raw sectors (ISO → 2352) leave EDC/ECC zeroed
+exactly as the reference does; `circ_ecc_regen_sector` can fill them when a caller
+requires valid ECC.
 
 ## Conformance
 
@@ -34,10 +34,15 @@ a caller requires valid ECC.
 - `tests/disc_image_test.cpp` — in-memory BIN/ISO user-data + raw-sector reads
   (sectors built with `circ_ecc`), format-validation rejections, a CUE
   integration test through real `open()` over temp files, and MSF/LBA helpers.
+- `tests/chd_reader_test.cpp` — CRC-16/CCITT-FALSE vectors, a hand-built
+  two-level Huffman compressed-map decode, a synthetic `none`-codec image opened
+  through `disc_image`, and an env-gated (`MNEMOS_SEGACD_CHD`) real-corpus parse
+  that checks the first data sector's Mode-1 sync pattern.
 
 ## Roadmap
 
-- `chd_image` (compressed-hunk disc image format) — will use `mnemos::compression::lzma1`
-  (already staged for this) + `circ_ecc` for cdlz sector reconstruction.
+- `chd_reader` cdfl (FLAC) — CD-DA audio tracks currently decode to silence
+  (their hunks are zero-filled). A clean-room FLAC decoder would let CHD audio
+  tracks play; data tracks already work without it.
 - The Sega CD system itself (sub-CPU, gate array, CDC/CDD) consumes `disc_image`
-  via `read_sector`/`read_raw_sector` in phase C.
+  via `read_sector`/`read_raw_sector`.
