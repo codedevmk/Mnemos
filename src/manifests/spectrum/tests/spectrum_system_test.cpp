@@ -105,6 +105,39 @@ TEST_CASE("spectrum routes OUT ($FE) bit 4 to the beeper", "[manifests][spectrum
     CHECK(mx > 1000);
 }
 
+TEST_CASE("spectrum 128K pages RAM banks + ROM halves via $7FFD", "[manifests][spectrum]") {
+    // 32 KiB ROM -> 128K model. Distinct first byte per ROM half.
+    std::vector<std::uint8_t> rom(0x8000U, 0x00U);
+    rom[0x0000] = 0xAA; // ROM half 0
+    rom[0x4000] = 0xBB; // ROM half 1
+    const auto sys = assemble_spectrum(rom);
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->model == mnemos::manifests::spectrum::spectrum_model::k128);
+
+    CHECK(sys->bus.read8(0x0000U) == 0xAAU); // half 0 at reset
+
+    // Tag $C000 in two different RAM banks, switching the page via $7FFD.
+    sys->set_paging(0);
+    sys->bus.write8(0xC000U, 0x11U); // bank 0
+    sys->set_paging(1);
+    sys->bus.write8(0xC000U, 0x22U); // bank 1
+    sys->set_paging(0);
+    CHECK(sys->bus.read8(0xC000U) == 0x11U);
+    sys->set_paging(1);
+    CHECK(sys->bus.read8(0xC000U) == 0x22U);
+
+    // ROM half select (bit 4).
+    sys->set_paging(0x10U);
+    CHECK(sys->bus.read8(0x0000U) == 0xBBU);
+    sys->set_paging(0x00U);
+    CHECK(sys->bus.read8(0x0000U) == 0xAAU);
+
+    // Paging lock (bit 5) freezes further $7FFD writes until reset.
+    sys->set_paging(0x20U | 1U);             // lock + bank 1 at $C000
+    sys->set_paging(0x00U);                  // ignored while locked
+    CHECK(sys->bus.read8(0xC000U) == 0x22U); // still bank 1
+}
+
 TEST_CASE("spectrum keyboard half-rows are active-low", "[manifests][spectrum]") {
     const std::vector<std::uint8_t> rom(0x4000U, 0x00U);
     const auto sys = assemble_spectrum(rom);
@@ -122,8 +155,8 @@ TEST_CASE("spectrum keyboard half-rows are active-low", "[manifests][spectrum]")
 
 TEST_CASE("spectrum boots a real 48K ROM to a mostly-white screen", "[manifests][spectrum][data]") {
     const std::vector<std::uint8_t> rom = read_rom_or_empty();
-    if (rom.size() < 0x4000U) {
-        SUCCEED("MNEMOS_SPECTRUM_ROM unset / too small -- skipping real-ROM boot");
+    if (rom.size() != 0x4000U) {
+        SUCCEED("MNEMOS_SPECTRUM_ROM is not a 16 KiB 48K ROM -- skipping the boot check");
         return;
     }
 
@@ -180,7 +213,8 @@ TEST_CASE("spectrum .z80 v1 snapshot parses registers + RAM", "[manifests][spect
     CHECK(snap->regs.sp == 0xFF00U);
     CHECK(snap->regs.im == 1U);
     CHECK(snap->border == 3U);
-    CHECK(snap->ram[0x0010] == 0xABU);
+    CHECK_FALSE(snap->is_128k);
+    CHECK(snap->bank[5][0x0010] == 0xABU); // $4010 -> RAM bank 5
 }
 
 TEST_CASE("spectrum .sna snapshot parses + pops PC off the stack",
