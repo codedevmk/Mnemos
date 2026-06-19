@@ -20,6 +20,12 @@ namespace mnemos::manifests::spectrum {
         }
     }
 
+    void spectrum_system::apply_snapshot(const spectrum_snapshot& snap) noexcept {
+        cpu.set_registers(snap.regs);
+        std::memcpy(ram.data(), snap.ram.data(), ram.size());
+        ula.set_border(snap.border);
+    }
+
     void spectrum_system::save_state(chips::state_writer& writer) const {
         writer.u32(k_state_version);
         writer.bytes(keyboard_rows);
@@ -59,6 +65,9 @@ namespace mnemos::manifests::spectrum {
         // (active-low) with EAR in bit 6; writes set the border (bits 0-2). The
         // MIC/EAR beeper bits and all odd ports are not modelled here.
         s->cpu.set_port_in([s](std::uint16_t port) -> std::uint8_t {
+            if ((port & 0x00FFU) == 0x1FU) {
+                return s->kempston; // Kempston joystick
+            }
             if ((port & 0x0001U) != 0U) {
                 return 0xFFU; // unattached / floating bus (simplified)
             }

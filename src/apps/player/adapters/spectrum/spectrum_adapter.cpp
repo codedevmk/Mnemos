@@ -1,6 +1,7 @@
 #include "spectrum_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "spectrum_snapshot.hpp"
 
 #include <memory>
 #include <utility>
@@ -22,13 +23,21 @@ namespace mnemos::apps::player::adapters::spectrum {
     spectrum_adapter::spectrum_adapter(std::vector<std::uint8_t> rom,
                                        const manifests::spectrum::spectrum_config& config,
                                        std::string display_name,
-                                       frontend_sdk::scheduler_factory* scheduler_factory)
+                                       frontend_sdk::scheduler_factory* scheduler_factory,
+                                       std::span<const std::uint8_t> snapshot)
         : sys_(manifests::spectrum::assemble_spectrum(rom, config)),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->ula)),
           region_(config.video_region) {
         chip_view_[0] = &sys_->ula;
         chip_view_[1] = &sys_->cpu;
+
+        // A snapshot (.z80/.sna) resumes a game mid-run on top of the system ROM.
+        if (!snapshot.empty()) {
+            if (const auto snap = manifests::spectrum::load_snapshot(snapshot)) {
+                sys_->apply_snapshot(*snap);
+            }
+        }
 
         spec_.push_back({.label = "System", .value = "ZX Spectrum 48K"});
         if (!display_name.empty()) {
@@ -42,11 +51,45 @@ namespace mnemos::apps::player::adapters::spectrum {
 
     void spectrum_adapter::step_one_frame() { scheduler_.run_frame(); }
 
-    void spectrum_adapter::apply_input(int /*port*/,
-                                       const frontend_sdk::controller_state& /*state*/) noexcept {
-        // Keyboard input is a follow-up increment: the Spectrum's input is the full
-        // 40-key matrix (port $FE half-rows), not a pad, so it needs a dedicated
-        // host-key -> matrix mapping rather than the controller_state pad fields.
+    void spectrum_adapter::apply_input(int port,
+                                       const frontend_sdk::controller_state& state) noexcept {
+        if (port != 0) {
+            return; // one player for now (keyboard + Kempston)
+        }
+        auto& sys = *sys_;
+        const bool fire = state.a || state.b;
+
+        // Kempston joystick at port $1F (active-HIGH): right/left/down/up/fire.
+        std::uint8_t k = 0;
+        if (state.right) {
+            k |= 0x01U;
+        }
+        if (state.left) {
+            k |= 0x02U;
+        }
+        if (state.down) {
+            k |= 0x04U;
+        }
+        if (state.up) {
+            k |= 0x08U;
+        }
+        if (fire) {
+            k |= 0x10U;
+        }
+        sys.kempston = k;
+
+        // Keyboard: rebuild from released, then press the mapped keys. The dpad
+        // drives the Sinclair cursor keys (5/6/7/8) so cursor-control games respond
+        // too; fire -> 0, Enter, Space and CAPS SHIFT are also exposed.
+        sys.keyboard_rows.fill(0xFFU);
+        sys.set_key(3, 4, state.left);   // 5
+        sys.set_key(4, 4, state.down);   // 6
+        sys.set_key(4, 3, state.up);     // 7
+        sys.set_key(4, 2, state.right);  // 8
+        sys.set_key(4, 0, fire);         // 0 (fire)
+        sys.set_key(6, 0, state.start);  // ENTER
+        sys.set_key(7, 0, state.select); // SPACE
+        sys.set_key(0, 0, state.mode);   // CAPS SHIFT
     }
 
     void force_link() noexcept {}
@@ -57,10 +100,16 @@ namespace mnemos::apps::player::adapters::spectrum {
                 "spectrum",
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    // main routes a .z80/.sna snapshot in as additional_media[0]
+                    // (the system ROM is opts.rom).
+                    const std::span<const std::uint8_t> snapshot =
+                        opts.additional_media.empty()
+                            ? std::span<const std::uint8_t>{}
+                            : std::span<const std::uint8_t>(opts.additional_media.front());
                     return std::make_unique<spectrum_adapter>(
                         std::move(opts.rom),
                         manifests::spectrum::spectrum_config{.video_region = opts.video_region},
-                        std::move(opts.display_name), opts.scheduler_factory_override);
+                        std::move(opts.display_name), opts.scheduler_factory_override, snapshot);
                 });
             return 0;
         }();

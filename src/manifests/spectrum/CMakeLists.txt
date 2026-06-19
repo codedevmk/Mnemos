@@ -1,5 +1,6 @@
 add_library(
     mnemos_manifests_spectrum
+    spectrum_snapshot.cpp
     spectrum_system.cpp
 )
 add_library(mnemos::manifests::spectrum ALIAS mnemos_manifests_spectrum)
