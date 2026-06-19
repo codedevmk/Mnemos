@@ -1,6 +1,7 @@
 // CHD v5 reader: synthetic unit tests (CRC-16/CCITT-FALSE, the 2-level map
 // Huffman decoder, an in-memory "none"-codec CHD opened through disc_image) and
-// an env-gated real-corpus test (MNEMOS_SEGACD_CHD) over an actual .chd disc.
+// env-gated real-corpus tests (MNEMOS_SEGACD_CHD) over an actual .chd disc -- a
+// data-track parse + a cdfl (FLAC) audio-track byte-order check.
 
 #include "chd_reader.hpp"
 #include "disc_image.hpp"
@@ -9,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -20,6 +22,7 @@ namespace {
 
     using mnemos::disc::disc_format;
     using mnemos::disc::disc_image;
+    using mnemos::disc::track_type;
     namespace chd = mnemos::disc::chd;
 
     void put_be16(std::vector<std::uint8_t>& v, std::size_t off, std::uint16_t x) {
@@ -293,4 +296,84 @@ TEST_CASE("chd opens a real corpus image", "[disc][chd][data]") {
     static const std::array<std::uint8_t, 12> sync = {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                                                       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
     REQUIRE(std::equal(sync.begin(), sync.end(), raw.begin()));
+}
+
+// Data-gated: decode the disc's first CD-DA (cdfl/FLAC) audio track and confirm
+// the FLAC payload was decoded (open succeeds with cdfl active -- every frame's
+// CRC-8/CRC-16 had to validate) and that the output byte order is right. CD audio
+// is highly correlated sample to sample, so the correct little-endian reading is
+// far "smoother" (small consecutive-sample deltas) than the byte-swapped reading,
+// which looks like noise -- a definitive check that the frame CRCs cannot give.
+TEST_CASE("chd cdfl audio track decodes to plausible little-endian CD-DA",
+          "[disc][chd][data][audio]") {
+#if defined(_MSC_VER)
+#pragma warning(disable : 4996) // std::getenv: opt-in test data path
+#endif
+    const char* chd_path = std::getenv("MNEMOS_SEGACD_CHD");
+    if (chd_path == nullptr) {
+        SUCCEED("MNEMOS_SEGACD_CHD not set -- skipping cdfl audio check");
+        return;
+    }
+    const auto img = disc_image::open(std::string{chd_path});
+    REQUIRE(img.has_value());
+
+    const disc_image::track* audio = nullptr;
+    for (const disc_image::track& t : img->tracks()) {
+        if (t.type == track_type::audio) {
+            audio = &t;
+            break;
+        }
+    }
+    if (audio == nullptr) {
+        SUCCEED("no CD-DA track on this disc -- skipping cdfl audio check");
+        return;
+    }
+
+    // Scan the audio track for a sector carrying real signal (a loud sample),
+    // then compare consecutive-sample smoothness for the little-endian reading
+    // (how the reader writes it) versus the byte-swapped reading.
+    constexpr int samples_per_sector = 588; // 2352 / 4
+    std::array<std::uint8_t, 2352> raw{};
+    double le_delta = 0.0;
+    double swapped_delta = 0.0;
+    int loud_sectors = 0;
+    // Aggregate over many signal-bearing sectors rather than judging a single one:
+    // a lone atypical sector (noise burst, sound effect) can read smoother
+    // byte-swapped, but real music is overwhelmingly smoother in the correct order
+    // across the track.
+    const std::uint32_t scan = std::min<std::uint32_t>(audio->sector_count, 20000U);
+    for (std::uint32_t s = 0; s < scan && loud_sectors < 256; ++s) {
+        REQUIRE(img->read_raw_sector(audio->start_lba + s, std::span<std::uint8_t, 2352>{raw}));
+        std::int32_t peak = 0;
+        for (int i = 0; i < samples_per_sector; ++i) {
+            const auto le =
+                static_cast<std::int16_t>(static_cast<std::uint16_t>(raw[i * 4]) |
+                                          (static_cast<std::uint16_t>(raw[i * 4 + 1]) << 8U));
+            peak = std::max(peak, std::abs(static_cast<int>(le)));
+        }
+        if (peak < 4000) {
+            continue; // silence / very quiet -- not a useful smoothness sample
+        }
+        std::int16_t prev_le = 0;
+        std::int16_t prev_swapped = 0;
+        for (int i = 0; i < samples_per_sector; ++i) {
+            const auto le =
+                static_cast<std::int16_t>(static_cast<std::uint16_t>(raw[i * 4]) |
+                                          (static_cast<std::uint16_t>(raw[i * 4 + 1]) << 8U));
+            const auto swapped =
+                static_cast<std::int16_t>((static_cast<std::uint16_t>(raw[i * 4]) << 8U) |
+                                          static_cast<std::uint16_t>(raw[i * 4 + 1]));
+            if (i > 0) {
+                le_delta += std::abs(static_cast<int>(le) - static_cast<int>(prev_le));
+                swapped_delta +=
+                    std::abs(static_cast<int>(swapped) - static_cast<int>(prev_swapped));
+            }
+            prev_le = le;
+            prev_swapped = swapped;
+        }
+        ++loud_sectors;
+    }
+
+    REQUIRE(loud_sectors >= 16);     // the cdfl track decoded to real, non-silent audio
+    CHECK(le_delta < swapped_delta); // little-endian is the natural sample order
 }

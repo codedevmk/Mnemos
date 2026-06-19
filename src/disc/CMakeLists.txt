@@ -3,6 +3,7 @@ add_library(
     chd_reader.cpp
     circ_ecc.cpp
     disc_image.cpp
+    flac_decoder.cpp
 )
 add_library(mnemos::disc ALIAS mnemos_disc)
 
@@ -25,6 +26,7 @@ if(BUILD_TESTING)
             tests/chd_reader_test.cpp
             tests/circ_ecc_test.cpp
             tests/disc_image_test.cpp
+            tests/flac_decoder_test.cpp
         LIBRARIES mnemos::disc
     )
 endif()

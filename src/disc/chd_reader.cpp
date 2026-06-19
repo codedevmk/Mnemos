@@ -8,6 +8,7 @@
 #include "chd_reader.hpp"
 
 #include "circ_ecc.hpp"
+#include "flac_decoder.hpp"
 #include "inflate.hpp"
 #include "lzma1.hpp"
 
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace mnemos::disc::chd {
     namespace {
@@ -40,6 +42,7 @@ namespace mnemos::disc::chd {
         }
         constexpr std::uint32_t kCodecCdzl = fourcc('c', 'd', 'z', 'l');
         constexpr std::uint32_t kCodecCdlz = fourcc('c', 'd', 'l', 'z');
+        constexpr std::uint32_t kCodecCdfl = fourcc('c', 'd', 'f', 'l'); // CD-DA audio (FLAC)
 
         // ---- v5 map entry compression types ----
         constexpr std::uint8_t kCompType0 = 0; // codec slot 0..3
@@ -289,6 +292,35 @@ namespace mnemos::disc::chd {
                     circ_ecc_regen_sector(
                         std::span<std::uint8_t, kSectorData>{sector, kSectorData});
                 }
+            }
+            return true;
+        }
+
+        // Decode a single cdfl (CD-FLAC) hunk into the flat frames*2352 sector
+        // buffer. Unlike cdzl/cdlz this codec has no ECC bitmap / complen header:
+        // the hunk is a bare FLAC frame stream (audio) followed by the DEFLATE
+        // subcode, which we drop. The decoded 16-bit FLAC value is the CHD-native
+        // (byte-swapped) sample, so we write it the same way cdzl/cdlz leave their
+        // raw CD-audio bytes -- the post-decode pass swaps every audio track once,
+        // uniformly across codecs, into the .bin little-endian order the CD-DA
+        // consumer reads.
+        bool decode_cdfl_hunk(std::span<const std::uint8_t> in, std::uint32_t hunk_bytes,
+                              std::span<std::uint8_t> out) {
+            const std::uint32_t frames = frames_per_hunk(hunk_bytes);
+            const std::uint32_t sample_pairs = frames * (kSectorData / 4U); // 588 per sector
+            std::vector<std::int16_t> samples(static_cast<std::size_t>(sample_pairs) * 2U);
+            const auto consumed = flac_decode_interleaved(in, sample_pairs, samples);
+            if (!consumed) {
+                return false; // malformed stream or a frame CRC mismatch
+            }
+            for (std::uint32_t i = 0; i < sample_pairs; ++i) {
+                const std::uint16_t l = static_cast<std::uint16_t>(samples[i * 2U]);
+                const std::uint16_t r = static_cast<std::uint16_t>(samples[i * 2U + 1U]);
+                std::uint8_t* p = out.data() + static_cast<std::size_t>(i) * 4U;
+                p[0] = static_cast<std::uint8_t>(l & 0xFFU);
+                p[1] = static_cast<std::uint8_t>(l >> 8U);
+                p[2] = static_cast<std::uint8_t>(r & 0xFFU);
+                p[3] = static_cast<std::uint8_t>(r >> 8U);
             }
             return true;
         }
@@ -544,12 +576,13 @@ namespace mnemos::disc::chd {
 
         const bool compressed = codec[0] != kCodecNone;
 
-        // The primary codec (slot 0, used for data tracks) must be one we can
-        // decode. Audio-only codecs (cdfl/FLAC) commonly occupy a later slot for
-        // CD-DA tracks; we accept the disc and zero-fill any hunk that actually
-        // uses an unsupported slot rather than rejecting the whole image.
-        if (codec[0] != kCodecNone && codec[0] != kCodecCdzl && codec[0] != kCodecCdlz) {
-            return std::nullopt; // e.g. a FLAC-primary disc -- deferred
+        // The primary codec (slot 0) must be one we can decode. cdzl/cdlz carry
+        // data tracks; cdfl carries CD-DA audio (a FLAC-primary, all-audio disc is
+        // valid). Any hunk on a still-unsupported slot is zero-filled rather than
+        // failing the whole image.
+        if (codec[0] != kCodecNone && codec[0] != kCodecCdzl && codec[0] != kCodecCdlz &&
+            codec[0] != kCodecCdfl) {
+            return std::nullopt;
         }
 
         // Decode the map: compressed (12-byte entries) or raw (4-byte indices).
@@ -613,16 +646,20 @@ namespace mnemos::disc::chd {
             case kCompType0 + 2:
             case kCompType0 + 3: {
                 const std::uint32_t this_codec = codec[type];
-                if (this_codec != kCodecCdzl && this_codec != kCodecCdlz) {
-                    // Unsupported codec for this slot (e.g. cdfl audio): leave
-                    // the hunk zero-filled. Data tracks never reference it.
+                if (this_codec != kCodecCdzl && this_codec != kCodecCdlz &&
+                    this_codec != kCodecCdfl) {
+                    // Still-unsupported codec for this slot: leave the hunk
+                    // zero-filled rather than failing the whole image.
                     break;
                 }
                 if (blockoffs + blocklen > file.size()) {
                     return std::nullopt;
                 }
                 const std::span<const std::uint8_t> comp = file.subspan(blockoffs, blocklen);
-                const bool ok = decode_cd_hunk(comp, hunkbytes, this_codec == kCodecCdlz, dst_span);
+                const bool ok =
+                    this_codec == kCodecCdfl
+                        ? decode_cdfl_hunk(comp, hunkbytes, dst_span)
+                        : decode_cd_hunk(comp, hunkbytes, this_codec == kCodecCdlz, dst_span);
                 if (!ok) {
                     return std::nullopt;
                 }
@@ -691,10 +728,14 @@ namespace mnemos::disc::chd {
                                                   static_cast<std::uint32_t>(mt.frames) -
                                                   static_cast<std::uint32_t>(pregap);
                     t.sector_count = end_lba - t.start_lba;
-                    // Flat-image byte offset (pregap pause bytes precede INDEX 1).
+                    // Flat-image byte offset of INDEX 1: this track's block starts at
+                    // the cumulative padded cursor `file_sectors`, and any in-file
+                    // pregap pause sectors precede INDEX 1. read_raw_sector adds
+                    // (lba - start_lba), so the offset must NOT subtract start_lba --
+                    // doing so only cancelled for the start_lba==0 data track and put
+                    // every audio track's window on top of the data track.
                     t.data_offset =
-                        (static_cast<std::uint64_t>(file_sectors) + pregap - t.start_lba) *
-                        kSectorData;
+                        (static_cast<std::uint64_t>(file_sectors) + pregap) * kSectorData;
                     toc_end = end_lba + static_cast<std::uint32_t>(mt.postgap);
                     file_sectors += ((static_cast<std::uint32_t>(mt.frames) + kTrackPadding - 1) /
                                      kTrackPadding) *

@@ -169,7 +169,7 @@ hard-problems board / per-title tasks), NOT the opt-in timing tail.
 ## Sega CD — 0 / 2
 
 #### Disc / media
-- [~] **D1** CHD compressed disc reader (v5 codec stack: cdfl / cdlz / cdzl / huff). **inc1 done (`451ed5bd`):** `chd_reader` decodes the v5 header, the two-level canonical-Huffman hunk map, and the `cdzl` (DEFLATE) / `cdlz` (LZMA) / `none` / `self` codecs into a flat raw-2352 image with CHTR/CHT2 track synthesis + ECC regen; `.chd` opens through `disc_image::open` and the player CLI accepts it. Verified across all 9 real Sega CD CHDs (first data sector's Mode-1 sync matches) — the 2-level map (not the flat-tree trap) is the working path. **Remaining (inc2):** `cdfl` (FLAC) for CD-DA audio tracks — their hunks decode to silence today; data tracks already play without it. · PARTIAL · HIGH · L · vs Emu · R3 · Evidence: `src/disc/chd_reader.cpp`, `src/disc/tests/chd_reader_test.cpp`
+- [x] **D1** CHD compressed disc reader (v5 codec stack: cdfl / cdlz / cdzl / huff). **inc1 (`451ed5bd`):** `chd_reader` decodes the v5 header, the two-level canonical-Huffman hunk map, and the `cdzl` (DEFLATE) / `cdlz` (LZMA) / `none` / `self` codecs into a flat raw-2352 image with CHTR/CHT2 track synthesis + ECC regen; `.chd` opens through `disc_image::open` and the player boots the Sega CD BIOS from it. **inc2 done:** clean-room `flac_decoder` (RFC 9639: header CRC-8 + footer CRC-16 validated, CONSTANT/VERBATIM/FIXED/LPC subframes, partitioned-Rice residual, L/R/mid-side decorrelation) decodes `cdfl` CD-DA audio. Also fixed a latent audio-track `data_offset` bug (subtracted start_lba, so every audio track's flat window overlapped the data track — harmless while audio was silent). Verified across all 9 real corpus CHDs: every FLAC frame's CRC validates and the decoded audio is correct little-endian CD-DA (waveform-smoothness check); synthetic FLAC unit tests cover CI. · DONE · HIGH · L · vs Emu · R3 · Evidence: `src/disc/flac_decoder.cpp`, `src/disc/chd_reader.cpp`, `src/disc/tests/{flac_decoder_test,chd_reader_test}.cpp`
 - [ ] **D2** ISO 9660 file-system walker (PVD parse + directory records) · MISSING · MED · M · vs Emu · R16 · Evidence: `progress-analysis.md` R16
 
 > Done (console hardware exceeds Emu): sub-CPU, gate array, word-RAM 2M+1M, CDC, CDD,
@@ -237,7 +237,7 @@ parity-grade for the new machine. Listed prerequisites still apply.
 ## Suggested critical path (correctness before breadth)
 
 1. ~~**32X timing cluster** — X2, X1, X3~~ **DONE (2026-06-13):** X1 address-error + X4 INTC + the X2/X3 cycle-true timing tail are all implemented (X2/X3 as opt-in, manual-grounded models; default-on deferred). 32X is 8/8. The next 32X correctness work is the boot/feature chain (per-title tasks), not this cluster.
-2. **Sega CD CHD** — D1 **inc1 done** (`chd_reader` decodes cdzl/cdlz/none data tracks; all 9 corpus CHDs parse). Remaining: inc2 = cdfl/FLAC for CD-DA audio.
+2. ~~**Sega CD CHD** — D1~~ **DONE** (`chd_reader` decodes cdzl/cdlz/none data tracks + cdfl/FLAC CD-DA audio; all 9 corpus CHDs verified).
 3. ~~**SMS YM2413** — S1~~ **DONE (2026-06-17):** SMS FM is wired through the hand-built path, manifest runtime, and player `--fm`.
 4. **Address-error exceptions** — G1 + X1 (shared 68K + SH-2 work; G1 also fixes Sega CD sub-CPU).
 5. ~~**Genesis whole-system deterministic save target** — G7 ⇄ T4~~ **DONE (2026-06-18):** the manifest-path `runtime::save_target` (graph chips + work/Z80 RAM + battery SRAM + board latches + EEPROM I2C state + scheduler pacing) round-trips deterministically; unlocks save-state/rewind.
