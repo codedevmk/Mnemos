@@ -222,7 +222,7 @@ Entirely absent from Mnemos. Domains to build per system; ordered easiest → ha
 "✓" = a reusable implementation exists in Mnemos, not that the chip is already
 parity-grade for the new machine. Listed prerequisites still apply.
 
-- [ ] **U1 Spectrum** — *LOW.* CPU: Z80 ✓ · Video: ULA (inline) · Audio: AY-3-8910 · Glue: 48K contention / Timex TC2048/TS2068/TC2068 models. Easiest win. · Evidence: `progress-analysis.md` §4
+- [~] **U1 Spectrum** — *LOW.* CPU: Z80 ✓ · Video: ULA ✓ · Audio: AY-3-8910 (128K) · Glue. **inc 1 DONE (#215 ULA chip, #216 system):** `chips::video::ula` (256x192 bitmap+attr+FLASH+border render-at-vblank, 50 Hz /INT pulse) + `manifests::spectrum::assemble_spectrum` (Z80 + 16K ROM + 48K RAM + port-$FE keyboard/border) + `spectrum_adapter` + `--system spectrum`. **The real 48K ROM boots to the © 1982 Sinclair Research Ltd screen (verified visually).** The 7th running system. **Remaining (inc 2+):** beeper audio, keyboard input mapping, `.z80`/`.tap` loading (to run games), then 128K AY + Timex models + 48K contention. · Evidence: `src/chips/video/ula/`, `src/manifests/spectrum/`, `src/apps/player/adapters/spectrum/`
 - [ ] **U2 CPS1** — *MED.* CPU: m68000 ✓ (G1 applies) + z80 ✓ · Video: CPS-A/B GFX (bespoke, inline in Emu) · Audio: ym2151 ✓ + MSM6295 + QSound · Glue: ZIP set loading. · Evidence: `progress-analysis.md` §4
 - [ ] **U3 NES** — *MED.* CPU: 2A03 variant + glue (Mnemos m6510 ≠ 2A03) · Video: ppu2c02 · Audio: ricoh_2a03_apu · Glue: real mappers (MMC1/3…) beyond NROM. · Evidence: `progress-analysis.md` §4
 - [ ] **U4 CPS2** — *MED–HIGH.* CPU: m68000 ✓ (G1 applies) + z80 ✓ · Video: reuse CPS1 path · Audio: QSound · Glue: CPS-2 keyed opcode decryption. · Evidence: `progress-analysis.md` §4
@@ -242,4 +242,4 @@ parity-grade for the new machine. Listed prerequisites still apply.
 4. **Address-error exceptions** — G1 + X1 (shared 68K + SH-2 work; G1 also fixes Sega CD sub-CPU).
 5. ~~**Genesis whole-system deterministic save target** — G7 ⇄ T4~~ **DONE (2026-06-18):** the manifest-path `runtime::save_target` (graph chips + work/Z80 RAM + battery SRAM + board latches + EEPROM I2C state + scheduler pacing) round-trips deterministically; unlocks save-state/rewind.
 6. **C64 1541 GCR hardening** — C1 (gates disk-based software).
-7. **Breadth, by ROI** — Spectrum → CPS1 → NES (6 → 9 systems for modest effort).
+7. **Breadth, by ROI** — ~~Spectrum~~ **48K booting (#215/#216; 7th system)** → CPS1 → NES.
