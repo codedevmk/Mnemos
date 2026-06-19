@@ -28,6 +28,7 @@
 #include "segacd_adapter.hpp"  // force_link (Sega CD: BIOS boot ROM + disc image)
 #include "sms_adapter.hpp"     // force_link + manifests::sms::parse_market
 #include "sms_region.hpp"
+#include "spectrum_adapter.hpp" // force_link (ZX Spectrum 48K)
 #include "system_family.hpp"
 #include "text_overlay.hpp"
 
@@ -253,6 +254,9 @@ int main(int argc, char* argv[]) {
         case system_family::c64:
             cart_default = mnemos::video_region::pal;
             break;
+        case system_family::spectrum:
+            cart_default = mnemos::video_region::pal; // 50 Hz machine
+            break;
         case system_family::sega32x:
             // 32X carts carry a Genesis-style header with the region byte.
             cart_default =
@@ -287,6 +291,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::irem_m72::force_link();
         mnemos::apps::player::adapters::capcom_cps1::force_link();
         mnemos::apps::player::adapters::capcom_cps2::force_link();
+        mnemos::apps::player::adapters::spectrum::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).
