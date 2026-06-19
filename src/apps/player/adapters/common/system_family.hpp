@@ -15,7 +15,8 @@ namespace mnemos::apps::player::adapters {
         sega32x,
         irem_m72,
         capcom_cps1,
-        capcom_cps2
+        capcom_cps2,
+        spectrum
     };
 
     // Map a `--system` name to its family. The accepted names are exactly the
