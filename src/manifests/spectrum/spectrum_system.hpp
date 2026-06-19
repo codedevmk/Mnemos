@@ -1,10 +1,11 @@
 #pragma once
 
-#include "bus.hpp"    // topology::bus
-#include "region.hpp" // mnemos::video_region
-#include "state.hpp"  // chips::state_writer / state_reader
-#include "ula.hpp"    // chips::video::ula
-#include "z80.hpp"    // chips::cpu::z80
+#include "bus.hpp"               // topology::bus
+#include "region.hpp"            // mnemos::video_region
+#include "spectrum_snapshot.hpp" // spectrum_snapshot
+#include "state.hpp"             // chips::state_writer / state_reader
+#include "ula.hpp"               // chips::video::ula
+#include "z80.hpp"               // chips::cpu::z80
 
 #include <array>
 #include <cstdint>
@@ -37,9 +38,16 @@ namespace mnemos::manifests::spectrum {
         std::array<std::uint8_t, 8> keyboard_rows{};
         bool ear_input{}; // tape EAR line, sampled in bit 6 of a port-$FE read
 
+        // Kempston joystick, read at port $1F: active-HIGH bits b0=right, b1=left,
+        // b2=down, b3=up, b4=fire (the de-facto joystick standard many games read).
+        std::uint8_t kempston{};
+
         // Press/release a key at (half-row 0..7, bit 0..4). Active-low: a held key
         // clears its bit.
         void set_key(int row, int bit, bool pressed) noexcept;
+
+        // Load a snapshot's registers, RAM and border into the running machine.
+        void apply_snapshot(const spectrum_snapshot& snap) noexcept;
 
         // Non-chip latch state (keyboard + EAR). The chips, ROM and RAM are
         // serialized separately by a machine-save path.

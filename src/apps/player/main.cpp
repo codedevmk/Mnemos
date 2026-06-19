@@ -350,6 +350,40 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        // A ZX Spectrum snapshot (.z80/.sna) resumes a game on top of the 48K
+        // system ROM (from MNEMOS_SPECTRUM_ROM), routed in as additional_media; a
+        // 16 KiB .rom is itself the system ROM and boots directly.
+        if (family == system_family::spectrum) {
+            std::string ext = rom_paths.front().size() >= 4
+                                  ? rom_paths.front().substr(rom_paths.front().size() - 4)
+                                  : std::string{};
+            for (char& ch : ext) {
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            if (ext == ".z80" || ext == ".sna") {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
+#endif
+                const char* bios_env = std::getenv("MNEMOS_SPECTRUM_ROM");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+                if (bios_env == nullptr) {
+                    std::fprintf(stderr, "[mnemos_player] a Spectrum snapshot needs "
+                                         "MNEMOS_SPECTRUM_ROM set to a 48K system ROM\n");
+                    return 1;
+                }
+                auto bios = load_rom(bios_env);
+                if (!bios || bios->bytes.size() < 0x4000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read Spectrum ROM: %s\n",
+                                 bios_env);
+                    return 1;
+                }
+                additional_media.insert(additional_media.begin(), std::move(primary_rom));
+                primary_rom = std::move(bios->bytes);
+            }
+        }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
             family_id(family), {.rom = std::move(primary_rom),
                                 .video_region = video,

@@ -26,7 +26,8 @@ namespace mnemos::apps::player::adapters::spectrum {
         explicit spectrum_adapter(std::vector<std::uint8_t> rom,
                                   const manifests::spectrum::spectrum_config& config = {},
                                   std::string display_name = {},
-                                  frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
+                                  frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
+                                  std::span<const std::uint8_t> snapshot = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override;
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&

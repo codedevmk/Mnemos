@@ -4,6 +4,7 @@
 
 #include "spectrum_system.hpp"
 
+#include "spectrum_snapshot.hpp"
 #include "ula.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -116,4 +117,106 @@ TEST_CASE("spectrum boots a real 48K ROM to a mostly-white screen", "[manifests]
     // The screen is overwhelmingly white paper, with a little black copyright text.
     CHECK(white_count > 40000U); // of 256*192 = 49152
     CHECK(black_count > 0U);
+}
+
+TEST_CASE("spectrum .z80 v1 snapshot parses registers + RAM", "[manifests][spectrum][snapshot]") {
+    std::vector<std::uint8_t> z(30U + 0xC000U, 0x00U);
+    z[0] = 0x12;           // A
+    z[1] = 0x34;           // F
+    z[2] = 0x78;           // C
+    z[3] = 0x56;           // B  -> BC = 0x5678
+    z[6] = 0x00;           // PC lo
+    z[7] = 0x80;           // PC hi -> 0x8000 (non-zero => v1)
+    z[8] = 0x00;           // SP lo
+    z[9] = 0xFF;           // SP hi -> 0xFF00
+    z[12] = 0x06;          // flags: border = 3, uncompressed
+    z[29] = 0x01;          // IM 1
+    z[30 + 0x0010] = 0xAB; // a RAM byte at $4010
+
+    const auto snap = mnemos::manifests::spectrum::load_z80_snapshot(z);
+    REQUIRE(snap.has_value());
+    CHECK(snap->regs.af == 0x1234U);
+    CHECK(snap->regs.bc == 0x5678U);
+    CHECK(snap->regs.pc == 0x8000U);
+    CHECK(snap->regs.sp == 0xFF00U);
+    CHECK(snap->regs.im == 1U);
+    CHECK(snap->border == 3U);
+    CHECK(snap->ram[0x0010] == 0xABU);
+}
+
+TEST_CASE("spectrum .sna snapshot parses + pops PC off the stack",
+          "[manifests][spectrum][snapshot]") {
+    std::vector<std::uint8_t> s(27U + 0xC000U, 0x00U);
+    s[21] = 0x34; // F
+    s[22] = 0x12; // A  -> AF = 0x1234
+    s[23] = 0x00; // SP lo
+    s[24] = 0x60; // SP hi -> SP = 0x6000
+    s[25] = 0x02; // IM 2
+    s[26] = 0x05; // border 5
+    // Put PC = 0x9ABC on the stack at $6000.
+    s[27 + (0x6000 - 0x4000)] = 0xBC;
+    s[27 + (0x6000 - 0x4000) + 1] = 0x9A;
+
+    const auto snap = mnemos::manifests::spectrum::load_sna_snapshot(s);
+    REQUIRE(snap.has_value());
+    CHECK(snap->regs.af == 0x1234U);
+    CHECK(snap->regs.pc == 0x9ABCU); // popped from the stack
+    CHECK(snap->regs.sp == 0x6002U); // SP += 2 after the pop
+    CHECK(snap->regs.im == 2U);
+    CHECK(snap->border == 5U);
+}
+
+// Data-gated: load the 48K ROM (MNEMOS_SPECTRUM_ROM) + a .z80 game
+// (MNEMOS_SPECTRUM_Z80), apply the snapshot, run a few frames, and confirm the
+// game paints a varied screen (not a blank single-colour field).
+TEST_CASE("spectrum runs a real .z80 game", "[manifests][spectrum][data]") {
+#if defined(_MSC_VER)
+#pragma warning(disable : 4996)
+#endif
+    const char* bios_env = std::getenv("MNEMOS_SPECTRUM_ROM");
+    const char* game_env = std::getenv("MNEMOS_SPECTRUM_Z80");
+    if (bios_env == nullptr || game_env == nullptr) {
+        SUCCEED("MNEMOS_SPECTRUM_ROM / MNEMOS_SPECTRUM_Z80 unset -- skipping real-game run");
+        return;
+    }
+    const auto read = [](const char* p) {
+        std::ifstream in(p, std::ios::binary);
+        return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(in),
+                                         std::istreambuf_iterator<char>{});
+    };
+    const std::vector<std::uint8_t> bios = read(bios_env);
+    const std::vector<std::uint8_t> game = read(game_env);
+    if (bios.size() < 0x4000U || game.empty()) {
+        SUCCEED("could not read ROM/game -- skipping");
+        return;
+    }
+
+    const auto sys = assemble_spectrum(bios);
+    REQUIRE(sys != nullptr);
+    const auto snap = mnemos::manifests::spectrum::load_snapshot(game);
+    REQUIRE(snap.has_value());
+    sys->apply_snapshot(*snap);
+    for (int i = 0; i < 8; ++i) {
+        run_frame(*sys);
+    }
+
+    // A real game screen has many distinct colours; a blank machine would be one.
+    const auto fb = sys->ula.framebuffer();
+    std::array<bool, 16> seen{};
+    int distinct = 0;
+    for (int y = 0; y < ula::display_height; ++y) {
+        const std::uint32_t* row =
+            fb.pixels + static_cast<std::size_t>(y + ula::screen_y_offset) * fb.effective_stride();
+        for (int x = 0; x < ula::display_width; ++x) {
+            // Fold the RGB to a small bucket so we count broad colour variety.
+            const std::uint32_t px = row[static_cast<std::size_t>(x + ula::screen_x_offset)];
+            const std::size_t bucket =
+                ((px >> 23U) & 1U) | (((px >> 15U) & 1U) << 1U) | (((px >> 7U) & 1U) << 2U);
+            if (!seen[bucket]) {
+                seen[bucket] = true;
+                ++distinct;
+            }
+        }
+    }
+    CHECK(distinct >= 3); // a real game uses several inks/papers
 }
