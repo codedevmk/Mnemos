@@ -98,6 +98,10 @@ namespace mnemos::manifests::nes {
         // adapter down-resamples cleanly. (NTSC; PAL timing is a later increment.)
         s->apu.set_clock_divider(37);
 
+        // The DMC channel streams delta-PCM samples from cartridge ROM
+        // ($8000-$FFFF) via the CPU bus during playback.
+        s->apu.set_dmc_reader([s](std::uint16_t addr) { return s->bus.read8(addr); });
+
         // $0000-$1FFF: 2 KiB work RAM, mirrored four times (A11/A12 ignored).
         for (std::uint32_t base = 0x0000U; base < 0x2000U; base += 0x0800U) {
             s->bus.map_ram(base, std::span<std::uint8_t>(s->wram));

@@ -19,6 +19,11 @@ namespace mnemos::chips::audio {
         constexpr std::array<std::uint16_t, 16> k_noise_period = {
             4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068};
 
+        // 4-bit rate index -> DMC output-clock period in CPU cycles (NTSC). Lower
+        // index = slower playback; index 15 (54) is the ~33 kHz maximum.
+        constexpr std::array<std::uint16_t, 16> k_dmc_rate = {
+            428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54};
+
         // Per-duty 8-step square sequence (1 = high). Indexed [duty][step].
         constexpr std::array<std::array<std::uint8_t, 8>, 4> k_duty_table = {{
             {0, 1, 0, 0, 0, 0, 0, 0}, // 12.5%
@@ -117,6 +122,16 @@ namespace mnemos::chips::audio {
         triangle_.enabled = et;
         noise_.enabled = en;
         dmc_.enabled = ed;
+        // DMC enable ($4015 bit 4): setting it (re)starts the sample only when the
+        // current one has finished; clearing it stops the memory reader.
+        if (ed) {
+            if (dmc_.bytes_remaining == 0U) {
+                dmc_.current_address = dmc_.sample_address;
+                dmc_.bytes_remaining = dmc_.sample_length;
+            }
+        } else {
+            dmc_.bytes_remaining = 0U;
+        }
         if (!e1) {
             pulse_[0].length_counter = 0U;
         }
@@ -292,6 +307,60 @@ namespace mnemos::chips::audio {
 
     // ---- synthesis (clean-room from the 2A03 datasheet) ----
 
+    void ricoh_2a03_apu::dmc_clock() noexcept {
+        // Memory reader: keep the one-byte sample buffer full while bytes remain.
+        // (The real chip steals ~4 CPU cycles per fetch for the DMA; that stall is
+        // not modelled -- only the sample stream is, which is what makes it sound.)
+        if (!dmc_.sample_buffer_full && dmc_.bytes_remaining > 0U) {
+            dmc_.sample_buffer = dmc_read_ ? dmc_read_(dmc_.current_address) : 0U;
+            dmc_.sample_buffer_full = true;
+            dmc_.current_address = dmc_.current_address == 0xFFFFU
+                                       ? 0x8000U
+                                       : static_cast<std::uint16_t>(dmc_.current_address + 1U);
+            --dmc_.bytes_remaining;
+            if (dmc_.bytes_remaining == 0U) {
+                if (dmc_.loop_sample) { // restart from the latched address/length
+                    dmc_.current_address = dmc_.sample_address;
+                    dmc_.bytes_remaining = dmc_.sample_length;
+                } else if (dmc_.irq_enable) {
+                    dmc_irq_flag_ = true;
+                }
+            }
+        }
+
+        // Output unit: the rate timer counts CPU cycles; on expiry it clocks one bit.
+        if (dmc_.timer_counter != 0U) {
+            --dmc_.timer_counter;
+            return;
+        }
+        dmc_.timer_counter = k_dmc_rate[dmc_.rate_index & 0x0FU];
+        if (!dmc_.silence) {
+            // Delta step: +-2 per shifted bit, clamped to the 7-bit DAC range.
+            if ((dmc_.shift_register & 0x01U) != 0U) {
+                if (dmc_.output_level <= 125U) {
+                    dmc_.output_level = static_cast<std::uint8_t>(dmc_.output_level + 2U);
+                }
+            } else if (dmc_.output_level >= 2U) {
+                dmc_.output_level = static_cast<std::uint8_t>(dmc_.output_level - 2U);
+            }
+        }
+        dmc_.shift_register = static_cast<std::uint8_t>(dmc_.shift_register >> 1U);
+        if (dmc_.bits_remaining > 0U) {
+            --dmc_.bits_remaining;
+        }
+        if (dmc_.bits_remaining == 0U) {
+            // Start a new output cycle from the sample buffer, or fall silent.
+            dmc_.bits_remaining = 8U;
+            if (dmc_.sample_buffer_full) {
+                dmc_.silence = false;
+                dmc_.shift_register = dmc_.sample_buffer;
+                dmc_.sample_buffer_full = false;
+            } else {
+                dmc_.silence = true;
+            }
+        }
+    }
+
     std::int16_t ricoh_2a03_apu::mix_step() noexcept {
         std::int32_t mix = 0;
 
@@ -353,8 +422,8 @@ namespace mnemos::chips::audio {
             }
         }
 
-        // DMC: no PCM stream is fetched here (that needs the CPU bus); the 7-bit DAC
-        // level set via $4011 is mixed straight through so direct-load tones sound.
+        // DMC: the 7-bit DAC level -- driven by the delta-PCM output unit in
+        // dmc_clock() (or loaded directly via $4011) -- mixed centred on mid-scale.
         if (dmc_.enabled) {
             mix += ((static_cast<std::int32_t>(dmc_.output_level) - 64) * k_channel_peak) / 64;
         }
@@ -376,6 +445,8 @@ namespace mnemos::chips::audio {
 
     void ricoh_2a03_apu::tick(std::uint64_t cycles) {
         for (std::uint64_t i = 0; i < cycles; ++i) {
+            dmc_clock(); // CPU-rate delta-PCM channel (memory reader + output unit)
+
             // Frame-counter IRQ edge gate (ported integer-exact from the reference).
             cpu_cycles_ += 1U;
             if (!frame_mode_5step_ && !frame_irq_inhibit_ &&
@@ -498,6 +569,14 @@ namespace mnemos::chips::audio {
         writer.u16(dmc_.sample_length);
         writer.boolean(dmc_.enabled);
         writer.u8(dmc_.output_level);
+        writer.u16(dmc_.timer_counter);
+        writer.u16(dmc_.current_address);
+        writer.u16(dmc_.bytes_remaining);
+        writer.u8(dmc_.shift_register);
+        writer.u8(dmc_.bits_remaining);
+        writer.u8(dmc_.sample_buffer);
+        writer.boolean(dmc_.sample_buffer_full);
+        writer.boolean(dmc_.silence);
 
         writer.boolean(frame_mode_5step_);
         writer.boolean(frame_irq_inhibit_);
@@ -571,6 +650,14 @@ namespace mnemos::chips::audio {
         dmc_.sample_length = reader.u16();
         dmc_.enabled = reader.boolean();
         dmc_.output_level = reader.u8();
+        dmc_.timer_counter = reader.u16();
+        dmc_.current_address = reader.u16();
+        dmc_.bytes_remaining = reader.u16();
+        dmc_.shift_register = reader.u8();
+        dmc_.bits_remaining = reader.u8();
+        dmc_.sample_buffer = reader.u8();
+        dmc_.sample_buffer_full = reader.boolean();
+        dmc_.silence = reader.boolean();
 
         frame_mode_5step_ = reader.boolean();
         frame_irq_inhibit_ = reader.boolean();

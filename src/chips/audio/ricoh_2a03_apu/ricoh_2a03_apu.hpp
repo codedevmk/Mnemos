@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -85,6 +86,13 @@ namespace mnemos::chips::audio {
         // bits inside $4000..$4017 are decoded; everything else is open-bus).
         [[nodiscard]] std::uint8_t read_reg(std::uint16_t addr) noexcept;
         void write_reg(std::uint16_t addr, std::uint8_t value) noexcept;
+
+        // Wire the DMC sample fetcher to CPU address space. During playback the DMC
+        // reads sample bytes from $8000-$FFFF (cartridge ROM); the host points this
+        // at the CPU bus. Unset (standalone chip / tests) => the DMC reads 0.
+        void set_dmc_reader(std::function<std::uint8_t(std::uint16_t)> reader) noexcept {
+            dmc_read_ = std::move(reader);
+        }
 
         // The /IRQ line: set by the 4-step-mode frame IRQ or the DMC IRQ.
         [[nodiscard]] bool irq_asserted() const noexcept {
@@ -178,16 +186,28 @@ namespace mnemos::chips::audio {
             bool loop_sample{};
             std::uint8_t rate_index{};
             std::uint8_t direct_load{};
-            std::uint16_t sample_address{};
-            std::uint16_t sample_length{};
+            std::uint16_t sample_address{}; // sample start ($4012)
+            std::uint16_t sample_length{};  // sample length in bytes ($4013)
             bool enabled{};
             std::uint8_t output_level{}; // 7-bit DAC level
+            // Sample-playback runtime, driven by the CPU-rate DMC clock.
+            std::uint16_t timer_counter{};   // CPU cycles until the next output clock
+            std::uint16_t current_address{}; // memory reader's fetch pointer
+            std::uint16_t bytes_remaining{}; // bytes left in the active sample
+            std::uint8_t shift_register{};   // output unit's shift register
+            std::uint8_t bits_remaining{};   // bits left in the current output cycle
+            std::uint8_t sample_buffer{};    // 1-byte buffer from the memory reader
+            bool sample_buffer_full{};
+            bool silence{true}; // output unit idle (no sample byte loaded)
         };
 
         void pulse_decode(pulse_channel& p) noexcept;
         void triangle_decode(triangle_channel& t) noexcept;
         void noise_decode(noise_channel& n) noexcept;
         void dmc_decode(dmc_channel& d) noexcept;
+        // One CPU-cycle tick of the DMC: refill the sample buffer (memory reader)
+        // and, when the rate timer expires, clock the delta-PCM output unit.
+        void dmc_clock() noexcept;
         void status_write(std::uint8_t value) noexcept;
         void frame_counter_write(std::uint8_t value) noexcept;
         // Advance the per-step oscillators and return the mono mix.
@@ -197,6 +217,7 @@ namespace mnemos::chips::audio {
         triangle_channel triangle_{};
         noise_channel noise_{};
         dmc_channel dmc_{};
+        std::function<std::uint8_t(std::uint16_t)> dmc_read_{};
 
         bool frame_mode_5step_{};
         bool frame_irq_inhibit_{};
