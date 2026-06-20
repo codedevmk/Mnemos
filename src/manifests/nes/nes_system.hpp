@@ -67,6 +67,11 @@ namespace mnemos::manifests::nes {
         std::unique_ptr<nes_mapper> mapper;         // owns the $8000-$FFFF + CHR banking
         bool battery{};                             // the $6000 RAM is battery-backed (persist it)
 
+        // The cartridge (MMC3) and the APU (frame + DMC) share the CPU /IRQ line as
+        // a wired-OR; each callback updates its source and republishes the union.
+        bool mapper_irq{};
+        bool apu_irq{};
+
         // Two standard pads. pad_buttons is the live state; pad_shift is the
         // per-port serial register the $4016/$4017 reads clock out.
         std::array<std::uint8_t, 2> pad_buttons{};

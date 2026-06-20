@@ -165,6 +165,29 @@ TEST_CASE("ricoh_2a03_apu DMC raises its IRQ at the end of a non-looping sample"
     REQUIRE_FALSE(chip.irq_asserted());
 }
 
+TEST_CASE("ricoh_2a03_apu delivers the /IRQ level through the callback",
+          "[ricoh_2a03_apu][audio]") {
+    ricoh_2a03_apu chip;
+    bool irq = false;
+    int edges = 0;
+    chip.set_irq_callback([&](bool a) {
+        irq = a;
+        ++edges;
+    });
+
+    // Frame IRQ (4-step mode, not inhibited) -> callback asserts on the edge.
+    chip.write_reg(ricoh_2a03_apu::reg_frame_counter, 0x00);
+    REQUIRE_FALSE(irq);
+    chip.tick(30000); // past the 4-step last-step cycle (29829)
+    CHECK(irq);
+    CHECK(edges == 1); // a single rising edge, not one per cycle
+
+    // Reading the status port acknowledges it -> callback deasserts.
+    (void)chip.read_reg(ricoh_2a03_apu::reg_status);
+    CHECK_FALSE(irq);
+    CHECK(edges == 2);
+}
+
 TEST_CASE("ricoh_2a03_apu save_state/load_state round-trips bit-identically",
           "[ricoh_2a03_apu][audio]") {
     ricoh_2a03_apu a;

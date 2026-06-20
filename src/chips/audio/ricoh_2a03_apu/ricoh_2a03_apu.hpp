@@ -99,6 +99,11 @@ namespace mnemos::chips::audio {
             return frame_irq_flag_ || dmc_irq_flag_;
         }
 
+        // Notified whenever the combined APU /IRQ level changes (frame or DMC IRQ
+        // set in tick(), or any of them acknowledged through a register access).
+        // The host wires this into the CPU /IRQ line (OR'd with the cartridge IRQ).
+        void set_irq_callback(std::function<void(bool)> cb) noexcept { irq_cb_ = std::move(cb); }
+
         // Generate one native mono sample, updating last_sample()/last_left()/
         // last_right() and advancing every enabled channel's oscillator.
         void step() noexcept;
@@ -210,6 +215,8 @@ namespace mnemos::chips::audio {
         void dmc_clock() noexcept;
         void status_write(std::uint8_t value) noexcept;
         void frame_counter_write(std::uint8_t value) noexcept;
+        // Re-evaluate irq_asserted() and fire irq_cb_ on a level change.
+        void notify_irq() noexcept;
         // Advance the per-step oscillators and return the mono mix.
         [[nodiscard]] std::int16_t mix_step() noexcept;
 
@@ -218,6 +225,8 @@ namespace mnemos::chips::audio {
         noise_channel noise_{};
         dmc_channel dmc_{};
         std::function<std::uint8_t(std::uint16_t)> dmc_read_{};
+        std::function<void(bool)> irq_cb_{};
+        bool irq_last_{}; // last /IRQ level reported to irq_cb_
 
         bool frame_mode_5step_{};
         bool frame_irq_inhibit_{};
