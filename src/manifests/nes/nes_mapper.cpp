@@ -213,7 +213,7 @@ namespace mnemos::manifests::nes {
         // last / second-last bank); CHR is composed 1 KiB at a time into an 8 KiB
         // window the PPU reads. Mirroring is set by $A000. The scanline IRQ
         // ($C000-$E001) registers are latched but not yet fired (a later step).
-        class mmc3_mapper final : public nes_mapper {
+        class mmc3_mapper : public nes_mapper {
           public:
             mmc3_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
@@ -294,7 +294,9 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-          private:
+          protected:
+            // Banking internals are protected so the Namco-118 (iNES 206) subclass
+            // can drive the same PRG/CHR layout through a reduced register set.
             void apply() {
                 apply_prg();
                 apply_chr();
@@ -350,7 +352,7 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            void apply_mirroring() {
+            virtual void apply_mirroring() {
                 using m = chips::video::ppu2c02::mirroring;
                 // MMC3 $A000 bit 0: 0 = vertical, 1 = horizontal.
                 ppu_->set_mirroring((mirror_reg_ & 0x01U) != 0U ? m::horizontal : m::vertical);
@@ -366,6 +368,37 @@ namespace mnemos::manifests::nes {
             bool irq_reload_{};
             bool irq_enabled_{};
             std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
+
+        // Namco 118 / DxROM (iNES 206): the MMC3 predecessor. Same eight bank
+        // registers and PRG/CHR layout as MMC3 mode 0, but the bank-select byte has
+        // no PRG-mode or CHR-A12-inversion bits (6-7), there is no $A000 mirroring
+        // register (the header solders it), and there is no scanline IRQ. So it is
+        // MMC3 with a reduced register set -- reuse the MMC3 banking wholesale.
+        class namco118_mapper final : public mmc3_mapper {
+          public:
+            using mmc3_mapper::mmc3_mapper;
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xE001U) {
+                case 0x8000U:
+                    bank_select_ = value & 0x07U; // bits 6-7 (mode / inversion) absent
+                    apply();
+                    break;
+                case 0x8001U:
+                    regs_[bank_select_ & 0x07U] = value;
+                    apply();
+                    break;
+                default:
+                    break; // no mirroring register, no IRQ registers
+                }
+            }
+
+            void clock_scanline(std::uint32_t /*line*/) override {} // no IRQ hardware
+
+          private:
+            // Mirroring is fixed by the cartridge wiring (the header), not a register.
+            void apply_mirroring() override {}
         };
 
         // CNROM (iNES 3): fixed PRG, 8 KiB CHR-bank switching. A write to
@@ -456,6 +489,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<mmc3_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 7:
             return std::make_unique<axrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 206:
+            return std::make_unique<namco118_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 0:
         default:
             return std::make_unique<nrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
