@@ -41,6 +41,18 @@ namespace mnemos::manifests::nes {
     // injected callback. Heap-allocated and never moved -- the bus holds spans
     // into the member arrays and the MMIO / NMI handlers capture `this`.
     struct nes_system final {
+        // Standard-pad buttons, in the $4016 serial-read order (A is shifted out
+        // first). set_pad() takes this bitmask; the shift register emits one bit
+        // per read.
+        static constexpr std::uint8_t btn_a = 0x01U;
+        static constexpr std::uint8_t btn_b = 0x02U;
+        static constexpr std::uint8_t btn_select = 0x04U;
+        static constexpr std::uint8_t btn_start = 0x08U;
+        static constexpr std::uint8_t btn_up = 0x10U;
+        static constexpr std::uint8_t btn_down = 0x20U;
+        static constexpr std::uint8_t btn_left = 0x40U;
+        static constexpr std::uint8_t btn_right = 0x80U;
+
         chips::cpu::m6510 cpu;
         chips::video::ppu2c02 ppu;
         chips::audio::ricoh_2a03_apu apu;
@@ -50,8 +62,23 @@ namespace mnemos::manifests::nes {
         std::vector<std::uint8_t> prg;          // PRG-ROM, mapped read-only at $8000
         std::vector<std::uint8_t> chr;          // CHR (ROM image), the PPU's $0000-$1FFF
 
-        // (controllers, OAM-DMA stall accuracy and save-state arrive in later
-        // increments; CHR-RAM games are out of scope for the NROM boot.)
+        // Two standard pads. pad_buttons is the live state; pad_shift is the
+        // per-port serial register the $4016/$4017 reads clock out.
+        std::array<std::uint8_t, 2> pad_buttons{};
+        std::array<std::uint8_t, 2> pad_shift{};
+        bool pad_strobe{};
+
+        // Set the live button bitmask for controller `port` (0 or 1).
+        void set_pad(int port, std::uint8_t buttons) noexcept;
+        // $4016 write: bit 0 is the strobe; a high level (re)loads both shift
+        // registers from the live button state.
+        void write_controller_strobe(std::uint8_t value) noexcept;
+        // $4016 / $4017 read: the next serial button bit (in bit 0) OR'd with the
+        // open-bus high bits the data lines float to.
+        [[nodiscard]] std::uint8_t read_controller(int port) noexcept;
+
+        // (OAM-DMA cycle stall, APU frame IRQ, mid-frame NMI edges, CHR-RAM and
+        // save-state arrive in later increments.)
     };
 
     // Build a runnable NES from a .nes image. An image that doesn't parse (or a
