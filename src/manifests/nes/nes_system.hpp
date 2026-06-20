@@ -59,10 +59,11 @@ namespace mnemos::manifests::nes {
         chips::audio::ricoh_2a03_apu apu;
         topology::bus bus{16U, topology::endianness::little};
 
-        std::array<std::uint8_t, 0x800> wram{}; // 2 KiB work RAM ($0000-$07FF, x4 mirror)
-        std::vector<std::uint8_t> prg;          // PRG-ROM, mapped at $8000 by the mapper
-        std::vector<std::uint8_t> chr;          // CHR (ROM or 8 KiB RAM), the PPU's $0000-$1FFF
-        std::unique_ptr<nes_mapper> mapper;     // owns the $8000-$FFFF + CHR banking
+        std::array<std::uint8_t, 0x800> wram{};     // 2 KiB work RAM ($0000-$07FF, x4 mirror)
+        std::array<std::uint8_t, 0x2000> prg_ram{}; // 8 KiB cartridge work/save RAM ($6000-$7FFF)
+        std::vector<std::uint8_t> prg;              // PRG-ROM, mapped at $8000 by the mapper
+        std::vector<std::uint8_t> chr;              // CHR (ROM or 8 KiB RAM), the PPU's $0000-$1FFF
+        std::unique_ptr<nes_mapper> mapper;         // owns the $8000-$FFFF + CHR banking
 
         // Two standard pads. pad_buttons is the live state; pad_shift is the
         // per-port serial register the $4016/$4017 reads clock out.
