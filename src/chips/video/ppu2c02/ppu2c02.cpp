@@ -398,6 +398,17 @@ namespace mnemos::chips::video {
 
     // ───────────────── Per-scanline renderer ─────────────────
 
+    std::uint8_t ppu2c02::bg_pattern_read(std::uint16_t addr) const noexcept {
+        // MMC5 splits CHR between sprites and background while 8x16 sprites are
+        // active: background fetches use set B. Otherwise the background shares the
+        // main CHR window (the normal single-window path).
+        if (!chr_bg_.empty() && (ctrl_ & ctrl_spr_size16) != 0U) {
+            const std::uint16_t a = static_cast<std::uint16_t>(addr & 0x1FFFU);
+            return a < chr_bg_.size() ? chr_bg_[a] : 0U;
+        }
+        return ppu_read(addr);
+    }
+
     void ppu2c02::render_bg_scanline(std::uint32_t sy, std::uint16_t line_v) noexcept {
         const std::size_t row = static_cast<std::size_t>(sy) * visible_width;
         const std::uint32_t backdrop = master_rgb(palette_[0]);
@@ -417,8 +428,8 @@ namespace mnemos::chips::video {
                 ppu_read(static_cast<std::uint16_t>(0x2000U | (lv & 0x0FFFU)));
             const std::uint16_t paddr =
                 static_cast<std::uint16_t>(pattern_base + tile * tile_bytes + fine_y);
-            plane0 = ppu_read(paddr);
-            plane1 = ppu_read(static_cast<std::uint16_t>(paddr + 8U));
+            plane0 = bg_pattern_read(paddr);
+            plane1 = bg_pattern_read(static_cast<std::uint16_t>(paddr + 8U));
             const std::uint8_t attr = ppu_read(static_cast<std::uint16_t>(
                 0x23C0U | (lv & 0x0C00U) | ((lv >> 4U) & 0x38U) | ((lv >> 2U) & 0x07U)));
             const std::uint32_t shift = ((lv >> 4U) & 0x04U) | (lv & 0x02U);

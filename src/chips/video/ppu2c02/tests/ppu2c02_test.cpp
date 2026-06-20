@@ -270,6 +270,30 @@ TEST_CASE("ppu2c02 honours the sprite flip-x attribute", "[ppu2c02]") {
     CHECK(at(100U, 50U) == master_0F); // original column now transparent -> backdrop
 }
 
+TEST_CASE("ppu2c02 background uses the MMC5 set-B CHR window in 8x16-sprite mode", "[ppu2c02]") {
+    ppu2c02 ppu;
+    // Set A tile 1 = pixel 1; set B tile 1 = pixel 2 (distinct palette colours).
+    const auto chr_a = make_chr({0U, 1U});
+    const auto chr_b = make_chr({0U, 2U});
+    ppu.attach_chr(chr_a);
+    ppu.attach_chr_bg(chr_b);
+    set_palette(ppu, 0U, 0x0FU);   // backdrop
+    set_palette(ppu, 1U, 0x06U);   // bg colour 1 -> dark red
+    set_palette(ppu, 2U, 0x1AU);   // bg colour 2 -> green
+    ppu.ppu_write(0x2000U, 0x01U); // tile 1 at (0,0)
+    ppu.reg_write(ppu2c02::reg_mask,
+                  static_cast<std::uint8_t>(ppu2c02::mask_bg_enable | ppu2c02::mask_bg_left));
+
+    // 8x8 sprites: the background shares set A -> pixel 1 -> dark red.
+    ppu.tick(frame_ticks);
+    CHECK(ppu.framebuffer().pixels[0] == master_06);
+
+    // 8x16 sprites: the background switches to set B -> pixel 2 -> green.
+    ppu.reg_write(ppu2c02::reg_ctrl, ppu2c02::ctrl_spr_size16);
+    ppu.tick(frame_ticks);
+    CHECK(ppu.framebuffer().pixels[0] == master_1A);
+}
+
 TEST_CASE("ppu2c02 PAL timing runs a 312-line frame", "[ppu2c02]") {
     ppu2c02 ppu;
     ppu.set_pal(true);

@@ -135,6 +135,11 @@ namespace mnemos::chips::video {
         void attach_nametables(std::span<const std::uint8_t> ram) noexcept {
             external_nametables_ = ram;
         }
+        // A separate CHR window for BACKGROUND fetches (MMC5's set-B banks). When
+        // attached, background pattern fetches use it while 8x16 sprites are active
+        // (the MMC5 sprite/background CHR split); sprites always use the main window.
+        // Empty (the default) => background shares the main CHR window.
+        void attach_chr_bg(std::span<const std::uint8_t> chr) noexcept { chr_bg_ = chr; }
         void set_mirroring(mirroring m) noexcept { mirroring_ = m; }
         // Select PAL (312-line) vs NTSC (262-line) frame geometry. The visible area
         // (0-239) and the vblank start (241) are identical; PAL only adds vblank
@@ -237,6 +242,9 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t fetch_pattern_pixel(std::uint16_t pattern_base,
                                                         std::uint32_t tile, std::uint32_t fine_x,
                                                         std::uint32_t fine_y) const noexcept;
+        // Read a background pattern byte ($0000-$1FFF), using the MMC5 set-B window
+        // when it is attached and 8x16 sprites are active, else the main CHR window.
+        [[nodiscard]] std::uint8_t bg_pattern_read(std::uint16_t addr) const noexcept;
         // 6-bit master-palette index -> 0x00RRGGBB.
         [[nodiscard]] static std::uint32_t master_rgb(std::uint8_t index) noexcept;
 
@@ -277,7 +285,8 @@ namespace mnemos::chips::video {
 
         // Non-owning external memory.
         std::span<const std::uint8_t> chr_{};
-        std::span<std::uint8_t> chr_ram_{}; // writable CHR (CHR-RAM carts); empty => CHR-ROM
+        std::span<std::uint8_t> chr_ram_{};      // writable CHR (CHR-RAM carts); empty => CHR-ROM
+        std::span<const std::uint8_t> chr_bg_{}; // MMC5 background CHR (set B); empty => share chr_
         std::span<const std::uint8_t> external_nametables_{};
 
         std::uint32_t dot_{};
