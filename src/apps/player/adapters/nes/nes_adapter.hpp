@@ -2,6 +2,7 @@
 
 #include "nes_system.hpp"
 #include "player_system.hpp"
+#include "save_state.hpp" // runtime::save_target
 #include "scheduler.hpp"
 #include "scheduler_factory.hpp"
 
@@ -17,6 +18,12 @@ namespace mnemos::apps::player::adapters::nes {
     // Force-link hook (see genesis_adapter.hpp): referenced from main so the
     // static registry self-registration in the .cpp is pulled in.
     void force_link() noexcept;
+
+    // Build a whole-machine save target for a hand-wired NES: the three chips
+    // (their own save_state), the work + cartridge RAM, and the mapper banking
+    // state (a save_component, since the mapper is not an ichip). CHR is included
+    // only when it is RAM. The runtime serialises/restores each chunk by id.
+    [[nodiscard]] runtime::save_target build_save_target(manifests::nes::nes_system& sys);
 
     // NES player adapter. Drives a hand-wired nes_system through the runtime
     // scheduler. The 2C02 PPU is the frame source and the master clock; the CPU

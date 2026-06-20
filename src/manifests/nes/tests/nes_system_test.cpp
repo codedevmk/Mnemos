@@ -377,6 +377,30 @@ TEST_CASE("MMC5 (mapper 5) banks PRG/CHR and serves the hardware multiplier", "[
     CHECK(sys->bus.read8(0x5206U) == 0x01U);
 }
 
+TEST_CASE("MMC3 mapper save_state/load_state round-trips the banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_mmc3());
+    // Configure: PRG mode 1, R6 = bank 3, mirroring horizontal.
+    a->bus.write8(0x8000U, 0x46U);
+    a->bus.write8(0x8001U, 0x03U);
+    a->bus.write8(0xA000U, 0x01U);
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+    const std::uint8_t aC000 = a->bus.read8(0xC000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    // A fresh machine powers up with different banks; loading restores them and
+    // re-points the bus.
+    auto b = assemble_nes(make_mmc3());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);
+    CHECK(b->bus.read8(0xC000U) == aC000);
+}
+
 TEST_CASE("MMC5 scanline IRQ fires at the target line and acknowledges on $5204 read",
           "[manifests][nes]") {
     auto sys = assemble_nes(make_mmc5());

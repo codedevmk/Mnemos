@@ -2,6 +2,7 @@
 
 #include "bus.hpp"     // topology::bus
 #include "ppu2c02.hpp" // chips::video::ppu2c02
+#include "state.hpp"   // chips::state_writer / state_reader
 
 #include <cstdint>
 #include <functional>
@@ -30,6 +31,12 @@ namespace mnemos::manifests::nes {
         // Clock a scanline-counter mapper (MMC3) once per visible scanline. The
         // default is a no-op (NROM / UxROM / MMC1 have no scanline IRQ).
         virtual void clock_scanline(std::uint32_t /*line*/) {}
+
+        // Serialise the mapper's banking state for save-states; load_state restores
+        // it AND re-applies the bus/CHR mapping. The stateless NROM uses the no-op
+        // default (its banks never move).
+        virtual void save_state(chips::state_writer& /*writer*/) const {}
+        virtual void load_state(chips::state_reader& /*reader*/) {}
 
         // How a scanline-IRQ mapper drives the CPU /IRQ line. The board wires this
         // to the CPU; mappers without an IRQ ignore it.

@@ -66,6 +66,7 @@ namespace mnemos::manifests::nes {
         std::vector<std::uint8_t> chr;              // CHR (ROM or 8 KiB RAM), the PPU's $0000-$1FFF
         std::unique_ptr<nes_mapper> mapper;         // owns the $8000-$FFFF + CHR banking
         bool battery{};                             // the $6000 RAM is battery-backed (persist it)
+        bool chr_is_ram{};                          // CHR is writable RAM (save it in a save-state)
 
         // The cartridge (MMC3) and the APU (frame + DMC) share the CPU /IRQ line as
         // a wired-OR; each callback updates its source and republishes the union.

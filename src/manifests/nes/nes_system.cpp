@@ -86,7 +86,8 @@ namespace mnemos::manifests::nes {
         const ines_image img = parse_ines(rom);
         s->prg = img.prg; // empty on a bad/unsupported image -> boots a blank PRG
         s->chr = img.chr;
-        s->battery = img.battery; // persist $6000 RAM only for battery carts
+        s->chr_is_ram = img.chr_is_ram; // CHR-RAM is writable -> include it in save-states
+        s->battery = img.battery;       // persist $6000 RAM only for battery carts
         s->ppu.set_mirroring(img.valid ? img.mirroring : mirroring::horizontal);
 
         // Region timing: PAL gives the PPU a 312-line/50 Hz frame and shifts the APU
