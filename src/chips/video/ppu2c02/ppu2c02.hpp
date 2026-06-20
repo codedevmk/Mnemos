@@ -166,6 +166,12 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t beam_line() const noexcept { return scanline_; }
         [[nodiscard]] std::uint32_t beam_dot() const noexcept { return dot_; }
 
+        // Force a full static render of the current state into the framebuffer
+        // (a held-state per-line sweep from t_), without advancing the beam. For
+        // tests / a host that wants the current frame without ticking; tick()
+        // renders the live frame line-by-line.
+        void render_frame() noexcept;
+
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
@@ -199,9 +205,22 @@ namespace mnemos::chips::video {
         [[nodiscard]] static std::uint16_t palette_index(std::uint16_t addr) noexcept;
         void refresh_nmi_line() noexcept;
 
-        void render_frame() noexcept;
-        void render_background() noexcept;
-        void render_sprites() noexcept;
+        // Render one visible scanline `sy` from the loopy address `line_v` (+ fine
+        // X): background then the sprites intersecting the line, into pixels_[sy].
+        // CHR/nametable are read live, so a mid-frame bank switch takes effect from
+        // the next line. Returns nothing; sprite-0 hit is scheduled via spr0_*.
+        void render_bg_scanline(std::uint32_t sy, std::uint16_t line_v) noexcept;
+        void render_sprites_scanline(std::uint32_t sy) noexcept;
+
+        // Loopy scroll-address operators (the canonical 2C02 v/t mechanics).
+        static void inc_coarse_x(std::uint16_t& v) noexcept;
+        static void inc_y(std::uint16_t& v) noexcept;
+        static void copy_horizontal(std::uint16_t& v, std::uint16_t t) noexcept;
+        static void copy_vertical(std::uint16_t& v, std::uint16_t t) noexcept;
+        [[nodiscard]] bool rendering_enabled() const noexcept {
+            return (mask_ & (mask_bg_enable | mask_spr_enable)) != 0U;
+        }
+
         // Decode one tile pixel (0..3) from CHR pattern memory.
         [[nodiscard]] std::uint32_t fetch_pattern_pixel(std::uint16_t pattern_base,
                                                         std::uint32_t tile, std::uint32_t fine_x,
@@ -211,10 +230,13 @@ namespace mnemos::chips::video {
 
         std::vector<std::uint32_t> pixels_ =
             std::vector<std::uint32_t>(static_cast<std::size_t>(visible_width) * visible_height);
-        // Per-pixel background opacity for the current frame (pixel value != 0),
-        // consumed by the sprite priority + sprite-0-hit logic.
-        std::array<std::uint8_t, static_cast<std::size_t>(visible_width) * visible_height>
-            bg_opaque_{};
+        // Background opacity of the scanline currently being rendered (pixel value
+        // != 0), consumed by the sprite priority + sprite-0-hit logic for that line.
+        std::array<std::uint8_t, visible_width> bg_opaque_{};
+        // Sprite-0 hit is dot-scheduled: rendering a line finds the first sprite-0
+        // / opaque-BG overlap dot; tick() sets the status flag when the beam reaches
+        // it. -1 = no pending hit on the current line.
+        int spr0_hit_dot_{-1};
         // The decoded pattern-table debug sheet, rebuilt on demand.
         mutable std::vector<std::uint32_t> pattern_sheet_;
 

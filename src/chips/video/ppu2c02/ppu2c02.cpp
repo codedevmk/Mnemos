@@ -74,10 +74,10 @@ namespace mnemos::chips::video {
     void ppu2c02::tick(std::uint64_t cycles) {
         for (std::uint64_t i = 0; i < cycles; ++i) {
             if (dot_ == 0U) {
+                // Frame-boundary events first, so the status clear precedes the
+                // render of line 0.
                 if (scanline_ == vblank_line) {
-                    // Entering vblank: render the completed frame, raise the
-                    // vblank flag + NMI gate, and bump the frame counter.
-                    render_frame();
+                    // The frame finished rendering line-by-line below; enter vblank.
                     status_ |= status_vblank;
                     refresh_nmi_line();
                     ++frame_index_;
@@ -85,15 +85,60 @@ namespace mnemos::chips::video {
                         vblank_cb_(scanline_);
                     }
                 } else if (scanline_ == 0U) {
-                    // Pre-render boundary: vblank / sprite-0 / overflow clear.
                     status_ &= static_cast<std::uint8_t>(
                         ~(status_vblank | status_spr0_hit | status_spr_over));
                     refresh_nmi_line();
                 }
+
+                // Render the visible scanline from the live loopy address, so a
+                // mid-frame CHR-bank / scroll change takes effect from the next
+                // line. A mapper IRQ (clocked by scanline_cb below) thus affects
+                // line+1, matching the hardware split point.
+                if (scanline_ < visible_height) {
+                    spr0_hit_dot_ = -1;
+                    const std::size_t row = static_cast<std::size_t>(scanline_) * visible_width;
+                    if ((mask_ & mask_bg_enable) != 0U) {
+                        render_bg_scanline(scanline_, v_);
+                    } else {
+                        const std::uint32_t backdrop = master_rgb(palette_[0]);
+                        for (std::uint32_t sx = 0; sx < visible_width; ++sx) {
+                            pixels_[row + sx] = backdrop;
+                            bg_opaque_[sx] = 0U;
+                        }
+                    }
+                    if ((mask_ & mask_spr_enable) != 0U) {
+                        render_sprites_scanline(scanline_);
+                    }
+                }
+
                 if (scanline_cb_) {
                     scanline_cb_(scanline_);
                 }
             }
+
+            // Dot-scheduled sprite-0 hit: set the flag when the beam reaches the
+            // first sprite-0/opaque-BG overlap dot on this visible line.
+            if (scanline_ < visible_height && spr0_hit_dot_ >= 0 &&
+                dot_ == static_cast<std::uint32_t>(spr0_hit_dot_)) {
+                status_ |= status_spr0_hit;
+            }
+
+            // Loopy address updates during rendering (visible + pre-render lines).
+            if (rendering_enabled()) {
+                const bool render_line =
+                    scanline_ < visible_height || scanline_ == lines_per_frame - 1U;
+                if (render_line) {
+                    if (dot_ == 256U) {
+                        inc_y(v_);
+                    } else if (dot_ == 257U) {
+                        copy_horizontal(v_, t_);
+                    }
+                }
+                if (scanline_ == lines_per_frame - 1U && dot_ >= 280U && dot_ <= 304U) {
+                    copy_vertical(v_, t_);
+                }
+            }
+
             if (++dot_ == dots_per_line) {
                 dot_ = 0U;
                 if (++scanline_ == lines_per_frame) {
@@ -314,81 +359,117 @@ namespace mnemos::chips::video {
         return ((plane0 >> bit) & 1U) | (((plane1 >> bit) & 1U) << 1U);
     }
 
-    void ppu2c02::render_background() noexcept {
+    // ───────────────── Loopy scroll-address mechanics ─────────────────
+
+    void ppu2c02::inc_coarse_x(std::uint16_t& v) noexcept {
+        if ((v & 0x001FU) == 0x001FU) {
+            v = static_cast<std::uint16_t>((v & ~0x001FU) ^ 0x0400U); // wrap + flip h nametable
+        } else {
+            v = static_cast<std::uint16_t>(v + 1U);
+        }
+    }
+
+    void ppu2c02::inc_y(std::uint16_t& v) noexcept {
+        if ((v & 0x7000U) != 0x7000U) {
+            v = static_cast<std::uint16_t>(v + 0x1000U); // fine Y++
+            return;
+        }
+        v = static_cast<std::uint16_t>(v & ~0x7000U); // fine Y = 0
+        std::uint16_t y = static_cast<std::uint16_t>((v & 0x03E0U) >> 5U);
+        if (y == 29U) {
+            y = 0U;
+            v = static_cast<std::uint16_t>(v ^ 0x0800U); // flip v nametable
+        } else if (y == 31U) {
+            y = 0U; // wrap inside the attribute region without flipping
+        } else {
+            ++y;
+        }
+        v = static_cast<std::uint16_t>((v & ~0x03E0U) | (y << 5U));
+    }
+
+    void ppu2c02::copy_horizontal(std::uint16_t& v, std::uint16_t t) noexcept {
+        v = static_cast<std::uint16_t>((v & ~0x041FU) | (t & 0x041FU)); // coarse X + h nametable
+    }
+
+    void ppu2c02::copy_vertical(std::uint16_t& v, std::uint16_t t) noexcept {
+        v = static_cast<std::uint16_t>((v & ~0x7BE0U) |
+                                       (t & 0x7BE0U)); // fine/coarse Y + v nametable
+    }
+
+    // ───────────────── Per-scanline renderer ─────────────────
+
+    void ppu2c02::render_bg_scanline(std::uint32_t sy, std::uint16_t line_v) noexcept {
+        const std::size_t row = static_cast<std::size_t>(sy) * visible_width;
+        const std::uint32_t backdrop = master_rgb(palette_[0]);
         const std::uint16_t pattern_base =
             static_cast<std::uint16_t>((ctrl_ & ctrl_bg_pt) != 0U ? 0x1000U : 0x0000U);
-        // Scroll origin from the loopy t register plus fine X.
-        const std::uint32_t coarse_x0 = t_ & 0x1FU;
-        const std::uint32_t coarse_y0 = (t_ >> 5U) & 0x1FU;
-        const std::uint32_t fine_y0 = (t_ >> 12U) & 0x07U;
-        const std::uint32_t nt_x0 = (t_ >> 10U) & 0x01U;
-        const std::uint32_t nt_y0 = (t_ >> 11U) & 0x01U;
         const bool left_clip = (mask_ & mask_bg_left) == 0U;
+        std::uint16_t lv = line_v;
+        const std::uint16_t fine_y = static_cast<std::uint16_t>((lv >> 12U) & 0x07U);
+        std::uint32_t fx = x_; // fine X into the current tile
 
-        for (std::uint32_t sy = 0; sy < visible_height; ++sy) {
-            // Walk the scroll position across the 2x2 nametable torus.
-            const std::uint32_t abs_y = sy + coarse_y0 * 8U + fine_y0 + nt_y0 * 240U;
-            const std::uint32_t world_y = abs_y % 480U; // two 240-tall screens
-            const std::uint32_t ty = (world_y % 240U) / 8U;
-            const std::uint32_t fine_y = world_y % 8U;
-            const std::uint32_t nt_y = world_y / 240U;
-            for (std::uint32_t sx = 0; sx < visible_width; ++sx) {
-                const std::uint32_t abs_x = sx + coarse_x0 * 8U + x_ + nt_x0 * 256U;
-                const std::uint32_t world_x = abs_x % 512U; // two 256-wide screens
-                const std::uint32_t tx = (world_x % 256U) / 8U;
-                const std::uint32_t fine_x = world_x % 8U;
-                const std::uint32_t nt_x = world_x / 256U;
+        // The current tile's two bitplanes + palette, reloaded each 8 px.
+        std::uint8_t plane0 = 0U;
+        std::uint8_t plane1 = 0U;
+        std::uint32_t pal = 0U;
+        const auto load_tile = [&]() {
+            const std::uint8_t tile =
+                ppu_read(static_cast<std::uint16_t>(0x2000U | (lv & 0x0FFFU)));
+            const std::uint16_t paddr =
+                static_cast<std::uint16_t>(pattern_base + tile * tile_bytes + fine_y);
+            plane0 = ppu_read(paddr);
+            plane1 = ppu_read(static_cast<std::uint16_t>(paddr + 8U));
+            const std::uint8_t attr = ppu_read(static_cast<std::uint16_t>(
+                0x23C0U | (lv & 0x0C00U) | ((lv >> 4U) & 0x38U) | ((lv >> 2U) & 0x07U)));
+            const std::uint32_t shift = ((lv >> 4U) & 0x04U) | (lv & 0x02U);
+            pal = (attr >> shift) & 0x03U;
+        };
+        load_tile();
 
-                const std::uint16_t nt_base =
-                    static_cast<std::uint16_t>(0x2000U + ((nt_y << 11U) | (nt_x << 10U)));
-                const std::uint16_t name_addr = static_cast<std::uint16_t>(nt_base + ty * 32U + tx);
-                const std::uint32_t tile = ppu_read(name_addr);
-                const std::uint32_t pixel = fetch_pattern_pixel(pattern_base, tile, fine_x, fine_y);
-
-                const std::size_t out = static_cast<std::size_t>(sy) * visible_width + sx;
-                if (pixel == 0U || (left_clip && sx < 8U)) {
-                    // Transparent (or clipped left column): the backdrop colour.
-                    bg_opaque_[out] = 0U;
-                    pixels_[out] = master_rgb(palette_[0]);
-                    continue;
-                }
-                // Attribute byte: one per 4x4-tile region, 2 bits per 2x2 quad.
-                const std::uint16_t attr_addr =
-                    static_cast<std::uint16_t>(nt_base + 0x3C0U + (ty / 4U) * 8U + (tx / 4U));
-                const std::uint8_t attr = ppu_read(attr_addr);
-                const std::uint32_t quad =
-                    ((ty & 2U) != 0U ? 2U : 0U) | ((tx & 2U) != 0U ? 1U : 0U);
-                const std::uint32_t pal = (attr >> (quad * 2U)) & 0x03U;
-                const std::uint8_t entry = palette_[(pal * 4U + pixel) & 0x1FU];
-                bg_opaque_[out] = 1U;
-                pixels_[out] = master_rgb(entry);
+        for (std::uint32_t sx = 0; sx < visible_width; ++sx) {
+            const std::uint32_t bit = 7U - fx;
+            const std::uint32_t pixel = ((plane0 >> bit) & 1U) | (((plane1 >> bit) & 1U) << 1U);
+            if (pixel == 0U || (left_clip && sx < 8U)) {
+                bg_opaque_[sx] = 0U;
+                pixels_[row + sx] = backdrop;
+            } else {
+                bg_opaque_[sx] = 1U;
+                pixels_[row + sx] = master_rgb(palette_[(pal * 4U + pixel) & 0x1FU]);
+            }
+            if (++fx == 8U) {
+                fx = 0U;
+                inc_coarse_x(lv);
+                load_tile();
             }
         }
     }
 
-    void ppu2c02::render_sprites() noexcept {
+    void ppu2c02::render_sprites_scanline(std::uint32_t sy) noexcept {
         const bool tall = (ctrl_ & ctrl_spr_size16) != 0U;
         const std::uint32_t height = tall ? 16U : 8U;
         const bool left_clip = (mask_ & mask_spr_left) == 0U;
+        const std::size_t row = static_cast<std::size_t>(sy) * visible_width;
 
-        // Lower OAM index = higher priority; draw high indices first so index 0
-        // lands on top.
+        // High OAM index first so sprite 0 (highest priority) lands on top.
         for (std::size_t s = 64U; s-- > 0U;) {
             const std::size_t base = s * 4U;
             const std::uint32_t spr_y = oam_[base + 0U];
+            if (spr_y >= 0xEFU) {
+                continue; // off-screen Y
+            }
+            const std::int32_t rin =
+                static_cast<std::int32_t>(sy) - static_cast<std::int32_t>(spr_y + 1U);
+            if (rin < 0 || rin >= static_cast<std::int32_t>(height)) {
+                continue; // this sprite doesn't cover line sy
+            }
             const std::uint32_t tile_raw = oam_[base + 1U];
             const std::uint8_t attr = oam_[base + 2U];
             const std::uint32_t spr_x = oam_[base + 3U];
-            if (spr_y >= 0xEFU) {
-                continue; // off-screen Y (>= 239)
-            }
             const std::uint32_t pal = attr & 0x03U;
             const bool behind = (attr & 0x20U) != 0U;
             const bool flip_x = (attr & 0x40U) != 0U;
             const bool flip_y = (attr & 0x80U) != 0U;
 
-            // 8x16 sprites take the pattern table from the tile's bit 0 and use
-            // an even/odd tile pair; 8x8 sprites use the CTRL-selected table.
             std::uint16_t pattern_base;
             std::uint32_t tile_index;
             if (tall) {
@@ -400,60 +481,66 @@ namespace mnemos::chips::video {
                     static_cast<std::uint16_t>((ctrl_ & ctrl_spr_pt) != 0U ? 0x1000U : 0x0000U);
                 tile_index = tile_raw;
             }
+            const std::uint32_t src_row = flip_y ? (height - 1U - static_cast<std::uint32_t>(rin))
+                                                 : static_cast<std::uint32_t>(rin);
+            const std::uint32_t cell = tile_index + (src_row >= 8U ? 1U : 0U);
+            const std::uint32_t fine_y = src_row & 7U;
 
-            for (std::uint32_t row = 0; row < height; ++row) {
-                const std::int32_t dest_y = static_cast<std::int32_t>(spr_y + row + 1U);
-                if (dest_y < 0 || dest_y >= static_cast<std::int32_t>(visible_height)) {
+            for (std::uint32_t col = 0; col < 8U; ++col) {
+                const std::uint32_t dx = spr_x + col;
+                if (dx >= visible_width) {
                     continue;
                 }
-                const std::uint32_t src_row = flip_y ? (height - 1U - row) : row;
-                // For 8x16 the second cell follows the first in pattern memory.
-                const std::uint32_t cell = tile_index + (src_row >= 8U ? 1U : 0U);
-                const std::uint32_t fine_y = src_row & 7U;
-                for (std::uint32_t col = 0; col < 8U; ++col) {
-                    const std::int32_t dest_x = static_cast<std::int32_t>(spr_x + col);
-                    if (dest_x < 0 || dest_x >= static_cast<std::int32_t>(visible_width)) {
-                        continue;
-                    }
-                    if (left_clip && dest_x < 8) {
-                        continue;
-                    }
-                    const std::uint32_t fine_x = flip_x ? (7U - col) : col;
-                    const std::uint32_t pixel =
-                        fetch_pattern_pixel(pattern_base, cell, fine_x, fine_y);
-                    if (pixel == 0U) {
-                        continue; // transparent
-                    }
-                    const std::size_t out = static_cast<std::size_t>(dest_y) * visible_width +
-                                            static_cast<std::size_t>(dest_x);
-                    // Sprite 0 hit: the first non-transparent sprite-0 pixel
-                    // over an opaque background pixel.
-                    if (s == 0U && bg_opaque_[out] != 0U) {
-                        status_ |= status_spr0_hit;
-                    }
-                    // Background-priority sprites lose to opaque background.
-                    if (behind && bg_opaque_[out] != 0U) {
-                        continue;
-                    }
-                    const std::uint8_t entry = palette_[0x10U + ((pal * 4U + pixel) & 0x0FU)];
-                    pixels_[out] = master_rgb(entry);
+                if (left_clip && dx < 8U) {
+                    continue;
                 }
+                const std::uint32_t fine_x = flip_x ? (7U - col) : col;
+                const std::uint32_t pixel = fetch_pattern_pixel(pattern_base, cell, fine_x, fine_y);
+                if (pixel == 0U) {
+                    continue; // transparent
+                }
+                // Sprite-0 hit: an opaque sprite-0 pixel over opaque background,
+                // never at x=255. Scheduled to the beam dot it is drawn at.
+                if (s == 0U && bg_opaque_[dx] != 0U && dx != 255U) {
+                    const int hit_dot = static_cast<int>(dx) + 1;
+                    if (spr0_hit_dot_ < 0 || hit_dot < spr0_hit_dot_) {
+                        spr0_hit_dot_ = hit_dot;
+                    }
+                }
+                if (behind && bg_opaque_[dx] != 0U) {
+                    continue; // background-priority sprite loses to opaque BG
+                }
+                pixels_[row + dx] = master_rgb(palette_[0x10U + ((pal * 4U + pixel) & 0x0FU)]);
             }
         }
     }
 
     void ppu2c02::render_frame() noexcept {
-        // Backdrop fill so a disabled background still shows palette entry 0.
+        // A static force-render: simulate the per-line loopy walk from t_ without
+        // disturbing the live beam (v_, dot_, scanline_). Used by tests / hosts
+        // that want the current frame without advancing time.
         const std::uint32_t backdrop = master_rgb(palette_[0]);
         for (std::uint32_t& px : pixels_) {
             px = backdrop;
         }
-        bg_opaque_.fill(0U);
-        if ((mask_ & mask_bg_enable) != 0U) {
-            render_background();
+        const bool bg = (mask_ & mask_bg_enable) != 0U;
+        const bool spr = (mask_ & mask_spr_enable) != 0U;
+        spr0_hit_dot_ = -1;
+        std::uint16_t sim_v = t_;
+        for (std::uint32_t sy = 0; sy < visible_height; ++sy) {
+            if (bg) {
+                render_bg_scanline(sy, sim_v);
+            } else {
+                bg_opaque_.fill(0U);
+            }
+            if (spr) {
+                render_sprites_scanline(sy);
+            }
+            inc_y(sim_v);
+            copy_horizontal(sim_v, t_);
         }
-        if ((mask_ & mask_spr_enable) != 0U) {
-            render_sprites();
+        if (spr0_hit_dot_ >= 0) {
+            status_ |= status_spr0_hit; // a held-state render reflects the hit
         }
     }
 
