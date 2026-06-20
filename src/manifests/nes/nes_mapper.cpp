@@ -9,8 +9,10 @@ namespace mnemos::manifests::nes {
     namespace {
         constexpr std::size_t k_prg_bank = 0x4000U; // 16 KiB
         constexpr std::size_t k_prg_8k = 0x2000U;   // 8 KiB PRG bank (MMC3)
+        constexpr std::size_t k_prg_32k = 0x8000U;  // 32 KiB PRG bank (AxROM)
         constexpr std::size_t k_chr_4k = 0x1000U;   // 4 KiB CHR bank
         constexpr std::size_t k_chr_1k = 0x0400U;   // 1 KiB CHR bank (MMC3)
+        constexpr std::size_t k_chr_8k = 0x2000U;   // 8 KiB CHR bank (CNROM)
 
         // NROM (iNES 0): no banking. A 16 KiB PRG image mirrors into both halves
         // (so $FFFC resolves); 32 KiB fills $8000-$FFFF. CHR is fixed.
@@ -365,6 +367,78 @@ namespace mnemos::manifests::nes {
             bool irq_enabled_{};
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
+
+        // CNROM (iNES 3): fixed PRG, 8 KiB CHR-bank switching. A write to
+        // $8000-$FFFF selects which 8 KiB CHR-ROM bank the PPU sees (no PRG
+        // banking, no mirroring control). The bank is a contiguous CHR subspan,
+        // so it just re-points the PPU's CHR window.
+        class cnrom_mapper final : public nes_mapper {
+          public:
+            cnrom_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                         bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_8k_count_(chr.size() / k_chr_8k) {
+            }
+
+            void reset() override {
+                if (!prg_.empty()) {
+                    bus_->map_rom(0x8000U, prg_);
+                    if (prg_.size() <= k_prg_bank) {
+                        bus_->map_rom(0xC000U, prg_); // mirror a 16 KiB image
+                    }
+                }
+                select_chr(0U);
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t /*addr*/, std::uint8_t value) override { select_chr(value); }
+
+          private:
+            void select_chr(std::uint8_t bank) noexcept {
+                if (chr_is_ram_ || chr_8k_count_ == 0U) {
+                    attach_chr(); // CHR-RAM / no banks: the whole window
+                    return;
+                }
+                const std::size_t b = bank % chr_8k_count_;
+                ppu_->attach_chr(
+                    std::span<const std::uint8_t>(chr_.subspan(b * k_chr_8k, k_chr_8k)));
+            }
+            std::size_t chr_8k_count_;
+        };
+
+        // AxROM (iNES 7): a single switchable 32 KiB PRG bank over $8000-$FFFF +
+        // single-screen mirroring select; CHR is normally 8 KiB CHR-RAM. A write
+        // to $8000-$FFFF sets the PRG bank (bits 0-2) and the nametable (bit 4).
+        class axrom_mapper final : public nes_mapper {
+          public:
+            axrom_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                         bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_32k_count_(prg.size() / k_prg_32k) {}
+
+            void reset() override {
+                if (prg_32k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k)); // 32 KiB bank 0
+                }
+                attach_chr();
+                ppu_->set_mirroring(chips::video::ppu2c02::mirroring::single_a);
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t /*addr*/, std::uint8_t value) override {
+                if (prg_32k_count_ != 0U) {
+                    const std::size_t bank = (value & 0x07U) % prg_32k_count_;
+                    bus_->retarget_rom(0x8000U, prg_.subspan(bank * k_prg_32k, k_prg_32k));
+                }
+                ppu_->set_mirroring((value & 0x10U) != 0U
+                                        ? chips::video::ppu2c02::mirroring::single_b
+                                        : chips::video::ppu2c02::mirroring::single_a);
+            }
+
+          private:
+            std::size_t prg_32k_count_;
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -376,8 +450,12 @@ namespace mnemos::manifests::nes {
             return std::make_unique<mmc1_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 2:
             return std::make_unique<uxrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 3:
+            return std::make_unique<cnrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 4:
             return std::make_unique<mmc3_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 7:
+            return std::make_unique<axrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 0:
         default:
             return std::make_unique<nrom_mapper>(bus, ppu, prg, chr, chr_is_ram);

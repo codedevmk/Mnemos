@@ -102,6 +102,43 @@ namespace {
         return rom;
     }
 
+    // A 32 KiB-PRG / two-8 KiB-bank-CHR CNROM (mapper 3). CHR bank N byte 0 =
+    // $C0+N; the reset vector points at $8000.
+    std::vector<std::uint8_t> make_cnrom() {
+        std::vector<std::uint8_t> rom(16U + 2U * 0x4000U + 2U * 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 2U;    // 32 KiB PRG
+        rom[5] = 2U;    // 16 KiB CHR (two 8 KiB banks)
+        rom[6] = 0x30U; // flags6: mapper low nibble = 3 (CNROM)
+        const std::size_t chr = 16U + 2U * 0x4000U;
+        rom[chr + 0x0000U] = 0xC0U; // CHR bank 0, byte 0
+        rom[chr + 0x2000U] = 0xC1U; // CHR bank 1, byte 0
+        rom[16U + 0x7FFCU] = 0x00U; // reset vector -> $8000
+        rom[16U + 0x7FFDU] = 0x80U;
+        return rom;
+    }
+
+    // A 64 KiB-PRG (two 32 KiB banks) / CHR-RAM AxROM (mapper 7). 32 KiB bank N
+    // byte 0 = $E0+N; the reset vector (bank 0) points at $8000.
+    std::vector<std::uint8_t> make_axrom() {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x4000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;                // 64 KiB PRG (= two 32 KiB banks)
+        rom[5] = 0U;                // CHR-RAM
+        rom[6] = 0x70U;             // flags6: mapper low nibble = 7 (AxROM)
+        rom[16U + 0x0000U] = 0xE0U; // 32 KiB bank 0, byte 0
+        rom[16U + 0x8000U] = 0xE1U; // 32 KiB bank 1, byte 0
+        rom[16U + 0x7FFCU] = 0x00U; // reset vector (bank 0) -> $8000
+        rom[16U + 0x7FFDU] = 0x80U;
+        return rom;
+    }
+
 } // namespace
 
 TEST_CASE("parse_ines reads a valid NROM header", "[manifests][nes]") {
@@ -233,6 +270,26 @@ TEST_CASE("MMC3 scanline IRQ counts down from the latch and acknowledges", "[man
 
     sys->bus.write8(0xE000U, 0x00U); // disable acknowledges the line
     CHECK_FALSE(irq);
+}
+
+TEST_CASE("CNROM (mapper 3) switches the 8 KiB CHR bank", "[manifests][nes]") {
+    auto sys = assemble_nes(make_cnrom());
+
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC0U); // initial CHR bank 0
+    sys->bus.write8(0x8000U, 0x01U);            // select CHR bank 1
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC1U);
+    sys->bus.write8(0x9ABCU, 0x00U); // any $8000-$FFFF write decodes -> bank 0
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC0U);
+}
+
+TEST_CASE("AxROM (mapper 7) switches the 32 KiB PRG bank", "[manifests][nes]") {
+    auto sys = assemble_nes(make_axrom());
+
+    CHECK(sys->bus.read8(0x8000U) == 0xE0U); // initial 32 KiB bank 0
+    sys->bus.write8(0x8000U, 0x01U);         // select bank 1 (+ single-screen A)
+    CHECK(sys->bus.read8(0x8000U) == 0xE1U);
+    sys->bus.write8(0x8000U, 0x10U); // bank 0, single-screen B
+    CHECK(sys->bus.read8(0x8000U) == 0xE0U);
 }
 
 TEST_CASE("cartridge work RAM at $6000-$7FFF reads back writes", "[manifests][nes]") {
