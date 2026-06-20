@@ -2,6 +2,7 @@
 
 #include "bus.hpp"            // topology::bus
 #include "m6510.hpp"          // chips::cpu::m6510 (the 2A03 is a 6502 core)
+#include "nes_mapper.hpp"     // manifests::nes::nes_mapper
 #include "ppu2c02.hpp"        // chips::video::ppu2c02
 #include "region.hpp"         // mnemos::video_region
 #include "ricoh_2a03_apu.hpp" // chips::audio::ricoh_2a03_apu
@@ -59,8 +60,9 @@ namespace mnemos::manifests::nes {
         topology::bus bus{16U, topology::endianness::little};
 
         std::array<std::uint8_t, 0x800> wram{}; // 2 KiB work RAM ($0000-$07FF, x4 mirror)
-        std::vector<std::uint8_t> prg;          // PRG-ROM, mapped read-only at $8000
-        std::vector<std::uint8_t> chr;          // CHR (ROM image), the PPU's $0000-$1FFF
+        std::vector<std::uint8_t> prg;          // PRG-ROM, mapped at $8000 by the mapper
+        std::vector<std::uint8_t> chr;          // CHR (ROM or 8 KiB RAM), the PPU's $0000-$1FFF
+        std::unique_ptr<nes_mapper> mapper;     // owns the $8000-$FFFF + CHR banking
 
         // Two standard pads. pad_buttons is the live state; pad_shift is the
         // per-port serial register the $4016/$4017 reads clock out.

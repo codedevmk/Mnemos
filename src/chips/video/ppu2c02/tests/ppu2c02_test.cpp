@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -104,6 +105,21 @@ TEST_CASE("ppu2c02 loopy v/t/x latch through the scroll and address ports", "[pp
     ppu.reg_write(ppu2c02::reg_addr, 0x08U);
     (void)ppu.reg_read(ppu2c02::reg_data); // buffered: returns stale, refills
     CHECK(ppu.reg_read(ppu2c02::reg_data) == 0x42U);
+}
+
+TEST_CASE("ppu2c02 CHR-RAM accepts pattern writes; CHR-ROM drops them", "[ppu2c02]") {
+    ppu2c02 ram_ppu;
+    std::array<std::uint8_t, ppu2c02::pattern_size> chr_ram{};
+    ram_ppu.attach_chr_ram(chr_ram);
+    ram_ppu.ppu_write(0x0001U, 0x77U);
+    CHECK(ram_ppu.ppu_read(0x0001U) == 0x77U); // writable + read back
+    CHECK(chr_ram[1] == 0x77U);                // landed in the backing store
+
+    ppu2c02 rom_ppu;
+    const std::array<std::uint8_t, ppu2c02::pattern_size> chr_rom{};
+    rom_ppu.attach_chr(chr_rom);
+    rom_ppu.ppu_write(0x0001U, 0x88U);
+    CHECK(rom_ppu.ppu_read(0x0001U) == 0x00U); // CHR-ROM write dropped
 }
 
 TEST_CASE("ppu2c02 renders a background tile through the palette", "[ppu2c02]") {

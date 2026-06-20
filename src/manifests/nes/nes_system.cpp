@@ -146,18 +146,12 @@ namespace mnemos::manifests::nes {
                 s->apu.write_reg(static_cast<std::uint16_t>(addr), value);
             });
 
-        // $8000-$FFFF: PRG-ROM. A 16 KiB image mirrors into both halves (so the
-        // $FFFC reset vector resolves); a 32 KiB image fills the whole range.
-        if (!s->prg.empty()) {
-            s->bus.map_rom(0x8000U, std::span<const std::uint8_t>(s->prg));
-            if (s->prg.size() <= k_prg_unit) {
-                s->bus.map_rom(0xC000U, std::span<const std::uint8_t>(s->prg));
-            }
-        }
-
-        if (!s->chr.empty()) {
-            s->ppu.attach_chr(std::span<const std::uint8_t>(s->chr));
-        }
+        // $8000-$FFFF (PRG) + the PPU's CHR window are owned by the cartridge
+        // mapper; reset() installs the initial banks (and CHR-RAM vs CHR-ROM).
+        s->mapper = make_mapper(img.valid ? img.mapper : 0, s->bus, s->ppu,
+                                std::span<const std::uint8_t>(s->prg),
+                                std::span<std::uint8_t>(s->chr), img.chr_is_ram);
+        s->mapper->reset();
 
         // The PPU drives the CPU /NMI: it asserts at vblank and clears at
         // pre-render. Both callbacks republish the PPU's current NMI level; the

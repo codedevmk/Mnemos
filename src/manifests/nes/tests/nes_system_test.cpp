@@ -45,6 +45,24 @@ namespace {
         return rom;
     }
 
+    // A 2x16 KiB-PRG / CHR-RAM UxROM (mapper 2). bank0[0]=$A0, bank1[0]=$B1; the
+    // reset vector (in the fixed last bank) points at $C000.
+    std::vector<std::uint8_t> make_uxrom() {
+        std::vector<std::uint8_t> rom(16U + 2U * 0x4000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 2U;                          // 2 x 16 KiB PRG
+        rom[5] = 0U;                          // CHR count 0 -> 8 KiB CHR-RAM
+        rom[6] = 0x20U;                       // flags6: mapper low nibble = 2 (UxROM)
+        rom[16U + 0x0000U] = 0xA0U;           // bank 0, first byte
+        rom[16U + 0x4000U] = 0xB1U;           // bank 1, first byte
+        rom[16U + 0x4000U + 0x3FFCU] = 0x00U; // reset vector (fixed last bank) -> $C000
+        rom[16U + 0x4000U + 0x3FFDU] = 0xC0U;
+        return rom;
+    }
+
 } // namespace
 
 TEST_CASE("parse_ines reads a valid NROM header", "[manifests][nes]") {
@@ -90,6 +108,30 @@ TEST_CASE("CPU writes reach the PPU through the $2000-$3FFF window", "[manifests
     sys->bus.write8(0x2006U, 0x00U);
     sys->bus.write8(0x2007U, 0xABU);
     CHECK(sys->ppu.ppu_read(0x2000U) == 0xABU);
+}
+
+TEST_CASE("UxROM (mapper 2) switches the $8000 PRG bank", "[manifests][nes]") {
+    auto sys = assemble_nes(make_uxrom());
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U); // initial: bank 0 at $8000
+    CHECK(sys->bus.read8(0xC000U) == 0xB1U); // last bank fixed at $C000
+
+    sys->bus.write8(0x8000U, 0x01U); // select bank 1 into the $8000 window
+    CHECK(sys->bus.read8(0x8000U) == 0xB1U);
+
+    sys->bus.write8(0xABCDU, 0x00U); // any $8000-$FFFF write decodes -> bank 0
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xB1U); // the fixed bank never moves
+}
+
+TEST_CASE("CHR-RAM cart accepts PPU pattern writes", "[manifests][nes]") {
+    auto sys = assemble_nes(make_uxrom()); // CHR count 0 -> CHR-RAM
+
+    // PPUADDR := $0000, then write a pattern byte and read it back.
+    sys->bus.write8(0x2006U, 0x00U);
+    sys->bus.write8(0x2006U, 0x00U);
+    sys->bus.write8(0x2007U, 0x5AU);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0x5AU);
 }
 
 TEST_CASE("controller shift register clocks buttons in $4016 read order", "[manifests][nes]") {
