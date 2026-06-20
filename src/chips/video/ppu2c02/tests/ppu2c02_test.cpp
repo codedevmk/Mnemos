@@ -270,6 +270,36 @@ TEST_CASE("ppu2c02 honours the sprite flip-x attribute", "[ppu2c02]") {
     CHECK(at(100U, 50U) == master_0F); // original column now transparent -> backdrop
 }
 
+TEST_CASE("ppu2c02 limits to eight sprites per line and sets the overflow flag", "[ppu2c02]") {
+    ppu2c02 ppu;
+    const auto chr = make_chr({0U, 1U}); // tile 1 = solid pixel 1
+    ppu.attach_chr(chr);
+    set_palette(ppu, 0U, 0x0FU);    // backdrop -> black
+    set_palette(ppu, 0x11U, 0x12U); // sprite palette 0 colour 1 -> blue
+
+    // Nine sprites all on row 50, in OAM order 0..8, at distinct columns.
+    for (std::uint8_t i = 0; i < 9U; ++i) {
+        ppu.poke_oam(i * 4U + 0U, static_cast<std::uint8_t>(50U - 1U));      // Y -> row 50
+        ppu.poke_oam(i * 4U + 1U, 0x01U);                                    // tile 1
+        ppu.poke_oam(i * 4U + 2U, 0x00U);                                    // palette 0, in front
+        ppu.poke_oam(i * 4U + 3U, static_cast<std::uint8_t>(16U + i * 16U)); // X
+    }
+    ppu.reg_write(ppu2c02::reg_mask,
+                  static_cast<std::uint8_t>(ppu2c02::mask_spr_enable | ppu2c02::mask_spr_left));
+
+    ppu.tick(frame_ticks);
+    const auto frame = ppu.framebuffer();
+    const auto at = [&](std::uint32_t x, std::uint32_t y) {
+        return frame.pixels[y * frame.effective_stride() + x];
+    };
+    // The first eight sprites (OAM 0..7) render; the ninth (OAM 8) is dropped.
+    CHECK(at(16U, 50U) == master_12);  // sprite 0
+    CHECK(at(128U, 50U) == master_12); // sprite 7 (16 + 7*16)
+    CHECK(at(144U, 50U) == master_0F); // sprite 8 dropped -> backdrop
+    // The ninth in-range sprite set the overflow flag ($2002 bit 5).
+    CHECK((ppu.reg_read(ppu2c02::reg_status) & ppu2c02::status_spr_over) != 0U);
+}
+
 TEST_CASE("ppu2c02 save_state / load_state round-trips", "[ppu2c02]") {
     ppu2c02 ppu;
     // Build a distinctive state: registers, loopy address, palette, OAM.
