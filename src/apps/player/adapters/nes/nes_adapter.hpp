@@ -37,6 +37,12 @@ namespace mnemos::apps::player::adapters::nes {
         [[nodiscard]] chips::frame_buffer_view current_frame() const noexcept override {
             return sys_->ppu.framebuffer();
         }
+        // Persist the $6000-$7FFF RAM only for battery-backed carts (Zelda, Final
+        // Fantasy, ...); plain work-RAM carts return empty so no .srm is written.
+        [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
+            return sys_->battery ? std::span<std::uint8_t>(sys_->prg_ram)
+                                 : std::span<std::uint8_t>{};
+        }
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
