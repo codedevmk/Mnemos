@@ -71,12 +71,19 @@ namespace mnemos::chips::video {
         }
         [[nodiscard]] std::uint8_t border() const noexcept { return border_; }
 
-        // Force a render of the current screen RAM into the framebuffer (used by
-        // tests / a host that wants the frame without advancing time).
+        // Force a full render of the current state into the framebuffer (used by
+        // tests / a host that wants the frame without advancing time). Equivalent
+        // to sweeping the beam across a whole frame with the state held constant.
         void render_frame() noexcept;
 
       private:
         void drive_irq(bool asserted) noexcept;
+        // Draw the two framebuffer pixels the beam covers at frame T-state `ft`,
+        // sampling the live border / screen RAM / FLASH phase. Called once per
+        // T-state from tick(), so a mid-frame OUT $FE (border) or screen-bank
+        // switch lands at the beam position where it happens -- border stripes,
+        // rainbow loaders, multicolour. render_frame() sweeps every T-state.
+        void draw_beam(int ft) noexcept;
 
         struct introspection_surface final : public instrumentation::ichip_introspection {};
 
