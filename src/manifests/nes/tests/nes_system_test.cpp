@@ -235,6 +235,18 @@ TEST_CASE("MMC3 scanline IRQ counts down from the latch and acknowledges", "[man
     CHECK_FALSE(irq);
 }
 
+TEST_CASE("cartridge work RAM at $6000-$7FFF reads back writes", "[manifests][nes]") {
+    auto sys = assemble_nes(make_synthetic_nrom());
+    // MMC3 (and other) games keep work variables in the 8 KiB at $6000; without it
+    // they read open bus and stall. Spot-check the ends + the middle.
+    sys->bus.write8(0x6000U, 0x5AU);
+    sys->bus.write8(0x7000U, 0xA5U);
+    sys->bus.write8(0x7FFFU, 0x3CU);
+    CHECK(sys->bus.read8(0x6000U) == 0x5AU);
+    CHECK(sys->bus.read8(0x7000U) == 0xA5U);
+    CHECK(sys->bus.read8(0x7FFFU) == 0x3CU);
+}
+
 TEST_CASE("CHR-RAM cart accepts PPU pattern writes", "[manifests][nes]") {
     auto sys = assemble_nes(make_uxrom()); // CHR count 0 -> CHR-RAM
 
