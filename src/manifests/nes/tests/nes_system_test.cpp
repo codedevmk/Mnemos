@@ -83,6 +83,25 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / CHR-RAM MMC3 (mapper 4). 8 KiB bank N
+    // first byte = $A0+N; the reset vector lives in the fixed last bank ($E000).
+    std::vector<std::uint8_t> make_mmc3() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 4 x 16 KiB = 64 KiB PRG (= eight 8 KiB banks)
+        rom[5] = 0U;    // CHR-RAM
+        rom[6] = 0x40U; // flags6: mapper low nibble = 4 (MMC3)
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
 } // namespace
 
 TEST_CASE("parse_ines reads a valid NROM header", "[manifests][nes]") {
@@ -172,6 +191,48 @@ TEST_CASE("MMC1 (mapper 1) serial loads switch PRG banks", "[manifests][nes]") {
     write5(0xE000U, 0x02U); // prg_bank 2 -> 32 KiB base bank 2
     CHECK(sys->bus.read8(0x8000U) == 0xC2U);
     CHECK(sys->bus.read8(0xC000U) == 0xD3U);
+}
+
+TEST_CASE("MMC3 (mapper 4) bank-select/data switch PRG banks", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mmc3());
+
+    // Power-on PRG mode 0: $8000 = R6 (bank 0), $C000 = second-last (bank 6),
+    // $E000 = last (bank 7, always fixed).
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA6U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // Select R6 and set it to bank 3 -> the $8000 window switches.
+    sys->bus.write8(0x8000U, 0x06U); // bank select: R6, PRG mode 0
+    sys->bus.write8(0x8001U, 0x03U); // R6 = bank 3
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // the last bank stays fixed
+
+    // PRG mode 1: $8000 becomes the fixed second-last bank, R6 moves to $C000.
+    sys->bus.write8(0x8000U, 0x46U);         // mode bit (0x40) + select R6
+    sys->bus.write8(0x8001U, 0x03U);         // R6 = bank 3
+    CHECK(sys->bus.read8(0x8000U) == 0xA6U); // second-last (fixed in mode 1)
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U); // R6 = bank 3
+}
+
+TEST_CASE("MMC3 scanline IRQ counts down from the latch and acknowledges", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mmc3());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xC000U, 0x02U); // IRQ latch = 2
+    sys->bus.write8(0xC001U, 0x00U); // reload on the next clock
+    sys->bus.write8(0xE001U, 0x00U); // enable
+
+    sys->mapper->clock_scanline(0U); // reload -> counter = 2
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(1U); // 2 -> 1
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(2U); // 1 -> 0 -> assert
+    CHECK(irq);
+
+    sys->bus.write8(0xE000U, 0x00U); // disable acknowledges the line
+    CHECK_FALSE(irq);
 }
 
 TEST_CASE("CHR-RAM cart accepts PPU pattern writes", "[manifests][nes]") {

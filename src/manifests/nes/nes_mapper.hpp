@@ -4,6 +4,7 @@
 #include "ppu2c02.hpp" // chips::video::ppu2c02
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 
@@ -26,8 +27,20 @@ namespace mnemos::manifests::nes {
 
         virtual void reset() = 0;
         virtual void write(std::uint16_t addr, std::uint8_t value) = 0;
+        // Clock a scanline-counter mapper (MMC3) once per visible scanline. The
+        // default is a no-op (NROM / UxROM / MMC1 have no scanline IRQ).
+        virtual void clock_scanline(std::uint32_t /*line*/) {}
+
+        // How a scanline-IRQ mapper drives the CPU /IRQ line. The board wires this
+        // to the CPU; mappers without an IRQ ignore it.
+        void set_irq_callback(std::function<void(bool)> on_irq) { set_irq_ = std::move(on_irq); }
 
       protected:
+        void raise_irq(bool asserted) {
+            if (set_irq_) {
+                set_irq_(asserted);
+            }
+        }
         // Attach the cart's CHR to the PPU: writable for a CHR-RAM cart, const for
         // CHR-ROM. (CHR-banking mappers re-point this as banks change.)
         void attach_chr() noexcept {
@@ -59,6 +72,9 @@ namespace mnemos::manifests::nes {
         std::span<const std::uint8_t> prg_;
         std::span<std::uint8_t> chr_;
         bool chr_is_ram_;
+
+      private:
+        std::function<void(bool)> set_irq_{};
     };
 
     // Build the mapper for the iNES `number`. An unsupported number falls back to
