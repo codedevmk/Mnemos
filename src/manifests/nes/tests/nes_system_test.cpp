@@ -102,6 +102,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Namco-118 (mapper 206).
+    // PRG bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset vector
+    // lives in the fixed last PRG bank ($E000).
+    std::vector<std::uint8_t> make_namco118() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0xE0U; // flags6: mapper low nibble = 0xE, horizontal mirroring
+        rom[7] = 0xC0U; // flags7: mapper high nibble = 0xC -> mapper 206
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // A 32 KiB-PRG / two-8 KiB-bank-CHR CNROM (mapper 3). CHR bank N byte 0 =
     // $C0+N; the reset vector points at $8000.
     std::vector<std::uint8_t> make_cnrom() {
@@ -275,6 +300,40 @@ TEST_CASE("MMC3 scanline IRQ counts down from the latch and acknowledges", "[man
 
     sys->bus.write8(0xE000U, 0x00U); // disable acknowledges the line
     CHECK_FALSE(irq);
+}
+
+TEST_CASE("Namco 118 (mapper 206) banks PRG/CHR but ignores the MMC3 mode/inversion bits",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_namco118());
+
+    // Power-on PRG mode 0: $8000 = R6 (bank 0), $A000 = R7 (bank 0), $C000 =
+    // second-last (bank 6), $E000 = last (bank 7, always fixed).
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA6U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // R6 -> bank 3 switches the $8000 window.
+    sys->bus.write8(0x8000U, 0x06U);
+    sys->bus.write8(0x8001U, 0x03U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+
+    // The MMC3 PRG-mode bit (0x40) does not exist on 206: $8000 stays R6 -- an MMC3
+    // would here swap in the fixed second-last bank ($A6).
+    sys->bus.write8(0x8000U, 0x46U);
+    sys->bus.write8(0x8001U, 0x03U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U); // still R6, NOT $A6
+
+    // CHR: R2 is the 1 KiB bank at $1000.
+    sys->bus.write8(0x8000U, 0x02U);
+    sys->bus.write8(0x8001U, 0x05U);
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD5U);
+
+    // The MMC3 CHR-A12-inversion bit (0x80) does not exist on 206: $1000 still
+    // tracks R2 -- an MMC3 would here remap $1000 to a 2 KiB R0 bank ($D0).
+    sys->bus.write8(0x8000U, 0x82U);
+    sys->bus.write8(0x8001U, 0x05U);
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD5U);
 }
 
 TEST_CASE("CNROM (mapper 3) switches the 8 KiB CHR bank", "[manifests][nes]") {
