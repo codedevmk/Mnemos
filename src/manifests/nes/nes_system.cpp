@@ -153,13 +153,20 @@ namespace mnemos::manifests::nes {
                                 std::span<std::uint8_t>(s->chr), img.chr_is_ram);
         s->mapper->reset();
 
+        // The mapper drives the CPU /IRQ (MMC3's scanline counter); the scanline
+        // callback below clocks it.
+        s->mapper->set_irq_callback([s](bool asserted) { s->cpu.set_irq_line(asserted); });
+
         // The PPU drives the CPU /NMI: it asserts at vblank and clears at
-        // pre-render. Both callbacks republish the PPU's current NMI level; the
-        // CPU latches the inactive->active edge.
+        // pre-render. The scanline callback also clocks the mapper's scanline IRQ.
+        // Both callbacks republish the PPU's current NMI level; the CPU latches the
+        // inactive->active edge.
         s->ppu.set_vblank_callback(
             [s](std::uint32_t) { s->cpu.set_nmi_line(s->ppu.nmi_asserted()); });
-        s->ppu.set_scanline_callback(
-            [s](std::uint32_t) { s->cpu.set_nmi_line(s->ppu.nmi_asserted()); });
+        s->ppu.set_scanline_callback([s](std::uint32_t line) {
+            s->cpu.set_nmi_line(s->ppu.nmi_asserted());
+            s->mapper->clock_scanline(line);
+        });
 
         s->cpu.attach_bus(s->bus);
         s->cpu.reset(chips::reset_kind::power_on); // loads PC from the $FFFC reset vector
