@@ -102,6 +102,28 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM MMC5 (mapper 5). PRG bank N
+    // byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N.
+    std::vector<std::uint8_t> make_mmc5() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x50U; // flags6: mapper low nibble = 5 (MMC5)
+        rom[7] = 0x00U;
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        return rom;
+    }
+
     // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Namco-118 (mapper 206).
     // PRG bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset vector
     // lives in the fixed last PRG bank ($E000).
@@ -324,6 +346,35 @@ TEST_CASE("MMC3 scanline IRQ only clocks while the PPU is rendering", "[manifest
     sys->ppu.reg_write(ppu::reg_mask, ppu::mask_bg_enable);
     sys->ppu.tick(frame_ticks);
     CHECK(irq);
+}
+
+TEST_CASE("MMC5 (mapper 5) banks PRG/CHR and serves the hardware multiplier", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mmc5());
+
+    // Power-on: PRG mode 3, all bank registers $FF -> every 8 KiB window is the
+    // last bank (bank 7 of eight).
+    CHECK(sys->bus.read8(0x8000U) == 0xA7U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // PRG mode 3 (8 KiB banks): $5114 = bank 2 (ROM, bit 7), $5117 = bank 5.
+    sys->bus.write8(0x5100U, 0x03U);
+    sys->bus.write8(0x5114U, 0x82U); // $8000 = ROM bank 2
+    sys->bus.write8(0x5117U, 0x05U); // $E000 = bank 5 ($5117 is always ROM)
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA5U);
+
+    // CHR 1 KiB mode: set-A register $5120 -> the $0000 slot. With 8x8 sprites the
+    // background reads set A, so the PPU sees the selected bank.
+    sys->bus.write8(0x5101U, 0x03U); // CHR mode 3 (1 KiB)
+    sys->bus.write8(0x5120U, 0x03U); // slot 0 = CHR bank 3
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD3U);
+
+    // Hardware multiplier: $5205 * $5206 -> 16-bit product across $5205 (low) /
+    // $5206 (high).
+    sys->bus.write8(0x5205U, 0x10U); // 16
+    sys->bus.write8(0x5206U, 0x10U); // 16 -> 256 = $0100
+    CHECK(sys->bus.read8(0x5205U) == 0x00U);
+    CHECK(sys->bus.read8(0x5206U) == 0x01U);
 }
 
 TEST_CASE("Namco 118 (mapper 206) banks PRG/CHR but ignores the MMC3 mode/inversion bits",
