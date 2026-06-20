@@ -302,6 +302,30 @@ TEST_CASE("MMC3 scanline IRQ counts down from the latch and acknowledges", "[man
     CHECK_FALSE(irq);
 }
 
+TEST_CASE("MMC3 scanline IRQ only clocks while the PPU is rendering", "[manifests][nes]") {
+    using ppu = mnemos::chips::video::ppu2c02;
+    constexpr std::uint64_t frame_ticks =
+        static_cast<std::uint64_t>(ppu::dots_per_line) * ppu::lines_per_frame;
+
+    auto sys = assemble_nes(make_mmc3());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+    sys->bus.write8(0xC000U, 0x01U); // IRQ latch = 1 (fires after reload + one clock)
+    sys->bus.write8(0xC001U, 0x00U); // reload on the next clock
+    sys->bus.write8(0xE001U, 0x00U); // enable
+
+    // Rendering disabled (PPUMASK = 0): a full frame of scanline callbacks must not
+    // clock the counter -- the A12 toggles that drive it only happen while rendering.
+    sys->ppu.reg_write(ppu::reg_mask, 0x00U);
+    sys->ppu.tick(frame_ticks);
+    CHECK_FALSE(irq);
+
+    // Enable background rendering: the per-line clocks now fire the IRQ.
+    sys->ppu.reg_write(ppu::reg_mask, ppu::mask_bg_enable);
+    sys->ppu.tick(frame_ticks);
+    CHECK(irq);
+}
+
 TEST_CASE("Namco 118 (mapper 206) banks PRG/CHR but ignores the MMC3 mode/inversion bits",
           "[manifests][nes]") {
     auto sys = assemble_nes(make_namco118());
