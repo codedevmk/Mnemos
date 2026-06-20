@@ -93,6 +93,27 @@ TEST_CASE("ula FLASH swaps ink/paper every 16 frames", "[chips][video][ula]") {
     CHECK(screen_px(u, 0, 0) == black); // ink/paper swapped
 }
 
+TEST_CASE("ula captures a mid-frame border change per scanline", "[chips][video][ula]") {
+    // The beam draws as it sweeps, so changing the border partway through a frame
+    // splits the border into stripes (the basis of rainbow loaders / border FX).
+    constexpr std::uint32_t green_normal = 0x00C000U;
+    std::array<std::uint8_t, ula::screen_ram_bytes> ram{};
+    ula u;
+    u.set_screen_ram(ram);
+
+    u.set_border(2);                        // red for the top of the frame
+    u.tick(ula::tstates_per_frame / 2);     // sweep the upper half
+    u.set_border(4);                        // green for the bottom
+    u.tick(ula::tstates_per_frame / 2 + 1); // finish the frame (cross the boundary)
+
+    REQUIRE(u.frame_index() == 1U);
+    const auto fb = u.framebuffer();
+    // A top-border row was painted while the border was red; a bottom-border row
+    // while it was green. Whole-frame rendering could only show one colour.
+    CHECK(fb.pixels[10U * fb.effective_stride()] == red_normal);
+    CHECK(fb.pixels[300U * fb.effective_stride()] == green_normal);
+}
+
 TEST_CASE("ula pulses /INT for 32 T-states at each frame start", "[chips][video][ula]") {
     ula u;
     bool line = false;

@@ -39,36 +39,45 @@ namespace mnemos::chips::video {
                 .revision = 1U};
     }
 
-    void ula::render_frame() noexcept {
+    void ula::draw_beam(int ft) noexcept {
+        // The 448x312 framebuffer is exactly 2 pixels per T-state x 224 T-states
+        // per line x 312 lines, so the beam covers every pixel once per frame.
+        const int line = ft / tstates_per_line;  // framebuffer row 0..311
+        const int phase = ft % tstates_per_line; // 0..223; x = phase * 2
+        std::uint32_t* const row =
+            framebuffer_.data() + static_cast<std::size_t>(line) * frame_width;
         const std::uint32_t border_rgb = k_palette[0][border_ & 0x07U];
-        for (std::uint32_t& px : framebuffer_) {
-            px = border_rgb;
-        }
-        if (screen_ram_.size() < screen_ram_bytes) {
-            return; // no screen attached -- border only
-        }
-
+        const bool screen_attached = screen_ram_.size() >= screen_ram_bytes;
+        const bool in_screen_y = line >= screen_y_offset && line < screen_y_offset + display_height;
         const bool flash_phase = (frame_count_ & 0x10U) != 0U;
-        for (int y = 0; y < display_height; ++y) {
-            std::uint32_t* row =
-                framebuffer_.data() + static_cast<std::size_t>(y + screen_y_offset) * frame_width;
-            for (int x = 0; x < display_width; x += 8) {
-                const std::uint8_t bitmap = screen_ram_[bitmap_offset(x, y)];
-                const std::uint8_t attr = screen_ram_[attr_offset(x, y)];
-                std::uint8_t ink = attr & 0x07U;
-                std::uint8_t paper = (attr >> 3U) & 0x07U;
-                const std::size_t bright = (attr & 0x40U) != 0U ? 1U : 0U;
-                if ((attr & 0x80U) != 0U && flash_phase) {
-                    const std::uint8_t tmp = ink;
-                    ink = paper;
-                    paper = tmp;
-                }
-                for (int bit = 0; bit < 8; ++bit) {
-                    const std::uint8_t color = (bitmap & (0x80U >> bit)) != 0U ? ink : paper;
-                    row[static_cast<std::size_t>(screen_x_offset + x + bit)] =
-                        k_palette[bright][color];
-                }
+
+        for (int i = 0; i < 2; ++i) {
+            const int x = phase * 2 + i;
+            const bool in_screen_x = x >= screen_x_offset && x < screen_x_offset + display_width;
+            if (!screen_attached || !in_screen_y || !in_screen_x) {
+                row[x] = border_rgb;
+                continue;
             }
+            const int sx = x - screen_x_offset;
+            const int sy = line - screen_y_offset;
+            const std::uint8_t bitmap = screen_ram_[bitmap_offset(sx, sy)];
+            const std::uint8_t attr = screen_ram_[attr_offset(sx, sy)];
+            std::uint8_t ink = attr & 0x07U;
+            std::uint8_t paper = (attr >> 3U) & 0x07U;
+            const std::size_t bright = (attr & 0x40U) != 0U ? 1U : 0U;
+            if ((attr & 0x80U) != 0U && flash_phase) {
+                const std::uint8_t tmp = ink;
+                ink = paper;
+                paper = tmp;
+            }
+            const bool pixel_on = (bitmap & (0x80U >> (sx & 7))) != 0U;
+            row[x] = k_palette[bright][pixel_on ? ink : paper];
+        }
+    }
+
+    void ula::render_frame() noexcept {
+        for (int ft = 0; ft < tstates_per_frame; ++ft) {
+            draw_beam(ft);
         }
     }
 
@@ -83,22 +92,22 @@ namespace mnemos::chips::video {
     }
 
     void ula::tick(std::uint64_t cycles) {
-        auto remaining = static_cast<std::int64_t>(cycles);
-        while (remaining > 0) {
-            const int frame_left = tstates_per_frame - frame_tstates_;
-            const int chunk = remaining < frame_left ? static_cast<int>(remaining) : frame_left;
-
-            if (irq_pulse_ > 0) {
-                irq_pulse_ = chunk >= irq_pulse_ ? 0 : irq_pulse_ - chunk;
+        // Draw the beam one T-state at a time so mid-frame state changes (border,
+        // 128K screen bank) are captured where they happen. The FLASH counter
+        // advances at the top of each frame so the frame the beam is painting uses
+        // the phase it completes with -- keeping render_frame() (a held-state
+        // sweep) byte-identical for static content.
+        for (std::uint64_t c = 0; c < cycles; ++c) {
+            if (frame_tstates_ == 0) {
+                ++frame_count_;
             }
-
-            frame_tstates_ += chunk;
-            remaining -= chunk;
-
+            draw_beam(frame_tstates_);
+            ++frame_tstates_;
+            if (irq_pulse_ > 0) {
+                --irq_pulse_;
+            }
             if (frame_tstates_ >= tstates_per_frame) {
                 frame_tstates_ = 0;
-                ++frame_count_;
-                render_frame();
                 ++frame_index_;
                 irq_pulse_ = irq_pulse_tstates; // /INT pulse at frame start
             }
