@@ -377,6 +377,34 @@ TEST_CASE("MMC5 (mapper 5) banks PRG/CHR and serves the hardware multiplier", "[
     CHECK(sys->bus.read8(0x5206U) == 0x01U);
 }
 
+TEST_CASE("MMC5 scanline IRQ fires at the target line and acknowledges on $5204 read",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_mmc5());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0x5203U, 0x08U); // IRQ target = scanline 8
+    sys->bus.write8(0x5204U, 0x80U); // enable
+
+    sys->mapper->clock_scanline(7U); // before the target -> no IRQ
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(8U); // target -> assert
+    CHECK(irq);
+
+    // $5204 read: bit 7 (pending) + bit 6 (in-frame) set, and the read acknowledges
+    // the IRQ (drops the line).
+    const std::uint8_t status = sys->bus.read8(0x5204U);
+    CHECK((status & 0x80U) != 0U);
+    CHECK((status & 0x40U) != 0U);
+    CHECK_FALSE(irq);
+
+    // Re-fire, then disabling ($5204 bit 7 clear) drops the line.
+    sys->mapper->clock_scanline(8U);
+    CHECK(irq);
+    sys->bus.write8(0x5204U, 0x00U);
+    CHECK_FALSE(irq);
+}
+
 TEST_CASE("Namco 118 (mapper 206) banks PRG/CHR but ignores the MMC3 mode/inversion bits",
           "[manifests][nes]") {
     auto sys = assemble_nes(make_namco118());
