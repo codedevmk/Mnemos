@@ -450,10 +450,14 @@ namespace mnemos::chips::video {
         const bool left_clip = (mask_ & mask_spr_left) == 0U;
         const std::size_t row = static_cast<std::size_t>(sy) * visible_width;
 
-        // High OAM index first so sprite 0 (highest priority) lands on top.
-        for (std::size_t s = 64U; s-- > 0U;) {
-            const std::size_t base = s * 4U;
-            const std::uint32_t spr_y = oam_[base + 0U];
+        // Sprite evaluation: walk OAM in order and keep the first eight sprites that
+        // cover this line (the hardware's 8-entry secondary OAM). A ninth in-range
+        // sprite sets the overflow flag and is dropped -- this is what produces the
+        // per-line sprite flicker games are designed around.
+        std::array<std::uint8_t, 8> line_sprites{};
+        std::size_t sprite_count = 0U;
+        for (std::size_t s = 0; s < 64U; ++s) {
+            const std::uint32_t spr_y = oam_[s * 4U];
             if (spr_y >= 0xEFU) {
                 continue; // off-screen Y
             }
@@ -462,6 +466,21 @@ namespace mnemos::chips::video {
             if (rin < 0 || rin >= static_cast<std::int32_t>(height)) {
                 continue; // this sprite doesn't cover line sy
             }
+            if (sprite_count == line_sprites.size()) {
+                status_ |= status_spr_over; // a ninth in-range sprite: overflow
+                break;
+            }
+            line_sprites[sprite_count++] = static_cast<std::uint8_t>(s);
+        }
+
+        // Draw the selected sprites back-to-front (highest OAM index first) so the
+        // lower index -- higher priority -- lands on top, and sprite 0 stays frontmost.
+        for (std::size_t i = sprite_count; i-- > 0U;) {
+            const std::size_t s = line_sprites[i];
+            const std::size_t base = s * 4U;
+            const std::uint32_t spr_y = oam_[base + 0U];
+            const std::int32_t rin =
+                static_cast<std::int32_t>(sy) - static_cast<std::int32_t>(spr_y + 1U);
             const std::uint32_t tile_raw = oam_[base + 1U];
             const std::uint8_t attr = oam_[base + 2U];
             const std::uint32_t spr_x = oam_[base + 3U];
