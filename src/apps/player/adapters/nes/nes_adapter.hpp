@@ -54,6 +54,12 @@ namespace mnemos::apps::player::adapters::nes {
         mnemos::video_region region_;
         double target_fps_;
         std::vector<frontend_sdk::spec_field> spec_{};
+        // drain_audio scratch: the APU queues interleaved stereo (mono duplicated
+        // to both lanes); it is resampled to the output frame rate, carrying the
+        // fractional remainder so the long-term rate stays exact.
+        std::vector<std::int16_t> apu_buf_{};
+        std::vector<std::int16_t> mix_buf_{};
+        double audio_frac_{0.0};
     };
 
 } // namespace mnemos::apps::player::adapters::nes

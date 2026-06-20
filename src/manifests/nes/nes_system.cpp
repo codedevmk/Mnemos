@@ -61,6 +61,12 @@ namespace mnemos::manifests::nes {
         // The 2A03 is a 6502 with no on-chip I/O port: $0000/$0001 are plain RAM.
         s->cpu.set_port_enabled(false);
 
+        // The APU's frame sequencer is CPU-clocked (it ticks once per CPU cycle in
+        // the schedule). One native audio sample per 37 CPU cycles puts the native
+        // rate (1.789773 MHz / 37 ~= 48.4 kHz) just above the 48 kHz output, so the
+        // adapter down-resamples cleanly. (NTSC; PAL timing is a later increment.)
+        s->apu.set_clock_divider(37);
+
         // $0000-$1FFF: 2 KiB work RAM, mirrored four times (A11/A12 ignored).
         for (std::uint32_t base = 0x0000U; base < 0x2000U; base += 0x0800U) {
             s->bus.map_ram(base, std::span<std::uint8_t>(s->wram));

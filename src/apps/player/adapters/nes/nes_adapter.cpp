@@ -31,6 +31,7 @@ namespace mnemos::apps::player::adapters::nes {
         chip_view_[0] = &sys_->ppu;
         chip_view_[1] = &sys_->cpu;
         chip_view_[2] = &sys_->apu;
+        sys_->apu.enable_audio_capture(true);
 
         spec_.push_back({.label = "System", .value = "Nintendo Entertainment System"});
         if (!display_name.empty()) {
@@ -45,8 +46,37 @@ namespace mnemos::apps::player::adapters::nes {
     void nes_adapter::step_one_frame() { scheduler_.run_frame(); }
 
     frontend_sdk::audio_chunk nes_adapter::drain_audio() noexcept {
-        // APU audio is the next increment; the NROM boot is video-only.
-        return {.samples = nullptr, .frame_count = 0U, .sample_rate = mnemos::dsp::kOutputRate};
+        const std::size_t pairs = sys_->apu.pending_samples();
+        if (pairs == 0U) {
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = mnemos::dsp::kOutputRate};
+        }
+        apu_buf_.resize(pairs * 2U);
+        sys_->apu.drain_samples(apu_buf_.data(), pairs);
+
+        // Output samples for this frame, carrying the fractional remainder so the
+        // long-term output rate is exact.
+        const double exact =
+            (static_cast<double>(mnemos::dsp::kOutputRate) / target_fps_) + audio_frac_;
+        int dst_pairs = static_cast<int>(exact);
+        if (dst_pairs <= 0) {
+            dst_pairs = 1;
+        }
+        audio_frac_ = exact - static_cast<double>(dst_pairs);
+
+        mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
+        const double scale = static_cast<double>(pairs) / static_cast<double>(dst_pairs);
+        for (int i = 0; i < dst_pairs; ++i) {
+            // The APU mix is a full-range int16 duplicated to both lanes; resample
+            // lane 0 (stride 2) and write it to both output lanes.
+            const int s = mnemos::dsp::sample_channel_box(
+                apu_buf_.data(), 2, 0, static_cast<int>(pairs), scale * i, scale * (i + 1));
+            const std::int16_t out = mnemos::dsp::clip_i16(s);
+            mix_buf_[static_cast<std::size_t>(i) * 2U] = out;
+            mix_buf_[static_cast<std::size_t>(i) * 2U + 1U] = out;
+        }
+        return {.samples = mix_buf_.data(),
+                .frame_count = static_cast<std::uint32_t>(dst_pairs),
+                .sample_rate = mnemos::dsp::kOutputRate};
     }
 
     void nes_adapter::apply_input(int /*port*/,
