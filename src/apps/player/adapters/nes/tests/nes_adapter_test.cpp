@@ -113,6 +113,23 @@ TEST_CASE("nes adapter constructs and steps frames", "[apps][player][nes]") {
     CHECK(adapter.system().ppu.frame_index() > before); // the PPU advanced frames
 }
 
+TEST_CASE("nes adapter maps the pad to the controller port", "[apps][player][nes]") {
+    nes_adapter adapter(tiny_nrom());
+    mnemos::frontend_sdk::controller_state st{};
+    st.a = true;
+    st.start = true;
+    adapter.apply_input(0, st);
+
+    auto& sys = adapter.system();
+    sys.bus.write8(0x4016U, 0x01U); // strobe
+    sys.bus.write8(0x4016U, 0x00U);
+    // Serial order A, B, Select, Start: A and Start pressed, B and Select not.
+    CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x01U); // A
+    CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x00U); // B
+    CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x00U); // Select
+    CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x01U); // Start
+}
+
 TEST_CASE("nes adapter drains APU audio after a frame", "[apps][player][nes]") {
     nes_adapter adapter(tiny_nrom());
     auto& sys = adapter.system();

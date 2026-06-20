@@ -92,6 +92,28 @@ TEST_CASE("CPU writes reach the PPU through the $2000-$3FFF window", "[manifests
     CHECK(sys->ppu.ppu_read(0x2000U) == 0xABU);
 }
 
+TEST_CASE("controller shift register clocks buttons in $4016 read order", "[manifests][nes]") {
+    auto sys = assemble_nes(make_synthetic_nrom());
+    sys->set_pad(0, nes_system::btn_a | nes_system::btn_right);
+
+    // Strobe high then low ($4016) latches the button state for serial reads.
+    sys->bus.write8(0x4016U, 0x01U);
+    sys->bus.write8(0x4016U, 0x00U);
+
+    // Eight reads emit A, B, Select, Start, Up, Down, Left, Right in bit 0.
+    const std::array<bool, 8> expect = {true, false, false, false, false, false, false, true};
+    for (std::size_t i = 0; i < expect.size(); ++i) {
+        const std::uint8_t r = sys->bus.read8(0x4016U);
+        CHECK((r & 0x01U) == (expect[i] ? 0x01U : 0x00U));
+    }
+    // Reads past the 8th return 1 (the open-bus / shifted-in level).
+    CHECK((sys->bus.read8(0x4016U) & 0x01U) == 0x01U);
+    // Controller 2 ($4017) was never pressed -> first read is 0.
+    sys->bus.write8(0x4016U, 0x01U);
+    sys->bus.write8(0x4016U, 0x00U);
+    CHECK((sys->bus.read8(0x4017U) & 0x01U) == 0x00U);
+}
+
 TEST_CASE("CPU writes reach the APU and produce audio", "[manifests][nes]") {
     const auto rom = make_synthetic_nrom();
     auto sys = assemble_nes(rom);

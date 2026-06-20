@@ -48,6 +48,35 @@ namespace mnemos::manifests::nes {
         return img;
     }
 
+    void nes_system::set_pad(int port, std::uint8_t buttons) noexcept {
+        if (port == 0 || port == 1) {
+            pad_buttons[static_cast<std::size_t>(port)] = buttons;
+        }
+    }
+
+    void nes_system::write_controller_strobe(std::uint8_t value) noexcept {
+        pad_strobe = (value & 0x01U) != 0U;
+        if (pad_strobe) {
+            // While the strobe is high the registers track the live state; the
+            // 1->0 edge games use latches the value reloaded here.
+            pad_shift[0] = pad_buttons[0];
+            pad_shift[1] = pad_buttons[1];
+        }
+    }
+
+    std::uint8_t nes_system::read_controller(int port) noexcept {
+        const auto p = static_cast<std::size_t>(port & 1);
+        std::uint8_t bit;
+        if (pad_strobe) {
+            bit = pad_buttons[p] & 0x01U; // strobing returns A continuously
+        } else {
+            bit = pad_shift[p] & 0x01U;
+            // Shift right, clocking in 1s so reads past the 8th return 1 (open bus).
+            pad_shift[p] = static_cast<std::uint8_t>((pad_shift[p] >> 1U) | 0x80U);
+        }
+        return static_cast<std::uint8_t>(bit | 0x40U); // open-bus high bits
+    }
+
     std::unique_ptr<nes_system> assemble_nes(std::span<const std::uint8_t> rom,
                                              const nes_config& /*config*/) {
         auto sys = std::make_unique<nes_system>();
@@ -91,8 +120,11 @@ namespace mnemos::manifests::nes {
                 if (addr == 0x4015U) {
                     return s->apu.read_reg(static_cast<std::uint16_t>(addr));
                 }
-                if (addr == 0x4016U || addr == 0x4017U) {
-                    return 0x40U; // open-bus high bit set; controllers arrive later
+                if (addr == 0x4016U) {
+                    return s->read_controller(0);
+                }
+                if (addr == 0x4017U) {
+                    return s->read_controller(1);
                 }
                 return 0x00U;
             },
@@ -108,7 +140,8 @@ namespace mnemos::manifests::nes {
                     return;
                 }
                 if (addr == 0x4016U) {
-                    return; // controller strobe -- a later increment
+                    s->write_controller_strobe(value); // both pads share the strobe
+                    return;
                 }
                 s->apu.write_reg(static_cast<std::uint16_t>(addr), value);
             });

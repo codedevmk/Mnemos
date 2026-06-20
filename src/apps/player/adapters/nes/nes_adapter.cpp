@@ -79,9 +79,37 @@ namespace mnemos::apps::player::adapters::nes {
                 .sample_rate = mnemos::dsp::kOutputRate};
     }
 
-    void nes_adapter::apply_input(int /*port*/,
-                                  const frontend_sdk::controller_state& /*state*/) noexcept {
-        // Controllers ($4016/$4017 shift registers) arrive in a later increment.
+    void nes_adapter::apply_input(int port, const frontend_sdk::controller_state& state) noexcept {
+        if (port < 0 || port > 1) {
+            return; // two standard pads
+        }
+        using sys = manifests::nes::nes_system;
+        std::uint8_t buttons = 0U;
+        if (state.a) {
+            buttons |= sys::btn_a;
+        }
+        if (state.b) {
+            buttons |= sys::btn_b;
+        }
+        if (state.select) {
+            buttons |= sys::btn_select;
+        }
+        if (state.start) {
+            buttons |= sys::btn_start;
+        }
+        if (state.up) {
+            buttons |= sys::btn_up;
+        }
+        if (state.down) {
+            buttons |= sys::btn_down;
+        }
+        if (state.left) {
+            buttons |= sys::btn_left;
+        }
+        if (state.right) {
+            buttons |= sys::btn_right;
+        }
+        sys_->set_pad(port, buttons);
     }
 
     void force_link() noexcept {}
