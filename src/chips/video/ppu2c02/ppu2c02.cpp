@@ -172,8 +172,10 @@ namespace mnemos::chips::video {
     void ppu2c02::ppu_write(std::uint16_t addr, std::uint8_t value) noexcept {
         addr &= 0x3FFFU;
         if (addr < 0x2000U) {
-            // CHR is read-only here (CHR RAM carts wire writes through the
-            // board); the attached span is const, so writes drop.
+            // CHR-ROM drops writes; a CHR-RAM cart attaches a writable window.
+            if (addr < chr_ram_.size()) {
+                chr_ram_[addr] = value;
+            }
             return;
         }
         if (addr < 0x3F00U) {

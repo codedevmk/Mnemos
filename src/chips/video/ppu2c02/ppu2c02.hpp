@@ -123,6 +123,13 @@ namespace mnemos::chips::video {
         // console's 2 KB CIRAM. Palette / OAM also have attach_* hooks so a test
         // can seed them directly (the CPU normally fills them via the ports).
         void attach_chr(std::span<const std::uint8_t> chr) noexcept { chr_ = chr; }
+        // CHR-RAM carts attach a writable 8 KiB pattern window: reads use it (as
+        // with attach_chr) and PPU $0000-$1FFF writes land in it. A CHR-ROM cart
+        // leaves chr_ram_ empty, so those writes drop.
+        void attach_chr_ram(std::span<std::uint8_t> ram) noexcept {
+            chr_ = ram; // const view for the read path
+            chr_ram_ = ram;
+        }
         void attach_nametables(std::span<const std::uint8_t> ram) noexcept {
             external_nametables_ = ram;
         }
@@ -236,6 +243,7 @@ namespace mnemos::chips::video {
 
         // Non-owning external memory.
         std::span<const std::uint8_t> chr_{};
+        std::span<std::uint8_t> chr_ram_{}; // writable CHR (CHR-RAM carts); empty => CHR-ROM
         std::span<const std::uint8_t> external_nametables_{};
 
         std::uint32_t dot_{};
