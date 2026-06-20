@@ -135,6 +135,32 @@ namespace {
         std::vector<spec_field> spec_{};
     };
 
+    // A synth-style system: it has no audio_source (nothing for export_audio), but
+    // drain_audio() yields a non-silent stereo chunk each frame -- exactly the case
+    // export_rendered_audio exists to capture.
+    class rendered_system final : public player_system {
+      public:
+        [[nodiscard]] video_region region() const noexcept override { return {60000U}; }
+        [[nodiscard]] const std::vector<spec_field>& system_spec() const noexcept override {
+            return spec_;
+        }
+        [[nodiscard]] frame_buffer_view current_frame() const noexcept override { return {}; }
+        void step_one_frame() override { ++frames_stepped; }
+        void apply_input(int, const controller_state&) noexcept override {}
+        [[nodiscard]] audio_chunk drain_audio() noexcept override {
+            // Two (L,R) frames per call, varying with the frame so it is non-silent.
+            buf_ = {static_cast<std::int16_t>(100 + frames_stepped), 200, 300, 400};
+            return {.samples = buf_.data(), .frame_count = 2U, .sample_rate = 48000U};
+        }
+        [[nodiscard]] std::span<ichip* const> chips() const noexcept override { return {}; }
+
+        int frames_stepped{0};
+
+      private:
+        std::array<std::int16_t, 4> buf_{};
+        std::vector<spec_field> spec_{};
+    };
+
     [[nodiscard]] std::filesystem::path make_scratch_dir(const std::string& tag) {
         const auto base =
             std::filesystem::temp_directory_path() / ("mnemos_audio_export_test_" + tag);
@@ -237,4 +263,26 @@ TEST_CASE("export_audio writes an empty manifest for a system with no samples", 
     const auto manifest = scratch / "out.audio.json";
     REQUIRE(std::filesystem::exists(manifest));
     CHECK(read_text(manifest).find("\"chips\": []") != std::string::npos);
+}
+
+TEST_CASE("export_rendered_audio captures the drained mix to a WAV", "[audio_export]") {
+    const auto scratch = make_scratch_dir("rendered");
+    const auto base = (scratch / "out").string();
+
+    rendered_system sys;
+    int input_calls = 0;
+    const std::size_t frames =
+        mnemos::debug::export_rendered_audio(sys, 5U, base, [&](std::uint64_t) { ++input_calls; });
+
+    // 5 frames x 2 (L,R) pairs drained per frame = 10 captured frames.
+    CHECK(frames == 10U);
+    CHECK(sys.frames_stepped == 5); // stepped exactly `frames` times
+    CHECK(input_calls == 5);        // before_frame ran once per frame
+
+    const auto wav = scratch / "out.rendered.wav";
+    REQUIRE(std::filesystem::exists(wav));
+    const auto bytes = read_file(wav);
+    CHECK(is_riff_wave(bytes));
+    // 10 stereo s16 frames = 40 bytes of PCM data on top of the 44-byte header.
+    CHECK(bytes.size() == 44U + 40U);
 }

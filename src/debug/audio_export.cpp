@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace mnemos::debug {
 
@@ -87,6 +88,37 @@ namespace mnemos::debug {
             std::fprintf(stderr, "[audio_export] could not write %s\n", manifest_path.c_str());
         }
         return written;
+    }
+
+    std::size_t export_rendered_audio(frontend_sdk::player_system& sys, std::uint64_t frames,
+                                      const std::string& base_path,
+                                      const std::function<void(std::uint64_t)>& before_frame) {
+        std::vector<std::int16_t> pcm; // interleaved L,R across the whole capture
+        std::uint32_t sample_rate = 0U;
+        for (std::uint64_t i = 0; i < frames; ++i) {
+            if (before_frame) {
+                before_frame(i);
+            }
+            sys.step_one_frame();
+            const frontend_sdk::audio_chunk chunk = sys.drain_audio();
+            if (chunk.sample_rate != 0U) {
+                sample_rate = chunk.sample_rate;
+            }
+            if (chunk.samples != nullptr && chunk.frame_count != 0U) {
+                pcm.insert(pcm.end(), chunk.samples,
+                           chunk.samples + static_cast<std::size_t>(chunk.frame_count) * 2U);
+            }
+        }
+
+        if (sample_rate == 0U) {
+            sample_rate = 48000U; // nothing drained -> still emit a valid (silent) WAV
+        }
+        const std::string path = base_path + ".rendered.wav";
+        if (!audio::write_wav(path, pcm, sample_rate, 2U)) {
+            std::fprintf(stderr, "[audio_export] could not write %s\n", path.c_str());
+            return 0U;
+        }
+        return pcm.size() / 2U; // (L,R) frames captured
     }
 
 } // namespace mnemos::debug

@@ -583,15 +583,20 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         const auto press_events = parse_press_events(argc, argv);
-        for (std::uint64_t i = 0; i < extract_audio->frames; ++i) {
-            if (!press_events.empty()) {
-                system->apply_input(0, input_for_frame(press_events, i + 1U));
-            }
-            system->step_one_frame();
-        }
+        // Record the rendered output (what the machine actually plays -- the only
+        // audio export that works for synth chips like the NES APU); the stepping
+        // also leaves the chips in their final state for export_audio's snapshot.
+        const std::size_t rendered = mnemos::debug::export_rendered_audio(
+            *system, extract_audio->frames, extract_audio->base, [&](std::uint64_t i) {
+                if (!press_events.empty()) {
+                    system->apply_input(0, input_for_frame(press_events, i + 1U));
+                }
+            });
         const std::size_t count = mnemos::debug::export_audio(*system, extract_audio->base);
-        std::fprintf(stderr, "[mnemos_player] extracted %zu sample(s) to %s.* after %llu frames\n",
-                     count, extract_audio->base.c_str(),
+        std::fprintf(stderr,
+                     "[mnemos_player] extracted %zu stored sample(s) + %zu rendered frame(s) to "
+                     "%s.* after %llu frames\n",
+                     count, rendered, extract_audio->base.c_str(),
                      static_cast<unsigned long long>(extract_audio->frames));
         std::fflush(stderr);
         return 0;
