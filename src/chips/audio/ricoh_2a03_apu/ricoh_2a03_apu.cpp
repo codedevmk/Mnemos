@@ -165,6 +165,60 @@ namespace mnemos::chips::audio {
         // The 3-4 CPU-cycle restart delay is modelled as immediate (per the
         // reference): reset the cycle accumulator.
         cpu_cycles_ = 0U;
+        // Switching to 5-step mode immediately clocks a quarter + half frame.
+        if (frame_mode_5step_) {
+            clock_quarter_frame();
+            clock_half_frame();
+        }
+    }
+
+    void ricoh_2a03_apu::clock_quarter_frame() noexcept {
+        // Volume envelopes (the two pulses + noise). The length-halt bit doubles as
+        // the envelope loop flag.
+        const auto clock_env = [](auto& ch) {
+            if (ch.env_start) {
+                ch.env_start = false;
+                ch.env_decay = 15U;
+                ch.env_divider = ch.volume_env;
+            } else if (ch.env_divider == 0U) {
+                ch.env_divider = ch.volume_env;
+                if (ch.env_decay > 0U) {
+                    --ch.env_decay;
+                } else if (ch.length_halt) {
+                    ch.env_decay = 15U; // loop
+                }
+            } else {
+                --ch.env_divider;
+            }
+        };
+        clock_env(pulse_[0]);
+        clock_env(pulse_[1]);
+        clock_env(noise_);
+
+        // Triangle linear counter: reload while the flag is set, else count down;
+        // the control bit (length_halt) clears the flag.
+        if (triangle_.linear_reload_flag) {
+            triangle_.linear_counter = triangle_.linear_reload;
+        } else if (triangle_.linear_counter > 0U) {
+            --triangle_.linear_counter;
+        }
+        if (!triangle_.length_halt) {
+            triangle_.linear_reload_flag = false;
+        }
+    }
+
+    void ricoh_2a03_apu::clock_half_frame() noexcept {
+        // Length counters: a running, non-halted counter ticks down so the channel
+        // actually stops. (Pulse sweep units are a later increment.)
+        const auto clock_len = [](auto& ch) {
+            if (!ch.length_halt && ch.length_counter > 0U) {
+                --ch.length_counter;
+            }
+        };
+        clock_len(pulse_[0]);
+        clock_len(pulse_[1]);
+        clock_len(triangle_);
+        clock_len(noise_);
     }
 
     void ricoh_2a03_apu::notify_irq() noexcept {
@@ -234,6 +288,7 @@ namespace mnemos::chips::audio {
                 pulse_[0].length_counter = k_length_table[pulse_[0].length_load & 0x1FU];
             }
             pulse_[0].sequence_step = 0U; // a timer-high write restarts the duty phase
+            pulse_[0].env_start = true;   // and restarts the volume envelope
             break;
 
         case reg_pulse2_0:
@@ -255,6 +310,7 @@ namespace mnemos::chips::audio {
                 pulse_[1].length_counter = k_length_table[pulse_[1].length_load & 0x1FU];
             }
             pulse_[1].sequence_step = 0U;
+            pulse_[1].env_start = true;
             break;
 
         case reg_tri_0:
@@ -271,7 +327,7 @@ namespace mnemos::chips::audio {
             if (triangle_.enabled) {
                 triangle_.length_counter = k_length_table[triangle_.length_load & 0x1FU];
             }
-            triangle_.linear_counter = triangle_.linear_reload;
+            triangle_.linear_reload_flag = true; // reloads on the next quarter-frame
             break;
 
         case reg_noise_0:
@@ -288,6 +344,7 @@ namespace mnemos::chips::audio {
             if (noise_.enabled) {
                 noise_.length_counter = k_length_table[noise_.length_load & 0x1FU];
             }
+            noise_.env_start = true;
             break;
 
         case reg_dmc_0:
@@ -380,64 +437,83 @@ namespace mnemos::chips::audio {
         }
     }
 
-    std::int16_t ricoh_2a03_apu::mix_step() noexcept {
-        std::int32_t mix = 0;
-
-        for (auto& p : pulse_) {
-            const bool gated = p.enabled && p.length_counter > 0U && p.timer >= 8U;
-            // The pulse timer is clocked every other APU cycle; period+1 native
-            // steps elapse before each duty-sequence advance.
-            if (p.timer_counter == 0U) {
-                p.timer_counter = p.timer;
-                p.sequence_step = static_cast<std::uint8_t>((p.sequence_step + 1U) & 0x07U);
-            } else {
-                --p.timer_counter;
+    void ricoh_2a03_apu::advance_oscillators(int cpu_cycles) noexcept {
+        for (int c = 0; c < cpu_cycles; ++c) {
+            // Triangle timer runs at the full CPU rate; its sequencer advances only
+            // while the channel is sounding (both gating counters non-zero).
+            {
+                triangle_channel& t = triangle_;
+                const bool on =
+                    t.enabled && t.length_counter > 0U && t.linear_counter > 0U && t.timer >= 2U;
+                if (t.timer_counter == 0U) {
+                    t.timer_counter = t.timer;
+                    if (on) {
+                        t.sequence_step = static_cast<std::uint8_t>((t.sequence_step + 1U) & 0x1FU);
+                    }
+                } else {
+                    --t.timer_counter;
+                }
             }
-            if (gated && k_duty_table[p.duty][p.sequence_step] != 0U) {
-                // The envelope generator is not separately clocked in this
-                // synthesis core, so volume_env is the level in both the
-                // constant-volume and envelope-decay modes.
-                mix += (k_channel_peak * static_cast<std::int32_t>(p.volume_env)) / 15;
+
+            // Pulse + noise timers run at the APU rate -- every other CPU cycle.
+            apu_half_ = !apu_half_;
+            if (!apu_half_) {
+                continue;
+            }
+            for (auto& p : pulse_) {
+                if (p.timer_counter == 0U) {
+                    p.timer_counter = p.timer;
+                    p.sequence_step = static_cast<std::uint8_t>((p.sequence_step + 1U) & 0x07U);
+                } else {
+                    --p.timer_counter;
+                }
+            }
+            {
+                noise_channel& n = noise_;
+                if (n.timer_counter == 0U) {
+                    n.timer_counter = k_noise_period[n.period_index & 0x0FU];
+                    const std::uint16_t tap_bit = n.mode ? 6U : 1U;
+                    const std::uint16_t fb =
+                        static_cast<std::uint16_t>((n.lfsr & 1U) ^ ((n.lfsr >> tap_bit) & 1U));
+                    n.lfsr = static_cast<std::uint16_t>((n.lfsr >> 1U) | (fb << 14U));
+                } else {
+                    --n.timer_counter;
+                }
             }
         }
+    }
 
-        // Triangle: its sequencer advances whenever the channel is sounding (both
-        // counters non-zero); the output is the 32-step ramp scaled to peak.
+    std::int16_t ricoh_2a03_apu::mix_step() noexcept {
+        // Run the tone oscillators across the CPU cycles this output sample spans,
+        // then sample each channel's level and sum. Clocking the timers at the CPU
+        // rate (not once per sample) is what makes the pitch correct.
+        advance_oscillators(clock_divider_ > 0 ? clock_divider_ : 1);
+
+        std::int32_t mix = 0;
+        for (auto& p : pulse_) {
+            const bool gated = p.enabled && p.length_counter > 0U && p.timer >= 8U;
+            if (gated && k_duty_table[p.duty][p.sequence_step] != 0U) {
+                // Constant-volume channels use the 4-bit volume; envelope channels
+                // use the decay level clocked at the quarter-frame rate.
+                const std::int32_t vol = p.constant_volume ? p.volume_env : p.env_decay;
+                mix += (k_channel_peak * vol) / 15;
+            }
+        }
         {
             triangle_channel& t = triangle_;
             const bool gated =
                 t.enabled && t.length_counter > 0U && t.linear_counter > 0U && t.timer >= 2U;
-            if (t.timer_counter == 0U) {
-                t.timer_counter = t.timer;
-                if (gated) {
-                    t.sequence_step = static_cast<std::uint8_t>((t.sequence_step + 1U) & 0x1FU);
-                }
-            } else {
-                --t.timer_counter;
-            }
             if (gated) {
                 const std::int32_t lvl = k_triangle_table[t.sequence_step]; // 0..15
                 mix += ((lvl - 7) * k_channel_peak) / 8;
             }
         }
-
-        // Noise: a 15-bit LFSR clocked at the period-table rate; bit 0 (inverted)
-        // gates the channel volume.
         {
             noise_channel& n = noise_;
             const bool gated = n.enabled && n.length_counter > 0U;
-            const std::uint16_t period = k_noise_period[n.period_index & 0x0FU];
-            if (n.timer_counter == 0U) {
-                n.timer_counter = period;
-                const std::uint16_t tap_bit = n.mode ? 6U : 1U;
-                const std::uint16_t fb =
-                    static_cast<std::uint16_t>((n.lfsr & 1U) ^ ((n.lfsr >> tap_bit) & 1U));
-                n.lfsr = static_cast<std::uint16_t>((n.lfsr >> 1U) | (fb << 14U));
-            } else {
-                --n.timer_counter;
-            }
             if (gated && (n.lfsr & 1U) == 0U) {
-                mix += (k_channel_peak * static_cast<std::int32_t>(n.volume_env)) / 15;
+                const std::int32_t vol = n.constant_volume ? n.volume_env : n.env_decay;
+                mix += (k_channel_peak * vol) / 15;
             }
         }
 
@@ -466,21 +542,39 @@ namespace mnemos::chips::audio {
         for (std::uint64_t i = 0; i < cycles; ++i) {
             dmc_clock(); // CPU-rate delta-PCM channel (memory reader + output unit)
 
-            // Frame-counter IRQ edge gate (NTSC/PAL period selected by pal_).
-            const std::uint64_t last_4step =
-                pal_ ? k_frame_4step_last_cyc_pal : k_frame_4step_last_cyc;
-            const std::uint64_t last_5step =
-                pal_ ? k_frame_5step_last_cyc_pal : k_frame_5step_last_cyc;
+            // Frame sequencer: every step clocks a quarter-frame (envelopes +
+            // triangle linear counter); steps 1 and the last also clock a half-frame
+            // (length counters). 4-step mode raises the frame IRQ on its last step.
+            // Step cycles are NTSC/PAL (2A07) per pal_.
+            const std::uint64_t s0 = pal_ ? 8313U : 7457U;
+            const std::uint64_t s1 = pal_ ? 16627U : 14913U;
+            const std::uint64_t s2 = pal_ ? 24939U : 22371U;
+            const std::uint64_t s3 = pal_ ? k_frame_4step_last_cyc_pal : k_frame_4step_last_cyc;
+            const std::uint64_t s4 = pal_ ? k_frame_5step_last_cyc_pal : k_frame_5step_last_cyc;
             cpu_cycles_ += 1U;
-            if (!frame_mode_5step_ && !frame_irq_inhibit_ && cpu_cycles_ >= last_4step) {
-                frame_irq_flag_ = true;
-            }
             if (frame_mode_5step_) {
-                if (cpu_cycles_ >= last_5step) {
+                if (cpu_cycles_ == s0 || cpu_cycles_ == s2) {
+                    clock_quarter_frame();
+                } else if (cpu_cycles_ == s1) {
+                    clock_quarter_frame();
+                    clock_half_frame();
+                } else if (cpu_cycles_ == s4) {
+                    clock_quarter_frame();
+                    clock_half_frame();
                     cpu_cycles_ = 0U;
                 }
             } else {
-                if (cpu_cycles_ >= last_4step) {
+                if (cpu_cycles_ == s0 || cpu_cycles_ == s2) {
+                    clock_quarter_frame();
+                } else if (cpu_cycles_ == s1) {
+                    clock_quarter_frame();
+                    clock_half_frame();
+                } else if (cpu_cycles_ == s3) {
+                    clock_quarter_frame();
+                    clock_half_frame();
+                    if (!frame_irq_inhibit_) {
+                        frame_irq_flag_ = true;
+                    }
                     cpu_cycles_ = 0U;
                 }
             }
@@ -528,6 +622,7 @@ namespace mnemos::chips::audio {
         open_bus_latch_ = 0U;
         cpu_cycles_ = 0U;
         irq_last_ = false;
+        apu_half_ = false;
         last_sample_ = 0;
         prescaler_ = 0;
         sample_queue_.clear();
@@ -553,6 +648,9 @@ namespace mnemos::chips::audio {
             writer.u8(p.length_counter);
             writer.u16(p.timer_counter);
             writer.u8(p.sequence_step);
+            writer.boolean(p.env_start);
+            writer.u8(p.env_divider);
+            writer.u8(p.env_decay);
         }
         writer.u8(triangle_.r0);
         writer.u8(triangle_.r2);
@@ -566,6 +664,7 @@ namespace mnemos::chips::audio {
         writer.u16(triangle_.timer_counter);
         writer.u8(triangle_.sequence_step);
         writer.u8(triangle_.linear_counter);
+        writer.boolean(triangle_.linear_reload_flag);
 
         writer.u8(noise_.r0);
         writer.u8(noise_.r2);
@@ -580,6 +679,9 @@ namespace mnemos::chips::audio {
         writer.u8(noise_.length_counter);
         writer.u16(noise_.timer_counter);
         writer.u16(noise_.lfsr);
+        writer.boolean(noise_.env_start);
+        writer.u8(noise_.env_divider);
+        writer.u8(noise_.env_decay);
 
         writer.u8(dmc_.r0);
         writer.u8(dmc_.r1);
@@ -606,6 +708,7 @@ namespace mnemos::chips::audio {
         writer.boolean(frame_irq_inhibit_);
         writer.boolean(frame_irq_flag_);
         writer.boolean(dmc_irq_flag_);
+        writer.boolean(apu_half_);
         writer.u8(open_bus_latch_);
         writer.u64(cpu_cycles_);
 
@@ -634,6 +737,9 @@ namespace mnemos::chips::audio {
             p.length_counter = reader.u8();
             p.timer_counter = reader.u16();
             p.sequence_step = reader.u8();
+            p.env_start = reader.boolean();
+            p.env_divider = reader.u8();
+            p.env_decay = reader.u8();
         }
         triangle_.r0 = reader.u8();
         triangle_.r2 = reader.u8();
@@ -647,6 +753,7 @@ namespace mnemos::chips::audio {
         triangle_.timer_counter = reader.u16();
         triangle_.sequence_step = reader.u8();
         triangle_.linear_counter = reader.u8();
+        triangle_.linear_reload_flag = reader.boolean();
 
         noise_.r0 = reader.u8();
         noise_.r2 = reader.u8();
@@ -661,6 +768,9 @@ namespace mnemos::chips::audio {
         noise_.length_counter = reader.u8();
         noise_.timer_counter = reader.u16();
         noise_.lfsr = reader.u16();
+        noise_.env_start = reader.boolean();
+        noise_.env_divider = reader.u8();
+        noise_.env_decay = reader.u8();
 
         dmc_.r0 = reader.u8();
         dmc_.r1 = reader.u8();
@@ -687,6 +797,7 @@ namespace mnemos::chips::audio {
         frame_irq_inhibit_ = reader.boolean();
         frame_irq_flag_ = reader.boolean();
         dmc_irq_flag_ = reader.boolean();
+        apu_half_ = reader.boolean();
         open_bus_latch_ = reader.u8();
         cpu_cycles_ = reader.u64();
 

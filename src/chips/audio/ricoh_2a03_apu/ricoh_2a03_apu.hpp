@@ -161,6 +161,10 @@ namespace mnemos::chips::audio {
             // Oscillator runtime.
             std::uint16_t timer_counter{};
             std::uint8_t sequence_step{};
+            // Volume-envelope runtime (clocked at the quarter-frame rate).
+            bool env_start{};
+            std::uint8_t env_divider{};
+            std::uint8_t env_decay{};
         };
 
         struct triangle_channel {
@@ -174,6 +178,7 @@ namespace mnemos::chips::audio {
             std::uint16_t timer_counter{};
             std::uint8_t sequence_step{};
             std::uint8_t linear_counter{};
+            bool linear_reload_flag{}; // set by $400B, cleared once the control bit clears
         };
 
         struct noise_channel {
@@ -188,6 +193,10 @@ namespace mnemos::chips::audio {
             std::uint8_t length_counter{};
             std::uint16_t timer_counter{};
             std::uint16_t lfsr{1U};
+            // Volume-envelope runtime (clocked at the quarter-frame rate).
+            bool env_start{};
+            std::uint8_t env_divider{};
+            std::uint8_t env_decay{};
         };
 
         struct dmc_channel {
@@ -220,9 +229,20 @@ namespace mnemos::chips::audio {
         void dmc_clock() noexcept;
         void status_write(std::uint8_t value) noexcept;
         void frame_counter_write(std::uint8_t value) noexcept;
+        // Frame-sequencer clocks: quarter-frame drives the volume envelopes + the
+        // triangle linear counter; half-frame drives the length counters (so a
+        // triggered channel actually stops). Without these, channels play forever.
+        void clock_quarter_frame() noexcept;
+        void clock_half_frame() noexcept;
         // Re-evaluate irq_asserted() and fire irq_cb_ on a level change.
         void notify_irq() noexcept;
-        // Advance the per-step oscillators and return the mono mix.
+        // Clock the tone oscillators (pulse/triangle/noise timers) for `cpu_cycles`
+        // CPU cycles -- the pulse/noise timers run at the APU rate (CPU/2), the
+        // triangle at the full CPU rate. This is what makes the pitch correct: the
+        // timers must advance at the CPU clock, not once per output sample.
+        void advance_oscillators(int cpu_cycles) noexcept;
+        // Advance the oscillators by one output sample's worth of cycles and return
+        // the mixed level.
         [[nodiscard]] std::int16_t mix_step() noexcept;
 
         std::array<pulse_channel, 2> pulse_{};
@@ -237,7 +257,8 @@ namespace mnemos::chips::audio {
         bool frame_irq_inhibit_{};
         bool frame_irq_flag_{};
         bool dmc_irq_flag_{};
-        bool pal_{}; // false = NTSC, true = PAL timing (config; survives reset)
+        bool pal_{};      // false = NTSC, true = PAL timing (config; survives reset)
+        bool apu_half_{}; // APU half-cycle phase: pulse/noise timers clock on the set edge
         std::uint8_t open_bus_latch_{};
         std::uint64_t cpu_cycles_{};
 

@@ -124,6 +124,33 @@ TEST_CASE("ricoh_2a03_apu synthesises a deterministic pulse waveform", "[ricoh_2
     REQUIRE(saw_low);
 }
 
+TEST_CASE("ricoh_2a03_apu pulse plays at the correct pitch", "[ricoh_2a03_apu][audio]") {
+    // Regression guard: the oscillators must clock at the CPU rate, not the output
+    // sample rate. A 440 Hz note (timer 253) must read back ~440 Hz; the old
+    // sample-rate-clocked bug produced ~24 Hz (~4 octaves too low).
+    ricoh_2a03_apu chip;
+    chip.set_clock_divider(37); // NES: one output sample per 37 CPU cycles (~48.4 kHz)
+    const int timer = 253;      // 1789773 / (16 * 254) ~= 440 Hz
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_0, 0x9F); // duty 2, constant volume 15
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_2, timer & 0xFF);
+    chip.write_reg(ricoh_2a03_apu::reg_status, 0x01);
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_3, ((timer >> 8) & 7) | (1 << 3));
+
+    std::vector<std::int16_t> buf(48372U * 2U); // ~1 s at the native step rate
+    chip.generate(buf);
+    int edges = 0;
+    bool prev = false;
+    for (std::size_t i = 0; i < buf.size(); i += 2) {
+        const bool hi = buf[i] > 500;
+        if (hi && !prev) {
+            ++edges;
+        }
+        prev = hi;
+    }
+    CHECK(edges > 410); // ~440 cycles in one second
+    CHECK(edges < 470);
+}
+
 TEST_CASE("ricoh_2a03_apu DMC streams delta-PCM samples from the bus reader",
           "[ricoh_2a03_apu][audio]") {
     ricoh_2a03_apu chip;
