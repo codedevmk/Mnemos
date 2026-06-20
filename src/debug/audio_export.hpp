@@ -9,6 +9,8 @@
 #include "player_system.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <string>
 
 namespace mnemos::debug {
@@ -29,5 +31,16 @@ namespace mnemos::debug {
     // listed in the manifest). The manifest is always written, even when no chip
     // exposes samples (an empty chip list).
     std::size_t export_audio(const frontend_sdk::player_system& sys, const std::string& base_path);
+
+    // Records what the machine actually PLAYS (the mixed stereo output) rather than
+    // a sample chip's stored PCM: steps `sys` for `frames` frames, draining
+    // drain_audio() each frame, and writes the concatenated stream to
+    // <base_path>.rendered.wav (16-bit stereo RIFF/WAVE). `before_frame(i)`, if
+    // set, runs before frame i so the caller can drive input. Returns the number of
+    // (L,R) frames captured. This is the only audio export that works for pure
+    // synth chips (the NES APU, SN76489, ...) which expose no stored samples.
+    std::size_t export_rendered_audio(frontend_sdk::player_system& sys, std::uint64_t frames,
+                                      const std::string& base_path,
+                                      const std::function<void(std::uint64_t)>& before_frame = {});
 
 } // namespace mnemos::debug
