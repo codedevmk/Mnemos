@@ -165,6 +165,9 @@ namespace mnemos::chips::audio {
             bool env_start{};
             std::uint8_t env_divider{};
             std::uint8_t env_decay{};
+            // Sweep-unit runtime (clocked at the half-frame rate).
+            std::uint8_t sweep_divider{};
+            bool sweep_reload{};
         };
 
         struct triangle_channel {
@@ -234,6 +237,12 @@ namespace mnemos::chips::audio {
         // triggered channel actually stops). Without these, channels play forever.
         void clock_quarter_frame() noexcept;
         void clock_half_frame() noexcept;
+        // The pulse sweep's target period (timer +/- timer>>shift; pulse 1 negate
+        // uses one's complement) and whether the channel is muted by it (target out
+        // of range or timer below the minimum). `first` selects pulse 1's variant.
+        [[nodiscard]] static std::uint16_t sweep_target(const pulse_channel& p,
+                                                        bool first) noexcept;
+        [[nodiscard]] static bool sweep_muted(const pulse_channel& p, bool first) noexcept;
         // Re-evaluate irq_asserted() and fire irq_cb_ on a level change.
         void notify_irq() noexcept;
         // Clock the tone oscillators (pulse/triangle/noise timers) for `cpu_cycles`

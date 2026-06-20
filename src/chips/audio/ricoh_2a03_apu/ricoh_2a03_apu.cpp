@@ -207,9 +207,24 @@ namespace mnemos::chips::audio {
         }
     }
 
+    std::uint16_t ricoh_2a03_apu::sweep_target(const pulse_channel& p, bool first) noexcept {
+        const std::uint16_t change = static_cast<std::uint16_t>(p.timer >> p.sweep_shift);
+        if (p.sweep_negate) {
+            // Pulse 1 negates with one's complement (an extra -1); pulse 2 two's.
+            const int delta = first ? -static_cast<int>(change) - 1 : -static_cast<int>(change);
+            const int t = static_cast<int>(p.timer) + delta;
+            return t < 0 ? 0U : static_cast<std::uint16_t>(t);
+        }
+        return static_cast<std::uint16_t>(p.timer + change);
+    }
+
+    bool ricoh_2a03_apu::sweep_muted(const pulse_channel& p, bool first) noexcept {
+        return p.timer < 8U || sweep_target(p, first) > 0x7FFU;
+    }
+
     void ricoh_2a03_apu::clock_half_frame() noexcept {
         // Length counters: a running, non-halted counter ticks down so the channel
-        // actually stops. (Pulse sweep units are a later increment.)
+        // actually stops.
         const auto clock_len = [](auto& ch) {
             if (!ch.length_halt && ch.length_counter > 0U) {
                 --ch.length_counter;
@@ -219,6 +234,23 @@ namespace mnemos::chips::audio {
         clock_len(pulse_[1]);
         clock_len(triangle_);
         clock_len(noise_);
+
+        // Pulse sweep units: when the divider clocks out and the unit is enabled +
+        // not muted, write the target period back to the timer (a pitch slide).
+        const auto clock_sweep = [](pulse_channel& p, bool first) {
+            if (p.sweep_divider == 0U && p.sweep_enable && p.sweep_shift > 0U &&
+                !sweep_muted(p, first)) {
+                p.timer = sweep_target(p, first);
+            }
+            if (p.sweep_divider == 0U || p.sweep_reload) {
+                p.sweep_divider = p.sweep_period;
+                p.sweep_reload = false;
+            } else {
+                --p.sweep_divider;
+            }
+        };
+        clock_sweep(pulse_[0], true);
+        clock_sweep(pulse_[1], false);
     }
 
     void ricoh_2a03_apu::notify_irq() noexcept {
@@ -276,6 +308,7 @@ namespace mnemos::chips::audio {
         case reg_pulse1_1:
             pulse_[0].r1 = value;
             pulse_decode(pulse_[0]);
+            pulse_[0].sweep_reload = true;
             break;
         case reg_pulse1_2:
             pulse_[0].r2 = value;
@@ -298,6 +331,7 @@ namespace mnemos::chips::audio {
         case reg_pulse2_1:
             pulse_[1].r1 = value;
             pulse_decode(pulse_[1]);
+            pulse_[1].sweep_reload = true;
             break;
         case reg_pulse2_2:
             pulse_[1].r2 = value;
@@ -491,7 +525,8 @@ namespace mnemos::chips::audio {
 
         std::int32_t mix = 0;
         for (auto& p : pulse_) {
-            const bool gated = p.enabled && p.length_counter > 0U && p.timer >= 8U;
+            const bool first = &p == &pulse_[0];
+            const bool gated = p.enabled && p.length_counter > 0U && !sweep_muted(p, first);
             if (gated && k_duty_table[p.duty][p.sequence_step] != 0U) {
                 // Constant-volume channels use the 4-bit volume; envelope channels
                 // use the decay level clocked at the quarter-frame rate.
@@ -651,6 +686,8 @@ namespace mnemos::chips::audio {
             writer.boolean(p.env_start);
             writer.u8(p.env_divider);
             writer.u8(p.env_decay);
+            writer.u8(p.sweep_divider);
+            writer.boolean(p.sweep_reload);
         }
         writer.u8(triangle_.r0);
         writer.u8(triangle_.r2);
@@ -740,6 +777,8 @@ namespace mnemos::chips::audio {
             p.env_start = reader.boolean();
             p.env_divider = reader.u8();
             p.env_decay = reader.u8();
+            p.sweep_divider = reader.u8();
+            p.sweep_reload = reader.boolean();
         }
         triangle_.r0 = reader.u8();
         triangle_.r2 = reader.u8();
