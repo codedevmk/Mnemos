@@ -8,8 +8,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 namespace {
@@ -88,4 +90,29 @@ TEST_CASE("CPU writes reach the PPU through the $2000-$3FFF window", "[manifests
     sys->bus.write8(0x2006U, 0x00U);
     sys->bus.write8(0x2007U, 0xABU);
     CHECK(sys->ppu.ppu_read(0x2000U) == 0xABU);
+}
+
+TEST_CASE("CPU writes reach the APU and produce audio", "[manifests][nes]") {
+    const auto rom = make_synthetic_nrom();
+    auto sys = assemble_nes(rom);
+    sys->apu.enable_audio_capture(true);
+
+    // Program pulse 1 through the $4000-$4017 MMIO: enable it ($4015), set duty 2
+    // with a held constant volume ($4000), and load the timer + length so the
+    // oscillator runs.
+    sys->bus.write8(0x4015U, 0x01U); // enable pulse 1
+    sys->bus.write8(0x4000U, 0xBFU); // duty 2, length-halt, constant volume 15
+    sys->bus.write8(0x4002U, 0xFFU); // timer low
+    sys->bus.write8(0x4003U, 0x08U); // length index 1, timer high 0
+
+    sys->apu.tick(30000); // ~half an NTSC frame of CPU cycles
+    std::vector<std::int16_t> buf(sys->apu.pending_samples() * 2U, 0);
+    const std::size_t pairs = sys->apu.drain_samples(buf.data(), sys->apu.pending_samples());
+    REQUIRE(pairs > 0U);
+
+    std::int16_t peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+    }
+    CHECK(peak > 1000); // a square wave at full volume, not silence
 }

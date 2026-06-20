@@ -8,8 +8,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 namespace {
@@ -109,4 +111,27 @@ TEST_CASE("nes adapter constructs and steps frames", "[apps][player][nes]") {
     CHECK(adapter.chips().size() == 3U);
     CHECK(adapter.current_frame().pixels != nullptr);
     CHECK(adapter.system().ppu.frame_index() > before); // the PPU advanced frames
+}
+
+TEST_CASE("nes adapter drains APU audio after a frame", "[apps][player][nes]") {
+    nes_adapter adapter(tiny_nrom());
+    auto& sys = adapter.system();
+
+    // Program pulse 1 through the bus, then run a frame so the scheduler ticks the
+    // APU (capture is enabled in the adapter ctor) and drain the mixed output.
+    sys.bus.write8(0x4015U, 0x01U);
+    sys.bus.write8(0x4000U, 0xBFU);
+    sys.bus.write8(0x4002U, 0xFFU);
+    sys.bus.write8(0x4003U, 0x08U);
+
+    adapter.step_one_frame();
+    const auto chunk = adapter.drain_audio();
+    REQUIRE(chunk.frame_count > 0U);
+    CHECK(chunk.sample_rate > 0U);
+
+    std::int16_t peak = 0;
+    for (std::uint32_t i = 0; i < chunk.frame_count * 2U; ++i) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(chunk.samples[i])));
+    }
+    CHECK(peak > 1000); // resampled APU output is audible
 }
