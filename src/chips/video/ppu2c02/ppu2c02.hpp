@@ -52,8 +52,10 @@ namespace mnemos::chips::video {
       public:
         static constexpr std::uint32_t visible_width = 256U;
         static constexpr std::uint32_t visible_height = 240U;
-        static constexpr std::uint32_t dots_per_line = 341U;   // total per line
+        static constexpr std::uint32_t dots_per_line = 341U;   // total per line (both regions)
         static constexpr std::uint32_t lines_per_frame = 262U; // NTSC total
+        static constexpr std::uint32_t pal_lines_per_frame =
+            312U; // PAL total (50 more vblank lines)
         // The first post-render line where vblank begins and the frame renders.
         static constexpr std::uint32_t vblank_line = 241U;
 
@@ -134,6 +136,12 @@ namespace mnemos::chips::video {
             external_nametables_ = ram;
         }
         void set_mirroring(mirroring m) noexcept { mirroring_ = m; }
+        // Select PAL (312-line) vs NTSC (262-line) frame geometry. The visible area
+        // (0-239) and the vblank start (241) are identical; PAL only adds vblank
+        // lines, lengthening the frame to 50 Hz. Config -- set once at assembly.
+        void set_pal(bool pal) noexcept {
+            total_lines_ = pal ? pal_lines_per_frame : lines_per_frame;
+        }
 
         // Register access (CPU side). reg is the low 3 bits of the $2000..$3FFF
         // range (the caller masks the mirror).
@@ -274,6 +282,7 @@ namespace mnemos::chips::video {
 
         std::uint32_t dot_{};
         std::uint32_t scanline_{};
+        std::uint32_t total_lines_{lines_per_frame}; // 262 (NTSC) or 312 (PAL)
         std::uint64_t frame_index_{};
 
         line_callback scanline_cb_{};

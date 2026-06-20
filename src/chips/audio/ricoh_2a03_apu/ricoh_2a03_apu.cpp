@@ -37,9 +37,16 @@ namespace mnemos::chips::audio {
             15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5,  4,  3,  2,  1,  0,
             0,  1,  2,  3,  4,  5,  6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
-        // Frame-counter step CPU cycles (NTSC 2A03), ported integer-exact.
+        // Frame-counter step CPU cycles, ported integer-exact (NTSC) + the PAL
+        // 2A07 equivalents (the sequencer runs the same steps over a longer period).
         constexpr std::uint64_t k_frame_4step_last_cyc = 29829U;
         constexpr std::uint64_t k_frame_5step_last_cyc = 37281U;
+        constexpr std::uint64_t k_frame_4step_last_cyc_pal = 33252U;
+        constexpr std::uint64_t k_frame_5step_last_cyc_pal = 41565U;
+
+        // PAL DMC output-clock periods in CPU cycles (the 2A07 rate table).
+        constexpr std::array<std::uint16_t, 16> k_dmc_rate_pal = {
+            398, 354, 316, 298, 276, 236, 210, 198, 176, 148, 132, 118, 98, 78, 66, 50};
 
         // Per-channel peak amplitude. The four square-ish channels each contribute
         // up to ~7 bits of headroom so the summed mono mix stays inside int16.
@@ -345,7 +352,7 @@ namespace mnemos::chips::audio {
             --dmc_.timer_counter;
             return;
         }
-        dmc_.timer_counter = k_dmc_rate[dmc_.rate_index & 0x0FU];
+        dmc_.timer_counter = (pal_ ? k_dmc_rate_pal : k_dmc_rate)[dmc_.rate_index & 0x0FU];
         if (!dmc_.silence) {
             // Delta step: +-2 per shifted bit, clamped to the 7-bit DAC range.
             if ((dmc_.shift_register & 0x01U) != 0U) {
@@ -459,18 +466,21 @@ namespace mnemos::chips::audio {
         for (std::uint64_t i = 0; i < cycles; ++i) {
             dmc_clock(); // CPU-rate delta-PCM channel (memory reader + output unit)
 
-            // Frame-counter IRQ edge gate (ported integer-exact from the reference).
+            // Frame-counter IRQ edge gate (NTSC/PAL period selected by pal_).
+            const std::uint64_t last_4step =
+                pal_ ? k_frame_4step_last_cyc_pal : k_frame_4step_last_cyc;
+            const std::uint64_t last_5step =
+                pal_ ? k_frame_5step_last_cyc_pal : k_frame_5step_last_cyc;
             cpu_cycles_ += 1U;
-            if (!frame_mode_5step_ && !frame_irq_inhibit_ &&
-                cpu_cycles_ >= k_frame_4step_last_cyc) {
+            if (!frame_mode_5step_ && !frame_irq_inhibit_ && cpu_cycles_ >= last_4step) {
                 frame_irq_flag_ = true;
             }
             if (frame_mode_5step_) {
-                if (cpu_cycles_ >= k_frame_5step_last_cyc) {
+                if (cpu_cycles_ >= last_5step) {
                     cpu_cycles_ = 0U;
                 }
             } else {
-                if (cpu_cycles_ >= k_frame_4step_last_cyc) {
+                if (cpu_cycles_ >= last_4step) {
                     cpu_cycles_ = 0U;
                 }
             }

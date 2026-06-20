@@ -130,6 +130,16 @@ TEST_CASE("nes adapter maps the pad to the controller port", "[apps][player][nes
     CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x01U); // Start
 }
 
+TEST_CASE("nes adapter runs PAL timing and reports 50 Hz", "[apps][player][nes]") {
+    nes_adapter adapter(
+        tiny_nrom(), mnemos::manifests::nes::nes_config{.video_region = mnemos::video_region::pal});
+    CHECK(adapter.region().frames_per_second_x1000 == 50000U);
+    // The PAL schedule uses a rational (16:5) CPU/APU rate -- stepping must work.
+    adapter.step_one_frame();
+    adapter.step_one_frame();
+    CHECK(adapter.system().ppu.frame_index() > 0U);
+}
+
 TEST_CASE("nes adapter exposes battery RAM only for battery carts", "[apps][player][nes]") {
     // A plain cart (no battery flag) persists nothing.
     nes_adapter plain(tiny_nrom());

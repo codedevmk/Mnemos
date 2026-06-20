@@ -79,7 +79,7 @@ namespace mnemos::manifests::nes {
     }
 
     std::unique_ptr<nes_system> assemble_nes(std::span<const std::uint8_t> rom,
-                                             const nes_config& /*config*/) {
+                                             const nes_config& config) {
         auto sys = std::make_unique<nes_system>();
         nes_system* s = sys.get();
 
@@ -88,6 +88,12 @@ namespace mnemos::manifests::nes {
         s->chr = img.chr;
         s->battery = img.battery; // persist $6000 RAM only for battery carts
         s->ppu.set_mirroring(img.valid ? img.mirroring : mirroring::horizontal);
+
+        // Region timing: PAL gives the PPU a 312-line/50 Hz frame and shifts the APU
+        // frame-sequencer period + DMC rate table (the 2A07). NTSC is the default.
+        const bool pal = config.video_region == mnemos::video_region::pal;
+        s->ppu.set_pal(pal);
+        s->apu.set_pal(pal);
 
         // The 2A03 is a 6502 with no on-chip I/O port: $0000/$0001 are plain RAM.
         s->cpu.set_port_enabled(false);
