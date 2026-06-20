@@ -63,6 +63,26 @@ namespace {
         return rom;
     }
 
+    // A 4x16 KiB-PRG / CHR-RAM MMC1 (mapper 1). bank N first byte = $A0+N; the
+    // reset vector lives in the fixed last bank and points at $C000.
+    std::vector<std::uint8_t> make_mmc1() {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x4000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 4 x 16 KiB PRG
+        rom[5] = 0U;    // CHR-RAM
+        rom[6] = 0x10U; // flags6: mapper low nibble = 1 (MMC1)
+        for (std::size_t bank = 0; bank < 4U; ++bank) {
+            // Distinct marker per bank: 0xA0, 0xB1, 0xC2, 0xD3.
+            rom[16U + bank * 0x4000U] = static_cast<std::uint8_t>(0xA0U + bank * 0x11U);
+        }
+        rom[16U + 3U * 0x4000U + 0x3FFCU] = 0x00U; // reset vector (fixed last bank) -> $C000
+        rom[16U + 3U * 0x4000U + 0x3FFDU] = 0xC0U;
+        return rom;
+    }
+
 } // namespace
 
 TEST_CASE("parse_ines reads a valid NROM header", "[manifests][nes]") {
@@ -122,6 +142,36 @@ TEST_CASE("UxROM (mapper 2) switches the $8000 PRG bank", "[manifests][nes]") {
     sys->bus.write8(0xABCDU, 0x00U); // any $8000-$FFFF write decodes -> bank 0
     CHECK(sys->bus.read8(0x8000U) == 0xA0U);
     CHECK(sys->bus.read8(0xC000U) == 0xB1U); // the fixed bank never moves
+}
+
+TEST_CASE("MMC1 (mapper 1) serial loads switch PRG banks", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mmc1());
+    const auto write5 = [&](std::uint16_t addr, std::uint8_t v) {
+        for (int i = 0; i < 5; ++i) {
+            sys->bus.write8(addr, static_cast<std::uint8_t>((v >> i) & 0x01U));
+        }
+    };
+
+    // Power-on PRG mode 3: $8000 = switchable bank 0, $C000 = fixed last bank.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xD3U);
+
+    // Select bank 2 into the $8000 window via the PRG register ($E000).
+    write5(0xE000U, 0x02U);
+    CHECK(sys->bus.read8(0x8000U) == 0xC2U);
+    CHECK(sys->bus.read8(0xC000U) == 0xD3U); // the fixed bank never moves
+
+    // A bit-7 write resets a partial shift; the next full load still lands.
+    sys->bus.write8(0xE000U, 0x01U); // 1 of 5
+    sys->bus.write8(0xE000U, 0x80U); // reset
+    write5(0xE000U, 0x01U);
+    CHECK(sys->bus.read8(0x8000U) == 0xB1U); // bank 1
+
+    // 32 KiB PRG mode (control mode 0): a bank pair (2,3) maps across $8000-$FFFF.
+    write5(0x8000U, 0x00U); // control: mirroring 0, PRG mode 0 (32 KiB), CHR 8 KiB
+    write5(0xE000U, 0x02U); // prg_bank 2 -> 32 KiB base bank 2
+    CHECK(sys->bus.read8(0x8000U) == 0xC2U);
+    CHECK(sys->bus.read8(0xC000U) == 0xD3U);
 }
 
 TEST_CASE("CHR-RAM cart accepts PPU pattern writes", "[manifests][nes]") {

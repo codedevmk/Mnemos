@@ -41,6 +41,19 @@ namespace mnemos::manifests::nes {
             }
         }
 
+        // Route CPU writes to $8000-$FFFF into this->write() without slowing the
+        // read path: a write-gated MMIO over the range (active only for writes, via
+        // the bus active-predicate) leaves reads to the underlying map_rom regions.
+        // Banking mappers call this once from reset() and retarget_rom the banks.
+        void install_register_write_hook() {
+            bus_->map_mmio(
+                0x8000U, 0x8000U, [](std::uint32_t) -> std::uint8_t { return 0xFFU; },
+                [this](std::uint32_t addr, std::uint8_t value) {
+                    write(static_cast<std::uint16_t>(addr), value);
+                },
+                1, [](std::uint32_t, bool is_write) { return is_write; });
+        }
+
         topology::bus* bus_;
         chips::video::ppu2c02* ppu_;
         std::span<const std::uint8_t> prg_;
