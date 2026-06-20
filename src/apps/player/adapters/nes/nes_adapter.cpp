@@ -76,12 +76,17 @@ namespace mnemos::apps::player::adapters::nes {
 
         mix_buf_.resize(static_cast<std::size_t>(dst_pairs) * 2U);
         const double scale = static_cast<double>(pairs) / static_cast<double>(dst_pairs);
+        // One-pole low-pass modelling the 2A03's ~14 kHz analog output filter: it
+        // rolls off the high-frequency aliasing of the raw square/triangle edges
+        // (the residual "crackle"). a = 1 - exp(-2*pi*fc/fs), fc=14k, fs=48k.
+        constexpr double lp_a = 0.84;
         for (int i = 0; i < dst_pairs; ++i) {
             // The APU mix is a full-range int16 duplicated to both lanes; resample
             // lane 0 (stride 2) and write it to both output lanes.
             const int s = mnemos::dsp::sample_channel_box(
                 apu_buf_.data(), 2, 0, static_cast<int>(pairs), scale * i, scale * (i + 1));
-            const std::int16_t out = mnemos::dsp::clip_i16(s);
+            lp_state_ += lp_a * (static_cast<double>(s) - lp_state_);
+            const std::int16_t out = mnemos::dsp::clip_i16(static_cast<int>(lp_state_));
             mix_buf_[static_cast<std::size_t>(i) * 2U] = out;
             mix_buf_[static_cast<std::size_t>(i) * 2U + 1U] = out;
         }

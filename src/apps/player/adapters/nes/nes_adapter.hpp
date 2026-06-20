@@ -66,6 +66,7 @@ namespace mnemos::apps::player::adapters::nes {
         std::vector<std::int16_t> apu_buf_{};
         std::vector<std::int16_t> mix_buf_{};
         double audio_frac_{0.0};
+        double lp_state_{0.0}; // one-pole low-pass state: the 2A03's ~14 kHz output filter
     };
 
 } // namespace mnemos::apps::player::adapters::nes
