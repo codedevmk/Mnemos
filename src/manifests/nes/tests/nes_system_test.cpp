@@ -157,6 +157,11 @@ TEST_CASE("parse_ines reads the mirroring flag", "[manifests][nes]") {
     CHECK(parse_ines(rom).mirroring == mirroring::vertical);
 }
 
+TEST_CASE("parse_ines reads the battery flag", "[manifests][nes]") {
+    CHECK_FALSE(parse_ines(make_synthetic_nrom(0x00U)).battery);
+    CHECK(parse_ines(make_synthetic_nrom(0x02U)).battery); // flags6 bit1
+}
+
 TEST_CASE("parse_ines rejects a non-iNES image", "[manifests][nes]") {
     const std::vector<std::uint8_t> junk(64U, 0xFFU);
     CHECK_FALSE(parse_ines(junk).valid);

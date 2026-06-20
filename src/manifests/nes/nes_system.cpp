@@ -23,6 +23,7 @@ namespace mnemos::manifests::nes {
         const std::uint8_t flags7 = data[7];
 
         img.mapper = static_cast<int>((flags7 & 0xF0U) | (flags6 >> 4U));
+        img.battery = (flags6 & 0x02U) != 0U; // battery-backed $6000-$7FFF RAM
         if ((flags6 & 0x08U) != 0U) {
             img.mirroring = mirroring::four_screen;
         } else {
@@ -85,6 +86,7 @@ namespace mnemos::manifests::nes {
         const ines_image img = parse_ines(rom);
         s->prg = img.prg; // empty on a bad/unsupported image -> boots a blank PRG
         s->chr = img.chr;
+        s->battery = img.battery; // persist $6000 RAM only for battery carts
         s->ppu.set_mirroring(img.valid ? img.mirroring : mirroring::horizontal);
 
         // The 2A03 is a 6502 with no on-chip I/O port: $0000/$0001 are plain RAM.

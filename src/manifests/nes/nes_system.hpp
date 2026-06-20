@@ -29,6 +29,7 @@ namespace mnemos::manifests::nes {
         chips::video::ppu2c02::mirroring mirroring{chips::video::ppu2c02::mirroring::horizontal};
         int mapper{};      // iNES mapper number (0 = NROM)
         bool chr_is_ram{}; // header CHR count 0 => 8 KiB CHR-RAM
+        bool battery{};    // flags6 bit1: $6000-$7FFF RAM is battery-backed (persist it)
         bool valid{};      // false if the header magic / sizes don't parse
     };
 
@@ -64,6 +65,7 @@ namespace mnemos::manifests::nes {
         std::vector<std::uint8_t> prg;              // PRG-ROM, mapped at $8000 by the mapper
         std::vector<std::uint8_t> chr;              // CHR (ROM or 8 KiB RAM), the PPU's $0000-$1FFF
         std::unique_ptr<nes_mapper> mapper;         // owns the $8000-$FFFF + CHR banking
+        bool battery{};                             // the $6000 RAM is battery-backed (persist it)
 
         // Two standard pads. pad_buttons is the live state; pad_shift is the
         // per-port serial register the $4016/$4017 reads clock out.

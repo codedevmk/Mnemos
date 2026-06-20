@@ -130,6 +130,21 @@ TEST_CASE("nes adapter maps the pad to the controller port", "[apps][player][nes
     CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x01U); // Start
 }
 
+TEST_CASE("nes adapter exposes battery RAM only for battery carts", "[apps][player][nes]") {
+    // A plain cart (no battery flag) persists nothing.
+    nes_adapter plain(tiny_nrom());
+    CHECK(plain.battery_ram().empty());
+
+    // A battery cart (flags6 bit1) exposes its 8 KiB $6000-$7FFF RAM, and writes
+    // through the bus land in the persisted span.
+    auto rom = tiny_nrom();
+    rom[6] |= 0x02U;
+    nes_adapter battery(std::move(rom));
+    REQUIRE(battery.battery_ram().size() == 0x2000U);
+    battery.system().bus.write8(0x6000U, 0x99U);
+    CHECK(battery.battery_ram()[0] == 0x99U);
+}
+
 TEST_CASE("nes adapter drains APU audio after a frame", "[apps][player][nes]") {
     nes_adapter adapter(tiny_nrom());
     auto& sys = adapter.system();
