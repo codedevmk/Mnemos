@@ -435,7 +435,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    // Headless path: step --frames, dump PPM + per-chip sidecars, exit. No
+    // Headless path: step --frames, dump the framebuffer (PNG when the
+    // --screenshot path ends in .png, else PPM) + per-chip sidecars, exit. No
     // window, no GPU. All system-specific knowledge lives behind player_system
     // -- the adapter publishes its chip list and each chip's introspection
     // surface advertises memory views, debug layers, and the CPU trace target.

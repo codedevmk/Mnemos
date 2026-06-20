@@ -7,6 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -250,6 +251,21 @@ TEST_CASE("dump_screenshot_artifacts writes framebuffer PPM + per-chip sidecars"
         const std::string name = entry.path().filename().string();
         CHECK(name.find("cpu_x") == std::string::npos);
     }
+}
+
+TEST_CASE("dump_screenshot_artifacts writes a PNG when the path ends in .png", "[debug_dump]") {
+    const auto scratch = make_scratch_dir("png");
+    const auto base = (scratch / "shot.PNG").string(); // extension match is case-insensitive
+
+    fake_system sys;
+    REQUIRE(mnemos::debug::dump_screenshot_artifacts(sys, base));
+
+    const auto png = read_file(base);
+    REQUIRE(png.size() >= 8U);
+    // The 8-byte PNG signature -- not a PPM "P6" header.
+    const std::array<std::uint8_t, 8> sig{0x89U, 0x50U, 0x4EU, 0x47U, 0x0DU, 0x0AU, 0x1AU, 0x0AU};
+    CHECK(std::equal(sig.begin(), sig.end(), png.begin()));
+    CHECK_FALSE(png[0] == static_cast<std::uint8_t>('P'));
 }
 
 TEST_CASE("dump_screenshot_artifacts writes system-level memory_views without a chip id",

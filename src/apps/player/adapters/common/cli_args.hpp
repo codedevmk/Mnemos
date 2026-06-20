@@ -43,9 +43,10 @@ namespace mnemos::apps::player::adapters {
     // return the 16-bit DIP bank, or nullopt when absent/malformed.
     [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);
 
-    // --screenshot <path.ppm> --frames N: headless run, dump the resulting
-    // VDP framebuffer as PPM, exit. Both flags must be present together; a
-    // missing or unparseable value disables the headless path.
+    // --screenshot <path> --frames N: headless run, dump the resulting
+    // framebuffer (a PNG when `path` ends in .png, otherwise a PPM), exit. Both
+    // flags must be present together; a missing or unparseable value disables the
+    // headless path.
     struct screenshot_request final {
         std::string path;
         std::uint64_t frames{};

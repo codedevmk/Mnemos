@@ -3,6 +3,7 @@
 #include "file.hpp"
 #include "introspection_views.hpp"
 #include "path_id.hpp"
+#include "png_image.hpp"
 #include "ppm_image.hpp"
 
 #include <algorithm>
@@ -15,7 +16,23 @@ namespace mnemos::debug {
 
     namespace {
 
-        bool dump_framebuffer_ppm(const chips::frame_buffer_view& fb, const std::string& path) {
+        // True if `path` ends in ".png" (case-insensitive).
+        [[nodiscard]] bool has_png_extension(std::string_view path) noexcept {
+            if (path.size() < 4U) {
+                return false;
+            }
+            const std::string_view ext = path.substr(path.size() - 4U);
+            const auto lower = [](char c) {
+                return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+            };
+            return ext[0] == '.' && lower(ext[1]) == 'p' && lower(ext[2]) == 'n' &&
+                   lower(ext[3]) == 'g';
+        }
+
+        // Write a framebuffer as an image, choosing the encoder by the path's
+        // extension: ".png" emits a PNG, anything else a PPM (the default for the
+        // diagnostic sidecars, which name themselves ".ppm").
+        bool dump_framebuffer_image(const chips::frame_buffer_view& fb, const std::string& path) {
             if (fb.pixels == nullptr || fb.width == 0U || fb.height == 0U) {
                 return false;
             }
@@ -27,6 +44,10 @@ namespace mnemos::debug {
             for (std::uint32_t y = 0; y < fb.height; ++y) {
                 const std::uint32_t* row = fb.pixels + static_cast<std::size_t>(y) * stride;
                 packed.insert(packed.end(), row, row + fb.width);
+            }
+            if (has_png_extension(path)) {
+                const graphics::images::png_image img(fb.width, fb.height, std::move(packed));
+                return img.write(path);
             }
             const graphics::images::ppm_image img(fb.width, fb.height, std::move(packed));
             return img.write(path);
@@ -98,7 +119,7 @@ namespace mnemos::debug {
 
     bool dump_screenshot_artifacts(const frontend_sdk::player_system& sys,
                                    const std::string& base_path) {
-        if (!dump_framebuffer_ppm(sys.current_frame(), base_path)) {
+        if (!dump_framebuffer_image(sys.current_frame(), base_path)) {
             return false;
         }
 
@@ -133,7 +154,7 @@ namespace mnemos::debug {
                 }
                 const std::string path =
                     base_path + "." + chip_id + "." + sanitize_id(layer->name()) + ".ppm";
-                if (!dump_framebuffer_ppm(layer->view(), path)) {
+                if (!dump_framebuffer_image(layer->view(), path)) {
                     std::fprintf(stderr, "[debug_dump] could not write %s\n", path.c_str());
                 }
             }
