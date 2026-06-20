@@ -20,6 +20,7 @@
 #include "genesis_adapter.hpp" // force_link + manifests::genesis::parse_market
 #include "genesis_region.hpp"
 #include "irem_m72_adapter.hpp" // force_link (arcade: no cart region byte)
+#include "nes_adapter.hpp"      // force_link (Nintendo NES / NROM)
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
@@ -257,6 +258,9 @@ int main(int argc, char* argv[]) {
         case system_family::spectrum:
             cart_default = mnemos::video_region::pal; // 50 Hz machine
             break;
+        case system_family::nes:
+            cart_default = mnemos::video_region::ntsc; // NTSC NES; PAL is a later increment
+            break;
         case system_family::sega32x:
             // 32X carts carry a Genesis-style header with the region byte.
             cart_default =
@@ -292,6 +296,7 @@ int main(int argc, char* argv[]) {
         mnemos::apps::player::adapters::capcom_cps1::force_link();
         mnemos::apps::player::adapters::capcom_cps2::force_link();
         mnemos::apps::player::adapters::spectrum::force_link();
+        mnemos::apps::player::adapters::nes::force_link();
 
         // Sega CD boots its BIOS as the program ROM; the file the user loaded is
         // the CD image (passed by path so disc_image can resolve .cue tracks).

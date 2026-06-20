@@ -8,6 +8,7 @@ add_subdirectory(irem_m72)
 add_subdirectory(capcom_cps1)
 add_subdirectory(capcom_cps2)
 add_subdirectory(spectrum)
+add_subdirectory(nes)
 
 add_library(mnemos_manifests INTERFACE)
 add_library(mnemos::manifests ALIAS mnemos_manifests)

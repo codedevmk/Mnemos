@@ -36,6 +36,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "spectrum") {
             return system_family::spectrum;
         }
+        if (id == "nes") {
+            return system_family::nes;
+        }
         return std::nullopt;
     }
 
@@ -59,6 +62,8 @@ namespace mnemos::apps::player::adapters {
             return "cps2";
         case system_family::spectrum:
             return "spectrum";
+        case system_family::nes:
+            return "nes";
         case system_family::genesis:
             break;
         }
@@ -85,6 +90,8 @@ namespace mnemos::apps::player::adapters {
             return "CPS2";
         case system_family::spectrum:
             return "ZX Spectrum";
+        case system_family::nes:
+            return "NES";
         case system_family::genesis:
             break;
         }
@@ -92,7 +99,7 @@ namespace mnemos::apps::player::adapters {
     }
 
     const char* family_names() noexcept {
-        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, cps1, cps2, spectrum";
+        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, cps1, cps2, spectrum, nes";
     }
 
 } // namespace mnemos::apps::player::adapters

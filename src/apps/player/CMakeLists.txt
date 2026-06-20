@@ -17,6 +17,7 @@ add_subdirectory(adapters/irem_m72)
 add_subdirectory(adapters/capcom_cps1)
 add_subdirectory(adapters/capcom_cps2)
 add_subdirectory(adapters/spectrum)
+add_subdirectory(adapters/nes)
 
 # Shared bitmap-font overlay helpers, kept in their own static lib so the
 # unit test can link against the same code the player binary uses.
@@ -45,6 +46,7 @@ target_link_libraries(
         mnemos::apps::player::capcom_cps1_adapter
         mnemos::apps::player::capcom_cps2_adapter
         mnemos::apps::player::spectrum_adapter
+        mnemos::apps::player::nes_adapter
         mnemos::apps::player::text_overlay
         mnemos::debug::dump
 )
