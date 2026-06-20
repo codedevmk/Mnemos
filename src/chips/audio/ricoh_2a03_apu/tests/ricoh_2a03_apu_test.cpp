@@ -151,6 +151,40 @@ TEST_CASE("ricoh_2a03_apu pulse plays at the correct pitch", "[ricoh_2a03_apu][a
     CHECK(edges < 470);
 }
 
+TEST_CASE("ricoh_2a03_apu pulse sweep slides the period and mutes on overflow",
+          "[ricoh_2a03_apu][audio]") {
+    ricoh_2a03_apu chip;
+    chip.set_clock_divider(37);
+    // Pulse 1: constant volume, timer = $400, sweep up (enable | period 0 | shift 1).
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_0, 0x9F);
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_1, 0x81);
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_2, 0x00);
+    chip.write_reg(ricoh_2a03_apu::reg_status, 0x01);
+    chip.write_reg(ricoh_2a03_apu::reg_pulse1_3, 0x04 | 0x08); // timer high $4 + length idx 1
+
+    // Before any frame clock the sweep hasn't run: timer $400 -> target $600 (in
+    // range), so the channel sounds.
+    std::array<std::int16_t, 256> before{};
+    chip.generate(before);
+    bool audible = false;
+    for (const auto s : before) {
+        audible = audible || (s != 0);
+    }
+    CHECK(audible);
+
+    // Run a couple of frames so the half-frame sweep clocks: the period climbs until
+    // the target exceeds $7FF and the channel mutes -- while the length counter (idx
+    // 1 = 254 half-frames) is nowhere near zero, so the mute is the sweep's doing.
+    chip.tick(60000);
+    std::array<std::int16_t, 256> after{};
+    chip.generate(after);
+    bool still_audible = false;
+    for (const auto s : after) {
+        still_audible = still_audible || (s != 0);
+    }
+    CHECK_FALSE(still_audible);
+}
+
 TEST_CASE("ricoh_2a03_apu DMC streams delta-PCM samples from the bus reader",
           "[ricoh_2a03_apu][audio]") {
     ricoh_2a03_apu chip;
