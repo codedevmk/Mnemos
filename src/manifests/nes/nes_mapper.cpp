@@ -424,6 +424,8 @@ namespace mnemos::manifests::nes {
                 chr_regs_b_.fill(0U);
                 nametable_mode_ = 0x00U;
                 mult_a_ = mult_b_ = 0U;
+                irq_target_ = 0U;
+                irq_enabled_ = irq_pending_ = in_frame_ = false;
                 exram_.fill(0U);
 
                 if (prg_8k_count_ != 0U) {
@@ -441,6 +443,15 @@ namespace mnemos::manifests::nes {
                     [this](std::uint32_t addr) -> std::uint8_t {
                         if (addr >= 0x5C00U) {
                             return exram_[addr - 0x5C00U];
+                        }
+                        if (addr == 0x5204U) {
+                            // IRQ status: bit 7 = pending, bit 6 = in-frame. Reading
+                            // acknowledges the IRQ (clears it + drops the line).
+                            const std::uint8_t s = static_cast<std::uint8_t>(
+                                (irq_pending_ ? 0x80U : 0x00U) | (in_frame_ ? 0x40U : 0x00U));
+                            irq_pending_ = false;
+                            raise_irq(false);
+                            return s;
                         }
                         const std::uint16_t product = static_cast<std::uint16_t>(
                             static_cast<std::uint16_t>(mult_a_) * mult_b_);
@@ -506,6 +517,15 @@ namespace mnemos::manifests::nes {
                     chr_regs_b_[addr - 0x5128U] = value;
                     apply_chr_bg();
                     break;
+                case 0x5203U:
+                    irq_target_ = value; // scanline to interrupt on
+                    break;
+                case 0x5204U:
+                    irq_enabled_ = (value & 0x80U) != 0U;
+                    if (!irq_enabled_) {
+                        raise_irq(false);
+                    }
+                    break;
                 case 0x5205U:
                     mult_a_ = value;
                     break;
@@ -513,7 +533,24 @@ namespace mnemos::manifests::nes {
                     mult_b_ = value;
                     break;
                 default:
-                    break; // $5113/$5130/IRQ/split/CHR-set-B/audio: later increments
+                    break; // $5113/$5130/vertical split/expansion audio: unused by CV3
+                }
+            }
+
+            // The MMC5 scanline counter (clocked once per visible line by the board)
+            // fires the IRQ when it reaches the $5203 target -- this is how CV3 times
+            // its mid-frame CHR-bank swaps and the status-bar split.
+            void clock_scanline(std::uint32_t line) override {
+                if (line >= 240U) {
+                    in_frame_ = false; // left the visible region
+                    return;
+                }
+                in_frame_ = true;
+                if (line == irq_target_) {
+                    irq_pending_ = true;
+                    if (irq_enabled_) {
+                        raise_irq(true);
+                    }
                 }
             }
 
@@ -684,6 +721,10 @@ namespace mnemos::manifests::nes {
             std::uint8_t nametable_mode_{};
             std::uint8_t mult_a_{};
             std::uint8_t mult_b_{};
+            std::uint8_t irq_target_{}; // $5203: scanline to fire the IRQ on
+            bool irq_enabled_{};        // $5204 bit 7
+            bool irq_pending_{};        // latched at the target scanline; cleared on $5204 read
+            bool in_frame_{};           // $5204 bit 6: the PPU is in the visible region
             std::array<std::uint8_t, 0x2000U> chr_window_{};    // composed set A (sprites)
             std::array<std::uint8_t, 0x2000U> chr_window_bg_{}; // composed set B (background)
             std::array<std::uint8_t, 0x400U> exram_{};
