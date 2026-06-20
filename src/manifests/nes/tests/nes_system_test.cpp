@@ -349,7 +349,6 @@ TEST_CASE("MMC3 scanline IRQ only clocks while the PPU is rendering", "[manifest
 }
 
 TEST_CASE("MMC5 (mapper 5) banks PRG/CHR and serves the hardware multiplier", "[manifests][nes]") {
-    using ppu = mnemos::chips::video::ppu2c02;
     auto sys = assemble_nes(make_mmc5());
 
     // Power-on: PRG mode 3, all bank registers $FF -> every 8 KiB window is the
