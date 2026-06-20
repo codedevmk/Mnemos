@@ -126,7 +126,7 @@ namespace mnemos::chips::video {
             // Loopy address updates during rendering (visible + pre-render lines).
             if (rendering_enabled()) {
                 const bool render_line =
-                    scanline_ < visible_height || scanline_ == lines_per_frame - 1U;
+                    scanline_ < visible_height || scanline_ == total_lines_ - 1U;
                 if (render_line) {
                     if (dot_ == 256U) {
                         inc_y(v_);
@@ -134,14 +134,14 @@ namespace mnemos::chips::video {
                         copy_horizontal(v_, t_);
                     }
                 }
-                if (scanline_ == lines_per_frame - 1U && dot_ >= 280U && dot_ <= 304U) {
+                if (scanline_ == total_lines_ - 1U && dot_ >= 280U && dot_ <= 304U) {
                     copy_vertical(v_, t_);
                 }
             }
 
             if (++dot_ == dots_per_line) {
                 dot_ = 0U;
-                if (++scanline_ == lines_per_frame) {
+                if (++scanline_ == total_lines_) {
                     scanline_ = 0U;
                 }
             }

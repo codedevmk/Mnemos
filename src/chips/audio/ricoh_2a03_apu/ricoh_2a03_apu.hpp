@@ -104,6 +104,11 @@ namespace mnemos::chips::audio {
         // The host wires this into the CPU /IRQ line (OR'd with the cartridge IRQ).
         void set_irq_callback(std::function<void(bool)> cb) noexcept { irq_cb_ = std::move(cb); }
 
+        // Select PAL vs NTSC timing: the frame-sequencer period and the DMC rate
+        // table differ between regions. Config -- set once at assembly; it is not
+        // cleared by reset() (the cartridge region does not change on reset).
+        void set_pal(bool pal) noexcept { pal_ = pal; }
+
         // Generate one native mono sample, updating last_sample()/last_left()/
         // last_right() and advancing every enabled channel's oscillator.
         void step() noexcept;
@@ -232,6 +237,7 @@ namespace mnemos::chips::audio {
         bool frame_irq_inhibit_{};
         bool frame_irq_flag_{};
         bool dmc_irq_flag_{};
+        bool pal_{}; // false = NTSC, true = PAL timing (config; survives reset)
         std::uint8_t open_bus_latch_{};
         std::uint64_t cpu_cycles_{};
 

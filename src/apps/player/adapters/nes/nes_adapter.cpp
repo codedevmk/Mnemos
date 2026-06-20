@@ -10,8 +10,18 @@ namespace mnemos::apps::player::adapters::nes {
 
     namespace {
         // The 2C02 dot clock is the master: the PPU ticks every cycle and is the
-        // frame source; the CPU and APU tick once per three (NTSC 3:1).
-        std::vector<runtime::scheduled_chip> build_schedule(manifests::nes::nes_system& sys) {
+        // frame source. NTSC clocks the CPU + APU once per three dots (3:1). PAL
+        // (2A07) runs the CPU at master/16 and the PPU at master/5, so the CPU ticks
+        // once per 3.2 dots -- a rational rate (5 chip cycles per 16 master dots).
+        std::vector<runtime::scheduled_chip> build_schedule(manifests::nes::nes_system& sys,
+                                                            bool pal) {
+            if (pal) {
+                return {
+                    {&sys.ppu, 1U},
+                    {&sys.cpu, 1U, 16U, 5U},
+                    {&sys.apu, 1U, 16U, 5U},
+                };
+            }
             return {
                 {&sys.ppu, 1U},
                 {&sys.cpu, 3U},
@@ -24,8 +34,9 @@ namespace mnemos::apps::player::adapters::nes {
                              const manifests::nes::nes_config& config, std::string display_name,
                              frontend_sdk::scheduler_factory* scheduler_factory)
         : sys_(manifests::nes::assemble_nes(rom, config)),
-          scheduler_(
-              frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->ppu)),
+          scheduler_(frontend_sdk::make_scheduler(
+              scheduler_factory,
+              build_schedule(*sys_, config.video_region == mnemos::video_region::pal), &sys_->ppu)),
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
         chip_view_[0] = &sys_->ppu;

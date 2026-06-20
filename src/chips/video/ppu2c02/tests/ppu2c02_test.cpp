@@ -270,6 +270,23 @@ TEST_CASE("ppu2c02 honours the sprite flip-x attribute", "[ppu2c02]") {
     CHECK(at(100U, 50U) == master_0F); // original column now transparent -> backdrop
 }
 
+TEST_CASE("ppu2c02 PAL timing runs a 312-line frame", "[ppu2c02]") {
+    ppu2c02 ppu;
+    ppu.set_pal(true);
+    const std::uint64_t pal_frame =
+        static_cast<std::uint64_t>(ppu2c02::dots_per_line) * ppu2c02::pal_lines_per_frame;
+    ppu.tick(pal_frame);
+    CHECK(ppu.frame_index() == 1U);
+    CHECK(ppu.beam_line() == 0U); // the beam wrapped exactly at 312 lines
+    CHECK(ppu.beam_dot() == 0U);
+
+    // One NTSC frame's worth of dots leaves a PAL PPU mid-frame (262 < 312).
+    ppu2c02 partial;
+    partial.set_pal(true);
+    partial.tick(static_cast<std::uint64_t>(ppu2c02::dots_per_line) * ppu2c02::lines_per_frame);
+    CHECK(partial.beam_line() == ppu2c02::lines_per_frame); // line 262, not yet wrapped
+}
+
 TEST_CASE("ppu2c02 limits to eight sprites per line and sets the overflow flag", "[ppu2c02]") {
     ppu2c02 ppu;
     const auto chr = make_chr({0U, 1U}); // tile 1 = solid pixel 1

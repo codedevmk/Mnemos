@@ -165,6 +165,19 @@ TEST_CASE("ricoh_2a03_apu DMC raises its IRQ at the end of a non-looping sample"
     REQUIRE_FALSE(chip.irq_asserted());
 }
 
+TEST_CASE("ricoh_2a03_apu PAL frame IRQ fires on the longer 2A07 period",
+          "[ricoh_2a03_apu][audio]") {
+    ricoh_2a03_apu chip;
+    chip.set_pal(true);
+    chip.write_reg(ricoh_2a03_apu::reg_frame_counter, 0x00); // 4-step, IRQ enabled
+    // Past the NTSC threshold (29829) but short of the PAL one (33252): no IRQ yet.
+    chip.tick(30000);
+    CHECK_FALSE(chip.irq_asserted());
+    // Past the PAL threshold now.
+    chip.tick(4000);
+    CHECK(chip.irq_asserted());
+}
+
 TEST_CASE("ricoh_2a03_apu delivers the /IRQ level through the callback",
           "[ricoh_2a03_apu][audio]") {
     ricoh_2a03_apu chip;

@@ -259,7 +259,9 @@ int main(int argc, char* argv[]) {
             cart_default = mnemos::video_region::pal; // 50 Hz machine
             break;
         case system_family::nes:
-            cart_default = mnemos::video_region::ntsc; // NTSC NES; PAL is a later increment
+            // iNES carries no region byte, so default to NTSC; PAL (50 Hz, 312-line
+            // 2A07 timing) is selectable with --region pal.
+            cart_default = mnemos::video_region::ntsc;
             break;
         case system_family::sega32x:
             // 32X carts carry a Genesis-style header with the region byte.
