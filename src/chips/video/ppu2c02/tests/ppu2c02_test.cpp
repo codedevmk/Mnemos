@@ -107,6 +107,41 @@ TEST_CASE("ppu2c02 loopy v/t/x latch through the scroll and address ports", "[pp
     CHECK(ppu.reg_read(ppu2c02::reg_data) == 0x42U);
 }
 
+TEST_CASE("ppu2c02 per-scanline tick render matches the static render_frame", "[ppu2c02]") {
+    // The beam (tick) renders line-by-line; render_frame() is a held-state sweep.
+    // For static content the two must produce an identical framebuffer.
+    const auto chr = make_chr({0U, 1U});
+    const auto setup = [&chr](ppu2c02& p) {
+        p.attach_chr(chr);
+        set_palette(p, 0U, 0x0FU);
+        set_palette(p, 1U, 0x06U);
+        p.ppu_write(0x2000U, 0x01U); // a tile at (0,0)
+        p.ppu_write(0x2041U, 0x01U); // and one further in
+        p.ppu_write(0x23C0U, 0x01U); // an attribute byte
+        p.reg_write(ppu2c02::reg_mask,
+                    static_cast<std::uint8_t>(ppu2c02::mask_bg_enable | ppu2c02::mask_bg_left));
+    };
+
+    ppu2c02 forced;
+    setup(forced);
+    forced.render_frame();
+
+    ppu2c02 beamed;
+    setup(beamed);
+    beamed.tick(frame_ticks); // one whole frame through the beam
+
+    const auto a = forced.framebuffer();
+    const auto b = beamed.framebuffer();
+    bool identical = true;
+    for (std::uint32_t i = 0; i < ppu2c02::visible_width * ppu2c02::visible_height; ++i) {
+        if (a.pixels[i] != b.pixels[i]) {
+            identical = false;
+            break;
+        }
+    }
+    CHECK(identical);
+}
+
 TEST_CASE("ppu2c02 CHR-RAM accepts pattern writes; CHR-ROM drops them", "[ppu2c02]") {
     ppu2c02 ram_ppu;
     std::array<std::uint8_t, ppu2c02::pattern_size> chr_ram{};
