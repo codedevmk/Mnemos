@@ -164,9 +164,17 @@ namespace mnemos::manifests::nes {
                                 std::span<std::uint8_t>(s->chr), img.chr_is_ram);
         s->mapper->reset();
 
-        // The mapper drives the CPU /IRQ (MMC3's scanline counter); the scanline
-        // callback below clocks it.
-        s->mapper->set_irq_callback([s](bool asserted) { s->cpu.set_irq_line(asserted); });
+        // The cartridge (MMC3 scanline counter) and the APU (frame + DMC IRQ) share
+        // the CPU /IRQ line as a wired-OR: each source updates its flag and the
+        // union is published to the CPU.
+        s->mapper->set_irq_callback([s](bool asserted) {
+            s->mapper_irq = asserted;
+            s->cpu.set_irq_line(s->mapper_irq || s->apu_irq);
+        });
+        s->apu.set_irq_callback([s](bool asserted) {
+            s->apu_irq = asserted;
+            s->cpu.set_irq_line(s->mapper_irq || s->apu_irq);
+        });
 
         // The PPU drives the CPU /NMI: it asserts at vblank and clears at
         // pre-render. The scanline callback also clocks the mapper's scanline IRQ.

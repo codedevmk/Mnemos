@@ -160,6 +160,16 @@ namespace mnemos::chips::audio {
         cpu_cycles_ = 0U;
     }
 
+    void ricoh_2a03_apu::notify_irq() noexcept {
+        const bool now = irq_asserted();
+        if (now != irq_last_) {
+            irq_last_ = now;
+            if (irq_cb_) {
+                irq_cb_(now);
+            }
+        }
+    }
+
     // ---- bus access ----
 
     std::uint8_t ricoh_2a03_apu::read_reg(std::uint16_t addr) noexcept {
@@ -188,6 +198,7 @@ namespace mnemos::chips::audio {
             }
             // Reading the status port clears the frame IRQ (but not the DMC IRQ).
             frame_irq_flag_ = false;
+            notify_irq();
             return v;
         }
         // Every other APU address reads back as the open-bus latch.
@@ -303,6 +314,7 @@ namespace mnemos::chips::audio {
         default:
             break; // $4014 and unused slots are handled elsewhere / ignored.
         }
+        notify_irq(); // $4015/$4017/$4010 can acknowledge a pending IRQ
     }
 
     // ---- synthesis (clean-room from the 2A03 datasheet) ----
@@ -472,6 +484,7 @@ namespace mnemos::chips::audio {
                 }
             }
         }
+        notify_irq(); // deliver a frame-/DMC-IRQ edge raised during this batch
     }
 
     std::size_t ricoh_2a03_apu::drain_samples(std::int16_t* out, std::size_t max_pairs) noexcept {
@@ -504,6 +517,7 @@ namespace mnemos::chips::audio {
         dmc_irq_flag_ = false;
         open_bus_latch_ = 0U;
         cpu_cycles_ = 0U;
+        irq_last_ = false;
         last_sample_ = 0;
         prescaler_ = 0;
         sample_queue_.clear();
