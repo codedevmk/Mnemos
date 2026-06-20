@@ -124,6 +124,47 @@ TEST_CASE("ricoh_2a03_apu synthesises a deterministic pulse waveform", "[ricoh_2
     REQUIRE(saw_low);
 }
 
+TEST_CASE("ricoh_2a03_apu DMC streams delta-PCM samples from the bus reader",
+          "[ricoh_2a03_apu][audio]") {
+    ricoh_2a03_apu chip;
+    // A bus reader that always yields $FF: every shifted bit is 1, so the delta
+    // decoder ramps the 7-bit DAC upward toward its maximum.
+    chip.set_dmc_reader([](std::uint16_t) -> std::uint8_t { return 0xFFU; });
+    chip.write_reg(ricoh_2a03_apu::reg_dmc_0, 0x0FU);  // rate index 15 (fastest); no loop/IRQ
+    chip.write_reg(ricoh_2a03_apu::reg_dmc_2, 0x00U);  // sample address $C000
+    chip.write_reg(ricoh_2a03_apu::reg_dmc_3, 0xFFU);  // length 4081 bytes (won't drain here)
+    chip.write_reg(ricoh_2a03_apu::reg_status, 0x10U); // enable DMC -> start the sample
+
+    // With only the DMC enabled the mono mix tracks the DAC level (centred on 64),
+    // so a rising DAC is directly observable in the output.
+    chip.step();
+    const std::int16_t before = chip.last_sample(); // DAC = 0 -> strongly negative
+    chip.tick(8000);
+    const std::int16_t after = chip.last_sample();
+    REQUIRE(after > before);
+    REQUIRE(after > 0); // an all-ones stream ramps the DAC above mid-scale
+}
+
+TEST_CASE("ricoh_2a03_apu DMC raises its IRQ at the end of a non-looping sample",
+          "[ricoh_2a03_apu][audio]") {
+    ricoh_2a03_apu chip;
+    chip.set_dmc_reader([](std::uint16_t) -> std::uint8_t { return 0x00U; });
+    chip.write_reg(ricoh_2a03_apu::reg_dmc_0, 0x8FU);  // IRQ enable, no loop, rate 15
+    chip.write_reg(ricoh_2a03_apu::reg_dmc_2, 0x00U);  // address $C000
+    chip.write_reg(ricoh_2a03_apu::reg_dmc_3, 0x00U);  // length = 1 byte
+    chip.write_reg(ricoh_2a03_apu::reg_status, 0x10U); // start
+    REQUIRE_FALSE(chip.irq_asserted());
+
+    chip.tick(2000); // drains the 1-byte sample -> end-of-sample IRQ
+    REQUIRE(chip.irq_asserted());
+    const std::uint8_t status = chip.read_reg(ricoh_2a03_apu::reg_status);
+    REQUIRE((status & ricoh_2a03_apu::status_dmc_irq) != 0U);
+
+    // Writing $4015 clears the DMC IRQ.
+    chip.write_reg(ricoh_2a03_apu::reg_status, 0x10U);
+    REQUIRE_FALSE(chip.irq_asserted());
+}
+
 TEST_CASE("ricoh_2a03_apu save_state/load_state round-trips bit-identically",
           "[ricoh_2a03_apu][audio]") {
     ricoh_2a03_apu a;
