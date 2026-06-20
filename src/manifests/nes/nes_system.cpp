@@ -184,7 +184,11 @@ namespace mnemos::manifests::nes {
             [s](std::uint32_t) { s->cpu.set_nmi_line(s->ppu.nmi_asserted()); });
         s->ppu.set_scanline_callback([s](std::uint32_t line) {
             s->cpu.set_nmi_line(s->ppu.nmi_asserted());
-            s->mapper->clock_scanline(line);
+            // The MMC3 scanline counter is driven by PPU A12 toggles, which only
+            // occur while rendering; a blanked screen does not clock it.
+            if (s->ppu.rendering_enabled()) {
+                s->mapper->clock_scanline(line);
+            }
         });
 
         s->cpu.attach_bus(s->bus);

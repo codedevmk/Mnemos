@@ -166,6 +166,13 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint32_t beam_line() const noexcept { return scanline_; }
         [[nodiscard]] std::uint32_t beam_dot() const noexcept { return dot_; }
 
+        // Whether background or sprite rendering is enabled (PPUMASK bits). The MMC3
+        // scanline IRQ only clocks while rendering -- its counter is driven by A12
+        // toggles that occur only during background/sprite fetches.
+        [[nodiscard]] bool rendering_enabled() const noexcept {
+            return (mask_ & (mask_bg_enable | mask_spr_enable)) != 0U;
+        }
+
         // Force a full static render of the current state into the framebuffer
         // (a held-state per-line sweep from t_), without advancing the beam. For
         // tests / a host that wants the current frame without ticking; tick()
@@ -217,9 +224,6 @@ namespace mnemos::chips::video {
         static void inc_y(std::uint16_t& v) noexcept;
         static void copy_horizontal(std::uint16_t& v, std::uint16_t t) noexcept;
         static void copy_vertical(std::uint16_t& v, std::uint16_t t) noexcept;
-        [[nodiscard]] bool rendering_enabled() const noexcept {
-            return (mask_ & (mask_bg_enable | mask_spr_enable)) != 0U;
-        }
 
         // Decode one tile pixel (0..3) from CHR pattern memory.
         [[nodiscard]] std::uint32_t fetch_pattern_pixel(std::uint16_t pattern_base,
