@@ -391,6 +391,38 @@ int main(int argc, char* argv[]) {
                 primary_rom = std::move(bios->bytes);
             }
         }
+        // A Famicom Disk System disk (.fds) boots on the FDS BIOS (DISKSYS.ROM from
+        // MNEMOS_FDS_BIOS, raw or zipped); passed as the NES adapter's bios image, it
+        // makes the adapter build the RP2C33 RAM adapter. A .nes cart needs no BIOS.
+        if (family == system_family::nes) {
+            std::string ext = rom_paths.front().size() >= 4
+                                  ? rom_paths.front().substr(rom_paths.front().size() - 4)
+                                  : std::string{};
+            for (char& ch : ext) {
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            if (ext == ".fds") {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
+#endif
+                const char* bios_env = std::getenv("MNEMOS_FDS_BIOS");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+                if (bios_env == nullptr) {
+                    std::fprintf(stderr, "[mnemos_player] a Famicom Disk System disk needs "
+                                         "MNEMOS_FDS_BIOS set to the 8 KiB DISKSYS.ROM\n");
+                    return 1;
+                }
+                auto bios = load_rom(bios_env);
+                if (!bios || bios->bytes.size() < 0x2000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read FDS BIOS: %s\n", bios_env);
+                    return 1;
+                }
+                bios_images.push_back(std::move(bios->bytes));
+            }
+        }
         system = mnemos::frontend_sdk::adapter_registry::instance().create(
             family_id(family), {.rom = std::move(primary_rom),
                                 .video_region = video,

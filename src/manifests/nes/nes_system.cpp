@@ -1,5 +1,7 @@
 #include "nes_system.hpp"
 
+#include "fds.hpp" // FDS disk-image detection + the RP2C33 RAM-adapter mapper
+
 namespace mnemos::manifests::nes {
 
     namespace {
@@ -83,12 +85,26 @@ namespace mnemos::manifests::nes {
         auto sys = std::make_unique<nes_system>();
         nes_system* s = sys.get();
 
-        const ines_image img = parse_ines(rom);
-        s->prg = img.prg; // empty on a bad/unsupported image -> boots a blank PRG
-        s->chr = img.chr;
-        s->chr_is_ram = img.chr_is_ram; // CHR-RAM is writable -> include it in save-states
-        s->battery = img.battery;       // persist $6000 RAM only for battery carts
-        s->ppu.set_mirroring(img.valid ? img.mirroring : mirroring::horizontal);
+        // A Famicom Disk System disk image (.fds) plus a BIOS routes to the RP2C33
+        // RAM adapter instead of a cartridge; everything else is an iNES cart.
+        const bool is_fds = !config.fds_bios.empty() && looks_like_fds(rom);
+        ines_image img{};
+        if (is_fds) {
+            s->is_fds = true;
+            s->fds_bios = config.fds_bios;
+            s->fds_disk = parse_fds_sides(rom);
+            s->fds_ram.assign(0x8000U, 0x00U); // 32 KiB PRG-RAM ($6000-$DFFF)
+            s->chr.assign(0x2000U, 0x00U);     // 8 KiB CHR-RAM
+            s->chr_is_ram = true;
+            s->ppu.set_mirroring(mirroring::horizontal);
+        } else {
+            img = parse_ines(rom);
+            s->prg = img.prg; // empty on a bad/unsupported image -> boots a blank PRG
+            s->chr = img.chr;
+            s->chr_is_ram = img.chr_is_ram; // CHR-RAM is writable -> include in save-states
+            s->battery = img.battery;       // persist $6000 RAM only for battery carts
+            s->ppu.set_mirroring(img.valid ? img.mirroring : mirroring::horizontal);
+        }
 
         // Region timing: PAL gives the PPU a 312-line/50 Hz frame and shifts the APU
         // frame-sequencer period + DMC rate table (the 2A07). NTSC is the default.
@@ -159,16 +175,25 @@ namespace mnemos::manifests::nes {
                 s->apu.write_reg(static_cast<std::uint16_t>(addr), value);
             });
 
-        // $6000-$7FFF: 8 KiB cartridge work / battery RAM. Always present -- many
-        // mapper games (MMC3, MMC1 SRAM titles) keep work variables here and break
-        // reading open bus; harmless for carts that ignore it.
-        s->bus.map_ram(0x6000U, std::span<std::uint8_t>(s->prg_ram));
+        if (is_fds) {
+            // The RP2C33 disk system maps $6000-$DFFF RAM, $E000-$FFFF BIOS, the
+            // $4020-$409F disk/sound registers and attaches the CHR-RAM itself.
+            s->mapper =
+                make_fds(s->bus, s->ppu, std::span<const std::uint8_t>(s->fds_disk),
+                         std::span<const std::uint8_t>(s->fds_bios),
+                         std::span<std::uint8_t>(s->fds_ram), std::span<std::uint8_t>(s->chr));
+        } else {
+            // $6000-$7FFF: 8 KiB cartridge work / battery RAM. Always present -- many
+            // mapper games (MMC3, MMC1 SRAM titles) keep work variables here and break
+            // reading open bus; harmless for carts that ignore it.
+            s->bus.map_ram(0x6000U, std::span<std::uint8_t>(s->prg_ram));
 
-        // $8000-$FFFF (PRG) + the PPU's CHR window are owned by the cartridge
-        // mapper; reset() installs the initial banks (and CHR-RAM vs CHR-ROM).
-        s->mapper = make_mapper(img.valid ? img.mapper : 0, s->bus, s->ppu,
-                                std::span<const std::uint8_t>(s->prg),
-                                std::span<std::uint8_t>(s->chr), img.chr_is_ram);
+            // $8000-$FFFF (PRG) + the PPU's CHR window are owned by the cartridge
+            // mapper; reset() installs the initial banks (and CHR-RAM vs CHR-ROM).
+            s->mapper = make_mapper(img.valid ? img.mapper : 0, s->bus, s->ppu,
+                                    std::span<const std::uint8_t>(s->prg),
+                                    std::span<std::uint8_t>(s->chr), img.chr_is_ram);
+        }
         s->mapper->reset();
 
         // The cartridge (MMC3 scanline counter) and the APU (frame + DMC IRQ) share
