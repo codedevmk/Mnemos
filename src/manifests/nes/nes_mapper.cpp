@@ -20,6 +20,86 @@ namespace mnemos::manifests::nes {
         constexpr std::size_t k_chr_1k = 0x0400U;   // 1 KiB CHR bank (MMC3)
         constexpr std::size_t k_chr_8k = 0x2000U;   // 8 KiB CHR bank (CNROM)
 
+        // The Konami VRC IRQ shared by VRC6 (24/26), VRC7 (85) and VRC2/4 (21/22/
+        // 23/25). An 8-bit counter that, in cycle mode, ticks every CPU cycle and,
+        // in scanline mode, is driven by a +3/cycle prescaler clocked once per ~341
+        // cycles (~one scanline); an overflow ($FF -> reload latch) asserts /IRQ.
+        // The owning mapper drives the actual /IRQ line, so each method takes a
+        // `raise` callable forwarding to the mapper's raise_irq(bool).
+        struct konami_vrc_irq {
+            std::uint8_t latch{};   // reload value
+            std::uint8_t counter{}; // 8-bit up-counter; overflow -> reload + IRQ
+            int prescaler{};        // scanline-mode +3/cycle accumulator
+            bool enabled{};         // control bit 1
+            bool ack_enable{};      // control bit 0: enable to restore on the next ack
+            bool cycle_mode{};      // control bit 2: 1 = per-cycle, 0 = per-scanline
+
+            void reset() noexcept {
+                latch = counter = 0U;
+                prescaler = 0;
+                enabled = ack_enable = cycle_mode = false;
+            }
+
+            template <typename Raise> void write_control(std::uint8_t value, const Raise& raise) {
+                ack_enable = (value & 0x01U) != 0U;
+                enabled = (value & 0x02U) != 0U;
+                cycle_mode = (value & 0x04U) != 0U;
+                if (enabled) {
+                    counter = latch; // reload + restart the prescaler
+                    prescaler = 0;
+                }
+                raise(false); // writing control acknowledges any pending IRQ
+            }
+
+            template <typename Raise> void acknowledge(const Raise& raise) {
+                raise(false);
+                enabled = ack_enable; // the ack restores enable from bit 0
+            }
+
+            template <typename Raise> void tick_counter(const Raise& raise) {
+                if (counter == 0xFFU) {
+                    counter = latch;
+                    raise(true);
+                } else {
+                    ++counter;
+                }
+            }
+
+            template <typename Raise> void clock(std::uint32_t cpu_cycles, const Raise& raise) {
+                if (!enabled) {
+                    return;
+                }
+                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
+                    if (cycle_mode) {
+                        tick_counter(raise);
+                    } else {
+                        prescaler += 3;
+                        if (prescaler >= 341) {
+                            prescaler -= 341;
+                            tick_counter(raise);
+                        }
+                    }
+                }
+            }
+
+            void save(chips::state_writer& writer) const {
+                writer.u8(latch);
+                writer.u8(counter);
+                writer.u32(static_cast<std::uint32_t>(prescaler));
+                writer.boolean(enabled);
+                writer.boolean(ack_enable);
+                writer.boolean(cycle_mode);
+            }
+            void load(chips::state_reader& reader) {
+                latch = reader.u8();
+                counter = reader.u8();
+                prescaler = static_cast<int>(reader.u32());
+                enabled = reader.boolean();
+                ack_enable = reader.boolean();
+                cycle_mode = reader.boolean();
+            }
+        };
+
         // NROM (iNES 0): no banking. A 16 KiB PRG image mirrors into both halves
         // (so $FFFC resolves); 32 KiB fills $8000-$FFFF. CHR is fixed.
         class nrom_mapper final : public nes_mapper {
@@ -1543,12 +1623,7 @@ namespace mnemos::manifests::nes {
                 prg_regs_ = {0U, 0U, 0U};
                 chr_banks_.fill(0U);
                 mirror_ = 0U;
-                irq_latch_ = 0U;
-                irq_counter_ = 0U;
-                irq_prescaler_ = 0;
-                irq_enabled_ = false;
-                irq_ack_enable_ = false;
-                cycle_mode_ = false;
+                irq_.reset();
 
                 if (prg_8k_count_ != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
@@ -1606,14 +1681,14 @@ namespace mnemos::manifests::nes {
                         mirror_ = static_cast<std::uint8_t>(value & 0x03U);
                         apply_mirroring();
                     } else { // $E010 = IRQ latch (reload value)
-                        irq_latch_ = value;
+                        irq_.latch = value;
                     }
                     break;
                 case 0xF000U:
                     if (!a4) { // $F000 = IRQ control
-                        write_irq_control(value);
+                        irq_.write_control(value, [this](bool a) { raise_irq(a); });
                     } else { // $F010 = IRQ acknowledge
-                        irq_acknowledge();
+                        irq_.acknowledge([this](bool a) { raise_irq(a); });
                     }
                     break;
                 default:
@@ -1621,24 +1696,8 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            // The Konami VRC IRQ. In cycle mode the 8-bit counter ticks every CPU
-            // cycle; in scanline mode a +3/cycle prescaler clocks it once per ~341
-            // cycles (~one scanline). An overflow ($FF -> reload latch) asserts /IRQ.
             void clock_cpu_timer(std::uint32_t cpu_cycles) override {
-                if (!irq_enabled_) {
-                    return;
-                }
-                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
-                    if (cycle_mode_) {
-                        tick_irq_counter();
-                    } else {
-                        irq_prescaler_ += 3;
-                        if (irq_prescaler_ >= 341) {
-                            irq_prescaler_ -= 341;
-                            tick_irq_counter();
-                        }
-                    }
-                }
+                irq_.clock(cpu_cycles, [this](bool a) { raise_irq(a); });
             }
 
             [[nodiscard]] chips::ichip* expansion_audio() noexcept override { return &opll_; }
@@ -1658,12 +1717,7 @@ namespace mnemos::manifests::nes {
                     writer.u8(b);
                 }
                 writer.u8(mirror_);
-                writer.u8(irq_latch_);
-                writer.u8(irq_counter_);
-                writer.u32(static_cast<std::uint32_t>(irq_prescaler_));
-                writer.boolean(irq_enabled_);
-                writer.boolean(irq_ack_enable_);
-                writer.boolean(cycle_mode_);
+                irq_.save(writer);
                 opll_.save_state(writer);
             }
             void load_state(chips::state_reader& reader) override {
@@ -1674,12 +1728,7 @@ namespace mnemos::manifests::nes {
                     b = reader.u8();
                 }
                 mirror_ = reader.u8();
-                irq_latch_ = reader.u8();
-                irq_counter_ = reader.u8();
-                irq_prescaler_ = static_cast<int>(reader.u32());
-                irq_enabled_ = reader.boolean();
-                irq_ack_enable_ = reader.boolean();
-                cycle_mode_ = reader.boolean();
+                irq_.load(reader);
                 opll_.load_state(reader);
                 apply_prg();
                 apply_chr();
@@ -1690,31 +1739,6 @@ namespace mnemos::manifests::nes {
             void set_chr(std::size_t slot, std::uint8_t value) {
                 chr_banks_[slot] = value;
                 apply_chr();
-            }
-
-            void write_irq_control(std::uint8_t value) {
-                irq_ack_enable_ = (value & 0x01U) != 0U; // restore-enable on the next ack
-                irq_enabled_ = (value & 0x02U) != 0U;
-                cycle_mode_ = (value & 0x04U) != 0U;
-                if (irq_enabled_) {
-                    irq_counter_ = irq_latch_; // reload + restart the prescaler
-                    irq_prescaler_ = 0;
-                }
-                raise_irq(false); // writing control acknowledges any pending IRQ
-            }
-
-            void irq_acknowledge() {
-                raise_irq(false);
-                irq_enabled_ = irq_ack_enable_; // the ack restores enable from bit 0
-            }
-
-            void tick_irq_counter() {
-                if (irq_counter_ == 0xFFU) {
-                    irq_counter_ = irq_latch_;
-                    raise_irq(true);
-                } else {
-                    ++irq_counter_;
-                }
             }
 
             void map_prg8(std::uint32_t slot, std::size_t bank8) {
@@ -1770,12 +1794,7 @@ namespace mnemos::manifests::nes {
             std::array<std::uint8_t, 3> prg_regs_{}; // $8000, $A000, $C000 8 KiB selects
             std::array<std::uint8_t, 8> chr_banks_{};
             std::uint8_t mirror_{};
-            std::uint8_t irq_latch_{};   // $E010 reload value
-            std::uint8_t irq_counter_{}; // 8-bit up-counter; overflow -> reload + IRQ
-            int irq_prescaler_{};        // scanline-mode +3/cycle accumulator
-            bool irq_enabled_{};
-            bool irq_ack_enable_{}; // $F000 bit 0: enable to restore on the next ack
-            bool cycle_mode_{};     // $F000 bit 2: 1 = per-cycle, 0 = per-scanline
+            konami_vrc_irq irq_; // $E010 latch + $F000/$F010 control/ack
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
 
@@ -1799,12 +1818,7 @@ namespace mnemos::manifests::nes {
                 prg8_ = 0U;
                 chr_banks_.fill(0U);
                 ppu_ctrl_ = 0U;
-                irq_latch_ = 0U;
-                irq_counter_ = 0U;
-                irq_prescaler_ = 0;
-                irq_enabled_ = false;
-                irq_ack_enable_ = false;
-                cycle_mode_ = false;
+                irq_.reset();
 
                 if (prg_8k_count_ != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank)); // 16 KiB switchable
@@ -1864,11 +1878,11 @@ namespace mnemos::manifests::nes {
                     break;
                 case 0xF000U: // Konami VRC IRQ
                     if (sub == 0x00U) {
-                        irq_latch_ = value;
+                        irq_.latch = value;
                     } else if (sub == 0x01U) {
-                        write_irq_control(value);
+                        irq_.write_control(value, [this](bool a) { raise_irq(a); });
                     } else if (sub == 0x02U) {
-                        irq_acknowledge();
+                        irq_.acknowledge([this](bool a) { raise_irq(a); });
                     }
                     break;
                 default:
@@ -1877,20 +1891,7 @@ namespace mnemos::manifests::nes {
             }
 
             void clock_cpu_timer(std::uint32_t cpu_cycles) override {
-                if (!irq_enabled_) {
-                    return;
-                }
-                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
-                    if (cycle_mode_) {
-                        tick_irq_counter();
-                    } else {
-                        irq_prescaler_ += 3;
-                        if (irq_prescaler_ >= 341) {
-                            irq_prescaler_ -= 341;
-                            tick_irq_counter();
-                        }
-                    }
-                }
+                irq_.clock(cpu_cycles, [this](bool a) { raise_irq(a); });
             }
 
             [[nodiscard]] chips::ichip* expansion_audio() noexcept override { return &sound_; }
@@ -1909,12 +1910,7 @@ namespace mnemos::manifests::nes {
                     writer.u8(b);
                 }
                 writer.u8(ppu_ctrl_);
-                writer.u8(irq_latch_);
-                writer.u8(irq_counter_);
-                writer.u32(static_cast<std::uint32_t>(irq_prescaler_));
-                writer.boolean(irq_enabled_);
-                writer.boolean(irq_ack_enable_);
-                writer.boolean(cycle_mode_);
+                irq_.save(writer);
                 sound_.save_state(writer);
             }
             void load_state(chips::state_reader& reader) override {
@@ -1924,12 +1920,7 @@ namespace mnemos::manifests::nes {
                     b = reader.u8();
                 }
                 ppu_ctrl_ = reader.u8();
-                irq_latch_ = reader.u8();
-                irq_counter_ = reader.u8();
-                irq_prescaler_ = static_cast<int>(reader.u32());
-                irq_enabled_ = reader.boolean();
-                irq_ack_enable_ = reader.boolean();
-                cycle_mode_ = reader.boolean();
+                irq_.load(reader);
                 sound_.load_state(reader);
                 apply_prg();
                 apply_chr();
@@ -1985,29 +1976,6 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            void write_irq_control(std::uint8_t value) {
-                irq_ack_enable_ = (value & 0x01U) != 0U;
-                irq_enabled_ = (value & 0x02U) != 0U;
-                cycle_mode_ = (value & 0x04U) != 0U;
-                if (irq_enabled_) {
-                    irq_counter_ = irq_latch_;
-                    irq_prescaler_ = 0;
-                }
-                raise_irq(false);
-            }
-            void irq_acknowledge() {
-                raise_irq(false);
-                irq_enabled_ = irq_ack_enable_;
-            }
-            void tick_irq_counter() {
-                if (irq_counter_ == 0xFFU) {
-                    irq_counter_ = irq_latch_;
-                    raise_irq(true);
-                } else {
-                    ++irq_counter_;
-                }
-            }
-
             std::size_t prg_16k_count_;
             std::size_t prg_8k_count_;
             std::size_t chr_1k_count_;
@@ -2017,12 +1985,7 @@ namespace mnemos::manifests::nes {
             std::uint8_t prg8_{};
             std::array<std::uint8_t, 8> chr_banks_{};
             std::uint8_t ppu_ctrl_{}; // $B003
-            std::uint8_t irq_latch_{};
-            std::uint8_t irq_counter_{};
-            int irq_prescaler_{};
-            bool irq_enabled_{};
-            bool irq_ack_enable_{};
-            bool cycle_mode_{};
+            konami_vrc_irq irq_;      // $F000-$F002
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
 
@@ -2315,12 +2278,7 @@ namespace mnemos::manifests::nes {
                 swap_mode_ = false;
                 mirror_ = 0U;
                 chr_bank_.fill(0U);
-                irq_latch_ = 0U;
-                irq_counter_ = 0U;
-                irq_prescaler_ = 0;
-                irq_enabled_ = false;
-                irq_ack_enable_ = false;
-                cycle_mode_ = false;
+                irq_.reset();
 
                 if (prg_8k_count_ != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
@@ -2381,15 +2339,15 @@ namespace mnemos::manifests::nes {
                         break;
                     }
                     if (sub == 0U) {
-                        irq_latch_ =
-                            static_cast<std::uint8_t>((irq_latch_ & 0xF0U) | (value & 0x0FU));
+                        irq_.latch =
+                            static_cast<std::uint8_t>((irq_.latch & 0xF0U) | (value & 0x0FU));
                     } else if (sub == 1U) {
-                        irq_latch_ = static_cast<std::uint8_t>((irq_latch_ & 0x0FU) |
+                        irq_.latch = static_cast<std::uint8_t>((irq_.latch & 0x0FU) |
                                                                ((value & 0x0FU) << 4U));
                     } else if (sub == 2U) {
-                        write_irq_control(value);
+                        irq_.write_control(value, [this](bool a) { raise_irq(a); });
                     } else {
-                        irq_acknowledge();
+                        irq_.acknowledge([this](bool a) { raise_irq(a); });
                     }
                     break;
                 default:
@@ -2398,20 +2356,7 @@ namespace mnemos::manifests::nes {
             }
 
             void clock_cpu_timer(std::uint32_t cpu_cycles) override {
-                if (!irq_enabled_) {
-                    return;
-                }
-                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
-                    if (cycle_mode_) {
-                        tick_irq_counter();
-                    } else {
-                        irq_prescaler_ += 3;
-                        if (irq_prescaler_ >= 341) {
-                            irq_prescaler_ -= 341;
-                            tick_irq_counter();
-                        }
-                    }
-                }
+                irq_.clock(cpu_cycles, [this](bool a) { raise_irq(a); });
             }
 
             void save_state(chips::state_writer& writer) const override {
@@ -2422,12 +2367,7 @@ namespace mnemos::manifests::nes {
                 for (const std::uint16_t b : chr_bank_) {
                     writer.u16(b);
                 }
-                writer.u8(irq_latch_);
-                writer.u8(irq_counter_);
-                writer.u32(static_cast<std::uint32_t>(irq_prescaler_));
-                writer.boolean(irq_enabled_);
-                writer.boolean(irq_ack_enable_);
-                writer.boolean(cycle_mode_);
+                irq_.save(writer);
             }
             void load_state(chips::state_reader& reader) override {
                 prg0_ = reader.u8();
@@ -2437,12 +2377,7 @@ namespace mnemos::manifests::nes {
                 for (std::uint16_t& b : chr_bank_) {
                     b = reader.u16();
                 }
-                irq_latch_ = reader.u8();
-                irq_counter_ = reader.u8();
-                irq_prescaler_ = static_cast<int>(reader.u32());
-                irq_enabled_ = reader.boolean();
-                irq_ack_enable_ = reader.boolean();
-                cycle_mode_ = reader.boolean();
+                irq_.load(reader);
                 apply_prg();
                 apply_chr();
                 apply_mirroring();
@@ -2504,29 +2439,6 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            void write_irq_control(std::uint8_t value) {
-                irq_ack_enable_ = (value & 0x01U) != 0U;
-                irq_enabled_ = (value & 0x02U) != 0U;
-                cycle_mode_ = (value & 0x04U) != 0U;
-                if (irq_enabled_) {
-                    irq_counter_ = irq_latch_;
-                    irq_prescaler_ = 0;
-                }
-                raise_irq(false);
-            }
-            void irq_acknowledge() {
-                raise_irq(false);
-                irq_enabled_ = irq_ack_enable_;
-            }
-            void tick_irq_counter() {
-                if (irq_counter_ == 0xFFU) {
-                    irq_counter_ = irq_latch_;
-                    raise_irq(true);
-                } else {
-                    ++irq_counter_;
-                }
-            }
-
             std::size_t prg_8k_count_;
             std::size_t chr_1k_count_;
             std::uint16_t a_mask_{}; // address bit forming register-index bit 0
@@ -2538,12 +2450,7 @@ namespace mnemos::manifests::nes {
             bool swap_mode_{};
             std::uint8_t mirror_{};
             std::array<std::uint16_t, 8> chr_bank_{}; // 9-bit each (low + high nibble)
-            std::uint8_t irq_latch_{};
-            std::uint8_t irq_counter_{};
-            int irq_prescaler_{};
-            bool irq_enabled_{};
-            bool irq_ack_enable_{};
-            bool cycle_mode_{};
+            konami_vrc_irq irq_;                      // $F000-$F003 (VRC4 only)
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
 
