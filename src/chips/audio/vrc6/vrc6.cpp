@@ -4,6 +4,7 @@
 #include "state.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <memory>
 
@@ -198,6 +199,7 @@ namespace mnemos::chips::audio {
         writer.u8(freq_shift_);
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
         writer.u32(static_cast<std::uint32_t>(sample_prescaler_));
+        writer.u64(std::bit_cast<std::uint64_t>(dc_)); // DC-blocker IIR state
     }
 
     void vrc6::load_state(state_reader& reader) {
@@ -222,6 +224,7 @@ namespace mnemos::chips::audio {
         freq_shift_ = reader.u8();
         clock_divider_ = static_cast<int>(reader.u32());
         sample_prescaler_ = static_cast<int>(reader.u32());
+        dc_ = std::bit_cast<double>(reader.u64());
     }
 
     instrumentation::ichip_introspection& vrc6::introspection() noexcept { return introspection_; }

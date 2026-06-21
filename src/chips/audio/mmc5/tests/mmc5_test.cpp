@@ -31,6 +31,18 @@ namespace {
         return peak;
     }
 
+    // Capture exactly `pairs` stereo frames of further output from a running chip.
+    [[nodiscard]] std::vector<std::int16_t> capture(mmc5& chip, std::size_t pairs) {
+        chip.enable_audio_capture(true);
+        std::vector<std::int16_t> out;
+        while (chip.pending_samples() < pairs) {
+            chip.tick(1024);
+        }
+        out.resize(pairs * 2U, 0);
+        chip.drain_samples(out.data(), pairs);
+        return out;
+    }
+
     // Enable + programme pulse 1: 50% duty, full constant volume, a mid period.
     void program_pulse1(mmc5& chip) {
         chip.write_reg(0x5015U, 0x01U); // enable pulse 1
@@ -108,4 +120,28 @@ TEST_CASE("mmc5 save_state/load_state round-trips the channels", "[mmc5][audio]"
     CHECK(reader.ok());
     CHECK(b.pulse_timer(0) == a.pulse_timer(0));
     CHECK(b.pcm_level() == a.pcm_level());
+}
+
+// A restored chip must produce a bit-identical sample stream: every field that
+// shapes future output (incl. the DC-blocker IIR state) is serialized.
+TEST_CASE("mmc5 restore is sample-exact (determinism)", "[mmc5][audio]") {
+    mmc5 a;
+    program_pulse1(a);
+    a.write_reg(0x5011U, 0x80U);
+    a.tick(5000); // warm the DC blocker + oscillator/frame state
+
+    std::vector<std::uint8_t> blob;
+    state_writer writer(blob);
+    a.save_state(writer);
+
+    constexpr std::size_t k_pairs = 4096;
+    const std::vector<std::int16_t> from_a = capture(a, k_pairs);
+
+    mmc5 b;
+    state_reader reader(blob);
+    b.load_state(reader);
+    REQUIRE(reader.ok());
+    const std::vector<std::int16_t> from_b = capture(b, k_pairs);
+
+    CHECK(from_a == from_b);
 }
