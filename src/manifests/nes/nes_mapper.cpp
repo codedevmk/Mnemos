@@ -17,6 +17,7 @@ namespace mnemos::manifests::nes {
         constexpr std::size_t k_prg_8k = 0x2000U;   // 8 KiB PRG bank (MMC3)
         constexpr std::size_t k_prg_32k = 0x8000U;  // 32 KiB PRG bank (AxROM)
         constexpr std::size_t k_chr_4k = 0x1000U;   // 4 KiB CHR bank
+        constexpr std::size_t k_chr_2k = 0x0800U;   // 2 KiB CHR bank (Sunsoft-4)
         constexpr std::size_t k_chr_1k = 0x0400U;   // 1 KiB CHR bank (MMC3)
         constexpr std::size_t k_chr_8k = 0x2000U;   // 8 KiB CHR bank (CNROM)
 
@@ -2812,6 +2813,153 @@ namespace mnemos::manifests::nes {
             bool irq_ack_enable_{};
             bool irq_8bit_{};
         };
+
+        // Sunsoft-4 (iNES 68). PRG: a switchable 16 KiB bank at $8000 ($F000 low 4
+        // bits) over the fixed last 16 KiB at $C000. CHR: four switchable 2 KiB banks
+        // ($8000/$9000/$A000/$B000) composed into the 8 KiB window. $E000 low 2 bits
+        // set the nametable arrangement; $E000 bit 4 enables CHR-ROM-backed
+        // nametables, with $C000/$D000 selecting their two 1 KiB pages.
+        //
+        // inc1 SIMPLIFICATION: the PPU is CIRAM-only, so the CHR-ROM-backed-nametable
+        // mode is approximated to standard CIRAM mirroring driven by the $E000 low 2
+        // bits (the $C000/$D000 page registers are stored + serialised but not yet
+        // sampled). True CHR-ROM nametables -- which one title uses for a pseudo-3D
+        // scrolling ground -- are a deferred inc2 needing a PPU change; most of the
+        // game still renders and boots without them.
+        class sunsoft4_mapper final : public nes_mapper {
+          public:
+            sunsoft4_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                            std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                            bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_16k_count_(prg.size() / k_prg_bank), chr_2k_count_(chr.size() / k_chr_2k) {}
+
+            void reset() override {
+                prg_bank_ = 0U;
+                chr_banks_.fill(0U);
+                nt_banks_ = {0U, 0U};
+                mirror_ = 0U;
+                nt_from_chr_ = false;
+
+                if (prg_16k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
+                    bus_->map_rom(0xC000U,
+                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xF000U) {
+                case 0x8000U: // CHR 2 KiB bank at $0000
+                case 0x9000U: // CHR 2 KiB bank at $0800
+                case 0xA000U: // CHR 2 KiB bank at $1000
+                case 0xB000U: // CHR 2 KiB bank at $1800
+                    chr_banks_[(addr - 0x8000U) >> 12U] = value;
+                    apply_chr();
+                    break;
+                case 0xC000U: // nametable-0 CHR-ROM page (stored; CIRAM in this inc)
+                    nt_banks_[0] = value;
+                    break;
+                case 0xD000U: // nametable-1 CHR-ROM page (stored; CIRAM in this inc)
+                    nt_banks_[1] = value;
+                    break;
+                case 0xE000U: // mirroring (bits 0-1) + CHR-ROM-nametable enable (bit 4)
+                    mirror_ = static_cast<std::uint8_t>(value & 0x03U);
+                    nt_from_chr_ = (value & 0x10U) != 0U;
+                    apply_mirroring();
+                    break;
+                case 0xF000U: // 16 KiB PRG bank at $8000 (low 4 bits)
+                    prg_bank_ = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_prg();
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(prg_bank_);
+                for (const std::uint8_t b : chr_banks_) {
+                    writer.u8(b);
+                }
+                for (const std::uint8_t b : nt_banks_) {
+                    writer.u8(b);
+                }
+                writer.u8(mirror_);
+                writer.boolean(nt_from_chr_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                prg_bank_ = reader.u8();
+                for (std::uint8_t& b : chr_banks_) {
+                    b = reader.u8();
+                }
+                for (std::uint8_t& b : nt_banks_) {
+                    b = reader.u8();
+                }
+                mirror_ = reader.u8();
+                nt_from_chr_ = reader.boolean();
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+            }
+
+          private:
+            void apply_prg() {
+                if (prg_16k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(
+                    0x8000U, prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
+            }
+
+            void apply_chr() {
+                if (chr_is_ram_ || chr_2k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t s = 0; s < 4U; ++s) {
+                    const std::size_t src = (chr_banks_[s] % chr_2k_count_) * k_chr_2k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_2k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_2k));
+                }
+            }
+
+            void apply_mirroring() {
+                using m = chips::video::ppu2c02::mirroring;
+                switch (mirror_) {
+                case 0:
+                    ppu_->set_mirroring(m::vertical);
+                    break;
+                case 1:
+                    ppu_->set_mirroring(m::horizontal);
+                    break;
+                case 2:
+                    ppu_->set_mirroring(m::single_a);
+                    break;
+                default:
+                    ppu_->set_mirroring(m::single_b);
+                    break;
+                }
+            }
+
+            std::size_t prg_16k_count_;
+            std::size_t chr_2k_count_;
+            std::uint8_t prg_bank_{};
+            std::array<std::uint8_t, 4> chr_banks_{}; // $8000/$9000/$A000/$B000 2 KiB selects
+            std::array<std::uint8_t, 2> nt_banks_{};  // $C000/$D000 CHR-ROM nametable pages
+            std::uint8_t mirror_{};
+            bool nt_from_chr_{}; // $E000 bit 4: CHR-ROM-backed nametables (inc2)
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -2852,6 +3000,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, true);
         case 66:
             return std::make_unique<gxrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 68:
+            return std::make_unique<sunsoft4_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 69:
             return std::make_unique<sunsoft5b_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 71:
