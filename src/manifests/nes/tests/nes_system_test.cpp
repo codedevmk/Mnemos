@@ -313,6 +313,47 @@ namespace {
         return rom;
     }
 
+    // A 128 KiB-PRG (four 32 KiB banks) / 32 KiB CHR-ROM (four 8 KiB banks) cart.
+    // 32 KiB PRG bank N byte 0 = $A0+N; 8 KiB CHR bank N byte 0 = $C0+N. `mapper` is
+    // written into the iNES header (66 = GxROM, 11 = Color Dreams).
+    std::vector<std::uint8_t> make_bankswitch_32k(int mapper) {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x8000U + 4U * 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 8U; // 128 KiB PRG (eight 16 KiB units = four 32 KiB banks)
+        rom[5] = 4U; // 32 KiB CHR (four 8 KiB banks)
+        rom[6] = static_cast<std::uint8_t>((mapper & 0x0F) << 4U);
+        rom[7] = static_cast<std::uint8_t>(mapper & 0xF0);
+        for (std::size_t b = 0; b < 4U; ++b) {
+            rom[16U + b * 0x8000U] = static_cast<std::uint8_t>(0xA0U + b); // PRG 32 KiB bank
+        }
+        const std::size_t chr = 16U + 4U * 0x8000U;
+        for (std::size_t b = 0; b < 4U; ++b) {
+            rom[chr + b * 0x2000U] = static_cast<std::uint8_t>(0xC0U + b); // CHR 8 KiB bank
+        }
+        return rom;
+    }
+
+    // A 64 KiB-PRG (four 16 KiB banks) / 8 KiB CHR-RAM Camerica cart (mapper 71). PRG
+    // 16 KiB bank N byte 0 = $A0+N.
+    std::vector<std::uint8_t> make_camerica() {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x4000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (four 16 KiB banks)
+        rom[5] = 0U;    // CHR-RAM
+        rom[6] = 0x70U; // mapper low nibble 7
+        rom[7] = 0x40U; // mapper high nibble 4 -> mapper 71
+        for (std::size_t b = 0; b < 4U; ++b) {
+            rom[16U + b * 0x4000U] = static_cast<std::uint8_t>(0xA0U + b);
+        }
+        return rom;
+    }
+
     // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
     // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
     // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
@@ -1052,6 +1093,41 @@ TEST_CASE("VRC2a (mapper 22) drops the low CHR bit and has no IRQ", "[manifests]
     sys->bus.write8(0xF002U, 0x06U);
     sys->mapper->clock_cpu_timer(1000U);
     CHECK_FALSE(irq);
+}
+
+TEST_CASE("GxROM (mapper 66) switches 32 KiB PRG + 8 KiB CHR", "[manifests][nes]") {
+    auto sys = assemble_nes(make_bankswitch_32k(66));
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);    // PRG bank 0
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC0U); // CHR bank 0
+
+    // bits 5-4 = PRG bank 2, bits 1-0 = CHR bank 1.
+    sys->bus.write8(0x8000U, 0x21U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC1U);
+}
+
+TEST_CASE("Color Dreams (mapper 11) switches 32 KiB PRG + 8 KiB CHR", "[manifests][nes]") {
+    auto sys = assemble_nes(make_bankswitch_32k(11));
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC0U);
+
+    // bits 1-0 = PRG bank 2, bits 7-4 = CHR bank 1.
+    sys->bus.write8(0x8000U, 0x12U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC1U);
+}
+
+TEST_CASE("Camerica (mapper 71) switches the 16 KiB bank at $8000", "[manifests][nes]") {
+    auto sys = assemble_nes(make_camerica());
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U); // bank 0
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U); // fixed last bank
+
+    sys->bus.write8(0xC000U, 0x02U); // bank reg responds across $C000-$FFFF
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U); // last stays fixed
 }
 
 TEST_CASE("Namco 163 (mapper 19) banks PRG + CHR", "[manifests][nes]") {

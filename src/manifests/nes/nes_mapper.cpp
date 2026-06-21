@@ -956,6 +956,152 @@ namespace mnemos::manifests::nes {
             std::uint8_t bank_value_{};
         };
 
+        // GxROM / GNROM (iNES 66): one $8000-$FFFF register switches both a 32 KiB
+        // PRG bank (bits 5-4) and an 8 KiB CHR bank (bits 1-0). No mirroring control.
+        class gxrom_mapper final : public nes_mapper {
+          public:
+            gxrom_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                         bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_32k_count_(prg.size() / k_prg_32k), chr_8k_count_(chr.size() / k_chr_8k) {}
+
+            void reset() override {
+                if (prg_32k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k));
+                }
+                bank_ = 0U;
+                apply();
+                install_register_write_hook();
+            }
+            void write(std::uint16_t /*addr*/, std::uint8_t value) override {
+                bank_ = value;
+                apply();
+            }
+            void save_state(chips::state_writer& writer) const override { writer.u8(bank_); }
+            void load_state(chips::state_reader& reader) override {
+                bank_ = reader.u8();
+                apply();
+            }
+
+          private:
+            void apply() {
+                if (prg_32k_count_ != 0U) {
+                    const std::size_t pb = ((bank_ >> 4U) & 0x03U) % prg_32k_count_;
+                    bus_->retarget_rom(0x8000U, prg_.subspan(pb * k_prg_32k, k_prg_32k));
+                }
+                if (chr_is_ram_ || chr_8k_count_ == 0U) {
+                    attach_chr();
+                } else {
+                    const std::size_t cb = (bank_ & 0x03U) % chr_8k_count_;
+                    ppu_->attach_chr(
+                        std::span<const std::uint8_t>(chr_.subspan(cb * k_chr_8k, k_chr_8k)));
+                }
+            }
+            std::size_t prg_32k_count_;
+            std::size_t chr_8k_count_;
+            std::uint8_t bank_{};
+        };
+
+        // Color Dreams (iNES 11): one $8000-$FFFF register switches a 32 KiB PRG bank
+        // (bits 1-0) and an 8 KiB CHR bank (bits 7-4). Header mirroring.
+        class color_dreams_mapper final : public nes_mapper {
+          public:
+            color_dreams_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                                std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                                bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_32k_count_(prg.size() / k_prg_32k), chr_8k_count_(chr.size() / k_chr_8k) {}
+
+            void reset() override {
+                if (prg_32k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k));
+                }
+                bank_ = 0U;
+                apply();
+                install_register_write_hook();
+            }
+            void write(std::uint16_t /*addr*/, std::uint8_t value) override {
+                bank_ = value;
+                apply();
+            }
+            void save_state(chips::state_writer& writer) const override { writer.u8(bank_); }
+            void load_state(chips::state_reader& reader) override {
+                bank_ = reader.u8();
+                apply();
+            }
+
+          private:
+            void apply() {
+                if (prg_32k_count_ != 0U) {
+                    const std::size_t pb = (bank_ & 0x03U) % prg_32k_count_;
+                    bus_->retarget_rom(0x8000U, prg_.subspan(pb * k_prg_32k, k_prg_32k));
+                }
+                if (chr_is_ram_ || chr_8k_count_ == 0U) {
+                    attach_chr();
+                } else {
+                    const std::size_t cb = ((bank_ >> 4U) & 0x0FU) % chr_8k_count_;
+                    ppu_->attach_chr(
+                        std::span<const std::uint8_t>(chr_.subspan(cb * k_chr_8k, k_chr_8k)));
+                }
+            }
+            std::size_t prg_32k_count_;
+            std::size_t chr_8k_count_;
+            std::uint8_t bank_{};
+        };
+
+        // Camerica / Codemasters BF909x (iNES 71): a switchable 16 KiB PRG bank at
+        // $8000 over the fixed last bank at $C000 (UxROM-style) with 8 KiB CHR-RAM.
+        // The bank register responds across $8000-$FFFF; the Fire Hawk variant carves
+        // out $9000-$9FFF for single-screen mirroring (bit 4).
+        class camerica_mapper final : public nes_mapper {
+          public:
+            camerica_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                            std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                            bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_16k_count_(prg.size() / k_prg_bank) {}
+
+            void reset() override {
+                bank_ = 0U;
+                if (prg_16k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
+                    bus_->map_rom(0xC000U, last_bank()); // fixed last 16 KiB
+                }
+                attach_chr(); // 8 KiB CHR-RAM
+                apply_prg();
+                install_register_write_hook();
+            }
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                if (addr >= 0x9000U && addr < 0xA000U) { // Fire Hawk single-screen mirroring
+                    ppu_->set_mirroring((value & 0x10U) != 0U
+                                            ? chips::video::ppu2c02::mirroring::single_b
+                                            : chips::video::ppu2c02::mirroring::single_a);
+                } else { // PRG bank at $8000
+                    bank_ = value;
+                    apply_prg();
+                }
+            }
+            void save_state(chips::state_writer& writer) const override { writer.u8(bank_); }
+            void load_state(chips::state_reader& reader) override {
+                bank_ = reader.u8();
+                apply_prg();
+            }
+
+          private:
+            [[nodiscard]] std::span<const std::uint8_t> last_bank() const noexcept {
+                return prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank);
+            }
+            void apply_prg() {
+                if (prg_16k_count_ != 0U) {
+                    const std::size_t b = bank_ % prg_16k_count_;
+                    bus_->retarget_rom(0x8000U, prg_.subspan(b * k_prg_bank, k_prg_bank));
+                }
+            }
+            std::size_t prg_16k_count_;
+            std::uint8_t bank_{};
+        };
+
         // Sunsoft FME-7 / 5B (iNES 69). Banking: three switchable 8 KiB PRG banks
         // ($8000/$A000/$C000) over a fixed last bank ($E000); eight switchable 1 KiB
         // CHR banks composed into the 8 KiB window; programmable mirroring; and a
@@ -2237,6 +2383,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<mmc5_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 7:
             return std::make_unique<axrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 11:
+            return std::make_unique<color_dreams_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 19:
             return std::make_unique<namco163_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 21: // VRC4a/c
@@ -2248,8 +2396,12 @@ namespace mnemos::manifests::nes {
             return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, false);
         case 26: // VRC6b (A0/A1 swapped)
             return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, true);
+        case 66:
+            return std::make_unique<gxrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 69:
             return std::make_unique<sunsoft5b_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 71:
+            return std::make_unique<camerica_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 85:
             return std::make_unique<vrc7_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 206:
