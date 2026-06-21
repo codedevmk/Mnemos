@@ -155,6 +155,27 @@ TEST_CASE("nes adapter exposes battery RAM only for battery carts", "[apps][play
     CHECK(battery.battery_ram()[0] == 0x99U);
 }
 
+TEST_CASE("nes adapter whole-machine save-state round-trips", "[apps][player][nes]") {
+    namespace nes = mnemos::apps::player::adapters::nes;
+    nes_adapter a(render_test_nrom());
+    for (int i = 0; i < 8; ++i) {
+        a.step_one_frame();
+    }
+    a.system().wram[0x100] = 0xABU; // mark work RAM after running
+
+    const mnemos::runtime::save_target ta = nes::build_save_target(a.system());
+    const std::vector<std::uint8_t> blob = mnemos::runtime::write_save_state(ta);
+    REQUIRE(!blob.empty());
+
+    // Restore into a fresh machine and confirm the captured state came back.
+    nes_adapter b(render_test_nrom());
+    CHECK(b.system().wram[0x100] != 0xABU);
+    mnemos::runtime::save_target tb = nes::build_save_target(b.system());
+    const mnemos::runtime::load_result result = mnemos::runtime::read_save_state(blob, tb);
+    CHECK(result.ok());
+    CHECK(b.system().wram[0x100] == 0xABU);
+}
+
 TEST_CASE("nes adapter drains APU audio after a frame", "[apps][player][nes]") {
     nes_adapter adapter(tiny_nrom());
     auto& sys = adapter.system();

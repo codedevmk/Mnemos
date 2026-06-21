@@ -53,18 +53,29 @@ namespace mnemos::manifests::nes {
             }
 
             void write(std::uint16_t /*addr*/, std::uint8_t value) override {
-                if (bank_count_ == 0U) {
-                    return;
-                }
-                const std::size_t bank = value % bank_count_;
-                bus_->retarget_rom(0x8000U, prg_.subspan(bank * k_prg_bank, k_prg_bank));
+                bank_ = value;
+                map_bank();
+            }
+
+            void save_state(chips::state_writer& writer) const override { writer.u8(bank_); }
+            void load_state(chips::state_reader& reader) override {
+                bank_ = reader.u8();
+                map_bank();
             }
 
           private:
+            void map_bank() {
+                if (bank_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(0x8000U,
+                                   prg_.subspan((bank_ % bank_count_) * k_prg_bank, k_prg_bank));
+            }
             [[nodiscard]] std::span<const std::uint8_t> last_bank() const {
                 return prg_.subspan((bank_count_ - 1U) * k_prg_bank, k_prg_bank);
             }
             std::size_t bank_count_;
+            std::uint8_t bank_{};
         };
 
         // MMC1 (iNES 1): a serial-shift-register mapper. Five writes of bit 0 load
@@ -129,6 +140,24 @@ namespace mnemos::manifests::nes {
                 shift_ = 0U;
                 count_ = 0U;
                 apply();
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(control_);
+                writer.u8(shift_);
+                writer.u8(count_);
+                writer.u8(chr_bank0_);
+                writer.u8(chr_bank1_);
+                writer.u8(prg_bank_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                control_ = reader.u8();
+                shift_ = reader.u8();
+                count_ = reader.u8();
+                chr_bank0_ = reader.u8();
+                chr_bank1_ = reader.u8();
+                prg_bank_ = reader.u8();
+                apply(); // re-point PRG/CHR/mirroring from the restored registers
             }
 
           private:
@@ -292,6 +321,30 @@ namespace mnemos::manifests::nes {
                 if (irq_counter_ == 0U && irq_enabled_) {
                     raise_irq(true);
                 }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(bank_select_);
+                writer.u8(mirror_reg_);
+                for (const std::uint8_t r : regs_) {
+                    writer.u8(r);
+                }
+                writer.u8(irq_latch_);
+                writer.u8(irq_counter_);
+                writer.boolean(irq_reload_);
+                writer.boolean(irq_enabled_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                bank_select_ = reader.u8();
+                mirror_reg_ = reader.u8();
+                for (std::uint8_t& r : regs_) {
+                    r = reader.u8();
+                }
+                irq_latch_ = reader.u8();
+                irq_counter_ = reader.u8();
+                irq_reload_ = reader.boolean();
+                irq_enabled_ = reader.boolean();
+                apply(); // re-point PRG/CHR/mirroring (apply_mirroring is virtual)
             }
 
           protected:
@@ -554,6 +607,57 @@ namespace mnemos::manifests::nes {
                 }
             }
 
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(prg_mode_);
+                writer.u8(chr_mode_);
+                for (const std::uint8_t r : prg_regs_) {
+                    writer.u8(r);
+                }
+                for (const std::uint8_t r : chr_regs_) {
+                    writer.u8(r);
+                }
+                for (const std::uint8_t r : chr_regs_b_) {
+                    writer.u8(r);
+                }
+                writer.u8(nametable_mode_);
+                writer.u8(mult_a_);
+                writer.u8(mult_b_);
+                writer.u8(irq_target_);
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_pending_);
+                writer.boolean(in_frame_);
+                for (const std::uint8_t b : exram_) {
+                    writer.u8(b);
+                }
+            }
+            void load_state(chips::state_reader& reader) override {
+                prg_mode_ = reader.u8();
+                chr_mode_ = reader.u8();
+                for (std::uint8_t& r : prg_regs_) {
+                    r = reader.u8();
+                }
+                for (std::uint8_t& r : chr_regs_) {
+                    r = reader.u8();
+                }
+                for (std::uint8_t& r : chr_regs_b_) {
+                    r = reader.u8();
+                }
+                nametable_mode_ = reader.u8();
+                mult_a_ = reader.u8();
+                mult_b_ = reader.u8();
+                irq_target_ = reader.u8();
+                irq_enabled_ = reader.boolean();
+                irq_pending_ = reader.boolean();
+                in_frame_ = reader.boolean();
+                for (std::uint8_t& b : exram_) {
+                    b = reader.u8();
+                }
+                apply_prg(); // re-point PRG/CHR/mirroring from the restored registers
+                apply_chr();
+                apply_chr_bg();
+                apply_mirroring();
+            }
+
           private:
             void map_prg8(std::uint32_t slot, std::size_t bank8) {
                 if (prg_8k_count_ == 0U) {
@@ -753,7 +857,16 @@ namespace mnemos::manifests::nes {
                 install_register_write_hook();
             }
 
-            void write(std::uint16_t /*addr*/, std::uint8_t value) override { select_chr(value); }
+            void write(std::uint16_t /*addr*/, std::uint8_t value) override {
+                chr_bank_ = value;
+                select_chr(chr_bank_);
+            }
+
+            void save_state(chips::state_writer& writer) const override { writer.u8(chr_bank_); }
+            void load_state(chips::state_reader& reader) override {
+                chr_bank_ = reader.u8();
+                select_chr(chr_bank_);
+            }
 
           private:
             void select_chr(std::uint8_t bank) noexcept {
@@ -766,6 +879,7 @@ namespace mnemos::manifests::nes {
                     std::span<const std::uint8_t>(chr_.subspan(b * k_chr_8k, k_chr_8k)));
             }
             std::size_t chr_8k_count_;
+            std::uint8_t chr_bank_{};
         };
 
         // AxROM (iNES 7): a single switchable 32 KiB PRG bank over $8000-$FFFF +
@@ -789,17 +903,28 @@ namespace mnemos::manifests::nes {
             }
 
             void write(std::uint16_t /*addr*/, std::uint8_t value) override {
-                if (prg_32k_count_ != 0U) {
-                    const std::size_t bank = (value & 0x07U) % prg_32k_count_;
-                    bus_->retarget_rom(0x8000U, prg_.subspan(bank * k_prg_32k, k_prg_32k));
-                }
-                ppu_->set_mirroring((value & 0x10U) != 0U
-                                        ? chips::video::ppu2c02::mirroring::single_b
-                                        : chips::video::ppu2c02::mirroring::single_a);
+                bank_value_ = value;
+                apply();
+            }
+
+            void save_state(chips::state_writer& writer) const override { writer.u8(bank_value_); }
+            void load_state(chips::state_reader& reader) override {
+                bank_value_ = reader.u8();
+                apply();
             }
 
           private:
+            void apply() {
+                if (prg_32k_count_ != 0U) {
+                    const std::size_t bank = (bank_value_ & 0x07U) % prg_32k_count_;
+                    bus_->retarget_rom(0x8000U, prg_.subspan(bank * k_prg_32k, k_prg_32k));
+                }
+                ppu_->set_mirroring((bank_value_ & 0x10U) != 0U
+                                        ? chips::video::ppu2c02::mirroring::single_b
+                                        : chips::video::ppu2c02::mirroring::single_a);
+            }
             std::size_t prg_32k_count_;
+            std::uint8_t bank_value_{};
         };
     } // namespace
 

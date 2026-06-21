@@ -130,6 +130,32 @@ namespace mnemos::apps::player::adapters::nes {
 
     void force_link() noexcept {}
 
+    runtime::save_target build_save_target(manifests::nes::nes_system& sys) {
+        runtime::save_target target;
+        target.manifest_id = "nes";
+        target.manifest_rev = 1U;
+        target.chips.push_back({"cpu", &sys.cpu});
+        target.chips.push_back({"ppu", &sys.ppu});
+        target.chips.push_back({"apu", &sys.apu});
+        target.memory.push_back({"wram", std::span<std::uint8_t>(sys.wram)});
+        target.memory.push_back({"prg_ram", std::span<std::uint8_t>(sys.prg_ram)});
+        if (sys.chr_is_ram && !sys.chr.empty()) {
+            target.memory.push_back({"chr_ram", std::span<std::uint8_t>(sys.chr)});
+        }
+        target.components.push_back({"mapper",
+                                     [&sys](chips::state_writer& w) {
+                                         if (sys.mapper) {
+                                             sys.mapper->save_state(w);
+                                         }
+                                     },
+                                     [&sys](chips::state_reader& r) {
+                                         if (sys.mapper) {
+                                             sys.mapper->load_state(r);
+                                         }
+                                     }});
+        return target;
+    }
+
     namespace {
         const auto register_nes = [] {
             mnemos::frontend_sdk::adapter_registry::instance().register_family(
