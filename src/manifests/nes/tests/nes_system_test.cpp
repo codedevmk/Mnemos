@@ -263,6 +263,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Namco 163 (mapper 19). PRG
+    // 8 KiB bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset vector
+    // lives in the fixed last 8 KiB PRG bank ($E000).
+    std::vector<std::uint8_t> make_namco163() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x30U; // flags6: mapper low nibble = 3
+        rom[7] = 0x10U; // flags7: mapper high nibble = 1 -> mapper 19
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b);
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
     // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
     // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
@@ -910,6 +935,107 @@ TEST_CASE("VRC6 (mapper 24) Konami VRC IRQ fires in cycle mode and acknowledges"
     CHECK(irq);
     sys->bus.write8(0xF002U, 0x00U); // acknowledge
     CHECK_FALSE(irq);
+}
+
+TEST_CASE("Namco 163 (mapper 19) banks PRG + CHR", "[manifests][nes]") {
+    auto sys = assemble_nes(make_namco163());
+
+    // Power-on: every switchable PRG window is bank 0; $E000 is the fixed last bank.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // $E000 -> $8000 bank, $E800 -> $A000 bank, $F000 -> $C000 bank (writes decode;
+    // reads at those addresses hit the fixed PRG bank).
+    sys->bus.write8(0xE000U, 0x03U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    sys->bus.write8(0xE800U, 0x05U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+    sys->bus.write8(0xF000U, 0x02U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // last bank stays fixed
+
+    // CHR: $8000 -> slot 0 ($0000), $B800 -> slot 7 ($1C00).
+    sys->bus.write8(0x8000U, 0x02U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD2U);
+    sys->bus.write8(0xB800U, 0x05U);
+    CHECK(sys->ppu.ppu_read(0x1C00U) == 0xD5U);
+}
+
+TEST_CASE("Namco 163 (mapper 19) routes the wavetable audio and produces sound",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_namco163());
+    auto* ea = sys->mapper->expansion_audio();
+    REQUIRE(ea != nullptr);
+
+    // Channel 8 ($78-$7F): a 4-sample square wave, full volume, one active channel.
+    sys->bus.write8(0xF800U, 0xF8U); // sound address $78, auto-increment
+    sys->bus.write8(0x4800U, 0x00U); // $78 freq low
+    sys->bus.write8(0x4800U, 0x00U); // $79 phase low
+    sys->bus.write8(0x4800U, 0x40U); // $7A freq mid -> freq $4000
+    sys->bus.write8(0x4800U, 0x00U); // $7B phase mid
+    sys->bus.write8(0x4800U, 0xFCU); // $7C freq high 0 + length -> 4 samples
+    sys->bus.write8(0x4800U, 0x00U); // $7D phase high
+    sys->bus.write8(0x4800U, 0x00U); // $7E wave address
+    sys->bus.write8(0x4800U, 0x0FU); // $7F volume 15, 1 channel
+    sys->bus.write8(0xF800U, 0x80U); // sound address $00, auto-increment
+    sys->bus.write8(0x4800U, 0x0FU); // samples 0,1 = 15,0
+    sys->bus.write8(0x4800U, 0x0FU); // samples 2,3 = 15,0
+
+    // The data port reads back through the same window.
+    sys->bus.write8(0xF800U, 0x00U); // address $00, no auto-increment
+    CHECK(sys->bus.read8(0x4800U) == 0x0FU);
+
+    ea->tick(40000);
+    const std::size_t avail = sys->mapper->expansion_audio_pending();
+    REQUIRE(avail > 0U);
+    std::vector<std::int16_t> buf(avail * 2U, 0);
+    const std::size_t got = sys->mapper->drain_expansion_audio(buf.data(), avail);
+    REQUIRE(got > 0U);
+    std::int16_t peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+    }
+    CHECK(peak > 0);
+}
+
+TEST_CASE("Namco 163 (mapper 19) 15-bit IRQ counter fires at $7FFF and acknowledges",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_namco163());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0x5800U, 0xFFU); // counter high = $7F, enable (bit 7)
+    sys->bus.write8(0x5000U, 0xFDU); // counter low = $FD -> counter = $7FFD
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // $7FFD -> $7FFE
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // $7FFE -> $7FFF -> assert + stop
+    CHECK(irq);
+
+    sys->bus.write8(0x5000U, 0x00U); // rewriting the counter acknowledges
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("Namco 163 (mapper 19) save_state/load_state round-trips banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_namco163());
+    a->bus.write8(0xE000U, 0x03U); // $8000 = PRG bank 3
+    a->bus.write8(0x8000U, 0x02U); // CHR slot 0 = bank 2
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+    const std::uint8_t achr = a->ppu.ppu_read(0x0000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_namco163());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);
+    CHECK(b->ppu.ppu_read(0x0000U) == achr);
 }
 
 TEST_CASE("looks_like_fds distinguishes FDS disks from iNES carts", "[manifests][nes][fds]") {
