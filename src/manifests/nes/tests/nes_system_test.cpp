@@ -441,6 +441,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (four 16 KiB banks) / 32 KiB CHR-ROM (sixteen 2 KiB banks) Sunsoft-4
+    // (mapper 68). PRG 16 KiB bank N byte 0 = $A0+N; CHR 2 KiB bank N byte 0 = $D0+N;
+    // the reset vector lives in the fixed last 16 KiB PRG bank ($C000).
+    std::vector<std::uint8_t> make_sunsoft4() {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x4000U + 16U * 0x0800U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (four 16 KiB banks)
+        rom[5] = 4U;    // 32 KiB CHR-ROM (sixteen 2 KiB banks)
+        rom[6] = 0x40U; // flags6: mapper low nibble = 4
+        rom[7] = 0x40U; // flags7: mapper high nibble = 4 -> mapper 68
+        for (std::size_t b = 0; b < 4U; ++b) {
+            rom[16U + b * 0x4000U] = static_cast<std::uint8_t>(0xA0U + b);
+        }
+        const std::size_t chr = 16U + 4U * 0x4000U;
+        for (std::size_t b = 0; b < 16U; ++b) {
+            rom[chr + b * 0x0800U] = static_cast<std::uint8_t>(0xD0U + b); // 2 KiB bank b
+        }
+        rom[16U + 3U * 0x4000U + 0x3FFCU] = 0x00U; // reset vector (fixed last bank) -> $C000
+        rom[16U + 3U * 0x4000U + 0x3FFDU] = 0xC0U;
+        return rom;
+    }
+
     // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
     // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
     // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
@@ -1420,6 +1445,79 @@ TEST_CASE("Namco 163 (mapper 19) save_state/load_state round-trips banking", "[m
     a->mapper->save_state(writer);
 
     auto b = assemble_nes(make_namco163());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);
+    CHECK(b->ppu.ppu_read(0x0000U) == achr);
+}
+
+TEST_CASE("Sunsoft-4 (mapper 68) banks 16 KiB PRG over the fixed last bank", "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft4());
+
+    // Power-on: $8000 = switchable bank 0; $C000 = the fixed last 16 KiB bank (3).
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U);
+
+    // $F000 low 4 bits select the $8000 16 KiB bank.
+    sys->bus.write8(0xF000U, 0x02U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U); // the last bank never moves
+}
+
+TEST_CASE("Sunsoft-4 (mapper 68) composes the four 2 KiB CHR banks", "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft4());
+
+    // Power-on: the four 2 KiB windows all select bank 0.
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD0U);
+
+    // $8000/$9000/$A000/$B000 each set the 2 KiB bank at $0000/$0800/$1000/$1800.
+    sys->bus.write8(0x8000U, 0x04U); // $0000 <- bank 4
+    sys->bus.write8(0x9000U, 0x06U); // $0800 <- bank 6
+    sys->bus.write8(0xA000U, 0x08U); // $1000 <- bank 8
+    sys->bus.write8(0xB000U, 0x0AU); // $1800 <- bank 10
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD4U);
+    CHECK(sys->ppu.ppu_read(0x0800U) == 0xD6U);
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD8U);
+    CHECK(sys->ppu.ppu_read(0x1800U) == 0xDAU);
+}
+
+TEST_CASE("Sunsoft-4 (mapper 68) drives mirroring from the $E000 low 2 bits", "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft4());
+
+    // Distinct bytes in the two physical CIRAM pages so the arrangement is
+    // observable: write $11 at $2000 (page 0) and $22 at $2400 (the second physical
+    // page under vertical mirroring).
+    sys->bus.write8(0xE000U, 0x00U); // vertical
+    sys->bus.write8(0x2006U, 0x20U);
+    sys->bus.write8(0x2006U, 0x00U);
+    sys->bus.write8(0x2007U, 0x11U); // $2000
+    sys->bus.write8(0x2006U, 0x24U);
+    sys->bus.write8(0x2006U, 0x00U);
+    sys->bus.write8(0x2007U, 0x22U); // $2400
+    CHECK(sys->ppu.ppu_read(0x2000U) == 0x11U);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0x22U); // vertical: $2400 is its own page
+
+    // Single-screen A ($E000 = 2): every nametable region maps to page 0, so $2400
+    // now reads page 0's byte.
+    sys->bus.write8(0xE000U, 0x02U);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0x11U);
+}
+
+TEST_CASE("Sunsoft-4 (mapper 68) save_state/load_state round-trips banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_sunsoft4());
+    a->bus.write8(0xF000U, 0x02U); // $8000 = PRG bank 2
+    a->bus.write8(0x8000U, 0x04U); // $0000 CHR = 2 KiB bank 4
+    a->bus.write8(0xC000U, 0x07U); // a nametable page register (stored only)
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+    const std::uint8_t achr = a->ppu.ppu_read(0x0000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_sunsoft4());
     CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
     mnemos::chips::state_reader reader(blob);
     b->mapper->load_state(reader);
