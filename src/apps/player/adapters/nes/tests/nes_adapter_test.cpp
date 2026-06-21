@@ -130,6 +130,40 @@ TEST_CASE("nes adapter maps the pad to the controller port", "[apps][player][nes
     CHECK((sys.bus.read8(0x4016U) & 0x01U) == 0x01U); // Start
 }
 
+TEST_CASE("nes adapter Zapper reports light sense and trigger", "[apps][player][nes]") {
+    // render_test_nrom draws a white band over the top 128 px, black below.
+    nes_adapter adapter(render_test_nrom(), mnemos::manifests::nes::nes_config{.zapper = true});
+    for (int i = 0; i < 16; ++i) {
+        adapter.step_one_frame();
+    }
+    auto& sys = adapter.system();
+
+    // Aim at the white band with the trigger pulled: light detected (bit 3 = 0),
+    // trigger (bit 4 = 1).
+    mnemos::frontend_sdk::controller_state gun{};
+    gun.aim_x = 10;
+    gun.aim_y = 10;
+    gun.trigger = true;
+    adapter.apply_input(1, gun);
+    std::uint8_t v = sys.bus.read8(0x4017U);
+    CHECK((v & 0x08U) == 0U); // light detected
+    CHECK((v & 0x10U) != 0U); // trigger pulled
+
+    // Aim at the black backdrop, trigger released: no light (bit 3 = 1).
+    gun.aim_y = 200;
+    gun.trigger = false;
+    adapter.apply_input(1, gun);
+    v = sys.bus.read8(0x4017U);
+    CHECK((v & 0x08U) != 0U); // no light
+    CHECK((v & 0x10U) == 0U); // no trigger
+
+    // Off-screen aim sees no light.
+    gun.aim_x = -1;
+    gun.aim_y = -1;
+    adapter.apply_input(1, gun);
+    CHECK((sys.bus.read8(0x4017U) & 0x08U) != 0U);
+}
+
 TEST_CASE("nes adapter runs PAL timing and reports 50 Hz", "[apps][player][nes]") {
     nes_adapter adapter(
         tiny_nrom(), mnemos::manifests::nes::nes_config{.video_region = mnemos::video_region::pal});

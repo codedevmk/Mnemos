@@ -63,6 +63,9 @@ namespace mnemos::frontend_sdk {
         // Optional FM expansion. SMS uses this for the Japanese Master System /
         // FM Sound Unit YM2413; families without an FM expansion ignore it.
         bool fm_unit{};
+        // Plug a light gun into the family's gun port (NES Zapper on port 2, ...).
+        // Families without a light gun ignore it.
+        bool light_gun{};
         // Filesystem path of the primary CD/disk image, for media that loads by
         // path rather than a flat byte buffer (a .cue references sibling .bin
         // tracks; an .iso is read whole -- .chd is not supported yet). The Sega CD

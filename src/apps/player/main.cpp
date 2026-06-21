@@ -194,6 +194,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
+    using mnemos::apps::player::adapters::parse_zapper_arg;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::srm_path_for;
@@ -205,6 +206,7 @@ int main(int argc, char* argv[]) {
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
     const bool fm_unit = parse_fm_unit_arg(argc, argv);
+    const bool zapper = parse_zapper_arg(argc, argv);
     const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
@@ -457,6 +459,7 @@ int main(int argc, char* argv[]) {
                                 .dip_override = dip_arg,
                                 .mapper_override = mapper_arg.value_or(std::string{}),
                                 .fm_unit = fm_unit,
+                                .light_gun = zapper,
                                 .disc_path = std::move(disc_path),
                                 .rom_path = rom_paths.front(),
                                 .bios_images = std::move(bios_images)});
@@ -983,6 +986,33 @@ int main(int argc, char* argv[]) {
             if (system) {
                 system->apply_input(0, pad);
             }
+        }
+
+        // Zapper light gun (port 2): map the mouse into the framebuffer using the
+        // same integer letterbox the present path uses; the left button is the
+        // trigger. Off-window -> aim (-1,-1) so the gun sees no light.
+        if (system && zapper) {
+            float mx = 0.0F;
+            float my = 0.0F;
+            const auto mouse = SDL_GetMouseState(&mx, &my);
+            int ww = 0;
+            int wh = 0;
+            SDL_GetWindowSize(window, &ww, &wh);
+            const auto fb = system->current_frame();
+            mnemos::frontend_sdk::controller_state gun{};
+            gun.trigger = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0U;
+            if (fb.width != 0U && fb.height != 0U && ww > 0 && wh > 0) {
+                const auto rect = integer_letterbox(ww, wh, static_cast<int>(fb.width),
+                                                    static_cast<int>(fb.height));
+                const int rx = static_cast<int>(mx) - rect.x;
+                const int ry = static_cast<int>(my) - rect.y;
+                if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
+                    gun.aim_x = static_cast<std::int16_t>(rx * static_cast<int>(fb.width) / rect.w);
+                    gun.aim_y =
+                        static_cast<std::int16_t>(ry * static_cast<int>(fb.height) / rect.h);
+                }
+            }
+            system->apply_input(1, gun);
         }
 
         // Drive emulation: step a game frame only when the wall-clock pacer

@@ -32,6 +32,13 @@ namespace mnemos::peripheral {
         bool y{};
         bool z{};
         bool mode{};
+        // Lightgun / pointer fields (Zapper, Menacer, ...): the aimed screen pixel
+        // in the system's native framebuffer coordinates and the trigger. A pad
+        // device ignores them; a lightgun ignores the buttons. aim_x/aim_y are -1
+        // when the pointer is off-screen.
+        std::int16_t aim_x{-1};
+        std::int16_t aim_y{-1};
+        bool trigger{};
     };
 
     // The category a peripheral belongs to. Drives the category subtree the

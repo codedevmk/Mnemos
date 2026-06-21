@@ -1063,6 +1063,28 @@ TEST_CASE("Namco 163 (mapper 19) save_state/load_state round-trips banking", "[m
     CHECK(b->ppu.ppu_read(0x0000U) == achr);
 }
 
+TEST_CASE("Zapper on port 2 reports the trigger and off-screen light sense", "[manifests][nes]") {
+    auto sys = assemble_nes(make_synthetic_nrom(), nes_config{.zapper = true});
+
+    // Trigger pulled, aimed off-screen (no frame rendered -> no light): $4017 bit 4
+    // set (trigger), bit 3 set (no light).
+    sys->set_zapper(-1, -1, true);
+    std::uint8_t v = sys->bus.read8(0x4017U);
+    CHECK((v & 0x10U) != 0U); // trigger
+    CHECK((v & 0x08U) != 0U); // no light off-screen
+
+    // Trigger released.
+    sys->set_zapper(-1, -1, false);
+    v = sys->bus.read8(0x4017U);
+    CHECK((v & 0x10U) == 0U);
+
+    // Port 1 ($4016) is unaffected -- it is still a standard pad.
+    sys->set_pad(0, nes_system::btn_a);
+    sys->bus.write8(0x4016U, 0x01U);
+    sys->bus.write8(0x4016U, 0x00U);
+    CHECK((sys->bus.read8(0x4016U) & 0x01U) == 0x01U); // A shifts out first
+}
+
 TEST_CASE("looks_like_fds distinguishes FDS disks from iNES carts", "[manifests][nes][fds]") {
     CHECK(looks_like_fds(make_synthetic_fds())); // headered "FDS\x1A"
 
