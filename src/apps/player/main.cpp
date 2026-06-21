@@ -54,6 +54,31 @@ namespace {
     constexpr int kInitialWindowWidth = 1280;
     constexpr int kInitialWindowHeight = 960;
 
+    // `--swap-disk <frame>` (repeatable): flip to the next removable-media slot at
+    // that frame, so headless runs can drive an FDS multi-side game onto side B
+    // (the interactive equivalent is F6). Frames are 1-based, matching --press.
+    [[nodiscard]] std::vector<std::uint64_t> parse_swap_frames(int argc, char* argv[]) {
+        std::vector<std::uint64_t> frames;
+        for (int i = 1; i + 1 < argc; ++i) {
+            if (std::string(argv[i]) == "--swap-disk") {
+                frames.push_back(std::strtoull(argv[i + 1], nullptr, 10));
+            }
+        }
+        return frames;
+    }
+
+    void apply_disk_swaps(mnemos::frontend_sdk::player_system& sys,
+                          const std::vector<std::uint64_t>& frames, std::uint64_t frame) {
+        if (sys.media_count() <= 1U) {
+            return;
+        }
+        for (const std::uint64_t f : frames) {
+            if (f == frame) {
+                sys.insert_media((sys.current_media_index() + 1U) % sys.media_count());
+            }
+        }
+    }
+
     // Streaming texture is sized for the worst-case frame across supported
     // systems: Genesis VDP 320x240 V30 (x2 rows for interlace) and the Irem
     // M72's 384x256 (256x384 once a vertical game is rotated for TATE
@@ -500,11 +525,13 @@ int main(int argc, char* argv[]) {
         // Scripted input (`--press <button>@<frame>[+duration]`) so headless runs
         // can drive a game past intro/menu screens. Sampled before each frame.
         const auto press_events = parse_press_events(argc, argv);
+        const auto swap_frames = parse_swap_frames(argc, argv);
         for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
             trace_frame = i + 1U;
             if (!press_events.empty()) {
                 system->apply_input(0, input_for_frame(press_events, i + 1U));
             }
+            apply_disk_swaps(*system, swap_frames, i + 1U);
             system->step_one_frame();
         }
 
@@ -617,6 +644,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         const auto press_events = parse_press_events(argc, argv);
+        const auto swap_frames = parse_swap_frames(argc, argv);
         // Record the rendered output (what the machine actually plays -- the only
         // audio export that works for synth chips like the NES APU); the stepping
         // also leaves the chips in their final state for export_audio's snapshot.
@@ -625,6 +653,7 @@ int main(int argc, char* argv[]) {
                 if (!press_events.empty()) {
                     system->apply_input(0, input_for_frame(press_events, i + 1U));
                 }
+                apply_disk_swaps(*system, swap_frames, i + 1U);
             });
         const std::size_t count = mnemos::debug::export_audio(*system, extract_audio->base);
         std::fprintf(stderr,

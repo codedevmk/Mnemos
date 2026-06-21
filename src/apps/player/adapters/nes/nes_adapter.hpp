@@ -57,6 +57,22 @@ namespace mnemos::apps::player::adapters::nes {
             return {chip_view_.data(), chip_view_.size()};
         }
 
+        // FDS multi-side disk swapping: the disk image's sides are the swappable
+        // media the player's F6 flips between. A cartridge reports none.
+        [[nodiscard]] std::size_t media_count() const noexcept override {
+            return sys_->mapper ? sys_->mapper->disk_side_count() : 0U;
+        }
+        [[nodiscard]] std::size_t current_media_index() const noexcept override {
+            return sys_->mapper ? sys_->mapper->current_disk_side() : 0U;
+        }
+        bool insert_media(std::size_t index) noexcept override {
+            if (sys_->mapper == nullptr || index >= sys_->mapper->disk_side_count()) {
+                return false;
+            }
+            sys_->mapper->insert_disk_side(index);
+            return true;
+        }
+
         [[nodiscard]] manifests::nes::nes_system& system() noexcept { return *sys_; }
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
