@@ -588,6 +588,31 @@ TEST_CASE("MMC5 scanline IRQ fires at the target line and acknowledges on $5204 
     CHECK_FALSE(irq);
 }
 
+TEST_CASE("MMC5 (mapper 5) routes the expansion audio and produces sound", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mmc5());
+    auto* ea = sys->mapper->expansion_audio();
+    REQUIRE(ea != nullptr);
+
+    // Pulse 1 via $5000-$5003 + enable at $5015.
+    sys->bus.write8(0x5015U, 0x01U);                // enable pulse 1
+    sys->bus.write8(0x5000U, 0xBFU);                // duty 50%, constant volume 15
+    sys->bus.write8(0x5002U, 0x40U);                // timer low
+    sys->bus.write8(0x5003U, 0x08U);                // timer high -> $040 + length load
+    CHECK((sys->bus.read8(0x5015U) & 0x01U) != 0U); // length status set
+
+    ea->tick(40000);
+    const std::size_t avail = sys->mapper->expansion_audio_pending();
+    REQUIRE(avail > 0U);
+    std::vector<std::int16_t> buf(avail * 2U, 0);
+    const std::size_t got = sys->mapper->drain_expansion_audio(buf.data(), avail);
+    REQUIRE(got > 0U);
+    std::int16_t peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+    }
+    CHECK(peak > 0);
+}
+
 TEST_CASE("Namco 118 (mapper 206) banks PRG/CHR but ignores the MMC3 mode/inversion bits",
           "[manifests][nes]") {
     auto sys = assemble_nes(make_namco118());

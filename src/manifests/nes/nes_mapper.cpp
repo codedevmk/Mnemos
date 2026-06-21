@@ -1,5 +1,6 @@
 #include "nes_mapper.hpp"
 
+#include "mmc5.hpp"   // chips::audio::mmc5 (the MMC5's 2 pulse + raw PCM sound block)
 #include "n163.hpp"   // chips::audio::n163 (the Namco 163's wavetable sound block)
 #include "ssg.hpp"    // chips::audio::ssg (the Sunsoft 5B's YM2149 sound block)
 #include "vrc6.hpp"   // chips::audio::vrc6 (the VRC6's pulse + sawtooth sound)
@@ -486,6 +487,10 @@ namespace mnemos::manifests::nes {
                 irq_enabled_ = irq_pending_ = in_frame_ = false;
                 exram_.fill(0U);
 
+                sound_.reset(chips::reset_kind::power_on);
+                sound_.set_clock_divider(37);
+                sound_.enable_audio_capture(true);
+
                 if (prg_8k_count_ != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
@@ -501,6 +506,9 @@ namespace mnemos::manifests::nes {
                     [this](std::uint32_t addr) -> std::uint8_t {
                         if (addr >= 0x5C00U) {
                             return exram_[addr - 0x5C00U];
+                        }
+                        if (addr == 0x5015U) { // expansion-audio length status
+                            return sound_.read_status();
                         }
                         if (addr == 0x5204U) {
                             // IRQ status: bit 7 = pending, bit 6 = in-frame. Reading
@@ -534,6 +542,10 @@ namespace mnemos::manifests::nes {
             void write(std::uint16_t addr, std::uint8_t value) override {
                 if (addr >= 0x5C00U) { // ExRAM (backed as plain RAM this increment)
                     exram_[addr - 0x5C00U] = value;
+                    return;
+                }
+                if (addr >= 0x5000U && addr <= 0x5015U) { // expansion audio
+                    sound_.write_reg(addr, value);
                     return;
                 }
                 switch (addr) {
@@ -612,6 +624,15 @@ namespace mnemos::manifests::nes {
                 }
             }
 
+            [[nodiscard]] chips::ichip* expansion_audio() noexcept override { return &sound_; }
+            [[nodiscard]] std::size_t expansion_audio_pending() const noexcept override {
+                return sound_.pending_samples();
+            }
+            std::size_t drain_expansion_audio(std::int16_t* out,
+                                              std::size_t max_pairs) noexcept override {
+                return sound_.drain_samples(out, max_pairs);
+            }
+
             void save_state(chips::state_writer& writer) const override {
                 writer.u8(prg_mode_);
                 writer.u8(chr_mode_);
@@ -634,6 +655,7 @@ namespace mnemos::manifests::nes {
                 for (const std::uint8_t b : exram_) {
                     writer.u8(b);
                 }
+                sound_.save_state(writer);
             }
             void load_state(chips::state_reader& reader) override {
                 prg_mode_ = reader.u8();
@@ -657,6 +679,7 @@ namespace mnemos::manifests::nes {
                 for (std::uint8_t& b : exram_) {
                     b = reader.u8();
                 }
+                sound_.load_state(reader);
                 apply_prg(); // re-point PRG/CHR/mirroring from the restored registers
                 apply_chr();
                 apply_chr_bg();
@@ -822,6 +845,7 @@ namespace mnemos::manifests::nes {
 
             std::size_t prg_8k_count_;
             std::size_t chr_1k_count_;
+            chips::audio::mmc5 sound_; // $5000-$5015 expansion audio
             std::uint8_t prg_mode_{3U};
             std::uint8_t chr_mode_{};
             std::array<std::uint8_t, 4> prg_regs_{0xFFU, 0xFFU, 0xFFU, 0xFFU};
