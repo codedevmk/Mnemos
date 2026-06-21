@@ -237,10 +237,22 @@ namespace mnemos::apps::player::adapters::genesis {
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
                     auto* sched_factory = opts.scheduler_factory_override;
+                    manifests::genesis::genesis_config config{.video_region = opts.video_region};
+                    // Lock-on: when a base cartridge is supplied via bios_images[0],
+                    // IT becomes the boot master (mapped at $000000) and the primary
+                    // `rom` is the inserted game ($300000). bios_images[1], if also
+                    // present, overrides which image is treated as inserted.
+                    std::vector<std::uint8_t> primary = std::move(opts.rom);
+                    if (!opts.bios_images.empty() && !opts.bios_images[0].empty()) {
+                        if (opts.bios_images.size() > 1U && !opts.bios_images[1].empty()) {
+                            config.inserted_rom = std::move(opts.bios_images[1]);
+                        } else {
+                            config.inserted_rom = std::move(primary);
+                        }
+                        primary = std::move(opts.bios_images[0]); // base = boot master
+                    }
                     return std::make_unique<genesis_adapter>(
-                        std::move(opts.rom),
-                        manifests::genesis::genesis_config{.video_region = opts.video_region},
-                        std::move(opts.display_name), sched_factory);
+                        std::move(primary), config, std::move(opts.display_name), sched_factory);
                 });
             return 0;
         }();

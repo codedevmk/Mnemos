@@ -4,6 +4,7 @@
 #include "genesis_banking.hpp" // cart_banking_runtime + wire_cart_banking
 #include "genesis_cart.hpp"    // cart_sram_runtime + wire_cart_sram
 #include "genesis_eeprom.hpp"  // cart_eeprom_runtime + wire_cart_eeprom
+#include "genesis_lockon.hpp"  // cart_lockon_runtime + wire_cart_lockon
 #include "genesis_vdp.hpp"     // video
 #include "m68000.hpp"          // main cpu
 #include "peripheral.hpp"      // peripheral::device (controller ports)
@@ -22,6 +23,11 @@ namespace mnemos::manifests::genesis {
 
     struct genesis_config final {
         mnemos::video_region video_region{mnemos::video_region::ntsc};
+        // Optional "lock-on" inserted cartridge. When non-empty, the primary
+        // `rom` passed to assemble/build is the lock-on BASE cartridge (boot
+        // master, flat-mapped at $000000) and this image is the inserted game
+        // mapped into the $300000-$3FFFFF window. Empty = ordinary single cart.
+        std::vector<std::uint8_t> inserted_rom{};
     };
 
     // Scheduler view of a chip, ticked only while `gate` is true. Used for
@@ -92,9 +98,11 @@ namespace mnemos::manifests::genesis {
         std::array<std::uint8_t, 0x10000> work_ram{}; // 64 KiB, mirrored $E00000-$FFFFFF
         std::array<std::uint8_t, 0x2000> z80_ram{};   // 8 KiB, Z80 $0000 / 68K $A00000
         std::vector<std::uint8_t> rom;                // cartridge image (borrowed by the buses)
+        std::vector<std::uint8_t> inserted_rom;       // lock-on inserted cart (borrowed by `bus`)
         cart_sram_runtime sram;                       // battery SRAM (borrowed by `bus`)
         cart_eeprom_runtime eeprom;                   // serial EEPROM (borrowed by `bus`)
         cart_banking_runtime banking;                 // >4 MiB ROM bank-switch (borrowed by `bus`)
+        cart_lockon_runtime lockon;                   // lock-on window select (borrowed by `bus`)
 
         std::uint8_t version_register{}; // $A10001 region/version readback
 

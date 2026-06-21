@@ -20,6 +20,7 @@
 #include "genesis_callbacks.hpp" // state + chip/bus types (+ chips::ichip via chip.hpp)
 #include "genesis_cart.hpp"      // cart_sram (header SRAM descriptor)
 #include "genesis_eeprom.hpp"    // cart_eeprom_runtime (serial EEPROM)
+#include "genesis_lockon.hpp"    // cart_lockon_runtime (lock-on window select)
 #include "genesis_system.hpp"    // genesis_config
 #include "state.hpp"             // chips::state_writer / state_reader (G7 system save/load)
 
@@ -44,8 +45,9 @@ namespace mnemos::manifests::genesis {
     // stop ticking (and stop dereferencing `state` / borrowing `rom`) before the
     // state and ROM they point at are torn down.
     struct genesis_runtime final {
-        std::vector<std::uint8_t> rom; // cartridge feed for the rom_provider
-        genesis_callbacks_state state; // chip/bus pointers + non-chip glue state
+        std::vector<std::uint8_t> rom;          // cartridge feed for the rom_provider
+        std::vector<std::uint8_t> inserted_rom; // lock-on inserted cart (borrowed by graph's bus)
+        genesis_callbacks_state state;          // chip/bus pointers + non-chip glue state
         // Scheduler-view wrappers for the gated CPUs (the gated_chip build_system
         // produced); set by build_genesis_runtime. Ungated chips schedule as
         // themselves via `state`.
@@ -54,6 +56,7 @@ namespace mnemos::manifests::genesis {
         cart_sram_runtime sram;       // battery SRAM (borrowed by graph's bus handlers)
         cart_eeprom_runtime eeprom;   // serial EEPROM (borrowed by graph's bus handlers)
         cart_banking_runtime banking; // >4 MiB ROM bank-switch (borrowed by graph's bus handlers)
+        cart_lockon_runtime lockon;   // lock-on window select (borrowed by graph's bus handlers)
         system_graph graph;           // owns chips/buses/memory; destructs first
 
         [[nodiscard]] chips::cpu::m68000* cpu() const noexcept { return state.cpu; }
