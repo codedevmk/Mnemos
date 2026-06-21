@@ -27,6 +27,10 @@ namespace mnemos::manifests::nes {
         // games that use it (Duck Hunt, Hogan's Alley, Wild Gunman, ...) replace the
         // second pad with the gun. Off by default.
         bool zapper{};
+        // Plug a Four Score / NES Satellite 4-player adapter into both ports. Games
+        // that support it (Gauntlet II, Super Spike V'Ball, ...) read 4 pads + the
+        // adapter signature. Off by default; takes precedence over the Zapper.
+        bool four_score{};
     };
 
     // A parsed iNES (.nes) image: the PRG/CHR banks plus the cartridge wiring the
@@ -90,11 +94,19 @@ namespace mnemos::manifests::nes {
         bool mapper_irq{};
         bool apu_irq{};
 
-        // Two standard pads. pad_buttons is the live state; pad_shift is the
-        // per-port serial register the $4016/$4017 reads clock out.
-        std::array<std::uint8_t, 2> pad_buttons{};
+        // Up to four pads (two direct + two behind a Four Score). pad_buttons is the
+        // live state; pad_shift is the per-port serial register the $4016/$4017 reads
+        // clock out (standard 2-pad path).
+        std::array<std::uint8_t, 4> pad_buttons{};
         std::array<std::uint8_t, 2> pad_shift{};
         bool pad_strobe{};
+
+        // Four Score / NES Satellite 4-player adapter. When enabled, each port clocks
+        // out 24 bits: controller 1+3 (port 0 / $4016) or 2+4 (port 1 / $4017), then
+        // an 8-bit signature, then 1s. fs_count is the per-port read index since the
+        // last strobe.
+        bool four_score_enabled{};
+        std::array<std::uint8_t, 2> fs_count{};
 
         // Zapper light gun on port 2 ($4017). When enabled, that port's read returns
         // the gun's light-sense (bit 3: 0 = light) + trigger (bit 4: 1 = pulled)
@@ -106,7 +118,8 @@ namespace mnemos::manifests::nes {
         std::int16_t zapper_y{-1};
         bool zapper_trigger{};
 
-        // Set the live button bitmask for controller `port` (0 or 1).
+        // Set the live button bitmask for controller `port` (0-3; 2-3 need a Four
+        // Score).
         void set_pad(int port, std::uint8_t buttons) noexcept;
         // Update the Zapper aim (framebuffer pixel) + trigger.
         void set_zapper(int x, int y, bool trigger) noexcept;

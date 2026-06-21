@@ -43,6 +43,10 @@ namespace mnemos::apps::player::adapters {
     // Zapper on port 2). Other systems ignore the flag.
     [[nodiscard]] bool parse_zapper_arg(int argc, char* argv[]);
 
+    // Plug a 4-player multitap into the selected system's ports (`--four-score`, the
+    // NES Four Score). Other systems ignore the flag.
+    [[nodiscard]] bool parse_four_score_arg(int argc, char* argv[]);
+
     // Scan argv for `--dip <value>` (hex with 0x prefix, or decimal) and
     // return the 16-bit DIP bank, or nullopt when absent/malformed.
     [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);

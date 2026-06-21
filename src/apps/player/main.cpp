@@ -171,6 +171,29 @@ namespace {
         };
     }
 
+    // OR an SDL gamepad's current buttons + left stick into a controller_state (so a
+    // pad and the keyboard can both drive a port).
+    void merge_gamepad(mnemos::frontend_sdk::controller_state& pad, SDL_Gamepad* gp) {
+        if (gp == nullptr) {
+            return;
+        }
+        constexpr Sint16 kAxisThreshold = 16384; // ~half deflection
+        const auto lx = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX);
+        const auto ly = SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY);
+        pad.up |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_UP) || ly < -kAxisThreshold;
+        pad.down |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || ly > kAxisThreshold;
+        pad.left |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || lx < -kAxisThreshold;
+        pad.right |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || lx > kAxisThreshold;
+        pad.a |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_SOUTH);
+        pad.b |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_EAST);
+        pad.c |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_WEST);
+        pad.x |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_NORTH);
+        pad.y |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+        pad.z |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+        pad.start |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_START);
+        pad.mode |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_BACK);
+    }
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -187,6 +210,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
+    using mnemos::apps::player::adapters::parse_four_score_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
@@ -207,6 +231,7 @@ int main(int argc, char* argv[]) {
     const auto mapper_arg = parse_mapper_arg(argc, argv);
     const bool fm_unit = parse_fm_unit_arg(argc, argv);
     const bool zapper = parse_zapper_arg(argc, argv);
+    const bool four_score = parse_four_score_arg(argc, argv);
     const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
     const auto extract = parse_extract_assets_args(argc, argv);
@@ -460,6 +485,7 @@ int main(int argc, char* argv[]) {
                                 .mapper_override = mapper_arg.value_or(std::string{}),
                                 .fm_unit = fm_unit,
                                 .light_gun = zapper,
+                                .four_score = four_score,
                                 .disc_path = std::move(disc_path),
                                 .rom_path = rom_paths.front(),
                                 .bios_images = std::move(bios_images)});
@@ -871,6 +897,8 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Gamepad* gamepad = nullptr;
+    // Four Score: up to three extra pads on ports 1-3 (gamepads 2-4).
+    std::array<SDL_Gamepad*, 3> fs_pads{};
     {
         int count = 0;
         SDL_JoystickID* ids = SDL_GetGamepads(&count);
@@ -879,6 +907,11 @@ int main(int argc, char* argv[]) {
             if (gamepad != nullptr) {
                 std::fprintf(stderr, "[mnemos_player] gamepad attached: %s\n",
                              SDL_GetGamepadName(gamepad));
+            }
+            if (four_score) {
+                for (int i = 1; i < count && i <= 3; ++i) {
+                    fs_pads[static_cast<std::size_t>(i - 1)] = SDL_OpenGamepad(ids[i]);
+                }
             }
             SDL_free(ids);
         }
@@ -962,29 +995,17 @@ int main(int argc, char* argv[]) {
             pad.z = keys[SDL_SCANCODE_D];
             pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
             pad.mode = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
-            if (gamepad != nullptr) {
-                constexpr Sint16 kAxisThreshold = 16384; // ~half deflection
-                const auto lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
-                const auto ly = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
-                pad.up |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) ||
-                          ly < -kAxisThreshold;
-                pad.down |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) ||
-                            ly > kAxisThreshold;
-                pad.left |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ||
-                            lx < -kAxisThreshold;
-                pad.right |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
-                             lx > kAxisThreshold;
-                pad.a |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
-                pad.b |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST);
-                pad.c |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);
-                pad.x |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_NORTH);
-                pad.y |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-                pad.z |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-                pad.start |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_START);
-                pad.mode |= SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_BACK);
-            }
+            merge_gamepad(pad, gamepad);
             if (system) {
                 system->apply_input(0, pad);
+            }
+            // Four Score: pads 2-4 from the additional gamepads on ports 1-3.
+            if (system && four_score) {
+                for (int port = 1; port <= 3; ++port) {
+                    mnemos::frontend_sdk::controller_state extra{};
+                    merge_gamepad(extra, fs_pads[static_cast<std::size_t>(port - 1)]);
+                    system->apply_input(port, extra);
+                }
             }
         }
 
@@ -1306,6 +1327,11 @@ int main(int argc, char* argv[]) {
 
     if (gamepad != nullptr) {
         SDL_CloseGamepad(gamepad);
+    }
+    for (SDL_Gamepad* gp : fs_pads) {
+        if (gp != nullptr) {
+            SDL_CloseGamepad(gp);
+        }
     }
     if (audio_stream != nullptr) {
         SDL_DestroyAudioStream(audio_stream);
