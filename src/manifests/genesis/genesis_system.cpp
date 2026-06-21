@@ -86,7 +86,8 @@ namespace mnemos::manifests::genesis {
     namespace {
         // Genesis system-state (non-chip) format version. Bump when the layout
         // below changes; load rejects an unknown version via reader.fail().
-        constexpr std::uint32_t genesis_system_state_version = 1U;
+        // v2 added the lock-on window-select latch.
+        constexpr std::uint32_t genesis_system_state_version = 2U;
     } // namespace
 
     void genesis_system::save_state(chips::state_writer& writer) const {
@@ -106,6 +107,7 @@ namespace mnemos::manifests::genesis {
         writer.bytes(banking.bank);
         writer.boolean(eeprom.scl);
         writer.boolean(eeprom.sda);
+        writer.boolean(lockon.patch_window);
         // z80_running is derived (reset released AND bus not requested), so it is
         // reconstructed on load rather than serialized.
     }
@@ -128,6 +130,7 @@ namespace mnemos::manifests::genesis {
         reader.bytes(banking.bank);
         eeprom.scl = reader.boolean();
         eeprom.sda = reader.boolean();
+        lockon.patch_window = reader.boolean();
         // Reconstruct the derived Z80 run gate (the gated_chip reads it live).
         z80_running = z80_reset_released && !z80_bus_requested;
     }
@@ -162,6 +165,11 @@ namespace mnemos::manifests::genesis {
         wire_cart_eeprom(s->bus, s->eeprom, s->rom);
         // >4 MiB ROMs: page the upper banks into the cartridge window ($A130F3-FF).
         wire_cart_banking(s->bus, s->banking, s->rom);
+        // Lock-on inserted cartridge: the primary `rom` above is the boot-master
+        // base (flat at $000000); this maps the inserted game at $300000 and takes
+        // over $A130F1 (composing with the SRAM latch). No-op for a single cart.
+        s->inserted_rom = config.inserted_rom;
+        wire_cart_lockon(s->bus, s->lockon, s->inserted_rom, &s->sram);
 
         // $A00000-$A03FFF: Z80 RAM (8 KiB, mirrored).
         s->bus.map_mmio(

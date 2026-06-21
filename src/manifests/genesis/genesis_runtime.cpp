@@ -110,6 +110,12 @@ namespace mnemos::manifests::genesis {
         wire_cart_eeprom(*rt->state.main_bus, rt->eeprom, rt->rom);
         // >4 MiB ROMs: page the upper banks into the cartridge window ($A130F3-FF).
         wire_cart_banking(*rt->state.main_bus, rt->banking, rt->rom);
+        // Lock-on inserted cartridge: `rt->rom` above is the boot-master base
+        // (mapped at $000000 by the manifest); this maps the inserted game at
+        // $300000 and takes over $A130F1 (composing with the SRAM latch). No-op
+        // for a single cart. Mirrors assemble_genesis so the two paths match.
+        rt->inserted_rom = config.inserted_rom;
+        wire_cart_lockon(*rt->state.main_bus, rt->lockon, rt->inserted_rom, &rt->sram);
 
         // Reset the CPUs now the buses (with the cart ROM mapped) are wired,
         // mirroring assemble_genesis: the 68000 loads SSP/PC from the cart's
@@ -137,8 +143,9 @@ namespace mnemos::manifests::genesis {
     namespace {
         // Layout guard for the system-latch chunk. Independent of (but identical
         // in value + field order to) genesis_system's marker, so a snapshot taken
-        // through either assembly path describes the same bytes.
-        constexpr std::uint32_t genesis_runtime_state_version = 1U;
+        // through either assembly path describes the same bytes. v2 added the
+        // lock-on window-select latch.
+        constexpr std::uint32_t genesis_runtime_state_version = 2U;
     } // namespace
 
     void genesis_runtime::save_state(chips::state_writer& writer) const {
@@ -158,6 +165,7 @@ namespace mnemos::manifests::genesis {
         writer.bytes(banking.bank);
         writer.boolean(eeprom.scl);
         writer.boolean(eeprom.sda);
+        writer.boolean(lockon.patch_window);
         // z80_running is derived (reset released AND bus not requested), so it is
         // reconstructed on load rather than serialized.
     }
@@ -180,6 +188,7 @@ namespace mnemos::manifests::genesis {
         reader.bytes(banking.bank);
         eeprom.scl = reader.boolean();
         eeprom.sda = reader.boolean();
+        lockon.patch_window = reader.boolean();
         // Reconstruct the derived Z80 run gate (the gated_chip reads it live).
         state.z80_running = state.z80_reset_released && !state.z80_bus_requested;
     }

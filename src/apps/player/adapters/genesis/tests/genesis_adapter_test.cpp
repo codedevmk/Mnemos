@@ -5,6 +5,7 @@
 
 #include "genesis_adapter.hpp"
 
+#include "adapter_registry.hpp"
 #include "battery_save.hpp"
 #include "bus.hpp"
 
@@ -228,3 +229,53 @@ TEST_CASE("genesis_adapter battery_ram persists through a .srm round-trip") {
 // shared cross-family test in adapters/common/tests/region_test.cpp:
 // parse_genesis_market() + default_video_for() compose into the same flow
 // the player does; the adapter just passes the resolved video_region through.
+
+namespace {
+    // A bootable base cartridge (the lock-on boot master): PC entry $00000100.
+    std::vector<std::uint8_t> base_rom() {
+        std::vector<std::uint8_t> rom(0x200000U, 0xB5U);
+        rom[0x04] = 0x00U;
+        rom[0x05] = 0x00U;
+        rom[0x06] = 0x01U;
+        rom[0x07] = 0x00U; // PC = $00000100
+        rom[0x100] = 0x60U;
+        rom[0x101] = 0xFEU; // BRA.S *
+        return rom;
+    }
+    // An inserted game filled with a distinct marker + a different reset PC.
+    std::vector<std::uint8_t> inserted_rom() {
+        std::vector<std::uint8_t> rom(0x200000U, 0x19U);
+        rom[0x04] = 0x00U;
+        rom[0x05] = 0x00U;
+        rom[0x06] = 0x02U;
+        rom[0x07] = 0x00U; // PC = $00000200 (must NOT boot)
+        return rom;
+    }
+} // namespace
+
+TEST_CASE("genesis_adapter lock-on: bios_images[0] base boots, rom maps at $300000") {
+    mnemos::apps::player::adapters::genesis::force_link(); // ensure registry entry survives
+
+    mnemos::frontend_sdk::adapter_options opts{};
+    opts.rom = inserted_rom(); // the inserted game
+    opts.video_region = mnemos::video_region::ntsc;
+    std::vector<std::vector<std::uint8_t>> bios;
+    bios.push_back(base_rom()); // bios_images[0] = lock-on base (boot master)
+    opts.bios_images = std::move(bios);
+
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("genesis", std::move(opts));
+    REQUIRE(system != nullptr);
+    auto& adapter = dynamic_cast<genesis_adapter&>(*system);
+
+    auto* bus = adapter.system().state.main_bus;
+    REQUIRE(bus != nullptr);
+    REQUIRE(adapter.system().lockon.active);
+
+    // Boot-master inversion: the BASE answers $000000 and the 68000 booted from
+    // its vectors ($00000100), NOT the inserted game's ($00000200).
+    CHECK(bus->read8(0x000006U) == 0x01U); // base PC byte
+    CHECK(adapter.system().cpu()->cpu_registers().pc == 0x00000100U);
+    // The inserted game answers the $300000 window.
+    CHECK(bus->read8(0x300000U) == 0x19U);
+}
