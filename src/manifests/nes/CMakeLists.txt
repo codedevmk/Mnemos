@@ -15,14 +15,16 @@ target_include_directories(
 
 # The NES assembler instantiates the concrete 2A03 (m6510) + 2C02 PPU + APU and
 # wires the topology bus, so it links them. The expansion-audio mappers own extra
-# sound chips: the Sunsoft 5B (iNES 69) a YM2149 (ssg), the VRC7 (iNES 85) an OPLL
-# (ym2413).
+# sound chips: the Sunsoft 5B (iNES 69) a YM2149 (ssg), the VRC6 (iNES 24/26) its
+# pulse/sawtooth (vrc6), the VRC7 (iNES 85) an OPLL (ym2413), the Namco 163 (iNES
+# 19) its wavetable (n163), and the FDS (rp2c33).
 target_link_libraries(
     mnemos_manifests_nes
     PUBLIC
         mnemos::topology
         mnemos::chips::cpu::m6510
         mnemos::chips::video::ppu2c02
+        mnemos::chips::audio::n163
         mnemos::chips::audio::ricoh_2a03_apu
         mnemos::chips::audio::rp2c33
         mnemos::chips::audio::ssg
