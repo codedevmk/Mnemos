@@ -261,6 +261,30 @@ namespace mnemos::apps::player {
         }
     }
 
+    void draw_crosshair(std::uint32_t color, std::uint32_t* dst, int dst_w, int dst_h, int cx,
+                        int cy, int arm) noexcept {
+        if (dst == nullptr || dst_w <= 0 || dst_h <= 0) {
+            return;
+        }
+        // A centre outside the buffer means the gun isn't aimed on-screen.
+        if (cx < 0 || cx >= dst_w || cy < 0 || cy >= dst_h) {
+            return;
+        }
+        // Horizontal arm.
+        const int x0 = cx - arm < 0 ? 0 : cx - arm;
+        const int x1 = cx + arm + 1 > dst_w ? dst_w : cx + arm + 1;
+        std::uint32_t* h_row = dst + static_cast<std::ptrdiff_t>(cy) * dst_w;
+        for (int px = x0; px < x1; ++px) {
+            h_row[px] = color;
+        }
+        // Vertical arm.
+        const int y0 = cy - arm < 0 ? 0 : cy - arm;
+        const int y1 = cy + arm + 1 > dst_h ? dst_h : cy + arm + 1;
+        for (int py = y0; py < y1; ++py) {
+            dst[static_cast<std::ptrdiff_t>(py) * dst_w + cx] = color;
+        }
+    }
+
     void draw_text(std::string_view text, std::uint32_t fg_color, std::uint32_t* dst, int dst_w,
                    int dst_h, int x, int y) noexcept {
         if (dst == nullptr || dst_w <= 0 || dst_h <= 0) {

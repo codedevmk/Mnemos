@@ -39,9 +39,9 @@ namespace mnemos::apps::player::adapters {
     // (currently SMS YM2413 via `--fm`). Other systems ignore the flag.
     [[nodiscard]] bool parse_fm_unit_arg(int argc, char* argv[]);
 
-    // Plug a light gun into the selected system's gun port (`--zapper`, the NES
-    // Zapper on port 2). Other systems ignore the flag.
-    [[nodiscard]] bool parse_zapper_arg(int argc, char* argv[]);
+    // Plug a light gun into the selected system's gun port (`--light-gun`,
+    // applied to port index 1). Other systems ignore the flag.
+    [[nodiscard]] bool parse_light_gun_arg(int argc, char* argv[]);
 
     // Plug a 4-player multitap into the selected system's ports (`--four-score`, the
     // NES Four Score). Other systems ignore the flag.
