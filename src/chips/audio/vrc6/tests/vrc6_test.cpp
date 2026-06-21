@@ -32,6 +32,18 @@ namespace {
         return peak;
     }
 
+    // Capture exactly `pairs` stereo frames of further output from a running chip.
+    [[nodiscard]] std::vector<std::int16_t> capture(vrc6& chip, std::size_t pairs) {
+        chip.enable_audio_capture(true);
+        std::vector<std::int16_t> out;
+        while (chip.pending_samples() < pairs) {
+            chip.tick(1024);
+        }
+        out.resize(pairs * 2U, 0);
+        chip.drain_samples(out.data(), pairs);
+        return out;
+    }
+
 } // namespace
 
 TEST_CASE("vrc6 registers in the chip factory", "[vrc6][audio]") {
@@ -96,4 +108,32 @@ TEST_CASE("vrc6 save_state/load_state round-trips the channels", "[vrc6][audio]"
     CHECK(reader.ok());
     CHECK(b.pulse_period(0) == a.pulse_period(0));
     CHECK(b.pulse_volume(0) == a.pulse_volume(0));
+}
+
+// A restored chip must produce a bit-identical sample stream: every field that
+// shapes future output (incl. the DC-blocker IIR state) is serialized.
+TEST_CASE("vrc6 restore is sample-exact (determinism)", "[vrc6][audio]") {
+    vrc6 a;
+    a.write_reg(0x9000U, 0x7FU);
+    a.write_reg(0x9001U, 0x40U);
+    a.write_reg(0x9002U, 0x81U);
+    a.write_reg(0xB000U, 0x20U);
+    a.write_reg(0xB001U, 0x40U);
+    a.write_reg(0xB002U, 0x81U);
+    a.tick(5000); // warm the DC blocker + oscillator phase
+
+    std::vector<std::uint8_t> blob;
+    state_writer writer(blob);
+    a.save_state(writer);
+
+    constexpr std::size_t k_pairs = 4096;
+    const std::vector<std::int16_t> from_a = capture(a, k_pairs);
+
+    vrc6 b;
+    state_reader reader(blob);
+    b.load_state(reader);
+    REQUIRE(reader.ok());
+    const std::vector<std::int16_t> from_b = capture(b, k_pairs);
+
+    CHECK(from_a == from_b);
 }

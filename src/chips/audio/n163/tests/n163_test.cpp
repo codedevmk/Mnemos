@@ -32,6 +32,18 @@ namespace {
         return peak;
     }
 
+    // Capture exactly `pairs` stereo frames of further output from a running chip.
+    [[nodiscard]] std::vector<std::int16_t> capture(n163& chip, std::size_t pairs) {
+        chip.enable_audio_capture(true);
+        std::vector<std::int16_t> out;
+        while (chip.pending_samples() < pairs) {
+            chip.tick(1024);
+        }
+        out.resize(pairs * 2U, 0);
+        chip.drain_samples(out.data(), pairs);
+        return out;
+    }
+
     // Programme channel 8 (registers $78-$7F) as a single active channel playing a
     // short square wave at full volume, plus a two-sample [15,0,15,0] waveform at the
     // start of RAM.
@@ -118,4 +130,27 @@ TEST_CASE("n163 save_state/load_state round-trips the sound RAM", "[n163][audio]
     CHECK(b.ram(0x7FU) == a.ram(0x7FU));
     CHECK(b.ram(0x7AU) == a.ram(0x7AU));
     CHECK(b.active_channels() == a.active_channels());
+}
+
+// A restored chip must produce a bit-identical sample stream: every field that
+// shapes future output (incl. the DC-blocker IIR state) is serialized.
+TEST_CASE("n163 restore is sample-exact (determinism)", "[n163][audio]") {
+    n163 a;
+    program_tone(a);
+    a.tick(5000); // warm the DC blocker + oscillator phase to a non-trivial state
+
+    std::vector<std::uint8_t> blob;
+    state_writer writer(blob);
+    a.save_state(writer);
+
+    constexpr std::size_t k_pairs = 4096;
+    const std::vector<std::int16_t> from_a = capture(a, k_pairs);
+
+    n163 b;
+    state_reader reader(blob);
+    b.load_state(reader);
+    REQUIRE(reader.ok());
+    const std::vector<std::int16_t> from_b = capture(b, k_pairs);
+
+    CHECK(from_a == from_b);
 }

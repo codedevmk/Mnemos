@@ -4,6 +4,7 @@
 #include "state.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <memory>
 
@@ -250,6 +251,7 @@ namespace mnemos::chips::audio {
         writer.u32(static_cast<std::uint32_t>(frame_accum_));
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
         writer.u32(static_cast<std::uint32_t>(sample_prescaler_));
+        writer.u64(std::bit_cast<std::uint64_t>(dc_)); // DC-blocker IIR state
     }
 
     void mmc5::load_state(state_reader& reader) {
@@ -273,6 +275,7 @@ namespace mnemos::chips::audio {
         frame_accum_ = static_cast<int>(reader.u32());
         clock_divider_ = static_cast<int>(reader.u32());
         sample_prescaler_ = static_cast<int>(reader.u32());
+        dc_ = std::bit_cast<double>(reader.u64());
     }
 
     instrumentation::ichip_introspection& mmc5::introspection() noexcept { return introspection_; }

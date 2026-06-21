@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
@@ -16,6 +17,18 @@ namespace {
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
     using mnemos::chips::audio::rp2c33;
+
+    // Capture exactly `pairs` stereo frames of further output from a running chip.
+    [[nodiscard]] std::vector<std::int16_t> capture(rp2c33& chip, std::size_t pairs) {
+        chip.enable_audio_capture(true);
+        std::vector<std::int16_t> out;
+        while (chip.pending_samples() < pairs) {
+            chip.tick(1024);
+        }
+        out.resize(pairs * 2U, 0);
+        chip.drain_samples(out.data(), pairs);
+        return out;
+    }
 
     // Program a square-ish waveform, full direct volume, and a mid-range pitch, so
     // the channel produces a non-trivial signal.
@@ -90,4 +103,28 @@ TEST_CASE("rp2c33 save_state/load_state round-trips the channel", "[rp2c33][audi
     CHECK(b.volume_gain() == a.volume_gain());
     CHECK(b.wave_sample(0) == a.wave_sample(0));
     CHECK(b.wave_sample(40) == a.wave_sample(40));
+}
+
+// A restored chip must produce a bit-identical sample stream: every field that
+// shapes future output (the wave/mod accumulators, envelopes, prescalers) is
+// serialized.
+TEST_CASE("rp2c33 restore is sample-exact (determinism)", "[rp2c33][audio]") {
+    rp2c33 a;
+    configure_tone(a);
+    a.tick(5000); // warm the accumulators + prescalers to a non-trivial state
+
+    std::vector<std::uint8_t> blob;
+    state_writer writer(blob);
+    a.save_state(writer);
+
+    constexpr std::size_t k_pairs = 4096;
+    const std::vector<std::int16_t> from_a = capture(a, k_pairs);
+
+    rp2c33 b;
+    state_reader reader(blob);
+    b.load_state(reader);
+    REQUIRE(reader.ok());
+    const std::vector<std::int16_t> from_b = capture(b, k_pairs);
+
+    CHECK(from_a == from_b);
 }
