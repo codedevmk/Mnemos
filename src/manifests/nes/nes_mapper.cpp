@@ -1936,6 +1936,288 @@ namespace mnemos::manifests::nes {
             bool irq_enabled_{};
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
+
+        // Konami VRC2 / VRC4 (iNES 21/22/23/25). One chip family that differs only in
+        // which two CPU address lines select the 2-bit register index within each
+        // $x000 group -- iNES folds several pin wirings under each mapper number, so
+        // each number ORs a pair of address bits to cover its sub-variants. PRG: two
+        // switchable 8 KiB banks ($8000 + $A000) over the fixed second-last ($C000)
+        // and last ($E000), with a VRC4 swap mode that moves the $8000 select to
+        // $C000. CHR: eight 1 KiB banks, each a 9-bit value written as a low + high
+        // nibble register pair. Mirroring is $9000 (2 bits on VRC4, 1 on VRC2). VRC4
+        // adds the Konami VRC IRQ at $F000-$F003 (same as VRC6/7); VRC2 has none and
+        // (on VRC2a = mapper 22) drops the low CHR bit.
+        class vrc2_4_mapper final : public nes_mapper {
+          public:
+            vrc2_4_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                          std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                          bool chr_is_ram, int number) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
+                  chr_1k_count_(chr.size() / k_chr_1k) {
+                // (a_mask, b_mask) = the address bits forming index bit 0 / bit 1.
+                switch (number) {
+                case 21: // VRC4a (A1/A2) + VRC4c (A6/A7)
+                    a_mask_ = 0x0042U;
+                    b_mask_ = 0x0084U;
+                    is_vrc4_ = true;
+                    break;
+                case 22: // VRC2a: A1/A0 swapped, low CHR bit dropped, no IRQ
+                    a_mask_ = 0x0002U;
+                    b_mask_ = 0x0001U;
+                    is_vrc4_ = false;
+                    chr_shift_ = 1;
+                    break;
+                case 25: // VRC4b/d (A0/A1 swapped) + A2/A3
+                    a_mask_ = 0x000AU;
+                    b_mask_ = 0x0005U;
+                    is_vrc4_ = true;
+                    break;
+                case 23: // VRC2b / VRC4e/f: A0/A1 + A2/A3
+                default:
+                    a_mask_ = 0x0005U;
+                    b_mask_ = 0x000AU;
+                    is_vrc4_ = true;
+                    break;
+                }
+            }
+
+            void reset() override {
+                prg0_ = 0U;
+                prg1_ = 0U;
+                swap_mode_ = false;
+                mirror_ = 0U;
+                chr_bank_.fill(0U);
+                irq_latch_ = 0U;
+                irq_counter_ = 0U;
+                irq_prescaler_ = 0;
+                irq_enabled_ = false;
+                irq_ack_enable_ = false;
+                cycle_mode_ = false;
+
+                if (prg_8k_count_ != 0U) {
+                    for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
+                        bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
+                    }
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                const std::uint16_t group = static_cast<std::uint16_t>((addr >> 12U) & 0x0FU);
+                const std::uint8_t sub = static_cast<std::uint8_t>(
+                    ((addr & b_mask_) != 0U ? 2U : 0U) | ((addr & a_mask_) != 0U ? 1U : 0U));
+                switch (group) {
+                case 0x8U: // PRG select 0
+                    prg0_ = static_cast<std::uint8_t>(value & 0x1FU);
+                    apply_prg();
+                    break;
+                case 0x9U:
+                    if (sub <= 1U) { // mirroring
+                        mirror_ = static_cast<std::uint8_t>(value & (is_vrc4_ ? 0x03U : 0x01U));
+                        apply_mirroring();
+                    } else if (is_vrc4_) { // $9002 bit 1 = PRG swap mode
+                        swap_mode_ = (value & 0x02U) != 0U;
+                        apply_prg();
+                    }
+                    break;
+                case 0xAU: // PRG select 1
+                    prg1_ = static_cast<std::uint8_t>(value & 0x1FU);
+                    apply_prg();
+                    break;
+                case 0xBU:
+                case 0xCU:
+                case 0xDU:
+                case 0xEU: { // CHR: a low + high nibble register per 1 KiB bank
+                    const std::size_t bank = (group - 0xBU) * 2U + (sub >> 1U);
+                    if ((sub & 1U) != 0U) { // high nibble (bits 8-4)
+                        chr_bank_[bank] = static_cast<std::uint16_t>((chr_bank_[bank] & 0x000FU) |
+                                                                     ((value & 0x1FU) << 4U));
+                    } else { // low nibble (bits 3-0)
+                        chr_bank_[bank] = static_cast<std::uint16_t>((chr_bank_[bank] & 0x01F0U) |
+                                                                     (value & 0x0FU));
+                    }
+                    apply_chr();
+                    break;
+                }
+                case 0xFU: // VRC IRQ (VRC4 only)
+                    if (!is_vrc4_) {
+                        break;
+                    }
+                    if (sub == 0U) {
+                        irq_latch_ =
+                            static_cast<std::uint8_t>((irq_latch_ & 0xF0U) | (value & 0x0FU));
+                    } else if (sub == 1U) {
+                        irq_latch_ = static_cast<std::uint8_t>((irq_latch_ & 0x0FU) |
+                                                               ((value & 0x0FU) << 4U));
+                    } else if (sub == 2U) {
+                        write_irq_control(value);
+                    } else {
+                        irq_acknowledge();
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void clock_cpu_timer(std::uint32_t cpu_cycles) override {
+                if (!irq_enabled_) {
+                    return;
+                }
+                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
+                    if (cycle_mode_) {
+                        tick_irq_counter();
+                    } else {
+                        irq_prescaler_ += 3;
+                        if (irq_prescaler_ >= 341) {
+                            irq_prescaler_ -= 341;
+                            tick_irq_counter();
+                        }
+                    }
+                }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(prg0_);
+                writer.u8(prg1_);
+                writer.boolean(swap_mode_);
+                writer.u8(mirror_);
+                for (const std::uint16_t b : chr_bank_) {
+                    writer.u16(b);
+                }
+                writer.u8(irq_latch_);
+                writer.u8(irq_counter_);
+                writer.u32(static_cast<std::uint32_t>(irq_prescaler_));
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_ack_enable_);
+                writer.boolean(cycle_mode_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                prg0_ = reader.u8();
+                prg1_ = reader.u8();
+                swap_mode_ = reader.boolean();
+                mirror_ = reader.u8();
+                for (std::uint16_t& b : chr_bank_) {
+                    b = reader.u16();
+                }
+                irq_latch_ = reader.u8();
+                irq_counter_ = reader.u8();
+                irq_prescaler_ = static_cast<int>(reader.u32());
+                irq_enabled_ = reader.boolean();
+                irq_ack_enable_ = reader.boolean();
+                cycle_mode_ = reader.boolean();
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+            }
+
+          private:
+            void map_prg8(std::uint32_t slot, std::size_t bank8) {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(slot,
+                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
+            }
+
+            void apply_prg() {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                const std::size_t second_last = prg_8k_count_ >= 2U ? prg_8k_count_ - 2U : 0U;
+                if (swap_mode_) { // VRC4: $8000 fixed second-last, select moves to $C000
+                    map_prg8(0x8000U, second_last);
+                    map_prg8(0xC000U, prg0_);
+                } else {
+                    map_prg8(0x8000U, prg0_);
+                    map_prg8(0xC000U, second_last);
+                }
+                map_prg8(0xA000U, prg1_);
+                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank fixed at $E000
+            }
+
+            void apply_chr() {
+                if (chr_is_ram_ || chr_1k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t s = 0; s < 8U; ++s) {
+                    const std::size_t bank =
+                        chr_shift_ != 0 ? (chr_bank_[s] >> chr_shift_) : chr_bank_[s];
+                    const std::size_t src = (bank % chr_1k_count_) * k_chr_1k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                }
+            }
+
+            void apply_mirroring() {
+                using m = chips::video::ppu2c02::mirroring;
+                switch (mirror_) {
+                case 0:
+                    ppu_->set_mirroring(m::vertical);
+                    break;
+                case 1:
+                    ppu_->set_mirroring(m::horizontal);
+                    break;
+                case 2:
+                    ppu_->set_mirroring(m::single_a);
+                    break;
+                default:
+                    ppu_->set_mirroring(m::single_b);
+                    break;
+                }
+            }
+
+            void write_irq_control(std::uint8_t value) {
+                irq_ack_enable_ = (value & 0x01U) != 0U;
+                irq_enabled_ = (value & 0x02U) != 0U;
+                cycle_mode_ = (value & 0x04U) != 0U;
+                if (irq_enabled_) {
+                    irq_counter_ = irq_latch_;
+                    irq_prescaler_ = 0;
+                }
+                raise_irq(false);
+            }
+            void irq_acknowledge() {
+                raise_irq(false);
+                irq_enabled_ = irq_ack_enable_;
+            }
+            void tick_irq_counter() {
+                if (irq_counter_ == 0xFFU) {
+                    irq_counter_ = irq_latch_;
+                    raise_irq(true);
+                } else {
+                    ++irq_counter_;
+                }
+            }
+
+            std::size_t prg_8k_count_;
+            std::size_t chr_1k_count_;
+            std::uint16_t a_mask_{}; // address bit forming register-index bit 0
+            std::uint16_t b_mask_{}; // address bit forming register-index bit 1
+            bool is_vrc4_{};         // IRQ + PRG-swap + single-screen present
+            int chr_shift_{};        // VRC2a drops the low CHR bit
+            std::uint8_t prg0_{};
+            std::uint8_t prg1_{};
+            bool swap_mode_{};
+            std::uint8_t mirror_{};
+            std::array<std::uint16_t, 8> chr_bank_{}; // 9-bit each (low + high nibble)
+            std::uint8_t irq_latch_{};
+            std::uint8_t irq_counter_{};
+            int irq_prescaler_{};
+            bool irq_enabled_{};
+            bool irq_ack_enable_{};
+            bool cycle_mode_{};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -1957,6 +2239,11 @@ namespace mnemos::manifests::nes {
             return std::make_unique<axrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 19:
             return std::make_unique<namco163_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 21: // VRC4a/c
+        case 22: // VRC2a
+        case 23: // VRC2b / VRC4e/f
+        case 25: // VRC2c / VRC4b/d
+            return std::make_unique<vrc2_4_mapper>(bus, ppu, prg, chr, chr_is_ram, number);
         case 24: // VRC6a
             return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, false);
         case 26: // VRC6b (A0/A1 swapped)
