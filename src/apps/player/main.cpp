@@ -211,6 +211,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
+    using mnemos::apps::player::adapters::parse_light_gun_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
@@ -218,7 +219,6 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
-    using mnemos::apps::player::adapters::parse_zapper_arg;
     using mnemos::apps::player::adapters::region_source_label;
     using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::srm_path_for;
@@ -230,7 +230,7 @@ int main(int argc, char* argv[]) {
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
     const bool fm_unit = parse_fm_unit_arg(argc, argv);
-    const bool zapper = parse_zapper_arg(argc, argv);
+    const bool light_gun = parse_light_gun_arg(argc, argv);
     const bool four_score = parse_four_score_arg(argc, argv);
     const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
     const auto screenshot = parse_screenshot_args(argc, argv);
@@ -484,7 +484,7 @@ int main(int argc, char* argv[]) {
                                 .dip_override = dip_arg,
                                 .mapper_override = mapper_arg.value_or(std::string{}),
                                 .fm_unit = fm_unit,
-                                .light_gun = zapper,
+                                .light_gun = light_gun,
                                 .four_score = four_score,
                                 .disc_path = std::move(disc_path),
                                 .rom_path = rom_paths.front(),
@@ -1009,10 +1009,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Zapper light gun (port 2): map the mouse into the framebuffer using the
+        // Light gun (port index 1): map the mouse into the framebuffer using the
         // same integer letterbox the present path uses; the left button is the
-        // trigger. Off-window -> aim (-1,-1) so the gun sees no light.
-        if (system && zapper) {
+        // trigger. Off-window -> aim (-1,-1) so the gun sees no light. The on-screen
+        // framebuffer aim pixel is stashed for the crosshair overlay (-1 = off-screen).
+        int gun_aim_x = -1;
+        int gun_aim_y = -1;
+        if (system && light_gun) {
             float mx = 0.0F;
             float my = 0.0F;
             const auto mouse = SDL_GetMouseState(&mx, &my);
@@ -1028,12 +1031,20 @@ int main(int argc, char* argv[]) {
                 const int rx = static_cast<int>(mx) - rect.x;
                 const int ry = static_cast<int>(my) - rect.y;
                 if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
-                    gun.aim_x = static_cast<std::int16_t>(rx * static_cast<int>(fb.width) / rect.w);
-                    gun.aim_y =
-                        static_cast<std::int16_t>(ry * static_cast<int>(fb.height) / rect.h);
+                    gun_aim_x = rx * static_cast<int>(fb.width) / rect.w;
+                    gun_aim_y = ry * static_cast<int>(fb.height) / rect.h;
+                    gun.aim_x = static_cast<std::int16_t>(gun_aim_x);
+                    gun.aim_y = static_cast<std::int16_t>(gun_aim_y);
                 }
             }
             system->apply_input(1, gun);
+            // Hide the OS cursor while aiming on-screen so only the crosshair shows;
+            // restore it when the aim leaves the framebuffer.
+            if (gun_aim_x >= 0) {
+                SDL_HideCursor();
+            } else {
+                SDL_ShowCursor();
+            }
         }
 
         // Drive emulation: step a game frame only when the wall-clock pacer
@@ -1103,6 +1114,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (fb.pixels != nullptr && src_w > 0U && src_h > 0U) {
+                using mnemos::apps::player::draw_crosshair;
                 // Copy framebuffer into the transfer buffer as a packed
                 // image. When stride > width (H32 mode etc.) the per-row copy
                 // avoids bleeding the stale stride tail. A vertical (TATE)
@@ -1131,6 +1143,14 @@ int main(int argc, char* argv[]) {
                             dst_row += src_w;
                             src_row += src_stride;
                         }
+                    }
+                    // Light-gun reticle at the aim point. The packed copy above is
+                    // src_w x src_h; rotation isn't handled here so the crosshair is
+                    // drawn only in the non-rotated path.
+                    if (!rotate_vertical && gun_aim_x >= 0) {
+                        draw_crosshair(0x00FF0000U, static_cast<std::uint32_t*>(mapped),
+                                       static_cast<int>(src_w), static_cast<int>(src_h), gun_aim_x,
+                                       gun_aim_y, 4);
                     }
                     SDL_UnmapGPUTransferBuffer(device, xfer);
                 }

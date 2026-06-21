@@ -213,7 +213,7 @@ namespace mnemos::apps::player::adapters::nes {
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
                     manifests::nes::nes_config cfg{.video_region = opts.video_region};
-                    cfg.zapper = opts.light_gun;      // --zapper plugs a gun into port 2
+                    cfg.zapper = opts.light_gun;      // --light-gun plugs the Zapper into port 2
                     cfg.four_score = opts.four_score; // --four-score: 4-player adapter
                     // The player passes the FDS BIOS (when the loaded file is a .fds
                     // disk) as the first bios image; assemble_nes uses it to build the

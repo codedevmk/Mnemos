@@ -47,9 +47,9 @@ namespace mnemos::apps::player::adapters {
         return false;
     }
 
-    bool parse_zapper_arg(int argc, char* argv[]) {
+    bool parse_light_gun_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc; ++i) {
-            if (std::string_view{argv[i]} == "--zapper") {
+            if (std::string_view{argv[i]} == "--light-gun") {
                 return true;
             }
         }

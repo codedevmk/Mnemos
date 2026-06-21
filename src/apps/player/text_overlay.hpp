@@ -37,4 +37,11 @@ namespace mnemos::apps::player {
     void fill_rect(std::uint32_t color, std::uint32_t* dst, int dst_w, int dst_h, int x, int y,
                    int w, int h) noexcept;
 
+    // Draw a plus-shaped reticle centred at (cx, cy): a horizontal and a
+    // vertical arm extending `arm` pixels in each direction (so each line
+    // spans 2*arm+1 pixels), written in `color`. Clipped to the destination
+    // bounds; a centre off the buffer draws nothing.
+    void draw_crosshair(std::uint32_t color, std::uint32_t* dst, int dst_w, int dst_h, int cx,
+                        int cy, int arm) noexcept;
+
 } // namespace mnemos::apps::player

@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdint>
 
+using mnemos::apps::player::draw_crosshair;
 using mnemos::apps::player::draw_text;
 using mnemos::apps::player::fill_rect;
 using mnemos::apps::player::kGlyphHeight;
@@ -80,6 +81,53 @@ TEST_CASE("fill_rect clips to the destination bounds") {
     buf.fill(0x00000000U);
     fill_rect(0x33U, buf.data(), kDstW, kDstH, 0, 0, kDstW, kDstH);
     CHECK(count_pixels(buf, 0x33U) == kDstW * kDstH);
+}
+
+TEST_CASE("draw_crosshair lights the centre and both arms") {
+    buffer buf{};
+    buf.fill(0x00000000U);
+
+    constexpr int cx = 10;
+    constexpr int cy = 6;
+    constexpr int arm = 3;
+    draw_crosshair(0x00FF0000U, buf.data(), kDstW, kDstH, cx, cy, arm);
+
+    // Centre is set.
+    CHECK(buf[static_cast<std::size_t>(cy) * kDstW + cx] == 0x00FF0000U);
+    // Arm ends are set.
+    CHECK(buf[static_cast<std::size_t>(cy) * kDstW + (cx - arm)] == 0x00FF0000U);
+    CHECK(buf[static_cast<std::size_t>(cy) * kDstW + (cx + arm)] == 0x00FF0000U);
+    CHECK(buf[static_cast<std::size_t>(cy - arm) * kDstW + cx] == 0x00FF0000U);
+    CHECK(buf[static_cast<std::size_t>(cy + arm) * kDstW + cx] == 0x00FF0000U);
+    // A plus of two 2*arm+1 lines sharing the centre = 2*(2*arm+1)-1 pixels.
+    CHECK(count_pixels(buf, 0x00FF0000U) == 2 * (2 * arm + 1) - 1);
+    // A pixel off the arms (diagonal) is untouched.
+    CHECK(buf[static_cast<std::size_t>(cy - 1) * kDstW + (cx - 1)] == 0x00000000U);
+}
+
+TEST_CASE("draw_crosshair clips arms to the destination bounds") {
+    buffer buf{};
+    buf.fill(0x00000000U);
+
+    // Centre in the corner: half of each arm runs off the buffer and is clipped.
+    constexpr int arm = 4;
+    draw_crosshair(0x00FF0000U, buf.data(), kDstW, kDstH, 0, 0, arm);
+    CHECK(buf[0] == 0x00FF0000U);
+    // Horizontal: columns 0..arm (arm+1 px). Vertical: rows 0..arm (arm+1 px).
+    // Shared centre counted once: 2*(arm+1)-1.
+    CHECK(count_pixels(buf, 0x00FF0000U) == 2 * (arm + 1) - 1);
+}
+
+TEST_CASE("draw_crosshair with an off-buffer centre draws nothing") {
+    buffer buf{};
+    buf.fill(0xDEADBEEFU);
+
+    draw_crosshair(0x00FF0000U, buf.data(), kDstW, kDstH, -1, 5, 4);
+    draw_crosshair(0x00FF0000U, buf.data(), kDstW, kDstH, kDstW, 5, 4);
+    draw_crosshair(0x00FF0000U, buf.data(), kDstW, kDstH, 5, -1, 4);
+    draw_crosshair(0x00FF0000U, buf.data(), kDstW, kDstH, 5, kDstH, 4);
+    CHECK(count_pixels(buf, 0x00FF0000U) == 0);
+    CHECK(count_pixels(buf, 0xDEADBEEFU) == kDstW * kDstH);
 }
 
 TEST_CASE("unsupported codepoints render as the tofu fallback") {
