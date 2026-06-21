@@ -164,6 +164,27 @@ TEST_CASE("nes adapter Zapper reports light sense and trigger", "[apps][player][
     CHECK((sys.bus.read8(0x4017U) & 0x08U) != 0U);
 }
 
+TEST_CASE("nes adapter advertises a lightgun port only with the Zapper enabled",
+          "[apps][player][nes]") {
+    namespace fsdk = mnemos::frontend_sdk;
+
+    // Zapper plugged in: port 1 is advertised as a light gun.
+    nes_adapter gun(tiny_nrom(), mnemos::manifests::nes::nes_config{.zapper = true});
+    const auto& gun_ports = gun.session_capabilities().input_ports;
+    REQUIRE(gun_ports.size() >= 2U);
+    CHECK(gun_ports[0].port_index == 0U);
+    CHECK(gun_ports[0].format == fsdk::input_device_format::digital_pad);
+    CHECK(gun_ports[1].port_index == 1U);
+    CHECK(gun_ports[1].format == fsdk::input_device_format::lightgun);
+
+    // No Zapper: that same port is a plain pad.
+    nes_adapter pads(tiny_nrom());
+    const auto& pad_ports = pads.session_capabilities().input_ports;
+    REQUIRE(pad_ports.size() >= 2U);
+    CHECK(pad_ports[1].port_index == 1U);
+    CHECK(pad_ports[1].format == fsdk::input_device_format::digital_pad);
+}
+
 TEST_CASE("nes adapter runs PAL timing and reports 50 Hz", "[apps][player][nes]") {
     nes_adapter adapter(
         tiny_nrom(), mnemos::manifests::nes::nes_config{.video_region = mnemos::video_region::pal});

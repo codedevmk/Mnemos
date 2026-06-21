@@ -40,6 +40,46 @@ namespace mnemos::apps::player::adapters::nes {
             }
             return sched;
         }
+
+        // Publish the controller layout the frontend routes input against. Port 0 is
+        // always the standard pad; the second port carries the light gun when the
+        // Zapper is plugged in, else a pad. A Four Score advertises four pads.
+        frontend_sdk::session_capability_info make_session_capabilities(bool zapper,
+                                                                        bool four_score) {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports.push_back({.port_index = 0U,
+                                           .player_slot = 1U,
+                                           .format = frontend_sdk::input_device_format::digital_pad,
+                                           .device_id = "nes.controller.port.1",
+                                           .label = "Controller 1"});
+            if (zapper) {
+                session.input_ports.push_back(
+                    {.port_index = 1U,
+                     .player_slot = 1U,
+                     .format = frontend_sdk::input_device_format::lightgun,
+                     .device_id = "zapper",
+                     .label = "Zapper"});
+            } else {
+                session.input_ports.push_back(
+                    {.port_index = 1U,
+                     .player_slot = 2U,
+                     .format = frontend_sdk::input_device_format::digital_pad,
+                     .device_id = "nes.controller.port.2",
+                     .label = "Controller 2"});
+            }
+            if (four_score) {
+                for (std::uint32_t p = 2U; p <= 3U; ++p) {
+                    session.input_ports.push_back(
+                        {.port_index = p,
+                         .player_slot = static_cast<std::uint8_t>(p + 1U),
+                         .format = frontend_sdk::input_device_format::digital_pad,
+                         .device_id = "nes.controller.port." + std::to_string(p + 1U),
+                         .label = "Controller " + std::to_string(p + 1U)});
+                }
+            }
+            session.deterministic_frame_input = true;
+            return session;
+        }
     } // namespace
 
     nes_adapter::nes_adapter(std::vector<std::uint8_t> rom,
@@ -52,6 +92,7 @@ namespace mnemos::apps::player::adapters::nes {
           region_(config.video_region),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]) {
         chip_view_ = {&sys_->ppu, &sys_->cpu, &sys_->apu};
+        session_ = make_session_capabilities(sys_->zapper_enabled, sys_->four_score_enabled);
         sys_->apu.enable_audio_capture(true);
         // Expose the expansion sound chip (if any) for introspection too; the mapper
         // already enabled its capture in reset().
