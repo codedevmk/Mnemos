@@ -1,5 +1,7 @@
 #include "fds.hpp"
 
+#include "rp2c33.hpp" // chips::audio::rp2c33 (the FDS wavetable + modulator sound)
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -82,6 +84,13 @@ namespace mnemos::manifests::nes {
                 timer_irq_ = false;
                 io_enable_ = false;
                 build_stream();
+
+                // The RP2C33 sound chip shares the disk register window ($4040-$409F);
+                // the board schedules it (via expansion_audio()) at the CPU rate, its
+                // own /37 prescaler giving a ~48 kHz captured stream the adapter mixes.
+                sound_.reset(chips::reset_kind::power_on);
+                sound_.set_clock_divider(37);
+                sound_.enable_audio_capture(true);
                 publish_irq();
             }
 
@@ -94,6 +103,17 @@ namespace mnemos::manifests::nes {
             void clock_cpu_timer(std::uint32_t cpu_cycles) override {
                 clock_timer(static_cast<int>(cpu_cycles));
                 clock_disk(static_cast<int>(cpu_cycles));
+            }
+
+            // The RP2C33 sound chip is the cartridge's expansion audio: the board
+            // schedules it + mixes its drained output into the 2A03 stream.
+            [[nodiscard]] chips::ichip* expansion_audio() noexcept override { return &sound_; }
+            [[nodiscard]] std::size_t expansion_audio_pending() const noexcept override {
+                return sound_.pending_samples();
+            }
+            std::size_t drain_expansion_audio(std::int16_t* out,
+                                              std::size_t max_pairs) noexcept override {
+                return sound_.drain_samples(out, max_pairs);
             }
 
             void save_state(chips::state_writer& writer) const override {
@@ -117,6 +137,7 @@ namespace mnemos::manifests::nes {
                 writer.boolean(timer_repeat_);
                 writer.boolean(timer_irq_);
                 writer.boolean(io_enable_);
+                sound_.save_state(writer);
             }
             void load_state(chips::state_reader& reader) override {
                 motor_on_ = reader.boolean();
@@ -141,6 +162,7 @@ namespace mnemos::manifests::nes {
                 io_enable_ = reader.boolean();
                 ppu_->set_mirroring(horizontal_ ? chips::video::ppu2c02::mirroring::horizontal
                                                 : chips::video::ppu2c02::mirroring::vertical);
+                sound_.load_state(reader);
                 publish_irq();
             }
 
@@ -226,12 +248,13 @@ namespace mnemos::manifests::nes {
                     // Ready as soon as a disk is inserted (the head can reach it); the
                     // motor gates the byte transfer, not this flag. No disk => both the
                     // not-inserted and not-ready bits set. bit 2 (write protect) clear.
+                    // (Multi-side disk swapping is a separate follow-up.)
                     return disk_.empty() ? 0x03U : 0x00U;
                 }
                 case 0x4033U:
                     return 0x80U; // external connector: battery good
                 default:
-                    return 0x00U; // FDS sound read ports ($4090-$4097): wired in a later step
+                    return sound_.read_reg(addr); // FDS sound read ports ($4090-$4097)
                 }
             }
 
@@ -269,7 +292,8 @@ namespace mnemos::manifests::nes {
                     write_control(value);
                     break;
                 default:
-                    break; // FDS sound write ports ($4040-$408A): wired in a later step
+                    sound_.write_reg(addr, value); // FDS sound write ports ($4040-$408A)
+                    break;
                 }
             }
 
@@ -392,6 +416,8 @@ namespace mnemos::manifests::nes {
             bool timer_repeat_{};
             bool timer_irq_{};
             bool io_enable_{};
+
+            chips::audio::rp2c33 sound_; // the FDS expansion sound chip
         };
     } // namespace
 
