@@ -211,6 +211,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Konami VRC7 (mapper 85).
+    // PRG bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset vector
+    // lives in the fixed last PRG bank ($E000).
+    std::vector<std::uint8_t> make_vrc7() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x50U; // flags6: mapper low nibble = 5
+        rom[7] = 0x50U; // flags7: mapper high nibble = 5 -> mapper 85
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
 } // namespace
 
 TEST_CASE("parse_ines reads a valid NROM header", "[manifests][nes]") {
@@ -607,6 +632,112 @@ TEST_CASE("Sunsoft 5B (mapper 69) save_state/load_state round-trips banking", "[
     a->mapper->save_state(writer);
 
     auto b = assemble_nes(make_sunsoft5b());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);
+    CHECK(b->ppu.ppu_read(0x0000U) == achr);
+}
+
+TEST_CASE("VRC7 (mapper 85) banks PRG and CHR through the A4-decoded registers",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc7());
+
+    // Power-on: all PRG windows are bank 0; $E000 is the fixed last bank.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // $8000 -> $8000 window, $8010 -> $A000 window, $9000 -> $C000 window.
+    sys->bus.write8(0x8000U, 0x03U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    sys->bus.write8(0x8010U, 0x05U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+    sys->bus.write8(0x9000U, 0x02U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // the last bank never moves
+
+    // CHR: $A000 -> slot 0 ($0000), $D010 -> slot 7 ($1C00).
+    sys->bus.write8(0xA000U, 0x04U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD4U);
+    sys->bus.write8(0xD010U, 0x01U);
+    CHECK(sys->ppu.ppu_read(0x1C00U) == 0xD1U);
+}
+
+TEST_CASE("VRC7 (mapper 85) routes the OPLL ports and produces audio", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc7());
+    auto* ea = sys->mapper->expansion_audio();
+    REQUIRE(ea != nullptr); // the VRC7 exposes its OPLL
+
+    // Key channel 0 with a preset instrument through $9010 (register select) /
+    // $9030 (data) -- the same note-on the OPLL unit test uses.
+    const auto opll = [&](std::uint8_t reg, std::uint8_t val) {
+        sys->bus.write8(0x9010U, reg);
+        sys->bus.write8(0x9030U, val);
+    };
+    opll(0x30U, 0x70U); // instrument 7, volume 0 (loud)
+    opll(0x10U, 0xA0U); // F-number low
+    opll(0x20U, 0x18U); // key-on, block 4
+
+    ea->tick(20000); // advance the OPLL (CPU/36 => ~555 samples)
+    const std::size_t avail = sys->mapper->expansion_audio_pending();
+    REQUIRE(avail > 0U);
+    std::vector<std::int16_t> buf(avail * 2U, 0);
+    const std::size_t got = sys->mapper->drain_expansion_audio(buf.data(), avail);
+    REQUIRE(got > 0U);
+
+    std::int16_t peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+    }
+    CHECK(peak > 0); // a keyed FM voice, not silence
+}
+
+TEST_CASE("VRC7 (mapper 85) VRC IRQ counts in cycle mode and acknowledges", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc7());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xE010U, 0xFEU); // IRQ latch = 0xFE
+    sys->bus.write8(0xF000U, 0x06U); // enable (bit 1) + cycle mode (bit 2) -> counter = 0xFE
+    CHECK_FALSE(irq);
+
+    sys->mapper->clock_cpu_timer(1U); // 0xFE -> 0xFF
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // 0xFF -> overflow -> reload + assert
+    CHECK(irq);
+
+    sys->bus.write8(0xF010U, 0x00U); // acknowledge drops the line
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("VRC7 (mapper 85) VRC IRQ scanline-mode prescaler clocks once per line",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc7());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xE010U, 0xFFU); // latch 0xFF -> the first counter tick overflows
+    sys->bus.write8(0xF000U, 0x02U); // enable, scanline mode (bit 2 clear)
+
+    // One scanline (114 CPU cycles): the +3/cycle prescaler reaches 341 once -> a
+    // single counter tick -> overflow -> IRQ.
+    sys->mapper->clock_cpu_timer(114U);
+    CHECK(irq);
+}
+
+TEST_CASE("VRC7 (mapper 85) save_state/load_state round-trips banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_vrc7());
+    a->bus.write8(0x8000U, 0x03U); // $8000 = PRG bank 3
+    a->bus.write8(0xA000U, 0x04U); // CHR slot 0 = bank 4
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+    const std::uint8_t achr = a->ppu.ppu_read(0x0000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_vrc7());
     CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
     mnemos::chips::state_reader reader(blob);
     b->mapper->load_state(reader);

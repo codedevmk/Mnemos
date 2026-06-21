@@ -13,8 +13,9 @@ target_include_directories(
 )
 
 # The NES assembler instantiates the concrete 2A03 (m6510) + 2C02 PPU + APU and
-# wires the topology bus, so it links them. The Sunsoft 5B mapper (iNES 69) owns a
-# YM2149 (ssg) for its expansion audio.
+# wires the topology bus, so it links them. The expansion-audio mappers own extra
+# sound chips: the Sunsoft 5B (iNES 69) a YM2149 (ssg), the VRC7 (iNES 85) an OPLL
+# (ym2413).
 target_link_libraries(
     mnemos_manifests_nes
     PUBLIC
@@ -23,6 +24,7 @@ target_link_libraries(
         mnemos::chips::video::ppu2c02
         mnemos::chips::audio::ricoh_2a03_apu
         mnemos::chips::audio::ssg
+        mnemos::chips::audio::ym2413
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_nes PUBLIC)
