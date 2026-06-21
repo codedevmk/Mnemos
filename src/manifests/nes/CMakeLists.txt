@@ -24,6 +24,7 @@ target_link_libraries(
         mnemos::chips::cpu::m6510
         mnemos::chips::video::ppu2c02
         mnemos::chips::audio::ricoh_2a03_apu
+        mnemos::chips::audio::rp2c33
         mnemos::chips::audio::ssg
         mnemos::chips::audio::ym2413
 )
