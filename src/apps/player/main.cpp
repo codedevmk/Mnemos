@@ -1057,6 +1057,7 @@ int main(int argc, char* argv[]) {
         // transfer-buffer copy; downstream (upload/letterbox/blit) then sees
         // the swapped dimensions.
         const bool rotate_vertical =
+            system != nullptr &&
             system->region().orientation == mnemos::frontend_sdk::display_orientation::vertical;
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
