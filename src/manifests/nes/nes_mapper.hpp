@@ -1,9 +1,11 @@
 #pragma once
 
 #include "bus.hpp"     // topology::bus
+#include "chip.hpp"    // chips::ichip
 #include "ppu2c02.hpp" // chips::video::ppu2c02
 #include "state.hpp"   // chips::state_writer / state_reader
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -37,6 +39,24 @@ namespace mnemos::manifests::nes {
         // default (its banks never move).
         virtual void save_state(chips::state_writer& /*writer*/) const {}
         virtual void load_state(chips::state_reader& /*reader*/) {}
+
+        // --- Cartridge expansion audio (Sunsoft 5B, VRC6/7, Namco 163) ---
+        // A cart with an on-board sound chip returns it here so the board can clock
+        // it in the scheduler (it is an ichip) and mix its output into the 2A03's;
+        // pending/drain expose its native stereo-frame queue. Carts without an
+        // expansion sound chip use the no-op defaults.
+        [[nodiscard]] virtual chips::ichip* expansion_audio() noexcept { return nullptr; }
+        [[nodiscard]] virtual std::size_t expansion_audio_pending() const noexcept { return 0U; }
+        virtual std::size_t drain_expansion_audio(std::int16_t* /*out*/,
+                                                  std::size_t /*max_pairs*/) noexcept {
+            return 0U;
+        }
+
+        // Advance a CPU-cycle-based mapper timer by `cpu_cycles`. The board calls
+        // this once per scanline UNGATED by rendering -- unlike the A12-driven
+        // clock_scanline -- because the Sunsoft FME-7 IRQ counter free-runs on the
+        // CPU clock whether or not the PPU is drawing. Default: no-op.
+        virtual void clock_cpu_timer(std::uint32_t /*cpu_cycles*/) {}
 
         // How a scanline-IRQ mapper drives the CPU /IRQ line. The board wires this
         // to the CPU; mappers without an IRQ ignore it.

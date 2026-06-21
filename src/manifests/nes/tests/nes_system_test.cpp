@@ -186,6 +186,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Sunsoft FME-7/5B (mapper 69).
+    // PRG bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset vector
+    // lives in the fixed last PRG bank ($E000).
+    std::vector<std::uint8_t> make_sunsoft5b() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x50U; // flags6: mapper low nibble = 5
+        rom[7] = 0x40U; // flags7: mapper high nibble = 4 -> mapper 69
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
 } // namespace
 
 TEST_CASE("parse_ines reads a valid NROM header", "[manifests][nes]") {
@@ -481,6 +506,113 @@ TEST_CASE("AxROM (mapper 7) switches the 32 KiB PRG bank", "[manifests][nes]") {
     CHECK(sys->bus.read8(0x8000U) == 0xE1U);
     sys->bus.write8(0x8000U, 0x10U); // bank 0, single-screen B
     CHECK(sys->bus.read8(0x8000U) == 0xE0U);
+}
+
+TEST_CASE("Sunsoft 5B (mapper 69) banks PRG and CHR through the command/parameter ports",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft5b());
+
+    // Power-on: every PRG window is bank 0; $E000 is the always-fixed last bank.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // Command 9 -> $8000 bank, A -> $A000 bank, B -> $C000 bank (command at $8000,
+    // parameter at $A000).
+    sys->bus.write8(0x8000U, 0x09U);
+    sys->bus.write8(0xA000U, 0x03U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    sys->bus.write8(0x8000U, 0x0AU);
+    sys->bus.write8(0xA000U, 0x05U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+    sys->bus.write8(0x8000U, 0x0BU);
+    sys->bus.write8(0xA000U, 0x02U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // the last bank never moves
+
+    // Commands 0-7 are the eight 1 KiB CHR banks: slot 0 ($0000) <- bank 4, slot 7
+    // ($1C00) <- bank 1.
+    sys->bus.write8(0x8000U, 0x00U);
+    sys->bus.write8(0xA000U, 0x04U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD4U);
+    sys->bus.write8(0x8000U, 0x07U);
+    sys->bus.write8(0xA000U, 0x01U);
+    CHECK(sys->ppu.ppu_read(0x1C00U) == 0xD1U);
+}
+
+TEST_CASE("Sunsoft 5B (mapper 69) routes the YM2149 ports and produces audio", "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft5b());
+    auto* ea = sys->mapper->expansion_audio();
+    REQUIRE(ea != nullptr); // the 5B exposes its on-board sound chip
+
+    // Program channel A through $C000 (register select) / $E000 (data): enable tone A
+    // in the mixer, set a period, full volume.
+    const auto ay = [&](std::uint8_t reg, std::uint8_t val) {
+        sys->bus.write8(0xC000U, reg);
+        sys->bus.write8(0xE000U, val);
+    };
+    ay(0x07U, 0xFEU); // mixer: tone A enabled (active-low bit 0 = 0), everything else off
+    ay(0x00U, 0x40U); // channel A period low
+    ay(0x01U, 0x00U); // channel A period high -> period $040
+    ay(0x08U, 0x0FU); // channel A volume = 15
+
+    ea->tick(20000); // advance the sound chip (its /16 prescaler => ~1250 samples)
+    const std::size_t avail = sys->mapper->expansion_audio_pending();
+    REQUIRE(avail > 0U);
+    std::vector<std::int16_t> buf(avail * 2U, 0);
+    const std::size_t got = sys->mapper->drain_expansion_audio(buf.data(), avail);
+    REQUIRE(got > 0U);
+
+    std::int16_t peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+    }
+    CHECK(peak > 0); // a square wave at full volume, not silence
+}
+
+TEST_CASE("Sunsoft 5B (mapper 69) FME-7 IRQ counter fires on underflow and acknowledges",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft5b());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    const auto cmd = [&](std::uint8_t c, std::uint8_t v) {
+        sys->bus.write8(0x8000U, c);
+        sys->bus.write8(0xA000U, v);
+    };
+    cmd(0x0FU, 0x00U); // counter high = 0
+    cmd(0x0EU, 0x64U); // counter low = 100
+    cmd(0x0DU, 0x81U); // enable the counter (bit 7) + the IRQ (bit 0)
+    CHECK_FALSE(irq);
+
+    sys->mapper->clock_cpu_timer(50U); // 100 -> 50, no wrap
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(60U); // 50 -> wraps past zero -> assert
+    CHECK(irq);
+
+    cmd(0x0DU, 0x00U); // writing the IRQ-control command acknowledges (and disables)
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("Sunsoft 5B (mapper 69) save_state/load_state round-trips banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_sunsoft5b());
+    a->bus.write8(0x8000U, 0x09U); // $8000 = PRG bank 3
+    a->bus.write8(0xA000U, 0x03U);
+    a->bus.write8(0x8000U, 0x00U); // CHR slot 0 = bank 4
+    a->bus.write8(0xA000U, 0x04U);
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+    const std::uint8_t achr = a->ppu.ppu_read(0x0000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_sunsoft5b());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);
+    CHECK(b->ppu.ppu_read(0x0000U) == achr);
 }
 
 TEST_CASE("cartridge work RAM at $6000-$7FFF reads back writes", "[manifests][nes]") {
