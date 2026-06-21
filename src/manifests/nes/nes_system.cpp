@@ -52,7 +52,7 @@ namespace mnemos::manifests::nes {
     }
 
     void nes_system::set_pad(int port, std::uint8_t buttons) noexcept {
-        if (port == 0 || port == 1) {
+        if (port >= 0 && port < 4) {
             pad_buttons[static_cast<std::size_t>(port)] = buttons;
         }
     }
@@ -88,10 +88,45 @@ namespace mnemos::manifests::nes {
             // 1->0 edge games use latches the value reloaded here.
             pad_shift[0] = pad_buttons[0];
             pad_shift[1] = pad_buttons[1];
+            fs_count[0] = 0U; // restart the Four Score 24-bit sequence
+            fs_count[1] = 0U;
         }
     }
 
+    namespace {
+        // One bit of a Four Score port's 24-bit sequence: controllers (first + the +2
+        // one behind the adapter), then the 8-bit signature (port 0 = bit 19 set,
+        // port 1 = bit 18 set), then 1s past bit 23.
+        [[nodiscard]] std::uint8_t four_score_bit(const std::array<std::uint8_t, 4>& pads, int port,
+                                                  unsigned n) noexcept {
+            if (n < 8U) {
+                return static_cast<std::uint8_t>((pads[static_cast<std::size_t>(port)] >> n) & 1U);
+            }
+            if (n < 16U) {
+                return static_cast<std::uint8_t>(
+                    (pads[static_cast<std::size_t>(port) + 2U] >> (n - 8U)) & 1U);
+            }
+            if (n < 24U) {
+                const unsigned sig_one = port == 0 ? 19U : 18U;
+                return n == sig_one ? 1U : 0U;
+            }
+            return 1U;
+        }
+    } // namespace
+
     std::uint8_t nes_system::read_controller(int port) noexcept {
+        const auto p = static_cast<std::size_t>(port & 1);
+
+        // Four Score: clock the 24-bit (4 pads + signature) sequence; it occupies both
+        // ports and takes precedence over the Zapper.
+        if (four_score_enabled) {
+            const std::uint8_t bit = four_score_bit(pad_buttons, port & 1, fs_count[p]);
+            if (!pad_strobe && fs_count[p] < 0xFFU) {
+                ++fs_count[p];
+            }
+            return static_cast<std::uint8_t>(bit | 0x40U);
+        }
+
         // The Zapper occupies port 2 ($4017): light-sense bit 3 (0 = light) + trigger
         // bit 4 (1 = pulled), no serial shift.
         if (zapper_enabled && (port & 1) == 1) {
@@ -104,7 +139,6 @@ namespace mnemos::manifests::nes {
             }
             return z;
         }
-        const auto p = static_cast<std::size_t>(port & 1);
         std::uint8_t bit;
         if (pad_strobe) {
             bit = pad_buttons[p] & 0x01U; // strobing returns A continuously
@@ -148,7 +182,8 @@ namespace mnemos::manifests::nes {
         s->ppu.set_pal(pal);
         s->apu.set_pal(pal);
 
-        s->zapper_enabled = config.zapper; // Zapper light gun on port 2
+        s->four_score_enabled = config.four_score;               // 4-player adapter on both ports
+        s->zapper_enabled = config.zapper && !config.four_score; // gun on port 2 (else)
 
         // The 2A03 is a 6502 with no on-chip I/O port: $0000/$0001 are plain RAM.
         s->cpu.set_port_enabled(false);

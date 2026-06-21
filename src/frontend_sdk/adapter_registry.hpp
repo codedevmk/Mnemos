@@ -66,6 +66,9 @@ namespace mnemos::frontend_sdk {
         // Plug a light gun into the family's gun port (NES Zapper on port 2, ...).
         // Families without a light gun ignore it.
         bool light_gun{};
+        // Plug a 4-player multitap into the family's ports (NES Four Score, ...).
+        // Families without a multitap ignore it.
+        bool four_score{};
         // Filesystem path of the primary CD/disk image, for media that loads by
         // path rather than a flat byte buffer (a .cue references sibling .bin
         // tracks; an .iso is read whole -- .chd is not supported yet). The Sega CD

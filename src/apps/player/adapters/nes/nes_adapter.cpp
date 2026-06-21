@@ -138,8 +138,10 @@ namespace mnemos::apps::player::adapters::nes {
     }
 
     void nes_adapter::apply_input(int port, const frontend_sdk::controller_state& state) noexcept {
-        if (port < 0 || port > 1) {
-            return; // two standard pads
+        // Up to four pads via a Four Score; otherwise two ports.
+        const int max_port = sys_->four_score_enabled ? 3 : 1;
+        if (port < 0 || port > max_port) {
+            return;
         }
         // With the Zapper plugged into port 2, that port feeds the gun (aim + trigger)
         // rather than a pad.
@@ -211,7 +213,8 @@ namespace mnemos::apps::player::adapters::nes {
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
                     manifests::nes::nes_config cfg{.video_region = opts.video_region};
-                    cfg.zapper = opts.light_gun; // --zapper plugs a gun into port 2
+                    cfg.zapper = opts.light_gun;      // --zapper plugs a gun into port 2
+                    cfg.four_score = opts.four_score; // --four-score: 4-player adapter
                     // The player passes the FDS BIOS (when the loaded file is a .fds
                     // disk) as the first bios image; assemble_nes uses it to build the
                     // RP2C33 RAM adapter. A plain cart leaves bios_images empty.
