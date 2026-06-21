@@ -204,10 +204,16 @@ namespace mnemos::apps::player::adapters::nes {
                 "nes",
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
-                    return std::make_unique<nes_adapter>(
-                        std::move(opts.rom),
-                        manifests::nes::nes_config{.video_region = opts.video_region},
-                        std::move(opts.display_name), opts.scheduler_factory_override);
+                    manifests::nes::nes_config cfg{.video_region = opts.video_region};
+                    // The player passes the FDS BIOS (when the loaded file is a .fds
+                    // disk) as the first bios image; assemble_nes uses it to build the
+                    // RP2C33 RAM adapter. A plain cart leaves bios_images empty.
+                    if (!opts.bios_images.empty()) {
+                        cfg.fds_bios = std::move(opts.bios_images.front());
+                    }
+                    return std::make_unique<nes_adapter>(std::move(opts.rom), std::move(cfg),
+                                                         std::move(opts.display_name),
+                                                         opts.scheduler_factory_override);
                 });
             return 0;
         }();

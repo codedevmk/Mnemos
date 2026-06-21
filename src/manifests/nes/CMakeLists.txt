@@ -1,5 +1,6 @@
 add_library(
     mnemos_manifests_nes
+    fds.cpp
     nes_mapper.cpp
     nes_system.cpp
 )

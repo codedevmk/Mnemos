@@ -6,6 +6,8 @@
 
 #include "nes_system.hpp"
 
+#include "fds.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -234,6 +236,39 @@ namespace {
         rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
         rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
         return rom;
+    }
+
+    // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
+    // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
+    // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
+    std::vector<std::uint8_t> make_synthetic_fds() {
+        std::vector<std::uint8_t> rom(16U + 65500U, 0x00U);
+        rom[0] = 'F';
+        rom[1] = 'D';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 1U; // one disk side
+        const std::size_t s = 16U;
+        rom[s + 0U] = 0x01U; // disk-info block code
+        const char* hvc = "*NINTENDO-HVC*";
+        for (std::size_t i = 0; i < 14U; ++i) {
+            rom[s + 1U + i] = static_cast<std::uint8_t>(hvc[i]);
+        }
+        rom[s + 56U] = 0x02U; // file-amount block code (block 1 is 56 bytes)
+        rom[s + 57U] = 0x00U; // zero files
+        return rom;
+    }
+
+    // A stand-in 8 KiB FDS BIOS: just enough to assemble (a reset vector to $E000 and
+    // a self-loop). The real DISKSYS.ROM is supplied via MNEMOS_FDS_BIOS for golden runs.
+    std::vector<std::uint8_t> make_dummy_fds_bios() {
+        std::vector<std::uint8_t> bios(0x2000U, 0x00U);
+        bios[0x0000U] = 0x4CU; // JMP $E000
+        bios[0x0001U] = 0x00U;
+        bios[0x0002U] = 0xE0U;
+        bios[0x1FFCU] = 0x00U; // reset vector -> $E000
+        bios[0x1FFDU] = 0xE0U;
+        return bios;
     }
 
 } // namespace
@@ -766,6 +801,75 @@ TEST_CASE("CHR-RAM cart accepts PPU pattern writes", "[manifests][nes]") {
     sys->bus.write8(0x2006U, 0x00U);
     sys->bus.write8(0x2007U, 0x5AU);
     CHECK(sys->ppu.ppu_read(0x0000U) == 0x5AU);
+}
+
+TEST_CASE("looks_like_fds distinguishes FDS disks from iNES carts", "[manifests][nes][fds]") {
+    CHECK(looks_like_fds(make_synthetic_fds())); // headered "FDS\x1A"
+
+    std::vector<std::uint8_t> headerless(k_fds_side_size, 0x00U);
+    headerless[0] = 0x01U;
+    CHECK(looks_like_fds(headerless)); // headerless single side
+
+    CHECK_FALSE(looks_like_fds(make_synthetic_nrom()));               // an iNES cart
+    CHECK_FALSE(looks_like_fds(std::vector<std::uint8_t>(100U, 0U))); // neither
+}
+
+TEST_CASE("parse_fds_sides strips the header and returns whole sides", "[manifests][nes][fds]") {
+    const auto sides = parse_fds_sides(make_synthetic_fds());
+    REQUIRE(sides.size() == k_fds_side_size); // one side, 16-byte header removed
+    CHECK(sides[0] == 0x01U);                 // disk-info block is first
+    CHECK(sides[1] == static_cast<std::uint8_t>('*'));
+}
+
+TEST_CASE("FDS image assembles the RP2C33 RAM adapter (RAM + BIOS + drive)",
+          "[manifests][nes][fds]") {
+    nes_config cfg;
+    cfg.fds_bios = make_dummy_fds_bios();
+    auto sys = assemble_nes(make_synthetic_fds(), cfg);
+    REQUIRE(sys->is_fds);
+
+    // $E000-$FFFF is the BIOS (its reset vector resolves); $6000-$DFFF is 32 KiB RAM.
+    CHECK(sys->bus.read8(0xFFFCU) == 0x00U);
+    CHECK(sys->bus.read8(0xFFFDU) == 0xE0U);
+    sys->bus.write8(0x6000U, 0x5AU);
+    sys->bus.write8(0xDFFFU, 0xA5U);
+    CHECK(sys->bus.read8(0x6000U) == 0x5AU);
+    CHECK(sys->bus.read8(0xDFFFU) == 0xA5U);
+
+    // $4032 reports the disk inserted + ready (bits 0/1 clear).
+    CHECK((sys->bus.read8(0x4032U) & 0x03U) == 0x00U);
+}
+
+TEST_CASE("FDS disk drive streams block bytes with synthesized CRC gaps", "[manifests][nes][fds]") {
+    nes_config cfg;
+    cfg.fds_bios = make_dummy_fds_bios();
+    auto sys = assemble_nes(make_synthetic_fds(), cfg);
+
+    sys->bus.write8(0x4023U, 0x83U); // enable the disk registers
+    sys->bus.write8(0x4025U, 0x2DU); // motor on, transfer running, read mode
+
+    // Pull bytes via the byte-ready ($4030 bit 7) / read-data ($4031) handshake,
+    // clocking the drive (the board normally does this once per scanline).
+    const auto next_byte = [&]() -> int {
+        for (int i = 0; i < 20000; ++i) {
+            if ((sys->bus.read8(0x4030U) & 0x80U) != 0U) {
+                return sys->bus.read8(0x4031U);
+            }
+            sys->mapper->clock_cpu_timer(114U);
+        }
+        return -1;
+    };
+
+    std::array<int, 60> b{};
+    for (int& v : b) {
+        v = next_byte();
+    }
+    CHECK(b[0] == 0x01);                  // block 1 (disk info) ID
+    CHECK(b[1] == static_cast<int>('*')); // "*NINTENDO-HVC*"
+    CHECK(b[56] == 0x00);                 // synthesized CRC byte after block 1's 56 bytes
+    CHECK(b[57] == 0x00);                 // (the raw .fds has no CRC; the drive supplies it)
+    CHECK(b[58] == 0x02);                 // block 2 (file amount) ID, correctly aligned
+    CHECK(b[59] == 0x00);                 // zero files
 }
 
 TEST_CASE("controller shift register clocks buttons in $4016 read order", "[manifests][nes]") {

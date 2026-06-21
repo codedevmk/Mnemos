@@ -19,6 +19,10 @@ namespace mnemos::manifests::nes {
         // The NES is principally a 60 Hz (NTSC) machine; PAL timing is a later
         // increment, so the host frame cadence defaults to NTSC.
         mnemos::video_region video_region{mnemos::video_region::ntsc};
+        // The 8 KiB Famicom Disk System BIOS (DISKSYS.ROM). When non-empty AND the
+        // loaded image is a .fds disk, assemble_nes builds the FDS RAM adapter
+        // instead of a cartridge. Empty for ordinary iNES carts.
+        std::vector<std::uint8_t> fds_bios{};
     };
 
     // A parsed iNES (.nes) image: the PRG/CHR banks plus the cartridge wiring the
@@ -67,6 +71,15 @@ namespace mnemos::manifests::nes {
         std::unique_ptr<nes_mapper> mapper;         // owns the $8000-$FFFF + CHR banking
         bool battery{};                             // the $6000 RAM is battery-backed (persist it)
         bool chr_is_ram{};                          // CHR is writable RAM (save it in a save-state)
+
+        // Famicom Disk System (RP2C33 RAM adapter). For a .fds image these hold the
+        // 8 KiB BIOS ($E000-$FFFF), the 32 KiB PRG-RAM ($6000-$DFFF) the BIOS loads
+        // files into, and the raw disk sides the drive streams. `mapper` is the FDS
+        // disk cartridge; the cart `prg`/`prg_ram` above stay empty.
+        bool is_fds{};
+        std::vector<std::uint8_t> fds_bios;
+        std::vector<std::uint8_t> fds_ram;
+        std::vector<std::uint8_t> fds_disk;
 
         // The cartridge (MMC3) and the APU (frame + DMC) share the CPU /IRQ line as
         // a wired-OR; each callback updates its source and republishes the union.
