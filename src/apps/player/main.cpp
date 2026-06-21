@@ -1009,13 +1009,25 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Light gun (port index 1): map the mouse into the framebuffer using the
-        // same integer letterbox the present path uses; the left button is the
-        // trigger. Off-window -> aim (-1,-1) so the gun sees no light. The on-screen
-        // framebuffer aim pixel is stashed for the crosshair overlay (-1 = off-screen).
+        // Light gun: map the mouse into the framebuffer using the same integer
+        // letterbox the present path uses; the left button is the trigger. Off-window
+        // -> aim (-1,-1) so the gun sees no light. The on-screen framebuffer aim pixel
+        // is stashed for the crosshair overlay (-1 = off-screen). The gun is routed to
+        // whichever port the adapter advertises as a light gun; if none is advertised
+        // the legacy port index 1 is used (only when --light-gun was passed).
         int gun_aim_x = -1;
         int gun_aim_y = -1;
         if (system && light_gun) {
+            int gun_port = -1;
+            for (const auto& p : system->session_capabilities().input_ports) {
+                if (p.format == mnemos::frontend_sdk::input_device_format::lightgun) {
+                    gun_port = static_cast<int>(p.port_index);
+                    break;
+                }
+            }
+            if (gun_port < 0) {
+                gun_port = 1; // adapter advertised no gun port: fall back to legacy index
+            }
             float mx = 0.0F;
             float my = 0.0F;
             const auto mouse = SDL_GetMouseState(&mx, &my);
@@ -1037,7 +1049,7 @@ int main(int argc, char* argv[]) {
                     gun.aim_y = static_cast<std::int16_t>(gun_aim_y);
                 }
             }
-            system->apply_input(1, gun);
+            system->apply_input(gun_port, gun);
             // Hide the OS cursor while aiming on-screen so only the crosshair shows;
             // restore it when the aim leaves the framebuffer.
             if (gun_aim_x >= 0) {

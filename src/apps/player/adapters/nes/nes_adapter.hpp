@@ -52,6 +52,10 @@ namespace mnemos::apps::player::adapters::nes {
         }
         void step_one_frame() override;
         void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
+        [[nodiscard]] const frontend_sdk::session_capability_info&
+        session_capabilities() const noexcept override {
+            return session_;
+        }
         [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
         [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
             return {chip_view_.data(), chip_view_.size()};
@@ -85,6 +89,9 @@ namespace mnemos::apps::player::adapters::nes {
         mnemos::video_region region_;
         double target_fps_;
         std::vector<frontend_sdk::spec_field> spec_{};
+        // Advertised input ports: the frontend routes a mouse-driven light gun to
+        // whichever port reports a lightgun format (port 2 when the Zapper is on).
+        frontend_sdk::session_capability_info session_{};
         // drain_audio scratch: the APU queues interleaved stereo (mono duplicated
         // to both lanes); it is resampled to the output frame rate, carrying the
         // fractional remainder so the long-term rate stays exact. exp_buf_ holds the
