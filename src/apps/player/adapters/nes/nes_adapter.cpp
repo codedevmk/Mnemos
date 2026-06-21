@@ -141,6 +141,12 @@ namespace mnemos::apps::player::adapters::nes {
         if (port < 0 || port > 1) {
             return; // two standard pads
         }
+        // With the Zapper plugged into port 2, that port feeds the gun (aim + trigger)
+        // rather than a pad.
+        if (port == 1 && sys_->zapper_enabled) {
+            sys_->set_zapper(state.aim_x, state.aim_y, state.trigger);
+            return;
+        }
         using sys = manifests::nes::nes_system;
         std::uint8_t buttons = 0U;
         if (state.a) {
@@ -205,6 +211,7 @@ namespace mnemos::apps::player::adapters::nes {
                 [](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
                     manifests::nes::nes_config cfg{.video_region = opts.video_region};
+                    cfg.zapper = opts.light_gun; // --zapper plugs a gun into port 2
                     // The player passes the FDS BIOS (when the loaded file is a .fds
                     // disk) as the first bios image; assemble_nes uses it to build the
                     // RP2C33 RAM adapter. A plain cart leaves bios_images empty.

@@ -57,6 +57,30 @@ namespace mnemos::manifests::nes {
         }
     }
 
+    void nes_system::set_zapper(int x, int y, bool trigger) noexcept {
+        zapper_x = static_cast<std::int16_t>(x);
+        zapper_y = static_cast<std::int16_t>(y);
+        zapper_trigger = trigger;
+    }
+
+    bool nes_system::zapper_light_detected() const noexcept {
+        const auto fb = ppu.framebuffer();
+        if (fb.pixels == nullptr || zapper_x < 0 || zapper_y < 0 ||
+            static_cast<std::uint32_t>(zapper_x) >= fb.width ||
+            static_cast<std::uint32_t>(zapper_y) >= fb.height) {
+            return false; // off-screen: the photodiode sees no CRT light
+        }
+        const std::uint32_t px =
+            fb.pixels[static_cast<std::size_t>(zapper_y) * fb.effective_stride() +
+                      static_cast<std::size_t>(zapper_x)];
+        const std::uint32_t r = (px >> 16U) & 0xFFU;
+        const std::uint32_t g = (px >> 8U) & 0xFFU;
+        const std::uint32_t b = px & 0xFFU;
+        // The gun trips on a bright spot (white / light colours the games flash over
+        // a target); average the channels and threshold above mid-grey.
+        return (r + g + b) >= 0x180U;
+    }
+
     void nes_system::write_controller_strobe(std::uint8_t value) noexcept {
         pad_strobe = (value & 0x01U) != 0U;
         if (pad_strobe) {
@@ -68,6 +92,18 @@ namespace mnemos::manifests::nes {
     }
 
     std::uint8_t nes_system::read_controller(int port) noexcept {
+        // The Zapper occupies port 2 ($4017): light-sense bit 3 (0 = light) + trigger
+        // bit 4 (1 = pulled), no serial shift.
+        if (zapper_enabled && (port & 1) == 1) {
+            std::uint8_t z = 0x40U; // open-bus high bits, as for a pad read
+            if (zapper_trigger) {
+                z |= 0x10U;
+            }
+            if (!zapper_light_detected()) {
+                z |= 0x08U; // bit 3 set = NO light
+            }
+            return z;
+        }
         const auto p = static_cast<std::size_t>(port & 1);
         std::uint8_t bit;
         if (pad_strobe) {
@@ -111,6 +147,8 @@ namespace mnemos::manifests::nes {
         const bool pal = config.video_region == mnemos::video_region::pal;
         s->ppu.set_pal(pal);
         s->apu.set_pal(pal);
+
+        s->zapper_enabled = config.zapper; // Zapper light gun on port 2
 
         // The 2A03 is a 6502 with no on-chip I/O port: $0000/$0001 are plain RAM.
         s->cpu.set_port_enabled(false);

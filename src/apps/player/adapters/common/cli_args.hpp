@@ -39,6 +39,10 @@ namespace mnemos::apps::player::adapters {
     // (currently SMS YM2413 via `--fm`). Other systems ignore the flag.
     [[nodiscard]] bool parse_fm_unit_arg(int argc, char* argv[]);
 
+    // Plug a light gun into the selected system's gun port (`--zapper`, the NES
+    // Zapper on port 2). Other systems ignore the flag.
+    [[nodiscard]] bool parse_zapper_arg(int argc, char* argv[]);
+
     // Scan argv for `--dip <value>` (hex with 0x prefix, or decimal) and
     // return the 16-bit DIP bank, or nullopt when absent/malformed.
     [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);

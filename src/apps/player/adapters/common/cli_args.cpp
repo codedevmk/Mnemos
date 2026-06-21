@@ -47,6 +47,15 @@ namespace mnemos::apps::player::adapters {
         return false;
     }
 
+    bool parse_zapper_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            if (std::string_view{argv[i]} == "--zapper") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::optional<std::string> parse_rom_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc - 1; ++i) {
             const std::string_view a{argv[i]};

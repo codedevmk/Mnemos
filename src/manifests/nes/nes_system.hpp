@@ -23,6 +23,10 @@ namespace mnemos::manifests::nes {
         // loaded image is a .fds disk, assemble_nes builds the FDS RAM adapter
         // instead of a cartridge. Empty for ordinary iNES carts.
         std::vector<std::uint8_t> fds_bios{};
+        // Plug a Zapper light gun into controller port 2 (read through $4017). The
+        // games that use it (Duck Hunt, Hogan's Alley, Wild Gunman, ...) replace the
+        // second pad with the gun. Off by default.
+        bool zapper{};
     };
 
     // A parsed iNES (.nes) image: the PRG/CHR banks plus the cartridge wiring the
@@ -92,14 +96,30 @@ namespace mnemos::manifests::nes {
         std::array<std::uint8_t, 2> pad_shift{};
         bool pad_strobe{};
 
+        // Zapper light gun on port 2 ($4017). When enabled, that port's read returns
+        // the gun's light-sense (bit 3: 0 = light) + trigger (bit 4: 1 = pulled)
+        // instead of a serial pad. aim_x/aim_y are the framebuffer pixel the gun
+        // points at (negative = off-screen); the light sense samples the PPU output
+        // there.
+        bool zapper_enabled{};
+        std::int16_t zapper_x{-1};
+        std::int16_t zapper_y{-1};
+        bool zapper_trigger{};
+
         // Set the live button bitmask for controller `port` (0 or 1).
         void set_pad(int port, std::uint8_t buttons) noexcept;
+        // Update the Zapper aim (framebuffer pixel) + trigger.
+        void set_zapper(int x, int y, bool trigger) noexcept;
         // $4016 write: bit 0 is the strobe; a high level (re)loads both shift
         // registers from the live button state.
         void write_controller_strobe(std::uint8_t value) noexcept;
         // $4016 / $4017 read: the next serial button bit (in bit 0) OR'd with the
-        // open-bus high bits the data lines float to.
+        // open-bus high bits the data lines float to -- or, on port 2 with the Zapper
+        // enabled, the gun's light-sense + trigger byte.
         [[nodiscard]] std::uint8_t read_controller(int port) noexcept;
+        // True when the PPU output at the Zapper aim point is bright enough to trip
+        // the photodiode.
+        [[nodiscard]] bool zapper_light_detected() const noexcept;
 
         // (OAM-DMA cycle stall, APU frame IRQ, mid-frame NMI edges, CHR-RAM and
         // save-state arrive in later increments.)
