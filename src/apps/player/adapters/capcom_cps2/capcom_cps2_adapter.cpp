@@ -3,6 +3,7 @@
 #include "adapter_registry.hpp"
 #include "cps2_crypto.hpp"
 #include "file.hpp"
+#include "input_pack.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 
@@ -303,54 +304,17 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     }
 
     void capcom_cps2_adapter::refresh_inputs() noexcept {
-        // Player byte (active low): right/left/down/up in bits 0-3, buttons 1/2/3
-        // in bits 4-6.
+        // Player byte (active low): right/left/down/up in bits 0-3 (the standard
+        // arcade nibble), buttons 1/2/3 in bits 4-6.
         const auto pack = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            std::uint8_t value = 0xFFU;
-            const auto clear = [&value](std::uint8_t bit) {
-                value &= static_cast<std::uint8_t>(~bit);
-            };
-            if (c.right) {
-                clear(0x01U);
-            }
-            if (c.left) {
-                clear(0x02U);
-            }
-            if (c.down) {
-                clear(0x04U);
-            }
-            if (c.up) {
-                clear(0x08U);
-            }
-            if (c.a) {
-                clear(0x10U);
-            }
-            if (c.b) {
-                clear(0x20U);
-            }
-            if (c.c) {
-                clear(0x40U);
-            }
-            return value;
+            return pack_active_low_pad(c, dpad_layout{},
+                                       {{c.a, 0x10U}, {c.b, 0x20U}, {c.c, 0x40U}});
         };
-        // Extra-button byte (active low): buttons 4/5/6 in bits 0-2. CPS2 fighting
-        // cabinets wire these through the second player input word rather than the
-        // joystick word above.
+        // Extra-button byte (active low): buttons 4/5/6 in bits 0-2, no directions.
+        // CPS2 fighting cabinets wire these through the second player input word
+        // rather than the joystick word above.
         const auto pack_extra = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            std::uint8_t value = 0xFFU;
-            const auto clear = [&value](std::uint8_t bit) {
-                value &= static_cast<std::uint8_t>(~bit);
-            };
-            if (c.x) {
-                clear(0x01U);
-            }
-            if (c.y) {
-                clear(0x02U);
-            }
-            if (c.z) {
-                clear(0x04U);
-            }
-            return value;
+            return pack_active_low_buttons({{c.x, 0x01U}, {c.y, 0x02U}, {c.z, 0x04U}});
         };
         // P2 high byte, P1 low byte.
         sys_->input0 = static_cast<std::uint16_t>(

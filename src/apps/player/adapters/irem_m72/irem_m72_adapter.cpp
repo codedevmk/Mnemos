@@ -1,6 +1,7 @@
 #include "irem_m72_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "input_pack.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 
@@ -228,28 +229,10 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         ports_[static_cast<std::size_t>(port)] = state;
 
         // Hardware bit layout (active low): joystick right/left/down/up from
-        // bit 0, buttons 4..1 from bit 4 -- button 1 is the MSB.
+        // bit 0 (the standard arcade nibble), buttons 4..1 from bit 4 -- button 1
+        // is the MSB, button 2 next.
         const auto pack = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            std::uint8_t value = 0xFFU;
-            if (c.right) {
-                value &= static_cast<std::uint8_t>(~0x01U);
-            }
-            if (c.left) {
-                value &= static_cast<std::uint8_t>(~0x02U);
-            }
-            if (c.down) {
-                value &= static_cast<std::uint8_t>(~0x04U);
-            }
-            if (c.up) {
-                value &= static_cast<std::uint8_t>(~0x08U);
-            }
-            if (c.a) {
-                value &= static_cast<std::uint8_t>(~0x80U); // button 1
-            }
-            if (c.b) {
-                value &= static_cast<std::uint8_t>(~0x40U); // button 2
-            }
-            return value;
+            return pack_active_low_pad(c, dpad_layout{}, {{c.a, 0x80U}, {c.b, 0x40U}});
         };
         sys_->input_p1 = pack(ports_[0]);
         sys_->input_p2 = pack(ports_[1]);
