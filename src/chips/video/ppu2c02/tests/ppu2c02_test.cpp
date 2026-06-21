@@ -341,6 +341,40 @@ TEST_CASE("ppu2c02 limits to eight sprites per line and sets the overflow flag",
     CHECK((ppu.reg_read(ppu2c02::reg_status) & ppu2c02::status_spr_over) != 0U);
 }
 
+TEST_CASE("ppu2c02 greyscale and colour emphasis shade the output", "[ppu2c02]") {
+    ppu2c02 ppu;
+    const auto chr = make_chr({0U, 1U});
+    ppu.attach_chr(chr);
+    set_palette(ppu, 0U, 0x0FU); // backdrop black
+    set_palette(ppu, 1U, 0x16U); // BG colour 1 -> master $16 (a red)
+    ppu.ppu_write(0x2000U, 0x01U);
+
+    const std::uint8_t base_mask =
+        static_cast<std::uint8_t>(ppu2c02::mask_bg_enable | ppu2c02::mask_bg_left);
+    ppu.reg_write(ppu2c02::reg_mask, base_mask);
+    ppu.tick(frame_ticks);
+    const std::uint32_t normal = ppu.framebuffer().pixels[0];
+
+    // Greyscale (PPUMASK bit 0): $16 & $30 = $10 -> a neutral grey (R==G==B).
+    ppu.reg_write(ppu2c02::reg_mask,
+                  static_cast<std::uint8_t>(base_mask | ppu2c02::mask_greyscale));
+    ppu.tick(frame_ticks);
+    const std::uint32_t grey = ppu.framebuffer().pixels[0];
+    CHECK(grey != normal);
+    CHECK(((grey >> 16) & 0xFFU) == ((grey >> 8) & 0xFFU));
+    CHECK(((grey >> 8) & 0xFFU) == (grey & 0xFFU));
+
+    // Colour emphasis (bit 5 = red): a white pixel keeps full red, attenuated G/B.
+    set_palette(ppu, 1U, 0x30U); // white
+    ppu.reg_write(ppu2c02::reg_mask, static_cast<std::uint8_t>(base_mask | 0x20U));
+    ppu.tick(frame_ticks);
+    const std::uint32_t emph = ppu.framebuffer().pixels[0];
+    CHECK(((emph >> 16) & 0xFFU) == 0xFFU); // red unchanged
+    CHECK(((emph >> 8) & 0xFFU) < 0xFFU);   // green attenuated
+    CHECK((emph & 0xFFU) < 0xFFU);          // blue attenuated
+    CHECK(((emph >> 8) & 0xFFU) == (emph & 0xFFU));
+}
+
 TEST_CASE("ppu2c02 save_state / load_state round-trips", "[ppu2c02]") {
     ppu2c02 ppu;
     // Build a distinctive state: registers, loopy address, palette, OAM.

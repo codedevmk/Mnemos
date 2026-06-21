@@ -100,7 +100,7 @@ namespace mnemos::chips::video {
                     if ((mask_ & mask_bg_enable) != 0U) {
                         render_bg_scanline(scanline_, v_);
                     } else {
-                        const std::uint32_t backdrop = master_rgb(palette_[0]);
+                        const std::uint32_t backdrop = shade(palette_[0]);
                         for (std::uint32_t sx = 0; sx < visible_width; ++sx) {
                             pixels_[row + sx] = backdrop;
                             bg_opaque_[sx] = 0U;
@@ -348,6 +348,37 @@ namespace mnemos::chips::video {
         return master_palette[index & 0x3FU];
     }
 
+    std::uint32_t ppu2c02::shade(std::uint8_t master_index) const noexcept {
+        // PPUMASK bit 0: greyscale forces the palette to the grey column ($00/$10/
+        // $20/$30) by masking the colour nibble.
+        if ((mask_ & mask_greyscale) != 0U) {
+            master_index &= 0x30U;
+        }
+        const std::uint32_t rgb = master_rgb(master_index);
+        const std::uint32_t emph = static_cast<std::uint32_t>(mask_ >> 5U); // bits 5,6,7 = R,G,B
+        if (emph == 0U) {
+            return rgb;
+        }
+        std::uint32_t r = (rgb >> 16U) & 0xFFU;
+        std::uint32_t g = (rgb >> 8U) & 0xFFU;
+        std::uint32_t b = rgb & 0xFFU;
+        // Each emphasis bit attenuates the two primaries it does not boost (~0.75),
+        // cumulative when several are set (all three set => the screen dims).
+        if ((emph & 0x01U) != 0U) { // emphasize red
+            g = g * 3U / 4U;
+            b = b * 3U / 4U;
+        }
+        if ((emph & 0x02U) != 0U) { // emphasize green
+            r = r * 3U / 4U;
+            b = b * 3U / 4U;
+        }
+        if ((emph & 0x04U) != 0U) { // emphasize blue
+            r = r * 3U / 4U;
+            g = g * 3U / 4U;
+        }
+        return (r << 16U) | (g << 8U) | b;
+    }
+
     std::uint32_t ppu2c02::fetch_pattern_pixel(std::uint16_t pattern_base, std::uint32_t tile,
                                                std::uint32_t fine_x,
                                                std::uint32_t fine_y) const noexcept {
@@ -411,7 +442,7 @@ namespace mnemos::chips::video {
 
     void ppu2c02::render_bg_scanline(std::uint32_t sy, std::uint16_t line_v) noexcept {
         const std::size_t row = static_cast<std::size_t>(sy) * visible_width;
-        const std::uint32_t backdrop = master_rgb(palette_[0]);
+        const std::uint32_t backdrop = shade(palette_[0]);
         const std::uint16_t pattern_base =
             static_cast<std::uint16_t>((ctrl_ & ctrl_bg_pt) != 0U ? 0x1000U : 0x0000U);
         const bool left_clip = (mask_ & mask_bg_left) == 0U;
@@ -445,7 +476,7 @@ namespace mnemos::chips::video {
                 pixels_[row + sx] = backdrop;
             } else {
                 bg_opaque_[sx] = 1U;
-                pixels_[row + sx] = master_rgb(palette_[(pal * 4U + pixel) & 0x1FU]);
+                pixels_[row + sx] = shade(palette_[(pal * 4U + pixel) & 0x1FU]);
             }
             if (++fx == 8U) {
                 fx = 0U;
@@ -540,7 +571,7 @@ namespace mnemos::chips::video {
                 if (behind && bg_opaque_[dx] != 0U) {
                     continue; // background-priority sprite loses to opaque BG
                 }
-                pixels_[row + dx] = master_rgb(palette_[0x10U + ((pal * 4U + pixel) & 0x0FU)]);
+                pixels_[row + dx] = shade(palette_[0x10U + ((pal * 4U + pixel) & 0x0FU)]);
             }
         }
     }
@@ -549,7 +580,7 @@ namespace mnemos::chips::video {
         // A static force-render: simulate the per-line loopy walk from t_ without
         // disturbing the live beam (v_, dot_, scanline_). Used by tests / hosts
         // that want the current frame without advancing time.
-        const std::uint32_t backdrop = master_rgb(palette_[0]);
+        const std::uint32_t backdrop = shade(palette_[0]);
         for (std::uint32_t& px : pixels_) {
             px = backdrop;
         }

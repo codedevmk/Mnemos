@@ -247,6 +247,10 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint8_t bg_pattern_read(std::uint16_t addr) const noexcept;
         // 6-bit master-palette index -> 0x00RRGGBB.
         [[nodiscard]] static std::uint32_t master_rgb(std::uint8_t index) noexcept;
+        // Final pixel colour from a palette entry, applying the PPUMASK greyscale
+        // (index &= $30) and colour-emphasis (each set bit attenuates the other two
+        // primaries) effects. All render paths funnel through this.
+        [[nodiscard]] std::uint32_t shade(std::uint8_t master_index) const noexcept;
 
         std::vector<std::uint32_t> pixels_ =
             std::vector<std::uint32_t>(static_cast<std::size_t>(visible_width) * visible_height);
