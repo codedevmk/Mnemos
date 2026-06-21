@@ -2,6 +2,7 @@ add_library(
     mnemos_apps_player_adapters_common
     battery_save.cpp
     cli_args.cpp
+    input_pack.cpp
     region_args.cpp
     rom_loader.cpp
     system_family.cpp
@@ -47,6 +48,7 @@ if(BUILD_TESTING)
         SOURCES
             tests/battery_save_test.cpp
             tests/cli_args_test.cpp
+            tests/input_pack_test.cpp
             tests/region_args_test.cpp
             tests/rom_loader_test.cpp
             tests/system_family_test.cpp
