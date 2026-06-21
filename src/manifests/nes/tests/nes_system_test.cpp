@@ -288,6 +288,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 32 KiB CHR-ROM Konami VRC4e (mapper 23). PRG
+    // 8 KiB bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = N (0..31, so the 9-bit
+    // low+high register pair is observable); reset vector in the fixed last bank.
+    std::vector<std::uint8_t> make_vrc4() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 32U * 0x0400U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 4U;    // 32 KiB CHR-ROM (32 one-KiB banks)
+        rom[6] = 0x70U; // flags6: mapper low nibble = 7
+        rom[7] = 0x10U; // flags7: mapper high nibble = 1 -> mapper 23
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 32U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(b);
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
     // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
     // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
@@ -959,6 +984,73 @@ TEST_CASE("VRC6 (mapper 24) Konami VRC IRQ fires in cycle mode and acknowledges"
     sys->mapper->clock_cpu_timer(1U); // 0xFF -> overflow -> assert
     CHECK(irq);
     sys->bus.write8(0xF002U, 0x00U); // acknowledge
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("VRC4 (mapper 23) banks PRG with swap mode + 9-bit CHR", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc4());
+
+    // Power-on: $8000 = PRG0 (bank 0), $A000 = PRG1 (bank 0), $C000 = second-last
+    // (bank 6), $E000 = last (bank 7).
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA6U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    sys->bus.write8(0x8000U, 0x03U); // PRG0 = bank 3
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    sys->bus.write8(0xA000U, 0x05U); // PRG1 = bank 5
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+
+    // Swap mode ($9002 decodes to sub-index 2 on mapper 23): PRG0 moves to $C000 and
+    // $8000 becomes the fixed second-last bank.
+    sys->bus.write8(0x9002U, 0x02U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA6U); // second-last
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U); // PRG0
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // last stays fixed
+
+    // CHR bank 0: low nibble $B000 = 5 -> bank 5, then high nibble $B001 = 1 ->
+    // bank (1<<4)|5 = 21.
+    sys->bus.write8(0xB000U, 0x05U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 5U);
+    sys->bus.write8(0xB001U, 0x01U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 21U);
+}
+
+TEST_CASE("VRC4 (mapper 23) Konami VRC IRQ fires and acknowledges", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc4());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xF000U, 0x0EU); // latch low nibble  -> $.E
+    sys->bus.write8(0xF001U, 0x0FU); // latch high nibble -> $FE
+    sys->bus.write8(0xF002U, 0x06U); // enable (bit 1) + cycle mode (bit 2) -> counter $FE
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // $FE -> $FF
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // $FF -> overflow -> assert
+    CHECK(irq);
+    sys->bus.write8(0xF003U, 0x00U); // acknowledge
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("VRC2a (mapper 22) drops the low CHR bit and has no IRQ", "[manifests][nes]") {
+    auto rom = make_vrc4();
+    rom[6] = 0x60U; // mapper low nibble 6 -> mapper 22 (VRC2a)
+    auto sys = assemble_nes(rom);
+
+    // VRC2a uses the written CHR value >> 1: writing 10 to the low register selects
+    // bank 5 (10 >> 1).
+    sys->bus.write8(0xB000U, 0x0AU);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 5U);
+
+    // No IRQ device: $F002 writes do nothing.
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+    sys->bus.write8(0xF000U, 0x0FU);
+    sys->bus.write8(0xF001U, 0x0FU);
+    sys->bus.write8(0xF002U, 0x06U);
+    sys->mapper->clock_cpu_timer(1000U);
     CHECK_FALSE(irq);
 }
 
