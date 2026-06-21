@@ -140,6 +140,13 @@ namespace mnemos::chips::video {
         // (the MMC5 sprite/background CHR split); sprites always use the main window.
         // Empty (the default) => background shares the main CHR window.
         void attach_chr_bg(std::span<const std::uint8_t> chr) noexcept { chr_bg_ = chr; }
+        // A cartridge hook fired on each pattern-table fetch with the PPU address, so
+        // a latch-banking mapper (MMC2/MMC4) can flip its CHR bank when it sees tile
+        // $FD/$FE fetched. Unset for every other mapper (no per-fetch overhead beyond
+        // a null check). The callback may re-point the mapper's CHR window in place.
+        void set_chr_fetch_callback(std::function<void(std::uint16_t)> cb) noexcept {
+            chr_fetch_cb_ = std::move(cb);
+        }
         void set_mirroring(mirroring m) noexcept { mirroring_ = m; }
         // Select PAL (312-line) vs NTSC (262-line) frame geometry. The visible area
         // (0-239) and the vblank start (241) are identical; PAL only adds vblank
@@ -292,6 +299,7 @@ namespace mnemos::chips::video {
         std::span<std::uint8_t> chr_ram_{};      // writable CHR (CHR-RAM carts); empty => CHR-ROM
         std::span<const std::uint8_t> chr_bg_{}; // MMC5 background CHR (set B); empty => share chr_
         std::span<const std::uint8_t> external_nametables_{};
+        std::function<void(std::uint16_t)> chr_fetch_cb_{}; // MMC2/MMC4 CHR-latch hook
 
         std::uint32_t dot_{};
         std::uint32_t scanline_{};

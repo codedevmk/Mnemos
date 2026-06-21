@@ -386,6 +386,10 @@ namespace mnemos::chips::video {
             static_cast<std::uint16_t>(pattern_base + tile * tile_bytes + fine_y);
         const std::uint8_t plane0 = ppu_read(row);
         const std::uint8_t plane1 = ppu_read(static_cast<std::uint16_t>(row + 8U));
+        if (chr_fetch_cb_) { // MMC2/MMC4 latch (flips after this tile's fetch)
+            chr_fetch_cb_(row);
+            chr_fetch_cb_(static_cast<std::uint16_t>(row + 8U));
+        }
         const std::uint32_t bit = 7U - (fine_x & 7U);
         return ((plane0 >> bit) & 1U) | (((plane1 >> bit) & 1U) << 1U);
     }
@@ -433,11 +437,17 @@ namespace mnemos::chips::video {
         // MMC5 splits CHR between sprites and background while 8x16 sprites are
         // active: background fetches use set B. Otherwise the background shares the
         // main CHR window (the normal single-window path).
+        std::uint8_t value;
         if (!chr_bg_.empty() && (ctrl_ & ctrl_spr_size16) != 0U) {
             const std::uint16_t a = static_cast<std::uint16_t>(addr & 0x1FFFU);
-            return a < chr_bg_.size() ? chr_bg_[a] : 0U;
+            value = a < chr_bg_.size() ? chr_bg_[a] : 0U;
+        } else {
+            value = ppu_read(addr);
         }
-        return ppu_read(addr);
+        if (chr_fetch_cb_) { // MMC2/MMC4 latch (flips after this fetch)
+            chr_fetch_cb_(addr);
+        }
+        return value;
     }
 
     void ppu2c02::render_bg_scanline(std::uint32_t sy, std::uint16_t line_v) noexcept {
