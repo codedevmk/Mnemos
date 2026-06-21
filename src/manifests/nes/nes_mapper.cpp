@@ -1,5 +1,7 @@
 #include "nes_mapper.hpp"
 
+#include "ssg.hpp" // chips::audio::ssg (the Sunsoft 5B's YM2149 sound block)
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -926,6 +928,237 @@ namespace mnemos::manifests::nes {
             std::size_t prg_32k_count_;
             std::uint8_t bank_value_{};
         };
+
+        // Sunsoft FME-7 / 5B (iNES 69). Banking: three switchable 8 KiB PRG banks
+        // ($8000/$A000/$C000) over a fixed last bank ($E000); eight switchable 1 KiB
+        // CHR banks composed into the 8 KiB window; programmable mirroring; and a
+        // 16-bit CPU-cycle down-counter IRQ. The board has two register pairs: the
+        // BANKING ports at $8000 (command 0-F) + $A000 (parameter), and -- on the
+        // "5B" variant -- the AUDIO ports at $C000 (YM2149 register select) + $E000
+        // (data). The 5B's sound chip is the on-board ssg; the board clocks it at the
+        // CPU rate (its native /16 prescaler) and mixes it into the 2A03 output.
+        //
+        // Not modelled (no local ROM depends on it; documented for the next pass):
+        // the command-8 $6000 ROM bank (the manifest maps $6000 as work RAM, which is
+        // what Gimmick! and the other 5B carts use). The IRQ counter is advanced once
+        // per scanline (clock_cpu_timer), so its precision is scanline-granular.
+        class sunsoft5b_mapper final : public nes_mapper {
+          public:
+            sunsoft5b_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                             std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                             bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
+                  chr_1k_count_(chr.size() / k_chr_1k) {}
+
+            void reset() override {
+                command_ = 0U;
+                chr_banks_.fill(0U);
+                prg_banks_ = {0U, 0U, 0U, 0U};
+                mirror_ = 0U;
+                irq_counter_ = 0U;
+                irq_enabled_ = false;
+                irq_counter_enabled_ = false;
+
+                if (prg_8k_count_ != 0U) {
+                    for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
+                        bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
+                    }
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+
+                // The 5B sound chip is clocked at the CPU rate divided by the YM2149's
+                // own /16 prescaler; the board enables capture so the adapter can drain
+                // and mix it.
+                ssg_.reset(chips::reset_kind::power_on);
+                ssg_.set_clock_divider(16);
+                ssg_.enable_audio_capture(true);
+
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xE000U) {
+                case 0x8000U: // command register: which parameter the next $A000 sets
+                    command_ = static_cast<std::uint8_t>(value & 0x0FU);
+                    break;
+                case 0xA000U: // parameter register
+                    set_parameter(value);
+                    break;
+                case 0xC000U: // 5B audio: latch the YM2149 register to access
+                    ssg_.address(static_cast<std::uint8_t>(value & 0x0FU));
+                    break;
+                case 0xE000U: // 5B audio: write the latched register
+                    ssg_.write(value);
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            // The FME-7 IRQ counter free-runs on the CPU clock; advanced once per
+            // scanline by the board. It asserts /IRQ when it wraps past $0000 (with
+            // both the counter + IRQ enabled); writing command $D acknowledges.
+            void clock_cpu_timer(std::uint32_t cpu_cycles) override {
+                if (!irq_counter_enabled_) {
+                    return;
+                }
+                if (cpu_cycles > irq_counter_ && irq_enabled_) {
+                    raise_irq(true); // the down-counter passed through zero
+                }
+                irq_counter_ = static_cast<std::uint16_t>((irq_counter_ - cpu_cycles) & 0xFFFFU);
+            }
+
+            [[nodiscard]] chips::ichip* expansion_audio() noexcept override { return &ssg_; }
+            [[nodiscard]] std::size_t expansion_audio_pending() const noexcept override {
+                return ssg_.pending_samples();
+            }
+            std::size_t drain_expansion_audio(std::int16_t* out,
+                                              std::size_t max_pairs) noexcept override {
+                return ssg_.drain_samples(out, max_pairs);
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(command_);
+                for (const std::uint8_t b : chr_banks_) {
+                    writer.u8(b);
+                }
+                for (const std::uint8_t b : prg_banks_) {
+                    writer.u8(b);
+                }
+                writer.u8(mirror_);
+                writer.u16(irq_counter_);
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_counter_enabled_);
+                ssg_.save_state(writer);
+            }
+            void load_state(chips::state_reader& reader) override {
+                command_ = reader.u8();
+                for (std::uint8_t& b : chr_banks_) {
+                    b = reader.u8();
+                }
+                for (std::uint8_t& b : prg_banks_) {
+                    b = reader.u8();
+                }
+                mirror_ = reader.u8();
+                irq_counter_ = reader.u16();
+                irq_enabled_ = reader.boolean();
+                irq_counter_enabled_ = reader.boolean();
+                ssg_.load_state(reader);
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+            }
+
+          private:
+            void set_parameter(std::uint8_t value) {
+                if (command_ <= 0x07U) { // commands 0-7: the eight 1 KiB CHR banks
+                    chr_banks_[command_] = value;
+                    apply_chr();
+                    return;
+                }
+                switch (command_) {
+                case 0x08U: // $6000 bank (ROM/RAM select) -- stored; $6000 stays work RAM
+                    prg_banks_[0] = value;
+                    break;
+                case 0x09U: // $8000 8 KiB ROM bank
+                    prg_banks_[1] = value;
+                    apply_prg();
+                    break;
+                case 0x0AU: // $A000 8 KiB ROM bank
+                    prg_banks_[2] = value;
+                    apply_prg();
+                    break;
+                case 0x0BU: // $C000 8 KiB ROM bank
+                    prg_banks_[3] = value;
+                    apply_prg();
+                    break;
+                case 0x0CU: // nametable mirroring
+                    mirror_ = static_cast<std::uint8_t>(value & 0x03U);
+                    apply_mirroring();
+                    break;
+                case 0x0DU: // IRQ control: bit 7 = counter enable, bit 0 = IRQ enable
+                    irq_counter_enabled_ = (value & 0x80U) != 0U;
+                    irq_enabled_ = (value & 0x01U) != 0U;
+                    raise_irq(false); // a write to $D acknowledges any pending IRQ
+                    break;
+                case 0x0EU: // IRQ counter low byte
+                    irq_counter_ = static_cast<std::uint16_t>((irq_counter_ & 0xFF00U) | value);
+                    break;
+                case 0x0FU: // IRQ counter high byte
+                    irq_counter_ = static_cast<std::uint16_t>(
+                        (irq_counter_ & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void map_prg8(std::uint32_t slot, std::size_t bank8) {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(slot,
+                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
+            }
+
+            void apply_prg() {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                map_prg8(0x8000U, prg_banks_[1]);
+                map_prg8(0xA000U, prg_banks_[2]);
+                map_prg8(0xC000U, prg_banks_[3]);
+                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank fixed at $E000
+            }
+
+            void apply_chr() {
+                if (chr_is_ram_ || chr_1k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t s = 0; s < 8U; ++s) {
+                    const std::size_t src = (chr_banks_[s] % chr_1k_count_) * k_chr_1k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                }
+            }
+
+            void apply_mirroring() {
+                using m = chips::video::ppu2c02::mirroring;
+                switch (mirror_) {
+                case 0:
+                    ppu_->set_mirroring(m::vertical);
+                    break;
+                case 1:
+                    ppu_->set_mirroring(m::horizontal);
+                    break;
+                case 2:
+                    ppu_->set_mirroring(m::single_a);
+                    break;
+                default:
+                    ppu_->set_mirroring(m::single_b);
+                    break;
+                }
+            }
+
+            std::size_t prg_8k_count_;
+            std::size_t chr_1k_count_;
+            chips::audio::ssg ssg_;
+            std::uint8_t command_{};
+            std::array<std::uint8_t, 8> chr_banks_{};
+            std::array<std::uint8_t, 4> prg_banks_{}; // [0]=$6000 [1]=$8000 [2]=$A000 [3]=$C000
+            std::uint8_t mirror_{};
+            std::uint16_t irq_counter_{};
+            bool irq_enabled_{};
+            bool irq_counter_enabled_{};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -945,6 +1178,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<mmc5_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 7:
             return std::make_unique<axrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 69:
+            return std::make_unique<sunsoft5b_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 206:
             return std::make_unique<namco118_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 0:

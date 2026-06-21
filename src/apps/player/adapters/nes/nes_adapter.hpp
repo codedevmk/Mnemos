@@ -62,15 +62,19 @@ namespace mnemos::apps::player::adapters::nes {
 
       private:
         std::unique_ptr<manifests::nes::nes_system> sys_;
-        std::array<chips::ichip*, 3> chip_view_{}; // PPU (frame source), CPU, APU
+        // PPU (frame source), CPU, APU, and -- for a cart with an on-board sound chip
+        // (Sunsoft 5B, ...) -- the expansion audio chip as a fourth entry.
+        std::vector<chips::ichip*> chip_view_{};
         runtime::scheduler scheduler_;
         mnemos::video_region region_;
         double target_fps_;
         std::vector<frontend_sdk::spec_field> spec_{};
         // drain_audio scratch: the APU queues interleaved stereo (mono duplicated
         // to both lanes); it is resampled to the output frame rate, carrying the
-        // fractional remainder so the long-term rate stays exact.
+        // fractional remainder so the long-term rate stays exact. exp_buf_ holds the
+        // cartridge expansion audio (if any), resampled and summed into the same mix.
         std::vector<std::int16_t> apu_buf_{};
+        std::vector<std::int16_t> exp_buf_{};
         std::vector<std::int16_t> mix_buf_{};
         double audio_frac_{0.0};
         double lp_state_{0.0}; // one-pole low-pass state: the 2A03's ~14 kHz output filter

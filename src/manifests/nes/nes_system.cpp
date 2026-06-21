@@ -189,8 +189,13 @@ namespace mnemos::manifests::nes {
         // inactive->active edge.
         s->ppu.set_vblank_callback(
             [s](std::uint32_t) { s->cpu.set_nmi_line(s->ppu.nmi_asserted()); });
-        s->ppu.set_scanline_callback([s](std::uint32_t line) {
+        // The Sunsoft FME-7 IRQ counter free-runs on the CPU clock; approximate it at
+        // scanline granularity (NTSC ~113.7, PAL ~106.6 CPU cycles per line).
+        const std::uint32_t cpu_cycles_per_line = pal ? 107U : 114U;
+        s->ppu.set_scanline_callback([s, cpu_cycles_per_line](std::uint32_t line) {
             s->cpu.set_nmi_line(s->ppu.nmi_asserted());
+            // The FME-7 counter ticks regardless of rendering (it is not A12-driven).
+            s->mapper->clock_cpu_timer(cpu_cycles_per_line);
             // The MMC3 scanline counter is driven by PPU A12 toggles, which only
             // occur while rendering; a blanked screen does not clock it.
             if (s->ppu.rendering_enabled()) {
