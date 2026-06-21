@@ -26,6 +26,7 @@ target_link_libraries(
         mnemos::chips::audio::ricoh_2a03_apu
         mnemos::chips::audio::rp2c33
         mnemos::chips::audio::ssg
+        mnemos::chips::audio::vrc6
         mnemos::chips::audio::ym2413
 )
 

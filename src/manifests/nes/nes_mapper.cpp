@@ -1,6 +1,7 @@
 #include "nes_mapper.hpp"
 
 #include "ssg.hpp"    // chips::audio::ssg (the Sunsoft 5B's YM2149 sound block)
+#include "vrc6.hpp"   // chips::audio::vrc6 (the VRC6's pulse + sawtooth sound)
 #include "ym2413.hpp" // chips::audio::ym2413 (the VRC7's OPLL sound block)
 
 #include <algorithm>
@@ -1424,6 +1425,253 @@ namespace mnemos::manifests::nes {
             bool cycle_mode_{};     // $F000 bit 2: 1 = per-cycle, 0 = per-scanline
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
+
+        // Konami VRC6 (iNES 24 = VRC6a, 26 = VRC6b). PRG: a switchable 16 KiB bank
+        // ($8000) over a switchable 8 KiB bank ($C000) + the fixed last 8 KiB bank
+        // ($E000). CHR: eight 1 KiB banks ($D000-$D003 + $E000-$E003) composed into
+        // the window. $B003 sets mirroring; $F000-$F002 are the Konami VRC IRQ (same
+        // as VRC7). The on-board sound is the vrc6 chip (2 pulse + sawtooth) at
+        // $9000-$9003/$A000-$A002/$B000-$B002. VRC6b swaps the A0/A1 register lines.
+        class vrc6_mapper final : public nes_mapper {
+          public:
+            vrc6_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                        std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                        bool chr_is_ram, bool variant_b) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_16k_count_(prg.size() / k_prg_bank), prg_8k_count_(prg.size() / k_prg_8k),
+                  chr_1k_count_(chr.size() / k_chr_1k), variant_b_(variant_b) {}
+
+            void reset() override {
+                prg16_ = 0U;
+                prg8_ = 0U;
+                chr_banks_.fill(0U);
+                ppu_ctrl_ = 0U;
+                irq_latch_ = 0U;
+                irq_counter_ = 0U;
+                irq_prescaler_ = 0;
+                irq_enabled_ = false;
+                irq_ack_enable_ = false;
+                cycle_mode_ = false;
+
+                if (prg_8k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank)); // 16 KiB switchable
+                    bus_->map_rom(0xC000U, prg_.subspan(0, k_prg_8k));   // 8 KiB switchable
+                    bus_->map_rom(0xE000U, prg_.subspan(0, k_prg_8k));   // 8 KiB fixed (last)
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+
+                sound_.reset(chips::reset_kind::power_on);
+                sound_.set_clock_divider(37);
+                sound_.enable_audio_capture(true);
+
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                const std::uint16_t group = addr & 0xF000U;
+                std::uint16_t sub = static_cast<std::uint16_t>(addr & 0x03U);
+                if (variant_b_) { // VRC6b swaps A0 and A1
+                    sub = static_cast<std::uint16_t>(((sub & 0x01U) << 1U) | ((sub >> 1U) & 0x01U));
+                }
+                switch (group) {
+                case 0x8000U: // PRG 16 KiB bank
+                    prg16_ = value;
+                    apply_prg();
+                    break;
+                case 0x9000U: // pulse 1 + global audio control
+                case 0xA000U: // pulse 2
+                    sound_.write_reg(static_cast<std::uint16_t>(group | sub), value);
+                    break;
+                case 0xB000U:
+                    if (sub == 0x03U) { // $B003: PPU banking mode + mirroring
+                        ppu_ctrl_ = value;
+                        apply_mirroring();
+                    } else { // sawtooth ($B000-$B002)
+                        sound_.write_reg(static_cast<std::uint16_t>(0xB000U | sub), value);
+                    }
+                    break;
+                case 0xC000U: // PRG 8 KiB bank
+                    prg8_ = value;
+                    apply_prg();
+                    break;
+                case 0xD000U: // CHR banks 0-3
+                    chr_banks_[sub] = value;
+                    apply_chr();
+                    break;
+                case 0xE000U: // CHR banks 4-7
+                    chr_banks_[4U + sub] = value;
+                    apply_chr();
+                    break;
+                case 0xF000U: // Konami VRC IRQ
+                    if (sub == 0x00U) {
+                        irq_latch_ = value;
+                    } else if (sub == 0x01U) {
+                        write_irq_control(value);
+                    } else if (sub == 0x02U) {
+                        irq_acknowledge();
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void clock_cpu_timer(std::uint32_t cpu_cycles) override {
+                if (!irq_enabled_) {
+                    return;
+                }
+                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
+                    if (cycle_mode_) {
+                        tick_irq_counter();
+                    } else {
+                        irq_prescaler_ += 3;
+                        if (irq_prescaler_ >= 341) {
+                            irq_prescaler_ -= 341;
+                            tick_irq_counter();
+                        }
+                    }
+                }
+            }
+
+            [[nodiscard]] chips::ichip* expansion_audio() noexcept override { return &sound_; }
+            [[nodiscard]] std::size_t expansion_audio_pending() const noexcept override {
+                return sound_.pending_samples();
+            }
+            std::size_t drain_expansion_audio(std::int16_t* out,
+                                              std::size_t max_pairs) noexcept override {
+                return sound_.drain_samples(out, max_pairs);
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(prg16_);
+                writer.u8(prg8_);
+                for (const std::uint8_t b : chr_banks_) {
+                    writer.u8(b);
+                }
+                writer.u8(ppu_ctrl_);
+                writer.u8(irq_latch_);
+                writer.u8(irq_counter_);
+                writer.u32(static_cast<std::uint32_t>(irq_prescaler_));
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_ack_enable_);
+                writer.boolean(cycle_mode_);
+                sound_.save_state(writer);
+            }
+            void load_state(chips::state_reader& reader) override {
+                prg16_ = reader.u8();
+                prg8_ = reader.u8();
+                for (std::uint8_t& b : chr_banks_) {
+                    b = reader.u8();
+                }
+                ppu_ctrl_ = reader.u8();
+                irq_latch_ = reader.u8();
+                irq_counter_ = reader.u8();
+                irq_prescaler_ = static_cast<int>(reader.u32());
+                irq_enabled_ = reader.boolean();
+                irq_ack_enable_ = reader.boolean();
+                cycle_mode_ = reader.boolean();
+                sound_.load_state(reader);
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+            }
+
+          private:
+            void map_prg8(std::uint32_t slot, std::size_t bank8) {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(slot,
+                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
+            }
+
+            void apply_prg() {
+                if (prg_16k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(
+                    0x8000U, prg_.subspan((prg16_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
+                map_prg8(0xC000U, prg8_);
+                map_prg8(0xE000U, prg_8k_count_ - 1U); // last 8 KiB fixed at $E000
+            }
+
+            void apply_chr() {
+                if (chr_is_ram_ || chr_1k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t s = 0; s < 8U; ++s) {
+                    const std::size_t src = (chr_banks_[s] % chr_1k_count_) * k_chr_1k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                }
+            }
+
+            void apply_mirroring() {
+                using m = chips::video::ppu2c02::mirroring;
+                // $B003 bits 3-2 select the nametable arrangement (CHR-mode-0 layout).
+                switch ((ppu_ctrl_ >> 2U) & 0x03U) {
+                case 0:
+                    ppu_->set_mirroring(m::vertical);
+                    break;
+                case 1:
+                    ppu_->set_mirroring(m::horizontal);
+                    break;
+                case 2:
+                    ppu_->set_mirroring(m::single_a);
+                    break;
+                default:
+                    ppu_->set_mirroring(m::single_b);
+                    break;
+                }
+            }
+
+            void write_irq_control(std::uint8_t value) {
+                irq_ack_enable_ = (value & 0x01U) != 0U;
+                irq_enabled_ = (value & 0x02U) != 0U;
+                cycle_mode_ = (value & 0x04U) != 0U;
+                if (irq_enabled_) {
+                    irq_counter_ = irq_latch_;
+                    irq_prescaler_ = 0;
+                }
+                raise_irq(false);
+            }
+            void irq_acknowledge() {
+                raise_irq(false);
+                irq_enabled_ = irq_ack_enable_;
+            }
+            void tick_irq_counter() {
+                if (irq_counter_ == 0xFFU) {
+                    irq_counter_ = irq_latch_;
+                    raise_irq(true);
+                } else {
+                    ++irq_counter_;
+                }
+            }
+
+            std::size_t prg_16k_count_;
+            std::size_t prg_8k_count_;
+            std::size_t chr_1k_count_;
+            bool variant_b_;
+            chips::audio::vrc6 sound_;
+            std::uint8_t prg16_{};
+            std::uint8_t prg8_{};
+            std::array<std::uint8_t, 8> chr_banks_{};
+            std::uint8_t ppu_ctrl_{}; // $B003
+            std::uint8_t irq_latch_{};
+            std::uint8_t irq_counter_{};
+            int irq_prescaler_{};
+            bool irq_enabled_{};
+            bool irq_ack_enable_{};
+            bool cycle_mode_{};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -1443,6 +1691,10 @@ namespace mnemos::manifests::nes {
             return std::make_unique<mmc5_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 7:
             return std::make_unique<axrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 24: // VRC6a
+            return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, false);
+        case 26: // VRC6b (A0/A1 swapped)
+            return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, true);
         case 69:
             return std::make_unique<sunsoft5b_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 85:
