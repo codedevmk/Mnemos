@@ -2546,6 +2546,365 @@ namespace mnemos::manifests::nes {
             bool cycle_mode_{};
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
+
+        // BNROM / NINA-001 (iNES 34). Two unrelated boards share the number; the CHR
+        // type disambiguates. BNROM (CHR-RAM): a write anywhere in $8000-$FFFF sets a
+        // 32 KiB PRG bank. NINA-001 (CHR-ROM): registers sit in the $7FFD-$7FFF tail
+        // of the $6000 RAM -- $7FFD = 32 KiB PRG bank, $7FFE / $7FFF = the two 4 KiB
+        // CHR banks at $0000 / $1000.
+        class bnrom_nina_mapper final : public nes_mapper {
+          public:
+            bnrom_nina_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                              std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                              bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_32k_count_(prg.size() / k_prg_32k), chr_4k_count_(chr.size() / k_chr_4k),
+                  is_nina_(!chr_is_ram && chr.size() >= k_chr_8k) {}
+
+            void reset() override {
+                prg_bank_ = 0U;
+                chr_bank_ = {0U, 1U};
+                if (prg_32k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k));
+                }
+                if (is_nina_) {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                    apply_chr();
+                    // NINA-001 registers live in the $6000 RAM tail; capture writes to
+                    // them (reads fall through to the RAM).
+                    bus_->map_mmio(
+                        0x7FFDU, 0x0003U, [](std::uint32_t) -> std::uint8_t { return 0xFFU; },
+                        [this](std::uint32_t addr, std::uint8_t value) { write_nina(addr, value); },
+                        1, [](std::uint32_t, bool is_write) { return is_write; });
+                } else {
+                    attach_chr(); // BNROM: 8 KiB CHR-RAM
+                    install_register_write_hook();
+                }
+            }
+
+            void write(std::uint16_t /*addr*/, std::uint8_t value) override { // BNROM only
+                prg_bank_ = value;
+                apply_prg();
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(prg_bank_);
+                writer.u8(chr_bank_[0]);
+                writer.u8(chr_bank_[1]);
+            }
+            void load_state(chips::state_reader& reader) override {
+                prg_bank_ = reader.u8();
+                chr_bank_[0] = reader.u8();
+                chr_bank_[1] = reader.u8();
+                apply_prg();
+                if (is_nina_) {
+                    apply_chr();
+                }
+            }
+
+          private:
+            void write_nina(std::uint32_t addr, std::uint8_t value) {
+                switch (addr) {
+                case 0x7FFDU:
+                    prg_bank_ = value;
+                    apply_prg();
+                    break;
+                case 0x7FFEU:
+                    chr_bank_[0] = value;
+                    apply_chr();
+                    break;
+                case 0x7FFFU:
+                    chr_bank_[1] = value;
+                    apply_chr();
+                    break;
+                default:
+                    break;
+                }
+            }
+            void apply_prg() {
+                if (prg_32k_count_ != 0U) {
+                    bus_->retarget_rom(
+                        0x8000U, prg_.subspan((prg_bank_ % prg_32k_count_) * k_prg_32k, k_prg_32k));
+                }
+            }
+            void apply_chr() {
+                if (chr_4k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t h = 0; h < 2U; ++h) {
+                    const std::size_t b = chr_bank_[h] % chr_4k_count_;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(b * k_chr_4k), k_chr_4k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(h * k_chr_4k));
+                }
+            }
+            std::size_t prg_32k_count_;
+            std::size_t chr_4k_count_;
+            bool is_nina_;
+            std::uint8_t prg_bank_{};
+            std::array<std::uint8_t, 2> chr_bank_{0U, 1U};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
+
+        // Konami VRC1 (iNES 75). Three switchable 8 KiB PRG banks ($8000/$A000/$C000)
+        // over the fixed last bank ($E000); two 4 KiB CHR banks ($E000/$F000 low
+        // nibble) whose 5th bit + the mirroring come from $9000. No IRQ, no audio.
+        class vrc1_mapper final : public nes_mapper {
+          public:
+            vrc1_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                        std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                        bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
+                  chr_4k_count_(chr.size() / k_chr_4k) {}
+
+            void reset() override {
+                prg_reg_ = {0U, 0U, 0U};
+                chr_lo_ = {0U, 0U};
+                chr_hi_ = {0U, 0U};
+                mirror_ = 0U;
+                if (prg_8k_count_ != 0U) {
+                    for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
+                        bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
+                    }
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xF000U) {
+                case 0x8000U:
+                    prg_reg_[0] = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_prg();
+                    break;
+                case 0x9000U: // mirroring (bit 0) + CHR high bits (bit 1 -> CHR0.4, bit 2 ->
+                              // CHR1.4)
+                    mirror_ = static_cast<std::uint8_t>(value & 0x01U);
+                    chr_hi_[0] = static_cast<std::uint8_t>((value >> 1U) & 0x01U);
+                    chr_hi_[1] = static_cast<std::uint8_t>((value >> 2U) & 0x01U);
+                    apply_chr();
+                    apply_mirroring();
+                    break;
+                case 0xA000U:
+                    prg_reg_[1] = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_prg();
+                    break;
+                case 0xC000U:
+                    prg_reg_[2] = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_prg();
+                    break;
+                case 0xE000U:
+                    chr_lo_[0] = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_chr();
+                    break;
+                case 0xF000U:
+                    chr_lo_[1] = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_chr();
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                for (const std::uint8_t b : prg_reg_) {
+                    writer.u8(b);
+                }
+                for (const std::uint8_t b : chr_lo_) {
+                    writer.u8(b);
+                }
+                for (const std::uint8_t b : chr_hi_) {
+                    writer.u8(b);
+                }
+                writer.u8(mirror_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                for (std::uint8_t& b : prg_reg_) {
+                    b = reader.u8();
+                }
+                for (std::uint8_t& b : chr_lo_) {
+                    b = reader.u8();
+                }
+                for (std::uint8_t& b : chr_hi_) {
+                    b = reader.u8();
+                }
+                mirror_ = reader.u8();
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+            }
+
+          private:
+            void map_prg8(std::uint32_t slot, std::size_t bank8) {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(slot,
+                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
+            }
+            void apply_prg() {
+                map_prg8(0x8000U, prg_reg_[0]);
+                map_prg8(0xA000U, prg_reg_[1]);
+                map_prg8(0xC000U, prg_reg_[2]);
+                map_prg8(0xE000U, prg_8k_count_ != 0U ? prg_8k_count_ - 1U : 0U);
+            }
+            void apply_chr() {
+                if (chr_is_ram_ || chr_4k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t h = 0; h < 2U; ++h) {
+                    const std::size_t bank =
+                        ((static_cast<std::size_t>(chr_hi_[h]) << 4U) | chr_lo_[h]) % chr_4k_count_;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(bank * k_chr_4k),
+                                k_chr_4k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(h * k_chr_4k));
+                }
+            }
+            void apply_mirroring() {
+                using m = chips::video::ppu2c02::mirroring;
+                ppu_->set_mirroring(mirror_ != 0U ? m::horizontal : m::vertical);
+            }
+            std::size_t prg_8k_count_;
+            std::size_t chr_4k_count_;
+            std::array<std::uint8_t, 3> prg_reg_{}; // $8000/$A000/$C000 8 KiB selects
+            std::array<std::uint8_t, 2> chr_lo_{};
+            std::array<std::uint8_t, 2> chr_hi_{};
+            std::uint8_t mirror_{};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
+
+        // Konami VRC3 (iNES 73, Salamander). A 16 KiB switchable PRG bank ($F000) over
+        // the fixed last 16 KiB, 8 KiB CHR-RAM, and a 16-bit (or 8-bit-mode) CPU-cycle
+        // IRQ counter whose latch is loaded a nibble at a time through $8000-$B000.
+        class vrc3_mapper final : public nes_mapper {
+          public:
+            vrc3_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                        std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                        bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_16k_count_(prg.size() / k_prg_bank) {}
+
+            void reset() override {
+                prg_bank_ = 0U;
+                irq_latch_ = 0U;
+                irq_counter_ = 0U;
+                irq_enabled_ = false;
+                irq_ack_enable_ = false;
+                irq_8bit_ = false;
+                if (prg_16k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
+                    bus_->map_rom(0xC000U,
+                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                }
+                attach_chr(); // 8 KiB CHR-RAM
+                apply_prg();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xF000U) {
+                case 0x8000U: // IRQ latch nibbles
+                    irq_latch_ =
+                        static_cast<std::uint16_t>((irq_latch_ & 0xFFF0U) | (value & 0x0FU));
+                    break;
+                case 0x9000U:
+                    irq_latch_ = static_cast<std::uint16_t>((irq_latch_ & 0xFF0FU) |
+                                                            ((value & 0x0FU) << 4U));
+                    break;
+                case 0xA000U:
+                    irq_latch_ = static_cast<std::uint16_t>((irq_latch_ & 0xF0FFU) |
+                                                            ((value & 0x0FU) << 8U));
+                    break;
+                case 0xB000U:
+                    irq_latch_ = static_cast<std::uint16_t>((irq_latch_ & 0x0FFFU) |
+                                                            ((value & 0x0FU) << 12U));
+                    break;
+                case 0xC000U: // IRQ control
+                    irq_8bit_ = (value & 0x04U) != 0U;
+                    irq_ack_enable_ = (value & 0x01U) != 0U;
+                    irq_enabled_ = (value & 0x02U) != 0U;
+                    if (irq_enabled_) {
+                        irq_counter_ = irq_latch_;
+                    }
+                    raise_irq(false);
+                    break;
+                case 0xD000U: // IRQ acknowledge
+                    raise_irq(false);
+                    irq_enabled_ = irq_ack_enable_;
+                    break;
+                case 0xF000U: // 16 KiB PRG bank at $8000
+                    prg_bank_ = static_cast<std::uint8_t>(value & 0x0FU);
+                    apply_prg();
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void clock_cpu_timer(std::uint32_t cpu_cycles) override {
+                if (!irq_enabled_) {
+                    return;
+                }
+                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
+                    if (irq_8bit_) {
+                        if ((irq_counter_ & 0x00FFU) == 0x00FFU) {
+                            irq_counter_ = static_cast<std::uint16_t>((irq_counter_ & 0xFF00U) |
+                                                                      (irq_latch_ & 0x00FFU));
+                            raise_irq(true);
+                        } else {
+                            ++irq_counter_;
+                        }
+                    } else {
+                        if (irq_counter_ == 0xFFFFU) {
+                            irq_counter_ = irq_latch_;
+                            raise_irq(true);
+                        } else {
+                            ++irq_counter_;
+                        }
+                    }
+                }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(prg_bank_);
+                writer.u16(irq_latch_);
+                writer.u16(irq_counter_);
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_ack_enable_);
+                writer.boolean(irq_8bit_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                prg_bank_ = reader.u8();
+                irq_latch_ = reader.u16();
+                irq_counter_ = reader.u16();
+                irq_enabled_ = reader.boolean();
+                irq_ack_enable_ = reader.boolean();
+                irq_8bit_ = reader.boolean();
+                apply_prg();
+            }
+
+          private:
+            void apply_prg() {
+                if (prg_16k_count_ != 0U) {
+                    bus_->retarget_rom(
+                        0x8000U,
+                        prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
+                }
+            }
+            std::size_t prg_16k_count_;
+            std::uint8_t prg_bank_{};
+            std::uint16_t irq_latch_{};
+            std::uint16_t irq_counter_{};
+            bool irq_enabled_{};
+            bool irq_ack_enable_{};
+            bool irq_8bit_{};
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -2573,6 +2932,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<color_dreams_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 19:
             return std::make_unique<namco163_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 34: // BNROM (CHR-RAM) / NINA-001 (CHR-ROM)
+            return std::make_unique<bnrom_nina_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 21: // VRC4a/c
         case 22: // VRC2a
         case 23: // VRC2b / VRC4e/f
@@ -2588,6 +2949,10 @@ namespace mnemos::manifests::nes {
             return std::make_unique<sunsoft5b_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 71:
             return std::make_unique<camerica_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 73:
+            return std::make_unique<vrc3_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 75:
+            return std::make_unique<vrc1_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 85:
             return std::make_unique<vrc7_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 206:

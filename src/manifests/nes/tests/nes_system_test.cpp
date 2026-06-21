@@ -377,6 +377,70 @@ namespace {
         return rom;
     }
 
+    // A 128 KiB-PRG (four 32 KiB banks) mapper-34 cart. BNROM when `chr_units` is 0
+    // (8 KiB CHR-RAM); NINA-001 when `chr_units` > 0 (CHR-ROM, four KiB banks marked
+    // $C0+N). PRG 32 KiB bank N byte 0 = $A0+N.
+    std::vector<std::uint8_t> make_mapper34(std::uint8_t chr_units) {
+        const std::size_t chr_bytes = static_cast<std::size_t>(chr_units) * 0x2000U;
+        std::vector<std::uint8_t> rom(16U + 4U * 0x8000U + chr_bytes, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 8U;        // 128 KiB PRG (four 32 KiB banks)
+        rom[5] = chr_units; // 0 = CHR-RAM (BNROM); >0 = CHR-ROM (NINA-001)
+        rom[6] = 0x20U;     // mapper low nibble 2
+        rom[7] = 0x20U;     // mapper high nibble 2 -> mapper 34
+        for (std::size_t b = 0; b < 4U; ++b) {
+            rom[16U + b * 0x8000U] = static_cast<std::uint8_t>(0xA0U + b);
+        }
+        const std::size_t chr = 16U + 4U * 0x8000U;
+        for (std::size_t b = 0; b < chr_bytes / 0x1000U; ++b) {
+            rom[chr + b * 0x1000U] = static_cast<std::uint8_t>(0xC0U + b); // CHR 4 KiB bank
+        }
+        return rom;
+    }
+
+    // A 64 KiB-PRG (eight 8 KiB banks) / 128 KiB CHR-ROM (32 four-KiB banks) Konami
+    // VRC1 (mapper 75). PRG 8 KiB bank N byte 0 = $A0+N; CHR 4 KiB bank N byte 0 = N.
+    std::vector<std::uint8_t> make_vrc1() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 32U * 0x1000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 16U;   // 128 KiB CHR (32 four-KiB banks)
+        rom[6] = 0xB0U; // mapper low nibble B
+        rom[7] = 0x40U; // -> mapper 75
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[16U + b * 0x2000U] = static_cast<std::uint8_t>(0xA0U + b);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 32U; ++b) {
+            rom[chr + b * 0x1000U] = static_cast<std::uint8_t>(b);
+        }
+        return rom;
+    }
+
+    // A 128 KiB-PRG (eight 16 KiB banks) / 8 KiB CHR-RAM Konami VRC3 (mapper 73,
+    // Salamander). PRG 16 KiB bank N byte 0 = $A0+N.
+    std::vector<std::uint8_t> make_vrc3() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x4000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 8U;    // 128 KiB PRG (eight 16 KiB banks)
+        rom[5] = 0U;    // CHR-RAM
+        rom[6] = 0x90U; // mapper low nibble 9
+        rom[7] = 0x40U; // -> mapper 73
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[16U + b * 0x4000U] = static_cast<std::uint8_t>(0xA0U + b);
+        }
+        return rom;
+    }
+
     // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
     // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
     // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
@@ -1193,8 +1257,78 @@ TEST_CASE("MMC4 (mapper 10) banks 16 KiB PRG over the fixed last bank", "[manife
     CHECK(sys->bus.read8(0xC000U) == 0xAEU); // last stays fixed
 }
 
+TEST_CASE("BNROM (mapper 34) switches the 32 KiB PRG bank", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mapper34(0)); // CHR-RAM -> BNROM
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    sys->bus.write8(0x8000U, 0x02U); // any $8000-$FFFF write sets the 32 KiB bank
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+}
+
+TEST_CASE("NINA-001 (mapper 34) banks PRG + two 4 KiB CHR via $7FFD-$7FFF", "[manifests][nes]") {
+    auto sys = assemble_nes(make_mapper34(4)); // CHR-ROM -> NINA-001
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC0U); // $0xxx = CHR bank 0
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xC1U); // $1xxx = CHR bank 1 (power-on)
+
+    sys->bus.write8(0x7FFDU, 0x02U); // 32 KiB PRG bank 2
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    sys->bus.write8(0x7FFEU, 0x03U); // $0xxx CHR bank 3
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xC3U);
+    sys->bus.write8(0x7FFFU, 0x05U); // $1xxx CHR bank 5
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xC5U);
+}
+
+TEST_CASE("VRC1 (mapper 75) banks PRG + 4 KiB CHR with the $9000 high bit", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc1());
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // fixed last 8 KiB bank
+
+    sys->bus.write8(0x8000U, 0x03U); // $8000 PRG bank 3
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    sys->bus.write8(0xA000U, 0x05U); // $A000 PRG bank 5
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+    sys->bus.write8(0xC000U, 0x02U); // $C000 PRG bank 2
+    CHECK(sys->bus.read8(0xC000U) == 0xA2U);
+
+    // CHR bank 0: low nibble $E000 = 2 -> bank 2; $9000 bit 1 adds bit 4 -> bank 18.
+    sys->bus.write8(0xE000U, 0x02U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 2U);
+    sys->bus.write8(0x9000U, 0x02U); // bit 1 -> CHR0 high bit
+    CHECK(sys->ppu.ppu_read(0x0000U) == 18U);
+}
+
+TEST_CASE("VRC3 (mapper 73) banks 16 KiB PRG + a 16-bit cycle IRQ", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc3());
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA7U); // fixed last 16 KiB bank
+    sys->bus.write8(0xF000U, 0x02U);         // 16 KiB bank 2 at $8000
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+    // Latch = $FFFE via the four nibble registers; 16-bit mode + enable.
+    sys->bus.write8(0x8000U, 0x0EU); // bits 0-3
+    sys->bus.write8(0x9000U, 0x0FU); // bits 4-7
+    sys->bus.write8(0xA000U, 0x0FU); // bits 8-11
+    sys->bus.write8(0xB000U, 0x0FU); // bits 12-15 -> latch $FFFE
+    sys->bus.write8(0xC000U, 0x02U); // enable (bit 1), 16-bit mode -> counter = $FFFE
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // $FFFE -> $FFFF
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // $FFFF -> overflow -> assert
+    CHECK(irq);
+    sys->bus.write8(0xD000U, 0x00U); // acknowledge
+    CHECK_FALSE(irq);
+}
+
 TEST_CASE("Namco 163 (mapper 19) banks PRG + CHR", "[manifests][nes]") {
     auto sys = assemble_nes(make_namco163());
+
+    // Power-on: every switchable PRG window is bank 0; $E000 is the fixed last bank.
 
     // Power-on: every switchable PRG window is bank 0; $E000 is the fixed last bank.
     CHECK(sys->bus.read8(0x8000U) == 0xA0U);
