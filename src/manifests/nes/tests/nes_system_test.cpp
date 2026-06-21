@@ -259,6 +259,30 @@ namespace {
         return rom;
     }
 
+    // A two-side FDS image: each side is a disk-info block ($01 + "*NINTENDO-HVC*")
+    // whose game-name byte (offset $10) is 'A' on side 0 and 'B' on side 1, so a test
+    // can tell which side the drive is serving, plus a file-amount block (0 files).
+    std::vector<std::uint8_t> make_synthetic_fds_2side() {
+        std::vector<std::uint8_t> rom(16U + 2U * 65500U, 0x00U);
+        rom[0] = 'F';
+        rom[1] = 'D';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 2U; // two sides
+        const char* hvc = "*NINTENDO-HVC*";
+        for (std::size_t side = 0; side < 2U; ++side) {
+            const std::size_t s = 16U + side * 65500U;
+            rom[s + 0U] = 0x01U;
+            for (std::size_t i = 0; i < 14U; ++i) {
+                rom[s + 1U + i] = static_cast<std::uint8_t>(hvc[i]);
+            }
+            rom[s + 0x10U] = static_cast<std::uint8_t>('A' + side); // per-side marker
+            rom[s + 56U] = 0x02U;
+            rom[s + 57U] = 0x00U;
+        }
+        return rom;
+    }
+
     // A stand-in 8 KiB FDS BIOS: just enough to assemble (a reset vector to $E000 and
     // a self-loop). The real DISKSYS.ROM is supplied via MNEMOS_FDS_BIOS for golden runs.
     std::vector<std::uint8_t> make_dummy_fds_bios() {
@@ -870,6 +894,42 @@ TEST_CASE("FDS disk drive streams block bytes with synthesized CRC gaps", "[mani
     CHECK(b[57] == 0x00);                 // (the raw .fds has no CRC; the drive supplies it)
     CHECK(b[58] == 0x02);                 // block 2 (file amount) ID, correctly aligned
     CHECK(b[59] == 0x00);                 // zero files
+}
+
+TEST_CASE("FDS multi-side disk swapping flips the served side", "[manifests][nes][fds]") {
+    nes_config cfg;
+    cfg.fds_bios = make_dummy_fds_bios();
+    auto sys = assemble_nes(make_synthetic_fds_2side(), cfg);
+    REQUIRE(sys->is_fds);
+    REQUIRE(sys->mapper->disk_side_count() == 2U);
+    CHECK(sys->mapper->current_disk_side() == 0U);
+
+    // Drive the disk from its start and return the disk-info block's game-name byte
+    // (offset $10 = the 17th byte), which differs per side.
+    const auto read_side_marker = [&]() -> int {
+        sys->bus.write8(0x4025U, 0x2EU); // hold/rewind to the side's start
+        sys->bus.write8(0x4023U, 0x83U); // enable the disk registers
+        sys->bus.write8(0x4025U, 0x2DU); // motor on, transfer running, read
+        int byte = -1;
+        for (int b = 0; b < 17; ++b) {
+            byte = -1;
+            for (int i = 0; i < 40000 && byte < 0; ++i) {
+                if ((sys->bus.read8(0x4030U) & 0x80U) != 0U) {
+                    byte = sys->bus.read8(0x4031U);
+                } else {
+                    sys->mapper->clock_cpu_timer(114U);
+                }
+            }
+        }
+        return byte; // the game-name byte (block offset $10)
+    };
+
+    CHECK(read_side_marker() == static_cast<int>('A')); // side 0
+
+    sys->mapper->insert_disk_side(1U);
+    CHECK(sys->mapper->current_disk_side() == 1U);
+    CHECK((sys->bus.read8(0x4032U) & 0x01U) != 0U);     // mid-swap: the disk reports removed
+    CHECK(read_side_marker() == static_cast<int>('B')); // side 1 after the flip
 }
 
 TEST_CASE("controller shift register clocks buttons in $4016 read order", "[manifests][nes]") {

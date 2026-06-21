@@ -58,6 +58,15 @@ namespace mnemos::manifests::nes {
         // CPU clock whether or not the PPU is drawing. Default: no-op.
         virtual void clock_cpu_timer(std::uint32_t /*cpu_cycles*/) {}
 
+        // --- FDS multi-side disk swapping ---
+        // An FDS disk image holds one or more sides; the player's media interface
+        // flips the inserted side (the emulated equivalent of the user turning the
+        // disk over) when a game asks for side B. A cartridge has no removable
+        // sides, so the defaults report none.
+        [[nodiscard]] virtual std::size_t disk_side_count() const noexcept { return 0U; }
+        [[nodiscard]] virtual std::size_t current_disk_side() const noexcept { return 0U; }
+        virtual void insert_disk_side(std::size_t /*side*/) noexcept {}
+
         // How a scanline-IRQ mapper drives the CPU /IRQ line. The board wires this
         // to the CPU; mappers without an IRQ ignore it.
         void set_irq_callback(std::function<void(bool)> on_irq) { set_irq_ = std::move(on_irq); }

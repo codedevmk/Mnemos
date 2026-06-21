@@ -21,6 +21,11 @@ namespace mnemos::manifests::nes {
         constexpr int k_cycles_per_byte = 50;
         constexpr int k_seek_delay = 8000;
 
+        // After a disk-side swap the drive reports the disk removed for this many
+        // $4032 reads, then reinserted -- the eject/reinsert the BIOS's "set disk"
+        // wait watches for before re-reading the new side.
+        constexpr int k_eject_reads = 24;
+
         [[nodiscard]] bool has_fds_header(std::span<const std::uint8_t> d) noexcept {
             return d.size() >= k_header && d[0] == 'F' && d[1] == 'D' && d[2] == 'S' &&
                    d[3] == 0x1AU;
@@ -83,6 +88,7 @@ namespace mnemos::manifests::nes {
                 timer_repeat_ = false;
                 timer_irq_ = false;
                 io_enable_ = false;
+                swap_eject_ = 0;
                 build_stream();
 
                 // The RP2C33 sound chip shares the disk register window ($4040-$409F);
@@ -114,6 +120,31 @@ namespace mnemos::manifests::nes {
             std::size_t drain_expansion_audio(std::int16_t* out,
                                               std::size_t max_pairs) noexcept override {
                 return sound_.drain_samples(out, max_pairs);
+            }
+
+            // --- multi-side disk swapping (player media interface) ---
+            [[nodiscard]] std::size_t disk_side_count() const noexcept override {
+                return disk_.size() / k_fds_side_size;
+            }
+            [[nodiscard]] std::size_t current_disk_side() const noexcept override {
+                return current_side_;
+            }
+            // Flip the inserted side: rebuild that side's stream, rewind the head, and
+            // report the disk removed for a moment so the BIOS's "set disk" wait sees
+            // the eject + reinsert and re-reads the new side.
+            void insert_disk_side(std::size_t side) noexcept override {
+                const std::size_t sides = disk_side_count();
+                if (sides == 0U) {
+                    return;
+                }
+                current_side_ = side % sides;
+                build_stream();
+                disk_pos_ = 0;
+                byte_ready_ = false;
+                end_of_head_ = false;
+                byte_accum_ = 0;
+                seek_remaining_ = k_seek_delay;
+                swap_eject_ = k_eject_reads;
             }
 
             void save_state(chips::state_writer& writer) const override {
@@ -245,11 +276,17 @@ namespace mnemos::manifests::nes {
                     return data_latch_;
                 }
                 case 0x4032U: { // drive status (active-high error bits)
+                    if (disk_.empty()) {
+                        return 0x03U; // no disk: not inserted + not ready
+                    }
+                    if (swap_eject_ > 0) {
+                        --swap_eject_;
+                        return 0x03U; // mid-swap: report the disk removed
+                    }
                     // Ready as soon as a disk is inserted (the head can reach it); the
-                    // motor gates the byte transfer, not this flag. No disk => both the
-                    // not-inserted and not-ready bits set. bit 2 (write protect) clear.
-                    // (Multi-side disk swapping is a separate follow-up.)
-                    return disk_.empty() ? 0x03U : 0x00U;
+                    // motor gates the byte transfer, not this flag. bit 2 (write
+                    // protect) clear.
+                    return 0x00U;
                 }
                 case 0x4033U:
                     return 0x80U; // external connector: battery good
@@ -416,6 +453,7 @@ namespace mnemos::manifests::nes {
             bool timer_repeat_{};
             bool timer_irq_{};
             bool io_enable_{};
+            int swap_eject_{}; // remaining "disk removed" $4032 reads after a side swap
 
             chips::audio::rp2c33 sound_; // the FDS expansion sound chip
         };
