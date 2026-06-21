@@ -1,8 +1,374 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-06-20T04:55:00+00:00",
+  "captured": "2026-06-21T05:08:20+00:00",
   "window_days": 7,
   "runs": [
+    {
+      "id": 27892007132,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 342
+    },
+    {
+      "id": 27891901150,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 263
+    },
+    {
+      "id": 27891642480,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 400
+    },
+    {
+      "id": 27891509933,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 354
+    },
+    {
+      "id": 27890652400,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 383
+    },
+    {
+      "id": 27890518076,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 358
+    },
+    {
+      "id": 27888935467,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 315
+    },
+    {
+      "id": 27888808318,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 345
+    },
+    {
+      "id": 27888674239,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 384
+    },
+    {
+      "id": 27888539108,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 381
+    },
+    {
+      "id": 27888005585,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 430
+    },
+    {
+      "id": 27887843695,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 382
+    },
+    {
+      "id": 27887813422,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 342
+    },
+    {
+      "id": 27887714501,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 325
+    },
+    {
+      "id": 27887481430,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 382
+    },
+    {
+      "id": 27887289913,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 388
+    },
+    {
+      "id": 27887136709,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 408
+    },
+    {
+      "id": 27886985632,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 397
+    },
+    {
+      "id": 27885689255,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 309
+    },
+    {
+      "id": 27885564099,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 295
+    },
+    {
+      "id": 27885300080,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 386
+    },
+    {
+      "id": 27885146856,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 348
+    },
+    {
+      "id": 27884957430,
+      "event": "pull_request",
+      "conclusion": "failure",
+      "seconds": 397
+    },
+    {
+      "id": 27884223285,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 320
+    },
+    {
+      "id": 27884044849,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 376
+    },
+    {
+      "id": 27883863426,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 384
+    },
+    {
+      "id": 27883703389,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 336
+    },
+    {
+      "id": 27883627885,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 370
+    },
+    {
+      "id": 27883475971,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 359
+    },
+    {
+      "id": 27883411753,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 375
+    },
+    {
+      "id": 27883264012,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 339
+    },
+    {
+      "id": 27883123701,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 360
+    },
+    {
+      "id": 27882978531,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 332
+    },
+    {
+      "id": 27882928442,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 305
+    },
+    {
+      "id": 27882774077,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 331
+    },
+    {
+      "id": 27882393329,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 328
+    },
+    {
+      "id": 27882224033,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 377
+    },
+    {
+      "id": 27881255963,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 329
+    },
+    {
+      "id": 27881096167,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 346
+    },
+    {
+      "id": 27880991478,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 369
+    },
+    {
+      "id": 27880793015,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 411
+    },
+    {
+      "id": 27880696188,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 362
+    },
+    {
+      "id": 27880536933,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 350
+    },
+    {
+      "id": 27880156478,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 355
+    },
+    {
+      "id": 27880003409,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 345
+    },
+    {
+      "id": 27878609024,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 350
+    },
+    {
+      "id": 27878441390,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 384
+    },
+    {
+      "id": 27878109874,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 384
+    },
+    {
+      "id": 27877969804,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 344
+    },
+    {
+      "id": 27877586046,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 354
+    },
+    {
+      "id": 27877462208,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 279
+    },
+    {
+      "id": 27876158968,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 400
+    },
+    {
+      "id": 27875979269,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 380
+    },
+    {
+      "id": 27875777400,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 378
+    },
+    {
+      "id": 27875581784,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 381
+    },
+    {
+      "id": 27875454797,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 361
+    },
+    {
+      "id": 27875298449,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 340
+    },
+    {
+      "id": 27875070238,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 313
+    },
+    {
+      "id": 27874908824,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 370
+    },
+    {
+      "id": 27874001756,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 362
+    },
+    {
+      "id": 27873860323,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 324
+    },
     {
       "id": 27818983448,
       "event": "push",
@@ -236,372 +602,6 @@
       "event": "pull_request",
       "conclusion": "success",
       "seconds": 301
-    },
-    {
-      "id": 27727652778,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 343
-    },
-    {
-      "id": 27725461565,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 315
-    },
-    {
-      "id": 27724974021,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 376
-    },
-    {
-      "id": 27724644305,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 380
-    },
-    {
-      "id": 27722497933,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 577
-    },
-    {
-      "id": 27722096741,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 360
-    },
-    {
-      "id": 27717909855,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 398
-    },
-    {
-      "id": 27717521590,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 334
-    },
-    {
-      "id": 27715548389,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 330
-    },
-    {
-      "id": 27715059679,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 440
-    },
-    {
-      "id": 27712295554,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 1158
-    },
-    {
-      "id": 27711631671,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 530
-    },
-    {
-      "id": 27711223725,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 552
-    },
-    {
-      "id": 27710842883,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 347
-    },
-    {
-      "id": 27709946369,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 322
-    },
-    {
-      "id": 27709532710,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 337
-    },
-    {
-      "id": 27705396479,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 573
-    },
-    {
-      "id": 27704753175,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 548
-    },
-    {
-      "id": 27704046870,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 327
-    },
-    {
-      "id": 27703653795,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 342
-    },
-    {
-      "id": 27703229160,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 510
-    },
-    {
-      "id": 27698598704,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 307
-    },
-    {
-      "id": 27698153965,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 365
-    },
-    {
-      "id": 27692107174,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 322
-    },
-    {
-      "id": 27691133947,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 308
-    },
-    {
-      "id": 27672340789,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 330
-    },
-    {
-      "id": 27672216460,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 296
-    },
-    {
-      "id": 27672012011,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 387
-    },
-    {
-      "id": 27671498467,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 352
-    },
-    {
-      "id": 27671230041,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 341
-    },
-    {
-      "id": 27670642086,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 517
-    },
-    {
-      "id": 27670277595,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 504
-    },
-    {
-      "id": 27669830975,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 485
-    },
-    {
-      "id": 27669438908,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 564
-    },
-    {
-      "id": 27669381345,
-      "event": "pull_request",
-      "conclusion": "failure",
-      "seconds": 20
-    },
-    {
-      "id": 27669286030,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 406
-    },
-    {
-      "id": 27668993471,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 419
-    },
-    {
-      "id": 27668540773,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 403
-    },
-    {
-      "id": 27668249970,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 429
-    },
-    {
-      "id": 27667501398,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 292
-    },
-    {
-      "id": 27667290491,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 330
-    },
-    {
-      "id": 27666127646,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 641
-    },
-    {
-      "id": 27665946103,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 290
-    },
-    {
-      "id": 27663634823,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 294
-    },
-    {
-      "id": 27663418822,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 355
-    },
-    {
-      "id": 27663036897,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 279
-    },
-    {
-      "id": 27662583560,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 744
-    },
-    {
-      "id": 27662100229,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 298
-    },
-    {
-      "id": 27661898645,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 331
-    },
-    {
-      "id": 27660960269,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 314
-    },
-    {
-      "id": 27660746607,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 314
-    },
-    {
-      "id": 27650631591,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 661
-    },
-    {
-      "id": 27650367234,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 278
-    },
-    {
-      "id": 27640353422,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 330
-    },
-    {
-      "id": 27640049392,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 292
-    },
-    {
-      "id": 27631624395,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 615
-    },
-    {
-      "id": 27631234020,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 341
-    },
-    {
-      "id": 27619749181,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 308
-    },
-    {
-      "id": 27619340180,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 394
-    },
-    {
-      "id": 27601670040,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 263
-    },
-    {
-      "id": 27601380235,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 321
     }
   ]
 }
