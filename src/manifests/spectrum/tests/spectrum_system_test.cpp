@@ -5,6 +5,7 @@
 #include "spectrum_system.hpp"
 
 #include "spectrum_snapshot.hpp"
+#include "state.hpp"
 #include "ula.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -137,6 +138,37 @@ TEST_CASE("spectrum 128K pages RAM banks + ROM halves via $7FFD", "[manifests][s
     sys->set_paging(0x20U | 1U);             // lock + bank 1 at $C000
     sys->set_paging(0x00U);                  // ignored while locked
     CHECK(sys->bus.read8(0xC000U) == 0x22U); // still bank 1
+}
+
+TEST_CASE("spectrum 128K save/load re-applies the paged banks", "[manifests][spectrum]") {
+    std::vector<std::uint8_t> rom(0x8000U, 0x00U);
+    rom[0x0000] = 0xAAU; // ROM half 0
+    rom[0x4000] = 0xBBU; // ROM half 1
+    const auto sys = assemble_spectrum(rom);
+    REQUIRE(sys != nullptr);
+
+    // Tag bank 1 at $C000, then select ROM half 1 + bank 1 and snapshot that state.
+    sys->set_paging(1U);
+    sys->bus.write8(0xC000U, 0x22U);
+    sys->set_paging(0x10U | 1U);
+    CHECK(sys->bus.read8(0x0000U) == 0xBBU);
+    CHECK(sys->bus.read8(0xC000U) == 0x22U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    // Disturb the live paging (ROM half 0 + bank 0).
+    sys->set_paging(0x00U);
+    CHECK(sys->bus.read8(0x0000U) == 0xAAU);
+
+    // load_state must re-point the live banks to the saved port, not just restore
+    // the raw field (this regressed before the set_paging-on-load fix).
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(sys->bus.read8(0x0000U) == 0xBBU); // ROM half 1 re-applied
+    CHECK(sys->bus.read8(0xC000U) == 0x22U); // bank 1 re-applied
 }
 
 TEST_CASE("spectrum 128K routes AY writes to the sound chip", "[manifests][spectrum]") {
