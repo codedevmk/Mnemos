@@ -238,6 +238,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Konami VRC6a (mapper 24).
+    // PRG 8 KiB bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset
+    // vector lives in the fixed last 8 KiB PRG bank ($E000).
+    std::vector<std::uint8_t> make_vrc6() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x80U; // flags6: mapper low nibble = 8
+        rom[7] = 0x10U; // flags7: mapper high nibble = 1 -> mapper 24
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b);
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // A minimal one-side Famicom Disk System image (.fds): the 16-byte header, then a
     // disk-info block ($01 + "*NINTENDO-HVC*") and a file-amount block ($02, 0 files),
     // padded to the 65500-byte side. Enough to exercise the parser + disk drive.
@@ -825,6 +850,66 @@ TEST_CASE("CHR-RAM cart accepts PPU pattern writes", "[manifests][nes]") {
     sys->bus.write8(0x2006U, 0x00U);
     sys->bus.write8(0x2007U, 0x5AU);
     CHECK(sys->ppu.ppu_read(0x0000U) == 0x5AU);
+}
+
+TEST_CASE("VRC6 (mapper 24) banks PRG + CHR", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc6());
+
+    // $8000 = 16 KiB bank 0 (8 KiB bank 0), $E000 = the fixed last 8 KiB bank.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    sys->bus.write8(0x8000U, 0x01U); // 16 KiB bank 1 -> 8 KiB bank 2 at $8000
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    sys->bus.write8(0xC000U, 0x03U); // 8 KiB bank 3 at $C000
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // last bank stays fixed
+
+    // CHR: $D000 -> slot 0 ($0000), $E000 -> slot 4 ($1000). (Reads at $E000 hit the
+    // fixed PRG bank; writes there decode to the CHR register.)
+    sys->bus.write8(0xD000U, 0x02U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD2U);
+    sys->bus.write8(0xE000U, 0x05U);
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD5U);
+}
+
+TEST_CASE("VRC6 (mapper 24) routes the pulse/saw audio and produces sound", "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc6());
+    auto* ea = sys->mapper->expansion_audio();
+    REQUIRE(ea != nullptr);
+
+    sys->bus.write8(0x9000U, 0x7FU); // pulse 1: duty 7 (50%), volume 15
+    sys->bus.write8(0x9001U, 0x40U); // period low
+    sys->bus.write8(0x9002U, 0x81U); // enable + period high
+
+    ea->tick(40000);
+    const std::size_t avail = sys->mapper->expansion_audio_pending();
+    REQUIRE(avail > 0U);
+    std::vector<std::int16_t> buf(avail * 2U, 0);
+    const std::size_t got = sys->mapper->drain_expansion_audio(buf.data(), avail);
+    REQUIRE(got > 0U);
+    std::int16_t peak = 0;
+    for (const std::int16_t s : buf) {
+        peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+    }
+    CHECK(peak > 0);
+}
+
+TEST_CASE("VRC6 (mapper 24) Konami VRC IRQ fires in cycle mode and acknowledges",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_vrc6());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xF000U, 0xFEU); // IRQ latch = 0xFE
+    sys->bus.write8(0xF001U, 0x06U); // enable (bit 1) + cycle mode (bit 2) -> counter 0xFE
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // 0xFE -> 0xFF
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1U); // 0xFF -> overflow -> assert
+    CHECK(irq);
+    sys->bus.write8(0xF002U, 0x00U); // acknowledge
+    CHECK_FALSE(irq);
 }
 
 TEST_CASE("looks_like_fds distinguishes FDS disks from iNES carts", "[manifests][nes][fds]") {
