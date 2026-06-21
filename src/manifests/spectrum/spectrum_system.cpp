@@ -72,8 +72,15 @@ namespace mnemos::manifests::spectrum {
         }
         reader.bytes(keyboard_rows);
         ear_input = reader.boolean();
-        port_7ffd = reader.u8();
-        paging_locked = reader.boolean();
+        const std::uint8_t saved_7ffd = reader.u8();
+        const bool saved_lock = reader.boolean();
+        // Re-apply paging so the live $C000 RAM bank, $0000 ROM half and ULA display
+        // bank match the restored port (restoring the raw fields alone leaves them
+        // stale). Clear the lock first so set_paging takes effect, then restore the
+        // exact saved lock state.
+        paging_locked = false;
+        set_paging(saved_7ffd);
+        paging_locked = saved_lock;
     }
 
     std::unique_ptr<spectrum_system> assemble_spectrum(std::span<const std::uint8_t> rom,
