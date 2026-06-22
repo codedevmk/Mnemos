@@ -210,6 +210,24 @@ TEST_CASE("nes adapter exposes battery RAM only for battery carts", "[apps][play
     CHECK(battery.battery_ram()[0] == 0x99U);
 }
 
+TEST_CASE("nes adapter persists a mapper-16 cart's EEPROM as the battery medium",
+          "[apps][player][nes]") {
+    std::vector<std::uint8_t> rom(16U + 2U * 0x4000U + 0x2000U, 0x00U);
+    rom[0] = 'N';
+    rom[1] = 'E';
+    rom[2] = 'S';
+    rom[3] = 0x1AU;
+    rom[4] = 2U;                          // 32 KiB PRG
+    rom[5] = 1U;                          // 8 KiB CHR
+    rom[7] = 0x10U;                       // flags7 high nibble 1 -> mapper 16
+    rom[16U + 0x4000U + 0x3FFCU] = 0x00U; // reset vector -> $C000 (fixed last bank)
+    rom[16U + 0x4000U + 0x3FFDU] = 0xC0U;
+    nes_adapter fcg(std::move(rom));
+    // The Bandai FCG's serial EEPROM (256 B) is the battery medium the mapper
+    // exposes, taking precedence over the 8 KiB $6000 work RAM.
+    REQUIRE(fcg.battery_ram().size() == 256U);
+}
+
 TEST_CASE("nes adapter whole-machine save-state round-trips", "[apps][player][nes]") {
     namespace nes = mnemos::apps::player::adapters::nes;
     nes_adapter a(render_test_nrom());

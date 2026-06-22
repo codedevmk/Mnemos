@@ -1202,6 +1202,22 @@ TEST_CASE("Bandai FCG (mapper 16) save/load round-trips banking and the EEPROM",
     CHECK(got == 0x7EU);
 }
 
+TEST_CASE("Bandai FCG (mapper 16) exposes the EEPROM as the cart battery medium",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_bandai_fcg());
+    // The mapper presents its 256-byte (24C02) EEPROM as the battery medium so the
+    // player's .srm path persists it.
+    REQUIRE(sys->mapper->battery_ram().size() == 256U);
+    // A byte written over I2C lands in that medium.
+    fcg_i2c h{*sys};
+    h.start();
+    h.write_byte(0xA0U); // control: write
+    h.write_byte(0x20U); // word address $20
+    h.write_byte(0x99U); // data
+    h.stop();
+    CHECK(sys->mapper->battery_ram()[0x20] == 0x99U);
+}
+
 TEST_CASE("Sunsoft-3 (mapper 67) banks 2 KiB CHR, 16 KiB PRG and selects mirroring",
           "[manifests][nes]") {
     auto sys = assemble_nes(make_sunsoft3());

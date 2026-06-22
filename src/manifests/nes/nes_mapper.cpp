@@ -903,6 +903,13 @@ namespace mnemos::manifests::nes {
                 apply_mirroring();
             }
 
+            // The serial EEPROM is the cart's battery medium -- exposed for .srm
+            // persistence. Always non-empty (a game that never writes it simply
+            // leaves it erased, so the save guard's change check writes no file).
+            [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
+                return eeprom_.bytes();
+            }
+
           private:
             void apply_prg() {
                 if (prg_16k_count_ == 0U) {

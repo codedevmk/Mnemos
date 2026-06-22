@@ -44,9 +44,17 @@ namespace mnemos::apps::player::adapters::nes {
         [[nodiscard]] chips::frame_buffer_view current_frame() const noexcept override {
             return sys_->ppu.framebuffer();
         }
-        // Persist the $6000-$7FFF RAM only for battery-backed carts (Zelda, Final
-        // Fantasy, ...); plain work-RAM carts return empty so no .srm is written.
+        // Persist a cart's save medium. A mapper that carries its own non-volatile
+        // store (the Bandai FCG's serial EEPROM) wins; otherwise the $6000-$7FFF RAM
+        // persists only for battery-backed carts (Zelda, Final Fantasy, ...), and
+        // plain work-RAM carts return empty so no .srm is written.
         [[nodiscard]] std::span<std::uint8_t> battery_ram() noexcept override {
+            if (sys_->mapper) {
+                const std::span<std::uint8_t> medium = sys_->mapper->battery_ram();
+                if (!medium.empty()) {
+                    return medium;
+                }
+            }
             return sys_->battery ? std::span<std::uint8_t>(sys_->prg_ram)
                                  : std::span<std::uint8_t>{};
         }

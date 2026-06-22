@@ -67,6 +67,12 @@ namespace mnemos::manifests::nes {
         [[nodiscard]] virtual std::size_t current_disk_side() const noexcept { return 0U; }
         virtual void insert_disk_side(std::size_t /*side*/) noexcept {}
 
+        // A cartridge that carries its OWN non-volatile save medium (e.g. the Bandai
+        // FCG's serial EEPROM) exposes it here for .srm persistence; the board
+        // prefers it over the $6000-$7FFF work RAM. The default (no on-cart medium)
+        // is empty, so the work-RAM path is used.
+        [[nodiscard]] virtual std::span<std::uint8_t> battery_ram() noexcept { return {}; }
+
         // How a scanline-IRQ mapper drives the CPU /IRQ line. The board wires this
         // to the CPU; mappers without an IRQ ignore it.
         void set_irq_callback(std::function<void(bool)> on_irq) { set_irq_ = std::move(on_irq); }
