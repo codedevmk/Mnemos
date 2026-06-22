@@ -176,6 +176,86 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (four 16 KiB banks) / 8 KiB CHR-ROM Bandai FCG (mapper 16). PRG
+    // 16 KiB bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset
+    // vector lives in the fixed last 16 KiB PRG bank ($C000).
+    std::vector<std::uint8_t> make_bandai_fcg() {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x4000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 4 x 16 KiB = 64 KiB PRG
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x00U; // flags6: mapper low nibble = 0
+        rom[7] = 0x10U; // flags7: mapper high nibble = 1 -> mapper 16
+        for (std::size_t bank = 0; bank < 4U; ++bank) {
+            rom[16U + bank * 0x4000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 4U * 0x4000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        rom[16U + 3U * 0x4000U + 0x3FFCU] = 0x00U; // reset vector (last 16 KiB bank) -> $C000
+        rom[16U + 3U * 0x4000U + 0x3FFDU] = 0xC0U;
+        return rom;
+    }
+
+    // I2C master that bit-bangs the Bandai FCG's serial EEPROM through the mapper:
+    // $800D drives it (bit 5 = SCL, bit 6 = SDA, bit 7 = read-enable / release SDA)
+    // and a $6000 read returns the device's SDA on D0.
+    struct fcg_i2c {
+        nes_system& sys;
+        void set(bool scl, bool sda, bool read_enable) {
+            std::uint8_t v = 0U;
+            if (read_enable) {
+                v |= 0x80U;
+            }
+            if (sda) {
+                v |= 0x40U;
+            }
+            if (scl) {
+                v |= 0x20U;
+            }
+            sys.bus.write8(0x800DU, v);
+        }
+        [[nodiscard]] bool dev_sda() { return (sys.bus.read8(0x6000U) & 0x01U) != 0U; }
+        void start() {
+            set(true, true, false);
+            set(true, false, false); // SDA high->low while SCL high
+            set(false, false, false);
+        }
+        void stop() {
+            set(false, false, false);
+            set(true, false, false);
+            set(true, true, false); // SDA low->high while SCL high
+        }
+        bool write_byte(std::uint8_t b) {
+            for (int i = 7; i >= 0; --i) {
+                const bool bit = ((b >> i) & 1U) != 0U;
+                set(false, bit, false);
+                set(true, bit, false);
+            }
+            set(false, true, true); // release SDA for the ACK bit
+            set(true, true, true);
+            const bool ack = !dev_sda();
+            set(false, true, true);
+            return ack;
+        }
+        std::uint8_t read_byte(bool ack) {
+            std::uint8_t v = 0U;
+            for (int i = 7; i >= 0; --i) {
+                set(false, true, true); // release SDA so the device drives it
+                set(true, true, true);
+                v = static_cast<std::uint8_t>((v << 1) | (dev_sda() ? 1U : 0U));
+            }
+            set(false, !ack, false); // master ACK (continue) / NAK (end)
+            set(true, !ack, false);
+            set(false, !ack, false);
+            return v;
+        }
+    };
+
     // A 32 KiB-PRG / two-8 KiB-bank-CHR CNROM (mapper 3). CHR bank N byte 0 =
     // $C0+N; the reset vector points at $8000.
     std::vector<std::uint8_t> make_cnrom() {
@@ -980,6 +1060,121 @@ TEST_CASE("RAMBO-1 (mapper 64) save_state/load_state round-trips banking and IRQ
     CHECK(reader.ok());
     CHECK(b->bus.read8(0x8000U) == a8000);
     CHECK(b->bus.read8(0xC000U) == aC000);
+}
+
+TEST_CASE("Bandai FCG (mapper 16) banks CHR/PRG and selects mirroring", "[manifests][nes]") {
+    auto sys = assemble_nes(make_bandai_fcg());
+
+    // Power-on: PRG bank 0 at $8000, the last 16 KiB bank fixed at $C000.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U);
+
+    // $x8 selects the 16 KiB bank at $8000; $C000 stays fixed.
+    sys->bus.write8(0x8008U, 0x02U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U);
+
+    // $x0-$x7 select the eight 1 KiB CHR banks.
+    sys->bus.write8(0x8000U, 0x05U); // CHR reg 0 -> $0000 = bank 5
+    sys->bus.write8(0x8007U, 0x03U); // CHR reg 7 -> $1C00 = bank 3
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD5U);
+    CHECK(sys->ppu.ppu_read(0x1C00U) == 0xD3U);
+
+    // Mirroring $x9: vertical (0) aliases $2000<->$2800; horizontal (1) aliases
+    // $2000<->$2400.
+    sys->bus.write8(0x8009U, 0x00U);
+    sys->ppu.ppu_write(0x2000U, 0xAAU);
+    CHECK(sys->ppu.ppu_read(0x2800U) == 0xAAU);
+    sys->bus.write8(0x8009U, 0x01U);
+    sys->ppu.ppu_write(0x2000U, 0xBBU);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0xBBU);
+}
+
+TEST_CASE("Bandai FCG (mapper 16) 16-bit cycle IRQ counts down and acknowledges",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_bandai_fcg());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    // Latch = 200 (little-endian low/high); $xA enable copies the latch to the
+    // counter and starts it.
+    sys->bus.write8(0x800BU, 0xC8U); // latch low = 200
+    sys->bus.write8(0x800CU, 0x00U); // latch high = 0
+    sys->bus.write8(0x800AU, 0x01U); // enable -> counter = 200
+    CHECK_FALSE(irq);
+
+    sys->mapper->clock_cpu_timer(114U); // 200 -> 86
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(114U); // passes through zero -> assert
+    CHECK(irq);
+
+    sys->bus.write8(0x800AU, 0x00U); // disable acknowledges the line
+    CHECK_FALSE(irq);
+
+    // Enabling while the counter holds zero asserts immediately.
+    sys->bus.write8(0x800BU, 0x00U);
+    sys->bus.write8(0x800CU, 0x00U);
+    sys->bus.write8(0x800AU, 0x01U);
+    CHECK(irq);
+}
+
+TEST_CASE("Bandai FCG (mapper 16) stores and reads back a byte over the I2C EEPROM",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_bandai_fcg());
+    fcg_i2c h{*sys};
+
+    // Sequential write: control (write) -> word address $05 -> data $42.
+    h.start();
+    CHECK(h.write_byte(0xA0U)); // 1010 000 + R/W=0 (write); device ACKs
+    CHECK(h.write_byte(0x05U)); // word address
+    CHECK(h.write_byte(0x42U)); // data
+    h.stop();
+
+    // Random read of $05: set the pointer, repeated-start, control (read), one byte.
+    h.start();
+    CHECK(h.write_byte(0xA0U)); // write to set the address pointer
+    CHECK(h.write_byte(0x05U));
+    h.start();                                   // repeated start
+    CHECK(h.write_byte(0xA1U));                  // 1010 000 + R/W=1 (read)
+    const std::uint8_t got = h.read_byte(false); // single byte -> master NAKs
+    h.stop();
+    CHECK(got == 0x42U);
+}
+
+TEST_CASE("Bandai FCG (mapper 16) save/load round-trips banking and the EEPROM",
+          "[manifests][nes]") {
+    auto a = assemble_nes(make_bandai_fcg());
+    a->bus.write8(0x8008U, 0x02U); // PRG bank 2
+    a->bus.write8(0x8000U, 0x05U); // CHR reg 0 -> bank 5
+    fcg_i2c ha{*a};                // store $7E at EEPROM $10
+    ha.start();
+    ha.write_byte(0xA0U);
+    ha.write_byte(0x10U);
+    ha.write_byte(0x7EU);
+    ha.stop();
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_bandai_fcg());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);    // PRG bank restored
+    CHECK(b->ppu.ppu_read(0x0000U) == 0xD5U); // CHR bank restored
+
+    fcg_i2c hb{*b}; // the stored EEPROM byte survived the round-trip
+    hb.start();
+    hb.write_byte(0xA0U);
+    hb.write_byte(0x10U);
+    hb.start();
+    hb.write_byte(0xA1U);
+    const std::uint8_t got = hb.read_byte(false);
+    hb.stop();
+    CHECK(got == 0x7EU);
 }
 
 TEST_CASE("CNROM (mapper 3) switches the 8 KiB CHR bank", "[manifests][nes]") {
