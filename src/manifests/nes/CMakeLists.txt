@@ -32,6 +32,7 @@ target_link_libraries(
         mnemos::chips::audio::ssg
         mnemos::chips::audio::vrc6
         mnemos::chips::audio::ym2413
+        mnemos::chips::storage::eeprom_i2c
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_nes PUBLIC)
