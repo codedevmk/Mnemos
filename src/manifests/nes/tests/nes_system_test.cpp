@@ -256,6 +256,31 @@ namespace {
         }
     };
 
+    // A 64 KiB-PRG (four 16 KiB banks) / 16 KiB CHR-ROM (eight 2 KiB banks)
+    // Sunsoft-3 (mapper 67). PRG 16 KiB bank N byte 0 = $A0+N; CHR 2 KiB bank N
+    // byte 0 = $D0+N; the reset vector lives in the fixed last 16 KiB PRG bank.
+    std::vector<std::uint8_t> make_sunsoft3() {
+        std::vector<std::uint8_t> rom(16U + 4U * 0x4000U + 0x4000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 4 x 16 KiB = 64 KiB PRG
+        rom[5] = 2U;    // 2 x 8 KiB = 16 KiB CHR-ROM (eight 2 KiB banks)
+        rom[6] = 0x30U; // flags6: mapper low nibble = 3
+        rom[7] = 0x40U; // flags7: mapper high nibble = 4 -> mapper 67
+        for (std::size_t bank = 0; bank < 4U; ++bank) {
+            rom[16U + bank * 0x4000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 4U * 0x4000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0800U] = static_cast<std::uint8_t>(0xD0U + b); // 2 KiB bank b
+        }
+        rom[16U + 3U * 0x4000U + 0x3FFCU] = 0x00U; // reset vector (last 16 KiB bank) -> $C000
+        rom[16U + 3U * 0x4000U + 0x3FFDU] = 0xC0U;
+        return rom;
+    }
+
     // A 32 KiB-PRG / two-8 KiB-bank-CHR CNROM (mapper 3). CHR bank N byte 0 =
     // $C0+N; the reset vector points at $8000.
     std::vector<std::uint8_t> make_cnrom() {
@@ -1175,6 +1200,89 @@ TEST_CASE("Bandai FCG (mapper 16) save/load round-trips banking and the EEPROM",
     const std::uint8_t got = hb.read_byte(false);
     hb.stop();
     CHECK(got == 0x7EU);
+}
+
+TEST_CASE("Sunsoft-3 (mapper 67) banks 2 KiB CHR, 16 KiB PRG and selects mirroring",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft3());
+
+    // Power-on: PRG bank 0 at $8000, last 16 KiB bank fixed at $C000.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U);
+
+    // $F800 selects the 16 KiB bank at $8000; $C000 stays fixed.
+    sys->bus.write8(0xF800U, 0x02U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA2U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA3U);
+
+    // CHR 2 KiB banks: $8800 -> $0000-$07FF, $B800 -> $1800-$1FFF.
+    sys->bus.write8(0x8800U, 0x05U); // CHR0 = 2 KiB bank 5
+    sys->bus.write8(0xB800U, 0x02U); // CHR3 = 2 KiB bank 2
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD5U);
+    CHECK(sys->ppu.ppu_read(0x1800U) == 0xD2U);
+
+    // Mirroring $E800: vertical (0) aliases $2000<->$2800; horizontal (1) aliases
+    // $2000<->$2400.
+    sys->bus.write8(0xE800U, 0x00U);
+    sys->ppu.ppu_write(0x2000U, 0xAAU);
+    CHECK(sys->ppu.ppu_read(0x2800U) == 0xAAU);
+    sys->bus.write8(0xE800U, 0x01U);
+    sys->ppu.ppu_write(0x2000U, 0xBBU);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0xBBU);
+}
+
+TEST_CASE("Sunsoft-3 (mapper 67) 16-bit IRQ loads high/low, fires on underflow, and pauses",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_sunsoft3());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    // Load the counter = 100 ($0064) high byte then low byte through $C800.
+    sys->bus.write8(0xC800U, 0x00U); // high
+    sys->bus.write8(0xC800U, 0x64U); // low -> counter = 100
+    sys->bus.write8(0xD800U, 0x10U); // bit 4 enables counting
+    CHECK_FALSE(irq);
+
+    sys->mapper->clock_cpu_timer(50U); // 100 -> 50
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(60U); // 50 wraps past zero -> assert + pause
+    CHECK(irq);
+
+    sys->bus.write8(0x8000U, 0x00U); // $8000 acknowledges
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(1000U); // paused after the IRQ -> does not re-fire
+    CHECK_FALSE(irq);
+
+    // Re-arm: $D800 resets the high/low write toggle, so $C800 takes the high byte
+    // first again -- loading $0005 (not $0500) and firing after ~5 cycles proves it.
+    sys->bus.write8(0xD800U, 0x00U);   // disable + reset the write toggle
+    sys->bus.write8(0xC800U, 0x00U);   // high
+    sys->bus.write8(0xC800U, 0x05U);   // low -> counter = 5
+    sys->bus.write8(0xD800U, 0x10U);   // enable
+    sys->mapper->clock_cpu_timer(10U); // 5 wraps past zero -> assert
+    CHECK(irq);
+}
+
+TEST_CASE("Sunsoft-3 (mapper 67) save/load round-trips banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_sunsoft3());
+    a->bus.write8(0xF800U, 0x02U); // PRG bank 2
+    a->bus.write8(0x8800U, 0x05U); // CHR0 = bank 5
+    a->bus.write8(0xC800U, 0x12U); // counter high
+    a->bus.write8(0xC800U, 0x34U); // counter low -> $1234
+    a->bus.write8(0xD800U, 0x10U); // counting
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_sunsoft3());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);    // PRG bank restored
+    CHECK(b->ppu.ppu_read(0x0000U) == 0xD5U); // CHR bank restored
 }
 
 TEST_CASE("CNROM (mapper 3) switches the 8 KiB CHR bank", "[manifests][nes]") {
