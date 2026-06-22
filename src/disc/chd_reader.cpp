@@ -299,11 +299,10 @@ namespace mnemos::disc::chd {
         // Decode a single cdfl (CD-FLAC) hunk into the flat frames*2352 sector
         // buffer. Unlike cdzl/cdlz this codec has no ECC bitmap / complen header:
         // the hunk is a bare FLAC frame stream (audio) followed by the DEFLATE
-        // subcode, which we drop. The decoded 16-bit FLAC value is the CHD-native
-        // (byte-swapped) sample, so we write it the same way cdzl/cdlz leave their
-        // raw CD-audio bytes -- the post-decode pass swaps every audio track once,
-        // uniformly across codecs, into the .bin little-endian order the CD-DA
-        // consumer reads.
+        // subcode, which we drop. FLAC yields logical sample values; we serialise
+        // each as little-endian (low byte first) below -- the same .bin order the
+        // cdzl/cdlz path already holds in its inflated/LZMA'd sector bytes and the
+        // order the CD-DA consumer reads, so no byte-swap is applied on any codec.
         bool decode_cdfl_hunk(std::span<const std::uint8_t> in, std::uint32_t hunk_bytes,
                               std::span<std::uint8_t> out) {
             const std::uint32_t frames = frames_per_hunk(hunk_bytes);
