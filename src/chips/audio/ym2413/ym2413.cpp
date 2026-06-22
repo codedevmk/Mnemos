@@ -84,15 +84,45 @@ namespace mnemos::chips::audio {
             return (static_cast<std::int32_t>(step) << 4) >> (3U - field);
         }
 
+        // VIB (vibrato) phase-modulation table (verified on real OPLL): 8 F-Number
+        // groups x 8 LFO phases. The value perturbs the channel's effective
+        // F-Number when an operator enables vibrato; the LFO advances one phase
+        // every 1024 native samples (~6 Hz).
+        constexpr std::array<std::int8_t, 64> lfo_pm_table = {
+            0, 0, 0, 0,  0,  0,  0, 0,  // F-Number group 0
+            1, 0, 0, 0,  -1, 0,  0, 0,  // 1
+            2, 1, 0, -1, -2, -1, 0, 1,  // 2
+            3, 1, 0, -1, -3, -1, 0, 1,  // 3
+            4, 2, 0, -2, -4, -2, 0, 2,  // 4
+            5, 2, 0, -2, -5, -2, 0, 2,  // 5
+            6, 3, 0, -3, -6, -3, 0, 3,  // 6
+            7, 3, 0, -3, -7, -3, 0, 3}; // 7
+
+        // AM (tremolo) advances one lfo_am entry every 64 native samples (~3.7 Hz).
+        constexpr std::uint32_t am_samples_per_entry = 64U;
+        // VIB advances one of the 8 phases every 1024 native samples (~6 Hz).
+        constexpr std::uint32_t vib_samples_per_phase = 1024U;
+        // Convert an lfo_am entry (0..26, 0.1875 dB units) to this core's atten
+        // units: one chip unit = 8 atten units, and the (provisional, ear-tunable)
+        // tremolo depth halves that -- x4 overall, a ~2.4 dB peak.
+        constexpr std::int32_t am_depth_scale = 4;
+
         // ---- Output-pipeline tables (log-sine + exp), built once ----
         //
         // The OPLL stores a 256-entry quarter-sine LUT in the log domain (12-bit
         // -log2(sin) * 256) and an exp post-decode that reverses the log to a
         // linear sample. They are pure functions of math, identical for every
         // chip instance, so they are built once on first use.
+        // The AM (tremolo) LFO table: a 210-entry triangle 0 -> 26 -> 0 the OPLL
+        // steps through (one entry per 64 native samples => ~3.7 Hz). Values are in
+        // the chip's "decibel" units (0.1875 dB each); the synthesis scales them
+        // into this core's attenuation domain when an operator enables AM.
+        constexpr std::size_t lfo_am_len = 210U;
+
         struct output_tables final {
             std::array<std::int16_t, 256> log_sine{};
             std::array<std::int16_t, 256> exp_lut{};
+            std::array<std::uint8_t, lfo_am_len> lfo_am{};
 
             output_tables() noexcept {
                 constexpr double pi = 3.14159265358979323846;
@@ -109,6 +139,25 @@ namespace mnemos::chips::audio {
                 for (int i = 0; i < 256; ++i) {
                     const int iv = static_cast<int>(std::pow(2.0, i / 256.0) * 1024.0 + 0.5);
                     exp_lut[static_cast<std::size_t>(i)] = static_cast<std::int16_t>(iv);
+                }
+                // Triangle: 7 zeros, rise 1..25 (four entries each), three at the 26
+                // peak, then fall 25..1 (four each) -- 7 + 100 + 3 + 100 = 210.
+                std::size_t k = 0;
+                for (int i = 0; i < 7; ++i) {
+                    lfo_am[k++] = 0U;
+                }
+                for (int v = 1; v <= 25; ++v) {
+                    for (int r = 0; r < 4; ++r) {
+                        lfo_am[k++] = static_cast<std::uint8_t>(v);
+                    }
+                }
+                for (int r = 0; r < 3; ++r) {
+                    lfo_am[k++] = 26U;
+                }
+                for (int v = 25; v >= 1; --v) {
+                    for (int r = 0; r < 4; ++r) {
+                        lfo_am[k++] = static_cast<std::uint8_t>(v);
+                    }
                 }
             }
         };
@@ -381,13 +430,9 @@ namespace mnemos::chips::audio {
     }
 
     std::int32_t ym2413::channel_sample(channel_state& c) noexcept {
-        // Global LFO advancement (one tick per output sample).
-        ++am_counter_;
-        ++vib_counter_;
-
-        // Block + F-Number drive the base phase increment. At the native sample
-        // rate the reference's Q16 unit-rate scaler is exactly 1.0, so the
-        // phase-per-sample math reduces to the integer increment directly.
+        // Base phase increment from block + F-Number. At the native sample rate the
+        // reference's Q16 unit-rate scaler is exactly 1.0, so the phase-per-sample
+        // math reduces to the integer increment directly.
         const std::uint32_t base_inc = (static_cast<std::uint32_t>(c.f_number) << c.block) >> 1U;
 
         // Key-scale level: a per-note attenuation from block + the F-Number's top 4
@@ -395,10 +440,33 @@ namespace mnemos::chips::audio {
         const std::uint8_t ksl_step =
             ksl_steps[(static_cast<std::size_t>(c.block) << 4U) | (c.f_number >> 5U)];
 
+        // Current LFO outputs (the counters advance once per sample in step()).
+        // AM (tremolo): an attenuation added to AM-enabled operators.
+        const std::int32_t am_atten =
+            static_cast<std::int32_t>(
+                tables().lfo_am[(am_counter_ / am_samples_per_entry) % lfo_am_len]) *
+            am_depth_scale;
+        // VIB (vibrato): a small F-Number perturbation for vibrato-enabled operators,
+        // chosen by the F-Number's top 3 bits and the current LFO phase.
+        const std::uint32_t vib_phase = (vib_counter_ / vib_samples_per_phase) & 0x07U;
+        const std::int32_t vib_offset =
+            lfo_pm_table[static_cast<std::size_t>((((c.f_number >> 6U) & 0x07U) * 8U) + vib_phase)];
+
+        // Phase increment for one operator, applying vibrato to the F-Number when the
+        // operator enables it (the perturbation scales with the block/octave). With a
+        // zero offset this reduces exactly to base_inc.
+        const auto op_inc = [&](const op_state& o) -> std::uint32_t {
+            std::uint32_t inc = base_inc;
+            if (o.vib != 0U) {
+                const std::int32_t fn = (static_cast<std::int32_t>(c.f_number) * 2) + vib_offset;
+                inc = static_cast<std::uint32_t>((fn << c.block) >> 2);
+            }
+            return (inc * multi_table[o.multi]) >> 1U;
+        };
+
         // Modulator (op[0]) phase + sample.
         op_state& m = c.op[0];
-        const std::uint32_t inc_m = (base_inc * multi_table[m.multi]) >> 1U;
-        m.phase += inc_m;
+        m.phase += op_inc(m);
         auto pm = static_cast<std::uint16_t>((m.phase >> 9U) & 0x07FFU);
         const std::int32_t fb_avg = (m.feedback[0] + m.feedback[1]) >> 1;
         if (m.fb > 0U) {
@@ -407,7 +475,7 @@ namespace mnemos::chips::audio {
         const std::int32_t m_log = sine_log(pm, m.wf);
         const std::int32_t m_atten = (m_log & 0x0FFF) + (static_cast<std::int32_t>(m.tl) << 5) +
                                      (static_cast<std::int32_t>(m.eg_level) << 4) +
-                                     ksl_atten(m.ksl, ksl_step);
+                                     ksl_atten(m.ksl, ksl_step) + (m.am != 0U ? am_atten : 0);
         std::int32_t m_lin = log_to_linear(static_cast<std::uint16_t>(m_atten & 0x1FFF));
         if ((m_log & 0x1000) != 0) {
             m_lin = -m_lin;
@@ -417,13 +485,12 @@ namespace mnemos::chips::audio {
 
         // Carrier (op[1]) phase + FM input from the modulator.
         op_state& cr = c.op[1];
-        const std::uint32_t inc_c = (base_inc * multi_table[cr.multi]) >> 1U;
-        cr.phase += inc_c;
+        cr.phase += op_inc(cr);
         const auto pc = static_cast<std::uint16_t>(((cr.phase >> 9U) + (m_lin >> 1)) & 0x07FFU);
         const std::int32_t c_log = sine_log(pc, cr.wf);
         const std::int32_t c_atten = (c_log & 0x0FFF) + (static_cast<std::int32_t>(c.volume) << 7) +
                                      (static_cast<std::int32_t>(cr.eg_level) << 4) +
-                                     ksl_atten(cr.ksl, ksl_step);
+                                     ksl_atten(cr.ksl, ksl_step) + (cr.am != 0U ? am_atten : 0);
         std::int32_t out = log_to_linear(static_cast<std::uint16_t>(c_atten & 0x1FFF));
         if ((c_log & 0x1000) != 0) {
             out = -out;
@@ -433,6 +500,8 @@ namespace mnemos::chips::audio {
 
     void ym2413::step() noexcept {
         ++eg_counter_;
+        ++am_counter_; // AM/VIB LFOs advance once per native sample (not per channel)
+        ++vib_counter_;
         std::int32_t mix = 0;
         for (auto& c : channels_) {
             // A channel contributes only while its carrier envelope is live.
