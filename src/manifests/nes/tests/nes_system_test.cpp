@@ -151,6 +151,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM RAMBO-1 (mapper 64). PRG
+    // bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the reset vector
+    // lives in the fixed last PRG bank ($E000).
+    std::vector<std::uint8_t> make_rambo1() {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U;    // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U;    // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = 0x00U; // flags6: mapper low nibble = 0
+        rom[7] = 0x40U; // flags7: mapper high nibble = 4 -> mapper 64
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // A 32 KiB-PRG / two-8 KiB-bank-CHR CNROM (mapper 3). CHR bank N byte 0 =
     // $C0+N; the reset vector points at $8000.
     std::vector<std::uint8_t> make_cnrom() {
@@ -823,6 +848,138 @@ TEST_CASE("Namco 118 (mapper 206) banks PRG/CHR but ignores the MMC3 mode/invers
     sys->bus.write8(0x8000U, 0x82U);
     sys->bus.write8(0x8001U, 0x05U);
     CHECK(sys->ppu.ppu_read(0x1000U) == 0xD5U);
+}
+
+TEST_CASE("RAMBO-1 (mapper 64) banks three switchable PRG banks with the P swap",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_rambo1());
+
+    // Power-on: every register 0, P=0 -> $8000=R6, $A000=R7, $C000=RF (all bank 0),
+    // $E000 = last bank (7, always fixed). The third switchable bank (RF at $C000)
+    // is what distinguishes RAMBO-1 from MMC3's fixed second-last.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // R6=1, R7=2, RF=5 (RF is register index 0x0F).
+    sys->bus.write8(0x8000U, 0x06U);
+    sys->bus.write8(0x8001U, 0x01U);
+    sys->bus.write8(0x8000U, 0x07U);
+    sys->bus.write8(0x8001U, 0x02U);
+    sys->bus.write8(0x8000U, 0x0FU);
+    sys->bus.write8(0x8001U, 0x05U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA1U); // R6
+    CHECK(sys->bus.read8(0xA000U) == 0xA2U); // R7
+    CHECK(sys->bus.read8(0xC000U) == 0xA5U); // RF
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // fixed last
+
+    // P=1 swaps R6 and RF between $8000 and $C000 (regs unchanged).
+    sys->bus.write8(0x8000U, 0x40U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA5U); // RF now at $8000
+    CHECK(sys->bus.read8(0xA000U) == 0xA2U); // R7 unchanged
+    CHECK(sys->bus.read8(0xC000U) == 0xA1U); // R6 now at $C000
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+}
+
+TEST_CASE("RAMBO-1 (mapper 64) CHR honours the K 1 KiB mode and C inversion", "[manifests][nes]") {
+    auto sys = assemble_nes(make_rambo1());
+
+    // K=0 (2 KiB mode), C=0: R0 is the 2 KiB region at $0000 (low bit ignored), so
+    // R0=2 maps banks 2,3 to $0000,$0400; R2 is the 1 KiB bank at $1000.
+    sys->bus.write8(0x8000U, 0x00U);
+    sys->bus.write8(0x8001U, 0x02U); // R0 = 2
+    sys->bus.write8(0x8000U, 0x02U);
+    sys->bus.write8(0x8001U, 0x05U); // R2 = 5
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD2U);
+    CHECK(sys->ppu.ppu_read(0x0400U) == 0xD3U); // 2 KiB pair (low bit set)
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD5U);
+
+    // K=1 (1 KiB mode): R0 -> $0000, R8 -> $0400 as independent 1 KiB banks.
+    sys->bus.write8(0x8000U, 0x20U);
+    sys->bus.write8(0x8001U, 0x04U); // R0 = 4
+    sys->bus.write8(0x8000U, 0x28U);
+    sys->bus.write8(0x8001U, 0x06U);            // R8 = 6
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD4U); // R0
+    CHECK(sys->ppu.ppu_read(0x0400U) == 0xD6U); // R8 (independent, not R0+1)
+
+    // C=1 inversion: the four-1 KiB region and the (K=1) split region swap halves,
+    // so R2 lands at $0000 and R0 at $1000.
+    sys->bus.write8(0x8000U, 0xA0U);            // C=1 (0x80) + K=1 (0x20), index R0
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD5U); // R2 (=5) now at $0000
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD4U); // R0 (=4) now at $1000
+}
+
+TEST_CASE("RAMBO-1 (mapper 64) scanline IRQ reloads with the OR-1 quirk and acknowledges",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_rambo1());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xC000U, 0x02U); // latch = 2
+    sys->bus.write8(0xC001U, 0x00U); // scanline mode (bit 0 = 0), reload on next clock
+    sys->bus.write8(0xE001U, 0x00U); // enable
+
+    // The $C001 reload ORs the non-zero latch with 1, so the counter loads 3 (not
+    // 2): it then takes three more clocks to underflow.
+    sys->mapper->clock_scanline(0U); // reload -> 3
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(1U); // 3 -> 2
+    sys->mapper->clock_scanline(2U); // 2 -> 1
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(3U); // 1 -> 0 -> assert
+    CHECK(irq);
+
+    sys->bus.write8(0xE000U, 0x00U); // disable acknowledges the line
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("RAMBO-1 (mapper 64) CPU-cycle IRQ clocks every four cycles and ignores scanlines",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_rambo1());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xC000U, 0x01U); // latch = 1
+    sys->bus.write8(0xC001U, 0x01U); // CPU-cycle mode (bit 0 = 1), reload, prescaler reset
+    sys->bus.write8(0xE001U, 0x00U); // enable
+
+    // In cycle mode the scanline clock must be inert.
+    sys->mapper->clock_scanline(0U);
+    sys->mapper->clock_scanline(1U);
+    CHECK_FALSE(irq);
+
+    // The counter advances once per four CPU cycles: the first group reloads it to
+    // 1, the second underflows it to 0.
+    sys->mapper->clock_cpu_timer(4U); // 1 clock: reload -> 1
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(4U); // 1 clock: 1 -> 0 -> assert
+    CHECK(irq);
+}
+
+TEST_CASE("RAMBO-1 (mapper 64) save_state/load_state round-trips banking and IRQ mode",
+          "[manifests][nes]") {
+    auto a = assemble_nes(make_rambo1());
+    a->bus.write8(0x8000U, 0x06U);
+    a->bus.write8(0x8001U, 0x03U); // R6 = 3
+    a->bus.write8(0x8000U, 0x0FU);
+    a->bus.write8(0x8001U, 0x05U); // RF = 5
+    a->bus.write8(0x8000U, 0x40U); // P=1 -> $8000=RF, $C000=R6
+    a->bus.write8(0xC001U, 0x01U); // cycle mode
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+    const std::uint8_t aC000 = a->bus.read8(0xC000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_rambo1());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);
+    CHECK(b->bus.read8(0xC000U) == aC000);
 }
 
 TEST_CASE("CNROM (mapper 3) switches the 8 KiB CHR bank", "[manifests][nes]") {
