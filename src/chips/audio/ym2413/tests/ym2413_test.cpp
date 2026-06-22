@@ -10,8 +10,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <span>
 #include <vector>
 
@@ -175,4 +177,81 @@ TEST_CASE("ym2413 audio capture counts and drains in stereo frames", "[ym2413][a
     const std::size_t left = chip.drain_samples(rest.data(), 100U);
     REQUIRE(left == frames - 3U);
     REQUIRE(chip.pending_samples() == 0U);
+}
+
+namespace {
+    // Program channel 0 from explicit user-instrument bytes (slot 0) at the given
+    // F-Number low byte + $20 control (key-on | block | F-Number high), volume 0.
+    void configure_user(ym2413& chip, const std::array<std::uint8_t, 8>& inst,
+                        std::uint8_t fnum_low, std::uint8_t control) {
+        for (std::uint8_t i = 0; i < 8U; ++i) {
+            write_reg(chip, static_cast<std::uint8_t>(ym2413::reg_user_inst_base + i), inst[i]);
+        }
+        write_reg(chip, ym2413::reg_inst_vol_base, 0x00); // instrument 0 (user), volume 0 (loud)
+        write_reg(chip, ym2413::reg_fnum_low_base, fnum_low);
+        write_reg(chip, ym2413::reg_control_base, control);
+    }
+
+    [[nodiscard]] int peak_abs(ym2413& chip, int pairs) {
+        std::vector<std::int16_t> buf(static_cast<std::size_t>(pairs) * 2U);
+        chip.generate(buf);
+        int peak = 0;
+        for (std::size_t i = 0; i < buf.size(); i += 2U) {
+            peak = std::max(peak, std::abs(static_cast<int>(buf[i])));
+        }
+        return peak;
+    }
+
+    [[nodiscard]] int min_sample(ym2413& chip, int pairs) {
+        std::vector<std::int16_t> buf(static_cast<std::size_t>(pairs) * 2U);
+        chip.generate(buf);
+        int lo = 0;
+        for (std::size_t i = 0; i < buf.size(); i += 2U) {
+            lo = std::min(lo, static_cast<int>(buf[i]));
+        }
+        return lo;
+    }
+} // namespace
+
+TEST_CASE("ym2413 key-scale level attenuates higher octaves", "[ym2413][audio]") {
+    // Carrier KSL = 3 (6 dB/octave). The modulator is silenced (TL max) so the
+    // carrier is ~a pure sine whose peak reflects only the envelope + KSL.
+    // Bytes: [0]/[1] egt=1,multi=1; [2] mod TL=$3F (silent); [3] carrier KSL=3
+    // ($C0); [4]/[5] AR=15 (instant); [6]/[7] SL/RR=0.
+    const std::array<std::uint8_t, 8> ksl_on = {0x21, 0x21, 0x3F, 0xC0, 0xF0, 0xF0, 0x00, 0x00};
+    ym2413 low;
+    ym2413 high;
+    configure_user(low, ksl_on, 0xA0, 0x13);  // block 1, F-Number high bit set
+    configure_user(high, ksl_on, 0xA0, 0x1B); // block 5 (four octaves up)
+    const int peak_low = peak_abs(low, 512);
+    const int peak_high = peak_abs(high, 512);
+    REQUIRE(peak_low > 0);
+    CHECK(peak_high * 2 < peak_low); // the higher octave is markedly attenuated by KSL
+
+    // With KSL off (field 0) the two octaves reach a comparable peak.
+    const std::array<std::uint8_t, 8> ksl_off = {0x21, 0x21, 0x3F, 0x00, 0xF0, 0xF0, 0x00, 0x00};
+    ym2413 low0;
+    ym2413 high0;
+    configure_user(low0, ksl_off, 0xA0, 0x13);
+    configure_user(high0, ksl_off, 0xA0, 0x1B);
+    const int peak_low0 = peak_abs(low0, 512);
+    const int peak_high0 = peak_abs(high0, 512);
+    CHECK(peak_high0 * 2 > peak_low0); // no KSL -> no octave attenuation
+}
+
+TEST_CASE("ym2413 half-sine waveform silences the negative half", "[ym2413][audio]") {
+    // Carrier WF = 1 (half-sine) with the modulator silenced: output is the
+    // rectified (non-negative) half-sine; WF = 0 (full sine) swings negative.
+    // [3] carrier byte: WF_carrier = bit 4 -> $10 for half-sine, $00 for full.
+    const std::array<std::uint8_t, 8> half = {0x21, 0x21, 0x3F, 0x10, 0xF0, 0xF0, 0x00, 0x00};
+    const std::array<std::uint8_t, 8> full = {0x21, 0x21, 0x3F, 0x00, 0xF0, 0xF0, 0x00, 0x00};
+    ym2413 hsine;
+    ym2413 fsine;
+    // Block 5 so the carrier phase sweeps full cycles (into the negative half)
+    // within the sample window.
+    configure_user(hsine, half, 0xA0, 0x1B);
+    configure_user(fsine, full, 0xA0, 0x1B);
+    CHECK(min_sample(hsine, 512) >= 0); // half-sine never goes negative
+    CHECK(min_sample(fsine, 512) < 0);  // full sine does
+    CHECK(peak_abs(hsine, 512) > 0);    // and it still sounds
 }

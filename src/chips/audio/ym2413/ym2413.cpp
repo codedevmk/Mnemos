@@ -50,6 +50,40 @@ namespace mnemos::chips::audio {
         constexpr std::array<std::uint8_t, 16> multi_table = {1,  2,  4,  6,  8,  10, 12, 14,
                                                               16, 18, 20, 20, 24, 24, 30, 30};
 
+        // Key-Scale-Level base attenuation (the OPLL "KSL ROM"): higher notes are
+        // progressively attenuated. Indexed by [block*16 + (F-Number >> 5)] -- block
+        // (octave) and the F-Number's top 4 bits. Values are in 0.375 dB steps (one
+        // step = 16 attenuation units in this chip's domain, where 256 units = 1
+        // octave = 6 dB); they realise the full 6 dB/octave slope, which the KSL
+        // field then scales down (>>0/1/2 for 6/3/1.5 dB-oct, off for field 0).
+        constexpr std::array<std::uint8_t, 128> ksl_steps = {
+            // OCT 0
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            // OCT 1
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 7, 8,
+            // OCT 2
+            0, 0, 0, 0, 0, 3, 5, 7, 8, 10, 11, 12, 13, 14, 15, 16,
+            // OCT 3
+            0, 0, 0, 5, 8, 11, 13, 15, 16, 18, 19, 20, 21, 22, 23, 24,
+            // OCT 4
+            0, 0, 8, 13, 16, 19, 21, 23, 24, 26, 27, 28, 29, 30, 31, 32,
+            // OCT 5
+            0, 8, 16, 21, 24, 27, 29, 31, 32, 34, 35, 36, 37, 38, 39, 40,
+            // OCT 6
+            0, 16, 24, 29, 32, 35, 37, 39, 40, 42, 43, 44, 45, 46, 47, 48,
+            // OCT 7
+            0, 24, 32, 37, 40, 43, 45, 47, 48, 50, 51, 52, 53, 54, 55, 56};
+
+        // KSL attenuation (in this chip's atten units) for a 2-bit field and a
+        // base step from ksl_steps: field 0 = off; 1/2/3 = 1.5/3/6 dB per octave
+        // (>>2 / >>1 / >>0 of the full-slope value). One step = 16 atten units.
+        [[nodiscard]] std::int32_t ksl_atten(std::uint8_t field, std::uint8_t step) noexcept {
+            if (field == 0U) {
+                return 0;
+            }
+            return (static_cast<std::int32_t>(step) << 4) >> (3U - field);
+        }
+
         // ---- Output-pipeline tables (log-sine + exp), built once ----
         //
         // The OPLL stores a 256-entry quarter-sine LUT in the log domain (12-bit
@@ -100,7 +134,13 @@ namespace mnemos::chips::audio {
         // Read an 11-bit log-sine value (0..2047 across one full cycle), folding
         // the quarter-wave LUT: bit 10 = sign, bit 9 = mirror direction. Returns
         // the magnitude in bits 11-0 with the sign packed into bit 12.
-        [[nodiscard]] std::int32_t sine_log(std::uint16_t phase11) noexcept {
+        //
+        // wf selects the operator waveform (OPLL has two): 0 = full sine, 1 = the
+        // half-sine, whose negative half (sign bit set) is replaced by silence.
+        [[nodiscard]] std::int32_t sine_log(std::uint16_t phase11, std::uint8_t wf) noexcept {
+            if (wf != 0U && (phase11 & 0x400U) != 0U) {
+                return 0x0FFF; // half-sine: the negative half is silenced (max atten)
+            }
             auto qpos = static_cast<std::uint8_t>((phase11 >> 1U) & 0xFFU);
             if ((phase11 & 0x200U) != 0U) {
                 qpos = static_cast<std::uint8_t>(255U - qpos);
@@ -350,6 +390,11 @@ namespace mnemos::chips::audio {
         // phase-per-sample math reduces to the integer increment directly.
         const std::uint32_t base_inc = (static_cast<std::uint32_t>(c.f_number) << c.block) >> 1U;
 
+        // Key-scale level: a per-note attenuation from block + the F-Number's top 4
+        // bits, scaled per operator by its KSL field (added into each atten below).
+        const std::uint8_t ksl_step =
+            ksl_steps[(static_cast<std::size_t>(c.block) << 4U) | (c.f_number >> 5U)];
+
         // Modulator (op[0]) phase + sample.
         op_state& m = c.op[0];
         const std::uint32_t inc_m = (base_inc * multi_table[m.multi]) >> 1U;
@@ -359,9 +404,10 @@ namespace mnemos::chips::audio {
         if (m.fb > 0U) {
             pm = static_cast<std::uint16_t>((pm + (fb_avg >> (7U - m.fb))) & 0x07FFU);
         }
-        const std::int32_t m_log = sine_log(pm);
+        const std::int32_t m_log = sine_log(pm, m.wf);
         const std::int32_t m_atten = (m_log & 0x0FFF) + (static_cast<std::int32_t>(m.tl) << 5) +
-                                     (static_cast<std::int32_t>(m.eg_level) << 4);
+                                     (static_cast<std::int32_t>(m.eg_level) << 4) +
+                                     ksl_atten(m.ksl, ksl_step);
         std::int32_t m_lin = log_to_linear(static_cast<std::uint16_t>(m_atten & 0x1FFF));
         if ((m_log & 0x1000) != 0) {
             m_lin = -m_lin;
@@ -374,9 +420,10 @@ namespace mnemos::chips::audio {
         const std::uint32_t inc_c = (base_inc * multi_table[cr.multi]) >> 1U;
         cr.phase += inc_c;
         const auto pc = static_cast<std::uint16_t>(((cr.phase >> 9U) + (m_lin >> 1)) & 0x07FFU);
-        const std::int32_t c_log = sine_log(pc);
+        const std::int32_t c_log = sine_log(pc, cr.wf);
         const std::int32_t c_atten = (c_log & 0x0FFF) + (static_cast<std::int32_t>(c.volume) << 7) +
-                                     (static_cast<std::int32_t>(cr.eg_level) << 4);
+                                     (static_cast<std::int32_t>(cr.eg_level) << 4) +
+                                     ksl_atten(cr.ksl, ksl_step);
         std::int32_t out = log_to_linear(static_cast<std::uint16_t>(c_atten & 0x1FFF));
         if ((c_log & 0x1000) != 0) {
             out = -out;
