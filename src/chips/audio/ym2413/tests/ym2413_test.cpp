@@ -255,3 +255,63 @@ TEST_CASE("ym2413 half-sine waveform silences the negative half", "[ym2413][audi
     CHECK(min_sample(fsine, 512) < 0);  // full sine does
     CHECK(peak_abs(hsine, 512) > 0);    // and it still sounds
 }
+
+namespace {
+    // Spread (max - min) of the per-window peak amplitude across the buffer: ~0 for
+    // a steady tone, large when tremolo modulates the level.
+    [[nodiscard]] int windowed_peak_range(ym2413& chip, int pairs, int window) {
+        std::vector<std::int16_t> buf(static_cast<std::size_t>(pairs) * 2U);
+        chip.generate(buf);
+        int hi = 0;
+        int lo = 0x7FFFFFFF;
+        for (int w = 0; w + window <= pairs; w += window) {
+            int peak = 0;
+            for (int i = 0; i < window; ++i) {
+                const auto s = buf[static_cast<std::size_t>((w + i) * 2)];
+                peak = std::max(peak, std::abs(static_cast<int>(s)));
+            }
+            hi = std::max(hi, peak);
+            lo = std::min(lo, peak);
+        }
+        return hi - lo;
+    }
+} // namespace
+
+TEST_CASE("ym2413 AM tremolo modulates the amplitude over time", "[ym2413][audio]") {
+    // Carrier AM = 1 (byte[1] bit 7), a sustained tone with the modulator silenced.
+    // Over a full AM cycle (~13440 samples) the level swings; without AM it is
+    // steady. The window (1024) spans several tone cycles so each window's peak is
+    // the true tone peak, varying only with the slow AM LFO.
+    const std::array<std::uint8_t, 8> am_on = {0x21, 0xA1, 0x3F, 0x00, 0xF0, 0xF0, 0x00, 0x00};
+    const std::array<std::uint8_t, 8> am_off = {0x21, 0x21, 0x3F, 0x00, 0xF0, 0xF0, 0x00, 0x00};
+    ym2413 with_am;
+    ym2413 without_am;
+    configure_user(with_am, am_on, 0xA0, 0x1B);     // block 5
+    configure_user(without_am, am_off, 0xA0, 0x1B); // identical but AM off
+    const int range_am = windowed_peak_range(with_am, 14000, 1024);
+    const int range_steady = windowed_peak_range(without_am, 14000, 1024);
+    CHECK(range_am > 100);              // tremolo clearly modulates the level
+    CHECK(range_steady < range_am / 4); // no AM -> a steady amplitude
+}
+
+TEST_CASE("ym2413 vibrato perturbs the tone and stays deterministic", "[ym2413][audio]") {
+    // Carrier VIB = 1 (byte[1] bit 6) at the top F-Number group (non-zero phase-mod
+    // offset): the waveform differs from the un-vibratoed tone, deterministically.
+    const std::array<std::uint8_t, 8> vib_on = {0x21, 0x61, 0x3F, 0x00, 0xF0, 0xF0, 0x00, 0x00};
+    const std::array<std::uint8_t, 8> vib_off = {0x21, 0x21, 0x3F, 0x00, 0xF0, 0xF0, 0x00, 0x00};
+    ym2413 vib;
+    ym2413 plain;
+    configure_user(vib, vib_on, 0xFF, 0x1B); // F-Number $1FF (group 7), block 5
+    configure_user(plain, vib_off, 0xFF, 0x1B);
+    std::array<std::int16_t, 8000> wv{};
+    std::array<std::int16_t, 8000> wp{};
+    vib.generate(wv);
+    plain.generate(wp);
+    CHECK(wv != wp); // vibrato changed the waveform
+
+    ym2413 vib2;
+    configure_user(vib2, vib_on, 0xFF, 0x1B);
+    std::array<std::int16_t, 8000> wv2{};
+    vib2.generate(wv2);
+    CHECK(wv == wv2); // and it is reproducible
+}
