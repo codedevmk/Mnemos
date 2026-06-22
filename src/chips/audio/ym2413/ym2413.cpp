@@ -312,10 +312,11 @@ namespace mnemos::chips::audio {
             if (new_key && !c.prev_key_on) {
                 // Key-on edge: kick both operators into the fast-damp step that
                 // precedes attack so the previous note's tail does not bleed
-                // through.
+                // through. The phase is NOT reset here -- doing so mid-note would
+                // jump the still-sounding waveform and click; it is reset when damp
+                // reaches silence (below), so the reset is inaudible.
                 for (auto& o : c.op) {
                     o.state = eg_state::damp;
-                    o.phase = 0U;
                 }
                 refresh_channel_instrument(ch);
             } else if (!new_key && c.prev_key_on) {
@@ -383,11 +384,12 @@ namespace mnemos::chips::audio {
         case eg_state::damp:
             if (o.eg_level < 0x1FFU) {
                 o.eg_level = static_cast<std::uint16_t>(o.eg_level + 4U);
-                if (o.eg_level >= 0x1FFU) {
-                    o.eg_level = 0x1FFU;
-                    o.state = eg_state::attack;
-                }
-            } else {
+            }
+            if (o.eg_level >= 0x1FFU) {
+                // The previous note is now damped to silence: reset the phase here
+                // (inaudible at silence) and begin the attack.
+                o.eg_level = 0x1FFU;
+                o.phase = 0U;
                 o.state = eg_state::attack;
             }
             break;

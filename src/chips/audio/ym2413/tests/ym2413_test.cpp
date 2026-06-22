@@ -357,3 +357,27 @@ TEST_CASE("ym2413 key-scale rate speeds up higher notes' envelopes", "[ym2413][a
     const int late_hi0 = peak_in_window(hi_off, 16000, 12000, 16000);
     CHECK(late_hi0 * 2 > late_lo0); // no KSR -> the two notes decay comparably
 }
+
+TEST_CASE("ym2413 key-on does not click (phase reset deferred to damp)", "[ym2413][audio]") {
+    // Re-keying a channel while it is still sounding must not jump the waveform:
+    // the phase reset is deferred until the damp phase fades the old note to
+    // silence, so the reset is inaudible.
+    ym2413 chip;
+    configure_channel0(chip); // Trumpet, keyed on
+    std::array<std::int16_t, 16000> warm{};
+    chip.generate(warm); // attack into a loud, sounding state
+    const int before = warm[warm.size() - 2U];
+
+    // Key-off then key-on (a fresh key-on edge) with no samples in between.
+    write_reg(chip, ym2413::reg_control_base, 0x08); // key-off
+    write_reg(chip, ym2413::reg_control_base, 0x18); // key-on again
+
+    std::array<std::int16_t, 400> across{};
+    chip.generate(across);
+    int maxdelta = std::abs(static_cast<int>(across[0]) - before);
+    for (std::size_t i = 2; i < across.size(); i += 2U) {
+        maxdelta = std::max(
+            maxdelta, std::abs(static_cast<int>(across[i]) - static_cast<int>(across[i - 2])));
+    }
+    CHECK(maxdelta < 800); // a clean transition, not a key-on click
+}
