@@ -541,6 +541,207 @@ namespace mnemos::manifests::nes {
             void apply_mirroring() override {}
         };
 
+        // RAMBO-1 / Tengen 800032 (iNES 64): an enhanced MMC3. It shares MMC3's
+        // bus/CHR-window/mirroring machinery (hence the subclass) but adds a THIRD
+        // switchable 8 KiB PRG bank (register RF), a 1 KiB CHR mode (the K bit
+        // splits R0/R1 into four 1 KiB banks supplied by R8/R9), a sixteen-entry
+        // register file, and an IRQ that clocks either per scanline (like MMC3) or
+        // per CPU cycle (selected by a $C001 mode bit). Games: the Tengen library
+        // -- Klax, Ms. Pac-Man, Skull & Crossbones, Shinobi, Rolling Thunder.
+        class rambo1_mapper final : public mmc3_mapper {
+          public:
+            using mmc3_mapper::mmc3_mapper;
+
+            void reset() override {
+                bank_select_ = 0U;
+                mirror_reg_ = 0U;
+                r_.fill(0U);
+                irq_latch_ = 0U;
+                irq_counter_ = 0U;
+                irq_reload_ = false;
+                irq_enabled_ = false;
+                irq_cycle_mode_ = false;
+                cycle_prescaler_ = 0U;
+                if (prg_8k_count_ != 0U) {
+                    for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
+                        bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
+                    }
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+                apply_banks();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xE001U) {
+                case 0x8000U: // bank select: CPKx RRRR
+                    bank_select_ = value;
+                    apply_banks();
+                    break;
+                case 0x8001U: // bank data -> the selected register (R0-RF)
+                    r_[bank_select_ & 0x0FU] = value;
+                    apply_banks();
+                    break;
+                case 0xA000U:
+                    mirror_reg_ = value;
+                    apply_mirroring();
+                    break;
+                case 0xA001U:
+                    break; // PRG-RAM protect -- not modelled
+                case 0xC000U:
+                    irq_latch_ = value;
+                    break;
+                case 0xC001U:
+                    irq_cycle_mode_ = (value & 0x01U) != 0U; // bit 0: 0 = scanline, 1 = CPU cycle
+                    irq_reload_ = true;                      // reload on the next clock
+                    cycle_prescaler_ = 0U;                   // $C001 resets the cycle prescaler
+                    break;
+                case 0xE000U:
+                    irq_enabled_ = false;
+                    raise_irq(false); // disable acknowledges any pending IRQ
+                    break;
+                case 0xE001U:
+                    irq_enabled_ = true;
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            // Scanline-mode clock: the board calls this only while the PPU renders
+            // (the A12 proxy), matching the hardware's A12-driven scanline counter.
+            void clock_scanline(std::uint32_t /*line*/) override {
+                if (!irq_cycle_mode_) {
+                    irq_clock();
+                }
+            }
+
+            // CPU-cycle-mode clock: the counter advances once every 4 CPU cycles.
+            // The board calls this every scanline (ungated) with the line's CPU
+            // cycles, so accumulate and step the counter for each group of four.
+            void clock_cpu_timer(std::uint32_t cpu_cycles) override {
+                if (!irq_cycle_mode_) {
+                    return;
+                }
+                cycle_prescaler_ += cpu_cycles;
+                while (cycle_prescaler_ >= 4U) {
+                    cycle_prescaler_ -= 4U;
+                    irq_clock();
+                }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                writer.u8(bank_select_);
+                writer.u8(mirror_reg_);
+                for (const std::uint8_t r : r_) {
+                    writer.u8(r);
+                }
+                writer.u8(irq_latch_);
+                writer.u8(irq_counter_);
+                writer.boolean(irq_reload_);
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_cycle_mode_);
+                writer.u32(cycle_prescaler_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                bank_select_ = reader.u8();
+                mirror_reg_ = reader.u8();
+                for (std::uint8_t& r : r_) {
+                    r = reader.u8();
+                }
+                irq_latch_ = reader.u8();
+                irq_counter_ = reader.u8();
+                irq_reload_ = reader.boolean();
+                irq_enabled_ = reader.boolean();
+                irq_cycle_mode_ = reader.boolean();
+                cycle_prescaler_ = reader.u32();
+                apply_banks(); // re-point PRG/CHR/mirroring
+            }
+
+          private:
+            void apply_banks() {
+                apply_prg_banks();
+                apply_chr_banks();
+                apply_mirroring();
+            }
+
+            void apply_prg_banks() {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                // Three switchable 8 KiB banks (R6, R7, RF) + the fixed last bank
+                // at $E000. The P bit (0x40) swaps R6 and RF between $8000 and $C000.
+                if ((bank_select_ & 0x40U) == 0U) { // P=0
+                    map_prg8(0x8000U, r_[6]);
+                    map_prg8(0xA000U, r_[7]);
+                    map_prg8(0xC000U, r_[15]);
+                } else { // P=1
+                    map_prg8(0x8000U, r_[15]);
+                    map_prg8(0xA000U, r_[7]);
+                    map_prg8(0xC000U, r_[6]);
+                }
+                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank always fixed at $E000
+            }
+
+            void apply_chr_banks() {
+                if (chr_is_ram_ || chr_1k_count_ == 0U) {
+                    return;
+                }
+                // The "normal" (C=0) layout is a pair of 2 KiB regions at $0000 then
+                // four 1 KiB banks at $1000. K=1 splits each 2 KiB region into two
+                // independent 1 KiB banks (R0/R8 and R1/R9); K=0 takes 2 KiB pairs
+                // from R0/R1 with the low bit ignored.
+                std::array<std::size_t, 8> normal{};
+                if ((bank_select_ & 0x20U) != 0U) { // K=1: all 1 KiB
+                    normal = {r_[0], r_[8], r_[1], r_[9], r_[2], r_[3], r_[4], r_[5]};
+                } else { // K=0: R0/R1 are 2 KiB (low bit ignored)
+                    const std::size_t r0 = r_[0] & 0xFEU;
+                    const std::size_t r1 = r_[1] & 0xFEU;
+                    normal = {r0, r0 + 1U, r1, r1 + 1U, r_[2], r_[3], r_[4], r_[5]};
+                }
+                // The C bit (0x80) swaps the $0000 and $1000 halves, exactly as
+                // MMC3's A12 inversion does.
+                std::array<std::size_t, 8> slot = normal;
+                if ((bank_select_ & 0x80U) != 0U) {
+                    slot = {normal[4], normal[5], normal[6], normal[7],
+                            normal[0], normal[1], normal[2], normal[3]};
+                }
+                for (std::size_t s = 0; s < slot.size(); ++s) {
+                    const std::size_t src = (slot[s] % chr_1k_count_) * k_chr_1k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                }
+            }
+
+            // The 8-bit IRQ down-counter shared by both clock sources. On a reload
+            // forced by a $C001 write the value is ORed with 1 when non-zero -- a
+            // RAMBO-1 quirk; an ordinary count-to-0 auto-reload uses the latch as-is.
+            void irq_clock() {
+                if (irq_reload_) {
+                    irq_counter_ = irq_latch_;
+                    if (irq_latch_ != 0U) {
+                        irq_counter_ = static_cast<std::uint8_t>(irq_counter_ | 0x01U);
+                    }
+                    irq_reload_ = false;
+                } else if (irq_counter_ == 0U) {
+                    irq_counter_ = irq_latch_;
+                } else {
+                    --irq_counter_;
+                }
+                if (irq_counter_ == 0U && irq_enabled_) {
+                    raise_irq(true); // hardware delays ~4 CPU cycles; approximated immediate
+                }
+            }
+
+            std::array<std::uint8_t, 16> r_{}; // R0-RF (R10-R14 unused)
+            bool irq_cycle_mode_{};
+            std::uint32_t cycle_prescaler_{};
+        };
+
         // MMC5 (iNES 5): the most capable NES mapper. This core increment models
         // the $5000-$5FFF register window, PRG banking (4 modes, ROM/RAM select),
         // CHR banking (4 modes, sprite-'A' set composed into the 8 KiB window),
@@ -2998,6 +3199,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, false);
         case 26: // VRC6b (A0/A1 swapped)
             return std::make_unique<vrc6_mapper>(bus, ppu, prg, chr, chr_is_ram, true);
+        case 64: // RAMBO-1 / Tengen 800032
+            return std::make_unique<rambo1_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 66:
             return std::make_unique<gxrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 68:
