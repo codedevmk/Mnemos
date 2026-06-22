@@ -22,6 +22,26 @@ namespace mnemos::manifests::nes {
         constexpr std::size_t k_chr_1k = 0x0400U;   // 1 KiB CHR bank (MMC3)
         constexpr std::size_t k_chr_8k = 0x2000U;   // 8 KiB CHR bank (CNROM)
 
+        // The 2-bit nametable mode several boards share (Bandai FCG 16, Sunsoft-3
+        // 67): 0 = vertical, 1 = horizontal, 2 = single-screen A, 3 = single-screen B.
+        void apply_mirror_mode(chips::video::ppu2c02& ppu, std::uint8_t mode) {
+            using m = chips::video::ppu2c02::mirroring;
+            switch (mode & 0x03U) {
+            case 0U:
+                ppu.set_mirroring(m::vertical);
+                break;
+            case 1U:
+                ppu.set_mirroring(m::horizontal);
+                break;
+            case 2U:
+                ppu.set_mirroring(m::single_a);
+                break;
+            default:
+                ppu.set_mirroring(m::single_b);
+                break;
+            }
+        }
+
         // The Konami VRC IRQ shared by VRC6 (24/26), VRC7 (85) and VRC2/4 (21/22/
         // 23/25). An 8-bit counter that, in cycle mode, ticks every CPU cycle and,
         // in scanline mode, is driven by a +3/cycle prescaler clocked once per ~341
@@ -903,23 +923,7 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            void apply_mirroring() {
-                using m = chips::video::ppu2c02::mirroring;
-                switch (mirror_) {
-                case 0U:
-                    ppu_->set_mirroring(m::vertical);
-                    break;
-                case 1U:
-                    ppu_->set_mirroring(m::horizontal);
-                    break;
-                case 2U:
-                    ppu_->set_mirroring(m::single_a);
-                    break;
-                default:
-                    ppu_->set_mirroring(m::single_b);
-                    break;
-                }
-            }
+            void apply_mirroring() { apply_mirror_mode(*ppu_, mirror_); }
 
             std::size_t prg_16k_count_;
             std::size_t chr_1k_count_;
@@ -931,6 +935,161 @@ namespace mnemos::manifests::nes {
             bool irq_enabled_{};
             std::array<std::uint8_t, 0x2000U> chr_window_{};
             chips::storage::eeprom_i2c eeprom_{256U}; // 24C02 serial EEPROM (saves)
+        };
+
+        // Sunsoft-3 (iNES 67): four 2 KiB CHR banks, a 16 KiB switchable PRG bank
+        // (the last 16 KiB fixed), four mirroring modes, and a 16-bit down-counter
+        // IRQ clocked on the M2 (CPU) clock. The counter is loaded high-byte-then-
+        // low-byte through one port ($C800) gated by a write toggle that $D800 also
+        // resets; when the count wraps past zero ($0000 -> $FFFF) the mapper asserts
+        // /IRQ and pauses itself, and a write to $8000 acknowledges it. Games:
+        // Fantasy Zone 2, Mito Koumon 2. (Completes the Sunsoft family alongside the
+        // Sunsoft-4 (68) and 5B (69).)
+        class sunsoft3_mapper final : public nes_mapper {
+          public:
+            sunsoft3_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                            std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                            bool chr_is_ram) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
+                  prg_16k_count_(prg.size() / k_prg_bank), chr_2k_count_(chr.size() / k_chr_2k) {}
+
+            void reset() override {
+                chr_bank_.fill(0U);
+                prg_bank_ = 0U;
+                mirror_ = 0U;
+                irq_counter_ = 0U;
+                irq_counting_ = false;
+                irq_write_hi_ = true;
+                if (prg_16k_count_ != 0U) {
+                    bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
+                    bus_->map_rom(0xC000U,
+                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+                apply_prg();
+                apply_chr();
+                apply_mirror_mode(*ppu_, mirror_);
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                switch (addr & 0xF800U) {
+                case 0x8000U: // $8000-$87FF: acknowledge a pending IRQ
+                    raise_irq(false);
+                    break;
+                case 0x8800U:
+                    chr_bank_[0] = value;
+                    apply_chr();
+                    break;
+                case 0x9800U:
+                    chr_bank_[1] = value;
+                    apply_chr();
+                    break;
+                case 0xA800U:
+                    chr_bank_[2] = value;
+                    apply_chr();
+                    break;
+                case 0xB800U:
+                    chr_bank_[3] = value;
+                    apply_chr();
+                    break;
+                case 0xC800U: // IRQ load: high byte then low byte, gated by the toggle
+                    if (irq_write_hi_) {
+                        irq_counter_ = static_cast<std::uint16_t>(
+                            (irq_counter_ & 0x00FFU) | (static_cast<std::uint16_t>(value) << 8U));
+                    } else {
+                        irq_counter_ = static_cast<std::uint16_t>((irq_counter_ & 0xFF00U) | value);
+                    }
+                    irq_write_hi_ = !irq_write_hi_;
+                    break;
+                case 0xD800U: // IRQ control: bit 4 enables counting; resets the load toggle
+                    irq_counting_ = (value & 0x10U) != 0U;
+                    irq_write_hi_ = true;
+                    break;
+                case 0xE800U:
+                    mirror_ = value & 0x03U;
+                    apply_mirror_mode(*ppu_, mirror_);
+                    break;
+                case 0xF800U:
+                    prg_bank_ = value & 0x0FU; // 16 KiB bank at $8000 (lower 4 bits)
+                    apply_prg();
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            // The 16-bit counter decrements on every M2 cycle while counting; on the
+            // $0000 -> $FFFF underflow it asserts /IRQ and pauses. The board clocks
+            // this ungated (it is not A12-driven).
+            void clock_cpu_timer(std::uint32_t cpu_cycles) override {
+                if (!irq_counting_) {
+                    return;
+                }
+                if (irq_counter_ < cpu_cycles) { // passes through zero -> underflow
+                    raise_irq(true);
+                    irq_counting_ = false; // the mapper pauses itself on the IRQ
+                }
+                irq_counter_ = static_cast<std::uint16_t>(irq_counter_ - cpu_cycles);
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                for (const std::uint8_t b : chr_bank_) {
+                    writer.u8(b);
+                }
+                writer.u8(prg_bank_);
+                writer.u8(mirror_);
+                writer.u32(irq_counter_);
+                writer.boolean(irq_counting_);
+                writer.boolean(irq_write_hi_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                for (std::uint8_t& b : chr_bank_) {
+                    b = reader.u8();
+                }
+                prg_bank_ = reader.u8();
+                mirror_ = reader.u8();
+                irq_counter_ = static_cast<std::uint16_t>(reader.u32());
+                irq_counting_ = reader.boolean();
+                irq_write_hi_ = reader.boolean();
+                apply_prg();
+                apply_chr();
+                apply_mirror_mode(*ppu_, mirror_);
+            }
+
+          private:
+            void apply_prg() {
+                if (prg_16k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(
+                    0x8000U, prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
+            }
+
+            void apply_chr() {
+                if (chr_is_ram_ || chr_2k_count_ == 0U) {
+                    return;
+                }
+                for (std::size_t s = 0; s < 4U; ++s) {
+                    const std::size_t src = (chr_bank_[s] % chr_2k_count_) * k_chr_2k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_2k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_2k));
+                }
+            }
+
+            std::size_t prg_16k_count_;
+            std::size_t chr_2k_count_;
+            std::array<std::uint8_t, 4> chr_bank_{};
+            std::uint8_t prg_bank_{};
+            std::uint8_t mirror_{};
+            std::uint16_t irq_counter_{};
+            bool irq_counting_{};
+            bool irq_write_hi_{true};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
 
         // MMC5 (iNES 5): the most capable NES mapper. This core increment models
@@ -3396,6 +3555,8 @@ namespace mnemos::manifests::nes {
             return std::make_unique<rambo1_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 66:
             return std::make_unique<gxrom_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 67: // Sunsoft-3
+            return std::make_unique<sunsoft3_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 68:
             return std::make_unique<sunsoft4_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 69:
