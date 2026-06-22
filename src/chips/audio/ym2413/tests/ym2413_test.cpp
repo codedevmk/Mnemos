@@ -82,10 +82,11 @@ TEST_CASE("ym2413 register writes drive the synthesis state and produce output",
     chip.step();
     REQUIRE(chip.last_sample() == 0);
 
-    // Keying a channel with a preset instrument makes it sound.
+    // Keying a channel with a preset instrument makes it sound. The Trumpet's
+    // attack is gradual, so step well past it before expecting audible output.
     configure_channel0(chip);
     bool any_nonzero = false;
-    for (int i = 0; i < 256; ++i) {
+    for (int i = 0; i < 8000; ++i) {
         chip.step();
         any_nonzero = any_nonzero || (chip.last_sample() != 0);
     }
@@ -137,8 +138,9 @@ TEST_CASE("ym2413 produces a deterministic, repeatable waveform after key-on", "
     configure_channel0(x);
     configure_channel0(y);
 
-    std::array<std::int16_t, 256> wx{};
-    std::array<std::int16_t, 256> wy{};
+    // Enough samples to cover the gradual attack into the sounding body.
+    std::array<std::int16_t, 16384> wx{};
+    std::array<std::int16_t, 16384> wy{};
     x.generate(wx);
     y.generate(wy);
     REQUIRE(wx == wy);
@@ -314,4 +316,44 @@ TEST_CASE("ym2413 vibrato perturbs the tone and stays deterministic", "[ym2413][
     std::array<std::int16_t, 8000> wv2{};
     vib2.generate(wv2);
     CHECK(wv == wv2); // and it is reproducible
+}
+
+namespace {
+    [[nodiscard]] int peak_in_window(ym2413& chip, int total, int start, int end) {
+        std::vector<std::int16_t> buf(static_cast<std::size_t>(total) * 2U);
+        chip.generate(buf);
+        int peak = 0;
+        for (int i = start; i < end; ++i) {
+            const auto s = buf[static_cast<std::size_t>(i) * 2U];
+            peak = std::max(peak, std::abs(static_cast<int>(s)));
+        }
+        return peak;
+    }
+} // namespace
+
+TEST_CASE("ym2413 key-scale rate speeds up higher notes' envelopes", "[ym2413][audio]") {
+    // A percussive voice (egt=0) with instant attack and a moderate decay to
+    // silence. With KSR on, a higher note decays faster, so a late window is much
+    // quieter than for the low note; with KSR off both decay at the same rate.
+    // Bytes [0]/[1]: egt=0, ksr=1 ($11) / ksr=0 ($01), multi=1. [4]/[5] AR=15,DR=8.
+    // [6]/[7] SL=15,RR=0.
+    const std::array<std::uint8_t, 8> ksr_on = {0x11, 0x11, 0x3F, 0x00, 0xF8, 0xF8, 0xF0, 0xF0};
+    const std::array<std::uint8_t, 8> ksr_off = {0x01, 0x01, 0x3F, 0x00, 0xF8, 0xF8, 0xF0, 0xF0};
+
+    ym2413 lo_on;
+    ym2413 hi_on;
+    configure_user(lo_on, ksr_on, 0xA0, 0x13); // block 1
+    configure_user(hi_on, ksr_on, 0xA0, 0x1D); // block 6
+    const int late_lo = peak_in_window(lo_on, 16000, 12000, 16000);
+    const int late_hi = peak_in_window(hi_on, 16000, 12000, 16000);
+    REQUIRE(late_lo > 0);
+    CHECK(late_hi * 4 < late_lo); // KSR: the higher note has decayed much further
+
+    ym2413 lo_off;
+    ym2413 hi_off;
+    configure_user(lo_off, ksr_off, 0xA0, 0x13);
+    configure_user(hi_off, ksr_off, 0xA0, 0x1D);
+    const int late_lo0 = peak_in_window(lo_off, 16000, 12000, 16000);
+    const int late_hi0 = peak_in_window(hi_off, 16000, 12000, 16000);
+    CHECK(late_hi0 * 2 > late_lo0); // no KSR -> the two notes decay comparably
 }
