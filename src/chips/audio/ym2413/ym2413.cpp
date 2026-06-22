@@ -338,7 +338,7 @@ namespace mnemos::chips::audio {
         }
     }
 
-    void ym2413::op_eg_tick(op_state& o) noexcept {
+    void ym2413::op_eg_tick(op_state& o, std::uint8_t keycode) noexcept {
         std::uint8_t rate = 0U;
         switch (o.state) {
         case eg_state::damp:
@@ -359,14 +359,23 @@ namespace mnemos::chips::audio {
         case eg_state::off:
             return; // frozen
         }
-        const std::uint16_t period = eg_period(rate);
-        if (period == 0U) {
-            return;
+        if (rate == 0U) {
+            return; // a zero rate is frozen regardless of key scaling
         }
+        // Key-scale rate (KSR): the OPLL adds a rate-key-scale to the 4-bit rate so
+        // higher notes have faster envelopes. RKS = ksr ? keycode : keycode>>2, and
+        // the effective 6-bit rate is 4*rate + RKS. At this model's >>2 step
+        // granularity ksr=0 leaves the rate unchanged (keycode>>2 never crosses a
+        // step), so only ksr=1 operators key-scale; the per-step sub-pattern of the
+        // exact OPL rate model is a later EG-accuracy refinement.
+        const std::uint32_t rks =
+            (o.ksr != 0U) ? keycode : static_cast<std::uint32_t>(keycode >> 2U);
+        const std::uint32_t rate6 = std::min<std::uint32_t>(63U, (4U * rate) + rks);
+        const std::uint16_t period = eg_period(static_cast<std::uint8_t>(rate6 >> 2U));
         // Global EG cadence: the shared eg_counter_ gates stepping per OPLL spec.
         // (The reference lifted this from a file-static into per-chip state so a
         // fresh chip is deterministic and instances are independent.)
-        if ((eg_counter_ % period) != 0U) {
+        if (period == 0U || (eg_counter_ % period) != 0U) {
             return;
         }
 
@@ -476,7 +485,9 @@ namespace mnemos::chips::audio {
         const std::int32_t m_atten = (m_log & 0x0FFF) + (static_cast<std::int32_t>(m.tl) << 5) +
                                      (static_cast<std::int32_t>(m.eg_level) << 4) +
                                      ksl_atten(m.ksl, ksl_step) + (m.am != 0U ? am_atten : 0);
-        std::int32_t m_lin = log_to_linear(static_cast<std::uint16_t>(m_atten & 0x1FFF));
+        // Saturate (not wrap) when the summed attenuation exceeds the 13-bit range,
+        // so a near-silent operator stays silent instead of aliasing back to loud.
+        std::int32_t m_lin = log_to_linear(static_cast<std::uint16_t>(std::min(m_atten, 0x1FFF)));
         if ((m_log & 0x1000) != 0) {
             m_lin = -m_lin;
         }
@@ -491,7 +502,7 @@ namespace mnemos::chips::audio {
         const std::int32_t c_atten = (c_log & 0x0FFF) + (static_cast<std::int32_t>(c.volume) << 7) +
                                      (static_cast<std::int32_t>(cr.eg_level) << 4) +
                                      ksl_atten(cr.ksl, ksl_step) + (cr.am != 0U ? am_atten : 0);
-        std::int32_t out = log_to_linear(static_cast<std::uint16_t>(c_atten & 0x1FFF));
+        std::int32_t out = log_to_linear(static_cast<std::uint16_t>(std::min(c_atten, 0x1FFF)));
         if ((c_log & 0x1000) != 0) {
             out = -out;
         }
@@ -510,9 +521,12 @@ namespace mnemos::chips::audio {
             }
             mix += channel_sample(c);
             // Advance the envelope generators after producing the sample, per the
-            // OPLL spec (EG ticks each chip step).
-            op_eg_tick(c.op[0]);
-            op_eg_tick(c.op[1]);
+            // OPLL spec (EG ticks each chip step). The key code (block + F-Number's
+            // top bit) drives the key-scale-rate.
+            const auto keycode =
+                static_cast<std::uint8_t>((c.block << 1U) | ((c.f_number >> 8U) & 0x01U));
+            op_eg_tick(c.op[0], keycode);
+            op_eg_tick(c.op[1], keycode);
         }
         mix = std::clamp(mix, -32768, 32767);
         last_sample_ = static_cast<std::int16_t>(mix);

@@ -143,7 +143,7 @@ namespace mnemos::chips::audio {
 
         void apply_instrument(channel_state& c, std::span<const std::uint8_t, 8> inst) noexcept;
         void refresh_channel_instrument(int ch_index) noexcept;
-        void op_eg_tick(op_state& o) noexcept;
+        void op_eg_tick(op_state& o, std::uint8_t keycode) noexcept;
         [[nodiscard]] std::int32_t channel_sample(channel_state& c) noexcept;
 
         std::array<std::uint8_t, user_instrument_size> user_instrument_{};

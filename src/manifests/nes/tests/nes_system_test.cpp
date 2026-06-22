@@ -1597,7 +1597,7 @@ TEST_CASE("VRC7 (mapper 85) routes the OPLL ports and produces audio", "[manifes
     opll(0x10U, 0xA0U); // F-number low
     opll(0x20U, 0x18U); // key-on, block 4
 
-    ea->tick(20000); // advance the OPLL (CPU/36 => ~555 samples)
+    ea->tick(300000); // advance the OPLL past the gradual attack (CPU/36 => ~8300 samples)
     const std::size_t avail = sys->mapper->expansion_audio_pending();
     REQUIRE(avail > 0U);
     std::vector<std::int16_t> buf(avail * 2U, 0);
