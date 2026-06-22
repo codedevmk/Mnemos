@@ -281,6 +281,31 @@ namespace {
         return rom;
     }
 
+    // A 256 KiB-PRG (32 x 8 KiB banks) / 32 KiB CHR-ROM (32 x 1 KiB banks) Jaleco
+    // SS88006 (mapper 18). PRG 8 KiB bank N byte 0 = $A0+N; CHR 1 KiB bank N byte
+    // 0 = $D0+N; the reset vector lives in the fixed last 8 KiB PRG bank ($E000).
+    std::vector<std::uint8_t> make_jaleco_ss88006() {
+        std::vector<std::uint8_t> rom(16U + 16U * 0x4000U + 4U * 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 16U;   // 16 x 16 KiB = 256 KiB PRG (= 32 x 8 KiB banks)
+        rom[5] = 4U;    // 4 x 8 KiB = 32 KiB CHR-ROM (= 32 x 1 KiB banks)
+        rom[6] = 0x20U; // flags6: mapper low nibble = 2
+        rom[7] = 0x10U; // flags7: mapper high nibble = 1 -> mapper 18
+        for (std::size_t bank = 0; bank < 32U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank); // 8 KiB bank
+        }
+        const std::size_t chr = 16U + 16U * 0x4000U;
+        for (std::size_t b = 0; b < 32U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank
+        }
+        rom[16U + 31U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 31U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // A 32 KiB-PRG / two-8 KiB-bank-CHR CNROM (mapper 3). CHR bank N byte 0 =
     // $C0+N; the reset vector points at $8000.
     std::vector<std::uint8_t> make_cnrom() {
@@ -1283,6 +1308,111 @@ TEST_CASE("Sunsoft-3 (mapper 67) save/load round-trips banking", "[manifests][ne
     CHECK(reader.ok());
     CHECK(b->bus.read8(0x8000U) == a8000);    // PRG bank restored
     CHECK(b->ppu.ppu_read(0x0000U) == 0xD5U); // CHR bank restored
+}
+
+TEST_CASE("Jaleco SS88006 (mapper 18) banks PRG/CHR through nibble-pair registers",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_jaleco_ss88006());
+
+    // Power-on: banks 0 at $8000/$A000/$C000, the last bank (31) fixed at $E000.
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xE000U) == static_cast<std::uint8_t>(0xA0U + 31U));
+
+    // PRG0 = bank $12 (18): low nibble $2 -> $8000, high nibble $1 -> $8001.
+    sys->bus.write8(0x8000U, 0x02U);
+    sys->bus.write8(0x8001U, 0x01U);
+    CHECK(sys->bus.read8(0x8000U) == static_cast<std::uint8_t>(0xA0U + 0x12U));
+    // PRG1 = bank 5 ($A000), PRG2 = bank 7 ($C000); $E000 stays fixed.
+    sys->bus.write8(0x8002U, 0x05U);
+    sys->bus.write8(0x8003U, 0x00U);
+    sys->bus.write8(0x9000U, 0x07U);
+    sys->bus.write8(0x9001U, 0x00U);
+    CHECK(sys->bus.read8(0xA000U) == static_cast<std::uint8_t>(0xA0U + 5U));
+    CHECK(sys->bus.read8(0xC000U) == static_cast<std::uint8_t>(0xA0U + 7U));
+    CHECK(sys->bus.read8(0xE000U) == static_cast<std::uint8_t>(0xA0U + 31U));
+
+    // CHR0 = bank $12 via $A000/$A001; CHR4 = bank 9 via $C000/$C001 ($1000);
+    // CHR7 = bank 3 via $D002/$D003 ($1C00).
+    sys->bus.write8(0xA000U, 0x02U);
+    sys->bus.write8(0xA001U, 0x01U);
+    sys->bus.write8(0xC000U, 0x09U);
+    sys->bus.write8(0xC001U, 0x00U);
+    sys->bus.write8(0xD002U, 0x03U);
+    sys->bus.write8(0xD003U, 0x00U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == static_cast<std::uint8_t>(0xD0U + 0x12U));
+    CHECK(sys->ppu.ppu_read(0x1000U) == static_cast<std::uint8_t>(0xD0U + 9U));
+    CHECK(sys->ppu.ppu_read(0x1C00U) == static_cast<std::uint8_t>(0xD0U + 3U));
+}
+
+TEST_CASE("Jaleco SS88006 (mapper 18) selects mirroring (0=H, 1=V)", "[manifests][nes]") {
+    auto sys = assemble_nes(make_jaleco_ss88006());
+
+    // $F002 = 0 -> horizontal: $2000 aliases $2400.
+    sys->bus.write8(0xF002U, 0x00U);
+    sys->ppu.ppu_write(0x2000U, 0xAAU);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0xAAU);
+    // $F002 = 1 -> vertical: $2000 aliases $2800.
+    sys->bus.write8(0xF002U, 0x01U);
+    sys->ppu.ppu_write(0x2000U, 0xBBU);
+    CHECK(sys->ppu.ppu_read(0x2800U) == 0xBBU);
+}
+
+TEST_CASE("Jaleco SS88006 (mapper 18) IRQ counts down, honours the width select, and acks",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_jaleco_ss88006());
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    // 16-bit mode: latch = $0064 (100) via nibbles ($E000=4, $E001=6).
+    sys->bus.write8(0xE000U, 0x04U);
+    sys->bus.write8(0xE001U, 0x06U);
+    sys->bus.write8(0xE002U, 0x00U);
+    sys->bus.write8(0xE003U, 0x00U);
+    sys->bus.write8(0xF000U, 0x00U);   // reload counter from latch (= 100)
+    sys->bus.write8(0xF001U, 0x01U);   // enable, 16-bit width
+    sys->mapper->clock_cpu_timer(50U); // 100 -> 50
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(60U); // 50 wraps past zero -> assert
+    CHECK(irq);
+    // Real games acknowledge by writing $F001 (disabling the counter), NOT $F000 --
+    // so $F001 must clear the line, or the IRQ re-fires forever.
+    sys->bus.write8(0xF001U, 0x00U);
+    CHECK_FALSE(irq);
+
+    // 4-bit width: only the low nibble counts, so a full latch of $00F5 fires after
+    // just ~5 cycles -- proving the width mask ($F001 bit 3) ignores the high bits.
+    sys->bus.write8(0xE000U, 0x05U);  // bits 0-3 = 5
+    sys->bus.write8(0xE001U, 0x0FU);  // bits 4-7 = F (frozen in 4-bit mode)
+    sys->bus.write8(0xF000U, 0x00U);  // counter = $00F5
+    sys->bus.write8(0xF001U, 0x09U);  // enable + 4-bit width (bit 3)
+    sys->mapper->clock_cpu_timer(4U); // low nibble 5 -> 1
+    CHECK_FALSE(irq);
+    sys->mapper->clock_cpu_timer(4U); // 1 wraps past zero -> assert
+    CHECK(irq);
+}
+
+TEST_CASE("Jaleco SS88006 (mapper 18) save/load round-trips banking", "[manifests][nes]") {
+    auto a = assemble_nes(make_jaleco_ss88006());
+    a->bus.write8(0x8000U, 0x03U); // PRG0 = bank 3
+    a->bus.write8(0x8001U, 0x00U);
+    a->bus.write8(0xA000U, 0x07U); // CHR0 = bank 7
+    a->bus.write8(0xA001U, 0x00U);
+    a->bus.write8(0xF002U, 0x01U); // mirroring vertical
+    const std::uint8_t a8000 = a->bus.read8(0x8000U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    a->mapper->save_state(writer);
+
+    auto b = assemble_nes(make_jaleco_ss88006());
+    CHECK(b->bus.read8(0x8000U) != a8000); // power-on differs
+    mnemos::chips::state_reader reader(blob);
+    b->mapper->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(b->bus.read8(0x8000U) == a8000);                                    // PRG restored
+    CHECK(b->ppu.ppu_read(0x0000U) == static_cast<std::uint8_t>(0xD0U + 7U)); // CHR restored
 }
 
 TEST_CASE("CNROM (mapper 3) switches the 8 KiB CHR bank", "[manifests][nes]") {
