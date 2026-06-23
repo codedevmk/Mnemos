@@ -3,6 +3,7 @@ add_library(
     fds.cpp
     nes_mapper.cpp
     nes_mapper_discrete.cpp
+    nes_mapper_konami.cpp
     nes_system.cpp
 )
 add_library(mnemos::manifests::nes ALIAS mnemos_manifests_nes)
