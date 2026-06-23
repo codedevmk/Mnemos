@@ -8,6 +8,7 @@ add_library(
     nes_mapper_konami.cpp
     nes_mapper_mmc1.cpp
     nes_mapper_mmc3.cpp
+    nes_mapper_mmc5.cpp
     nes_mapper_sunsoft.cpp
     nes_mapper_taito.cpp
     nes_system.cpp
