@@ -7,6 +7,7 @@ add_library(
     nes_mapper_jaleco.cpp
     nes_mapper_konami.cpp
     nes_mapper_mmc1.cpp
+    nes_mapper_mmc2_4.cpp
     nes_mapper_mmc3.cpp
     nes_mapper_mmc5.cpp
     nes_mapper_namco.cpp
