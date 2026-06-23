@@ -1,8 +1,98 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-06-22T05:09:06+00:00",
+  "captured": "2026-06-23T04:49:52+00:00",
   "window_days": 7,
   "runs": [
+    {
+      "id": 28000298990,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 377
+    },
+    {
+      "id": 28000028741,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 441
+    },
+    {
+      "id": 27995993268,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 337
+    },
+    {
+      "id": 27995758573,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 368
+    },
+    {
+      "id": 27995191357,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 370
+    },
+    {
+      "id": 27994953264,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 356
+    },
+    {
+      "id": 27938228390,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 350
+    },
+    {
+      "id": 27937863499,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 378
+    },
+    {
+      "id": 27933490006,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 396
+    },
+    {
+      "id": 27933146015,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 420
+    },
+    {
+      "id": 27932401344,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 351
+    },
+    {
+      "id": 27932154841,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 344
+    },
+    {
+      "id": 27931885760,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 356
+    },
+    {
+      "id": 27931648054,
+      "event": "pull_request",
+      "conclusion": "success",
+      "seconds": 344
+    },
+    {
+      "id": 27930772162,
+      "event": "push",
+      "conclusion": "success",
+      "seconds": 345
+    },
     {
       "id": 27930117828,
       "event": "pull_request",
@@ -512,96 +602,6 @@
       "event": "push",
       "conclusion": "success",
       "seconds": 329
-    },
-    {
-      "id": 27881096167,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 346
-    },
-    {
-      "id": 27880991478,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 369
-    },
-    {
-      "id": 27880793015,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 411
-    },
-    {
-      "id": 27880696188,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 362
-    },
-    {
-      "id": 27880536933,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 350
-    },
-    {
-      "id": 27880156478,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 355
-    },
-    {
-      "id": 27880003409,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 345
-    },
-    {
-      "id": 27878609024,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 350
-    },
-    {
-      "id": 27878441390,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 384
-    },
-    {
-      "id": 27878109874,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 384
-    },
-    {
-      "id": 27877969804,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 344
-    },
-    {
-      "id": 27877586046,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 354
-    },
-    {
-      "id": 27877462208,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 279
-    },
-    {
-      "id": 27876158968,
-      "event": "push",
-      "conclusion": "success",
-      "seconds": 400
-    },
-    {
-      "id": 27875979269,
-      "event": "pull_request",
-      "conclusion": "success",
-      "seconds": 380
     }
   ]
 }
