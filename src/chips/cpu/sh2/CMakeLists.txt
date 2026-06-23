@@ -20,7 +20,9 @@ mnemos_declare_tier(NAME mnemos_chips_cpu_sh2 TIER 2 DEPENDS mnemos_foundation)
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_cpu_sh2_test
-        SOURCES tests/sh2_test.cpp
+        SOURCES
+            tests/sh2_test.cpp
+            tests/sh2_divu_test.cpp
         LIBRARIES mnemos::chips::cpu::sh2 mnemos::topology
     )
 

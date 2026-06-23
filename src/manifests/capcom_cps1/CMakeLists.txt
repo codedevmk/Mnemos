@@ -58,7 +58,9 @@ mnemos_declare_tier(
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_capcom_cps1_profile_test
-        SOURCES tests/cps_b_profile_test.cpp
+        SOURCES
+            tests/cps_b_profile_test.cpp
+            tests/cps_b_profile_census_test.cpp
         LIBRARIES mnemos::manifests::capcom_cps1
     )
     mnemos_add_test(

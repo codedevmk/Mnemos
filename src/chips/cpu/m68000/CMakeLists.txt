@@ -20,7 +20,9 @@ mnemos_declare_tier(NAME mnemos_chips_cpu_m68000 TIER 2 DEPENDS mnemos_foundatio
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_cpu_m68000_test
-        SOURCES tests/m68000_test.cpp
+        SOURCES
+            tests/m68000_exception_test.cpp
+            tests/m68000_test.cpp
         LIBRARIES mnemos::chips::cpu::m68000 mnemos::topology
     )
 
