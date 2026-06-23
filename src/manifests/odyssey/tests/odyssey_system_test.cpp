@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace {
     using mnemos::manifests::odyssey::assemble_odyssey;
