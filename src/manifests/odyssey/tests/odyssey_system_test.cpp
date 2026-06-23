@@ -14,11 +14,13 @@ namespace {
     using mnemos::manifests::odyssey::odyssey_controller;
 
     [[nodiscard]] std::size_t lit_pixels(std::span<const std::uint8_t> luma) {
-        return static_cast<std::size_t>(std::ranges::count(luma, static_cast<std::uint8_t>(255U)));
+        return static_cast<std::size_t>(
+            std::ranges::count(luma, static_cast<std::uint8_t>(255U)));
     }
 } // namespace
 
-TEST_CASE("assemble_odyssey exposes a discrete no CPU/no ROM/no RAM machine", "[odyssey][architecture]") {
+TEST_CASE("assemble_odyssey exposes a discrete no CPU/no ROM/no RAM machine",
+          "[odyssey][architecture]") {
     auto system = assemble_odyssey();
     const auto state = system.observable_state();
 
