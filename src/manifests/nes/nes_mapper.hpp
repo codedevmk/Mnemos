@@ -96,6 +96,35 @@ namespace mnemos::manifests::nes {
             }
         }
 
+        // PRG-bank counts for the cart's ROM, in 8/16/32 KiB units. Banking mappers
+        // index banks modulo these so an out-of-range select wraps instead of reading
+        // past the ROM.
+        [[nodiscard]] std::size_t prg_8k_count() const noexcept { return prg_.size() / 0x2000U; }
+        [[nodiscard]] std::size_t prg_16k_count() const noexcept { return prg_.size() / 0x4000U; }
+        [[nodiscard]] std::size_t prg_32k_count() const noexcept { return prg_.size() / 0x8000U; }
+
+        // Point an already-mapped PRG window (set up once in reset() via map_rom) at
+        // a given bank. `slot` is the CPU address of the window; `bank` is in the
+        // window's size units and wraps to the ROM size. A zero-length ROM is a no-op.
+        void map_prg_8k(std::uint32_t slot, std::size_t bank) {
+            const std::size_t count = prg_8k_count();
+            if (count != 0U) {
+                bus_->retarget_rom(slot, prg_.subspan((bank % count) * 0x2000U, 0x2000U));
+            }
+        }
+        void map_prg_16k(std::uint32_t slot, std::size_t bank) {
+            const std::size_t count = prg_16k_count();
+            if (count != 0U) {
+                bus_->retarget_rom(slot, prg_.subspan((bank % count) * 0x4000U, 0x4000U));
+            }
+        }
+        void map_prg_32k(std::uint32_t slot, std::size_t bank) {
+            const std::size_t count = prg_32k_count();
+            if (count != 0U) {
+                bus_->retarget_rom(slot, prg_.subspan((bank % count) * 0x8000U, 0x8000U));
+            }
+        }
+
         // Route CPU writes to $8000-$FFFF into this->write() without slowing the
         // read path: a write-gated MMIO over the range (active only for writes, via
         // the bus active-predicate) leaves reads to the underlying map_rom regions.
