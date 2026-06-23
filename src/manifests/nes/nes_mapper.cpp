@@ -3758,6 +3758,236 @@ namespace mnemos::manifests::nes {
             bool nt_from_chr_{}; // $E000 bit 4: CHR-ROM-backed nametables (inc2)
             std::array<std::uint8_t, 0x2000U> chr_window_{};
         };
+
+        // Taito TC0190 (iNES 33) / TC0690 (iNES 48). Two switchable 8 KiB PRG banks
+        // at $8000/$A000 with $C000/$E000 fixed to the last two banks. CHR is two
+        // 2 KiB banks ($0000/$0800) plus four 1 KiB banks ($1000-$1FFF) composed into
+        // an 8 KiB window. The TC0690 (48) additionally provides an MMC3-style A12
+        // scanline IRQ ($C000-$C003) and selects mirroring at $E000 bit 6; the plain
+        // TC0190 (33) has no IRQ and selects mirroring from $8000 bit 6.
+        class taito_tc0190_mapper final : public nes_mapper {
+          public:
+            taito_tc0190_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
+                                std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
+                                bool chr_is_ram, bool with_irq) noexcept
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
+                  chr_1k_count_(chr.size() / k_chr_1k), with_irq_(with_irq) {}
+
+            void reset() override {
+                prg_bank_.fill(0U);
+                chr2k_.fill(0U);
+                chr1k_.fill(0U);
+                mirror_ = 0U;
+                irq_latch_ = 0U;
+                irq_counter_ = 0U;
+                irq_enabled_ = false;
+                irq_reload_ = false;
+                if (prg_8k_count_ != 0U) {
+                    for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
+                        bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
+                    }
+                }
+                if (chr_is_ram_) {
+                    ppu_->attach_chr_ram(chr_);
+                } else {
+                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
+                }
+                apply();
+                install_register_write_hook();
+            }
+
+            void write(std::uint16_t addr, std::uint8_t value) override {
+                if (with_irq_) {
+                    // TC0690: $8xxx/$Axxx banking, $Cxxx IRQ, $E000 mirroring.
+                    switch (addr & 0xE003U) {
+                    case 0x8000U:
+                        prg_bank_[0] = value & 0x3FU;
+                        apply_prg();
+                        break;
+                    case 0x8001U:
+                        prg_bank_[1] = value & 0x3FU;
+                        apply_prg();
+                        break;
+                    case 0x8002U:
+                        chr2k_[0] = value;
+                        apply_chr();
+                        break;
+                    case 0x8003U:
+                        chr2k_[1] = value;
+                        apply_chr();
+                        break;
+                    case 0xA000U:
+                    case 0xA001U:
+                    case 0xA002U:
+                    case 0xA003U:
+                        chr1k_[addr & 0x03U] = value;
+                        apply_chr();
+                        break;
+                    case 0xC000U:
+                        irq_latch_ = value;
+                        break;
+                    case 0xC001U:
+                        irq_counter_ = 0U; // reload on the next scanline clock
+                        irq_reload_ = true;
+                        break;
+                    case 0xC002U:
+                        irq_enabled_ = true;
+                        break;
+                    case 0xC003U:
+                        irq_enabled_ = false;
+                        raise_irq(false); // disable acknowledges any pending IRQ
+                        break;
+                    case 0xE000U:
+                        mirror_ = static_cast<std::uint8_t>((value >> 6U) & 0x01U);
+                        apply_mirroring();
+                        break;
+                    default:
+                        break;
+                    }
+                    return;
+                }
+                // TC0190: $8000 bit 6 is mirroring; $8xxx/$Axxx banking; no IRQ.
+                switch (addr & 0xA003U) {
+                case 0x8000U:
+                    mirror_ = static_cast<std::uint8_t>((value >> 6U) & 0x01U);
+                    prg_bank_[0] = value & 0x3FU;
+                    apply_prg();
+                    apply_mirroring();
+                    break;
+                case 0x8001U:
+                    prg_bank_[1] = value & 0x3FU;
+                    apply_prg();
+                    break;
+                case 0x8002U:
+                    chr2k_[0] = value;
+                    apply_chr();
+                    break;
+                case 0x8003U:
+                    chr2k_[1] = value;
+                    apply_chr();
+                    break;
+                case 0xA000U:
+                case 0xA001U:
+                case 0xA002U:
+                case 0xA003U:
+                    chr1k_[addr & 0x03U] = value;
+                    apply_chr();
+                    break;
+                default:
+                    break;
+                }
+            }
+
+            void clock_scanline(std::uint32_t line) override {
+                if (!with_irq_ || line >= 240U) {
+                    return; // TC0190 has no IRQ; TC0690 counts on visible scanlines
+                }
+                if (irq_counter_ == 0U || irq_reload_) {
+                    irq_counter_ = irq_latch_;
+                    irq_reload_ = false;
+                } else {
+                    --irq_counter_;
+                }
+                if (irq_counter_ == 0U && irq_enabled_) {
+                    raise_irq(true);
+                }
+            }
+
+            void save_state(chips::state_writer& writer) const override {
+                for (const std::uint8_t b : prg_bank_) {
+                    writer.u8(b);
+                }
+                for (const std::uint8_t b : chr2k_) {
+                    writer.u8(b);
+                }
+                for (const std::uint8_t b : chr1k_) {
+                    writer.u8(b);
+                }
+                writer.u8(mirror_);
+                writer.u8(irq_latch_);
+                writer.u8(irq_counter_);
+                writer.boolean(irq_enabled_);
+                writer.boolean(irq_reload_);
+            }
+            void load_state(chips::state_reader& reader) override {
+                for (std::uint8_t& b : prg_bank_) {
+                    b = reader.u8();
+                }
+                for (std::uint8_t& b : chr2k_) {
+                    b = reader.u8();
+                }
+                for (std::uint8_t& b : chr1k_) {
+                    b = reader.u8();
+                }
+                mirror_ = reader.u8();
+                irq_latch_ = reader.u8();
+                irq_counter_ = reader.u8();
+                irq_enabled_ = reader.boolean();
+                irq_reload_ = reader.boolean();
+                apply();
+            }
+
+          private:
+            void apply() {
+                apply_prg();
+                apply_chr();
+                apply_mirroring();
+            }
+
+            void map_prg8(std::uint32_t slot, std::size_t bank8) {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                bus_->retarget_rom(slot,
+                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
+            }
+
+            void apply_prg() {
+                if (prg_8k_count_ == 0U) {
+                    return;
+                }
+                map_prg8(0x8000U, prg_bank_[0]);
+                map_prg8(0xA000U, prg_bank_[1]);
+                map_prg8(0xC000U, prg_8k_count_ >= 2U ? prg_8k_count_ - 2U : 0U);
+                map_prg8(0xE000U, prg_8k_count_ - 1U);
+            }
+
+            void apply_chr() {
+                if (chr_is_ram_ || chr_1k_count_ == 0U) {
+                    return;
+                }
+                // Two 2 KiB banks then four 1 KiB banks -> eight 1 KiB window slots.
+                const std::array<std::size_t, 8> slot = {
+                    static_cast<std::size_t>(chr2k_[0]) * 2U,
+                    static_cast<std::size_t>(chr2k_[0]) * 2U + 1U,
+                    static_cast<std::size_t>(chr2k_[1]) * 2U,
+                    static_cast<std::size_t>(chr2k_[1]) * 2U + 1U,
+                    chr1k_[0],
+                    chr1k_[1],
+                    chr1k_[2],
+                    chr1k_[3]};
+                for (std::size_t s = 0; s < slot.size(); ++s) {
+                    const std::size_t src = (slot[s] % chr_1k_count_) * k_chr_1k;
+                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
+                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                }
+            }
+
+            void apply_mirroring() { apply_mirror_mode(*ppu_, mirror_); }
+
+            std::size_t prg_8k_count_;
+            std::size_t chr_1k_count_;
+            bool with_irq_;
+            std::array<std::uint8_t, 2> prg_bank_{}; // $8000 / $A000 8 KiB selects
+            std::array<std::uint8_t, 2> chr2k_{};    // $0000 / $0800 2 KiB selects
+            std::array<std::uint8_t, 4> chr1k_{};    // $1000-$1FFF 1 KiB selects
+            std::uint8_t mirror_{};
+            std::uint8_t irq_latch_{};
+            std::uint8_t irq_counter_{};
+            bool irq_enabled_{};
+            bool irq_reload_{};
+            std::array<std::uint8_t, 0x2000U> chr_window_{};
+        };
     } // namespace
 
     std::unique_ptr<nes_mapper> make_mapper(int number, topology::bus& bus,
@@ -3787,6 +4017,10 @@ namespace mnemos::manifests::nes {
             return std::make_unique<bandai_fcg_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 18: // Jaleco SS88006
             return std::make_unique<jaleco_ss88006_mapper>(bus, ppu, prg, chr, chr_is_ram);
+        case 33: // Taito TC0190 (no IRQ)
+            return std::make_unique<taito_tc0190_mapper>(bus, ppu, prg, chr, chr_is_ram, false);
+        case 48: // Taito TC0690 (TC0190 + MMC3-style scanline IRQ)
+            return std::make_unique<taito_tc0190_mapper>(bus, ppu, prg, chr, chr_is_ram, true);
         case 19:
             return std::make_unique<namco163_mapper>(bus, ppu, prg, chr, chr_is_ram);
         case 34: // BNROM (CHR-RAM) / NINA-001 (CHR-ROM)

@@ -201,6 +201,31 @@ namespace {
         return rom;
     }
 
+    // A 64 KiB-PRG (eight 8 KiB banks) / 8 KiB CHR-ROM Taito TC0190 (33) or TC0690
+    // (48). PRG 8 KiB bank N byte 0 = $A0+N; CHR 1 KiB bank N byte 0 = $D0+N; the
+    // reset vector lives in the fixed last 8 KiB bank ($E000).
+    std::vector<std::uint8_t> make_taito(int mapper) {
+        std::vector<std::uint8_t> rom(16U + 8U * 0x2000U + 0x2000U, 0x00U);
+        rom[0] = 'N';
+        rom[1] = 'E';
+        rom[2] = 'S';
+        rom[3] = 0x1AU;
+        rom[4] = 4U; // 64 KiB PRG (eight 8 KiB banks)
+        rom[5] = 1U; // 8 KiB CHR-ROM (eight 1 KiB banks)
+        rom[6] = static_cast<std::uint8_t>((mapper & 0x0F) << 4); // flags6: mapper low nibble
+        rom[7] = static_cast<std::uint8_t>(mapper & 0xF0);        // flags7: mapper high nibble
+        for (std::size_t bank = 0; bank < 8U; ++bank) {
+            rom[16U + bank * 0x2000U] = static_cast<std::uint8_t>(0xA0U + bank);
+        }
+        const std::size_t chr = 16U + 8U * 0x2000U;
+        for (std::size_t b = 0; b < 8U; ++b) {
+            rom[chr + b * 0x0400U] = static_cast<std::uint8_t>(0xD0U + b); // 1 KiB bank b
+        }
+        rom[16U + 7U * 0x2000U + 0x1FFCU] = 0x00U; // reset vector (last 8 KiB bank) -> $E000
+        rom[16U + 7U * 0x2000U + 0x1FFDU] = 0xE0U;
+        return rom;
+    }
+
     // I2C master that bit-bangs the Bandai FCG's serial EEPROM through the mapper:
     // $800D drives it (bit 5 = SCL, bit 6 = SDA, bit 7 = read-enable / release SDA)
     // and a $6000 read returns the device's SDA on D0.
@@ -1166,6 +1191,113 @@ TEST_CASE("Bandai FCG (mapper 16) 16-bit cycle IRQ counts down and acknowledges"
     sys->bus.write8(0x800CU, 0x00U);
     sys->bus.write8(0x800AU, 0x01U);
     CHECK(irq);
+}
+
+TEST_CASE("Taito TC0190 (mapper 33) banks PRG and selects mirroring from $8000",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_taito(33));
+
+    // Power-on: $8000/$A000 = bank 0; $C000 = second-last (6), $E000 = last (7).
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA6U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    // $8000 low 6 bits = PRG bank at $8000 (bit 6 is mirroring); $8001 = $A000 bank.
+    sys->bus.write8(0x8000U, 0x03U); // bank 3, mirror bit clear
+    sys->bus.write8(0x8001U, 0x05U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA6U); // fixed
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U); // fixed
+
+    // $8000 bit 6: 0 = vertical ($2000<->$2800), 1 = horizontal ($2000<->$2400).
+    sys->bus.write8(0x8000U, 0x00U);
+    sys->ppu.ppu_write(0x2000U, 0xAAU);
+    CHECK(sys->ppu.ppu_read(0x2800U) == 0xAAU);
+    sys->bus.write8(0x8000U, 0x40U);
+    sys->ppu.ppu_write(0x2000U, 0xBBU);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0xBBU);
+}
+
+TEST_CASE("Taito TC0190 (mapper 33) composes two 2 KiB + four 1 KiB CHR banks",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_taito(33));
+
+    // $8002/$8003 = 2 KiB banks at $0000/$0800 (value is the 2 KiB bank index).
+    sys->bus.write8(0x8002U, 0x01U); // 2 KiB bank 1 -> 1 KiB banks 2,3 at $0000/$0400
+    sys->bus.write8(0x8003U, 0x02U); // 2 KiB bank 2 -> 1 KiB banks 4,5 at $0800/$0C00
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD2U);
+    CHECK(sys->ppu.ppu_read(0x0400U) == 0xD3U);
+    CHECK(sys->ppu.ppu_read(0x0800U) == 0xD4U);
+    CHECK(sys->ppu.ppu_read(0x0C00U) == 0xD5U);
+
+    // $A000-$A003 = four 1 KiB banks at $1000/$1400/$1800/$1C00.
+    sys->bus.write8(0xA000U, 0x07U);
+    sys->bus.write8(0xA001U, 0x06U);
+    sys->bus.write8(0xA002U, 0x01U);
+    sys->bus.write8(0xA003U, 0x00U);
+    CHECK(sys->ppu.ppu_read(0x1000U) == 0xD7U);
+    CHECK(sys->ppu.ppu_read(0x1400U) == 0xD6U);
+    CHECK(sys->ppu.ppu_read(0x1800U) == 0xD1U);
+    CHECK(sys->ppu.ppu_read(0x1C00U) == 0xD0U);
+}
+
+TEST_CASE("Taito TC0190 (mapper 33) has no scanline IRQ", "[manifests][nes]") {
+    auto sys = assemble_nes(make_taito(33));
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+    for (std::uint32_t line = 0; line < 240U; ++line) {
+        sys->mapper->clock_scanline(line);
+    }
+    CHECK_FALSE(irq);
+}
+
+TEST_CASE("Taito TC0690 (mapper 48) banks PRG/CHR and selects mirroring at $E000",
+          "[manifests][nes]") {
+    auto sys = assemble_nes(make_taito(48));
+
+    CHECK(sys->bus.read8(0x8000U) == 0xA0U);
+    CHECK(sys->bus.read8(0xC000U) == 0xA6U);
+    CHECK(sys->bus.read8(0xE000U) == 0xA7U);
+
+    sys->bus.write8(0x8000U, 0x03U); // $8000 PRG bank (no mirror bit on TC0690)
+    sys->bus.write8(0x8001U, 0x05U);
+    CHECK(sys->bus.read8(0x8000U) == 0xA3U);
+    CHECK(sys->bus.read8(0xA000U) == 0xA5U);
+
+    // CHR banking is identical to the TC0190.
+    sys->bus.write8(0x8002U, 0x01U);
+    sys->bus.write8(0xA003U, 0x04U);
+    CHECK(sys->ppu.ppu_read(0x0000U) == 0xD2U);
+    CHECK(sys->ppu.ppu_read(0x1C00U) == 0xD4U);
+
+    // Mirroring moves to $E000 bit 6.
+    sys->bus.write8(0xE000U, 0x00U);
+    sys->ppu.ppu_write(0x2000U, 0xAAU);
+    CHECK(sys->ppu.ppu_read(0x2800U) == 0xAAU);
+    sys->bus.write8(0xE000U, 0x40U);
+    sys->ppu.ppu_write(0x2000U, 0xBBU);
+    CHECK(sys->ppu.ppu_read(0x2400U) == 0xBBU);
+}
+
+TEST_CASE("Taito TC0690 (mapper 48) scanline IRQ reloads and acknowledges", "[manifests][nes]") {
+    auto sys = assemble_nes(make_taito(48));
+    bool irq = false;
+    sys->mapper->set_irq_callback([&irq](bool asserted) { irq = asserted; });
+
+    sys->bus.write8(0xC000U, 0x02U); // latch = 2
+    sys->bus.write8(0xC001U, 0x00U); // reload on the next scanline clock
+    sys->bus.write8(0xC002U, 0x00U); // enable
+    sys->mapper->clock_scanline(0U); // reload -> counter = 2
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(1U); // 2 -> 1
+    CHECK_FALSE(irq);
+    sys->mapper->clock_scanline(2U); // 1 -> 0 -> assert
+    CHECK(irq);
+
+    sys->bus.write8(0xC003U, 0x00U); // disable acknowledges the line
+    CHECK_FALSE(irq);
 }
 
 TEST_CASE("Bandai FCG (mapper 16) stores and reads back a byte over the I2C EEPROM",
