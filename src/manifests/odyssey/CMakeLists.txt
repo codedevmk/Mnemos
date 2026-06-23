@@ -15,6 +15,7 @@ target_link_libraries(
     mnemos_manifests_odyssey
     PUBLIC
         mnemos::foundation
+        mnemos::chips::shared
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_odyssey PUBLIC)
@@ -22,6 +23,7 @@ mnemos_declare_tier(
     NAME mnemos_manifests_odyssey
     TIER 4
     DEPENDS
+        mnemos_chips_shared
         mnemos_foundation
 )
 
