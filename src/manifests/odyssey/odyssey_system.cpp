@@ -6,6 +6,9 @@
 namespace mnemos::manifests::odyssey {
 
     namespace {
+        constexpr std::uint8_t black_luma{0U};
+        constexpr std::uint8_t white_luma{255U};
+
         [[nodiscard]] float clamp_unit(float value) noexcept {
             return std::clamp(value, -1.0F, 1.0F);
         }
@@ -163,7 +166,7 @@ namespace mnemos::manifests::odyssey {
                 if (px < 0 || px >= static_cast<std::int16_t>(frame_.width)) {
                     continue;
                 }
-                frame_.luma[static_cast<std::size_t>(py) * frame_.width + static_cast<std::size_t>(px)] = 255U;
+                frame_.luma[static_cast<std::size_t>(py) * frame_.width + static_cast<std::size_t>(px)] = white_luma;
             }
         }
     }
@@ -182,13 +185,13 @@ namespace mnemos::manifests::odyssey {
                 if (x < 0 || x >= static_cast<std::int16_t>(frame_.width)) {
                     continue;
                 }
-                frame_.luma[static_cast<std::size_t>(y) * frame_.width + static_cast<std::size_t>(x)] = 255U;
+                frame_.luma[static_cast<std::size_t>(y) * frame_.width + static_cast<std::size_t>(x)] = white_luma;
             }
         }
     }
 
     const odyssey_frame& odyssey_system::render_frame() noexcept {
-        std::ranges::fill(frame_.luma, 0U);
+        std::ranges::fill(frame_.luma, black_luma);
         draw_center_line();
         draw_rect(player0_);
         draw_rect(player1_);
