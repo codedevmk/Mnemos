@@ -87,6 +87,9 @@ namespace mnemos::manifests::odyssey {
         wiring_ = wiring_for(card_);
         wiring_.line_visible = wiring_.line_visible && config_.visible_center_line;
         wiring_.ball_visible = wiring_.ball_visible && config_.visible_ball;
+        player0_.visible = wiring_.player0_visible;
+        player1_.visible = wiring_.player1_visible;
+        ball_.visible = wiring_.ball_visible;
         ball_dx_ = wiring_.ball_dx;
         ball_dy_ = wiring_.ball_dy;
         line_h_ = wiring_.line_h;
@@ -96,7 +99,10 @@ namespace mnemos::manifests::odyssey {
     void odyssey_system::set_controller(std::size_t port,
                                         const odyssey_controller& controller) noexcept {
         if (port < controllers_.size()) {
-            controllers_[port] = controller;
+            controllers_[port] = {.horizontal = clamp_unit(controller.horizontal),
+                                  .vertical = clamp_unit(controller.vertical),
+                                  .english = clamp_unit(controller.english),
+                                  .reset = controller.reset};
         }
     }
 
