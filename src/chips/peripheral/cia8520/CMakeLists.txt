@@ -11,10 +11,19 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
-target_link_libraries(mnemos_chips_peripheral_cia8520 PUBLIC mnemos::chips::shared)
+target_link_libraries(
+    mnemos_chips_peripheral_cia8520
+    PUBLIC
+        mnemos::chips::shared
+        mnemos::chips::bus_controller::cia_6526
+)
 
 mnemos_apply_common_target_options(mnemos_chips_peripheral_cia8520 PUBLIC)
-mnemos_declare_tier(NAME mnemos_chips_peripheral_cia8520 TIER 2 DEPENDS mnemos_foundation)
+mnemos_declare_tier(
+    NAME mnemos_chips_peripheral_cia8520
+    TIER 2
+    DEPENDS mnemos_foundation mnemos_chips_bus_controller_cia_6526
+)
 
 if(BUILD_TESTING)
     mnemos_add_test(

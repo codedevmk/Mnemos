@@ -29,14 +29,23 @@ target_include_directories(
 )
 mnemos_apply_common_target_options(mnemos_apps_player_text_overlay PUBLIC)
 
-add_executable(mnemos_player main.cpp)
-
+add_library(
+    mnemos_apps_player_core STATIC
+    adapter_link.cpp
+    headless_commands.cpp
+    system_launch.cpp
+)
+add_library(mnemos::apps::player::core ALIAS mnemos_apps_player_core)
+target_include_directories(
+    mnemos_apps_player_core PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
 target_link_libraries(
-    mnemos_player
-    PRIVATE
-        SDL3::SDL3-static
+    mnemos_apps_player_core
+    PUBLIC
         mnemos::frontend_sdk
         mnemos::apps::player::adapters::common
+    PRIVATE
         mnemos::apps::player::genesis_adapter
         mnemos::apps::player::sms_adapter
         mnemos::apps::player::c64_adapter
@@ -47,8 +56,26 @@ target_link_libraries(
         mnemos::apps::player::capcom_cps2_adapter
         mnemos::apps::player::spectrum_adapter
         mnemos::apps::player::nes_adapter
-        mnemos::apps::player::text_overlay
         mnemos::debug::dump
+)
+mnemos_apply_common_target_options(mnemos_apps_player_core PUBLIC)
+mnemos_declare_tier(
+    NAME mnemos_apps_player_core
+    TIER 8
+    DEPENDS
+        mnemos_frontend_sdk
+        mnemos_apps_player_adapters_common
+        mnemos_debug_dump
+)
+
+add_executable(mnemos_player main.cpp)
+
+target_link_libraries(
+    mnemos_player
+    PRIVATE
+        SDL3::SDL3-static
+        mnemos::apps::player::core
+        mnemos::apps::player::text_overlay
 )
 
 # SDL3 headers trip /W4 /WX in some configs; mark them SYSTEM so warnings in

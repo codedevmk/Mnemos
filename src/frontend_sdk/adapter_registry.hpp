@@ -10,10 +10,10 @@
 // LINKER NOTE: an adapter library that nothing else references can be
 // discarded entirely by the linker, which silently disables its static-init
 // self-registration. To prevent this, each adapter exposes a `force_link()`
-// no-op function declared in its header; the main binary calls it once at
-// startup. Adding a new adapter is: drop the adapter directory + add one
-// force_link() call in main.cpp. main.cpp never names a concrete adapter
-// type.
+// no-op function declared in its header; the player core calls those once
+// before construction. Adding a new adapter is: drop the adapter directory +
+// add one force_link() call in the player adapter-retention unit. The executable
+// entrypoint never names a concrete adapter type.
 
 #include "player_system.hpp"
 #include "region.hpp"

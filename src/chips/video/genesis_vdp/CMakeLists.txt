@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_video_genesis_vdp
     genesis_vdp.cpp
+    genesis_vdp_registration.cpp
 )
 add_library(mnemos::chips::video::genesis_vdp ALIAS mnemos_chips_video_genesis_vdp)
 

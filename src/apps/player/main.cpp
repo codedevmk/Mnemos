@@ -5,44 +5,23 @@
 
 #define SDL_MAIN_HANDLED
 
-#include "adapter_registry.hpp"
-#include "animation_export.hpp"     // --record-gif / --record-movie
-#include "asset_export.hpp"         // --extract-assets: decoded graphics -> PNG + JSON
-#include "audio_export.hpp"         // --extract-audio: decoded PCM samples -> WAV + JSON
 #include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
-#include "c64_adapter.hpp"          // force_link (the C64 has no cart-header region byte)
-#include "capability_discovery.hpp" // --capabilities: headless capability/control summary
-#include "capcom_cps1_adapter.hpp"  // force_link (arcade: no cart region byte)
-#include "capcom_cps2_adapter.hpp"  // force_link (arcade: encrypted ROM-set board)
-#include "chip.hpp"
 #include "cli_args.hpp"
-#include "debug_dump.hpp"
-#include "genesis_adapter.hpp" // force_link + manifests::genesis::parse_market
-#include "genesis_region.hpp"
-#include "irem_m72_adapter.hpp" // force_link (arcade: no cart region byte)
-#include "nes_adapter.hpp"      // force_link (Nintendo NES / NROM)
+#include "headless_commands.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
-#include "rom_loader.hpp"
-#include "sega32x_adapter.hpp" // force_link (Sega 32X: cart + the three boot ROMs)
-#include "segacd_adapter.hpp"  // force_link (Sega CD: BIOS boot ROM + disc image)
-#include "sms_adapter.hpp"     // force_link + manifests::sms::parse_market
-#include "sms_region.hpp"
-#include "spectrum_adapter.hpp" // force_link (ZX Spectrum 48K)
-#include "system_family.hpp"
+#include "system_launch.hpp"
 #include "text_overlay.hpp"
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include <cctype>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <iterator>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -53,31 +32,6 @@ namespace {
 
     constexpr int kInitialWindowWidth = 1280;
     constexpr int kInitialWindowHeight = 960;
-
-    // `--swap-disk <frame>` (repeatable): flip to the next removable-media slot at
-    // that frame, so headless runs can drive an FDS multi-side game onto side B
-    // (the interactive equivalent is F6). Frames are 1-based, matching --press.
-    [[nodiscard]] std::vector<std::uint64_t> parse_swap_frames(int argc, char* argv[]) {
-        std::vector<std::uint64_t> frames;
-        for (int i = 1; i + 1 < argc; ++i) {
-            if (std::string(argv[i]) == "--swap-disk") {
-                frames.push_back(std::strtoull(argv[i + 1], nullptr, 10));
-            }
-        }
-        return frames;
-    }
-
-    void apply_disk_swaps(mnemos::frontend_sdk::player_system& sys,
-                          const std::vector<std::uint64_t>& frames, std::uint64_t frame) {
-        if (sys.media_count() <= 1U) {
-            return;
-        }
-        for (const std::uint64_t f : frames) {
-            if (f == frame) {
-                sys.insert_media((sys.current_media_index() + 1U) % sys.media_count());
-            }
-        }
-    }
 
     // Streaming texture is sized for the worst-case frame across supported
     // systems: Genesis VDP 320x240 V30 (x2 rows for interlace) and the Irem
@@ -197,16 +151,9 @@ namespace {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    using mnemos::apps::player::adapters::clean_rom_name;
-    using mnemos::apps::player::adapters::family_from_name;
-    using mnemos::apps::player::adapters::family_id;
-    using mnemos::apps::player::adapters::family_label;
-    using mnemos::apps::player::adapters::family_names;
-    using mnemos::apps::player::adapters::input_for_frame;
-    using mnemos::apps::player::adapters::load_rom;
-    using mnemos::apps::player::adapters::load_rom_verbatim;
     using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
+    using mnemos::apps::player::adapters::parse_dip_arg;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
@@ -214,15 +161,11 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_light_gun_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
-    using mnemos::apps::player::adapters::parse_press_events;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
-    using mnemos::apps::player::adapters::region_source_label;
-    using mnemos::apps::player::adapters::resolve_video_region;
     using mnemos::apps::player::adapters::srm_path_for;
-    using mnemos::apps::player::adapters::system_family;
 
     const auto rom_paths = parse_rom_args(argc, argv);
     const auto system_arg = parse_system_arg(argc, argv);
@@ -232,466 +175,39 @@ int main(int argc, char* argv[]) {
     const bool fm_unit = parse_fm_unit_arg(argc, argv);
     const bool light_gun = parse_light_gun_arg(argc, argv);
     const bool four_score = parse_four_score_arg(argc, argv);
-    const auto dip_arg = mnemos::apps::player::adapters::parse_dip_arg(argc, argv);
-    const auto screenshot = parse_screenshot_args(argc, argv);
-    const auto extract = parse_extract_assets_args(argc, argv);
-    const auto extract_audio = parse_extract_audio_args(argc, argv);
-    const bool capabilities = parse_capabilities_arg(argc, argv);
-    const auto record_animation = parse_animation_record_args(argc, argv);
-
-    const auto resolve_video = [region_arg](mnemos::video_region cart_default) {
-        return resolve_video_region(region_arg, cart_default);
+    const auto dip_arg = parse_dip_arg(argc, argv);
+    const mnemos::apps::player::headless_requests headless{
+        .screenshot = parse_screenshot_args(argc, argv),
+        .extract_assets = parse_extract_assets_args(argc, argv),
+        .extract_audio = parse_extract_audio_args(argc, argv),
+        .record_animation = parse_animation_record_args(argc, argv),
+        .capabilities = parse_capabilities_arg(argc, argv),
     };
-    const char* region_source = region_source_label(region_arg);
 
-    std::unique_ptr<mnemos::frontend_sdk::player_system> system;
-    // Persists the cartridge battery RAM across runs (interactive playback only --
-    // gated on !screenshot at the emplace below). Declared after `system` so it
-    // destructs first, while the adapter (and its SRAM span) is still alive.
+    auto launch = mnemos::apps::player::launch_system({.rom_paths = rom_paths,
+                                                       .system_arg = system_arg,
+                                                       .autostart = autostart,
+                                                       .region_override = region_arg,
+                                                       .mapper_override = mapper_arg,
+                                                       .fm_unit = fm_unit,
+                                                       .light_gun = light_gun,
+                                                       .four_score = four_score,
+                                                       .dip_override = dip_arg});
+    if (launch.exit_code != 0) {
+        return launch.exit_code;
+    }
+    auto system = std::move(launch.system);
+
+    // Diagnostic/headless sweeps over ROM corpora must not create or update
+    // save files beside source media.
     std::optional<battery_save_guard> srm_guard;
-    if (!rom_paths.empty()) {
-        // The engine is named explicitly: `--system <name> --rom <file>`. ROM
-        // filenames carry no weight -- a zipped image routes by the name alone.
-        if (!system_arg) {
-            std::fprintf(stderr,
-                         "[mnemos_player] --system <name> is required with --rom "
-                         "(one of: %s)\n",
-                         family_names());
-            return 1;
-        }
-        const auto family_opt = family_from_name(*system_arg);
-        if (!family_opt) {
-            std::fprintf(stderr, "[mnemos_player] unknown system '%s' (one of: %s)\n",
-                         system_arg->c_str(), family_names());
-            return 1;
-        }
-        const system_family family = *family_opt;
-        // Arcade sets ARE their archive: the adapter resolves the dump
-        // entries through the game declaration inside, so no unwrapping.
-        const bool arcade_family = family == system_family::irem_m72 ||
-                                   family == system_family::capcom_cps1 ||
-                                   family == system_family::capcom_cps2;
-        auto loaded =
-            arcade_family ? load_rom_verbatim(rom_paths.front()) : load_rom(rom_paths.front());
-        if (!loaded || loaded->bytes.empty()) {
-            std::fprintf(stderr, "could not read ROM: %s\n", rom_paths.front().c_str());
-            return 1;
-        }
-        // Any further media paths are additional images -- the rest of a
-        // multi-disk set the C64 adapter can swap between at runtime.
-        std::vector<std::vector<std::uint8_t>> additional_media;
-        for (std::size_t i = 1; i < rom_paths.size(); ++i) {
-            auto extra = load_rom(rom_paths[i]);
-            if (!extra || extra->bytes.empty()) {
-                std::fprintf(stderr, "could not read media: %s\n", rom_paths[i].c_str());
-                return 1;
-            }
-            additional_media.push_back(std::move(extra->bytes));
-        }
-        // Default video standard before any --region override: the cartridge
-        // consoles carry a region byte in their header; the C64 does not, so it
-        // defaults to PAL (its core market, and the manifest/c64_config default).
-        mnemos::video_region cart_default = mnemos::video_region::ntsc;
-        switch (family) {
-        case system_family::sms:
-            cart_default =
-                mnemos::default_video_for(mnemos::manifests::sms::parse_market(loaded->bytes));
-            break;
-        case system_family::gg:
-            cart_default = mnemos::video_region::ntsc; // Game Gear is 60 Hz only
-            break;
-        case system_family::genesis:
-            cart_default =
-                mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
-            break;
-        case system_family::c64:
-            cart_default = mnemos::video_region::pal;
-            break;
-        case system_family::spectrum:
-            cart_default = mnemos::video_region::pal; // 50 Hz machine
-            break;
-        case system_family::nes:
-            // iNES carries no region byte, so default to NTSC; PAL (50 Hz, 312-line
-            // 2A07 timing) is selectable with --region pal.
-            cart_default = mnemos::video_region::ntsc;
-            break;
-        case system_family::sega32x:
-            // 32X carts carry a Genesis-style header with the region byte.
-            cart_default =
-                mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
-            break;
-        case system_family::segacd:
-            // Region comes from the disc/BIOS, not a cart header byte; keep the
-            // NTSC default set above (also silences -Wswitch on this enum).
-            break;
-        case system_family::irem_m72:
-        case system_family::capcom_cps1:
-        case system_family::capcom_cps2:
-            // Arcade boards have no region byte; the adapter reports the
-            // board's own raster through region().
-            break;
-        }
-        const auto video = resolve_video(cart_default);
-        std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n", family_label(family),
-                     video == mnemos::video_region::pal ? "PAL" : "NTSC", region_source);
-        std::fflush(stderr);
-
-        // Ensure each adapter's static-init self-registration with the
-        // adapter_registry actually links in. Without these calls a static-
-        // library adapter that the binary doesn't otherwise reference can be
-        // dropped, silently disabling its registration. Adding a new system
-        // means adding one more force_link() call here.
-        mnemos::apps::player::adapters::genesis::force_link();
-        mnemos::apps::player::adapters::sms::force_link();
-        mnemos::apps::player::adapters::c64::force_link();
-        mnemos::apps::player::adapters::segacd::force_link();
-        mnemos::apps::player::adapters::sega32x::force_link();
-        mnemos::apps::player::adapters::irem_m72::force_link();
-        mnemos::apps::player::adapters::capcom_cps1::force_link();
-        mnemos::apps::player::adapters::capcom_cps2::force_link();
-        mnemos::apps::player::adapters::spectrum::force_link();
-        mnemos::apps::player::adapters::nes::force_link();
-
-        // Sega CD boots its BIOS as the program ROM; the file the user loaded is
-        // the CD image (passed by path so disc_image can resolve .cue tracks).
-        // Every other family runs the loaded file directly.
-        std::vector<std::uint8_t> primary_rom = std::move(loaded->bytes);
-        std::string disc_path;
-        if (family == system_family::segacd) {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
-#endif
-            const char* bios_env = std::getenv("MNEMOS_SEGACD_BIOS");
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            if (bios_env == nullptr) {
-                std::fprintf(
-                    stderr, "[mnemos_player] Sega CD needs MNEMOS_SEGACD_BIOS set to a BIOS ROM\n");
-                return 1;
-            }
-            auto bios = load_rom(bios_env);
-            if (!bios || bios->bytes.empty()) {
-                std::fprintf(stderr, "[mnemos_player] could not read Sega CD BIOS: %s\n", bios_env);
-                return 1;
-            }
-            disc_path = rom_paths.front();
-            primary_rom = std::move(bios->bytes);
-        }
-        // The 32X boots through three adapter ROMs (master SH-2 / slave SH-2 /
-        // 68000 vector overlay) found in MNEMOS_32X_BIOS_DIR by their canonical
-        // names. Without them the cart's own vectors run on the bare Genesis
-        // side -- the SH-2 handshake then never starts, so warn loudly.
-        std::vector<std::vector<std::uint8_t>> bios_images;
-        if (family == system_family::sega32x) {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
-#endif
-            const char* bios_dir = std::getenv("MNEMOS_32X_BIOS_DIR");
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-            if (bios_dir == nullptr) {
-                std::fprintf(stderr, "[mnemos_player] MNEMOS_32X_BIOS_DIR unset; booting without "
-                                     "the 32X boot ROMs (most carts will not start)\n");
-            } else {
-                const std::string dir{bios_dir};
-                for (const char* name : {"32X_M_BIOS.bin", "32X_S_BIOS.bin", "32X_G_BIOS.bin"}) {
-                    auto image = load_rom(dir + "/" + name);
-                    if (!image || image->bytes.empty()) {
-                        std::fprintf(stderr, "[mnemos_player] could not read 32X boot ROM: %s/%s\n",
-                                     dir.c_str(), name);
-                        return 1;
-                    }
-                    bios_images.push_back(std::move(image->bytes));
-                }
-            }
-        }
-        // A ZX Spectrum snapshot (.z80/.sna) resumes a game on top of the 48K
-        // system ROM (from MNEMOS_SPECTRUM_ROM), routed in as additional_media; a
-        // 16 KiB .rom is itself the system ROM and boots directly.
-        if (family == system_family::spectrum) {
-            std::string ext = rom_paths.front().size() >= 4
-                                  ? rom_paths.front().substr(rom_paths.front().size() - 4)
-                                  : std::string{};
-            for (char& ch : ext) {
-                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            }
-            if (ext == ".z80" || ext == ".sna") {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
-#endif
-                const char* bios_env = std::getenv("MNEMOS_SPECTRUM_ROM");
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-                if (bios_env == nullptr) {
-                    std::fprintf(stderr, "[mnemos_player] a Spectrum snapshot needs "
-                                         "MNEMOS_SPECTRUM_ROM set to a 48K system ROM\n");
-                    return 1;
-                }
-                auto bios = load_rom(bios_env);
-                if (!bios || bios->bytes.size() < 0x4000U) {
-                    std::fprintf(stderr, "[mnemos_player] could not read Spectrum ROM: %s\n",
-                                 bios_env);
-                    return 1;
-                }
-                additional_media.insert(additional_media.begin(), std::move(primary_rom));
-                primary_rom = std::move(bios->bytes);
-            }
-        }
-        // A Famicom Disk System disk (.fds) boots on the FDS BIOS (DISKSYS.ROM from
-        // MNEMOS_FDS_BIOS, raw or zipped); passed as the NES adapter's bios image, it
-        // makes the adapter build the RP2C33 RAM adapter. A .nes cart needs no BIOS.
-        if (family == system_family::nes) {
-            std::string ext = rom_paths.front().size() >= 4
-                                  ? rom_paths.front().substr(rom_paths.front().size() - 4)
-                                  : std::string{};
-            for (char& ch : ext) {
-                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            }
-            if (ext == ".fds") {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in BIOS path, not hot-path
-#endif
-                const char* bios_env = std::getenv("MNEMOS_FDS_BIOS");
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-                if (bios_env == nullptr) {
-                    std::fprintf(stderr, "[mnemos_player] a Famicom Disk System disk needs "
-                                         "MNEMOS_FDS_BIOS set to the 8 KiB DISKSYS.ROM\n");
-                    return 1;
-                }
-                auto bios = load_rom(bios_env);
-                if (!bios || bios->bytes.size() < 0x2000U) {
-                    std::fprintf(stderr, "[mnemos_player] could not read FDS BIOS: %s\n", bios_env);
-                    return 1;
-                }
-                bios_images.push_back(std::move(bios->bytes));
-            }
-        }
-        system = mnemos::frontend_sdk::adapter_registry::instance().create(
-            family_id(family), {.rom = std::move(primary_rom),
-                                .video_region = video,
-                                .display_name = clean_rom_name(loaded->name),
-                                .additional_media = std::move(additional_media),
-                                .autostart = autostart,
-                                .dip_override = dip_arg,
-                                .mapper_override = mapper_arg.value_or(std::string{}),
-                                .fm_unit = fm_unit,
-                                .light_gun = light_gun,
-                                .four_score = four_score,
-                                .disc_path = std::move(disc_path),
-                                .rom_path = rom_paths.front(),
-                                .bios_images = std::move(bios_images)});
-        if (system && system->media_count() > 1U) {
-            std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
-                         system->media_count());
-        }
-        if (!system) {
-            std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%s'\n",
-                         family_id(family));
-            return 1;
-        }
-        // Load any existing .srm before the first frame; the guard writes it back
-        // on exit, keyed off the on-disk ROM path (so it sits beside the cart even
-        // when the image came from a .zip). Skipped under the headless
-        // --screenshot / --extract-assets / --extract-audio / --capabilities /
-        // recording paths: those diagnostic sweeps over a read-only ROM corpus
-        // must not drop saves beside the ROMs.
-        if (!screenshot && !extract && !extract_audio && !capabilities && !record_animation) {
-            srm_guard.emplace(system.get(), srm_path_for(rom_paths.front()));
-        }
+    if (system && !mnemos::apps::player::has_headless_request(headless)) {
+        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path));
     }
 
-    // Headless capability path: the frontend consumes the same manifest future
-    // GUI/tooling controls will use, then exits before SDL startup.
-    if (capabilities) {
-        if (!system) {
-            std::fprintf(stderr, "--capabilities requires --rom\n");
-            return 1;
-        }
-        const auto manifest = mnemos::debug::discover_dump_capabilities(*system);
-        const std::string summary = mnemos::debug::format_capability_summary(manifest);
-        std::fwrite(summary.data(), 1U, summary.size(), stdout);
-        std::fflush(stdout);
-        return 0;
-    }
-
-    // Headless path: step --frames, dump the framebuffer (PNG when the
-    // --screenshot path ends in .png, else PPM) + per-chip sidecars, exit. No
-    // window, no GPU. All system-specific knowledge lives behind player_system
-    // -- the adapter publishes its chip list and each chip's introspection
-    // surface advertises memory views, debug layers, and the CPU trace target.
-    if (screenshot) {
-        if (!system) {
-            std::fprintf(stderr, "--screenshot requires --rom\n");
-            return 1;
-        }
-        // Per-instruction CPU trace (MNEMOS_CPU_TRACE=1): opt-in -- the CSV
-        // write dominates headless runtime and bloats sweep outputs, so plain
-        // screenshot runs skip it.
-        std::uint64_t trace_frame = 0;
-        const std::string trace_path = screenshot->path + ".cpu_trace.csv";
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996) // std::getenv: opt-in debug knob
-#endif
-        const char* trace_env = std::getenv("MNEMOS_CPU_TRACE");
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
-        std::optional<mnemos::debug::trace_csv_session> trace;
-        if (trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0') {
-            trace.emplace(*system, trace_path, trace_frame);
-        }
-
-        // Scripted input (`--press <button>@<frame>[+duration]`) so headless runs
-        // can drive a game past intro/menu screens. Sampled before each frame.
-        const auto press_events = parse_press_events(argc, argv);
-        const auto swap_frames = parse_swap_frames(argc, argv);
-        for (std::uint64_t i = 0; i < screenshot->frames; ++i) {
-            trace_frame = i + 1U;
-            if (!press_events.empty()) {
-                system->apply_input(0, input_for_frame(press_events, i + 1U));
-            }
-            apply_disk_swaps(*system, swap_frames, i + 1U);
-            system->step_one_frame();
-        }
-
-        if (!mnemos::debug::dump_screenshot_artifacts(*system, screenshot->path)) {
-            std::fprintf(stderr, "could not write screenshot: %s\n", screenshot->path.c_str());
-            return 1;
-        }
-        const auto fb = system->current_frame();
-        std::fprintf(stderr, "[mnemos_player] wrote %s (%ux%u after %llu frames)\n",
-                     screenshot->path.c_str(), fb.width, fb.height,
-                     static_cast<unsigned long long>(screenshot->frames));
-        if (trace && trace->active()) {
-            std::fprintf(stderr, "[mnemos_player] wrote %s\n", trace_path.c_str());
-            if (trace->trace_count() > 1U) {
-                std::fprintf(stderr, "[mnemos_player] wrote %zu CPU trace files\n",
-                             trace->trace_count());
-            }
-        }
-        std::fflush(stderr);
-        return 0;
-    }
-
-    // Headless animation-record path: step N frames while capturing every
-    // framebuffer. GIF is a preview container; movie output is a lossless PNG
-    // sequence plus manifest that an external plugin can transcode.
-    if (record_animation) {
-        if (!system) {
-            std::fprintf(stderr, "--record-gif/--record-movie requires --rom\n");
-            return 1;
-        }
-        const auto press_events = parse_press_events(argc, argv);
-        std::vector<mnemos::debug::animation_frame> frames;
-        frames.reserve(static_cast<std::size_t>(record_animation->frames));
-        for (std::uint64_t i = 0; i < record_animation->frames; ++i) {
-            if (!press_events.empty()) {
-                system->apply_input(0, input_for_frame(press_events, i + 1U));
-            }
-            system->step_one_frame();
-            auto frame = mnemos::debug::capture_animation_frame(*system);
-            if (!frame) {
-                std::fprintf(stderr, "[mnemos_player] could not capture frame %llu\n",
-                             static_cast<unsigned long long>(i + 1U));
-                return 1;
-            }
-            frames.push_back(std::move(*frame));
-        }
-
-        const std::uint32_t fps_x1000 = system->region().frames_per_second_x1000;
-        if (record_animation->format ==
-            mnemos::apps::player::adapters::animation_record_format::gif) {
-            if (!mnemos::debug::write_gif_animation(record_animation->output, frames, fps_x1000)) {
-                std::fprintf(stderr, "[mnemos_player] could not write animated GIF: %s\n",
-                             record_animation->output.c_str());
-                return 1;
-            }
-            std::fprintf(stderr, "[mnemos_player] wrote animated GIF %s (%llu frames)\n",
-                         record_animation->output.c_str(),
-                         static_cast<unsigned long long>(record_animation->frames));
-        } else {
-            const auto result = mnemos::debug::write_movie_frame_sequence(record_animation->output,
-                                                                          frames, fps_x1000);
-            if (result.frames_written != frames.size()) {
-                std::fprintf(stderr,
-                             "[mnemos_player] incomplete movie frame sequence: %zu/%zu frames\n",
-                             result.frames_written, frames.size());
-                return 1;
-            }
-            std::fprintf(stderr,
-                         "[mnemos_player] wrote movie frame sequence %s.* (%zu frames, manifest "
-                         "%s)\n",
-                         record_animation->output.c_str(), result.frames_written,
-                         result.manifest_path.c_str());
-        }
-        std::fflush(stderr);
-        return 0;
-    }
-
-    // Headless asset-extraction path: step --extract-frames frames, then decode
-    // every chip's graphics (palettes, tiles, sprites) to <base>.* PNG + JSON
-    // and exit. Like --screenshot it drives the system only through
-    // player_system + the chip introspection surface, so it works for any
-    // adapter that implements an asset_source.
-    if (extract) {
-        if (!system) {
-            std::fprintf(stderr, "--extract-assets requires --rom\n");
-            return 1;
-        }
-        const auto press_events = parse_press_events(argc, argv);
-        for (std::uint64_t i = 0; i < extract->frames; ++i) {
-            if (!press_events.empty()) {
-                system->apply_input(0, input_for_frame(press_events, i + 1U));
-            }
-            system->step_one_frame();
-        }
-        const std::size_t count = mnemos::debug::export_assets(*system, extract->base);
-        std::fprintf(
-            stderr, "[mnemos_player] extracted %zu asset image(s) to %s.* after %llu frames\n",
-            count, extract->base.c_str(), static_cast<unsigned long long>(extract->frames));
-        std::fflush(stderr);
-        return 0;
-    }
-
-    // Headless audio-extraction path: step --extract-frames frames (let sample
-    // memory fill), then write every chip's PCM samples to <base>.* WAV + JSON
-    // and exit. Same introspection-only drive as --extract-assets, via
-    // audio_source.
-    if (extract_audio) {
-        if (!system) {
-            std::fprintf(stderr, "--extract-audio requires --rom\n");
-            return 1;
-        }
-        const auto press_events = parse_press_events(argc, argv);
-        const auto swap_frames = parse_swap_frames(argc, argv);
-        // Record the rendered output (what the machine actually plays -- the only
-        // audio export that works for synth chips like the NES APU); the stepping
-        // also leaves the chips in their final state for export_audio's snapshot.
-        const std::size_t rendered = mnemos::debug::export_rendered_audio(
-            *system, extract_audio->frames, extract_audio->base, [&](std::uint64_t i) {
-                if (!press_events.empty()) {
-                    system->apply_input(0, input_for_frame(press_events, i + 1U));
-                }
-                apply_disk_swaps(*system, swap_frames, i + 1U);
-            });
-        const std::size_t count = mnemos::debug::export_audio(*system, extract_audio->base);
-        std::fprintf(stderr,
-                     "[mnemos_player] extracted %zu stored sample(s) + %zu rendered frame(s) to "
-                     "%s.* after %llu frames\n",
-                     count, rendered, extract_audio->base.c_str(),
-                     static_cast<unsigned long long>(extract_audio->frames));
-        std::fflush(stderr);
-        return 0;
+    if (const auto exit_code =
+            mnemos::apps::player::run_headless_request(system.get(), headless, argc, argv)) {
+        return *exit_code;
     }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {

@@ -3,6 +3,7 @@
 #include "eeprom_i2c.hpp" // chips::storage::eeprom_i2c (the Bandai FCG's serial save EEPROM)
 #include "mmc5.hpp"       // chips::audio::mmc5 (the MMC5's 2 pulse + raw PCM sound block)
 #include "n163.hpp"       // chips::audio::n163 (the Namco 163's wavetable sound block)
+#include "nes_mapper_helpers.hpp"
 #include "ssg.hpp"        // chips::audio::ssg (the Sunsoft 5B's YM2149 sound block)
 #include "vrc6.hpp"       // chips::audio::vrc6 (the VRC6's pulse + sawtooth sound)
 #include "ym2413.hpp"     // chips::audio::ym2413 (the VRC7's OPLL sound block)
@@ -13,168 +14,18 @@
 
 namespace mnemos::manifests::nes {
 
+    using detail::apply_mirror_mode;
+    using detail::chr_window;
+    using detail::k_chr_1k;
+    using detail::k_chr_2k;
+    using detail::k_chr_4k;
+    using detail::k_chr_8k;
+    using detail::k_prg_8k;
+    using detail::k_prg_32k;
+    using detail::k_prg_bank;
+    using detail::konami_vrc_irq;
+
     namespace {
-        constexpr std::size_t k_prg_bank = 0x4000U; // 16 KiB
-        constexpr std::size_t k_prg_8k = 0x2000U;   // 8 KiB PRG bank (MMC3)
-        constexpr std::size_t k_prg_32k = 0x8000U;  // 32 KiB PRG bank (AxROM)
-        constexpr std::size_t k_chr_4k = 0x1000U;   // 4 KiB CHR bank
-        constexpr std::size_t k_chr_2k = 0x0800U;   // 2 KiB CHR bank (Sunsoft-4)
-        constexpr std::size_t k_chr_1k = 0x0400U;   // 1 KiB CHR bank (MMC3)
-        constexpr std::size_t k_chr_8k = 0x2000U;   // 8 KiB CHR bank (CNROM)
-
-        // Composes a cartridge's CHR banking into the single 8 KiB window the PPU
-        // reads. A CHR-ROM cart banks 1/2/4 KiB regions into the window with set_*
-        // and attaches it once; a CHR-RAM cart has no banking -- the RAM itself is
-        // the window, so set_* are inert and attach() hands the RAM to the PPU. This
-        // is the one place the bank-modulo + copy-into-window logic lives (every
-        // CHR-banking mapper used to repeat it).
-        class chr_window {
-          public:
-            chr_window(std::span<std::uint8_t> chr, bool is_ram) noexcept
-                : chr_(chr), is_ram_(is_ram), count_1k_(chr.size() / k_chr_1k) {}
-
-            // Attach the active CHR to the PPU: the RAM directly, or the compose
-            // window. Call once from the owning mapper's reset().
-            void attach(chips::video::ppu2c02& ppu) noexcept {
-                if (chr_.empty()) {
-                    return;
-                }
-                if (is_ram_) {
-                    ppu.attach_chr_ram(chr_);
-                } else {
-                    ppu.attach_chr(std::span<const std::uint8_t>(window_));
-                }
-            }
-
-            [[nodiscard]] std::size_t count_1k() const noexcept { return count_1k_; }
-            // True when the window is actually composed (CHR-ROM present); false for
-            // CHR-RAM or an empty CHR, where set_* are inert.
-            [[nodiscard]] bool bankable() const noexcept { return !is_ram_ && count_1k_ != 0U; }
-
-            // Place a 1/2/4 KiB CHR bank `bank` (numbered in those units, wrapping to
-            // the CHR size) into window slot `slot` (also in those units).
-            void set_1k(std::size_t slot, std::size_t bank) noexcept { put(slot, bank, 1U); }
-            void set_2k(std::size_t slot, std::size_t bank) noexcept { put(slot, bank, 2U); }
-            void set_4k(std::size_t slot, std::size_t bank) noexcept { put(slot, bank, 4U); }
-
-          private:
-            void put(std::size_t slot, std::size_t bank, std::size_t units) noexcept {
-                if (!bankable()) {
-                    return;
-                }
-                const std::size_t bytes = units * k_chr_1k;
-                const std::size_t banks = count_1k_ / units; // count in `units`-sized banks
-                const std::size_t src = (banks == 0U ? 0U : bank % banks) * bytes;
-                std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), bytes,
-                            window_.begin() + static_cast<std::ptrdiff_t>(slot * bytes));
-            }
-
-            std::span<std::uint8_t> chr_;
-            bool is_ram_;
-            std::size_t count_1k_;
-            std::array<std::uint8_t, 0x2000U> window_{};
-        };
-
-        // The 2-bit nametable mode several boards share (Bandai FCG 16, Sunsoft-3
-        // 67): 0 = vertical, 1 = horizontal, 2 = single-screen A, 3 = single-screen B.
-        void apply_mirror_mode(chips::video::ppu2c02& ppu, std::uint8_t mode) {
-            using m = chips::video::ppu2c02::mirroring;
-            switch (mode & 0x03U) {
-            case 0U:
-                ppu.set_mirroring(m::vertical);
-                break;
-            case 1U:
-                ppu.set_mirroring(m::horizontal);
-                break;
-            case 2U:
-                ppu.set_mirroring(m::single_a);
-                break;
-            default:
-                ppu.set_mirroring(m::single_b);
-                break;
-            }
-        }
-
-        // The Konami VRC IRQ shared by VRC6 (24/26), VRC7 (85) and VRC2/4 (21/22/
-        // 23/25). An 8-bit counter that, in cycle mode, ticks every CPU cycle and,
-        // in scanline mode, is driven by a +3/cycle prescaler clocked once per ~341
-        // cycles (~one scanline); an overflow ($FF -> reload latch) asserts /IRQ.
-        // The owning mapper drives the actual /IRQ line, so each method takes a
-        // `raise` callable forwarding to the mapper's raise_irq(bool).
-        struct konami_vrc_irq {
-            std::uint8_t latch{};   // reload value
-            std::uint8_t counter{}; // 8-bit up-counter; overflow -> reload + IRQ
-            int prescaler{};        // scanline-mode +3/cycle accumulator
-            bool enabled{};         // control bit 1
-            bool ack_enable{};      // control bit 0: enable to restore on the next ack
-            bool cycle_mode{};      // control bit 2: 1 = per-cycle, 0 = per-scanline
-
-            void reset() noexcept {
-                latch = counter = 0U;
-                prescaler = 0;
-                enabled = ack_enable = cycle_mode = false;
-            }
-
-            template <typename Raise> void write_control(std::uint8_t value, const Raise& raise) {
-                ack_enable = (value & 0x01U) != 0U;
-                enabled = (value & 0x02U) != 0U;
-                cycle_mode = (value & 0x04U) != 0U;
-                if (enabled) {
-                    counter = latch; // reload + restart the prescaler
-                    prescaler = 0;
-                }
-                raise(false); // writing control acknowledges any pending IRQ
-            }
-
-            template <typename Raise> void acknowledge(const Raise& raise) {
-                raise(false);
-                enabled = ack_enable; // the ack restores enable from bit 0
-            }
-
-            template <typename Raise> void tick_counter(const Raise& raise) {
-                if (counter == 0xFFU) {
-                    counter = latch;
-                    raise(true);
-                } else {
-                    ++counter;
-                }
-            }
-
-            template <typename Raise> void clock(std::uint32_t cpu_cycles, const Raise& raise) {
-                if (!enabled) {
-                    return;
-                }
-                for (std::uint32_t i = 0; i < cpu_cycles; ++i) {
-                    if (cycle_mode) {
-                        tick_counter(raise);
-                    } else {
-                        prescaler += 3;
-                        if (prescaler >= 341) {
-                            prescaler -= 341;
-                            tick_counter(raise);
-                        }
-                    }
-                }
-            }
-
-            void save(chips::state_writer& writer) const {
-                writer.u8(latch);
-                writer.u8(counter);
-                writer.u32(static_cast<std::uint32_t>(prescaler));
-                writer.boolean(enabled);
-                writer.boolean(ack_enable);
-                writer.boolean(cycle_mode);
-            }
-            void load(chips::state_reader& reader) {
-                latch = reader.u8();
-                counter = reader.u8();
-                prescaler = static_cast<int>(reader.u32());
-                enabled = reader.boolean();
-                ack_enable = reader.boolean();
-                cycle_mode = reader.boolean();
-            }
-        };
-
         // NROM (iNES 0): no banking. A 16 KiB PRG image mirrors into both halves
         // (so $FFFC resolves); 32 KiB fills $8000-$FFFF. CHR is fixed.
         class nrom_mapper final : public nes_mapper {

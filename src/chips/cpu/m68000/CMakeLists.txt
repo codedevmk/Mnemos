@@ -1,6 +1,7 @@
 add_library(
     mnemos_chips_cpu_m68000
     m68000.cpp
+    m68000_registration.cpp
 )
 add_library(mnemos::chips::cpu::m68000 ALIAS mnemos_chips_cpu_m68000)
 

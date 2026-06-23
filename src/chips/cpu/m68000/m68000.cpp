@@ -5,13 +5,17 @@
 #include "state.hpp"
 
 #include <array>
-#include <memory>
 #include <string_view>
 #include <utility>
 
 namespace mnemos::chips::cpu {
 
+    void force_link_m68000_registration() noexcept;
+
     namespace {
+        [[maybe_unused]] const auto m68000_registration_anchor =
+            (force_link_m68000_registration(), 0);
+
         // Exception vector numbers (the address is vector * 4).
         constexpr int vec_bus_error = 2;
         constexpr int vec_address_error = 3;
@@ -2708,11 +2712,5 @@ namespace mnemos::chips::cpu {
     m68000_diagnostics::last_cycle_sources() const noexcept {
         return owner_->last_cycle_sources_;
     }
-
-    namespace {
-        [[maybe_unused]] const auto m68000_registration =
-            register_factory("motorola.68000", chip_class::cpu,
-                             []() -> std::unique_ptr<ichip> { return std::make_unique<m68000>(); });
-    } // namespace
 
 } // namespace mnemos::chips::cpu
