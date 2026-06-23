@@ -32,13 +32,9 @@ namespace mnemos::manifests::odyssey {
         case odyssey_card::table_tennis:
             return {.line_visible = true, .ball_visible = true, .line_h = 190U};
         case odyssey_card::ski:
-            return {.line_visible = false,
-                    .ball_visible = false,
-                    .collision_reverses_x = false};
+            return {.line_visible = false, .ball_visible = false, .collision_reverses_x = false};
         case odyssey_card::simon_says:
-            return {.line_visible = false,
-                    .ball_visible = false,
-                    .collision_reverses_x = false};
+            return {.line_visible = false, .ball_visible = false, .collision_reverses_x = false};
         case odyssey_card::tennis:
             return {.line_visible = true,
                     .ball_visible = true,
@@ -64,13 +60,9 @@ namespace mnemos::manifests::odyssey {
                     .ball_dy = 2,
                     .line_h = 96U};
         case odyssey_card::cat_and_mouse:
-            return {.line_visible = false,
-                    .ball_visible = false,
-                    .collision_reverses_x = false};
+            return {.line_visible = false, .ball_visible = false, .collision_reverses_x = false};
         case odyssey_card::haunted_house:
-            return {.line_visible = false,
-                    .ball_visible = false,
-                    .collision_reverses_x = false};
+            return {.line_visible = false, .ball_visible = false, .collision_reverses_x = false};
         case odyssey_card::submarine:
             return {.line_visible = false,
                     .ball_visible = true,
@@ -85,9 +77,7 @@ namespace mnemos::manifests::odyssey {
                     .player1_visible = false,
                     .collision_reverses_x = false};
         case odyssey_card::states:
-            return {.line_visible = false,
-                    .ball_visible = false,
-                    .collision_reverses_x = false};
+            return {.line_visible = false, .ball_visible = false, .collision_reverses_x = false};
         }
         return {};
     }
@@ -97,9 +87,6 @@ namespace mnemos::manifests::odyssey {
         wiring_ = wiring_for(card_);
         wiring_.line_visible = wiring_.line_visible && config_.visible_center_line;
         wiring_.ball_visible = wiring_.ball_visible && config_.visible_ball;
-        player0_.visible = wiring_.player0_visible;
-        player1_.visible = wiring_.player1_visible;
-        ball_.visible = wiring_.ball_visible;
         ball_dx_ = wiring_.ball_dx;
         ball_dy_ = wiring_.ball_dy;
         line_h_ = wiring_.line_h;
@@ -109,19 +96,15 @@ namespace mnemos::manifests::odyssey {
     void odyssey_system::set_controller(std::size_t port,
                                         const odyssey_controller& controller) noexcept {
         if (port < controllers_.size()) {
-            controllers_[port] = {.horizontal = clamp_unit(controller.horizontal),
-                                  .vertical = clamp_unit(controller.vertical),
-                                  .english = clamp_unit(controller.english),
-                                  .reset = controller.reset};
+            controllers_[port] = controller;
         }
     }
 
     void odyssey_system::set_master_line(float position, float height) noexcept {
         line_x_ = map_x(position);
-        const auto h = static_cast<float>(config_.height) *
-                       ((clamp_unit(height) + 1.0F) * 0.5F);
-        line_h_ = static_cast<std::uint16_t>(std::clamp(
-            rounded(h), std::int16_t{8}, static_cast<std::int16_t>(config_.height)));
+        const auto h = static_cast<float>(config_.height) * ((clamp_unit(height) + 1.0F) * 0.5F);
+        line_h_ = static_cast<std::uint16_t>(
+            std::clamp(rounded(h), std::int16_t{8}, static_cast<std::int16_t>(config_.height)));
     }
 
     void odyssey_system::set_ball_speed(float speed) noexcept {
@@ -141,11 +124,8 @@ namespace mnemos::manifests::odyssey {
                     .w = 6U,
                     .h = 6U,
                     .visible = wiring_.player1_visible};
-        ball_ = {.x = map_x(0.0F),
-                 .y = map_y(0.0F),
-                 .w = 4U,
-                 .h = 4U,
-                 .visible = wiring_.ball_visible};
+        ball_ = {
+            .x = map_x(0.0F), .y = map_y(0.0F), .w = 4U, .h = 4U, .visible = wiring_.ball_visible};
         ball_dx_ = wiring_.ball_dx;
         ball_dy_ = wiring_.ball_dy;
         frame_counter_ = 0U;
@@ -184,22 +164,19 @@ namespace mnemos::manifests::odyssey {
         ball_.x = static_cast<std::int16_t>(ball_.x + ball_dx_);
         ball_.y = static_cast<std::int16_t>(ball_.y + ball_dy_ + english);
 
-        if (ball_.y <= 0 ||
-            ball_.y + static_cast<std::int16_t>(ball_.h) >=
-                static_cast<std::int16_t>(config_.height)) {
+        if (ball_.y <= 0 || ball_.y + static_cast<std::int16_t>(ball_.h) >=
+                                static_cast<std::int16_t>(config_.height)) {
             ball_dy_ = static_cast<std::int16_t>(-ball_dy_);
         }
 
-        const auto hit_player0 =
-            ball_.x <= player0_.x + static_cast<std::int16_t>(player0_.w) &&
-            ball_.y + static_cast<std::int16_t>(ball_.h) >= player0_.y &&
-            ball_.y <= player0_.y + static_cast<std::int16_t>(player0_.h) &&
-            player0_.visible;
-        const auto hit_player1 =
-            ball_.x + static_cast<std::int16_t>(ball_.w) >= player1_.x &&
-            ball_.y + static_cast<std::int16_t>(ball_.h) >= player1_.y &&
-            ball_.y <= player1_.y + static_cast<std::int16_t>(player1_.h) &&
-            player1_.visible;
+        const auto hit_player0 = ball_.x <= player0_.x + static_cast<std::int16_t>(player0_.w) &&
+                                 ball_.y + static_cast<std::int16_t>(ball_.h) >= player0_.y &&
+                                 ball_.y <= player0_.y + static_cast<std::int16_t>(player0_.h) &&
+                                 player0_.visible;
+        const auto hit_player1 = ball_.x + static_cast<std::int16_t>(ball_.w) >= player1_.x &&
+                                 ball_.y + static_cast<std::int16_t>(ball_.h) >= player1_.y &&
+                                 ball_.y <= player1_.y + static_cast<std::int16_t>(player1_.h) &&
+                                 player1_.visible;
         if (wiring_.collision_reverses_x && (hit_player0 || hit_player1)) {
             ball_dx_ = static_cast<std::int16_t>(-ball_dx_);
         }
@@ -225,8 +202,7 @@ namespace mnemos::manifests::odyssey {
                 continue;
             }
             for (std::uint8_t x = 0U; x < sprite.w; ++x) {
-                const auto px =
-                    static_cast<std::int16_t>(sprite.x + static_cast<std::int16_t>(x));
+                const auto px = static_cast<std::int16_t>(sprite.x + static_cast<std::int16_t>(x));
                 if (px < 0 || px >= static_cast<std::int16_t>(frame_.width)) {
                     continue;
                 }
@@ -247,8 +223,7 @@ namespace mnemos::manifests::odyssey {
             if (y < 0 || y >= static_cast<std::int16_t>(frame_.height)) {
                 continue;
             }
-            for (std::int16_t x = line_x_; x < static_cast<std::int16_t>(line_x_ + 2);
-                 ++x) {
+            for (std::int16_t x = line_x_; x < static_cast<std::int16_t>(line_x_ + 2); ++x) {
                 if (x < 0 || x >= static_cast<std::int16_t>(frame_.width)) {
                     continue;
                 }
