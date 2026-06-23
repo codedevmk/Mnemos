@@ -22,6 +22,59 @@ namespace mnemos::manifests::nes {
         constexpr std::size_t k_chr_1k = 0x0400U;   // 1 KiB CHR bank (MMC3)
         constexpr std::size_t k_chr_8k = 0x2000U;   // 8 KiB CHR bank (CNROM)
 
+        // Composes a cartridge's CHR banking into the single 8 KiB window the PPU
+        // reads. A CHR-ROM cart banks 1/2/4 KiB regions into the window with set_*
+        // and attaches it once; a CHR-RAM cart has no banking -- the RAM itself is
+        // the window, so set_* are inert and attach() hands the RAM to the PPU. This
+        // is the one place the bank-modulo + copy-into-window logic lives (every
+        // CHR-banking mapper used to repeat it).
+        class chr_window {
+          public:
+            chr_window(std::span<std::uint8_t> chr, bool is_ram) noexcept
+                : chr_(chr), is_ram_(is_ram), count_1k_(chr.size() / k_chr_1k) {}
+
+            // Attach the active CHR to the PPU: the RAM directly, or the compose
+            // window. Call once from the owning mapper's reset().
+            void attach(chips::video::ppu2c02& ppu) noexcept {
+                if (chr_.empty()) {
+                    return;
+                }
+                if (is_ram_) {
+                    ppu.attach_chr_ram(chr_);
+                } else {
+                    ppu.attach_chr(std::span<const std::uint8_t>(window_));
+                }
+            }
+
+            [[nodiscard]] std::size_t count_1k() const noexcept { return count_1k_; }
+            // True when the window is actually composed (CHR-ROM present); false for
+            // CHR-RAM or an empty CHR, where set_* are inert.
+            [[nodiscard]] bool bankable() const noexcept { return !is_ram_ && count_1k_ != 0U; }
+
+            // Place a 1/2/4 KiB CHR bank `bank` (numbered in those units, wrapping to
+            // the CHR size) into window slot `slot` (also in those units).
+            void set_1k(std::size_t slot, std::size_t bank) noexcept { put(slot, bank, 1U); }
+            void set_2k(std::size_t slot, std::size_t bank) noexcept { put(slot, bank, 2U); }
+            void set_4k(std::size_t slot, std::size_t bank) noexcept { put(slot, bank, 4U); }
+
+          private:
+            void put(std::size_t slot, std::size_t bank, std::size_t units) noexcept {
+                if (!bankable()) {
+                    return;
+                }
+                const std::size_t bytes = units * k_chr_1k;
+                const std::size_t banks = count_1k_ / units; // count in `units`-sized banks
+                const std::size_t src = (banks == 0U ? 0U : bank % banks) * bytes;
+                std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), bytes,
+                            window_.begin() + static_cast<std::ptrdiff_t>(slot * bytes));
+            }
+
+            std::span<std::uint8_t> chr_;
+            bool is_ram_;
+            std::size_t count_1k_;
+            std::array<std::uint8_t, 0x2000U> window_{};
+        };
+
         // The 2-bit nametable mode several boards share (Bandai FCG 16, Sunsoft-3
         // 67): 0 = vertical, 1 = horizontal, 2 = single-screen A, 3 = single-screen B.
         void apply_mirror_mode(chips::video::ppu2c02& ppu, std::uint8_t mode) {
@@ -147,42 +200,31 @@ namespace mnemos::manifests::nes {
             uxrom_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                          std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                          bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), bank_count_(prg.size() / k_prg_bank) {
-            }
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram) {}
 
             void reset() override {
                 attach_chr();
-                if (bank_count_ == 0U) {
+                if (prg_16k_count() == 0U) {
                     return; // malformed (no full 16 KiB bank)
                 }
                 bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank)); // bank 0 (switchable)
-                bus_->map_rom(0xC000U, last_bank());                 // last bank (fixed)
+                bus_->map_rom(0xC000U,
+                              prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank));
                 install_register_write_hook();
             }
 
             void write(std::uint16_t /*addr*/, std::uint8_t value) override {
                 bank_ = value;
-                map_bank();
+                map_prg_16k(0x8000U, bank_);
             }
 
             void save_state(chips::state_writer& writer) const override { writer.u8(bank_); }
             void load_state(chips::state_reader& reader) override {
                 bank_ = reader.u8();
-                map_bank();
+                map_prg_16k(0x8000U, bank_);
             }
 
           private:
-            void map_bank() {
-                if (bank_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(0x8000U,
-                                   prg_.subspan((bank_ % bank_count_) * k_prg_bank, k_prg_bank));
-            }
-            [[nodiscard]] std::span<const std::uint8_t> last_bank() const {
-                return prg_.subspan((bank_count_ - 1U) * k_prg_bank, k_prg_bank);
-            }
-            std::size_t bank_count_;
             std::uint8_t bank_{};
         };
 
@@ -197,24 +239,19 @@ namespace mnemos::manifests::nes {
             mmc1_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                         bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_count_(prg.size() / k_prg_bank),
-                  chr_4k_count_(chr.size() / k_chr_4k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 control_ = 0x0CU; // power-on: PRG mode 3 ($8000 switchable, $C000 fixed last)
                 shift_ = 0U;
                 count_ = 0U;
                 chr_bank0_ = chr_bank1_ = prg_bank_ = 0U;
-                if (prg_count_ != 0U) {
+                if (prg_16k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                     bus_->map_rom(0xC000U,
-                                  prg_.subspan((prg_count_ - 1U) * k_prg_bank, k_prg_bank));
+                                  prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank));
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_); // 8 KiB CHR-RAM (no ROM banking)
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply();
                 install_register_write_hook();
             }
@@ -289,58 +326,38 @@ namespace mnemos::manifests::nes {
                 apply_chr();
             }
 
-            void map_prg(std::uint32_t slot, std::size_t bank16) {
-                if (prg_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank16 % prg_count_) * k_prg_bank, k_prg_bank));
-            }
-
             void apply_prg() {
                 const unsigned mode = (control_ >> 2U) & 0x03U;
                 if (mode <= 1U) { // 32 KiB at $8000 (low PRG-bank bit ignored)
                     const std::size_t base = static_cast<std::size_t>(prg_bank_ & 0x0EU);
-                    map_prg(0x8000U, base);
-                    map_prg(0xC000U, base + 1U);
+                    map_prg_16k(0x8000U, base);
+                    map_prg_16k(0xC000U, base + 1U);
                 } else if (mode == 2U) { // fix first bank at $8000, switch 16 KiB at $C000
-                    map_prg(0x8000U, 0U);
-                    map_prg(0xC000U, prg_bank_);
+                    map_prg_16k(0x8000U, 0U);
+                    map_prg_16k(0xC000U, prg_bank_);
                 } else { // mode 3: switch 16 KiB at $8000, fix last bank at $C000
-                    map_prg(0x8000U, prg_bank_);
-                    map_prg(0xC000U, prg_count_ - 1U);
+                    map_prg_16k(0x8000U, prg_bank_);
+                    map_prg_16k(0xC000U, prg_16k_count() != 0U ? prg_16k_count() - 1U : 0U);
                 }
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_4k_count_ == 0U) {
-                    return; // CHR-RAM: the 8 KiB window is the RAM itself
-                }
                 if ((control_ & 0x10U) == 0U) { // 8 KiB CHR (low bit of chr_bank0 ignored)
-                    copy_chr_4k(0U, static_cast<std::size_t>(chr_bank0_ & 0x1EU));
-                    copy_chr_4k(1U, static_cast<std::size_t>(chr_bank0_ & 0x1EU) + 1U);
+                    chr_win_.set_4k(0U, static_cast<std::size_t>(chr_bank0_ & 0x1EU));
+                    chr_win_.set_4k(1U, static_cast<std::size_t>(chr_bank0_ & 0x1EU) + 1U);
                 } else { // two independent 4 KiB banks
-                    copy_chr_4k(0U, chr_bank0_);
-                    copy_chr_4k(1U, chr_bank1_);
+                    chr_win_.set_4k(0U, chr_bank0_);
+                    chr_win_.set_4k(1U, chr_bank1_);
                 }
             }
 
-            // Copy a 4 KiB CHR-ROM bank into half `half` (0 or 1) of the 8 KiB window.
-            void copy_chr_4k(std::size_t half, std::size_t bank4) {
-                const std::size_t src = (bank4 % chr_4k_count_) * k_chr_4k;
-                std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_4k,
-                            chr_window_.begin() + static_cast<std::ptrdiff_t>(half * k_chr_4k));
-            }
-
-            std::size_t prg_count_;
-            std::size_t chr_4k_count_;
             std::uint8_t control_{0x0CU};
             std::uint8_t shift_{};
             std::uint8_t count_{};
             std::uint8_t chr_bank0_{};
             std::uint8_t chr_bank1_{};
             std::uint8_t prg_bank_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // MMC3 (iNES 4): bank-select ($8000 even) names one of eight registers +
@@ -355,23 +372,18 @@ namespace mnemos::manifests::nes {
             mmc3_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                         bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 bank_select_ = 0U;
                 mirror_reg_ = 0U;
                 regs_.fill(0U);
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply();
                 install_register_write_hook();
             }
@@ -464,52 +476,38 @@ namespace mnemos::manifests::nes {
                 apply_mirroring();
             }
 
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
-                const std::size_t last = prg_8k_count_ - 1U;
-                const std::size_t second_last = prg_8k_count_ >= 2U ? prg_8k_count_ - 2U : last;
+                const std::size_t last = count - 1U;
+                const std::size_t second_last = count >= 2U ? count - 2U : last;
                 if ((bank_select_ & 0x40U) == 0U) { // mode 0: R6 @ $8000, fixed @ $C000
-                    map_prg8(0x8000U, regs_[6]);
-                    map_prg8(0xA000U, regs_[7]);
-                    map_prg8(0xC000U, second_last);
+                    map_prg_8k(0x8000U, regs_[6]);
+                    map_prg_8k(0xA000U, regs_[7]);
+                    map_prg_8k(0xC000U, second_last);
                 } else { // mode 1: fixed @ $8000, R6 @ $C000
-                    map_prg8(0x8000U, second_last);
-                    map_prg8(0xA000U, regs_[7]);
-                    map_prg8(0xC000U, regs_[6]);
+                    map_prg_8k(0x8000U, second_last);
+                    map_prg_8k(0xA000U, regs_[7]);
+                    map_prg_8k(0xC000U, regs_[6]);
                 }
-                map_prg8(0xE000U, last); // the last bank is always fixed at $E000
+                map_prg_8k(0xE000U, last); // the last bank is always fixed at $E000
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 // Eight 1 KiB CHR slots. R0/R1 are 2 KiB banks (low bit ignored);
                 // bit 7 of bank-select swaps the $0000 and $1000 halves.
-                std::array<std::size_t, 8> slot{};
                 const std::size_t r0 = regs_[0] & 0xFEU;
                 const std::size_t r1 = regs_[1] & 0xFEU;
                 const std::array<std::size_t, 8> normal = {r0,       r0 + 1U,  r1,       r1 + 1U,
                                                            regs_[2], regs_[3], regs_[4], regs_[5]};
-                if ((bank_select_ & 0x80U) == 0U) {
-                    slot = normal;
-                } else { // A12 inversion: 1 KiB banks at $0000, 2 KiB banks at $1000
+                std::array<std::size_t, 8> slot = normal;
+                if ((bank_select_ & 0x80U) != 0U) { // A12 inversion: swap the halves
                     slot = {regs_[2], regs_[3], regs_[4], regs_[5], r0, r0 + 1U, r1, r1 + 1U};
                 }
                 for (std::size_t s = 0; s < slot.size(); ++s) {
-                    const std::size_t src = (slot[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, slot[s]);
                 }
             }
 
@@ -519,8 +517,6 @@ namespace mnemos::manifests::nes {
                 ppu_->set_mirroring((mirror_reg_ & 0x01U) != 0U ? m::horizontal : m::vertical);
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             std::array<std::uint8_t, 8> regs_{};
             std::uint8_t bank_select_{};
             std::uint8_t mirror_reg_{};
@@ -528,7 +524,7 @@ namespace mnemos::manifests::nes {
             std::uint8_t irq_counter_{};
             bool irq_reload_{};
             bool irq_enabled_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Namco 118 / DxROM (iNES 206): the MMC3 predecessor. Same eight bank
@@ -583,16 +579,12 @@ namespace mnemos::manifests::nes {
                 irq_enabled_ = false;
                 irq_cycle_mode_ = false;
                 cycle_prescaler_ = 0U;
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply_banks();
                 install_register_write_hook();
             }
@@ -691,27 +683,25 @@ namespace mnemos::manifests::nes {
             }
 
             void apply_prg_banks() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
                 // Three switchable 8 KiB banks (R6, R7, RF) + the fixed last bank
                 // at $E000. The P bit (0x40) swaps R6 and RF between $8000 and $C000.
                 if ((bank_select_ & 0x40U) == 0U) { // P=0
-                    map_prg8(0x8000U, r_[6]);
-                    map_prg8(0xA000U, r_[7]);
-                    map_prg8(0xC000U, r_[15]);
+                    map_prg_8k(0x8000U, r_[6]);
+                    map_prg_8k(0xA000U, r_[7]);
+                    map_prg_8k(0xC000U, r_[15]);
                 } else { // P=1
-                    map_prg8(0x8000U, r_[15]);
-                    map_prg8(0xA000U, r_[7]);
-                    map_prg8(0xC000U, r_[6]);
+                    map_prg_8k(0x8000U, r_[15]);
+                    map_prg_8k(0xA000U, r_[7]);
+                    map_prg_8k(0xC000U, r_[6]);
                 }
-                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank always fixed at $E000
+                map_prg_8k(0xE000U, count - 1U); // last bank always fixed at $E000
             }
 
             void apply_chr_banks() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 // The "normal" (C=0) layout is a pair of 2 KiB regions at $0000 then
                 // four 1 KiB banks at $1000. K=1 splits each 2 KiB region into two
                 // independent 1 KiB banks (R0/R8 and R1/R9); K=0 takes 2 KiB pairs
@@ -732,9 +722,7 @@ namespace mnemos::manifests::nes {
                             normal[0], normal[1], normal[2], normal[3]};
                 }
                 for (std::size_t s = 0; s < slot.size(); ++s) {
-                    const std::size_t src = (slot[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, slot[s]);
                 }
             }
 
@@ -776,8 +764,7 @@ namespace mnemos::manifests::nes {
             bandai_fcg_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                               std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                               bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_16k_count_(prg.size() / k_prg_bank), chr_1k_count_(chr.size() / k_chr_1k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 chr_bank_.fill(0U);
@@ -787,16 +774,12 @@ namespace mnemos::manifests::nes {
                 irq_counter_ = 0U;
                 irq_enabled_ = false;
                 eeprom_.reset();
-                if (prg_16k_count_ != 0U) {
+                if (prg_16k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                     bus_->map_rom(0xC000U,
-                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                                  prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank));
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply_prg();
                 apply_chr();
                 apply_mirroring();
@@ -911,36 +894,23 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void apply_prg() {
-                if (prg_16k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(
-                    0x8000U, prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
-            }
+            void apply_prg() { map_prg_16k(0x8000U, prg_bank_); }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
-                    const std::size_t src = (chr_bank_[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, chr_bank_[s]);
                 }
             }
 
             void apply_mirroring() { apply_mirror_mode(*ppu_, mirror_); }
 
-            std::size_t prg_16k_count_;
-            std::size_t chr_1k_count_;
             std::array<std::uint8_t, 8> chr_bank_{};
             std::uint8_t prg_bank_{};
             std::uint8_t mirror_{};
             std::uint16_t irq_latch_{};
             std::uint16_t irq_counter_{};
             bool irq_enabled_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
             chips::storage::eeprom_i2c eeprom_{256U}; // 24C02 serial EEPROM (saves)
         };
 
@@ -957,8 +927,7 @@ namespace mnemos::manifests::nes {
             sunsoft3_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                             std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                             bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_16k_count_(prg.size() / k_prg_bank), chr_2k_count_(chr.size() / k_chr_2k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 chr_bank_.fill(0U);
@@ -967,16 +936,12 @@ namespace mnemos::manifests::nes {
                 irq_counter_ = 0U;
                 irq_counting_ = false;
                 irq_write_hi_ = true;
-                if (prg_16k_count_ != 0U) {
+                if (prg_16k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                     bus_->map_rom(0xC000U,
-                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                                  prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank));
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply_prg();
                 apply_chr();
                 apply_mirror_mode(*ppu_, mirror_);
@@ -1069,34 +1034,21 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void apply_prg() {
-                if (prg_16k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(
-                    0x8000U, prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
-            }
+            void apply_prg() { map_prg_16k(0x8000U, prg_bank_); }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_2k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 4U; ++s) {
-                    const std::size_t src = (chr_bank_[s] % chr_2k_count_) * k_chr_2k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_2k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_2k));
+                    chr_win_.set_2k(s, chr_bank_[s]);
                 }
             }
 
-            std::size_t prg_16k_count_;
-            std::size_t chr_2k_count_;
             std::array<std::uint8_t, 4> chr_bank_{};
             std::uint8_t prg_bank_{};
             std::uint8_t mirror_{};
             std::uint16_t irq_counter_{};
             bool irq_counting_{};
             bool irq_write_hi_{true};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Jaleco SS88006 (iNES 18): three 8 KiB switchable PRG banks (last 8 KiB
@@ -1113,8 +1065,7 @@ namespace mnemos::manifests::nes {
             jaleco_ss88006_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                                   std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                                   bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_bank_.fill(0U);
@@ -1124,18 +1075,14 @@ namespace mnemos::manifests::nes {
                 irq_counter_ = 0U;
                 irq_mask_ = 0xFFFFU;
                 irq_enabled_ = false;
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                     bus_->map_rom(0xE000U, // the last 8 KiB bank is fixed here
-                                  prg_.subspan((prg_8k_count_ - 1U) * k_prg_8k, k_prg_8k));
+                                  prg_.subspan((prg_8k_count() - 1U) * k_prg_8k, k_prg_8k));
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply_prg();
                 apply_chr();
                 apply_mirroring();
@@ -1285,26 +1232,15 @@ namespace mnemos::manifests::nes {
             }
 
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
                 // Three switchable 8 KiB banks; $E000 stays fixed to the last bank.
-                bus_->retarget_rom(
-                    0x8000U, prg_.subspan((prg_bank_[0] % prg_8k_count_) * k_prg_8k, k_prg_8k));
-                bus_->retarget_rom(
-                    0xA000U, prg_.subspan((prg_bank_[1] % prg_8k_count_) * k_prg_8k, k_prg_8k));
-                bus_->retarget_rom(
-                    0xC000U, prg_.subspan((prg_bank_[2] % prg_8k_count_) * k_prg_8k, k_prg_8k));
+                map_prg_8k(0x8000U, prg_bank_[0]);
+                map_prg_8k(0xA000U, prg_bank_[1]);
+                map_prg_8k(0xC000U, prg_bank_[2]);
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
-                    const std::size_t src = (chr_bank_[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, chr_bank_[s]);
                 }
             }
 
@@ -1327,8 +1263,6 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             std::array<std::uint8_t, 3> prg_bank_{};
             std::array<std::uint8_t, 8> chr_bank_{};
             std::uint8_t mirror_{};
@@ -1336,7 +1270,7 @@ namespace mnemos::manifests::nes {
             std::uint16_t irq_counter_{};
             std::uint32_t irq_mask_{0xFFFFU};
             bool irq_enabled_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // MMC5 (iNES 5): the most capable NES mapper. This core increment models
@@ -1798,11 +1732,10 @@ namespace mnemos::manifests::nes {
             axrom_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                          std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                          bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_32k_count_(prg.size() / k_prg_32k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram) {}
 
             void reset() override {
-                if (prg_32k_count_ != 0U) {
+                if (prg_32k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k)); // 32 KiB bank 0
                 }
                 attach_chr();
@@ -1823,15 +1756,11 @@ namespace mnemos::manifests::nes {
 
           private:
             void apply() {
-                if (prg_32k_count_ != 0U) {
-                    const std::size_t bank = (bank_value_ & 0x07U) % prg_32k_count_;
-                    bus_->retarget_rom(0x8000U, prg_.subspan(bank * k_prg_32k, k_prg_32k));
-                }
+                map_prg_32k(0x8000U, bank_value_ & 0x07U);
                 ppu_->set_mirroring((bank_value_ & 0x10U) != 0U
                                         ? chips::video::ppu2c02::mirroring::single_b
                                         : chips::video::ppu2c02::mirroring::single_a);
             }
-            std::size_t prg_32k_count_;
             std::uint8_t bank_value_{};
         };
 
@@ -1842,11 +1771,11 @@ namespace mnemos::manifests::nes {
             gxrom_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                          std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                          bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_32k_count_(prg.size() / k_prg_32k), chr_8k_count_(chr.size() / k_chr_8k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_8k_count_(chr.size() / k_chr_8k) {
+            }
 
             void reset() override {
-                if (prg_32k_count_ != 0U) {
+                if (prg_32k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k));
                 }
                 bank_ = 0U;
@@ -1865,10 +1794,7 @@ namespace mnemos::manifests::nes {
 
           private:
             void apply() {
-                if (prg_32k_count_ != 0U) {
-                    const std::size_t pb = ((bank_ >> 4U) & 0x03U) % prg_32k_count_;
-                    bus_->retarget_rom(0x8000U, prg_.subspan(pb * k_prg_32k, k_prg_32k));
-                }
+                map_prg_32k(0x8000U, (bank_ >> 4U) & 0x03U);
                 if (chr_is_ram_ || chr_8k_count_ == 0U) {
                     attach_chr();
                 } else {
@@ -1877,7 +1803,6 @@ namespace mnemos::manifests::nes {
                         std::span<const std::uint8_t>(chr_.subspan(cb * k_chr_8k, k_chr_8k)));
                 }
             }
-            std::size_t prg_32k_count_;
             std::size_t chr_8k_count_;
             std::uint8_t bank_{};
         };
@@ -1889,11 +1814,11 @@ namespace mnemos::manifests::nes {
             color_dreams_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                                 std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                                 bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_32k_count_(prg.size() / k_prg_32k), chr_8k_count_(chr.size() / k_chr_8k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_8k_count_(chr.size() / k_chr_8k) {
+            }
 
             void reset() override {
-                if (prg_32k_count_ != 0U) {
+                if (prg_32k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k));
                 }
                 bank_ = 0U;
@@ -1912,10 +1837,7 @@ namespace mnemos::manifests::nes {
 
           private:
             void apply() {
-                if (prg_32k_count_ != 0U) {
-                    const std::size_t pb = (bank_ & 0x03U) % prg_32k_count_;
-                    bus_->retarget_rom(0x8000U, prg_.subspan(pb * k_prg_32k, k_prg_32k));
-                }
+                map_prg_32k(0x8000U, bank_ & 0x03U);
                 if (chr_is_ram_ || chr_8k_count_ == 0U) {
                     attach_chr();
                 } else {
@@ -1924,7 +1846,6 @@ namespace mnemos::manifests::nes {
                         std::span<const std::uint8_t>(chr_.subspan(cb * k_chr_8k, k_chr_8k)));
                 }
             }
-            std::size_t prg_32k_count_;
             std::size_t chr_8k_count_;
             std::uint8_t bank_{};
         };
@@ -1938,12 +1859,11 @@ namespace mnemos::manifests::nes {
             camerica_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                             std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                             bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_16k_count_(prg.size() / k_prg_bank) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram) {}
 
             void reset() override {
                 bank_ = 0U;
-                if (prg_16k_count_ != 0U) {
+                if (prg_16k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                     bus_->map_rom(0xC000U, last_bank()); // fixed last 16 KiB
                 }
@@ -1969,15 +1889,9 @@ namespace mnemos::manifests::nes {
 
           private:
             [[nodiscard]] std::span<const std::uint8_t> last_bank() const noexcept {
-                return prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank);
+                return prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank);
             }
-            void apply_prg() {
-                if (prg_16k_count_ != 0U) {
-                    const std::size_t b = bank_ % prg_16k_count_;
-                    bus_->retarget_rom(0x8000U, prg_.subspan(b * k_prg_bank, k_prg_bank));
-                }
-            }
-            std::size_t prg_16k_count_;
+            void apply_prg() { map_prg_16k(0x8000U, bank_); }
             std::uint8_t bank_{};
         };
 
@@ -1995,9 +1909,8 @@ namespace mnemos::manifests::nes {
             mmc2_4_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                           std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                           bool chr_is_ram, bool is_mmc4) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  prg_16k_count_(prg.size() / k_prg_bank), chr_4k_count_(chr.size() / k_chr_4k),
-                  is_mmc4_(is_mmc4) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), is_mmc4_(is_mmc4),
+                  chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_bank_ = 0U;
@@ -2009,20 +1922,16 @@ namespace mnemos::manifests::nes {
                 // retarget_rom finds a matching region): MMC4 uses two 16 KiB windows,
                 // MMC2 four 8 KiB windows.
                 if (is_mmc4_) {
-                    if (prg_16k_count_ != 0U) {
+                    if (prg_16k_count() != 0U) {
                         bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                         bus_->map_rom(0xC000U, prg_.subspan(0, k_prg_bank));
                     }
-                } else if (prg_8k_count_ != 0U) {
+                } else if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 ppu_->set_chr_fetch_callback([this](std::uint16_t addr) { chr_latch(addr); });
 
                 apply_prg();
@@ -2104,47 +2013,31 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
                 if (is_mmc4_) { // 16 KiB switchable at $8000 + fixed last 16 KiB
-                    if (prg_16k_count_ == 0U) {
+                    const std::size_t count16 = prg_16k_count();
+                    if (count16 == 0U) {
                         return;
                     }
-                    bus_->retarget_rom(
-                        0x8000U,
-                        prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
-                    bus_->retarget_rom(
-                        0xC000U, prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                    map_prg_16k(0x8000U, prg_bank_);
+                    map_prg_16k(0xC000U, count16 - 1U);
                     return;
                 }
-                if (prg_8k_count_ == 0U) { // MMC2: 8 KiB switchable + three fixed last
+                const std::size_t count8 = prg_8k_count();
+                if (count8 == 0U) { // MMC2: 8 KiB switchable + three fixed last
                     return;
                 }
-                map_prg8(0x8000U, prg_bank_);
-                map_prg8(0xA000U, prg_8k_count_ - 3U);
-                map_prg8(0xC000U, prg_8k_count_ - 2U);
-                map_prg8(0xE000U, prg_8k_count_ - 1U);
+                map_prg_8k(0x8000U, prg_bank_);
+                map_prg_8k(0xA000U, count8 - 3U);
+                map_prg_8k(0xC000U, count8 - 2U);
+                map_prg_8k(0xE000U, count8 - 1U);
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_4k_count_ == 0U) {
-                    return;
-                }
                 // $0xxx half: bank chr_bank_[0/1] selected by latch 0; $1xxx half:
                 // chr_bank_[2/3] by latch 1.
-                const std::size_t b0 = chr_bank_[latch_[0] ? 1U : 0U] % chr_4k_count_;
-                const std::size_t b1 = chr_bank_[latch_[1] ? 3U : 2U] % chr_4k_count_;
-                std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(b0 * k_chr_4k), k_chr_4k,
-                            chr_window_.begin());
-                std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(b1 * k_chr_4k), k_chr_4k,
-                            chr_window_.begin() + static_cast<std::ptrdiff_t>(k_chr_4k));
+                chr_win_.set_4k(0U, chr_bank_[latch_[0] ? 1U : 0U]);
+                chr_win_.set_4k(1U, chr_bank_[latch_[1] ? 3U : 2U]);
             }
 
             void apply_mirroring() {
@@ -2152,15 +2045,12 @@ namespace mnemos::manifests::nes {
                 ppu_->set_mirroring(mirror_ != 0U ? m::horizontal : m::vertical);
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t prg_16k_count_;
-            std::size_t chr_4k_count_;
             bool is_mmc4_;
             std::uint8_t prg_bank_{};
             std::array<std::uint8_t, 4> chr_bank_{}; // [0]=$0/FD [1]=$0/FE [2]=$1/FD [3]=$1/FE
             std::array<bool, 2> latch_{true, true};  // false=$FD, true=$FE per table
             std::uint8_t mirror_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Sunsoft FME-7 / 5B (iNES 69). Banking: three switchable 8 KiB PRG banks
@@ -2181,8 +2071,7 @@ namespace mnemos::manifests::nes {
             sunsoft5b_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                              std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                              bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 command_ = 0U;
@@ -2193,16 +2082,12 @@ namespace mnemos::manifests::nes {
                 irq_enabled_ = false;
                 irq_counter_enabled_ = false;
 
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
 
                 // The 5B sound chip is clocked at the CPU rate divided by the YM2149's
                 // own /16 prescaler; the board enables capture so the adapter can drain
@@ -2334,32 +2219,20 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
-                map_prg8(0x8000U, prg_banks_[1]);
-                map_prg8(0xA000U, prg_banks_[2]);
-                map_prg8(0xC000U, prg_banks_[3]);
-                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank fixed at $E000
+                map_prg_8k(0x8000U, prg_banks_[1]);
+                map_prg_8k(0xA000U, prg_banks_[2]);
+                map_prg_8k(0xC000U, prg_banks_[3]);
+                map_prg_8k(0xE000U, count - 1U); // last bank fixed at $E000
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
-                    const std::size_t src = (chr_banks_[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, chr_banks_[s]);
                 }
             }
 
@@ -2381,8 +2254,6 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             chips::audio::ssg ssg_;
             std::uint8_t command_{};
             std::array<std::uint8_t, 8> chr_banks_{};
@@ -2391,7 +2262,7 @@ namespace mnemos::manifests::nes {
             std::uint16_t irq_counter_{};
             bool irq_enabled_{};
             bool irq_counter_enabled_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Konami VRC7 (iNES 85). PRG: three switchable 8 KiB banks ($8000/$A000/
@@ -2415,8 +2286,7 @@ namespace mnemos::manifests::nes {
             vrc7_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                         bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_regs_ = {0U, 0U, 0U};
@@ -2424,16 +2294,12 @@ namespace mnemos::manifests::nes {
                 mirror_ = 0U;
                 irq_.reset();
 
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
 
                 opll_.reset(chips::reset_kind::power_on);
                 opll_.set_clock_divider(36); // CPU clock / 36 ~= 49716 Hz OPLL native rate
@@ -2540,32 +2406,20 @@ namespace mnemos::manifests::nes {
                 apply_chr();
             }
 
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
-                map_prg8(0x8000U, prg_regs_[0] & 0x3FU);
-                map_prg8(0xA000U, prg_regs_[1] & 0x3FU);
-                map_prg8(0xC000U, prg_regs_[2] & 0x3FU);
-                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank fixed at $E000
+                map_prg_8k(0x8000U, prg_regs_[0] & 0x3FU);
+                map_prg_8k(0xA000U, prg_regs_[1] & 0x3FU);
+                map_prg_8k(0xC000U, prg_regs_[2] & 0x3FU);
+                map_prg_8k(0xE000U, count - 1U); // last bank fixed at $E000
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
-                    const std::size_t src = (chr_banks_[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, chr_banks_[s]);
                 }
             }
 
@@ -2587,14 +2441,12 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             chips::audio::ym2413 opll_;
             std::array<std::uint8_t, 3> prg_regs_{}; // $8000, $A000, $C000 8 KiB selects
             std::array<std::uint8_t, 8> chr_banks_{};
             std::uint8_t mirror_{};
             konami_vrc_irq irq_; // $E010 latch + $F000/$F010 control/ack
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Konami VRC6 (iNES 24 = VRC6a, 26 = VRC6b). PRG: a switchable 16 KiB bank
@@ -2608,9 +2460,8 @@ namespace mnemos::manifests::nes {
             vrc6_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                         bool chr_is_ram, bool variant_b) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_16k_count_(prg.size() / k_prg_bank), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k), variant_b_(variant_b) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), variant_b_(variant_b),
+                  chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg16_ = 0U;
@@ -2619,16 +2470,12 @@ namespace mnemos::manifests::nes {
                 ppu_ctrl_ = 0U;
                 irq_.reset();
 
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank)); // 16 KiB switchable
                     bus_->map_rom(0xC000U, prg_.subspan(0, k_prg_8k));   // 8 KiB switchable
                     bus_->map_rom(0xE000U, prg_.subspan(0, k_prg_8k));   // 8 KiB fixed (last)
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
 
                 sound_.reset(chips::reset_kind::power_on);
                 sound_.set_clock_divider(37);
@@ -2727,32 +2574,19 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_16k_count_ == 0U) {
+                const std::size_t count8 = prg_8k_count();
+                if (count8 == 0U) {
                     return;
                 }
-                bus_->retarget_rom(
-                    0x8000U, prg_.subspan((prg16_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
-                map_prg8(0xC000U, prg8_);
-                map_prg8(0xE000U, prg_8k_count_ - 1U); // last 8 KiB fixed at $E000
+                map_prg_16k(0x8000U, prg16_);
+                map_prg_8k(0xC000U, prg8_);
+                map_prg_8k(0xE000U, count8 - 1U); // last 8 KiB fixed at $E000
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
-                    const std::size_t src = (chr_banks_[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, chr_banks_[s]);
                 }
             }
 
@@ -2775,9 +2609,6 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_16k_count_;
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             bool variant_b_;
             chips::audio::vrc6 sound_;
             std::uint8_t prg16_{};
@@ -2785,7 +2616,7 @@ namespace mnemos::manifests::nes {
             std::array<std::uint8_t, 8> chr_banks_{};
             std::uint8_t ppu_ctrl_{}; // $B003
             konami_vrc_irq irq_;      // $F000-$F002
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Namco 163 (iNES 19). PRG: three switchable 8 KiB banks ($8000/$A000/$C000
@@ -2802,8 +2633,7 @@ namespace mnemos::manifests::nes {
             namco163_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                             std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                             bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_regs_ = {0U, 0U, 0U};
@@ -2812,16 +2642,12 @@ namespace mnemos::manifests::nes {
                 irq_counter_ = 0U;
                 irq_enabled_ = false;
 
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
 
                 sound_.reset(chips::reset_kind::power_on);
                 sound_.set_clock_divider(37);
@@ -2967,32 +2793,20 @@ namespace mnemos::manifests::nes {
                 raise_irq(false); // writing the counter acknowledges a pending IRQ
             }
 
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
-                map_prg8(0x8000U, prg_regs_[0]);
-                map_prg8(0xA000U, prg_regs_[1]);
-                map_prg8(0xC000U, prg_regs_[2]);
-                map_prg8(0xE000U, prg_8k_count_ - 1U); // last 8 KiB fixed at $E000
+                map_prg_8k(0x8000U, prg_regs_[0]);
+                map_prg_8k(0xA000U, prg_regs_[1]);
+                map_prg_8k(0xC000U, prg_regs_[2]);
+                map_prg_8k(0xE000U, count - 1U); // last 8 KiB fixed at $E000
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
-                    const std::size_t src = (chr_banks_[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, chr_banks_[s]);
                 }
             }
 
@@ -3016,15 +2830,13 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             chips::audio::n163 sound_;
             std::array<std::uint8_t, 3> prg_regs_{}; // $8000/$A000/$C000 8 KiB selects
             std::array<std::uint8_t, 8> chr_banks_{};
             std::array<std::uint8_t, 4> nt_banks_{}; // nametable page selectors
             std::uint16_t irq_counter_{};            // 15-bit CPU-cycle up-counter
             bool irq_enabled_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Konami VRC2 / VRC4 (iNES 21/22/23/25). One chip family that differs only in
@@ -3042,8 +2854,7 @@ namespace mnemos::manifests::nes {
             vrc2_4_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                           std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                           bool chr_is_ram, int number) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k) {
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {
                 // (a_mask, b_mask) = the address bits forming index bit 0 / bit 1.
                 switch (number) {
                 case 21: // VRC4a (A1/A2) + VRC4c (A6/A7)
@@ -3079,16 +2890,12 @@ namespace mnemos::manifests::nes {
                 chr_bank_.fill(0U);
                 irq_.reset();
 
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
 
                 apply_prg();
                 apply_chr();
@@ -3183,40 +2990,28 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
-                const std::size_t second_last = prg_8k_count_ >= 2U ? prg_8k_count_ - 2U : 0U;
+                const std::size_t second_last = count >= 2U ? count - 2U : 0U;
                 if (swap_mode_) { // VRC4: $8000 fixed second-last, select moves to $C000
-                    map_prg8(0x8000U, second_last);
-                    map_prg8(0xC000U, prg0_);
+                    map_prg_8k(0x8000U, second_last);
+                    map_prg_8k(0xC000U, prg0_);
                 } else {
-                    map_prg8(0x8000U, prg0_);
-                    map_prg8(0xC000U, second_last);
+                    map_prg_8k(0x8000U, prg0_);
+                    map_prg_8k(0xC000U, second_last);
                 }
-                map_prg8(0xA000U, prg1_);
-                map_prg8(0xE000U, prg_8k_count_ - 1U); // last bank fixed at $E000
+                map_prg_8k(0xA000U, prg1_);
+                map_prg_8k(0xE000U, count - 1U); // last bank fixed at $E000
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 8U; ++s) {
                     const std::size_t bank =
                         chr_shift_ != 0 ? (chr_bank_[s] >> chr_shift_) : chr_bank_[s];
-                    const std::size_t src = (bank % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
+                    chr_win_.set_1k(s, bank);
                 }
             }
 
@@ -3238,8 +3033,6 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             std::uint16_t a_mask_{}; // address bit forming register-index bit 0
             std::uint16_t b_mask_{}; // address bit forming register-index bit 1
             bool is_vrc4_{};         // IRQ + PRG-swap + single-screen present
@@ -3250,7 +3043,7 @@ namespace mnemos::manifests::nes {
             std::uint8_t mirror_{};
             std::array<std::uint16_t, 8> chr_bank_{}; // 9-bit each (low + high nibble)
             konami_vrc_irq irq_;                      // $F000-$F003 (VRC4 only)
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // BNROM / NINA-001 (iNES 34). Two unrelated boards share the number; the CHR
@@ -3264,17 +3057,16 @@ namespace mnemos::manifests::nes {
                               std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                               bool chr_is_ram) noexcept
                 : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_32k_count_(prg.size() / k_prg_32k), chr_4k_count_(chr.size() / k_chr_4k),
-                  is_nina_(!chr_is_ram && chr.size() >= k_chr_8k) {}
+                  is_nina_(!chr_is_ram && chr.size() >= k_chr_8k), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_bank_ = 0U;
                 chr_bank_ = {0U, 1U};
-                if (prg_32k_count_ != 0U) {
+                if (prg_32k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_32k));
                 }
+                chr_win_.attach(*ppu_); // NINA: compose window; BNROM: 8 KiB CHR-RAM
                 if (is_nina_) {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
                     apply_chr();
                     // NINA-001 registers live in the $6000 RAM tail; capture writes to
                     // them (reads fall through to the RAM).
@@ -3283,7 +3075,6 @@ namespace mnemos::manifests::nes {
                         [this](std::uint32_t addr, std::uint8_t value) { write_nina(addr, value); },
                         1, [](std::uint32_t, bool is_write) { return is_write; });
                 } else {
-                    attach_chr(); // BNROM: 8 KiB CHR-RAM
                     install_register_write_hook();
                 }
             }
@@ -3327,28 +3118,16 @@ namespace mnemos::manifests::nes {
                     break;
                 }
             }
-            void apply_prg() {
-                if (prg_32k_count_ != 0U) {
-                    bus_->retarget_rom(
-                        0x8000U, prg_.subspan((prg_bank_ % prg_32k_count_) * k_prg_32k, k_prg_32k));
-                }
-            }
+            void apply_prg() { map_prg_32k(0x8000U, prg_bank_); }
             void apply_chr() {
-                if (chr_4k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t h = 0; h < 2U; ++h) {
-                    const std::size_t b = chr_bank_[h] % chr_4k_count_;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(b * k_chr_4k), k_chr_4k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(h * k_chr_4k));
+                    chr_win_.set_4k(h, chr_bank_[h]);
                 }
             }
-            std::size_t prg_32k_count_;
-            std::size_t chr_4k_count_;
             bool is_nina_;
             std::uint8_t prg_bank_{};
             std::array<std::uint8_t, 2> chr_bank_{0U, 1U};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Konami VRC1 (iNES 75). Three switchable 8 KiB PRG banks ($8000/$A000/$C000)
@@ -3359,24 +3138,19 @@ namespace mnemos::manifests::nes {
             vrc1_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                         bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_4k_count_(chr.size() / k_chr_4k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_reg_ = {0U, 0U, 0U};
                 chr_lo_ = {0U, 0U};
                 chr_hi_ = {0U, 0U};
                 mirror_ = 0U;
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply_prg();
                 apply_chr();
                 apply_mirroring();
@@ -3447,42 +3221,29 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
             void apply_prg() {
-                map_prg8(0x8000U, prg_reg_[0]);
-                map_prg8(0xA000U, prg_reg_[1]);
-                map_prg8(0xC000U, prg_reg_[2]);
-                map_prg8(0xE000U, prg_8k_count_ != 0U ? prg_8k_count_ - 1U : 0U);
+                const std::size_t count = prg_8k_count();
+                map_prg_8k(0x8000U, prg_reg_[0]);
+                map_prg_8k(0xA000U, prg_reg_[1]);
+                map_prg_8k(0xC000U, prg_reg_[2]);
+                map_prg_8k(0xE000U, count != 0U ? count - 1U : 0U);
             }
             void apply_chr() {
-                if (chr_is_ram_ || chr_4k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t h = 0; h < 2U; ++h) {
                     const std::size_t bank =
-                        ((static_cast<std::size_t>(chr_hi_[h]) << 4U) | chr_lo_[h]) % chr_4k_count_;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(bank * k_chr_4k),
-                                k_chr_4k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(h * k_chr_4k));
+                        (static_cast<std::size_t>(chr_hi_[h]) << 4U) | chr_lo_[h];
+                    chr_win_.set_4k(h, bank);
                 }
             }
             void apply_mirroring() {
                 using m = chips::video::ppu2c02::mirroring;
                 ppu_->set_mirroring(mirror_ != 0U ? m::horizontal : m::vertical);
             }
-            std::size_t prg_8k_count_;
-            std::size_t chr_4k_count_;
             std::array<std::uint8_t, 3> prg_reg_{}; // $8000/$A000/$C000 8 KiB selects
             std::array<std::uint8_t, 2> chr_lo_{};
             std::array<std::uint8_t, 2> chr_hi_{};
             std::uint8_t mirror_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Konami VRC3 (iNES 73, Salamander). A 16 KiB switchable PRG bank ($F000) over
@@ -3493,8 +3254,7 @@ namespace mnemos::manifests::nes {
             vrc3_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                         std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                         bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_16k_count_(prg.size() / k_prg_bank) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram) {}
 
             void reset() override {
                 prg_bank_ = 0U;
@@ -3503,10 +3263,10 @@ namespace mnemos::manifests::nes {
                 irq_enabled_ = false;
                 irq_ack_enable_ = false;
                 irq_8bit_ = false;
-                if (prg_16k_count_ != 0U) {
+                if (prg_16k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                     bus_->map_rom(0xC000U,
-                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                                  prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank));
                 }
                 attach_chr(); // 8 KiB CHR-RAM
                 apply_prg();
@@ -3596,14 +3356,7 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void apply_prg() {
-                if (prg_16k_count_ != 0U) {
-                    bus_->retarget_rom(
-                        0x8000U,
-                        prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
-                }
-            }
-            std::size_t prg_16k_count_;
+            void apply_prg() { map_prg_16k(0x8000U, prg_bank_); }
             std::uint8_t prg_bank_{};
             std::uint16_t irq_latch_{};
             std::uint16_t irq_counter_{};
@@ -3629,8 +3382,7 @@ namespace mnemos::manifests::nes {
             sunsoft4_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                             std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                             bool chr_is_ram) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram),
-                  prg_16k_count_(prg.size() / k_prg_bank), chr_2k_count_(chr.size() / k_chr_2k) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_bank_ = 0U;
@@ -3639,16 +3391,12 @@ namespace mnemos::manifests::nes {
                 mirror_ = 0U;
                 nt_from_chr_ = false;
 
-                if (prg_16k_count_ != 0U) {
+                if (prg_16k_count() != 0U) {
                     bus_->map_rom(0x8000U, prg_.subspan(0, k_prg_bank));
                     bus_->map_rom(0xC000U,
-                                  prg_.subspan((prg_16k_count_ - 1U) * k_prg_bank, k_prg_bank));
+                                  prg_.subspan((prg_16k_count() - 1U) * k_prg_bank, k_prg_bank));
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
 
                 apply_prg();
                 apply_chr();
@@ -3712,22 +3460,11 @@ namespace mnemos::manifests::nes {
             }
 
           private:
-            void apply_prg() {
-                if (prg_16k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(
-                    0x8000U, prg_.subspan((prg_bank_ % prg_16k_count_) * k_prg_bank, k_prg_bank));
-            }
+            void apply_prg() { map_prg_16k(0x8000U, prg_bank_); }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_2k_count_ == 0U) {
-                    return;
-                }
                 for (std::size_t s = 0; s < 4U; ++s) {
-                    const std::size_t src = (chr_banks_[s] % chr_2k_count_) * k_chr_2k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_2k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_2k));
+                    chr_win_.set_2k(s, chr_banks_[s]);
                 }
             }
 
@@ -3749,14 +3486,12 @@ namespace mnemos::manifests::nes {
                 }
             }
 
-            std::size_t prg_16k_count_;
-            std::size_t chr_2k_count_;
             std::uint8_t prg_bank_{};
             std::array<std::uint8_t, 4> chr_banks_{}; // $8000/$9000/$A000/$B000 2 KiB selects
             std::array<std::uint8_t, 2> nt_banks_{};  // $C000/$D000 CHR-ROM nametable pages
             std::uint8_t mirror_{};
             bool nt_from_chr_{}; // $E000 bit 4: CHR-ROM-backed nametables (inc2)
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
 
         // Taito TC0190 (iNES 33) / TC0690 (iNES 48). Two switchable 8 KiB PRG banks
@@ -3770,8 +3505,8 @@ namespace mnemos::manifests::nes {
             taito_tc0190_mapper(topology::bus& bus, chips::video::ppu2c02& ppu,
                                 std::span<const std::uint8_t> prg, std::span<std::uint8_t> chr,
                                 bool chr_is_ram, bool with_irq) noexcept
-                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), prg_8k_count_(prg.size() / k_prg_8k),
-                  chr_1k_count_(chr.size() / k_chr_1k), with_irq_(with_irq) {}
+                : nes_mapper(bus, ppu, prg, chr, chr_is_ram), with_irq_(with_irq),
+                  chr_win_(chr, chr_is_ram) {}
 
             void reset() override {
                 prg_bank_.fill(0U);
@@ -3782,16 +3517,12 @@ namespace mnemos::manifests::nes {
                 irq_counter_ = 0U;
                 irq_enabled_ = false;
                 irq_reload_ = false;
-                if (prg_8k_count_ != 0U) {
+                if (prg_8k_count() != 0U) {
                     for (const std::uint32_t slot : {0x8000U, 0xA000U, 0xC000U, 0xE000U}) {
                         bus_->map_rom(slot, prg_.subspan(0, k_prg_8k));
                     }
                 }
-                if (chr_is_ram_) {
-                    ppu_->attach_chr_ram(chr_);
-                } else {
-                    ppu_->attach_chr(std::span<const std::uint8_t>(chr_window_));
-                }
+                chr_win_.attach(*ppu_);
                 apply();
                 install_register_write_hook();
             }
@@ -3934,49 +3665,29 @@ namespace mnemos::manifests::nes {
                 apply_mirroring();
             }
 
-            void map_prg8(std::uint32_t slot, std::size_t bank8) {
-                if (prg_8k_count_ == 0U) {
-                    return;
-                }
-                bus_->retarget_rom(slot,
-                                   prg_.subspan((bank8 % prg_8k_count_) * k_prg_8k, k_prg_8k));
-            }
-
             void apply_prg() {
-                if (prg_8k_count_ == 0U) {
+                const std::size_t count = prg_8k_count();
+                if (count == 0U) {
                     return;
                 }
-                map_prg8(0x8000U, prg_bank_[0]);
-                map_prg8(0xA000U, prg_bank_[1]);
-                map_prg8(0xC000U, prg_8k_count_ >= 2U ? prg_8k_count_ - 2U : 0U);
-                map_prg8(0xE000U, prg_8k_count_ - 1U);
+                map_prg_8k(0x8000U, prg_bank_[0]);
+                map_prg_8k(0xA000U, prg_bank_[1]);
+                map_prg_8k(0xC000U, count >= 2U ? count - 2U : 0U);
+                map_prg_8k(0xE000U, count - 1U);
             }
 
             void apply_chr() {
-                if (chr_is_ram_ || chr_1k_count_ == 0U) {
-                    return;
-                }
-                // Two 2 KiB banks then four 1 KiB banks -> eight 1 KiB window slots.
-                const std::array<std::size_t, 8> slot = {
-                    static_cast<std::size_t>(chr2k_[0]) * 2U,
-                    static_cast<std::size_t>(chr2k_[0]) * 2U + 1U,
-                    static_cast<std::size_t>(chr2k_[1]) * 2U,
-                    static_cast<std::size_t>(chr2k_[1]) * 2U + 1U,
-                    chr1k_[0],
-                    chr1k_[1],
-                    chr1k_[2],
-                    chr1k_[3]};
-                for (std::size_t s = 0; s < slot.size(); ++s) {
-                    const std::size_t src = (slot[s] % chr_1k_count_) * k_chr_1k;
-                    std::copy_n(chr_.begin() + static_cast<std::ptrdiff_t>(src), k_chr_1k,
-                                chr_window_.begin() + static_cast<std::ptrdiff_t>(s * k_chr_1k));
-                }
+                // Two 2 KiB banks ($0000/$0800) then four 1 KiB banks ($1000-$1FFF).
+                chr_win_.set_2k(0U, chr2k_[0]);
+                chr_win_.set_2k(1U, chr2k_[1]);
+                chr_win_.set_1k(4U, chr1k_[0]);
+                chr_win_.set_1k(5U, chr1k_[1]);
+                chr_win_.set_1k(6U, chr1k_[2]);
+                chr_win_.set_1k(7U, chr1k_[3]);
             }
 
             void apply_mirroring() { apply_mirror_mode(*ppu_, mirror_); }
 
-            std::size_t prg_8k_count_;
-            std::size_t chr_1k_count_;
             bool with_irq_;
             std::array<std::uint8_t, 2> prg_bank_{}; // $8000 / $A000 8 KiB selects
             std::array<std::uint8_t, 2> chr2k_{};    // $0000 / $0800 2 KiB selects
@@ -3986,7 +3697,7 @@ namespace mnemos::manifests::nes {
             std::uint8_t irq_counter_{};
             bool irq_enabled_{};
             bool irq_reload_{};
-            std::array<std::uint8_t, 0x2000U> chr_window_{};
+            chr_window chr_win_;
         };
     } // namespace
 
