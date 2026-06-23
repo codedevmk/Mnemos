@@ -2,6 +2,7 @@ add_library(
     mnemos_manifests_nes
     fds.cpp
     nes_mapper.cpp
+    nes_mapper_bandai.cpp
     nes_mapper_discrete.cpp
     nes_mapper_konami.cpp
     nes_mapper_mmc3.cpp
