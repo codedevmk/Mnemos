@@ -60,6 +60,7 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_nes_test
         SOURCES
+            tests/nes_fds_test.cpp
             tests/nes_system_test.cpp
             tests/nes_mapper_mmc2_4_test.cpp
         LIBRARIES mnemos::manifests::nes

@@ -53,6 +53,7 @@ if(BUILD_TESTING)
             tests/animation_export_test.cpp
             tests/debug_dump_test.cpp
             tests/capability_discovery_test.cpp
+            tests/capability_discovery_media_test.cpp
             tests/game_watch_test.cpp
             tests/asset_export_test.cpp
             tests/audio_export_test.cpp
