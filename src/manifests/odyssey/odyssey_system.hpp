@@ -1,11 +1,8 @@
 #pragma once
 
-#include "state.hpp"
-
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 namespace mnemos::manifests::odyssey {
 
@@ -85,9 +82,6 @@ namespace mnemos::manifests::odyssey {
         void tick_frame() noexcept;
         [[nodiscard]] const odyssey_frame& render_frame() noexcept;
 
-        void save_state(chips::state_writer& writer) const;
-        void load_state(chips::state_reader& reader) noexcept;
-
         [[nodiscard]] odyssey_observable_state observable_state() const noexcept;
         [[nodiscard]] odyssey_card card() const noexcept { return card_; }
         [[nodiscard]] std::uint64_t frame_counter() const noexcept { return frame_counter_; }
@@ -106,7 +100,6 @@ namespace mnemos::manifests::odyssey {
         };
 
         [[nodiscard]] static card_wiring wiring_for(odyssey_card card) noexcept;
-        [[nodiscard]] static bool is_valid_card(odyssey_card card) noexcept;
         [[nodiscard]] std::int16_t map_x(float value) const noexcept;
         [[nodiscard]] std::int16_t map_y(float value) const noexcept;
         void apply_controller_positions() noexcept;
