@@ -381,3 +381,88 @@ TEST_CASE("ym2413 key-on does not click (phase reset deferred to damp)", "[ym241
     }
     CHECK(maxdelta < 800); // a clean transition, not a key-on click
 }
+
+namespace {
+    // Put the chip into rhythm mode with channels 6-8 pitched + at full drum volume,
+    // then key the percussion voices named by `rhythm_keys` (the $0E low bits). Done
+    // as a fresh chip so each call is independent.
+    void configure_rhythm(ym2413& chip, std::uint8_t rhythm_keys) {
+        for (std::uint8_t ch = 6; ch <= 8; ++ch) {
+            write_reg(chip, static_cast<std::uint8_t>(ym2413::reg_fnum_low_base + ch), 0xA0);
+            // $20: block 4 (bits 3-1) + F-Number high bit; the melodic key-on bit is
+            // ignored for these channels once rhythm mode is on.
+            write_reg(chip, static_cast<std::uint8_t>(ym2413::reg_control_base + ch), 0x18);
+            // $36/$37/$38 = 0: both drum-volume nibbles loudest.
+            write_reg(chip, static_cast<std::uint8_t>(ym2413::reg_inst_vol_base + ch), 0x00);
+        }
+        write_reg(chip, ym2413::reg_rhythm, static_cast<std::uint8_t>(0x20U | rhythm_keys));
+    }
+} // namespace
+
+TEST_CASE("ym2413 rhythm mode keys each percussion voice", "[ym2413][audio]") {
+    // Each of the five drum key bits, in isolation, must produce audible output:
+    // BD=0x10, SD=0x08, TOM=0x04, TC=0x02, HH=0x01.
+    for (const int bit : {0x10, 0x08, 0x04, 0x02, 0x01}) {
+        ym2413 chip;
+        configure_rhythm(chip, static_cast<std::uint8_t>(bit));
+        CHECK(peak_abs(chip, 4000) > 0);
+    }
+}
+
+TEST_CASE("ym2413 rhythm mode is silent with no percussion keyed", "[ym2413][audio]") {
+    // Enabling rhythm mode without keying any drum leaves channels 6-8 silent.
+    ym2413 chip;
+    configure_rhythm(chip, 0x00);
+    CHECK(peak_abs(chip, 4000) == 0);
+}
+
+TEST_CASE("ym2413 rhythm leaving the mode restores the melodic voices", "[ym2413][audio]") {
+    // Key the bass drum, let it sound, then clear rhythm mode: channel 6 reverts to
+    // a (silent, un-keyed) melodic voice and the drum stops.
+    ym2413 chip;
+    configure_rhythm(chip, 0x10);
+    REQUIRE(peak_abs(chip, 1000) > 0);
+    write_reg(chip, ym2413::reg_rhythm, 0x00); // rhythm off
+    CHECK(peak_abs(chip, 4000) == 0);
+}
+
+TEST_CASE("ym2413 rhythm noise gives the hi-hat an aperiodic signal", "[ym2413][audio]") {
+    // The hi-hat is driven by the noise LFSR, so its waveform does not settle into a
+    // short repeating period the way a pure tone does: successive windows differ.
+    ym2413 chip;
+    configure_rhythm(chip, 0x01); // hi-hat only
+    std::array<std::int16_t, 8000U * 2U> buf{};
+    chip.generate(buf);
+    // Compare two disjoint late windows sample-for-sample; a periodic tone would
+    // line up, noise will not.
+    int diff = 0;
+    for (std::size_t i = 0; i < 1000U; ++i) {
+        diff = std::max(diff, std::abs(static_cast<int>(buf[(4000U + i) * 2U]) -
+                                       static_cast<int>(buf[(6000U + i) * 2U])));
+    }
+    CHECK(diff > 0);
+}
+
+TEST_CASE("ym2413 rhythm state save/load round-trips bit-identically", "[ym2413][audio]") {
+    // Run rhythm mode (advancing the noise LFSR + percussion EGs), snapshot, then
+    // verify a reloaded chip continues identically -- this exercises the serialized
+    // noise register and the drum operator state.
+    ym2413 src;
+    configure_rhythm(src, 0x1F); // all five drums keyed
+    std::array<std::int16_t, 2000U> warm{};
+    src.generate(warm);
+
+    std::vector<std::uint8_t> blob;
+    state_writer w(blob);
+    src.save_state(w);
+
+    ym2413 dst;
+    state_reader r(blob);
+    dst.load_state(r);
+
+    std::array<std::int16_t, 2000U> a{};
+    std::array<std::int16_t, 2000U> b{};
+    src.generate(a);
+    dst.generate(b);
+    CHECK(a == b);
+}
