@@ -44,6 +44,16 @@ namespace mnemos::chips::audio {
             {0x41, 0x41, 0x89, 0x03, 0xF1, 0xE4, 0xC0, 0x13}, // F: Electric Guitar
         }};
 
+        // Rhythm-mode percussion patches (the OPLL's three fixed drum instruments),
+        // same 8-byte register layout as preset_rom. In rhythm mode channels 6-8 are
+        // repurposed: ch6 = Bass Drum (a normal 2-op voice), ch7 = Hi-Hat (op0) +
+        // Snare (op1), ch8 = Tom-Tom (op0) + Top Cymbal (op1).
+        constexpr std::array<std::array<std::uint8_t, 8>, 3> rhythm_rom = {{
+            {0x01, 0x01, 0x18, 0x0F, 0xDF, 0xF8, 0x6A, 0x6D}, // Bass Drum (ch6)
+            {0x01, 0x01, 0x00, 0x00, 0xC8, 0xD8, 0xA7, 0x48}, // Hi-Hat + Snare (ch7)
+            {0x05, 0x01, 0x00, 0x00, 0xF8, 0xAA, 0x59, 0x55}, // Tom-Tom + Top Cymbal (ch8)
+        }};
+
         // Frequency multiplier table: MULTI=0 maps to 0.5 (represented here as 1
         // with the final >>1; 1..15 map to the listed integer multipliers,
         // doubled so the shared >>1 yields the real value).
@@ -288,7 +298,55 @@ namespace mnemos::chips::audio {
             return;
         }
         if (regaddr == reg_rhythm) {
+            const std::uint8_t prev = rhythm_ctrl_;
             rhythm_ctrl_ = value;
+            const bool was_on = (prev & 0x20U) != 0U;
+            const bool now_on = (value & 0x20U) != 0U;
+            if (now_on && !was_on) {
+                // Entering rhythm mode: load the three drum patches into channels
+                // 6-8 and silence them until their percussion key bits assert.
+                for (int ch = 6; ch <= 8; ++ch) {
+                    apply_instrument(channels_[static_cast<std::size_t>(ch)],
+                                     std::span<const std::uint8_t, 8>(
+                                         rhythm_rom[static_cast<std::size_t>(ch - 6)]));
+                    for (auto& o : channels_[static_cast<std::size_t>(ch)].op) {
+                        o.state = eg_state::off;
+                        o.eg_level = 0x1FFU;
+                        o.phase = 0U;
+                    }
+                }
+            } else if (!now_on && was_on) {
+                // Leaving rhythm mode: restore melodic instruments and silence any
+                // percussion still ringing.
+                for (int ch = 6; ch <= 8; ++ch) {
+                    refresh_channel_instrument(ch);
+                    for (auto& o : channels_[static_cast<std::size_t>(ch)].op) {
+                        o.state = eg_state::off;
+                        o.eg_level = 0x1FFU;
+                    }
+                }
+            }
+            if (now_on) {
+                // Percussion key bits: BD=0x10 keys both ch6 operators; HH=0x01
+                // (ch7 op0), SD=0x08 (ch7 op1), TOM=0x04 (ch8 op0), TC=0x02 (ch8
+                // op1). A rising edge retriggers (damp -> attack), a falling edge
+                // releases.
+                const auto key = [&](op_state& o, std::uint8_t mask) {
+                    const bool on = (value & mask) != 0U;
+                    const bool was = (prev & mask) != 0U;
+                    if (on && !was) {
+                        o.state = eg_state::damp;
+                    } else if (!on && was) {
+                        o.state = eg_state::release;
+                    }
+                };
+                key(channels_[6].op[0], 0x10U);
+                key(channels_[6].op[1], 0x10U);
+                key(channels_[7].op[0], 0x01U);
+                key(channels_[7].op[1], 0x08U);
+                key(channels_[8].op[0], 0x04U);
+                key(channels_[8].op[1], 0x02U);
+            }
             return;
         }
         if (regaddr == reg_test) {
@@ -334,7 +392,12 @@ namespace mnemos::chips::audio {
             channel_state& c = channels_[static_cast<std::size_t>(ch)];
             c.instrument = static_cast<std::uint8_t>((value >> 4U) & 0x0FU);
             c.volume = static_cast<std::uint8_t>(value & 0x0FU);
-            refresh_channel_instrument(ch);
+            // In rhythm mode the high channels (6-8) are the drums: their $30 nibbles
+            // are percussion volumes (high = modulator-slot drum, low = carrier-slot
+            // drum), not an instrument select -- keep the loaded drum patch.
+            if (!((rhythm_ctrl_ & 0x20U) != 0U && ch >= 6)) {
+                refresh_channel_instrument(ch);
+            }
             return;
         }
     }
@@ -511,12 +574,106 @@ namespace mnemos::chips::audio {
         return out;
     }
 
+    std::int32_t ym2413::rhythm_mix() noexcept {
+        channel_state& c6 = channels_[6];
+        channel_state& c7 = channels_[7];
+        channel_state& c8 = channels_[8];
+
+        // Advance the channel 7/8 operator phases (channel 6 is advanced by
+        // channel_sample below). Percussion ignores vibrato.
+        const auto advance = [](op_state& o, const channel_state& c) {
+            const std::uint32_t base = (static_cast<std::uint32_t>(c.f_number) << c.block) >> 1U;
+            o.phase += (base * multi_table[o.multi]) >> 1U;
+        };
+        advance(c7.op[0], c7);
+        advance(c7.op[1], c7);
+        advance(c8.op[0], c8);
+        advance(c8.op[1], c8);
+
+        // One operator's output at an explicit 11-bit phase, attenuated by its
+        // envelope plus a 4-bit volume nibble (3 dB/step, like a melody carrier). No
+        // KSL/AM/PM on percussion.
+        const auto op_out = [](const op_state& o, std::uint16_t phase11,
+                               std::uint8_t vol) -> std::int32_t {
+            const std::int32_t lg = sine_log(phase11, o.wf);
+            const std::int32_t at = (lg & 0x0FFF) + (static_cast<std::int32_t>(vol) << 7) +
+                                    (static_cast<std::int32_t>(o.eg_level) << 4);
+            std::int32_t lin = log_to_linear(static_cast<std::uint16_t>(std::min(at, 0x1FFF)));
+            return (lg & 0x1000) != 0 ? -lin : lin;
+        };
+
+        const bool noise = (noise_rng_ & 0x01U) != 0U;
+        std::int32_t out = 0;
+
+        // Bass Drum: channel 6 as a normal 2-op FM voice, doubled.
+        if (c6.op[1].state != eg_state::off) {
+            out += 2 * channel_sample(c6);
+        }
+
+        // Hi-Hat and Top Cymbal share a set of phase bits taken from channel 7's
+        // modulator and channel 8's carrier.
+        const std::uint32_t idx7 = c7.op[0].phase >> 9U;
+        const std::uint32_t idx8 = c8.op[1].phase >> 9U;
+        const bool b2 = ((idx7 >> 3U) & 1U) != 0U;
+        const bool b3 = ((idx7 >> 4U) & 1U) != 0U;
+        const bool b7 = ((idx7 >> 8U) & 1U) != 0U;
+        const bool res1 = (b2 != b7) || b3;
+        const bool b3e = ((idx8 >> 4U) & 1U) != 0U;
+        const bool b5e = ((idx8 >> 6U) & 1U) != 0U;
+        const bool res2 = (b3e != b5e);
+
+        // Hi-Hat (ch7 op0): volume = $37 high nibble (channels_[7].instrument).
+        if (c7.op[0].state != eg_state::off) {
+            std::uint16_t ph = res1 ? 0x468U : 0x1A0U;
+            if (res2) {
+                ph = 0x468U;
+            }
+            if ((ph & 0x400U) != 0U) {
+                if (noise) {
+                    ph = 0x5A0U;
+                }
+            } else if (noise) {
+                ph = 0x68U;
+            }
+            out += 2 * op_out(c7.op[0], ph, c7.instrument);
+        }
+        // Snare Drum (ch7 op1): phase from ch7 op0 bit 8 XOR noise; volume = $37 low.
+        if (c7.op[1].state != eg_state::off) {
+            const bool b8 = ((idx7 >> 9U) & 1U) != 0U;
+            std::uint16_t ph = b8 ? 0x400U : 0x200U;
+            if (noise) {
+                ph ^= 0x200U;
+            }
+            out += 2 * op_out(c7.op[1], ph, c7.volume);
+        }
+        // Tom-Tom (ch8 op0): its own phase; volume = $38 high nibble.
+        if (c8.op[0].state != eg_state::off) {
+            out +=
+                2 * op_out(c8.op[0], static_cast<std::uint16_t>((c8.op[0].phase >> 9U) & 0x07FFU),
+                           c8.instrument);
+        }
+        // Top Cymbal (ch8 op1): shares the Hi-Hat phase bits; volume = $38 low nibble.
+        if (c8.op[1].state != eg_state::off) {
+            std::uint16_t ph = res1 ? 0x600U : 0x200U;
+            if (res2) {
+                ph = 0x600U;
+            }
+            out += 2 * op_out(c8.op[1], ph, c8.volume);
+        }
+        return out;
+    }
+
     void ym2413::step() noexcept {
         ++eg_counter_;
         ++am_counter_; // AM/VIB LFOs advance once per native sample (not per channel)
         ++vib_counter_;
         std::int32_t mix = 0;
-        for (auto& c : channels_) {
+        const bool rhythm = (rhythm_ctrl_ & 0x20U) != 0U;
+        // In rhythm mode channels 6-8 become the percussion voices (handled by
+        // rhythm_mix); only 0-5 run the melodic path.
+        const int melody_channels = rhythm ? 6 : channel_count;
+        for (int i = 0; i < melody_channels; ++i) {
+            channel_state& c = channels_[static_cast<std::size_t>(i)];
             // A channel contributes only while its carrier envelope is live.
             if (c.op[1].state == eg_state::off) {
                 continue;
@@ -529,6 +686,22 @@ namespace mnemos::chips::audio {
                 static_cast<std::uint8_t>((c.block << 1U) | ((c.f_number >> 8U) & 0x01U));
             op_eg_tick(c.op[0], keycode);
             op_eg_tick(c.op[1], keycode);
+        }
+        if (rhythm) {
+            mix += rhythm_mix();
+            // Tick the percussion operators' envelopes, then advance the noise LFSR
+            // once per native sample (taps per the OPLL: XOR then shift).
+            for (int ch = 6; ch <= 8; ++ch) {
+                channel_state& c = channels_[static_cast<std::size_t>(ch)];
+                const auto keycode =
+                    static_cast<std::uint8_t>((c.block << 1U) | ((c.f_number >> 8U) & 0x01U));
+                op_eg_tick(c.op[0], keycode);
+                op_eg_tick(c.op[1], keycode);
+            }
+            if ((noise_rng_ & 1U) != 0U) {
+                noise_rng_ ^= 0x800302U;
+            }
+            noise_rng_ >>= 1U;
         }
         mix = std::clamp(mix, -32768, 32767);
         last_sample_ = static_cast<std::int16_t>(mix);
@@ -579,6 +752,7 @@ namespace mnemos::chips::audio {
         am_counter_ = 0U;
         vib_counter_ = 0U;
         eg_counter_ = 0U;
+        noise_rng_ = 1U;
         channels_ = {};
         for (auto& c : channels_) {
             // Power-up baseline: silent volume, both operators off + fully
@@ -632,6 +806,7 @@ namespace mnemos::chips::audio {
         writer.u32(am_counter_);
         writer.u32(vib_counter_);
         writer.u32(eg_counter_);
+        writer.u32(noise_rng_);
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
         writer.u32(static_cast<std::uint32_t>(prescaler_));
         writer.u16(static_cast<std::uint16_t>(last_sample_));
@@ -675,6 +850,7 @@ namespace mnemos::chips::audio {
         am_counter_ = reader.u32();
         vib_counter_ = reader.u32();
         eg_counter_ = reader.u32();
+        noise_rng_ = reader.u32();
         clock_divider_ = static_cast<int>(reader.u32());
         prescaler_ = static_cast<int>(reader.u32());
         last_sample_ = static_cast<std::int16_t>(reader.u16());

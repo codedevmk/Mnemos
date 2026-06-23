@@ -145,6 +145,9 @@ namespace mnemos::chips::audio {
         void refresh_channel_instrument(int ch_index) noexcept;
         void op_eg_tick(op_state& o, std::uint8_t keycode) noexcept;
         [[nodiscard]] std::int32_t channel_sample(channel_state& c) noexcept;
+        // Sum of the five percussion voices when rhythm mode ($0E bit 5) is on.
+        // Advances the phases of channels 6-8 (repurposed as the drum operators).
+        [[nodiscard]] std::int32_t rhythm_mix() noexcept;
 
         std::array<std::uint8_t, user_instrument_size> user_instrument_{};
         std::uint8_t rhythm_ctrl_{};
@@ -157,6 +160,8 @@ namespace mnemos::chips::audio {
         std::uint32_t am_counter_{};
         std::uint32_t vib_counter_{};
         std::uint32_t eg_counter_{};
+        // 23-bit noise LFSR feeding the hi-hat and cymbal voices in rhythm mode.
+        std::uint32_t noise_rng_{1U};
 
         std::int16_t last_sample_{};
 
