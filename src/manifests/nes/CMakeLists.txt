@@ -9,6 +9,7 @@ add_library(
     nes_mapper_mmc1.cpp
     nes_mapper_mmc3.cpp
     nes_mapper_sunsoft.cpp
+    nes_mapper_taito.cpp
     nes_system.cpp
 )
 add_library(mnemos::manifests::nes ALIAS mnemos_manifests_nes)
