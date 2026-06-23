@@ -4,6 +4,7 @@ add_library(
     nes_mapper.cpp
     nes_mapper_bandai.cpp
     nes_mapper_discrete.cpp
+    nes_mapper_jaleco.cpp
     nes_mapper_konami.cpp
     nes_mapper_mmc1.cpp
     nes_mapper_mmc3.cpp
