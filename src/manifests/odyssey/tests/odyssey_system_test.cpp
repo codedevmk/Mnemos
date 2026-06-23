@@ -14,8 +14,7 @@ namespace {
     using mnemos::manifests::odyssey::odyssey_controller;
 
     [[nodiscard]] std::size_t lit_pixels(std::span<const std::uint8_t> luma) {
-        return static_cast<std::size_t>(
-            std::ranges::count(luma, static_cast<std::uint8_t>(255U)));
+        return static_cast<std::size_t>(std::ranges::count(luma, static_cast<std::uint8_t>(255U)));
     }
 } // namespace
 
