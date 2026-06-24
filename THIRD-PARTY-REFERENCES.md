@@ -75,6 +75,14 @@ multiple independent open-source implementations.
 - **C64 cartridge `.crt` container** — the de-facto community format
   originally defined by the CCS64 project and adopted by all subsequent C64
   emulators.
+- **Taito F2 custom-chip behaviour** — TC0100SCN/TC0200OBJ/TC0280GRD/TC0430GRW/
+  TC0480SCP/TC0190FMC board maps, register effects, and priority interactions are
+  treated as behavioural facts to cross-check against public hardware notes and
+  independent emulator behaviour, not as source material. Mnemos keeps those facts
+  behind its own chip contracts, manifests, tests, and save-state model. ROM file
+  names, byte counts, load offsets, and CRCs are catalog facts required to load
+  user-provided sets; Mnemos records them in its own manifests and does not import
+  MAME driver macros, implementation code, comments, or table structure.
 
 ## Cartridge / mapper protocol notes
 

@@ -1,5 +1,5 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2) with the --rom media (zip
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / taito_f2 / cps1 / cps2) with the --rom media (zip
 // archives are extracted transparently), presents its framebuffer at integer
 // scale, streams audio, and routes keyboard + gamepad input. ESC quits.
 

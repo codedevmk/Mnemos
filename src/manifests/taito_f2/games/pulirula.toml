@@ -1,0 +1,113 @@
+# PuLiRuLa (World) -- Taito F2 / C98 dual-PCB set.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps TC0100SCN SCR
+# graphics, "sprites" maps TC0200OBJ object graphics, "roz" maps the
+# TC0430GRW pivot graphics, and YM2610 ADPCM-A is "adpcma". This set has no
+# Delta-T sample region.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "pulirula"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "pulirula"
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_policy = "extension_2"
+taito_f2_sprite_buffering = "partial_delayed"
+taito_f2_sprite_extension_base = 0x600000
+taito_f2_sprite_extension_size = 0x4000
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x0c0000
+
+[[region.file]]
+name   = "c98-12.rom"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x816d6cde
+
+[[region.file]]
+name   = "c98-16.rom"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0x59df5c77
+
+[[region.file]]
+name   = "c98-06.rom"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x64a71b45
+
+[[region.file]]
+name   = "c98-07.rom"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0x90195bc0
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "c98-04.rom"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0x0e1fe3b2
+
+[[region]]
+name = "sprites"
+size = 0x200000
+
+[[region.file]]
+name   = "c98-02.rom"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x4a2ad2b3
+
+[[region.file]]
+name   = "c98-03.rom"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x589a678f
+
+[[region]]
+name = "roz"
+size = 0x080000
+
+[[region.file]]
+name   = "c98-05.rom"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0x9ddd9c39
+
+[[region]]
+name = "audiocpu"
+size = 0x20000
+
+[[region.file]]
+name   = "c98-14.rom"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xa858e17c
+
+[[region]]
+name = "adpcma"
+size = 0x100000
+
+[[region.file]]
+name   = "c98-01.rom"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x197f66f5

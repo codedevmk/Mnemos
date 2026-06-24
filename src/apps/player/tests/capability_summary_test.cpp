@@ -6,6 +6,7 @@
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
 #include "sms_adapter.hpp"
+#include "taito_f2_adapter.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -24,6 +25,7 @@ namespace {
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
     namespace segacd = mnemos::apps::player::adapters::segacd;
     namespace sms = mnemos::apps::player::adapters::sms;
+    namespace taito_f2 = mnemos::apps::player::adapters::taito_f2;
 
     [[nodiscard]] std::vector<std::uint8_t> genesis_cart() {
         std::vector<std::uint8_t> rom(0x100U, 0x00U);
@@ -135,6 +137,18 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> taito_f2_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::taito_f2::main_rom_size, 0xFFU);
+        poke32_be(rom, 0x0U, mnemos::manifests::taito_f2::work_ram_base +
+                                mnemos::manifests::taito_f2::work_ram_size);
+        poke32_be(rom, 0x4U, 0x00000400U);
+        poke16_be(rom, 0x400U, 0x33FCU);
+        poke16_be(rom, 0x402U, 0x4242U);
+        poke32_be(rom, 0x404U, mnemos::manifests::taito_f2::work_ram_base);
+        poke16_be(rom, 0x408U, 0x60FEU);
+        return rom;
+    }
+
     [[nodiscard]] std::string summary_for(const mnemos::frontend_sdk::player_system& system) {
         return mnemos::debug::format_capability_summary(
             mnemos::debug::discover_dump_capabilities(system));
@@ -224,6 +238,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M72") {
         irem_m72::irem_m72_adapter adapter(irem_m72_program(), "Tiny M72");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.rom_set");
+    }
+
+    SECTION("Taito F2") {
+        taito_f2::taito_f2_adapter adapter(taito_f2_program(), "Tiny Taito F2");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary);
         require_degraded_media(summary, "media.rom_set");

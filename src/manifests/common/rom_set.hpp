@@ -73,8 +73,8 @@ namespace mnemos::manifests::common {
         // own files first, then the parent's) -- every file is still CRC-verified
         // regardless of which zip supplied it. Absent => a standalone set.
         // Constrained to a plain set id by the loader (no path separators).
-        // NOTE: only the capcom_cps1 adapter currently consumes this (it threads
-        // adapter_options.rom_path and composes the fallback); other boards parse
+        // NOTE: capcom_cps1 and taito_f2 consume this by threading
+        // adapter_options.rom_path and composing the fallback. Other boards parse
         // it but ignore it, so a `parent` there would report the shared files
         // missing. Single level only -- the parent set must be standalone, not
         // itself a clone.
@@ -95,6 +95,18 @@ namespace mnemos::manifests::common {
         // Optional Kabuki-encrypted-sound key name (board-interpreted): capcom_cps1
         // reads "dino" / "wof" / "punisher" to decrypt the QSound Z80 program.
         std::optional<std::string> kabuki;
+        // Optional Taito F2 board wiring selectors. The family is not one fixed
+        // decode: games move the IO/sound/video windows and several need distinct
+        // sprite buffering or banking behavior.
+        std::optional<std::string> taito_f2_map;
+        std::optional<std::string> taito_f2_sprite_policy;
+        std::optional<std::string> taito_f2_sprite_buffering;
+        std::optional<std::string> taito_f2_palette_format;
+        std::optional<std::uint32_t> taito_f2_sprite_extension_base;
+        std::optional<std::uint32_t> taito_f2_sprite_extension_size;
+        std::optional<std::string> taito_f2_sprite_active_area;
+        std::optional<std::int16_t> taito_f2_sprite_hide_pixels;
+        std::optional<std::int16_t> taito_f2_sprite_flip_hide_pixels;
         std::vector<rom_set_region> regions;
     };
 

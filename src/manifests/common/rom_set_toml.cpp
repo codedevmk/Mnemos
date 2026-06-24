@@ -87,6 +87,19 @@ namespace mnemos::manifests::common {
             return std::nullopt;
         }
 
+        [[nodiscard]] std::optional<std::int64_t> read_signed(const parse_context& ctx,
+                                                              const toml::node& node,
+                                                              std::string_view key,
+                                                              std::string_view where) {
+            if (const auto* value = node.as_integer()) {
+                return value->get();
+            }
+            ctx.error("'" + std::string(key) + "' in " + std::string(where) +
+                          " must be an integer",
+                      &node);
+            return std::nullopt;
+        }
+
         // crc32 accepts a TOML integer or a hex string ("DEADBEEF" / "0x...").
         [[nodiscard]] std::optional<std::uint32_t>
         read_crc32(const parse_context& ctx, const toml::node& node, std::string_view where) {
@@ -240,7 +253,11 @@ namespace mnemos::manifests::common {
         if (const auto* set = root.get_as<toml::table>("set")) {
             check_keys(ctx, *set,
                        {"schema", "name", "board", "parent", "cps_b_profile", "orientation",
-                        "sprite_order", "sound", "kabuki"},
+                        "sprite_order", "sound", "kabuki", "taito_f2_map",
+                        "taito_f2_sprite_policy", "taito_f2_sprite_buffering",
+                        "taito_f2_palette_format", "taito_f2_sprite_extension_base",
+                        "taito_f2_sprite_extension_size", "taito_f2_sprite_active_area",
+                        "taito_f2_sprite_hide_pixels", "taito_f2_sprite_flip_hide_pixels"},
                        "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
@@ -341,6 +358,159 @@ namespace mnemos::manifests::common {
                     decl.kabuki = value->get();
                 } else {
                     ctx.error("'kabuki' in [set] must be a string", node);
+                }
+            }
+            // Optional Taito F2 selectors. Keep the schema strict enough to catch
+            // typos in per-game manifests while leaving the board code in charge
+            // of interpreting the behavior.
+            if (const toml::node* node = set->get("taito_f2_map")) {
+                if (const auto* value = node->as_string()) {
+                    const std::string& map = value->get();
+                    if (map == "synthetic" || map == "dondokod" || map == "gunfront" ||
+                        map == "liquidk" || map == "pulirula" || map == "quizhq" ||
+                        map == "qtorimon" || map == "qzchikyu" || map == "qzquest" ||
+                        map == "metalb" || map == "footchmp" || map == "deadconx" ||
+                        map == "dinorex" || map == "thundfox" || map == "growl" ||
+                        map == "ninjak" || map == "solfigtr") {
+                        decl.taito_f2_map = map;
+                    } else {
+                        ctx.error("'taito_f2_map' in [set] must be \"synthetic\", "
+                                  "\"dondokod\", \"gunfront\", \"liquidk\", \"pulirula\", or "
+                                  "\"quizhq\", \"qtorimon\", \"qzchikyu\", \"qzquest\", "
+                                  "\"metalb\", \"footchmp\", \"deadconx\", \"dinorex\", "
+                                  "\"thundfox\", \"growl\", \"ninjak\", or \"solfigtr\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'taito_f2_map' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_policy")) {
+                if (const auto* value = node->as_string()) {
+                    const std::string& policy = value->get();
+                    if (policy == "standard" || policy == "partial_buffer" ||
+                        policy == "banked" || policy == "extension_1" ||
+                        policy == "extension_2" || policy == "extension_3") {
+                        decl.taito_f2_sprite_policy = policy;
+                    } else {
+                        ctx.error("'taito_f2_sprite_policy' in [set] must be a known "
+                                  "Taito F2 sprite policy",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'taito_f2_sprite_policy' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_buffering")) {
+                if (const auto* value = node->as_string()) {
+                    const std::string& buffering = value->get();
+                    if (buffering == "immediate" || buffering == "full_delayed" ||
+                        buffering == "partial_delayed" ||
+                        buffering == "partial_delayed_thundfox" ||
+                        buffering == "partial_delayed_qzchikyu") {
+                        decl.taito_f2_sprite_buffering = buffering;
+                    } else {
+                        ctx.error("'taito_f2_sprite_buffering' in [set] must be a known "
+                                  "Taito F2 sprite-buffer policy",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'taito_f2_sprite_buffering' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_palette_format")) {
+                if (const auto* value = node->as_string()) {
+                    const std::string& format = value->get();
+                    if (format == "xbgr_555" || format == "rgbx_444" ||
+                        format == "xrgb_555") {
+                        decl.taito_f2_palette_format = format;
+                    } else {
+                        ctx.error("'taito_f2_palette_format' in [set] must be "
+                                  "\"xbgr_555\", \"rgbx_444\", or \"xrgb_555\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'taito_f2_palette_format' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_active_area")) {
+                if (const auto* value = node->as_string()) {
+                    const std::string& active_area = value->get();
+                    if (active_area == "mode_default" || active_area == "none" ||
+                        active_area == "control_word_bit0" || active_area == "y_word_bit0") {
+                        decl.taito_f2_sprite_active_area = active_area;
+                    } else {
+                        ctx.error("'taito_f2_sprite_active_area' in [set] must be "
+                                  "\"mode_default\", \"none\", \"control_word_bit0\", or "
+                                  "\"y_word_bit0\"",
+                                  node);
+                    }
+                } else {
+                    ctx.error("'taito_f2_sprite_active_area' in [set] must be a string", node);
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_extension_base")) {
+                if (auto base = read_unsigned(ctx, *node, "taito_f2_sprite_extension_base",
+                                              "[set]")) {
+                    if (*base > 0xFFFFFFU) {
+                        ctx.error("'taito_f2_sprite_extension_base' in [set] is out of "
+                                  "24-bit 68000 address range",
+                                  node);
+                    } else if ((*base & 1U) != 0U) {
+                        ctx.error("'taito_f2_sprite_extension_base' in [set] must be "
+                                  "word-aligned",
+                                  node);
+                    } else {
+                        decl.taito_f2_sprite_extension_base =
+                            static_cast<std::uint32_t>(*base);
+                    }
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_extension_size")) {
+                if (auto size = read_unsigned(ctx, *node, "taito_f2_sprite_extension_size",
+                                              "[set]")) {
+                    if (*size == 0U || *size > 0x4000U) {
+                        ctx.error("'taito_f2_sprite_extension_size' in [set] must be "
+                                  "between 2 and 0x4000 bytes",
+                                  node);
+                    } else if ((*size & 1U) != 0U) {
+                        ctx.error("'taito_f2_sprite_extension_size' in [set] must be "
+                                  "word-aligned",
+                                  node);
+                    } else {
+                        decl.taito_f2_sprite_extension_size =
+                            static_cast<std::uint32_t>(*size);
+                    }
+                }
+            }
+            if (decl.taito_f2_sprite_extension_size.has_value() &&
+                !decl.taito_f2_sprite_extension_base.has_value()) {
+                ctx.error("'taito_f2_sprite_extension_size' in [set] requires "
+                          "'taito_f2_sprite_extension_base'",
+                          set->get("taito_f2_sprite_extension_size"));
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_hide_pixels")) {
+                if (auto hide = read_signed(ctx, *node, "taito_f2_sprite_hide_pixels", "[set]")) {
+                    if (*hide < -16 || *hide > 16) {
+                        ctx.error("'taito_f2_sprite_hide_pixels' in [set] must be between "
+                                  "-16 and 16",
+                                  node);
+                    } else {
+                        decl.taito_f2_sprite_hide_pixels = static_cast<std::int16_t>(*hide);
+                    }
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_sprite_flip_hide_pixels")) {
+                if (auto hide = read_signed(ctx, *node, "taito_f2_sprite_flip_hide_pixels",
+                                            "[set]")) {
+                    if (*hide < -16 || *hide > 16) {
+                        ctx.error("'taito_f2_sprite_flip_hide_pixels' in [set] must be between "
+                                  "-16 and 16",
+                                  node);
+                    } else {
+                        decl.taito_f2_sprite_flip_hide_pixels =
+                            static_cast<std::int16_t>(*hide);
+                    }
                 }
             }
         } else {

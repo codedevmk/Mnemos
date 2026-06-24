@@ -75,6 +75,7 @@ namespace mnemos::apps::player {
 
         const system_family family = *family_opt;
         const bool arcade_family = family == system_family::irem_m72 ||
+                                   family == system_family::taito_f2 ||
                                    family == system_family::capcom_cps1 ||
                                    family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
@@ -124,6 +125,7 @@ namespace mnemos::apps::player {
             break;
         case system_family::segacd:
         case system_family::irem_m72:
+        case system_family::taito_f2:
         case system_family::capcom_cps1:
         case system_family::capcom_cps2:
             break;

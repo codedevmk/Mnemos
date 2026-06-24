@@ -1,0 +1,108 @@
+# Gun & Frontier (World) -- Taito F2 / C71.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0100SCN SCR
+# dump, "sprites" maps TC0200OBJ object graphics, and YM2610 ADPCM-A is
+# "adpcma". This set has no Delta-T sample region.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "gunfront"
+board  = "taito_f2"
+orientation = "vertical"
+taito_f2_map = "gunfront"
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_policy = "banked"
+taito_f2_sprite_buffering = "partial_delayed"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "c71-09.ic42"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x10a544a2
+
+[[region.file]]
+name   = "c71-08.ic41"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xc17dc0a0
+
+[[region.file]]
+name   = "c71-10.ic40"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xf39c0a06
+
+[[region.file]]
+name   = "c71-14.ic39"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x312da036
+
+[[region.file]]
+name   = "c71-16.ic38"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x1bbcc2d4
+
+[[region.file]]
+name   = "c71-15.ic37"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0xdf3e00bb
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "c71-02.ic59"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0x2a600c92
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "c71-03.ic19"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x9133c605
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c71-12.ic49"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x0038c7f8
+
+[[region]]
+name = "adpcma"
+size = 0x100000
+
+[[region.file]]
+name   = "c71-01.ic29"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x0e73105a
