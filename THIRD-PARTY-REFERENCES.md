@@ -70,6 +70,25 @@ multiple independent open-source implementations.
 - **Sega Master System VDP / Genesis VDP** — H-counter and timing tables
   derived from community hardware tests and published timing notes;
   cross-checked against multiple open-source Sega emulators.
+- **MSX2 / Yamaha V9938** — MSX2 slot, PPI, PSG, and VDP I/O-port layout
+  checked against the MSX2 Technical Handbook / MSX Datapack references; the
+  V9938 register, palette, status, and display-mode model is derived from the
+  Yamaha V9938 MSX-VIDEO Technical Data Book. No emulator source was copied.
+- **Konami 051649 / SCC** — SCC wavetable-channel count, 32-byte waveform RAM,
+  12-bit frequency, 4-bit volume, channel-enable register, and original-SCC
+  shared waveform for channels 4/5 checked against public MSX hardware notes
+  (MSX Wiki and MSX Blue). No emulator source was copied.
+- **MSX-MUSIC / Yamaha YM2413** — optional MSX2 FM expansion port decode
+  (#7C address, #7D data) checked against public MSX hardware references. The
+  YM2413 synthesis core is Mnemos-native and shared with other in-tree systems.
+- **Ricoh RP-5C01 / MSX2 RTC** — MSX2 clock-chip port decode (#B4 index, #B5
+  data), four CMOS blocks, mode/test/reset registers, and 1980-based BCD
+  calendar behavior checked against public MSX hardware references. The RTC
+  model is Mnemos-native and deterministic.
+- **Western Digital WD1793 / MSX2 disk interface** — FDC register layout,
+  MSX memory-mapped/I/O port decode, DRQ/INTRQ status behaviour, and standard
+  512-byte-sector DSK geometries checked against public MSX hardware and disk
+  format references. The controller model is Mnemos-native and sector-level.
 - **C64 PLA (906114)** — banking truth table from the published PLA equations;
   cross-checked against multiple open-source C64 emulators' memory maps.
 - **C64 cartridge `.crt` container** — the de-facto community format

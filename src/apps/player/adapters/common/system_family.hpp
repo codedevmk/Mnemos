@@ -17,7 +17,8 @@ namespace mnemos::apps::player::adapters {
         capcom_cps1,
         capcom_cps2,
         spectrum,
-        nes
+        nes,
+        msx2
     };
 
     // Map a `--system` name to its family. The accepted names are exactly the

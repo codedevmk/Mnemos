@@ -118,6 +118,9 @@ namespace mnemos::apps::player {
         case system_family::nes:
             cart_default = mnemos::video_region::ntsc;
             break;
+        case system_family::msx2:
+            cart_default = mnemos::video_region::ntsc;
+            break;
         case system_family::sega32x:
             cart_default =
                 mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
@@ -220,6 +223,56 @@ namespace mnemos::apps::player {
             }
         }
 
+        if (family == system_family::msx2) {
+            const std::string ext = lowercase_extension(options.rom_paths.front());
+            if (ext == ".dsk") {
+                additional_media.insert(additional_media.begin(), std::move(primary_rom));
+                primary_rom.clear();
+            }
+
+            const char* bios_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_BIOS");
+            if (bios_env == nullptr) {
+                std::fprintf(stderr, "[mnemos_player] MSX2 needs MNEMOS_MSX2_BIOS set to a "
+                                     "main BIOS ROM\n");
+                outcome.exit_code = 1;
+                return outcome;
+            }
+            auto bios = load_rom(bios_env);
+            if (!bios || bios->bytes.size() < 0x8000U) {
+                std::fprintf(stderr, "[mnemos_player] could not read MSX2 BIOS: %s\n", bios_env);
+                outcome.exit_code = 1;
+                return outcome;
+            }
+            bios_images.push_back(std::move(bios->bytes));
+
+            if (const char* subrom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_SUBROM");
+                subrom_env != nullptr) {
+                auto subrom = load_rom(subrom_env);
+                if (!subrom || subrom->bytes.size() < 0x4000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX2 sub-ROM: %s\n",
+                                 subrom_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                bios_images.push_back(std::move(subrom->bytes));
+            }
+
+            if (const char* diskrom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_DISKROM");
+                diskrom_env != nullptr) {
+                auto diskrom = load_rom(diskrom_env);
+                if (!diskrom || diskrom->bytes.size() < 0x4000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX2 disk ROM: %s\n",
+                                 diskrom_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                while (bios_images.size() < 2U) {
+                    bios_images.push_back({});
+                }
+                bios_images.push_back(std::move(diskrom->bytes));
+            }
+        }
+
         outcome.system = frontend_sdk::adapter_registry::instance().create(
             family_id(family), {.rom = std::move(primary_rom),
                                 .video_region = video,
@@ -227,8 +280,7 @@ namespace mnemos::apps::player {
                                 .additional_media = std::move(additional_media),
                                 .autostart = options.autostart,
                                 .dip_override = options.dip_override,
-                                .mapper_override =
-                                    options.mapper_override.value_or(std::string{}),
+                                .mapper_override = options.mapper_override.value_or(std::string{}),
                                 .fm_unit = options.fm_unit,
                                 .light_gun = options.light_gun,
                                 .four_score = options.four_score,

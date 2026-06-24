@@ -18,6 +18,7 @@ add_subdirectory(adapters/capcom_cps1)
 add_subdirectory(adapters/capcom_cps2)
 add_subdirectory(adapters/spectrum)
 add_subdirectory(adapters/nes)
+add_subdirectory(adapters/msx2)
 
 # Shared bitmap-font overlay helpers, kept in their own static lib so the
 # unit test can link against the same code the player binary uses.
@@ -56,6 +57,7 @@ target_link_libraries(
         mnemos::apps::player::capcom_cps2_adapter
         mnemos::apps::player::spectrum_adapter
         mnemos::apps::player::nes_adapter
+        mnemos::apps::player::msx2_adapter
         mnemos::debug::dump
 )
 mnemos_apply_common_target_options(mnemos_apps_player_core PUBLIC)

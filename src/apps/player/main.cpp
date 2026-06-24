@@ -5,7 +5,7 @@
 
 #define SDL_MAIN_HANDLED
 
-#include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
+#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "cli_args.hpp"
 #include "headless_commands.hpp"
 #include "player_system.hpp"
@@ -34,11 +34,11 @@ namespace {
     constexpr int kInitialWindowHeight = 960;
 
     // Streaming texture is sized for the worst-case frame across supported
-    // systems: Genesis VDP 320x240 V30 (x2 rows for interlace) and the Irem
-    // M72's 384x256 (256x384 once a vertical game is rotated for TATE
-    // presentation); per-frame uploads only touch the active subregion the
-    // adapter reports.
-    constexpr std::uint32_t kMaxFbWidth = 384U;
+    // systems: MSX2 V9938 512-wide bitmap modes, Genesis VDP 320x240 V30
+    // (x2 rows for interlace), and the Irem M72's 384x256 (256x384 once a
+    // vertical game is rotated for TATE presentation); per-frame uploads only
+    // touch the active subregion the adapter reports.
+    constexpr std::uint32_t kMaxFbWidth = 512U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
 
     // Status overlay: two lines of 8x8 monospaced text, anchored to the
