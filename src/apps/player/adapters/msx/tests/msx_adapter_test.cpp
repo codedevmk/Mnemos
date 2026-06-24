@@ -467,7 +467,7 @@ TEST_CASE("msx adapter exposes and mixes Konami SCC cartridge audio", "[apps][pl
     sys.primary_slot_select = 0x14U;
     sys.bus.write8(0x9000U, 0x3FU);
     sys.bus.write8(0x9800U, 0x7FU);
-    sys.bus.write8(0x9880U, 0x00U);
+    sys.bus.write8(0x9880U, 0x10U); // non-zero period keeps the channel audible
     sys.bus.write8(0x9881U, 0x00U);
     sys.bus.write8(0x988AU, 0x0FU);
     sys.bus.write8(0x988FU, 0x01U);
@@ -503,7 +503,7 @@ TEST_CASE("msx adapter exposes and mixes Konami SCC audio from cartridge slot 2"
     sys.primary_slot_select = 0x28U; // pages 1/2 -> slot 2
     sys.bus.write8(0x9000U, 0x3FU);
     sys.bus.write8(0x9800U, 0x7FU);
-    sys.bus.write8(0x9880U, 0x00U);
+    sys.bus.write8(0x9880U, 0x10U); // non-zero period keeps the channel audible
     sys.bus.write8(0x9881U, 0x00U);
     sys.bus.write8(0x988AU, 0x0FU);
     sys.bus.write8(0x988FU, 0x01U);

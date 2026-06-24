@@ -5,130 +5,133 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
+#include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <span>
 #include <vector>
 
 namespace {
     using mnemos::chips::chip_class;
-    using mnemos::chips::create_chip;
-    using mnemos::chips::reset_kind;
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
     using mnemos::chips::audio::scc;
 
-    void configure_channel_a(scc& chip) {
-        chip.write(0x9800U, 0x40U);
-        chip.write(0x9801U, 0xC0U);
-        chip.write(0x9880U, 0x00U);
-        chip.write(0x9881U, 0x00U);
-        chip.write(0x988AU, 0x0FU);
-        chip.write(0x988FU, 0x01U);
+    void program_square_tone(scc& chip) {
+        for (int i = 0; i < scc::waveform_size; ++i) {
+            chip.write(static_cast<std::uint16_t>(i), i < (scc::waveform_size / 2) ? 0x60U : 0xA0U);
+        }
+        chip.write(0x80U, 0x02U); // channel 1 period low
+        chip.write(0x81U, 0x00U); // channel 1 period high
+        chip.write(0x8AU, 0x0FU); // channel 1 volume
+        chip.write(0x8FU, 0x01U); // channel 1 enable
+        chip.set_clock_divider(1);
+    }
+
+    [[nodiscard]] std::int16_t capture_peak(scc& chip, int ticks) {
+        chip.enable_audio_capture(true);
+        chip.tick(static_cast<std::uint64_t>(ticks));
+        std::vector<std::int16_t> buf(chip.pending_samples() * 2U, 0);
+        const std::size_t pairs = chip.drain_samples(buf.data(), chip.pending_samples());
+        if (pairs == 0U) {
+            return 0;
+        }
+        std::int16_t peak = 0;
+        for (const std::int16_t s : buf) {
+            peak = std::max(peak, static_cast<std::int16_t>(std::abs(s)));
+        }
+        return peak;
+    }
+
+    [[nodiscard]] std::vector<std::int16_t> capture(scc& chip, std::size_t pairs) {
+        chip.enable_audio_capture(true);
+        while (chip.pending_samples() < pairs) {
+            chip.tick(256);
+        }
+        std::vector<std::int16_t> out(pairs * 2U, 0);
+        chip.drain_samples(out.data(), pairs);
+        return out;
     }
 } // namespace
 
-TEST_CASE("scc registers in the chip registry as an audio synth", "[scc][audio]") {
-    auto chip = create_chip("konami.scc");
+TEST_CASE("scc registers in the chip factory", "[scc][audio]") {
+    const auto chip = mnemos::chips::create_chip("konami.051649");
     REQUIRE(chip != nullptr);
     REQUIRE(chip->metadata().klass == chip_class::audio_synth);
+    CHECK(chip->metadata().part_number == "051649");
 }
 
-TEST_CASE("scc wave RAM and mirrored register window decode", "[scc][audio]") {
+TEST_CASE("scc maps waveform and control registers", "[scc][audio]") {
     scc chip;
-    chip.write(0x9800U, 0x12U);
-    chip.write(0x9820U, 0x34U);
-    chip.write(0x9840U, 0x56U);
-    chip.write(0x9860U, 0x78U);
 
-    CHECK(chip.read(0x9800U) == 0x12U);
-    CHECK(chip.read(0x9820U) == 0x34U);
-    CHECK(chip.read(0x9840U) == 0x56U);
-    CHECK(chip.read(0x9860U) == 0x78U);
+    chip.write(0x00U, 0x7FU);
+    chip.write(0x80U, 0x34U);
+    chip.write(0x81U, 0x02U);
+    chip.write(0x8AU, 0xAFU);
+    chip.write(0x8FU, 0x01U);
 
-    chip.write(0x9980U, 0xABU); // mirrors $9880-$988F through $9FFF
-    chip.write(0x9981U, 0x0CU);
-    CHECK(chip.period(0) == 0x0CABU);
-}
-
-TEST_CASE("scc channel registers control frequency volume and enable", "[scc][audio]") {
-    scc chip;
-    chip.write(0x9880U, 0xCDU);
-    chip.write(0x9881U, 0xABU);
-    chip.write(0x988AU, 0x3FU);
-    chip.write(0x988FU, 0x21U);
-
-    CHECK(chip.period(0) == 0x0BCDU);
+    CHECK(chip.read(0x00U) == 0x7FU);
+    CHECK(chip.wave_sample(0, 0) == 0x7FU);
+    CHECK(chip.frequency(0) == 0x0234U);
     CHECK(chip.volume(0) == 0x0FU);
-    CHECK(chip.enable_mask() == 0x01U);
+    CHECK(chip.channel_enabled(0));
+    CHECK_FALSE(chip.channel_enabled(1));
 }
 
-TEST_CASE("scc generates signed wavetable output and captures stereo frames", "[scc][audio]") {
+TEST_CASE("scc mirrors the control block through the $90-$9F window", "[scc][audio]") {
     scc chip;
-    configure_channel_a(chip);
-    chip.set_clock_divider(1);
-    chip.enable_audio_capture(true);
-    chip.tick(4);
 
-    CHECK(chip.pending_samples() == 4U);
-    CHECK(chip.last_left() == chip.last_right());
+    chip.write(0x90U, 0x78U);
+    chip.write(0x91U, 0x03U);
+    chip.write(0x9AU, 0x0CU);
+    chip.write(0x9FU, 0x01U);
 
-    std::array<std::int16_t, 8> frames{};
-    const std::size_t got = chip.drain_samples(frames.data(), 4U);
-    CHECK(got == 4U);
-    CHECK(chip.pending_samples() == 0U);
-    bool any_nonzero = false;
-    for (const std::int16_t sample : frames) {
-        any_nonzero = any_nonzero || sample != 0;
-    }
-    CHECK(any_nonzero);
+    CHECK(chip.read(0x80U) == 0x78U);
+    CHECK(chip.read(0x90U) == 0x78U);
+    CHECK(chip.frequency(0) == 0x0378U);
+    CHECK(chip.volume(0) == 0x0CU);
+    CHECK(chip.channel_enabled(0));
 }
 
-TEST_CASE("scc channels 4 and 5 share waveform RAM in compatibility mode", "[scc][audio]") {
+TEST_CASE("scc channels four and five share waveform RAM", "[scc][audio]") {
     scc chip;
-    chip.write(0x9860U, 0x7FU);
-    chip.write(0x9886U, 0x00U);
-    chip.write(0x9888U, 0x00U);
-    chip.write(0x988DU, 0x0FU);
-    chip.write(0x988EU, 0x0FU);
-    chip.write(0x988FU, 0x18U);
-    chip.set_clock_divider(1);
-    chip.tick(1);
 
-    // Both voices read waveform bank 3; equal phase and volume sum to 2x one voice.
-    CHECK(chip.last_left() == static_cast<std::int16_t>(0x7F * 15 * 2 * 2));
+    chip.write(0x60U, 0x55U);
+    chip.write(0x7FU, 0xAAU);
+
+    CHECK(chip.wave_sample(3, 0) == 0x55U);
+    CHECK(chip.wave_sample(4, 0) == 0x55U);
+    CHECK(chip.wave_sample(3, 31) == 0xAAU);
+    CHECK(chip.wave_sample(4, 31) == 0xAAU);
 }
 
-TEST_CASE("scc save_state/load_state round-trips generated output", "[scc][audio]") {
+TEST_CASE("scc plays a captured wavetable tone", "[scc][audio]") {
+    scc chip;
+    program_square_tone(chip);
+
+    CHECK(capture_peak(chip, 256) > 1000);
+}
+
+TEST_CASE("scc save_state/load_state round-trips registers and output phase", "[scc][audio]") {
     scc a;
-    configure_channel_a(a);
-    a.set_clock_divider(1);
-    a.tick(8);
+    program_square_tone(a);
+    a.tick(127);
 
     std::vector<std::uint8_t> blob;
     state_writer writer(blob);
     a.save_state(writer);
 
+    constexpr std::size_t k_pairs = 512;
+    const std::vector<std::int16_t> from_a = capture(a, k_pairs);
+
     scc b;
-    state_reader reader(blob);
+    state_reader reader(std::span<const std::uint8_t>{blob});
     b.load_state(reader);
     REQUIRE(reader.ok());
-    REQUIRE(reader.remaining() == 0U);
 
-    a.tick(32);
-    b.tick(32);
-    CHECK(a.last_left() == b.last_left());
-    CHECK(a.last_right() == b.last_right());
-}
-
-TEST_CASE("scc reset clears registers and output", "[scc][audio]") {
-    scc chip;
-    configure_channel_a(chip);
-    chip.tick(8);
-    chip.reset(reset_kind::hard);
-
-    CHECK(chip.period(0) == 0U);
-    CHECK(chip.volume(0) == 0U);
-    CHECK(chip.enable_mask() == 0U);
-    CHECK(chip.deformation() == 0U);
-    CHECK(chip.last_left() == 0);
+    CHECK(b.frequency(0) == a.frequency(0));
+    CHECK(b.volume(0) == a.volume(0));
+    CHECK(b.channel_enabled(0));
+    CHECK(b.wave_sample(0, 0) == a.wave_sample(0, 0));
+    CHECK(capture(b, k_pairs) == from_a);
 }

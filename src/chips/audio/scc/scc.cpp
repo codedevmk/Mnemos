@@ -10,166 +10,145 @@
 namespace mnemos::chips::audio {
 
     namespace {
-        constexpr std::uint32_t k_state_version = 1U;
-
-        [[nodiscard]] std::int16_t clamp16(std::int32_t value) noexcept {
-            if (value > 32767) {
-                return 32767;
-            }
-            if (value < -32768) {
-                return -32768;
-            }
-            return static_cast<std::int16_t>(value);
+        [[nodiscard]] std::int16_t clip16(int v) noexcept {
+            return static_cast<std::int16_t>(std::clamp(v, -32768, 32767));
         }
     } // namespace
-
-    scc::scc() {
-        introspection_.with_registers([this] { return register_snapshot(); })
-            .with_reg_writes([this](instrumentation::reg_write_trace::callback cb) {
-                reg_write_callback_ = std::move(cb);
-            });
-        reset(reset_kind::power_on);
-    }
 
     chip_metadata scc::metadata() const noexcept {
         return {
             .manufacturer = "Konami",
-            .part_number = "K051649",
-            .family = "SCC",
+            .part_number = "051649",
+            .family = "Sound Creative Chip",
             .klass = chip_class::audio_synth,
             .revision = 1U,
         };
     }
 
-    void scc::note_write(std::uint16_t port, std::uint8_t value) {
-        if (reg_write_callback_) {
-            reg_write_callback_({.port = port, .value = value});
+    std::uint8_t scc::canonical_register(std::uint8_t address) noexcept {
+        // The $90-$9F range mirrors the $80-$8F frequency/volume/enable block on
+        // common cartridge decodes; canonicalise it so writes through either window
+        // update the same oscillator state.
+        if (address >= 0x90U && address <= 0x9FU) {
+            return static_cast<std::uint8_t>(address - 0x10U);
         }
+        return address;
     }
 
-    std::uint8_t scc::waveform(int waveform, int index) const noexcept {
-        if (waveform < 0 || waveform >= waveform_count || index < 0 || index >= waveform_size) {
+    std::size_t scc::waveform_for_channel(int channel) noexcept {
+        if (channel <= 0) {
             return 0U;
         }
-        return waveform_[static_cast<std::size_t>(waveform)][static_cast<std::size_t>(index)];
+        if (channel >= channel_count - 1) {
+            return waveform_count - 1U;
+        }
+        return static_cast<std::size_t>(channel);
     }
 
-    std::uint16_t scc::period(int channel) const noexcept {
+    void scc::decode_register(std::uint8_t reg) noexcept {
+        if (reg >= 0x80U && reg <= 0x89U) {
+            const std::size_t ch = static_cast<std::size_t>((reg - 0x80U) / 2U);
+            const std::uint16_t lo = regs_[0x80U + ch * 2U];
+            const std::uint16_t hi = static_cast<std::uint16_t>(regs_[0x81U + ch * 2U] & 0x0FU);
+            frequency_[ch] = static_cast<std::uint16_t>(lo | (hi << 8U));
+            return;
+        }
+        if (reg >= 0x8AU && reg <= 0x8EU) {
+            const std::size_t ch = static_cast<std::size_t>(reg - 0x8AU);
+            volume_[ch] = static_cast<std::uint8_t>(regs_[reg] & 0x0FU);
+            return;
+        }
+        if (reg == 0x8FU) {
+            enable_mask_ = static_cast<std::uint8_t>(regs_[reg] & 0x1FU);
+        }
+    }
+
+    std::uint8_t scc::read(std::uint16_t address) const noexcept {
+        return regs_[canonical_register(static_cast<std::uint8_t>(address & 0x00FFU))];
+    }
+
+    void scc::write(std::uint16_t address, std::uint8_t value) noexcept {
+        const std::uint8_t reg = canonical_register(static_cast<std::uint8_t>(address & 0x00FFU));
+        regs_[reg] = value;
+        decode_register(reg);
+    }
+
+    std::uint16_t scc::frequency(int channel) const noexcept {
         if (channel < 0 || channel >= channel_count) {
             return 0U;
         }
-        return channels_[static_cast<std::size_t>(channel)].period;
+        return frequency_[static_cast<std::size_t>(channel)];
     }
 
     std::uint8_t scc::volume(int channel) const noexcept {
         if (channel < 0 || channel >= channel_count) {
             return 0U;
         }
-        return channels_[static_cast<std::size_t>(channel)].volume;
+        return volume_[static_cast<std::size_t>(channel)];
     }
 
-    std::uint16_t scc::reload_period(const channel_state& channel) const noexcept {
-        std::uint32_t reload = static_cast<std::uint32_t>(channel.period) + 1U;
-        const std::uint8_t deform_rate = static_cast<std::uint8_t>(deformation_ & 0x03U);
-        if (deform_rate == 1U) {
-            reload = std::max<std::uint32_t>(1U, reload / 256U);
-        } else if (deform_rate == 2U || deform_rate == 3U) {
-            reload = std::max<std::uint32_t>(1U, reload / 16U);
+    bool scc::channel_enabled(int channel) const noexcept {
+        if (channel < 0 || channel >= channel_count) {
+            return false;
         }
-        return static_cast<std::uint16_t>(std::min<std::uint32_t>(reload, 0x1000U));
+        return (enable_mask_ & (1U << static_cast<unsigned>(channel))) != 0U;
     }
 
-    std::uint8_t scc::read(std::uint16_t address) noexcept {
-        const std::uint8_t offset = static_cast<std::uint8_t>(address & 0x00FFU);
-        if (offset < 0x80U) {
-            const auto wave = static_cast<std::size_t>(offset >> 5U);
-            const auto index = static_cast<std::size_t>(offset & 0x1FU);
-            return waveform_[wave][index];
+    std::uint8_t scc::wave_sample(int channel, int offset) const noexcept {
+        if (channel < 0 || channel >= channel_count || offset < 0 || offset >= waveform_size) {
+            return 0U;
         }
-        if (offset >= 0xE0U) {
-            deformation_ |= 0x40U;
-            return 0xFFU;
-        }
-        return 0xFFU;
+        const std::size_t wave = waveform_for_channel(channel);
+        const std::size_t index = wave * waveform_size + static_cast<std::size_t>(offset);
+        return regs_[index];
     }
 
-    void scc::write(std::uint16_t address, std::uint8_t value) noexcept {
-        const std::uint8_t offset = static_cast<std::uint8_t>(address & 0x00FFU);
-        note_write(static_cast<std::uint16_t>(0x9800U | offset), value);
-
-        if (offset < 0x80U) {
-            if ((deformation_ & 0x40U) == 0U) {
-                const auto wave = static_cast<std::size_t>(offset >> 5U);
-                const auto index = static_cast<std::size_t>(offset & 0x1FU);
-                waveform_[wave][index] = value;
-            }
-            return;
+    std::int32_t scc::channel_output(int channel) const noexcept {
+        if (channel < 0 || channel >= channel_count) {
+            return 0;
         }
+        return channel_output_[static_cast<std::size_t>(channel)];
+    }
 
-        if (offset >= 0x80U && offset < 0xA0U) {
-            const std::uint8_t reg = static_cast<std::uint8_t>(offset & 0x0FU);
-            if (reg < 0x0AU) {
-                const auto ch = static_cast<std::size_t>(reg >> 1U);
-                if ((reg & 1U) == 0U) {
-                    channels_[ch].period =
-                        static_cast<std::uint16_t>((channels_[ch].period & 0x0F00U) | value);
-                } else {
-                    channels_[ch].period = static_cast<std::uint16_t>(
-                        (channels_[ch].period & 0x00FFU) |
-                        (static_cast<std::uint16_t>(value & 0x0FU) << 8U));
-                }
-                if ((deformation_ & 0x20U) != 0U) {
-                    channels_[ch].phase = 0U;
-                    channels_[ch].counter = reload_period(channels_[ch]);
-                }
-                return;
+    void scc::advance_oscillators() noexcept {
+        for (std::size_t ch = 0; ch < channel_count; ++ch) {
+            if ((enable_mask_ & (1U << ch)) == 0U || volume_[ch] == 0U || frequency_[ch] == 0U) {
+                channel_output_[ch] = 0;
+                continue;
             }
-            if (reg >= 0x0AU && reg <= 0x0EU) {
-                channels_[static_cast<std::size_t>(reg - 0x0AU)].volume =
-                    static_cast<std::uint8_t>(value & 0x0FU);
-                return;
-            }
-            enable_mask_ = static_cast<std::uint8_t>(value & 0x1FU);
-            return;
-        }
 
-        if (offset >= 0xE0U) {
-            deformation_ = value;
+            ++phase_counter_[ch];
+            if (phase_counter_[ch] >= frequency_[ch]) {
+                phase_counter_[ch] = 0U;
+                wave_index_[ch] =
+                    static_cast<std::uint8_t>((wave_index_[ch] + 1U) & (waveform_size - 1U));
+            }
+
+            const std::uint8_t sample = wave_sample(static_cast<int>(ch), wave_index_[ch]);
+            const auto signed_sample = static_cast<std::int8_t>(sample);
+            channel_output_[ch] = static_cast<int>(signed_sample) * static_cast<int>(volume_[ch]);
         }
     }
 
-    void scc::step() noexcept {
-        std::int32_t mix = 0;
-        for (std::size_t i = 0; i < channels_.size(); ++i) {
-            channel_state& ch = channels_[i];
-            if ((enable_mask_ & (1U << i)) != 0U && ch.volume != 0U) {
-                const auto wave = waveform_for_channel(static_cast<int>(i));
-                const auto sample =
-                    static_cast<std::int8_t>(waveform_[wave][static_cast<std::size_t>(ch.phase)]);
-                mix += static_cast<std::int32_t>(sample) * static_cast<std::int32_t>(ch.volume) * 2;
-            }
-
-            if (ch.counter == 0U) {
-                ch.counter = reload_period(ch);
-                ch.phase = static_cast<std::uint8_t>((ch.phase + 1U) & 0x1FU);
-            } else {
-                --ch.counter;
-            }
+    std::int16_t scc::mix_output() noexcept {
+        int sum = 0;
+        for (std::size_t ch = 0; ch < channel_count; ++ch) {
+            sum += channel_output_[ch];
         }
-
-        const std::int16_t sample = clamp16(mix);
-        last_left_ = sample;
-        last_right_ = sample;
+        return clip16(sum * k_output_gain);
     }
 
     void scc::tick(std::uint64_t cycles) {
         for (std::uint64_t i = 0; i < cycles; ++i) {
-            if (++prescaler_ >= clock_divider_) {
-                prescaler_ = 0;
-                step();
+            advance_oscillators();
+            if (++sample_prescaler_ >= clock_divider_) {
+                sample_prescaler_ = 0;
+                const std::int16_t sample = mix_output();
+                last_left_ = sample;
+                last_right_ = sample;
                 if (audio_capture_) {
-                    sample_queue_.push_back(last_left_);
-                    sample_queue_.push_back(last_right_);
+                    sample_queue_.push_back(sample);
+                    sample_queue_.push_back(sample);
                 }
             }
         }
@@ -188,79 +167,87 @@ namespace mnemos::chips::audio {
     }
 
     void scc::reset(reset_kind /*kind*/) {
-        for (auto& wave : waveform_) {
-            wave.fill(0U);
-        }
-        channels_ = {};
+        regs_.fill(0U);
+        frequency_.fill(0U);
+        volume_.fill(0U);
         enable_mask_ = 0U;
-        deformation_ = 0U;
+        phase_counter_.fill(0U);
+        wave_index_.fill(0U);
+        channel_output_.fill(0);
         last_left_ = 0;
         last_right_ = 0;
-        prescaler_ = 0;
+        sample_prescaler_ = 0;
         sample_queue_.clear();
     }
 
     void scc::save_state(state_writer& writer) const {
-        writer.u32(k_state_version);
-        for (const auto& wave : waveform_) {
-            writer.bytes(wave);
+        writer.bytes(regs_);
+        for (const std::uint16_t f : frequency_) {
+            writer.u16(f);
         }
-        for (const auto& ch : channels_) {
-            writer.u16(ch.period);
-            writer.u8(ch.volume);
-            writer.u16(ch.counter);
-            writer.u8(ch.phase);
-        }
+        writer.bytes(volume_);
         writer.u8(enable_mask_);
-        writer.u8(deformation_);
-        writer.u32(static_cast<std::uint32_t>(clock_divider_));
-        writer.u32(static_cast<std::uint32_t>(prescaler_));
+        for (const std::uint16_t p : phase_counter_) {
+            writer.u16(p);
+        }
+        writer.bytes(wave_index_);
+        for (const std::int32_t o : channel_output_) {
+            writer.u32(static_cast<std::uint32_t>(o));
+        }
         writer.u16(static_cast<std::uint16_t>(last_left_));
         writer.u16(static_cast<std::uint16_t>(last_right_));
+        writer.u32(static_cast<std::uint32_t>(clock_divider_));
+        writer.u32(static_cast<std::uint32_t>(sample_prescaler_));
     }
 
     void scc::load_state(state_reader& reader) {
-        if (reader.u32() != k_state_version) {
-            reader.fail();
-            return;
+        reader.bytes(regs_);
+        for (std::uint16_t& f : frequency_) {
+            f = static_cast<std::uint16_t>(reader.u16() & 0x0FFFU);
         }
-        for (auto& wave : waveform_) {
-            reader.bytes(wave);
+        reader.bytes(volume_);
+        for (std::uint8_t& v : volume_) {
+            v = static_cast<std::uint8_t>(v & 0x0FU);
         }
-        for (auto& ch : channels_) {
-            ch.period = reader.u16();
-            ch.volume = reader.u8();
-            ch.counter = reader.u16();
-            ch.phase = reader.u8();
+        enable_mask_ = static_cast<std::uint8_t>(reader.u8() & 0x1FU);
+        for (std::uint16_t& p : phase_counter_) {
+            p = reader.u16();
         }
-        enable_mask_ = reader.u8();
-        deformation_ = reader.u8();
-        clock_divider_ = static_cast<int>(reader.u32());
-        prescaler_ = static_cast<int>(reader.u32());
+        reader.bytes(wave_index_);
+        for (std::uint8_t& i : wave_index_) {
+            i = static_cast<std::uint8_t>(i & (waveform_size - 1U));
+        }
+        for (std::int32_t& o : channel_output_) {
+            o = static_cast<std::int32_t>(reader.u32());
+        }
         last_left_ = static_cast<std::int16_t>(reader.u16());
         last_right_ = static_cast<std::int16_t>(reader.u16());
+        clock_divider_ = static_cast<int>(reader.u32());
+        if (clock_divider_ <= 0) {
+            clock_divider_ = default_clock_divider;
+        }
+        sample_prescaler_ = static_cast<int>(reader.u32());
+        sample_queue_.clear();
     }
+
+    instrumentation::ichip_introspection& scc::introspection() noexcept { return introspection_; }
 
     std::span<const register_descriptor> scc::register_snapshot() noexcept {
         using fmt = register_value_format;
-        register_view_[0] = {"FREQ_A", channels_[0].period, 12U, fmt::unsigned_integer};
-        register_view_[1] = {"FREQ_B", channels_[1].period, 12U, fmt::unsigned_integer};
-        register_view_[2] = {"FREQ_C", channels_[2].period, 12U, fmt::unsigned_integer};
-        register_view_[3] = {"FREQ_D", channels_[3].period, 12U, fmt::unsigned_integer};
-        register_view_[4] = {"FREQ_E", channels_[4].period, 12U, fmt::unsigned_integer};
-        register_view_[5] = {"VOL_A", channels_[0].volume, 4U, fmt::unsigned_integer};
-        register_view_[6] = {"VOL_B", channels_[1].volume, 4U, fmt::unsigned_integer};
-        register_view_[7] = {"VOL_C", channels_[2].volume, 4U, fmt::unsigned_integer};
-        register_view_[8] = {"VOL_D", channels_[3].volume, 4U, fmt::unsigned_integer};
-        register_view_[9] = {"VOL_E", channels_[4].volume, 4U, fmt::unsigned_integer};
-        register_view_[10] = {"ENABLE", enable_mask_, 5U, fmt::flags};
-        register_view_[11] = {"DEFORM", deformation_, 8U, fmt::flags};
+        register_view_[0] = {"ENABLE", enable_mask_, 5U, fmt::flags};
+        for (std::size_t ch = 0; ch < channel_count; ++ch) {
+            const std::size_t base = 1U + ch * 2U;
+            register_view_[base] = {"FREQ", frequency_[ch], 12U, fmt::unsigned_integer};
+            register_view_[base + 1U] = {"VOL", volume_[ch], 4U, fmt::unsigned_integer};
+        }
+        register_view_[11] = {"LAST", static_cast<std::uint16_t>(last_left_), 16U,
+                              fmt::signed_integer};
         return register_view_;
     }
 
     namespace {
         [[maybe_unused]] const auto scc_registration =
-            register_factory("konami.scc", chip_class::audio_synth,
+            register_factory("konami.051649", chip_class::audio_synth,
                              []() -> std::unique_ptr<ichip> { return std::make_unique<scc>(); });
     } // namespace
 

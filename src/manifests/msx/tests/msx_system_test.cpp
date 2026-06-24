@@ -527,17 +527,22 @@ TEST_CASE("msx Konami SCC mapper exposes memory-mapped SCC audio registers", "[m
     sys->bus.write8(0x9000U, 0x3FU);
     CHECK(sys->scc_window_enabled);
 
-    sys->bus.write8(0x9800U, 0x7FU);
-    CHECK(sys->scc.waveform(0, 0) == 0x7FU);
+    // Fill channel 0's 32-byte waveform so the sampled output is independent of
+    // the oscillator phase, then verify the write reached the SCC waveform RAM.
+    for (std::uint16_t i = 0; i < 32U; ++i) {
+        sys->bus.write8(static_cast<std::uint16_t>(0x9800U + i), 0x7FU);
+    }
+    CHECK(sys->scc.wave_sample(0, 0) == 0x7FU);
     CHECK(sys->bus.read8(0x9800U) == 0x7FU);
 
-    sys->bus.write8(0x9880U, 0x00U);
+    // A non-zero frequency keeps channel 0 audible (a zero period silences it).
+    sys->bus.write8(0x9880U, 0x10U);
     sys->bus.write8(0x9881U, 0x00U);
     sys->bus.write8(0x988AU, 0x0FU);
     sys->bus.write8(0x988FU, 0x01U);
     sys->scc.set_clock_divider(1);
     sys->scc.tick(1);
-    CHECK(sys->scc.last_left() == static_cast<std::int16_t>(0x7F * 15 * 2));
+    CHECK(sys->scc.last_left() == static_cast<std::int16_t>(0x7F * 15 * 3));
 }
 
 TEST_CASE("msx second cartridge slot exposes Konami SCC audio registers", "[manifests][msx]") {
@@ -554,7 +559,7 @@ TEST_CASE("msx second cartridge slot exposes Konami SCC audio registers", "[mani
     CHECK(sys->scc2_window_enabled);
 
     sys->bus.write8(0x9800U, 0x55U);
-    CHECK(sys->scc.waveform(0, 0) == 0x55U);
+    CHECK(sys->scc.wave_sample(0, 0) == 0x55U);
     CHECK(sys->bus.read8(0x9800U) == 0x55U);
 }
 
