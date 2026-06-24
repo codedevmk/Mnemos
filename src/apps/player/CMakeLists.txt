@@ -21,6 +21,7 @@ add_subdirectory(adapters/capcom_cps2)
 add_subdirectory(adapters/spectrum)
 add_subdirectory(adapters/nes)
 add_subdirectory(adapters/msx)
+add_subdirectory(adapters/msx2)
 add_subdirectory(adapters/amiga500)
 
 # Shared bitmap-font overlay helpers, kept in their own static lib so the
@@ -62,6 +63,7 @@ target_link_libraries(
         mnemos::apps::player::spectrum_adapter
         mnemos::apps::player::nes_adapter
         mnemos::apps::player::msx_adapter
+        mnemos::apps::player::msx2_adapter
         mnemos::apps::player::amiga500_adapter
         mnemos::debug::dump
 )

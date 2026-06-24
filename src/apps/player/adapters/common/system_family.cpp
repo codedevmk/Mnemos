@@ -45,6 +45,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "msx") {
             return system_family::msx;
         }
+        if (id == "msx2") {
+            return system_family::msx2;
+        }
         if (id == "amiga500" || id == "a500" || id == "amiga") {
             return system_family::amiga500;
         }
@@ -77,6 +80,8 @@ namespace mnemos::apps::player::adapters {
             return "nes";
         case system_family::msx:
             return "msx";
+        case system_family::msx2:
+            return "msx2";
         case system_family::amiga500:
             return "amiga500";
         case system_family::genesis:
@@ -111,6 +116,8 @@ namespace mnemos::apps::player::adapters {
             return "NES";
         case system_family::msx:
             return "MSX";
+        case system_family::msx2:
+            return "MSX2";
         case system_family::amiga500:
             return "Amiga 500";
         case system_family::genesis:
@@ -121,7 +128,7 @@ namespace mnemos::apps::player::adapters {
 
     const char* family_names() noexcept {
         return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, taito_f2, cps1, cps2, spectrum, "
-               "nes, msx, amiga500";
+               "nes, msx, msx2, amiga500";
     }
 
 } // namespace mnemos::apps::player::adapters

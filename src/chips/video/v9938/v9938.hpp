@@ -77,6 +77,7 @@ namespace mnemos::chips::video {
         [[nodiscard]] display_mode mode() const noexcept;
         [[nodiscard]] int visible_width() const noexcept;
         [[nodiscard]] int visible_height() const noexcept;
+        [[nodiscard]] int total_scanlines() const noexcept { return total_scanlines_; }
         [[nodiscard]] std::uint8_t reg(int index) const noexcept {
             return (index >= 0 && index < register_count) ? reg_[static_cast<std::size_t>(index)]
                                                           : 0U;

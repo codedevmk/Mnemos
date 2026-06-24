@@ -9,7 +9,7 @@
 
 namespace mnemos::chips::storage {
     namespace {
-        constexpr std::uint32_t k_state_version = 4U;
+        constexpr std::uint32_t k_state_version = 5U;
         constexpr std::uint8_t k_mfm_gap = 0x4EU;
         constexpr std::uint8_t k_mfm_sync_pad = 0x00U;
         constexpr std::uint8_t k_mfm_sync_mark = 0xA1U;
@@ -127,7 +127,7 @@ namespace mnemos::chips::storage {
         clear_transfer();
     }
 
-    bool wd1793::mount_dsk(std::span<const std::uint8_t> image) {
+    bool wd1793::mount_dsk(std::span<const std::uint8_t> image, bool write_protected) {
         const auto inferred = infer_dsk_geometry(image);
         if (!inferred) {
             return false;
@@ -135,6 +135,7 @@ namespace mnemos::chips::storage {
         geometry_ = *inferred;
         disk_.assign(image.begin(), image.end());
         reset(reset_kind::power_on);
+        write_protected_ = write_protected; // set after reset: WP is a property of the mounted media
         transfer_.reserve(standard_mfm_track_size);
         return true;
     }
@@ -142,6 +143,7 @@ namespace mnemos::chips::storage {
     void wd1793::eject() noexcept {
         disk_.clear();
         geometry_ = {};
+        write_protected_ = false;
         clear_transfer();
         busy_ = false;
         drq_ = false;
@@ -166,6 +168,9 @@ namespace mnemos::chips::storage {
         }
         if (type_i_status_ && track_ == 0U) {
             status |= status_track0;
+        }
+        if (type_i_status_ && write_protected_) {
+            status |= status_write_protect;
         }
         if (!ready()) {
             status |= status_not_ready;
@@ -274,6 +279,10 @@ namespace mnemos::chips::storage {
 
     void wd1793::begin_write_sector() noexcept {
         type_i_status_ = false;
+        if (write_protected_) {
+            fail_command(status_write_protect);
+            return;
+        }
         std::size_t offset = 0U;
         if (!sector_offset(offset)) {
             fail_command(ready() ? status_record_not_found : status_not_ready);
@@ -319,6 +328,10 @@ namespace mnemos::chips::storage {
 
     void wd1793::begin_write_track() noexcept {
         type_i_status_ = false;
+        if (write_protected_) {
+            fail_command(status_write_protect);
+            return;
+        }
         if (!ready() || geometry_.bytes_per_sector != sector_size || geometry_.tracks == 0U ||
             geometry_.sides == 0U || geometry_.sectors_per_track == 0U ||
             geometry_.sectors_per_track != standard_sectors_per_track ||
@@ -656,6 +669,7 @@ namespace mnemos::chips::storage {
         writer.boolean(multi_sector_);
         writer.boolean(type_i_status_);
         writer.boolean(write_track_transfer_);
+        writer.boolean(write_protected_);
     }
 
     void wd1793::load_state(state_reader& reader) {
@@ -693,6 +707,7 @@ namespace mnemos::chips::storage {
         multi_sector_ = version >= 2U ? reader.boolean() : false;
         type_i_status_ = reader.boolean();
         write_track_transfer_ = version >= 4U ? reader.boolean() : false;
+        write_protected_ = version >= 5U ? reader.boolean() : false;
 
         if (!reader.ok()) {
             return;

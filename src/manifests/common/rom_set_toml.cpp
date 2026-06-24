@@ -717,15 +717,6 @@ namespace mnemos::manifests::common {
                 }
             }
         }
-        if (const auto* hle = root.get_as<toml::array>("hle")) {
-            for (const toml::node& entry : *hle) {
-                if (const auto* table = entry.as_table()) {
-                    parse_hle(ctx, *table, decl);
-                } else {
-                    ctx.error("[[hle]] entries must be tables", &entry);
-                }
-            }
-        }
         if (decl.regions.empty()) {
             ctx.error("a ROM-set declaration needs at least one [[region]]");
         }

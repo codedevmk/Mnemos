@@ -26,6 +26,7 @@ TEST_CASE("system_family: every registry id maps to its family") {
     CHECK(family_from_name("spectrum") == system_family::spectrum);
     CHECK(family_from_name("nes") == system_family::nes);
     CHECK(family_from_name("msx") == system_family::msx);
+    CHECK(family_from_name("msx2") == system_family::msx2);
 }
 
 TEST_CASE("system_family: names are case-insensitive") {
@@ -34,6 +35,7 @@ TEST_CASE("system_family: names are case-insensitive") {
     CHECK(family_from_name("SegaCD") == system_family::segacd);
     CHECK(family_from_name("TAITO_F2") == system_family::taito_f2);
     CHECK(family_from_name("CPS2") == system_family::capcom_cps2);
+    CHECK(family_from_name("MSX2") == system_family::msx2);
 }
 
 TEST_CASE("system_family: unknown names are rejected, never guessed") {
@@ -49,7 +51,7 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
           system_family::segacd, system_family::sega32x, system_family::irem_m72,
           system_family::taito_f2, system_family::capcom_cps1, system_family::capcom_cps2,
           system_family::spectrum, system_family::nes, system_family::msx,
-          system_family::amiga500}) {
+          system_family::msx2, system_family::amiga500}) {
         CHECK(family_from_name(family_id(family)) == family);
     }
 }
@@ -61,7 +63,7 @@ TEST_CASE("system_family: family_names lists every accepted id") {
           system_family::segacd, system_family::sega32x, system_family::irem_m72,
           system_family::taito_f2, system_family::capcom_cps1, system_family::capcom_cps2,
           system_family::spectrum, system_family::nes, system_family::msx,
-          system_family::amiga500}) {
+          system_family::msx2, system_family::amiga500}) {
         CHECK(names.find(family_id(family)) != std::string::npos);
     }
 }
@@ -77,4 +79,5 @@ TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::spectrum)} == "ZX Spectrum");
     CHECK(std::string{family_label(system_family::nes)} == "NES");
     CHECK(std::string{family_label(system_family::msx)} == "MSX");
+    CHECK(std::string{family_label(system_family::msx2)} == "MSX2");
 }

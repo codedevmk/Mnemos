@@ -20,6 +20,7 @@ namespace mnemos::apps::player::adapters {
         spectrum,
         nes,
         msx,
+        msx2,
         amiga500
     };
 

@@ -34,9 +34,11 @@ namespace mnemos::chips::storage {
         void load_state(state_reader& reader) override;
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
-        [[nodiscard]] bool mount_dsk(std::span<const std::uint8_t> image);
+        [[nodiscard]] bool mount_dsk(std::span<const std::uint8_t> image,
+                                     bool write_protected = false);
         void eject() noexcept;
         [[nodiscard]] bool mounted() const noexcept { return !disk_.empty(); }
+        [[nodiscard]] bool write_protected() const noexcept { return write_protected_; }
         [[nodiscard]] dsk_geometry geometry() const noexcept { return geometry_; }
         [[nodiscard]] std::span<const std::uint8_t> disk_image() const noexcept { return disk_; }
 
@@ -57,6 +59,8 @@ namespace mnemos::chips::storage {
         [[nodiscard]] bool busy() const noexcept { return busy_; }
         [[nodiscard]] bool drq() const noexcept { return drq_; }
         [[nodiscard]] bool intrq() const noexcept { return intrq_; }
+        // Side-effect-free WD179x status view (unlike read_register(0), which clears INTRQ).
+        [[nodiscard]] std::uint8_t composed_status() const noexcept;
 
       private:
         class introspection_surface final : public instrumentation::ichip_introspection {};
@@ -71,7 +75,6 @@ namespace mnemos::chips::storage {
         static constexpr std::uint8_t status_not_ready = 0x80U;
 
         [[nodiscard]] bool ready() const noexcept;
-        [[nodiscard]] std::uint8_t composed_status() const noexcept;
         [[nodiscard]] bool sector_offset(std::size_t& offset) const noexcept;
         [[nodiscard]] static std::size_t expected_size(dsk_geometry geometry) noexcept;
 
@@ -92,6 +95,7 @@ namespace mnemos::chips::storage {
 
         dsk_geometry geometry_{};
         std::vector<std::uint8_t> disk_{};
+        bool write_protected_{}; // media write-protect (WD179x status bit 6); media property, not cleared by reset
         std::vector<std::uint8_t> transfer_{};
         std::size_t transfer_index_{};
         std::size_t transfer_size_{};

@@ -394,7 +394,7 @@ TEST_CASE("rom_set_toml parses the optional input profile", "[rom_set_toml]") {
     }
 }
 
-TEST_CASE("rom_set_toml parses explicit HLE declarations", "[rom_set_toml]") {
+TEST_CASE("rom_set_toml parses a profile-less HLE declaration", "[rom_set_toml]") {
     const auto result = parse_rom_set_decl(R"(
 [set]
 schema = "mnemos-romset/1"
