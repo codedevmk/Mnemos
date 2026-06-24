@@ -143,6 +143,34 @@ TEST_CASE("cia_6526 serial shift register latches an input byte after 8 CNT edge
     CHECK((cia.read(0x0DU) & 0x08U) != 0U); // SDR source
 }
 
+TEST_CASE("cia_6526 serial output publishes SP pin transitions") {
+    cia_6526 cia;
+    std::vector<bool> sp_levels;
+    cia_6526::config cfg;
+    cfg.write_sp = [&sp_levels](bool level) { sp_levels.push_back(level); };
+    cia.configure(cfg);
+
+    cia.write(0x04U, 0x01U); // Timer A latch = 1 for a short serial clock.
+    cia.write(0x05U, 0x00U);
+    cia.write(0x0EU, 0x41U); // CRA: START | SPMODE output.
+    cia.write(0x0CU, 0x00U); // Shift out low bits on SP.
+    cia.tick(12U);
+
+    REQUIRE(sp_levels.size() >= 2U);
+    CHECK_FALSE(sp_levels.back());
+
+    cia.write(0x0EU, 0x00U); // Releasing SPMODE lets SP return high.
+    CHECK(sp_levels.back());
+
+    constexpr std::uint8_t input_byte = 0x66U;
+    for (int bit = 7; bit >= 0; --bit) {
+        cia.sp_level(((input_byte >> static_cast<unsigned>(bit)) & 0x01U) != 0U);
+        cia.cnt_edge(false);
+        cia.cnt_edge(true);
+    }
+    CHECK(cia.read(0x0CU) == input_byte);
+}
+
 TEST_CASE("cia_6526 reset returns timers to the 0xFFFF latch") {
     cia_6526 cia;
     cia.write(0x04U, 0x12U);

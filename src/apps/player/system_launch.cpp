@@ -121,6 +121,9 @@ namespace mnemos::apps::player {
         case system_family::msx:
             cart_default = mnemos::video_region::ntsc;
             break;
+        case system_family::amiga500:
+            cart_default = mnemos::video_region::pal;
+            break;
         case system_family::sega32x:
             cart_default =
                 mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
@@ -278,6 +281,28 @@ namespace mnemos::apps::player {
                     bios_images.emplace_back();
                 }
                 bios_images.push_back(std::move(kanji_rom->bytes));
+            }
+        }
+
+        if (family == system_family::amiga500) {
+            const std::string ext = lowercase_extension(options.rom_paths.front());
+            if (ext == ".adf") {
+                const char* kickstart_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA500_KICKSTART");
+                if (kickstart_env == nullptr) {
+                    std::fprintf(stderr, "[mnemos_player] an Amiga ADF needs "
+                                         "MNEMOS_AMIGA500_KICKSTART set to a Kickstart ROM\n");
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                auto kickstart = load_rom(kickstart_env);
+                if (!kickstart || kickstart->bytes.empty()) {
+                    std::fprintf(stderr, "[mnemos_player] could not read Amiga Kickstart ROM: %s\n",
+                                 kickstart_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                additional_media.insert(additional_media.begin(), std::move(primary_rom));
+                primary_rom = std::move(kickstart->bytes);
             }
         }
 

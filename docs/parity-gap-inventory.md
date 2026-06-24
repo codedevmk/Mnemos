@@ -48,6 +48,63 @@ and the `R#` cross-reference to the risk register where one exists.
 > re-architecture rule, but remains non-binding until ratified. Items here name
 > *what* to port or prove (behaviour); the *how* follows accepted authority.
 
+> **Update 2026-06-23 (Amiga 500 bootstrap branch):** **U5 moves `[ ]`→`[~]`**.
+> The feature branch adds a first bootable Amiga 500 integration path: MC68000 +
+> Agnus + Denise + Paula + two CIA 8520s, Kickstart reset overlay, chip RAM,
+> OCS custom register routing, Paula audio DMA, Copper pointer/strobe routing
+> plus frame-start `COP1LC` reload, MOVE/SKIP/WAIT instruction cadence,
+> impossible terminal-WAIT handling, `BPLCON0` high-resolution 640-pixel
+> fetch/view, `BPLCON1` playfield horizontal-scroll delay, and
+> `BLTPRI` blitter-priority CPU chip-RAM wait states, high-resolution
+> four-plane display-DMA CPU chip-RAM lockout, and
+> board-owned custom-register MOVEs for raster palette/interrupt effects,
+> ADF mounting with AmigaDOS MFM track streaming, DF0 motor/step/side control,
+> player media metadata, and hardware-visible joystick input through
+> JOY0DAT/JOY1DAT, CIAA fire bits, mouse counters, and POT secondary/middle
+> button pins. This is not
+> a compatibility-complete Amiga: a real Kickstart+ADF boot smoke gate now exists
+> behind `MNEMOS_AMIGA500_KICKSTART`/`MNEMOS_AMIGA500_ADF`, but no local
+> copyrighted-media pass is recorded here; floppy write/decode and exact
+> sub-byte bitcell timing are simplified, and major OCS/ECS features remain partial (exact blitter bus
+> timing, exact sprite DMA bus-slot/hires edge-priority behavior,
+> non-saturated display DMA contention, exact non-nasty blitter/display CPU slot arbitration,
+> and remaining Copper/display bus arbitration and bitplane timing). Follow-ups in the same branch wire an adapter-level
+> runtime save target for the six chips, Amiga board state, chip RAM,
+> mounted-media position, input state, and scheduler pacing, plus a CIA-A
+> raw-key serial queue for Amiga keyboard down/up events gated by the host
+> KDAT/SP handshake pulse, exact keyboard control-code injection including
+> reset warning, and Caps Lock LED toggle semantics, and a first OCS
+> sprite compositor slice for attach mode, DMA-list channel reuse, `BPLCON2`
+> playfield/sprite priority, and `CLXCON`/`CLXDAT` collision latches. The branch also adds a bounded OCS
+> area-blitter path: BLTCON0/1, A/B/C/D pointers, modulos, A first/last masks,
+> minterm evaluation, inclusive/exclusive area fill, line mode with octant
+> stepping, texture, and `SING`, BLTSIZE-triggered chip-RAM writes,
+> color-clock-bounded BBUSY retirement, delayed BLIT interrupt request, and
+> in-flight busy countdown save states.
+> Controller-port follow-ups include `POTGO`-started, RC-calibrated raster-line
+> POT counters with the reset-window delay and per-axis stop thresholds for
+> `POT0DAT`/`POT1DAT`.
+> Floppy status now includes the CIAA active-low disk-change latch, asserted on
+> media insert/remove and cleared by a selected step pulse, plus a 300 RPM
+> scanline-paced DF0 index pulse on CIAB FLAG. Disk write DMA now consumes chip
+> RAM bytes at the paced raw-track stream position, mutates writable in-memory
+> raw tracks, raises DSKBLK on completion, and preserves the raw track stream in
+> save states. Disk read DMA now honors `ADKCON.WORDSYNC`, waiting for
+> `DSKSYNC` before transferring the following disk word and preserving that wait in
+> save states. Raw MFM bytes now reach `DSKBYTR` and disk DMA through an Agnus
+> color-clock accumulator instead of scanline-start bursts. The player/frontend path now forwards host keyboard state as
+> USB/HID usages to the dedicated Amiga keyboard port, where the adapter maps
+> the US raw-key table including modifiers, keypad, cursor/function keys, and
+> Caps Lock LED toggles. DF0-DF3 select lines now address independent mounted
+> media, cylinders, change/status latches, raw-track streams, and save-state
+> phase; the player adapter mounts the first four supplied ADFs as resident
+> drives while keeping DF0 media swapping available. Writable AmigaDOS raw
+> sectors are decoded back into the resident ADF image when disk write DMA
+> completes with valid MFM header/data checksums. The adapter also advertises
+> analog POT ports, the SDL player routes normalized gamepad stick axes into
+> `POT0DAT`/`POT1DAT` targets, and the manifest converts those targets through
+> the calibrated POT reset-window counter model.
+
 ## How to use
 
 - Tick `[x]` when the item is merged to master; reference the item ID in the PR title.
@@ -228,7 +285,7 @@ parity-grade for the new machine. Listed prerequisites still apply.
 - [ ] **U2 CPS1** — *MED.* CPU: m68000 ✓ (G1 applies) + z80 ✓ · Video: CPS-A/B GFX (bespoke, inline in Emu) · Audio: ym2151 ✓ + MSM6295 + QSound · Glue: ZIP set loading. · Evidence: `progress-analysis.md` §4
 - [ ] **U3 NES** — *MED.* CPU: 2A03 variant + glue (Mnemos m6510 ≠ 2A03) · Video: ppu2c02 · Audio: ricoh_2a03_apu · Glue: real mappers (MMC1/3…) beyond NROM. · Evidence: `progress-analysis.md` §4
 - [ ] **U4 CPS2** — *MED–HIGH.* CPU: m68000 ✓ (G1 applies) + z80 ✓ · Video: reuse CPS1 path · Audio: QSound · Glue: CPS-2 keyed opcode decryption. · Evidence: `progress-analysis.md` §4
-- [ ] **U5 Amiga** — *HIGH.* CPU: m68000 ✓ (G1 applies) · Video: agnus + denise · Audio: paula · Glue: cia8520, copper, floppy (Emu chip shells are shallow OCS/ECS — need finishing). · Evidence: `progress-analysis.md` §4
+- [~] **U5 Amiga** — *HIGH.* CPU: m68000 ✓ (G1 applies) · Video: agnus + denise wired for OCS bitplanes/palette/custom registers plus `BPLCON0` high-resolution 640-pixel fetch/view, HAM/EHB/dual-playfield colour decoding, basic sprite register/DMA/attach rendering with bounded DMA-list channel reuse, `BPLCON1` playfield horizontal-scroll delay, `BPLCON2` playfield/sprite priority, `CLXCON`/`CLXDAT` collision latches, Copper pointer/strobe routing with frame-start `COP1LC` reload, MOVE/SKIP/WAIT cadence, impossible terminal-WAIT handling, high-resolution four-plane display-DMA CPU chip-RAM lockout, board-owned custom-register MOVEs for raster palette/interrupt effects, and a bounded blitter (`BLTCON0/1`, A/B/C/D pointers, modulos, first/last A masks, minterms, inclusive/exclusive area fill, line mode with texture and `SING`, `BLTSIZE`, BZERO/BBUSY, color-clock-bounded BLIT IRQ retirement, in-flight busy save state, `BLTPRI` CPU chip-RAM wait states while blitter DMA is busy) · Audio: paula DMA + capture · Glue: cia8520, Kickstart reset overlay, chip RAM, DF0-DF3 ADF mount + color-clock-distributed raw MFM byte stream with `ADKCON.WORDSYNC`/`DSKSYNC` start gating, raw-track write-DMA capture plus valid AmigaDOS-sector ADF writeback, CIAB drive motor/step/side/select, CIAA active-low disk-change/status latches, 300 RPM scanline-paced CIAB disk-index FLAG pulse, player `--system amiga500`, ADF launch via `MNEMOS_AMIGA500_KICKSTART`, media swapping, joystick/POT/CIAA input, mouse JOYxDAT counters with CIAA/POTINP buttons, `POTGO`-started RC-calibrated raster-line POT counters with reset-window delay, programmable axis thresholds, and frontend analog axis routing, CIA-A keyboard raw-key serial queue gated by host KDAT/SP handshake, exact keyboard control codes/reset warning, Caps Lock LED state, US physical keyboard USB/HID usage mapping, adapter-level runtime save target, and data-gated real Kickstart+ADF boot smoke are in the bootstrap branch. Remaining for true compatibility: media-backed proof of a full Kickstart+Workbench boot, cycle/beam-exact non-saturated display DMA contention, exact non-nasty CPU/display/blitter bus-slot arbitration, sprite bus-slot timing/hires edge behavior, floppy exact sub-byte bitcell timing and broader custom-track/non-AmigaDOS write behavior, international keymap selection/phantom-key matrix behavior, and remaining Copper/display bus arbitration edge cases. · PARTIAL · HIGH · L · beyond Emu · Evidence: `progress-analysis.md` §4 + `src/manifests/amiga500/` + `src/apps/player/adapters/amiga500/`
 - [ ] **U6 NeoGeo** — *HIGH.* CPU: m68000 ✓ (G1 applies) + z80 ✓ · Video: **LSPC (greenfield — exists nowhere)** · Audio: ym2610 (ssg + adpcm_a + adpcm_b). Emu is a scaffold. · Evidence: `progress-analysis.md` §4 + R19
 - [ ] **U7 Taito F2** — *HIGH.* CPU: m68000 ✓ (G1 applies) + z80 ✓ · Video: **TC0100SCN + TC0200OBJ customs (greenfield)** · Audio: ym2610. Emu is a scaffold (197 LOC). · Evidence: `progress-analysis.md` §4 + R19
 - [ ] **U8 SNES** — *VERY HIGH.* CPU: 65c816 · Video: s_ppu · Audio: spc700 + s_dsp · Glue: CPU IRQ servicing, DMA/HDMA, HiROM. Emu CPU is a scaffold. · Evidence: `progress-analysis.md` §4 + R19

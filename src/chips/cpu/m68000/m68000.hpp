@@ -122,6 +122,16 @@ namespace mnemos::chips::cpu {
             tas_callback_ = std::move(callback);
         }
 
+        // Board-specific bus wait states for cycle-accounted memory accesses.
+        // The callback returns additional 68000 cycles for one byte/word bus
+        // transfer at `addr`; longword accesses call it once per halfword.
+        // Unset = no added latency. Used by Amiga chip-RAM DMA contention.
+        void set_bus_wait_callback(
+            std::function<std::uint32_t(std::uint32_t addr, bool program, bool write)> callback)
+            noexcept {
+            bus_wait_callback_ = std::move(callback);
+        }
+
         // Diagnostic facade: trace callback + cycle-source decomposition for
         // the last completed instruction. Pure observation -- toggling these
         // never changes the CPU's architectural behaviour. Off-by-default,
@@ -202,6 +212,7 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint32_t read_sized(std::uint32_t a, op_size s,
                                                bool program = false) noexcept;
         void write_sized(std::uint32_t a, op_size s, std::uint32_t v) noexcept;
+        void charge_bus_cycle(std::uint32_t a, bool program, bool write) noexcept;
         // PC-relative modes (mode 7 reg 2 = d16(PC), reg 3 = d8(PC,Xn)) are the only
         // program-space EA reads; everything else uses the data bus.
         [[nodiscard]] static constexpr bool is_pc_relative(int mode, int reg) noexcept {
@@ -288,6 +299,8 @@ namespace mnemos::chips::cpu {
         int prev_irq_level_{}; // for the level-7 (NMI) edge
         std::function<void(int)> irq_ack_{};
         std::function<void(std::uint32_t)> tas_callback_{};
+        std::function<std::uint32_t(std::uint32_t addr, bool program, bool write)>
+            bus_wait_callback_{};
         std::function<void(std::uint32_t)> trace_callback_{};
         bool exception_raised_{};
         bool exception_entry_{};

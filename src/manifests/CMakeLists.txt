@@ -10,6 +10,7 @@ add_subdirectory(capcom_cps2)
 add_subdirectory(spectrum)
 add_subdirectory(nes)
 add_subdirectory(msx)
+add_subdirectory(amiga500)
 
 add_library(mnemos_manifests INTERFACE)
 add_library(mnemos::manifests ALIAS mnemos_manifests)

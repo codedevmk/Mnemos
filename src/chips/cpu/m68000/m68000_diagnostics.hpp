@@ -25,6 +25,7 @@ namespace mnemos::chips::cpu {
             std::uint8_t refresh_fired{};    // 0 or 1 (at most once per inst)
             std::uint8_t z80_bus_accesses{}; // count of $A0xxxx accesses
             std::uint8_t irq_entered{};      // 0 or 1
+            std::uint32_t external_wait_cycles{}; // board-supplied bus wait states
         };
 
         m68000_diagnostics(const m68000_diagnostics&) = delete;

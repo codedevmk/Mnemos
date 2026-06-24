@@ -32,6 +32,7 @@ namespace mnemos::chips::bus_controller {
             std::function<std::uint8_t()> read_port_b;
             std::function<void(std::uint8_t)> write_port_a;
             std::function<void(std::uint8_t)> write_port_b;
+            std::function<void(bool)> write_sp;
             std::function<void(bool)> irq_edge;
             std::uint32_t tod_tick_hz{1'000'000U}; // φ2 cycles per second
             std::uint32_t tod_src_hz{60U};         // TOD source frequency (50/60)
@@ -135,6 +136,7 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] std::uint8_t port_b_driven() const noexcept;
         void publish_port_a();
         void publish_port_b();
+        void publish_sp(bool level);
         [[nodiscard]] std::uint8_t read_pa_live();
         [[nodiscard]] std::uint8_t read_pb_live();
         void timer_handle_underflow(timer_state& t, bool is_timer_a);

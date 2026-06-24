@@ -14,6 +14,7 @@ namespace mnemos::chips::peripheral {
             core.read_port_b = std::move(cfg.read_port_b);
             core.write_port_a = std::move(cfg.write_port_a);
             core.write_port_b = std::move(cfg.write_port_b);
+            core.write_sp = std::move(cfg.write_sp);
             core.irq_edge = std::move(cfg.irq_edge);
             core.tod_tick_hz = cfg.tod_tick_hz;
             core.tod_src_hz = cfg.tod_src_hz;

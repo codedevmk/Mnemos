@@ -4,7 +4,9 @@
 #include "ibus.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <array>
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -198,15 +200,27 @@ namespace mnemos::chips::cpu {
         return (a & 0xFF0000U) == 0xA00000U;
     }
 
-    std::uint8_t m68000::read8(std::uint32_t a, bool program) noexcept {
-        if (group0_fault_.pending) {
-            return 0U;
-        }
+    void m68000::charge_bus_cycle(std::uint32_t a, bool program, bool write) noexcept {
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
+        if (bus_wait_callback_) {
+            const std::uint32_t wait = bus_wait_callback_(a & address_mask, program, write);
+            const int room = std::numeric_limits<int>::max() - cycles_;
+            const auto clamped = static_cast<int>(
+                std::min<std::uint32_t>(wait, room > 0 ? static_cast<std::uint32_t>(room) : 0U));
+            cycles_ += clamped;
+            cycle_sources_.external_wait_cycles += static_cast<std::uint32_t>(clamped);
+        }
+    }
+
+    std::uint8_t m68000::read8(std::uint32_t a, bool program) noexcept {
+        if (group0_fault_.pending) {
+            return 0U;
+        }
+        charge_bus_cycle(a, program, false);
         // PC-relative byte read on a split board: take the byte from the decrypted
         // word (the opcode bus has no byte strobe; the lane is selected by A0).
         const std::uint8_t value =
@@ -229,11 +243,7 @@ namespace mnemos::chips::cpu {
             queue_address_error(a, inst_addr_, false, true);
             return 0U;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, program, false);
         const std::uint16_t value =
             (program && bus_ != nullptr) ? bus_->fetch16_be_opcode(a) : rd16(a);
         const ibus::bus_fault fault = consume_bus_fault();
@@ -251,17 +261,8 @@ namespace mnemos::chips::cpu {
             queue_address_error(a, inst_addr_, false, true);
             return 0U;
         }
-        cycles_ += 8;
-        if (z80_bus_latency_enabled_) {
-            if (is_z80_bus_addr(a)) {
-                cycles_ += 1;
-                ++cycle_sources_.z80_bus_accesses;
-            }
-            if (is_z80_bus_addr(a + 2U)) {
-                cycles_ += 1;
-                ++cycle_sources_.z80_bus_accesses;
-            }
-        }
+        charge_bus_cycle(a, program, false);
+        charge_bus_cycle(a + 2U, program, false);
         const std::uint32_t value =
             (program && bus_ != nullptr)
                 ? ((static_cast<std::uint32_t>(bus_->fetch16_be_opcode(a)) << 16U) |
@@ -278,11 +279,7 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, false, true);
         wr8(a, v);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
@@ -297,11 +294,7 @@ namespace mnemos::chips::cpu {
             queue_address_error(a, inst_addr_, false, false);
             return;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, false, true);
         wr16(a, v);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
@@ -321,22 +314,14 @@ namespace mnemos::chips::cpu {
         // write-timing trace) sees the correct cumulative cycles for each halfword
         // -- the first word must read +4, not the full +8. Total cost (+8 plus any
         // Z80-bus latency) and the per-access latency attribution are unchanged.
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, false, true);
         wr16(a, static_cast<std::uint16_t>(v >> 16U));
         ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
             queue_bus_error(fault.address, inst_addr_, false, !fault.write);
             return;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a + 2U)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a + 2U, false, true);
         wr16(a + 2U, static_cast<std::uint16_t>(v));
         fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
@@ -380,8 +365,8 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return 0U;
         }
-        cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
+        charge_bus_cycle(a, true, false);
         if (!exception_entry_ && (a & 1U) != 0U) {
             queue_address_error(a, a, true, true);
             return 0U;
@@ -408,8 +393,8 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return 0U;
         }
-        cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
+        charge_bus_cycle(a, true, false);
         pc_ += 2U;
         const std::uint32_t off = a - fetch_lo_;
         const std::uint32_t lo =

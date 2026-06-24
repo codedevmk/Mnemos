@@ -78,11 +78,18 @@ TEST_CASE("player_system stub fulfils the interface contract") {
     controller_state st{};
     st.start = true;
     st.a = true;
+    st.set_key(0x04U, true);
     p.apply_input(0, st);
     CHECK(p.last_port() == 0);
     CHECK(p.last_input().start);
     CHECK(p.last_input().a);
     CHECK_FALSE(p.last_input().up);
+    CHECK(p.last_input().key_down(0x04U));
+    st.set_key(0x04U, false);
+    CHECK_FALSE(st.key_down(0x04U));
+    st.set_key(static_cast<std::uint16_t>(mnemos::peripheral::keyboard_usage_count), true);
+    CHECK_FALSE(st.key_down(static_cast<std::uint16_t>(
+        mnemos::peripheral::keyboard_usage_count)));
 
     const auto audio = p.drain_audio();
     REQUIRE(audio.samples != nullptr);

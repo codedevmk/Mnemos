@@ -7,7 +7,7 @@ mnemos_fetch_sdl3()
 # isolation. Cross-system primitives (video_region, market) live in
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
 # manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M72, CPS1, CPS2,
-# Spectrum, NES, MSX.
+# Spectrum, NES, MSX, Amiga 500.
 add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
 add_subdirectory(adapters/sms)
@@ -20,6 +20,7 @@ add_subdirectory(adapters/capcom_cps2)
 add_subdirectory(adapters/spectrum)
 add_subdirectory(adapters/nes)
 add_subdirectory(adapters/msx)
+add_subdirectory(adapters/amiga500)
 
 # Shared bitmap-font overlay helpers, kept in their own static lib so the
 # unit test can link against the same code the player binary uses.
@@ -59,6 +60,7 @@ target_link_libraries(
         mnemos::apps::player::spectrum_adapter
         mnemos::apps::player::nes_adapter
         mnemos::apps::player::msx_adapter
+        mnemos::apps::player::amiga500_adapter
         mnemos::debug::dump
 )
 mnemos_apply_common_target_options(mnemos_apps_player_core PUBLIC)
@@ -109,5 +111,6 @@ if(BUILD_TESTING)
             mnemos::apps::player::irem_m72_adapter
             mnemos::apps::player::capcom_cps1_adapter
             mnemos::apps::player::msx_adapter
+            mnemos::apps::player::amiga500_adapter
     )
 endif()

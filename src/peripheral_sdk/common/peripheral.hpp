@@ -7,9 +7,13 @@
 // can present them as catalog entries and an adapter can pick a default
 // appropriate to the loaded software.
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace mnemos::peripheral {
+
+    inline constexpr std::size_t keyboard_usage_count = 256U;
 
     // System-agnostic abstract input state a frontend passes to a peripheral
     // each frame. Lives at this tier so the player adapters (tier 8) and the
@@ -33,12 +37,23 @@ namespace mnemos::peripheral {
         bool z{};
         bool mode{};
         // Lightgun / pointer fields (Zapper, Menacer, ...): the aimed screen pixel
-        // in the system's native framebuffer coordinates and the trigger. A pad
-        // device ignores them; a lightgun ignores the buttons. aim_x/aim_y are -1
-        // when the pointer is off-screen.
+        // in the system's native framebuffer coordinates and the trigger. Analog
+        // devices reuse aim_x/aim_y as normalized 0..255 axis positions, with -1
+        // meaning disconnected/default maximum resistance.
         std::int16_t aim_x{-1};
         std::int16_t aim_y{-1};
         bool trigger{};
+        std::array<bool, keyboard_usage_count> keyboard_usage{};
+
+        [[nodiscard]] bool key_down(std::uint16_t usage) const noexcept {
+            return usage < keyboard_usage.size() && keyboard_usage[usage];
+        }
+
+        void set_key(std::uint16_t usage, bool pressed) noexcept {
+            if (usage < keyboard_usage.size()) {
+                keyboard_usage[usage] = pressed;
+            }
+        }
     };
 
     // The category a peripheral belongs to. Drives the category subtree the
