@@ -9,19 +9,30 @@
 
 namespace mnemos::apps::player::adapters {
 
-    std::optional<std::string> parse_mapper_arg(int argc, char* argv[]) {
-        for (int i = 1; i < argc - 1; ++i) {
-            if (std::string_view{argv[i]} == "--mapper") {
-                std::string value{argv[i + 1]};
-                for (char& c : value) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
-                if (!value.empty()) {
-                    return value;
+    namespace {
+        std::optional<std::string> parse_lowercase_value_arg(int argc, char* argv[],
+                                                             std::string_view flag) {
+            for (int i = 1; i < argc - 1; ++i) {
+                if (std::string_view{argv[i]} == flag) {
+                    std::string value{argv[i + 1]};
+                    for (char& c : value) {
+                        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    }
+                    if (!value.empty()) {
+                        return value;
+                    }
                 }
             }
+            return std::nullopt;
         }
-        return std::nullopt;
+    } // namespace
+
+    std::optional<std::string> parse_mapper_arg(int argc, char* argv[]) {
+        return parse_lowercase_value_arg(argc, argv, "--mapper");
+    }
+
+    std::optional<std::string> parse_mapper2_arg(int argc, char* argv[]) {
+        return parse_lowercase_value_arg(argc, argv, "--mapper2");
     }
 
     std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]) {
@@ -59,6 +70,24 @@ namespace mnemos::apps::player::adapters {
     bool parse_four_score_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc; ++i) {
             if (std::string_view{argv[i]} == "--four-score") {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool parse_rtc_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            if (std::string_view{argv[i]} == "--rtc") {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool parse_msx2_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            if (std::string_view{argv[i]} == "--msx2") {
                 return true;
             }
         }

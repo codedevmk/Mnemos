@@ -5,6 +5,7 @@
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m72_adapter.hpp"
+#include "msx_adapter.hpp"
 #include "nes_adapter.hpp"
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
@@ -24,6 +25,7 @@ namespace mnemos::apps::player {
         adapters::capcom_cps2::force_link();
         adapters::spectrum::force_link();
         adapters::nes::force_link();
+        adapters::msx::force_link();
     }
 
 } // namespace mnemos::apps::player

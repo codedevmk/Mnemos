@@ -3,6 +3,7 @@
 #include "capcom_cps1_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m72_adapter.hpp"
+#include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
 #include "sms_adapter.hpp"
@@ -21,6 +22,7 @@ namespace {
     namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
+    namespace msx = mnemos::apps::player::adapters::msx;
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
     namespace segacd = mnemos::apps::player::adapters::segacd;
     namespace sms = mnemos::apps::player::adapters::sms;
@@ -248,5 +250,14 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary);
         require_degraded_media(summary, "media.rom_set");
+    }
+
+    SECTION("MSX") {
+        msx::msx_adapter adapter(std::vector<std::uint8_t>(0x8000U, 0x00U),
+                                 std::vector<std::uint8_t>(0x4000U, 0xFFU), {}, "Tiny MSX");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary);
+        require_degraded_media(summary, "media.bios");
+        require_degraded_media(summary, "media.cart");
     }
 }
