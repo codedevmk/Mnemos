@@ -199,9 +199,23 @@ machines:
 
   irem_m72:
     module: src/manifests/irem_m72
+    golden:
+      - id: GLD-M72-RTYPE
+        ctest: mnemos_apps_player_irem_m72_rtype_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_RTYPE_SET
+        requires_apps: true
+      - id: GLD-M72-PROTECTED
+        ctest: mnemos_apps_player_irem_m72_protected_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_PROTECTED_SET
+        requires_apps: true
+      - id: GLD-M72-VERTICAL
+        ctest: mnemos_apps_player_irem_m72_vertical_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_VERTICAL_SET
+        requires_apps: true
     parity:
       - id: ORC-M72-SYSTEM
         ctest: mnemos_manifests_irem_m72_test
         data_gated: false
-    # golden scenarios arrive with the M72 plan's later phases (boot to
-    # attract mode needs the sound/sprite increments); registered then.

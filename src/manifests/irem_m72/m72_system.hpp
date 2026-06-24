@@ -6,6 +6,7 @@
 #include "mcs51.hpp"          // optional protection MCU
 #include "pic_8259.hpp"       // main-CPU interrupt controller (uPD71059)
 #include "rom_set.hpp"        // arcade ROM-set image
+#include "state.hpp"          // chips::state_writer / state_reader
 #include "v30.hpp"            // main CPU
 #include "ym2151.hpp"         // FM synth on the Z80 ports
 #include "z80.hpp"            // sound CPU
@@ -14,8 +15,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace mnemos::manifests::irem_m72 {
 
@@ -27,11 +30,16 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::size_t main_rom_size = 0x100000U; // V30 program, full 20-bit space
 
     // M72 memory map. The program ROM backs the whole space at low priority;
-    // the RAM blocks overlay it at higher priority. The sound CPU has no ROM:
-    // its 64K program RAM is shared with the V30 through the byte window at
-    // 0xE0000, the V30 uploads the sound program there and then releases the
-    // Z80 from reset (port 0x02 bit 4). Work RAM sits at a per-game base
-    // (0x40000 or 0xA0000 wiring variants), carried in m72_board_params.
+    // the RAM blocks overlay it at higher priority. Original M72 boards such
+    // as R-Type have no sound ROM: the Z80's 64K program RAM is shared with
+    // the V30 through the byte window at 0xE0000, the V30 uploads the sound
+    // program there, then releases the Z80 from reset (port 0x02 bit 4).
+    // Later M72-family boards carry a sound program ROM instead; public dumps
+    // declare a 64 KiB "soundcpu" region, but the board maps 0x0000-0xEFFF as
+    // ROM and overlays 0xF000-0xFFFF with Z80 RAM. There is no V30 upload
+    // window in that mode.
+    // Work RAM sits at a per-game base (0x40000 or 0xA0000 wiring variants),
+    // carried in m72_board_params.
     inline constexpr std::uint32_t sprite_ram_base = 0xC0000U;
     inline constexpr std::size_t sprite_ram_size = 0x400U;
     inline constexpr std::uint32_t palette_a_base = 0xC8000U; // sprite palette
@@ -43,6 +51,12 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::size_t work_ram_size = 0x4000U;
     inline constexpr std::uint32_t sound_ram_window = 0xE0000U; // V30 view
     inline constexpr std::size_t sound_ram_size = 0x10000U;     // Z80 program RAM
+    inline constexpr std::uint16_t sound_rom_base = 0x0000U;
+    inline constexpr std::size_t sound_rom_region_size = 0x10000U;
+    inline constexpr std::size_t sound_rom_mapped_size = 0xF000U;
+    inline constexpr std::size_t sound_rom_size = sound_rom_region_size;
+    inline constexpr std::uint16_t sound_work_ram_base = 0xF000U;
+    inline constexpr std::size_t sound_work_ram_size = 0x1000U;
 
     // V30 I/O ports. Reads are active-low input bytes; the write side carries
     // the sound latch, the board-control register, the sprite-DMA trigger,
@@ -69,19 +83,24 @@ namespace mnemos::manifests::irem_m72 {
     // raster compare, both pulsed for one scanline.
     inline constexpr std::uint16_t port_pic_a0 = 0x40U;
     inline constexpr std::uint16_t port_pic_a1 = 0x42U;
-    // V30 <-> protection-MCU latch pair (first-cut port; present only when
-    // the set carries an "mcu" program region). An OUT writes the
-    // main-to-MCU latch and pulses the MCU's INT1; an IN reads the MCU's
+    // V30 <-> protection-MCU latch pair. An OUT writes the main-to-MCU latch;
+    // real MCU boards pulse INT1, while declared no-dump HLE profiles only
+    // acknowledge the board-facing command and sample trigger. An IN reads the
     // reply latch.
     inline constexpr std::uint16_t port_mcu_latch = 0xC0U;
     // Scroll registers as four little-endian words: +0/+2 = playfield A Y/X,
     // +4/+6 = playfield B Y/X.
     inline constexpr std::uint16_t port_out_scroll_base = 0x80U;
 
-    // Protection-MCU external (MOVX) map: the sample ROM low, the latch
-    // pair at the top (first-cut layout).
-    inline constexpr std::uint32_t mcu_latch_in = 0xE000U;  // main -> MCU
-    inline constexpr std::uint32_t mcu_latch_out = 0xE001U; // MCU -> main
+    // Protection-MCU external (MOVX) map. Protected M72 boards expose sample
+    // data/address latches at the low addresses and a shared 4 KiB RAM window:
+    // the V30 sees it at 0xB0000, while the MCU sees the same bytes at 0xC000.
+    inline constexpr std::uint32_t mcu_sample_data = 0x0000U;
+    inline constexpr std::uint32_t mcu_sample_addr_high = 0x0001U;
+    inline constexpr std::uint32_t mcu_latch = 0x0002U;
+    inline constexpr std::uint32_t mcu_shared_main_base = 0xB0000U;
+    inline constexpr std::uint32_t mcu_shared_movx_base = 0xC000U;
+    inline constexpr std::size_t mcu_shared_ram_size = 0x1000U;
 
     // Z80-side ports: YM2151 address/data (status readable at the data port),
     // the sound latch readable at 2 with its interrupt acknowledged by the
@@ -110,11 +129,16 @@ namespace mnemos::manifests::irem_m72 {
     struct m72_board_params final {
         std::uint32_t work_ram_base{0xA0000U};
         std::uint16_t dip_default{0xFFFFU};
+        std::optional<std::string> protection_hle_profile{};
     };
 
     // The board parameters for a declared set name; the base-map defaults
     // when the name is unknown.
     [[nodiscard]] m72_board_params board_params_for(std::string_view set_name);
+
+    // The set of manifest-declared no-dump MCU profiles this board can
+    // consume. Unknown profiles are invalid data, not hidden unprotected mode.
+    [[nodiscard]] bool supported_protection_hle_profile(std::string_view profile) noexcept;
 
     // Heap-allocated, never-moved M72 board. Built like sega32x_system: chips
     // and RAM blocks as value members, the buses holding spans into them, the
@@ -144,7 +168,10 @@ namespace mnemos::manifests::irem_m72 {
         std::array<std::uint8_t, vram_size> vram_a{};
         std::array<std::uint8_t, vram_size> vram_b{};
         std::array<std::uint8_t, work_ram_size> work_ram{};
+        std::array<std::uint8_t, mcu_shared_ram_size> mcu_shared_ram{};
         // The Z80's whole program/work RAM, shared with the V30 at 0xE0000.
+        // In ROM-backed sound mode, only the 0xF000-0xFFFF tail is mapped on
+        // the sound bus and the V30 upload window is absent.
         std::array<std::uint8_t, sound_ram_size> sound_ram{};
 
         std::uint8_t sound_latch{};
@@ -153,6 +180,7 @@ namespace mnemos::manifests::irem_m72 {
         std::uint8_t input_system{0xFFU}; // start/coin/service, active low
         std::uint16_t dip_switches{0xFFFFU};
         std::uint8_t control_register{}; // port 0x02 latch (coin/flip/blank/reset)
+        std::array<std::uint32_t, 2> coin_counters{}; // rising edges on control bits 0/1
         std::array<std::uint8_t, 8> scroll_regs{};
         std::array<std::uint8_t, 2> raster_regs{};
         // The Z80's INT line is the OR of the pending sound latch and the
@@ -161,24 +189,40 @@ namespace mnemos::manifests::irem_m72 {
         bool sound_latch_irq{};
         // Sample-ROM read cursor (Z80 ports 0x80/0x81 set it, reads at 0x84
         // auto-increment it through the "samples" region).
-        std::uint16_t sample_address{};
+        std::uint32_t sample_address{};
+        struct dac_write_event final {
+            std::uint64_t sound_clock{};
+            std::int16_t output{};
+        };
+        std::vector<dac_write_event> dac_write_events{};
         // V30 <-> protection-MCU latch pair.
         std::uint8_t main_to_mcu{};
         std::uint8_t mcu_to_main{};
+        std::uint32_t mcu_sample_address{};
         bool mcu_present{};
+        bool protection_hle_present{};
+        bool sound_rom_present{};
 
         void update_sound_irq() noexcept {
             sound_cpu.set_irq_line(sound_latch_irq || fm.irq_asserted());
         }
+        void record_dac_write(std::uint8_t value);
+        void discard_dac_write_events_before(std::uint64_t sound_clock);
 
         explicit m72_system(common::rom_set_image image, m72_board_params board_params = {});
+
+        // Whole-board save-state: chip state, writable board RAM, and glue
+        // latches/cursors that live outside any chip.
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
     };
 
     // The board's canonical ROM-set declaration skeleton: the program region
     // with its fixed size and no files. A game declaration copies it, fills
     // in the dump files (and reloads), and appends its graphics / sample
-    // regions. There is no sound-program region -- the Z80 runs from the
-    // shared RAM the V30 fills at boot.
+    // regions. Sets without a sound-program region use the original
+    // upload-RAM sound path; sets carrying "soundcpu" use the ROM-backed Z80
+    // map described above.
     [[nodiscard]] common::rom_set_decl m72_rom_skeleton(std::string set_name);
 
     [[nodiscard]] std::unique_ptr<m72_system> assemble_m72(common::rom_set_image image,

@@ -23,4 +23,13 @@ Currently wired:
 ## Keys
 
 - `ESC` quit, `F11` fullscreen toggle, `P` pause, `F12` framebuffer dump.
-- Keyboard: arrows = dpad, `Z`/`X`/`C` = A/B/C, `Enter` = Start.
+- Keyboard: arrows = dpad, `Z`/`X`/`C` = A/B/C, `A`/`S`/`D` = X/Y/Z,
+  `Enter` or `1` = Start, `Backspace` or `5` = Select / arcade coin,
+  `Shift` or `F2` = Mode / arcade service.
+
+## Headless Input
+
+- `--press <button>@<frame>[+duration]` scripts port 1 for screenshots,
+  animations, asset extraction, and rendered-audio exports.
+- `--press pN:<button>@<frame>[+duration]` targets a specific 1-based input
+  port, e.g. `--press p2:select@120+4` for player-2 coin on arcade boards.

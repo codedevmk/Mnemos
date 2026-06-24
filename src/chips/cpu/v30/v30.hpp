@@ -31,12 +31,13 @@ namespace mnemos::chips::cpu {
     // through an injected acknowledge callback (unset -> vector 0).
     //
     // The V30 0F-prefix extension group implements the bit-manipulation set
-    // (TEST1/CLR1/SET1/NOT1), the nibble rotates (ROL4/ROR4), and the
-    // packed-BCD strings (ADD4S/SUB4S/CMP4S); the bitfield ops (INS/EXT) and
-    // BRKEM 8080-emulation entry are consumed as no-ops. Deferred to later
-    // increments (docs/plans/2026-06-10-irem-m72-port.md): those no-op forms,
+    // (TEST1/CLR1/SET1/NOT1), the nibble rotates (ROL4/ROR4), the packed-BCD
+    // strings (ADD4S/SUB4S/CMP4S), and bitfield insert/extract (INS/EXT).
+    // FPO2 and BRKEM consume their documented operands but stub coprocessor
+    // and 8080-emulation behavior because no M72 title depends on either.
+    // Deferred to later increments (docs/plans/2026-06-10-irem-m72-port.md):
     // exact V30 cycle timing (costs here are first-order documented
-    // 8086-family values), and REP interruptibility.
+    // 8086-family values), REP interruptibility, and real BRKEM mode switch.
     class v30 final : public icpu, public cpu_catch_up<v30> {
       public:
         // PSW (FLAGS) bits.

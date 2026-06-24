@@ -7,6 +7,7 @@
 #include "debug_dump.hpp"
 #include "player_system.hpp"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -49,6 +50,24 @@ namespace {
         return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
     }
 
+    void apply_press_events(mnemos::frontend_sdk::player_system& sys,
+                            const std::vector<mnemos::apps::player::adapters::press_event>& events,
+                            std::uint64_t frame) {
+        if (events.empty()) {
+            return;
+        }
+        std::uint32_t max_port = 0U;
+        for (const auto& event : events) {
+            if (event.port_index > max_port) {
+                max_port = event.port_index;
+            }
+        }
+        for (std::uint32_t port = 0; port <= max_port; ++port) {
+            sys.apply_input(static_cast<int>(port),
+                            mnemos::apps::player::adapters::input_for_frame(events, frame, port));
+        }
+    }
+
 } // namespace
 
 namespace mnemos::apps::player {
@@ -61,7 +80,6 @@ namespace mnemos::apps::player {
     std::optional<int> run_headless_request(frontend_sdk::player_system* system,
                                             const headless_requests& requests, int argc,
                                             char* argv[]) {
-        using adapters::input_for_frame;
         using adapters::parse_press_events;
 
         if (requests.capabilities) {
@@ -93,9 +111,7 @@ namespace mnemos::apps::player {
             const auto swap_frames = parse_swap_frames(argc, argv);
             for (std::uint64_t i = 0; i < requests.screenshot->frames; ++i) {
                 trace_frame = i + 1U;
-                if (!press_events.empty()) {
-                    system->apply_input(0, input_for_frame(press_events, i + 1U));
-                }
+                apply_press_events(*system, press_events, i + 1U);
                 apply_disk_swaps(*system, swap_frames, i + 1U);
                 system->step_one_frame();
             }
@@ -129,9 +145,7 @@ namespace mnemos::apps::player {
             std::vector<debug::animation_frame> frames;
             frames.reserve(static_cast<std::size_t>(requests.record_animation->frames));
             for (std::uint64_t i = 0; i < requests.record_animation->frames; ++i) {
-                if (!press_events.empty()) {
-                    system->apply_input(0, input_for_frame(press_events, i + 1U));
-                }
+                apply_press_events(*system, press_events, i + 1U);
                 system->step_one_frame();
                 auto frame = debug::capture_animation_frame(*system);
                 if (!frame) {
@@ -181,9 +195,7 @@ namespace mnemos::apps::player {
             }
             const auto press_events = parse_press_events(argc, argv);
             for (std::uint64_t i = 0; i < requests.extract_assets->frames; ++i) {
-                if (!press_events.empty()) {
-                    system->apply_input(0, input_for_frame(press_events, i + 1U));
-                }
+                apply_press_events(*system, press_events, i + 1U);
                 system->step_one_frame();
             }
             const std::size_t count = debug::export_assets(*system, requests.extract_assets->base);
@@ -206,10 +218,7 @@ namespace mnemos::apps::player {
             const std::size_t rendered =
                 debug::export_rendered_audio(*system, requests.extract_audio->frames,
                                              requests.extract_audio->base, [&](std::uint64_t i) {
-                                                 if (!press_events.empty()) {
-                                                     system->apply_input(
-                                                         0, input_for_frame(press_events, i + 1U));
-                                                 }
+                                                 apply_press_events(*system, press_events, i + 1U);
                                                  apply_disk_swaps(*system, swap_frames, i + 1U);
                                              });
             const std::size_t count = debug::export_audio(*system, requests.extract_audio->base);

@@ -110,6 +110,31 @@ namespace mnemos::manifests::common {
         return image;
     }
 
+    rom_set_decl inherit_parent_regions(const rom_set_decl& parent, rom_set_decl child) {
+        std::vector<rom_set_region> merged = parent.regions;
+        for (rom_set_region& child_region : child.regions) {
+            bool replaced = false;
+            for (rom_set_region& region : merged) {
+                if (region.name == child_region.name) {
+                    region = std::move(child_region);
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                merged.push_back(std::move(child_region));
+            }
+        }
+        child.regions = std::move(merged);
+        if (child.dips.empty()) {
+            child.dips = parent.dips;
+        }
+        if (child.hle.empty()) {
+            child.hle = parent.hle;
+        }
+        return child;
+    }
+
     rom_file_provider make_directory_rom_provider(std::string directory) {
         return [dir = std::move(directory)](
                    std::string_view name) -> std::optional<std::vector<std::uint8_t>> {

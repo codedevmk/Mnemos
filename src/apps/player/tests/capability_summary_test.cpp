@@ -146,7 +146,8 @@ namespace {
         CHECK(summary.find(needle) != std::string::npos);
     }
 
-    void require_common_session_controls(const std::string& summary) {
+    void require_common_session_controls(const std::string& summary,
+                                         bool rollback_available = false) {
         require_line(summary, "schema=1 producer=mnemos.debug.capability_discovery@1");
         require_line(summary,
                      "capability session session.input.port.0 state=available control=enabled "
@@ -160,14 +161,27 @@ namespace {
         require_line(summary,
                      "capability session session.mode.input_delay state=available control=enabled "
                      "scope=session provider=mnemos.debug.session");
-        require_line(summary,
-                     "capability session session.mode.rollback state=unavailable control=hidden "
-                     "scope=session provider=mnemos.debug.session");
+        if (rollback_available) {
+            require_line(summary,
+                         "capability session session.mode.rollback state=available control=enabled "
+                         "scope=session provider=mnemos.debug.session");
+        } else {
+            require_line(summary,
+                         "capability session session.mode.rollback state=unavailable control=hidden "
+                         "scope=session provider=mnemos.debug.session");
+        }
     }
 
     void require_degraded_media(const std::string& summary, std::string_view media_id) {
         const std::string line = "capability media " + std::string{media_id} +
                                  " state=degraded control=disabled scope=media "
+                                 "provider=mnemos.debug.media";
+        require_line(summary, line);
+    }
+
+    void require_available_media(const std::string& summary, std::string_view media_id) {
+        const std::string line = "capability media " + std::string{media_id} +
+                                 " state=available control=enabled scope=media "
                                  "provider=mnemos.debug.media";
         require_line(summary, line);
     }
@@ -225,8 +239,8 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
     SECTION("Irem M72") {
         irem_m72::irem_m72_adapter adapter(irem_m72_program(), "Tiny M72");
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
-        require_degraded_media(summary, "media.rom_set");
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
     }
 
     SECTION("Capcom CPS1") {

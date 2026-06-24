@@ -75,6 +75,10 @@ multiple independent open-source implementations.
 - **C64 cartridge `.crt` container** — the de-facto community format
   originally defined by the CCS64 project and adopted by all subsequent C64
   emulators.
+- **NEC V20/V30 opcode references** — public NEC V-series user manuals, RBIL
+  opcode notes, and assembler opcode-table discussions were used only to
+  confirm the FPO2 `66/67 ModR/M` escape form and `0F FF imm8` BRKEM operand
+  length. No assembler or emulator code was copied.
 
 ## Cartridge / mapper protocol notes
 
@@ -93,6 +97,16 @@ multiple independent open-source implementations.
   (`src/manifests/sms/sms_system.cpp`), compiled from the community Game Gear
   cartridge database and cross-checked against open-source Sega emulators' game
   lists. The 93C46 Microwire protocol is the published Microchip datasheet.
+- **Irem M72 ROM-set metadata** — declarative game manifests under
+  `src/manifests/irem_m72/games/` use public MAME M72 driver metadata for dump
+  filenames, offsets, reloads, CRC-32s, parent/clone relationships, cabinet
+  orientation, and true-M72 DIP switch / coinage tables. The
+  no-dump `dbreedm72` / `dkgensanm72` manifests also carry explicit HLE
+  declarations from the public missing-i8751 notes and startup RAM inversion
+  behavior. Their sample-trigger cursor starts are profile data cross-checked
+  against MAME's public M72 driver and bounded by the declared sample ROM at
+  runtime. No fake protection code arrays, emulator source code, or ROM data
+  are copied into Mnemos.
 - **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
   CPS-B custom chip has a per-board scrambled register map (layer-control,
   priority, palette-control, layer-enable, protection ports) and a graphics-code

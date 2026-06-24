@@ -1,0 +1,397 @@
+# Armed Police Unit Gallop (Japan, M72 hardware) -- Irem M72 protected board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "gallopm72"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x000c
+default = 0x000c
+
+[[dip.option]]
+label = "Very Easy"
+value = 0x0000
+
+[[dip.option]]
+label = "Easy"
+value = 0x0008
+
+[[dip.option]]
+label = "Normal"
+value = 0x000c
+
+[[dip.option]]
+label = "Hard"
+value = 0x0004
+
+[[dip]]
+bank = "SW1"
+name = "Allow Continue"
+mask = 0x0020
+default = 0x0020
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0020
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0040
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0040
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0600
+default = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip.option]]
+label = "Upright (2P)"
+value = 0x0200
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0600
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0800
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coinage"
+mask = 0xf000
+default = 0xf000
+condition_mask = 0x0800
+condition_value = 0x0800
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0xa000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0xb000
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0xc000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0xd000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0xe000
+
+[[dip.option]]
+label = "2 Coins to Start/1 to Continue"
+value = 0x1000
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x3000
+
+[[dip.option]]
+label = "4 Coins / 3 Credits"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0xf000
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x9000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x7000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x6000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x5000
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin A"
+mask = 0x3000
+default = 0x3000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x1000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x3000
+
+[[dip]]
+bank = "SW2"
+name = "Coin B"
+mask = 0xc000
+default = 0xc000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0xc000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "cc_c-h0-.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x2217dcd0
+
+[[region.file]]
+name   = "cc_c-l0-.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xff39d7fb
+
+[[region.file]]
+name   = "cc_c-h3-.ic43"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x9b2bbab9
+
+[[region.file]]
+name   = "cc_c-h3-.ic43"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x9b2bbab9
+
+[[region.file]]
+name   = "cc_c-l3-.ic34"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xacd3278e
+
+[[region.file]]
+name   = "cc_c-l3-.ic34"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0xacd3278e
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "cc_c-pr-.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0xac4421b1
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "cc_c-00.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x9d99deaa
+
+[[region.file]]
+name   = "cc_c-10.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x7eb083ed
+
+[[region.file]]
+name   = "cc_c-20.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x9421489e
+
+[[region.file]]
+name   = "cc_c-30.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x920ec735
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "cc_b-a0.ic21"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xa33472bd
+
+[[region.file]]
+name   = "cc_b-a1.ic22"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x118b1f2d
+
+[[region.file]]
+name   = "cc_b-a2.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x83cebf48
+
+[[region.file]]
+name   = "cc_b-a3.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x572903fc
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "cc_b-b0.ic26"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x0df5b439
+
+[[region.file]]
+name   = "cc_b-b1.ic27"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x010b778f
+
+[[region.file]]
+name   = "cc_b-b2.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xbda9f6fb
+
+[[region.file]]
+name   = "cc_b-b3.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xd361ba3f
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "cc_c-v0.ic44"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x6247bade

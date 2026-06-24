@@ -493,7 +493,8 @@ int main(int argc, char* argv[]) {
         // can switch input mid-session. Adapters ignore buttons their hardware
         // doesn't have.
         //   Keyboard: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z (Genesis
-        //             6-button extras), Enter = Start, LShift = Mode.
+        //             6-button extras), Enter/1 = Start, Backspace/5 = Select
+        //             (arcade coin), LShift/F2 = Mode (arcade service).
         //   Gamepad : dpad + left stick = dpad, South/East/West = A/B/C,
         //             North = X, L1/R1 = Y/Z, Start/Back = Start/Mode.
         {
@@ -509,8 +510,11 @@ int main(int argc, char* argv[]) {
             pad.x = keys[SDL_SCANCODE_A];
             pad.y = keys[SDL_SCANCODE_S];
             pad.z = keys[SDL_SCANCODE_D];
-            pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
-            pad.mode = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+            pad.start =
+                keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER] || keys[SDL_SCANCODE_1];
+            pad.select = keys[SDL_SCANCODE_BACKSPACE] || keys[SDL_SCANCODE_5];
+            pad.mode =
+                keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT] || keys[SDL_SCANCODE_F2];
             merge_gamepad(pad, gamepad);
             if (system) {
                 system->apply_input(0, pad);

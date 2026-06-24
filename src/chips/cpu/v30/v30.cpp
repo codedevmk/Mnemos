@@ -1042,7 +1042,8 @@ namespace mnemos::chips::cpu {
             break;
         case 0x66U: // FPO2 (no coprocessor fitted)
         case 0x67U:
-            take_cycles(2);
+            fetch_modrm();
+            take_cycles(2 + ea_cycles());
             break;
         case 0x6CU: // INS/OUTS are REP-able string instructions
         case 0x6DU:
@@ -1664,10 +1665,10 @@ namespace mnemos::chips::cpu {
     void v30::exec_0f() {
         // The V20/V30 extension group. Implemented: the bit-manipulation set
         // (TEST1/CLR1/SET1/NOT1 by CL or immediate), the nibble rotates
-        // (ROL4/ROR4), and the packed-BCD strings (ADD4S/SUB4S/CMP4S). The
-        // bitfield ops (INS/EXT), FPO2 forms, and BRKEM 8080-emulation entry
-        // execute as no-ops (their operand bytes are consumed) until a title
-        // demands them.
+        // (ROL4/ROR4), the packed-BCD strings (ADD4S/SUB4S/CMP4S), and
+        // bitfield insert/extract (INS/EXT). FPO2 forms and the BRKEM
+        // 8080-emulation entry consume their operands but execute as no-ops;
+        // remaining encodings are one-extension-byte no-ops.
         const std::uint8_t extension = fetch8();
         switch (extension) {
         case 0x10U:   // TEST1 r/m8, CL
@@ -1767,8 +1768,12 @@ namespace mnemos::chips::cpu {
         case 0x3BU: // EXT reg, imm4
             exec_ins_ext(true, true);
             break;
+        case 0xFFU: // BRKEM imm8: no 8080-emulation mode switch in M72.
+            static_cast<void>(fetch8());
+            take_cycles(2);
+            break;
         default:
-            // FPO2 forms, BRKEM, and the remaining encodings: no-op.
+            // Remaining encodings: no-op.
             take_cycles(2);
             break;
         }

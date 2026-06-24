@@ -249,6 +249,163 @@ TEST_CASE("mcs51 edge-sensed INT0 vectors to 0x0003 and RETI returns", "[mcs51]"
     CHECK(cpu.cpu_registers().pc == 0x0012U); // back at the idle loop
 }
 
+TEST_CASE("mcs51 high-priority interrupts preempt a low-priority service routine", "[mcs51]") {
+    mcs51 cpu;
+    // Main: set INT0/INT1 edge-triggered, make INT1 high priority through IP,
+    // enable both external sources, then idle. INT0's ISR intentionally loops
+    // without RETI so the test can prove only the high-priority source nests.
+    std::vector<std::uint8_t> program(0x40U, 0x00U);
+    program[0x00] = 0x80U; // SJMP +0x1E -> main at 0x20
+    program[0x01] = 0x1EU;
+    program[0x03] = 0x75U; // low ISR: MOV 30,#11
+    program[0x04] = 0x30U;
+    program[0x05] = 0x11U;
+    program[0x06] = 0x80U; // SJMP self
+    program[0x07] = 0xFEU;
+    program[0x13] = 0x75U; // high ISR: MOV 31,#22; RETI
+    program[0x14] = 0x31U;
+    program[0x15] = 0x22U;
+    program[0x16] = 0x32U;
+    const std::vector<std::uint8_t> main_code{
+        0xD2U, 0x88U,        // SETB TCON.IT0
+        0xD2U, 0x8AU,        // SETB TCON.IT1
+        0x75U, 0xB8U, 0x04U, // MOV IP,#PX1
+        0x75U, 0xA8U, 0x85U, // MOV IE,#EA|EX0|EX1
+        0x80U, 0xFEU,        // SJMP self
+    };
+    for (std::size_t i = 0; i < main_code.size(); ++i) {
+        program[0x20U + i] = main_code[i];
+    }
+    cpu.attach_program(program);
+
+    run(cpu, 5); // jump to main, configure IT0/IT1/IP/IE
+    CHECK(cpu.cpu_registers().pc == 0x002AU);
+
+    cpu.set_int0_line(true);
+    cpu.set_int0_line(false);
+    cpu.step_instruction(); // low-priority INT0 accepted
+    CHECK(cpu.cpu_registers().pc == 0x0003U);
+    cpu.step_instruction(); // low ISR marker
+    CHECK(cpu.peek_direct(0x30U) == 0x11U);
+    CHECK(cpu.cpu_registers().pc == 0x0006U);
+
+    cpu.set_int1_line(true);
+    cpu.set_int1_line(false);
+    cpu.step_instruction(); // high-priority INT1 preempts the low ISR
+    CHECK(cpu.cpu_registers().pc == 0x0013U);
+
+    cpu.set_int0_line(true);
+    cpu.set_int0_line(false);
+    cpu.step_instruction(); // high ISR body executes; low INT0 cannot preempt it
+    CHECK(cpu.peek_direct(0x31U) == 0x22U);
+    CHECK(cpu.cpu_registers().pc == 0x0016U);
+    cpu.step_instruction(); // RETI from high ISR resumes the low ISR
+    CHECK(cpu.cpu_registers().pc == 0x0006U);
+    cpu.step_instruction(); // pending low INT0 is still masked by the active low ISR
+    CHECK(cpu.cpu_registers().pc == 0x0006U);
+}
+
+TEST_CASE("mcs51 serial RI and TI flags request vector 0x0023", "[mcs51]") {
+    mcs51 cpu;
+    // Serial RI/TI flags share the 0x23 vector. The hardware does not clear
+    // either flag on interrupt entry; firmware clears SCON.RI/TI explicitly.
+    std::vector<std::uint8_t> program(0x30U, 0x00U);
+    program[0x23] = 0x75U; // MOV 32,#5A
+    program[0x24] = 0x32U;
+    program[0x25] = 0x5AU;
+    program[0x26] = 0x32U; // RETI
+    cpu.attach_program(program);
+    cpu.poke_direct(0x98U, 0x01U); // SCON.RI
+    cpu.poke_direct(0xA8U, 0x90U); // IE.EA | IE.ES
+
+    cpu.step_instruction(); // serial interrupt accepted
+    CHECK(cpu.cpu_registers().pc == 0x0023U);
+    cpu.step_instruction(); // ISR marker
+    CHECK(cpu.peek_direct(0x32U) == 0x5AU);
+    CHECK((cpu.peek_direct(0x98U) & 0x01U) != 0U);
+    cpu.step_instruction(); // RETI
+    CHECK(cpu.cpu_registers().pc == 0x0000U);
+    CHECK((cpu.peek_direct(0x98U) & 0x01U) != 0U);
+
+    cpu.poke_direct(0x98U, 0x02U); // SCON.TI requests the same source
+    cpu.step_instruction();
+    CHECK(cpu.cpu_registers().pc == 0x0023U);
+}
+
+TEST_CASE("mcs51 SBUF transmit completes after a frame and survives save state", "[mcs51]") {
+    mcs51 cpu;
+    const std::vector<std::uint8_t> program(16U, 0x00U);
+    cpu.attach_program(program);
+    std::vector<std::uint8_t> sent;
+    cpu.set_serial_transmit_callback([&sent](std::uint8_t value) { sent.push_back(value); });
+
+    cpu.poke_direct(0x99U, 0xA5U); // write-only TX side of SBUF
+    CHECK(cpu.peek_direct(0x99U) == 0x00U); // reads expose the independent RX buffer
+    run(cpu, 7);
+    CHECK((cpu.peek_direct(0x98U) & 0x02U) == 0U);
+    CHECK(sent.empty());
+
+    std::vector<std::uint8_t> snapshot;
+    mnemos::chips::state_writer writer(snapshot);
+    cpu.save_state(writer);
+
+    mcs51 restored;
+    restored.attach_program(program);
+    mnemos::chips::state_reader reader(snapshot);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+
+    std::vector<std::uint8_t> restored_sent;
+    restored.set_serial_transmit_callback(
+        [&restored_sent](std::uint8_t value) { restored_sent.push_back(value); });
+    restored.step_instruction();
+    CHECK((restored.peek_direct(0x98U) & 0x02U) != 0U);
+    REQUIRE(restored_sent.size() == 1U);
+    CHECK(restored_sent[0] == 0xA5U);
+    CHECK(sent.empty());
+}
+
+TEST_CASE("mcs51 serial receive byte updates SBUF RI and RB8 when enabled", "[mcs51]") {
+    mcs51 cpu;
+
+    cpu.serial_receive_byte(0x5AU, true);
+    CHECK(cpu.peek_direct(0x99U) == 0x00U);
+    CHECK((cpu.peek_direct(0x98U) & 0x05U) == 0U);
+
+    cpu.poke_direct(0x98U, 0x10U); // SCON.REN
+    cpu.serial_receive_byte(0x5AU, true);
+    CHECK(cpu.peek_direct(0x99U) == 0x5AU);
+    CHECK((cpu.peek_direct(0x98U) & 0x05U) == 0x05U); // RI | RB8
+
+    cpu.serial_receive_byte(0xA5U, false);
+    CHECK(cpu.peek_direct(0x99U) == 0xA5U);
+    CHECK((cpu.peek_direct(0x98U) & 0x01U) != 0U);
+    CHECK((cpu.peek_direct(0x98U) & 0x04U) == 0U);
+}
+
+TEST_CASE("mcs51 timer 1 overflows clock serial mode 1 transmit frames", "[mcs51]") {
+    mcs51 cpu;
+    const std::vector<std::uint8_t> program(400U, 0x00U);
+    cpu.attach_program(program);
+    std::vector<std::uint8_t> sent;
+    cpu.set_serial_transmit_callback([&sent](std::uint8_t value) { sent.push_back(value); });
+
+    cpu.poke_direct(0x98U, 0x40U); // SCON.SM1: serial mode 1, 10-bit frame
+    cpu.poke_direct(0x89U, 0x20U); // TMOD: timer 1 mode 2 auto-reload
+    cpu.poke_direct(0x8DU, 0xFFU); // TH1 reload causes one overflow per machine cycle
+    cpu.poke_direct(0x8BU, 0xFFU); // TL1 starts at overflow edge
+    cpu.poke_direct(0x88U, 0x40U); // TCON.TR1
+    cpu.poke_direct(0x99U, 0x3CU);
+
+    run(cpu, 319);
+    CHECK((cpu.peek_direct(0x98U) & 0x02U) == 0U);
+    CHECK(sent.empty());
+    cpu.step_instruction();
+    CHECK((cpu.peek_direct(0x98U) & 0x02U) != 0U);
+    REQUIRE(sent.size() == 1U);
+    CHECK(sent[0] == 0x3CU);
+}
+
 TEST_CASE("mcs51 timer 0 mode 2 auto-reloads and interrupts", "[mcs51]") {
     mcs51 cpu;
     // MOV TMOD,#0x02 (T0 mode 2); MOV TH0,#0xFC; MOV TL0,#0xFC;
@@ -278,6 +435,53 @@ TEST_CASE("mcs51 timer 0 mode 2 auto-reloads and interrupts", "[mcs51]") {
     // TL0 counts from 0xFC: overflows after 4 machine cycles of idling.
     run(cpu, 8); // idle SJMPs accumulate cycles; the ISR fires in here
     CHECK(cpu.peek_direct(0x31U) == 0x77U);
+}
+
+TEST_CASE("mcs51 timer mode 0 counts as a 13-bit timer", "[mcs51]") {
+    mcs51 cpu;
+    const std::vector<std::uint8_t> program{0x00U, 0x00U, 0x00U};
+    cpu.attach_program(program);
+    cpu.poke_direct(0x89U, 0x00U); // TMOD: timer 0 mode 0
+    cpu.poke_direct(0x8CU, 0xFFU); // TH0: upper 8 bits
+    cpu.poke_direct(0x8AU, 0xBEU); // TL0: upper 3 bits preserved, low 5 bits = 0x1E
+    cpu.poke_direct(0x88U, 0x10U); // TCON.TR0
+
+    cpu.step_instruction(); // NOP: 0x1FFE -> 0x1FFF
+    CHECK(cpu.peek_direct(0x8CU) == 0xFFU);
+    CHECK(cpu.peek_direct(0x8AU) == 0xBFU);
+    CHECK((cpu.peek_direct(0x88U) & 0x20U) == 0U);
+
+    cpu.step_instruction(); // 0x1FFF -> 0x0000, TF0 set
+    CHECK(cpu.peek_direct(0x8CU) == 0x00U);
+    CHECK(cpu.peek_direct(0x8AU) == 0xA0U); // TL0 upper bits are not part of the counter
+    CHECK((cpu.peek_direct(0x88U) & 0x20U) != 0U);
+}
+
+TEST_CASE("mcs51 timer mode 3 splits timer 0 into TL0 and TH0 halves", "[mcs51]") {
+    mcs51 cpu;
+    const std::vector<std::uint8_t> program{0x00U, 0x00U, 0x00U};
+    cpu.attach_program(program);
+    cpu.poke_direct(0x89U, 0x13U); // T0 mode 3, T1 mode 1
+    cpu.poke_direct(0x8AU, 0xFEU); // TL0
+    cpu.poke_direct(0x8CU, 0xFEU); // TH0
+    cpu.poke_direct(0x8BU, 0xFEU); // TL1: stopped while T0 is in mode 3
+    cpu.poke_direct(0x8DU, 0xFEU); // TH1
+    cpu.poke_direct(0x88U, 0x50U); // TCON.TR0 | TCON.TR1
+
+    cpu.step_instruction();
+    CHECK(cpu.peek_direct(0x8AU) == 0xFFU);
+    CHECK(cpu.peek_direct(0x8CU) == 0xFFU);
+    CHECK(cpu.peek_direct(0x8BU) == 0xFEU);
+    CHECK(cpu.peek_direct(0x8DU) == 0xFEU);
+    CHECK((cpu.peek_direct(0x88U) & 0xA0U) == 0U);
+
+    cpu.step_instruction();
+    CHECK(cpu.peek_direct(0x8AU) == 0x00U);
+    CHECK(cpu.peek_direct(0x8CU) == 0x00U);
+    CHECK(cpu.peek_direct(0x8BU) == 0xFEU);
+    CHECK(cpu.peek_direct(0x8DU) == 0xFEU);
+    CHECK((cpu.peek_direct(0x88U) & 0x20U) != 0U); // TF0 from TL0
+    CHECK((cpu.peek_direct(0x88U) & 0x80U) != 0U); // TF1 from TH0
 }
 
 TEST_CASE("mcs51 save and load round-trips mid-program", "[mcs51]") {

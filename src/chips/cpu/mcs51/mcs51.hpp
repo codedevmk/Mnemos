@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <utility>
 
 namespace mnemos::chips::cpu {
 
@@ -27,10 +28,13 @@ namespace mnemos::chips::cpu {
     // latches/RAM. Port reads/writes route through optional per-port
     // callbacks (unset: reads return the latch, writes only update it).
     //
-    // Interrupts: external INT0/INT1 (IT0/IT1 edge or level sense) and the
-    // timer 0/1 overflows through IE, vectoring to 0x03/0x0B/0x13/0x1B with
-    // a single in-service level (nested priority via IP is deferred, as are
-    // the serial port and timer mode 3).
+    // Interrupts: external INT0/INT1 (IT0/IT1 edge or level sense), timer 0/1
+    // overflows, and serial RI/TI through IE/IP, vectoring to
+    // 0x03/0x0B/0x13/0x1B/0x23. The two-level priority model is implemented:
+    // high-priority sources can preempt low-priority ISRs, while equal/lower-
+    // priority sources wait for RETI. Timer modes 0/1/2/3 are modelled; SBUF
+    // transmit/receive is modelled at frame granularity (bit-level pins and
+    // external serial-clock waveforms are below this core boundary).
     //
     // Instruction-stepped: step_instruction() returns the machine-cycle cost
     // (one machine cycle = 12 oscillator clocks on the classic part);
@@ -48,6 +52,7 @@ namespace mnemos::chips::cpu {
 
         using port_in_fn = std::function<std::uint8_t(int port)>;
         using port_out_fn = std::function<void(int port, std::uint8_t value)>;
+        using serial_tx_fn = std::function<void(std::uint8_t value)>;
 
         // A snapshot / load image of the architectural register file.
         struct registers final {
@@ -87,6 +92,10 @@ namespace mnemos::chips::cpu {
         // latch alone. Writes always update the latch, then notify.
         void set_port_in(port_in_fn handler) noexcept { port_in_ = std::move(handler); }
         void set_port_out(port_out_fn handler) noexcept { port_out_ = std::move(handler); }
+        void set_serial_transmit_callback(serial_tx_fn handler) noexcept {
+            serial_tx_ = std::move(handler);
+        }
+        void serial_receive_byte(std::uint8_t value, bool ninth_bit = false) noexcept;
 
         // External interrupt pins (TCON.IT0/IT1 select edge or level sense).
         void set_int0_line(bool asserted) noexcept;
@@ -140,10 +149,16 @@ namespace mnemos::chips::cpu {
         void do_subb(std::uint8_t value) noexcept;
 
         // ---- execution ----
-        void interrupt(std::uint16_t vector) noexcept;
+        void interrupt(std::uint16_t vector, bool high_priority) noexcept;
         [[nodiscard]] bool service_interrupts() noexcept;
         int exec_one();
         void timers_tick(std::uint32_t machine_cycles) noexcept;
+        [[nodiscard]] std::uint8_t serial_mode() const noexcept;
+        [[nodiscard]] std::uint8_t serial_frame_bits() const noexcept;
+        void serial_begin_transmit(std::uint8_t value) noexcept;
+        void serial_transmit_bit_elapsed() noexcept;
+        void serial_timer1_overflow() noexcept;
+        void serial_tick(std::uint32_t machine_cycles) noexcept;
 
         std::span<const std::uint8_t> program_{};
         std::array<std::uint8_t, 128> iram_{};
@@ -158,7 +173,13 @@ namespace mnemos::chips::cpu {
 
         bool int0_line_{};
         bool int1_line_{};
-        bool in_interrupt_{}; // single in-service level (RETI clears)
+        std::uint8_t active_interrupt_priorities_{}; // bit 0 low, bit 1 high; RETI pops highest
+        std::uint8_t serial_rx_buffer_{};
+        std::uint8_t serial_tx_buffer_{};
+        std::uint8_t serial_tx_bits_remaining_{};
+        std::uint8_t serial_tx_timer1_divider_{};
+        std::uint16_t serial_tx_oscillator_accum_{};
+        bool serial_tx_active_{};
 
         int step_cycles_{};
         // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
@@ -168,6 +189,7 @@ namespace mnemos::chips::cpu {
         ibus* bus_{};
         port_in_fn port_in_{};
         port_out_fn port_out_{};
+        serial_tx_fn serial_tx_{};
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
         std::array<register_descriptor, 6> register_view_{};

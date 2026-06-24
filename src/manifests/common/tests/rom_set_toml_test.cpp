@@ -67,6 +67,8 @@ fill = 0x00
     CHECK(decl.regions[1].files.empty());
     CHECK_FALSE(decl.cps_b_profile.has_value()); // optional key, absent here
     CHECK_FALSE(decl.parent.has_value());        // optional key, absent here
+    CHECK(decl.dips.empty());                    // cabinet DIP metadata is explicit
+    CHECK(decl.hle.empty());                     // explicit substitutions only
 }
 
 TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") {
@@ -103,6 +105,176 @@ TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") 
                 bad + "\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
             CHECK_FALSE(result.ok());
         }
+    }
+}
+
+TEST_CASE("rom_set_toml parses explicit HLE declarations", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "dbreedm72"
+board = "irem_m72"
+
+[[hle]]
+chip = "mcu"
+profile = "irem_m72.dbreedm72_no_dump_mcu"
+rationale = "The i8751 dump is unavailable; this profile declares the substitution."
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->hle.size() == 1U);
+    CHECK(result.value->hle[0].chip == "mcu");
+    CHECK(result.value->hle[0].profile == "irem_m72.dbreedm72_no_dump_mcu");
+    CHECK_FALSE(result.value->hle[0].rationale.empty());
+}
+
+TEST_CASE("rom_set_toml rejects bad HLE declarations", "[rom_set_toml]") {
+    SECTION("missing rationale") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("empty profile") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"\"\nrationale = \"documented\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("unknown key is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\nextra = true\n[[region]]\n"
+            "name = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses DIP switch metadata", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "rtype"
+board = "irem_m72"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->dips.size() == 1U);
+    const auto& dip = result.value->dips[0];
+    CHECK(dip.bank == "SW1");
+    CHECK(dip.name == "Lives");
+    CHECK(dip.mask == 0x0003U);
+    CHECK(dip.default_value == 0x0003U);
+    REQUIRE(dip.options.size() == 2U);
+    CHECK(dip.options[0].label == "2");
+    CHECK(dip.options[0].value == 0x0002U);
+    CHECK(dip.options[1].label == "3");
+    CHECK(dip.options[1].value == 0x0003U);
+}
+
+TEST_CASE("rom_set_toml parses conditional DIP switch metadata", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "rtype"
+board = "irem_m72"
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->dips.size() == 1U);
+    const auto& condition = result.value->dips[0].condition;
+    REQUIRE(condition.has_value());
+    CHECK(condition->mask == 0x0400U);
+    CHECK(condition->value == 0x0400U);
+}
+
+TEST_CASE("rom_set_toml rejects bad DIP switch metadata", "[rom_set_toml]") {
+    SECTION("zero mask") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 0\ndefault = 0\n[[dip.option]]\nlabel = \"3\"\n"
+            "value = 0\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("missing options") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 3\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("default outside mask") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 4\n[[dip.option]]\nlabel = \"3\"\n"
+            "value = 3\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("option outside mask") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 3\n[[dip.option]]\nlabel = \"bad\"\n"
+            "value = 4\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("unknown key") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 3\nextra = true\n[[dip.option]]\n"
+            "label = \"3\"\nvalue = 3\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("partial condition is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Coinage\"\nmask = 0xf0\ndefault = 0xf0\ncondition_mask = 0x400\n"
+            "[[dip.option]]\nlabel = \"1 Coin / 1 Credit\"\nvalue = 0xf0\n[[region]]\n"
+            "name = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("condition value outside mask is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Coinage\"\nmask = 0xf0\ndefault = 0xf0\ncondition_mask = 0x400\n"
+            "condition_value = 0x800\n[[dip.option]]\nlabel = \"1 Coin / 1 Credit\"\n"
+            "value = 0xf0\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
     }
 }
 

@@ -31,6 +31,20 @@ namespace {
         introspection_stub intro_;
     };
 
+    struct rejecting_chip final : chips::ichip {
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override { return {}; }
+        void tick(std::uint64_t) override {}
+        void reset(chips::reset_kind) override {}
+        void save_state(chips::state_writer&) const override {}
+        void load_state(chips::state_reader& r) override { r.fail(); }
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return intro_;
+        }
+
+      private:
+        introspection_stub intro_;
+    };
+
 } // namespace
 
 TEST_CASE("save state round-trips chips, memory, and the master cycle") {
@@ -97,6 +111,15 @@ TEST_CASE("save state rejects corruption and mismatches") {
         CHECK(runtime::read_save_state(blob, dst).status ==
               runtime::load_status::manifest_mismatch);
     }
+    SECTION("manifest revision mismatch") {
+        stateful_chip c2;
+        runtime::save_target dst;
+        dst.manifest_id = "sys";
+        dst.manifest_rev = 1U;
+        dst.chips.push_back({.id = "c", .chip = &c2});
+        CHECK(runtime::read_save_state(blob, dst).status ==
+              runtime::load_status::manifest_mismatch);
+    }
 }
 
 TEST_CASE("save state skips chunks with no matching target") {
@@ -116,4 +139,40 @@ TEST_CASE("save state skips chunks with no matching target") {
     const runtime::load_result result = runtime::read_save_state(blob, dst);
     CHECK(result.ok());
     CHECK(other.value == 0x55U); // untouched: the "absent" chunk had no home
+}
+
+TEST_CASE("save state reports rejected chip and component chunks") {
+    stateful_chip source_chip;
+    source_chip.value = 0x33U;
+
+    SECTION("chip") {
+        runtime::save_target src;
+        src.manifest_id = "sys";
+        src.chips.push_back({.id = "cpu", .chip = &source_chip});
+        const std::vector<std::uint8_t> blob = runtime::write_save_state(src);
+
+        rejecting_chip rejected;
+        runtime::save_target dst;
+        dst.manifest_id = "sys";
+        dst.chips.push_back({.id = "cpu", .chip = &rejected});
+        CHECK(runtime::read_save_state(blob, dst).status ==
+              runtime::load_status::chunk_rejected);
+    }
+
+    SECTION("component") {
+        runtime::save_target src;
+        src.manifest_id = "sys";
+        src.components.push_back({"board",
+                                  [](chips::state_writer& w) { w.u32(0x11223344U); },
+                                  [](chips::state_reader&) {}});
+        const std::vector<std::uint8_t> blob = runtime::write_save_state(src);
+
+        runtime::save_target dst;
+        dst.manifest_id = "sys";
+        dst.components.push_back({"board",
+                                  [](chips::state_writer&) {},
+                                  [](chips::state_reader& r) { r.fail(); }});
+        CHECK(runtime::read_save_state(blob, dst).status ==
+              runtime::load_status::chunk_rejected);
+    }
 }

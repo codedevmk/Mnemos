@@ -131,10 +131,8 @@ namespace mnemos::runtime {
         if (version != save_state_format_version) {
             return {.status = load_status::unsupported_version};
         }
-        static_cast<void>(rev); // recorded; manifest match is by id in v0.1
-
         const std::string id(id_bytes.begin(), id_bytes.end());
-        if (id != target.manifest_id) {
+        if (id != target.manifest_id || rev != target.manifest_rev) {
             return {.status = load_status::manifest_mismatch};
         }
 
@@ -182,6 +180,9 @@ namespace mnemos::runtime {
                 if (sc.id == chunk_id && sc.chip != nullptr) {
                     chips::state_reader cr(chunk);
                     sc.chip->load_state(cr);
+                    if (!cr.ok()) {
+                        return {.status = load_status::chunk_rejected};
+                    }
                     handled = true;
                     break;
                 }
@@ -204,6 +205,9 @@ namespace mnemos::runtime {
                         if (sc.load) {
                             chips::state_reader cr(chunk);
                             sc.load(cr);
+                            if (!cr.ok()) {
+                                return {.status = load_status::chunk_rejected};
+                            }
                         }
                         handled = true;
                         break;

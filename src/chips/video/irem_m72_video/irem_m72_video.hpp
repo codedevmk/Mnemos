@@ -16,11 +16,11 @@ namespace mnemos::chips::video {
     // Two 64x64-tile scrolling playfields of 8x8 4bpp planar tiles over a
     // 384x256 visible raster (512x284 total) at the 8 MHz pixel clock
     // (32 MHz board crystal / 4), ~55 Hz. tick(cycles) advances one pixel per
-    // cycle; entering the vblank region renders the completed frame
-    // (frame-at-once; a scanline renderer arrives with raster-effect parity
-    // work) and bumps frame_index(). The scanline callback fires at the start
-    // of EVERY line with its number -- the board derives its one-line vblank
-    // and raster-compare interrupt pulses from it.
+    // cycle; visible scanlines are composed at the start of their beam line
+    // and entering vblank finalizes the completed frame and bumps
+    // frame_index(). The scanline callback fires at the start of EVERY line
+    // with its number -- the board derives its one-line vblank and
+    // raster-compare interrupt pulses from it.
     //
     // The board attaches non-owning spans for VRAM / sprite RAM / palette RAM
     // / graphics ROM. Formats per the real hardware:
@@ -47,8 +47,8 @@ namespace mnemos::chips::video {
     //     for tiles.
     //
     // Sprites render from an internal holding buffer the board fills via
-    // latch_sprites() (the sprite-DMA port), never from live sprite RAM.
-    // Flip-screen lands with the cabinet pass.
+    // latch_sprites() (the sprite-DMA port), never from live sprite RAM. The
+    // board-level flip-screen bit mirrors the completed composite frame.
     class irem_m72_video final : public ivideo {
       public:
         static constexpr std::uint32_t visible_width = 384U;
@@ -114,6 +114,8 @@ namespace mnemos::chips::video {
         // Display disable (board control register bit): blanked frames render
         // black.
         void set_display_enable(bool enabled) noexcept { display_enabled_ = enabled; }
+        void set_flip_screen(bool enabled) noexcept { flip_screen_ = enabled; }
+        [[nodiscard]] bool flip_screen() const noexcept { return flip_screen_; }
         // The board's sprite DMA: copy live sprite RAM into the holding
         // buffer rendering reads.
         void latch_sprites() noexcept;
@@ -152,13 +154,18 @@ namespace mnemos::chips::video {
             std::array<instrumentation::debug_layer*, 1> layer_ptr_{};
         };
 
-        void render_frame() noexcept;
-        // One playfield pass: draws the pens the group's mask admits for this
-        // pass (masks index by group; a set bit means the pen is skipped).
-        void render_layer(std::span<const std::uint8_t> vram, std::span<const std::uint8_t> tiles,
-                          std::uint16_t scroll_x, std::uint16_t scroll_y,
-                          std::span<const std::uint16_t, 4> skip_masks) noexcept;
-        void render_sprites() noexcept;
+        void begin_frame() noexcept;
+        void finish_frame() noexcept;
+        void render_scanline(std::uint32_t y) noexcept;
+        // One playfield scanline pass: draws the pens the group's mask admits
+        // for this pass (masks index by group; a set bit means the pen is
+        // skipped).
+        void render_layer_scanline(std::uint32_t y, std::span<const std::uint8_t> vram,
+                                   std::span<const std::uint8_t> tiles,
+                                   std::uint16_t scroll_x, std::uint16_t scroll_y,
+                                   std::span<const std::uint16_t, 4> skip_masks) noexcept;
+        void render_sprites_scanline(std::uint32_t y) noexcept;
+        void flip_framebuffer() noexcept;
         [[nodiscard]] static std::uint32_t lookup_rgb(std::span<const std::uint8_t> palette,
                                                       std::size_t index) noexcept;
 
@@ -186,6 +193,7 @@ namespace mnemos::chips::video {
         std::uint16_t scroll_b_y_{};
         std::int32_t raster_compare_{-1}; // de-biased beam line; -1 = never
         bool display_enabled_{true};
+        bool flip_screen_{false};
 
         std::uint32_t beam_x_{};
         std::uint32_t beam_y_{};

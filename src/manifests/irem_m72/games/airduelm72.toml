@@ -1,0 +1,362 @@
+# Air Duel (World, M72 hardware) -- protected vertical Irem M72 board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "airduelm72"
+board       = "irem_m72"
+orientation = "vertical"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x000c
+default = 0x000c
+
+[[dip.option]]
+label = "Very Easy"
+value = 0x0000
+
+[[dip.option]]
+label = "Easy"
+value = 0x0008
+
+[[dip.option]]
+label = "Normal"
+value = 0x000c
+
+[[dip.option]]
+label = "Hard"
+value = 0x0004
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0040
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0040
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0800
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coinage"
+mask = 0xf000
+default = 0xf000
+condition_mask = 0x0800
+condition_value = 0x0800
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0xa000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0xb000
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0xc000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0xd000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0xe000
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x3000
+
+[[dip.option]]
+label = "4 Coins / 3 Credits"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0xf000
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x9000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x7000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x6000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x5000
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin A"
+mask = 0x3000
+default = 0x3000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x1000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x3000
+
+[[dip]]
+bank = "SW2"
+name = "Coin B"
+mask = 0xc000
+default = 0xc000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0xc000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ad_c-h0-c.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x6467ed0f
+
+[[region.file]]
+name   = "ad_c-l0-c.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xb90c4ffd
+
+[[region.file]]
+name   = "ad_c-h3-.ic43"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x9f7cfca3
+
+[[region.file]]
+name   = "ad_c-l3-.ic34"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x9dd343f7
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "ad_c-h3-.ic43"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x9f7cfca3
+
+[[region.file]]
+name   = "ad_c-l3-.ic34"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9dd343f7
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "ad_c-pr-c.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x8785e4e2
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "ad-00.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2f0d599b
+
+[[region.file]]
+name   = "ad-10.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x9865856b
+
+[[region.file]]
+name   = "ad-20.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xd392aef2
+
+[[region.file]]
+name   = "ad-30.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x923240c3
+
+[[region]]
+name = "tiles_a"
+size = 0x080000
+
+[[region.file]]
+name   = "ad-a0.ic21"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xce134b47
+
+[[region.file]]
+name   = "ad-a1.ic22"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x097fd853
+
+[[region.file]]
+name   = "ad-a2.ic20"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x6a94c1b9
+
+[[region.file]]
+name   = "ad-a3.ic23"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x6637c349
+
+[[region]]
+name = "tiles_b"
+size = 0x080000
+
+[[region.file]]
+name   = "ad-b0.ic26"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xce134b47
+
+[[region.file]]
+name   = "ad-b1.ic27"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x097fd853
+
+[[region.file]]
+name   = "ad-b2.ic25"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x6a94c1b9
+
+[[region.file]]
+name   = "ad-b3.ic24"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x6637c349
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "ad-v0.ic44"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x339f474d

@@ -217,6 +217,149 @@ namespace mnemos::manifests::common {
             decl.regions.push_back(std::move(region));
         }
 
+        void parse_hle(const parse_context& ctx, const toml::table& table, rom_set_decl& decl) {
+            check_keys(ctx, table, {"chip", "profile", "rationale"}, "[[hle]]");
+            rom_set_hle_decl hle;
+            if (auto chip = require_string(ctx, table, "chip", "[[hle]]")) {
+                hle.chip = std::move(*chip);
+            }
+            if (auto profile = require_string(ctx, table, "profile", "[[hle]]")) {
+                hle.profile = std::move(*profile);
+            }
+            if (auto rationale = require_string(ctx, table, "rationale", "[[hle]]")) {
+                hle.rationale = std::move(*rationale);
+            }
+            decl.hle.push_back(std::move(hle));
+        }
+
+        void parse_dip_option(const parse_context& ctx, const toml::table& table,
+                              rom_set_dip_switch& dip) {
+            check_keys(ctx, table, {"label", "value"}, "[[dip.option]]");
+            rom_set_dip_option option;
+            if (auto label = require_string(ctx, table, "label", "[[dip.option]]")) {
+                option.label = std::move(*label);
+            }
+            if (const toml::node* node = table.get("value")) {
+                if (auto value = read_unsigned(ctx, *node, "value", "[[dip.option]]")) {
+                    if (*value > 0xFFFFU) {
+                        ctx.error("'value' in [[dip.option]] is out of 16-bit range", node);
+                    } else if ((*value & ~static_cast<std::uint64_t>(dip.mask)) != 0U) {
+                        ctx.error("'value' in [[dip.option]] sets bits outside the parent mask",
+                                  node);
+                    } else {
+                        option.value = static_cast<std::uint16_t>(*value);
+                    }
+                }
+            } else {
+                ctx.error("[[dip.option]] is missing required key 'value'");
+            }
+            dip.options.push_back(std::move(option));
+        }
+
+        void parse_dip(const parse_context& ctx, const toml::table& table, rom_set_decl& decl) {
+            check_keys(ctx, table,
+                       {"bank", "name", "mask", "default", "condition_mask",
+                        "condition_value", "option"},
+                       "[[dip]]");
+            rom_set_dip_switch dip;
+            if (auto bank = require_string(ctx, table, "bank", "[[dip]]")) {
+                dip.bank = std::move(*bank);
+            }
+            if (auto name = require_string(ctx, table, "name", "[[dip]]")) {
+                dip.name = std::move(*name);
+            }
+            bool saw_mask = false;
+            if (const toml::node* node = table.get("mask")) {
+                if (auto mask = read_unsigned(ctx, *node, "mask", "[[dip]]")) {
+                    if (*mask == 0U) {
+                        ctx.error("'mask' in [[dip]] must be non-zero", node);
+                    } else if (*mask > 0xFFFFU) {
+                        ctx.error("'mask' in [[dip]] is out of 16-bit range", node);
+                    } else {
+                        saw_mask = true;
+                        dip.mask = static_cast<std::uint16_t>(*mask);
+                    }
+                }
+            } else {
+                ctx.error("[[dip]] is missing required key 'mask'");
+            }
+            if (const toml::node* node = table.get("default")) {
+                if (auto value = read_unsigned(ctx, *node, "default", "[[dip]]")) {
+                    if (*value > 0xFFFFU) {
+                        ctx.error("'default' in [[dip]] is out of 16-bit range", node);
+                    } else if (saw_mask &&
+                               (*value & ~static_cast<std::uint64_t>(dip.mask)) != 0U) {
+                        ctx.error("'default' in [[dip]] sets bits outside the switch mask", node);
+                    } else {
+                        dip.default_value = static_cast<std::uint16_t>(*value);
+                    }
+                }
+            } else {
+                ctx.error("[[dip]] is missing required key 'default'");
+            }
+            const toml::node* condition_mask_node = table.get("condition_mask");
+            const toml::node* condition_value_node = table.get("condition_value");
+            if (condition_mask_node != nullptr || condition_value_node != nullptr) {
+                rom_set_dip_condition condition;
+                bool saw_condition_mask = false;
+                if (condition_mask_node != nullptr) {
+                    if (auto mask =
+                            read_unsigned(ctx, *condition_mask_node, "condition_mask", "[[dip]]")) {
+                        if (*mask == 0U) {
+                            ctx.error("'condition_mask' in [[dip]] must be non-zero",
+                                      condition_mask_node);
+                        } else if (*mask > 0xFFFFU) {
+                            ctx.error("'condition_mask' in [[dip]] is out of 16-bit range",
+                                      condition_mask_node);
+                        } else {
+                            saw_condition_mask = true;
+                            condition.mask = static_cast<std::uint16_t>(*mask);
+                        }
+                    }
+                } else {
+                    ctx.error("[[dip]] is missing required key 'condition_mask'");
+                }
+                if (condition_value_node != nullptr) {
+                    if (auto value = read_unsigned(
+                            ctx, *condition_value_node, "condition_value", "[[dip]]")) {
+                        if (*value > 0xFFFFU) {
+                            ctx.error("'condition_value' in [[dip]] is out of 16-bit range",
+                                      condition_value_node);
+                        } else if (saw_condition_mask &&
+                                   (*value & ~static_cast<std::uint64_t>(condition.mask)) != 0U) {
+                            ctx.error("'condition_value' in [[dip]] sets bits outside the "
+                                      "condition mask",
+                                      condition_value_node);
+                        } else {
+                            condition.value = static_cast<std::uint16_t>(*value);
+                        }
+                    }
+                } else {
+                    ctx.error("[[dip]] is missing required key 'condition_value'");
+                }
+                if (saw_condition_mask && condition_value_node != nullptr) {
+                    dip.condition = condition;
+                }
+            }
+            if (const toml::node* options = table.get("option")) {
+                if (const auto* array = options->as_array()) {
+                    for (const toml::node& entry : *array) {
+                        if (const auto* option_table = entry.as_table()) {
+                            parse_dip_option(ctx, *option_table, dip);
+                        } else {
+                            ctx.error("[[dip.option]] entries must be tables", &entry);
+                        }
+                    }
+                } else {
+                    ctx.error("'option' in [[dip]] must be an array of tables", options);
+                }
+            }
+            if (dip.options.empty()) {
+                ctx.error("[[dip]] '" + dip.name + "' must declare at least one option");
+            }
+            decl.dips.push_back(std::move(dip));
+        }
+
     } // namespace
 
     rom_set_load_result parse_rom_set_decl(std::string_view text, std::string_view source_name) {
@@ -234,7 +377,7 @@ namespace mnemos::manifests::common {
             return result;
         }
         const toml::table& root = parsed.table();
-        check_keys(ctx, root, {"set", "region"}, "the document root");
+        check_keys(ctx, root, {"set", "region", "hle", "dip"}, "the document root");
 
         rom_set_decl decl;
         if (const auto* set = root.get_as<toml::table>("set")) {
@@ -345,6 +488,30 @@ namespace mnemos::manifests::common {
             }
         } else {
             ctx.error("missing required [set] table");
+        }
+
+        if (const toml::node* dips = root.get("dip")) {
+            if (const auto* array = dips->as_array()) {
+                for (const toml::node& entry : *array) {
+                    if (const auto* table = entry.as_table()) {
+                        parse_dip(ctx, *table, decl);
+                    } else {
+                        ctx.error("[[dip]] entries must be tables", &entry);
+                    }
+                }
+            } else {
+                ctx.error("'dip' in the document root must be an array of tables", dips);
+            }
+        }
+
+        if (const auto* hle = root.get_as<toml::array>("hle")) {
+            for (const toml::node& entry : *hle) {
+                if (const auto* table = entry.as_table()) {
+                    parse_hle(ctx, *table, decl);
+                } else {
+                    ctx.error("[[hle]] entries must be tables", &entry);
+                }
+            }
         }
 
         if (const auto* regions = root.get_as<toml::array>("region")) {

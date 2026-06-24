@@ -1,0 +1,402 @@
+# Dragon Breed (World, M72 hardware) -- Irem M72 protected board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "dbreedm72"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x000c
+default = 0x000c
+
+[[dip.option]]
+label = "Very Easy"
+value = 0x0000
+
+[[dip.option]]
+label = "Easy"
+value = 0x0008
+
+[[dip.option]]
+label = "Normal"
+value = 0x000c
+
+[[dip.option]]
+label = "Hard"
+value = 0x0004
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0x00a0
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x00b0
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0x00c0
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x00d0
+
+[[dip.option]]
+label = "8 Coins / 3 Credits"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x00e0
+
+[[dip.option]]
+label = "5 Coins / 3 Credits"
+value = 0x0020
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x0030
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x0090
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x0070
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0060
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0050
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coin A"
+mask = 0x0030
+default = 0x0030
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x0020
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x0030
+
+[[dip]]
+bank = "SW1"
+name = "Coin B"
+mask = 0x00c0
+default = 0x00c0
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x00c0
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0200
+default = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0200
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0400
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Demo Sounds"
+mask = 0x0800
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0800
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Allow Continue"
+mask = 0x1000
+default = 0x1000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x1000
+
+[[dip]]
+bank = "SW2"
+name = "Stop Mode"
+mask = 0x2000
+default = 0x2000
+
+[[dip.option]]
+label = "Off"
+value = 0x2000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[hle]]
+chip      = "mcu"
+profile   = "irem_m72.dbreedm72_no_dump_mcu"
+rationale = "The set's i8751 dump is unavailable; this manifest declares the interim M72 no-dump protection profile rather than pretending a ROM exists."
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "db_c-h3-b.ic43"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x4bf3063c
+
+[[region.file]]
+name   = "db_c-l3-b.ic34"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xe4b89b79
+
+[[region.file]]
+name   = "db_c-h0-.ic40"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x5aa79fb2
+
+[[region.file]]
+name   = "db_c-h0-.ic40"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x5aa79fb2
+
+[[region.file]]
+name   = "db_c-l0-.ic37"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0xed0f5e06
+
+[[region.file]]
+name   = "db_c-l0-.ic37"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xed0f5e06
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "db_k800m.00.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xc027a8cf
+
+[[region.file]]
+name   = "db_k801m.10.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x093faf33
+
+[[region.file]]
+name   = "db_k802m.20.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x055b4c59
+
+[[region.file]]
+name   = "db_k803m.30.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8ed63922
+
+[[region]]
+name = "tiles_a"
+size = 0x080000
+
+[[region.file]]
+name   = "db_k804m.a0.ic21"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x4c83e92e
+
+[[region.file]]
+name   = "db_k805m.a1.ic22"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x835ef268
+
+[[region.file]]
+name   = "db_k806m.a2.ic20"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x5117f114
+
+[[region.file]]
+name   = "db_k807m.a3.ic23"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8eb0c978
+
+[[region]]
+name = "tiles_b"
+size = 0x080000
+
+[[region.file]]
+name   = "db_k804m.b0.ic26"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x4c83e92e
+
+[[region.file]]
+name   = "db_k805m.b1.ic27"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x835ef268
+
+[[region.file]]
+name   = "db_k806m.b2.ic25"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x5117f114
+
+[[region.file]]
+name   = "db_k807m.b3.ic24"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8eb0c978
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "db_c-v0.ic44"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x312f7282

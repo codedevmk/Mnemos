@@ -224,22 +224,26 @@ TEST_CASE("cli_args: recording rejects missing, zero, and option-shaped values")
           std::nullopt);
 }
 
-TEST_CASE("cli_args: parse_press_events parses button@frame[+duration]") {
-    auto a = make_argv({"player", "--press", "start@60", "--press", "a@10+8"});
+TEST_CASE("cli_args: parse_press_events parses [pN:]button@frame[+duration]") {
+    auto a = make_argv({"player", "--press", "start@60", "--press", "p2:a@10+8"});
     const auto ev = parse_press_events(a.argc(), a.argv.data());
     REQUIRE(ev.size() == 2U);
+    CHECK(ev[0].port_index == 0U);
     CHECK(ev[0].button == "start");
     CHECK(ev[0].frame == 60U);
     CHECK(ev[0].duration == 4U); // default
+    CHECK(ev[1].port_index == 1U);
     CHECK(ev[1].button == "a");
     CHECK(ev[1].frame == 10U);
     CHECK(ev[1].duration == 8U);
 }
 
 TEST_CASE("cli_args: parse_press_events lowercases and skips bad specs") {
-    auto a = make_argv({"player", "--press", "START@30", "--press", "bogus@5", "--press", "noat"});
+    auto a = make_argv({"player", "--press", "P2:START@30", "--press", "bogus@5",
+                        "--press", "p0:a@10", "--press", "noat"});
     const auto ev = parse_press_events(a.argc(), a.argv.data());
-    REQUIRE(ev.size() == 1U); // unknown button + missing '@' dropped
+    REQUIRE(ev.size() == 1U); // unknown button + bad port + missing '@' dropped
+    CHECK(ev[0].port_index == 1U);
     CHECK(ev[0].button == "start");
     CHECK(ev[0].frame == 30U);
 }
@@ -256,14 +260,25 @@ TEST_CASE("cli_args: input_for_frame holds a button over its [frame, frame+durat
 }
 
 TEST_CASE("cli_args: input_for_frame combines overlapping events") {
-    auto a = make_argv({"player", "--press", "left@10+20", "--press", "a@15+2"});
+    auto a = make_argv({"player", "--press", "left@10+20", "--press", "a@15+2",
+                        "--press", "p2:b@16+2", "--press", "p2:right@10+20"});
     const auto ev = parse_press_events(a.argc(), a.argv.data());
     const auto at16 = input_for_frame(ev, 16U);
     CHECK(at16.left);
     CHECK(at16.a);
+    CHECK_FALSE(at16.b);
+    CHECK_FALSE(at16.right);
+    const auto at16p2 = input_for_frame(ev, 16U, 1U);
+    CHECK_FALSE(at16p2.left);
+    CHECK_FALSE(at16p2.a);
+    CHECK(at16p2.b);
+    CHECK(at16p2.right);
     const auto at20 = input_for_frame(ev, 20U);
     CHECK(at20.left);
     CHECK_FALSE(at20.a); // a's 2-frame window (15,16) has passed
+    const auto at20p2 = input_for_frame(ev, 20U, 1U);
+    CHECK(at20p2.right);
+    CHECK_FALSE(at20p2.b); // b's 2-frame window (16,17) has passed
 }
 
 TEST_CASE("cli_args: input_for_frame with no events is all-released") {

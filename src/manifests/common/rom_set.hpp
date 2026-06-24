@@ -64,6 +64,34 @@ namespace mnemos::manifests::common {
     // default for every official set).
     enum class sprite_draw_order : std::uint8_t { ascending, descending };
 
+    struct rom_set_dip_option final {
+        std::string label;
+        // Full 16-bit DSW word bits covered by the parent switch mask. M72 reads
+        // SW1 in the low byte and SW2 in the high byte.
+        std::uint16_t value{};
+    };
+
+    struct rom_set_dip_condition final {
+        // The option group is active when `(dip_word & mask) == value`.
+        std::uint16_t mask{};
+        std::uint16_t value{};
+    };
+
+    struct rom_set_dip_switch final {
+        std::string bank; // display grouping, e.g. "SW1" / "SW2"
+        std::string name;
+        std::uint16_t mask{};
+        std::uint16_t default_value{};
+        std::optional<rom_set_dip_condition> condition;
+        std::vector<rom_set_dip_option> options;
+    };
+
+    struct rom_set_hle_decl final {
+        std::string chip;
+        std::string profile;
+        std::string rationale;
+    };
+
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
         std::string board; // board family id, e.g. "irem_m72" (informational)
@@ -73,11 +101,9 @@ namespace mnemos::manifests::common {
         // own files first, then the parent's) -- every file is still CRC-verified
         // regardless of which zip supplied it. Absent => a standalone set.
         // Constrained to a plain set id by the loader (no path separators).
-        // NOTE: only the capcom_cps1 adapter currently consumes this (it threads
-        // adapter_options.rom_path and composes the fallback); other boards parse
-        // it but ignore it, so a `parent` there would report the shared files
-        // missing. Single level only -- the parent set must be standalone, not
-        // itself a clone.
+        // NOTE: board adapters that support clone sets thread
+        // adapter_options.rom_path and compose the fallback. Single level only --
+        // the parent set must be standalone, not itself a clone.
         std::optional<std::string> parent;
         // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
         // hardware profile by this numeric id; absent on families that don't use it.
@@ -95,6 +121,14 @@ namespace mnemos::manifests::common {
         // Optional Kabuki-encrypted-sound key name (board-interpreted): capcom_cps1
         // reads "dino" / "wof" / "punisher" to decrypt the QSound Z80 program.
         std::optional<std::string> kabuki;
+        // Optional cabinet DIP switch metadata. Values are the board's raw
+        // active-low bit pattern after applying `mask`; adapters decide how to
+        // surface or edit them.
+        std::vector<rom_set_dip_switch> dips;
+        // Explicit high-level substitution declarations. These are never a
+        // hidden fallback: a board may consume a known profile only when the
+        // manifest declares the substituted chip and rationale.
+        std::vector<rom_set_hle_decl> hle;
         std::vector<rom_set_region> regions;
     };
 
@@ -121,6 +155,13 @@ namespace mnemos::manifests::common {
 
     [[nodiscard]] rom_set_image load_rom_set(const rom_set_decl& decl,
                                              const rom_file_provider& provider);
+
+    // Builds an effective clone declaration from a standalone parent and a
+    // child clone declaration. Child metadata wins when present; regions are
+    // inherited by name, with a child region replacing the parent's region of
+    // the same name.
+    [[nodiscard]] rom_set_decl inherit_parent_regions(const rom_set_decl& parent,
+                                                      rom_set_decl child);
 
     // Provider over a directory of loose dump files (name -> directory/name).
     [[nodiscard]] rom_file_provider make_directory_rom_provider(std::string directory);

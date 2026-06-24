@@ -119,6 +119,33 @@ namespace mnemos::apps::player::adapters {
     }
 
     namespace {
+        std::optional<std::uint32_t> parse_press_port_prefix(std::string_view& spec) noexcept {
+            if (spec.size() < 3U || (spec[0] != 'p' && spec[0] != 'P') ||
+                std::isdigit(static_cast<unsigned char>(spec[1])) == 0) {
+                return 0U;
+            }
+
+            std::size_t i = 1U;
+            std::uint32_t one_based_port = 0U;
+            while (i < spec.size() &&
+                   std::isdigit(static_cast<unsigned char>(spec[i])) != 0) {
+                const std::uint32_t digit = static_cast<std::uint32_t>(spec[i] - '0');
+                if (one_based_port > 999U) {
+                    return std::nullopt;
+                }
+                one_based_port = one_based_port * 10U + digit;
+                ++i;
+            }
+            if (i >= spec.size() || spec[i] != ':') {
+                return 0U;
+            }
+            if (one_based_port == 0U) {
+                return std::nullopt;
+            }
+            spec = spec.substr(i + 1U);
+            return one_based_port - 1U;
+        }
+
         // Set the named button on `s`; returns false for an unknown name.
         bool apply_button(mnemos::peripheral::controller_state& s, std::string_view b) {
             if (b == "up") {
@@ -155,6 +182,10 @@ namespace mnemos::apps::player::adapters {
 
         // Parse one `<button>@<frame>[+duration]` spec.
         std::optional<press_event> parse_press_spec(std::string_view spec) {
+            const auto port_index = parse_press_port_prefix(spec);
+            if (!port_index.has_value()) {
+                return std::nullopt;
+            }
             const auto at = spec.find('@');
             if (at == std::string_view::npos || at == 0U) {
                 return std::nullopt;
@@ -174,6 +205,7 @@ namespace mnemos::apps::player::adapters {
                 return std::nullopt;
             }
             press_event e;
+            e.port_index = *port_index;
             e.button = std::move(button);
             e.frame = std::strtoull(frame_str.c_str(), nullptr, 10);
             if (plus != std::string_view::npos) {
@@ -199,10 +231,11 @@ namespace mnemos::apps::player::adapters {
     }
 
     mnemos::peripheral::controller_state input_for_frame(const std::vector<press_event>& events,
-                                                         std::uint64_t frame) noexcept {
+                                                         std::uint64_t frame,
+                                                         std::uint32_t port_index) noexcept {
         mnemos::peripheral::controller_state state{};
         for (const press_event& e : events) {
-            if (frame >= e.frame && frame < e.frame + e.duration) {
+            if (e.port_index == port_index && frame >= e.frame && frame < e.frame + e.duration) {
                 apply_button(state, e.button);
             }
         }

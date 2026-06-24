@@ -1,0 +1,218 @@
+# Image Fight (Japan bootleg) -- protected Irem M72-compatible clone of imgfight.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "imgfightjb"
+parent      = "imgfight"
+board       = "irem_m72"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ic108.9b"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x592d2d80
+
+[[region.file]]
+name   = "ic89.7b"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x61f89056
+
+[[region.file]]
+name   = "ic111.9e"
+offset = 0x40001
+stride = 2
+size   = 0x10000
+crc32  = 0x6aae3a46
+
+[[region.file]]
+name   = "ic111.9e"
+offset = 0xC0001
+stride = 2
+size   = 0x10000
+crc32  = 0x6aae3a46
+
+[[region.file]]
+name   = "ic110.9d"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x0e0aefcd
+
+[[region.file]]
+name   = "ic110.9d"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x0e0aefcd
+
+[[region.file]]
+name   = "ic92.7e"
+offset = 0x40000
+stride = 2
+size   = 0x10000
+crc32  = 0x38fce272
+
+[[region.file]]
+name   = "ic92.7e"
+offset = 0xC0000
+stride = 2
+size   = 0x10000
+crc32  = 0x38fce272
+
+[[region.file]]
+name   = "ic91.7d"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0xd69c0722
+
+[[region.file]]
+name   = "ic91.7d"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xd69c0722
+
+[[region]]
+name = "mcu"
+size = 0x2000
+
+[[region.file]]
+name   = "25.ic27.2l"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xd83359a2
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "ic96.7k"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xd4febb03
+
+[[region.file]]
+name   = "ic97.7l"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x973d7bbc
+
+[[region.file]]
+name   = "ic115.9k"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x2328880b
+
+[[region.file]]
+name   = "ic116.9l"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x6da001ea
+
+[[region.file]]
+name   = "ic94.7h"
+offset = 0x40000
+size   = 0x10000
+crc32  = 0x92bc7fda
+
+[[region.file]]
+name   = "ic95.7j"
+offset = 0x50000
+size   = 0x10000
+crc32  = 0xe63a5918
+
+[[region.file]]
+name   = "ic113.9h"
+offset = 0x60000
+size   = 0x10000
+crc32  = 0x27caec8e
+
+[[region.file]]
+name   = "ic114.9j"
+offset = 0x70000
+size   = 0x10000
+crc32  = 0x1933eb65
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "ic30.3d"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x34ee2d77
+
+[[region.file]]
+name   = "ic31.3e"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x6bd2845b
+
+[[region.file]]
+name   = "ic29.3c"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x090d50e5
+
+[[region.file]]
+name   = "ic32.3f"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x3a8e3083
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "ic35.3k"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xb425c829
+
+[[region.file]]
+name   = "ic36.3l"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0xe9bfe23e
+
+[[region.file]]
+name   = "ic34.3j"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x256e50f2
+
+[[region.file]]
+name   = "ic33.3h"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x4c682785
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "ic28.lower.2n"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xcb64a194
+
+[[region.file]]
+name   = "ic28.upper.2n"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x45b68bf5

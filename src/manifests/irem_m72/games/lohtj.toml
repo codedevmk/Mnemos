@@ -1,0 +1,161 @@
+# Legend of Hero Tonma (Japan) -- Irem M72 protected clone of loht.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "lohtj"
+parent      = "loht"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "tom_c-h0-.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x2a752998
+
+[[region.file]]
+name   = "tom_c-l0-.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xa224d928
+
+[[region.file]]
+name   = "tom_c-h3-.ic43"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x714778b5
+
+[[region.file]]
+name   = "tom_c-l3-.ic34"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x2f049b03
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "tom_c-h3-.ic43"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x714778b5
+
+[[region.file]]
+name   = "tom_c-l3-.ic34"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x2f049b03
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "tom_c-pr-.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x9fa9b496
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "r200.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x0b83265f
+
+[[region.file]]
+name   = "r210.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x8ec5f6f3
+
+[[region.file]]
+name   = "r220.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa41d3bfd
+
+[[region.file]]
+name   = "r230.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x9d81a25b
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "r2a0.a0.ic21"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3ca3e771
+
+[[region.file]]
+name   = "r2a1.a1.ic22"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x7a05ee2f
+
+[[region.file]]
+name   = "r2a2.a2.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x79aa2335
+
+[[region.file]]
+name   = "r2a3.a3.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x789e8b24
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "078.b0.ic26"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x44626bf6
+
+[[region.file]]
+name   = "079.b1.ic27"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x464952cf
+
+[[region.file]]
+name   = "080.b2.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x3db9b2c7
+
+[[region.file]]
+name   = "081.b3.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xf01fe899
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "082.ic44"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3ed51d1f

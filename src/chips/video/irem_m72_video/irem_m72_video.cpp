@@ -44,6 +44,7 @@ namespace mnemos::chips::video {
         scroll_b_x_ = scroll_b_y_ = 0U;
         raster_compare_ = -1;
         display_enabled_ = true;
+        flip_screen_ = false;
         sprite_buffer_.fill(0U);
         for (std::uint32_t& px : pixels_) {
             px = 0U;
@@ -53,8 +54,14 @@ namespace mnemos::chips::video {
     void irem_m72_video::tick(std::uint64_t cycles) {
         for (std::uint64_t i = 0; i < cycles; ++i) {
             if (beam_x_ == 0U) {
+                if (beam_y_ == 0U) {
+                    begin_frame();
+                }
+                if (beam_y_ < visible_height) {
+                    render_scanline(beam_y_);
+                }
                 if (beam_y_ == visible_height) {
-                    render_frame();
+                    finish_frame();
                     ++frame_index_;
                     if (vblank_cb_) {
                         vblank_cb_(beam_y_);
@@ -99,10 +106,13 @@ namespace mnemos::chips::video {
         return (r << 16U) | (g << 8U) | b;
     }
 
-    void irem_m72_video::render_layer(std::span<const std::uint8_t> vram,
-                                      std::span<const std::uint8_t> tiles, std::uint16_t scroll_x,
-                                      std::uint16_t scroll_y,
-                                      std::span<const std::uint16_t, 4> skip_masks) noexcept {
+    void irem_m72_video::render_layer_scanline(
+        std::uint32_t y,
+        std::span<const std::uint8_t> vram,
+        std::span<const std::uint8_t> tiles,
+        std::uint16_t scroll_x,
+        std::uint16_t scroll_y,
+        std::span<const std::uint16_t, 4> skip_masks) noexcept {
         if (vram.size() < static_cast<std::size_t>(map_tiles) * map_tiles * vram_entry_bytes ||
             tiles.size() < 4U * 8U) {
             return; // nothing attached (yet); leave the backdrop
@@ -110,41 +120,39 @@ namespace mnemos::chips::video {
         const std::size_t plane_size = tiles.size() / 4U;
         const std::size_t tile_count = plane_size / 8U;
 
-        for (std::uint32_t y = 0; y < visible_height; ++y) {
-            // Scroll Y lives in the 128-biased beam space (+384 ≡ -128 mod 512).
-            const std::uint32_t map_y =
-                (y + scroll_y + 512U - static_cast<std::uint32_t>(line_bias)) &
-                (map_tiles * 8U - 1U);
-            for (std::uint32_t x = 0; x < visible_width; ++x) {
-                const std::uint32_t map_x = (x + beam_x_origin + scroll_x) & (map_tiles * 8U - 1U);
-                const std::size_t entry =
-                    (static_cast<std::size_t>(map_y / 8U) * map_tiles + map_x / 8U) *
-                    vram_entry_bytes;
-                const std::uint16_t word0 =
-                    static_cast<std::uint16_t>(vram[entry] | (vram[entry + 1U] << 8U));
-                const std::uint16_t word1 =
-                    static_cast<std::uint16_t>(vram[entry + 2U] | (vram[entry + 3U] << 8U));
-                const std::size_t code = (word0 & 0x3FFFU) % tile_count;
-                const std::uint32_t color = word1 & 0x0FU;
-                const std::uint32_t group = (word1 >> 6U) & 0x03U;
-                const std::uint32_t tx = (word0 & 0x4000U) != 0U ? 7U - (map_x & 7U) : (map_x & 7U);
-                const std::uint32_t ty = (word0 & 0x8000U) != 0U ? 7U - (map_y & 7U) : (map_y & 7U);
-                const std::size_t row = code * 8U + ty;
-                const std::uint32_t bit = 7U - tx;
-                std::uint32_t pixel = 0U;
-                for (std::uint32_t plane = 0; plane < 4U; ++plane) {
-                    pixel |= ((tiles[plane * plane_size + row] >> bit) & 1U) << plane;
-                }
-                if (((skip_masks[group] >> pixel) & 1U) != 0U) {
-                    continue;
-                }
-                pixels_[static_cast<std::size_t>(y) * visible_width + x] =
-                    lookup_rgb(palette_b_, color * 16U + pixel);
+        // Scroll Y lives in the 128-biased beam space (+384 ≡ -128 mod 512).
+        const std::uint32_t map_y =
+            (y + scroll_y + 512U - static_cast<std::uint32_t>(line_bias)) &
+            (map_tiles * 8U - 1U);
+        for (std::uint32_t x = 0; x < visible_width; ++x) {
+            const std::uint32_t map_x = (x + beam_x_origin + scroll_x) & (map_tiles * 8U - 1U);
+            const std::size_t entry =
+                (static_cast<std::size_t>(map_y / 8U) * map_tiles + map_x / 8U) *
+                vram_entry_bytes;
+            const std::uint16_t word0 =
+                static_cast<std::uint16_t>(vram[entry] | (vram[entry + 1U] << 8U));
+            const std::uint16_t word1 =
+                static_cast<std::uint16_t>(vram[entry + 2U] | (vram[entry + 3U] << 8U));
+            const std::size_t code = (word0 & 0x3FFFU) % tile_count;
+            const std::uint32_t color = word1 & 0x0FU;
+            const std::uint32_t group = (word1 >> 6U) & 0x03U;
+            const std::uint32_t tx = (word0 & 0x4000U) != 0U ? 7U - (map_x & 7U) : (map_x & 7U);
+            const std::uint32_t ty = (word0 & 0x8000U) != 0U ? 7U - (map_y & 7U) : (map_y & 7U);
+            const std::size_t row = code * 8U + ty;
+            const std::uint32_t bit = 7U - tx;
+            std::uint32_t pixel = 0U;
+            for (std::uint32_t plane = 0; plane < 4U; ++plane) {
+                pixel |= ((tiles[plane * plane_size + row] >> bit) & 1U) << plane;
             }
+            if (((skip_masks[group] >> pixel) & 1U) != 0U) {
+                continue;
+            }
+            pixels_[static_cast<std::size_t>(y) * visible_width + x] =
+                lookup_rgb(palette_b_, color * 16U + pixel);
         }
     }
 
-    void irem_m72_video::render_sprites() noexcept {
+    void irem_m72_video::render_sprites_scanline(std::uint32_t y) noexcept {
         if (sprites_.size() < 4U * sprite_cell_bytes) {
             return; // nothing attached (yet)
         }
@@ -192,59 +200,69 @@ namespace mnemos::chips::video {
                         cell_count;
                     const std::int32_t base_x = sx + 16 * col;
                     const std::int32_t base_y = sy + 16 * row;
-                    for (std::int32_t py = 0; py < 16; ++py) {
-                        const std::int32_t dest_y = base_y + py;
-                        if (dest_y < 0 || dest_y >= static_cast<std::int32_t>(visible_height)) {
+                    const auto line_y = static_cast<std::int32_t>(y);
+                    if (line_y < base_y || line_y >= base_y + 16) {
+                        continue;
+                    }
+                    const std::int32_t py = line_y - base_y;
+                    const std::uint32_t ty = static_cast<std::uint32_t>(flip_y ? 15 - py : py);
+                    for (std::int32_t px = 0; px < 16; ++px) {
+                        const std::int32_t dest_x = base_x + px;
+                        if (dest_x < 0 || dest_x >= static_cast<std::int32_t>(visible_width)) {
                             continue;
                         }
-                        const std::uint32_t ty = static_cast<std::uint32_t>(flip_y ? 15 - py : py);
-                        for (std::int32_t px = 0; px < 16; ++px) {
-                            const std::int32_t dest_x = base_x + px;
-                            if (dest_x < 0 || dest_x >= static_cast<std::int32_t>(visible_width)) {
-                                continue;
-                            }
-                            const std::uint32_t tx =
-                                static_cast<std::uint32_t>(flip_x ? 15 - px : px);
-                            // Cell layout per plane: left 8x16 half then the
-                            // right half, one byte per row each.
-                            const std::size_t byte_index =
-                                cell * sprite_cell_bytes + (tx >= 8U ? 16U : 0U) + ty;
-                            const std::uint32_t bit = 7U - (tx & 7U);
-                            std::uint32_t pixel = 0U;
-                            for (std::uint32_t plane = 0; plane < 4U; ++plane) {
-                                pixel |= ((sprites_[plane * plane_size + byte_index] >> bit) & 1U)
-                                         << plane;
-                            }
-                            if (pixel == 0U) {
-                                continue; // transparent
-                            }
-                            pixels_[static_cast<std::size_t>(dest_y) * visible_width +
-                                    static_cast<std::size_t>(dest_x)] =
-                                lookup_rgb(palette_a_, color * 16U + pixel);
+                        const std::uint32_t tx = static_cast<std::uint32_t>(flip_x ? 15 - px : px);
+                        // Cell layout per plane: left 8x16 half then the
+                        // right half, one byte per row each.
+                        const std::size_t byte_index =
+                            cell * sprite_cell_bytes + (tx >= 8U ? 16U : 0U) + ty;
+                        const std::uint32_t bit = 7U - (tx & 7U);
+                        std::uint32_t pixel = 0U;
+                        for (std::uint32_t plane = 0; plane < 4U; ++plane) {
+                            pixel |= ((sprites_[plane * plane_size + byte_index] >> bit) & 1U)
+                                     << plane;
                         }
+                        if (pixel == 0U) {
+                            continue; // transparent
+                        }
+                        pixels_[static_cast<std::size_t>(y) * visible_width +
+                                static_cast<std::size_t>(dest_x)] =
+                            lookup_rgb(palette_a_, color * 16U + pixel);
                     }
                 }
             }
         }
     }
 
-    void irem_m72_video::render_frame() noexcept {
-        if (!display_enabled_) {
-            for (std::uint32_t& px : pixels_) {
-                px = 0U;
-            }
-            return;
-        }
+    void irem_m72_video::begin_frame() noexcept {
         for (std::uint32_t& px : pixels_) {
             px = 0U;
         }
+    }
+
+    void irem_m72_video::render_scanline(std::uint32_t y) noexcept {
+        const std::size_t offset = static_cast<std::size_t>(y) * visible_width;
+        std::fill_n(pixels_.begin() + static_cast<std::ptrdiff_t>(offset), visible_width, 0U);
+        if (!display_enabled_) {
+            return;
+        }
         // Below-sprite pens of both playfields, sprites, then the above-
         // sprite pens (back playfield first in each pass).
-        render_layer(vram_b_, tiles_b_, scroll_b_x_, scroll_b_y_, bg_below);
-        render_layer(vram_a_, tiles_a_, scroll_a_x_, scroll_a_y_, fg_below);
-        render_sprites();
-        render_layer(vram_b_, tiles_b_, scroll_b_x_, scroll_b_y_, bg_above);
-        render_layer(vram_a_, tiles_a_, scroll_a_x_, scroll_a_y_, fg_above);
+        render_layer_scanline(y, vram_b_, tiles_b_, scroll_b_x_, scroll_b_y_, bg_below);
+        render_layer_scanline(y, vram_a_, tiles_a_, scroll_a_x_, scroll_a_y_, fg_below);
+        render_sprites_scanline(y);
+        render_layer_scanline(y, vram_b_, tiles_b_, scroll_b_x_, scroll_b_y_, bg_above);
+        render_layer_scanline(y, vram_a_, tiles_a_, scroll_a_x_, scroll_a_y_, fg_above);
+    }
+
+    void irem_m72_video::finish_frame() noexcept {
+        if (flip_screen_) {
+            flip_framebuffer();
+        }
+    }
+
+    void irem_m72_video::flip_framebuffer() noexcept {
+        std::reverse(pixels_.begin(), pixels_.end());
     }
 
     void irem_m72_video::save_state(state_writer& writer) const {
@@ -257,6 +275,10 @@ namespace mnemos::chips::video {
         writer.u16(scroll_b_y_);
         writer.u32(static_cast<std::uint32_t>(raster_compare_));
         writer.boolean(display_enabled_);
+        writer.boolean(flip_screen_);
+        for (const std::uint32_t pixel : pixels_) {
+            writer.u32(pixel);
+        }
         writer.bytes(sprite_buffer_);
     }
 
@@ -270,6 +292,10 @@ namespace mnemos::chips::video {
         scroll_b_y_ = reader.u16();
         raster_compare_ = static_cast<std::int32_t>(reader.u32());
         display_enabled_ = reader.boolean();
+        flip_screen_ = reader.boolean();
+        for (std::uint32_t& pixel : pixels_) {
+            pixel = reader.u32();
+        }
         reader.bytes(sprite_buffer_);
     }
 

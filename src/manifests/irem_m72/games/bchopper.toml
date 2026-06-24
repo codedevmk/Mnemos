@@ -1,23 +1,25 @@
-# R-Type (World) -- Irem M72, the board family's first game (ADR-0012).
+# Battle Chopper (World) -- Irem M72 protected board.
 # Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
 # resolves it from the standard set zip name, so no game.toml copy is required.
 #
-# The V30 program is two even/odd-interleaved pairs; the second pair reloads
-# at the top of the 1 MiB region so the FFFF0 reset vector lands in ROM.
-# There is no sound program dump: the M72 sound CPU runs from RAM the main
-# CPU fills at boot. The 32K sprite dumps repeat in the 32K hole after each
-# (the board sees 64K windows); tiles are four bitplane files per playfield.
+# This is the M72-C parent set for Mr. Heli. It carries an i8751 protection MCU
+# and a sample ROM; the Z80 still uses the board's RAM-upload sound path.
 
 [set]
-schema = "mnemos-romset/1"
-name   = "rtype"
-board  = "irem_m72"
+schema      = "mnemos-romset/1"
+name        = "bchopper"
+board       = "irem_m72"
+orientation = "horizontal"
 
 [[dip]]
 bank = "SW1"
 name = "Lives"
 mask = 0x0003
 default = 0x0003
+
+[[dip.option]]
+label = "1"
+value = 0x0000
 
 [[dip.option]]
 label = "2"
@@ -31,23 +33,19 @@ value = 0x0003
 label = "4"
 value = 0x0001
 
-[[dip.option]]
-label = "5"
-value = 0x0000
-
 [[dip]]
 bank = "SW1"
 name = "Demo Sounds"
 mask = 0x0004
-default = 0x0000
+default = 0x0004
 
 [[dip.option]]
 label = "Off"
-value = 0x0004
+value = 0x0000
 
 [[dip.option]]
 label = "On"
-value = 0x0000
+value = 0x0004
 
 [[dip]]
 bank = "SW1"
@@ -56,53 +54,11 @@ mask = 0x0008
 default = 0x0008
 
 [[dip.option]]
-label = "50K 150K 250K 400K 600K"
-value = 0x0000
-
-[[dip.option]]
-label = "100K 200K 350K 500K 700K"
+label = "80K 200K 350K"
 value = 0x0008
 
-[[dip]]
-bank = "SW2"
-name = "Flip Screen"
-mask = 0x0100
-default = 0x0100
-
 [[dip.option]]
-label = "Off"
-value = 0x0100
-
-[[dip.option]]
-label = "On"
-value = 0x0000
-
-[[dip]]
-bank = "SW2"
-name = "Cabinet"
-mask = 0x0200
-default = 0x0000
-
-[[dip.option]]
-label = "Upright"
-value = 0x0000
-
-[[dip.option]]
-label = "Cocktail"
-value = 0x0200
-
-[[dip]]
-bank = "SW2"
-name = "Coin Mode"
-mask = 0x0400
-default = 0x0400
-
-[[dip.option]]
-label = "Mode 1"
-value = 0x0400
-
-[[dip.option]]
-label = "Mode 2"
+label = "100K 250K 400K"
 value = 0x0000
 
 [[dip]]
@@ -227,6 +183,48 @@ value = 0x0000
 
 [[dip]]
 bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0200
+default = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0200
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0400
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
 name = "Difficulty"
 mask = 0x0800
 default = 0x0800
@@ -286,176 +284,186 @@ name = "maincpu"
 size = 0x100000
 
 [[region.file]]
-name   = "rt_r-h0-b.1b"
+name   = "mh_c-h0-b.ic40"
 offset = 0x00001
 stride = 2
 size   = 0x10000
-crc32  = 0x591c7754
+crc32  = 0xf2feab16
 
 [[region.file]]
-name   = "rt_r-l0-b.3b"
+name   = "mh_c-l0-b.ic37"
 offset = 0x00000
 stride = 2
 size   = 0x10000
-crc32  = 0xa1928df0
+crc32  = 0x9f887096
 
 [[region.file]]
-name   = "rt_r-h1-b.1c"
+name   = "mh_c-h1-b.ic41"
 offset = 0x20001
 stride = 2
 size   = 0x10000
-crc32  = 0xa9d71eca
+crc32  = 0xa995d64f
 
 [[region.file]]
-name   = "rt_r-l1-b.3c"
+name   = "mh_c-l1-b.ic36"
 offset = 0x20000
 stride = 2
 size   = 0x10000
-crc32  = 0x0df3573d
+crc32  = 0x41dda999
 
-# Boot-chunk reload of the second pair at the top of the region.
 [[region.file]]
-name   = "rt_r-h1-b.1c"
+name   = "mh_c-h3-b.ic43"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0xab9451ca
+
+[[region.file]]
+name   = "mh_c-l3-b.ic34"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0x11562221
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "mh_c-h3-b.ic43"
 offset = 0xE0001
 stride = 2
 size   = 0x10000
-crc32  = 0xa9d71eca
+crc32  = 0xab9451ca
 
 [[region.file]]
-name   = "rt_r-l1-b.3c"
+name   = "mh_c-l3-b.ic34"
 offset = 0xE0000
 stride = 2
 size   = 0x10000
-crc32  = 0x0df3573d
+crc32  = 0x11562221
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "mh_c-pr-b.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x9d201fea
 
 [[region]]
 name = "sprites"
-size = 0x80000
+size = 0x080000
 
 [[region.file]]
-name   = "rt_r-00.1h"
+name   = "mh_c-00-a.ic53"
 offset = 0x00000
 size   = 0x10000
-crc32  = 0xdad53bc0
+crc32  = 0xf6e6e660
 
 [[region.file]]
-name   = "rt_r-01.1j"
+name   = "mh_c-01-b.ic52"
 offset = 0x10000
-size   = 0x8000
-crc32  = 0x5e441e7f
+size   = 0x10000
+crc32  = 0x708cdd37
 
 [[region.file]]
-name   = "rt_r-01.1j"
-offset = 0x18000
-size   = 0x8000
-crc32  = 0x5e441e7f
-
-[[region.file]]
-name   = "rt_r-10.1k"
+name   = "mh_c-10-a.ic51"
 offset = 0x20000
 size   = 0x10000
-crc32  = 0xd6a66298
+crc32  = 0x292c8520
 
 [[region.file]]
-name   = "rt_r-11.1l"
+name   = "mh_c-11-b.ic50"
 offset = 0x30000
-size   = 0x8000
-crc32  = 0x791df4f8
+size   = 0x10000
+crc32  = 0x20904cf3
 
 [[region.file]]
-name   = "rt_r-11.1l"
-offset = 0x38000
-size   = 0x8000
-crc32  = 0x791df4f8
-
-[[region.file]]
-name   = "rt_r-20.3h"
+name   = "mh_c-20-a.ic49"
 offset = 0x40000
 size   = 0x10000
-crc32  = 0xfc247c8a
+crc32  = 0x1ab50c23
 
 [[region.file]]
-name   = "rt_r-21.3j"
+name   = "mh_c-21-b.ic48"
 offset = 0x50000
-size   = 0x8000
-crc32  = 0xed793841
+size   = 0x10000
+crc32  = 0xc823d34c
 
 [[region.file]]
-name   = "rt_r-21.3j"
-offset = 0x58000
-size   = 0x8000
-crc32  = 0xed793841
-
-[[region.file]]
-name   = "rt_r-30.3k"
+name   = "mh_c-30-a.ic47"
 offset = 0x60000
 size   = 0x10000
-crc32  = 0xeb02a1cb
+crc32  = 0x11f6c56b
 
 [[region.file]]
-name   = "rt_r-31.3l"
+name   = "mh_c-31-b.ic46"
 offset = 0x70000
-size   = 0x8000
-crc32  = 0x8558355d
-
-[[region.file]]
-name   = "rt_r-31.3l"
-offset = 0x78000
-size   = 0x8000
-crc32  = 0x8558355d
+size   = 0x10000
+crc32  = 0x23134ec5
 
 [[region]]
 name = "tiles_a"
-size = 0x20000
+size = 0x040000
 
 [[region.file]]
-name   = "rt_b-a0.3c"
+name   = "mh_b-a0-b.ic21"
 offset = 0x00000
-size   = 0x8000
-crc32  = 0x4e212fb0
+size   = 0x10000
+crc32  = 0xe46ed7bf
 
 [[region.file]]
-name   = "rt_b-a1.3d"
-offset = 0x08000
-size   = 0x8000
-crc32  = 0x8a65bdff
-
-[[region.file]]
-name   = "rt_b-a2.3a"
+name   = "mh_b-a1-b.ic22"
 offset = 0x10000
-size   = 0x8000
-crc32  = 0x5a4ae5b9
+size   = 0x10000
+crc32  = 0x590605ff
 
 [[region.file]]
-name   = "rt_b-a3.3e"
-offset = 0x18000
-size   = 0x8000
-crc32  = 0x73327606
+name   = "mh_b-a2-b.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xf8158226
+
+[[region.file]]
+name   = "mh_b-a3-b.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x0f07b9b7
 
 [[region]]
 name = "tiles_b"
-size = 0x20000
+size = 0x040000
 
 [[region.file]]
-name   = "rt_b-b0.3j"
+name   = "mh_b-b0-.ic26"
 offset = 0x00000
-size   = 0x8000
-crc32  = 0xa7b17491
+size   = 0x10000
+crc32  = 0xb5b95776
 
 [[region.file]]
-name   = "rt_b-b1.3k"
-offset = 0x08000
-size   = 0x8000
-crc32  = 0xb9709686
-
-[[region.file]]
-name   = "rt_b-b2.3h"
+name   = "mh_b-b1-.ic27"
 offset = 0x10000
-size   = 0x8000
-crc32  = 0x433b229a
+size   = 0x10000
+crc32  = 0x74ca16ee
 
 [[region.file]]
-name   = "rt_b-b3.3f"
-offset = 0x18000
-size   = 0x8000
-crc32  = 0xad89b072
+name   = "mh_b-b2-.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xb82cca04
+
+[[region.file]]
+name   = "mh_b-b3-.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xa7afc920
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "mh_c-v0-b.ic44"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xd0c27e58
