@@ -60,8 +60,12 @@ namespace mnemos::frontend_sdk {
         // Empty = let the adapter auto-detect. Families without selectable
         // mappers ignore it.
         std::string mapper_override;
+        // Optional second cartridge/media slot mapper override. Empty = family
+        // default. Families without a second mapper-selectable slot ignore it.
+        std::string mapper2_override;
         // Optional FM expansion. SMS uses this for the Japanese Master System /
-        // FM Sound Unit YM2413; families without an FM expansion ignore it.
+        // FM Sound Unit YM2413; MSX uses it for MSX-MUSIC/FM-PAC OPLL plus PAC
+        // SRAM. Families without an FM expansion ignore it.
         bool fm_unit{};
         // Plug a light gun into the family's gun port (NES Zapper on port 2, ...).
         // Families without a light gun ignore it.
@@ -69,6 +73,12 @@ namespace mnemos::frontend_sdk {
         // Plug a 4-player multitap into the family's ports (NES Four Score, ...).
         // Families without a multitap ignore it.
         bool four_score{};
+        // Optional battery-backed real-time clock. MSX uses this for RP-5C01
+        // clock/CMOS hardware; families without an RTC ignore it.
+        bool rtc{};
+        // Select MSX2-class video hardware where the family supports it. MSX
+        // maps this to the V9938; other families ignore it.
+        bool msx2{};
         // Filesystem path of the primary CD/disk image, for media that loads by
         // path rather than a flat byte buffer (a .cue references sibling .bin
         // tracks; an .iso is read whole -- .chd is not supported yet). The Sega CD

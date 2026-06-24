@@ -31,12 +31,18 @@ namespace mnemos::apps::player::adapters {
 
     // Scan argv for `--mapper <name>` and return the lowercased value, or
     // nullopt when the flag is absent or has no value. The value is interpreted
-    // by the family adapter (the SMS adapter accepts sega/codemasters/korean);
-    // an unrecognised name leaves the adapter on auto-detect.
+    // by the family adapter (the SMS adapter accepts sega/codemasters/korean;
+    // the MSX adapter accepts ascii8/ascii8-sram8/ascii16/ascii16-sram2/
+    // konami/konami-scc/korean-msx/korean-msx-nemesis); an unrecognised name
+    // leaves the adapter on auto-detect.
     [[nodiscard]] std::optional<std::string> parse_mapper_arg(int argc, char* argv[]);
 
-    // Enable an optional FM expansion where the selected system exposes one
-    // (currently SMS YM2413 via `--fm`). Other systems ignore the flag.
+    // Same mapper vocabulary as `--mapper`, but reserved for a system's second
+    // cartridge/media slot. Currently MSX uses this for cartridge slot 2.
+    [[nodiscard]] std::optional<std::string> parse_mapper2_arg(int argc, char* argv[]);
+
+    // Enable an optional FM expansion where the selected system exposes one:
+    // SMS YM2413 or MSX-MUSIC/FM-PAC via `--fm`. Other systems ignore the flag.
     [[nodiscard]] bool parse_fm_unit_arg(int argc, char* argv[]);
 
     // Plug a light gun into the selected system's gun port (`--light-gun`,
@@ -46,6 +52,14 @@ namespace mnemos::apps::player::adapters {
     // Plug a 4-player multitap into the selected system's ports (`--four-score`, the
     // NES Four Score). Other systems ignore the flag.
     [[nodiscard]] bool parse_four_score_arg(int argc, char* argv[]);
+
+    // Enable optional battery-backed RTC hardware where the selected system has
+    // one (`--rtc`; currently MSX RP-5C01). Other systems ignore the flag.
+    [[nodiscard]] bool parse_rtc_arg(int argc, char* argv[]);
+
+    // Select MSX2-class video hardware (`--msx2`; V9938). Other systems ignore
+    // the flag.
+    [[nodiscard]] bool parse_msx2_arg(int argc, char* argv[]);
 
     // Scan argv for `--dip <value>` (hex with 0x prefix, or decimal) and
     // return the 16-bit DIP bank, or nullopt when absent/malformed.

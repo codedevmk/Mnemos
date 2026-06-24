@@ -16,10 +16,14 @@ namespace {
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
+    using mnemos::apps::player::adapters::parse_mapper2_arg;
+    using mnemos::apps::player::adapters::parse_mapper_arg;
+    using mnemos::apps::player::adapters::parse_msx2_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_press_events;
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
+    using mnemos::apps::player::adapters::parse_rtc_arg;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
 
@@ -118,6 +122,33 @@ TEST_CASE("cli_args: --fm enables the optional FM expansion") {
 
     auto b = make_argv({"player", "--system", "sms", "--rom", "g.sms", "--fm"});
     CHECK(parse_fm_unit_arg(b.argc(), b.argv.data()));
+}
+
+TEST_CASE("cli_args: --rtc enables optional real-time clock hardware") {
+    auto a = make_argv({"player", "--system", "msx", "--rom", "g.rom"});
+    CHECK_FALSE(parse_rtc_arg(a.argc(), a.argv.data()));
+
+    auto b = make_argv({"player", "--system", "msx", "--rom", "g.rom", "--rtc"});
+    CHECK(parse_rtc_arg(b.argc(), b.argv.data()));
+}
+
+TEST_CASE("cli_args: --msx2 selects MSX2 video hardware") {
+    auto a = make_argv({"player", "--system", "msx", "--rom", "g.rom"});
+    CHECK_FALSE(parse_msx2_arg(a.argc(), a.argv.data()));
+
+    auto b = make_argv({"player", "--system", "msx", "--rom", "g.rom", "--msx2"});
+    CHECK(parse_msx2_arg(b.argc(), b.argv.data()));
+}
+
+TEST_CASE("cli_args: mapper overrides lowercase primary and secondary cartridge slots") {
+    auto a = make_argv({"player", "--system", "msx", "--rom", "bios.rom", "--mapper", "ASCII8",
+                        "--mapper2", "Konami-SCC"});
+    REQUIRE(parse_mapper_arg(a.argc(), a.argv.data()) == "ascii8");
+    REQUIRE(parse_mapper2_arg(a.argc(), a.argv.data()) == "konami-scc");
+
+    auto b = make_argv({"player", "--system", "msx", "--rom", "bios.rom"});
+    CHECK(parse_mapper_arg(b.argc(), b.argv.data()) == std::nullopt);
+    CHECK(parse_mapper2_arg(b.argc(), b.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: --screenshot + --frames returns the request") {

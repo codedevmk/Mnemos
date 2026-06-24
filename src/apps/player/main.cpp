@@ -1,11 +1,14 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2) with the --rom media (zip
-// archives are extracted transparently), presents its framebuffer at integer
-// scale, streams audio, and routes keyboard + gamepad input. ESC quits.
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2 /
+// spectrum / nes / msx) with the --rom media (zip archives are extracted
+// transparently), presents its framebuffer at integer scale, streams audio, and
+// routes keyboard + gamepad input. ESC quits. Optional devices include --fm
+// for MSX-MUSIC/FM-PAC or SMS YM2413, --rtc for MSX RP-5C01 clock/CMOS, and
+// --msx2 for MSX2/V9938 video hardware.
 
 #define SDL_MAIN_HANDLED
 
-#include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
+#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "cli_args.hpp"
 #include "headless_commands.hpp"
 #include "player_system.hpp"
@@ -34,11 +37,11 @@ namespace {
     constexpr int kInitialWindowHeight = 960;
 
     // Streaming texture is sized for the worst-case frame across supported
-    // systems: Genesis VDP 320x240 V30 (x2 rows for interlace) and the Irem
-    // M72's 384x256 (256x384 once a vertical game is rotated for TATE
-    // presentation); per-frame uploads only touch the active subregion the
-    // adapter reports.
-    constexpr std::uint32_t kMaxFbWidth = 384U;
+    // systems: V9938 high-resolution MSX2 modes at 512 columns, Genesis VDP
+    // 320x240 V30 (x2 rows for interlace), and the Irem M72's 384x256 (256x384
+    // once a vertical game is rotated for TATE presentation); per-frame uploads
+    // only touch the active subregion the adapter reports.
+    constexpr std::uint32_t kMaxFbWidth = 512U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
 
     // Status overlay: two lines of 8x8 monospaced text, anchored to the
@@ -159,10 +162,13 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
     using mnemos::apps::player::adapters::parse_light_gun_arg;
+    using mnemos::apps::player::adapters::parse_mapper2_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
+    using mnemos::apps::player::adapters::parse_msx2_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
+    using mnemos::apps::player::adapters::parse_rtc_arg;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
     using mnemos::apps::player::adapters::srm_path_for;
@@ -172,9 +178,12 @@ int main(int argc, char* argv[]) {
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
+    const auto mapper2_arg = parse_mapper2_arg(argc, argv);
     const bool fm_unit = parse_fm_unit_arg(argc, argv);
     const bool light_gun = parse_light_gun_arg(argc, argv);
     const bool four_score = parse_four_score_arg(argc, argv);
+    const bool rtc = parse_rtc_arg(argc, argv);
+    const bool msx2 = parse_msx2_arg(argc, argv);
     const auto dip_arg = parse_dip_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
@@ -189,9 +198,12 @@ int main(int argc, char* argv[]) {
                                                        .autostart = autostart,
                                                        .region_override = region_arg,
                                                        .mapper_override = mapper_arg,
+                                                       .mapper2_override = mapper2_arg,
                                                        .fm_unit = fm_unit,
                                                        .light_gun = light_gun,
                                                        .four_score = four_score,
+                                                       .rtc = rtc,
+                                                       .msx2 = msx2,
                                                        .dip_override = dip_arg});
     if (launch.exit_code != 0) {
         return launch.exit_code;

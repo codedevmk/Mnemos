@@ -118,6 +118,9 @@ namespace mnemos::apps::player {
         case system_family::nes:
             cart_default = mnemos::video_region::ntsc;
             break;
+        case system_family::msx:
+            cart_default = mnemos::video_region::ntsc;
+            break;
         case system_family::sega32x:
             cart_default =
                 mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
@@ -220,21 +223,82 @@ namespace mnemos::apps::player {
             }
         }
 
+        if (family == system_family::msx) {
+            const char* bios_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_BIOS");
+            const bool primary_is_dsk = lowercase_extension(options.rom_paths.front()) == ".dsk";
+            if (bios_env != nullptr && bios_env[0] != '\0') {
+                auto bios = load_rom(bios_env);
+                if (!bios || bios->bytes.size() < 0x8000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX BIOS: %s\n", bios_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                additional_media.insert(additional_media.begin(), std::move(primary_rom));
+                primary_rom = std::move(bios->bytes);
+            } else if (primary_is_dsk) {
+                std::fprintf(stderr, "[mnemos_player] an MSX disk needs MNEMOS_MSX_BIOS set to "
+                                     "a system BIOS ROM\n");
+                outcome.exit_code = 1;
+                return outcome;
+            } else {
+                std::fprintf(stderr, "[mnemos_player] MNEMOS_MSX_BIOS unset; treating --rom as "
+                                     "the MSX BIOS image (no cartridge mounted)\n");
+            }
+            bool disk_requested = primary_is_dsk;
+            for (const auto& path : options.rom_paths) {
+                disk_requested = disk_requested || lowercase_extension(path) == ".dsk";
+            }
+            if (disk_requested) {
+                const char* disk_rom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_DISK_ROM");
+                if (disk_rom_env == nullptr || disk_rom_env[0] == '\0') {
+                    std::fprintf(stderr, "[mnemos_player] an MSX disk needs "
+                                         "MNEMOS_MSX_DISK_ROM set to a disk interface ROM\n");
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                auto disk_rom = load_rom(disk_rom_env);
+                if (!disk_rom || disk_rom->bytes.size() < 0x4000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX disk ROM: %s\n",
+                                 disk_rom_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                bios_images.push_back(std::move(disk_rom->bytes));
+            }
+            const char* kanji_rom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_KANJI_ROM");
+            if (kanji_rom_env != nullptr && kanji_rom_env[0] != '\0') {
+                auto kanji_rom = load_rom(kanji_rom_env);
+                if (!kanji_rom || kanji_rom->bytes.size() < 0x20000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX Kanji ROM: %s\n",
+                                 kanji_rom_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                if (!disk_requested) {
+                    bios_images.emplace_back();
+                }
+                bios_images.push_back(std::move(kanji_rom->bytes));
+            }
+        }
+
         outcome.system = frontend_sdk::adapter_registry::instance().create(
-            family_id(family), {.rom = std::move(primary_rom),
-                                .video_region = video,
-                                .display_name = clean_rom_name(loaded->name),
-                                .additional_media = std::move(additional_media),
-                                .autostart = options.autostart,
-                                .dip_override = options.dip_override,
-                                .mapper_override =
-                                    options.mapper_override.value_or(std::string{}),
-                                .fm_unit = options.fm_unit,
-                                .light_gun = options.light_gun,
-                                .four_score = options.four_score,
-                                .disc_path = std::move(disc_path),
-                                .rom_path = options.rom_paths.front(),
-                                .bios_images = std::move(bios_images)});
+            family_id(family),
+            {.rom = std::move(primary_rom),
+             .video_region = video,
+             .display_name = clean_rom_name(loaded->name),
+             .additional_media = std::move(additional_media),
+             .autostart = options.autostart,
+             .dip_override = options.dip_override,
+             .mapper_override = options.mapper_override.value_or(std::string{}),
+             .mapper2_override = options.mapper2_override.value_or(std::string{}),
+             .fm_unit = options.fm_unit,
+             .light_gun = options.light_gun,
+             .four_score = options.four_score,
+             .rtc = options.rtc,
+             .msx2 = options.msx2,
+             .disc_path = std::move(disc_path),
+             .rom_path = options.rom_paths.front(),
+             .bios_images = std::move(bios_images)});
         if (outcome.system && outcome.system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
                          outcome.system->media_count());

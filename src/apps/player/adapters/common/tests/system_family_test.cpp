@@ -22,6 +22,9 @@ TEST_CASE("system_family: every registry id maps to its family") {
     CHECK(family_from_name("irem_m72") == system_family::irem_m72);
     CHECK(family_from_name("cps1") == system_family::capcom_cps1);
     CHECK(family_from_name("cps2") == system_family::capcom_cps2);
+    CHECK(family_from_name("spectrum") == system_family::spectrum);
+    CHECK(family_from_name("nes") == system_family::nes);
+    CHECK(family_from_name("msx") == system_family::msx);
 }
 
 TEST_CASE("system_family: names are case-insensitive") {
@@ -42,7 +45,8 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
     for (const auto family :
          {system_family::genesis, system_family::sms, system_family::gg, system_family::c64,
           system_family::segacd, system_family::sega32x, system_family::irem_m72,
-          system_family::capcom_cps1, system_family::capcom_cps2}) {
+          system_family::capcom_cps1, system_family::capcom_cps2, system_family::spectrum,
+          system_family::nes, system_family::msx}) {
         CHECK(family_from_name(family_id(family)) == family);
     }
 }
@@ -52,7 +56,8 @@ TEST_CASE("system_family: family_names lists every accepted id") {
     for (const auto family :
          {system_family::genesis, system_family::sms, system_family::gg, system_family::c64,
           system_family::segacd, system_family::sega32x, system_family::irem_m72,
-          system_family::capcom_cps1, system_family::capcom_cps2}) {
+          system_family::capcom_cps1, system_family::capcom_cps2, system_family::spectrum,
+          system_family::nes, system_family::msx}) {
         CHECK(names.find(family_id(family)) != std::string::npos);
     }
 }
@@ -64,4 +69,7 @@ TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::sega32x)} == "32X");
     CHECK(std::string{family_label(system_family::capcom_cps1)} == "CPS1");
     CHECK(std::string{family_label(system_family::capcom_cps2)} == "CPS2");
+    CHECK(std::string{family_label(system_family::spectrum)} == "ZX Spectrum");
+    CHECK(std::string{family_label(system_family::nes)} == "NES");
+    CHECK(std::string{family_label(system_family::msx)} == "MSX");
 }
