@@ -20,7 +20,9 @@ mnemos_declare_tier(NAME mnemos_chips_cpu_m6510 TIER 2 DEPENDS mnemos_foundation
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_chips_cpu_m6510_test
-        SOURCES tests/m6510_test.cpp
+        SOURCES
+            tests/m6510_test.cpp
+            tests/m6510_undocumented_test.cpp
         LIBRARIES mnemos::chips::cpu::m6510
     )
 
