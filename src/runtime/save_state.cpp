@@ -182,6 +182,10 @@ namespace mnemos::runtime {
                 if (sc.id == chunk_id && sc.chip != nullptr) {
                     chips::state_reader cr(chunk);
                     sc.chip->load_state(cr);
+                    if (!cr.ok()) {
+                        return {.status = load_status::chunk_rejected,
+                                .master_cycle = master_cycle};
+                    }
                     handled = true;
                     break;
                 }
@@ -204,6 +208,10 @@ namespace mnemos::runtime {
                         if (sc.load) {
                             chips::state_reader cr(chunk);
                             sc.load(cr);
+                            if (!cr.ok()) {
+                                return {.status = load_status::chunk_rejected,
+                                        .master_cycle = master_cycle};
+                            }
                         }
                         handled = true;
                         break;

@@ -1,14 +1,18 @@
 #include "capcom_cps2_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "cps2_game_manifests.hpp"
 #include "cps2_crypto.hpp"
 #include "file.hpp"
 #include "input_pack.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
+#include "zip_archive.hpp"
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <span>
@@ -24,11 +28,31 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         using mnemos::manifests::common::rom_set_image;
         namespace cps2 = mnemos::manifests::capcom_cps2;
 
+        constexpr std::uint32_t cps2_adapter_state_version = 3U;
+
         struct loaded_set final {
             rom_set_image image;
             frontend_sdk::display_orientation orientation{
                 frontend_sdk::display_orientation::horizontal};
+            std::uint8_t players{2U};
+            cps2_input_profile input_profile{cps2_input_profile::six_button};
+            cps2::cps2_analog_input_mode analog_input_mode{cps2::cps2_analog_input_mode::none};
+            bool coin_lockout_active_high{};
         };
+
+        struct key_file_candidate final {
+            std::string label;
+            std::string stem;
+            std::vector<std::uint8_t> bytes;
+        };
+
+        struct resolved_rom_provider final {
+            mnemos::manifests::common::rom_file_provider provider;
+            std::vector<key_file_candidate> key_candidates;
+        };
+
+        [[nodiscard]] std::vector<key_file_candidate>
+        collect_zip_key_candidates(std::span<const std::uint8_t> archive_bytes);
 
         [[nodiscard]] frontend_sdk::display_orientation
         to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
@@ -37,41 +61,223 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                        : frontend_sdk::display_orientation::horizontal;
         }
 
+        frontend_sdk::session_capability_info make_session_capabilities(std::uint8_t players) {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports.reserve(players);
+            for (std::uint8_t i = 0U; i < players; ++i) {
+                const std::uint8_t slot = static_cast<std::uint8_t>(i + 1U);
+                session.input_ports.push_back(frontend_sdk::session_input_port{
+                    .port_index = i,
+                    .player_slot = slot,
+                    .format = frontend_sdk::input_device_format::arcade_panel,
+                    .device_id = "cps2.panel.p" + std::to_string(slot),
+                    .label = "Player " + std::to_string(slot) + " Panel"});
+            }
+            session.deterministic_frame_input = true;
+            session.save_state_supported = true;
+            session.frame_exact_save_state = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
+                                                                    std::uint64_t byte_count) {
+            frontend_sdk::media_capability_info media{};
+            media.media.push_back(frontend_sdk::media_image_info{
+                .id = "rom_set",
+                .label = display_name.empty() ? std::string{"ROM set"} : std::string{display_name},
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = byte_count,
+                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .provider_id = "cps2.adapter",
+                .revision = "loaded",
+                .cache_hint = "resident"});
+            return media;
+        }
+
+        [[nodiscard]] cps2_input_profile
+        input_profile_for(const std::optional<std::string>& input, std::uint8_t players) {
+            if (input.has_value()) {
+                if (*input == "six_button") {
+                    return cps2_input_profile::six_button;
+                }
+                if (*input == "six_button_ticket_dispenser" ||
+                    *input == "two_player_six_button_ticket" || *input == "cps2_2p6bt") {
+                    return cps2_input_profile::six_button_ticket_dispenser;
+                }
+                if (*input == "four_player") {
+                    return cps2_input_profile::four_player;
+                }
+                if (*input == "two_player") {
+                    return cps2_input_profile::two_player;
+                }
+                if (*input == "two_player_one_button") {
+                    return cps2_input_profile::two_player_one_button;
+                }
+                if (*input == "two_player_two_button") {
+                    return cps2_input_profile::two_player_two_button;
+                }
+                if (*input == "two_player_three_button") {
+                    return cps2_input_profile::two_player;
+                }
+                if (*input == "two_player_four_button") {
+                    return cps2_input_profile::two_player_four_button;
+                }
+                if (*input == "three_player_three_button") {
+                    return cps2_input_profile::three_player_three_button;
+                }
+                if (*input == "four_player_two_button") {
+                    return cps2_input_profile::four_player_two_button;
+                }
+                if (*input == "four_player_three_button") {
+                    return cps2_input_profile::four_player;
+                }
+                if (*input == "four_player_four_button") {
+                    return cps2_input_profile::four_player_four_button;
+                }
+                if (*input == "one_player_three_button") {
+                    return cps2_input_profile::one_player_three_button;
+                }
+                if (*input == "cybots_four_button") {
+                    return cps2_input_profile::cybots_four_button;
+                }
+                if (*input == "ecofighters_spinner") {
+                    return cps2_input_profile::ecofighters_spinner;
+                }
+                if (*input == "puzz_loop_2_paddle") {
+                    return cps2_input_profile::puzz_loop_2_paddle;
+                }
+                std::fprintf(stderr,
+                             "[capcom_cps2] unsupported input profile '%s'; using automatic "
+                             "layout\n",
+                             input->c_str());
+            }
+            return players > 2U ? cps2_input_profile::four_player
+                                : cps2_input_profile::six_button;
+        }
+
+        [[nodiscard]] cps2::cps2_analog_input_mode
+        analog_input_mode_for(cps2_input_profile profile) noexcept {
+            switch (profile) {
+            case cps2_input_profile::ecofighters_spinner:
+                return cps2::cps2_analog_input_mode::eco_fighters;
+            case cps2_input_profile::puzz_loop_2_paddle:
+                return cps2::cps2_analog_input_mode::puzz_loop_2;
+            default:
+                return cps2::cps2_analog_input_mode::none;
+            }
+        }
+
+        [[nodiscard]] bool coin_lockout_active_high_for(std::string_view set_name) noexcept {
+            constexpr std::string_view prefix = "mmatrix";
+            return set_name.size() >= prefix.size() &&
+                   set_name.substr(0U, prefix.size()) == prefix;
+        }
+
+        [[nodiscard]] bool starts_with_ascii(std::string_view value,
+                                             std::string_view prefix) noexcept {
+            return value.size() >= prefix.size() && value.substr(0U, prefix.size()) == prefix;
+        }
+
+        [[nodiscard]] bool is_vertical_cps2_family(std::string_view set_id) noexcept {
+            return starts_with_ascii(set_id, "19xx") || starts_with_ascii(set_id, "1944");
+        }
+
+        [[nodiscard]] bool manifest_declares_orientation(std::string_view text) noexcept {
+            std::size_t line_start = 0U;
+            while (line_start < text.size()) {
+                const std::size_t line_end = text.find('\n', line_start);
+                std::string_view line =
+                    text.substr(line_start, line_end == std::string_view::npos
+                                                ? std::string_view::npos
+                                                : line_end - line_start);
+                while (!line.empty() &&
+                       std::isspace(static_cast<unsigned char>(line.front())) != 0) {
+                    line.remove_prefix(1U);
+                }
+                if (!line.empty() && line.front() != '#' &&
+                    starts_with_ascii(line, "orientation")) {
+                    line.remove_prefix(std::string_view{"orientation"}.size());
+                    while (!line.empty() &&
+                           std::isspace(static_cast<unsigned char>(line.front())) != 0) {
+                        line.remove_prefix(1U);
+                    }
+                    if (!line.empty() && line.front() == '=') {
+                        return true;
+                    }
+                }
+                if (line_end == std::string_view::npos) {
+                    break;
+                }
+                line_start = line_end + 1U;
+            }
+            return false;
+        }
+
+        [[nodiscard]] frontend_sdk::display_orientation
+        default_orientation_for_set(const std::string& set_name,
+                                    const std::optional<std::string>& parent,
+                                    const std::string& rom_path) {
+            if (is_vertical_cps2_family(set_name) ||
+                (parent.has_value() && is_vertical_cps2_family(*parent))) {
+                return frontend_sdk::display_orientation::vertical;
+            }
+            if (!rom_path.empty()) {
+                namespace fs = std::filesystem;
+                if (is_vertical_cps2_family(fs::path(rom_path).stem().string())) {
+                    return frontend_sdk::display_orientation::vertical;
+                }
+            }
+            return frontend_sdk::display_orientation::horizontal;
+        }
+
         // Resolve a clone set's parent zip beside the clone on disk and compose a
-        // fallback provider (clone first, then parent). Identical in shape to the
-        // CPS1 adapter's helper.
-        [[nodiscard]] mnemos::manifests::common::rom_file_provider
+        // fallback provider (clone first, then parent) while carrying any parent
+        // zip-contained key candidates for validated CPS2 key recovery.
+        [[nodiscard]] resolved_rom_provider
         with_parent_fallback(const mnemos::manifests::common::rom_file_provider& clone,
+                             std::vector<key_file_candidate> key_candidates,
                              const std::string& parent, const std::string& rom_path) {
+            resolved_rom_provider result{clone, std::move(key_candidates)};
             if (rom_path.empty()) {
                 std::fprintf(stderr,
                              "[capcom_cps2] set declares parent '%s' but no path is known to "
                              "locate it; shared ROMs will be missing\n",
                              parent.c_str());
-                return clone;
+                return result;
             }
             if (parent.find('/') != std::string::npos || parent.find('\\') != std::string::npos ||
                 parent.find("..") != std::string::npos) {
                 std::fprintf(stderr,
                              "[capcom_cps2] refusing to resolve parent '%s': not a plain set id\n",
                              parent.c_str());
-                return clone;
+                return result;
             }
             const auto slash = rom_path.find_last_of("/\\");
             const std::string dir =
                 slash == std::string::npos ? std::string{} : rom_path.substr(0, slash + 1);
             const std::string parent_path = dir + parent + ".zip";
-            bool unreadable_zip = false;
-            auto parent_provider = mnemos::manifests::common::make_zip_rom_provider_from_path(
-                parent_path, &unreadable_zip);
-            if (!parent_provider.has_value()) {
-                std::fprintf(stderr, "[capcom_cps2] parent set %s: %s\n",
-                             unreadable_zip ? "is not a readable zip" : "not found",
+            auto parent_bytes = mnemos::io::read_file(parent_path);
+            if (!parent_bytes.has_value()) {
+                std::fprintf(stderr, "[capcom_cps2] parent set not found: %s\n",
                              parent_path.c_str());
-                return clone;
+                return result;
             }
-            return mnemos::manifests::common::make_fallback_rom_provider(
+            auto parent_key_candidates = collect_zip_key_candidates(*parent_bytes);
+            auto parent_provider =
+                mnemos::manifests::common::make_zip_rom_provider(std::move(*parent_bytes));
+            if (!parent_provider.has_value()) {
+                std::fprintf(stderr, "[capcom_cps2] parent set is not a readable zip: %s\n",
+                             parent_path.c_str());
+                return result;
+            }
+            for (key_file_candidate& candidate : parent_key_candidates) {
+                candidate.label = parent_path + ":" + candidate.label;
+                result.key_candidates.push_back(std::move(candidate));
+            }
+            result.provider = mnemos::manifests::common::make_fallback_rom_provider(
                 clone, std::move(*parent_provider));
+            return result;
         }
 
         // A 20-byte board key validates against the encrypted program when the
@@ -103,14 +309,117 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             return (reset_ssp & 1U) == 0U && (reset_pc & 1U) == 0U && reset_pc < opcode.size();
         }
 
+        [[nodiscard]] bool is_plain_set_id(std::string_view name) noexcept {
+            return !name.empty() && name.find('/') == std::string_view::npos &&
+                   name.find('\\') == std::string_view::npos &&
+                   name.find("..") == std::string_view::npos;
+        }
+
+        [[nodiscard]] std::string set_id_from_rom_path(const std::string& rom_path) {
+            if (rom_path.empty()) {
+                return {};
+            }
+            namespace fs = std::filesystem;
+            std::string set_id = fs::path(rom_path).stem().string();
+            return is_plain_set_id(set_id) ? set_id : std::string{};
+        }
+
+        [[nodiscard]] std::string filename_from_entry(std::string_view name) {
+            const std::size_t slash = name.find_last_of("/\\");
+            return std::string(slash == std::string_view::npos ? name : name.substr(slash + 1U));
+        }
+
+        [[nodiscard]] std::string stem_from_filename(std::string_view name) {
+            const std::size_t dot = name.find_last_of('.');
+            return std::string(dot == std::string_view::npos ? name : name.substr(0U, dot));
+        }
+
+        [[nodiscard]] bool has_key_extension(std::string_view name) noexcept {
+            const std::size_t dot = name.find_last_of('.');
+            return dot != std::string_view::npos && name.substr(dot) == ".key";
+        }
+
+        void push_key_id(std::vector<std::string>& ids, std::string id) {
+            if (!is_plain_set_id(id)) {
+                return;
+            }
+            if (std::find(ids.begin(), ids.end(), id) == ids.end()) {
+                ids.push_back(std::move(id));
+            }
+        }
+
+        [[nodiscard]] std::vector<std::string>
+        key_id_candidates(const std::string& set_name, const std::optional<std::string>& parent,
+                          const std::string& rom_path) {
+            std::vector<std::string> ids;
+            push_key_id(ids, set_name);
+            if (parent.has_value()) {
+                push_key_id(ids, *parent);
+            }
+            if (!rom_path.empty()) {
+                namespace fs = std::filesystem;
+                std::error_code ec;
+                const fs::path stem = fs::path(rom_path).stem();
+                push_key_id(ids, stem.string());
+            }
+            return ids;
+        }
+
+        [[nodiscard]] int key_match_rank(std::string_view stem,
+                                         const std::vector<std::string>& ids) noexcept {
+            if (stem.empty()) {
+                return 2;
+            }
+            for (const std::string& id : ids) {
+                if (stem == id) {
+                    return 0;
+                }
+            }
+            for (const std::string& id : ids) {
+                if (stem.rfind(id, 0U) == 0U || std::string_view{id}.rfind(stem, 0U) == 0U) {
+                    return 1;
+                }
+            }
+            return 2;
+        }
+
+        [[nodiscard]] std::vector<key_file_candidate>
+        collect_zip_key_candidates(std::span<const std::uint8_t> archive_bytes) {
+            std::vector<key_file_candidate> candidates;
+            const auto archive = mnemos::compression::zip_archive::open(archive_bytes);
+            if (!archive.has_value()) {
+                return candidates;
+            }
+            for (const mnemos::compression::zip_entry& entry : archive->entries()) {
+                const std::string filename = filename_from_entry(entry.name);
+                if (filename.empty() || !has_key_extension(filename)) {
+                    continue;
+                }
+                auto bytes = archive->extract(entry);
+                if (!bytes.has_value()) {
+                    continue;
+                }
+                std::string stem = stem_from_filename(filename);
+                if (stem.empty()) {
+                    continue;
+                }
+                candidates.push_back({entry.name, std::move(stem), std::move(*bytes)});
+            }
+            return candidates;
+        }
+
         // CPS2 boards are encrypted; the board key is a 20-byte external asset. If
-        // the declaration did not place a "key" region, scan `<dir>/keys` and the
-        // zip's own dir for `.key` files whose name shares the set's prefix, and
-        // adopt the first that decrypts the program to a sane reset vector. (The
-        // zip name does not reliably encode the region, so the right variant is
-        // chosen by validation, mirroring the reference loader.)
+        // the declaration did not place a "key" region, scan provider-backed zip
+        // entries plus `<dir>/keys` and the zip's own dir for `.key` files whose
+        // name shares the set's prefix, and adopt the first that decrypts the
+        // program to a sane reset vector. (The zip name does not reliably encode
+        // the region, so the right variant is chosen by validation, mirroring the
+        // reference loader.)
         void resolve_key_region(rom_set_image& image, const std::string& set_name,
-                                const std::string& rom_path) {
+                                const std::optional<std::string>& parent,
+                                const std::string& rom_path,
+                                const mnemos::manifests::common::rom_file_provider& provider,
+                                std::vector<key_file_candidate> zip_keys) {
             if (const auto* k = image.region("key");
                 k != nullptr && k->size() == cps2::crypto_key_size) {
                 return; // already supplied by the declaration
@@ -119,9 +428,57 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             if (program == nullptr || program->empty() || (program->size() & 1U) != 0U) {
                 return;
             }
-            if (set_name.empty() || rom_path.empty() || set_name.find('/') != std::string::npos ||
-                set_name.find('\\') != std::string::npos ||
-                set_name.find("..") != std::string::npos) {
+            const std::vector<std::string> ids = key_id_candidates(set_name, parent, rom_path);
+            if (ids.empty()) {
+                return;
+            }
+
+            const auto adopt = [&image, program](const std::string& label,
+                                                 std::vector<std::uint8_t> bytes) {
+                if (bytes.size() == cps2::crypto_key_size && key_decrypts_program(bytes, *program)) {
+                    std::fprintf(stderr, "[capcom_cps2] board key: %s\n", label.c_str());
+                    image.regions["key"] = std::move(bytes);
+                    return true;
+                }
+                return false;
+            };
+
+            if (provider) {
+                for (const std::string& id : ids) {
+                    for (const std::string& name : {id + ".key", "keys/" + id + ".key"}) {
+                        if (auto bytes = provider(name)) {
+                            if (adopt(name, std::move(*bytes))) {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            std::stable_sort(zip_keys.begin(), zip_keys.end(),
+                             [&ids](const key_file_candidate& a, const key_file_candidate& b) {
+                                 const int ar = key_match_rank(a.stem, ids);
+                                 const int br = key_match_rank(b.stem, ids);
+                                 if (ar != br) {
+                                     return ar < br;
+                                 }
+                                 return a.stem.size() < b.stem.size();
+                             });
+            const bool allow_single_unmatched_key = zip_keys.size() == 1U;
+            for (key_file_candidate& candidate : zip_keys) {
+                if (key_match_rank(candidate.stem, ids) > 1 && !allow_single_unmatched_key) {
+                    continue;
+                }
+                if (adopt("zip:" + candidate.label, std::move(candidate.bytes))) {
+                    return;
+                }
+            }
+
+            if (rom_path.empty()) {
+                std::fprintf(stderr,
+                             "[capcom_cps2] no valid board key for '%s' in the zip -- the board "
+                             "stays a non-executable blocker\n",
+                             set_name.c_str());
                 return;
             }
 
@@ -138,27 +495,25 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                         continue;
                     }
                     const std::string stem = entry.path().stem().string();
-                    if (stem.rfind(set_name, 0U) == 0U || set_name.rfind(stem, 0U) == 0U) {
+                    if (key_match_rank(stem, ids) < 2) {
                         candidates.push_back(entry.path());
                     }
                 }
                 // Prefer an exact name match, then the shorter (base) names.
                 std::sort(candidates.begin(), candidates.end(),
-                          [&set_name](const fs::path& a, const fs::path& b) {
-                              const bool ea = a.stem().string() == set_name;
-                              const bool eb = b.stem().string() == set_name;
-                              if (ea != eb) {
-                                  return ea;
+                          [&ids](const fs::path& a, const fs::path& b) {
+                              const std::string as = a.stem().string();
+                              const std::string bs = b.stem().string();
+                              const int ar = key_match_rank(as, ids);
+                              const int br = key_match_rank(bs, ids);
+                              if (ar != br) {
+                                  return ar < br;
                               }
-                              return a.stem().string().size() < b.stem().string().size();
+                              return as.size() < bs.size();
                           });
                 for (const auto& candidate : candidates) {
                     auto bytes = mnemos::io::read_file(candidate.string());
-                    if (bytes && bytes->size() == cps2::crypto_key_size &&
-                        key_decrypts_program(*bytes, *program)) {
-                        std::fprintf(stderr, "[capcom_cps2] board key: %s\n",
-                                     candidate.string().c_str());
-                        image.regions["key"] = std::move(*bytes);
+                    if (bytes && adopt(candidate.string(), std::move(*bytes))) {
                         return;
                     }
                 }
@@ -169,10 +524,59 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                          set_name.c_str(), rom_path.c_str());
         }
 
+        [[nodiscard]] loaded_set
+        load_declared_set(std::string_view text, std::string source_name,
+                          const mnemos::manifests::common::rom_file_provider& provider,
+                          std::vector<key_file_candidate> zip_key_candidates,
+                          const std::string& rom_path) {
+            loaded_set result;
+            const auto parsed = mnemos::manifests::common::parse_rom_set_decl(text, source_name);
+            if (!parsed.ok()) {
+                for (const auto& error : parsed.errors) {
+                    std::fprintf(stderr, "[capcom_cps2] %s:%u:%u: %s\n", error.source.c_str(),
+                                 error.line, error.column, error.message.c_str());
+                }
+                return result; // declared but invalid: boot an empty board
+            }
+            if (parsed.value->board != "capcom_cps2") {
+                std::fprintf(stderr,
+                             "[capcom_cps2] %s declares board '%s', expected 'capcom_cps2'\n",
+                             source_name.c_str(), parsed.value->board.c_str());
+                return result;
+            }
+            result.orientation = manifest_declares_orientation(text)
+                                     ? to_display_orientation(parsed.value->orientation)
+                                     : default_orientation_for_set(parsed.value->name,
+                                                                   parsed.value->parent, rom_path);
+            result.players = parsed.value->players;
+            result.input_profile = input_profile_for(parsed.value->input, result.players);
+            result.analog_input_mode = analog_input_mode_for(result.input_profile);
+            result.coin_lockout_active_high =
+                coin_lockout_active_high_for(parsed.value->name) ||
+                (parsed.value->parent.has_value() &&
+                 coin_lockout_active_high_for(*parsed.value->parent));
+            auto effective = parsed.value->parent.has_value()
+                                 ? with_parent_fallback(provider, std::move(zip_key_candidates),
+                                                        *parsed.value->parent, rom_path)
+                                 : resolved_rom_provider{provider, std::move(zip_key_candidates)};
+            result.image = mnemos::manifests::common::load_rom_set(*parsed.value,
+                                                                   effective.provider);
+            for (const auto& issue : result.image.issues) {
+                std::fprintf(stderr, "[capcom_cps2] %s: %s\n", issue.file.c_str(),
+                             issue.message.c_str());
+            }
+            resolve_key_region(result.image, parsed.value->name, parsed.value->parent, rom_path,
+                               effective.provider, std::move(effective.key_candidates));
+            return result;
+        }
+
         // Set loader. A .zip carrying a "game.toml" (schema mnemos-romset/1) loads
-        // declaratively; a clone names a `parent` whose zip supplies the shared
-        // dumps. Without a manifest the development format applies (region-named
-        // <region>.bin entries). A bare binary is the encrypted 68000 program.
+        // declaratively. A normal set zip without that extra file resolves the
+        // same checked-in declaration by zip stem (games/<set>.toml), so authentic
+        // MAME-style archives remain read-only. A clone names a `parent` whose zip
+        // supplies shared dumps. Without any declaration, the development format
+        // applies (region-named <region>.bin entries). A bare binary is the
+        // encrypted 68000 program.
         [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
                                           const std::string& rom_path) {
             loaded_set result;
@@ -181,40 +585,23 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                 result.image.regions.emplace("maincpu", std::move(rom));
                 return result;
             }
+            auto zip_key_candidates = collect_zip_key_candidates(rom);
             auto provider = mnemos::manifests::common::make_zip_rom_provider(std::move(rom));
             if (!provider.has_value()) {
                 return result;
             }
             if (auto manifest_bytes = (*provider)("game.toml")) {
                 const std::string text(manifest_bytes->begin(), manifest_bytes->end());
-                const auto parsed =
-                    mnemos::manifests::common::parse_rom_set_decl(text, "game.toml");
-                if (!parsed.ok()) {
-                    for (const auto& error : parsed.errors) {
-                        std::fprintf(stderr, "[capcom_cps2] %s:%u:%u: %s\n", error.source.c_str(),
-                                     error.line, error.column, error.message.c_str());
-                    }
-                    return result; // declared but invalid: boot an empty board
+                return load_declared_set(text, "game.toml", *provider,
+                                         std::move(zip_key_candidates), rom_path);
+            }
+            if (const std::string set_id = set_id_from_rom_path(rom_path); !set_id.empty()) {
+                const std::string_view manifest = cps2::cps2_game_manifest_toml(set_id);
+                if (!manifest.empty()) {
+                    return load_declared_set(
+                        manifest, std::string{"capcom_cps2/games/"} + set_id + ".toml",
+                        *provider, std::move(zip_key_candidates), rom_path);
                 }
-                if (parsed.value->board != "capcom_cps2") {
-                    std::fprintf(stderr,
-                                 "[capcom_cps2] game.toml declares board '%s', expected "
-                                 "'capcom_cps2'\n",
-                                 parsed.value->board.c_str());
-                    return result;
-                }
-                result.orientation = to_display_orientation(parsed.value->orientation);
-                const auto effective =
-                    parsed.value->parent.has_value()
-                        ? with_parent_fallback(*provider, *parsed.value->parent, rom_path)
-                        : *provider;
-                result.image = mnemos::manifests::common::load_rom_set(*parsed.value, effective);
-                for (const auto& issue : result.image.issues) {
-                    std::fprintf(stderr, "[capcom_cps2] %s: %s\n", issue.file.c_str(),
-                                 issue.message.c_str());
-                }
-                resolve_key_region(result.image, parsed.value->name, rom_path);
-                return result;
             }
             for (const char* region : {"maincpu", "gfx", "audiocpu", "qsound", "key"}) {
                 if (auto bytes = (*provider)(std::string{region} + ".bin")) {
@@ -224,8 +611,93 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             return result;
         }
 
-        [[nodiscard]] std::unique_ptr<cps2::cps2_system> assemble_from(rom_set_image image) {
-            return std::make_unique<cps2::cps2_system>(std::move(image), cps2::cps2_board_params{});
+        [[nodiscard]] std::unique_ptr<cps2::cps2_system>
+        assemble_from(rom_set_image image, cps2::cps2_analog_input_mode analog_input_mode,
+                      bool coin_lockout_active_high) {
+            cps2::cps2_board_params params;
+            params.analog_input = analog_input_mode;
+            params.coin_lockout_active_high = coin_lockout_active_high;
+            return std::make_unique<cps2::cps2_system>(std::move(image), params);
+        }
+
+        void save_controller_state(chips::state_writer& writer,
+                                   const frontend_sdk::controller_state& state) {
+            writer.boolean(state.up);
+            writer.boolean(state.down);
+            writer.boolean(state.left);
+            writer.boolean(state.right);
+            writer.boolean(state.start);
+            writer.boolean(state.select);
+            writer.boolean(state.a);
+            writer.boolean(state.b);
+            writer.boolean(state.c);
+            writer.boolean(state.x);
+            writer.boolean(state.y);
+            writer.boolean(state.z);
+            writer.boolean(state.mode);
+            writer.boolean(state.service);
+            writer.boolean(state.test);
+            writer.u16(std::bit_cast<std::uint16_t>(state.aim_x));
+            writer.u16(std::bit_cast<std::uint16_t>(state.aim_y));
+            writer.boolean(state.trigger);
+            writer.u16(state.paddle);
+        }
+
+        [[nodiscard]] frontend_sdk::controller_state
+        load_controller_state(chips::state_reader& reader, std::uint32_t version) {
+            frontend_sdk::controller_state state{};
+            state.up = reader.boolean();
+            state.down = reader.boolean();
+            state.left = reader.boolean();
+            state.right = reader.boolean();
+            state.start = reader.boolean();
+            state.select = reader.boolean();
+            state.a = reader.boolean();
+            state.b = reader.boolean();
+            state.c = reader.boolean();
+            state.x = reader.boolean();
+            state.y = reader.boolean();
+            state.z = reader.boolean();
+            state.mode = reader.boolean();
+            state.service = reader.boolean();
+            state.test = reader.boolean();
+            state.aim_x = std::bit_cast<std::int16_t>(reader.u16());
+            state.aim_y = std::bit_cast<std::int16_t>(reader.u16());
+            state.trigger = reader.boolean();
+            if (version >= 3U) {
+                state.paddle = reader.u16();
+            }
+            return state;
+        }
+
+        [[nodiscard]] bool valid_input_profile(std::uint8_t value) noexcept {
+            switch (static_cast<cps2_input_profile>(value)) {
+            case cps2_input_profile::six_button:
+            case cps2_input_profile::four_player:
+            case cps2_input_profile::two_player:
+            case cps2_input_profile::two_player_one_button:
+            case cps2_input_profile::two_player_two_button:
+            case cps2_input_profile::two_player_four_button:
+            case cps2_input_profile::three_player_three_button:
+            case cps2_input_profile::four_player_two_button:
+            case cps2_input_profile::four_player_four_button:
+            case cps2_input_profile::one_player_three_button:
+            case cps2_input_profile::cybots_four_button:
+            case cps2_input_profile::ecofighters_spinner:
+            case cps2_input_profile::puzz_loop_2_paddle:
+            case cps2_input_profile::six_button_ticket_dispenser:
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool valid_orientation(std::uint8_t value) noexcept {
+            switch (static_cast<frontend_sdk::display_orientation>(value)) {
+            case frontend_sdk::display_orientation::horizontal:
+            case frontend_sdk::display_orientation::vertical:
+                return true;
+            }
+            return false;
         }
 
     } // namespace
@@ -233,15 +705,25 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     capcom_cps2_adapter::capcom_cps2_adapter(std::vector<std::uint8_t> rom,
                                              std::string display_name,
                                              frontend_sdk::scheduler_factory* /*scheduler_factory*/,
-                                             std::optional<std::uint16_t> /*dip_override*/,
+                                             std::optional<std::uint16_t> dip_override,
                                              std::string rom_path)
     // The CPS2 board integrates the 68000 + the QSound Z80/DSP + the beam in
     // its own run_frame(), so there is no per-chip master-clock schedule to
     // build; the scheduler_factory override does not apply.
     {
+        media_ = make_media_capabilities(display_name, rom.size());
         loaded_set set = load_set(std::move(rom), rom_path);
         orientation_ = set.orientation;
-        sys_ = assemble_from(std::move(set.image));
+        player_count_ = set.players;
+        input_profile_ = set.input_profile;
+        session_ = make_session_capabilities(player_count_);
+        sys_ = assemble_from(std::move(set.image), set.analog_input_mode,
+                             set.coin_lockout_active_high);
+        if (dip_override.has_value()) {
+            sys_->set_development_dips(
+                {static_cast<std::uint8_t>(*dip_override & 0xFFU),
+                 static_cast<std::uint8_t>((*dip_override >> 8U) & 0xFFU), 0xFFU});
+        }
         chip_view_ = {&sys_->video(), &sys_->cpu(), &sys_->sound_cpu(), &sys_->qsound_dsp()};
         publish_memory_views();
         spec_ = {{"System", "Arcade"},
@@ -267,6 +749,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         publish(7U, "qsound_shared_ram", sys_->qsound_shared_ram());
         publish(8U, "z80_ram", sys_->z80_ram());
         publish(9U, "qsound_work_ram", sys_->qsound_work_ram());
+        publish(10U, "development_dips", sys_->development_dips());
     }
 
     void capcom_cps2_adapter::step_one_frame() {
@@ -278,10 +761,12 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
     frontend_sdk::audio_chunk capcom_cps2_adapter::drain_audio() noexcept {
         // QSound emits a fixed ~24 kHz stereo stream independent of the CPU clock;
-        // pace the drain off the frame clock (native rate / fps) and step the HLE
-        // mixer once per output frame via generate().
+        // pace the drain off the exact CPS-2 refresh rational and step the HLE
+        // mixer once per output sample frame via generate().
         constexpr std::uint32_t rate = chips::audio::qsound::native_sample_rate;
-        const std::uint64_t due = frames_stepped_ * rate / manifests::capcom_cps2::frame_rate_hz;
+        const std::uint64_t due =
+            frames_stepped_ * static_cast<std::uint64_t>(rate) *
+            manifests::capcom_cps2::refresh_hz_den / manifests::capcom_cps2::refresh_hz_num;
         const std::uint64_t pending = due - samples_drained_;
         samples_drained_ = due;
         if (pending == 0U) {
@@ -296,55 +781,242 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
     void capcom_cps2_adapter::apply_input(int port,
                                           const frontend_sdk::controller_state& state) noexcept {
-        if (port < 0 || port > 1) {
-            return; // two-player hardware
+        if (port < 0 || static_cast<std::size_t>(port) >= player_count_) {
+            return;
         }
         ports_[static_cast<std::size_t>(port)] = state;
         refresh_inputs();
     }
 
+    std::vector<std::uint8_t> capcom_cps2_adapter::save_state() {
+        return runtime::write_save_state(build_save_target(*this));
+    }
+
+    runtime::load_result capcom_cps2_adapter::load_state(std::span<const std::uint8_t> data) {
+        runtime::save_target target = build_save_target(*this);
+        const runtime::load_result result = runtime::read_save_state(data, target);
+        if (result.ok()) {
+            audio_buf_.clear();
+        }
+        return result;
+    }
+
     void capcom_cps2_adapter::refresh_inputs() noexcept {
-        // Player byte (active low): right/left/down/up in bits 0-3 (the standard
-        // arcade nibble), buttons 1/2/3 in bits 4-6.
-        const auto pack = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            return pack_active_low_pad(c, dpad_layout{},
-                                       {{c.a, 0x10U}, {c.b, 0x20U}, {c.c, 0x40U}});
+        const auto clear8 = [](std::uint8_t& word, std::uint8_t bit) {
+            word = static_cast<std::uint8_t>(word & static_cast<std::uint8_t>(~bit));
         };
-        // Extra-button byte (active low): buttons 4/5/6 in bits 0-2, no directions.
-        // CPS2 fighting cabinets wire these through the second player input word
-        // rather than the joystick word above.
-        const auto pack_extra = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            return pack_active_low_buttons({{c.x, 0x01U}, {c.y, 0x02U}, {c.z, 0x04U}});
+        const auto clear16 = [](std::uint16_t& word, std::uint16_t bit) {
+            word = static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~bit));
         };
+        const auto main_button_count = [this]() -> std::uint8_t {
+            switch (input_profile_) {
+            case cps2_input_profile::two_player_one_button:
+            case cps2_input_profile::puzz_loop_2_paddle:
+                return 1U;
+            case cps2_input_profile::two_player_two_button:
+            case cps2_input_profile::four_player_two_button:
+                return 2U;
+            case cps2_input_profile::two_player_four_button:
+            case cps2_input_profile::four_player_four_button:
+                return 4U;
+            case cps2_input_profile::six_button:
+            case cps2_input_profile::six_button_ticket_dispenser:
+            case cps2_input_profile::four_player:
+            case cps2_input_profile::two_player:
+            case cps2_input_profile::three_player_three_button:
+            case cps2_input_profile::one_player_three_button:
+            case cps2_input_profile::cybots_four_button:
+            case cps2_input_profile::ecofighters_spinner:
+            default:
+                return 3U;
+            }
+        };
+        // Main player byte (active low): right/left/down/up in bits 0-3, then
+        // buttons 1-4 in bits 4-7 for profiles whose cabinet exposes them there.
+        const auto pack_main = [&clear8](const frontend_sdk::controller_state& c,
+                                         std::uint8_t buttons) -> std::uint8_t {
+            std::uint8_t result = pack_active_low_pad(c, dpad_layout{}, {});
+            if (buttons >= 1U && c.a) {
+                clear8(result, 0x10U);
+            }
+            if (buttons >= 2U && c.b) {
+                clear8(result, 0x20U);
+            }
+            if (buttons >= 3U && c.c) {
+                clear8(result, 0x40U);
+            }
+            if (buttons >= 4U && c.x) {
+                clear8(result, 0x80U);
+            }
+            return result;
+        };
+        const auto main_byte = [this, &pack_main, &main_button_count](
+                                   std::size_t port) -> std::uint8_t {
+            return port < player_count_ ? pack_main(ports_[port], main_button_count()) : 0xFFU;
+        };
+        const auto multi_player_word = [this, &pack_main, &main_button_count]() -> std::uint16_t {
+            return static_cast<std::uint16_t>(
+                (static_cast<std::uint16_t>(player_count_ > 3U
+                                                ? pack_main(ports_[3U], main_button_count())
+                                                : 0xFFU)
+                 << 8U) |
+                (player_count_ > 2U ? pack_main(ports_[2U], main_button_count()) : 0xFFU));
+        };
+
         // P2 high byte, P1 low byte.
         sys_->input0 = static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(pack(ports_[1])) << 8U) | pack(ports_[0]));
-        sys_->input1 = static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(pack_extra(ports_[1])) << 8U) | pack_extra(ports_[0]));
+            (static_cast<std::uint16_t>(main_byte(1U)) << 8U) | main_byte(0U));
+        switch (input_profile_) {
+        case cps2_input_profile::six_button:
+        case cps2_input_profile::six_button_ticket_dispenser: {
+            // Two-row fighters wire P1 buttons 4-6 to IN1 bits 0-2, P2 buttons
+            // 4-5 to IN1 bits 4-5, and P2 button 6 to IN2 bit 14. SFA3's
+            // Hispanic/Brazil dispenser profile adds an active-high ticket-empty
+            // line on IN1 bit 13; keep it low (tickets present) until a real
+            // dispenser device exists.
+            std::uint16_t extra = 0xFFFFU;
+            if (input_profile_ == cps2_input_profile::six_button_ticket_dispenser) {
+                clear16(extra, 0x2000U);
+            }
+            if (player_count_ > 0U) {
+                if (ports_[0U].x) {
+                    clear16(extra, 0x0001U);
+                }
+                if (ports_[0U].y) {
+                    clear16(extra, 0x0002U);
+                }
+                if (ports_[0U].z) {
+                    clear16(extra, 0x0004U);
+                }
+            }
+            if (player_count_ > 1U) {
+                if (ports_[1U].x) {
+                    clear16(extra, 0x0010U);
+                }
+                if (ports_[1U].y) {
+                    clear16(extra, 0x0020U);
+                }
+            }
+            sys_->input1 = extra;
+            break;
+        }
+        case cps2_input_profile::cybots_four_button: {
+            std::uint16_t extra = 0xFFFFU;
+            if (player_count_ > 0U && ports_[0U].x) {
+                clear16(extra, 0x0001U);
+            }
+            if (player_count_ > 1U && ports_[1U].x) {
+                clear16(extra, 0x0010U);
+            }
+            sys_->input1 = extra;
+            break;
+        }
+        case cps2_input_profile::ecofighters_spinner:
+            // MAME's Eco Fighters profile defaults "Use Spinners" to yes by
+            // clearing IN1 bit 4; the CPU then selects digital vs dial reads.
+            sys_->input1 = 0xFFEFU;
+            break;
+        case cps2_input_profile::four_player:
+        case cps2_input_profile::three_player_three_button:
+        case cps2_input_profile::four_player_two_button:
+        case cps2_input_profile::four_player_four_button:
+            // Multiplayer CPS2 beat-em-up cabinets repurpose IN1 as P3/P4 main
+            // controls with the same per-player button count as IN0.
+            sys_->input1 = multi_player_word();
+            break;
+        case cps2_input_profile::two_player_one_button:
+        case cps2_input_profile::two_player_two_button:
+        case cps2_input_profile::two_player_four_button:
+        case cps2_input_profile::one_player_three_button:
+        case cps2_input_profile::puzz_loop_2_paddle:
+        case cps2_input_profile::two_player:
+            sys_->input1 = 0xFFFFU;
+            break;
+        default:
+            sys_->input1 = 0xFFFFU;
+            break;
+        }
 
-        // System word (active low): the CPS-2 IN2 layout puts START1-4 in bits
-        // 8-11 and COIN1-4 in bits 12-15 (bit 0 is the EEPROM data-out the board
-        // overlays at read time). The pads' `select` is the coin slot.
+        // System word (active low): IN2 bit 1 is the operator test switch, bit 2
+        // is service credit, START1-4 are bits 8-11, and COIN1-4 are bits 12-15.
+        // Bit 0 is the EEPROM data-out the board overlays at read time. On
+        // six-button cabinets, bit 14 is P2 button 6 instead of COIN3.
         std::uint16_t system = 0xFFFFU;
-        const auto clear = [&system](std::uint16_t bit) {
-            system &= static_cast<std::uint16_t>(~bit);
-        };
-        if (ports_[0].start) {
-            clear(0x0100U); // START1
+        for (std::uint8_t i = 0U; i < player_count_; ++i) {
+            if (ports_[i].test) {
+                clear16(system, 0x0002U);
+            }
+            if (ports_[i].service) {
+                clear16(system, 0x0004U);
+            }
+            if (ports_[i].start) {
+                clear16(system, static_cast<std::uint16_t>(0x0100U << i));
+            }
+            if (ports_[i].select) {
+                clear16(system, static_cast<std::uint16_t>(0x1000U << i));
+            }
         }
-        if (ports_[1].start) {
-            clear(0x0200U); // START2
+        if ((input_profile_ == cps2_input_profile::six_button ||
+             input_profile_ == cps2_input_profile::six_button_ticket_dispenser) &&
+            player_count_ > 1U && ports_[1U].z) {
+            clear16(system, 0x4000U);
         }
-        if (ports_[0].select) {
-            clear(0x1000U); // COIN1
-        }
-        if (ports_[1].select) {
-            clear(0x2000U); // COIN2
+        for (std::uint8_t i = 0U; i < 2U; ++i) {
+            sys_->set_analog_dial(i, ports_[i].paddle);
         }
         sys_->input_sys = system;
     }
 
     void force_link() noexcept {}
+
+    runtime::save_target build_save_target(capcom_cps2_adapter& adapter) {
+        runtime::save_target target;
+        target.manifest_id = "capcom_cps2";
+        target.manifest_rev = 1U;
+        target.master_cycle = adapter.sys_->cpu().elapsed_cycles();
+        target.components.push_back(
+            {"board",
+             [&adapter](chips::state_writer& writer) { adapter.sys_->save_state(writer); },
+             [&adapter](chips::state_reader& reader) { adapter.sys_->load_state(reader); }});
+        target.components.push_back(
+            {"adapter",
+             [&adapter](chips::state_writer& writer) {
+                 writer.u32(cps2_adapter_state_version);
+                 writer.u8(adapter.player_count_);
+                 writer.u8(static_cast<std::uint8_t>(adapter.input_profile_));
+                 writer.u8(static_cast<std::uint8_t>(adapter.orientation_));
+                 writer.u64(adapter.frames_stepped_);
+                 writer.u64(adapter.samples_drained_);
+                 for (const frontend_sdk::controller_state& port : adapter.ports_) {
+                     save_controller_state(writer, port);
+                 }
+             },
+             [&adapter](chips::state_reader& reader) {
+                 const std::uint32_t version = reader.u32();
+                 const std::uint8_t players = reader.u8();
+                 const std::uint8_t profile = reader.u8();
+                 const std::uint8_t orientation = reader.u8();
+                 if (version < 2U || version > cps2_adapter_state_version ||
+                     players != adapter.player_count_ ||
+                     !valid_input_profile(profile) ||
+                     static_cast<cps2_input_profile>(profile) != adapter.input_profile_ ||
+                     !valid_orientation(orientation) ||
+                     static_cast<frontend_sdk::display_orientation>(orientation) !=
+                         adapter.orientation_) {
+                     reader.fail();
+                     return;
+                 }
+                 adapter.frames_stepped_ = reader.u64();
+                 adapter.samples_drained_ = reader.u64();
+                 for (frontend_sdk::controller_state& port : adapter.ports_) {
+                     port = load_controller_state(reader, version);
+                 }
+                 if (reader.ok()) {
+                     adapter.refresh_inputs();
+                 }
+             }});
+        return target;
+    }
 
     namespace {
         const auto register_capcom_cps2 = [] {

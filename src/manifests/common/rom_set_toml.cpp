@@ -217,6 +217,18 @@ namespace mnemos::manifests::common {
             decl.regions.push_back(std::move(region));
         }
 
+        void parse_hle(const parse_context& ctx, const toml::table& table, rom_set_decl& decl) {
+            check_keys(ctx, table, {"chip", "rationale"}, "[[hle]]");
+            hle_declaration hle;
+            if (auto chip = require_string(ctx, table, "chip", "[[hle]]")) {
+                hle.chip = std::move(*chip);
+            }
+            if (auto rationale = require_string(ctx, table, "rationale", "[[hle]]")) {
+                hle.rationale = std::move(*rationale);
+            }
+            decl.hle.push_back(std::move(hle));
+        }
+
     } // namespace
 
     rom_set_load_result parse_rom_set_decl(std::string_view text, std::string_view source_name) {
@@ -234,13 +246,13 @@ namespace mnemos::manifests::common {
             return result;
         }
         const toml::table& root = parsed.table();
-        check_keys(ctx, root, {"set", "region"}, "the document root");
+        check_keys(ctx, root, {"set", "region", "hle"}, "the document root");
 
         rom_set_decl decl;
         if (const auto* set = root.get_as<toml::table>("set")) {
             check_keys(ctx, *set,
                        {"schema", "name", "board", "parent", "cps_b_profile", "orientation",
-                        "sprite_order", "sound", "kabuki"},
+                        "players", "input", "sprite_order", "sound", "kabuki"},
                        "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
@@ -311,6 +323,26 @@ namespace mnemos::manifests::common {
                     ctx.error("'orientation' in [set] must be a string", node);
                 }
             }
+            // Optional local player panel count. CPS-style arcade input words
+            // expose at most START/COIN 1-4; reject invalid declarations at the
+            // manifest boundary rather than silently truncating adapter state.
+            if (const toml::node* node = set->get("players")) {
+                if (auto players = read_unsigned(ctx, *node, "players", "[set]")) {
+                    if (*players < 1U || *players > 4U) {
+                        ctx.error("'players' in [set] must be in the range 1..4", node);
+                    } else {
+                        decl.players = static_cast<std::uint8_t>(*players);
+                    }
+                }
+            }
+            // Optional board-interpreted input/cabinet wiring profile.
+            if (const toml::node* node = set->get("input")) {
+                if (const auto* value = node->as_string()) {
+                    decl.input = value->get();
+                } else {
+                    ctx.error("'input' in [set] must be a string", node);
+                }
+            }
             // Optional sprite-list draw order ("ascending" / "descending"); a few
             // bootleg sets relocate the object list. Absent => ascending.
             if (const toml::node* node = set->get("sprite_order")) {
@@ -353,6 +385,15 @@ namespace mnemos::manifests::common {
                     parse_region(ctx, *table, decl);
                 } else {
                     ctx.error("[[region]] entries must be tables", &entry);
+                }
+            }
+        }
+        if (const auto* hle = root.get_as<toml::array>("hle")) {
+            for (const toml::node& entry : *hle) {
+                if (const auto* table = entry.as_table()) {
+                    parse_hle(ctx, *table, decl);
+                } else {
+                    ctx.error("[[hle]] entries must be tables", &entry);
                 }
             }
         }

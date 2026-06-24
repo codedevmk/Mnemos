@@ -1,0 +1,34 @@
+#pragma once
+
+// GENERATED FILE -- do not edit. Produced by configure_file from
+// cps2_game_manifests.hpp.in, with each entry read verbatim from
+// games/<set>.toml at configure time. The source TOMLs are on the directory's
+// CMAKE_CONFIGURE_DEPENDS list, so editing or adding one regenerates this
+// catalog. Access it through cps2_game_manifest_toml().
+
+#include <array>
+#include <string_view>
+
+namespace mnemos::manifests::capcom_cps2 {
+
+    struct cps2_game_manifest_view final {
+        std::string_view set_id;
+        std::string_view toml;
+    };
+
+    inline constexpr std::array<cps2_game_manifest_view, @MNEMOS_CPS2_GAME_MANIFEST_COUNT@>
+        cps2_game_manifest_catalog{{
+@MNEMOS_CPS2_GAME_MANIFEST_ENTRIES@
+        }};
+
+    [[nodiscard]] constexpr std::string_view
+    cps2_game_manifest_toml(std::string_view set_id) noexcept {
+        for (const cps2_game_manifest_view& entry : cps2_game_manifest_catalog) {
+            if (entry.set_id == set_id) {
+                return entry.toml;
+            }
+        }
+        return {};
+    }
+
+} // namespace mnemos::manifests::capcom_cps2

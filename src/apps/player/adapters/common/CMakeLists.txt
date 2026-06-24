@@ -5,6 +5,7 @@ add_library(
     input_pack.cpp
     region_args.cpp
     rom_loader.cpp
+    state_file.cpp
     system_family.cpp
 )
 add_library(
@@ -51,6 +52,7 @@ if(BUILD_TESTING)
             tests/input_pack_test.cpp
             tests/region_args_test.cpp
             tests/rom_loader_test.cpp
+            tests/state_file_test.cpp
             tests/system_family_test.cpp
         LIBRARIES mnemos::apps::player::adapters::common
     )

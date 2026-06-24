@@ -52,7 +52,7 @@ hardware audit explicitly excluded tooling, which hid an entire axis.
 | Tracing / logging | devkit event-bus + Saturn 38-file tracer | inst-trace CSV + PSG→VGM + **APM sidecar** | Even |
 | Video debug viewers | Studio **live** plane/sprite viewer | rich **offline** PNG export | Emu ahead (live) |
 | Audio tooling | Studio channels + **FFT/THD A/B** + 5-fmt WAV + C64 SID player/scope/MIDI | WAV export + PSG VGM | Emu ahead |
-| Save-state / rewind / TAS | C64/SMS/Genesis save; **rewind + TAS movie** (C64) | generic container solid, **wired C64-only**; rewind unwired | Emu ahead |
+| Save-state / rewind / TAS | C64/SMS/Genesis save; **rewind + TAS movie** (C64) | generic container solid, C64/Genesis lower-level targets plus **CPS2 player save/load**; rewind unwired | Emu ahead |
 | Asset tools | asset_codec + dumps + **C64 inject** | best-structured **export** (PNG+JSON), **no import** | Even |
 | Scripting / automation | devkit C-API + Python-over-CLI harness | **README stubs only** | Emu ahead |
 | Frontends / UX | CLI + **Studio: ImGui GUI, DX11/12/Vulkan, 11 widgets** | SDL player + CLI; **no GUI**; apps/dev vapor | Emu ahead |
@@ -75,7 +75,7 @@ hardware audit explicitly excluded tooling, which hid an entire axis.
 - [ ] **T1** GUI dev-suite — Emu's `frontends/studio` is a ~17k-LOC ImGui app (DX11/DX12/Vulkan) with 11 dockable widgets (CPU snapshot, disasm, memory lens, watch debugger, event timeline, video layers, audio channels). Mnemos has **no GUI** (`apps/dev` is a README stub). Brings live tile/sprite/palette/layer viewers with it · MISSING · HIGH · XL · vs Emu
 
 #### Save-state / rewind / movie
-- [ ] **T4** Whole-system save-state aggregators — generic container + 79 per-chip serializers exist, but only the C64 builds a `save_target`; wire SMS, Genesis, Sega CD, 32X, M72 + expose save/load in the SDL player · PARTIAL · HIGH · M · vs Emu · ⇄ hardware G7
+- [ ] **T4** Whole-system save-state aggregators — generic container + 79 per-chip serializers exist; Genesis has a deterministic runtime target, CPS2 now exposes a frontend save/load path (`--save-state`, `--load-state`, F5/F9), but SMS, Sega CD, 32X, M72, CPS1, and broader rewind/TAS player wiring remain · PARTIAL · HIGH · M · vs Emu · ⇄ hardware G7
 - [ ] **T5** Wire rewind ring + deterministic input-movie/TAS into the player — both exist (`runtime/rewind`, `runtime/input`) but are C64-CLI-only and unwired to `mnemos_player` · PARTIAL · MED · M · vs Emu
 
 #### Audio tooling

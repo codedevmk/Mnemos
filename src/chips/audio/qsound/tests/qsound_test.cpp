@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace {
@@ -30,6 +31,24 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] bool all_zero(std::span<const std::int16_t> samples) noexcept {
+        for (const std::int16_t sample : samples) {
+            if (sample != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool any_nonzero(std::span<const std::int16_t> samples) noexcept {
+        for (const std::int16_t sample : samples) {
+            if (sample != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 } // namespace
 
 TEST_CASE("qsound mixes one centered voice at the expected level", "[qsound]") {
@@ -37,12 +56,12 @@ TEST_CASE("qsound mixes one centered voice at the expected level", "[qsound]") {
     const auto rom = rom_with(0x10U, 0x40U); // sample 0x4000 = 16384
     q.set_sample_rom(rom);
 
-    // Voice 0: addr 0x10, rate 0x100, end 0x1000, volume 0x4000, pan center (0x10).
+    // Voice 0: addr 0x10, rate 0x100, end 0x1000, volume 0x4000, pan center (0x20).
     program(q, 1U, 0x0010U);  // addr
     program(q, 2U, 0x0100U);  // rate
     program(q, 5U, 0x1000U);  // end_addr
     program(q, 6U, 0x4000U);  // volume
-    program(q, 0x80U, 0x10U); // pan (centered)
+    program(q, 0x80U, 0x20U); // pan (centered)
 
     q.step();
     // sample = (0x4000 * 16384) >> 14 = 16384; pan center -> each lane
@@ -51,48 +70,97 @@ TEST_CASE("qsound mixes one centered voice at the expected level", "[qsound]") {
     CHECK(q.last_right() == 2048);
 }
 
-TEST_CASE("qsound pans hard left and hard right", "[qsound]") {
+TEST_CASE("qsound pans hard left, center, and hard right", "[qsound]") {
     const auto rom = rom_with(0x10U, 0x40U);
 
-    SECTION("hard left (pan 0)") {
+    SECTION("hard left (pan 0x10)") {
         qsound q;
         q.set_sample_rom(rom);
         program(q, 1U, 0x0010U);
         program(q, 2U, 0x0100U);
         program(q, 5U, 0x1000U);
         program(q, 6U, 0x4000U);
-        program(q, 0x80U, 0x00U); // all to the left
+        program(q, 0x80U, 0x10U); // all to the left
         q.step();
         // left = (16384 * 0x20) >> 5 = 16384 -> >> 2 = 4096; right = 0.
         CHECK(q.last_left() == 4096);
         CHECK(q.last_right() == 0);
     }
-    SECTION("hard right (pan 0x20)") {
+    SECTION("center (pan 0x20)") {
         qsound q;
         q.set_sample_rom(rom);
         program(q, 1U, 0x0010U);
         program(q, 2U, 0x0100U);
         program(q, 5U, 0x1000U);
         program(q, 6U, 0x4000U);
-        program(q, 0x80U, 0x20U); // all to the right
+        program(q, 0x80U, 0x20U); // centered
+        q.step();
+        CHECK(q.last_left() == 2048);
+        CHECK(q.last_right() == 2048);
+    }
+    SECTION("hard right (pan 0x30)") {
+        qsound q;
+        q.set_sample_rom(rom);
+        program(q, 1U, 0x0010U);
+        program(q, 2U, 0x0100U);
+        program(q, 5U, 0x1000U);
+        program(q, 6U, 0x4000U);
+        program(q, 0x80U, 0x30U); // all to the right
         q.step();
         CHECK(q.last_left() == 0);
         CHECK(q.last_right() == 4096);
     }
 }
 
-TEST_CASE("qsound skips voices with zero volume or rate", "[qsound]") {
+TEST_CASE("qsound skips voices with zero volume", "[qsound]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
     q.set_sample_rom(rom);
     program(q, 1U, 0x0010U);
     program(q, 5U, 0x1000U);
     program(q, 6U, 0x4000U);
-    program(q, 0x80U, 0x10U);
-    // rate left at 0 -> the voice is idle.
+    program(q, 0x80U, 0x20U);
+    program(q, 6U, 0x0000U);
     q.step();
     CHECK(q.last_left() == 0);
     CHECK(q.last_right() == 0);
+}
+
+TEST_CASE("qsound emits stationary PCM voices when rate is zero", "[qsound]") {
+    qsound q;
+    const auto rom = rom_with(0x10U, 0x40U);
+    q.set_sample_rom(rom);
+    program(q, 1U, 0x0010U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+
+    q.step();
+
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+}
+
+TEST_CASE("qsound keeps advancing a PCM voice past end when loop length is zero",
+          "[qsound]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x10U] = 0x40U;
+    rom[0x12U] = 0x20U;
+    q.set_sample_rom(rom);
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x2000U);
+    program(q, 5U, 0x0011U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+
+    q.step();
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+
+    q.step();
+    CHECK(q.last_left() == 1024);
+    CHECK(q.last_right() == 1024);
 }
 
 TEST_CASE("qsound read_sample addresses the ROM by bank:addr", "[qsound]") {
@@ -128,6 +196,32 @@ TEST_CASE("qsound bank register programs the next voice", "[qsound]") {
     CHECK(q.last_left() == 4096); // voice 4 found the sample in bank 2
 }
 
+TEST_CASE("qsound applies PCM echo delay and feedback registers", "[qsound][echo]") {
+    qsound q;
+    const auto rom = rom_with(0x10U, 0x40U);
+    q.set_sample_rom(rom);
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x0000U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+    program(q, 0xBAU, 0x4000U); // voice 0 echo send
+    program(q, 0x93U, 0x4000U); // echo feedback
+    program(q, 0xD9U, static_cast<std::uint16_t>(qsound::echo_delay_base + 1U));
+
+    q.step();
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+
+    q.step();
+    CHECK(q.last_left() == 4096);
+    CHECK(q.last_right() == 4096);
+
+    q.step();
+    CHECK(q.last_left() == 7168);
+    CHECK(q.last_right() == 7168);
+}
+
 TEST_CASE("qsound save/load round-trips voice state", "[qsound]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
@@ -151,6 +245,146 @@ TEST_CASE("qsound save/load round-trips voice state", "[qsound]") {
     CHECK(q2.last_left() == 4096); // restored voice plays identically
 }
 
+TEST_CASE("qsound save/load preserves echo delay state", "[qsound][echo][save]") {
+    qsound q;
+    const auto rom = rom_with(0x10U, 0x40U);
+    q.set_sample_rom(rom);
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x0000U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+    program(q, 0xBAU, 0x4000U);
+    program(q, 0x93U, 0x4000U);
+    program(q, 0xD9U, static_cast<std::uint16_t>(qsound::echo_delay_base + 1U));
+    q.step();
+
+    std::vector<std::uint8_t> blob;
+    state_writer w(blob);
+    q.save_state(w);
+
+    qsound restored;
+    restored.set_sample_rom(rom);
+    state_reader r(blob);
+    restored.load_state(r);
+    REQUIRE(r.ok());
+
+    std::array<std::int16_t, 6> reference{};
+    std::array<std::int16_t, 6> actual{};
+    q.generate(reference);
+    restored.generate(actual);
+    CHECK(actual == reference);
+}
+
+TEST_CASE("qsound decodes triggered ADPCM voices into both lanes", "[qsound][adpcm]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x20U] = 0x70U; // high nibble +7, low nibble 0
+    q.set_sample_rom(rom);
+
+    program(q, 0xCAU, 0x0020U); // voice 0 start
+    program(q, 0xCBU, 0x0022U); // voice 0 end
+    program(q, 0xCCU, 0x8000U); // voice 0 bank
+    program(q, 0xCDU, 0x4000U); // voice 0 volume
+    program(q, 0xD6U, 0x0001U); // trigger voice 0
+
+    q.step();
+
+    // predictor = 75 from the +7 nibble and initial step size 10; volume 0x4000
+    // gives sample 18, mixed mono into L/R, then the global mix shift divides by 4.
+    CHECK(q.last_left() == 4);
+    CHECK(q.last_right() == 4);
+}
+
+TEST_CASE("qsound ADPCM trigger latches a late nonzero volume", "[qsound][adpcm]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x20U] = 0x70U;
+    q.set_sample_rom(rom);
+
+    program(q, 0xCAU, 0x0020U);
+    program(q, 0xCBU, 0x0022U);
+    program(q, 0xCCU, 0x8000U);
+    program(q, 0xD6U, 0x0001U);
+    program(q, 0xCDU, 0x4000U);
+
+    std::array<std::int16_t, 32> samples{};
+    q.generate(samples);
+
+    CHECK(any_nonzero(samples));
+}
+
+TEST_CASE("qsound ADPCM trigger survives audio ticks before volume",
+          "[qsound][adpcm]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x20U] = 0x70U;
+    q.set_sample_rom(rom);
+
+    program(q, 0xCAU, 0x0020U);
+    program(q, 0xCBU, 0x0022U);
+    program(q, 0xCCU, 0x8000U);
+    program(q, 0xD6U, 0x0001U);
+
+    std::array<std::int16_t, 24> silent{};
+    q.generate(silent);
+    CHECK(all_zero(silent));
+
+    program(q, 0xCDU, 0x4000U);
+    std::array<std::int16_t, 32> audible{};
+    q.generate(audible);
+    CHECK(any_nonzero(audible));
+}
+
+TEST_CASE("qsound ADPCM consumes the top nibble before the low nibble",
+          "[qsound][adpcm]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x20U] = 0x07U; // top nibble 0 first, then low nibble +7.
+    q.set_sample_rom(rom);
+
+    program(q, 0xCAU, 0x0020U);
+    program(q, 0xCBU, 0x0022U);
+    program(q, 0xCCU, 0x8000U);
+    program(q, 0xCDU, 0x4000U);
+    program(q, 0xD6U, 0x0001U);
+
+    q.step();
+
+    CHECK(q.last_left() < 0);
+    CHECK(q.last_right() < 0);
+}
+
+TEST_CASE("qsound save/load preserves ADPCM decoder phase", "[qsound][adpcm][save]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x20U] = 0x70U;
+    q.set_sample_rom(rom);
+
+    program(q, 0xCAU, 0x0020U);
+    program(q, 0xCBU, 0x0022U);
+    program(q, 0xCCU, 0x8000U);
+    program(q, 0xCDU, 0x4000U);
+    program(q, 0xD6U, 0x0001U);
+    q.step();
+
+    std::vector<std::uint8_t> blob;
+    state_writer w(blob);
+    q.save_state(w);
+
+    qsound restored;
+    restored.set_sample_rom(rom);
+    state_reader r(blob);
+    restored.load_state(r);
+    REQUIRE(r.ok());
+
+    std::array<std::int16_t, 12> reference{};
+    std::array<std::int16_t, 12> actual{};
+    q.generate(reference);
+    restored.generate(actual);
+    CHECK(actual == reference);
+}
+
 TEST_CASE("qsound generate fills interleaved stereo pairs", "[qsound]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
@@ -159,7 +393,7 @@ TEST_CASE("qsound generate fills interleaved stereo pairs", "[qsound]") {
     program(q, 2U, 0x0100U);
     program(q, 5U, 0x1000U);
     program(q, 6U, 0x4000U);
-    program(q, 0x80U, 0x10U);
+    program(q, 0x80U, 0x20U);
     std::array<std::int16_t, 8> buf{};
     q.generate(buf);
     CHECK(buf[0] == 2048); // L

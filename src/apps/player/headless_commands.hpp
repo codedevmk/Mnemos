@@ -12,6 +12,8 @@ namespace mnemos::apps::player {
 
     struct headless_requests final {
         std::optional<adapters::screenshot_request> screenshot{};
+        std::optional<adapters::save_state_request> save_state{};
+        std::optional<std::string> load_state{};
         std::optional<adapters::extract_assets_request> extract_assets{};
         std::optional<adapters::extract_audio_request> extract_audio{};
         std::optional<adapters::animation_record_request> record_animation{};

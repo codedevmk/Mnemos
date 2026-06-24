@@ -147,10 +147,27 @@ namespace mnemos::apps::player::adapters {
                 s.z = true;
             } else if (b == "mode") {
                 s.mode = true;
+            } else if (b == "service") {
+                s.service = true;
+            } else if (b == "test") {
+                s.test = true;
             } else {
                 return false;
             }
             return true;
+        }
+
+        [[nodiscard]] std::optional<std::uint16_t> parse_u16_token(std::string_view token) {
+            if (token.empty()) {
+                return std::nullopt;
+            }
+            std::string value{token};
+            char* end = nullptr;
+            const unsigned long parsed = std::strtoul(value.c_str(), &end, 0);
+            if (end == value.c_str() || *end != '\0' || parsed > 0xFFFFUL) {
+                return std::nullopt;
+            }
+            return static_cast<std::uint16_t>(parsed);
         }
 
         // Parse one `<button>@<frame>[+duration]` spec.
@@ -163,9 +180,22 @@ namespace mnemos::apps::player::adapters {
             for (char& c : button) {
                 c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             }
+            std::optional<std::uint16_t> paddle_value;
+            constexpr std::string_view paddle_prefix = "paddle=";
+            constexpr std::string_view dial_prefix = "dial=";
+            if (button.rfind(paddle_prefix, 0U) == 0U) {
+                paddle_value = parse_u16_token(std::string_view{button}.substr(paddle_prefix.size()));
+                button = "paddle";
+            } else if (button.rfind(dial_prefix, 0U) == 0U) {
+                paddle_value = parse_u16_token(std::string_view{button}.substr(dial_prefix.size()));
+                button = "paddle";
+            }
             mnemos::peripheral::controller_state probe{};
-            if (!apply_button(probe, button)) {
+            if (!paddle_value.has_value() && !apply_button(probe, button)) {
                 return std::nullopt; // unknown button name
+            }
+            if (button == "paddle" && !paddle_value.has_value()) {
+                return std::nullopt; // malformed axis value
             }
             std::string_view rest = spec.substr(at + 1U);
             const auto plus = rest.find('+');
@@ -175,6 +205,7 @@ namespace mnemos::apps::player::adapters {
             }
             press_event e;
             e.button = std::move(button);
+            e.paddle_value = paddle_value;
             e.frame = std::strtoull(frame_str.c_str(), nullptr, 10);
             if (plus != std::string_view::npos) {
                 const std::string dur_str{rest.substr(plus + 1U)};
@@ -203,7 +234,11 @@ namespace mnemos::apps::player::adapters {
         mnemos::peripheral::controller_state state{};
         for (const press_event& e : events) {
             if (frame >= e.frame && frame < e.frame + e.duration) {
-                apply_button(state, e.button);
+                if (e.paddle_value.has_value()) {
+                    state.paddle = *e.paddle_value;
+                } else {
+                    apply_button(state, e.button);
+                }
             }
         }
         return state;
@@ -222,6 +257,41 @@ namespace mnemos::apps::player::adapters {
         }
         if (path && frames) {
             return screenshot_request{*path, *frames};
+        }
+        return std::nullopt;
+    }
+
+    std::optional<save_state_request> parse_save_state_args(int argc, char* argv[]) {
+        std::optional<std::string> path;
+        std::uint64_t frames = 0U;
+        for (int i = 1; i < argc; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--save-state" && i < argc - 1) {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    path = std::string{value};
+                    ++i;
+                }
+            } else if (a == "--frames" && i < argc - 1) {
+                frames = std::strtoull(argv[i + 1], nullptr, 10);
+                ++i;
+            }
+        }
+        if (path) {
+            return save_state_request{*path, frames};
+        }
+        return std::nullopt;
+    }
+
+    std::optional<std::string> parse_load_state_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--load-state") {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    return std::string{value};
+                }
+                return std::nullopt;
+            }
         }
         return std::nullopt;
     }

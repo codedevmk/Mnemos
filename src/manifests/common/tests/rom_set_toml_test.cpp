@@ -67,6 +67,8 @@ fill = 0x00
     CHECK(decl.regions[1].files.empty());
     CHECK_FALSE(decl.cps_b_profile.has_value()); // optional key, absent here
     CHECK_FALSE(decl.parent.has_value());        // optional key, absent here
+    CHECK(decl.players == 2U);                    // optional key, absent here
+    CHECK_FALSE(decl.input.has_value());          // optional key, absent here
 }
 
 TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") {
@@ -165,6 +167,93 @@ TEST_CASE("rom_set_toml parses the optional sprite_order", "[rom_set_toml]") {
         const auto result = parse_rom_set_decl(
             "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nsprite_order = \"sideways\"\n"
             "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional local player count", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nplayers = 4\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->players == 4U);
+    }
+    SECTION("absent defaults to two players") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->players == 2U);
+    }
+    SECTION("zero is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nplayers = 0\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("values above the CPS-style input-word limit are rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nplayers = 5\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional input profile", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ninput = \"four_player\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->input.has_value());
+        CHECK(*result.value->input == "four_player");
+    }
+    SECTION("absent leaves it unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->input.has_value());
+    }
+    SECTION("non-string is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ninput = 7\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses explicit HLE declarations", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "x"
+
+[[hle]]
+chip = "capcom.qsound"
+rationale = "Behavioral DL-1425 PCM mixer; DSP16 instruction-level model is not implemented."
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->hle.size() == 1U);
+    CHECK(result.value->hle[0].chip == "capcom.qsound");
+    CHECK(result.value->hle[0].rationale.find("DL-1425") != std::string::npos);
+}
+
+TEST_CASE("rom_set_toml rejects invalid HLE declarations", "[rom_set_toml]") {
+    SECTION("missing rationale") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = "
+            "\"capcom.qsound\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("unknown key") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = "
+            "\"capcom.qsound\"\nrationale = \"x\"\nextra = true\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
         CHECK_FALSE(result.ok());
     }
 }

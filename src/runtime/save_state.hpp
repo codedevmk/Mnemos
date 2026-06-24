@@ -60,6 +60,7 @@ namespace mnemos::runtime {
         truncated,
         bad_crc,
         decompress_failed,
+        chunk_rejected,
     };
 
     struct load_result final {

@@ -1,6 +1,7 @@
 #include "c64_adapter.hpp"
 #include "capability_discovery.hpp"
 #include "capcom_cps1_adapter.hpp"
+#include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "sega32x_adapter.hpp"
@@ -19,6 +20,7 @@ namespace {
 
     namespace c64 = mnemos::apps::player::adapters::c64;
     namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
+    namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
@@ -120,6 +122,10 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> cps2_program() {
+        return std::vector<std::uint8_t>(0x40U, 0x00U);
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> irem_m72_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m72::main_rom_size, 0xFFU);
         rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
@@ -146,7 +152,8 @@ namespace {
         CHECK(summary.find(needle) != std::string::npos);
     }
 
-    void require_common_session_controls(const std::string& summary) {
+    void require_common_session_controls(const std::string& summary,
+                                         bool rollback_available = false) {
         require_line(summary, "schema=1 producer=mnemos.debug.capability_discovery@1");
         require_line(summary,
                      "capability session session.input.port.0 state=available control=enabled "
@@ -161,8 +168,11 @@ namespace {
                      "capability session session.mode.input_delay state=available control=enabled "
                      "scope=session provider=mnemos.debug.session");
         require_line(summary,
-                     "capability session session.mode.rollback state=unavailable control=hidden "
-                     "scope=session provider=mnemos.debug.session");
+                     rollback_available
+                         ? "capability session session.mode.rollback state=available "
+                           "control=enabled scope=session provider=mnemos.debug.session"
+                         : "capability session session.mode.rollback state=unavailable "
+                           "control=hidden scope=session provider=mnemos.debug.session");
     }
 
     void require_degraded_media(const std::string& summary, std::string_view media_id) {
@@ -233,6 +243,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         cps1::capcom_cps1_adapter adapter(cps1_program(), "Tiny CPS1");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary);
+        require_degraded_media(summary, "media.rom_set");
+    }
+
+    SECTION("Capcom CPS2") {
+        cps2::capcom_cps2_adapter adapter(cps2_program(), "Tiny CPS2");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.rom_set");
     }
 }

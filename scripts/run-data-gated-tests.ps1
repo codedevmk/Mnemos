@@ -12,6 +12,8 @@
 #   MNEMOS_M6510_TESTS_DIR    per-instruction 6502 test JSON dir      -> m6510_conformance_test
 #   MNEMOS_M68000_TESTS_DIR   per-instruction 68000 test JSON dir     -> m68000_conformance_test
 #   MNEMOS_SMS_BIOS           an SMS BIOS/cart image (A/B comparator) -> sms_manifest_parity_test
+#   MNEMOS_CPS2_ROM           one CPS2 ROM/key zip                   -> cps2 corpus smoke
+#   MNEMOS_CPS2_SET_DIR       dir with CPS2 ROM/key zips             -> cps2 corpus smoke
 #
 # Optional golden-hash pins (assert the rendered framebuffer once locked in):
 #   MNEMOS_SMS_BOOT_SHA256, MNEMOS_C64_BOOT_SHA256, MNEMOS_GENESIS_BOOT_SHA256
@@ -45,7 +47,9 @@ $vars = @(
     @{ Name = "MNEMOS_M68000_TESTS_DIR"; Test = "m68000_conformance_test" },
     @{ Name = "MNEMOS_SMS_BIOS";         Test = "sms_manifest_parity_test" },
     @{ Name = "MNEMOS_32X_BIOS_DIR";     Test = "sega32x_adapter_test (boot golden)" },
-    @{ Name = "MNEMOS_32X_ROM";          Test = "sega32x_adapter_test (boot golden)" }
+    @{ Name = "MNEMOS_32X_ROM";          Test = "sega32x_adapter_test (boot golden)" },
+    @{ Name = "MNEMOS_CPS2_ROM";         Test = "cps2 corpus smoke" },
+    @{ Name = "MNEMOS_CPS2_SET_DIR";     Test = "cps2 corpus smoke" }
 )
 foreach ($v in $vars) {
     $value = [Environment]::GetEnvironmentVariable($v.Name)
@@ -64,4 +68,16 @@ if (-not (Test-Path $testDir)) {
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
     -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity"
-exit $LASTEXITCODE
+$ctestExit = $LASTEXITCODE
+if ($ctestExit -ne 0) {
+    exit $ctestExit
+}
+
+$cps2Runner = Join-Path $PSScriptRoot "cps2/run-corpus-smoke.ps1"
+if (Test-Path $cps2Runner) {
+    Write-Host "`nRunning CPS2 corpus smoke ..." -ForegroundColor Cyan
+    & $cps2Runner -BuildDir $BuildDir
+    exit $LASTEXITCODE
+}
+
+exit 0

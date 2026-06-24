@@ -62,6 +62,21 @@ namespace mnemos::apps::player::adapters {
 
     [[nodiscard]] std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]);
 
+    // --save-state <path> [--frames N]: headless run, advances N frames
+    // (default 0), writes the raw Mnemos save-state container, and exits.
+    // The path must be present and must not be another option.
+    struct save_state_request final {
+        std::string path;
+        std::uint64_t frames{};
+    };
+
+    [[nodiscard]] std::optional<save_state_request> parse_save_state_args(int argc,
+                                                                          char* argv[]);
+
+    // --load-state <path>: restore a raw Mnemos save-state container before
+    // running a headless operation or entering the windowed player.
+    [[nodiscard]] std::optional<std::string> parse_load_state_arg(int argc, char* argv[]);
+
     // --extract-assets <base> [--extract-frames N]: headless run that advances N
     // frames (default 0 -- extract at the boot state) then writes the decoded
     // graphics assets (palettes, tiles, sprites) of every chip to `<base>.*`
@@ -117,15 +132,18 @@ namespace mnemos::apps::player::adapters {
 
     // A scripted controller input for the headless path: hold `button` on port 1
     // for `duration` frames starting at the 1-based `frame`. Parsed from
-    // `--press <button>@<frame>[+duration]` (e.g. `--press start@60+12`).
+    // `--press <button>@<frame>[+duration]` (e.g. `--press start@60+12`), or
+    // `--press paddle=<value>@<frame>[+duration]` for an analog rotary position.
     struct press_event final {
         std::string button;
         std::uint64_t frame{};
         std::uint64_t duration{press_default_duration};
+        std::optional<std::uint16_t> paddle_value;
     };
 
     // Every `--press <button>@<frame>[+duration]` event, in command-line order.
-    // Recognised buttons: up/down/left/right/start/select/a/b/c/x/y/z/mode.
+    // Recognised buttons: up/down/left/right/start/select/a/b/c/x/y/z/mode,
+    // plus arcade service/test inputs and paddle=<0..65535> rotary values.
     // Specs with an unknown button or unparseable frame are skipped.
     [[nodiscard]] std::vector<press_event> parse_press_events(int argc, char* argv[]);
 

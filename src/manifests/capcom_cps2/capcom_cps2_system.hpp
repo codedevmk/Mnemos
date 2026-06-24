@@ -28,6 +28,11 @@
 #include <string>
 #include <vector>
 
+namespace mnemos::chips {
+    class state_reader;
+    class state_writer;
+} // namespace mnemos::chips
+
 namespace mnemos::manifests::capcom_cps2 {
 
     // 68000 memory map (24-bit, big-endian), transcribed from the reference core.
@@ -45,7 +50,9 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint32_t z80_rom_window = 0x8000U; // fixed low 32 KiB
     inline constexpr std::uint16_t z80_bank_base = 0x8000U;
     inline constexpr std::uint32_t z80_bank_window = 0x4000U;    // 16 KiB banked window
-    inline constexpr std::uint32_t z80_bank_rom_base = 0x10000U; // banks start here in the ROM
+    inline constexpr std::uint32_t z80_qsound_cpu_rom_region_size = 0x50000U;
+    inline constexpr std::uint32_t z80_bank_rom_base_large = 0x10000U;
+    inline constexpr std::uint32_t z80_bank_rom_base_small = 0x8000U;
     inline constexpr std::uint8_t z80_bank_mask = 0x0FU;         // 16 banks ($D003)
     inline constexpr std::uint16_t z80_shared_base = 0xC000U;    // 68K<->Z80 comm RAM (4 KiB)
     inline constexpr std::uint16_t z80_ram_base = 0xD000U;       // 2 KiB scratch RAM
@@ -61,7 +68,9 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::size_t extra_ctrl_size = 0x2U;
     inline constexpr std::uint32_t object_ram_base = 0x700000U; // object/sprite RAM
     inline constexpr std::size_t object_ram_size = 0x10000U;    // 64 KiB (banks fold here)
+    inline constexpr std::uint32_t object_ram_alt_base = 0x708000U;
     inline constexpr std::uint32_t object_bank_bytes = 0x2000U; // one 8 KiB object-table bank
+    inline constexpr std::uint32_t object_ram_alt_window_bytes = object_bank_bytes;
     inline constexpr std::uint32_t cps_a_base = 0x804100U;      // CPS-A register window
     inline constexpr std::uint32_t cps_b_base = 0x804140U;      // CPS-B register window
     inline constexpr std::uint32_t cps_a_mirror_base = 0x800100U;
@@ -70,6 +79,8 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::size_t cps_reg_size = 0x200U;     // the backing register file
     inline constexpr std::uint32_t cps_io_base = 0x804000U; // inputs / EEPROM / volume / control
     inline constexpr std::size_t cps_io_size = 0x100U;
+    inline constexpr std::uint32_t development_dip_base = 0x8040B0U;
+    inline constexpr std::size_t development_dip_size = 3U; // three 8-bit dev switch banks
     inline constexpr std::uint32_t video_ram_base = 0x900000U; // tile/attribute RAM
     inline constexpr std::size_t video_ram_size = 0x30000U;    // 192 KiB
     inline constexpr std::uint32_t main_ram_base = 0xFF0000U;  // 64 KiB work RAM
@@ -99,15 +110,22 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint32_t other_base_align = 0x0800U;
     inline constexpr std::uint32_t palette_page_bytes = 0x400U;
     inline constexpr std::uint32_t palette_copy_pages = 6U;
-    inline constexpr std::uint16_t palette_control_default = 0x003FU; // all 6 pages
+    inline constexpr std::size_t cps_b_palette_control_word = 0x18U;  // CPS-B byte offset 0x30
 
     // EEPROM pin bits at the $804040 write port, and the data-out bit on input 2.
     inline constexpr std::uint8_t eeprom_di_bit = 0x10U;
     inline constexpr std::uint8_t eeprom_clk_bit = 0x20U;
     inline constexpr std::uint8_t eeprom_cs_bit = 0x40U;
     inline constexpr std::uint16_t qsound_volume_status = 0xE021U;
-    inline constexpr std::uint32_t m68k_clock_hz = 11'800'000U;
-    inline constexpr std::uint32_t frame_rate_hz = 60U;
+    inline constexpr std::uint32_t m68k_clock_hz = 16'000'000U;
+    inline constexpr std::uint32_t refresh_hz_num = 59'637'405U;
+    inline constexpr std::uint32_t refresh_hz_den = 1'000'000U;
+    inline constexpr std::uint32_t frame_rate_millihz = static_cast<std::uint32_t>(
+        (static_cast<std::uint64_t>(refresh_hz_num) * 1000U + refresh_hz_den / 2U) /
+        refresh_hz_den);
+    inline constexpr std::uint64_t cpu_cycles_per_frame =
+        (static_cast<std::uint64_t>(m68k_clock_hz) * refresh_hz_den + refresh_hz_num / 2U) /
+        refresh_hz_num;
     // QSound sound CPU (Z80) clock + its DL-1425 /INT cadence. The sound driver
     // does all its work in the 250 Hz interrupt handler (its main loop just idles
     // waiting for /INT), so without this pulse the Z80 never programs the DSP.
@@ -115,10 +133,18 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint32_t qsound_irq_hz = 250U;
     inline constexpr std::uint32_t qsound_irq_period = qsound_z80_clock_hz / qsound_irq_hz;
 
+    enum class cps2_analog_input_mode : std::uint8_t {
+        none = 0,
+        eco_fighters = 1,
+        puzz_loop_2 = 2,
+    };
+
     struct cps2_board_params final {
         // The 20-byte board key (an external asset, never committed). Without it
         // the program cannot be decrypted and the machine is not executable.
         std::optional<std::array<std::uint8_t, crypto_key_size>> key;
+        cps2_analog_input_mode analog_input{cps2_analog_input_mode::none};
+        bool coin_lockout_active_high{};
     };
 
     // Assembled CPS-2 machine. Never moved after construction: the bus and video
@@ -148,6 +174,8 @@ namespace mnemos::manifests::capcom_cps2 {
         // (including QSound when released), render at vblank, latch sprites for
         // the next frame, then finish vblank.
         void run_frame();
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader);
 
         [[nodiscard]] chips::cpu::m68000& cpu() noexcept { return main_cpu; }
         [[nodiscard]] topology::bus& bus() noexcept { return main_bus; }
@@ -189,6 +217,16 @@ namespace mnemos::manifests::capcom_cps2 {
         [[nodiscard]] std::span<const std::uint8_t> qsound_work_ram() const noexcept {
             return std::span<const std::uint8_t>(qsound_work_ram_);
         }
+        [[nodiscard]] std::span<const std::uint8_t> development_dips() const noexcept {
+            return std::span<const std::uint8_t>(development_dips_);
+        }
+        void set_development_dips(std::array<std::uint8_t, development_dip_size> dips) noexcept {
+            development_dips_ = dips;
+        }
+        void set_analog_dial(std::uint8_t player, std::uint16_t value) noexcept;
+        [[nodiscard]] std::uint16_t analog_dial(std::uint8_t player) const noexcept;
+        [[nodiscard]] std::uint64_t coin_counter(std::uint8_t slot) const noexcept;
+        [[nodiscard]] bool coin_lockout(std::uint8_t slot) const noexcept;
         [[nodiscard]] std::uint64_t vblank_irq_raised() const noexcept {
             return vblank_irq_raised_;
         }
@@ -213,6 +251,7 @@ namespace mnemos::manifests::capcom_cps2 {
 
         common::rom_set_image roms;
         cps2_board_params params;
+        cps2_analog_input_mode analog_input_mode_{cps2_analog_input_mode::none};
 
         // The decrypted opcode image the 68000 fetches instructions from; the
         // encrypted program ROM (in `roms`) is what data reads see. Heap-backed so
@@ -232,6 +271,15 @@ namespace mnemos::manifests::capcom_cps2 {
         // video decode; CPS-B writes are forwarded to the shared video chip.
         std::array<std::uint8_t, cps_reg_size> cps_regs_{};
         std::array<std::uint16_t, cps_a_reg_count> cps_a_regs_{};
+        std::array<std::uint8_t, development_dip_size> development_dips_{
+            0xFFU, 0xFFU, 0xFFU};
+        std::array<std::uint16_t, 2> analog_dial_{};
+        std::array<std::uint16_t, 2> ecofighters_dial_last_{};
+        std::array<std::uint8_t, 2> ecofighters_dial_direction_{};
+        bool read_paddle_{false};
+        std::array<std::uint64_t, 2> coin_counters_{};
+        std::array<bool, 2> coin_counter_lines_{};
+        std::array<bool, 4> coin_lockouts_{};
         std::uint8_t object_bank_{0U};
         std::uint64_t vblank_irq_raised_{};
         std::uint64_t vblank_irq_acked_{};
@@ -247,6 +295,7 @@ namespace mnemos::manifests::capcom_cps2 {
         std::uint8_t sound_bank_{0U};
         bool sound_reset_asserted_{true};    // the Z80 powers up held in reset
         std::int64_t sound_cycle_debt_{0};   // 68K cycles owed to the Z80 (clock-ratio scaled)
+        std::uint64_t sound_cycle_accum_{0}; // fractional 8 MHz / 16 MHz clock accumulator
         bool qsound_irq_line_{false};        // DL-1425 /INT line into the Z80
         std::uint32_t qsound_irq_accum_{0U}; // Z80 cycles toward the next /INT pulse
 
@@ -257,6 +306,12 @@ namespace mnemos::manifests::capcom_cps2 {
                                                  std::size_t word_index) const noexcept;
         // The big-endian word at `offset` in the CPS-2 control-register file.
         [[nodiscard]] std::uint16_t control_reg_word(std::size_t offset) const noexcept;
+        [[nodiscard]] std::uint16_t input0_read_word(bool side_effects);
+        void update_ecofighters_dial_direction() noexcept;
+        void update_coin_outputs(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint32_t object_ram_base_from_reg(std::uint16_t reg) const noexcept;
+        [[nodiscard]] std::uint32_t object_ram_base_aligned(std::uint16_t reg,
+                                                            std::uint32_t boundary) const noexcept;
         [[nodiscard]] std::uint32_t video_ram_base_from_reg(std::uint16_t reg) const noexcept;
         [[nodiscard]] std::uint32_t video_ram_base_aligned(std::uint16_t reg,
                                                            std::uint32_t boundary) const noexcept;
@@ -264,8 +319,12 @@ namespace mnemos::manifests::capcom_cps2 {
         // The current CPS-A reg5 palette source (page-aligned video-RAM offset) the
         // video chip DMAs from at render time.
         [[nodiscard]] std::uint32_t palette_source() const noexcept;
+        // The raw CPS-B palette-control word. The video chip applies the hardware
+        // zero-control default, so the board must not pre-expand it here.
+        [[nodiscard]] std::uint16_t palette_control() const noexcept;
         // Wire the Z80 sound CPU + the 68K<->Z80 comm RAM + the DL-1425 QSound DSP.
         void setup_sound();
+        [[nodiscard]] std::uint32_t sound_bank_rom_base() const noexcept;
     };
 
     [[nodiscard]] common::rom_set_decl cps2_rom_skeleton(std::string set_name);

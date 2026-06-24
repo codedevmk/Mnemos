@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 
 namespace {
 
@@ -90,6 +91,10 @@ TEST_CASE("player_system stub fulfils the interface contract") {
     CHECK(audio.sample_rate == 44100U);
     CHECK(audio.samples[0] == 1234);
     CHECK(audio.samples[1] == -1234);
+
+    CHECK(p.save_state().empty());
+    CHECK(p.load_state(std::span<const std::uint8_t>{}).status ==
+          mnemos::runtime::load_status::unsupported_version);
 
     // The spec publisher hands back a borrowed view of the cached vector;
     // its contents stay stable across calls.

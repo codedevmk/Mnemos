@@ -1,6 +1,8 @@
 #include "capcom_cps2_system.hpp"
 
 #include "cps2_crypto.hpp"
+#include "rom_set_toml.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -8,7 +10,11 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace {
@@ -19,6 +25,7 @@ namespace {
     using mnemos::manifests::capcom_cps2::cps2_system;
     using mnemos::manifests::capcom_cps2::crypto_key_size;
     using mnemos::manifests::capcom_cps2::encrypt_opcodes;
+    using mnemos::manifests::common::parse_rom_set_decl;
     using mnemos::manifests::common::rom_set_image;
 
     std::array<std::uint8_t, crypto_key_size> sample_key() {
@@ -31,16 +38,20 @@ namespace {
 
     // A tiny 68000 program (big-endian): reset vector (SSP=$00FF0000, PC=$000008)
     // then one caller-selected instruction. Padded to an even length.
-    std::vector<std::uint8_t> plain_program(std::uint16_t opcode = 0x707FU) {
+    std::vector<std::uint8_t> plain_program(std::uint16_t opcode = 0x707FU,
+                                            std::uint32_t reset_ssp = 0x00FF0000U,
+                                            std::uint32_t reset_pc = 0x00000008U) {
         std::vector<std::uint8_t> p(0x40U, 0x00U);
         const auto w16 = [&](std::size_t a, std::uint16_t v) {
             p[a] = static_cast<std::uint8_t>(v >> 8U);
             p[a + 1U] = static_cast<std::uint8_t>(v);
         };
-        w16(0x0U, 0x00FFU);
-        w16(0x2U, 0x0000U); // SSP = 0x00FF0000
-        w16(0x4U, 0x0000U);
-        w16(0x6U, 0x0008U); // PC = 0x00000008
+        const auto w32 = [&](std::size_t a, std::uint32_t v) {
+            w16(a, static_cast<std::uint16_t>(v >> 16U));
+            w16(a + 2U, static_cast<std::uint16_t>(v));
+        };
+        w32(0x0U, reset_ssp);
+        w32(0x4U, reset_pc);
         w16(0x8U, opcode);
         return p;
     }
@@ -48,13 +59,158 @@ namespace {
     // The encrypted program a real CPS-2 board ships (encrypt the plaintext with
     // the board key); the machine must decrypt it back to boot.
     std::vector<std::uint8_t> encrypted_program(const std::array<std::uint8_t, crypto_key_size>& k,
-                                                std::uint16_t opcode = 0x707FU) {
-        const std::vector<std::uint8_t> plain = plain_program(opcode);
+                                                std::uint16_t opcode = 0x707FU,
+                                                std::uint32_t reset_ssp = 0x00FF0000U,
+                                                std::uint32_t reset_pc = 0x00000008U) {
+        const std::vector<std::uint8_t> plain = plain_program(opcode, reset_ssp, reset_pc);
         mnemos::manifests::capcom_cps2::cps2_crypto_key key{};
         REQUIRE(decode_key(k, key));
         std::vector<std::uint8_t> enc(plain.size());
         REQUIRE(encrypt_opcodes(plain, enc, key));
         return enc;
+    }
+
+    rom_set_image save_state_image(const std::array<std::uint8_t, crypto_key_size>& k) {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
+        image.regions["gfx"].assign(0x10000U, 0xFFU);
+        image.regions["audiocpu"].assign(0x12000U, 0x00U);
+        image.regions["qsound"].assign(0x20000U, 0x80U);
+        return image;
+    }
+
+    std::vector<std::uint8_t> snapshot(cps2_system& sys) {
+        std::vector<std::uint8_t> blob;
+        mnemos::chips::state_writer writer(blob);
+        sys.save_state(writer);
+        return blob;
+    }
+
+    void seed_mutable_board_state(cps2_system& sys) {
+        auto& bus = sys.bus();
+        bus.write16_be(cps2::main_ram_base, 0xCAFEU);
+        bus.write16_be(cps2::video_ram_base + 0x20U, 0x1357U);
+        bus.write16_be(cps2::object_ram_base + 0x40U, 0x2468U);
+        bus.write16_be(cps2::extra_ram_base + 0x10U, 0x5A5AU);
+        bus.write16_be(cps2::control_reg_base + 0x04U, 0x0FEDU);
+        bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
+                       static_cast<std::uint16_t>(cps2::video_ram_base >> 8U));
+        bus.write16_be(cps2::cps_b_base + 0x02U, 0x2222U);
+        bus.write8(0x8040E0U, 0x01U);
+        bus.write8(cps2::sound_reset_port, 0x08U);
+        bus.write8(cps2::sound_reset_port, 0x09U); // run Z80 + pulse coin counter 1
+        bus.write8(cps2::sound_reset_port, 0x08U);
+        bus.write8(cps2::sound_reset_port, 0x19U); // release coin lockout 1
+
+        sys.input0 = 0xBEEFU;
+        sys.input1 = 0x7F7FU;
+        sys.input_sys = 0xFFFCU;
+        sys.set_development_dips({0x12U, 0x34U, 0x56U});
+        auto eeprom = sys.eeprom().bytes();
+        eeprom[0] = 0x34U;
+        eeprom[1] = 0x12U;
+
+        sys.sound_bus().write8(cps2::z80_bank_reg, 0x03U);
+        sys.sound_bus().write8(cps2::z80_shared_base + 3U, 0xA6U);
+        sys.sound_bus().write8(cps2::z80_ram_base + 4U, 0x5CU);
+        sys.sound_bus().write8(cps2::z80_work_base + 5U, 0xC3U);
+
+        // Program one QSound voice through the same three-port interface the Z80
+        // uses, so the DSP register latch participates in the board snapshot.
+        auto& q = sys.qsound_dsp();
+        q.write_port(0U, 0x00U);
+        q.write_port(1U, 0x40U);
+        q.write_port(2U, 0x06U); // voice 0 volume
+        q.write_port(0U, 0x00U);
+        q.write_port(1U, 0x10U);
+        q.write_port(2U, 0x02U); // voice 0 rate
+    }
+
+    void cps2_eeprom_set(cps2_system& sys, std::uint8_t pins) {
+        sys.bus().write8(0x804040U, pins);
+    }
+
+    void cps2_eeprom_select(cps2_system& sys) {
+        cps2_eeprom_set(sys, 0x00U);
+        cps2_eeprom_set(sys, cps2::eeprom_cs_bit);
+    }
+
+    void cps2_eeprom_deselect(cps2_system& sys) { cps2_eeprom_set(sys, 0x00U); }
+
+    void cps2_eeprom_send_bit(cps2_system& sys, bool bit) {
+        const auto pins = static_cast<std::uint8_t>(cps2::eeprom_cs_bit |
+                                                    (bit ? cps2::eeprom_di_bit : 0U));
+        cps2_eeprom_set(sys, pins);
+        cps2_eeprom_set(sys, static_cast<std::uint8_t>(pins | cps2::eeprom_clk_bit));
+        cps2_eeprom_set(sys, pins);
+    }
+
+    void cps2_eeprom_send_bits(cps2_system& sys, std::uint32_t value, std::uint8_t bits) {
+        for (std::uint8_t bit = bits; bit > 0U; --bit) {
+            cps2_eeprom_send_bit(sys, ((value >> (bit - 1U)) & 1U) != 0U);
+        }
+    }
+
+    bool cps2_eeprom_read_clock(cps2_system& sys) {
+        cps2_eeprom_set(sys, cps2::eeprom_cs_bit);
+        cps2_eeprom_set(sys, static_cast<std::uint8_t>(cps2::eeprom_cs_bit |
+                                                       cps2::eeprom_clk_bit));
+        const bool bit = (sys.bus().read16_be(0x804020U) & 0x0001U) != 0U;
+        cps2_eeprom_set(sys, cps2::eeprom_cs_bit);
+        return bit;
+    }
+
+    void cps2_eeprom_write_enable(cps2_system& sys) {
+        cps2_eeprom_select(sys);
+        cps2_eeprom_send_bits(sys, 0x100U | 0x30U, 9U);
+        cps2_eeprom_deselect(sys);
+    }
+
+    void cps2_eeprom_write_word(cps2_system& sys, std::uint8_t address, std::uint16_t value) {
+        cps2_eeprom_select(sys);
+        cps2_eeprom_send_bits(sys, 0x100U | (1U << 6U) | (address & 0x3FU), 9U);
+        cps2_eeprom_send_bits(sys, value, 16U);
+        cps2_eeprom_deselect(sys);
+    }
+
+    std::uint16_t cps2_eeprom_read_word(cps2_system& sys, std::uint8_t address) {
+        std::uint16_t value = 0U;
+        cps2_eeprom_select(sys);
+        cps2_eeprom_send_bits(sys, 0x100U | (2U << 6U) | (address & 0x3FU), 9U);
+        for (std::uint8_t i = 0U; i < 16U; ++i) {
+            value = static_cast<std::uint16_t>((value << 1U) |
+                                               (cps2_eeprom_read_clock(sys) ? 1U : 0U));
+        }
+        cps2_eeprom_deselect(sys);
+        return value;
+    }
+
+    std::uint16_t cps2_eeprom_read_word_19xx(cps2_system& sys, std::uint8_t address) {
+        std::uint16_t value = 0U;
+        cps2_eeprom_select(sys);
+        cps2_eeprom_send_bits(sys, 0x180U | (address & 0x3FU), 10U);
+        for (std::uint8_t i = 0U; i < 16U; ++i) {
+            value = static_cast<std::uint16_t>((value << 1U) |
+                                               (cps2_eeprom_read_clock(sys) ? 1U : 0U));
+        }
+        cps2_eeprom_deselect(sys);
+        return value;
+    }
+
+    void qsound_port_write(cps2_system& sys, std::uint8_t reg, std::uint16_t data) {
+        auto& sound = sys.sound_bus();
+        sound.write8(cps2::z80_port_base + 0U, static_cast<std::uint8_t>(data >> 8U));
+        sound.write8(cps2::z80_port_base + 1U, static_cast<std::uint8_t>(data));
+        sound.write8(cps2::z80_port_base + 2U, reg);
+    }
+
+    [[nodiscard]] bool any_nonzero(std::span<const std::int16_t> samples) noexcept {
+        for (const std::int16_t sample : samples) {
+            if (sample != 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
 } // namespace
@@ -71,6 +227,39 @@ TEST_CASE("cps2 ROM skeleton declares the fixed executable regions", "[capcom_cp
     CHECK(decl.regions[1].name == "key");
     CHECK(decl.regions[1].size == crypto_key_size);
     CHECK(decl.regions[1].fill == 0x00U);
+}
+
+TEST_CASE("cps2 checked-in game TOMLs parse and declare QSound HLE",
+          "[capcom_cps2][manifest]") {
+    namespace fs = std::filesystem;
+    const fs::path games_dir{MNEMOS_CPS2_GAMES_DIR};
+    REQUIRE(fs::is_directory(games_dir));
+
+    std::vector<fs::path> tomls;
+    for (const fs::directory_entry& entry : fs::directory_iterator(games_dir)) {
+        if (entry.path().extension() == ".toml") {
+            tomls.push_back(entry.path());
+        }
+    }
+    std::sort(tomls.begin(), tomls.end());
+    REQUIRE(tomls.size() >= 36U);
+
+    for (const fs::path& path : tomls) {
+        INFO(path.string());
+        std::ifstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        const std::string text{std::istreambuf_iterator<char>{file},
+                               std::istreambuf_iterator<char>{}};
+        const auto result = parse_rom_set_decl(text, path.string());
+        REQUIRE(result.ok());
+        CHECK(result.value->board == "capcom_cps2");
+
+        const auto has_qsound_hle =
+            std::any_of(result.value->hle.begin(), result.value->hle.end(), [](const auto& hle) {
+                return hle.chip == "capcom.qsound" && !hle.rationale.empty();
+            });
+        CHECK(has_qsound_hle);
+    }
 }
 
 TEST_CASE("cps2 system boots the 68000 from the decrypted opcode image", "[capcom_cps2][system]") {
@@ -104,6 +293,48 @@ TEST_CASE("cps2 system without a key is a non-executable blocker", "[capcom_cps2
     CHECK_FALSE(sys.executable());
     // The opcode overlay is the raw encrypted bytes, so a fetch != the plaintext.
     CHECK(sys.bus().fetch16_be_opcode(0x0008U) != 0x707FU);
+}
+
+TEST_CASE("cps2 system rejects decrypted programs with unsafe reset vectors",
+          "[capcom_cps2][system]") {
+    const auto k = sample_key();
+
+    SECTION("odd SSP") {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k, 0x707FU, 0x00FF0001U, 0x00000008U);
+        cps2_system sys(std::move(image), cps2_board_params{.key = k});
+
+        CHECK_FALSE(sys.executable());
+    }
+
+    SECTION("odd PC") {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k, 0x707FU, 0x00FF0000U, 0x00000009U);
+        cps2_system sys(std::move(image), cps2_board_params{.key = k});
+        const auto before = sys.cpu().cpu_registers();
+
+        sys.run_cycles(64);
+
+        CHECK_FALSE(sys.executable());
+        CHECK(sys.cpu().cpu_registers().pc == before.pc);
+    }
+
+    SECTION("PC outside loaded program image") {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k, 0x707FU, 0x00FF0000U, 0x00010000U);
+        cps2_system sys(std::move(image), cps2_board_params{.key = k});
+
+        CHECK_FALSE(sys.executable());
+    }
+
+    SECTION("high even SSP is accepted on the 24-bit bus") {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k, 0x707FU, 0x01000000U, 0x00000008U);
+        cps2_system sys(std::move(image), cps2_board_params{.key = k});
+
+        REQUIRE(sys.executable());
+        CHECK(sys.cpu().cpu_registers().a[7] == 0x01000000U);
+    }
 }
 
 TEST_CASE("cps2 direct cycle stepping is blocked until a key makes the board executable",
@@ -143,10 +374,10 @@ TEST_CASE("cps2 system maps RAM, CPS registers, inputs, and the EEPROM port",
     auto& bus = sys.bus();
 
     SECTION("the RAM regions round-trip") {
-        // (The QSound comm RAM at $618000 is odd-byte, tested separately.)
-        const std::array<std::uint32_t, 5> ram_bases{cps2::main_ram_base, cps2::video_ram_base,
-                                                     cps2::object_ram_base, cps2::extra_ram_base,
-                                                     cps2::control_reg_base};
+        // (The QSound comm RAM at $618000 and the banked object RAM are tested
+        // separately.)
+        const std::array<std::uint32_t, 4> ram_bases{cps2::main_ram_base, cps2::video_ram_base,
+                                                     cps2::extra_ram_base, cps2::control_reg_base};
         std::uint16_t v = 0x1111U;
         for (const std::uint32_t base : ram_bases) {
             bus.write16_be(base, v);
@@ -167,17 +398,271 @@ TEST_CASE("cps2 system maps RAM, CPS registers, inputs, and the EEPROM port",
     SECTION("the input ports read the active-low controls + QSound volume status") {
         sys.input0 = 0x4321U;
         sys.input1 = 0x8765U;
+        sys.input_sys = 0xFFF9U; // test/service active low; bit0 remains EEPROM-owned
         CHECK(bus.read16_be(0x804000U) == 0x4321U);
         CHECK(bus.read16_be(0x804010U) == 0x8765U);
+        CHECK((bus.read16_be(0x804020U) & 0x0006U) == 0x0000U);
         CHECK(bus.read16_be(0x804030U) == cps2::qsound_volume_status);
     }
 
     SECTION("the EEPROM port is wired: data-out on input 2 bit 0, pins on $804040") {
         // CS low resets the serial state; an idle 93C46 drives DO high.
         bus.write8(0x804040U, 0x00U);
+        sys.input_sys = 0xFFFEU;
         CHECK((bus.read16_be(0x804020U) & 0x0001U) == 0x0001U);
         CHECK(((bus.read16_be(0x804020U) & 0x0001U) != 0U) == sys.eeprom().data_out());
+
+        cps2_eeprom_write_enable(sys);
+        cps2_eeprom_write_word(sys, 3U, 0xA55AU);
+        CHECK(cps2_eeprom_read_word(sys, 3U) == 0xA55AU);
+        CHECK(cps2_eeprom_read_word_19xx(sys, 3U) == 0xA55AU);
     }
+
+    SECTION("the low EEPROM/output byte latches coin counters and lockouts") {
+        CHECK(sys.coin_counter(0U) == 0U);
+        CHECK(sys.coin_counter(1U) == 0U);
+        CHECK_FALSE(sys.coin_lockout(0U));
+
+        bus.write8(cps2::sound_reset_port, 0x03U);
+        CHECK(sys.coin_counter(0U) == 1U);
+        CHECK(sys.coin_counter(1U) == 1U);
+        bus.write8(cps2::sound_reset_port, 0x03U);
+        CHECK(sys.coin_counter(0U) == 1U);
+        CHECK(sys.coin_counter(1U) == 1U);
+        bus.write8(cps2::sound_reset_port, 0x02U);
+        bus.write8(cps2::sound_reset_port, 0x03U);
+        CHECK(sys.coin_counter(0U) == 2U);
+        CHECK(sys.coin_counter(1U) == 1U);
+
+        bus.write8(cps2::sound_reset_port, 0x00U);
+        CHECK(sys.coin_lockout(0U));
+        CHECK(sys.coin_lockout(1U));
+        CHECK(sys.coin_lockout(2U));
+        CHECK(sys.coin_lockout(3U));
+        bus.write8(cps2::sound_reset_port, 0xF0U);
+        CHECK_FALSE(sys.coin_lockout(0U));
+        CHECK_FALSE(sys.coin_lockout(3U));
+    }
+
+    SECTION("the development DIP banks read through $8040B0-$8040B2") {
+        CHECK(bus.read8(cps2::development_dip_base + 0U) == 0xFFU);
+        CHECK(bus.read8(cps2::development_dip_base + 1U) == 0xFFU);
+        CHECK(bus.read8(cps2::development_dip_base + 2U) == 0xFFU);
+        CHECK(bus.read16_be(cps2::development_dip_base) == 0xFFFFU);
+
+        sys.set_development_dips({0x12U, 0x34U, 0x56U});
+
+        CHECK(bus.read8(cps2::development_dip_base + 0U) == 0x12U);
+        CHECK(bus.read8(cps2::development_dip_base + 1U) == 0x34U);
+        CHECK(bus.read8(cps2::development_dip_base + 2U) == 0x56U);
+        CHECK(bus.read8(cps2::development_dip_base + 3U) == 0xFFU);
+        CHECK(bus.read16_be(cps2::development_dip_base) == 0x1234U);
+        CHECK(bus.read16_be(cps2::development_dip_base + 2U) == 0x56FFU);
+    }
+}
+
+TEST_CASE("cps2 system multiplexes CPS2 analog paddle profiles on the IN0 port",
+          "[capcom_cps2][system][input]") {
+    namespace cps2 = mnemos::manifests::capcom_cps2;
+    const auto k = sample_key();
+
+    SECTION("Puzz Loop 2 switches between 8-bit paddles and digital controls") {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k);
+        cps2_system sys(std::move(image),
+                        cps2_board_params{.key = k,
+                                          .analog_input =
+                                              cps2::cps2_analog_input_mode::puzz_loop_2});
+        auto& bus = sys.bus();
+        sys.input0 = 0xABCDU;
+        sys.set_analog_dial(0U, 0x019AU);
+        sys.set_analog_dial(1U, 0x02BCU);
+
+        CHECK(sys.analog_dial(0U) == 0x009AU);
+        CHECK(sys.analog_dial(1U) == 0x00BCU);
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0xBC9AU);
+
+        bus.write8(cps2::sound_reset_port, 0x02U);
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0xABCDU);
+        CHECK(sys.coin_counter(1U) == 0U); // bit 1 is the paddle selector, not coin 2.
+        bus.write8(cps2::sound_reset_port, 0x00U);
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0xBC9AU);
+    }
+
+    SECTION("Eco Fighters returns spinner bytes and tracks digital direction bits") {
+        rom_set_image image;
+        image.regions["maincpu"] = encrypted_program(k);
+        cps2_system sys(std::move(image),
+                        cps2_board_params{.key = k,
+                                          .analog_input =
+                                              cps2::cps2_analog_input_mode::eco_fighters});
+        auto& bus = sys.bus();
+        sys.input0 = 0xFFFFU;
+        sys.input1 = 0xFFEFU; // "Use Spinners" configuration bit active-low.
+        sys.set_analog_dial(0U, 0x0123U);
+        sys.set_analog_dial(1U, 0x0456U);
+
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0xDFDFU);
+        bus.write8(0x804040U, 0x01U);
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0x5623U);
+        bus.write8(0x804040U, 0x00U);
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0xFFFFU);
+
+        sys.input0 = 0x1234U;
+        sys.input1 = 0xFFFFU; // spinner mode disabled: raw digital IN0.
+        CHECK(bus.read16_be(cps2::cps_io_base) == 0x1234U);
+    }
+}
+
+TEST_CASE("cps2 system supports the Mars Matrix coin-lockout polarity",
+          "[capcom_cps2][system][input]") {
+    namespace cps2 = mnemos::manifests::capcom_cps2;
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    cps2_system sys(std::move(image),
+                    cps2_board_params{.key = k, .coin_lockout_active_high = true});
+    auto& bus = sys.bus();
+
+    bus.write8(cps2::sound_reset_port, 0x00U);
+    CHECK_FALSE(sys.coin_lockout(0U));
+    CHECK_FALSE(sys.coin_lockout(3U));
+    bus.write8(cps2::sound_reset_port, 0x90U);
+    CHECK(sys.coin_lockout(0U));
+    CHECK_FALSE(sys.coin_lockout(1U));
+    CHECK_FALSE(sys.coin_lockout(2U));
+    CHECK(sys.coin_lockout(3U));
+}
+
+TEST_CASE("cps2 system maps object RAM through the selected bank and alternate window",
+          "[capcom_cps2][system][video]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& bus = sys.bus();
+
+    bus.write16_be(cps2::object_ram_base, 0x1111U);     // bank 0, offset 0
+    bus.write16_be(cps2::object_ram_alt_base, 0x2222U); // bank 1, offset 0
+
+    CHECK(bus.read16_be(cps2::object_ram_base) == 0x1111U);
+    CHECK(bus.read16_be(cps2::object_ram_alt_base) == 0x2222U);
+    CHECK(bus.read16_be(cps2::object_ram_base + cps2::object_bank_bytes) == 0xFFFFU);
+
+    bus.write16_be(cps2::object_ram_alt_base + cps2::object_bank_bytes, 0x3333U);
+    CHECK(bus.read16_be(cps2::object_ram_alt_base + cps2::object_bank_bytes) == 0xFFFFU);
+    CHECK(bus.read16_be(cps2::object_ram_alt_base) == 0x2222U);
+
+    bus.write8(0x8040E0U, 0x01U); // selected bank flips to bank 1
+    CHECK(bus.read16_be(cps2::object_ram_base) == 0x2222U);
+    CHECK(bus.read16_be(cps2::object_ram_alt_base) == 0x1111U);
+
+    bus.write16_be(cps2::object_ram_base + 0x10U, 0x4444U);
+    CHECK(sys.object_ram()[cps2::object_bank_bytes + 0x10U] == 0x44U);
+    CHECK(sys.object_ram()[cps2::object_bank_bytes + 0x11U] == 0x44U);
+}
+
+TEST_CASE("cps2 system latches sprites from the CPS-A object base inside the selected bank",
+          "[capcom_cps2][system][video]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
+
+    // Sprite tile 1, texel (0,0) = pen 0xA.
+    image.regions["gfx"].assign(0x1000U, 0x00U);
+    image.regions["gfx"][128U + 0U] = 0x80U;
+    image.regions["gfx"][128U + 2U] = 0x80U;
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& bus = sys.bus();
+
+    constexpr std::uint32_t palette_source = 0x20000U;
+    bus.write16_be(cps2::video_ram_base + palette_source + 0x54U, 0xFF00U);
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
+                   static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
+
+    // Entry 0 terminates the base table. If the CPS-A object-base register is
+    // ignored, no sprite can render.
+    bus.write16_be(cps2::object_ram_base + 0x02U, 0xFFFFU);
+
+    constexpr std::uint32_t table_offset = 0x0800U;
+    bus.write16_be(cps2::object_ram_base + table_offset + 0x0U, 0x0000U); // raw_x
+    bus.write16_be(cps2::object_ram_base + table_offset + 0x2U, 0x0000U); // raw_y
+    bus.write16_be(cps2::object_ram_base + table_offset + 0x4U, 0x0001U); // tile
+    bus.write16_be(cps2::object_ram_base + table_offset + 0x6U, 0x0002U); // palette 2
+    bus.write16_be(cps2::object_ram_base + table_offset + 0xAU, 0xFFFFU); // terminator
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_obj_base * 2U,
+                   static_cast<std::uint16_t>((cps2::object_ram_base + table_offset) >> 8U));
+
+    sys.run_frame();
+
+    const auto fb = sys.video().framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == 0x00FF0000U);
+}
+
+TEST_CASE("cps2 system forwards CPS-A flip-screen control to the video chip",
+          "[capcom_cps2][system][video]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
+
+    image.regions["gfx"].assign(2U * 128U, 0x00U);
+    image.regions["gfx"][128U + 0U] = 0x80U; // sprite tile 1 texel (0,0) = pen 0xA
+    image.regions["gfx"][128U + 2U] = 0x80U;
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& bus = sys.bus();
+
+    constexpr std::uint32_t palette_source = 0x20000U;
+    bus.write16_be(cps2::video_ram_base + palette_source + 0x14U, 0xFF00U);
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
+                   static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
+    bus.write16_be(cps2::object_ram_base + 0x0U, 0x0000U); // raw_x
+    bus.write16_be(cps2::object_ram_base + 0x2U, 0x0000U); // raw_y
+    bus.write16_be(cps2::object_ram_base + 0x4U, 0x0001U); // tile 1
+    bus.write16_be(cps2::object_ram_base + 0x6U, 0x0000U); // palette 0
+    bus.write16_be(cps2::object_ram_base + 0xAU, 0x8000U); // terminator
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_video_control * 2U, 0x8000U);
+
+    sys.run_frame();
+
+    const auto fb = sys.video().framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == 0x00000000U);
+    CHECK(fb.pixels[(fb.height - 1U) * fb.width + (fb.width - 1U)] == 0x00FF0000U);
+}
+
+TEST_CASE("cps2 system forwards sprite control-register bases to offset-mode objects",
+          "[capcom_cps2][system][video]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
+
+    image.regions["gfx"].assign(2U * 128U, 0x00U);
+    image.regions["gfx"][128U + 3U] = 0x80U; // sprite tile 1 texel (0,0) = pen 1
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& bus = sys.bus();
+
+    constexpr std::uint32_t palette_source = 0x20000U;
+    bus.write16_be(cps2::video_ram_base + palette_source + 0x02U, 0xFF00U);
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
+                   static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
+
+    bus.write16_be(cps2::control_reg_base + 0x08U, 0x0020U); // sprite x base
+    bus.write16_be(cps2::control_reg_base + 0x0AU, 0x0010U); // sprite y base
+    bus.write16_be(cps2::object_ram_base + 0x0U, 0x0000U);   // base-relative raw_x
+    bus.write16_be(cps2::object_ram_base + 0x2U, 0x0000U);   // base-relative raw_y
+    bus.write16_be(cps2::object_ram_base + 0x4U, 0x0001U);   // tile 1
+    bus.write16_be(cps2::object_ram_base + 0x6U, 0x0080U);   // attr bit 7: offset mode
+    bus.write16_be(cps2::object_ram_base + 0xAU, 0x8000U);   // terminator
+
+    sys.run_frame();
+
+    const auto fb = sys.video().framebuffer();
+    REQUIRE(fb.pixels != nullptr);
+    CHECK(fb.pixels[0] == 0x00FF0000U);
 }
 
 TEST_CASE("cps2 system decodes CPS-A latches into video while QSound advances",
@@ -227,6 +712,58 @@ TEST_CASE("cps2 system decodes CPS-A latches into video while QSound advances",
     CHECK(fb.pixels[120U * fb.width + 200U] == 0xFF0000U);
 }
 
+TEST_CASE("cps2 system accounts only level-2 acknowledges as vblank IRQs",
+          "[capcom_cps2][system]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for stable PC setup
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+
+    const auto unmask_main_irq = [&sys] {
+        auto regs = sys.cpu().cpu_registers();
+        regs.sr = mnemos::chips::cpu::m68000::sr_s; // supervisor, IPM 0
+        regs.a[7] = cps2::main_ram_base + 0x1000U;
+        regs.ssp = regs.a[7];
+        regs.pc = 0x00000008U;
+        sys.cpu().set_registers(regs);
+    };
+
+    unmask_main_irq();
+    sys.cpu().set_irq_level(4);
+    sys.cpu().step_instruction();
+
+    CHECK(sys.vblank_irq_acked() == 0U);
+    CHECK(((sys.cpu().cpu_registers().sr >> 8U) & 7U) == 4U);
+
+    unmask_main_irq();
+    sys.cpu().set_irq_level(2);
+    sys.cpu().step_instruction();
+
+    CHECK(sys.vblank_irq_acked() == 1U);
+    CHECK(((sys.cpu().cpu_registers().sr >> 8U) & 7U) == 2U);
+}
+
+TEST_CASE("cps2 system forwards CPS-B palette-control masks into video DMA",
+          "[capcom_cps2][system][video]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& bus = sys.bus();
+
+    constexpr std::uint32_t palette_source = 0x20000U;
+    bus.write16_be(cps2::video_ram_base + palette_source + 0x0000U, 0x1111U);
+    bus.write16_be(cps2::video_ram_base + palette_source + 0x0400U, 0x2222U);
+    bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
+                   static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
+
+    bus.write16_be(cps2::cps_b_base + cps2::cps_b_palette_control_word * 2U, 0x0002U);
+    sys.run_frame();
+
+    CHECK(sys.video().palette_color(0U) == 0x0000U);
+    CHECK(sys.video().palette_color(0x200U) == 0x1111U);
+}
+
 TEST_CASE("cps2 system QSound: shared comm RAM, Z80 boot, reset gating", "[capcom_cps2][system]") {
     const auto k = sample_key();
     rom_set_image image;
@@ -256,14 +793,184 @@ TEST_CASE("cps2 system QSound: shared comm RAM, Z80 boot, reset gating", "[capco
     // executes its program, writing $42 into the comm RAM.
     sys.run_cycles(100);
     CHECK(z80.read8(0xC000U) == 0x5AU); // unchanged: Z80 still in reset
-    m68k.write8(0x804041U, 0x08U);      // release the sound-CPU reset
+    m68k.write16_be(0x804040U, 0x0008U); // release the sound-CPU reset via low byte
+    CHECK(sys.sound_cpu().cpu_registers().pc == 0x0000U);
     sys.run_cycles(200);
     CHECK(z80.read8(0xC000U) == 0x42U);    // the Z80 ran its program
     CHECK(m68k.read8(0x618001U) == 0x42U); // and the 68K sees it
 
+    auto regs = sys.sound_cpu().cpu_registers();
+    regs.pc = 0x1234U;
+    sys.sound_cpu().set_registers(regs);
+    m68k.write16_be(0x804040U, 0x0008U);
+    CHECK(sys.sound_cpu().cpu_registers().pc == 0x1234U);
+
+    z80.write8(0xC000U, 0x00U);
+    m68k.write16_be(0x804040U, 0x0000U);
+    CHECK(sys.sound_cpu().cpu_registers().pc == 0x0000U);
+    sys.run_cycles(200);
+    CHECK(z80.read8(0xC000U) == 0x00U);
+
     // The DL-1425 ready flag is readable at $D007 (deterministic; not the scratch
     // RAM that backs the rest of the $D000 window).
     CHECK(z80.read8(0xD007U) == z80.read8(0xD007U));
+}
+
+TEST_CASE("cps2 system maps QSound DSP ports to PCM output",
+          "[capcom_cps2][system][sound]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    image.regions["audiocpu"].assign(0x8000U, 0x00U);
+    image.regions["qsound"].assign(0x20000U, 0x00U);
+    image.regions["qsound"][0x10U] = 0x40U;
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+
+    qsound_port_write(sys, 1U, 0x0010U);  // voice 0 address
+    qsound_port_write(sys, 2U, 0x0100U);  // voice 0 rate
+    qsound_port_write(sys, 5U, 0x1000U);  // voice 0 end address
+    qsound_port_write(sys, 6U, 0x4000U);  // voice 0 volume
+    qsound_port_write(sys, 0x80U, 0x20U); // voice 0 pan, centered
+
+    std::array<std::int16_t, 16> samples{};
+    sys.qsound_dsp().generate(samples);
+
+    CHECK(sys.sound_bus().read8(cps2::z80_ready_reg) ==
+          mnemos::chips::audio::qsound::ready_flag);
+    CHECK(any_nonzero(samples));
+}
+
+TEST_CASE("cps2 system maps QSound DSP ports to ADPCM output",
+          "[capcom_cps2][system][sound][adpcm]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    image.regions["audiocpu"].assign(0x8000U, 0x00U);
+    image.regions["qsound"].assign(0x20000U, 0x00U);
+    image.regions["qsound"][0x20U] = 0x70U;
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+
+    qsound_port_write(sys, 0xCAU, 0x0020U); // ADPCM voice 0 start
+    qsound_port_write(sys, 0xCBU, 0x0022U); // ADPCM voice 0 end
+    qsound_port_write(sys, 0xCCU, 0x8000U); // ADPCM voice 0 bank
+    qsound_port_write(sys, 0xD6U, 0x0001U); // trigger voice 0
+    qsound_port_write(sys, 0xCDU, 0x4000U); // late volume must still become audible
+
+    std::array<std::int16_t, 32> samples{};
+    sys.qsound_dsp().generate(samples);
+
+    CHECK(any_nonzero(samples));
+}
+
+TEST_CASE("cps2 system maps compact QSound Z80 banks from the 32 KiB split",
+          "[capcom_cps2][system][sound]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    auto& audio = image.regions["audiocpu"];
+    audio.assign(0x20000U, 0xFFU);
+    audio[cps2::z80_bank_rom_base_small + 2U * cps2::z80_bank_window] = 0x5AU;
+    audio[cps2::z80_bank_rom_base_large + 2U * cps2::z80_bank_window] = 0xA5U;
+    image.regions["qsound"].assign(0x1000U, 0x00U);
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    sys.sound_bus().write8(cps2::z80_bank_reg, 0x02U);
+
+    CHECK(sys.sound_bus().read8(cps2::z80_bank_base) == 0x5AU);
+}
+
+TEST_CASE("cps2 system maps full QSound Z80 banks from the 64 KiB split",
+          "[capcom_cps2][system][sound]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    auto& audio = image.regions["audiocpu"];
+    audio.assign(cps2::z80_qsound_cpu_rom_region_size, 0xFFU);
+    audio[cps2::z80_bank_rom_base_small + 2U * cps2::z80_bank_window] = 0xA5U;
+    audio[cps2::z80_bank_rom_base_large + 2U * cps2::z80_bank_window] = 0x5AU;
+    image.regions["qsound"].assign(0x1000U, 0x00U);
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    sys.sound_bus().write8(cps2::z80_bank_reg, 0x02U);
+
+    CHECK(sys.sound_bus().read8(cps2::z80_bank_base) == 0x5AU);
+}
+
+TEST_CASE("cps2 system clocks the QSound Z80 at the board ratio", "[capcom_cps2][system]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for steady 68K cycles
+    image.regions["audiocpu"].assign(0x8000U, 0x00U);         // Z80 NOP stream
+    image.regions["qsound"].assign(0x1000U, 0x00U);
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    sys.bus().write8(cps2::sound_reset_port, 0x08U);
+
+    sys.run_cycles(cps2::m68k_clock_hz / 1000U); // 1 ms of 68K time
+
+    const std::uint64_t main_cycles = sys.cpu().elapsed_cycles();
+    const std::uint64_t sound_cycles = sys.sound_cpu().elapsed_cycles();
+    const std::uint64_t expected =
+        main_cycles * cps2::qsound_z80_clock_hz / cps2::m68k_clock_hz;
+    INFO("main=" << main_cycles << " sound=" << sound_cycles << " expected=" << expected);
+
+    // The Z80 is whole-instruction stepped; allow one NOP of scheduling slack
+    // while requiring the long-run 8 MHz / 16 MHz board ratio.
+    CHECK(sound_cycles + 4U >= expected);
+    CHECK(sound_cycles <= expected + 4U);
+}
+
+TEST_CASE("cps2 system frame budget follows the CPS2 raster cadence",
+          "[capcom_cps2][system]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for steady frame timing
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    sys.run_frame();
+
+    const std::uint64_t expected =
+        (static_cast<std::uint64_t>(cps2::m68k_clock_hz) * cps2::refresh_hz_den +
+         cps2::refresh_hz_num / 2U) /
+        cps2::refresh_hz_num;
+    const std::uint64_t elapsed = sys.cpu().elapsed_cycles();
+    INFO("elapsed=" << elapsed << " expected=" << expected);
+
+    CHECK(cps2::m68k_clock_hz == 16'000'000U);
+    CHECK(cps2::qsound_z80_clock_hz == 8'000'000U);
+    CHECK(cps2::refresh_hz_num == 59'637'405U);
+    CHECK(cps2::refresh_hz_den == 1'000'000U);
+    CHECK(cps2::frame_rate_millihz == 59'637U);
+    CHECK(cps2::cpu_cycles_per_frame == expected);
+
+    // The 68000 runs whole instructions, so the frame can overshoot by the final
+    // instruction in each visible/vblank slice, but its budget must be derived
+    // from the native 59.637405 Hz board cadence rather than a rounded 60 Hz frame.
+    CHECK(elapsed >= expected);
+    CHECK(elapsed <= expected + 64U);
+}
+
+TEST_CASE("cps2 system save/load reproduces whole-board forward evolution",
+          "[capcom_cps2][system][save]") {
+    const auto k = sample_key();
+    cps2_system live(save_state_image(k), cps2_board_params{.key = k});
+    cps2_system restored(save_state_image(k), cps2_board_params{.key = k});
+
+    seed_mutable_board_state(live);
+    live.run_frame();
+    const std::vector<std::uint8_t> saved = snapshot(live);
+
+    live.run_frame();
+    const std::vector<std::uint8_t> reference = snapshot(live);
+
+    mnemos::chips::state_reader reader(saved);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+    restored.run_frame();
+
+    CHECK(snapshot(restored) == reference);
 }
 
 TEST_CASE("cps2 gfx unshuffle de-interleaves 8-byte units recursively", "[capcom_cps2][gfx]") {

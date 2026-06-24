@@ -21,6 +21,7 @@
 #include "chip.hpp"                // for mnemos::chips::frame_buffer_view, ichip
 #include "introspection_views.hpp" // for mnemos::instrumentation::memory_view
 #include "peripheral.hpp"          // for mnemos::peripheral::controller_state
+#include "save_state.hpp"          // for mnemos::runtime::load_result
 
 #include <cstddef>
 #include <cstdint>
@@ -185,6 +186,17 @@ namespace mnemos::frontend_sdk {
         // Returns an empty chunk (frame_count == 0) when the adapter has no
         // audio path wired yet -- the frontend handles silence cleanly.
         [[nodiscard]] virtual audio_chunk drain_audio() noexcept = 0;
+
+        // Whole-session save/load. Adapters that publish
+        // session_capability_info::save_state_supported must return a complete
+        // runtime save-state container here and accept it through load_state().
+        // Default empty/unsupported keeps older adapters honest until they wire
+        // a full-machine target.
+        [[nodiscard]] virtual std::vector<std::uint8_t> save_state() { return {}; }
+        [[nodiscard]] virtual runtime::load_result load_state(std::span<const std::uint8_t> data) {
+            (void)data;
+            return {.status = runtime::load_status::unsupported_version};
+        }
 
         // The chips that make up this system, returned in scheduler order so
         // debug consumers can present a stable view. Each pointer is non-owning

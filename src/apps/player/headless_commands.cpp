@@ -6,6 +6,7 @@
 #include "capability_discovery.hpp"
 #include "debug_dump.hpp"
 #include "player_system.hpp"
+#include "state_file.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -49,20 +50,71 @@ namespace {
         return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
     }
 
+    [[nodiscard]] const char*
+    load_status_name(mnemos::runtime::load_status status) noexcept {
+        switch (status) {
+        case mnemos::runtime::load_status::ok:
+            return "ok";
+        case mnemos::runtime::load_status::bad_magic:
+            return "bad_magic";
+        case mnemos::runtime::load_status::unsupported_version:
+            return "unsupported_version";
+        case mnemos::runtime::load_status::manifest_mismatch:
+            return "manifest_mismatch";
+        case mnemos::runtime::load_status::truncated:
+            return "truncated";
+        case mnemos::runtime::load_status::bad_crc:
+            return "bad_crc";
+        case mnemos::runtime::load_status::decompress_failed:
+            return "decompress_failed";
+        case mnemos::runtime::load_status::chunk_rejected:
+            return "chunk_rejected";
+        }
+        return "unknown";
+    }
+
 } // namespace
 
 namespace mnemos::apps::player {
 
     bool has_headless_request(const headless_requests& requests) noexcept {
-        return requests.capabilities || requests.screenshot || requests.extract_assets ||
-               requests.extract_audio || requests.record_animation;
+        return requests.capabilities || requests.screenshot || requests.save_state ||
+               requests.extract_assets || requests.extract_audio || requests.record_animation;
     }
 
     std::optional<int> run_headless_request(frontend_sdk::player_system* system,
                                             const headless_requests& requests, int argc,
                                             char* argv[]) {
         using adapters::input_for_frame;
+        using adapters::load_save_state_file;
         using adapters::parse_press_events;
+        using adapters::save_save_state_file;
+
+        if (requests.load_state) {
+            if (system == nullptr) {
+                std::fprintf(stderr, "--load-state requires --rom\n");
+                return 1;
+            }
+            if (!system->session_capabilities().save_state_supported) {
+                std::fprintf(stderr, "[mnemos_player] system does not support save states\n");
+                return 1;
+            }
+            const auto bytes = load_save_state_file(*requests.load_state);
+            if (!bytes.has_value()) {
+                std::fprintf(stderr, "[mnemos_player] could not read save state: %s\n",
+                             requests.load_state->c_str());
+                return 1;
+            }
+            const auto result = system->load_state(*bytes);
+            if (!result.ok()) {
+                std::fprintf(stderr, "[mnemos_player] could not load save state %s: %s\n",
+                             requests.load_state->c_str(), load_status_name(result.status));
+                return 1;
+            }
+            std::fprintf(stderr, "[mnemos_player] loaded save state: %s\n",
+                         requests.load_state->c_str());
+            std::fflush(stderr);
+        }
 
         if (requests.capabilities) {
             if (system == nullptr) {
@@ -73,6 +125,38 @@ namespace mnemos::apps::player {
             const std::string summary = debug::format_capability_summary(manifest);
             std::fwrite(summary.data(), 1U, summary.size(), stdout);
             std::fflush(stdout);
+            return 0;
+        }
+
+        if (requests.save_state) {
+            if (system == nullptr) {
+                std::fprintf(stderr, "--save-state requires --rom\n");
+                return 1;
+            }
+            if (!system->session_capabilities().save_state_supported) {
+                std::fprintf(stderr, "[mnemos_player] system does not support save states\n");
+                return 1;
+            }
+            const auto press_events = parse_press_events(argc, argv);
+            const auto swap_frames = parse_swap_frames(argc, argv);
+            for (std::uint64_t i = 0; i < requests.save_state->frames; ++i) {
+                if (!press_events.empty()) {
+                    system->apply_input(0, input_for_frame(press_events, i + 1U));
+                }
+                apply_disk_swaps(*system, swap_frames, i + 1U);
+                system->step_one_frame();
+            }
+            const std::vector<std::uint8_t> state = system->save_state();
+            if (state.empty() || !save_save_state_file(requests.save_state->path, state)) {
+                std::fprintf(stderr, "[mnemos_player] could not write save state: %s\n",
+                             requests.save_state->path.c_str());
+                return 1;
+            }
+            std::fprintf(stderr, "[mnemos_player] wrote save state: %s (%zu bytes after %llu "
+                                 "frames)\n",
+                         requests.save_state->path.c_str(), state.size(),
+                         static_cast<unsigned long long>(requests.save_state->frames));
+            std::fflush(stderr);
             return 0;
         }
 

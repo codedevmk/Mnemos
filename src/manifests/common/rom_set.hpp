@@ -64,6 +64,14 @@ namespace mnemos::manifests::common {
     // default for every official set).
     enum class sprite_draw_order : std::uint8_t { ascending, descending };
 
+    // Explicit high-level emulation substitution. The constitution requires every
+    // non-cycle-accurate/HLE chip path to be visible in the manifest rather than
+    // hidden in a board implementation.
+    struct hle_declaration final {
+        std::string chip;
+        std::string rationale;
+    };
+
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
         std::string board; // board family id, e.g. "irem_m72" (informational)
@@ -85,6 +93,12 @@ namespace mnemos::manifests::common {
         // Display orientation (default horizontal); the frontend rotates a
         // vertical set's framebuffer for upright presentation.
         screen_orientation orientation{screen_orientation::horizontal};
+        // Local player panel count exposed by the board/cabinet. Arcade boards
+        // default to two panels unless a set declares a dedicated 3P/4P layout.
+        std::uint8_t players{2U};
+        // Optional board-interpreted input/cabinet wiring profile. CPS2 uses this
+        // to distinguish six-button fighters from cabinets that repurpose IN1.
+        std::optional<std::string> input;
         // Sprite-list draw order (default ascending); a few bootleg sets relocate
         // the object list and declare "descending". Board-interpreted (capcom_cps1).
         sprite_draw_order sprite_order{sprite_draw_order::ascending};
@@ -95,6 +109,8 @@ namespace mnemos::manifests::common {
         // Optional Kabuki-encrypted-sound key name (board-interpreted): capcom_cps1
         // reads "dino" / "wof" / "punisher" to decrypt the QSound Z80 program.
         std::optional<std::string> kabuki;
+        // Explicit high-level emulation declarations for this board/set.
+        std::vector<hle_declaration> hle;
         std::vector<rom_set_region> regions;
     };
 

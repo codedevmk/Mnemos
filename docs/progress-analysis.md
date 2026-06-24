@@ -85,7 +85,7 @@ depth **≈ 92%** · total weighted portfolio (breadth × depth) **≈ 37%**.
 | Spectrum | no | 0% | ⬇ | Z80 reused, ULA inline — LOW (easiest win) |
 | NeoGeo | no | 0% | ⬇ | Needs YM2610+LSPC — HIGH (Emu scaffold) |
 | CPS1 | no | 0% | ⬇ | Needs MSM6295+CPS-A/B GFX+QSound — MEDIUM |
-| CPS2 | no | 0% | ⬇ | Needs QSound+CPS2 opcode-crypto — MEDIUM-HIGH |
+| CPS2 | yes | ~85% | ⬆ | Keyed opcode crypto, CPS-2 video, QSound PCM/ADPCM/echo HLE, EEPROM, MAME-matched per-game digital/ticket/analog input profiles, coin output latches, ZIP manifest loading, player adapter, player save/load, and a data-gated CPS2 corpus smoke runner are wired; local proof covers four 1944-family zips, wider corpus proof remains |
 | Taito F2 | no | 0% | ⬇ | Needs YM2610+TC0100SCN/TC0200OBJ — HIGH (Emu scaffold) |
 
 ---
@@ -370,14 +370,14 @@ advantage): no Z80 `$8000` ROM banking, and both expose only one game (R-Type).
 | **sinclair/spectrum** | spectrum.c 901; ~1,022. Real (48K contention/floating-bus timing, Timex TC2048/TS2068/TC2068, AY, palettes; ULA inline) | z80, (ULA inline), AY-3-8910 | **z80** | none as separate cores; AY-3-8910 PSG (Mnemos has sn76489, not AY) | LOW |
 | **snk/neogeo** | neogeo.c 253; ~378. Explicit scaffold (LSPC regs return 0; YM2610 only latched) | m68k, z80, ym2610 (ssg+adpcm_a+adpcm_b) | **m68000, z80** | ym2610 (shell over ssg 198 / adpcm_a 178 / adpcm_b 186), **LSPC video (does not exist anywhere)** | HIGH |
 | **capcom/cps1** | cps1.c 4216; ~4,431. NOT a scaffold — full tile/sprite/palette video + inline QSound + inline OKI MSM6295 | m68k, z80, ym2151, msm6295 (CPS-A/B bespoke inline) | **m68000, z80, ym2151** | msm6295 (Emu 225-line core, here inlined) + inline CPS-A/B GFX + QSound | MEDIUM |
-| **capcom/cps2** | cps2.c 3667 + cps2_crypto.cpp 696; ~3,948. NOT a scaffold — keyed 68000 opcode decryption, ZIP loading, video, inline QSound | m68k, z80, QSound (inline) | **m68000, z80** | QSound (inline) + CPS-2 crypto; reuses CPS-1 video | MEDIUM (HIGH if cycle-accurate QSound/crypto) |
+| **capcom/cps2** | cps2.c 3667 + cps2_crypto.cpp 696; ~3,948. NOT a scaffold — keyed 68000 opcode decryption, ZIP loading, video, inline QSound | m68k, z80, QSound (inline) | **m68000, z80, cps2_video, qsound PCM/ADPCM/echo HLE, eeprom_93c46, CPS-2 crypto, player adapter, CPS2 corpus smoke runner** | Wider real-set corpus proof via `MNEMOS_CPS2_SET_DIR`; game-specific EEPROM defaults if real sets need them; DSP16-level QSound only if cycle-grade fidelity is required | LOW-MED follow-up |
 | **taito/f2** | taito_f2.c 197; ~282. Explicit scaffold (bare RAM + comm latch, no video, no sound) | m68k, z80, ym2610 (+TC0100SCN/TC0200OBJ) | **m68000, z80** | ym2610 + **TC0100SCN tilemap + TC0200OBJ sprite customs (do not exist)** | HIGH |
 
 **Easiest → hardest to port next:**
 1. **Spectrum (LOW)** — Z80 done; ULA inline (no separate core); only gap is AY-3-8910. Cleanest win.
 2. **CPS1 (MEDIUM)** — 3 of 4 chips present; only MSM6295 + already-inline CPS-A/B GFX + QSound. High payoff (fighting library).
 3. **NES (MEDIUM)** — real, working; needs ppu2c02 + 2A03 APU + proper 2A03 CPU variant + real mappers.
-4. **CPS2 (MEDIUM→HIGH)** — reuses CPS1 video; adds CPS-2 opcode-crypto + QSound DSP.
+4. **CPS2 follow-up (LOW-MED)** — broaden the real-set corpus through `scripts/cps2/run-corpus-smoke.ps1`, fill game-specific EEPROM defaults if real sets need them, and only pursue DSP16-level QSound if cycle-grade audio fidelity is required.
 5. **Amiga (HIGH)** — only m68000 reused; port Agnus/Denise/Paula/CIA8520 (shallow OCS/ECS shells need completion).
 6. **NeoGeo (HIGH)** — scaffold; needs YM2610 + from-scratch LSPC.
 7. **Taito F2 (HIGH)** — scaffold; needs YM2610 + TC0100SCN/TC0200OBJ customs (don't exist). Little Emu code to lift (197 LOC).
@@ -416,7 +416,7 @@ likely impact on game compatibility / development if relied upon.
 | R14 | SMS | **Pause button not wired (no pause→NMI)** | MEDIUM | Z80 supports NMI but the SMS manifest exposes no pause entry point — the pause button does nothing |
 | R15 | SMS | **Shallow cart-header validation; cart-RAM mapper detail unverified** | MEDIUM | Only region nibble parsed (no checksum/product-code/size); Sega-mapper `$8000-$BFFF` cart-RAM bank-select not separately verified |
 | R16 | Sega CD | **No ISO 9660 walker / Saturn IP.BIN** | LOW-MED | Mostly Saturn-relevant; some CD tooling/inspection paths unavailable |
-| R17 | C64 / all | **Dev-tooling axis is a broad gap** (the C64 suite ~4,400 LOC is just the visible part) | LOW (scope) | Out of *hardware* scope but real: no GUI debugger, no disassemblers, scripting is README-stubs, save-states wired C64-only. Full inventory + T#/N# checklist in [`tooling-gap-inventory.md`](tooling-gap-inventory.md) |
+| R17 | C64 / all | **Dev-tooling axis is a broad gap** (the C64 suite ~4,400 LOC is just the visible part) | LOW (scope) | Out of *hardware* scope but real: no GUI debugger, no disassemblers, scripting is README-stubs, and save-state/rewind player coverage is still uneven outside the new CPS2 path. Full inventory + T#/N# checklist in [`tooling-gap-inventory.md`](tooling-gap-inventory.md) |
 | R18 | Sega CD / Genesis | **CD-DA & sub-BIOS placement differ from Emu** | LOW (architectural) | CD-DA lives in segacd subsystem (not Genesis core); sub-BIOS runs as main cart (not a dedicated sub image). Functionally equivalent — note before "comparing to Emu" |
 | R19 | Multiple | **Emu is NOT a trustworthy oracle for its scaffolds/stubs** | META | Emu's M72, NeoGeo, Taito F2, SNES are scaffolds; its SVP DSP, Sega CD 1M mode + stamp ASIC are stubs. "Match Emu" is wrong for these — use GPGX/MAME/hardware. Do not regress Mnemos's superior implementations toward Emu |
 

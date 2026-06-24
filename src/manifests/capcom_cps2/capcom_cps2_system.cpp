@@ -1,5 +1,7 @@
 #include "capcom_cps2_system.hpp"
 
+#include "state.hpp"
+
 #include <algorithm>
 #include <cstring>
 #include <span>
@@ -40,6 +42,57 @@ namespace mnemos::manifests::capcom_cps2 {
         // span independently.
         constexpr std::size_t gfx_bank_bytes = 0x200000U;
         constexpr std::size_t gfx_unit_bytes = 8U; // an 8-byte (64-bit) gfx unit
+        constexpr std::uint32_t cps2_system_state_version = 5U;
+        constexpr std::uint32_t m68k_address_mask = 0x00FFFFFFU;
+        constexpr int m68k_vblank_irq_level = 2;
+
+        [[nodiscard]] std::uint32_t object_ram_index(std::uint32_t address,
+                                                     std::uint8_t object_bank,
+                                                     std::uint32_t window_base,
+                                                     std::uint8_t bank_selector) noexcept {
+            std::uint32_t local = address - window_base;
+            if (bank_selector != 0U) {
+                local &= object_bank_bytes - 1U;
+            }
+            const std::uint32_t bank = (static_cast<std::uint32_t>(object_bank & 1U) ^
+                                        static_cast<std::uint32_t>(bank_selector & 1U));
+            return bank * object_bank_bytes + local;
+        }
+
+        [[nodiscard]] std::uint32_t read_be32(std::span<const std::uint8_t> bytes,
+                                              std::size_t offset) noexcept {
+            if (offset + 3U >= bytes.size()) {
+                return 0U;
+            }
+            return (static_cast<std::uint32_t>(bytes[offset]) << 24U) |
+                   (static_cast<std::uint32_t>(bytes[offset + 1U]) << 16U) |
+                   (static_cast<std::uint32_t>(bytes[offset + 2U]) << 8U) |
+                   static_cast<std::uint32_t>(bytes[offset + 3U]);
+        }
+
+        [[nodiscard]] bool address_in_program_image(std::size_t image_size,
+                                                    std::uint32_t address) noexcept {
+            return (address & 1U) == 0U && (address & m68k_address_mask) < image_size;
+        }
+
+        [[nodiscard]] bool reset_vectors_executable(std::span<const std::uint8_t> image) noexcept {
+            if (image.size() < 8U) {
+                return false;
+            }
+            const std::uint32_t reset_ssp = read_be32(image, 0U);
+            const std::uint32_t reset_pc = read_be32(image, 4U);
+            return (reset_ssp & 1U) == 0U && address_in_program_image(image.size(), reset_pc);
+        }
+
+        [[nodiscard]] bool valid_analog_input_mode(std::uint8_t value) noexcept {
+            switch (static_cast<cps2_analog_input_mode>(value)) {
+            case cps2_analog_input_mode::none:
+            case cps2_analog_input_mode::eco_fighters:
+            case cps2_analog_input_mode::puzz_loop_2:
+                return true;
+            }
+            return false;
+        }
     } // namespace
 
     void cps2_system::unshuffle_gfx_units(std::span<std::uint8_t> units) noexcept {
@@ -89,20 +142,23 @@ namespace mnemos::manifests::capcom_cps2 {
     }
 
     cps2_system::cps2_system(common::rom_set_image image, cps2_board_params board_params)
-        : roms(std::move(image)), params(std::move(board_params)) {
+        : roms(std::move(image)), params(std::move(board_params)),
+          analog_input_mode_(params.analog_input) {
         // The encrypted 68000 program, mapped at $000000 for DATA reads.
         std::vector<std::uint8_t>& program = region(roms, "maincpu");
 
         // Build the decrypted opcode image. Default to the raw encrypted bytes so
         // the opcode overlay is always valid storage; a valid key overwrites it
-        // with the decrypted stream and marks the board executable. Decryption
-        // needs an even, non-empty program.
+        // with the decrypted stream. The board only becomes executable when the
+        // decrypted reset vectors are safe; wrong regional keys can decrypt to
+        // bytes that are not a bootable CPS-2 program.
         opcode_image.assign(program.begin(), program.end());
         const auto key_bytes = resolve_key(params, roms);
         if (key_bytes.has_value() && !program.empty() && (program.size() & 1U) == 0U) {
             cps2_crypto_key key{};
             if (decode_key(*key_bytes, key) && decrypt_opcodes(program, opcode_image, key)) {
-                executable_ = true;
+                executable_ =
+                    reset_vectors_executable(std::span<const std::uint8_t>(opcode_image));
             }
         }
 
@@ -115,10 +171,31 @@ namespace mnemos::manifests::capcom_cps2 {
         // actually overlap it, but keeps them authoritative).
         main_bus.map_ram(main_ram_base, std::span<std::uint8_t>(work_ram_), 1);
         main_bus.map_ram(video_ram_base, std::span<std::uint8_t>(video_ram_), 1);
-        main_bus.map_ram(object_ram_base, std::span<std::uint8_t>(object_ram_), 1);
         main_bus.map_ram(extra_ram_base, std::span<std::uint8_t>(extra_ram_), 1);
         main_bus.map_ram(extra_ctrl_base, std::span<std::uint8_t>(extra_control_), 1);
         main_bus.map_ram(control_reg_base, std::span<std::uint8_t>(control_regs_), 1);
+        const auto map_object_window = [this](std::uint32_t base, std::uint32_t size,
+                                              std::uint8_t bank_selector) {
+            main_bus.map_mmio(
+                base, size,
+                [this, base, bank_selector](std::uint32_t address) -> std::uint8_t {
+                    const std::uint32_t index =
+                        object_ram_index(address, object_bank_, base, bank_selector);
+                    return index < object_ram_.size() ? object_ram_[index] : 0xFFU;
+                },
+                [this, base, bank_selector](std::uint32_t address, std::uint8_t value) {
+                    const std::uint32_t index =
+                        object_ram_index(address, object_bank_, base, bank_selector);
+                    if (index < object_ram_.size()) {
+                        object_ram_[index] = value;
+                    }
+                },
+                1);
+        };
+        // CPS-2 exposes an 8 KiB selected object bank at $700000 and an 8 KiB
+        // alternate window at $708000 that addresses the opposite bank.
+        map_object_window(object_ram_base, object_bank_bytes, 0U);
+        map_object_window(object_ram_alt_base, object_ram_alt_window_bytes, 1U);
         // QSound 68K<->Z80 comm RAM: the 68K sees the 4 KiB buffer on the ODD byte
         // of an 8 KiB window (index = (addr-base)>>1); the Z80 sees it flat at $C000.
         main_bus.map_mmio(
@@ -152,20 +229,23 @@ namespace mnemos::manifests::capcom_cps2 {
         main_bus.map_mmio(
             cps_io_base, static_cast<std::uint32_t>(cps_io_size),
             [this](std::uint32_t address) -> std::uint8_t {
+                if (address >= development_dip_base &&
+                    address < development_dip_base + development_dip_size) {
+                    return development_dips_[address - development_dip_base];
+                }
                 std::uint16_t word = 0xFFFFU;
                 switch (address & 0xFFFFFEU) {
                 case 0x804000U:
-                    word = input0;
+                    word = input0_read_word((address & 1U) == 0U);
                     break;
                 case 0x804010U:
                     word = input1;
                     break;
                 case 0x804020U:
                     // System (start/coin) inputs; bit 0 is the EEPROM data-out.
-                    word = input_sys;
-                    if (!eeprom_.data_out()) {
-                        word = static_cast<std::uint16_t>(word & ~0x0001U);
-                    }
+                    word = eeprom_.data_out()
+                               ? static_cast<std::uint16_t>(input_sys | 0x0001U)
+                               : static_cast<std::uint16_t>(input_sys & ~0x0001U);
                     break;
                 case 0x804030U:
                     word = qsound_volume_status;
@@ -182,14 +262,22 @@ namespace mnemos::manifests::capcom_cps2 {
                 case 0x804040U: // serial EEPROM: DI bit4, CLK bit5, CS bit6
                     eeprom_.update((value & eeprom_cs_bit) != 0U, (value & eeprom_clk_bit) != 0U,
                                    (value & eeprom_di_bit) != 0U);
+                    if (analog_input_mode_ == cps2_analog_input_mode::eco_fighters) {
+                        read_paddle_ = (value & 0x01U) != 0U;
+                    }
                     break;
                 case 0x804041U: // sound-CPU reset: bit3 set = run, clear = hold in reset
+                    if (analog_input_mode_ == cps2_analog_input_mode::puzz_loop_2) {
+                        read_paddle_ = (value & 0x02U) != 0U;
+                    }
+                    update_coin_outputs(value);
                     if ((value & 0x08U) != 0U) {
                         // Release: start the Z80 fresh from its reset vector.
                         if (sound_reset_asserted_) {
                             sound_cpu_.reset(chips::reset_kind::power_on);
                             sound_cpu_.set_irq_line(false);
                             sound_cycle_debt_ = 0;
+                            sound_cycle_accum_ = 0U;
                             qsound_irq_line_ = false;
                             qsound_irq_accum_ = 0U;
                         }
@@ -198,6 +286,8 @@ namespace mnemos::manifests::capcom_cps2 {
                         sound_reset_asserted_ = true;
                         sound_cpu_.reset(chips::reset_kind::power_on);
                         sound_cpu_.set_irq_line(false);
+                        sound_cycle_debt_ = 0;
+                        sound_cycle_accum_ = 0U;
                         qsound_irq_line_ = false;
                         qsound_irq_accum_ = 0U;
                     }
@@ -223,14 +313,17 @@ namespace mnemos::manifests::capcom_cps2 {
         for (std::size_t base = 0U; base + gfx_bank_bytes <= gfx.size(); base += gfx_bank_bytes) {
             unshuffle_gfx_units(std::span<std::uint8_t>(gfx).subspan(base, gfx_bank_bytes));
         }
+        video_.set_zero_layer_control_defaults(false);
         video_.attach_gfx(std::span<const std::uint8_t>(gfx));
         video_.attach_video_ram(std::span<const std::uint8_t>(video_ram_));
         video_.attach_object_ram(std::span<const std::uint8_t>(object_ram_));
 
         main_cpu.attach_bus(main_bus);
-        main_cpu.set_irq_ack_callback([this](int /*level*/) {
+        main_cpu.set_irq_ack_callback([this](int level) {
             main_cpu.set_irq_level(0);
-            ++vblank_irq_acked_;
+            if (level == m68k_vblank_irq_level) {
+                ++vblank_irq_acked_;
+            }
         });
         // Reset reads the vector ($0 SSP / $4 PC) through the opcode path, so on a
         // keyed board it boots from the decrypted image.
@@ -251,7 +344,11 @@ namespace mnemos::manifests::capcom_cps2 {
         sound_bus_.map_mmio(
             z80_bank_base, z80_bank_window,
             [this, rom_span](std::uint32_t address) -> std::uint8_t {
-                const std::uint32_t rom_addr = z80_bank_rom_base +
+                const std::uint32_t bank_base = sound_bank_rom_base();
+                if (bank_base == 0xFFFFFFFFU) {
+                    return 0xFFU;
+                }
+                const std::uint32_t rom_addr = bank_base +
                                                (sound_bank_ & z80_bank_mask) * z80_bank_window +
                                                (address - z80_bank_base);
                 return rom_addr < rom_span.size() ? rom_span[rom_addr] : 0xFFU;
@@ -288,6 +385,16 @@ namespace mnemos::manifests::capcom_cps2 {
         qdsp_.set_sample_rom(std::span<const std::uint8_t>(region(roms, "qsound")));
     }
 
+    std::uint32_t cps2_system::sound_bank_rom_base() const noexcept {
+        if (sound_rom_size_ <= z80_rom_window) {
+            return 0xFFFFFFFFU;
+        }
+        return sound_rom_size_ >= z80_qsound_cpu_rom_region_size ||
+                       sound_rom_size_ > 0x20000U
+                   ? z80_bank_rom_base_large
+                   : z80_bank_rom_base_small;
+    }
+
     common::rom_set_decl cps2_rom_skeleton(std::string set_name) {
         common::rom_set_decl decl;
         decl.name = std::move(set_name);
@@ -303,7 +410,7 @@ namespace mnemos::manifests::capcom_cps2 {
         if (!executable_) {
             return;
         }
-        // The 68K (~11.8 MHz) drives; the sound Z80 (~8 MHz) catches up at the clock
+        // The 68K (16 MHz) drives; the sound Z80 (8 MHz) catches up at the clock
         // ratio when out of reset, and the DSP advances with it. The Z80 sound
         // driver does its work in the 250 Hz DL-1425 /INT handler, so the loop
         // pulses that interrupt (raise on the period, release on the accept edge --
@@ -314,8 +421,13 @@ namespace mnemos::manifests::capcom_cps2 {
             const std::uint64_t step = spent > 0 ? static_cast<std::uint64_t>(spent) : 1U;
             ran += step;
             if (sound_rom_size_ != 0U && !sound_reset_asserted_) {
-                // Z80 cycles owed ~= 68K cycles * 8 / 12 (11.8/8 ratio).
-                sound_cycle_debt_ += static_cast<std::int64_t>(step) * 8 / 12;
+                // Z80 cycles owed = 68K cycles * 8 MHz / 16 MHz. Keep the
+                // fractional remainder so the long-run cadence does not drift
+                // toward an approximate 2:3 ratio.
+                sound_cycle_accum_ += step * static_cast<std::uint64_t>(qsound_z80_clock_hz);
+                const std::uint64_t due = sound_cycle_accum_ / m68k_clock_hz;
+                sound_cycle_accum_ -= due * m68k_clock_hz;
+                sound_cycle_debt_ += static_cast<std::int64_t>(due);
                 while (sound_cycle_debt_ > 0) {
                     const bool ack_possible = qsound_irq_line_ && sound_cpu_.iff1();
                     sound_cpu_.set_irq_line(qsound_irq_line_);
@@ -353,6 +465,23 @@ namespace mnemos::manifests::capcom_cps2 {
         return static_cast<std::uint32_t>(reg) * 256U;
     }
 
+    std::uint32_t cps2_system::object_ram_base_from_reg(std::uint16_t reg) const noexcept {
+        const std::uint32_t addr = static_cast<std::uint32_t>(reg) << 8U;
+        if (addr >= object_ram_base && addr < object_ram_base + object_ram_size) {
+            return addr - object_ram_base;
+        }
+        return static_cast<std::uint32_t>(reg) * 256U;
+    }
+
+    std::uint32_t cps2_system::object_ram_base_aligned(std::uint16_t reg,
+                                                       std::uint32_t boundary) const noexcept {
+        std::uint32_t base = object_ram_base_from_reg(reg);
+        if (boundary > 1U) {
+            base &= ~(boundary - 1U);
+        }
+        return base;
+    }
+
     std::uint32_t cps2_system::video_ram_base_aligned(std::uint16_t reg,
                                                       std::uint32_t boundary) const noexcept {
         std::uint32_t base = video_ram_base_from_reg(reg);
@@ -366,7 +495,12 @@ namespace mnemos::manifests::capcom_cps2 {
         // CPS-2 stores sprites in the dedicated $700000 object-RAM window; the
         // object bank latch selects the active 0x2000-byte object table. The
         // sprite x/y coordinate base comes from control regs 0x08/0x0A.
-        video_.set_object_base(static_cast<std::uint32_t>(object_bank_ & 1U) * object_bank_bytes);
+        const std::uint32_t bank_base =
+            static_cast<std::uint32_t>(object_bank_ & 1U) * object_bank_bytes;
+        const std::uint32_t table_offset =
+            object_ram_base_aligned(cps_a_regs_[cps_a_obj_base], object_base_align) &
+            (object_bank_bytes - 1U);
+        video_.set_object_base(bank_base + table_offset);
         video_.set_sprite_offsets(control_reg_word(0x08U), control_reg_word(0x0AU));
         // Priority compositor input: the object priority-control word (control reg
         // 0x04). Scroll layer enable comes from the CPS-B layer-control word.
@@ -399,13 +533,105 @@ namespace mnemos::manifests::capcom_cps2 {
             (static_cast<std::uint16_t>(control_regs_[offset]) << 8U) | control_regs_[offset + 1U]);
     }
 
+    void cps2_system::set_analog_dial(std::uint8_t player, std::uint16_t value) noexcept {
+        if (player >= analog_dial_.size()) {
+            return;
+        }
+        const std::uint16_t mask =
+            analog_input_mode_ == cps2_analog_input_mode::puzz_loop_2 ? 0x00FFU : 0x0FFFU;
+        analog_dial_[player] = static_cast<std::uint16_t>(value & mask);
+    }
+
+    std::uint16_t cps2_system::analog_dial(std::uint8_t player) const noexcept {
+        return player < analog_dial_.size() ? analog_dial_[player] : 0U;
+    }
+
+    std::uint64_t cps2_system::coin_counter(std::uint8_t slot) const noexcept {
+        return slot < coin_counters_.size() ? coin_counters_[slot] : 0U;
+    }
+
+    bool cps2_system::coin_lockout(std::uint8_t slot) const noexcept {
+        return slot < coin_lockouts_.size() ? coin_lockouts_[slot] : false;
+    }
+
+    void cps2_system::update_coin_outputs(std::uint8_t value) noexcept {
+        for (std::uint8_t i = 0U; i < coin_counters_.size(); ++i) {
+            if (i == 1U && analog_input_mode_ == cps2_analog_input_mode::puzz_loop_2) {
+                continue; // bit 1 selects stick/paddle reads on Puzz Loop 2.
+            }
+            const bool line = ((value >> i) & 1U) != 0U;
+            if (line && !coin_counter_lines_[i]) {
+                ++coin_counters_[i];
+            }
+            coin_counter_lines_[i] = line;
+        }
+        for (std::uint8_t i = 0U; i < coin_lockouts_.size(); ++i) {
+            const bool bit = ((value >> (4U + i)) & 1U) != 0U;
+            coin_lockouts_[i] = params.coin_lockout_active_high ? bit : !bit;
+        }
+    }
+
+    void cps2_system::update_ecofighters_dial_direction() noexcept {
+        for (std::size_t i = 0U; i < analog_dial_.size(); ++i) {
+            const std::uint16_t dial = static_cast<std::uint16_t>(analog_dial_[i] & 0x0FFFU);
+            const std::uint16_t last =
+                static_cast<std::uint16_t>(ecofighters_dial_last_[i] & 0x0FFFU);
+            if ((dial & 0x0800U) == (last & 0x0800U)) {
+                ecofighters_dial_direction_[i] = dial > last ? 1U : 0U;
+            } else if ((dial & 0x0800U) > (last & 0x0800U)) {
+                ecofighters_dial_direction_[i] = 0U;
+            } else {
+                ecofighters_dial_direction_[i] = 1U;
+            }
+            ecofighters_dial_last_[i] = dial;
+        }
+    }
+
+    std::uint16_t cps2_system::input0_read_word(bool side_effects) {
+        switch (analog_input_mode_) {
+        case cps2_analog_input_mode::puzz_loop_2:
+            if (read_paddle_) {
+                return input0;
+            }
+            return static_cast<std::uint16_t>((analog_dial_[0] & 0x00FFU) |
+                                              ((analog_dial_[1] & 0x00FFU) << 8U));
+        case cps2_analog_input_mode::eco_fighters: {
+            const bool spinners_enabled = (input1 & 0x0010U) == 0U;
+            if (!read_paddle_ || !spinners_enabled) {
+                std::uint16_t word = input0;
+                if (spinners_enabled) {
+                    word = static_cast<std::uint16_t>(word & 0xDFDFU);
+                    word = static_cast<std::uint16_t>(
+                        word |
+                        (static_cast<std::uint16_t>(ecofighters_dial_direction_[0] & 1U) << 5U) |
+                        (static_cast<std::uint16_t>(ecofighters_dial_direction_[1] & 1U)
+                         << 13U));
+                }
+                return word;
+            }
+            const std::uint16_t word = static_cast<std::uint16_t>(
+                (analog_dial_[0] & 0x00FFU) | ((analog_dial_[1] & 0x00FFU) << 8U));
+            if (side_effects) {
+                update_ecofighters_dial_direction();
+            }
+            return word;
+        }
+        case cps2_analog_input_mode::none:
+        default:
+            return input0;
+        }
+    }
+
     std::uint32_t cps2_system::palette_source() const noexcept {
         const std::uint16_t reg = cps_a_regs_[cps_a_palette_base];
         return video_ram_base_from_reg(reg) & ~(palette_page_bytes - 1U);
     }
 
+    std::uint16_t cps2_system::palette_control() const noexcept {
+        return cps_reg_word(cps_b_file_offset, cps_b_palette_control_word);
+    }
+
     void cps2_system::run_frame() {
-        constexpr std::uint64_t cpu_cycles_per_frame = m68k_clock_hz / frame_rate_hz;
         constexpr std::uint32_t frame_lines = 262U; // total scanlines
         constexpr std::uint32_t visible_lines = chips::video::cps2_video::visible_height;
         constexpr std::uint64_t cpu_visible = cpu_cycles_per_frame * visible_lines / frame_lines;
@@ -416,15 +642,168 @@ namespace mnemos::manifests::capcom_cps2 {
             }
         };
 
-        // Run the visible field, then at vblank latch the CPS-A state, render the
-        // frame from the current palette source, and raise the level-2 IRQ the game
+        // Run the visible field, then at vblank latch the CPS-A/object state,
+        // render the frame from those latches, and raise the level-2 IRQ the game
         // services during vblank.
         run_main(cpu_visible);
         push_cps_a_to_video();
-        video_.render(palette_source(), palette_control_default);
-        main_cpu.set_irq_level(2);
+        video_.latch_objects();
+        video_.render(palette_source(), palette_control());
+        main_cpu.set_irq_level(m68k_vblank_irq_level);
         ++vblank_irq_raised_;
         run_main(cpu_cycles_per_frame - cpu_visible);
+    }
+
+    void cps2_system::save_state(chips::state_writer& writer) const {
+        writer.u32(cps2_system_state_version);
+        writer.boolean(executable_);
+        writer.u32(sound_rom_size_);
+
+        main_cpu.save_state(writer);
+        sound_cpu_.save_state(writer);
+        qdsp_.save_state(writer);
+        video_.save_state(writer);
+        eeprom_.save_state(writer);
+
+        writer.bytes(std::span<const std::uint8_t>(work_ram_));
+        writer.bytes(std::span<const std::uint8_t>(video_ram_));
+        writer.bytes(std::span<const std::uint8_t>(object_ram_));
+        writer.bytes(std::span<const std::uint8_t>(extra_ram_));
+        writer.bytes(std::span<const std::uint8_t>(control_regs_));
+        writer.bytes(std::span<const std::uint8_t>(extra_control_));
+        writer.bytes(std::span<const std::uint8_t>(cps_regs_));
+        for (const std::uint16_t value : cps_a_regs_) {
+            writer.u16(value);
+        }
+        writer.u8(object_bank_);
+        writer.u64(vblank_irq_raised_);
+        writer.u64(vblank_irq_acked_);
+        writer.u16(input0);
+        writer.u16(input1);
+        writer.u16(input_sys);
+        writer.bytes(std::span<const std::uint8_t>(development_dips_));
+        writer.u8(static_cast<std::uint8_t>(analog_input_mode_));
+        writer.boolean(read_paddle_);
+        for (const std::uint16_t value : analog_dial_) {
+            writer.u16(value);
+        }
+        for (const std::uint16_t value : ecofighters_dial_last_) {
+            writer.u16(value);
+        }
+        for (const std::uint8_t value : ecofighters_dial_direction_) {
+            writer.u8(value);
+        }
+        for (const std::uint64_t value : coin_counters_) {
+            writer.u64(value);
+        }
+        for (const bool value : coin_counter_lines_) {
+            writer.boolean(value);
+        }
+        for (const bool value : coin_lockouts_) {
+            writer.boolean(value);
+        }
+
+        writer.bytes(std::span<const std::uint8_t>(qsound_shared_ram_));
+        writer.bytes(std::span<const std::uint8_t>(z80_ram_));
+        writer.bytes(std::span<const std::uint8_t>(qsound_work_ram_));
+        writer.u8(sound_bank_);
+        writer.boolean(sound_reset_asserted_);
+        writer.u64(static_cast<std::uint64_t>(sound_cycle_debt_));
+        writer.u64(sound_cycle_accum_);
+        writer.boolean(qsound_irq_line_);
+        writer.u32(qsound_irq_accum_);
+    }
+
+    void cps2_system::load_state(chips::state_reader& reader) {
+        const std::uint32_t version = reader.u32();
+        if (version < 1U || version > cps2_system_state_version) {
+            reader.fail();
+            return;
+        }
+
+        const bool saved_executable = reader.boolean();
+        const std::uint32_t saved_sound_rom_size = reader.u32();
+        if (saved_executable != executable_ || saved_sound_rom_size != sound_rom_size_) {
+            reader.fail();
+            return;
+        }
+
+        main_cpu.load_state(reader);
+        sound_cpu_.load_state(reader);
+        qdsp_.load_state(reader);
+        video_.load_state(reader);
+        eeprom_.load_state(reader);
+
+        reader.bytes(std::span<std::uint8_t>(work_ram_));
+        reader.bytes(std::span<std::uint8_t>(video_ram_));
+        reader.bytes(std::span<std::uint8_t>(object_ram_));
+        reader.bytes(std::span<std::uint8_t>(extra_ram_));
+        reader.bytes(std::span<std::uint8_t>(control_regs_));
+        reader.bytes(std::span<std::uint8_t>(extra_control_));
+        reader.bytes(std::span<std::uint8_t>(cps_regs_));
+        for (std::uint16_t& value : cps_a_regs_) {
+            value = reader.u16();
+        }
+        object_bank_ = reader.u8();
+        vblank_irq_raised_ = reader.u64();
+        vblank_irq_acked_ = reader.u64();
+        input0 = reader.u16();
+        input1 = reader.u16();
+        input_sys = reader.u16();
+        if (version >= 3U) {
+            reader.bytes(std::span<std::uint8_t>(development_dips_));
+        } else {
+            development_dips_.fill(0xFFU);
+        }
+        if (version >= 4U) {
+            const std::uint8_t saved_analog_mode = reader.u8();
+            if (!valid_analog_input_mode(saved_analog_mode) ||
+                static_cast<cps2_analog_input_mode>(saved_analog_mode) != analog_input_mode_) {
+                reader.fail();
+                return;
+            }
+            read_paddle_ = reader.boolean();
+            for (std::uint16_t& value : analog_dial_) {
+                value = reader.u16();
+            }
+            for (std::uint16_t& value : ecofighters_dial_last_) {
+                value = reader.u16();
+            }
+            for (std::uint8_t& value : ecofighters_dial_direction_) {
+                value = reader.u8();
+            }
+        } else {
+            read_paddle_ = false;
+            analog_dial_.fill(0U);
+            ecofighters_dial_last_.fill(0U);
+            ecofighters_dial_direction_.fill(0U);
+        }
+        if (version >= 5U) {
+            for (std::uint64_t& value : coin_counters_) {
+                value = reader.u64();
+            }
+            for (bool& value : coin_counter_lines_) {
+                value = reader.boolean();
+            }
+            for (bool& value : coin_lockouts_) {
+                value = reader.boolean();
+            }
+        } else {
+            coin_counters_.fill(0U);
+            coin_counter_lines_.fill(false);
+            coin_lockouts_.fill(false);
+        }
+
+        reader.bytes(std::span<std::uint8_t>(qsound_shared_ram_));
+        reader.bytes(std::span<std::uint8_t>(z80_ram_));
+        reader.bytes(std::span<std::uint8_t>(qsound_work_ram_));
+        sound_bank_ = reader.u8();
+        sound_reset_asserted_ = reader.boolean();
+        sound_cycle_debt_ = static_cast<std::int64_t>(reader.u64());
+        sound_cycle_accum_ = version >= 2U ? reader.u64() : 0U;
+        qsound_irq_line_ = reader.boolean();
+        qsound_irq_accum_ = reader.u32();
+        sound_cpu_.set_irq_line(qsound_irq_line_);
     }
 
 } // namespace mnemos::manifests::capcom_cps2
