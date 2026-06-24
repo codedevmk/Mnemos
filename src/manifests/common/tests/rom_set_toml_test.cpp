@@ -430,6 +430,245 @@ TEST_CASE("rom_set_toml rejects invalid HLE declarations", "[rom_set_toml]") {
     }
 }
 
+TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"gunfront\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"gunfront\"\ntaito_f2_sprite_policy = "
+            "\"banked\"\ntaito_f2_sprite_extension_base = 0xC00000\n"
+            "taito_f2_sprite_extension_size = 0x2000\n"
+            "taito_f2_sprite_buffering = \"partial_delayed\"\n"
+            "taito_f2_palette_format = \"rgbx_444\"\n"
+            "taito_f2_sprite_active_area = \"y_word_bit0\"\n"
+            "taito_f2_sprite_hide_pixels = 3\n"
+            "taito_f2_sprite_flip_hide_pixels = -3\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        REQUIRE(result.value->taito_f2_sprite_policy.has_value());
+        REQUIRE(result.value->taito_f2_sprite_buffering.has_value());
+        REQUIRE(result.value->taito_f2_palette_format.has_value());
+        REQUIRE(result.value->taito_f2_sprite_extension_base.has_value());
+        REQUIRE(result.value->taito_f2_sprite_extension_size.has_value());
+        REQUIRE(result.value->taito_f2_sprite_active_area.has_value());
+        REQUIRE(result.value->taito_f2_sprite_hide_pixels.has_value());
+        REQUIRE(result.value->taito_f2_sprite_flip_hide_pixels.has_value());
+        CHECK(*result.value->taito_f2_map == "gunfront");
+        CHECK(*result.value->taito_f2_sprite_policy == "banked");
+        CHECK(*result.value->taito_f2_sprite_buffering == "partial_delayed");
+        CHECK(*result.value->taito_f2_palette_format == "rgbx_444");
+        CHECK(*result.value->taito_f2_sprite_extension_base == 0xC00000U);
+        CHECK(*result.value->taito_f2_sprite_extension_size == 0x2000U);
+        CHECK(*result.value->taito_f2_sprite_active_area == "y_word_bit0");
+        CHECK(*result.value->taito_f2_sprite_hide_pixels == 3);
+        CHECK(*result.value->taito_f2_sprite_flip_hide_pixels == -3);
+    }
+    SECTION("absent leaves them unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = "
+                                               "\"x\"\n[[region]]\nname = \"maincpu\"\nsize = "
+                                               "0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->taito_f2_map.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_policy.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_buffering.has_value());
+        CHECK_FALSE(result.value->taito_f2_palette_format.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_extension_base.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_extension_size.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_active_area.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_hide_pixels.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_flip_hide_pixels.has_value());
+    }
+    SECTION("liquid kids map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"liquidk\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"liquidk\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "liquidk");
+    }
+    SECTION("dondoko don map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"dondokod\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"dondokod\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "dondokod");
+    }
+    SECTION("quiz hq map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"quizhq\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"quizhq\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "quizhq");
+    }
+    SECTION("metal black map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"metalb\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"metalb\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "metalb");
+    }
+    SECTION("football champ map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"footchmp\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"footchmp\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "footchmp");
+    }
+    SECTION("dead connection map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"deadconx\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"deadconx\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "deadconx");
+    }
+    SECTION("dino rex map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"dinorex\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"dinorex\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "dinorex");
+    }
+    SECTION("thunder fox map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"thundfox\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"thundfox\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "thundfox");
+    }
+    SECTION("quiz chikyu map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"qzchikyu\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"qzchikyu\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "qzchikyu");
+    }
+    SECTION("quiz torimon map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"qtorimon\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"qtorimon\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "qtorimon");
+    }
+    SECTION("quiz quest map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"qzquest\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"qzquest\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "qzquest");
+    }
+    SECTION("growl map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"growl\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"growl\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "growl");
+    }
+    SECTION("ninja kids map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"ninjak\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"ninjak\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "ninjak");
+    }
+    SECTION("solitary fighter map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"solfigtr\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"solfigtr\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "solfigtr");
+    }
+    SECTION("pulirula map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"pulirula\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"pulirula\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "pulirula");
+    }
+    SECTION("invalid values are rejected") {
+        const auto bad_map = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ntaito_f2_map = "
+            "\"typo\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_map.ok());
+
+        const auto bad_policy = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ntaito_f2_sprite_policy = "
+            "\"typo\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_policy.ok());
+
+        const auto bad_buffering = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_buffering = \"typo\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_buffering.ok());
+
+        const auto bad_palette = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_palette_format = \"typo\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_palette.ok());
+
+        const auto bad_base = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_extension_base = 0x1000000\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_base.ok());
+
+        const auto odd_size = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_extension_base = 0xC00000\n"
+            "taito_f2_sprite_extension_size = 3\n[[region]]\nname = \"maincpu\"\nsize = "
+            "0x100\n");
+        CHECK_FALSE(odd_size.ok());
+
+        const auto size_without_base = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_extension_size = 0x1000\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(size_without_base.ok());
+
+        const auto bad_active_area = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_active_area = \"typo\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_active_area.ok());
+
+        const auto bad_hide = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_hide_pixels = 17\n[[region]]\nname = \"maincpu\"\nsize = "
+            "0x100\n");
+        CHECK_FALSE(bad_hide.ok());
+    }
+}
+
 TEST_CASE("rom_set_toml parses the CPS1 layout keys", "[rom_set_toml]") {
     const auto result = parse_rom_set_decl(R"(
 [set]

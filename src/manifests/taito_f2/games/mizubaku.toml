@@ -1,0 +1,95 @@
+# Mizubaku Daibouken (Japan) -- Taito F2 / C49.
+# Split clone of liquidk: shared dumps resolve from liquidk.zip when present.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "mizubaku"
+board  = "taito_f2"
+parent = "liquidk"
+orientation = "horizontal"
+taito_f2_map = "liquidk"
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_buffering = "partial_delayed"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "c49-09.ic47"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x6ae09eb9
+
+[[region.file]]
+name   = "c49-11.ic48"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x42d2be6e
+
+[[region.file]]
+name   = "c49-10.ic45"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x50bef2e0
+
+[[region.file]]
+name   = "c49-13.ic46"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x2518dbf9
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "c49-03.ic76"
+offset = 0x00000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0xc3364f9b
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "c49-01.ic54"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x67cc3163
+
+[[region.file]]
+name   = "c49-02.ic53"
+offset = 0x80000
+size   = 0x80000
+crc32  = 0xd2400710
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c49-08.ic32"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x413c310c
+
+[[region]]
+name = "adpcma"
+size = 0x80000
+
+[[region.file]]
+name   = "c49-04.ic33"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x474d45a4

@@ -1,0 +1,104 @@
+# Don Doko Don (World) -- Taito F2 / B95.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0100SCN SCR
+# dump, "sprites" maps TC0200OBJ object graphics, "roz" maps the TC0280GRD
+# pivot graphics, and YM2610 ADPCM-A is "adpcma". This set has no Delta-T
+# sample region.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "dondokod"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "dondokod"
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_buffering = "partial_delayed"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "b95-12.bin"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xd0fce87a
+
+[[region.file]]
+name   = "b95-11-1.bin"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xdad40cd3
+
+[[region.file]]
+name   = "b95-10.bin"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xa46e1f0b
+
+[[region.file]]
+name   = "b95-14.bin"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x6e4e1351
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "b95-02.bin"
+offset = 0x00000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x67b4e979
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "b95-01.bin"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x51c176ce
+
+[[region]]
+name = "roz"
+size = 0x080000
+
+[[region.file]]
+name   = "b95-03.bin"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x543aa0d1
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "b95-08.bin"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xb5aa49e1
+
+[[region]]
+name = "adpcma"
+size = 0x80000
+
+[[region.file]]
+name   = "b95-04.bin"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0xac4c1716

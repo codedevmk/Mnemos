@@ -1,0 +1,109 @@
+# Dead Connection (World) -- Taito F2 / D28 with TC0480SCP tilemaps and
+# TC0190FMC sprite banking.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0480SCP SCR
+# graphics, "sprites" maps TC0200OBJ object graphics, and "adpcma" maps
+# YM2610 ADPCM-A. This set has no Delta-T sample region.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "deadconx"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "deadconx"
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_policy = "banked"
+taito_f2_sprite_active_area = "y_word_bit0"
+taito_f2_sprite_buffering = "full_delayed"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "d28-06.3"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x5b4bff51
+
+[[region.file]]
+name   = "d28-12.5"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0x9b74e631
+
+[[region.file]]
+name   = "d28-09.2"
+offset = 0x80000
+stride = 2
+size   = 0x40000
+crc32  = 0x143a0cc1
+
+[[region.file]]
+name   = "d28-08.4"
+offset = 0x80001
+stride = 2
+size   = 0x40000
+crc32  = 0x4c872bd9
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "d28-04.16"
+offset = 0x00000
+unit   = 2
+stride = 4
+size   = 0x80000
+crc32  = 0xdcabc26b
+
+[[region.file]]
+name   = "d28-05.17"
+offset = 0x00002
+unit   = 2
+stride = 4
+size   = 0x80000
+crc32  = 0x862f9665
+
+[[region]]
+name = "sprites"
+size = 0x200000
+
+[[region.file]]
+name   = "d28-01.8"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x181d7b69
+
+[[region.file]]
+name   = "d28-02.9"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0xd301771c
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "d28-10.6"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x40805d74
+
+[[region]]
+name = "adpcma"
+size = 0x100000
+
+[[region.file]]
+name   = "d28-03.10"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0xa1804b52

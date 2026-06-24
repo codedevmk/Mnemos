@@ -14,6 +14,7 @@ namespace mnemos::apps::player::adapters {
         segacd,
         sega32x,
         irem_m72,
+        taito_f2,
         capcom_cps1,
         capcom_cps2,
         spectrum,
@@ -24,9 +25,9 @@ namespace mnemos::apps::player::adapters {
 
     // Map a `--system` name to its family. The accepted names are exactly the
     // adapter-registry family ids -- genesis, sms, gg, c64, segacd, sega32x,
-    // irem_m72, cps1, cps2, spectrum, nes, msx, amiga500 -- case-insensitive.
-    // nullopt for anything else. The engine is always chosen by this name, never
-    // inferred from the ROM filename.
+    // irem_m72, taito_f2, cps1, cps2, spectrum, nes, msx, amiga500 --
+    // case-insensitive. nullopt for anything else. The engine is always chosen by
+    // this name, never inferred from the ROM filename.
     [[nodiscard]] std::optional<system_family> family_from_name(const std::string& name) noexcept;
 
     // The adapter-registry id for `family` ("genesis", "sms", ...).

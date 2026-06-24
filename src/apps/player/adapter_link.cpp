@@ -12,6 +12,7 @@
 #include "segacd_adapter.hpp"
 #include "sms_adapter.hpp"
 #include "spectrum_adapter.hpp"
+#include "taito_f2_adapter.hpp"
 
 namespace mnemos::apps::player {
 
@@ -22,6 +23,7 @@ namespace mnemos::apps::player {
         adapters::segacd::force_link();
         adapters::sega32x::force_link();
         adapters::irem_m72::force_link();
+        adapters::taito_f2::force_link();
         adapters::capcom_cps1::force_link();
         adapters::capcom_cps2::force_link();
         adapters::spectrum::force_link();

@@ -1,0 +1,92 @@
+# Quiz Torimonochou (Japan) -- Taito F2 / C41 with TC0110PCR palette and
+# shifted TC0220IOC/sound windows.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" is empty because this
+# board reads 1bpp text definitions from the 68000 program region, "sprites"
+# maps TC0200OBJ object graphics, and "adpcma" maps YM2610 ADPCM-A samples.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "qtorimon"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "qtorimon"
+taito_f2_palette_format = "xbgr_555"
+taito_f2_sprite_buffering = "partial_delayed"
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "c41-04.bin"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x0fbf5223
+
+[[region.file]]
+name   = "c41-05.bin"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x174bd5db
+
+[[region.file]]
+name   = "mask-51.bin"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x12e14aca
+
+[[region.file]]
+name   = "mask-52.bin"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xb3ef66f3
+
+[[region]]
+name = "tiles"
+size = 0x100000
+fill = 0xFF
+
+[[region]]
+name = "sprites"
+size = 0x040000
+
+[[region.file]]
+name   = "c41-02.bin"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x05dcd36d
+
+[[region.file]]
+name   = "c41-01.bin"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x39ff043c
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c41-06.bin"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x753a98d8
+
+[[region]]
+name = "adpcma"
+size = 0x080000
+
+[[region.file]]
+name   = "c41-03.bin"
+offset = 0x000000
+size   = 0x020000
+crc32  = 0xb2c18e89
