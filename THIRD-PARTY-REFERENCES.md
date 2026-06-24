@@ -25,6 +25,7 @@ expected end state. None of these corpora are committed.
 | Public per-instruction 8088/V20 test corpus (one JSON or gzipped JSON file per opcode, initial/final register + RAM images; the corpus metadata.json drives per-opcode flag masks) | `v30_singlestep_test` | `MNEMOS_V30_TESTS_DIR` |
 | Public per-instruction **SH4** single-step corpus (one JSON file per encoding, four-instruction frame, initial/final register + memory) — used as a _functional_ cross-check for the shared SH-2/SH-4 integer ISA | `mnemos_chips_cpu_sh2_conformance_test` | `MNEMOS_SH2_TESTS_DIR` |
 | **ZEXALL-SMS** — Z80 instruction exerciser as a Sega Master System ROM (renders to the SMS VDP / SDSC console) | _SMS-native; no committed harness yet_ | _n/a_ |
+| Capcom CPS2 authentic ROM/key zip corpus (copyrighted game data; never committed) | `scripts/cps2/run-corpus-smoke.ps1` | `MNEMOS_CPS2_ROM`, `MNEMOS_CPS2_SET_DIR`, `MNEMOS_CPS2_EXTRA_ROMS` |
 
 These corpora are the de-facto standard for verifying 8-/16-bit CPU cores; we
 acknowledge their authors' work in producing and maintaining them.
@@ -129,6 +130,17 @@ multiple independent open-source implementations.
   adapted from sibling first-party projects"), restructured into Mnemos style, and
   cross-checked against the reference's output as a golden vector in its unit test.
   The BSD-3-Clause attribution above is retained here per that license.
+- **Capcom CPS2 video, board glue, and QSound behaviour** — the CPS-2-specific
+  object-RAM banking, graphics unshuffle, layer/sprite priority composition,
+  input/service/test switch bits, coin counter/lockout output behaviour,
+  per-game digital, ticket-dispenser, and spinner/paddle input profile variants,
+  EEPROM pins, QSound sound-CPU map, and DL-1425 PCM/ADPCM/echo mixer behaviour
+  were re-expressed in Mnemos C++ using the author's first-party Emu CPS2 core as the
+  behavioural reference and cross-checked against MAME as an independent
+  black-box reference. The QSound DSP is intentionally modelled at the
+  behavioural mixer level rather than as a DSP16 instruction core; that HLE
+  status is declared in the CPS2 manifests. No third-party emulator source is
+  vendored.
 
 ## Cross-check emulators
 

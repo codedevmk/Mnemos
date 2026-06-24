@@ -20,8 +20,8 @@ namespace mnemos::peripheral {
     // peripheral devices (tier 2) can both reference the same shape without
     // a tier inversion. A peripheral consumes the subset of fields its
     // hardware exposes and ignores the rest -- a 3-button pad reads only
-    // u/d/l/r/a/b/c/start; a mouse reads dx/dy/buttons; a lightgun reads
-    // aim_x/aim_y/trigger; etc.
+    // u/d/l/r/a/b/c/start; an arcade panel may read coin/service/test; a mouse
+    // reads dx/dy/buttons; a lightgun reads aim_x/aim_y/trigger; etc.
     struct controller_state final {
         bool up{};
         bool down{};
@@ -36,6 +36,9 @@ namespace mnemos::peripheral {
         bool y{};
         bool z{};
         bool mode{};
+        bool service{}; // arcade service credit / service switch
+        bool test{};    // arcade operator test/menu switch
+        std::uint16_t paddle{}; // rotary paddle/dial absolute position, board-masked
         // Lightgun / pointer fields (Zapper, Menacer, ...): the aimed screen pixel
         // in the system's native framebuffer coordinates and the trigger. Analog
         // devices reuse aim_x/aim_y as normalized 0..255 axis positions, with -1

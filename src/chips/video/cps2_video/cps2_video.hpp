@@ -63,7 +63,8 @@ namespace mnemos::chips::video {
         // The tile/sprite graphics ROM (the source for tile_pixel).
         void attach_gfx(std::span<const std::uint8_t> gfx) noexcept { gfx_ = gfx; }
         // The object/sprite RAM (the board's $700000 window); the active bank is
-        // selected by set_object_base. Non-owning.
+        // selected by set_object_base. Non-owning. Sprites render from the vblank
+        // latch, not this live RAM span.
         void attach_object_ram(std::span<const std::uint8_t> object_ram) noexcept {
             object_ram_ = object_ram;
         }
@@ -76,6 +77,10 @@ namespace mnemos::chips::video {
         // The object priority-control word (CPS-2 control reg 0x04) -- drives the
         // sprite-vs-layer priority masks.
         void set_object_priority(std::uint16_t value) noexcept { object_priority_ = value; }
+        // Latch the selected object-RAM bank and priority-control word for the next
+        // sprite draw. CPS-2 hardware snapshots this table at vblank; live writes
+        // after the latch are not visible until the following latch.
+        void latch_objects() noexcept;
 
         // Map a layer's graphics code to a tile index in the gfx ROM. Returns false
         // (no tile) for an out-of-bank code or when no gfx is attached.
@@ -108,7 +113,8 @@ namespace mnemos::chips::video {
         // Decode the per-slot scroll-layer ids (raw, pre-collapse) from the control
         // word; a zero control word uses the default order.
         static void decode_layer_control(std::uint16_t layer_control,
-                                         std::array<int, 4>& raw_layers) noexcept;
+                                         std::array<int, 4>& raw_layers,
+                                         bool default_when_zero = true) noexcept;
         // Collapse the raw layers to the 3 drawn slots and build the per-priority
         // sprite-vs-layer masks (transcribed from the reference).
         static void build_sprite_priority_masks(
@@ -155,6 +161,11 @@ namespace mnemos::chips::video {
         // CPS-A video-control register (bit 15 = flip screen).
         void set_video_control(std::uint16_t value) noexcept { video_control_ = value; }
         void set_display_enable(bool enabled) noexcept { display_enabled_ = enabled; }
+        // Bare video-chip tests have no ROM-backed CPS-B register stream and use
+        // the reference's synthetic no-ROM default order; real CPS-2 boards do not.
+        void set_zero_layer_control_defaults(bool enabled) noexcept {
+            zero_layer_control_defaults_ = enabled;
+        }
         [[nodiscard]] bool flip_screen() const noexcept { return (video_control_ & 0x8000U) != 0U; }
 
       private:
@@ -184,6 +195,8 @@ namespace mnemos::chips::video {
         static constexpr std::uint16_t layer_enable_scroll1 = 0x02U;
         static constexpr std::uint16_t layer_enable_scroll2 = 0x04U;
         static constexpr std::uint16_t layer_enable_scroll3 = 0x08U;
+        static constexpr std::uint16_t video_enable_scroll2 = 0x0004U;
+        static constexpr std::uint16_t video_enable_scroll3 = 0x0008U;
         // Object/sprite RAM: one bank is 0x2000 bytes of 8-byte entries; sprites
         // are positioned in a 512x256 full-screen space clipped to the visible
         // window.
@@ -217,7 +230,7 @@ namespace mnemos::chips::video {
         void draw_scroll2(std::uint8_t priority) noexcept;
         void draw_scroll3(std::uint8_t priority) noexcept;
 
-        // The big-endian word at `offset` in the active object-RAM bank.
+        // The big-endian word at `offset` in the latched object-RAM bank.
         [[nodiscard]] std::uint16_t object_read16(std::uint32_t offset) const noexcept;
         // Count the live sprite entries (stop at a terminator / past the bank).
         [[nodiscard]] std::uint32_t find_sprite_count() const noexcept;
@@ -242,6 +255,8 @@ namespace mnemos::chips::video {
         std::span<const std::uint8_t> video_ram_{};
         std::span<const std::uint8_t> gfx_{};
         std::span<const std::uint8_t> object_ram_{};
+        std::vector<std::uint8_t> object_render_ram_ =
+            std::vector<std::uint8_t>(object_bank_bytes, 0xFFU);
         std::array<std::uint8_t, palette_bytes> palette_ram_{};
         static constexpr std::size_t pixel_count =
             static_cast<std::size_t>(visible_width) * visible_height;
@@ -268,8 +283,10 @@ namespace mnemos::chips::video {
         bool rowscroll_enabled_{};
         std::uint16_t video_control_{};
         bool display_enabled_{true};
+        bool zero_layer_control_defaults_{true};
         std::uint16_t sprite_x_base_{}, sprite_y_base_{};
         std::uint16_t object_priority_{};
+        std::uint16_t object_priority_latch_{};
         std::array<std::uint16_t, cps_b_reg_count> cps_b_regs_{};
 
         std::uint64_t frame_index_{};

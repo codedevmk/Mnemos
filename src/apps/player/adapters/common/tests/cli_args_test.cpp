@@ -16,6 +16,7 @@ namespace {
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
+    using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_msx2_arg;
@@ -24,6 +25,7 @@ namespace {
     using mnemos::apps::player::adapters::parse_rom_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_rtc_arg;
+    using mnemos::apps::player::adapters::parse_save_state_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
 
@@ -169,6 +171,39 @@ TEST_CASE("cli_args: --frames alone (no --screenshot) returns nullopt") {
     CHECK(parse_screenshot_args(a.argc(), a.argv.data()) == std::nullopt);
 }
 
+TEST_CASE("cli_args: --save-state accepts an output path and optional frame count") {
+    auto a = make_argv({"player", "--save-state", "scratch/slot0.mns"});
+    const auto boot_req = parse_save_state_args(a.argc(), a.argv.data());
+    REQUIRE(boot_req.has_value());
+    CHECK(boot_req->path == "scratch/slot0.mns");
+    CHECK(boot_req->frames == 0U);
+
+    auto b = make_argv({"player", "--save-state", "scratch/slot1.mns", "--frames", "120"});
+    const auto stepped_req = parse_save_state_args(b.argc(), b.argv.data());
+    REQUIRE(stepped_req.has_value());
+    CHECK(stepped_req->path == "scratch/slot1.mns");
+    CHECK(stepped_req->frames == 120U);
+}
+
+TEST_CASE("cli_args: --save-state rejects missing and option-shaped paths") {
+    auto missing = make_argv({"player", "--save-state"});
+    CHECK(parse_save_state_args(missing.argc(), missing.argv.data()) == std::nullopt);
+
+    auto option = make_argv({"player", "--save-state", "--frames", "60"});
+    CHECK(parse_save_state_args(option.argc(), option.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --load-state accepts only a concrete path") {
+    auto a = make_argv({"player", "--load-state", "scratch/slot0.mns"});
+    REQUIRE(parse_load_state_arg(a.argc(), a.argv.data()) == "scratch/slot0.mns");
+
+    auto missing = make_argv({"player", "--load-state"});
+    CHECK(parse_load_state_arg(missing.argc(), missing.argv.data()) == std::nullopt);
+
+    auto option = make_argv({"player", "--load-state", "--screenshot", "out.ppm"});
+    CHECK(parse_load_state_arg(option.argc(), option.argv.data()) == std::nullopt);
+}
+
 TEST_CASE("cli_args: neither --screenshot nor --frames returns nullopt") {
     auto a = make_argv({"player", "--rom", "x.bin"});
     CHECK(parse_screenshot_args(a.argc(), a.argv.data()) == std::nullopt);
@@ -310,6 +345,39 @@ TEST_CASE("cli_args: input_for_frame combines overlapping events") {
     const auto at20p2 = input_for_frame(ev, 20U, 1U);
     CHECK(at20p2.right);
     CHECK_FALSE(at20p2.b); // b's 2-frame window (16,17) has passed
+}
+
+TEST_CASE("cli_args: input_for_frame exposes arcade service and test events") {
+    auto a = make_argv({"player", "--press", "service@5+2", "--press", "test@6+3"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+    REQUIRE(ev.size() == 2U);
+    CHECK(ev[0].button == "service");
+    CHECK(ev[1].button == "test");
+
+    CHECK(input_for_frame(ev, 5U).service);
+    CHECK_FALSE(input_for_frame(ev, 5U).test);
+    const auto at6 = input_for_frame(ev, 6U);
+    CHECK(at6.service);
+    CHECK(at6.test);
+    CHECK_FALSE(input_for_frame(ev, 9U).test);
+}
+
+TEST_CASE("cli_args: input_for_frame exposes analog paddle events") {
+    auto a = make_argv({"player", "--press", "paddle=0x123@4+2", "--press", "dial=42@7"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+    REQUIRE(ev.size() == 2U);
+    CHECK(ev[0].button == "paddle");
+    REQUIRE(ev[0].paddle_value.has_value());
+    CHECK(*ev[0].paddle_value == 0x0123U);
+    CHECK(ev[1].button == "paddle");
+    REQUIRE(ev[1].paddle_value.has_value());
+    CHECK(*ev[1].paddle_value == 42U);
+
+    CHECK(input_for_frame(ev, 3U).paddle == 0U);
+    CHECK(input_for_frame(ev, 4U).paddle == 0x0123U);
+    CHECK(input_for_frame(ev, 5U).paddle == 0x0123U);
+    CHECK(input_for_frame(ev, 6U).paddle == 0U);
+    CHECK(input_for_frame(ev, 7U).paddle == 42U);
 }
 
 TEST_CASE("cli_args: input_for_frame with no events is all-released") {

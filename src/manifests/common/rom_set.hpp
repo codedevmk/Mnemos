@@ -86,6 +86,10 @@ namespace mnemos::manifests::common {
         std::vector<rom_set_dip_option> options;
     };
 
+    // Explicit high-level emulation substitution. The constitution requires every
+    // non-cycle-accurate/HLE chip path to be visible in the manifest rather than
+    // hidden in a board implementation. `profile` is optional (empty when the
+    // substitution needs no profile id, e.g. CPS2 sets).
     struct rom_set_hle_decl final {
         std::string chip;
         std::string profile;
@@ -111,6 +115,12 @@ namespace mnemos::manifests::common {
         // Display orientation (default horizontal); the frontend rotates a
         // vertical set's framebuffer for upright presentation.
         screen_orientation orientation{screen_orientation::horizontal};
+        // Local player panel count exposed by the board/cabinet. Arcade boards
+        // default to two panels unless a set declares a dedicated 3P/4P layout.
+        std::uint8_t players{2U};
+        // Optional board-interpreted input/cabinet wiring profile. CPS2 uses this
+        // to distinguish six-button fighters from cabinets that repurpose IN1.
+        std::optional<std::string> input;
         // Sprite-list draw order (default ascending); a few bootleg sets relocate
         // the object list and declare "descending". Board-interpreted (capcom_cps1).
         sprite_draw_order sprite_order{sprite_draw_order::ascending};

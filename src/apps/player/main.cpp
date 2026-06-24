@@ -14,6 +14,7 @@
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
+#include "state_file.hpp"
 #include "system_launch.hpp"
 #include "text_overlay.hpp"
 
@@ -187,6 +188,78 @@ namespace {
         }
     }
 
+    [[nodiscard]] const char*
+    load_status_name(mnemos::runtime::load_status status) noexcept {
+        switch (status) {
+        case mnemos::runtime::load_status::ok:
+            return "ok";
+        case mnemos::runtime::load_status::bad_magic:
+            return "bad_magic";
+        case mnemos::runtime::load_status::unsupported_version:
+            return "unsupported_version";
+        case mnemos::runtime::load_status::manifest_mismatch:
+            return "manifest_mismatch";
+        case mnemos::runtime::load_status::truncated:
+            return "truncated";
+        case mnemos::runtime::load_status::bad_crc:
+            return "bad_crc";
+        case mnemos::runtime::load_status::decompress_failed:
+            return "decompress_failed";
+        case mnemos::runtime::load_status::chunk_rejected:
+            return "chunk_rejected";
+        }
+        return "unknown";
+    }
+
+    void save_quick_state(mnemos::frontend_sdk::player_system* system, const std::string& path) {
+        if (system == nullptr || path.empty()) {
+            return;
+        }
+        if (!system->session_capabilities().save_state_supported) {
+            std::fprintf(stderr, "[mnemos_player] save states are not supported by this system\n");
+            std::fflush(stderr);
+            return;
+        }
+        const std::vector<std::uint8_t> bytes = system->save_state();
+        if (bytes.empty() ||
+            !mnemos::apps::player::adapters::save_save_state_file(path, bytes)) {
+            std::fprintf(stderr, "[mnemos_player] quick save failed: %s\n", path.c_str());
+        } else {
+            std::fprintf(stderr, "[mnemos_player] quick saved: %s (%zu bytes)\n", path.c_str(),
+                         bytes.size());
+        }
+        std::fflush(stderr);
+    }
+
+    void load_quick_state(mnemos::frontend_sdk::player_system* system, const std::string& path,
+                          SDL_AudioStream* audio_stream) {
+        if (system == nullptr || path.empty()) {
+            return;
+        }
+        if (!system->session_capabilities().save_state_supported) {
+            std::fprintf(stderr, "[mnemos_player] save states are not supported by this system\n");
+            std::fflush(stderr);
+            return;
+        }
+        const auto bytes = mnemos::apps::player::adapters::load_save_state_file(path);
+        if (!bytes.has_value()) {
+            std::fprintf(stderr, "[mnemos_player] quick load missing: %s\n", path.c_str());
+            std::fflush(stderr);
+            return;
+        }
+        const mnemos::runtime::load_result result = system->load_state(*bytes);
+        if (!result.ok()) {
+            std::fprintf(stderr, "[mnemos_player] quick load failed: %s (%s)\n", path.c_str(),
+                         load_status_name(result.status));
+        } else {
+            if (audio_stream != nullptr) {
+                SDL_ClearAudioStream(audio_stream);
+            }
+            std::fprintf(stderr, "[mnemos_player] quick loaded: %s\n", path.c_str());
+        }
+        std::fflush(stderr);
+    }
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -198,6 +271,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
     using mnemos::apps::player::adapters::parse_light_gun_arg;
+    using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
     using mnemos::apps::player::adapters::parse_msx2_arg;
@@ -205,8 +279,10 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
     using mnemos::apps::player::adapters::parse_rtc_arg;
+    using mnemos::apps::player::adapters::parse_save_state_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
+    using mnemos::apps::player::adapters::state_path_for;
     using mnemos::apps::player::adapters::srm_path_for;
 
     const auto rom_paths = parse_rom_args(argc, argv);
@@ -223,6 +299,8 @@ int main(int argc, char* argv[]) {
     const auto dip_arg = parse_dip_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
+        .save_state = parse_save_state_args(argc, argv),
+        .load_state = parse_load_state_arg(argc, argv),
         .extract_assets = parse_extract_assets_args(argc, argv),
         .extract_audio = parse_extract_audio_args(argc, argv),
         .record_animation = parse_animation_record_args(argc, argv),
@@ -245,6 +323,8 @@ int main(int argc, char* argv[]) {
         return launch.exit_code;
     }
     auto system = std::move(launch.system);
+    const std::string quick_state_path =
+        launch.primary_media_path.empty() ? std::string{} : state_path_for(launch.primary_media_path);
 
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.
@@ -494,6 +574,10 @@ int main(int argc, char* argv[]) {
                     running = false;
                 } else if (event.key.key == SDLK_F12) {
                     dump_requested = true;
+                } else if (event.key.key == SDLK_F5) {
+                    save_quick_state(system.get(), quick_state_path);
+                } else if (event.key.key == SDLK_F9) {
+                    load_quick_state(system.get(), quick_state_path, audio_stream);
                 } else if (event.key.key == SDLK_F11) {
                     fullscreen = !fullscreen;
                     SDL_SetWindowFullscreen(window, fullscreen);
@@ -542,7 +626,8 @@ int main(int argc, char* argv[]) {
         // host keyboard as physical key usages on that port instead.
         //   Keyboard-as-pad: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z
         //             (Genesis 6-button extras), Enter/1 = Start, Backspace/5 =
-        //             Select (arcade coin), LShift/F2 = Mode (arcade service).
+        //             Select (arcade coin), LShift = Mode, 6 = service credit,
+        //             F2 = test switch.
         //   Gamepad : dpad + left stick = dpad, South/East/West = A/B/C,
         //             North = X, L1/R1 = Y/Z, Start/Back = Start/Mode.
         {
@@ -575,8 +660,9 @@ int main(int argc, char* argv[]) {
                 pad.select = key_pressed(keys, key_count, SDL_SCANCODE_BACKSPACE) ||
                              key_pressed(keys, key_count, SDL_SCANCODE_5);
                 pad.mode = key_pressed(keys, key_count, SDL_SCANCODE_LSHIFT) ||
-                           key_pressed(keys, key_count, SDL_SCANCODE_RSHIFT) ||
-                           key_pressed(keys, key_count, SDL_SCANCODE_F2);
+                           key_pressed(keys, key_count, SDL_SCANCODE_RSHIFT);
+                pad.service = key_pressed(keys, key_count, SDL_SCANCODE_6);
+                pad.test = key_pressed(keys, key_count, SDL_SCANCODE_F2);
             }
             merge_gamepad(pad, gamepad);
             if (system) {

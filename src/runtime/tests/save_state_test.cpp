@@ -35,8 +35,11 @@ namespace {
         [[nodiscard]] chips::chip_metadata metadata() const noexcept override { return {}; }
         void tick(std::uint64_t) override {}
         void reset(chips::reset_kind) override {}
-        void save_state(chips::state_writer&) const override {}
-        void load_state(chips::state_reader& r) override { r.fail(); }
+        void save_state(chips::state_writer& w) const override { w.u32(0xBADC0DEU); }
+        void load_state(chips::state_reader& r) override {
+            static_cast<void>(r.u32());
+            r.fail();
+        }
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
             return intro_;
         }
@@ -142,37 +145,32 @@ TEST_CASE("save state skips chunks with no matching target") {
 }
 
 TEST_CASE("save state reports rejected chip and component chunks") {
-    stateful_chip source_chip;
-    source_chip.value = 0x33U;
+    stateful_chip chip;
+    chip.value = 0x1234U;
+    runtime::save_target src;
+    src.manifest_id = "sys";
+    src.chips.push_back({.id = "chip", .chip = &chip});
+    src.components.push_back({.id = "component",
+                              .save = [](chips::state_writer& w) { w.u32(0x5678U); },
+                              .load = [](chips::state_reader&) {}});
+    const std::vector<std::uint8_t> blob = runtime::write_save_state(src);
 
-    SECTION("chip") {
-        runtime::save_target src;
-        src.manifest_id = "sys";
-        src.chips.push_back({.id = "cpu", .chip = &source_chip});
-        const std::vector<std::uint8_t> blob = runtime::write_save_state(src);
-
-        rejecting_chip rejected;
+    SECTION("chip reader failure") {
+        rejecting_chip bad;
         runtime::save_target dst;
         dst.manifest_id = "sys";
-        dst.chips.push_back({.id = "cpu", .chip = &rejected});
-        CHECK(runtime::read_save_state(blob, dst).status ==
-              runtime::load_status::chunk_rejected);
+        dst.chips.push_back({.id = "chip", .chip = &bad});
+        CHECK(runtime::read_save_state(blob, dst).status == runtime::load_status::chunk_rejected);
     }
 
-    SECTION("component") {
-        runtime::save_target src;
-        src.manifest_id = "sys";
-        src.components.push_back({"board",
-                                  [](chips::state_writer& w) { w.u32(0x11223344U); },
-                                  [](chips::state_reader&) {}});
-        const std::vector<std::uint8_t> blob = runtime::write_save_state(src);
-
+    SECTION("component reader failure") {
+        stateful_chip ok;
         runtime::save_target dst;
         dst.manifest_id = "sys";
-        dst.components.push_back({"board",
-                                  [](chips::state_writer&) {},
-                                  [](chips::state_reader& r) { r.fail(); }});
-        CHECK(runtime::read_save_state(blob, dst).status ==
-              runtime::load_status::chunk_rejected);
+        dst.chips.push_back({.id = "chip", .chip = &ok});
+        dst.components.push_back({.id = "component",
+                                  .save = [](chips::state_writer&) {},
+                                  .load = [](chips::state_reader& r) { r.fail(); }});
+        CHECK(runtime::read_save_state(blob, dst).status == runtime::load_status::chunk_rejected);
     }
 }

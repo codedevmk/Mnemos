@@ -2,6 +2,7 @@
 #include "c64_adapter.hpp"
 #include "capability_discovery.hpp"
 #include "capcom_cps1_adapter.hpp"
+#include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "msx_adapter.hpp"
@@ -23,6 +24,7 @@ namespace {
     namespace amiga500 = mnemos::apps::player::adapters::amiga500;
     namespace c64 = mnemos::apps::player::adapters::c64;
     namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
+    namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
     namespace msx = mnemos::apps::player::adapters::msx;
@@ -139,6 +141,10 @@ namespace {
         poke32_be(rom, 0x404U, 0x00FF0000U);
         poke16_be(rom, 0x408U, 0x60FEU);
         return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> cps2_program() {
+        return std::vector<std::uint8_t>(0x40U, 0x00U);
     }
 
     [[nodiscard]] std::vector<std::uint8_t> irem_m72_program() {
@@ -294,5 +300,12 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         require_common_session_controls(summary);
         require_degraded_media(summary, "media.bios");
         require_degraded_media(summary, "media.cart");
+    }
+
+    SECTION("Capcom CPS2") {
+        cps2::capcom_cps2_adapter adapter(cps2_program(), "Tiny CPS2");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_degraded_media(summary, "media.rom_set");
     }
 }

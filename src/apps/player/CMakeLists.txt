@@ -110,6 +110,7 @@ if(BUILD_TESTING)
             mnemos::apps::player::sega32x_adapter
             mnemos::apps::player::irem_m72_adapter
             mnemos::apps::player::capcom_cps1_adapter
+            mnemos::apps::player::capcom_cps2_adapter
             mnemos::apps::player::msx_adapter
             mnemos::apps::player::amiga500_adapter
     )
