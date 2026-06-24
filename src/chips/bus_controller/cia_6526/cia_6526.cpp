@@ -143,6 +143,7 @@ namespace mnemos::chips::bus_controller {
         }
         publish_port_a();
         publish_port_b();
+        publish_sp(true);
     }
 
     void cia_6526::irq_pin_update() {
@@ -193,6 +194,12 @@ namespace mnemos::chips::bus_controller {
     void cia_6526::publish_port_b() {
         if (cfg_.write_port_b) {
             cfg_.write_port_b(port_b_driven());
+        }
+    }
+
+    void cia_6526::publish_sp(bool level) {
+        if (cfg_.write_sp) {
+            cfg_.write_sp(level);
         }
     }
 
@@ -325,7 +332,11 @@ namespace mnemos::chips::bus_controller {
                 return;
             }
         }
-        sdr_.sp_level = (sdr_.shift_reg & 0x80U) != 0U;
+        const bool next_sp = (sdr_.shift_reg & 0x80U) != 0U;
+        if (sdr_.sp_level != next_sp) {
+            sdr_.sp_level = next_sp;
+            publish_sp(next_sp);
+        }
         sdr_.shift_reg = static_cast<std::uint8_t>(sdr_.shift_reg << 1U);
         sdr_.bit_count = static_cast<std::uint8_t>(sdr_.bit_count + 1U);
         if (sdr_.bit_count >= 8U) {
@@ -539,7 +550,18 @@ namespace mnemos::chips::bus_controller {
                 tod_.phase_reload = (value & cra_todin) != 0U ? 5U : 6U;
                 tod_.phase = tod_.phase_reload;
             }
+            const bool was_output_mode = sdr_.output_mode;
             sdr_.output_mode = (value & cra_spmode) != 0U;
+            if (was_output_mode && !sdr_.output_mode) {
+                sdr_.shifting = false;
+                sdr_.pending_load = false;
+                sdr_.clock_ff = false;
+                sdr_.bit_count = 0U;
+                if (!sdr_.sp_level) {
+                    sdr_.sp_level = true;
+                    publish_sp(true);
+                }
+            }
             if (!was_running && timer_a_.running && timer_a_.force_load_phase == 0U &&
                 timer_a_.counter == 0U) {
                 timer_a_.counter = timer_a_.latch;

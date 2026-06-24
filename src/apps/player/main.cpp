@@ -1,11 +1,12 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2) with the --rom media (zip
-// archives are extracted transparently), presents its framebuffer at integer
-// scale, streams audio, and routes keyboard + gamepad input. ESC quits.
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2 /
+// spectrum / nes / amiga500) with the --rom media (zip archives are extracted
+// transparently), presents its framebuffer at integer scale, streams audio, and
+// routes keyboard + gamepad input. ESC quits.
 
 #define SDL_MAIN_HANDLED
 
-#include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
+#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "cli_args.hpp"
 #include "headless_commands.hpp"
 #include "player_system.hpp"
@@ -146,6 +147,42 @@ namespace {
         pad.z |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
         pad.start |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_START);
         pad.mode |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_BACK);
+    }
+
+    [[nodiscard]] std::int16_t normalize_analog_axis(Sint16 value) noexcept {
+        const int shifted = static_cast<int>(value) + 32768;
+        const int clamped = std::clamp(shifted, 0, 65535);
+        return static_cast<std::int16_t>((clamped * 255 + 32767) / 65535);
+    }
+
+    void populate_analog_state(mnemos::frontend_sdk::controller_state& state, SDL_Gamepad* gp,
+                               std::size_t analog_index) noexcept {
+        if (gp == nullptr) {
+            return;
+        }
+        const SDL_GamepadAxis x_axis =
+            analog_index == 0U ? SDL_GAMEPAD_AXIS_LEFTX : SDL_GAMEPAD_AXIS_RIGHTX;
+        const SDL_GamepadAxis y_axis =
+            analog_index == 0U ? SDL_GAMEPAD_AXIS_LEFTY : SDL_GAMEPAD_AXIS_RIGHTY;
+        state.aim_x = normalize_analog_axis(SDL_GetGamepadAxis(gp, x_axis));
+        state.aim_y = normalize_analog_axis(SDL_GetGamepadAxis(gp, y_axis));
+    }
+
+    [[nodiscard]] bool key_pressed(const bool* keys, int key_count, SDL_Scancode scancode) noexcept {
+        const int index = static_cast<int>(scancode);
+        return keys != nullptr && index >= 0 && index < key_count && keys[index];
+    }
+
+    void populate_keyboard_usage(mnemos::frontend_sdk::controller_state& state, const bool* keys,
+                                 int key_count) noexcept {
+        if (keys == nullptr || key_count <= 0) {
+            return;
+        }
+        const auto count = std::min<std::size_t>(
+            static_cast<std::size_t>(key_count), mnemos::peripheral::keyboard_usage_count);
+        for (std::size_t usage = 0; usage < count; ++usage) {
+            state.set_key(static_cast<std::uint16_t>(usage), keys[usage]);
+        }
     }
 
 } // namespace
@@ -489,31 +526,50 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Keyboard + gamepad OR'd into the same controller_state so the user
-        // can switch input mid-session. Adapters ignore buttons their hardware
-        // doesn't have.
-        //   Keyboard: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z (Genesis
-        //             6-button extras), Enter = Start, LShift = Mode.
+        // Keyboard + gamepad OR'd into the same controller_state for pad-only
+        // systems. Systems that advertise a dedicated keyboard port receive the
+        // host keyboard as physical key usages on that port instead.
+        //   Keyboard-as-pad: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z
+        //             (Genesis 6-button extras), Enter = Start, LShift = Mode.
         //   Gamepad : dpad + left stick = dpad, South/East/West = A/B/C,
         //             North = X, L1/R1 = Y/Z, Start/Back = Start/Mode.
         {
-            const bool* keys = SDL_GetKeyboardState(nullptr);
+            int key_count = 0;
+            const bool* keys = SDL_GetKeyboardState(&key_count);
+            int keyboard_port = -1;
+            if (system != nullptr) {
+                for (const auto& p : system->session_capabilities().input_ports) {
+                    if (p.format == mnemos::frontend_sdk::input_device_format::keyboard) {
+                        keyboard_port = static_cast<int>(p.port_index);
+                        break;
+                    }
+                }
+            }
             mnemos::frontend_sdk::controller_state pad{};
-            pad.up = keys[SDL_SCANCODE_UP];
-            pad.down = keys[SDL_SCANCODE_DOWN];
-            pad.left = keys[SDL_SCANCODE_LEFT];
-            pad.right = keys[SDL_SCANCODE_RIGHT];
-            pad.a = keys[SDL_SCANCODE_Z];
-            pad.b = keys[SDL_SCANCODE_X];
-            pad.c = keys[SDL_SCANCODE_C];
-            pad.x = keys[SDL_SCANCODE_A];
-            pad.y = keys[SDL_SCANCODE_S];
-            pad.z = keys[SDL_SCANCODE_D];
-            pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
-            pad.mode = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+            if (keyboard_port < 0 && keys != nullptr) {
+                pad.up = key_pressed(keys, key_count, SDL_SCANCODE_UP);
+                pad.down = key_pressed(keys, key_count, SDL_SCANCODE_DOWN);
+                pad.left = key_pressed(keys, key_count, SDL_SCANCODE_LEFT);
+                pad.right = key_pressed(keys, key_count, SDL_SCANCODE_RIGHT);
+                pad.a = key_pressed(keys, key_count, SDL_SCANCODE_Z);
+                pad.b = key_pressed(keys, key_count, SDL_SCANCODE_X);
+                pad.c = key_pressed(keys, key_count, SDL_SCANCODE_C);
+                pad.x = key_pressed(keys, key_count, SDL_SCANCODE_A);
+                pad.y = key_pressed(keys, key_count, SDL_SCANCODE_S);
+                pad.z = key_pressed(keys, key_count, SDL_SCANCODE_D);
+                pad.start = key_pressed(keys, key_count, SDL_SCANCODE_RETURN) ||
+                            key_pressed(keys, key_count, SDL_SCANCODE_KP_ENTER);
+                pad.mode = key_pressed(keys, key_count, SDL_SCANCODE_LSHIFT) ||
+                           key_pressed(keys, key_count, SDL_SCANCODE_RSHIFT);
+            }
             merge_gamepad(pad, gamepad);
             if (system) {
                 system->apply_input(0, pad);
+                if (keyboard_port >= 0) {
+                    mnemos::frontend_sdk::controller_state keyboard{};
+                    populate_keyboard_usage(keyboard, keys, key_count);
+                    system->apply_input(keyboard_port, keyboard);
+                }
             }
             // Four Score: pads 2-4 from the additional gamepads on ports 1-3.
             if (system && four_score) {
@@ -522,6 +578,60 @@ int main(int argc, char* argv[]) {
                     merge_gamepad(extra, fs_pads[static_cast<std::size_t>(port - 1)]);
                     system->apply_input(port, extra);
                 }
+            }
+        }
+
+        // Analog controls: systems that advertise analog ports consume raw
+        // normalized axes. The first analog port is the gamepad left stick, the
+        // second is the right stick; additional ports repeat the right stick.
+        if (system) {
+            std::size_t analog_index = 0U;
+            for (const auto& p : system->session_capabilities().input_ports) {
+                if (p.format != mnemos::frontend_sdk::input_device_format::analog) {
+                    continue;
+                }
+                mnemos::frontend_sdk::controller_state analog{};
+                populate_analog_state(analog, gamepad, analog_index);
+                system->apply_input(static_cast<int>(p.port_index), analog);
+                ++analog_index;
+            }
+        }
+
+        // Pointer-style mouse ports consume the OS pointer even when --light-gun
+        // is not active; adapters advertise the concrete port they want driven.
+        if (system) {
+            int mouse_port = -1;
+            for (const auto& p : system->session_capabilities().input_ports) {
+                if (p.format == mnemos::frontend_sdk::input_device_format::mouse) {
+                    mouse_port = static_cast<int>(p.port_index);
+                    break;
+                }
+            }
+            if (mouse_port >= 0) {
+                float mx = 0.0F;
+                float my = 0.0F;
+                const auto mouse = SDL_GetMouseState(&mx, &my);
+                int ww = 0;
+                int wh = 0;
+                SDL_GetWindowSize(window, &ww, &wh);
+                const auto fb = system->current_frame();
+                mnemos::frontend_sdk::controller_state pointer{};
+                pointer.trigger = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0U;
+                pointer.a = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0U;
+                pointer.b = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_MIDDLE)) != 0U;
+                if (fb.width != 0U && fb.height != 0U && ww > 0 && wh > 0) {
+                    const auto rect = integer_letterbox(ww, wh, static_cast<int>(fb.width),
+                                                        static_cast<int>(fb.height));
+                    const int rx = static_cast<int>(mx) - rect.x;
+                    const int ry = static_cast<int>(my) - rect.y;
+                    if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
+                        pointer.aim_x =
+                            static_cast<std::int16_t>(rx * static_cast<int>(fb.width) / rect.w);
+                        pointer.aim_y =
+                            static_cast<std::int16_t>(ry * static_cast<int>(fb.height) / rect.h);
+                    }
+                }
+                system->apply_input(mouse_port, pointer);
             }
         }
 

@@ -23,6 +23,7 @@ namespace mnemos::chips::peripheral {
             std::function<std::uint8_t()> read_port_b;
             std::function<void(std::uint8_t)> write_port_a;
             std::function<void(std::uint8_t)> write_port_b;
+            std::function<void(bool)> write_sp;
             std::function<void(bool)> irq_edge;
             std::uint32_t tod_tick_hz{715'909U}; // source clock per second (NTSC /E)
             std::uint32_t tod_src_hz{60U};       // TOD source frequency (50/60)

@@ -24,14 +24,63 @@ namespace {
         return palette;
     }
 
+    void set_palette_word(std::vector<std::uint8_t>& palette, std::size_t index,
+                          std::uint16_t color12) {
+        palette[index * 2U] = static_cast<std::uint8_t>((color12 >> 8U) & 0xFFU);
+        palette[index * 2U + 1U] = static_cast<std::uint8_t>(color12 & 0xFFU);
+    }
+
     // Program the display window/data-fetch so the whole 320x256 PAL field is
     // visible and 20 low-res words are fetched per line.
-    void program_full_window(agnus& chip) {
-        chip.set_bplcon0(0x1000U); // BPU = 1 (one bitplane)
+    void write_word(std::vector<std::uint8_t>& ram, std::uint32_t address, std::uint16_t value) {
+        ram[address] = static_cast<std::uint8_t>(value >> 8U);
+        ram[address + 1U] = static_cast<std::uint8_t>(value);
+    }
+
+    void set_plane_word(std::vector<std::uint8_t>& ram, agnus& chip, std::uint32_t plane,
+                        std::uint16_t word) {
+        const std::uint32_t base = plane * 0x100U;
+        write_word(ram, base, word);
+        chip.set_bitplane_pointer(plane, base);
+    }
+
+    void clear_six_plane_words(std::vector<std::uint8_t>& ram, agnus& chip) {
+        for (std::uint32_t plane = 0; plane < agnus::max_bitplanes; ++plane) {
+            set_plane_word(ram, chip, plane, 0U);
+        }
+    }
+
+    void program_full_window(agnus& chip, std::uint16_t bplcon0 = 0x1000U) {
+        chip.set_bplcon0(bplcon0);
         chip.set_diwstrt(0x2C00U); // V start = 0x2C (matches display_line_origin)
         chip.set_diwstop(0xF400U); // V stop = 0xF4 (244), bit 7 set => no +0x100
         chip.set_ddfstrt(0x0038U); // fetch start
         chip.set_ddfstop(0x00D0U); // fetch stop => 20 words/line
+    }
+
+    void program_full_window_hires(agnus& chip, std::uint16_t bplcon0 = 0x9000U) {
+        chip.set_bplcon0(bplcon0);
+        chip.set_diwstrt(0x2C00U);
+        chip.set_diwstop(0xF400U);
+        chip.set_ddfstrt(0x003CU); // standard high-resolution fetch start
+        chip.set_ddfstop(0x00D4U); // standard high-resolution fetch stop => 40 words/line
+    }
+
+    [[nodiscard]] constexpr std::uint16_t sprite_pos(std::uint32_t visible_y,
+                                                     std::uint32_t visible_x) noexcept {
+        const std::uint32_t beam_y = agnus::display_line_origin + visible_y;
+        const std::uint32_t beam_x = agnus::display_clock_origin + visible_x;
+        return static_cast<std::uint16_t>(((beam_y & 0xFFU) << 8U) | ((beam_x >> 1U) & 0xFFU));
+    }
+
+    [[nodiscard]] constexpr std::uint16_t
+    sprite_ctl(std::uint32_t visible_y, std::uint32_t visible_x, std::uint32_t height) noexcept {
+        const std::uint32_t beam_y = agnus::display_line_origin + visible_y;
+        const std::uint32_t stop_y = beam_y + height;
+        const std::uint32_t beam_x = agnus::display_clock_origin + visible_x;
+        return static_cast<std::uint16_t>(
+            ((stop_y & 0xFFU) << 8U) | ((beam_x & 0x01U) != 0U ? 0x0001U : 0U) |
+            ((stop_y & 0x100U) != 0U ? 0x0002U : 0U) | ((beam_y & 0x100U) != 0U ? 0x0004U : 0U));
     }
 
 } // namespace
@@ -141,6 +190,77 @@ TEST_CASE("agnus decodes bitplane DMA through the colour palette", "[agnus]") {
     CHECK(frame.pixels[1] == 0x00000000U);
 }
 
+TEST_CASE("agnus BPLCON1 delays odd and even playfield serializers", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 1U, 0x0F00U); // BPL1 only = red.
+    set_palette_word(palette, 2U, 0x00F0U); // BPL2 only = green.
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip, 0x2000U); // Two bitplanes.
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    set_plane_word(chip_ram, chip, 1U, 0x8000U);
+    chip.set_bplcon1(0x0021U); // PF1 delay = 1, PF2 delay = 2.
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00000000U);
+    CHECK(frame.pixels[1] == 0x00FF0000U);
+    CHECK(frame.pixels[2] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus BPLCON0 HIRES fetches and exposes 640-pixel bitplane rows", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 0U, 0x8000U);       // x = 0
+    write_word(chip_ram, 39U * 2U, 0x0001U); // x = 639, proves the 40th word is fetched
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window_hires(chip);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.width == agnus::visible_width_hires);
+    CHECK(frame.height == agnus::visible_height_pal);
+    CHECK(frame.effective_stride() == agnus::framebuffer_stride);
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::visible_width_hires - 1U] == 0x00FF0000U);
+}
+
+TEST_CASE("agnus BPLCON1 high-resolution scroll delay advances in two-pixel steps",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 0U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window_hires(chip);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.set_bplcon1(0x0011U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00000000U);
+    CHECK(frame.pixels[1] == 0x00000000U);
+    CHECK(frame.pixels[2] == 0x00FF0000U);
+}
+
 TEST_CASE("agnus paints the backdrop from colour 0 and clips outside the display window",
           "[agnus]") {
     agnus chip;
@@ -187,6 +307,247 @@ TEST_CASE("agnus disables the display when bitplane DMA is off", "[agnus]") {
     CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U); // now the foreground draws
 }
 
+TEST_CASE("agnus renders extra-half-brite colours from the sixth bitplane", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0EEEU);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip, 0x6000U); // BPU = 6, HAM/DPF clear => EHB.
+    clear_six_plane_words(chip_ram, chip);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    set_plane_word(chip_ram, chip, 5U, 0x8000U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+
+    CHECK(chip.framebuffer().pixels[0] == 0x00777777U);
+}
+
+TEST_CASE("agnus renders HAM load and channel modify pixels", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x000FU);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip, 0x6800U); // BPU = 6 + HAM.
+    clear_six_plane_words(chip_ram, chip);
+    set_plane_word(chip_ram, chip, 0U, 0xC000U);
+    set_plane_word(chip_ram, chip, 1U, 0x4000U);
+    set_plane_word(chip_ram, chip, 2U, 0x4000U);
+    set_plane_word(chip_ram, chip, 3U, 0x4000U);
+    set_plane_word(chip_ram, chip, 5U, 0x4000U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x000000FFU);
+    CHECK(frame.pixels[1] == 0x00FF00FFU);
+}
+
+TEST_CASE("agnus renders dual-playfield colours with playfield-one priority", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    palette[2] = 0x0FU;
+    palette[3] = 0x00U; // COLOR01 = red
+    palette[18] = 0x00U;
+    palette[19] = 0xF0U; // COLOR09 = green
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip, 0x6400U); // BPU = 6 + DPF.
+    clear_six_plane_words(chip_ram, chip);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    set_plane_word(chip_ram, chip, 1U, 0xC000U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[1] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus renders manual sprite registers over the backdrop", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    palette[34] = 0x0FU;
+    palette[35] = 0x00U; // COLOR17 = red
+    palette[36] = 0x00U;
+    palette[37] = 0xF0U; // COLOR18 = green
+
+    chip.attach_palette(palette);
+    chip.write_sprite_pos(0U, sprite_pos(0U, 0U));
+    chip.write_sprite_ctl(0U, sprite_ctl(0U, 0U, 1U));
+    chip.write_sprite_data_b(0U, 0x4000U);
+    chip.write_sprite_data_a(0U, 0x8000U);
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[1] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus renders sprite DMA data from the sprite pointer", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    palette[34] = 0x0FU;
+    palette[35] = 0x00U; // COLOR17 = red
+    palette[38] = 0x00U;
+    palette[39] = 0x0FU; // COLOR19 = blue
+
+    constexpr std::uint32_t sprite_base = 0x200U;
+    write_word(chip_ram, sprite_base + 0U, sprite_pos(0U, 2U));
+    write_word(chip_ram, sprite_base + 2U, sprite_ctl(0U, 2U, 1U));
+    write_word(chip_ram, sprite_base + 4U, 0xC000U);
+    write_word(chip_ram, sprite_base + 6U, 0x4000U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_sprite_pointer(0U, sprite_base);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_spren));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[2] == 0x00FF0000U);
+    CHECK(frame.pixels[3] == 0x000000FFU);
+}
+
+TEST_CASE("agnus reuses a sprite DMA channel from the next control block", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 17U, 0x0F00U); // COLOR17 = red.
+    set_palette_word(palette, 18U, 0x00F0U); // COLOR18 = green.
+
+    constexpr std::uint32_t sprite_base = 0x240U;
+    write_word(chip_ram, sprite_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, sprite_base + 2U, sprite_ctl(0U, 0U, 1U));
+    write_word(chip_ram, sprite_base + 4U, 0x8000U);
+    write_word(chip_ram, sprite_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite_base + 8U, sprite_pos(2U, 4U));
+    write_word(chip_ram, sprite_base + 10U, sprite_ctl(2U, 4U, 1U));
+    write_word(chip_ram, sprite_base + 12U, 0x0000U);
+    write_word(chip_ram, sprite_base + 14U, 0x8000U);
+    write_word(chip_ram, sprite_base + 16U, 0x0000U);
+    write_word(chip_ram, sprite_base + 18U, 0x0000U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_sprite_pointer(0U, sprite_base);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_spren));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+    const auto reused_pixel = static_cast<std::size_t>(2U) * frame.effective_stride() + 4U;
+
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[reused_pixel] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus attaches odd sprite pairs into the 15-colour sprite palette", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 21U, 0x00F0U); // attached value 5 -> COLOR21 green.
+
+    chip.attach_palette(palette);
+    chip.write_sprite_pos(0U, sprite_pos(0U, 0U));
+    chip.write_sprite_ctl(0U, sprite_ctl(0U, 0U, 1U));
+    chip.write_sprite_pos(1U, sprite_pos(0U, 0U));
+    chip.write_sprite_ctl(1U, static_cast<std::uint16_t>(sprite_ctl(0U, 0U, 1U) | 0x0080U));
+    chip.write_sprite_data_a(0U, 0x8000U);
+    chip.write_sprite_data_a(1U, 0x8000U);
+
+    chip.tick(frame_ticks);
+
+    CHECK(chip.framebuffer().pixels[0] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus BPLCON2 priority can place sprites behind or ahead of a playfield",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 1U, 0x0F00U);  // playfield red.
+    set_palette_word(palette, 17U, 0x00F0U); // sprite green.
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    chip.write_sprite_pos(0U, sprite_pos(0U, 0U));
+    chip.write_sprite_ctl(0U, sprite_ctl(0U, 0U, 1U));
+    chip.write_sprite_data_a(0U, 0x8000U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U);
+
+    chip.set_bplcon2(0x0020U); // PF2 priority slot 4: behind all sprite pairs.
+    chip.tick(frame_ticks);
+    CHECK(chip.framebuffer().pixels[0] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus CLXDAT latches sprite and playfield collisions until read", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    chip.write_clxcon(0x0041U); // Include BPL1 and require BPL1=1.
+    chip.write_sprite_pos(0U, sprite_pos(0U, 0U));
+    chip.write_sprite_ctl(0U, sprite_ctl(0U, 0U, 1U));
+    chip.write_sprite_data_a(0U, 0x8000U);
+    chip.write_sprite_pos(2U, sprite_pos(0U, 0U));
+    chip.write_sprite_ctl(2U, sprite_ctl(0U, 0U, 1U));
+    chip.write_sprite_data_a(2U, 0x8000U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const std::uint16_t first = chip.read_clxdat();
+
+    CHECK((first & 0x0002U) != 0U); // Odd bitplanes to sprite pair 0/1.
+    CHECK((first & 0x0004U) != 0U); // Odd bitplanes to sprite pair 2/3.
+    CHECK((first & 0x0200U) != 0U); // Sprite pair 0/1 to pair 2/3.
+    CHECK(chip.read_clxdat() == 0U);
+}
+
+TEST_CASE("agnus CLXDAT latches odd-even playfield collisions without sprites", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip, 0x2000U);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    set_plane_word(chip_ram, chip, 1U, 0x8000U);
+    chip.write_clxcon(0x00C3U); // Include BPL1/BPL2 and require both high.
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+
+    CHECK((chip.read_clxdat() & 0x0001U) != 0U);
+}
+
 TEST_CASE("agnus copper MOVE pokes a display register from chip RAM", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
@@ -215,6 +576,117 @@ TEST_CASE("agnus copper MOVE pokes a display register from chip RAM", "[agnus]")
     // board-owned, so the observable effect is that the copper advanced past
     // the MOVE without faulting and reached the WAIT (still running).
     CHECK(chip.dma_copper());
+}
+
+TEST_CASE("agnus copper MOVE cadence consumes four memory cycles", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+
+    constexpr std::uint32_t list = 0x100U;
+    write_word(chip_ram, list + 0U, 0x0096U); // MOVE DMACON: set BPLEN.
+    write_word(chip_ram, list + 2U,
+               static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_bplen));
+    write_word(chip_ram, list + 4U, 0x0096U); // MOVE DMACON: clear BPLEN.
+    write_word(chip_ram, list + 6U, agnus::dmacon_bplen);
+    write_word(chip_ram, list + 8U, 0xFFFFU);
+    write_word(chip_ram, list + 10U, 0xFFFEU);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
+                                                 agnus::dmacon_copen));
+
+    chip.tick(1U);
+    CHECK(chip.dma_bitplane());
+
+    chip.tick(3U);
+    CHECK(chip.dma_bitplane());
+
+    chip.tick(1U);
+    CHECK_FALSE(chip.dma_bitplane());
+}
+
+TEST_CASE("agnus copper WAIT wake consumes six memory cycles", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+
+    constexpr std::uint32_t list = 0x100U;
+    write_word(chip_ram, list + 0U, 0x0001U); // WAIT VP=0, HP=0.
+    write_word(chip_ram, list + 2U, 0xFFFEU);
+    write_word(chip_ram, list + 4U, 0x0096U); // MOVE DMACON: set BPLEN.
+    write_word(chip_ram, list + 6U,
+               static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_bplen));
+    write_word(chip_ram, list + 8U, 0xFFFFU);
+    write_word(chip_ram, list + 10U, 0xFFFEU);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
+                                                 agnus::dmacon_copen));
+
+    chip.tick(1U);
+    CHECK_FALSE(chip.dma_bitplane());
+
+    chip.tick(5U);
+    CHECK_FALSE(chip.dma_bitplane());
+
+    chip.tick(1U);
+    CHECK(chip.dma_bitplane());
+}
+
+TEST_CASE("agnus copper terminal WAIT cannot pass during the active frame", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+
+    constexpr std::uint32_t list = 0x100U;
+    write_word(chip_ram, list + 0U, 0x0096U); // MOVE DMACON: set BPLEN.
+    write_word(chip_ram, list + 2U,
+               static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_bplen));
+    write_word(chip_ram, list + 4U, 0xFFFFU); // WAIT VP=$FF, HP=$FE: impossible.
+    write_word(chip_ram, list + 6U, 0xFFFEU);
+    write_word(chip_ram, list + 8U, 0x0096U); // Would clear BPLEN if the WAIT wrapped.
+    write_word(chip_ram, list + 10U, agnus::dmacon_bplen);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
+                                                 agnus::dmacon_copen));
+
+    chip.tick(1U);
+    REQUIRE(chip.dma_bitplane());
+
+    chip.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) * 256U);
+    CHECK(chip.dma_bitplane());
+}
+
+TEST_CASE("agnus copper reloads COP1 at the start of each frame", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    constexpr std::uint32_t list = 0x100U;
+    // MOVE 0x1000 -> BPLCON0 (enable one bitplane), then the common terminal
+    // WAIT. The second frame proves COP1 reloads even after the previous frame
+    // left the Copper away from the list head.
+    write_word(chip_ram, list + 0U, 0x0100U);
+    write_word(chip_ram, list + 2U, 0x1000U);
+    write_word(chip_ram, list + 4U, 0xFFFFU);
+    write_word(chip_ram, list + 6U, 0xFFFEU);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip, 0x0000U);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
+                                                 agnus::dmacon_copen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U);
+
+    chip.set_bplcon0(0x0000U);
+    chip.tick(frame_ticks);
+    CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U);
 }
 
 TEST_CASE("agnus save_state / load_state round-trips", "[agnus]") {
