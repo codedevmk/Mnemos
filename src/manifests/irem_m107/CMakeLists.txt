@@ -47,7 +47,12 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_m107
     PUBLIC
+        mnemos::topology
+        mnemos::chips::cpu::v30
+        mnemos::chips::audio::ym2151
+        mnemos::chips::audio::okim6295
         mnemos::manifests::common
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_irem_m107 PUBLIC)
@@ -55,7 +60,10 @@ mnemos_declare_tier(
     NAME mnemos_manifests_irem_m107
     TIER 4
     DEPENDS
+        mnemos_topology
         mnemos_manifests_common
+        mnemos_security_cryptography
+        mnemos_chips_shared
         mnemos_foundation
 )
 

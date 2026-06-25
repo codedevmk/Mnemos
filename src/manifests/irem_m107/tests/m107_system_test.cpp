@@ -240,6 +240,62 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_m107_program(const std::vector<std::uint8_t>& program) {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_program() {
+        return make_m107_program(
+            {0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U, 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U});
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::sound_rom_size, 0xFFU);
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        rom[0x0200U] = 0xF4U;
+        return rom;
+    }
+
+    [[nodiscard]] rom_set_image synthetic_m107_image() {
+        rom_set_image image;
+        image.regions.emplace("maincpu", synthetic_m107_program());
+        image.regions.emplace("soundcpu", synthetic_m107_sound_program());
+        std::vector<std::uint8_t> gfx(0x4000U, 0x00U);
+        for (std::size_t i = 0; i < gfx.size(); ++i) {
+            gfx[i] = static_cast<std::uint8_t>((i * 37U) & 0xFFU);
+        }
+        image.regions.emplace("gfx", std::move(gfx));
+        image.regions.emplace("samples", std::vector<std::uint8_t>(0x1000U, 0x55U));
+        image.regions.emplace("subdata", std::vector<std::uint8_t>(0x1000U, 0xA5U));
+        return image;
+    }
+
+    [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
+        for (std::uint32_t y = 0; y < frame.height; ++y) {
+            for (std::uint32_t x = 0; x < frame.width; ++x) {
+                if (frame.pixels[static_cast<std::size_t>(y) * frame.effective_stride() + x] !=
+                    0U) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 } // namespace
 
 TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus",
@@ -310,6 +366,47 @@ TEST_CASE("m107 embedded game manifests mirror the checked-in roster", "[m107][r
     CHECK_FALSE(mnemos::manifests::irem_m107::game_manifest_toml("airass").empty());
     CHECK_FALSE(mnemos::manifests::irem_m107::game_manifest_toml("firebarr").empty());
     CHECK(mnemos::manifests::irem_m107::game_manifest_toml("rtype2").empty());
+}
+
+TEST_CASE("m107 executable board maps V-series reset and RAM", "[m107][board]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto system = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
+    REQUIRE(system != nullptr);
+
+    CHECK(system->main_bus.read8(0xFFFF0U) == 0xEAU);
+    CHECK(system->sound_bus.read8(0xFFFF0U) == 0xEAU);
+    system->run_frame();
+    CHECK(system->work_ram[0] == 0x42U);
+    CHECK(frame_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][board]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto source = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
+    source->set_inputs(0xFEU, 0xFDU, 0xFBU);
+    source->run_frame();
+    source->work_ram[7] = 0x6CU;
+
+    std::vector<std::uint8_t> state;
+    mnemos::chips::state_writer writer(state);
+    source->save_state(writer);
+    REQUIRE_FALSE(state.empty());
+
+    auto restored = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
+    mnemos::chips::state_reader reader(state);
+    restored->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(restored->work_ram[0] == 0x42U);
+    CHECK(restored->work_ram[7] == 0x6CU);
+    CHECK(restored->input_p1 == 0xFEU);
+
+    auto wrong_layout =
+        m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("firebarr"));
+    mnemos::chips::state_reader wrong_reader(state);
+    wrong_layout->load_state(wrong_reader);
+    CHECK_FALSE(wrong_reader.ok());
 }
 
 TEST_CASE("m107 local artifacts load CRC-clean through embedded manifests",
