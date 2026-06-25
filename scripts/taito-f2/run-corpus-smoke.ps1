@@ -4529,6 +4529,12 @@ function Get-TaitoF2RuntimeFeatureCoverage {
                     $null -ne $row.audio_probe.runtime_evidence) {
                     $evidence.Add($row.audio_probe.runtime_evidence)
                 }
+                $attractAudioProbe = $row.PSObject.Properties["audio_attract_probe"]
+                if ($null -ne $attractAudioProbe -and
+                    $row.audio_attract_probe.enabled -and
+                    $null -ne $row.audio_attract_probe.runtime_evidence) {
+                    $evidence.Add($row.audio_attract_probe.runtime_evidence)
+                }
             }
             if ($evidence.Count -gt 0 -and
                 (Test-FeatureObserved -Feature $feature -Evidence @($evidence))) {
@@ -4793,6 +4799,8 @@ foreach ($romPath in $uniqueRoms) {
     $gameplayScreenshotPath = Join-Path $setOut "$setId.gameplay.ppm"
     $audioLog = Join-Path $setOut "$setId.audio.log"
     $audioBasePath = Join-Path $setOut "$setId.audio"
+    $audioAttractLog = Join-Path $setOut "$setId.audio-attract.log"
+    $audioAttractBasePath = Join-Path $setOut "$setId.audio-attract"
 
     Write-Host ("[taito-f2] {0}" -f $setId) -ForegroundColor Cyan
 
@@ -4901,6 +4909,11 @@ foreach ($romPath in $uniqueRoms) {
     $audioExit = $null
     $audioSummary = New-MissingAudioSummary -BasePath $audioBasePath
     $audioRuntimeEvidence = Get-AudioRuntimeEvidence -AudioSummary $audioSummary
+    $audioAttractExit = $null
+    $audioAttractFrames = [Math]::Max($AudioFrames, 12000)
+    $audioAttractSummary = New-MissingAudioSummary -BasePath $audioAttractBasePath
+    $audioAttractRuntimeEvidence = Get-AudioRuntimeEvidence -AudioSummary $audioAttractSummary
+    $audioAttractProbeEnabled = $false
     if ($AudioProbe) {
         $audioArgs = @(
             "--system", "taito_f2",
@@ -4916,6 +4929,36 @@ foreach ($romPath in $uniqueRoms) {
         $audioExit = Invoke-Player -Player $player -LogPath $audioLog -Arguments $audioArgs
         $audioSummary = Get-RenderedAudioSummary -BasePath $audioBasePath
         $audioRuntimeEvidence = Get-AudioRuntimeEvidence -AudioSummary $audioSummary
+
+        $manifestHasAdpcma = $null -ne $manifestPath -and
+            (Test-TomlRegion -ManifestPath $manifestPath -Name "adpcma")
+        $manifestHasAdpcmb = $null -ne $manifestPath -and
+            (Test-TomlRegion -ManifestPath $manifestPath -Name "adpcmb")
+        $needsAdpcmaAttractProbe =
+            $RequireFeatureEvidence -and
+            $manifestHasAdpcma -and
+            ((-not (Test-EvidenceFlag -Evidence $audioRuntimeEvidence -Name "adpcma_active")) -or
+             (-not (Test-EvidenceFlag -Evidence $audioRuntimeEvidence -Name "adpcma_rekey_trace")) -or
+             (Get-EvidenceInt -Evidence $audioRuntimeEvidence -Name "adpcma_key_on_writes") -eq 0)
+        $needsAdpcmbAttractProbe =
+            $RequireFeatureEvidence -and
+            $manifestHasAdpcmb -and
+            ((-not (Test-EvidenceFlag -Evidence $audioRuntimeEvidence -Name "adpcmb_active")) -or
+             (Get-EvidenceInt -Evidence $audioRuntimeEvidence -Name "adpcmb_start_writes") -eq 0)
+        if ($needsAdpcmaAttractProbe -or $needsAdpcmbAttractProbe) {
+            $audioAttractProbeEnabled = $true
+            $audioAttractArgs = @(
+                "--system", "taito_f2",
+                "--rom", $runRomPath,
+                "--extract-frames", $audioAttractFrames.ToString(),
+                "--extract-audio", $audioAttractBasePath
+            )
+            $audioAttractExit = Invoke-Player -Player $player `
+                -LogPath $audioAttractLog -Arguments $audioAttractArgs
+            $audioAttractSummary = Get-RenderedAudioSummary -BasePath $audioAttractBasePath
+            $audioAttractRuntimeEvidence =
+                Get-AudioRuntimeEvidence -AudioSummary $audioAttractSummary
+        }
     }
     $goldenPassed = $true
     if ($null -ne $expectedHash) {
@@ -4969,6 +5012,16 @@ foreach ($romPath in $uniqueRoms) {
             runtime_evidence = $audioRuntimeEvidence
             base = $audioBasePath
             log = $audioLog
+        }
+        audio_attract_probe = [pscustomobject]@{
+            enabled = [bool]$audioAttractProbeEnabled
+            frames = $audioAttractFrames
+            presses = @()
+            exit = $audioAttractExit
+            summary = $audioAttractSummary
+            runtime_evidence = $audioAttractRuntimeEvidence
+            base = $audioAttractBasePath
+            log = $audioAttractLog
         }
         save_log = $saveLog
         load_log = $loadLog
