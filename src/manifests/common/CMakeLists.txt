@@ -13,6 +13,8 @@ add_library(
     mnemos_manifests_common
     manifest.cpp
     builder.cpp
+    msx_cartridge_mapper.cpp
+    msx_io_ports.cpp
     rom_set.cpp
     rom_set_toml.cpp
 )
@@ -65,6 +67,8 @@ if(BUILD_TESTING)
         SOURCES
             tests/manifest_test.cpp
             tests/builder_test.cpp
+            tests/msx_cartridge_mapper_test.cpp
+            tests/msx_io_ports_test.cpp
             tests/rom_set_test.cpp
             tests/rom_set_toml_test.cpp
         LIBRARIES

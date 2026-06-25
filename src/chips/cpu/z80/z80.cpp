@@ -990,11 +990,11 @@ namespace mnemos::chips::cpu {
         }
 
         if (!handled) {
-            // The prefix has no effect on this opcode: rewind and let the next
-            // step re-decode it unprefixed (DD/FD each still cost 4T + an R inc).
-            r_ = static_cast<std::uint8_t>((r_ & 0x80U) | ((r_ - 1U) & 0x7FU));
-            pc_ = static_cast<std::uint16_t>(pc_ - 1U);
+            // The prefix has no effect on this opcode, but the CPU still treats
+            // the prefixed byte sequence as one instruction: interrupts are not
+            // accepted between the prefix and the following opcode.
             step_cycles_ += 4;
+            exec_main(op);
         }
     }
 

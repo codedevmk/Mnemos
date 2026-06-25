@@ -120,6 +120,18 @@ multiple independent open-source implementations.
   catalogue (`src/manifests/sms/sms_system.cpp`) was compiled from the community
   SMS cartridge database and cross-checked against open-source Sega emulators'
   game lists; only carts whose mapper Mnemos implements are listed.
+- **MSX Korean mapper CRC database** — Korean MSX cartridge images likewise have
+  no universal header signature, so exact known images that require the Korean
+  MSX 8 KiB mapper are auto-detected by ROM CRC-32
+  (`src/manifests/common/msx_cartridge_mapper.cpp`). The entries are catalogue
+  facts from data-gated cartridge images and are cross-checked by forcing the
+  implemented mapper in Mnemos; no cartridge data is committed.
+- **MSX Generic8 / AshGuine mapper notes** — the four 8 KiB window Generic8
+  mapper behaviour and the AshGuine family mapper assignment were cross-checked
+  against public MSX mapper notes (`https://www.msx.org/wiki/MegaROM_Mappers`)
+  and fMSX cartridge compatibility notes (`https://fms.komkon.org/fMSX/fMSX.html`).
+  Mnemos implements the mapper from the observed bank-register protocol and
+  local data-gated ROM traces; no emulator code or cartridge data is copied.
 - **93C46 EEPROM cart CRC database** — the handful of Game Gear cartridges that
   carry a 93C46 serial EEPROM for saves are likewise auto-detected by ROM CRC-32
   (`src/manifests/sms/sms_system.cpp`), compiled from the community Game Gear

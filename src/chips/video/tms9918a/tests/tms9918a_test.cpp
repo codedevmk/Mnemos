@@ -251,3 +251,28 @@ TEST_CASE("tms9918a round-trips state") {
     set_addr(restored, 0x0123U, 0U);
     CHECK(restored.data_read() == 0x5AU);
 }
+
+TEST_CASE("tms9918a exposes VRAM and VDP registers through introspection") {
+    tms9918a vdp;
+    set_addr(vdp, 0x0123U, 1U);
+    vdp.data_write(0x5AU);
+    write_reg(vdp, 7, 0xF1U);
+
+    auto& intro = vdp.introspection();
+    const auto memories = intro.memory_views();
+    REQUIRE(memories.size() == 2U);
+    REQUIRE(memories[0] != nullptr);
+    REQUIRE(memories[1] != nullptr);
+    CHECK(memories[0]->name() == "vram");
+    CHECK(memories[0]->bytes()[0x0123U] == 0x5AU);
+    CHECK(memories[1]->name() == "registers");
+    CHECK(memories[1]->bytes()[7U] == 0xF1U);
+
+    auto* registers = intro.registers();
+    REQUIRE(registers != nullptr);
+    const auto snapshot = registers->registers();
+    REQUIRE(snapshot.size() >= 13U);
+    CHECK(snapshot[7].name == "R7");
+    CHECK(snapshot[7].value == 0xF1U);
+    CHECK(snapshot[8].name == "STATUS");
+}

@@ -7,7 +7,7 @@ mnemos_fetch_sdl3()
 # isolation. Cross-system primitives (video_region, market) live in
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
 # manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M72, Taito F2,
-# CPS1, CPS2, Spectrum, NES, MSX, Amiga 500.
+# CPS1, CPS2, Spectrum, NES, MSX, MSX2, Amiga 500.
 add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
 add_subdirectory(adapters/sms)
@@ -65,6 +65,8 @@ target_link_libraries(
         mnemos::apps::player::msx_adapter
         mnemos::apps::player::msx2_adapter
         mnemos::apps::player::amiga500_adapter
+        mnemos::chips::storage::msx_cassette
+        mnemos::chips::storage::wd1793
         mnemos::debug::dump
 )
 mnemos_apply_common_target_options(mnemos_apps_player_core PUBLIC)
@@ -74,6 +76,8 @@ mnemos_declare_tier(
     DEPENDS
         mnemos_frontend_sdk
         mnemos_apps_player_adapters_common
+        mnemos_chips_storage_msx_cassette
+        mnemos_chips_storage_wd1793
         mnemos_debug_dump
 )
 
@@ -103,6 +107,11 @@ if(BUILD_TESTING)
         LIBRARIES mnemos::apps::player::text_overlay
     )
     mnemos_add_test(
+        mnemos_apps_player_system_launch_test
+        SOURCES tests/system_launch_test.cpp
+        LIBRARIES mnemos::apps::player::core
+    )
+    mnemos_add_test(
         mnemos_apps_player_capability_summary_test
         SOURCES tests/capability_summary_test.cpp
         LIBRARIES
@@ -117,6 +126,7 @@ if(BUILD_TESTING)
             mnemos::apps::player::capcom_cps1_adapter
             mnemos::apps::player::capcom_cps2_adapter
             mnemos::apps::player::msx_adapter
+            mnemos::apps::player::msx2_adapter
             mnemos::apps::player::amiga500_adapter
     )
 endif()

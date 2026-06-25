@@ -3,6 +3,8 @@
 #include "bus.hpp"
 #include "korean_msx_mapper.hpp"
 #include "msx_cassette.hpp"
+#include "msx_io_ports.hpp"
+#include "msx_kanji_rom.hpp"
 #include "peripheral.hpp"
 #include "region.hpp"
 #include "rp5c01.hpp"
@@ -24,11 +26,13 @@
 namespace mnemos::manifests::msx {
 
     enum class msx_cartridge_mapper : std::uint8_t {
+        automatic,
         plain,
         ascii8,
         ascii8_sram8,
         ascii16,
         ascii16_sram2,
+        generic8,
         konami,
         konami_scc,
         korean_msx,
@@ -43,16 +47,19 @@ namespace mnemos::manifests::msx {
     struct msx_config final {
         mnemos::video_region video_region{mnemos::video_region::ntsc};
         msx_video_model video_model{msx_video_model::tms9918a};
-        msx_cartridge_mapper cartridge_mapper{msx_cartridge_mapper::plain};
-        msx_cartridge_mapper cartridge2_mapper{msx_cartridge_mapper::plain};
+        msx_cartridge_mapper cartridge_mapper{msx_cartridge_mapper::automatic};
+        msx_cartridge_mapper cartridge2_mapper{msx_cartridge_mapper::automatic};
         std::uint8_t expanded_primary_slots{};
         std::uint8_t ram_primary_slot{3U};
         std::uint8_t ram_secondary_slot{};
         std::uint8_t ram_mapper_segments{};
         bool rtc_enabled{};
         bool disk_enabled{};
+        bool disk_write_protected{};
         bool fm_music_enabled{};
         bool fmpac_sram_enabled{};
+        std::span<const std::uint8_t> cassette_image{};
+        std::span<const std::uint8_t> logo_rom{};
         std::uint8_t disk_primary_slot{3U};
         std::uint8_t disk_secondary_slot{1U};
         std::uint8_t cartridge2_primary_slot{2U};
@@ -74,6 +81,7 @@ namespace mnemos::manifests::msx {
         chips::audio::scc scc;
         chips::audio::ym2413 fm;
         chips::peripheral::rp5c01 rtc;
+        chips::peripheral::msx_kanji_rom kanji;
         chips::storage::msx_cassette cassette;
         chips::storage::wd1793 fdc;
         chips::mapper::korean_msx_mapper korean_mapper;
@@ -83,10 +91,10 @@ namespace mnemos::manifests::msx {
         std::array<std::uint8_t, 0x8000> bios{};
         std::array<std::uint8_t, 0x10000> ram{};
         std::vector<std::uint8_t> mapped_ram{};
+        std::vector<std::uint8_t> logo_rom{};
         std::vector<std::uint8_t> cartridge{};
         std::vector<std::uint8_t> cartridge2{};
         std::vector<std::uint8_t> disk_rom{};
-        std::vector<std::uint8_t> kanji_rom{};
         std::vector<std::uint8_t> cart_sram{};
         std::vector<std::uint8_t> cart2_sram{};
         std::array<std::uint8_t, 0x2000> fmpac_sram{};
@@ -100,6 +108,8 @@ namespace mnemos::manifests::msx {
         std::array<std::uint8_t, 2> cart2_16k_bank{{0U, 1U}};
         bool scc_window_enabled{};
         bool scc2_window_enabled{};
+        bool cartridge_lower_handoff{};
+        bool cartridge2_lower_handoff{};
         bool rtc_enabled{};
         bool disk_enabled{};
         bool fm_music_enabled{};
@@ -112,6 +122,7 @@ namespace mnemos::manifests::msx {
 
         // PPI port A: two primary-slot select bits for each 16 KiB page.
         std::uint8_t primary_slot_select{};
+        std::uint8_t ppi_a{};
         // Bit N marks primary slot N as expanded. Each expanded primary slot owns
         // one subslot-select latch at $FFFF.
         std::uint8_t expanded_primary_slots{};
@@ -119,16 +130,19 @@ namespace mnemos::manifests::msx {
         std::uint8_t ram_primary_slot{3U};
         std::uint8_t ram_secondary_slot{};
         std::array<std::uint8_t, 4> ram_mapper_page{{0U, 1U, 2U, 3U}};
-        std::array<std::uint16_t, 2> kanji_char_address{};
-        std::array<std::uint8_t, 2> kanji_byte_counter{};
         // PPI port C: low nibble selects the keyboard row; upper bits carry
         // cassette motor/write, caps LED, and click output latches.
         std::uint8_t ppi_c{0xF0U};
+        std::uint8_t ppi_control{0x9BU};
+        std::uint8_t ppi_b{0xFFU};
         std::array<std::uint8_t, 16> keyboard_rows{};
         std::array<std::uint8_t, 2> joystick_rows{{0x3FU, 0x3FU}}; // active-low low 6 bits
+        std::array<common::msx_mouse_port, 2> mouse_ports{};
 
         void set_key(int row, int bit, bool pressed) noexcept;
         void apply_joystick(int port, const peripheral::controller_state& state) noexcept;
+        void set_mouse(int port, std::int16_t delta_x, std::int16_t delta_y, bool left_button,
+                       bool right_button) noexcept;
 
         [[nodiscard]] std::uint8_t read_memory(std::uint16_t address) noexcept;
         void write_memory(std::uint16_t address, std::uint8_t value) noexcept;
@@ -141,7 +155,9 @@ namespace mnemos::manifests::msx {
         [[nodiscard]] chips::ivideo& active_video() noexcept;
         [[nodiscard]] const chips::ivideo& active_video() const noexcept;
         [[nodiscard]] chips::frame_buffer_view framebuffer() const noexcept;
+        void sync_ppi_outputs() noexcept;
         void sync_cassette_control() noexcept;
+        void sync_psg_outputs() noexcept;
 
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
@@ -159,6 +175,10 @@ namespace mnemos::manifests::msx {
         [[nodiscard]] std::uint8_t cart_slot_index(slot_decode slot) const noexcept;
         [[nodiscard]] bool is_disk_slot(slot_decode slot) const noexcept;
         [[nodiscard]] bool is_ram_slot(slot_decode slot) const noexcept;
+        [[nodiscard]] std::uint8_t
+        plain_32k_handoff_cart_slot(slot_decode selected_slot,
+                                    std::uint16_t address) const noexcept;
+        [[nodiscard]] bool plain_16k_lower_page_visible(std::uint8_t slot_index) const noexcept;
         [[nodiscard]] std::uint8_t read_ram(std::uint16_t address) const noexcept;
         void write_ram(std::uint16_t address, std::uint8_t value) noexcept;
         [[nodiscard]] std::uint8_t read_disk(std::uint16_t address) noexcept;
@@ -168,8 +188,6 @@ namespace mnemos::manifests::msx {
         void write_cart(std::uint8_t slot_index, std::uint16_t address,
                         std::uint8_t value) noexcept;
         [[nodiscard]] bool fmpac_sram_unlocked() const noexcept;
-        [[nodiscard]] std::uint8_t read_kanji(std::size_t level) noexcept;
-        void write_kanji_address(std::size_t level, bool upper, std::uint8_t value) noexcept;
         [[nodiscard]] std::uint8_t read_cart_8k(std::span<const std::uint8_t> rom,
                                                 std::uint8_t bank,
                                                 std::uint16_t offset) const noexcept;

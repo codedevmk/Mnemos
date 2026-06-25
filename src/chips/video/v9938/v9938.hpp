@@ -20,6 +20,7 @@ namespace mnemos::chips::video {
         static constexpr int display_height_384 = 384;
         static constexpr int display_height_424 = 424;
         static constexpr int vram_size = 0x20000;
+        static constexpr int expanded_vram_size = 0x10000;
         static constexpr int register_count = 64;
         static constexpr int status_register_count = 10;
         static constexpr int palette_count = 16;
@@ -86,7 +87,7 @@ namespace mnemos::chips::video {
             if (index < 0 || index >= status_register_count) {
                 return 0xFFU;
             }
-            return index == 2 ? compose_status2() : status_[static_cast<std::size_t>(index)];
+            return compose_status_register(static_cast<std::uint8_t>(index));
         }
         [[nodiscard]] std::uint16_t palette(int index) const noexcept {
             return (index >= 0 && index < palette_count) ? palette_[static_cast<std::size_t>(index)]
@@ -97,7 +98,30 @@ namespace mnemos::chips::video {
         void render_frame() noexcept;
 
       private:
-        struct introspection_surface final : public instrumentation::ichip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(v9938& owner) noexcept
+                : vram_view_("vram", owner.vram_),
+                  expanded_vram_view_("expanded_vram", owner.expanded_vram_),
+                  regs_view_("registers", owner.reg_),
+                  status_view_("status", owner.status_) {
+                memory_views_[0] = &vram_view_;
+                memory_views_[1] = &expanded_vram_view_;
+                memory_views_[2] = &regs_view_;
+                memory_views_[3] = &status_view_;
+            }
+
+            [[nodiscard]] std::span<instrumentation::memory_view* const> memory_views() override {
+                return memory_views_;
+            }
+
+          private:
+            instrumentation::span_memory_view vram_view_;
+            instrumentation::span_memory_view expanded_vram_view_;
+            instrumentation::span_memory_view regs_view_;
+            instrumentation::span_memory_view status_view_;
+            std::array<instrumentation::memory_view*, 4> memory_views_{};
+        };
 
         enum class command_stream_kind : std::uint8_t {
             none,
@@ -114,6 +138,12 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint8_t vram_at(std::uint32_t address) const noexcept {
             return vram_[address & (vram_size - 1U)];
         }
+        [[nodiscard]] std::uint8_t memory_at(std::uint32_t address,
+                                             bool expansion) const noexcept;
+        void write_memory(std::uint32_t address, bool expansion, std::uint8_t value) noexcept;
+        [[nodiscard]] bool cpu_access_uses_expansion() const noexcept;
+        [[nodiscard]] bool command_source_uses_expansion() const noexcept;
+        [[nodiscard]] bool command_destination_uses_expansion() const noexcept;
         [[nodiscard]] std::uint32_t vram_address() const noexcept;
         [[nodiscard]] bool interlace_enabled() const noexcept;
         [[nodiscard]] int field_visible_height() const noexcept;
@@ -123,6 +153,7 @@ namespace mnemos::chips::video {
         void set_vram_address(std::uint32_t address) noexcept;
         void increment_vram_address() noexcept;
         void write_register(std::uint8_t reg, std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint8_t compose_status_register(std::uint8_t index) const noexcept;
         [[nodiscard]] std::uint8_t compose_status2() const noexcept;
         [[nodiscard]] bool vertical_retrace_active() const noexcept;
         [[nodiscard]] bool horizontal_retrace_active() const noexcept;
@@ -165,30 +196,53 @@ namespace mnemos::chips::video {
         void execute_pset(std::uint8_t op) noexcept;
         void execute_point() noexcept;
         void stop_command() noexcept;
+        void arm_command_busy(std::uint64_t cycles) noexcept;
+        void arm_transfer_delay(std::uint64_t cycles) noexcept;
+        void advance_command_timers(std::uint64_t cycles) noexcept;
+        [[nodiscard]] std::uint64_t
+        apply_command_access_pressure(std::uint64_t cycles) const noexcept;
         void start_cpu_to_vram_command(command_stream_kind kind, std::uint8_t op) noexcept;
         void start_vram_to_cpu_command() noexcept;
         void consume_cpu_command_data(std::uint8_t value) noexcept;
         void prepare_vram_to_cpu_data() noexcept;
         void advance_command_stream(std::uint16_t pixels) noexcept;
         void update_command_stream_status() noexcept;
+        [[nodiscard]] std::uint64_t
+        estimate_command_busy_cycles(std::uint8_t command) const noexcept;
+        [[nodiscard]] std::uint64_t
+        estimate_cpu_transfer_delay_cycles(command_stream_kind kind) const noexcept;
         [[nodiscard]] std::uint16_t command_x(int low_reg, int high_reg) const noexcept;
         [[nodiscard]] std::uint16_t command_y(int low_reg, int high_reg) const noexcept;
+        void set_command_x(int low_reg, int high_reg, std::uint16_t value) noexcept;
+        void set_command_y(int low_reg, int high_reg, std::uint16_t value) noexcept;
         [[nodiscard]] std::uint16_t command_screen_width() const noexcept;
+        [[nodiscard]] std::uint16_t command_screen_height() const noexcept;
+        [[nodiscard]] std::uint16_t executed_vertical_rows(std::uint16_t y, std::uint16_t rows,
+                                                           int y_step) const noexcept;
+        [[nodiscard]] std::uint16_t executed_vertical_rows(std::uint16_t y0, std::uint16_t y1,
+                                                           std::uint16_t rows,
+                                                           int y_step) const noexcept;
+        void apply_command_register_postconditions(std::uint8_t command) noexcept;
         [[nodiscard]] std::uint8_t high_speed_pixels_per_byte(display_mode mode) const noexcept;
         [[nodiscard]] std::uint8_t high_speed_colour_from_byte(std::uint8_t value, int x,
                                                                display_mode mode) const noexcept;
         [[nodiscard]] bool command_pixel_address(std::uint16_t x, std::uint16_t y,
                                                  std::uint32_t& address, std::uint8_t& shift,
                                                  std::uint8_t& mask) const noexcept;
-        [[nodiscard]] std::uint8_t read_command_pixel(std::uint16_t x,
-                                                      std::uint16_t y) const noexcept;
+        [[nodiscard]] std::uint8_t read_command_pixel(std::uint16_t x, std::uint16_t y,
+                                                      bool expansion) const noexcept;
+        [[nodiscard]] std::uint8_t read_high_speed_byte(std::uint16_t x, std::uint16_t y,
+                                                        bool expansion) const noexcept;
+        void write_high_speed_byte(std::uint16_t x, std::uint16_t y, std::uint8_t value,
+                                   display_mode mode, bool expansion) noexcept;
         void write_high_speed_byte(std::uint16_t x, std::uint16_t y, std::uint8_t value) noexcept;
         void write_command_pixel(std::uint16_t x, std::uint16_t y, std::uint8_t colour,
-                                 std::uint8_t logical_op = 0U) noexcept;
+                                 bool expansion, std::uint8_t logical_op = 0U) noexcept;
         [[nodiscard]] std::uint8_t apply_logical(std::uint8_t source, std::uint8_t dest,
                                                  std::uint8_t op, std::uint8_t mask) const noexcept;
 
         std::array<std::uint8_t, vram_size> vram_{};
+        std::array<std::uint8_t, expanded_vram_size> expanded_vram_{};
         std::array<std::uint8_t, register_count> reg_{};
         std::array<std::uint8_t, status_register_count> status_{};
         std::array<std::uint16_t, palette_count> palette_{};
@@ -212,7 +266,11 @@ namespace mnemos::chips::video {
         int stream_y_step_{1};
         std::uint8_t stream_op_{};
         bool stream_high_speed_{};
+        bool stream_source_expansion_{};
+        bool stream_dest_expansion_{};
         display_mode stream_mode_{display_mode::graphics_i};
+        std::uint64_t command_busy_cycles_{};
+        std::uint64_t stream_ready_delay_cycles_{};
 
         bool irq_asserted_{};
         std::function<void(bool)> irq_callback_{};
@@ -226,7 +284,7 @@ namespace mnemos::chips::video {
         std::vector<std::uint32_t> framebuffer_ =
             std::vector<std::uint32_t>(static_cast<std::size_t>(max_width) * max_height);
 
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::video

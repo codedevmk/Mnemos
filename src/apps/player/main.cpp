@@ -329,8 +329,9 @@ int main(int argc, char* argv[]) {
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.
     std::optional<battery_save_guard> srm_guard;
-    if (system && !mnemos::apps::player::has_headless_request(headless)) {
-        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path));
+    if (system && !mnemos::apps::player::has_headless_request(headless) &&
+        !launch.battery_media_path.empty()) {
+        srm_guard.emplace(system.get(), srm_path_for(launch.battery_media_path));
     }
 
     if (const auto exit_code =

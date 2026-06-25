@@ -223,6 +223,11 @@ namespace mnemos::frontend_sdk {
         // chip return non-empty (a cartridge console with no save RAM returns {}).
         [[nodiscard]] virtual std::span<std::uint8_t> battery_ram() noexcept { return {}; }
 
+        // Adapter-stable media id that owns battery_ram() ("cart", "cart2",
+        // "fmpac", etc.). Empty preserves the legacy frontend behavior of
+        // saving beside the primary media path.
+        [[nodiscard]] virtual std::string_view battery_ram_media_id() const noexcept { return {}; }
+
         // Convenience: lookup a chip by an adapter-stable id ("cpu", "vdp",
         // "z80", "sub_cpu", "vdp1", ...). Returns nullptr if the adapter
         // doesn't advertise that id. Default scans `chips()` for a match on

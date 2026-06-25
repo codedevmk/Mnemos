@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
 
 namespace mnemos::chips::storage {
     namespace {
@@ -15,8 +16,7 @@ namespace mnemos::chips::storage {
 
         [[nodiscard]] bool magic_at(std::span<const std::uint8_t> image,
                                     std::size_t offset) noexcept {
-            if ((offset % msx_cassette::cas_header_magic.size()) != 0U ||
-                offset + msx_cassette::cas_header_magic.size() > image.size()) {
+            if (offset + msx_cassette::cas_header_magic.size() > image.size()) {
                 return false;
             }
             for (std::size_t i = 0; i < msx_cassette::cas_header_magic.size(); ++i) {
@@ -39,7 +39,7 @@ namespace mnemos::chips::storage {
     }
 
     bool msx_cassette::has_cas_header(std::span<const std::uint8_t> image) noexcept {
-        for (std::size_t i = 0; i + cas_header_magic.size() <= image.size(); i += 8U) {
+        for (std::size_t i = 0; i + cas_header_magic.size() <= image.size(); ++i) {
             if (magic_at(image, i)) {
                 return true;
             }
@@ -165,6 +165,10 @@ namespace mnemos::chips::storage {
         writer.boolean(play_);
         writer.boolean(motor_on_);
         writer.boolean(output_high_);
+        writer.u64(static_cast<std::uint64_t>(half_cycles_.size()));
+        for (const std::uint32_t half_cycle : half_cycles_) {
+            writer.u32(half_cycle);
+        }
     }
 
     void msx_cassette::load_state(state_reader& reader) {
@@ -175,13 +179,31 @@ namespace mnemos::chips::storage {
         rate_ = reader.u8() == static_cast<std::uint8_t>(baud_rate::baud_2400)
                     ? baud_rate::baud_2400
                     : baud_rate::baud_1200;
-        pulse_index_ =
-            std::min<std::size_t>(static_cast<std::size_t>(reader.u64()), half_cycles_.size());
+        const std::uint64_t saved_pulse_index = reader.u64();
         countdown_ = reader.u32();
         input_high_ = reader.boolean();
         play_ = reader.boolean();
         motor_on_ = reader.boolean();
         output_high_ = reader.boolean();
+        if (reader.remaining() != 0U) {
+            if (reader.remaining() < sizeof(std::uint64_t)) {
+                reader.fail();
+                return;
+            }
+            const std::uint64_t count = reader.u64();
+            if (count > (reader.remaining() / sizeof(std::uint32_t))) {
+                reader.fail();
+                return;
+            }
+            std::vector<std::uint32_t> half_cycles;
+            half_cycles.reserve(static_cast<std::size_t>(count));
+            for (std::uint64_t i = 0; i < count; ++i) {
+                half_cycles.push_back(reader.u32());
+            }
+            half_cycles_ = std::move(half_cycles);
+        }
+        pulse_index_ =
+            std::min<std::size_t>(static_cast<std::size_t>(saved_pulse_index), half_cycles_.size());
         if (pulse_index_ >= half_cycles_.size()) {
             countdown_ = 0U;
         }

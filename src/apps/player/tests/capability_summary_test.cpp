@@ -5,6 +5,7 @@
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m72_adapter.hpp"
+#include "msx2_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
@@ -29,6 +30,7 @@ namespace {
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
     namespace msx = mnemos::apps::player::adapters::msx;
+    namespace msx2 = mnemos::apps::player::adapters::msx2;
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
     namespace segacd = mnemos::apps::player::adapters::segacd;
     namespace sms = mnemos::apps::player::adapters::sms;
@@ -166,8 +168,9 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> taito_f2_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::taito_f2::main_rom_size, 0xFFU);
-        poke32_be(rom, 0x0U, mnemos::manifests::taito_f2::work_ram_base +
-                                mnemos::manifests::taito_f2::work_ram_size);
+        poke32_be(rom, 0x0U,
+                  mnemos::manifests::taito_f2::work_ram_base +
+                      mnemos::manifests::taito_f2::work_ram_size);
         poke32_be(rom, 0x4U, 0x00000400U);
         poke16_be(rom, 0x400U, 0x33FCU);
         poke16_be(rom, 0x402U, 0x4242U);
@@ -207,9 +210,10 @@ namespace {
                          "capability session session.mode.rollback state=available control=enabled "
                          "scope=session provider=mnemos.debug.session");
         } else {
-            require_line(summary,
-                         "capability session session.mode.rollback state=unavailable control=hidden "
-                         "scope=session provider=mnemos.debug.session");
+            require_line(
+                summary,
+                "capability session session.mode.rollback state=unavailable control=hidden "
+                "scope=session provider=mnemos.debug.session");
         }
     }
 
@@ -318,7 +322,16 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         msx::msx_adapter adapter(std::vector<std::uint8_t>(0x8000U, 0x00U),
                                  std::vector<std::uint8_t>(0x4000U, 0xFFU), {}, "Tiny MSX");
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
+        require_common_session_controls(summary, true);
+        require_degraded_media(summary, "media.bios");
+        require_degraded_media(summary, "media.cart");
+    }
+
+    SECTION("MSX2") {
+        msx2::msx2_adapter adapter(std::vector<std::uint8_t>(0x8000U, 0x00U),
+                                   std::vector<std::uint8_t>(0x4000U, 0xFFU), {}, "Tiny MSX2");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.bios");
         require_degraded_media(summary, "media.cart");
     }

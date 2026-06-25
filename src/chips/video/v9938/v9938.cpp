@@ -11,7 +11,7 @@
 namespace mnemos::chips::video {
 
     namespace {
-        constexpr std::uint32_t k_state_version = 2U;
+        constexpr std::uint32_t k_state_version = 4U;
         constexpr std::uint8_t k_status_frame_irq = 0x80U;
         constexpr std::uint8_t k_status_scanline_irq = 0x01U;
         constexpr std::uint8_t k_status_command_execute = 0x01U;
@@ -22,10 +22,29 @@ namespace mnemos::chips::video {
         constexpr std::uint8_t k_status_display_field = 0x02U;
         constexpr std::uint8_t k_status2_fixed_bits = 0x0CU;
         constexpr std::uint8_t k_register8_black_white = 0x01U;
+        constexpr std::uint8_t k_register8_sprite_disable = 0x02U;
+        constexpr std::uint8_t k_register8_colour0_opaque = 0x20U;
         constexpr std::uint8_t k_register9_interlace = 0x08U;
         constexpr std::uint8_t k_register9_even_odd_page = 0x04U;
         constexpr std::uint8_t k_register9_pal_refresh = 0x02U;
+        constexpr std::uint8_t k_register45_source_expansion = 0x20U;
+        constexpr std::uint8_t k_register45_destination_expansion = 0x40U;
         constexpr int k_horizontal_retrace_cycles = 32;
+
+        [[nodiscard]] constexpr std::uint64_t
+        master_cycles_to_v9938_ticks(std::uint64_t cycles) noexcept {
+            return (cycles + 5U) / 6U;
+        }
+
+        [[nodiscard]] constexpr std::uint64_t
+        rect_command_ticks(std::uint64_t pixels, std::uint64_t rows, std::uint64_t per_pixel_master,
+                           std::uint64_t per_line_master) noexcept {
+            if (pixels == 0U || rows == 0U) {
+                return 0U;
+            }
+            const std::uint64_t line_cost = rows > 1U ? (rows - 1U) * per_line_master : 0U;
+            return master_cycles_to_v9938_ticks(pixels * per_pixel_master + line_cost);
+        }
 
         [[nodiscard]] constexpr std::uint8_t expand3(std::uint16_t value) noexcept {
             return static_cast<std::uint8_t>(((value & 0x07U) * 255U) / 7U);
@@ -56,9 +75,9 @@ namespace mnemos::chips::video {
             return (r[1] & 0x01U) != 0U;
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         name_base_tms(const std::array<std::uint8_t, v9938::register_count>& r) noexcept {
-            return static_cast<std::uint16_t>((r[2] & 0x0FU) << 10U);
+            return static_cast<std::uint32_t>(r[2] & 0x7FU) << 10U;
         }
 
         [[nodiscard]] std::uint32_t
@@ -72,27 +91,29 @@ namespace mnemos::chips::video {
                    (static_cast<std::uint32_t>(r[3] & 0xF8U) << 6U);
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         color_base_g1(const std::array<std::uint8_t, v9938::register_count>& r) noexcept {
-            return static_cast<std::uint16_t>(r[3] << 6U);
+            return (static_cast<std::uint32_t>(r[10] & 0x07U) << 14U) |
+                   (static_cast<std::uint32_t>(r[3]) << 6U);
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         pattern_base_g1(const std::array<std::uint8_t, v9938::register_count>& r) noexcept {
-            return static_cast<std::uint16_t>((r[4] & 0x07U) << 11U);
+            return static_cast<std::uint32_t>(r[4] & 0x3FU) << 11U;
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         color_base_g2(const std::array<std::uint8_t, v9938::register_count>& r) noexcept {
-            return static_cast<std::uint16_t>((r[3] & 0x80U) << 6U);
+            return (static_cast<std::uint32_t>(r[10] & 0x07U) << 14U) |
+                   (static_cast<std::uint32_t>(r[3] & 0x80U) << 6U);
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         pattern_base_g2(const std::array<std::uint8_t, v9938::register_count>& r) noexcept {
-            return static_cast<std::uint16_t>((r[4] & 0x04U) << 11U);
+            return static_cast<std::uint32_t>(r[4] & 0x3CU) << 11U;
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         graphics_ii_pattern_address(const std::array<std::uint8_t, v9938::register_count>& r,
                                     std::uint8_t pattern, int page, int fine_y) noexcept {
             const auto char_index =
@@ -100,10 +121,10 @@ namespace mnemos::chips::video {
             const auto offset =
                 static_cast<std::uint16_t>((char_index << 3U) | static_cast<std::uint16_t>(fine_y));
             const auto mask = static_cast<std::uint16_t>(((r[4] & 0x03U) << 11U) | 0x07FFU);
-            return static_cast<std::uint16_t>(pattern_base_g2(r) | (offset & mask));
+            return pattern_base_g2(r) | static_cast<std::uint32_t>(offset & mask);
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         graphics_ii_color_address(const std::array<std::uint8_t, v9938::register_count>& r,
                                   std::uint8_t pattern, int page, int fine_y) noexcept {
             const auto char_index =
@@ -111,12 +132,13 @@ namespace mnemos::chips::video {
             const auto offset =
                 static_cast<std::uint16_t>((char_index << 3U) | static_cast<std::uint16_t>(fine_y));
             const auto mask = static_cast<std::uint16_t>(((r[3] & 0x7FU) << 6U) | 0x003FU);
-            return static_cast<std::uint16_t>(color_base_g2(r) | (offset & mask));
+            return color_base_g2(r) | static_cast<std::uint32_t>(offset & mask);
         }
 
-        [[nodiscard]] std::uint16_t
+        [[nodiscard]] std::uint32_t
         sprite_attr_base(const std::array<std::uint8_t, v9938::register_count>& r) noexcept {
-            return static_cast<std::uint16_t>((r[5] & 0x7FU) << 7U);
+            return (static_cast<std::uint32_t>(r[11] & 0x03U) << 15U) |
+                   (static_cast<std::uint32_t>(r[5]) << 7U);
         }
 
         [[nodiscard]] std::uint32_t
@@ -251,7 +273,7 @@ namespace mnemos::chips::video {
 
     std::uint32_t v9938::paletted_display_rgb(std::uint8_t colour) const noexcept {
         const std::uint8_t index = static_cast<std::uint8_t>(colour & 0x0FU);
-        const bool colour_zero_transparent = (reg_[8] & 0x20U) == 0U;
+        const bool colour_zero_transparent = (reg_[8] & k_register8_colour0_opaque) == 0U;
         return index == 0U && colour_zero_transparent ? backdrop_rgb()
                                                       : display_rgb(palette_rgb(index));
     }
@@ -282,6 +304,31 @@ namespace mnemos::chips::video {
         const std::uint32_t luma5 = (luma8 * 31U + 127U) / 255U;
         const std::uint32_t channel = (luma5 * 255U + 15U) / 31U;
         return (channel << 16U) | (channel << 8U) | channel;
+    }
+
+    std::uint8_t v9938::memory_at(std::uint32_t address, bool expansion) const noexcept {
+        return expansion ? expanded_vram_[address & (expanded_vram_size - 1U)]
+                         : vram_[address & (vram_size - 1U)];
+    }
+
+    void v9938::write_memory(std::uint32_t address, bool expansion, std::uint8_t value) noexcept {
+        if (expansion) {
+            expanded_vram_[address & (expanded_vram_size - 1U)] = value;
+            return;
+        }
+        vram_[address & (vram_size - 1U)] = value;
+    }
+
+    bool v9938::cpu_access_uses_expansion() const noexcept {
+        return (reg_[45] & k_register45_destination_expansion) != 0U;
+    }
+
+    bool v9938::command_source_uses_expansion() const noexcept {
+        return (reg_[45] & k_register45_source_expansion) != 0U;
+    }
+
+    bool v9938::command_destination_uses_expansion() const noexcept {
+        return (reg_[45] & k_register45_destination_expansion) != 0U;
     }
 
     std::uint32_t v9938::vram_address() const noexcept {
@@ -356,7 +403,7 @@ namespace mnemos::chips::video {
         addr_low_ = static_cast<std::uint16_t>(((value & 0x3FU) << 8U) | cmd_first_);
         code_ = static_cast<std::uint8_t>((value >> 6U) & 0x01U);
         if (code_ == 0U) {
-            read_buffer_ = vram_[vram_address()];
+            read_buffer_ = memory_at(vram_address(), cpu_access_uses_expansion());
             increment_vram_address();
         }
     }
@@ -365,7 +412,7 @@ namespace mnemos::chips::video {
         cmd_pending_ = false;
         palette_second_ = false;
         const std::uint8_t result = read_buffer_;
-        read_buffer_ = vram_[vram_address()];
+        read_buffer_ = memory_at(vram_address(), cpu_access_uses_expansion());
         increment_vram_address();
         return result;
     }
@@ -378,9 +425,26 @@ namespace mnemos::chips::video {
             consume_cpu_command_data(value);
             return;
         }
-        vram_[vram_address()] = value;
+        write_memory(vram_address(), cpu_access_uses_expansion(), value);
         read_buffer_ = value;
         increment_vram_address();
+    }
+
+    std::uint8_t v9938::compose_status_register(std::uint8_t index) const noexcept {
+        switch (index) {
+        case 2U:
+            return compose_status2();
+        case 4U:
+            return static_cast<std::uint8_t>(0xFEU | (status_[4] & 0x01U));
+        case 6U:
+            return static_cast<std::uint8_t>(
+                0xFCU | (second_display_field() ? k_status_display_field : 0U) |
+                (status_[6] & 0x01U));
+        case 9U:
+            return static_cast<std::uint8_t>(0xFEU | (status_[9] & 0x01U));
+        default:
+            return status_[index];
+        }
     }
 
     std::uint8_t v9938::compose_status2() const noexcept {
@@ -412,12 +476,12 @@ namespace mnemos::chips::video {
         if (selected >= status_register_count) {
             return 0xFFU;
         }
-        const std::uint8_t result = selected == 2U ? compose_status2() : status_[selected];
+        const std::uint8_t result = compose_status_register(selected);
         if (selected == 7U && command_stream_ == command_stream_kind::lmcm &&
             (status_[2] & k_status_transfer_ready) != 0U) {
             advance_command_stream(1U);
             if (command_stream_ == command_stream_kind::lmcm) {
-                prepare_vram_to_cpu_data();
+                arm_transfer_delay(estimate_cpu_transfer_delay_cycles(command_stream_));
             }
             return result;
         }
@@ -506,9 +570,77 @@ namespace mnemos::chips::video {
         stream_y_step_ = 1;
         stream_op_ = 0U;
         stream_high_speed_ = false;
+        stream_source_expansion_ = false;
+        stream_dest_expansion_ = false;
         stream_mode_ = display_mode::graphics_i;
+        command_busy_cycles_ = 0U;
+        stream_ready_delay_cycles_ = 0U;
         status_[2] &=
             static_cast<std::uint8_t>(~(k_status_command_execute | k_status_transfer_ready));
+    }
+
+    void v9938::arm_command_busy(std::uint64_t cycles) noexcept {
+        command_busy_cycles_ = apply_command_access_pressure(cycles);
+        status_[2] &= static_cast<std::uint8_t>(~k_status_transfer_ready);
+        if (command_busy_cycles_ == 0U) {
+            status_[2] &= static_cast<std::uint8_t>(~k_status_command_execute);
+            return;
+        }
+        status_[2] |= k_status_command_execute;
+    }
+
+    void v9938::arm_transfer_delay(std::uint64_t cycles) noexcept {
+        stream_ready_delay_cycles_ = apply_command_access_pressure(cycles);
+        if (stream_ready_delay_cycles_ == 0U) {
+            update_command_stream_status();
+            return;
+        }
+        status_[2] |= k_status_command_execute;
+        status_[2] &= static_cast<std::uint8_t>(~k_status_transfer_ready);
+    }
+
+    void v9938::advance_command_timers(std::uint64_t cycles) noexcept {
+        if (command_busy_cycles_ != 0U) {
+            if (cycles >= command_busy_cycles_) {
+                command_busy_cycles_ = 0U;
+                if (command_stream_ == command_stream_kind::none) {
+                    status_[2] &= static_cast<std::uint8_t>(~k_status_command_execute);
+                }
+            } else {
+                command_busy_cycles_ -= cycles;
+            }
+        }
+
+        if (stream_ready_delay_cycles_ == 0U) {
+            return;
+        }
+        if (cycles >= stream_ready_delay_cycles_) {
+            stream_ready_delay_cycles_ = 0U;
+            if (command_stream_ == command_stream_kind::lmcm) {
+                prepare_vram_to_cpu_data();
+            } else {
+                update_command_stream_status();
+            }
+        } else {
+            stream_ready_delay_cycles_ -= cycles;
+        }
+    }
+
+    std::uint64_t v9938::apply_command_access_pressure(std::uint64_t cycles) const noexcept {
+        if (cycles == 0U) {
+            return 0U;
+        }
+
+        constexpr std::uint64_t screen_off_slots = 154U;
+        constexpr std::uint64_t sprites_off_slots = 88U;
+        constexpr std::uint64_t sprites_on_slots = 31U;
+
+        const bool screen_enabled = display_enabled(reg_);
+        const bool sprites_inhibited = (reg_[8] & k_register8_sprite_disable) != 0U;
+        const std::uint64_t slots =
+            !screen_enabled ? screen_off_slots
+                            : (sprites_inhibited ? sprites_off_slots : sprites_on_slots);
+        return (cycles * screen_off_slots + slots - 1U) / slots;
     }
 
     std::uint8_t v9938::high_speed_pixels_per_byte(display_mode mode) const noexcept {
@@ -553,11 +685,19 @@ namespace mnemos::chips::video {
     void v9938::update_command_stream_status() noexcept {
         if (command_stream_ == command_stream_kind::none || stream_row_ >= stream_ny_ ||
             stream_nx_ == 0U || stream_ny_ == 0U) {
+            if (command_stream_ != command_stream_kind::none) {
+                apply_command_register_postconditions(reg_[46]);
+            }
             stop_command();
             return;
         }
 
-        status_[2] |= static_cast<std::uint8_t>(k_status_command_execute | k_status_transfer_ready);
+        status_[2] |= k_status_command_execute;
+        if (stream_ready_delay_cycles_ == 0U) {
+            status_[2] |= k_status_transfer_ready;
+        } else {
+            status_[2] &= static_cast<std::uint8_t>(~k_status_transfer_ready);
+        }
     }
 
     void v9938::advance_command_stream(std::uint16_t pixels) noexcept {
@@ -573,17 +713,29 @@ namespace mnemos::chips::video {
         update_command_stream_status();
     }
 
+    std::uint8_t v9938::read_high_speed_byte(std::uint16_t x, std::uint16_t y,
+                                             bool expansion) const noexcept {
+        std::uint32_t address = 0U;
+        std::uint8_t shift = 0U;
+        std::uint8_t mask = 0U;
+        if (!command_pixel_address(x, y, address, shift, mask)) {
+            return 0U;
+        }
+        return memory_at(address, expansion);
+    }
+
+    void v9938::write_high_speed_byte(std::uint16_t x, std::uint16_t y, std::uint8_t value,
+                                      display_mode mode, bool expansion) noexcept {
+        const std::uint8_t pixels = high_speed_pixels_per_byte(mode);
+        for (std::uint8_t i = 0; i < pixels; ++i) {
+            const auto px = static_cast<std::uint16_t>(x + i);
+            write_command_pixel(px, y, high_speed_colour_from_byte(value, px, mode), expansion);
+        }
+    }
+
     void v9938::write_high_speed_byte(std::uint16_t x, std::uint16_t y,
                                       std::uint8_t value) noexcept {
-        const std::uint8_t pixels = high_speed_pixels_per_byte(stream_mode_);
-        for (std::uint8_t i = 0; i < pixels; ++i) {
-            const int px = static_cast<int>(x) + static_cast<int>(i) * stream_x_step_;
-            if (px < 0) {
-                continue;
-            }
-            write_command_pixel(static_cast<std::uint16_t>(px), y,
-                                high_speed_colour_from_byte(value, px, stream_mode_));
-        }
+        write_high_speed_byte(x, y, value, stream_mode_, stream_dest_expansion_);
     }
 
     void v9938::consume_cpu_command_data(std::uint8_t value) noexcept {
@@ -602,13 +754,16 @@ namespace mnemos::chips::video {
                 advance_command_stream(high_speed_pixels_per_byte(stream_mode_));
             } else {
                 write_command_pixel(static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
-                                    value, stream_op_);
+                                    value, stream_dest_expansion_, stream_op_);
                 advance_command_stream(1U);
             }
         } else {
             advance_command_stream(command_stream_ == command_stream_kind::hmmc
                                        ? high_speed_pixels_per_byte(stream_mode_)
                                        : 1U);
+        }
+        if (command_stream_ != command_stream_kind::none) {
+            arm_transfer_delay(estimate_cpu_transfer_delay_cycles(command_stream_));
         }
     }
 
@@ -618,9 +773,11 @@ namespace mnemos::chips::video {
         }
         const int x = static_cast<int>(stream_x_) + static_cast<int>(stream_col_) * stream_x_step_;
         const int y = static_cast<int>(stream_y_) + static_cast<int>(stream_row_) * stream_y_step_;
-        status_[7] = (x >= 0 && y >= 0) ? read_command_pixel(static_cast<std::uint16_t>(x),
-                                                             static_cast<std::uint16_t>(y))
-                                        : 0U;
+        status_[7] =
+            (x >= 0 && y >= 0)
+                ? read_command_pixel(static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
+                                     stream_source_expansion_)
+                : 0U;
         update_command_stream_status();
     }
 
@@ -640,6 +797,9 @@ namespace mnemos::chips::video {
         stream_x_step_ = (reg_[45] & 0x04U) != 0U ? -1 : 1;
         stream_y_step_ = (reg_[45] & 0x08U) != 0U ? -1 : 1;
         stream_op_ = op;
+        stream_source_expansion_ = false;
+        stream_dest_expansion_ = command_destination_uses_expansion();
+        stream_ready_delay_cycles_ = 0U;
         command_stream_ = kind;
         update_command_stream_status();
         consume_cpu_command_data(reg_[44]);
@@ -655,8 +815,91 @@ namespace mnemos::chips::video {
         stream_ny_ = command_y(42, 43);
         stream_x_step_ = (reg_[45] & 0x04U) != 0U ? -1 : 1;
         stream_y_step_ = (reg_[45] & 0x08U) != 0U ? -1 : 1;
+        stream_source_expansion_ = command_source_uses_expansion();
+        stream_dest_expansion_ = false;
+        stream_ready_delay_cycles_ = 0U;
         command_stream_ = command_stream_kind::lmcm;
-        prepare_vram_to_cpu_data();
+        arm_transfer_delay(estimate_cpu_transfer_delay_cycles(command_stream_));
+    }
+
+    std::uint64_t v9938::estimate_command_busy_cycles(std::uint8_t command) const noexcept {
+        switch (command & 0xF0U) {
+        case 0xE0U: {
+            const display_mode active_mode = mode();
+            const std::uint16_t x_mask = high_speed_x_mask(active_mode);
+            const std::uint16_t x_origin = static_cast<std::uint16_t>(command_x(36, 37) & x_mask);
+            const std::uint16_t ny = command_y(42, 43);
+            const std::uint16_t screen_width = command_screen_width();
+            if (ny == 0U || screen_width == 0U || x_origin >= screen_width) {
+                return 0U;
+            }
+            const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
+            const std::uint16_t width =
+                x_step > 0 ? static_cast<std::uint16_t>(screen_width - x_origin)
+                           : static_cast<std::uint16_t>(x_origin +
+                                                        high_speed_pixels_per_byte(active_mode));
+            return rect_command_ticks(static_cast<std::uint64_t>(width) * ny, ny, 64U, 0U);
+        }
+        case 0xC0U: {
+            const std::uint16_t nx =
+                static_cast<std::uint16_t>(command_x(40, 41) & high_speed_x_mask(mode()));
+            const std::uint16_t ny = command_y(42, 43);
+            return rect_command_ticks(static_cast<std::uint64_t>(nx) * ny, ny, 48U, 56U);
+        }
+        case 0xD0U: {
+            const std::uint16_t nx =
+                static_cast<std::uint16_t>(command_x(40, 41) & high_speed_x_mask(mode()));
+            const std::uint16_t ny = command_y(42, 43);
+            return rect_command_ticks(static_cast<std::uint64_t>(nx) * ny, ny, 88U, 64U);
+        }
+        case 0x80U: {
+            const std::uint16_t nx = command_x(40, 41);
+            const std::uint16_t ny = command_y(42, 43);
+            return rect_command_ticks(static_cast<std::uint64_t>(nx) * ny, ny, 96U, 64U);
+        }
+        case 0x90U: {
+            const std::uint16_t nx = command_x(40, 41);
+            const std::uint16_t ny = command_y(42, 43);
+            return rect_command_ticks(static_cast<std::uint64_t>(nx) * ny, ny, 120U, 64U);
+        }
+        case 0x70U: {
+            const std::uint64_t major = command_x(40, 41);
+            const std::uint64_t minor = command_y(42, 43);
+            return master_cycles_to_v9938_ticks((major + 1U) * 112U + minor * 32U);
+        }
+        case 0x60U: {
+            const std::uint16_t sx = command_x(32, 33);
+            const std::uint16_t width = command_screen_width();
+            if (width == 0U || sx >= width) {
+                return 0U;
+            }
+            const std::uint64_t pixels = (reg_[45] & 0x04U) != 0U
+                                             ? static_cast<std::uint64_t>(sx) + 1U
+                                             : static_cast<std::uint64_t>(width - sx);
+            return master_cycles_to_v9938_ticks(pixels * 48U);
+        }
+        case 0x50U:
+            return master_cycles_to_v9938_ticks(96U);
+        case 0x40U:
+            return master_cycles_to_v9938_ticks(64U);
+        default:
+            return 0U;
+        }
+    }
+
+    std::uint64_t
+    v9938::estimate_cpu_transfer_delay_cycles(command_stream_kind kind) const noexcept {
+        switch (kind) {
+        case command_stream_kind::hmmc:
+            return master_cycles_to_v9938_ticks(48U);
+        case command_stream_kind::lmmc:
+            return master_cycles_to_v9938_ticks(96U);
+        case command_stream_kind::lmcm:
+            return master_cycles_to_v9938_ticks(48U);
+        case command_stream_kind::none:
+            return 0U;
+        }
+        return 0U;
     }
 
     std::uint16_t v9938::command_x(int low_reg, int high_reg) const noexcept {
@@ -669,6 +912,181 @@ namespace mnemos::chips::video {
         return static_cast<std::uint16_t>(
             reg_[static_cast<std::size_t>(low_reg)] |
             ((reg_[static_cast<std::size_t>(high_reg)] & 0x03U) << 8U));
+    }
+
+    void v9938::set_command_x(int low_reg, int high_reg, std::uint16_t value) noexcept {
+        value = static_cast<std::uint16_t>(value & 0x01FFU);
+        reg_[static_cast<std::size_t>(low_reg)] = static_cast<std::uint8_t>(value & 0xFFU);
+        auto& high = reg_[static_cast<std::size_t>(high_reg)];
+        high = static_cast<std::uint8_t>((high & 0xFEU) | ((value >> 8U) & 0x01U));
+    }
+
+    void v9938::set_command_y(int low_reg, int high_reg, std::uint16_t value) noexcept {
+        value = static_cast<std::uint16_t>(value & 0x03FFU);
+        reg_[static_cast<std::size_t>(low_reg)] = static_cast<std::uint8_t>(value & 0xFFU);
+        auto& high = reg_[static_cast<std::size_t>(high_reg)];
+        high = static_cast<std::uint8_t>((high & 0xFCU) | ((value >> 8U) & 0x03U));
+    }
+
+    std::uint16_t v9938::command_screen_height() const noexcept {
+        switch (mode()) {
+        case display_mode::graphics_iv:
+        case display_mode::graphics_v:
+            return 1024U;
+        case display_mode::graphics_vi:
+        case display_mode::graphics_vii:
+            return 512U;
+        default:
+            return 0U;
+        }
+    }
+
+    std::uint16_t v9938::executed_vertical_rows(std::uint16_t y, std::uint16_t rows,
+                                                int y_step) const noexcept {
+        const std::uint16_t height = command_screen_height();
+        if (rows == 0U || height == 0U) {
+            return 0U;
+        }
+        if (y_step >= 0) {
+            if (y >= height) {
+                return 0U;
+            }
+            return std::min(rows, static_cast<std::uint16_t>(height - y));
+        }
+        return std::min(rows, static_cast<std::uint16_t>(y + 1U));
+    }
+
+    std::uint16_t v9938::executed_vertical_rows(std::uint16_t y0, std::uint16_t y1,
+                                                std::uint16_t rows, int y_step) const noexcept {
+        return std::min(executed_vertical_rows(y0, rows, y_step),
+                        executed_vertical_rows(y1, rows, y_step));
+    }
+
+    void v9938::apply_command_register_postconditions(std::uint8_t command) noexcept {
+        const std::uint8_t family = static_cast<std::uint8_t>(command & 0xF0U);
+        const std::uint16_t ny = command_y(42, 43);
+        const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
+
+        const auto advance_y = [y_step](std::uint16_t y, std::uint16_t rows) noexcept {
+            return static_cast<std::uint16_t>(static_cast<int>(y) +
+                                              static_cast<int>(rows) * y_step);
+        };
+        const auto set_nyb = [this, ny](std::uint16_t rows) noexcept {
+            set_command_y(42, 43, static_cast<std::uint16_t>(ny - rows));
+        };
+        const auto clear_command_high = [this]() noexcept {
+            reg_[46] = static_cast<std::uint8_t>(reg_[46] & 0x0FU);
+        };
+
+        switch (family) {
+        case 0xF0U: { // HMMC
+            const std::uint16_t nx =
+                static_cast<std::uint16_t>(command_x(40, 41) & high_speed_x_mask(mode()));
+            const std::uint16_t rows =
+                nx == 0U ? 0U : executed_vertical_rows(command_y(38, 39), ny, y_step);
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0xE0U: { // YMMM
+            const std::uint16_t x_origin =
+                static_cast<std::uint16_t>(command_x(36, 37) & high_speed_x_mask(mode()));
+            const std::uint16_t width = command_screen_width();
+            const std::uint16_t rows =
+                width == 0U || x_origin >= width
+                    ? 0U
+                    : executed_vertical_rows(command_y(34, 35), command_y(38, 39), ny, y_step);
+            set_command_y(34, 35, advance_y(command_y(34, 35), rows));
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0xD0U: { // HMMM
+            const std::uint16_t nx =
+                static_cast<std::uint16_t>(command_x(40, 41) & high_speed_x_mask(mode()));
+            const std::uint16_t rows =
+                nx == 0U ? 0U
+                         : executed_vertical_rows(command_y(34, 35), command_y(38, 39), ny, y_step);
+            set_command_y(34, 35, advance_y(command_y(34, 35), rows));
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0xC0U: { // HMMV
+            const std::uint16_t nx =
+                static_cast<std::uint16_t>(command_x(40, 41) & high_speed_x_mask(mode()));
+            const std::uint16_t rows =
+                nx == 0U ? 0U : executed_vertical_rows(command_y(38, 39), ny, y_step);
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0xB0U: { // LMMC
+            const std::uint16_t nx = command_x(40, 41);
+            const std::uint16_t rows =
+                nx == 0U ? 0U : executed_vertical_rows(command_y(38, 39), ny, y_step);
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0xA0U: { // LMCM
+            const std::uint16_t nx = command_x(40, 41);
+            const std::uint16_t rows =
+                nx == 0U ? 0U : executed_vertical_rows(command_y(34, 35), ny, y_step);
+            set_command_y(34, 35, advance_y(command_y(34, 35), rows));
+            set_nyb(rows);
+            reg_[44] = status_[7];
+            clear_command_high();
+            break;
+        }
+        case 0x90U: { // LMMM
+            const std::uint16_t nx = command_x(40, 41);
+            const std::uint16_t rows =
+                nx == 0U ? 0U
+                         : executed_vertical_rows(command_y(34, 35), command_y(38, 39), ny, y_step);
+            set_command_y(34, 35, advance_y(command_y(34, 35), rows));
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0x80U: { // LMMV
+            const std::uint16_t nx = command_x(40, 41);
+            const std::uint16_t rows =
+                nx == 0U ? 0U : executed_vertical_rows(command_y(38, 39), ny, y_step);
+            set_command_y(38, 39, advance_y(command_y(38, 39), rows));
+            set_nyb(rows);
+            clear_command_high();
+            break;
+        }
+        case 0x70U: { // LINE
+            const int y = command_y(38, 39);
+            const int major = command_x(40, 41);
+            const int minor = command_y(42, 43);
+            const bool major_is_y = (reg_[45] & 0x01U) != 0U;
+            const int vertical_delta = major_is_y ? major + 1 : minor;
+
+            set_command_y(38, 39,
+                          static_cast<std::uint16_t>(y + vertical_delta * y_step));
+            clear_command_high();
+            break;
+        }
+        case 0x60U: // SRCH
+        case 0x50U: // PSET
+            clear_command_high();
+            break;
+        case 0x40U: // POINT
+            reg_[44] = status_[7];
+            clear_command_high();
+            break;
+        default:
+            break;
+        }
     }
 
     bool v9938::command_pixel_address(std::uint16_t x, std::uint16_t y, std::uint32_t& address,
@@ -711,14 +1129,15 @@ namespace mnemos::chips::video {
         }
     }
 
-    std::uint8_t v9938::read_command_pixel(std::uint16_t x, std::uint16_t y) const noexcept {
+    std::uint8_t v9938::read_command_pixel(std::uint16_t x, std::uint16_t y,
+                                           bool expansion) const noexcept {
         std::uint32_t address = 0U;
         std::uint8_t shift = 0U;
         std::uint8_t mask = 0U;
         if (!command_pixel_address(x, y, address, shift, mask)) {
             return 0U;
         }
-        return static_cast<std::uint8_t>((vram_[address & (vram_size - 1U)] >> shift) & mask);
+        return static_cast<std::uint8_t>((memory_at(address, expansion) >> shift) & mask);
     }
 
     std::uint8_t v9938::apply_logical(std::uint8_t source, std::uint8_t dest, std::uint8_t op,
@@ -746,7 +1165,7 @@ namespace mnemos::chips::video {
     }
 
     void v9938::write_command_pixel(std::uint16_t x, std::uint16_t y, std::uint8_t colour,
-                                    std::uint8_t logical_op) noexcept {
+                                    bool expansion, std::uint8_t logical_op) noexcept {
         std::uint32_t address = 0U;
         std::uint8_t shift = 0U;
         std::uint8_t mask = 0U;
@@ -754,12 +1173,13 @@ namespace mnemos::chips::video {
             return;
         }
 
-        std::uint8_t& packed = vram_[address & (vram_size - 1U)];
+        std::uint8_t packed = memory_at(address, expansion);
         const std::uint8_t dest = static_cast<std::uint8_t>((packed >> shift) & mask);
         const std::uint8_t result = apply_logical(colour, dest, logical_op, mask);
         const std::uint8_t shifted_mask = static_cast<std::uint8_t>(mask << shift);
         const std::uint8_t preserve_mask = static_cast<std::uint8_t>(~shifted_mask);
         packed = static_cast<std::uint8_t>((packed & preserve_mask) | ((result & mask) << shift));
+        write_memory(address, expansion, packed);
     }
 
     void v9938::execute_hmmv() noexcept {
@@ -773,31 +1193,28 @@ namespace mnemos::chips::video {
             return;
         }
 
-        const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
+        const std::uint8_t pixels_per_byte = high_speed_pixels_per_byte(active_mode);
+        const std::uint16_t byte_count = static_cast<std::uint16_t>(nx / pixels_per_byte);
+        if (byte_count == 0U) {
+            return;
+        }
+        const bool dest_expansion = command_destination_uses_expansion();
+        const int x_step =
+            (reg_[45] & 0x04U) != 0U ? -static_cast<int>(pixels_per_byte)
+                                     : static_cast<int>(pixels_per_byte);
         const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
         for (std::uint16_t row = 0; row < ny; ++row) {
             const int y = static_cast<int>(dy) + static_cast<int>(row) * y_step;
             if (y < 0) {
                 continue;
             }
-            for (std::uint16_t col = 0; col < nx; ++col) {
+            for (std::uint16_t col = 0; col < byte_count; ++col) {
                 const int x = static_cast<int>(dx) + static_cast<int>(col) * x_step;
                 if (x < 0) {
                     continue;
                 }
-                std::uint8_t colour = reg_[44];
-                if (active_mode == display_mode::graphics_iv) {
-                    colour = (x & 1) == 0 ? static_cast<std::uint8_t>(reg_[44] >> 4U)
-                                          : static_cast<std::uint8_t>(reg_[44] & 0x0FU);
-                } else if (active_mode == display_mode::graphics_v) {
-                    const int packed_shift = (3 - (x & 3)) * 2;
-                    colour = static_cast<std::uint8_t>((reg_[44] >> packed_shift) & 0x03U);
-                } else if (active_mode == display_mode::graphics_vi) {
-                    colour = (x & 1) == 0 ? static_cast<std::uint8_t>(reg_[44] >> 4U)
-                                          : static_cast<std::uint8_t>(reg_[44] & 0x0FU);
-                }
-                write_command_pixel(static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
-                                    colour);
+                write_high_speed_byte(static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
+                                      reg_[44], active_mode, dest_expansion);
             }
         }
     }
@@ -815,7 +1232,16 @@ namespace mnemos::chips::video {
             return;
         }
 
-        const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
+        const std::uint8_t pixels_per_byte = high_speed_pixels_per_byte(active_mode);
+        const std::uint16_t byte_count = static_cast<std::uint16_t>(nx / pixels_per_byte);
+        if (byte_count == 0U) {
+            return;
+        }
+        const bool source_expansion = command_source_uses_expansion();
+        const bool dest_expansion = command_destination_uses_expansion();
+        const int x_step =
+            (reg_[45] & 0x04U) != 0U ? -static_cast<int>(pixels_per_byte)
+                                     : static_cast<int>(pixels_per_byte);
         const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
         for (std::uint16_t row = 0; row < ny; ++row) {
             const int src_y = static_cast<int>(sy) + static_cast<int>(row) * y_step;
@@ -823,7 +1249,7 @@ namespace mnemos::chips::video {
             if (dst_y < 0) {
                 continue;
             }
-            for (std::uint16_t col = 0; col < nx; ++col) {
+            for (std::uint16_t col = 0; col < byte_count; ++col) {
                 const int src_x = static_cast<int>(sx) + static_cast<int>(col) * x_step;
                 const int dst_x = static_cast<int>(dx) + static_cast<int>(col) * x_step;
                 if (dst_x < 0) {
@@ -831,11 +1257,13 @@ namespace mnemos::chips::video {
                 }
                 std::uint8_t colour = 0U;
                 if (src_x >= 0 && src_y >= 0) {
-                    colour = read_command_pixel(static_cast<std::uint16_t>(src_x),
-                                                static_cast<std::uint16_t>(src_y));
+                    colour = read_high_speed_byte(static_cast<std::uint16_t>(src_x),
+                                                  static_cast<std::uint16_t>(src_y),
+                                                  source_expansion);
                 }
-                write_command_pixel(static_cast<std::uint16_t>(dst_x),
-                                    static_cast<std::uint16_t>(dst_y), colour);
+                write_high_speed_byte(static_cast<std::uint16_t>(dst_x),
+                                      static_cast<std::uint16_t>(dst_y), colour, active_mode,
+                                      dest_expansion);
             }
         }
     }
@@ -856,27 +1284,37 @@ namespace mnemos::chips::video {
             return;
         }
 
-        const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
-        const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
+        const std::uint8_t pixels_per_byte = high_speed_pixels_per_byte(active_mode);
+        const int x_step =
+            (reg_[45] & 0x04U) != 0U ? -static_cast<int>(pixels_per_byte)
+                                     : static_cast<int>(pixels_per_byte);
         const std::uint16_t width =
-            x_step > 0
-                ? static_cast<std::uint16_t>(screen_width - x_origin)
-                : static_cast<std::uint16_t>(x_origin + high_speed_pixels_per_byte(active_mode));
+            x_step > 0 ? static_cast<std::uint16_t>(screen_width - x_origin)
+                       : static_cast<std::uint16_t>(x_origin + pixels_per_byte);
+        const std::uint16_t byte_count = static_cast<std::uint16_t>(width / pixels_per_byte);
+        if (byte_count == 0U) {
+            return;
+        }
+        const bool source_expansion = command_source_uses_expansion();
+        const bool dest_expansion = command_destination_uses_expansion();
+        const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
         for (std::uint16_t row = 0; row < ny; ++row) {
             const int src_y = static_cast<int>(sy) + static_cast<int>(row) * y_step;
             const int dst_y = static_cast<int>(dy) + static_cast<int>(row) * y_step;
             if (src_y < 0 || dst_y < 0) {
                 continue;
             }
-            for (std::uint16_t col = 0; col < width; ++col) {
+            for (std::uint16_t col = 0; col < byte_count; ++col) {
                 const int x = static_cast<int>(x_origin) + static_cast<int>(col) * x_step;
                 if (x < 0) {
                     continue;
                 }
-                write_command_pixel(static_cast<std::uint16_t>(x),
-                                    static_cast<std::uint16_t>(dst_y),
-                                    read_command_pixel(static_cast<std::uint16_t>(x),
-                                                       static_cast<std::uint16_t>(src_y)));
+                write_high_speed_byte(static_cast<std::uint16_t>(x),
+                                      static_cast<std::uint16_t>(dst_y),
+                                      read_high_speed_byte(static_cast<std::uint16_t>(x),
+                                                           static_cast<std::uint16_t>(src_y),
+                                                           source_expansion),
+                                      active_mode, dest_expansion);
             }
         }
     }
@@ -898,6 +1336,7 @@ namespace mnemos::chips::video {
 
         const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
         const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
+        const bool dest_expansion = command_destination_uses_expansion();
         for (std::uint16_t row = 0; row < ny; ++row) {
             const int y = static_cast<int>(dy) + static_cast<int>(row) * y_step;
             if (y < 0) {
@@ -909,7 +1348,7 @@ namespace mnemos::chips::video {
                     continue;
                 }
                 write_command_pixel(static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
-                                    reg_[44], op);
+                                    reg_[44], dest_expansion, op);
             }
         }
     }
@@ -927,6 +1366,8 @@ namespace mnemos::chips::video {
 
         const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
         const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
+        const bool source_expansion = command_source_uses_expansion();
+        const bool dest_expansion = command_destination_uses_expansion();
         for (std::uint16_t row = 0; row < ny; ++row) {
             const int src_y = static_cast<int>(sy) + static_cast<int>(row) * y_step;
             const int dst_y = static_cast<int>(dy) + static_cast<int>(row) * y_step;
@@ -942,10 +1383,11 @@ namespace mnemos::chips::video {
                 std::uint8_t colour = 0U;
                 if (src_x >= 0 && src_y >= 0) {
                     colour = read_command_pixel(static_cast<std::uint16_t>(src_x),
-                                                static_cast<std::uint16_t>(src_y));
+                                                static_cast<std::uint16_t>(src_y),
+                                                source_expansion);
                 }
                 write_command_pixel(static_cast<std::uint16_t>(dst_x),
-                                    static_cast<std::uint16_t>(dst_y), colour, op);
+                                    static_cast<std::uint16_t>(dst_y), colour, dest_expansion, op);
             }
         }
     }
@@ -958,12 +1400,13 @@ namespace mnemos::chips::video {
         const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
         const int y_step = (reg_[45] & 0x08U) != 0U ? -1 : 1;
         const bool major_is_y = (reg_[45] & 0x01U) != 0U;
+        const bool dest_expansion = command_destination_uses_expansion();
         int error = major / 2;
 
         for (int i = 0; i <= major; ++i) {
             if (x >= 0 && y >= 0) {
                 write_command_pixel(static_cast<std::uint16_t>(x), static_cast<std::uint16_t>(y),
-                                    reg_[44], op);
+                                    reg_[44], dest_expansion, op);
             }
 
             if (major_is_y) {
@@ -1001,11 +1444,14 @@ namespace mnemos::chips::video {
             return;
         }
         const std::uint8_t border = static_cast<std::uint8_t>(reg_[44] & pixel_mask);
-        const bool search_not_equal = (reg_[45] & 0x02U) != 0U;
+        const bool stop_on_border_colour = (reg_[45] & 0x02U) == 0U;
         const int x_step = (reg_[45] & 0x04U) != 0U ? -1 : 1;
+        const bool source_expansion = command_source_uses_expansion();
         for (int x = sx; x >= 0 && x < width; x += x_step) {
-            const std::uint8_t colour = read_command_pixel(static_cast<std::uint16_t>(x), sy);
-            const bool matches = search_not_equal ? colour != border : colour == border;
+            const std::uint8_t colour =
+                read_command_pixel(static_cast<std::uint16_t>(x), sy, source_expansion);
+            const bool matches =
+                stop_on_border_colour ? colour == border : colour != border;
             if (!matches) {
                 continue;
             }
@@ -1020,14 +1466,18 @@ namespace mnemos::chips::video {
     }
 
     void v9938::execute_pset(std::uint8_t op) noexcept {
-        write_command_pixel(command_x(36, 37), command_y(38, 39), reg_[44], op);
+        write_command_pixel(command_x(36, 37), command_y(38, 39), reg_[44],
+                            command_destination_uses_expansion(), op);
     }
 
     void v9938::execute_point() noexcept {
-        status_[7] = read_command_pixel(command_x(32, 33), command_y(34, 35));
+        status_[7] =
+            read_command_pixel(command_x(32, 33), command_y(34, 35),
+                               command_source_uses_expansion());
     }
 
     void v9938::execute_command(std::uint8_t command) noexcept {
+        const std::uint64_t busy_cycles = estimate_command_busy_cycles(command);
         stop_command();
         status_[2] &= static_cast<std::uint8_t>(~k_status_border_found);
         status_[2] |= k_status_command_execute;
@@ -1077,23 +1527,25 @@ namespace mnemos::chips::video {
         }
 
         if (command_stream_ == command_stream_kind::none) {
-            status_[2] &= static_cast<std::uint8_t>(~k_status_command_execute);
+            apply_command_register_postconditions(command);
+            arm_command_busy(busy_cycles);
         }
     }
 
     void v9938::render_graphics_i_scanline(int line, std::uint32_t* out) noexcept {
         const int tile_y = line >> 3;
         const int fine_y = line & 7;
-        const std::uint16_t nt = name_base_tms(reg_);
-        const std::uint16_t pt = pattern_base_g1(reg_);
-        const std::uint16_t ct = color_base_g1(reg_);
+        const std::uint32_t nt = name_base_tms(reg_);
+        const std::uint32_t pt = pattern_base_g1(reg_);
+        const std::uint32_t ct = color_base_g1(reg_);
         for (int col = 0; col < 32; ++col) {
             const std::uint8_t pattern =
-                vram_at(static_cast<std::uint16_t>(nt + tile_y * 32 + col));
+                vram_at(nt + static_cast<std::uint32_t>(tile_y * 32 + col));
             const std::uint8_t bits = vram_at(
-                static_cast<std::uint16_t>(pt + static_cast<std::uint16_t>(pattern) * 8U + fine_y));
+                pt + static_cast<std::uint32_t>(pattern) * 8U +
+                static_cast<std::uint32_t>(fine_y));
             const std::uint8_t colours =
-                vram_at(static_cast<std::uint16_t>(ct + static_cast<std::uint16_t>(pattern >> 3U)));
+                vram_at(ct + static_cast<std::uint32_t>(pattern >> 3U));
             const std::uint8_t fg = static_cast<std::uint8_t>(colours >> 4U);
             const std::uint8_t bg = static_cast<std::uint8_t>(colours & 0x0FU);
             for (int px = 0; px < 8; ++px) {
@@ -1107,10 +1559,10 @@ namespace mnemos::chips::video {
         const int tile_y = line >> 3;
         const int fine_y = line & 7;
         const int page = line >> 6;
-        const std::uint16_t nt = name_base_tms(reg_);
+        const std::uint32_t nt = name_base_tms(reg_);
         for (int col = 0; col < 32; ++col) {
             const std::uint8_t pattern =
-                vram_at(static_cast<std::uint16_t>(nt + tile_y * 32 + col));
+                vram_at(nt + static_cast<std::uint32_t>(tile_y * 32 + col));
             const std::uint8_t bits =
                 vram_at(graphics_ii_pattern_address(reg_, pattern, page, fine_y));
             const std::uint8_t colours =
@@ -1131,14 +1583,16 @@ namespace mnemos::chips::video {
 
         const int row = line >> 3;
         const int fine_y = line & 7;
-        const std::uint16_t nt = name_base_tms(reg_);
-        const std::uint16_t pt = pattern_base_g1(reg_);
+        const std::uint32_t nt = name_base_tms(reg_);
+        const std::uint32_t pt = pattern_base_g1(reg_);
         const std::uint8_t fg = static_cast<std::uint8_t>(reg_[7] >> 4U);
         constexpr int x_offset = 8;
         for (int col = 0; col < 40; ++col) {
-            const std::uint8_t pattern = vram_at(static_cast<std::uint16_t>(nt + row * 40 + col));
+            const std::uint8_t pattern =
+                vram_at(nt + static_cast<std::uint32_t>(row * 40 + col));
             const std::uint8_t bits = vram_at(
-                static_cast<std::uint16_t>(pt + static_cast<std::uint16_t>(pattern) * 8U + fine_y));
+                pt + static_cast<std::uint32_t>(pattern) * 8U +
+                static_cast<std::uint32_t>(fine_y));
             for (int px = 0; px < 6; ++px) {
                 const bool on = (bits & (0x80U >> px)) != 0U;
                 out[x_offset + col * 6 + px] = paletted_display_rgb(on ? fg : bg_colour);
@@ -1177,7 +1631,7 @@ namespace mnemos::chips::video {
         const int row = line >> 3;
         const int fine_y = line & 7;
         const std::uint32_t nt = name_base_text_ii(reg_);
-        const std::uint16_t pt = pattern_base_g1(reg_);
+        const std::uint32_t pt = pattern_base_g1(reg_);
         const std::uint8_t fg = static_cast<std::uint8_t>(reg_[7] >> 4U);
         const std::uint8_t blink_fg = static_cast<std::uint8_t>(reg_[12] >> 4U);
         const std::uint8_t blink_bg = static_cast<std::uint8_t>(reg_[12] & 0x0FU);
@@ -1188,7 +1642,8 @@ namespace mnemos::chips::video {
             const std::uint8_t pattern =
                 vram_at(nt + static_cast<std::uint32_t>(row * columns + col));
             const std::uint8_t bits = vram_at(
-                static_cast<std::uint16_t>(pt + static_cast<std::uint16_t>(pattern) * 8U + fine_y));
+                pt + static_cast<std::uint32_t>(pattern) * 8U +
+                static_cast<std::uint32_t>(fine_y));
             const bool blink_cell = blink_phase && text_ii_cell_blink_enabled(row, col);
             const std::uint8_t cell_fg = blink_cell ? blink_fg : fg;
             const std::uint8_t cell_bg = blink_cell ? blink_bg : bg_colour;
@@ -1202,15 +1657,15 @@ namespace mnemos::chips::video {
     void v9938::render_multicolor_scanline(int line, std::uint32_t* out) noexcept {
         const int tile_y = line >> 3;
         const int fine_y = line & 7;
-        const std::uint16_t nt = name_base_tms(reg_);
-        const std::uint16_t pt = pattern_base_g1(reg_);
+        const std::uint32_t nt = name_base_tms(reg_);
+        const std::uint32_t pt = pattern_base_g1(reg_);
         for (int col = 0; col < 32; ++col) {
             const std::uint8_t pattern =
-                vram_at(static_cast<std::uint16_t>(nt + tile_y * 32 + col));
+                vram_at(nt + static_cast<std::uint32_t>(tile_y * 32 + col));
             const std::uint16_t row_pair =
                 static_cast<std::uint16_t>(((tile_y & 3) * 2) + ((fine_y >> 2) & 1));
-            const std::uint8_t colours = vram_at(static_cast<std::uint16_t>(
-                pt + static_cast<std::uint16_t>(pattern) * 8U + row_pair));
+            const std::uint8_t colours =
+                vram_at(pt + static_cast<std::uint32_t>(pattern) * 8U + row_pair);
             const std::uint8_t left = static_cast<std::uint8_t>(colours >> 4U);
             const std::uint8_t right = static_cast<std::uint8_t>(colours & 0x0FU);
             for (int px = 0; px < 4; ++px) {
@@ -1326,15 +1781,16 @@ namespace mnemos::chips::video {
         const int base_size = sprite_16x16(reg_) ? 16 : 8;
         const int zoom = sprite_magnified(reg_) ? 2 : 1;
         const int visible_size = base_size * zoom;
-        const std::uint16_t sat = sprite_attr_base(reg_);
+        const std::uint32_t sat = sprite_attr_base(reg_);
         const std::uint32_t spt = sprite_pattern_base(reg_);
 
         std::array<bool, display_width_256> collision_occupied{};
         std::array<bool, display_width_256> draw_occupied{};
         int sprites_on_line = 0;
+        const bool colour0_visible = (reg_[8] & k_register8_colour0_opaque) != 0U;
 
         for (int i = 0; i < 32; ++i) {
-            const std::uint16_t attr = static_cast<std::uint16_t>(sat + i * 4);
+            const std::uint32_t attr = sat + static_cast<std::uint32_t>(i) * 4U;
             const std::uint8_t raw_y = vram_at(attr);
             if (raw_y == 0xD0U) {
                 break;
@@ -1353,9 +1809,9 @@ namespace mnemos::chips::video {
             }
             ++sprites_on_line;
 
-            int sx = vram_at(static_cast<std::uint16_t>(attr + 1U));
-            std::uint8_t pattern = vram_at(static_cast<std::uint16_t>(attr + 2U));
-            const std::uint8_t colour = vram_at(static_cast<std::uint16_t>(attr + 3U));
+            int sx = vram_at(attr + 1U);
+            std::uint8_t pattern = vram_at(attr + 2U);
+            const std::uint8_t colour = vram_at(attr + 3U);
             if ((colour & 0x80U) != 0U) {
                 sx -= 32;
             }
@@ -1372,8 +1828,9 @@ namespace mnemos::chips::video {
             for (int tx = 0; tx < tile_x; ++tx) {
                 const std::uint8_t tile =
                     static_cast<std::uint8_t>(pattern + sub_y + (tx == 0 ? 0 : 2));
-                const std::uint8_t bits = vram_at(static_cast<std::uint16_t>(
-                    spt + static_cast<std::uint16_t>(tile) * 8U + row_in_tile));
+                const std::uint8_t bits =
+                    vram_at(spt + static_cast<std::uint32_t>(tile) * 8U +
+                            static_cast<std::uint32_t>(row_in_tile));
                 for (int px = 0; px < 8; ++px) {
                     if ((bits & (0x80U >> px)) == 0U) {
                         continue;
@@ -1383,13 +1840,16 @@ namespace mnemos::chips::video {
                         if (x < 0 || x >= display_width_256) {
                             continue;
                         }
+                        if (pen == 0U && !colour0_visible) {
+                            continue;
+                        }
                         const auto xs = static_cast<std::size_t>(x);
                         if (collision_occupied[xs]) {
                             status_[0] |= 0x20U;
                         } else {
                             collision_occupied[xs] = true;
                         }
-                        if (pen == 0U || draw_occupied[xs]) {
+                        if (draw_occupied[xs]) {
                             continue;
                         }
                         draw_occupied[xs] = true;
@@ -1422,6 +1882,7 @@ namespace mnemos::chips::video {
         std::array<bool, max_width> draw_occupied{};
         std::array<std::uint8_t, max_width> draw_pen{};
         int sprites_on_line = 0;
+        const bool colour0_visible = (reg_[8] & k_register8_colour0_opaque) != 0U;
 
         for (int i = 0; i < 32; ++i) {
             const std::uint32_t attr = sat + static_cast<std::uint32_t>(i) * 4U;
@@ -1452,7 +1913,7 @@ namespace mnemos::chips::video {
             const bool cc = (colour_byte & 0x40U) != 0U;
             const bool ic = (colour_byte & 0x20U) != 0U;
             const std::uint8_t pen = static_cast<std::uint8_t>(colour_byte & 0x0FU);
-            if (pen == 0U) {
+            if (pen == 0U && !colour0_visible) {
                 continue;
             }
 
@@ -1648,6 +2109,7 @@ namespace mnemos::chips::video {
     }
 
     void v9938::tick(std::uint64_t cycles) {
+        advance_command_timers(cycles);
         for (std::uint64_t i = 0; i < cycles; ++i) {
             ++scanline_cycle_;
             if (scanline_cycle_ >= cycles_per_line) {
@@ -1666,6 +2128,7 @@ namespace mnemos::chips::video {
 
     void v9938::reset(reset_kind /*kind*/) {
         vram_.fill(0U);
+        expanded_vram_.fill(0U);
         reg_.fill(0U);
         status_.fill(0U);
         palette_.fill(0U);
@@ -1702,7 +2165,11 @@ namespace mnemos::chips::video {
         stream_y_step_ = 1;
         stream_op_ = 0U;
         stream_high_speed_ = false;
+        stream_source_expansion_ = false;
+        stream_dest_expansion_ = false;
         stream_mode_ = display_mode::graphics_i;
+        command_busy_cycles_ = 0U;
+        stream_ready_delay_cycles_ = 0U;
         irq_asserted_ = false;
         scanline_ = 0;
         scanline_cycle_ = 0;
@@ -1715,6 +2182,7 @@ namespace mnemos::chips::video {
     void v9938::save_state(state_writer& writer) const {
         writer.u32(k_state_version);
         writer.bytes(vram_);
+        writer.bytes(expanded_vram_);
         writer.bytes(reg_);
         writer.bytes(status_);
         for (std::uint16_t colour : palette_) {
@@ -1738,7 +2206,11 @@ namespace mnemos::chips::video {
         writer.u8(stream_y_step_ < 0 ? 1U : 0U);
         writer.u8(stream_op_);
         writer.boolean(stream_high_speed_);
+        writer.boolean(stream_source_expansion_);
+        writer.boolean(stream_dest_expansion_);
         writer.u8(static_cast<std::uint8_t>(stream_mode_));
+        writer.u64(command_busy_cycles_);
+        writer.u64(stream_ready_delay_cycles_);
         writer.boolean(irq_asserted_);
         writer.u32(static_cast<std::uint32_t>(scanline_));
         writer.u32(static_cast<std::uint32_t>(scanline_cycle_));
@@ -1754,6 +2226,11 @@ namespace mnemos::chips::video {
             return;
         }
         reader.bytes(vram_);
+        if (version >= 4U) {
+            reader.bytes(expanded_vram_);
+        } else {
+            expanded_vram_.fill(0U);
+        }
         reader.bytes(reg_);
         reader.bytes(status_);
         for (std::uint16_t& colour : palette_) {
@@ -1781,6 +2258,13 @@ namespace mnemos::chips::video {
             stream_y_step_ = reader.u8() != 0U ? -1 : 1;
             stream_op_ = reader.u8();
             stream_high_speed_ = reader.boolean();
+            if (version >= 4U) {
+                stream_source_expansion_ = reader.boolean();
+                stream_dest_expansion_ = reader.boolean();
+            } else {
+                stream_source_expansion_ = false;
+                stream_dest_expansion_ = false;
+            }
             const auto raw_mode = reader.u8();
             stream_mode_ = raw_mode <= static_cast<std::uint8_t>(display_mode::graphics_vii)
                                ? static_cast<display_mode>(raw_mode)
@@ -1797,7 +2281,16 @@ namespace mnemos::chips::video {
             stream_y_step_ = 1;
             stream_op_ = 0U;
             stream_high_speed_ = false;
+            stream_source_expansion_ = false;
+            stream_dest_expansion_ = false;
             stream_mode_ = display_mode::graphics_i;
+        }
+        if (version >= 3U) {
+            command_busy_cycles_ = reader.u64();
+            stream_ready_delay_cycles_ = reader.u64();
+        } else {
+            command_busy_cycles_ = 0U;
+            stream_ready_delay_cycles_ = 0U;
         }
         irq_asserted_ = reader.boolean();
         scanline_ = static_cast<int>(reader.u32());
@@ -1809,6 +2302,15 @@ namespace mnemos::chips::video {
         reg_[15] &= 0x0FU;
         reg_[16] &= 0x0FU;
         reg_[17] &= 0xBFU;
+        if (command_stream_ != command_stream_kind::none) {
+            update_command_stream_status();
+        } else if (command_busy_cycles_ != 0U) {
+            status_[2] |= k_status_command_execute;
+            status_[2] &= static_cast<std::uint8_t>(~k_status_transfer_ready);
+        } else {
+            status_[2] &=
+                static_cast<std::uint8_t>(~(k_status_command_execute | k_status_transfer_ready));
+        }
         update_irq();
     }
 

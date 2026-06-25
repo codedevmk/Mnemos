@@ -38,7 +38,7 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<std::string> parse_mapper_arg(int argc, char* argv[]);
 
     // Same mapper vocabulary as `--mapper`, but reserved for a system's second
-    // cartridge/media slot. Currently MSX uses this for cartridge slot 2.
+    // cartridge/media slot. MSX and MSX2 use this for cartridge slot 2.
     [[nodiscard]] std::optional<std::string> parse_mapper2_arg(int argc, char* argv[]);
 
     // Enable an optional FM expansion where the selected system exposes one:

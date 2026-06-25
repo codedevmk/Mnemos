@@ -1,17 +1,17 @@
 #include "msx_system.hpp"
 
+#include "msx_cartridge_mapper.hpp"
+#include "msx_io_ports.hpp"
+
 #include <algorithm>
+#include <array>
 #include <cstring>
 
 namespace mnemos::manifests::msx {
 
     namespace {
-        constexpr std::uint32_t k_state_version = 13U;
+        constexpr std::uint32_t k_state_version = 19U;
         constexpr std::uint8_t k_no_cartridge_slot = 0xFFU;
-        constexpr std::size_t k_kanji_level_size = 0x20000U;
-        constexpr std::size_t k_kanji_bytes_per_character = 32U;
-        constexpr std::size_t k_ascii8_sram8_size = 0x2000U;
-        constexpr std::size_t k_ascii16_sram2_size = 0x0800U;
 
         [[nodiscard]] std::uint8_t clamp_row(std::uint8_t value) noexcept {
             return static_cast<std::uint8_t>(value & 0x0FU);
@@ -33,24 +33,91 @@ namespace mnemos::manifests::msx {
             return std::min<std::size_t>(banks, 0x100U);
         }
 
+        [[nodiscard]] common::msx_cartridge_mapper_kind
+        mapper_kind(msx_cartridge_mapper mapper) noexcept {
+            using common::msx_cartridge_mapper_kind;
+            switch (mapper) {
+            case msx_cartridge_mapper::automatic:
+                return msx_cartridge_mapper_kind::automatic;
+            case msx_cartridge_mapper::ascii8:
+                return msx_cartridge_mapper_kind::ascii8;
+            case msx_cartridge_mapper::ascii8_sram8:
+                return msx_cartridge_mapper_kind::ascii8_sram8;
+            case msx_cartridge_mapper::ascii16:
+                return msx_cartridge_mapper_kind::ascii16;
+            case msx_cartridge_mapper::ascii16_sram2:
+                return msx_cartridge_mapper_kind::ascii16_sram2;
+            case msx_cartridge_mapper::generic8:
+                return msx_cartridge_mapper_kind::generic8;
+            case msx_cartridge_mapper::konami:
+                return msx_cartridge_mapper_kind::konami;
+            case msx_cartridge_mapper::konami_scc:
+                return msx_cartridge_mapper_kind::konami_scc;
+            case msx_cartridge_mapper::korean_msx:
+                return msx_cartridge_mapper_kind::korean_msx;
+            case msx_cartridge_mapper::korean_msx_nemesis:
+                return msx_cartridge_mapper_kind::korean_msx_nemesis;
+            case msx_cartridge_mapper::plain:
+            default:
+                return msx_cartridge_mapper_kind::plain;
+            }
+        }
+
+        [[nodiscard]] msx_cartridge_mapper
+        mapper_from_kind(common::msx_cartridge_mapper_kind mapper) noexcept {
+            using common::msx_cartridge_mapper_kind;
+            switch (mapper) {
+            case msx_cartridge_mapper_kind::automatic:
+                return msx_cartridge_mapper::automatic;
+            case msx_cartridge_mapper_kind::ascii8:
+                return msx_cartridge_mapper::ascii8;
+            case msx_cartridge_mapper_kind::ascii8_sram8:
+                return msx_cartridge_mapper::ascii8_sram8;
+            case msx_cartridge_mapper_kind::ascii16:
+                return msx_cartridge_mapper::ascii16;
+            case msx_cartridge_mapper_kind::ascii16_sram2:
+                return msx_cartridge_mapper::ascii16_sram2;
+            case msx_cartridge_mapper_kind::generic8:
+                return msx_cartridge_mapper::generic8;
+            case msx_cartridge_mapper_kind::konami:
+                return msx_cartridge_mapper::konami;
+            case msx_cartridge_mapper_kind::konami_scc:
+                return msx_cartridge_mapper::konami_scc;
+            case msx_cartridge_mapper_kind::korean_msx:
+                return msx_cartridge_mapper::korean_msx;
+            case msx_cartridge_mapper_kind::korean_msx_nemesis:
+                return msx_cartridge_mapper::korean_msx_nemesis;
+            case msx_cartridge_mapper_kind::plain:
+            default:
+                return msx_cartridge_mapper::plain;
+            }
+        }
+
+        [[nodiscard]] msx_cartridge_mapper
+        resolve_cartridge_mapper(msx_cartridge_mapper mapper,
+                                 std::span<const std::uint8_t> rom) noexcept {
+            return mapper_from_kind(common::resolve_msx_cartridge_mapper(mapper_kind(mapper), rom));
+        }
+
+        [[nodiscard]] std::uint16_t mirror_konami_address(std::uint16_t address) noexcept {
+            return common::mirror_msx_konami_address(address);
+        }
+
         [[nodiscard]] bool is_disk_mmio_address(std::uint16_t address) noexcept {
             return address >= 0x4000U && address < 0xC000U && (address & 0x3FF8U) == 0x3FF8U;
         }
 
         [[nodiscard]] bool is_korean_mapper(msx_cartridge_mapper mapper) noexcept {
-            return mapper == msx_cartridge_mapper::korean_msx ||
-                   mapper == msx_cartridge_mapper::korean_msx_nemesis;
+            return common::msx_mapper_is_korean(mapper_kind(mapper));
         }
 
         [[nodiscard]] std::size_t cart_sram_size(msx_cartridge_mapper mapper) noexcept {
-            switch (mapper) {
-            case msx_cartridge_mapper::ascii8_sram8:
-                return k_ascii8_sram8_size;
-            case msx_cartridge_mapper::ascii16_sram2:
-                return k_ascii16_sram2_size;
-            default:
-                return 0U;
-            }
+            return common::msx_mapper_sram_size(mapper_kind(mapper));
+        }
+
+        [[nodiscard]] std::size_t
+        ram_mapper_segment_count(const msx_system& sys) noexcept {
+            return sys.mapped_ram.size() / 0x4000U;
         }
 
         [[nodiscard]] chips::mapper::korean_msx_mapper::variant
@@ -58,6 +125,34 @@ namespace mnemos::manifests::msx {
             return mapper == msx_cartridge_mapper::korean_msx_nemesis
                        ? chips::mapper::korean_msx_mapper::variant::nemesis
                        : chips::mapper::korean_msx_mapper::variant::msx;
+        }
+
+        void save_mouse_ports(chips::state_writer& writer,
+                              const std::array<common::msx_mouse_port, 2>& ports) {
+            for (const common::msx_mouse_port& port : ports) {
+                writer.boolean(port.attached());
+                writer.boolean(port.pin8_high());
+                writer.u8(port.phase());
+                writer.u8(port.protocol_delta_x());
+                writer.u8(port.protocol_delta_y());
+                writer.boolean(port.left_button());
+                writer.boolean(port.right_button());
+            }
+        }
+
+        void load_mouse_ports(chips::state_reader& reader,
+                              std::array<common::msx_mouse_port, 2>& ports) {
+            for (common::msx_mouse_port& port : ports) {
+                const bool attached = reader.boolean();
+                const bool pin8_high = reader.boolean();
+                const std::uint8_t phase = reader.u8();
+                const std::uint8_t delta_x = reader.u8();
+                const std::uint8_t delta_y = reader.u8();
+                const bool left_button = reader.boolean();
+                const bool right_button = reader.boolean();
+                port.restore(attached, pin8_high, phase, delta_x, delta_y, left_button,
+                             right_button);
+            }
         }
     } // namespace
 
@@ -78,26 +173,19 @@ namespace mnemos::manifests::msx {
         if (port < 0 || port >= static_cast<int>(joystick_rows.size())) {
             return;
         }
-        std::uint8_t bits = 0x3FU;
-        if (state.up) {
-            bits &= static_cast<std::uint8_t>(~0x01U);
+        mouse_ports[static_cast<std::size_t>(port)].detach();
+        joystick_rows[static_cast<std::size_t>(port)] = common::msx_joystick_port_bits(
+            state.up, state.down, state.left, state.right, state.a || state.b, state.x || state.y);
+    }
+
+    void msx_system::set_mouse(int port, std::int16_t delta_x, std::int16_t delta_y,
+                               bool left_button, bool right_button) noexcept {
+        if (port < 0 || port >= static_cast<int>(mouse_ports.size())) {
+            return;
         }
-        if (state.down) {
-            bits &= static_cast<std::uint8_t>(~0x02U);
-        }
-        if (state.left) {
-            bits &= static_cast<std::uint8_t>(~0x04U);
-        }
-        if (state.right) {
-            bits &= static_cast<std::uint8_t>(~0x08U);
-        }
-        if (state.a || state.b) {
-            bits &= static_cast<std::uint8_t>(~0x10U);
-        }
-        if (state.x || state.y) {
-            bits &= static_cast<std::uint8_t>(~0x20U);
-        }
-        joystick_rows[static_cast<std::size_t>(port)] = bits;
+        mouse_ports[static_cast<std::size_t>(port)].attach_protocol_delta(
+            delta_x, delta_y, left_button, right_button);
+        sync_psg_outputs();
     }
 
     bool msx_system::primary_slot_expanded(std::uint8_t primary) const noexcept {
@@ -146,6 +234,50 @@ namespace mnemos::manifests::msx {
 
     bool msx_system::is_ram_slot(slot_decode slot) const noexcept {
         return slot.primary == ram_primary_slot && slot.secondary == ram_secondary_slot;
+    }
+
+    std::uint8_t
+    msx_system::plain_32k_handoff_cart_slot(slot_decode slot,
+                                            std::uint16_t address) const noexcept {
+        if (!is_ram_slot(slot) && !is_bios_slot(slot)) {
+            return k_no_cartridge_slot;
+        }
+
+        const bool lower_window =
+            common::msx_plain_32k_lower_rom_window(common::msx_cartridge_mapper_kind::plain,
+                                                   0x8000U, address);
+        const bool upper_window =
+            common::msx_plain_32k_upper_rom_window(common::msx_cartridge_mapper_kind::plain,
+                                                   0x8000U, address);
+        if (!lower_window && !upper_window) {
+            return k_no_cartridge_slot;
+        }
+
+        const std::uint8_t reference_cart_slot =
+            cart_slot_index(selected_slot(lower_window ? 0x8000U : 0x4000U));
+        if (reference_cart_slot == k_no_cartridge_slot) {
+            return k_no_cartridge_slot;
+        }
+
+        const bool primary_cart = reference_cart_slot == 0U;
+        const auto active_mapper = primary_cart ? mapper : cartridge2_mapper;
+        const auto& rom = primary_cart ? cartridge : cartridge2;
+        const bool lower_handoff = primary_cart ? cartridge_lower_handoff
+                                                : cartridge2_lower_handoff;
+        if (lower_window && !lower_handoff) {
+            return k_no_cartridge_slot;
+        }
+        const bool in_partner_window =
+            lower_window
+                ? common::msx_plain_32k_lower_rom_window(mapper_kind(active_mapper), rom.size(),
+                                                         address)
+                : common::msx_plain_32k_upper_rom_window(mapper_kind(active_mapper), rom.size(),
+                                                         address);
+        return in_partner_window ? reference_cart_slot : k_no_cartridge_slot;
+    }
+
+    bool msx_system::plain_16k_lower_page_visible(std::uint8_t slot_index) const noexcept {
+        return cart_slot_index(selected_slot(0x4000U)) == slot_index;
     }
 
     std::uint8_t msx_system::read_ram(std::uint16_t address) const noexcept {
@@ -228,13 +360,17 @@ namespace mnemos::manifests::msx {
         const bool scc_window = primary_cart ? scc_window_enabled : scc2_window_enabled;
         auto& korean = primary_cart ? korean_mapper : korean_mapper2;
 
-        if (active_mapper == msx_cartridge_mapper::konami_scc && scc_window && address >= 0x9800U &&
-            address < 0xA000U) {
-            return scc.read(address);
-        }
         if (primary_cart && fmpac_sram_enabled && fmpac_sram_unlocked() && address >= 0x4000U &&
             address < 0x6000U) {
             return fmpac_sram[static_cast<std::size_t>(address - 0x4000U)];
+        }
+        if (active_mapper == msx_cartridge_mapper::konami ||
+            active_mapper == msx_cartridge_mapper::konami_scc) {
+            address = mirror_konami_address(address);
+        }
+        if (active_mapper == msx_cartridge_mapper::konami_scc && scc_window && address >= 0x9800U &&
+            address < 0xA000U) {
+            return scc.read(address);
         }
         if (is_korean_mapper(active_mapper)) {
             return korean.cpu_read(address);
@@ -263,6 +399,7 @@ namespace mnemos::manifests::msx {
         switch (active_mapper) {
         case msx_cartridge_mapper::ascii8:
         case msx_cartridge_mapper::ascii8_sram8:
+        case msx_cartridge_mapper::generic8:
         case msx_cartridge_mapper::konami:
         case msx_cartridge_mapper::konami_scc: {
             const auto slot = static_cast<std::size_t>((address - 0x4000U) >> 13U);
@@ -281,7 +418,8 @@ namespace mnemos::manifests::msx {
         }
         case msx_cartridge_mapper::plain:
         default: {
-            const std::size_t phys = static_cast<std::size_t>(address - 0x4000U);
+            const std::size_t phys = common::msx_plain_rom_physical_offset(
+                rom, address, plain_16k_lower_page_visible(slot_index));
             return phys < rom.size() ? rom[phys] : 0xFFU;
         }
         }
@@ -314,6 +452,10 @@ namespace mnemos::manifests::msx {
                 return;
             }
         }
+        if (active_mapper == msx_cartridge_mapper::konami ||
+            active_mapper == msx_cartridge_mapper::konami_scc) {
+            address = mirror_konami_address(address);
+        }
         if (active_mapper == msx_cartridge_mapper::ascii8_sram8 && !sram.empty() &&
             address >= 0x8000U && address < 0xC000U) {
             const auto slot = static_cast<std::size_t>((address - 0x4000U) >> 13U);
@@ -344,10 +486,14 @@ namespace mnemos::manifests::msx {
             break;
         case msx_cartridge_mapper::ascii16:
         case msx_cartridge_mapper::ascii16_sram2:
-            if (address >= 0x6000U && address < 0x6800U) {
-                bank16[0] = value;
-            } else if (address >= 0x7000U && address < 0x7800U) {
-                bank16[1] = value;
+            if (const std::uint8_t reg = common::msx_ascii16_bank_register(address);
+                reg < bank16.size()) {
+                bank16[reg] = value;
+            }
+            break;
+        case msx_cartridge_mapper::generic8:
+            if (address >= 0x4000U && address < 0xC000U) {
+                bank8[static_cast<std::size_t>((address - 0x4000U) >> 13U)] = value;
             }
             break;
         case msx_cartridge_mapper::konami:
@@ -383,35 +529,6 @@ namespace mnemos::manifests::msx {
         return fmpac_unlock_latch[0] == 0x4DU && fmpac_unlock_latch[1] == 0x69U;
     }
 
-    std::uint8_t msx_system::read_kanji(std::size_t level) noexcept {
-        if (level >= kanji_char_address.size()) {
-            return 0xFFU;
-        }
-        const std::size_t counter = kanji_byte_counter[level] & 0x1FU;
-        const std::size_t offset = (level * k_kanji_level_size) +
-                                   (static_cast<std::size_t>(kanji_char_address[level] & 0x0FFFU) *
-                                    k_kanji_bytes_per_character) +
-                                   counter;
-        kanji_byte_counter[level] = static_cast<std::uint8_t>((counter + 1U) & 0x1FU);
-        return offset < kanji_rom.size() ? kanji_rom[offset] : 0xFFU;
-    }
-
-    void msx_system::write_kanji_address(std::size_t level, bool upper,
-                                         std::uint8_t value) noexcept {
-        if (level >= kanji_char_address.size()) {
-            return;
-        }
-        const auto bits = static_cast<std::uint16_t>(value & 0x3FU);
-        if (upper) {
-            kanji_char_address[level] = static_cast<std::uint16_t>(
-                ((bits << 6U) | (kanji_char_address[level] & 0x003FU)) & 0x0FFFU);
-        } else {
-            kanji_char_address[level] =
-                static_cast<std::uint16_t>((kanji_char_address[level] & 0x0FC0U) | bits);
-        }
-        kanji_byte_counter[level] = 0U;
-    }
-
     std::uint8_t msx_system::read_memory(std::uint16_t address) noexcept {
         const slot_decode page3 = page3_slot();
         if (address == 0xFFFFU && primary_slot_expanded(page3.primary)) {
@@ -419,9 +536,17 @@ namespace mnemos::manifests::msx {
         }
 
         const slot_decode slot = selected_slot(address);
+        const std::uint8_t handoff_cart_slot = plain_32k_handoff_cart_slot(slot, address);
+        if (handoff_cart_slot != k_no_cartridge_slot) {
+            return read_cart(handoff_cart_slot, address);
+        }
         if (is_bios_slot(slot)) {
             if (address < bios.size()) {
                 return bios[address];
+            }
+            if (address >= 0x8000U && address < 0xC000U && !logo_rom.empty()) {
+                const std::size_t offset = static_cast<std::size_t>(address - 0x8000U);
+                return offset < logo_rom.size() ? logo_rom[offset] : 0xFFU;
             }
             return 0xFFU;
         }
@@ -461,15 +586,34 @@ namespace mnemos::manifests::msx {
     }
 
     std::uint8_t msx_system::psg_port_a() const noexcept {
-        const bool port2 = (psg.read_reg(chips::audio::ssg::reg_port_b) & 0x40U) != 0U;
-        const std::uint8_t joy = joystick_rows[port2 ? 1U : 0U] & 0x3FU;
-        const std::uint8_t cassette_in = cassette.input_high() ? 0x80U : 0x00U;
-        return static_cast<std::uint8_t>(joy | 0x40U | cassette_in);
+        if (!common::msx_psg_port_a_input(psg.read_reg(chips::audio::ssg::reg_mixer))) {
+            return psg.read_reg(chips::audio::ssg::reg_port_a);
+        }
+        const std::uint8_t effective_port_b = common::msx_psg_effective_port_b_latch(
+            psg.read_reg(chips::audio::ssg::reg_mixer),
+            psg.read_reg(chips::audio::ssg::reg_port_b));
+        return common::msx_psg_port_a_value(joystick_rows, mouse_ports,
+                                            effective_port_b, cassette.input_high());
+    }
+
+    void msx_system::sync_ppi_outputs() noexcept {
+        if (common::msx_ppi_port_a_output(ppi_control)) {
+            primary_slot_select = ppi_a;
+        }
+        sync_cassette_control();
     }
 
     void msx_system::sync_cassette_control() noexcept {
-        cassette.set_motor_on((ppi_c & 0x10U) == 0U);
-        cassette.set_output_high((ppi_c & 0x20U) != 0U);
+        cassette.set_motor_on(common::msx_cassette_motor_from_ppi(ppi_control, ppi_c));
+        cassette.set_output_high(common::msx_cassette_output_high_from_ppi(ppi_control, ppi_c));
+    }
+
+    void msx_system::sync_psg_outputs() noexcept {
+        const std::uint8_t port_b = common::msx_psg_effective_port_b_latch(
+            psg.read_reg(chips::audio::ssg::reg_mixer),
+            psg.read_reg(chips::audio::ssg::reg_port_b));
+        mouse_ports[0].set_pin8((port_b & 0x10U) != 0U);
+        mouse_ports[1].set_pin8((port_b & 0x20U) != 0U);
     }
 
     bool msx_system::msx2_video() const noexcept { return video_model == msx_video_model::v9938; }
@@ -504,9 +648,9 @@ namespace mnemos::manifests::msx {
         case 0xD4U:
             return disk_enabled ? fdc.read_control_register() : 0xFFU;
         case 0xD9U:
-            return read_kanji(0U);
+            return kanji.read_data(0U);
         case 0xDBU:
-            return read_kanji(1U);
+            return kanji.read_data(1U);
         case 0x98U:
             return msx2_video() ? vdp2.data_read() : vdp.data_read();
         case 0x99U:
@@ -517,9 +661,13 @@ namespace mnemos::manifests::msx {
         case 0xA8U:
             return primary_slot_select;
         case 0xA9U:
-            return keyboard_rows[clamp_row(ppi_c)];
+            if (common::msx_ppi_port_b_output(ppi_control)) {
+                return ppi_b;
+            }
+            return common::msx_ppi_port_c_lower_output(ppi_control) ? keyboard_rows[clamp_row(ppi_c)]
+                                                                    : 0xFFU;
         case 0xAAU:
-            return ppi_c;
+            return common::msx_ppi_port_c_read(ppi_control, ppi_c);
         case 0xB5U:
             return rtc_enabled ? rtc.data_read() : 0xFFU;
         case 0xFCU:
@@ -568,20 +716,23 @@ namespace mnemos::manifests::msx {
             break;
         case 0xD4U:
             if (disk_enabled) {
-                fdc.write_control_register(value);
+                const common::msx_fdc_drive_control control =
+                    common::msx_fdc_decode_drive_control(value);
+                fdc.write_memory_register(0x05U, control.drive);
+                fdc.write_memory_register(0x04U, control.side);
             }
             break;
         case 0xD8U:
-            write_kanji_address(0U, false, value);
+            kanji.write_address(0U, false, value);
             break;
         case 0xD9U:
-            write_kanji_address(0U, true, value);
+            kanji.write_address(0U, true, value);
             break;
         case 0xDAU:
-            write_kanji_address(1U, false, value);
+            kanji.write_address(1U, false, value);
             break;
         case 0xDBU:
-            write_kanji_address(1U, true, value);
+            kanji.write_address(1U, true, value);
             break;
         case 0x98U:
             if (msx2_video()) {
@@ -612,16 +763,24 @@ namespace mnemos::manifests::msx {
             break;
         case 0xA1U:
             psg.write(value);
+            sync_psg_outputs();
             break;
         case 0xA8U:
-            primary_slot_select = value;
+            ppi_a = value;
+            primary_slot_select = ppi_a;
+            break;
+        case 0xA9U:
+            ppi_b = value;
             break;
         case 0xAAU:
             ppi_c = value;
             sync_cassette_control();
             break;
         case 0xABU:
-            if ((value & 0x80U) == 0U) {
+            if ((value & 0x80U) != 0U) {
+                ppi_control = value;
+                sync_ppi_outputs();
+            } else {
                 const auto bit = static_cast<std::uint8_t>((value >> 1U) & 0x07U);
                 const auto mask = static_cast<std::uint8_t>(1U << bit);
                 if ((value & 0x01U) != 0U) {
@@ -647,7 +806,8 @@ namespace mnemos::manifests::msx {
         case 0xFEU:
         case 0xFFU:
             if (!mapped_ram.empty()) {
-                ram_mapper_page[static_cast<std::size_t>(p - 0xFCU)] = value;
+                ram_mapper_page[static_cast<std::size_t>(p - 0xFCU)] =
+                    common::msx_ram_mapper_latch_value(value, ram_mapper_segment_count(*this));
             }
             break;
         default:
@@ -680,15 +840,17 @@ namespace mnemos::manifests::msx {
         writer.bytes(ram);
         writer.bytes(mapped_ram);
         writer.u8(primary_slot_select);
+        writer.u8(ppi_a);
         writer.bytes(secondary_slot_select);
         writer.bytes(ram_mapper_page);
-        for (const std::uint16_t address : kanji_char_address) {
-            writer.u16(address);
-        }
-        writer.bytes(kanji_byte_counter);
+        kanji.save_state(writer);
         writer.u8(ppi_c);
+        writer.u8(ppi_control);
+        writer.u8(ppi_b);
         writer.bytes(keyboard_rows);
         writer.bytes(joystick_rows);
+        save_mouse_ports(writer, mouse_ports);
+        psg.save_state(writer);
         writer.bytes(cart_8k_bank);
         writer.bytes(cart_16k_bank);
         writer.boolean(scc_window_enabled);
@@ -721,15 +883,22 @@ namespace mnemos::manifests::msx {
         reader.bytes(ram);
         reader.bytes(mapped_ram);
         primary_slot_select = reader.u8();
+        ppi_a = reader.u8();
         reader.bytes(secondary_slot_select);
         reader.bytes(ram_mapper_page);
-        for (std::uint16_t& address : kanji_char_address) {
-            address = static_cast<std::uint16_t>(reader.u16() & 0x0FFFU);
+        const std::size_t segment_count = ram_mapper_segment_count(*this);
+        for (std::uint8_t& page : ram_mapper_page) {
+            page = common::msx_ram_mapper_latch_value(page, segment_count);
         }
-        reader.bytes(kanji_byte_counter);
+        kanji.load_state(reader);
         ppi_c = reader.u8();
+        ppi_control = reader.u8();
+        ppi_b = reader.u8();
         reader.bytes(keyboard_rows);
         reader.bytes(joystick_rows);
+        load_mouse_ports(reader, mouse_ports);
+        psg.load_state(reader);
+        sync_psg_outputs();
         reader.bytes(cart_8k_bank);
         reader.bytes(cart_16k_bank);
         scc_window_enabled = reader.boolean();
@@ -796,11 +965,16 @@ namespace mnemos::manifests::msx {
         }
         s->cartridge.assign(cartridge.begin(), cartridge.end());
         s->cartridge2.assign(cartridge2.begin(), cartridge2.end());
+        s->logo_rom.assign(config.logo_rom.begin(), config.logo_rom.end());
         s->disk_rom.assign(disk_rom.begin(), disk_rom.end());
-        s->kanji_rom.assign(kanji_rom.begin(), kanji_rom.end());
+        s->kanji.attach_rom(kanji_rom);
         s->video_model = config.video_model;
-        s->mapper = config.cartridge_mapper;
-        s->cartridge2_mapper = config.cartridge2_mapper;
+        s->mapper = resolve_cartridge_mapper(config.cartridge_mapper, s->cartridge);
+        s->cartridge2_mapper = resolve_cartridge_mapper(config.cartridge2_mapper, s->cartridge2);
+        s->cartridge_lower_handoff =
+            common::msx_plain_32k_lower_handoff_required(s->cartridge);
+        s->cartridge2_lower_handoff =
+            common::msx_plain_32k_lower_handoff_required(s->cartridge2);
         s->korean_mapper.set_variant(korean_variant(s->mapper));
         s->korean_mapper.attach_rom(s->cartridge);
         s->korean_mapper.reset(chips::reset_kind::power_on);
@@ -839,7 +1013,7 @@ namespace mnemos::manifests::msx {
                 s->expanded_primary_slots | (1U << s->cartridge2_primary_slot));
         }
         if (!disk_image.empty()) {
-            (void)s->fdc.mount_dsk(disk_image);
+            (void)s->fdc.mount_dsk(disk_image, config.disk_write_protected);
         } else {
             s->fdc.reset(chips::reset_kind::power_on);
         }
@@ -847,15 +1021,23 @@ namespace mnemos::manifests::msx {
             const auto segment_count =
                 static_cast<std::size_t>(std::max<std::uint8_t>(config.ram_mapper_segments, 4U));
             s->mapped_ram.assign(segment_count * 0x4000U, 0U);
+            s->ram_mapper_page = common::msx_initial_ram_mapper_pages(segment_count);
         }
         s->primary_slot_select = 0x00U; // BIOS slot selected for all pages at reset
+        s->ppi_a = 0x00U;
         s->ppi_c = 0xF0U;
+        s->ppi_control = 0x9BU;
+        s->ppi_b = 0xFFU;
         s->sync_cassette_control();
         s->psg.set_clock_divider(32); // MSX PSG input clock is Z80/2, then SSG /16.
         s->scc.set_clock_divider(32); // SCC native sample clock is the bus clock / 32.
         s->fm.set_clock_divider(72);  // MSX-MUSIC OPLL native rate is 3.579545 MHz / 72.
         s->rtc.set_cycles_per_second(chips::peripheral::rp5c01::default_cycles_per_second);
         s->cassette.set_cycles_per_second(chips::storage::msx_cassette::default_cycles_per_second);
+        if (!config.cassette_image.empty() && s->cassette.load_cas(config.cassette_image)) {
+            s->cassette.set_play(true);
+            s->sync_cassette_control();
+        }
         s->vdp.set_pal(config.video_region == mnemos::video_region::pal);
         s->vdp2.set_pal(config.video_region == mnemos::video_region::pal);
         s->vdp.set_irq_callback([s](bool asserted) { s->cpu.set_irq_line(asserted); });

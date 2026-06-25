@@ -151,6 +151,24 @@ TEST_CASE("z80 takes absolute jumps") {
     CHECK(m.cpu.cpu_registers().pc == 0x2000U);
 }
 
+TEST_CASE("z80 ignored DD/FD prefixes do not split the following instruction") {
+    machine m;
+    m.load(0x0000U, {0xFDU, 0xC3U, 0x00U, 0x20U}); // FD + JP $2000
+
+    auto r = m.cpu.cpu_registers();
+    r.iff1 = r.iff2 = true;
+    m.cpu.set_registers(r);
+
+    CHECK(m.cpu.step_instruction() == 14);
+    CHECK(m.cpu.cpu_registers().pc == 0x2000U);
+
+    m.cpu.set_irq_line(true);
+    CHECK(m.cpu.step_instruction() == 13);
+    CHECK(m.cpu.cpu_registers().pc == 0x0038U);
+    CHECK(m.ram[0xFFFD] == 0x00U);
+    CHECK(m.ram[0xFFFE] == 0x20U);
+}
+
 TEST_CASE("z80 calls and returns through the stack") {
     machine m;
     m.load(0x0000U, {0xCDU, 0x00U, 0x10U}); // CALL $1000

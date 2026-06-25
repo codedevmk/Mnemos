@@ -32,6 +32,20 @@ namespace mnemos::frontend_sdk {
 
     class scheduler_factory; // scheduler_factory.hpp
 
+    struct msx_slot_location final {
+        std::uint8_t primary{};
+        std::uint8_t secondary{};
+    };
+
+    struct msx_machine_profile final {
+        std::optional<std::uint8_t> expanded_primary_slots{};
+        std::optional<msx_slot_location> ram_slot{};
+        std::optional<msx_slot_location> sub_bios_slot{};
+        std::optional<msx_slot_location> disk_slot{};
+        std::optional<msx_slot_location> cartridge2_slot{};
+        std::optional<std::size_t> ram_size{};
+    };
+
     // Inputs every adapter factory takes. Future adapters may need richer
     // config (CD-ROM image, BIOS path, manifest selection); extend this
     // struct rather than the factory signature so existing factories keep
@@ -79,6 +93,9 @@ namespace mnemos::frontend_sdk {
         // Select MSX2-class video hardware where the family supports it. MSX
         // maps this to the V9938; other families ignore it.
         bool msx2{};
+        // Optional MSX/MSX2 machine profile, used by real machine proofs and
+        // launches whose firmware expects a specific slot/subslot layout.
+        msx_machine_profile msx_profile{};
         // Filesystem path of the primary CD/disk image, for media that loads by
         // path rather than a flat byte buffer (a .cue references sibling .bin
         // tracks; an .iso is read whole -- .chd is not supported yet). The Sega CD
