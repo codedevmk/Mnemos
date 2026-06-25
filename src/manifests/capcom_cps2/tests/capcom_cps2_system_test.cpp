@@ -657,8 +657,8 @@ TEST_CASE("cps2 system latches sprites from the selected object bank start",
 
     // Sprite tile 1, texel (0,0) = pen 0xA.
     image.regions["gfx"].assign(0x1000U, 0x00U);
-    image.regions["gfx"][128U + 0U] = 0x80U;
-    image.regions["gfx"][128U + 2U] = 0x80U;
+    image.regions["gfx"][128U + 1U] = 0x80U;
+    image.regions["gfx"][128U + 3U] = 0x80U;
 
     cps2_system sys(std::move(image), cps2_board_params{.key = k});
     auto& bus = sys.bus();
@@ -700,8 +700,8 @@ TEST_CASE("cps2 system forwards CPS-A flip-screen control to the video chip",
     image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
 
     image.regions["gfx"].assign(2U * 128U, 0x00U);
-    image.regions["gfx"][128U + 0U] = 0x80U; // sprite tile 1 texel (0,0) = pen 0xA
-    image.regions["gfx"][128U + 2U] = 0x80U;
+    image.regions["gfx"][128U + 1U] = 0x80U; // sprite tile 1 texel (0,0) = pen 0xA
+    image.regions["gfx"][128U + 3U] = 0x80U;
 
     cps2_system sys(std::move(image), cps2_board_params{.key = k});
     auto& bus = sys.bus();
@@ -732,7 +732,7 @@ TEST_CASE("cps2 system forwards sprite control-register bases to offset-mode obj
     image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for frame stepping
 
     image.regions["gfx"].assign(2U * 128U, 0x00U);
-    image.regions["gfx"][128U + 3U] = 0x80U; // sprite tile 1 texel (0,0) = pen 1
+    image.regions["gfx"][128U + 0U] = 0x80U; // sprite tile 1 texel (0,0) = pen 1
 
     cps2_system sys(std::move(image), cps2_board_params{.key = k});
     auto& bus = sys.bus();

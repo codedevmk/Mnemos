@@ -154,9 +154,11 @@ namespace mnemos::chips::video {
         if (gfx_.empty() || offset + 3U >= gfx_.size()) {
             return transparent_pen;
         }
+        // After CPS-2 bank unshuffle, each packed byte contributes the same-numbered
+        // pen bit; reversing this order puts real logo art into the wrong palette pens.
         return static_cast<std::uint8_t>(
-            (((gfx_[offset + 3U] >> bit) & 1U) << 0U) | (((gfx_[offset + 2U] >> bit) & 1U) << 1U) |
-            (((gfx_[offset + 1U] >> bit) & 1U) << 2U) | (((gfx_[offset + 0U] >> bit) & 1U) << 3U));
+            (((gfx_[offset + 0U] >> bit) & 1U) << 0U) | (((gfx_[offset + 1U] >> bit) & 1U) << 1U) |
+            (((gfx_[offset + 2U] >> bit) & 1U) << 2U) | (((gfx_[offset + 3U] >> bit) & 1U) << 3U));
     }
 
     std::uint8_t cps2_video::tile_pixel(gfx_type type, std::uint32_t code, int x, int y,
