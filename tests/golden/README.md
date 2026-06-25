@@ -63,10 +63,13 @@ flag, EEPROM byte count, EEPROM hash, and non-erased byte counts only; ROMs,
 keys, screenshots, WAVs, EEPROM dumps, register dumps, and logs remain local
 under `build/scratch/`.
 
-Most rows use the 600-frame gate. `dstlk.zip` intentionally runs the save/load
-and default audio probes for 1200 frames because its EEPROM/QSound
-self-initialization remains black past the 600-frame checkpoint and reaches a
-stable visible attract frame by 1200.
+Most rows use the 600-frame screenshot/state gate. `dstlk.zip` intentionally
+runs the save/load and default audio probes for 1200 frames because its
+EEPROM/QSound self-initialization remains black past the 600-frame checkpoint
+and reaches a stable visible attract frame by 1200. `hsf2.zip` keeps the
+600-frame screenshot/state gate but records a 6040-frame audio-only probe,
+matching the focused HSF2 QSound oracle window where significant rendered audio
+starts after frame 1198.
 
 Point `MNEMOS_CPS2_SET_DIR` at a directory of CPS2 zip/key sets, build
 `mnemos_player`, then run:
