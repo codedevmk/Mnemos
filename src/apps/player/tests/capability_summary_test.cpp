@@ -166,8 +166,9 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> taito_f2_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::taito_f2::main_rom_size, 0xFFU);
-        poke32_be(rom, 0x0U, mnemos::manifests::taito_f2::work_ram_base +
-                                mnemos::manifests::taito_f2::work_ram_size);
+        poke32_be(rom, 0x0U,
+                  mnemos::manifests::taito_f2::work_ram_base +
+                      mnemos::manifests::taito_f2::work_ram_size);
         poke32_be(rom, 0x4U, 0x00000400U);
         poke16_be(rom, 0x400U, 0x33FCU);
         poke16_be(rom, 0x402U, 0x4242U);
@@ -207,9 +208,10 @@ namespace {
                          "capability session session.mode.rollback state=available control=enabled "
                          "scope=session provider=mnemos.debug.session");
         } else {
-            require_line(summary,
-                         "capability session session.mode.rollback state=unavailable control=hidden "
-                         "scope=session provider=mnemos.debug.session");
+            require_line(
+                summary,
+                "capability session session.mode.rollback state=unavailable control=hidden "
+                "scope=session provider=mnemos.debug.session");
         }
     }
 
@@ -280,7 +282,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
     SECTION("Amiga 500") {
         amiga500::amiga500_adapter adapter(amiga500_kickstart(), {}, "Tiny Kickstart");
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.kickstart");
     }
 
@@ -289,7 +291,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         disks.push_back(amiga500_adf());
         amiga500::amiga500_adapter adapter(amiga500_kickstart(), {}, "Tiny ADF", std::move(disks));
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.disk_0");
     }
 

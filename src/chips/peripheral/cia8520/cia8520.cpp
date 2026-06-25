@@ -18,7 +18,7 @@ namespace mnemos::chips::peripheral {
             core.irq_edge = std::move(cfg.irq_edge);
             core.tod_tick_hz = cfg.tod_tick_hz;
             core.tod_src_hz = cfg.tod_src_hz;
-            core.rev = bus_controller::cia_6526::revision::nmos_6526;
+            core.rev = bus_controller::cia_6526::revision::mos_8520;
             return core;
         }
 

@@ -110,6 +110,51 @@ TEST_CASE("m68000 opcode/data split: decrypted opcodes, encrypted data, opcode-p
     CHECK((r.d[0] & 0xFFU) == 0x7FU);
 }
 
+TEST_CASE("m68000 RESET pulses the external reset callback without reloading CPU vectors") {
+    machine m;
+    m.w32(0x0000U, 0x00002000U);
+    m.w32(0x0004U, 0x00001000U);
+    m.load(0x1000U, {0x4E70U, 0x707FU}); // RESET; MOVEQ #$7F,D0
+    m.cpu.reset(reset_kind::power_on);
+
+    int reset_pulses = 0;
+    m.cpu.set_reset_callback([&reset_pulses] { ++reset_pulses; });
+
+    const int reset_cycles = m.cpu.step_instruction();
+    auto r = m.cpu.cpu_registers();
+    CHECK(reset_pulses == 1);
+    CHECK(reset_cycles == 132);
+    CHECK(r.pc == 0x00001002U);
+    CHECK(r.a[7] == 0x00002000U);
+
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK((r.d[0] & 0xFFU) == 0x7FU);
+}
+
+TEST_CASE("m68000 user-mode RESET traps without pulsing the external reset callback") {
+    machine m;
+    m.w32(0x0000U, 0x00002000U);
+    m.w32(0x0004U, 0x00001000U);
+    m.w32(0x0020U, 0x00003000U); // privilege vector
+    m.load(0x1000U, {0x4E70U});
+    m.cpu.reset(reset_kind::power_on);
+
+    auto r = m.cpu.cpu_registers();
+    r.sr = 0U;
+    r.a[7] = 0x00002000U;
+    r.usp = 0x00002000U;
+    m.cpu.set_registers(r);
+
+    int reset_pulses = 0;
+    m.cpu.set_reset_callback([&reset_pulses] { ++reset_pulses; });
+    m.cpu.step_instruction();
+
+    r = m.cpu.cpu_registers();
+    CHECK(reset_pulses == 0);
+    CHECK(r.pc == 0x00003000U);
+}
+
 TEST_CASE("m68000 executes MOVEQ with sign extension and flags") {
     machine m;
     m.load(0x1000U, {0x7042U}); // MOVEQ #$42,D0
@@ -395,6 +440,33 @@ TEST_CASE("m68000 TST sets N/Z from the operand and clears V/C") {
     CHECK((r.sr & m68000::sr_z) != 0U);
     CHECK((r.sr & m68000::sr_v) == 0U);
     CHECK((r.sr & m68000::sr_c) == 0U);
+}
+
+TEST_CASE("m68000 TST.B d16(An) drives BMI from the byte sign bit") {
+    machine m;
+    m.bus.map_mmio(
+        0x00BFE000U, 0x1000U,
+        [](std::uint32_t address) {
+            return address == 0x00BFE701U ? static_cast<std::uint8_t>(0xFFU)
+                                          : static_cast<std::uint8_t>(0x00U);
+        },
+        [](std::uint32_t, std::uint8_t) {}, 1);
+    m.load(0x1000U, {0x4A28U, 0x0700U, 0x6BFAU, 0x7001U}); // TST.B (0x700,A0); BMI $1000
+
+    m68000::registers s{};
+    s.pc = 0x1000U;
+    s.a[0] = 0x00BFE001U;
+    s.sr = m68000::sr_s;
+    m.cpu.set_registers(s);
+
+    m.cpu.step_instruction();
+    auto r = m.cpu.cpu_registers();
+    REQUIRE(r.pc == 0x1004U);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x1000U);
 }
 
 TEST_CASE("m68000 ADDX adds with the extend flag") {
@@ -830,6 +902,36 @@ TEST_CASE("m68000 MOVEM round-trips registers through the stack") {
     CHECK(r.d[2] == 0xAAAA0000U); // restored from D0
     CHECK(r.d[3] == 0xBBBB1111U); // restored from D1
     CHECK(r.a[7] == 0x00003000U); // stack balanced
+}
+
+TEST_CASE("m68000 MOVEM restores a full Exec-style context from the stack") {
+    machine m;
+    m68000::registers s{};
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+
+    constexpr std::array<std::uint32_t, 15> expected{
+        0xD0000000U, 0xD1111111U, 0xD2222222U, 0xD3333333U, 0xD4444444U,
+        0xD5555555U, 0xD6666666U, 0xD7777777U, 0xA0000000U, 0xA1111111U,
+        0xA2222222U, 0xA3333333U, 0xA4444444U, 0xA5555555U, 0xA6666666U};
+    std::uint32_t cursor = s.a[7];
+    for (const std::uint32_t value : expected) {
+        m.w32(cursor, value);
+        cursor += 4U;
+    }
+
+    m.load(0x1000U, {0x4CDFU, 0x7FFFU}); // MOVEM.L (A7)+,D0-D7/A0-A6
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    for (std::size_t i = 0; i < 8U; ++i) {
+        CHECK(r.d[i] == expected[i]);
+    }
+    for (std::size_t i = 0; i < 7U; ++i) {
+        CHECK(r.a[i] == expected[8U + i]);
+    }
+    CHECK(r.a[7] == 0x0000303CU);
 }
 
 TEST_CASE("m68000 MOVEP scatters and gathers bytes at even addresses") {

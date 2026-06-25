@@ -171,7 +171,8 @@ namespace {
         state.aim_y = normalize_analog_axis(SDL_GetGamepadAxis(gp, y_axis));
     }
 
-    [[nodiscard]] bool key_pressed(const bool* keys, int key_count, SDL_Scancode scancode) noexcept {
+    [[nodiscard]] bool key_pressed(const bool* keys, int key_count,
+                                   SDL_Scancode scancode) noexcept {
         const int index = static_cast<int>(scancode);
         return keys != nullptr && index >= 0 && index < key_count && keys[index];
     }
@@ -181,15 +182,14 @@ namespace {
         if (keys == nullptr || key_count <= 0) {
             return;
         }
-        const auto count = std::min<std::size_t>(
-            static_cast<std::size_t>(key_count), mnemos::peripheral::keyboard_usage_count);
+        const auto count = std::min<std::size_t>(static_cast<std::size_t>(key_count),
+                                                 mnemos::peripheral::keyboard_usage_count);
         for (std::size_t usage = 0; usage < count; ++usage) {
             state.set_key(static_cast<std::uint16_t>(usage), keys[usage]);
         }
     }
 
-    [[nodiscard]] const char*
-    load_status_name(mnemos::runtime::load_status status) noexcept {
+    [[nodiscard]] const char* load_status_name(mnemos::runtime::load_status status) noexcept {
         switch (status) {
         case mnemos::runtime::load_status::ok:
             return "ok";
@@ -221,8 +221,7 @@ namespace {
             return;
         }
         const std::vector<std::uint8_t> bytes = system->save_state();
-        if (bytes.empty() ||
-            !mnemos::apps::player::adapters::save_save_state_file(path, bytes)) {
+        if (bytes.empty() || !mnemos::apps::player::adapters::save_save_state_file(path, bytes)) {
             std::fprintf(stderr, "[mnemos_player] quick save failed: %s\n", path.c_str());
         } else {
             std::fprintf(stderr, "[mnemos_player] quick saved: %s (%zu bytes)\n", path.c_str(),
@@ -270,6 +269,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
+    using mnemos::apps::player::adapters::parse_keyboard_layout_arg;
     using mnemos::apps::player::adapters::parse_light_gun_arg;
     using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
@@ -282,8 +282,8 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_save_state_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
-    using mnemos::apps::player::adapters::state_path_for;
     using mnemos::apps::player::adapters::srm_path_for;
+    using mnemos::apps::player::adapters::state_path_for;
 
     const auto rom_paths = parse_rom_args(argc, argv);
     const auto system_arg = parse_system_arg(argc, argv);
@@ -297,6 +297,7 @@ int main(int argc, char* argv[]) {
     const bool rtc = parse_rtc_arg(argc, argv);
     const bool msx2 = parse_msx2_arg(argc, argv);
     const auto dip_arg = parse_dip_arg(argc, argv);
+    const auto keyboard_layout_arg = parse_keyboard_layout_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
         .save_state = parse_save_state_args(argc, argv),
@@ -307,24 +308,27 @@ int main(int argc, char* argv[]) {
         .capabilities = parse_capabilities_arg(argc, argv),
     };
 
-    auto launch = mnemos::apps::player::launch_system({.rom_paths = rom_paths,
-                                                       .system_arg = system_arg,
-                                                       .autostart = autostart,
-                                                       .region_override = region_arg,
-                                                       .mapper_override = mapper_arg,
-                                                       .mapper2_override = mapper2_arg,
-                                                       .fm_unit = fm_unit,
-                                                       .light_gun = light_gun,
-                                                       .four_score = four_score,
-                                                       .rtc = rtc,
-                                                       .msx2 = msx2,
-                                                       .dip_override = dip_arg});
+    auto launch =
+        mnemos::apps::player::launch_system({.rom_paths = rom_paths,
+                                             .system_arg = system_arg,
+                                             .autostart = autostart,
+                                             .region_override = region_arg,
+                                             .mapper_override = mapper_arg,
+                                             .mapper2_override = mapper2_arg,
+                                             .fm_unit = fm_unit,
+                                             .light_gun = light_gun,
+                                             .four_score = four_score,
+                                             .rtc = rtc,
+                                             .msx2 = msx2,
+                                             .dip_override = dip_arg,
+                                             .keyboard_layout_override = keyboard_layout_arg});
     if (launch.exit_code != 0) {
         return launch.exit_code;
     }
     auto system = std::move(launch.system);
-    const std::string quick_state_path =
-        launch.primary_media_path.empty() ? std::string{} : state_path_for(launch.primary_media_path);
+    const std::string quick_state_path = launch.primary_media_path.empty()
+                                             ? std::string{}
+                                             : state_path_for(launch.primary_media_path);
 
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.

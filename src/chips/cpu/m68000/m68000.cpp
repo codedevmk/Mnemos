@@ -201,13 +201,17 @@ namespace mnemos::chips::cpu {
     }
 
     void m68000::charge_bus_cycle(std::uint32_t a, bool program, bool write) noexcept {
+        const std::uint32_t instruction_cycles_before_access =
+            cycles_ > 0 ? static_cast<std::uint32_t>(cycles_) : 0U;
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
         if (bus_wait_callback_) {
-            const std::uint32_t wait = bus_wait_callback_(a & address_mask, program, write);
+            const std::uint32_t wait = bus_wait_callback_(a & address_mask, program, write,
+                                                          instruction_cycles_before_access,
+                                                          cycle_sources_.external_wait_cycles);
             const int room = std::numeric_limits<int>::max() - cycles_;
             const auto clamped = static_cast<int>(
                 std::min<std::uint32_t>(wait, room > 0 ? static_cast<std::uint32_t>(room) : 0U));
@@ -1744,6 +1748,10 @@ namespace mnemos::chips::cpu {
                       // prefetch
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
+                return;
+            }
+            if (reset_callback_) {
+                reset_callback_();
             }
             cycles_ += 128; // 132 total - 4 fetch16 (opcode)
             return;

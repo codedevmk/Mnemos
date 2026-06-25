@@ -65,6 +65,11 @@ namespace mnemos::apps::player::adapters {
     // return the 16-bit DIP bank, or nullopt when absent/malformed.
     [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);
 
+    // Select the physical keyboard layout token used by computer adapters that
+    // expose a raw keyboard matrix (`--keyboard-layout <token>`). Missing,
+    // empty, or option-shaped values leave the adapter default in place.
+    [[nodiscard]] std::optional<std::string> parse_keyboard_layout_arg(int argc, char* argv[]);
+
     // --screenshot <path> --frames N: headless run, dump the resulting
     // framebuffer (a PNG when `path` ends in .png, otherwise a PPM), exit. Both
     // flags must be present together; a missing or unparseable value disables the
@@ -84,8 +89,7 @@ namespace mnemos::apps::player::adapters {
         std::uint64_t frames{};
     };
 
-    [[nodiscard]] std::optional<save_state_request> parse_save_state_args(int argc,
-                                                                          char* argv[]);
+    [[nodiscard]] std::optional<save_state_request> parse_save_state_args(int argc, char* argv[]);
 
     // --load-state <path>: restore a raw Mnemos save-state container before
     // running a headless operation or entering the windowed player.

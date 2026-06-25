@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -36,6 +37,19 @@ namespace {
         return ext;
     }
 
+    [[nodiscard]] std::string
+    amiga500_keyboard_layout_override(const std::optional<std::string>& override) {
+        std::string layout = override.value_or(std::string{});
+        if (!layout.empty()) {
+            return layout;
+        }
+        if (const char* layout_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA500_KEYBOARD_LAYOUT");
+            layout_env != nullptr && layout_env[0] != '\0') {
+            layout = layout_env;
+        }
+        return layout;
+    }
+
 } // namespace
 
 namespace mnemos::apps::player {
@@ -53,6 +67,61 @@ namespace mnemos::apps::player {
 
         system_launch_outcome outcome{};
         if (options.rom_paths.empty()) {
+            if (!options.system_arg) {
+                return outcome;
+            }
+            const auto family_opt = family_from_name(*options.system_arg);
+            if (!family_opt || *family_opt != system_family::amiga500) {
+                return outcome;
+            }
+
+            const char* kickstart_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA500_KICKSTART");
+            if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
+                std::fprintf(stderr, "[mnemos_player] Amiga500 BIOS-only launch needs "
+                                     "MNEMOS_AMIGA500_KICKSTART set to a Kickstart ROM\n");
+                outcome.exit_code = 1;
+                return outcome;
+            }
+            auto kickstart = load_rom(kickstart_env);
+            if (!kickstart || kickstart->bytes.empty()) {
+                std::fprintf(stderr, "[mnemos_player] could not read Amiga Kickstart ROM: %s\n",
+                             kickstart_env);
+                outcome.exit_code = 1;
+                return outcome;
+            }
+
+            const system_family family = *family_opt;
+            const auto video =
+                resolve_video_region(options.region_override, mnemos::video_region::pal);
+            std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n",
+                         family_label(family), video == mnemos::video_region::pal ? "PAL" : "NTSC",
+                         adapters::region_source_label(options.region_override));
+            std::fflush(stderr);
+
+            force_link_all_adapters();
+
+            frontend_sdk::adapter_options adapter_options{};
+            adapter_options.rom = std::move(kickstart->bytes);
+            adapter_options.video_region = video;
+            adapter_options.display_name = clean_rom_name(kickstart->name);
+            adapter_options.autostart = options.autostart;
+            adapter_options.dip_override = options.dip_override;
+            adapter_options.mapper_override = options.mapper_override.value_or(std::string{});
+            adapter_options.mapper2_override = options.mapper2_override.value_or(std::string{});
+            adapter_options.fm_unit = options.fm_unit;
+            adapter_options.light_gun = options.light_gun;
+            adapter_options.four_score = options.four_score;
+            adapter_options.rtc = options.rtc;
+            adapter_options.msx2 = options.msx2;
+            adapter_options.keyboard_layout_override =
+                amiga500_keyboard_layout_override(options.keyboard_layout_override);
+            outcome.system = frontend_sdk::adapter_registry::instance().create(
+                family_id(family), std::move(adapter_options));
+            if (!outcome.system) {
+                std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%s'\n",
+                             family_id(family));
+                outcome.exit_code = 1;
+            }
             return outcome;
         }
 
@@ -74,10 +143,9 @@ namespace mnemos::apps::player {
         }
 
         const system_family family = *family_opt;
-        const bool arcade_family = family == system_family::irem_m72 ||
-                                   family == system_family::taito_f2 ||
-                                   family == system_family::capcom_cps1 ||
-                                   family == system_family::capcom_cps2;
+        const bool arcade_family =
+            family == system_family::irem_m72 || family == system_family::taito_f2 ||
+            family == system_family::capcom_cps1 || family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
                                     : load_rom(options.rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
@@ -169,6 +237,8 @@ namespace mnemos::apps::player {
         }
 
         std::vector<std::vector<std::uint8_t>> bios_images;
+        std::string keyboard_layout_override =
+            options.keyboard_layout_override.value_or(std::string{});
         if (family == system_family::sega32x) {
             const char* bios_dir = MNEMOS_PLAYER_GETENV("MNEMOS_32X_BIOS_DIR");
             if (bios_dir == nullptr) {
@@ -290,10 +360,12 @@ namespace mnemos::apps::player {
         }
 
         if (family == system_family::amiga500) {
-            const std::string ext = lowercase_extension(options.rom_paths.front());
+            keyboard_layout_override =
+                amiga500_keyboard_layout_override(options.keyboard_layout_override);
+            const std::string ext = lowercase_extension(loaded->name);
             if (ext == ".adf") {
                 const char* kickstart_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA500_KICKSTART");
-                if (kickstart_env == nullptr) {
+                if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
                     std::fprintf(stderr, "[mnemos_player] an Amiga ADF needs "
                                          "MNEMOS_AMIGA500_KICKSTART set to a Kickstart ROM\n");
                     outcome.exit_code = 1;
@@ -378,7 +450,8 @@ namespace mnemos::apps::player {
              .msx2 = options.msx2,
              .disc_path = std::move(disc_path),
              .rom_path = options.rom_paths.front(),
-             .bios_images = std::move(bios_images)});
+             .bios_images = std::move(bios_images),
+             .keyboard_layout_override = std::move(keyboard_layout_override)});
         if (outcome.system && outcome.system->media_count() > 1U) {
             std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
                          outcome.system->media_count());

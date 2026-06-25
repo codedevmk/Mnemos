@@ -37,6 +37,9 @@ namespace mnemos::topology {
       public:
         using read_handler = std::function<std::uint8_t(std::uint32_t address)>;
         using write_handler = std::function<void(std::uint32_t address, std::uint8_t value)>;
+        using read16_handler = std::function<std::uint16_t(std::uint32_t address)>;
+        using write16_handler =
+            std::function<void(std::uint32_t address, std::uint16_t value)>;
         // True when this region should handle the access at `address` (the system
         // typically consults a mapper/PLA decode here). Empty == always active.
         using active_predicate = std::function<bool(std::uint32_t address, bool is_write)>;
@@ -58,6 +61,10 @@ namespace mnemos::topology {
                      active_predicate active = {});
         void map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                       write_handler on_write, int priority = 0, active_predicate active = {});
+        void map_mmio16(std::uint32_t start, std::uint32_t size, read_handler on_read,
+                        write_handler on_write, read16_handler on_read16,
+                        write16_handler on_write16, int priority = 0,
+                        active_predicate active = {});
         // Explicit bus-error/BERR window. Unlike ordinary holes, which remain
         // open bus by default, accesses resolved here report a consumable fault.
         void map_bus_error(std::uint32_t start, std::uint32_t size, int priority = 0,
@@ -143,6 +150,8 @@ namespace mnemos::topology {
             std::span<const std::uint8_t> rom{};
             read_handler on_read{};
             write_handler on_write{};
+            read16_handler on_read16{};
+            write16_handler on_write16{};
             active_predicate active{};
         };
 

@@ -49,6 +49,19 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::optional<std::string> parse_keyboard_layout_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--keyboard-layout") {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    return std::string{value};
+                }
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+
     bool parse_fm_unit_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc; ++i) {
             if (std::string_view{argv[i]} == "--fm") {
@@ -156,8 +169,7 @@ namespace mnemos::apps::player::adapters {
 
             std::size_t i = 1U;
             std::uint32_t one_based_port = 0U;
-            while (i < spec.size() &&
-                   std::isdigit(static_cast<unsigned char>(spec[i])) != 0) {
+            while (i < spec.size() && std::isdigit(static_cast<unsigned char>(spec[i])) != 0) {
                 const std::uint32_t digit = static_cast<std::uint32_t>(spec[i] - '0');
                 if (one_based_port > 999U) {
                     return std::nullopt;
@@ -244,7 +256,8 @@ namespace mnemos::apps::player::adapters {
             constexpr std::string_view paddle_prefix = "paddle=";
             constexpr std::string_view dial_prefix = "dial=";
             if (button.rfind(paddle_prefix, 0U) == 0U) {
-                paddle_value = parse_u16_token(std::string_view{button}.substr(paddle_prefix.size()));
+                paddle_value =
+                    parse_u16_token(std::string_view{button}.substr(paddle_prefix.size()));
                 button = "paddle";
             } else if (button.rfind(dial_prefix, 0U) == 0U) {
                 paddle_value = parse_u16_token(std::string_view{button}.substr(dial_prefix.size()));
