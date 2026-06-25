@@ -9,7 +9,7 @@
 namespace mnemos::manifests::amiga500 {
 
     namespace {
-        constexpr std::uint32_t state_version = 23U;
+        constexpr std::uint32_t state_version = 24U;
 
         constexpr std::uint16_t reg_dmaconr = 0x002U;
         constexpr std::uint16_t reg_vposr = 0x004U;
@@ -656,7 +656,7 @@ namespace mnemos::manifests::amiga500 {
             const auto* drive = active_floppy_drive_state();
             const bool dma_on = disk_dma_bytes_remaining != 0U && (disk_length & 0x8000U) != 0U &&
                                 agnus.dma_disk() && drive != nullptr && !drive->image.empty() &&
-                                floppy_selected && floppy_motor_on;
+                                floppy_selected && drive->motor_on;
             if (disk_byte_valid) {
                 value = static_cast<std::uint16_t>(value | 0x8000U);
             }
@@ -1391,7 +1391,7 @@ namespace mnemos::manifests::amiga500 {
                 // CIAA PRA disk sense lines are active low: PA5=/RDY, PA4=/TK0,
                 // PA3=/WPRO, PA2=/CHNG. /CHNG remains low after media changes until
                 // the selected drive receives a step pulse with media present.
-                if (loaded && floppy_motor_on) {
+                if (loaded && drive->motor_on) {
                     pins = static_cast<std::uint8_t>(pins & ~0x20U);
                 }
                 if (loaded && drive->cylinder_pos == 0U) {
@@ -1455,6 +1455,8 @@ namespace mnemos::manifests::amiga500 {
 
     void amiga500_system::write_cia_b_port_b(std::uint8_t value) {
         const std::uint8_t next_selected_mask = static_cast<std::uint8_t>((~value >> 3U) & 0x0FU);
+        const std::uint8_t newly_selected_mask =
+            static_cast<std::uint8_t>(next_selected_mask & ~floppy_selected_mask);
         std::uint8_t next_active_drive = no_floppy_drive;
         for (std::size_t drive = 0U; drive < floppy_drive_count; ++drive) {
             if ((next_selected_mask & (1U << drive)) != 0U) {
@@ -1463,7 +1465,7 @@ namespace mnemos::manifests::amiga500 {
             }
         }
         const bool next_selected = next_active_drive != no_floppy_drive;
-        const bool next_motor_on = (value & 0x80U) == 0U;
+        const bool next_motor_latch = (value & 0x80U) == 0U;
         const auto next_side = static_cast<std::uint8_t>((value & 0x04U) == 0U ? 1U : 0U);
         const bool next_direction_inward = (value & 0x02U) != 0U;
         const bool next_step_line = (value & 0x01U) != 0U;
@@ -1474,9 +1476,29 @@ namespace mnemos::manifests::amiga500 {
         floppy_selected_mask = next_selected_mask;
         floppy_selected = next_selected;
         floppy_active_drive = next_active_drive;
-        floppy_motor_on = next_motor_on;
         floppy_side_pos = next_side;
         floppy_direction_inward = next_direction_inward;
+
+        for (std::size_t drive = 0U; drive < floppy_drive_count; ++drive) {
+            if ((newly_selected_mask & (1U << drive)) == 0U) {
+                continue;
+            }
+            auto& df = floppy_drives[drive];
+            df.motor_on = next_motor_latch;
+            if (!df.motor_on) {
+                df.index_line_accumulator = 0U;
+                df.byte_clock_accumulator = 0U;
+                df.stream_write_latch = 0U;
+                df.stream_write_shift = 0U;
+                df.stream_write_bits_remaining = 0U;
+            }
+        }
+
+        if (const auto* drive = active_floppy_drive_state(); floppy_selected && drive != nullptr) {
+            floppy_motor_on = drive->motor_on;
+        } else {
+            floppy_motor_on = false;
+        }
 
         if (stepping) {
             for (std::size_t drive = 0U; drive < floppy_drive_count; ++drive) {
@@ -1743,7 +1765,7 @@ namespace mnemos::manifests::amiga500 {
 
     void amiga500_system::tick_floppy_scanline() noexcept {
         auto* drive = active_floppy_drive_state();
-        if (!floppy_selected || !floppy_motor_on || drive == nullptr || drive->image.empty()) {
+        if (!floppy_selected || drive == nullptr || !drive->motor_on || drive->image.empty()) {
             if (drive != nullptr) {
                 drive->index_line_accumulator = 0U;
                 drive->byte_clock_accumulator = 0U;
@@ -1765,7 +1787,7 @@ namespace mnemos::manifests::amiga500 {
 
     void amiga500_system::tick_floppy_data_cycle() noexcept {
         auto* drive = active_floppy_drive_state();
-        if (!floppy_selected || !floppy_motor_on || drive == nullptr || drive->image.empty()) {
+        if (!floppy_selected || drive == nullptr || !drive->motor_on || drive->image.empty()) {
             if (drive != nullptr) {
                 drive->byte_clock_accumulator = 0U;
             }
@@ -1863,7 +1885,7 @@ namespace mnemos::manifests::amiga500 {
         reset_pending_write_byte();
         const auto* drive = active_floppy_drive_state();
         if (!agnus.dma_disk() || drive == nullptr || drive->image.empty() || !floppy_selected ||
-            !floppy_motor_on) {
+            !drive->motor_on) {
             disk_dma_bytes_remaining = 0U;
             disk_wordsync_waiting = false;
             return;
@@ -2215,6 +2237,7 @@ namespace mnemos::manifests::amiga500 {
             if (drive_index == 0U) {
                 drive.connected = true;
             }
+            drive.motor_on = false;
             drive.stream_offset = 0U;
             drive.stream_bit_offset = 0U;
             drive.stream_read_shift = 0U;
@@ -2342,6 +2365,7 @@ namespace mnemos::manifests::amiga500 {
             writer.u8(static_cast<std::uint8_t>(drive.stream_bit_offset & 0x07U));
             writer.u8(drive.cylinder_pos);
             writer.boolean(drive.connected);
+            writer.boolean(drive.motor_on);
             writer.boolean(drive.write_protected);
             writer.boolean(drive.change_latch);
             writer.u32(drive.index_line_accumulator);
@@ -2491,6 +2515,7 @@ namespace mnemos::manifests::amiga500 {
         std::array<std::uint8_t, floppy_drive_count> saved_floppy_write_bits_remaining{};
         std::array<std::uint16_t, floppy_drive_count> saved_floppy_weak_bit_lfsr{};
         std::array<bool, floppy_drive_count> saved_floppy_connected{};
+        std::array<bool, floppy_drive_count> saved_floppy_motor_on{};
         std::array<bool, floppy_drive_count> saved_floppy_track_dirty{};
         std::array<std::vector<std::uint8_t>, floppy_drive_count> saved_floppy_image{};
         std::array<std::vector<std::uint8_t>, floppy_drive_count> saved_floppy_track_stream{};
@@ -2501,6 +2526,7 @@ namespace mnemos::manifests::amiga500 {
             saved_floppy_stream_bit_offset[drive] = static_cast<std::uint8_t>(reader.u8() & 0x07U);
             df.cylinder_pos = reader.u8();
             saved_floppy_connected[drive] = reader.boolean();
+            saved_floppy_motor_on[drive] = reader.boolean();
             df.write_protected = reader.boolean();
             df.change_latch = reader.boolean();
             df.index_line_accumulator = reader.u32();
@@ -2617,6 +2643,7 @@ namespace mnemos::manifests::amiga500 {
                 auto& df = floppy_drives[drive];
                 df.image = std::move(saved_floppy_image[drive]);
                 df.connected = drive == 0U || saved_floppy_connected[drive] || !df.image.empty();
+                df.motor_on = saved_floppy_motor_on[drive] && df.connected;
                 df.track_stream.clear();
                 df.weak_bit_stream.clear();
                 df.track_stream_dirty = false;
@@ -2646,6 +2673,8 @@ namespace mnemos::manifests::amiga500 {
                     df.stream_write_shift = saved_floppy_write_shift[drive];
                     df.stream_write_bits_remaining = saved_floppy_write_bits_remaining[drive];
                 } else {
+                    df.index_line_accumulator = 0U;
+                    df.byte_clock_accumulator = 0U;
                     df.weak_bit_stream.clear();
                     df.stream_bit_offset = 0U;
                     df.stream_read_shift = 0U;
@@ -2663,6 +2692,12 @@ namespace mnemos::manifests::amiga500 {
                         df.byte_clock_accumulator %= index_clocks;
                     }
                 }
+            }
+            if (const auto* drive = active_floppy_drive_state();
+                floppy_selected && drive != nullptr) {
+                floppy_motor_on = drive->motor_on;
+            } else {
+                floppy_motor_on = false;
             }
             update_irq_level();
         }

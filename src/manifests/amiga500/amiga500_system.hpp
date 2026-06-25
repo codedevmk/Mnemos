@@ -153,6 +153,7 @@ namespace mnemos::manifests::amiga500 {
             std::uint16_t weak_bit_lfsr{0xACE1U};
             std::uint8_t cylinder_pos{};
             bool connected{};
+            bool motor_on{};
             bool write_protected{true};
             bool change_latch{true};
             bool track_stream_dirty{};

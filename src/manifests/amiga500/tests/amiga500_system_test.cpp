@@ -1531,6 +1531,62 @@ TEST_CASE("amiga500 CIAB disk control only follows PRB lines driven by DDRB",
     CHECK(sys->floppy_motor_on);
 }
 
+TEST_CASE("amiga500 CIAB disk motor state latches when a drive is selected",
+          "[manifests][amiga500][disk][cia][save]") {
+    auto sys = assemble_amiga500(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+
+    sys->cia_b.write(0x01U, 0xFFU);
+    sys->cia_b.write(0x03U, 0xFFU);
+    sys->cia_b.write(0x01U, 0x7FU); // /MTR=0 with no drive selected.
+    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK_FALSE(sys->floppy_drives[0].motor_on);
+    CHECK_FALSE(sys->floppy_motor_on);
+
+    sys->cia_b.write(0x01U, 0x77U); // DF0 samples /MTR=0 on select assertion.
+    CHECK(sys->selected_floppy_drive() == 0U);
+    CHECK(sys->floppy_drives[0].motor_on);
+    CHECK(sys->floppy_motor_on);
+    CHECK((sys->cia_a.read(0x00U) & 0x20U) == 0U);
+
+    sys->cia_b.write(0x01U, 0xFFU); // Deselecting all drives does not relatch /MTR=1.
+    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->floppy_drives[0].motor_on);
+    CHECK_FALSE(sys->floppy_motor_on);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    sys->cia_b.write(0x01U, 0xF7U); // DF0 samples /MTR=1 on the next select assertion.
+    CHECK(sys->selected_floppy_drive() == 0U);
+    CHECK_FALSE(sys->floppy_drives[0].motor_on);
+    CHECK_FALSE(sys->floppy_motor_on);
+    CHECK((sys->cia_a.read(0x00U) & 0x20U) != 0U);
+
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->floppy_drives[0].motor_on);
+    CHECK_FALSE(sys->floppy_motor_on);
+
+    sys->cia_b.write(0x01U, 0xFFU);
+    sys->cia_b.write(0x01U, 0xF7U);
+    CHECK(sys->selected_floppy_drive() == 0U);
+    CHECK_FALSE(sys->floppy_drives[0].motor_on);
+    CHECK_FALSE(sys->floppy_motor_on);
+    CHECK((sys->cia_a.read(0x00U) & 0x20U) != 0U);
+
+    sys->cia_b.write(0x01U, 0xFFU);
+    sys->cia_b.write(0x01U, 0x77U);
+    CHECK(sys->selected_floppy_drive() == 0U);
+    CHECK(sys->floppy_drives[0].motor_on);
+    CHECK(sys->floppy_motor_on);
+    CHECK((sys->cia_a.read(0x00U) & 0x20U) == 0U);
+}
+
 TEST_CASE("amiga500 CIAB disk select lines address independent DF0-DF3 state",
           "[manifests][amiga500][disk]") {
     auto sys = assemble_amiga500(tiny_kickstart());
