@@ -11,6 +11,8 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -19,6 +21,8 @@ namespace {
     using mnemos::chips::reset_kind;
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
+    using mnemos::chips::audio::adpcm_a;
+    using mnemos::chips::audio::adpcm_b;
     using mnemos::chips::audio::ym2610;
 
     // Drive the SSG block through the YM2610 bank-A address/data ports: a tone on
@@ -60,6 +64,52 @@ namespace {
         write_a(0xA4, 0x22); // block 4, F-number high bits
         write_a(0xA0, 0x80); // F-number low byte
         write_a(0x28, 0xF0); // key on all four slots of channel 1 (sel=0)
+    }
+
+    std::vector<std::uint8_t> make_adpcm_a_rom() {
+        std::vector<std::uint8_t> rom(0x200, 0U);
+        rom[0x100] = 0x12U;
+        rom[0x101] = 0x34U;
+        return rom;
+    }
+
+    void configure_adpcm_a_channel0(ym2610& chip) {
+        const auto write_b = [&chip](std::uint8_t reg, std::uint8_t value) {
+            chip.write_address_b(reg);
+            chip.write_data_b(value);
+        };
+        write_b(adpcm_a::reg_tl, 0x3FU);
+        write_b(adpcm_a::reg_ch_pan_level, 0xDFU);
+        write_b(adpcm_a::reg_ch_start_lo, 0x01U);
+        write_b(adpcm_a::reg_ch_start_hi, 0x00U);
+        write_b(adpcm_a::reg_ch_end_lo, 0x01U);
+        write_b(adpcm_a::reg_ch_end_hi, 0x00U);
+        write_b(adpcm_a::reg_key, 0x01U);
+    }
+
+    void configure_adpcm_a_channel5(ym2610& chip) {
+        const auto write_b = [&chip](std::uint8_t reg, std::uint8_t value) {
+            chip.write_address_b(reg);
+            chip.write_data_b(value);
+        };
+        write_b(adpcm_a::reg_tl, 0x3FU);
+        write_b(adpcm_a::reg_ch_pan_level + 5, 0xDFU);
+        write_b(adpcm_a::reg_ch_start_lo + 5, 0x01U);
+        write_b(adpcm_a::reg_ch_start_hi + 5, 0x00U);
+        write_b(adpcm_a::reg_ch_end_lo + 5, 0x01U);
+        write_b(adpcm_a::reg_ch_end_hi + 5, 0x00U);
+        write_b(adpcm_a::reg_key, 0x20U);
+    }
+
+    std::uint64_t register_value(std::span<const mnemos::chips::register_descriptor> regs,
+                                 std::string_view name) {
+        for (const auto& reg : regs) {
+            if (reg.name == name) {
+                return reg.value;
+            }
+        }
+        FAIL("missing register " << name);
+        return 0U;
     }
 
 } // namespace
@@ -111,6 +161,208 @@ TEST_CASE("ym2610 an FM register write produces output", "[ym2610][audio]") {
         any_nonzero = any_nonzero || (chip.last_left() != 0) || (chip.last_right() != 0);
     }
     REQUIRE(any_nonzero);
+}
+
+TEST_CASE("ym2610 ignores invalid four-channel FM selectors", "[ym2610][audio]") {
+    ym2610 chip;
+
+    // Low selector 2 is a valid six-channel OPN selector, but the YM2610 model
+    // represented here has four FM channels. Taito sound programs can touch
+    // these holes while probing/resetting the OPNB register file; that must not
+    // decode into channel index 4.
+    chip.write_address_b(0xA2);
+    chip.write_data_b(0x7F);
+    chip.write_address_b(0xB2);
+    chip.write_data_b(0x07);
+    chip.write_address_a(0x28);
+    chip.write_data_a(0xF2);
+
+    std::array<std::int16_t, 16> out{};
+    chip.generate(out);
+
+    REQUIRE(chip.fm_register(0x1A2) == 0x7F);
+    REQUIRE(chip.fm_register(0x1B2) == 0x07);
+}
+
+TEST_CASE("ym2610 routes the full bank-B ADPCM-A register window", "[ym2610][audio]") {
+    ym2610 chip;
+
+    chip.write_address_b(adpcm_a::reg_ch_end_lo);
+    chip.write_data_b(0x34U);
+    chip.write_address_b(adpcm_a::reg_ch_end_hi);
+    chip.write_data_b(0x12U);
+
+    REQUIRE(chip.adpcm_a_block().read_reg(adpcm_a::reg_ch_end_lo) == 0x34U);
+    REQUIRE(chip.adpcm_a_block().read_reg(adpcm_a::reg_ch_end_hi) == 0x12U);
+}
+
+TEST_CASE("ym2610 routes bank-B zero to the ADPCM-A key register", "[ym2610][audio]") {
+    ym2610 chip;
+    const std::vector<std::uint8_t> rom = make_adpcm_a_rom();
+    chip.adpcm_a_block().set_sample_rom(rom);
+
+    configure_adpcm_a_channel0(chip);
+
+    bool any_nonzero = false;
+    for (int i = 0; i < 32; ++i) {
+        chip.step();
+        any_nonzero = any_nonzero || chip.last_left() != 0 || chip.last_right() != 0;
+    }
+
+    REQUIRE(chip.adpcm_a_block().read_reg(adpcm_a::reg_key) == 0x01U);
+    REQUIRE(any_nonzero);
+}
+
+TEST_CASE("ym2610 clocks ADPCM-A at one third of the YM output rate", "[ym2610][audio]") {
+    ym2610 chip;
+    const std::vector<std::uint8_t> rom = make_adpcm_a_rom();
+    chip.adpcm_a_block().set_sample_rom(rom);
+    configure_adpcm_a_channel0(chip);
+
+    std::vector<std::int16_t> left;
+    for (int i = 0; i < 10; ++i) {
+        chip.step();
+        left.push_back(chip.last_left());
+    }
+
+    REQUIRE(left == std::vector<std::int16_t>{96, 96, 96, 256, 256, 256, 480, 480, 480, 768});
+}
+
+TEST_CASE("ym2610 exposes CPU-facing register writes to introspection",
+          "[ym2610][audio][introspection]") {
+    ym2610 chip;
+    std::vector<std::uint16_t> ports;
+    std::vector<std::uint8_t> values;
+
+    auto* trace = chip.introspection().reg_writes();
+    REQUIRE(trace != nullptr);
+    trace->install([&](const mnemos::instrumentation::reg_write_event& event) {
+        ports.push_back(event.port);
+        values.push_back(event.value);
+    });
+
+    chip.write_address_a(0x08U);
+    chip.write_data_a(0x0FU);
+    chip.write_address_b(0x10U);
+    chip.write_data_b(0x80U);
+    trace->install({});
+
+    REQUIRE(ports == std::vector<std::uint16_t>{0x0008U, 0x0110U});
+    REQUIRE(values == std::vector<std::uint8_t>{0x0FU, 0x80U});
+}
+
+TEST_CASE("ym2610 exposes ADPCM-A per-channel diagnostics", "[ym2610][audio]") {
+    ym2610 chip;
+    const std::vector<std::uint8_t> rom = make_adpcm_a_rom();
+    chip.adpcm_a_block().set_sample_rom(rom);
+    configure_adpcm_a_channel5(chip);
+
+    chip.step();
+    const auto regs = chip.register_snapshot();
+
+    REQUIRE(register_value(regs, "ADPCMA_KEY") == 0x20U);
+    REQUIRE(register_value(regs, "ADPCMA_ACTIVE") == 0x20U);
+    REQUIRE(register_value(regs, "ADPCMA_CH5_START") == 0x000100U);
+    REQUIRE(register_value(regs, "ADPCMA_CH5_END") == 0x0001FFU);
+    REQUIRE(register_value(regs, "ADPCMA_CH5_ACTIVE") == 1U);
+    REQUIRE(register_value(regs, "ADPCMA_CH5_ACC") != 0U);
+    REQUIRE(register_value(regs, "ADPCMA_CH5_END_EVENTS") == 0U);
+    REQUIRE(register_value(regs, "ADPCMA_CH5_ROM_UNDERRUNS") == 0U);
+    REQUIRE(register_value(regs, "ADPCMA_CH0_ACTIVE") == 0U);
+}
+
+TEST_CASE("ym2610 exposes ADPCM-B stream diagnostics", "[ym2610][audio]") {
+    ym2610 chip;
+    const std::vector<std::uint8_t> rom(0x100, 0x11U);
+    chip.adpcm_b_block().set_sample_rom(rom);
+
+    const auto write_a = [&chip](std::uint8_t reg, std::uint8_t value) {
+        chip.write_address_a(static_cast<std::uint8_t>(0x10U + reg));
+        chip.write_data_a(value);
+    };
+    write_a(adpcm_b::reg_start_lo, 0x00U);
+    write_a(adpcm_b::reg_start_hi, 0x00U);
+    write_a(adpcm_b::reg_end_lo, 0x00U);
+    write_a(adpcm_b::reg_end_hi, 0x00U);
+    write_a(adpcm_b::reg_delta_lo, 0x00U);
+    write_a(adpcm_b::reg_delta_hi, 0x01U);
+    write_a(adpcm_b::reg_pan_tl, adpcm_b::pan_left | adpcm_b::pan_right | 0x05U);
+    write_a(adpcm_b::reg_ctrl, adpcm_b::ctrl_start | adpcm_b::ctrl_repeat);
+
+    chip.step();
+    const auto regs = chip.register_snapshot();
+
+    REQUIRE(register_value(regs, "ADPCMB_CTRL") ==
+            (adpcm_b::ctrl_start | adpcm_b::ctrl_repeat));
+    REQUIRE((register_value(regs, "ADPCMB_STATUS") & adpcm_b::status_busy) != 0U);
+    REQUIRE(register_value(regs, "ADPCMB_TL") == 0x05U);
+    REQUIRE(register_value(regs, "ADPCMB_START") == 0x0000U);
+    REQUIRE(register_value(regs, "ADPCMB_END") == 0x0000U);
+    REQUIRE(register_value(regs, "ADPCMB_DELTA_N") == 0x0100U);
+    REQUIRE(register_value(regs, "ADPCMB_CURSOR") > 0U);
+    REQUIRE(register_value(regs, "ADPCMB_ACTIVE") == 1U);
+    REQUIRE(register_value(regs, "ADPCMB_REPEAT") == 1U);
+    REQUIRE(register_value(regs, "ADPCMB_END_EVENTS") == 0U);
+    REQUIRE(register_value(regs, "ADPCMB_LOOP_EVENTS") == 0U);
+    REQUIRE(register_value(regs, "ADPCMB_ROM_UNDERRUNS") == 0U);
+
+    std::array<std::int16_t, 1100> loop_buf{};
+    chip.generate(loop_buf);
+    const auto loop_regs = chip.register_snapshot();
+
+    REQUIRE(register_value(loop_regs, "ADPCMB_ACTIVE") == 1U);
+    REQUIRE(register_value(loop_regs, "ADPCMB_END_EVENTS") >= 1U);
+    REQUIRE(register_value(loop_regs, "ADPCMB_LOOP_EVENTS") >= 1U);
+    REQUIRE(register_value(loop_regs, "ADPCMB_ROM_UNDERRUNS") == 0U);
+}
+
+TEST_CASE("ym2610 timer A overflow raises and clears the IRQ line", "[ym2610][audio]") {
+    ym2610 chip;
+    std::vector<bool> irq_edges;
+    chip.set_irq([&](bool asserted) { irq_edges.push_back(asserted); });
+
+    chip.write_address_a(0x24U);
+    chip.write_data_a(0xFFU);
+    chip.write_address_a(0x25U);
+    chip.write_data_a(0x02U);
+    chip.write_address_a(0x27U);
+    chip.write_data_a(0x05U); // run timer A + enable timer A IRQ
+
+    chip.tick((2U * ym2610::default_clock_divider) - 1U);
+    CHECK_FALSE(chip.irq_asserted());
+    CHECK((chip.read_status() & ym2610::status_timer_a) == 0U);
+
+    chip.tick(1U);
+    REQUIRE(chip.irq_asserted());
+    CHECK((chip.read_status() & ym2610::status_timer_a) != 0U);
+    REQUIRE(irq_edges == std::vector<bool>{true});
+
+    chip.write_address_a(0x27U);
+    chip.write_data_a(0x15U); // keep timer A running/enabled, clear flag A
+
+    CHECK_FALSE(chip.irq_asserted());
+    CHECK((chip.read_status() & ym2610::status_timer_a) == 0U);
+    CHECK(irq_edges == std::vector<bool>{true, false});
+}
+
+TEST_CASE("ym2610 reset drops a pending timer IRQ", "[ym2610][audio]") {
+    ym2610 chip;
+    std::vector<bool> irq_edges;
+    chip.set_irq([&](bool asserted) { irq_edges.push_back(asserted); });
+
+    chip.write_address_a(0x24U);
+    chip.write_data_a(0xFFU);
+    chip.write_address_a(0x25U);
+    chip.write_data_a(0x02U);
+    chip.write_address_a(0x27U);
+    chip.write_data_a(0x05U);
+    chip.tick(2U * ym2610::default_clock_divider);
+    REQUIRE(chip.irq_asserted());
+
+    chip.reset(reset_kind::power_on);
+
+    CHECK_FALSE(chip.irq_asserted());
+    CHECK(irq_edges == std::vector<bool>{true, false});
 }
 
 TEST_CASE("ym2610 save_state/load_state round-trips bit-identically", "[ym2610][audio]") {

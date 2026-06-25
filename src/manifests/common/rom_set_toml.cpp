@@ -100,6 +100,53 @@ namespace mnemos::manifests::common {
             return std::nullopt;
         }
 
+        [[nodiscard]] bool is_choice(std::string_view value,
+                                      std::initializer_list<std::string_view> choices) noexcept {
+            return std::any_of(choices.begin(), choices.end(),
+                               [value](std::string_view choice) { return value == choice; });
+        }
+
+        [[nodiscard]] std::optional<std::string>
+        read_string_choice(const parse_context& ctx, const toml::table& table,
+                           std::string_view key, std::initializer_list<std::string_view> choices,
+                           std::string_view description) {
+            const toml::node* node = table.get(key);
+            if (node == nullptr) {
+                return std::nullopt;
+            }
+            if (const auto* value = node->as_string()) {
+                const std::string& text = value->get();
+                if (is_choice(text, choices)) {
+                    return text;
+                }
+                ctx.error("'" + std::string(key) + "' in [set] must be a known " +
+                              std::string(description),
+                          node);
+                return std::nullopt;
+            }
+            ctx.error("'" + std::string(key) + "' in [set] must be a string", node);
+            return std::nullopt;
+        }
+
+        [[nodiscard]] std::optional<std::uint8_t>
+        read_irq_level(const parse_context& ctx, const toml::table& table,
+                       std::string_view key) {
+            const toml::node* node = table.get(key);
+            if (node == nullptr) {
+                return std::nullopt;
+            }
+            if (auto level = read_unsigned(ctx, *node, key, "[set]")) {
+                if (*level < 1U || *level > 7U) {
+                    ctx.error("'" + std::string(key) +
+                                  "' in [set] must be a 68000 IRQ level in the range 1..7",
+                              node);
+                    return std::nullopt;
+                }
+                return static_cast<std::uint8_t>(*level);
+            }
+            return std::nullopt;
+        }
+
         // crc32 accepts a TOML integer or a hex string ("DEADBEEF" / "0x...").
         [[nodiscard]] std::optional<std::uint32_t>
         read_crc32(const parse_context& ctx, const toml::node& node, std::string_view where) {
@@ -404,7 +451,18 @@ namespace mnemos::manifests::common {
                         "taito_f2_sprite_policy", "taito_f2_sprite_buffering",
                         "taito_f2_palette_format", "taito_f2_sprite_extension_base",
                         "taito_f2_sprite_extension_size", "taito_f2_sprite_active_area",
-                        "taito_f2_sprite_hide_pixels", "taito_f2_sprite_flip_hide_pixels"},
+                        "taito_f2_sprite_hide_pixels", "taito_f2_sprite_flip_hide_pixels",
+                        "taito_f2_input_profile", "taito_f2_text_gfx_source",
+                        "taito_f2_text_gfx_base", "taito_f2_tc0100scn_bg_x_offset",
+                        "taito_f2_tc0100scn_text_x_offset",
+                        "taito_f2_tc0100scn_text_y_origin",
+                        "taito_f2_tc0100scn_positive_text_y_origin",
+                        "taito_f2_io_profile", "taito_f2_palette_profile",
+                        "taito_f2_priority_profile", "taito_f2_sprite_chip_pair",
+                        "taito_f2_sound_comm_chip", "taito_f2_video_profile",
+                        "taito_f2_tc0480scp_profile", "taito_f2_roz_x_offset",
+                        "taito_f2_roz_y_offset", "taito_f2_aux_profile",
+                        "taito_f2_vblank_irq_level", "taito_f2_sprite_dma_irq_level"},
                        "[set]");
             if (auto schema = require_string(ctx, *set, "schema", "[set]")) {
                 if (*schema != expected_schema) {
@@ -589,11 +647,13 @@ namespace mnemos::manifests::common {
                 if (const auto* value = node->as_string()) {
                     const std::string& format = value->get();
                     if (format == "xbgr_555" || format == "rgbx_444" ||
-                        format == "xrgb_555") {
+                        format == "xrgb_555" || format == "rrrr_gggg_bbbb_rgbx" ||
+                        format == "rrrrggggbbbbrgbx") {
                         decl.taito_f2_palette_format = format;
                     } else {
                         ctx.error("'taito_f2_palette_format' in [set] must be "
-                                  "\"xbgr_555\", \"rgbx_444\", or \"xrgb_555\"",
+                                  "\"xbgr_555\", \"rgbx_444\", \"xrgb_555\", or "
+                                  "\"rrrr_gggg_bbbb_rgbx\"",
                                   node);
                     }
                 } else {
@@ -680,6 +740,143 @@ namespace mnemos::manifests::common {
                     }
                 }
             }
+            decl.taito_f2_input_profile =
+                read_string_choice(ctx, *set, "taito_f2_input_profile",
+                                   {"standard", "split_tmp82c265", "te7750_quad"},
+                                   "Taito F2 input profile");
+            decl.taito_f2_text_gfx_source =
+                read_string_choice(ctx, *set, "taito_f2_text_gfx_source",
+                                   {"tc0100scn_ram_2bpp", "program_1bpp"},
+                                   "Taito F2 text graphics source");
+            if (const toml::node* node = set->get("taito_f2_text_gfx_base")) {
+                if (auto base = read_unsigned(ctx, *node, "taito_f2_text_gfx_base",
+                                              "[set]")) {
+                    if (*base > 0xFFFFFFU) {
+                        ctx.error("'taito_f2_text_gfx_base' in [set] is out of "
+                                  "24-bit region offset range",
+                                  node);
+                    } else {
+                        decl.taito_f2_text_gfx_base =
+                            static_cast<std::uint32_t>(*base);
+                    }
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_tc0100scn_bg_x_offset")) {
+                if (auto offset =
+                        read_signed(ctx, *node, "taito_f2_tc0100scn_bg_x_offset", "[set]")) {
+                    if (*offset < -256 || *offset > 256) {
+                        ctx.error("'taito_f2_tc0100scn_bg_x_offset' in [set] must be "
+                                  "between -256 and 256",
+                                  node);
+                    } else {
+                        decl.taito_f2_tc0100scn_bg_x_offset =
+                            static_cast<std::int16_t>(*offset);
+                    }
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_tc0100scn_text_x_offset")) {
+                if (auto offset =
+                        read_signed(ctx, *node, "taito_f2_tc0100scn_text_x_offset", "[set]")) {
+                    if (*offset < -256 || *offset > 256) {
+                        ctx.error("'taito_f2_tc0100scn_text_x_offset' in [set] must be "
+                                  "between -256 and 256",
+                                  node);
+                    } else {
+                        decl.taito_f2_tc0100scn_text_x_offset =
+                            static_cast<std::int16_t>(*offset);
+                    }
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_tc0100scn_text_y_origin")) {
+                if (auto origin =
+                        read_signed(ctx, *node, "taito_f2_tc0100scn_text_y_origin", "[set]")) {
+                    if (*origin < -256 || *origin > 256) {
+                        ctx.error("'taito_f2_tc0100scn_text_y_origin' in [set] must be "
+                                  "between -256 and 256",
+                                  node);
+                    } else {
+                        decl.taito_f2_tc0100scn_text_y_origin =
+                            static_cast<std::int16_t>(*origin);
+                    }
+                }
+            }
+            if (const toml::node* node =
+                    set->get("taito_f2_tc0100scn_positive_text_y_origin")) {
+                if (auto origin = read_signed(
+                        ctx, *node, "taito_f2_tc0100scn_positive_text_y_origin", "[set]")) {
+                    if (*origin < -256 || *origin > 256) {
+                        ctx.error("'taito_f2_tc0100scn_positive_text_y_origin' in [set] "
+                                  "must be between -256 and 256",
+                                  node);
+                    } else {
+                        decl.taito_f2_tc0100scn_positive_text_y_origin =
+                            static_cast<std::int16_t>(*origin);
+                    }
+                }
+            }
+            decl.taito_f2_io_profile =
+                read_string_choice(ctx, *set, "taito_f2_io_profile",
+                                   {"tc0220ioc", "tc0510nio", "te7750", "tmp82c265"},
+                                   "Taito F2 I/O profile");
+            decl.taito_f2_palette_profile =
+                read_string_choice(ctx, *set, "taito_f2_palette_profile",
+                                   {"tc0110pcr_tc0070rgb", "tc0260dar"},
+                                   "Taito F2 palette profile");
+            decl.taito_f2_priority_profile =
+                read_string_choice(ctx, *set, "taito_f2_priority_profile",
+                                   {"none", "tc0360pri"},
+                                   "Taito F2 priority profile");
+            decl.taito_f2_sprite_chip_pair =
+                read_string_choice(ctx, *set, "taito_f2_sprite_chip_pair",
+                                   {"tc0200obj_tc0210fbc", "tc0540obn_tc0520tbc"},
+                                   "Taito F2 sprite chip pair");
+            decl.taito_f2_sound_comm_chip =
+                read_string_choice(ctx, *set, "taito_f2_sound_comm_chip",
+                                   {"tc0140syt", "tc0530syc"},
+                                   "Taito F2 sound-communication chip");
+            decl.taito_f2_video_profile =
+                read_string_choice(ctx, *set, "taito_f2_video_profile",
+                                   {"tc0100scn", "dual_tc0100scn",
+                                    "tc0100scn_tc0280grd", "tc0100scn_tc0430grw",
+                                    "tc0480scp"},
+                                   "Taito F2 video profile");
+            decl.taito_f2_tc0480scp_profile =
+                read_string_choice(ctx, *set, "taito_f2_tc0480scp_profile",
+                                   {"none", "metalb", "footchmp", "deadconx"},
+                                   "Taito F2 TC0480SCP profile");
+            if (const toml::node* node = set->get("taito_f2_roz_x_offset")) {
+                if (auto offset = read_signed(ctx, *node, "taito_f2_roz_x_offset", "[set]")) {
+                    if (*offset < -256 || *offset > 256) {
+                        ctx.error("'taito_f2_roz_x_offset' in [set] must be "
+                                  "between -256 and 256",
+                                  node);
+                    } else {
+                        decl.taito_f2_roz_x_offset =
+                            static_cast<std::int16_t>(*offset);
+                    }
+                }
+            }
+            if (const toml::node* node = set->get("taito_f2_roz_y_offset")) {
+                if (auto offset = read_signed(ctx, *node, "taito_f2_roz_y_offset", "[set]")) {
+                    if (*offset < -256 || *offset > 256) {
+                        ctx.error("'taito_f2_roz_y_offset' in [set] must be "
+                                  "between -256 and 256",
+                                  node);
+                    } else {
+                        decl.taito_f2_roz_y_offset =
+                            static_cast<std::int16_t>(*offset);
+                    }
+                }
+            }
+            decl.taito_f2_aux_profile =
+                read_string_choice(ctx, *set, "taito_f2_aux_profile",
+                                   {"none", "tc0030cmd_cchip", "rtc", "printer",
+                                    "rtc_printer"},
+                                   "Taito F2 auxiliary-device profile");
+            decl.taito_f2_vblank_irq_level =
+                read_irq_level(ctx, *set, "taito_f2_vblank_irq_level");
+            decl.taito_f2_sprite_dma_irq_level =
+                read_irq_level(ctx, *set, "taito_f2_sprite_dma_irq_level");
         } else {
             ctx.error("missing required [set] table");
         }

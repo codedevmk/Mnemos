@@ -1,5 +1,5 @@
-# Dino Rex (World) -- Taito F2 / D39 with TC0100SCN tilemaps and type-3
-# TC0200OBJ sprite extension RAM.
+# Dino Rex (World) -- Taito F2 / D39 with TC0100SCN tilemaps and
+# TC0200OBJ object codes carried in the object words.
 # Schema mnemos-romset/1; drop a copy of this file into the set zip as
 # "game.toml" next to the dump files it names.
 #
@@ -13,7 +13,21 @@ name   = "dinorex"
 board  = "taito_f2"
 orientation = "horizontal"
 taito_f2_map = "dinorex"
-taito_f2_palette_format = "xrgb_555"
+taito_f2_input_profile = "standard"
+taito_f2_text_gfx_source = "tc0100scn_ram_2bpp"
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "tc0510nio"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "rrrr_gggg_bbbb_rgbx"
 taito_f2_sprite_policy = "extension_3"
 taito_f2_sprite_buffering = "immediate"
 taito_f2_sprite_extension_base = 0x400000

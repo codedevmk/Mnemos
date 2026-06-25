@@ -110,6 +110,12 @@ namespace mnemos::chips::cpu {
         // (boards holding the CPU while its program RAM is uploaded).
         void set_reset_line(bool asserted) noexcept;
         [[nodiscard]] bool reset_line_held() const noexcept { return reset_line_; }
+        [[nodiscard]] std::uint64_t nmi_accept_count() const noexcept {
+            return nmi_accept_count_;
+        }
+        [[nodiscard]] std::uint64_t irq_accept_count() const noexcept {
+            return irq_accept_count_;
+        }
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -236,6 +242,8 @@ namespace mnemos::chips::cpu {
         bool nmi_pending_{};
         bool nmi_line_{};   // previous /NMI level for edge detection
         bool reset_line_{}; // /RESET held: parked, no execution
+        std::uint64_t nmi_accept_count_{};
+        std::uint64_t irq_accept_count_{};
 
         int step_cycles_{}; // cycles of the instruction in flight
         // tick()'s catch-up loop and cycle_debt_ live in cpu_catch_up.
@@ -253,7 +261,7 @@ namespace mnemos::chips::cpu {
         // own elapsed_cycles() at fire time.
         std::function<void(std::uint32_t pc)> trace_callback_{};
 
-        std::array<register_descriptor, 16> register_view_{};
+        std::array<register_descriptor, 25> register_view_{};
         instrumentation::introspection_builder introspection_;
     };
 

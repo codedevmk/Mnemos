@@ -12,8 +12,10 @@
 #include "inflate.hpp"
 #include "lzma1.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,6 +45,10 @@ namespace mnemos::disc::chd {
         constexpr std::uint32_t kCodecCdzl = fourcc('c', 'd', 'z', 'l');
         constexpr std::uint32_t kCodecCdlz = fourcc('c', 'd', 'l', 'z');
         constexpr std::uint32_t kCodecCdfl = fourcc('c', 'd', 'f', 'l'); // CD-DA audio (FLAC)
+        constexpr std::uint32_t kCodecLzma = fourcc('l', 'z', 'm', 'a');
+        constexpr std::uint32_t kCodecZlib = fourcc('z', 'l', 'i', 'b');
+        constexpr std::uint32_t kCodecHuff = fourcc('h', 'u', 'f', 'f');
+        constexpr std::uint32_t kCodecFlac = fourcc('f', 'l', 'a', 'c');
 
         // ---- v5 map entry compression types ----
         constexpr std::uint8_t kCompType0 = 0; // codec slot 0..3
@@ -239,8 +245,143 @@ namespace mnemos::disc::chd {
             return dec.assign_canonical_codes() && dec.build_lookup_table() && !br.overflowed();
         }
 
+        bool import_tree_huffman(huffman_decoder& dec, bit_reader& br) {
+            huffman_decoder small;
+            small.init(24, 6);
+            small.numbits[0] = static_cast<std::uint8_t>(br.read(3));
+            const int start = static_cast<int>(br.read(3)) + 1;
+            int count = 0;
+            for (int index = 1; index < 24; ++index) {
+                if (index < start || count == 7) {
+                    small.numbits[static_cast<std::size_t>(index)] = 0;
+                } else {
+                    count = static_cast<int>(br.read(3));
+                    small.numbits[static_cast<std::size_t>(index)] =
+                        static_cast<std::uint8_t>(count == 7 ? 0 : count);
+                }
+            }
+            if (!small.assign_canonical_codes() || !small.build_lookup_table()) {
+                return false;
+            }
+
+            std::uint32_t temp = dec.numcodes - 9U;
+            std::uint8_t rlefullbits = 0;
+            while (temp != 0U) {
+                temp >>= 1U;
+                ++rlefullbits;
+            }
+
+            int last = 0;
+            std::uint32_t curcode = 0;
+            while (curcode < dec.numcodes) {
+                const int value = static_cast<int>(small.decode_one(br));
+                if (value != 0) {
+                    dec.numbits[curcode++] = static_cast<std::uint8_t>(value - 1);
+                    last = value - 1;
+                } else {
+                    int repeat = static_cast<int>(br.read(3)) + 2;
+                    if (repeat == 9) {
+                        repeat += static_cast<int>(br.read(rlefullbits));
+                    }
+                    while (repeat-- > 0 && curcode < dec.numcodes) {
+                        dec.numbits[curcode++] = static_cast<std::uint8_t>(last);
+                    }
+                }
+            }
+
+            return curcode == dec.numcodes && dec.assign_canonical_codes() &&
+                   dec.build_lookup_table() && !br.overflowed();
+        }
+
         // ---- codec scratch sizes ----
         std::uint32_t frames_per_hunk(std::uint32_t hunk_bytes) { return hunk_bytes / kFrameSize; }
+
+        std::uint32_t adler32(std::span<const std::uint8_t> data) noexcept {
+            constexpr std::uint32_t mod = 65521U;
+            std::uint32_t a = 1U;
+            std::uint32_t b = 0U;
+            for (std::uint8_t byte : data) {
+                a += byte;
+                if (a >= mod) {
+                    a -= mod;
+                }
+                b += a;
+                b %= mod;
+            }
+            return (b << 16U) | a;
+        }
+
+        bool decode_zlib_hunk(std::span<const std::uint8_t> in, std::span<std::uint8_t> out) {
+            if (in.size() >= 6U) {
+                const std::uint8_t cmf = in[0];
+                const std::uint8_t flg = in[1];
+                const bool valid_header =
+                    (cmf & 0x0FU) == 8U && ((cmf >> 4U) <= 7U) &&
+                    (((static_cast<std::uint32_t>(cmf) << 8U) | flg) % 31U) == 0U &&
+                    (flg & 0x20U) == 0U;
+                if (valid_header) {
+                    std::size_t consumed = 0;
+                    const auto written =
+                        compression::inflate_raw(in.subspan(2), out, consumed);
+                    const std::size_t checksum_offset = 2U + consumed;
+                    if (written && *written == out.size() && checksum_offset + 4U <= in.size()) {
+                        const std::uint32_t stored = be32(in.data() + checksum_offset);
+                        if (stored == adler32(out)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            const auto written = compression::inflate_raw(in, out);
+            return written && *written == out.size();
+        }
+
+        bool decode_flac_block_hunk(std::span<const std::uint8_t> in,
+                                    std::span<std::uint8_t> out) {
+            if ((out.size() % 4U) != 0U) {
+                return false;
+            }
+            std::span<const std::uint8_t> flac = in;
+            if (in.size() >= 3U && in[1] == 0xFFU && (in[2] & 0xFEU) == 0xF8U) {
+                // CHD block-FLAC stores a byte-order marker before the bare FLAC frame.
+                flac = in.subspan(1);
+            }
+            const std::uint32_t sample_pairs = static_cast<std::uint32_t>(out.size() / 4U);
+            std::vector<std::int16_t> samples(static_cast<std::size_t>(sample_pairs) * 2U);
+            const auto consumed = flac_decode_interleaved(flac, sample_pairs, samples);
+            if (!consumed) {
+                return false;
+            }
+            for (std::uint32_t i = 0; i < sample_pairs; ++i) {
+                const std::uint16_t l = static_cast<std::uint16_t>(samples[i * 2U]);
+                const std::uint16_t r = static_cast<std::uint16_t>(samples[i * 2U + 1U]);
+                std::uint8_t* p = out.data() + static_cast<std::size_t>(i) * 4U;
+                p[0] = static_cast<std::uint8_t>(l & 0xFFU);
+                p[1] = static_cast<std::uint8_t>(l >> 8U);
+                p[2] = static_cast<std::uint8_t>(r & 0xFFU);
+                p[3] = static_cast<std::uint8_t>(r >> 8U);
+            }
+            return true;
+        }
+
+        bool decode_huff8_hunk(std::span<const std::uint8_t> in,
+                               std::span<std::uint8_t> out) {
+            bit_reader br{.src = in};
+            huffman_decoder dec;
+            dec.init(256, 16);
+            if (!import_tree_huffman(dec, br)) {
+                return false;
+            }
+            for (std::uint8_t& byte : out) {
+                const std::uint32_t symbol = dec.decode_one(br);
+                if (symbol > 0xFFU) {
+                    return false;
+                }
+                byte = static_cast<std::uint8_t>(symbol);
+            }
+            return !br.overflowed();
+        }
 
         // Decompress a single cdzl/cdlz CD hunk into a flat frames*2352 sector
         // buffer (subcode dropped). `is_lzma` selects the base-lane codec.
@@ -543,7 +684,37 @@ namespace mnemos::disc::chd {
         return rawmap;
     }
 
-    std::optional<chd_image_data> decode(std::span<const std::uint8_t> file) {
+    namespace {
+
+        std::optional<std::vector<std::uint8_t>>
+        decode_hunk_map(std::span<const std::uint8_t> file, const chd_file_info& info,
+                        bool compressed) {
+            const std::uint32_t mapentrybytes = compressed ? 12U : 4U;
+            if (compressed) {
+                if (info.map_offset >= file.size()) {
+                    return std::nullopt;
+                }
+                return decode_compressed_map(
+                    file.subspan(info.map_offset), static_cast<std::uint32_t>(info.hunk_count),
+                    info.hunk_bytes, info.unit_bytes);
+            }
+
+            if (info.hunk_count >
+                (std::numeric_limits<std::uint64_t>::max() / mapentrybytes)) {
+                return std::nullopt;
+            }
+            const std::uint64_t rawsize = info.hunk_count * mapentrybytes;
+            if (info.map_offset + rawsize > file.size() || info.map_offset + rawsize < info.map_offset) {
+                return std::nullopt;
+            }
+            return std::vector<std::uint8_t>{
+                file.begin() + static_cast<std::ptrdiff_t>(info.map_offset),
+                file.begin() + static_cast<std::ptrdiff_t>(info.map_offset + rawsize)};
+        }
+
+    } // namespace
+
+    std::optional<chd_file_info> probe(std::span<const std::uint8_t> file) {
         if (file.size() < kHeaderSize) {
             return std::nullopt;
         }
@@ -556,22 +727,39 @@ namespace mnemos::disc::chd {
             return std::nullopt;
         }
 
-        std::array<std::uint32_t, 4> codec{};
+        chd_file_info info{};
+        info.version = version;
+        info.header_bytes = length;
         for (int i = 0; i < 4; ++i) {
-            codec[static_cast<std::size_t>(i)] = be32(&file[16 + 4 * i]);
+            info.codecs[static_cast<std::size_t>(i)] = be32(&file[16 + 4 * i]);
         }
-        const std::uint64_t logicalbytes = be64(&file[32]);
-        const std::uint64_t mapoffset = be64(&file[40]);
-        const std::uint64_t metaoffset = be64(&file[48]);
-        const std::uint32_t hunkbytes = be32(&file[56]);
-        const std::uint32_t unitbytes = be32(&file[60]);
-        if (hunkbytes == 0 || unitbytes == 0 || (hunkbytes % kFrameSize) != 0) {
+        info.logical_bytes = be64(&file[32]);
+        info.map_offset = be64(&file[40]);
+        info.meta_offset = be64(&file[48]);
+        info.hunk_bytes = be32(&file[56]);
+        info.unit_bytes = be32(&file[60]);
+        if (info.hunk_bytes == 0 || info.unit_bytes == 0) {
             return std::nullopt;
         }
-        const std::uint64_t hunkcount = (logicalbytes + hunkbytes - 1) / hunkbytes;
-        if (hunkcount == 0 || hunkcount > 0x00FFFFFFULL) {
+        info.hunk_count = (info.logical_bytes + info.hunk_bytes - 1) / info.hunk_bytes;
+        if (info.hunk_count == 0 || info.hunk_count > 0x00FFFFFFULL) {
             return std::nullopt; // bound the map size
         }
+        info.has_cd_unit_layout =
+            info.unit_bytes == kFrameSize && (info.hunk_bytes % kFrameSize) == 0;
+        return info;
+    }
+
+    std::optional<chd_image_data> decode(std::span<const std::uint8_t> file) {
+        const auto info = probe(file);
+        if (!info || !info->has_cd_unit_layout) {
+            return std::nullopt;
+        }
+
+        const std::array<std::uint32_t, 4>& codec = info->codecs;
+        const std::uint64_t metaoffset = info->meta_offset;
+        const std::uint32_t hunkbytes = info->hunk_bytes;
+        const std::uint64_t hunkcount = info->hunk_count;
 
         const bool compressed = codec[0] != kCodecNone;
 
@@ -585,27 +773,12 @@ namespace mnemos::disc::chd {
         }
 
         // Decode the map: compressed (12-byte entries) or raw (4-byte indices).
-        std::vector<std::uint8_t> rawmap;
-        const std::uint32_t mapentrybytes = compressed ? 12U : 4U;
-        if (compressed) {
-            if (mapoffset >= file.size()) {
-                return std::nullopt;
-            }
-            auto decoded =
-                decode_compressed_map(file.subspan(mapoffset),
-                                      static_cast<std::uint32_t>(hunkcount), hunkbytes, unitbytes);
-            if (!decoded) {
-                return std::nullopt;
-            }
-            rawmap = std::move(*decoded);
-        } else {
-            const std::uint64_t rawsize = hunkcount * mapentrybytes;
-            if (mapoffset + rawsize > file.size() || mapoffset + rawsize < mapoffset) {
-                return std::nullopt;
-            }
-            rawmap.assign(file.begin() + static_cast<std::ptrdiff_t>(mapoffset),
-                          file.begin() + static_cast<std::ptrdiff_t>(mapoffset + rawsize));
+        auto decoded_map = decode_hunk_map(file, *info, compressed);
+        if (!decoded_map) {
+            return std::nullopt;
         }
+        std::vector<std::uint8_t> rawmap = std::move(*decoded_map);
+        const std::uint32_t mapentrybytes = compressed ? 12U : 4U;
 
         // Decompress every hunk into one flat frame-ordered buffer of 2352-byte
         // sectors (subcode dropped). hunk i lives at i * sectors_per_hunk.
@@ -753,6 +926,129 @@ namespace mnemos::disc::chd {
         img.data = std::move(flat);
         img.total_sectors = toc_end;
         return img;
+    }
+
+    std::optional<chd_block_image_data>
+    decode_block_device(std::span<const std::uint8_t> file, std::uint64_t max_logical_bytes) {
+        const auto info = probe(file);
+        if (!info || info->has_cd_unit_layout || info->logical_bytes > max_logical_bytes) {
+            return std::nullopt;
+        }
+        if (info->hunk_bytes < info->unit_bytes || (info->hunk_bytes % info->unit_bytes) != 0U) {
+            return std::nullopt;
+        }
+        if (info->hunk_count >
+            (std::numeric_limits<std::uint64_t>::max() / info->hunk_bytes)) {
+            return std::nullopt;
+        }
+        const std::uint64_t padded_size = info->hunk_count * info->hunk_bytes;
+        if (padded_size > max_logical_bytes || padded_size > static_cast<std::uint64_t>(
+                                                   std::numeric_limits<std::size_t>::max())) {
+            return std::nullopt;
+        }
+
+        const bool compressed = info->codecs[0] != kCodecNone;
+        auto decoded_map = decode_hunk_map(file, *info, compressed);
+        if (!decoded_map) {
+            return std::nullopt;
+        }
+        const std::vector<std::uint8_t>& rawmap = *decoded_map;
+        const std::uint32_t mapentrybytes = compressed ? 12U : 4U;
+
+        std::vector<std::uint8_t> padded(static_cast<std::size_t>(padded_size), 0);
+        enum class hunk_state : std::uint8_t { pending, decoding, done };
+        std::vector<hunk_state> state(static_cast<std::size_t>(info->hunk_count),
+                                      hunk_state::pending);
+
+        auto decode_one = [&](auto&& self, std::uint64_t h) -> bool {
+            if (h >= info->hunk_count) {
+                return false;
+            }
+            hunk_state& s = state[static_cast<std::size_t>(h)];
+            if (s == hunk_state::done) {
+                return true;
+            }
+            if (s == hunk_state::decoding) {
+                return false;
+            }
+            s = hunk_state::decoding;
+
+            std::uint8_t* dst = padded.data() + static_cast<std::size_t>(h) * info->hunk_bytes;
+            const std::span<std::uint8_t> dst_span{dst, info->hunk_bytes};
+            const std::uint8_t* entry =
+                rawmap.data() + static_cast<std::size_t>(h) * mapentrybytes;
+
+            if (!compressed) {
+                const std::uint64_t blockoffs =
+                    static_cast<std::uint64_t>(be32(entry)) * info->hunk_bytes;
+                if (blockoffs != 0U) {
+                    if (blockoffs + info->hunk_bytes > file.size()) {
+                        return false;
+                    }
+                    std::memcpy(dst, file.data() + blockoffs, info->hunk_bytes);
+                }
+                s = hunk_state::done;
+                return true;
+            }
+
+            const std::uint8_t type = entry[0];
+            const std::uint32_t blocklen = be24(entry + 1);
+            const std::uint64_t blockoffs = be48(entry + 4);
+            switch (type) {
+            case kCompType0:
+            case kCompType0 + 1:
+            case kCompType0 + 2:
+            case kCompType0 + 3: {
+                const std::uint32_t this_codec = info->codecs[type];
+                if (blockoffs + blocklen > file.size()) {
+                    return false;
+                }
+                const std::span<const std::uint8_t> comp = file.subspan(blockoffs, blocklen);
+                bool ok = false;
+                if (this_codec == kCodecLzma) {
+                    ok = compression::lzma1_decode(3, 0, 2, comp, dst_span).has_value();
+                } else if (this_codec == kCodecZlib) {
+                    ok = decode_zlib_hunk(comp, dst_span);
+                } else if (this_codec == kCodecHuff) {
+                    ok = decode_huff8_hunk(comp, dst_span);
+                } else if (this_codec == kCodecFlac) {
+                    ok = decode_flac_block_hunk(comp, dst_span);
+                }
+                if (!ok) {
+                    return false;
+                }
+                break;
+            }
+            case kCompNone:
+                if (blockoffs + info->hunk_bytes > file.size()) {
+                    return false;
+                }
+                std::memcpy(dst, file.data() + blockoffs, info->hunk_bytes);
+                break;
+            case kCompSelf:
+                if (!self(self, blockoffs)) {
+                    return false;
+                }
+                std::memcpy(dst, padded.data() + static_cast<std::size_t>(blockoffs) *
+                                             info->hunk_bytes,
+                            info->hunk_bytes);
+                break;
+            default:
+                return false; // parent CHDs and unsupported RLE forms are not mountable here.
+            }
+
+            s = hunk_state::done;
+            return true;
+        };
+
+        for (std::uint64_t h = 0; h < info->hunk_count; ++h) {
+            if (!decode_one(decode_one, h)) {
+                return std::nullopt;
+            }
+        }
+
+        padded.resize(static_cast<std::size_t>(info->logical_bytes));
+        return chd_block_image_data{.info = *info, .data = std::move(padded)};
     }
 
 } // namespace mnemos::disc::chd

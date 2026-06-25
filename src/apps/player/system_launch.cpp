@@ -76,6 +76,7 @@ namespace mnemos::apps::player {
         const system_family family = *family_opt;
         const bool arcade_family = family == system_family::irem_m72 ||
                                    family == system_family::taito_f2 ||
+                                   family == system_family::taito_gnet ||
                                    family == system_family::capcom_cps1 ||
                                    family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
@@ -135,6 +136,7 @@ namespace mnemos::apps::player {
         case system_family::segacd:
         case system_family::irem_m72:
         case system_family::taito_f2:
+        case system_family::taito_gnet:
         case system_family::capcom_cps1:
         case system_family::capcom_cps2:
             break;
@@ -229,6 +231,24 @@ namespace mnemos::apps::player {
                 }
                 bios_images.push_back(std::move(bios->bytes));
             }
+        }
+
+        if (family == system_family::taito_gnet) {
+            const char* bios_env = MNEMOS_PLAYER_GETENV("MNEMOS_TAITO_GNET_BIOS");
+            if (bios_env == nullptr) {
+                std::fprintf(stderr, "[mnemos_player] Taito G-NET needs "
+                                     "MNEMOS_TAITO_GNET_BIOS set to a ZN-2/G-NET BIOS ROM\n");
+                outcome.exit_code = 1;
+                return outcome;
+            }
+            auto bios = load_rom(bios_env);
+            if (!bios || bios->bytes.empty()) {
+                std::fprintf(stderr, "[mnemos_player] could not read Taito G-NET BIOS: %s\n",
+                             bios_env);
+                outcome.exit_code = 1;
+                return outcome;
+            }
+            bios_images.push_back(std::move(bios->bytes));
         }
 
         if (family == system_family::msx) {

@@ -1377,6 +1377,7 @@ namespace mnemos::chips::cpu {
 
         if (nmi_pending_) {
             nmi_pending_ = false;
+            ++nmi_accept_count_;
             halted_ = false;
             iff2_ = iff1_;
             iff1_ = false;
@@ -1389,6 +1390,7 @@ namespace mnemos::chips::cpu {
         }
 
         if (irq_line_ && iff1_ && !ei_pending_) {
+            ++irq_accept_count_;
             halted_ = false;
             iff1_ = iff2_ = false;
             inc_r(); // the IACK cycle refreshes R
@@ -1490,6 +1492,8 @@ namespace mnemos::chips::cpu {
         i_ = r_ = im_ = 0U;
         iff1_ = iff2_ = false;
         halted_ = ei_pending_ = irq_line_ = nmi_pending_ = nmi_line_ = false;
+        nmi_accept_count_ = 0U;
+        irq_accept_count_ = 0U;
         step_cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
@@ -1633,6 +1637,15 @@ namespace mnemos::chips::cpu {
         register_view_[13] = {"R", r_, 8U, fmt::unsigned_integer};
         register_view_[14] = {"IM", im_, 8U, fmt::unsigned_integer};
         register_view_[15] = {"F", f(), 8U, fmt::flags};
+        register_view_[16] = {"IFF1", iff1_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[17] = {"IFF2", iff2_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[18] = {"HALT", halted_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[19] = {"IRQ", irq_line_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[20] = {"NMIPEND", nmi_pending_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[21] = {"NMILINE", nmi_line_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[22] = {"RESET", reset_line_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[23] = {"NMIACC", nmi_accept_count_, 64U, fmt::unsigned_integer};
+        register_view_[24] = {"IRQACC", irq_accept_count_, 64U, fmt::unsigned_integer};
         return register_view_;
     }
 

@@ -303,7 +303,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
     SECTION("Taito F2") {
         taito_f2::taito_f2_adapter adapter(taito_f2_program(), "Tiny Taito F2");
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.rom_set");
     }
 

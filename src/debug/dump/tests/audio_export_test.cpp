@@ -14,6 +14,7 @@
 #include <fstream>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -35,6 +36,8 @@ namespace {
     using mnemos::instrumentation::audio_source;
     using mnemos::instrumentation::ichip_introspection;
     using mnemos::instrumentation::register_view;
+    using mnemos::instrumentation::reg_write_event;
+    using mnemos::instrumentation::reg_write_trace;
     using mnemos::instrumentation::sample_view;
 
     class fake_audio final : public audio_source {
@@ -56,21 +59,99 @@ namespace {
         [[nodiscard]] std::span<const register_descriptor> registers() override { return descs_; }
 
       private:
-        std::array<register_descriptor, 1> descs_{
+        std::array<register_descriptor, 2> descs_{
             register_descriptor{.name = "ENV",
                                 .value = 0xC0U,
                                 .bit_width = 8U,
+                                .format = register_value_format::unsigned_integer},
+            register_descriptor{.name = "ADPCMA_ACTIVE",
+                                .value = 0x21U,
+                                .bit_width = 6U,
+                                .format = register_value_format::flags}};
+    };
+
+    class fake_sound_comm_regs final : public register_view {
+      public:
+        void set_command_nmi(std::uint64_t value) noexcept { command_nmi_ = value; }
+        [[nodiscard]] std::span<const register_descriptor> registers() override {
+            descs_[4].value = command_nmi_;
+            return descs_;
+        }
+
+      private:
+        std::uint64_t command_nmi_{};
+        std::array<register_descriptor, 5> descs_{
+            register_descriptor{.name = "MPORT",
+                                .value = 0U,
+                                .bit_width = 4U,
+                                .format = register_value_format::unsigned_integer},
+            register_descriptor{.name = "SPORT",
+                                .value = 0U,
+                                .bit_width = 4U,
+                                .format = register_value_format::unsigned_integer},
+            register_descriptor{.name = "M2S0",
+                                .value = 0x5AU,
+                                .bit_width = 8U,
+                                .format = register_value_format::unsigned_integer},
+            register_descriptor{.name = "M2SPEND",
+                                .value = 1U,
+                                .bit_width = 2U,
+                                .format = register_value_format::flags},
+            register_descriptor{.name = "CMDNMI",
+                                .value = 0U,
+                                .bit_width = 64U,
                                 .format = register_value_format::unsigned_integer}};
+    };
+
+    class fake_sound_cpu_regs final : public register_view {
+      public:
+        void set_nmi_accepts(std::uint64_t value) noexcept { nmi_accepts_ = value; }
+        [[nodiscard]] std::span<const register_descriptor> registers() override {
+            descs_[1].value = nmi_accepts_;
+            return descs_;
+        }
+
+      private:
+        std::uint64_t nmi_accepts_{};
+        std::array<register_descriptor, 3> descs_{
+            register_descriptor{.name = "PC",
+                                .value = 0x66U,
+                                .bit_width = 16U,
+                                .format = register_value_format::unsigned_integer},
+            register_descriptor{.name = "NMIACC",
+                                .value = 0U,
+                                .bit_width = 64U,
+                                .format = register_value_format::unsigned_integer},
+            register_descriptor{.name = "IRQACC",
+                                .value = 0U,
+                                .bit_width = 64U,
+                                .format = register_value_format::unsigned_integer}};
+    };
+
+    class fake_reg_trace final : public reg_write_trace {
+      public:
+        void install(callback cb) override { cb_ = std::move(cb); }
+        void fire(std::uint16_t port, std::uint8_t value) const {
+            if (cb_) {
+                cb_(reg_write_event{.port = port, .value = value});
+            }
+        }
+
+      private:
+        callback cb_{};
     };
 
     class audio_intro final : public ichip_introspection {
       public:
         [[nodiscard]] audio_source* audio() override { return &audio_; }
         [[nodiscard]] register_view* registers() override { return &regs_; }
+        [[nodiscard]] reg_write_trace* reg_writes() override { return &trace_; }
+        [[nodiscard]] const fake_reg_trace& reg_trace_impl() const noexcept { return trace_; }
 
       private:
         fake_audio audio_;
         fake_regs regs_;
+        fake_reg_trace trace_;
     };
 
     class pcm_chip final : public ichip {
@@ -87,9 +168,70 @@ namespace {
         void save_state(state_writer&) const override {}
         void load_state(state_reader&) override {}
         [[nodiscard]] ichip_introspection& introspection() noexcept override { return intro_; }
+        void fire_write(std::uint16_t port, std::uint8_t value) const {
+            intro_.reg_trace_impl().fire(port, value);
+        }
 
       private:
         audio_intro intro_;
+    };
+
+    class sound_comm_intro final : public ichip_introspection {
+      public:
+        [[nodiscard]] register_view* registers() override { return &regs_; }
+        void set_command_nmi(std::uint64_t value) noexcept { regs_.set_command_nmi(value); }
+
+      private:
+        fake_sound_comm_regs regs_;
+    };
+
+    class sound_comm_chip final : public ichip {
+      public:
+        [[nodiscard]] chip_metadata metadata() const noexcept override {
+            return {.manufacturer = "Taito",
+                    .part_number = "TC0140SYT",
+                    .family = "sound communication latch",
+                    .klass = chip_class::bus_controller,
+                    .revision = 1U};
+        }
+        void tick(std::uint64_t) override {}
+        void reset(reset_kind) override {}
+        void save_state(state_writer&) const override {}
+        void load_state(state_reader&) override {}
+        [[nodiscard]] ichip_introspection& introspection() noexcept override { return intro_; }
+        void set_command_nmi(std::uint64_t value) noexcept { intro_.set_command_nmi(value); }
+
+      private:
+        sound_comm_intro intro_;
+    };
+
+    class sound_cpu_intro final : public ichip_introspection {
+      public:
+        [[nodiscard]] register_view* registers() override { return &regs_; }
+        void set_nmi_accepts(std::uint64_t value) noexcept { regs_.set_nmi_accepts(value); }
+
+      private:
+        fake_sound_cpu_regs regs_;
+    };
+
+    class sound_cpu_chip final : public ichip {
+      public:
+        [[nodiscard]] chip_metadata metadata() const noexcept override {
+            return {.manufacturer = "Zilog",
+                    .part_number = "Z80",
+                    .family = "Z80",
+                    .klass = chip_class::cpu,
+                    .revision = 1U};
+        }
+        void tick(std::uint64_t) override {}
+        void reset(reset_kind) override {}
+        void save_state(state_writer&) const override {}
+        void load_state(state_reader&) override {}
+        [[nodiscard]] ichip_introspection& introspection() noexcept override { return intro_; }
+        void set_nmi_accepts(std::uint64_t value) noexcept { intro_.set_nmi_accepts(value); }
+
+      private:
+        sound_cpu_intro intro_;
     };
 
     // A chip with no audio_source -- export must skip it.
@@ -140,23 +282,39 @@ namespace {
     // export_rendered_audio exists to capture.
     class rendered_system final : public player_system {
       public:
+        rendered_system() {
+            chip_list_[0] = &pcm_;
+            chip_list_[1] = &sound_comm_;
+            chip_list_[2] = &sound_cpu_;
+        }
         [[nodiscard]] video_region region() const noexcept override { return {60000U}; }
         [[nodiscard]] const std::vector<spec_field>& system_spec() const noexcept override {
             return spec_;
         }
         [[nodiscard]] frame_buffer_view current_frame() const noexcept override { return {}; }
-        void step_one_frame() override { ++frames_stepped; }
+        void step_one_frame() override {
+            ++frames_stepped;
+            sound_comm_.set_command_nmi(static_cast<std::uint64_t>(frames_stepped));
+            sound_cpu_.set_nmi_accepts(static_cast<std::uint64_t>(frames_stepped - 1));
+            pcm_.fire_write(0x100U, static_cast<std::uint8_t>(0x20U + frames_stepped));
+        }
         void apply_input(int, const controller_state&) noexcept override {}
         [[nodiscard]] audio_chunk drain_audio() noexcept override {
             // Two (L,R) frames per call, varying with the frame so it is non-silent.
             buf_ = {static_cast<std::int16_t>(100 + frames_stepped), 200, 300, 400};
             return {.samples = buf_.data(), .frame_count = 2U, .sample_rate = 48000U};
         }
-        [[nodiscard]] std::span<ichip* const> chips() const noexcept override { return {}; }
+        [[nodiscard]] std::span<ichip* const> chips() const noexcept override {
+            return chip_list_;
+        }
 
         int frames_stepped{0};
 
       private:
+        pcm_chip pcm_;
+        sound_comm_chip sound_comm_;
+        sound_cpu_chip sound_cpu_;
+        std::array<ichip*, 3> chip_list_{};
         std::array<std::int16_t, 4> buf_{};
         std::vector<spec_field> spec_{};
     };
@@ -285,4 +443,22 @@ TEST_CASE("export_rendered_audio captures the drained mix to a WAV", "[audio_exp
     CHECK(is_riff_wave(bytes));
     // 10 stereo s16 frames = 40 bytes of PCM data on top of the 44-byte header.
     CHECK(bytes.size() == 44U + 40U);
+
+    const auto trace = scratch / "out.rendered_audio.json";
+    REQUIRE(std::filesystem::exists(trace));
+    const std::string json = read_text(trace);
+    CHECK(json.find("\"schema\": \"mnemos.rendered_audio_trace/1\"") != std::string::npos);
+    CHECK(json.find("\"captured_frames\": 10") != std::string::npos);
+    CHECK(json.find("\"audio_frames\": 2") != std::string::npos);
+    CHECK(json.find("\"peak_abs\": 400") != std::string::npos);
+    CHECK(json.find("\"name\": \"ADPCMA_ACTIVE\"") != std::string::npos);
+    CHECK(json.find("\"value\": 33") != std::string::npos);
+    CHECK(json.find("\"part_number\": \"TC0140SYT\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"CMDNMI\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"M2SPEND\"") != std::string::npos);
+    CHECK(json.find("\"part_number\": \"Z80\"") != std::string::npos);
+    CHECK(json.find("\"name\": \"NMIACC\"") != std::string::npos);
+    CHECK(json.find("\"register_writes\":") != std::string::npos);
+    CHECK(json.find("\"port\": 256") != std::string::npos);
+    CHECK(json.find("\"value\": 33") != std::string::npos);
 }

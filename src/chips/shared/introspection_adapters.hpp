@@ -95,6 +95,10 @@ namespace mnemos::instrumentation {
             registers_.emplace(std::move(snapshot));
             return *this;
         }
+        introspection_builder& with_memory_views(std::span<memory_view* const> views) {
+            memory_views_ = views;
+            return *this;
+        }
         introspection_builder& with_trace(function_trace_target::installer install_fn) {
             trace_.emplace(std::move(install_fn));
             return *this;
@@ -113,6 +117,9 @@ namespace mnemos::instrumentation {
         [[nodiscard]] register_view* registers() override {
             return registers_ ? &*registers_ : nullptr;
         }
+        [[nodiscard]] std::span<memory_view* const> memory_views() override {
+            return memory_views_;
+        }
         [[nodiscard]] trace_target* trace() override { return trace_ ? &*trace_ : nullptr; }
         [[nodiscard]] reg_write_trace* reg_writes() override {
             return reg_writes_ ? &*reg_writes_ : nullptr;
@@ -120,6 +127,7 @@ namespace mnemos::instrumentation {
         [[nodiscard]] audio_source* audio() override { return audio_; }
 
       private:
+        std::span<memory_view* const> memory_views_{};
         std::optional<callback_register_view> registers_;
         std::optional<function_trace_target> trace_;
         std::optional<function_reg_write_trace> reg_writes_;

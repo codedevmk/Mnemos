@@ -153,6 +153,25 @@ namespace mnemos::manifests::common {
         std::optional<std::string> taito_f2_sprite_active_area;
         std::optional<std::int16_t> taito_f2_sprite_hide_pixels;
         std::optional<std::int16_t> taito_f2_sprite_flip_hide_pixels;
+        std::optional<std::string> taito_f2_input_profile;
+        std::optional<std::string> taito_f2_text_gfx_source;
+        std::optional<std::uint32_t> taito_f2_text_gfx_base;
+        std::optional<std::int16_t> taito_f2_tc0100scn_bg_x_offset;
+        std::optional<std::int16_t> taito_f2_tc0100scn_text_x_offset;
+        std::optional<std::int16_t> taito_f2_tc0100scn_text_y_origin;
+        std::optional<std::int16_t> taito_f2_tc0100scn_positive_text_y_origin;
+        std::optional<std::string> taito_f2_io_profile;
+        std::optional<std::string> taito_f2_palette_profile;
+        std::optional<std::string> taito_f2_priority_profile;
+        std::optional<std::string> taito_f2_sprite_chip_pair;
+        std::optional<std::string> taito_f2_sound_comm_chip;
+        std::optional<std::string> taito_f2_video_profile;
+        std::optional<std::string> taito_f2_tc0480scp_profile;
+        std::optional<std::int16_t> taito_f2_roz_x_offset;
+        std::optional<std::int16_t> taito_f2_roz_y_offset;
+        std::optional<std::string> taito_f2_aux_profile;
+        std::optional<std::uint8_t> taito_f2_vblank_irq_level;
+        std::optional<std::uint8_t> taito_f2_sprite_dma_irq_level;
         std::vector<rom_set_region> regions;
     };
 
