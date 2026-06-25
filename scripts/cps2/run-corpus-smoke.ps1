@@ -79,6 +79,27 @@ function Get-Cps2SaveFrameCount {
     return $DefaultFrames
 }
 
+function Get-Cps2AudioFrameCount {
+    param(
+        [Parameter(Mandatory = $true)][string]$SetId,
+        [Parameter(Mandatory = $true)][int]$DefaultFrames
+    )
+
+    # HSF2's first significant QSound output lands after frame 1198. Keep the
+    # screenshot/save-state gate at 600 frames, but preserve the focused
+    # HSF2-vs-Emu oracle window in the committed audio row.
+    if ($SetId -eq "hsf2" -and $DefaultFrames -lt 6040) {
+        return 6040
+    }
+    return $DefaultFrames
+}
+
+function Test-Cps2AudioStateProbeDefault {
+    param([Parameter(Mandatory = $true)][string]$SetId)
+
+    return $SetId -eq "hsf2"
+}
+
 function Invoke-Player {
     param(
         [Parameter(Mandatory = $true)][string]$Player,
@@ -921,7 +942,9 @@ foreach ($romPath in $uniqueRoms) {
     Write-Host ("[cps2] {0}" -f $setId) -ForegroundColor Cyan
 
     $effectiveFrames = Get-Cps2SaveFrameCount -SetId $setId -DefaultFrames $Frames
-    $effectiveAudioFrames = if ($AudioFrames -gt 0) { $AudioFrames } else { $effectiveFrames }
+    $defaultAudioFrames = Get-Cps2AudioFrameCount -SetId $setId -DefaultFrames $effectiveFrames
+    $effectiveAudioFrames = if ($AudioFrames -gt 0) { $AudioFrames } else { $defaultAudioFrames }
+    $effectiveAudioStateProbe = $AudioStateProbe.IsPresent -or (Test-Cps2AudioStateProbeDefault -SetId $setId)
     $savePressArgs = Get-Cps2PressArguments -FrameCount $effectiveFrames `
         -UseGameplayInput:$GameplaySaveInput.IsPresent `
         -GameplayPlayers $GameplayPlayers `
@@ -970,7 +993,7 @@ foreach ($romPath in $uniqueRoms) {
     $audioExit = Invoke-Player -Player $player -LogPath $audioLog -Arguments $audioArgs
 
     $audioStateExit = $null
-    if ($AudioStateProbe) {
+    if ($effectiveAudioStateProbe) {
         $audioStateArgs = @(
             "--system", "cps2",
             "--rom", $romPath,
@@ -1006,7 +1029,7 @@ foreach ($romPath in $uniqueRoms) {
 
     $audioQSoundProbe = $null
     $audioQSoundError = ""
-    if ($AudioStateProbe) {
+    if ($effectiveAudioStateProbe) {
         if ($audioStateExit -eq 0 -and (Test-Path -LiteralPath $audioQSoundRegisterDumpPath)) {
             try {
                 $audioQSoundProbe = Get-QSoundRegisterProbe -Path $audioQSoundRegisterDumpPath
@@ -1053,7 +1076,7 @@ foreach ($romPath in $uniqueRoms) {
         $audioProbe.audio_frame_count -gt 0 -and $batteryExit -eq 0 -and
         (Test-Path -LiteralPath $batteryPath) -and $null -ne $batteryProbe -and
         $batteryProbe.battery_bytes -gt 0 -and $null -ne $qsoundProbe -and
-        (-not $AudioStateProbe -or ($audioStateExit -eq 0 -and $null -ne $audioQSoundProbe)))
+        (-not $effectiveAudioStateProbe -or ($audioStateExit -eq 0 -and $null -ne $audioQSoundProbe)))
     $zipName = [System.IO.Path]::GetFileName($romPath)
     $results.Add([pscustomobject]@{
         set = $setId

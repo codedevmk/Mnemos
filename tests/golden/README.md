@@ -69,7 +69,8 @@ EEPROM/QSound self-initialization remains black past the 600-frame checkpoint
 and reaches a stable visible attract frame by 1200. `hsf2.zip` keeps the
 600-frame screenshot/state gate but records a 6040-frame audio-only probe,
 matching the focused HSF2 QSound oracle window where significant rendered audio
-starts after frame 1198.
+starts after frame 1198; the corpus runner applies that HSF2 audio window
+automatically for the committed baseline.
 
 Point `MNEMOS_CPS2_SET_DIR` at a directory of CPS2 zip/key sets, build
 `mnemos_player`, then run:
