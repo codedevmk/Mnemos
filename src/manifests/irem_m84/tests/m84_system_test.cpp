@@ -327,6 +327,37 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_m84_program(const std::vector<std::uint8_t>& program) {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m84::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m84_program() {
+        return make_m84_program(
+            {0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U, 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U});
+    }
+
+    [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
+        for (std::uint32_t y = 0; y < frame.height; ++y) {
+            for (std::uint32_t x = 0; x < frame.width; ++x) {
+                if (frame.pixels[static_cast<std::size_t>(y) * frame.effective_stride() + x] !=
+                    0U) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 } // namespace
 
 TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus",
@@ -394,6 +425,60 @@ TEST_CASE("m84 embedded game manifests mirror the checked-in roster", "[m84][rom
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryb").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryu").empty());
     CHECK(mnemos::manifests::irem_m84::game_manifest_toml("hharry").empty());
+}
+
+TEST_CASE("m84 executable board runs the Hammerin' Harry-compatible V30/Z80 frame",
+          "[m84]") {
+    namespace m81 = mnemos::manifests::irem_m81;
+    namespace m84 = mnemos::manifests::irem_m84;
+
+    rom_set_image image;
+    image.regions.emplace("maincpu", synthetic_m84_program());
+    image.regions.emplace("soundcpu", std::vector<std::uint8_t>(m81::sound_rom_size, 0x00U));
+    image.regions.emplace("tiles", std::vector<std::uint8_t>(0x1000U, 0x35U));
+    image.regions.emplace("sprites", std::vector<std::uint8_t>(0x1000U, 0xA7U));
+    image.regions.emplace("proms", std::vector<std::uint8_t>(0x100U, 0x11U));
+
+    auto system = m84::assemble_m84(std::move(image), m84::board_params_for("hharryb"));
+    REQUIRE(system != nullptr);
+    system->run_frame();
+
+    CHECK(system->work_ram[0] == 0x42U);
+    CHECK(system->video.frame_index() == 1U);
+    CHECK(system->fm.elapsed_clocks() >= m84::sound_cycles_per_frame);
+    CHECK(frame_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m84 save state rejects a different M84 program-layout profile", "[m84]") {
+    namespace m81 = mnemos::manifests::irem_m81;
+    namespace m84 = mnemos::manifests::irem_m84;
+
+    rom_set_image image;
+    image.regions.emplace("maincpu", synthetic_m84_program());
+    image.regions.emplace("soundcpu", std::vector<std::uint8_t>(m81::sound_rom_size, 0x00U));
+    image.regions.emplace("tiles", std::vector<std::uint8_t>(0x1000U, 0x35U));
+    image.regions.emplace("sprites", std::vector<std::uint8_t>(0x1000U, 0xA7U));
+    image.regions.emplace("proms", std::vector<std::uint8_t>(0x100U, 0x11U));
+
+    auto source = m84::assemble_m84(image, m84::board_params_for("hharryb"));
+    REQUIRE(source != nullptr);
+    source->run_frame();
+
+    std::vector<std::uint8_t> snapshot;
+    mnemos::chips::state_writer writer(snapshot);
+    source->save_state(writer);
+
+    auto same_layout = m84::assemble_m84(image, m84::board_params_for("hharryb"));
+    REQUIRE(same_layout != nullptr);
+    mnemos::chips::state_reader same_reader(snapshot);
+    same_layout->load_state(same_reader);
+    CHECK(same_reader.ok());
+
+    auto different_layout = m84::assemble_m84(std::move(image), m84::board_params_for("hharryu"));
+    REQUIRE(different_layout != nullptr);
+    mnemos::chips::state_reader different_reader(snapshot);
+    different_layout->load_state(different_reader);
+    CHECK_FALSE(different_reader.ok());
 }
 
 TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",

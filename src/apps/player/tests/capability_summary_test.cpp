@@ -7,6 +7,7 @@
 #include "irem_m72_adapter.hpp"
 #include "irem_m81_adapter.hpp"
 #include "irem_m82_adapter.hpp"
+#include "irem_m84_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
@@ -32,6 +33,7 @@ namespace {
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
     namespace irem_m81 = mnemos::apps::player::adapters::irem_m81;
     namespace irem_m82 = mnemos::apps::player::adapters::irem_m82;
+    namespace irem_m84 = mnemos::apps::player::adapters::irem_m84;
     namespace msx = mnemos::apps::player::adapters::msx;
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
     namespace segacd = mnemos::apps::player::adapters::segacd;
@@ -198,6 +200,21 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> irem_m84_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m84::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> taito_f2_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::taito_f2::main_rom_size, 0xFFU);
         poke32_be(rom, 0x0U,
@@ -345,6 +362,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M82") {
         irem_m82::irem_m82_adapter adapter(irem_m82_program(), "Tiny M82");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M84") {
+        irem_m84::irem_m84_adapter adapter(irem_m84_program(), "Tiny M84");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");

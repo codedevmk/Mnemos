@@ -2,36 +2,69 @@
 
 Date: 2026-06-25
 
-## Workspace
+## Resume Point
 
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Root checkout `C:\dev\emu\Mnemos` was intentionally not used for edits.
-- The goal is still not complete: "100% working Irem arcade emulation" remains broader than the current proven slice.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-25 handoff push.
+- Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
+- This root-level `RESUME.md` is intentional because the user explicitly requested the handoff at this path.
+- Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
 
-## Current Commit Intent
+Quick verification after reopening:
 
-This handoff is meant to be committed with every tracked and untracked change currently in the feature worktree. Resume from `feature/irem-arcade` at current `HEAD` after the commit/push that includes this file.
+```powershell
+Set-Location C:\dev\emu\Mnemos-irem-arcade
+git fetch origin
+git status --short --branch
+git log -1 --oneline
+```
 
-## What Is Implemented
+Expected branch state after this handoff: clean working tree on `feature/irem-arcade`, tracking `origin/feature/irem-arcade`.
 
-- Irem M72 has a first-pass playable profile with checked-in true-M72 manifests, protected-set handling, MCS-51/i8751 plumbing, no-dump HLE declarations for selected no-dump sets, parent/clone loader hardening, media validation reporting, vertical/R-Type/protected gates, and corpus smoke tooling.
-- Irem M82 has its own player-routable R-Type II profile via `--system irem_m82`, with wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real R-Type II data-gated smoke.
-- Irem M81 now has:
-  - checked-in manifests for `dbreed`, `hharry`, and `xmultipl`;
-  - explicit V30/Z80/YM2151/DAC/8259 first-pass board assembly in `src/manifests/irem_m81`;
-  - save-state identity across M81 board-layout profiles;
-  - player adapter `src/apps/player/adapters/irem_m81`;
-  - CLI/system-family routing via `--system irem_m81` and alias `m81`;
-  - capability discovery and rollback-ready save-state reporting;
-  - real local data-gated player smoke through `MNEMOS_M81_SET_DIR=D:\emu\irem\M81`.
-- Irem M15, M84, and M107 have checked-in ROM-contract manifests and corpus gates, but remain non-executable board/profile surfaces.
-- `scripts/run-data-gated-tests.ps1` now includes M81 player smoke in the Irem data-gated test selection.
+## Current Implemented Coverage
 
-## Local ROM Corpus State
+### Irem M72
 
-Local Irem corpus roots used in validation:
+- First-pass playable profile with checked-in true-M72 manifests.
+- Protected-set handling, MCS-51/i8751 plumbing, selected no-dump HLE declarations, parent/clone loader hardening, media validation reporting, vertical/R-Type/protected gates, and corpus smoke tooling.
+- Real local R-Type/protected/vertical smoke passed with the configured local corpus.
+- Remaining: artifact-proof closure for the full roster, plus authenticity work for video priority, raster timing, DIP behavior, palette behavior, and board-specific timing.
+
+### Irem M81
+
+- Checked-in manifests for `dbreed`, `hharry`, and `xmultipl`.
+- Explicit V30/Z80/YM2151/DAC/8259 first-pass board assembly in `src/manifests/irem_m81`.
+- Player adapter in `src/apps/player/adapters/irem_m81`.
+- CLI/system-family routing via `--system irem_m81` and alias `m81`.
+- Save-state identity across M81 board-layout profiles, capability discovery, rollback-ready save-state reporting, and real local data-gated smoke through `MNEMOS_M81_SET_DIR=D:\emu\irem\M81`.
+
+### Irem M82
+
+- Player-routable R-Type II profile via `--system irem_m82`.
+- Wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real R-Type II data-gated smoke.
+
+### Irem M84
+
+- Checked-in manifests for `hharryb` and `hharryu`.
+- M84-owned executable wrapper in `src/manifests/irem_m84`.
+- The current executable M84 slice uses the M81-compatible V30/Z80/YM2151/DAC board core for local Hammerin' Harry split sets while preserving separate M84 manifest and save-state identity.
+- Player adapter added at `src/apps/player/adapters/irem_m84`.
+- CLI/system-family routing via `--system irem_m84` and alias `m84`.
+- Clone-parent media routing composes M84 child media with supplemental M81 `hharry` parent media.
+- Capability discovery, rollback-ready save-state reporting, and real local player smoke are data-gated through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`.
+- Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry video/priority, raster timing, DIP behavior, and screenshot parity before calling this authentic.
+
+### Irem M15 and M107
+
+- M15 and M107 have checked-in ROM-contract manifests and corpus gates.
+- They remain non-executable board/profile surfaces.
+- Highest-value next implementation target is M107, but inspect the board facts first. Do not silently relabel another board core as M107 unless the work is explicitly scoped as a first-pass compatibility wrapper with separate identity and documented limitations.
+
+## Local ROM Corpus Notes
+
+Local Irem corpus roots used in the latest validation:
 
 ```powershell
 $env:MNEMOS_M72_RTYPE_SET="D:\emu\irem\R-Type_Arcade_EN.zip"
@@ -44,65 +77,85 @@ $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 ```
 
-Important corpus blockers:
+Important local corpus facts:
 
+- `D:\emu\irem\imgfightjb.zip` exists. ZIP vs unpacked folder is not the blocker; the loader supports both. The important distinction is split, merged, parent, and standalone composition.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
 - World `nspirit` is incomplete locally: missing `mcu/nin_c-pr-b.ic1`, size `0x1000`, CRC `0x0f7b2713`.
-- `nspiritj` is a separate valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
-- `MNEMOS_M72_SET_DIR` was intentionally unset in the last full CTest run, so the full M72 roster golden test skipped. The dedicated M72 corpus smoke still passed for configured R-Type/protected/vertical artifacts.
+- `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
+- `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. The dedicated M72 corpus smoke still passed for configured R-Type/protected/vertical artifacts.
 
-## Latest Validation
+## Latest Validation Evidence
 
-All commands were run from `C:\dev\emu\Mnemos-irem-arcade` under:
+All validation was run from `C:\dev\emu\Mnemos-irem-arcade` under:
 
 ```bat
 cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && <command>'
 ```
 
-Results:
+Passed results:
 
-- `cmake --preset windows-msvc-debug` passed.
-- Focused build passed:
-  - `mnemos_apps_player_irem_m81_adapter_test`
+- `cmake --preset windows-msvc-debug`
+- Focused M84/player build:
+  - `mnemos_manifests_irem_m84_test`
+  - `mnemos_apps_player_irem_m84_adapter_test`
   - `mnemos_apps_player_adapters_common_test`
   - `mnemos_apps_player_capability_summary_test`
   - `mnemos_player`
-- Focused CTest passed: `4/4`.
+- Focused CTest: `4/4`
+  - `mnemos_manifests_irem_m84_test`
   - `mnemos_apps_player_capability_summary_test`
   - `mnemos_apps_player_adapters_common_test`
-  - `mnemos_apps_player_irem_m81_adapter_test`
-  - `mnemos_apps_player_irem_m81_corpus_golden_test`
-- Full build passed: `cmake --build --preset windows-msvc-debug`.
-- Full CTest passed: `182/182`, with expected conformance/media skips.
-- `scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug` passed:
-  - selected tests: `21/21`;
-  - M72 corpus smoke: `2/2`;
-  - CPS2 smoke skipped because no CPS2 env was configured.
+  - `mnemos_apps_player_irem_m84_adapter_test`
+- M84 data-gated CTest: `2/2`
+  - `mnemos_manifests_irem_m84_test`
+  - `mnemos_apps_player_irem_m84_corpus_golden_test`
+- Real player M84 smoke:
+  - child: `D:\emu\irem\M84\Hammerin-Harry_Arcade_EN.zip`
+  - parent: `D:\emu\irem\M81\Hammerin-Harry_Arcade_EN.zip`
+  - capability summary reported `media.rom_set state=available` and rollback available
+  - screenshot smoke wrote `build\scratch\irem_m84_hharryu.ppm`, `384x256`, nonzero pixel payload
+  - save/load smoke wrote `build\scratch\irem_m84_hharryu.state` and `build\scratch\irem_m84_hharryu_loaded.ppm`, also nonzero
+- Full build: `cmake --build --preset windows-msvc-debug`
+- Full CTest: `184/184`, with expected conformance/media skips
+- Data-gated script:
+  - `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug`
+  - selected tests: `22/22`
+  - M84 corpus golden passed
+  - M72 corpus smoke: `2/2`
+  - CPS2 smoke skipped because no CPS2 env was configured
+- `git diff --check` was clean except recurring LF-to-CRLF working-copy warnings.
+- `python tools\governance\repo_hygiene.py --all` flags root `RESUME.md`; this is an intentional user-requested handoff exception, not a source-layout regression.
 
-## Remaining Work
+## Suggested Next Work
 
-Do not mark the goal complete yet.
+1. Implement the M107 executable board/profile for Air Assault / Fire Barrel after inspecting `src/manifests/irem_m107`, local `D:\emu\irem\M107`, and comparable Irem board cores.
+2. Implement the M15 executable profile for `headoni`, including i8080/discrete video/input/sound path and real screenshot smoke.
+3. Do the M84 authenticity pass and replace/validate the M81-compatible assumptions.
+4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
+5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, palette banking, and board timing.
 
-Highest-value continuation targets:
+## Resume Commands
 
-1. M84 executable board/profile: use the existing M84 manifests and local `hharry` parent from `D:\emu\irem\M81`; keep it separate from M81 until board wiring is proven.
-2. M107 executable board/profile: Air Assault / Fire Barrel remain manifest-only; verify CPU/audio/video assumptions before implementing.
-3. M15 executable profile for `headoni`: i8080/discrete video/input/sound path and real screenshot smoke are still open.
-4. M72 artifact closure: continue searching for the exact Gallop and World Ninja Spirit MCU dumps, but do not substitute Japan `nspiritj` or fake fill bytes.
-5. Authenticity pass: M81/M82 video priority, raster phase/timing, DIP behavior, palette banking, and board timing are first-pass, not final authentic parity.
-
-## Suggested Resume Commands
+Baseline:
 
 ```powershell
 Set-Location C:\dev\emu\Mnemos-irem-arcade
 git status --short --branch
-git log -1 --oneline
 cmake --build --preset windows-msvc-debug
 ctest --preset windows-msvc-debug --output-on-failure
 ```
 
-For Irem data gates, set the environment variables listed above and run:
+Data gates:
 
 ```powershell
+$env:MNEMOS_M72_RTYPE_SET="D:\emu\irem\R-Type_Arcade_EN.zip"
+$env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
+$env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
+$env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
+$env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
+$env:MNEMOS_M82_SET_DIR="D:\emu\irem"
+$env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
+$env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug
 ```

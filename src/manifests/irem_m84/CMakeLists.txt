@@ -44,6 +44,7 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_m84
     PUBLIC
+        mnemos::manifests::irem_m81
         mnemos::manifests::common
 )
 
@@ -52,6 +53,7 @@ mnemos_declare_tier(
     NAME mnemos_manifests_irem_m84
     TIER 4
     DEPENDS
+        mnemos_manifests_irem_m81
         mnemos_manifests_common
         mnemos_foundation
 )

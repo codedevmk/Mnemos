@@ -19,7 +19,7 @@
 #   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest corpus
 #   MNEMOS_M81_SET_DIR        path-list of dirs with M81 zips/dirs/wrappers -> irem_m81 manifest/player smoke
 #   MNEMOS_M82_SET_DIR        path-list of dirs with M82 R-Type II zips/dirs/wrappers -> irem_m82 smoke
-#   MNEMOS_M84_SET_DIR        path-list of dirs with M84 zips/dirs/wrappers plus M81 parent -> irem_m84 manifest corpus
+#   MNEMOS_M84_SET_DIR        path-list of dirs with M84 zips/dirs/wrappers plus M81 parent -> irem_m84 manifest/player smoke
 #   MNEMOS_M107_SET_DIR       path-list of dirs with M107 zips/dirs/wrappers -> irem_m107 manifest corpus
 #   MNEMOS_CPS2_ROM           one CPS2 ROM/key zip                   -> cps2 corpus smoke
 #   MNEMOS_CPS2_SET_DIR       dir with CPS2 ROM/key zips             -> cps2 corpus smoke
@@ -64,7 +64,7 @@ $vars = @(
     @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest corpus" },
     @{ Name = "MNEMOS_M81_SET_DIR";      Test = "irem_m81 manifest/player smoke" },
     @{ Name = "MNEMOS_M82_SET_DIR";      Test = "irem_m82 R-Type II smoke" },
-    @{ Name = "MNEMOS_M84_SET_DIR";      Test = "irem_m84 manifest corpus" },
+    @{ Name = "MNEMOS_M84_SET_DIR";      Test = "irem_m84 manifest/player smoke" },
     @{ Name = "MNEMOS_M107_SET_DIR";     Test = "irem_m107 manifest corpus" },
     @{ Name = "MNEMOS_CPS2_ROM";         Test = "cps2 corpus smoke" },
     @{ Name = "MNEMOS_CPS2_SET_DIR";     Test = "cps2 corpus smoke" }
@@ -85,7 +85,7 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(15|81|82|84|107)_test|irem_m72_.*golden|irem_m81_.*golden|irem_m82_.*golden"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(15|81|82|84|107)_test|irem_m72_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden"
 $ctestExit = $LASTEXITCODE
 if ($ctestExit -ne 0) {
     exit $ctestExit
