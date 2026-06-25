@@ -71,6 +71,23 @@ namespace {
         return it == decl.regions.end() ? nullptr : &*it;
     }
 
+    [[nodiscard]] bool has_file_alias(const rom_set_decl& decl,
+                                      std::string_view file_name,
+                                      std::string_view alias) noexcept {
+        for (const auto& region : decl.regions) {
+            for (const auto& file : region.files) {
+                if (file.name != file_name) {
+                    continue;
+                }
+                if (std::find(file.aliases.begin(), file.aliases.end(), alias) !=
+                    file.aliases.end()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     [[nodiscard]] const rom_set_hle_decl* find_hle(const rom_set_decl& decl,
                                                    std::string_view chip) noexcept {
         const auto it = std::find_if(decl.hle.begin(), decl.hle.end(),
@@ -239,6 +256,12 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             REQUIRE(decl.parent.has_value());
             CHECK(*decl.parent == "airduelm72");
         }
+        if (decl.name == "dbreedjm72") {
+            REQUIRE(decl.parent.has_value());
+            CHECK(*decl.parent == "dbreedm72");
+            CHECK(find_hle(decl, "mcu") == nullptr);
+            REQUIRE(find_region(decl, "mcu") != nullptr);
+        }
         if (decl.name == "imgfight" || decl.name == "imgfightj" || decl.name == "imgfightjb" ||
             decl.name == "airduelm72" || decl.name == "airdueljm72") {
             CHECK(decl.orientation == screen_orientation::vertical);
@@ -252,6 +275,9 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             const rom_set_hle_decl* mcu_hle = find_hle(decl, "mcu");
             REQUIRE(mcu_hle != nullptr);
             CHECK(mcu_hle->profile == "irem_m72.dbreedm72_no_dump_mcu");
+            REQUIRE(mcu_hle->sample_triggers.size() == 9U);
+            CHECK(mcu_hle->sample_triggers[6].trigger == 6U);
+            CHECK(mcu_hle->sample_triggers[6].start == 0x13000U);
         }
         if (decl.name == "rtype") {
             REQUIRE_FALSE(decl.dips.empty());
@@ -286,7 +312,24 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             const rom_set_hle_decl* mcu_hle = find_hle(decl, "mcu");
             REQUIRE(mcu_hle != nullptr);
             CHECK(mcu_hle->profile == "irem_m72.dkgensanm72_no_dump_mcu");
+            REQUIRE(mcu_hle->sample_triggers.size() == 28U);
+            CHECK(mcu_hle->sample_triggers[20].trigger == 20U);
+            CHECK(mcu_hle->sample_triggers[20].start == 0x12B20U);
             CHECK(has_dip(decl, "Continue Limit", 0x0010U, 0x0010U));
+        }
+        if (decl.name == "gallopm72") {
+            CHECK(has_file_alias(decl, "cc_c-h0-.ic40", "cc-c-h0.bin"));
+            CHECK(has_file_alias(decl, "cc_c-00.ic53", "cc-c-00.bin"));
+            CHECK(has_file_alias(decl, "cc_b-a0.ic21", "cc-b-a0.bin"));
+            CHECK(has_file_alias(decl, "cc_b-b0.ic26", "cc-b-b0.bin"));
+            CHECK(has_file_alias(decl, "cc_c-v0.ic44", "cc-c-v0.bin"));
+        }
+        if (decl.name == "nspirit") {
+            CHECK(has_file_alias(decl, "nin_c-h0-b.ic40", "nin_c-h0.6h"));
+            CHECK(has_file_alias(decl, "nin-r00.ic53", "nin-r00.7m"));
+            CHECK(has_file_alias(decl, "nin_b-a0.ic21", "nin_b-a0.4c"));
+            CHECK(has_file_alias(decl, "b0.ic26", "b0.4j"));
+            CHECK(has_file_alias(decl, "nin-v0.ic44", "nin-v0.7a"));
         }
     }
 
@@ -783,6 +826,30 @@ TEST_CASE("m72 records DAC writes on the sound-clock timeline", "[m72]") {
     CHECK(system->dac_write_events[0].sound_clock == 64U);
 }
 
+TEST_CASE("m72 unprotected boards leave the absent MCU latch as open bus", "[m72]") {
+    auto system = assemble_m72(make_image({
+        0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+        0x8EU, 0xD8U,        // MOV DS,AX
+        0xE4U, 0xC0U,        // IN AL,C0
+        0xA2U, 0x10U, 0x00U, // MOV [0010],AL
+        0xB0U, 0x5AU,        // MOV AL,5A
+        0xE6U, 0xC0U,        // OUT C0,AL
+        0xE4U, 0xC0U,        // IN AL,C0
+        0xA2U, 0x11U, 0x00U, // MOV [0011],AL
+        0xF4U,               // HLT
+    }));
+    REQUIRE_FALSE(system->mcu_present);
+    REQUIRE_FALSE(system->protection_hle_present);
+
+    run_until_halt(system->main_cpu, 24);
+
+    CHECK(system->main_cpu.halted());
+    CHECK(system->work_ram[0x10U] == 0xFFU);
+    CHECK(system->work_ram[0x11U] == 0xFFU);
+    CHECK(system->main_to_mcu == 0x00U);
+    CHECK(system->mcu_to_main == 0x00U);
+}
+
 TEST_CASE("m72 protection MCU answers the V30 through the latch pair", "[m72]") {
     // MCU program: read the main->MCU latch, reply with value+1, write the
     // shared-RAM window, then stream one sample byte through the MCU sample
@@ -836,21 +903,185 @@ TEST_CASE("m72 protection MCU answers the V30 through the latch pair", "[m72]") 
     CHECK(system->mcu_sample_address == 0x21U);
 }
 
-TEST_CASE("m72 manifest-declared MCU HLE maps the protection RAM inversion surface", "[m72]") {
+TEST_CASE("m72 protection MCU mailbox interrupt is asserted by the shared-RAM tail",
+          "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    // Reset jumps around the INT0 vector. The level-sensed ISR acknowledges
+    // the dual-port RAM mailbox by reading the final word, then counts once.
+    std::vector<std::uint8_t> mcu_program(0x28U, 0x00U);
+    mcu_program[0x00U] = 0x02U; // LJMP 0020
+    mcu_program[0x01U] = 0x00U;
+    mcu_program[0x02U] = 0x20U;
+    mcu_program[0x03U] = 0x90U; // MOV DPTR,#CFFE
+    mcu_program[0x04U] = 0xCFU;
+    mcu_program[0x05U] = 0xFEU;
+    mcu_program[0x06U] = 0xE0U; // MOVX A,@DPTR
+    mcu_program[0x07U] = 0x05U; // INC 30
+    mcu_program[0x08U] = 0x30U;
+    mcu_program[0x09U] = 0x32U; // RETI
+    mcu_program[0x20U] = 0x75U; // MOV IE,#EA|EX0
+    mcu_program[0x21U] = 0xA8U;
+    mcu_program[0x22U] = 0x81U;
+    mcu_program[0x23U] = 0x80U; // SJMP $
+    mcu_program[0x24U] = 0xFEU;
+
+    rom_set_image image;
+    image.regions["mcu"] = std::move(mcu_program);
+    image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+    auto system = assemble_m72(std::move(image));
+    REQUIRE(system->mcu_present);
+
+    system->mcu.step_instruction(); // LJMP main
+    system->mcu.step_instruction(); // MOV IE,#EA|EX0
+    CHECK(system->mcu.cpu_registers().pc == 0x0023U);
+
+    system->main_bus.write8(m72::mcu_shared_main_base + 0x010U, 0x5AU);
+    system->mcu.step_instruction(); // ordinary shared-RAM writes do not knock INT0
+    CHECK(system->mcu.peek_direct(0x30U) == 0x00U);
+
+    system->main_bus.write8(
+        m72::mcu_shared_main_base + static_cast<std::uint32_t>(m72::mcu_shared_ram_size - 2U),
+        0xA5U);
+    system->mcu.step_instruction(); // INT0 service entry
+    CHECK(system->mcu.cpu_registers().pc == 0x0003U);
+    system->mcu.step_instruction(); // MOV DPTR,#CFFE
+    system->mcu.step_instruction(); // MOVX A,@DPTR clears the mailbox interrupt line
+    system->mcu.step_instruction(); // INC 30
+    system->mcu.step_instruction(); // RETI
+    CHECK(system->mcu.peek_direct(0x30U) == 0x01U);
+
+    for (int i = 0; i < 4; ++i) {
+        system->mcu.step_instruction();
+    }
+    CHECK(system->mcu.peek_direct(0x30U) == 0x01U);
+}
+
+TEST_CASE("m72 protection MCU reaches board latches through P2-latched MOVX @Ri", "[m72]") {
+    // Some i8751 programs use MOVX @R0/@R1 instead of DPTR; P2 supplies the
+    // MOVX high address byte, so the board must expose the same latch/RAM map.
+    rom_set_image image;
+    image.regions["mcu"] = {
+        0x75U, 0xA0U, 0x00U, // MOV P2,#00
+        0x78U, 0x02U,        // MOV R0,#02
+        0xE2U,               // MOVX A,@R0 (main->MCU latch)
+        0x24U, 0x01U,        // ADD A,#1
+        0xF2U,               // MOVX @R0,A (MCU->main latch)
+        0x75U, 0xA0U, 0xC0U, // MOV P2,#C0
+        0x79U, 0x20U,        // MOV R1,#20
+        0x74U, 0x6BU,        // MOV A,#6B
+        0xF3U,               // MOVX @R1,A (shared RAM)
+        0x75U, 0xA0U, 0x00U, // MOV P2,#00
+        0x78U, 0x00U,        // MOV R0,#00
+        0x74U, 0x02U,        // MOV A,#02 (sample offset = value << 5)
+        0xF2U,               // MOVX @R0,A
+        0xE2U,               // MOVX A,@R0 (sample data)
+        0x75U, 0xA0U, 0xC0U, // MOV P2,#C0
+        0x79U, 0x21U,        // MOV R1,#21
+        0xF3U,               // MOVX @R1,A (shared RAM)
+        0x80U, 0xFEU,        // SJMP $
+    };
+    image.regions["samples"].assign(0x60U, 0x00U);
+    image.regions["samples"][0x40U] = 0x88U;
+    auto& main = image.regions["maincpu"];
+    main.assign(mnemos::manifests::irem_m72::main_rom_size, 0xFFU);
+    main[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+    main[0xFFFF1U] = 0x00U;
+    main[0xFFFF2U] = 0x02U;
+    main[0xFFFF3U] = 0x00U;
+    main[0xFFFF4U] = 0x00U;
+    const std::vector<std::uint8_t> program{0xB0U, 0x51U, 0xE6U, 0xC0U, 0xF4U};
+    for (std::size_t i = 0; i < program.size(); ++i) {
+        main[0x200U + i] = program[i];
+    }
+
+    auto system = assemble_m72(std::move(image));
+    REQUIRE(system->mcu_present);
+
+    run_until_halt(system->main_cpu, 8);
+    system->mcu.tick(256U);
+
+    CHECK(system->mcu_to_main == 0x52U);
+    CHECK(system->mcu_shared_ram[0x20U] == 0x6BU);
+    CHECK(system->mcu_shared_ram[0x21U] == 0x88U);
+    CHECK(system->main_bus.read8(mnemos::manifests::irem_m72::mcu_shared_main_base + 0x20U) ==
+          0x6BU);
+    CHECK(system->main_bus.read8(mnemos::manifests::irem_m72::mcu_shared_main_base + 0x21U) ==
+          0x88U);
+    CHECK(system->mcu_sample_address == 0x41U);
+}
+
+TEST_CASE("m72 manifest-declared MCU HLE inverts only the startup fill pattern", "[m72]") {
     namespace m72 = mnemos::manifests::irem_m72;
 
     rom_set_image image;
     image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+    image.regions["samples"].assign(0x13001U, 0x00U);
     auto params = m72::board_params_for("dbreedm72");
     params.protection_hle_profile = "irem_m72.dbreedm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x06U, 0x13000U}};
 
     auto system = assemble_m72(std::move(image), params);
     REQUIRE_FALSE(system->mcu_present);
     REQUIRE(system->protection_hle_present);
 
+    for (std::size_t offset = 0; offset < m72::mcu_shared_ram_size; ++offset) {
+        const auto pattern =
+            static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
+        system->main_bus.write8(m72::mcu_shared_main_base + static_cast<std::uint32_t>(offset),
+                                pattern);
+        CHECK(system->mcu_shared_ram[offset] == static_cast<std::uint8_t>(~pattern));
+    }
+
+    for (std::size_t offset = 0; offset < m72::mcu_shared_ram_size - 4U; ++offset) {
+        const auto incremented = static_cast<std::uint8_t>(system->mcu_shared_ram[offset] + 1U);
+        system->main_bus.write8(m72::mcu_shared_main_base + static_cast<std::uint32_t>(offset),
+                                incremented);
+        CHECK(system->mcu_shared_ram[offset] == incremented);
+    }
+    CHECK(system->protection_hle_entry_stub_active);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 0U) == 0xEAU);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 1U) == 0x6CU);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 2U) == 0x00U);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 3U) == 0x00U);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 4U) == 0x00U);
+
     system->main_bus.write8(m72::mcu_shared_main_base + 0x12U, 0xA5U);
-    CHECK(system->mcu_shared_ram[0x12U] == 0x5AU);
-    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 0x12U) == 0x5AU);
+    CHECK(system->mcu_shared_ram[0x12U] == 0xA5U);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 0x12U) == 0xA5U);
+}
+
+TEST_CASE("m72 Daiku no Gensan no-dump MCU HLE exposes its entry continuation", "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    rom_set_image image;
+    image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+    image.regions["samples"].assign(0x12B40U, 0x00U);
+    auto params = m72::board_params_for("dkgensanm72");
+    params.protection_hle_profile = "irem_m72.dkgensanm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x14U, 0x12B20U}};
+
+    auto system = assemble_m72(std::move(image), params);
+    REQUIRE_FALSE(system->mcu_present);
+    REQUIRE(system->protection_hle_present);
+
+    for (std::size_t offset = 0; offset < m72::mcu_shared_ram_size; ++offset) {
+        const auto pattern =
+            static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
+        system->main_bus.write8(m72::mcu_shared_main_base + static_cast<std::uint32_t>(offset),
+                                pattern);
+    }
+    for (std::size_t offset = 0; offset < m72::mcu_shared_ram_size - 4U; ++offset) {
+        system->main_bus.write8(m72::mcu_shared_main_base + static_cast<std::uint32_t>(offset),
+                                static_cast<std::uint8_t>(system->mcu_shared_ram[offset] + 1U));
+    }
+
+    REQUIRE(system->protection_hle_entry_stub_active);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 0U) == 0xEAU);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 1U) == 0x3DU);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 2U) == 0x00U);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 3U) == 0x00U);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 4U) == 0x10U);
 }
 
 TEST_CASE("m72 rejects unsupported MCU HLE profiles at board construction", "[m72]") {
@@ -868,6 +1099,47 @@ TEST_CASE("m72 rejects unsupported MCU HLE profiles at board construction", "[m7
     REQUIRE(system->roms.issues.size() == 1U);
     CHECK(system->roms.issues[0].file == "mcu");
     CHECK(system->roms.issues[0].message.find("unsupported M72 MCU HLE profile") !=
+          std::string::npos);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base) == 0xFFU);
+}
+
+TEST_CASE("m72 rejects no-dump MCU HLE profiles without sample trigger metadata", "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    rom_set_image image;
+    image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+    auto params = m72::board_params_for("dbreedm72");
+    params.protection_hle_profile = "irem_m72.dbreedm72_no_dump_mcu";
+
+    auto system = assemble_m72(std::move(image), params);
+    CHECK_FALSE(system->mcu_present);
+    CHECK_FALSE(system->protection_hle_present);
+    CHECK_FALSE(system->params.protection_hle_profile.has_value());
+    REQUIRE(system->roms.issues.size() == 1U);
+    CHECK(system->roms.issues[0].file == "mcu");
+    CHECK(system->roms.issues[0].message.find("missing sample-trigger metadata") !=
+          std::string::npos);
+    CHECK(system->main_bus.read8(m72::mcu_shared_main_base) == 0xFFU);
+}
+
+TEST_CASE("m72 rejects no-dump MCU HLE sample triggers outside the samples region",
+          "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    rom_set_image image;
+    image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+    image.regions["samples"].assign(0x100U, 0x00U);
+    auto params = m72::board_params_for("dbreedm72");
+    params.protection_hle_profile = "irem_m72.dbreedm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x06U, 0x13000U}};
+
+    auto system = assemble_m72(std::move(image), params);
+    CHECK_FALSE(system->mcu_present);
+    CHECK_FALSE(system->protection_hle_present);
+    CHECK_FALSE(system->params.protection_hle_profile.has_value());
+    REQUIRE(system->roms.issues.size() == 1U);
+    CHECK(system->roms.issues[0].file == "mcu");
+    CHECK(system->roms.issues[0].message.find("beyond samples region size") !=
           std::string::npos);
     CHECK(system->main_bus.read8(m72::mcu_shared_main_base) == 0xFFU);
 }
@@ -894,6 +1166,7 @@ TEST_CASE("m72 no-dump MCU HLE sample trigger selects sample segments above 64K"
 
     auto params = m72::board_params_for("dkgensanm72");
     params.protection_hle_profile = "irem_m72.dkgensanm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x14U, 0x12B20U}};
 
     auto system = assemble_m72(std::move(image), params);
     REQUIRE(system->protection_hle_present);
@@ -918,7 +1191,7 @@ TEST_CASE("m72 no-dump MCU HLE sample trigger selects sample segments above 64K"
     CHECK(system->sample_address == 0x12B21U);
 }
 
-TEST_CASE("m72 dbreed no-dump MCU HLE sample trigger uses the profile table", "[m72]") {
+TEST_CASE("m72 dbreed no-dump MCU HLE sample trigger uses declared metadata", "[m72]") {
     namespace m72 = mnemos::manifests::irem_m72;
 
     auto image = make_image({
@@ -931,6 +1204,7 @@ TEST_CASE("m72 dbreed no-dump MCU HLE sample trigger uses the profile table", "[
 
     auto params = m72::board_params_for("dbreedm72");
     params.protection_hle_profile = "irem_m72.dbreedm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x06U, 0x13000U}};
 
     auto system = assemble_m72(std::move(image), params);
     REQUIRE(system->protection_hle_present);
@@ -953,6 +1227,7 @@ TEST_CASE("m72 no-dump MCU HLE leaves the sample cursor unchanged for unknown tr
 
     auto params = m72::board_params_for("dkgensanm72");
     params.protection_hle_profile = "irem_m72.dkgensanm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x14U, 0x12B20U}};
 
     auto system = assemble_m72(std::move(image), params);
     system->sample_address = 0x1234U;
@@ -970,11 +1245,12 @@ TEST_CASE("m72 board save_state/load_state round-trips glue RAM and latches", "[
     auto make_hle_image = [] {
         rom_set_image image;
         image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
-        image.regions["samples"] = {0x10U, 0x20U, 0x30U};
+        image.regions["samples"].assign(0x13020U, 0x00U);
         return image;
     };
     auto params = m72::board_params_for("dbreedm72");
     params.protection_hle_profile = "irem_m72.dbreedm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x06U, 0x13000U}};
     auto source = assemble_m72(make_hle_image(), params);
 
     source->work_ram[0x20U] = 0x44U;
@@ -999,6 +1275,11 @@ TEST_CASE("m72 board save_state/load_state round-trips glue RAM and latches", "[
     source->main_to_mcu = 0x41U;
     source->mcu_to_main = 0x42U;
     source->mcu_sample_address = 0x23456U;
+    source->protection_hle_startup_invert_active = true;
+    source->protection_hle_startup_next_offset = 0x0123U;
+    source->protection_hle_startup_fill_completed = true;
+    source->protection_hle_entry_write_next_offset = 0x0456U;
+    source->protection_hle_entry_stub_active = true;
     source->fm.tick(128U);
     source->record_dac_write(0x9AU);
     source->sound_latch_irq = true;
@@ -1036,6 +1317,11 @@ TEST_CASE("m72 board save_state/load_state round-trips glue RAM and latches", "[
     CHECK(restored->main_to_mcu == 0x41U);
     CHECK(restored->mcu_to_main == 0x42U);
     CHECK(restored->mcu_sample_address == 0x23456U);
+    CHECK(restored->protection_hle_startup_invert_active);
+    CHECK(restored->protection_hle_startup_next_offset == 0x0123U);
+    CHECK(restored->protection_hle_startup_fill_completed);
+    CHECK(restored->protection_hle_entry_write_next_offset == 0x0456U);
+    CHECK(restored->protection_hle_entry_stub_active);
     CHECK(restored->dac.level() == 0x9AU);
     REQUIRE(restored->dac_write_events.size() == 1U);
     CHECK(restored->dac_write_events[0].sound_clock == 128U);
@@ -1049,10 +1335,12 @@ TEST_CASE("m72 board load_state rejects a structurally different board or ROM im
     auto protected_image = [] {
         rom_set_image image;
         image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+        image.regions["samples"].assign(0x15821U, 0x00U);
         return image;
     };
     auto params = m72::board_params_for("dbreedm72");
     params.protection_hle_profile = "irem_m72.dbreedm72_no_dump_mcu";
+    params.protection_hle_sample_triggers = {{0x06U, 0x13000U}};
     auto source = assemble_m72(protected_image(), params);
 
     std::vector<std::uint8_t> snapshot;
@@ -1063,6 +1351,13 @@ TEST_CASE("m72 board load_state rejects a structurally different board or ROM im
     mnemos::chips::state_reader reader(snapshot);
     incompatible->load_state(reader);
     CHECK_FALSE(reader.ok());
+
+    auto different_hle_params = params;
+    different_hle_params.protection_hle_sample_triggers = {{0x07U, 0x15820U}};
+    auto same_rom_different_hle = assemble_m72(protected_image(), different_hle_params);
+    mnemos::chips::state_reader hle_reader(snapshot);
+    same_rom_different_hle->load_state(hle_reader);
+    CHECK_FALSE(hle_reader.ok());
 
     auto same_wiring_source = assemble_m72(make_image({0xF4U}), m72::board_params_for("rtype"));
     std::vector<std::uint8_t> same_wiring_snapshot;

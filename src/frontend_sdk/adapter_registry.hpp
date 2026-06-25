@@ -46,6 +46,11 @@ namespace mnemos::frontend_sdk {
         // player_system::insert_media. Empty for single-image media. Each entry
         // is interpreted the same way the adapter interprets `rom`.
         std::vector<std::vector<std::uint8_t>> additional_media;
+        // Filesystem paths corresponding to `additional_media` entries. Empty
+        // paths are allowed for synthetic media; file-backed arcade adapters use
+        // these to validate supplemental ROM-set fragments against the selected
+        // manifest before merging them.
+        std::vector<std::string> additional_media_paths;
         // Whether the adapter should auto-start the loaded media (a disk/tape
         // computer types LOAD/RUN for you). Adapters without an autostart
         // concept ignore it. Defaults on; the frontend clears it to drop to a

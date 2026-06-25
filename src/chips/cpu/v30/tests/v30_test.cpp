@@ -243,6 +243,29 @@ TEST_CASE("v30 multiplies and divides through group 3", "[v30]") {
         CHECK(after.ip == 0x0060U);
         CHECK((after.flags & v30::flag_i) == 0U); // IF cleared on entry
     }
+
+    SECTION("byte IDIV quotient -128 vectors through INT 0 on V20/V30") {
+        // IVT[0] -> 0050:0060
+        bus.memory[0x0000U] = 0x60U;
+        bus.memory[0x0001U] = 0x00U;
+        bus.memory[0x0002U] = 0x50U;
+        bus.memory[0x0003U] = 0x00U;
+        // MOV AX, C960; MOV BX, 006D; IDIV BL
+        load_program(bus, cpu, 0x0100U, 0x0000U,
+                     {0xB8U, 0x60U, 0xC9U, 0xBBU, 0x6DU, 0x00U, 0xF6U, 0xFBU});
+        auto regs = cpu.cpu_registers();
+        regs.ss = 0x0900U;
+        regs.sp = 0x0100U;
+        cpu.set_registers(regs);
+        cpu.step_instruction();
+        cpu.step_instruction();
+        cpu.step_instruction();
+        const auto after = cpu.cpu_registers();
+        CHECK(after.cs == 0x0050U);
+        CHECK(after.ip == 0x0060U);
+        CHECK(after.sp == 0x00FAU);
+        CHECK((after.flags & v30::flag_i) == 0U);
+    }
 }
 
 TEST_CASE("v30 IN and OUT route through the port callbacks", "[v30]") {

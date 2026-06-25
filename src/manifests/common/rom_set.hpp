@@ -36,6 +36,10 @@ namespace mnemos::manifests::common {
     // relative to the region.
     struct rom_set_file final {
         std::string name;
+        // Alternate dump names accepted for the same bytes. This keeps
+        // split-parent zips and standalone archives loadable when they carry
+        // CRC-identical dumps under board-location-specific labels.
+        std::vector<std::string> aliases;
         std::size_t offset{};                 // first destination byte
         std::size_t stride{1U};               // destination step per source unit
         std::size_t unit{1U};                 // source bytes per chunk (contiguous)
@@ -90,10 +94,18 @@ namespace mnemos::manifests::common {
     // non-cycle-accurate/HLE chip path to be visible in the manifest rather than
     // hidden in a board implementation. `profile` is optional (empty when the
     // substitution needs no profile id, e.g. CPS2 sets).
+    struct rom_set_hle_sample_trigger final {
+        std::uint8_t trigger{};
+        std::uint32_t start{};
+    };
+
     struct rom_set_hle_decl final {
         std::string chip;
         std::string profile;
         std::string rationale;
+        // Optional board-interpreted sample cursor declarations carried by the
+        // same explicit HLE profile that consumes them.
+        std::vector<rom_set_hle_sample_trigger> sample_triggers;
     };
 
     struct rom_set_decl final {

@@ -89,6 +89,7 @@ size = 0x1000
 
 [[region.file]]
 name   = "c8751h.bin"
+aliases = ["tom_c-pr-b.ic1"]
 offset = 0x0000
 size   = 0x1000
 crc32  = 0x9c9545f1
@@ -151,24 +152,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "i-20.20"
+aliases = ["tom_m21.ic21", "tom_m21.rom"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x3ca3e771
 
 [[region.file]]
 name   = "r-21.21"
+aliases = ["tom_m22.ic22", "tom_m22.rom"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x7a05ee2f
 
 [[region.file]]
 name   = "i-19.19"
+aliases = ["tom_m20.ic20", "tom_m20.rom"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x79aa2335
 
 [[region.file]]
 name   = "i-22.22"
+aliases = ["tom_m23.ic23", "tom_m23.rom"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x789e8b24
@@ -179,18 +184,21 @@ size = 0x040000
 
 [[region.file]]
 name   = "r-25.25"
+aliases = ["tom_m26.ic26", "tom_m26.rom"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x44626bf6
 
 [[region.file]]
 name   = "r-26.26"
+aliases = ["tom_m27.ic27", "tom_m27.rom"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x464952cf
 
 [[region.file]]
 name   = "r-24.24"
+aliases = ["tom_m25.ic25", "tom_m25.rom"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x3db9b2c7
@@ -207,6 +215,7 @@ size = 0x10000
 
 [[region.file]]
 name   = "i-4.4"
+aliases = ["tom_m44.ic44", "tom_m44.rom"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x3ed51d1f

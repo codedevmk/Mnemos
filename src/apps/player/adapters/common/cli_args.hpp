@@ -121,6 +121,11 @@ namespace mnemos::apps::player::adapters {
     // prints a deterministic capability/control summary, and exits.
     [[nodiscard]] bool parse_capabilities_arg(int argc, char* argv[]);
 
+    // --help / -h: print the usage screen and exit before loading any media.
+    // A bare presence flag -- it consumes no value and is recognised wherever it
+    // appears on the command line.
+    [[nodiscard]] bool parse_help_arg(int argc, char* argv[]);
+
     enum class animation_record_format : std::uint8_t {
         gif,
         movie_frames,

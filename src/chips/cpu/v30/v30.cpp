@@ -1975,8 +1975,9 @@ namespace mnemos::chips::cpu {
                     interrupt(0U);
                     break;
                 }
-                const std::int16_t quotient = static_cast<std::int16_t>(dividend / divisor);
-                if (quotient > 0x7F || quotient < -0x80) {
+                const std::int32_t quotient = dividend / divisor;
+                // V20/V30 byte IDIV vectors on -128 even though it fits in signed 8 bits.
+                if (quotient > 0x7F || quotient <= -0x80) {
                     interrupt(0U);
                     break;
                 }

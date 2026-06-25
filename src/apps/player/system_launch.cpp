@@ -36,6 +36,28 @@ namespace {
         return ext;
     }
 
+    void log_media_validation_issues(const mnemos::frontend_sdk::player_system& system) {
+        const auto& capabilities = system.media_capabilities();
+        bool any = false;
+        for (const auto& image : capabilities.media) {
+            const char* id = image.id.empty() ? "<unnamed>" : image.id.c_str();
+            for (const auto& issue : image.validation_issues) {
+                const char* code = issue.code.empty() ? "media.validation" : issue.code.c_str();
+                if (issue.detail.empty()) {
+                    std::fprintf(stderr, "[mnemos_player] media validation issue: %s: %s\n", id,
+                                 code);
+                } else {
+                    std::fprintf(stderr, "[mnemos_player] media validation issue: %s: %s: %s\n", id,
+                                 code, issue.detail.c_str());
+                }
+                any = true;
+            }
+        }
+        if (any) {
+            std::fflush(stderr);
+        }
+    }
+
 } // namespace
 
 namespace mnemos::apps::player {
@@ -74,27 +96,38 @@ namespace mnemos::apps::player {
         }
 
         const system_family family = *family_opt;
-        const bool arcade_family = family == system_family::irem_m72 ||
-                                   family == system_family::taito_f2 ||
-                                   family == system_family::capcom_cps1 ||
-                                   family == system_family::capcom_cps2;
+        const bool arcade_family =
+            family == system_family::irem_m72 || family == system_family::irem_m81 ||
+            family == system_family::irem_m82 || family == system_family::taito_f2 ||
+            family == system_family::capcom_cps1 || family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
                                     : load_rom(options.rom_paths.front());
-        if (!loaded || loaded->bytes.empty()) {
+        const bool directory_backed_irem =
+            loaded && loaded->directory_source &&
+            (family == system_family::irem_m72 || family == system_family::irem_m81 ||
+             family == system_family::irem_m82);
+        if (!loaded || (loaded->bytes.empty() && !directory_backed_irem)) {
             std::fprintf(stderr, "could not read ROM: %s\n", options.rom_paths.front().c_str());
             outcome.exit_code = 1;
             return outcome;
         }
 
         std::vector<std::vector<std::uint8_t>> additional_media;
+        std::vector<std::string> additional_media_paths;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
-            auto extra = load_rom(options.rom_paths[i]);
-            if (!extra || extra->bytes.empty()) {
+            const bool irem_family =
+                family == system_family::irem_m72 || family == system_family::irem_m81 ||
+                family == system_family::irem_m82;
+            auto extra = irem_family ? load_rom_verbatim(options.rom_paths[i])
+                                     : load_rom(options.rom_paths[i]);
+            const bool directory_backed_extra = extra && extra->directory_source && irem_family;
+            if (!extra || (extra->bytes.empty() && !directory_backed_extra)) {
                 std::fprintf(stderr, "could not read media: %s\n", options.rom_paths[i].c_str());
                 outcome.exit_code = 1;
                 return outcome;
             }
             additional_media.push_back(std::move(extra->bytes));
+            additional_media_paths.push_back(options.rom_paths[i]);
         }
 
         mnemos::video_region cart_default = mnemos::video_region::ntsc;
@@ -134,6 +167,8 @@ namespace mnemos::apps::player {
             break;
         case system_family::segacd:
         case system_family::irem_m72:
+        case system_family::irem_m81:
+        case system_family::irem_m82:
         case system_family::taito_f2:
         case system_family::capcom_cps1:
         case system_family::capcom_cps2:
@@ -367,6 +402,7 @@ namespace mnemos::apps::player {
              .video_region = video,
              .display_name = clean_rom_name(loaded->name),
              .additional_media = std::move(additional_media),
+             .additional_media_paths = std::move(additional_media_paths),
              .autostart = options.autostart,
              .dip_override = options.dip_override,
              .mapper_override = options.mapper_override.value_or(std::string{}),
@@ -379,15 +415,16 @@ namespace mnemos::apps::player {
              .disc_path = std::move(disc_path),
              .rom_path = options.rom_paths.front(),
              .bios_images = std::move(bios_images)});
-        if (outcome.system && outcome.system->media_count() > 1U) {
-            std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
-                         outcome.system->media_count());
-        }
         if (!outcome.system) {
             std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%s'\n",
                          family_id(family));
             outcome.exit_code = 1;
             return outcome;
+        }
+        log_media_validation_issues(*outcome.system);
+        if (outcome.system->media_count() > 1U) {
+            std::fprintf(stderr, "[mnemos_player] media set: %zu disks (F6 swaps)\n",
+                         outcome.system->media_count());
         }
 
         outcome.primary_media_path = options.rom_paths.front();

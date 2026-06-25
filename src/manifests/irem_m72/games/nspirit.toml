@@ -276,6 +276,7 @@ size = 0x100000
 
 [[region.file]]
 name   = "nin_c-h0-b.ic40"
+aliases = ["nin_c-h0.6h"]
 offset = 0x00001
 stride = 2
 size   = 0x10000
@@ -283,6 +284,7 @@ crc32  = 0x035692fa
 
 [[region.file]]
 name   = "nin_c-l0-b.ic37"
+aliases = ["nin_c-l0.6d"]
 offset = 0x00000
 stride = 2
 size   = 0x10000
@@ -290,6 +292,7 @@ crc32  = 0x9a405898
 
 [[region.file]]
 name   = "nin_c-h1-.ic41"
+aliases = ["nin_c-h1.6j"]
 offset = 0x20001
 stride = 2
 size   = 0x10000
@@ -297,6 +300,7 @@ crc32  = 0xcbc10586
 
 [[region.file]]
 name   = "nin_c-l1-.ic36"
+aliases = ["nin_c-l1.6c"]
 offset = 0x20000
 stride = 2
 size   = 0x10000
@@ -304,6 +308,7 @@ crc32  = 0xb75c9a4d
 
 [[region.file]]
 name   = "nin_c-h2-.ic42"
+aliases = ["nin_c-h2.6l"]
 offset = 0x40001
 stride = 2
 size   = 0x10000
@@ -311,6 +316,7 @@ crc32  = 0x8ad818fa
 
 [[region.file]]
 name   = "nin_c-l2-.ic35"
+aliases = ["nin_c-l2.6b"]
 offset = 0x40000
 stride = 2
 size   = 0x10000
@@ -318,6 +324,7 @@ crc32  = 0xc52ca78c
 
 [[region.file]]
 name   = "nin_c-h3-b.ic43"
+aliases = ["nin_c-h3.6m"]
 offset = 0x60001
 stride = 2
 size   = 0x10000
@@ -325,6 +332,7 @@ crc32  = 0x501104ef
 
 [[region.file]]
 name   = "nin_c-l3-b.ic34"
+aliases = ["nin_c-l3.6a"]
 offset = 0x60000
 stride = 2
 size   = 0x10000
@@ -333,6 +341,7 @@ crc32  = 0xfd7408b8
 # Boot-chunk reload of the final program pair at the top of the region.
 [[region.file]]
 name   = "nin_c-h3-b.ic43"
+aliases = ["nin_c-h3.6m"]
 offset = 0xE0001
 stride = 2
 size   = 0x10000
@@ -340,6 +349,7 @@ crc32  = 0x501104ef
 
 [[region.file]]
 name   = "nin_c-l3-b.ic34"
+aliases = ["nin_c-l3.6a"]
 offset = 0xE0000
 stride = 2
 size   = 0x10000
@@ -361,24 +371,28 @@ size = 0x080000
 
 [[region.file]]
 name   = "nin-r00.ic53"
+aliases = ["nin-r00.7m"]
 offset = 0x00000
 size   = 0x20000
 crc32  = 0x5f61d30b
 
 [[region.file]]
 name   = "nin-r10.ic51"
+aliases = ["nin-r10.7j"]
 offset = 0x20000
 size   = 0x20000
 crc32  = 0x0caad107
 
 [[region.file]]
 name   = "nin-r20.ic49"
+aliases = ["nin-r20.7f"]
 offset = 0x40000
 size   = 0x20000
 crc32  = 0xef3617d3
 
 [[region.file]]
 name   = "nin-r30.ic47"
+aliases = ["nin-r30.7d"]
 offset = 0x60000
 size   = 0x20000
 crc32  = 0x175d2a24
@@ -389,24 +403,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "nin_b-a0.ic21"
+aliases = ["nin_b-a0.4c"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x63f8f658
 
 [[region.file]]
 name   = "nin_b-a1.ic22"
+aliases = ["nin_b-a1.4d"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x75eb8306
 
 [[region.file]]
 name   = "nin_b-a2.ic20"
+aliases = ["nin_b-a2.4b"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0xdf532172
 
 [[region.file]]
 name   = "nin_b-a3.ic23"
+aliases = ["nin_b-a3.4e"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x4dedd64c
@@ -417,24 +435,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "b0.ic26"
+aliases = ["b0.4j"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x1b0e08a6
 
 [[region.file]]
 name   = "b1.ic27"
+aliases = ["b1.4k"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x728727f0
 
 [[region.file]]
 name   = "b2.ic25"
+aliases = ["b2.4h"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0xf87efd75
 
 [[region.file]]
 name   = "b3.ic24"
+aliases = ["b3.4f"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x98856cb4
@@ -445,6 +467,7 @@ size = 0x10000
 
 [[region.file]]
 name   = "nin-v0.ic44"
+aliases = ["nin-v0.7a"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0xa32e8caf

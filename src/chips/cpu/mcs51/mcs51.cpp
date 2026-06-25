@@ -43,6 +43,12 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t tcon_tr1 = 0x40U;
         constexpr std::uint8_t tcon_tf1 = 0x80U;
 
+        // TMOD bits.
+        constexpr std::uint8_t tmod_t0_ct = 0x04U;
+        constexpr std::uint8_t tmod_t0_gate = 0x08U;
+        constexpr std::uint8_t tmod_t1_ct = 0x40U;
+        constexpr std::uint8_t tmod_t1_gate = 0x80U;
+
         // SCON bits.
         constexpr std::uint8_t scon_ri = 0x01U;
         constexpr std::uint8_t scon_ti = 0x02U;
@@ -80,6 +86,57 @@ namespace mnemos::chips::cpu {
             bits ^= bits >> 1U;
             return (bits & 1U) != 0U;
         }
+
+        [[nodiscard]] bool tick_13_bit(std::uint8_t& tcon,
+                                       std::uint8_t& tl,
+                                       std::uint8_t& th,
+                                       std::uint8_t overflow_flag) noexcept {
+            const std::uint8_t upper_tl = static_cast<std::uint8_t>(tl & 0xE0U);
+            std::uint16_t counter =
+                static_cast<std::uint16_t>((static_cast<std::uint16_t>(th) << 5U) |
+                                           (tl & 0x1FU));
+            counter = static_cast<std::uint16_t>((counter + 1U) & 0x1FFFU);
+            th = static_cast<std::uint8_t>(counter >> 5U);
+            tl = static_cast<std::uint8_t>(upper_tl | (counter & 0x1FU));
+            if (counter == 0U) {
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool tick_16_bit(std::uint8_t& tcon,
+                                       std::uint8_t& tl,
+                                       std::uint8_t& th,
+                                       std::uint8_t overflow_flag) noexcept {
+            if (++tl == 0U && ++th == 0U) {
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool tick_8_bit(std::uint8_t& tcon,
+                                      std::uint8_t& tl,
+                                      std::uint8_t overflow_flag) noexcept {
+            if (++tl == 0U) {
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool tick_8_bit_reload(std::uint8_t& tcon,
+                                             std::uint8_t& tl,
+                                             std::uint8_t th,
+                                             std::uint8_t overflow_flag) noexcept {
+            if (++tl == 0U) {
+                tl = th;
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
     } // namespace
 
     chip_metadata mcs51::metadata() const noexcept {
@@ -108,7 +165,13 @@ namespace mnemos::chips::cpu {
         pc_ = 0U;
         int0_line_ = false;
         int1_line_ = false;
+        t0_line_ = false;
+        t1_line_ = false;
         active_interrupt_priorities_ = 0U;
+        interrupt_poll_inhibit_ = false;
+        track_interrupt_control_access_ = false;
+        interrupt_control_accessed_ = false;
+        instruction_blocks_interrupt_poll_ = false;
         serial_rx_buffer_ = 0U;
         serial_tx_buffer_ = 0U;
         serial_tx_bits_remaining_ = 0U;
@@ -139,6 +202,7 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t mcs51::read_direct(std::uint8_t address) noexcept {
+        mark_interrupt_control_access(address);
         if (address < 0x80U) {
             return iram_[address];
         }
@@ -174,7 +238,33 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    std::uint8_t mcs51::read_direct_latch(std::uint8_t address) noexcept {
+        mark_interrupt_control_access(address);
+        if (address < 0x80U) {
+            return iram_[address];
+        }
+        switch (address) {
+        case sfr_acc:
+            return acc_;
+        case sfr_b:
+            return b_;
+        case sfr_psw:
+            return static_cast<std::uint8_t>((psw_ & ~psw_p) | (odd_parity(acc_) ? psw_p : 0U));
+        case sfr_sp:
+            return sp_;
+        case sfr_dpl:
+            return static_cast<std::uint8_t>(dptr_);
+        case sfr_dph:
+            return static_cast<std::uint8_t>(dptr_ >> 8U);
+        case sfr_sbuf:
+            return serial_rx_buffer_;
+        default:
+            return sfr_[address - 0x80U];
+        }
+    }
+
     void mcs51::write_direct(std::uint8_t address, std::uint8_t value) noexcept {
+        mark_interrupt_control_access(address);
         if (address < 0x80U) {
             iram_[address] = value;
             return;
@@ -216,6 +306,12 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    void mcs51::mark_interrupt_control_access(std::uint8_t address) noexcept {
+        if (track_interrupt_control_access_ && (address == sfr_ie || address == sfr_ip)) {
+            interrupt_control_accessed_ = true;
+        }
+    }
+
     std::uint8_t mcs51::read_indirect(std::uint8_t address) noexcept {
         // @Ri reaches internal RAM only; the classic 8051 has no upper 128.
         return address < 0x80U ? iram_[address] : 0xFFU;
@@ -234,8 +330,19 @@ namespace mnemos::chips::cpu {
         return read_direct(static_cast<std::uint8_t>(bit & 0xF8U));
     }
 
+    std::uint8_t mcs51::read_bit_latch_source(std::uint8_t bit) noexcept {
+        if (bit < 0x80U) {
+            return iram_[0x20U + (bit >> 3U)];
+        }
+        return read_direct_latch(static_cast<std::uint8_t>(bit & 0xF8U));
+    }
+
     bool mcs51::read_bit(std::uint8_t bit) noexcept {
         return (read_bit_source(bit) & (1U << (bit & 7U))) != 0U;
+    }
+
+    bool mcs51::read_bit_latch(std::uint8_t bit) noexcept {
+        return (read_bit_latch_source(bit) & (1U << (bit & 7U))) != 0U;
     }
 
     void mcs51::write_bit(std::uint8_t bit, bool value) noexcept {
@@ -247,7 +354,7 @@ namespace mnemos::chips::cpu {
             return;
         }
         const auto address = static_cast<std::uint8_t>(bit & 0xF8U);
-        const std::uint8_t byte = read_direct(address);
+        const std::uint8_t byte = read_direct_latch(address);
         write_direct(address, value ? static_cast<std::uint8_t>(byte | mask)
                                     : static_cast<std::uint8_t>(byte & ~mask));
     }
@@ -317,6 +424,25 @@ namespace mnemos::chips::cpu {
         int1_line_ = asserted;
     }
 
+    void mcs51::set_t0_line(bool high) noexcept {
+        const bool falling_edge = t0_line_ && !high;
+        t0_line_ = high;
+        if (falling_edge && timer0_external_counter() && timer0_gate_open() &&
+            (sfr_[sfr_tcon - 0x80U] & tcon_tr0) != 0U) {
+            tick_timer0_once();
+        }
+    }
+
+    void mcs51::set_t1_line(bool high) noexcept {
+        const bool falling_edge = t1_line_ && !high;
+        t1_line_ = high;
+        const std::uint8_t timer0_mode = sfr_[sfr_tmod - 0x80U] & 0x03U;
+        if (falling_edge && timer0_mode != 3U && timer1_external_counter() &&
+            timer1_gate_open() && (sfr_[sfr_tcon - 0x80U] & tcon_tr1) != 0U) {
+            tick_timer1_once();
+        }
+    }
+
     void mcs51::interrupt(std::uint16_t vector, bool high_priority) noexcept {
         push8(static_cast<std::uint8_t>(pc_));
         push8(static_cast<std::uint8_t>(pc_ >> 8U));
@@ -325,6 +451,34 @@ namespace mnemos::chips::cpu {
             active_interrupt_priorities_ |
             (high_priority ? active_interrupt_high : active_interrupt_low));
         step_cycles_ += 2;
+    }
+
+    bool mcs51::serviceable_interrupt_pending() const noexcept {
+        const std::uint8_t ie = sfr_[sfr_ie - 0x80U];
+        if ((ie & ie_ea) == 0U ||
+            (active_interrupt_priorities_ & active_interrupt_high) != 0U) {
+            return false;
+        }
+        const std::uint8_t tcon = sfr_[sfr_tcon - 0x80U];
+        const std::uint8_t ip = sfr_[sfr_ip - 0x80U];
+        const auto priority_pending = [&](bool high_priority) {
+            if (!high_priority &&
+                (active_interrupt_priorities_ & active_interrupt_low) != 0U) {
+                return false;
+            }
+            return (((ip & ip_px0) != 0U) == high_priority && (tcon & tcon_ie0) != 0U &&
+                    (ie & ie_ex0) != 0U) ||
+                   (((ip & ip_pt0) != 0U) == high_priority && (tcon & tcon_tf0) != 0U &&
+                    (ie & ie_et0) != 0U) ||
+                   (((ip & ip_px1) != 0U) == high_priority && (tcon & tcon_ie1) != 0U &&
+                    (ie & ie_ex1) != 0U) ||
+                   (((ip & ip_pt1) != 0U) == high_priority && (tcon & tcon_tf1) != 0U &&
+                    (ie & ie_et1) != 0U) ||
+                   (((ip & ip_ps) != 0U) == high_priority &&
+                    (sfr_[sfr_scon - 0x80U] & (scon_ri | scon_ti)) != 0U &&
+                    (ie & ie_es) != 0U);
+        };
+        return priority_pending(true) || priority_pending(false);
     }
 
     bool mcs51::service_interrupts() noexcept {
@@ -444,6 +598,77 @@ namespace mnemos::chips::cpu {
         serial_transmit_bit_elapsed();
     }
 
+    bool mcs51::timer0_gate_open() const noexcept {
+        const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
+        return (tmod & tmod_t0_gate) == 0U || int0_line_;
+    }
+
+    bool mcs51::timer1_gate_open() const noexcept {
+        const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
+        return (tmod & tmod_t1_gate) == 0U || int1_line_;
+    }
+
+    bool mcs51::timer0_external_counter() const noexcept {
+        return (sfr_[sfr_tmod - 0x80U] & tmod_t0_ct) != 0U;
+    }
+
+    bool mcs51::timer1_external_counter() const noexcept {
+        return (sfr_[sfr_tmod - 0x80U] & tmod_t1_ct) != 0U;
+    }
+
+    void mcs51::tick_timer0_once() noexcept {
+        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+        const std::uint8_t mode = sfr_[sfr_tmod - 0x80U] & 0x03U;
+        std::uint8_t& tl = sfr_[sfr_tl0 - 0x80U];
+        std::uint8_t& th = sfr_[sfr_th0 - 0x80U];
+        switch (mode) {
+        case 0U:
+            (void)tick_13_bit(tcon, tl, th, tcon_tf0);
+            break;
+        case 1U:
+            (void)tick_16_bit(tcon, tl, th, tcon_tf0);
+            break;
+        case 2U:
+            (void)tick_8_bit_reload(tcon, tl, th, tcon_tf0);
+            break;
+        case 3U:
+            (void)tick_8_bit(tcon, tl, tcon_tf0);
+            break;
+        default:
+            break;
+        }
+    }
+
+    void mcs51::tick_timer0_high_once() noexcept {
+        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+        std::uint8_t& th = sfr_[sfr_th0 - 0x80U];
+        (void)tick_8_bit(tcon, th, tcon_tf1);
+    }
+
+    void mcs51::tick_timer1_once() noexcept {
+        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+        const std::uint8_t mode = (sfr_[sfr_tmod - 0x80U] >> 4U) & 0x03U;
+        std::uint8_t& tl = sfr_[sfr_tl1 - 0x80U];
+        std::uint8_t& th = sfr_[sfr_th1 - 0x80U];
+        bool overflowed = false;
+        switch (mode) {
+        case 0U:
+            overflowed = tick_13_bit(tcon, tl, th, tcon_tf1);
+            break;
+        case 1U:
+            overflowed = tick_16_bit(tcon, tl, th, tcon_tf1);
+            break;
+        case 2U:
+            overflowed = tick_8_bit_reload(tcon, tl, th, tcon_tf1);
+            break;
+        default:
+            break;
+        }
+        if (overflowed) {
+            serial_timer1_overflow();
+        }
+    }
+
     void mcs51::serial_tick(std::uint32_t machine_cycles) noexcept {
         for (std::uint32_t c = 0; c < machine_cycles && serial_tx_active_; ++c) {
             const std::uint8_t mode = serial_mode();
@@ -484,99 +709,28 @@ namespace mnemos::chips::cpu {
     }
 
     void mcs51::timers_tick(std::uint32_t machine_cycles) noexcept {
-        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
-        const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
-        const auto tick_13_bit = [&tcon](std::uint8_t& tl,
-                                         std::uint8_t& th,
-                                         std::uint8_t overflow_flag) {
-            const std::uint8_t upper_tl = static_cast<std::uint8_t>(tl & 0xE0U);
-            std::uint16_t counter =
-                static_cast<std::uint16_t>((static_cast<std::uint16_t>(th) << 5U) |
-                                           (tl & 0x1FU));
-            counter = static_cast<std::uint16_t>((counter + 1U) & 0x1FFFU);
-            th = static_cast<std::uint8_t>(counter >> 5U);
-            tl = static_cast<std::uint8_t>(upper_tl | (counter & 0x1FU));
-            if (counter == 0U) {
-                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
-                return true;
-            }
-            return false;
-        };
-        const auto tick_16_bit = [&tcon](std::uint8_t& tl,
-                                         std::uint8_t& th,
-                                         std::uint8_t overflow_flag) {
-            if (++tl == 0U && ++th == 0U) {
-                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
-                return true;
-            }
-            return false;
-        };
-        const auto tick_8_bit = [&tcon](std::uint8_t& tl, std::uint8_t overflow_flag) {
-            if (++tl == 0U) {
-                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
-                return true;
-            }
-            return false;
-        };
-        const auto tick_8_bit_reload = [&tcon](std::uint8_t& tl,
-                                               std::uint8_t th,
-                                               std::uint8_t overflow_flag) {
-            if (++tl == 0U) {
-                tl = th;
-                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
-                return true;
-            }
-            return false;
-        };
         for (std::uint32_t c = 0; c < machine_cycles; ++c) {
+            const std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+            const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
             const std::uint8_t timer0_mode = tmod & 0x03U;
-            std::uint8_t& tl0 = sfr_[sfr_tl0 - 0x80U];
-            std::uint8_t& th0 = sfr_[sfr_th0 - 0x80U];
             if (timer0_mode == 3U) {
-                if ((tcon & tcon_tr0) != 0U) {
-                    (void)tick_8_bit(tl0, tcon_tf0);
+                if ((tcon & tcon_tr0) != 0U && timer0_gate_open() &&
+                    !timer0_external_counter()) {
+                    tick_timer0_once();
                 }
                 if ((tcon & tcon_tr1) != 0U) {
-                    (void)tick_8_bit(th0, tcon_tf1);
+                    tick_timer0_high_once();
                 }
                 continue;
             }
-            if ((tcon & tcon_tr0) != 0U) {
-                switch (timer0_mode) {
-                case 0U:
-                    (void)tick_13_bit(tl0, th0, tcon_tf0);
-                    break;
-                case 1U:
-                    (void)tick_16_bit(tl0, th0, tcon_tf0);
-                    break;
-                case 2U:
-                    (void)tick_8_bit_reload(tl0, th0, tcon_tf0);
-                    break;
-                default:
-                    break;
-                }
+            if ((tcon & tcon_tr0) != 0U && timer0_gate_open() &&
+                !timer0_external_counter()) {
+                tick_timer0_once();
             }
             const std::uint8_t timer1_mode = (tmod >> 4U) & 0x03U;
-            if ((tcon & tcon_tr1) != 0U && timer1_mode != 3U) {
-                std::uint8_t& tl = sfr_[sfr_tl1 - 0x80U];
-                std::uint8_t& th = sfr_[sfr_th1 - 0x80U];
-                bool timer1_overflowed = false;
-                switch (timer1_mode) {
-                case 0U:
-                    timer1_overflowed = tick_13_bit(tl, th, tcon_tf1);
-                    break;
-                case 1U:
-                    timer1_overflowed = tick_16_bit(tl, th, tcon_tf1);
-                    break;
-                case 2U:
-                    timer1_overflowed = tick_8_bit_reload(tl, th, tcon_tf1);
-                    break;
-                default:
-                    break;
-                }
-                if (timer1_overflowed) {
-                    serial_timer1_overflow();
-                }
+            if ((tcon & tcon_tr1) != 0U && timer1_mode != 3U &&
+                timer1_gate_open() && !timer1_external_counter()) {
+                tick_timer1_once();
             }
         }
         serial_tick(machine_cycles);
@@ -586,13 +740,28 @@ namespace mnemos::chips::cpu {
 
     int mcs51::step_instruction() {
         step_cycles_ = 0;
-        if (!service_interrupts()) {
+        bool interrupt_serviced = false;
+        if (interrupt_poll_inhibit_) {
+            interrupt_poll_inhibit_ = false;
+        } else {
+            interrupt_serviced = service_interrupts();
+        }
+        if (!interrupt_serviced) {
             if (trace_callback_) {
                 trace_callback_(pc_);
             }
+            interrupt_control_accessed_ = false;
+            instruction_blocks_interrupt_poll_ = false;
+            track_interrupt_control_access_ = true;
             step_cycles_ += exec_one();
+            track_interrupt_control_access_ = false;
         }
         timers_tick(static_cast<std::uint32_t>(step_cycles_));
+        if (!interrupt_serviced &&
+            (interrupt_control_accessed_ || instruction_blocks_interrupt_poll_) &&
+            serviceable_interrupt_pending()) {
+            interrupt_poll_inhibit_ = true;
+        }
         elapsed_ += static_cast<std::uint64_t>(step_cycles_);
         return step_cycles_;
     }
@@ -724,6 +893,7 @@ namespace mnemos::chips::cpu {
                     static_cast<std::uint8_t>(active_interrupt_priorities_ &
                                               ~active_interrupt_low);
             }
+            instruction_blocks_interrupt_poll_ = true;
             return 2;
         }
         case 0x03U: // RR A
@@ -749,7 +919,7 @@ namespace mnemos::chips::cpu {
             return 1;
         case 0x05U: { // INC direct
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) + 1U));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) + 1U));
             return 1;
         }
         case 0x06U:
@@ -774,7 +944,7 @@ namespace mnemos::chips::cpu {
             return 1;
         case 0x15U: { // DEC direct
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) - 1U));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) - 1U));
             return 1;
         }
         case 0x16U:
@@ -797,7 +967,7 @@ namespace mnemos::chips::cpu {
         case 0x10U: { // JBC bit, rel
             const std::uint8_t bit = fetch8();
             const auto rel = static_cast<std::int8_t>(fetch8());
-            if (read_bit(bit)) {
+            if (read_bit_latch(bit)) {
                 write_bit(bit, false);
                 pc_ = static_cast<std::uint16_t>(pc_ + static_cast<std::uint16_t>(rel));
             }
@@ -854,35 +1024,35 @@ namespace mnemos::chips::cpu {
         }
         case 0x42U: { // ORL direct, A
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) | acc_));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) | acc_));
             return 1;
         }
         case 0x43U: { // ORL direct, #imm
             const std::uint8_t address = fetch8();
             const std::uint8_t imm = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) | imm));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) | imm));
             return 2;
         }
         case 0x52U: { // ANL direct, A
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) & acc_));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) & acc_));
             return 1;
         }
         case 0x53U: { // ANL direct, #imm
             const std::uint8_t address = fetch8();
             const std::uint8_t imm = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) & imm));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) & imm));
             return 2;
         }
         case 0x62U: { // XRL direct, A
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) ^ acc_));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) ^ acc_));
             return 1;
         }
         case 0x63U: { // XRL direct, #imm
             const std::uint8_t address = fetch8();
             const std::uint8_t imm = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) ^ imm));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) ^ imm));
             return 2;
         }
         case 0x72U: { // ORL C, bit
@@ -1011,7 +1181,7 @@ namespace mnemos::chips::cpu {
             return 2;
         case 0xB2U: { // CPL bit
             const std::uint8_t bit = fetch8();
-            write_bit(bit, !read_bit(bit));
+            write_bit(bit, !read_bit_latch(bit));
             return 1;
         }
         case 0xB3U: // CPL C
@@ -1133,7 +1303,7 @@ namespace mnemos::chips::cpu {
         case 0xD5U: { // DJNZ direct, rel
             const std::uint8_t address = fetch8();
             const auto rel = static_cast<std::int8_t>(fetch8());
-            const auto value = static_cast<std::uint8_t>(read_direct(address) - 1U);
+            const auto value = static_cast<std::uint8_t>(read_direct_latch(address) - 1U);
             write_direct(address, value);
             if (value != 0U) {
                 pc_ = static_cast<std::uint16_t>(pc_ + static_cast<std::uint16_t>(rel));
@@ -1233,7 +1403,10 @@ namespace mnemos::chips::cpu {
         writer.u16(pc_);
         writer.boolean(int0_line_);
         writer.boolean(int1_line_);
+        writer.boolean(t0_line_);
+        writer.boolean(t1_line_);
         writer.u8(active_interrupt_priorities_);
+        writer.boolean(interrupt_poll_inhibit_);
         writer.u8(serial_rx_buffer_);
         writer.u8(serial_tx_buffer_);
         writer.u8(serial_tx_bits_remaining_);
@@ -1255,8 +1428,14 @@ namespace mnemos::chips::cpu {
         pc_ = reader.u16();
         int0_line_ = reader.boolean();
         int1_line_ = reader.boolean();
+        t0_line_ = reader.boolean();
+        t1_line_ = reader.boolean();
         active_interrupt_priorities_ =
             static_cast<std::uint8_t>(reader.u8() & (active_interrupt_low | active_interrupt_high));
+        interrupt_poll_inhibit_ = reader.boolean();
+        track_interrupt_control_access_ = false;
+        interrupt_control_accessed_ = false;
+        instruction_blocks_interrupt_poll_ = false;
         serial_rx_buffer_ = reader.u8();
         serial_tx_buffer_ = reader.u8();
         serial_tx_bits_remaining_ = reader.u8();

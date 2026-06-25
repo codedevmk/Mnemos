@@ -1,0 +1,142 @@
+# Air Assault / Air Duel US -- Irem M107 set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M107 board profile remains separate from older Irem board families.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "airass"
+board       = "irem_m107"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "f4-a-h0-etc.h0"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0x038f2cbd
+
+[[region.file]]
+name   = "f4-a-l0-etc.l0"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0xd3eb7842
+
+[[region.file]]
+name   = "f4-a-h1-ss.h1"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0x4cb1c9ae
+
+[[region.file]]
+name   = "f4-a-l1-ss.l1"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x1ddd192d
+
+# Boot-chunk reload of the final program pair at the top of the 1 MiB CPU space.
+[[region.file]]
+name   = "f4-a-h1-ss.h1"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x4cb1c9ae
+
+[[region.file]]
+name   = "f4-a-l1-ss.l1"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x1ddd192d
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "f4-b-sh0-c.sh0"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x31c05c0d
+
+[[region.file]]
+name   = "f4-b-sl0-c.sl0"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x60a0d33a
+
+[[region]]
+name = "subdata"
+size = 0x040000
+
+[[region.file]]
+name   = "f4-b-drh-.drh"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x12001372
+
+[[region.file]]
+name   = "f4-b-drl-.drl"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x08cb7533
+
+[[region]]
+name = "gfx"
+size = 0x600000
+
+[[region.file]]
+name   = "w47.000"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x72e1a253
+
+[[region.file]]
+name   = "w48.010"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x1746b7f6
+
+[[region.file]]
+name   = "w49.020"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0x17b5caf2
+
+[[region.file]]
+name   = "w50.030"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x63e4bec3
+
+[[region.file]]
+name   = "w45.c00"
+offset = 0x400000
+size   = 0x100000
+crc32  = 0x2aab419e
+
+[[region.file]]
+name   = "w46.c10"
+offset = 0x500000
+size   = 0x100000
+crc32  = 0xd6e5c910
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "w96.da0"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x7a493e2e

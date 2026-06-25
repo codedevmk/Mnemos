@@ -1,0 +1,55 @@
+# Head On (Irem) -- local Irem M15 corpus set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# i8080-era M15 board profile is still pending.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "headoni"
+board       = "irem_m15"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x2000
+
+[[region.file]]
+name    = "e1.9a"
+aliases = ["headoni/e1.9a"]
+offset  = 0x0000
+size    = 0x0400
+crc32   = 0x05da5265
+
+[[region.file]]
+name    = "e2.9b"
+aliases = ["headoni/e2.9b"]
+offset  = 0x0400
+size    = 0x0400
+crc32   = 0xdada26a8
+
+[[region.file]]
+name    = "e3.9c"
+aliases = ["headoni/e3.9c"]
+offset  = 0x0800
+size    = 0x0400
+crc32   = 0x61ff24f5
+
+[[region.file]]
+name    = "e4.9d"
+aliases = ["headoni/e4.9d"]
+offset  = 0x0c00
+size    = 0x0400
+crc32   = 0xce4c5a67
+
+[[region.file]]
+name    = "e5.9f"
+aliases = ["headoni/e5.9f"]
+offset  = 0x1000
+size    = 0x0400
+crc32   = 0xb5232439
+
+[[region.file]]
+name    = "e6.9g"
+aliases = ["headoni/e6.9g"]
+offset  = 0x1400
+size    = 0x0400
+crc32   = 0x99acd1a6

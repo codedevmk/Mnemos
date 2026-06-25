@@ -31,13 +31,14 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
     // Player adapter for the Irem M72 arcade board family.
     //
-    // Accepts standard set zips by resolving the zip basename against the
-    // checked-in Irem M72 game manifests (e.g. rtype.zip -> rtype.toml). A zip
-    // may still carry a game.toml override for development. If neither path
-    // resolves, the development-format ROM set applies: entries named by board
-    // region ("maincpu.bin", "soundcpu.bin", "tiles_a.bin", "tiles_b.bin",
-    // "sprites.bin", "samples.bin", "mcu.bin") are loaded whole. A bare binary
-    // is treated as the V30 program image.
+    // Accepts standard set zips or unpacked set directories by resolving the
+    // source basename against the checked-in Irem M72 game manifests (e.g.
+    // rtype.zip or rtype/ -> rtype.toml). A source may still carry a game.toml
+    // override for development. If neither path resolves, the development-format
+    // ROM set applies to zips: entries named by board region ("maincpu.bin",
+    // "soundcpu.bin", "tiles_a.bin", "tiles_b.bin", "sprites.bin",
+    // "samples.bin", "mcu.bin") are loaded whole. A bare binary is treated as
+    // the V30 program image.
     //
     // Input mapping (first-cut, active low): joystick bytes carry up/down/
     // left/right in bits 0-3 and buttons A/B in bits 4-5; the system byte
@@ -51,7 +52,9 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         explicit irem_m72_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
                                   frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
                                   std::optional<std::uint16_t> dip_override = {},
-                                  std::string rom_path = {});
+                                  std::string rom_path = {},
+                                  std::vector<std::vector<std::uint8_t>> supplemental_roms = {},
+                                  std::vector<std::string> supplemental_rom_paths = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
             // 8 MHz pixel clock over a 512x284 raster: 55.0176... Hz.
@@ -87,6 +90,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         memory_views() const noexcept override {
             return system_mem_view_;
         }
+        [[nodiscard]] std::vector<std::uint8_t> save_state() override;
+        [[nodiscard]] runtime::load_result load_state(std::span<const std::uint8_t> data) override;
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::irem_m72::m72_system& machine() noexcept { return *sys_; }

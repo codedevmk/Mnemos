@@ -31,7 +31,15 @@ namespace mnemos::manifests::common {
             std::vector<std::uint8_t> bytes(region.size, region.fill);
 
             for (const rom_set_file& file : region.files) {
-                const auto data = provider ? provider(file.name) : std::nullopt;
+                auto data = provider ? provider(file.name) : std::nullopt;
+                if (!data.has_value() && provider) {
+                    for (const std::string& alias : file.aliases) {
+                        data = provider(alias);
+                        if (data.has_value()) {
+                            break;
+                        }
+                    }
+                }
                 if (!data.has_value()) {
                     image.issues.push_back({file.name, "missing from the ROM set"});
                     continue;
@@ -111,6 +119,12 @@ namespace mnemos::manifests::common {
     }
 
     rom_set_decl inherit_parent_regions(const rom_set_decl& parent, rom_set_decl child) {
+        std::vector<std::string> child_owned_regions;
+        child_owned_regions.reserve(child.regions.size());
+        for (const rom_set_region& child_region : child.regions) {
+            child_owned_regions.push_back(child_region.name);
+        }
+
         std::vector<rom_set_region> merged = parent.regions;
         for (rom_set_region& child_region : child.regions) {
             bool replaced = false;
@@ -130,7 +144,19 @@ namespace mnemos::manifests::common {
             child.dips = parent.dips;
         }
         if (child.hle.empty()) {
-            child.hle = parent.hle;
+            child.hle.reserve(parent.hle.size());
+            for (const rom_set_hle_decl& hle : parent.hle) {
+                bool child_owns_chip_region = false;
+                for (const std::string& child_region_name : child_owned_regions) {
+                    if (child_region_name == hle.chip) {
+                        child_owns_chip_region = true;
+                        break;
+                    }
+                }
+                if (!child_owns_chip_region) {
+                    child.hle.push_back(hle);
+                }
+            }
         }
         return child;
     }

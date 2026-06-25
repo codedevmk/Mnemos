@@ -13,6 +13,7 @@
 namespace {
     using mnemos::apps::player::adapters::clean_rom_name;
     using mnemos::apps::player::adapters::load_rom;
+    using mnemos::apps::player::adapters::load_rom_verbatim;
 
     // A deflate .zip holding a single "payload.bin" entry (128-byte body), from
     // PowerShell Compress-Archive. Exercises load_rom's signature detection,
@@ -76,4 +77,17 @@ TEST_CASE("rom_loader: load_rom returns a bare ROM unchanged with its path as th
     CHECK(loaded->bytes == std::vector<std::uint8_t>(raw.begin(), raw.end()));
     CHECK(loaded->name == path.string());
     std::filesystem::remove(path);
+}
+
+TEST_CASE("rom_loader: load_rom_verbatim accepts directory-backed ROM sets") {
+    const auto dir = std::filesystem::temp_directory_path() / "mnemos_rom_loader_arcade_set";
+    REQUIRE((std::filesystem::create_directories(dir) || std::filesystem::exists(dir)));
+
+    const auto loaded = load_rom_verbatim(dir.string());
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->bytes.empty());
+    CHECK(loaded->name == dir.string());
+    CHECK(loaded->directory_source);
+
+    std::filesystem::remove_all(dir);
 }

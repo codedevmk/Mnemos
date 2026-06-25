@@ -5,6 +5,7 @@
 #include <toml++/toml.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <string>
 #include <utility>
@@ -131,12 +132,32 @@ namespace mnemos::manifests::common {
         void parse_file(const parse_context& ctx, const toml::table& table,
                         rom_set_region& region) {
             check_keys(ctx, table,
-                       {"name", "offset", "stride", "unit", "swap", "source_offset", "length",
-                        "size", "crc32"},
+                       {"name", "aliases", "offset", "stride", "unit", "swap", "source_offset",
+                        "length", "size", "crc32"},
                        "[[region.file]]");
             rom_set_file file;
             if (auto name = require_string(ctx, table, "name", "[[region.file]]")) {
                 file.name = std::move(*name);
+            }
+            if (const toml::node* node = table.get("aliases")) {
+                if (const auto* aliases = node->as_array()) {
+                    for (const toml::node& entry : *aliases) {
+                        if (const auto* alias = entry.as_string()) {
+                            if (alias->get().empty()) {
+                                ctx.error("'aliases' in [[region.file]] must not contain an "
+                                          "empty string",
+                                          &entry);
+                            } else {
+                                file.aliases.push_back(alias->get());
+                            }
+                        } else {
+                            ctx.error("'aliases' in [[region.file]] must contain only strings",
+                                      &entry);
+                        }
+                    }
+                } else {
+                    ctx.error("'aliases' in [[region.file]] must be an array of strings", node);
+                }
             }
             if (const toml::node* node = table.get("offset")) {
                 if (auto offset = read_unsigned(ctx, *node, "offset", "[[region.file]]")) {
@@ -230,8 +251,65 @@ namespace mnemos::manifests::common {
             decl.regions.push_back(std::move(region));
         }
 
+        void parse_hle_sample_trigger(const parse_context& ctx,
+                                      const toml::table& table,
+                                      rom_set_hle_decl& hle,
+                                      std::array<const toml::node*, 256>& trigger_sources) {
+            constexpr std::string_view where = "[[hle.sample_trigger]]";
+            check_keys(ctx, table, {"trigger", "start"}, where);
+
+            rom_set_hle_sample_trigger sample_trigger;
+            const toml::node* trigger_node = nullptr;
+            bool valid = true;
+            if (const toml::node* node = table.get("trigger")) {
+                if (auto value = read_unsigned(ctx, *node, "trigger", where)) {
+                    if (*value <= 0xFFU) {
+                        sample_trigger.trigger = static_cast<std::uint8_t>(*value);
+                        trigger_node = node;
+                    } else {
+                        ctx.error("'trigger' in " + std::string(where) +
+                                      " is out of 8-bit range",
+                                  node);
+                        valid = false;
+                    }
+                } else {
+                    valid = false;
+                }
+            } else {
+                ctx.error(std::string(where) + " is missing required key 'trigger'");
+                valid = false;
+            }
+
+            if (const toml::node* node = table.get("start")) {
+                if (auto value = read_unsigned(ctx, *node, "start", where)) {
+                    if (*value <= 0xFFFFFFFFULL) {
+                        sample_trigger.start = static_cast<std::uint32_t>(*value);
+                    } else {
+                        ctx.error("'start' in " + std::string(where) +
+                                      " is out of 32-bit range",
+                                  node);
+                        valid = false;
+                    }
+                } else {
+                    valid = false;
+                }
+            } else {
+                ctx.error(std::string(where) + " is missing required key 'start'");
+                valid = false;
+            }
+
+            if (valid) {
+                if (trigger_sources[sample_trigger.trigger] != nullptr) {
+                    ctx.error("duplicate 'trigger' in " + std::string(where), trigger_node);
+                    return;
+                }
+                trigger_sources[sample_trigger.trigger] = trigger_node;
+                hle.sample_triggers.push_back(sample_trigger);
+            }
+        }
+
         void parse_hle(const parse_context& ctx, const toml::table& table, rom_set_decl& decl) {
-            check_keys(ctx, table, {"chip", "profile", "rationale"}, "[[hle]]");
+            check_keys(ctx, table, {"chip", "profile", "rationale", "sample_trigger"}, "[[hle]]");
             rom_set_hle_decl hle;
             if (auto chip = require_string(ctx, table, "chip", "[[hle]]")) {
                 hle.chip = std::move(*chip);
@@ -245,6 +323,21 @@ namespace mnemos::manifests::common {
             }
             if (auto rationale = require_string(ctx, table, "rationale", "[[hle]]")) {
                 hle.rationale = std::move(*rationale);
+            }
+            if (const toml::node* sample_triggers = table.get("sample_trigger")) {
+                if (const auto* array = sample_triggers->as_array()) {
+                    std::array<const toml::node*, 256> trigger_sources{};
+                    for (const toml::node& entry : *array) {
+                        if (const auto* sample_table = entry.as_table()) {
+                            parse_hle_sample_trigger(ctx, *sample_table, hle, trigger_sources);
+                        } else {
+                            ctx.error("[[hle.sample_trigger]] entries must be tables", &entry);
+                        }
+                    }
+                } else {
+                    ctx.error("'sample_trigger' in [[hle]] must be an array of tables",
+                              sample_triggers);
+                }
             }
             decl.hle.push_back(std::move(hle));
         }

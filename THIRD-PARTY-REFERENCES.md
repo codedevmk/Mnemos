@@ -133,8 +133,10 @@ multiple independent open-source implementations.
   declarations from the public missing-i8751 notes and startup RAM inversion
   behavior. Their sample-trigger cursor starts are profile data cross-checked
   against MAME's public M72 driver and bounded by the declared sample ROM at
-  runtime. No fake protection code arrays, emulator source code, or ROM data
-  are copied into Mnemos.
+  runtime. The no-dump HLE entry continuations synthesize Mnemos-native V30 far
+  jumps from the same public profile targets; they are declared simulated
+  behavior, not authentic dumped i8751 firmware. No wholesale fake protection
+  routines, emulator source code, or ROM data are copied into Mnemos.
 - **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
   CPS-B custom chip has a per-board scrambled register map (layer-control,
   priority, palette-control, layer-enable, protection ports) and a graphics-code

@@ -1,4 +1,4 @@
-﻿# Mnemos hardware parity-gap inventory & tracking checklist (2026-06-11; re-audited 2026-06-12, 2026-06-13)
+# Mnemos hardware parity-gap inventory & tracking checklist (2026-06-11; re-audited 2026-06-12, 2026-06-13)
 
 Actionable checklist of **missing or incomplete** hardware implementation found
 by the 2026-06-11 parity audit. Companion to
@@ -242,10 +242,84 @@ All "beyond Emu" — Emu's M72 is a non-rendering scaffold, so these are board-f
 hardware completeness, not Emu-parity gaps.
 
 #### CPU
-- [~] **M1** mcs51 (8051) protection MCU — the optional `mcu` region is now player-loadable via `mcu.bin`, scheduled when present, and covered through the MCU MOVX sample/latch/shared-RAM path (`V30 $B0000` / MCU `$C000`); the MCS-51 core now implements the classic IE/IP two-level priority model so high-priority external/timer/serial interrupts can preempt a low-priority ISR while equal/lower-priority requests wait for RETI, timer mode 0's 13-bit counter, timer mode 3's split TL0/TH0 behavior, serial RI/TI arbitration through the shared `0x0023` vector with firmware-owned flag clearing, and frame-level SBUF transmit/receive timing; no-dump true-M72 sets can now declare explicit `[[hle]]` MCU profiles, with `dbreedm72` / `dkgensanm72` mapped to the startup protection RAM inversion surface, V30 command-latch acknowledge, and profile-bounded sample-trigger cursor setup; `MNEMOS_M72_PROTECTED_SET` provides a data-gated real-ROM player check for protected true-M72 sets with either a dumped MCU or an explicit no-dump HLE profile. Remaining: validate / complete protected-game behavior against authentic per-game MCU + ROM-set artifacts, including the no-dump profile entry routines beyond startup RAM inversion, command-latch acknowledge, and sample trigger setup (R-Type needs none) · PARTIAL · HIGH · M · beyond Emu · R9 · Evidence: `src/chips/cpu/mcs51/mcs51.cpp` + `src/chips/cpu/mcs51/tests/mcs51_test.cpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` R9
+- [~] **M1** mcs51 (8051) protection MCU — the optional `mcu` region is now player-loadable via `mcu.bin`, scheduled when present, and covered through the MCU MOVX sample/latch/shared-RAM path (`V30 $B0000` / MCU `$C000`) using both DPTR and P2-latched `@R0` / `@R1` external-data forms; declarative protected sets with a missing MCU dump now carry the ROM-set issue but clear the filled `mcu` region before board construction, so Mnemos does not schedule an all-`0xFF` fake protection CPU; port read-modify-write instructions now use the output latch rather than external pin levels, matching the 8051 behavior real i8751 code relies on when updating P0-P3; the MCS-51 core now implements the classic IE/IP two-level priority model so high-priority external/timer/serial interrupts can preempt a low-priority ISR while equal/lower-priority requests wait for RETI plus the following foreground instruction, including the same one-instruction deferral when an IE/IP access leaves a serviceable request pending, timer mode 0's 13-bit counter, timer mode 3's split TL0/TH0 behavior, TMOD GATE-controlled timers, T0/T1 external counter pins, serial RI/TI arbitration through the shared `0x0023` vector with firmware-owned flag clearing, frame-level SBUF transmit/receive timing, and a mechanical all-opcode operand-consumption regression covering the complete i8751 decoder surface including AJMP/ACALL page forms and call stack byte order; no-dump true-M72 sets can now declare explicit `[[hle]]` MCU profiles, with `dbreedm72` / `dkgensanm72` mapped to the startup protection RAM inversion surface, V30 command-latch acknowledge, and manifest-declared profile-bounded sample-trigger cursor setup; duplicate sample-trigger declarations are schema errors, and supported no-dump profiles without trigger metadata or with trigger starts outside the loaded `samples` region are reported and disabled instead of activating partial HLE; `MNEMOS_M72_PROTECTED_SET` provides a data-gated real-ROM player check for protected true-M72 sets with either a dumped MCU or an explicit no-dump HLE profile. Remaining: validate / complete protected-game behavior against authentic per-game MCU + ROM-set artifacts, including the no-dump profile entry routines beyond startup RAM inversion, command-latch acknowledge, and sample trigger setup (R-Type needs none) · PARTIAL · HIGH · M · beyond Emu · R9 · Evidence: `src/chips/cpu/mcs51/mcs51.cpp` + `src/chips/cpu/mcs51/tests/mcs51_test.cpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` R9
+
+Loader note: no-dump HLE profiles now also disable when their declared `samples` region has missing file issues, preventing sample fill bytes from driving protection-HLE cursors.
 
 #### System / variants
-- [~] **M3** Additional M72 board variants beyond R-Type — `board_params_for` now records the known true-M72 work-RAM map families (`rtype*`, standard protected M72, `xmultiplm72`, and `dbreed*m72`) plus set-specific DIP defaults without admitting M81/M82/M84/M85/M92 boards into the M72 profile; the player resolves standard set zips by basename through the embedded checked-in game manifests, keeps zip-local `game.toml` as a development override, resolves declarative clone `parent` zips beside the clone set, and inherits parent manifest regions plus parent DIP/HLE metadata when the clone manifest omits replacements; checked-in M72 game manifests now cover the true-M72 roster: `rtype`, `bchopper`, `mrheli`, `nspirit`, `nspiritj`, `loht`, `lohtj`, `lohtb2`, `lohtb3`, `imgfight`, `airduelm72`, `rtypej`, `rtypejp`, `rtypeu`, `rtypeb`, `imgfightj`, `imgfightjb`, `airdueljm72`, `xmultiplm72`, `dbreedm72`, `dbreedjm72`, `dkgensanm72`, and `gallopm72` with parser/region-contract coverage plus explicit no-dump MCU HLE declarations for `dbreedm72` / `dkgensanm72`; the ROM-set schema/player adapter now parse and retain roster-level true-M72 DIP option metadata, including conditional Irem coinage tables, unsupported MCU HLE profiles now report loader issues instead of silently booting as unprotected boards, and the player media descriptor publishes a CRC32 over resolved set metadata plus loaded resident ROM regions so capability discovery can identify parent-fallback-resolved M72 media as available; no-dump HLE profiles now cover the startup inversion surface, V30 command-latch acknowledge, and profile-bounded sample-trigger cursor; control-register coin-counter outputs now count rising edges, the CPU-visible sprite-DMA-complete bit stays asserted, flip-screen mirrors the composed frame while both round-trip through board/video state, mid-frame video save-state now preserves already-composed scanlines, the M72 board save-target manifest revision tracks the media-fingerprinted board-state schema, the player-adapter save target also captures adapter frame count, audio-drain cursor, DAC mix continuity, and frontend input snapshots, capability discovery exposes that frame-exact target as rollback-ready for the M72 player session, and visible scanlines compose at beam-line start so raster-time scroll writes affect later lines without repainting earlier lines; and `MNEMOS_M72_VERTICAL_SET` provides a data-gated real-ROM orientation/framebuffer sanity hook for vertical true-M72 sets. Remaining: complete and validate no-dump HLE protection entry behavior beyond the covered startup/latch/sample surfaces, verify any board-manual corrections for MAME-assumed DIP locations, exercise the vertical real-ROM hook with authentic artifacts, and resolve any remaining set-specific protection/sample behavior · PARTIAL · MED · M–L per game · beyond Emu · Evidence: `src/manifests/irem_m72/games/*.toml` + `src/manifests/irem_m72/m72_game_manifests.hpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` M72 board roster
+- [~] **M3** Additional M72 board variants beyond R-Type — `board_params_for` now records the known true-M72 work-RAM map families (`rtype*`, standard protected M72, `xmultiplm72`, and `dbreed*m72`) plus set-specific DIP defaults without admitting M81/M82/M84/M85/M92 boards into the M72 profile; the player resolves standard set zips, single-inner-set wrapper zips, or unpacked set directories by basename through the embedded checked-in game manifests, keeps source-local `game.toml` as a development override, resolves declarative clone `parent` zips/directories beside the clone set, reports missing/corrupt/unsafe/undeclared/mismatched parent resolutions as media validation issues, refuses fallback bytes from a parent zip whose manifest does not validate as the declared parent, and inherits parent manifest regions plus parent DIP/HLE metadata when the clone manifest omits replacements; source-local declarations for non-M72 boards now surface loader issues instead of falling through as empty M72 development sets; checked-in M72 game manifests now cover the true-M72 roster: `rtype`, `bchopper`, `mrheli`, `nspirit`, `nspiritj`, `loht`, `lohtj`, `lohtb2`, `lohtb3`, `imgfight`, `airduelm72`, `rtypej`, `rtypejp`, `rtypeu`, `rtypeb`, `imgfightj`, `imgfightjb`, `airdueljm72`, `xmultiplm72`, `dbreedm72`, `dbreedjm72`, `dkgensanm72`, and `gallopm72` with parser/region-contract coverage plus explicit no-dump MCU HLE declarations for `dbreedm72` / `dkgensanm72`; the ROM-set schema/player adapter now parse and retain roster-level true-M72 DIP option metadata, including conditional Irem coinage tables, unsupported MCU HLE profiles now report loader issues instead of silently booting as unprotected boards, unprotected boards leave the absent MCU latch port as open bus, and the player media descriptor publishes a CRC32 over resolved set metadata plus loaded resident ROM regions while carrying ROM-set validation issues so capability discovery degrades CRC-mismatched or incomplete M72 media instead of reporting it available; no-dump HLE profiles now cover the startup inversion surface, V30 command-latch acknowledge, and manifest-declared profile-bounded sample-trigger cursor; control-register coin-counter outputs now count rising edges, the CPU-visible sprite-DMA-complete bit stays asserted, flip-screen mirrors the composed frame while both round-trip through board/video state, mid-frame video save-state now preserves already-composed scanlines, the M72 board save-target manifest revision tracks the media-fingerprinted board-state schema, the player-adapter save/load overrides now expose that target to `mnemos_player`, and the target also captures adapter frame count, audio-drain cursor, DAC mix continuity, and frontend input snapshots, capability discovery exposes that frame-exact target as rollback-ready for the M72 player session, and visible scanlines compose at beam-line start so raster-time scroll writes affect later lines without repainting earlier lines; `MNEMOS_M72_VERTICAL_SET` provides a data-gated real-ROM orientation/framebuffer sanity hook for vertical true-M72 sets, `MNEMOS_M72_SET_DIR` now drives a full checked-in true-M72 roster gate from a platform path-list of roots containing `<set>.zip`, `<set>\`, or single-inner-set wrapper zips per embedded manifest and validates CRC-clean loads, clone parent fallback, board wiring, orientation, sound release, and a non-blank frame, and `scripts/irem_m72/run-corpus-smoke.ps1` drives configured R-Type, protected, vertical, and roster artifacts through `mnemos_player` save/load/screenshot smoke proof with per-set fallback frame attempts for attract/blank intervals and per-set subsets for collection ZIPs. Current local proof treats `D:\emu\irem` as a mixed Irem corpus (`m72`, `M81`, `m82`, `M84`, `M15`, `i8751`, plus root archives) and proves clean save/load/screenshot smoke for 19 true-M72 sets: `airdueljm72`, `airduelm72`, `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `imgfight`, `imgfightj`, `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspiritj`, `rtype`, `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`, and `xmultiplm72`; the smoke runner now refuses media-validation issues when deciding pass/fail, so incomplete discovered local artifacts are rejected for `gallopm72` (`cc_c-pr-.ic1` missing) and `nspirit` (`nin_c-pr-b.ic1` missing); `scripts/irem_m72/find-missing-artifacts.ps1` now records a repeatable name/CRC scan across `D:\emu\irem` plus `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z`, finding 83/94 artifacts for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2` but no matching `gallopm72` or `nspirit` MCU dumps, while `lohtj` lacks both set-specific program ROMs plus its MCU and `lohtb2` lacks four set-specific program ROMs, its 8 KiB MCU dump, and one sprite ROM. Remaining: complete and validate no-dump HLE protection entry behavior beyond the covered startup/latch/sample surfaces, verify any board-manual corrections for MAME-assumed DIP locations, exercise the full roster real-ROM hook with complete authentic artifacts, and resolve remaining set-specific protection/sample behavior · PARTIAL · MED · M–L per game · beyond Emu · Evidence: `src/manifests/irem_m72/games/*.toml` + `src/manifests/irem_m72/m72_game_manifests.hpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` + `scripts/irem_m72/run-corpus-smoke.ps1` / `progress-analysis.md` M72 board roster
+
+Artifact note: extracting the Darksoft raw `gallop`/`nspirit` folders proves
+the raw-name aliases load through `mnemos_player`; the extracted-folder scan is
+42/44 present and still missing only `gallopm72:mcu:cc_c-pr-.ic1:ac4421b1` and
+`nspirit:mcu:nin_c-pr-b.ic1:0f7b2713`. `nspirit` can reach a lit fallback
+frame with the MCU disabled, but it is still not counted as protected-board
+complete because the media remains incomplete. A bounded CRC scan of
+`D:\emu\arcade` finds the Cosmic Cop/Gallop non-MCU files but still no
+`cc_c-pr-.ic1` MCU dump, and no matching Ninja Spirit set.
+
+Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
+`-RomDir` values and treats sorted non-M72 roots such as `D:\emu\irem\M81`,
+`D:\emu\irem\m82`, and `D:\emu\irem\M84` as a clean zero-candidate result
+instead of folding them into M72 proof; `D:\emu\irem\m72 -MaxSets 2` remains a
+positive smoke path. The default fallback frame list includes 900 frames because
+`rtypeb` stays black at the 300/600-frame attract probes but reaches a lit
+post-load frame at 900.
+
+2026-06-25 artifact proof note: `MNEMOS_M72_RTYPE_SET=D:\emu\irem\R-Type_Arcade_EN.zip`,
+`MNEMOS_M72_PROTECTED_SET=D:\emu\irem\imgfight.zip`, and
+`MNEMOS_M72_VERTICAL_SET=D:\emu\irem\imgfight.zip` pass their dedicated CTest
+golden gates. The recursive mixed-corpus smoke path still rejects
+`gallopm72`/`nspirit` until their missing MCU dumps are present.
+
+Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
+`-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
+ignores archive-only container folders as unpacked sets, and currently reports
+121 items across `root`, `m72`, `M15`, `M81`, `m82`, `M84`, `M107`, and `i8751`.
+One item matches a checked-in M15 manifest contract, thirty-seven items match
+checked-in playable M72 manifests, five items match checked-in M81 manifest
+contracts, five items match checked-in M82 R-Type II manifests, two items match
+checked-in M84 manifest contracts, and eight items match checked-in M107
+manifest contracts. The inventory now separates manifest tracking from player
+loadability: 58 items match a checked-in Irem manifest, 52 are loadable through
+current ZIP / single-inner-ZIP / folder routes, and six `.7z` matches remain
+metadata-only until they are converted to ZIP or unpacked folders. No sorted
+top-level board bucket is completely untracked anymore; `board_family_candidates`
+now only keeps 19 untracked / misbucketed `M72`-folder items visible instead of
+silently treating them as true-M72 proof.
+M15 now has a ROM-contract-only manifest layer for `headoni`;
+`MNEMOS_M15_SET_DIR=D:\emu\irem\M15` proves the sorted local wrapper ZIP loads
+CRC-clean through the embedded manifest, including the directory-prefixed entry
+aliases used by the local nested ZIP. M84 now has a ROM-contract-only manifest
+layer for `hharryb` and `hharryu`;
+`MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81` proves the sorted split
+wrapper ZIPs load CRC-clean when composed with the M81 `hharry` parent, while
+keeping the M84-specific program/PAL regions separate from the inherited parent
+graphics, sound, samples, and PROMs.
+M81 now has a first-pass executable board/profile layer for `dbreed`, `hharry`,
+and `xmultipl`: the embedded manifests preserve the three M81 ROM layouts,
+`MNEMOS_M81_SET_DIR=D:\emu\irem\M81` proves those sorted wrapper ZIPs load
+CRC-clean, and hermetic tests run a V30/Z80/YM2151/DAC/8259 frame plus reject
+save states restored under the wrong board-layout profile. M81 is now also
+player-routable through `--system irem_m81`, with resident media validation,
+rollback-ready save-state, capability discovery, and real local wrapper-ZIP
+player smoke for all three checked-in sets. The inventory also identifies
+duplicate / misbucketed `dbreed` copies outside `M81`; M81 still lacks final
+authentic video/raster priority, DIP, and board-timing parity. M107 now has a
+ROM-contract-only manifest layer for `airass` and `firebarr`;
+`MNEMOS_M107_SET_DIR=D:\emu\irem\M107` proves the sorted ZIPs load CRC-clean,
+while root and `m72`-folder duplicates are also visible as M107 artifacts; the
+two Fire Barrel `.7z` copies remain metadata-only until converted or unpacked.
+M82 is player-routable
+through its own first-pass board profile, including scanline-composed video for
+mid-frame palette writes and M72-style tile priority groups around sprites, but
+not yet exact raster-phase or visual-priority authentic. The data-gated M82
+artifact/player tests use `MNEMOS_M82_SET_DIR=D:\emu\irem` to unwrap the local
+R-Type II collection ZIPs and load `rtype2`, `rtype2j`, `rtype2jc`, and
+`rtype2m82b` CRC-clean through the embedded manifests and clone-parent fallback.
+M15, M84, and M107 still lack their executable board/profile layers.
+
+Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible.
 
 #### Mapper / ROM
 - [x] **M2** Z80 sound-program ROM path / `$8000` banked variants · DONE · MED · S · beyond Emu · ROM-backed sound maps activate when a set supplies a `soundcpu` region; public 64 KiB sound ROM declarations are accepted, with only `$0000-$EFFF` mapped as ROM and `$F000-$FFFF` shadowed by Z80 RAM, and the development zip `soundcpu.bin` path is covered. The suspected `$8000` bank-register variants are not part of the true-M72 board profile and must be routed to later M81/M84/M92 profiles or ADRs instead of folded into M72. · Evidence: `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` R9
@@ -255,6 +329,67 @@ hardware completeness, not Emu-parity gaps.
 > tilemaps / sprites / palette with raster-time scroll changes), YM2151, DAC/PCM sample playback with sound-clocked
 > write-boundary mixing, 8259 PIC, raster compare,
 > shared sound RAM, inputs/DIPs.
+
+---
+
+## Irem M15 — 1 / 2
+
+This section is split from M72 so the early Head On hardware stays classified as
+an i8080-era M15 profile instead of being folded into later V30 boards.
+
+#### Manifests / board bring-up
+- [x] **I15-1** Local M15 ROM-set contract — `src/manifests/irem_m15` carries a checked-in embedded ROM-contract manifest for `headoni`, with parser/region-contract coverage for the six 1 KiB program ROMs in the local nested wrapper ZIP and aliases for its `headoni/` entry prefix. `MNEMOS_M15_SET_DIR=D:\emu\irem\M15` data-gates the sorted local artifact and proves it loads CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` now records the M15 bucket as tracked/loadable instead of an unsupported board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m15/games/headoni.toml` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [ ] **I15-2** Executable M15 board profile — still needed: i8080 CPU wiring, discrete video/input/sound timing, screen geometry proof, save-state, player adapter, and real screenshot/player smoke for `headoni` · OPEN · HIGH · M-L · beyond Emu
+
+---
+
+## Irem M81 — 1 / 2
+
+This section is split from M72 so Dragon Breed, Hammerin' Harry, and X Multiply
+sets do not inherit true-M72 board wiring when they are local M81 artifacts.
+
+#### Manifests / board bring-up
+- [x] **I81-1** Local M81 ROM-set contract — `src/manifests/irem_m81` carries checked-in embedded ROM-contract manifests for `dbreed`, `hharry`, and `xmultipl`, with parser/region-contract coverage for the 1 MiB V30 program region, boot-chunk reload declarations, sound CPU ROM, samples, graphics regions, and PROM metadata. `MNEMOS_M81_SET_DIR=D:\emu\irem\M81` data-gates the sorted local wrapper ZIPs and proves all three sets load CRC-clean from single-inner ZIP artifacts; `scripts/irem/inventory-corpus.ps1` now records five total M81 manifest matches when duplicate / misbucketed corpus copies are included · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m81/games/*.toml` + `src/manifests/irem_m81/tests/m81_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [~] **I81-2** Executable M81 board profile — `src/manifests/irem_m81/m81_system.cpp` now assembles an explicit M81 V30/Z80/YM2151/DAC/8259 board with a 1 MiB V30 program map, sound ROM + Z80 work RAM, inputs/DIPs, frame stepping, sound-clocked YM/DAC drain support, whole-board save/load, scanline-composed video, per-layout media identity, and save-state rejection across mismatched M81 board-layout profiles. `src/apps/player/adapters/irem_m81` registers `--system irem_m81`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, resident media CRC/validation reporting, rollback-ready save-state, capability discovery, and real local player smoke for `dbreed`, `hharry`, and `xmultipl`. `MNEMOS_M81_SET_DIR=D:\emu\irem\M81` proves all three embedded M81 sets through the adapter. Remaining: replace/verify first-pass video priority, raster phase/timing, DIP behavior, and visual parity against board/manual evidence before calling the profile authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m81/m81_system.cpp` + `src/manifests/irem_m81/tests/m81_system_test.cpp` + `src/apps/player/adapters/irem_m81/irem_m81_adapter.cpp` + `src/apps/player/adapters/irem_m81/tests/irem_m81_adapter_test.cpp`
+
+---
+
+## Irem M82 — 1 / 2
+
+This section is split from M72 so R-Type II does not inherit true-M72
+assumptions. M82 now has its own executable profile, and the video path has a
+RAM-backed first-pass tile/sprite/palette renderer composed per visible
+scanline plus scanline-paced vblank / raster-compare IRQ delivery, with
+tile priority groups partitioned into below-sprite and above-sprite passes and
+a diagnostic fallback for uninitialized development launches pending
+board-accurate DIP / raster-phase proof.
+
+#### Manifests / board bring-up
+- [x] **I82-1** R-Type II ROM-set contract — `src/manifests/irem_m82` carries checked-in embedded manifests for `rtype2`, `rtype2j`, `rtype2jc`, and the local nested `rtype2m82b` artifact, with parser/region-contract coverage for clone-parent inheritance, the 1 MiB main-program reset-vector reload, sound CPU ROM, voice/sample ROM, graphics regions, and PROM metadata. `MNEMOS_M82_SET_DIR=D:\emu\irem` data-gates real local artifacts and proves all four embedded R-Type II sets load CRC-clean from standard wrapper ZIPs through parent fallback, including reset-vector reload equality and non-fill resident regions · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m82/games/*.toml` + `src/manifests/irem_m82/m82_game_manifests.hpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp`
+- [~] **I82-2** Executable M82 board profile — `src/manifests/irem_m82/m82_system.cpp` now assembles an explicit M82 V30/Z80/YM2151/DAC/8259 board with a 1 MiB V30 program map, sound ROM + Z80 work RAM, inputs/DIPs, frame stepping, audio drain timing, whole-board save/load, scanline-sliced V30 execution with one-line IR0 vblank and IR2 raster-compare pulses, and an M82-local video path that uses VRAM-backed 8x8 planar tilemaps, rowscroll RAM, 5-bit palette RAM, sprite-DMA-latched 16x16 planar cells, flip-screen state, scanline composition before the CPU tick for that beam line, M72-style tile priority groups split into below-sprite and above-sprite passes, and save/load of the latched sprite buffer, while retaining a diagnostic fallback only when no hardware render state is initialized; focused board/video tests now prove a raster-compare V30 handler changing palette RAM affects later scanlines without repainting earlier scanlines, group-0 front pens stay below sprites, and group-2 front pens cover sprites. `src/apps/player/adapters/irem_m82` registers `--system irem_m82`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, clone parent fallback, supplemental parent media, resident media CRC/validation reporting, rollback-ready save-state, capability discovery, and real R-Type II player smoke. `MNEMOS_M82_SET_DIR=D:\emu\irem` proves all four embedded R-Type II sets through the adapter; direct parent and clone+parent `mnemos_player --system irem_m82` smokes both produce 384x256 nonblank frames. Remaining: verify/replace first-pass M82 palette banking, exact raster phase/timing, board-manual DIP behavior, and real visual-priority parity before calling R-Type II visually authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m82/m82_system.cpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp` + `src/apps/player/adapters/irem_m82/irem_m82_adapter.cpp` + `src/apps/player/adapters/irem_m82/tests/irem_m82_adapter_test.cpp`
+
+---
+
+## Irem M84 — 1 / 2
+
+This section is split from M81 because the local Hammerin' Harry M84 artifacts
+are split clone sets with M84-specific program/PAL dumps but inherited parent
+graphics, sound, sample, and PROM assets.
+
+#### Manifests / board bring-up
+- [x] **I84-1** Local M84 ROM-set contract — `src/manifests/irem_m84` carries checked-in embedded ROM-contract manifests for `hharryb` and `hharryu`, with parser/region-contract coverage for the 1 MiB V30 program reload layout, M84-specific PAL/PLD regions, and clone-parent inheritance from the M81 `hharry` parent. `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81` data-gates the sorted local split wrapper ZIPs and proves both clone sets load CRC-clean when composed with the checked-in M81 parent manifest/provider; `scripts/irem/inventory-corpus.ps1` now records two total M84 manifest matches and no unsupported top-level board buckets · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m84/games/*.toml` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [ ] **I84-2** Executable M84 board profile — still needed: V30/Z80/YM2151/DAC board assembly, M84 memory/I/O map, Hammerin' Harry video/priority behavior, clone-parent player media routing, inputs/DIPs, save-state, and real screenshot/player smoke · OPEN · HIGH · M-L · beyond Emu
+
+---
+
+## Irem M107 — 1 / 2
+
+This section is split from M72/M81/M82 so Air Assault / Fire Barrel artifacts
+do not get counted as older Irem board proof.
+
+#### Manifests / board bring-up
+- [x] **I107-1** Local M107 ROM-set contract — `src/manifests/irem_m107` carries checked-in embedded ROM-contract manifests for `airass` and `firebarr`, with parser/region-contract coverage for the 1 MiB main program region, boot-chunk reload declarations, interleaved sound program ROMs, graphics ROM groups, Air Assault data/sample regions, and current local ZIP CRCs. `MNEMOS_M107_SET_DIR=D:\emu\irem\M107` data-gates the sorted local ZIPs and proves both sets load CRC-clean; `scripts/irem/inventory-corpus.ps1` now records eight total M107 manifest matches when duplicate root and misbucketed `m72` copies plus metadata-only `.7z` copies are included · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m107/games/*.toml` + `src/manifests/irem_m107/tests/m107_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [ ] **I107-2** Executable M107 board profile — still needed: CPU configuration, sound CPU / PCM path, memory and I/O map, video/priority path, inputs/DIPs, save-state, player adapter, and real screenshot/player smoke. This must stay separate from M72/M81/M82 until board-level wiring is proven · OPEN · HIGH · L · beyond Emu
 
 ---
 

@@ -1,0 +1,150 @@
+# Fire Barrel -- Irem M107 set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M107 board profile remains separate from older Irem board families.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "firebarr"
+board       = "irem_m107"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "f4-a-h0-c.h0"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0x2aa5676e
+
+[[region.file]]
+name   = "f4-a-l0-c.l0"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x42f75d59
+
+[[region.file]]
+name   = "f4-a-h1-c.h1"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0xbb7f6968
+
+[[region.file]]
+name   = "f4-a-l1-c.l1"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x9d57edd6
+
+# Boot-chunk reload of the final program pair at the top of the 1 MiB CPU space.
+[[region.file]]
+name   = "f4-a-h1-c.h1"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xbb7f6968
+
+[[region.file]]
+name   = "f4-a-l1-c.l1"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9d57edd6
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "f4-b-sh0-b.sh0"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x30a8e232
+
+[[region.file]]
+name   = "f4-b-sl0-b.sl0"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x204b5f1f
+
+[[region]]
+name = "gfx"
+size = 0x600000
+
+[[region.file]]
+name   = "f4-000.000"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x920deee9
+
+[[region.file]]
+name   = "f4-001.001"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xe5725eaf
+
+[[region.file]]
+name   = "f4-010.010"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x3505d185
+
+[[region.file]]
+name   = "f4-011.011"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0x1912682f
+
+[[region.file]]
+name   = "f4-020.020"
+offset = 0x200000
+size   = 0x80000
+crc32  = 0xec130b8e
+
+[[region.file]]
+name   = "f4-021.021"
+offset = 0x280000
+size   = 0x80000
+crc32  = 0x8dd384dc
+
+[[region.file]]
+name   = "f4-030.030"
+offset = 0x300000
+size   = 0x80000
+crc32  = 0x7e7b30cd
+
+[[region.file]]
+name   = "f4-031.031"
+offset = 0x380000
+size   = 0x80000
+crc32  = 0x83ac56c5
+
+[[region.file]]
+name   = "f4-c00.c00"
+offset = 0x400000
+size   = 0x80000
+crc32  = 0x50cab384
+
+[[region.file]]
+name   = "f4-c01.c01"
+offset = 0x480000
+size   = 0x80000
+crc32  = 0x12a698c8
+
+[[region.file]]
+name   = "f4-c10.c10"
+offset = 0x500000
+size   = 0x80000
+crc32  = 0x330c6df2
+
+[[region.file]]
+name   = "f4-c11.c11"
+offset = 0x580000
+size   = 0x80000
+crc32  = 0x3f9add18

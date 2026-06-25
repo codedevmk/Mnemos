@@ -5,6 +5,7 @@
 [set]
 schema      = "mnemos-romset/1"
 name        = "dbreedjm72"
+parent      = "dbreedm72"
 board       = "irem_m72"
 orientation = "horizontal"
 
@@ -311,97 +312,3 @@ name   = "db_c-pr-.ic1"
 offset = 0x0000
 size   = 0x1000
 crc32  = 0x8bf2910c
-
-[[region]]
-name = "sprites"
-size = 0x080000
-
-[[region.file]]
-name   = "db_k800m.00.ic53"
-offset = 0x00000
-size   = 0x20000
-crc32  = 0xc027a8cf
-
-[[region.file]]
-name   = "db_k801m.10.ic51"
-offset = 0x20000
-size   = 0x20000
-crc32  = 0x093faf33
-
-[[region.file]]
-name   = "db_k802m.20.ic49"
-offset = 0x40000
-size   = 0x20000
-crc32  = 0x055b4c59
-
-[[region.file]]
-name   = "db_k803m.30.ic47"
-offset = 0x60000
-size   = 0x20000
-crc32  = 0x8ed63922
-
-[[region]]
-name = "tiles_a"
-size = 0x080000
-
-[[region.file]]
-name   = "db_k804m.a0.ic21"
-offset = 0x00000
-size   = 0x20000
-crc32  = 0x4c83e92e
-
-[[region.file]]
-name   = "db_k805m.a1.ic22"
-offset = 0x20000
-size   = 0x20000
-crc32  = 0x835ef268
-
-[[region.file]]
-name   = "db_k806m.a2.ic20"
-offset = 0x40000
-size   = 0x20000
-crc32  = 0x5117f114
-
-[[region.file]]
-name   = "db_k807m.a3.ic23"
-offset = 0x60000
-size   = 0x20000
-crc32  = 0x8eb0c978
-
-[[region]]
-name = "tiles_b"
-size = 0x080000
-
-[[region.file]]
-name   = "db_k804m.b0.ic26"
-offset = 0x00000
-size   = 0x20000
-crc32  = 0x4c83e92e
-
-[[region.file]]
-name   = "db_k805m.b1.ic27"
-offset = 0x20000
-size   = 0x20000
-crc32  = 0x835ef268
-
-[[region.file]]
-name   = "db_k806m.b2.ic25"
-offset = 0x40000
-size   = 0x20000
-crc32  = 0x5117f114
-
-[[region.file]]
-name   = "db_k807m.b3.ic24"
-offset = 0x60000
-size   = 0x20000
-crc32  = 0x8eb0c978
-
-[[region]]
-name = "samples"
-size = 0x20000
-
-[[region.file]]
-name   = "db_c-v0.ic44"
-offset = 0x00000
-size   = 0x20000
-crc32  = 0x312f7282

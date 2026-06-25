@@ -12,6 +12,15 @@
 #   MNEMOS_M6510_TESTS_DIR    per-instruction 6502 test JSON dir      -> m6510_conformance_test
 #   MNEMOS_M68000_TESTS_DIR   per-instruction 68000 test JSON dir     -> m68000_conformance_test
 #   MNEMOS_SMS_BIOS           an SMS BIOS/cart image (A/B comparator) -> sms_manifest_parity_test
+#   MNEMOS_M72_RTYPE_SET      an R-Type-family M72 zip or directory -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_PROTECTED_SET  a protected true-M72 zip or directory -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_VERTICAL_SET   a vertical true-M72 zip or directory  -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_SET_DIR        path-list of dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
+#   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest corpus
+#   MNEMOS_M81_SET_DIR        path-list of dirs with M81 zips/dirs/wrappers -> irem_m81 manifest/player smoke
+#   MNEMOS_M82_SET_DIR        path-list of dirs with M82 R-Type II zips/dirs/wrappers -> irem_m82 smoke
+#   MNEMOS_M84_SET_DIR        path-list of dirs with M84 zips/dirs/wrappers plus M81 parent -> irem_m84 manifest corpus
+#   MNEMOS_M107_SET_DIR       path-list of dirs with M107 zips/dirs/wrappers -> irem_m107 manifest corpus
 #   MNEMOS_CPS2_ROM           one CPS2 ROM/key zip                   -> cps2 corpus smoke
 #   MNEMOS_CPS2_SET_DIR       dir with CPS2 ROM/key zips             -> cps2 corpus smoke
 #
@@ -48,6 +57,15 @@ $vars = @(
     @{ Name = "MNEMOS_SMS_BIOS";         Test = "sms_manifest_parity_test" },
     @{ Name = "MNEMOS_32X_BIOS_DIR";     Test = "sega32x_adapter_test (boot golden)" },
     @{ Name = "MNEMOS_32X_ROM";          Test = "sega32x_adapter_test (boot golden)" },
+    @{ Name = "MNEMOS_M72_RTYPE_SET";    Test = "irem_m72 golden/corpus smoke" },
+    @{ Name = "MNEMOS_M72_PROTECTED_SET"; Test = "irem_m72 golden/corpus smoke" },
+    @{ Name = "MNEMOS_M72_VERTICAL_SET"; Test = "irem_m72 golden/corpus smoke" },
+    @{ Name = "MNEMOS_M72_SET_DIR";      Test = "irem_m72 roster/corpus smoke" },
+    @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest corpus" },
+    @{ Name = "MNEMOS_M81_SET_DIR";      Test = "irem_m81 manifest/player smoke" },
+    @{ Name = "MNEMOS_M82_SET_DIR";      Test = "irem_m82 R-Type II smoke" },
+    @{ Name = "MNEMOS_M84_SET_DIR";      Test = "irem_m84 manifest corpus" },
+    @{ Name = "MNEMOS_M107_SET_DIR";     Test = "irem_m107 manifest corpus" },
     @{ Name = "MNEMOS_CPS2_ROM";         Test = "cps2 corpus smoke" },
     @{ Name = "MNEMOS_CPS2_SET_DIR";     Test = "cps2 corpus smoke" }
 )
@@ -67,10 +85,20 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(15|81|82|84|107)_test|irem_m72_.*golden|irem_m81_.*golden|irem_m82_.*golden"
 $ctestExit = $LASTEXITCODE
 if ($ctestExit -ne 0) {
     exit $ctestExit
+}
+
+$m72Runner = Join-Path $PSScriptRoot "irem_m72/run-corpus-smoke.ps1"
+if (Test-Path $m72Runner) {
+    Write-Host "`nRunning Irem M72 corpus smoke ..." -ForegroundColor Cyan
+    & $m72Runner -BuildDir $BuildDir
+    $m72Exit = $LASTEXITCODE
+    if ($m72Exit -ne 0) {
+        exit $m72Exit
+    }
 }
 
 $cps2Runner = Join-Path $PSScriptRoot "cps2/run-corpus-smoke.ps1"

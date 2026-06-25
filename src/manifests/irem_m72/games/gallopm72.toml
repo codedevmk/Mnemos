@@ -252,6 +252,7 @@ size = 0x100000
 
 [[region.file]]
 name   = "cc_c-h0-.ic40"
+aliases = ["cc-c-h0.bin"]
 offset = 0x00001
 stride = 2
 size   = 0x20000
@@ -259,6 +260,7 @@ crc32  = 0x2217dcd0
 
 [[region.file]]
 name   = "cc_c-l0-.ic37"
+aliases = ["cc-c-l0.bin"]
 offset = 0x00000
 stride = 2
 size   = 0x20000
@@ -266,6 +268,7 @@ crc32  = 0xff39d7fb
 
 [[region.file]]
 name   = "cc_c-h3-.ic43"
+aliases = ["cc-c-h3.bin"]
 offset = 0x40001
 stride = 2
 size   = 0x20000
@@ -273,6 +276,7 @@ crc32  = 0x9b2bbab9
 
 [[region.file]]
 name   = "cc_c-h3-.ic43"
+aliases = ["cc-c-h3.bin"]
 offset = 0xC0001
 stride = 2
 size   = 0x20000
@@ -280,6 +284,7 @@ crc32  = 0x9b2bbab9
 
 [[region.file]]
 name   = "cc_c-l3-.ic34"
+aliases = ["cc-c-l3.bin"]
 offset = 0x40000
 stride = 2
 size   = 0x20000
@@ -287,6 +292,7 @@ crc32  = 0xacd3278e
 
 [[region.file]]
 name   = "cc_c-l3-.ic34"
+aliases = ["cc-c-l3.bin"]
 offset = 0xC0000
 stride = 2
 size   = 0x20000
@@ -308,24 +314,28 @@ size = 0x080000
 
 [[region.file]]
 name   = "cc_c-00.ic53"
+aliases = ["cc-c-00.bin"]
 offset = 0x00000
 size   = 0x20000
 crc32  = 0x9d99deaa
 
 [[region.file]]
 name   = "cc_c-10.ic51"
+aliases = ["cc-c-10.bin"]
 offset = 0x20000
 size   = 0x20000
 crc32  = 0x7eb083ed
 
 [[region.file]]
 name   = "cc_c-20.ic49"
+aliases = ["cc-c-20.bin"]
 offset = 0x40000
 size   = 0x20000
 crc32  = 0x9421489e
 
 [[region.file]]
 name   = "cc_c-30.ic47"
+aliases = ["cc-c-30.bin"]
 offset = 0x60000
 size   = 0x20000
 crc32  = 0x920ec735
@@ -336,24 +346,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "cc_b-a0.ic21"
+aliases = ["cc-b-a0.bin"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0xa33472bd
 
 [[region.file]]
 name   = "cc_b-a1.ic22"
+aliases = ["cc-b-a1.bin"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x118b1f2d
 
 [[region.file]]
 name   = "cc_b-a2.ic20"
+aliases = ["cc-b-a2.bin"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x83cebf48
 
 [[region.file]]
 name   = "cc_b-a3.ic23"
+aliases = ["cc-b-a3.bin"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x572903fc
@@ -364,24 +378,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "cc_b-b0.ic26"
+aliases = ["cc-b-b0.bin"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x0df5b439
 
 [[region.file]]
 name   = "cc_b-b1.ic27"
+aliases = ["cc-b-b1.bin"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x010b778f
 
 [[region.file]]
 name   = "cc_b-b2.ic25"
+aliases = ["cc-b-b2.bin"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0xbda9f6fb
 
 [[region.file]]
 name   = "cc_b-b3.ic24"
+aliases = ["cc-b-b3.bin"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0xd361ba3f
@@ -392,6 +410,7 @@ size = 0x20000
 
 [[region.file]]
 name   = "cc_c-v0.ic44"
+aliases = ["cc-c-v0.bin"]
 offset = 0x00000
 size   = 0x20000
 crc32  = 0x6247bade

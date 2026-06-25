@@ -113,6 +113,11 @@ namespace mnemos::frontend_sdk {
         std::string hash{};
     };
 
+    struct media_validation_issue final {
+        std::string code{};
+        std::string detail{};
+    };
+
     struct media_image_info final {
         std::string id{};
         std::string label{};
@@ -127,6 +132,7 @@ namespace mnemos::frontend_sdk {
         std::string revision{};
         bool revision_supported{true};
         std::string cache_hint{};
+        std::vector<media_validation_issue> validation_issues{};
     };
 
     struct media_capability_info final {
