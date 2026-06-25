@@ -477,7 +477,8 @@ function Get-CsvValue {
 function Compare-FrameHashRows {
     param(
         [Parameter(Mandatory = $true)][object[]]$CurrentRows,
-        [Parameter(Mandatory = $true)][string]$ExpectedCsvPath
+        [Parameter(Mandatory = $true)][string]$ExpectedCsvPath,
+        [Parameter(Mandatory = $true)][bool]$RequireAllExpectedRows
     )
 
     $expectedRows = @(Import-Csv -LiteralPath $ExpectedCsvPath)
@@ -603,14 +604,16 @@ function Compare-FrameHashRows {
         }
     }
 
-    foreach ($zip in $expectedByZip.Keys) {
-        if (-not $seenZips.Contains($zip)) {
-            $mismatches += [pscustomobject]@{
-                zip = $zip
-                game = Get-CsvValue -Row $expectedByZip[$zip] -Name "game"
-                field = "<row>"
-                expected = "<present in current corpus>"
-                actual = "<missing>"
+    if ($RequireAllExpectedRows) {
+        foreach ($zip in $expectedByZip.Keys) {
+            if (-not $seenZips.Contains($zip)) {
+                $mismatches += [pscustomobject]@{
+                    zip = $zip
+                    game = Get-CsvValue -Row $expectedByZip[$zip] -Name "game"
+                    field = "<row>"
+                    expected = "<present in current corpus>"
+                    actual = "<missing>"
+                }
             }
         }
     }
@@ -864,6 +867,14 @@ if (-not [string]::IsNullOrWhiteSpace($StartAfter)) {
 if ($MaxSets -gt 0) {
     $uniqueRoms = @($uniqueRoms | Select-Object -First $MaxSets)
 }
+
+$requireAllExpectedRows = (
+    [string]::IsNullOrWhiteSpace($Rom) -and
+    $onlySetTokens.Count -eq 0 -and
+    $skipSetTokens.Count -eq 0 -and
+    [string]::IsNullOrWhiteSpace($StartAfter) -and
+    $MaxSets -le 0
+)
 
 if ($uniqueRoms.Count -eq 0) {
     if ($skippedZips.Count -gt 0 -and -not $IncludeAllZips) {
@@ -1205,7 +1216,9 @@ Write-Cps2CorpusArtifacts -Results $results -FrameRows $frameRows -SummaryPath $
 
 $hashMismatches = @()
 if (-not [string]::IsNullOrWhiteSpace($expectedFrameHashPath)) {
-    $hashMismatches = @(Compare-FrameHashRows -CurrentRows @($frameRows) -ExpectedCsvPath $expectedFrameHashPath)
+    $hashMismatches = @(Compare-FrameHashRows -CurrentRows @($frameRows) `
+            -ExpectedCsvPath $expectedFrameHashPath `
+            -RequireAllExpectedRows $requireAllExpectedRows)
     if ($hashMismatches.Count -gt 0) {
         $frameHashMismatchPath = Join-Path $outDir "frame_hash_mismatches.csv"
         $hashMismatches | Export-Csv -Path $frameHashMismatchPath -NoTypeInformation -Encoding utf8

@@ -78,6 +78,10 @@ Point `MNEMOS_CPS2_SET_DIR` at a directory of CPS2 zip/key sets, build
 When `MNEMOS_CPS2_SET_DIR` is set, the runner automatically compares against the
 committed baseline. Set `MNEMOS_CPS2_FRAME_HASH_BASELINE` to another CSV when
 testing an intentional rendering change or a local candidate baseline.
+Focused runs using `-Rom`, `-OnlySets`, `-SkipSets`, `-StartAfter`, or `-MaxSets`
+compare only the selected rows and do not fail just because other baseline rows
+were not part of that focused proof. Unfiltered `MNEMOS_CPS2_SET_DIR` sweeps
+still require every committed baseline row to be present.
 
 Some CPS2 games do not program audible QSound output inside the default
 600-frame screenshot/state window. Use a longer audio-only proof window and the
