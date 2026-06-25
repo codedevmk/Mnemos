@@ -259,6 +259,13 @@ TEST_CASE("cps2 checked-in game TOMLs parse and declare QSound HLE",
                 return hle.chip == "capcom.qsound" && !hle.rationale.empty();
             });
         CHECK(has_qsound_hle);
+
+        const auto audio_region =
+            std::find_if(result.value->regions.begin(), result.value->regions.end(),
+                         [](const auto& region) { return region.name == "audiocpu"; });
+        if (audio_region != result.value->regions.end()) {
+            CHECK(audio_region->fill == 0x00U);
+        }
     }
 }
 
