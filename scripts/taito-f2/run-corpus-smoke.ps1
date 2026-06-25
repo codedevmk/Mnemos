@@ -4631,6 +4631,9 @@ $audioProbeEnv = [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_F2_AUDIO_PR
 if (-not $AudioProbe -and -not [string]::IsNullOrWhiteSpace($audioProbeEnv)) {
     $AudioProbe = $audioProbeEnv -match '^(1|true|yes|on)$'
 }
+if (-not $AudioProbe -and $RequireFeatureEvidence) {
+    $AudioProbe = $true
+}
 $audioFramesEnv = [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_F2_AUDIO_FRAMES")
 if (-not [string]::IsNullOrWhiteSpace($audioFramesEnv)) {
     $AudioFrames = [int]$audioFramesEnv
