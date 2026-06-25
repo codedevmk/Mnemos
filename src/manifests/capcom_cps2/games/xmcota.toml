@@ -92,6 +92,7 @@ crc32         = 0xcb36b0a4
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "xmn.01a"

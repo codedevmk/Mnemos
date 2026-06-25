@@ -29,13 +29,25 @@ namespace mnemos::chips::audio {
         static constexpr std::int16_t adpcm_max_step_size = 2000;
         static constexpr std::uint16_t echo_delay_base = 0x0554U;
         static constexpr std::size_t echo_delay_capacity = 1024U;
+        static constexpr std::size_t register_trace_capacity = 128U;
+        static constexpr std::size_t adpcm_register_fields = 10U;
+        static constexpr std::size_t register_trace_fields = 4U;
+        static constexpr std::size_t register_histogram_fields = 3U;
+        static constexpr std::size_t register_view_count =
+            15U + adpcm_voice_count * adpcm_register_fields +
+            256U * register_histogram_fields +
+            register_trace_capacity * register_trace_fields;
         // 60 MHz / 2 / 1248 -- the DSP's native stereo output rate.
         static constexpr std::uint32_t native_sample_rate = 24038U;
 
-        qsound() {
-            introspection_.with_registers([this] { return register_snapshot(); });
-            reset(reset_kind::power_on);
-        }
+        struct register_trace_entry final {
+            std::uint32_t sequence{};
+            std::uint8_t reg{};
+            std::uint16_t data{};
+            std::uint16_t pc{};
+        };
+
+        qsound();
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -53,6 +65,8 @@ namespace mnemos::chips::audio {
         // low byte, == 2 commits (register = value, data = the latched word) and
         // re-arms the ready flag.
         void write_port(std::uint8_t offset, std::uint8_t value) noexcept;
+        void write_port_with_pc(std::uint8_t offset, std::uint8_t value,
+                                std::uint16_t writer_pc) noexcept;
         [[nodiscard]] std::uint8_t read_status() const noexcept { return ready_; }
 
         // Advance every active voice one step and recompute the stereo mix (stored
@@ -63,6 +77,36 @@ namespace mnemos::chips::audio {
 
         // Fill interleaved (L,R) pairs (size must be even), stepping once per pair.
         void generate(std::span<std::int16_t> buf_lr) noexcept;
+
+        [[nodiscard]] std::uint32_t port_write_count() const noexcept {
+            return port_write_count_;
+        }
+        [[nodiscard]] std::uint32_t register_write_count() const noexcept {
+            return register_write_count_;
+        }
+        [[nodiscard]] std::uint32_t nonzero_pcm_volume_write_count() const noexcept {
+            return nonzero_pcm_volume_write_count_;
+        }
+        [[nodiscard]] std::uint32_t nonzero_adpcm_volume_write_count() const noexcept {
+            return nonzero_adpcm_volume_write_count_;
+        }
+        [[nodiscard]] std::uint32_t adpcm_trigger_count() const noexcept {
+            return adpcm_trigger_count_;
+        }
+        [[nodiscard]] std::uint8_t last_register() const noexcept { return last_register_; }
+        [[nodiscard]] std::uint16_t last_register_data() const noexcept {
+            return last_register_data_;
+        }
+        [[nodiscard]] std::uint16_t last_register_pc() const noexcept { return last_register_pc_; }
+        [[nodiscard]] std::uint32_t register_write_histogram(std::uint8_t reg) const noexcept {
+            return register_write_histogram_[reg];
+        }
+        [[nodiscard]] std::uint32_t register_trace_count() const noexcept {
+            return register_trace_count_;
+        }
+        [[nodiscard]] register_trace_entry register_trace(std::uint32_t sequence) const noexcept {
+            return register_trace_[sequence % register_trace_.size()];
+        }
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -94,7 +138,9 @@ namespace mnemos::chips::audio {
             std::int16_t last_sample{};
         };
 
-        void write_register(std::uint8_t reg, std::uint16_t data) noexcept;
+        void write_register(std::uint8_t reg, std::uint16_t data,
+                            std::uint16_t writer_pc) noexcept;
+        void initialize_trace_register_names() noexcept;
         [[nodiscard]] std::uint8_t read_sample_u8(std::uint32_t rom_addr) const noexcept;
         [[nodiscard]] std::int16_t read_sample(std::uint16_t bank,
                                                std::uint16_t addr) const noexcept;
@@ -112,6 +158,32 @@ namespace mnemos::chips::audio {
 
         std::uint16_t data_latch_{};
         std::uint8_t ready_{ready_flag};
+        std::uint32_t port_write_count_{};
+        std::uint32_t register_write_count_{};
+        std::array<std::uint32_t, 256> register_write_histogram_{};
+        std::array<std::uint16_t, 256> register_last_data_{};
+        std::array<std::uint16_t, 256> register_last_pc_{};
+        std::uint32_t nonzero_pcm_volume_write_count_{};
+        std::uint8_t last_nonzero_pcm_volume_reg_{};
+        std::uint16_t last_nonzero_pcm_volume_data_{};
+        std::uint16_t last_nonzero_pcm_volume_pc_{};
+        std::uint32_t nonzero_adpcm_volume_write_count_{};
+        std::uint8_t last_nonzero_adpcm_volume_voice_{};
+        std::uint16_t last_nonzero_adpcm_volume_data_{};
+        std::uint16_t last_nonzero_adpcm_volume_pc_{};
+        std::uint32_t adpcm_trigger_count_{};
+        std::uint8_t last_adpcm_trigger_voice_{};
+        std::uint16_t last_adpcm_trigger_flag_{};
+        std::uint16_t last_adpcm_trigger_pc_{};
+        std::uint8_t last_register_{};
+        std::uint16_t last_register_data_{};
+        std::uint16_t last_register_pc_{};
+        std::uint32_t register_trace_count_{};
+        std::array<register_trace_entry, register_trace_capacity> register_trace_{};
+        std::array<std::array<char, 16>, 256U * register_histogram_fields>
+            histogram_register_names_{};
+        std::array<std::array<char, 16>, register_trace_capacity * register_trace_fields>
+            trace_register_names_{};
         std::uint32_t adpcm_phase_{};
         std::array<std::int16_t, echo_delay_capacity> echo_delay_{};
         std::uint16_t echo_end_pos_{};
@@ -121,7 +193,7 @@ namespace mnemos::chips::audio {
         std::int16_t last_l_{};
         std::int16_t last_r_{};
 
-        std::array<register_descriptor, 6> register_view_{};
+        std::array<register_descriptor, register_view_count> register_view_{};
         instrumentation::introspection_builder introspection_;
     };
 

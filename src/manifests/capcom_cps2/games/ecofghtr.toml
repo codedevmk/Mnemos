@@ -58,6 +58,7 @@ crc32         = 0x9d9771cf
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "uec.01"

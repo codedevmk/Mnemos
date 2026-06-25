@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -22,6 +23,12 @@ namespace {
         q.write_port(0, static_cast<std::uint8_t>(data >> 8U));
         q.write_port(1, static_cast<std::uint8_t>(data & 0xFFU));
         q.write_port(2, reg);
+    }
+
+    void program_at(qsound& q, std::uint8_t reg, std::uint16_t data, std::uint16_t pc) {
+        q.write_port_with_pc(0, static_cast<std::uint8_t>(data >> 8U), pc);
+        q.write_port_with_pc(1, static_cast<std::uint8_t>(data & 0xFFU), pc);
+        q.write_port_with_pc(2, reg, pc);
     }
 
     // A sample ROM with one known PCM byte at bank 0, address `addr`.
@@ -47,6 +54,18 @@ namespace {
             }
         }
         return false;
+    }
+
+    [[nodiscard]] std::uint64_t introspection_value(qsound& q, std::string_view name) {
+        auto* view = q.introspection().registers();
+        REQUIRE(view != nullptr);
+        for (const auto& reg : view->registers()) {
+            if (reg.name == name) {
+                return reg.value;
+            }
+        }
+        FAIL("missing QSound register descriptor");
+        return 0U;
     }
 
 } // namespace
@@ -196,6 +215,66 @@ TEST_CASE("qsound bank register programs the next voice", "[qsound]") {
     CHECK(q.last_left() == 4096); // voice 4 found the sample in bank 2
 }
 
+TEST_CASE("qsound records CPS2 sound-driver register diagnostics", "[qsound][trace]") {
+    qsound q;
+
+    program_at(q, 0x06U, 0x4000U, 0x1234U); // voice 0 volume
+    program_at(q, 0xCDU, 0x2222U, 0x2345U); // ADPCM voice 0 volume
+    program_at(q, 0xD6U, 0x0001U, 0x3456U); // ADPCM voice 0 trigger
+
+    CHECK(q.port_write_count() == 9U);
+    CHECK(q.register_write_count() == 3U);
+    CHECK(q.register_write_histogram(0x06U) == 1U);
+    CHECK(q.register_write_histogram(0xCDU) == 1U);
+    CHECK(q.nonzero_pcm_volume_write_count() == 1U);
+    CHECK(q.nonzero_adpcm_volume_write_count() == 1U);
+    CHECK(q.adpcm_trigger_count() == 1U);
+    CHECK(q.last_register() == 0xD6U);
+    CHECK(q.last_register_data() == 0x0001U);
+    CHECK(q.last_register_pc() == 0x3456U);
+    CHECK(q.register_trace_count() == 3U);
+
+    const auto first = q.register_trace(0U);
+    CHECK(first.sequence == 0U);
+    CHECK(first.reg == 0x06U);
+    CHECK(first.data == 0x4000U);
+    CHECK(first.pc == 0x1234U);
+    const auto last = q.register_trace(2U);
+    CHECK(last.sequence == 2U);
+    CHECK(last.reg == 0xD6U);
+    CHECK(last.data == 0x0001U);
+    CHECK(last.pc == 0x3456U);
+
+    CHECK(introspection_value(q, "REGWR") == 3U);
+    CHECK(introspection_value(q, "TRACECOUNT") == 3U);
+    CHECK(introspection_value(q, "LASTREG") == 0xD6U);
+    CHECK(introspection_value(q, "LASTDATA") == 0x0001U);
+    CHECK(introspection_value(q, "LASTPC") == 0x3456U);
+    CHECK(introspection_value(q, "PCM_VOLWR") == 1U);
+    CHECK(introspection_value(q, "ADPCM_VOLWR") == 1U);
+    CHECK(introspection_value(q, "ADPCM_TRIG") == 1U);
+    CHECK(introspection_value(q, "ADPCM0_START") == 0U);
+    CHECK(introspection_value(q, "ADPCM0_END") == 0U);
+    CHECK(introspection_value(q, "ADPCM0_BANK") == 0x8000U);
+    CHECK(introspection_value(q, "ADPCM0_VOL") == 0x2222U);
+    CHECK(introspection_value(q, "ADPCM0_PLAY") == 0U);
+    CHECK(introspection_value(q, "ADPCM0_FLAG") == 1U);
+    CHECK(introspection_value(q, "REG06_WR") == 1U);
+    CHECK(introspection_value(q, "REG06_DATA") == 0x4000U);
+    CHECK(introspection_value(q, "REG06_PC") == 0x1234U);
+    CHECK(introspection_value(q, "REGCD_WR") == 1U);
+    CHECK(introspection_value(q, "REGCD_DATA") == 0x2222U);
+    CHECK(introspection_value(q, "REGCD_PC") == 0x2345U);
+    CHECK(introspection_value(q, "TRACE000_SEQ") == 0U);
+    CHECK(introspection_value(q, "TRACE000_REG") == 0x06U);
+    CHECK(introspection_value(q, "TRACE000_DATA") == 0x4000U);
+    CHECK(introspection_value(q, "TRACE000_PC") == 0x1234U);
+    CHECK(introspection_value(q, "TRACE002_SEQ") == 2U);
+    CHECK(introspection_value(q, "TRACE002_REG") == 0xD6U);
+    CHECK(introspection_value(q, "TRACE002_DATA") == 0x0001U);
+    CHECK(introspection_value(q, "TRACE002_PC") == 0x3456U);
+}
+
 TEST_CASE("qsound applies PCM echo delay and feedback registers", "[qsound][echo]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
@@ -220,6 +299,8 @@ TEST_CASE("qsound applies PCM echo delay and feedback registers", "[qsound][echo
     q.step();
     CHECK(q.last_left() == 7168);
     CHECK(q.last_right() == 7168);
+    CHECK(introspection_value(q, "ECHOFB") == 0x4000U);
+    CHECK(introspection_value(q, "ECHOLEN") == 1U);
 }
 
 TEST_CASE("qsound save/load round-trips voice state", "[qsound]") {
@@ -243,6 +324,35 @@ TEST_CASE("qsound save/load round-trips voice state", "[qsound]") {
     REQUIRE(r.ok());
     q2.step();
     CHECK(q2.last_left() == 4096); // restored voice plays identically
+}
+
+TEST_CASE("qsound save/load preserves register diagnostics", "[qsound][trace][save]") {
+    qsound q;
+    program_at(q, 0x06U, 0x4000U, 0x4567U);
+    program_at(q, 0xD6U, 0x0001U, 0x5678U);
+
+    std::vector<std::uint8_t> blob;
+    state_writer w(blob);
+    q.save_state(w);
+
+    qsound restored;
+    state_reader r(blob);
+    restored.load_state(r);
+    REQUIRE(r.ok());
+
+    CHECK(restored.port_write_count() == q.port_write_count());
+    CHECK(restored.register_write_count() == q.register_write_count());
+    CHECK(restored.nonzero_pcm_volume_write_count() == 1U);
+    CHECK(restored.adpcm_trigger_count() == 1U);
+    CHECK(restored.last_register() == 0xD6U);
+    CHECK(restored.last_register_data() == 0x0001U);
+    CHECK(restored.last_register_pc() == 0x5678U);
+    REQUIRE(restored.register_trace_count() == 2U);
+    const auto entry = restored.register_trace(1U);
+    CHECK(entry.sequence == 1U);
+    CHECK(entry.reg == 0xD6U);
+    CHECK(entry.data == 0x0001U);
+    CHECK(entry.pc == 0x5678U);
 }
 
 TEST_CASE("qsound save/load preserves echo delay state", "[qsound][echo][save]") {

@@ -13,6 +13,7 @@ namespace {
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
+    using mnemos::apps::player::adapters::parse_dump_battery_args;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
@@ -28,6 +29,7 @@ namespace {
     using mnemos::apps::player::adapters::parse_save_state_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
+    using mnemos::apps::player::adapters::validate_headless_request_args;
 
     // parse_*_arg takes a `char* []`, so the helper hands them a mutable
     // backing vector and a parallel vector of pointers into it.
@@ -161,14 +163,83 @@ TEST_CASE("cli_args: --screenshot + --frames returns the request") {
     CHECK(req->frames == 120U);
 }
 
-TEST_CASE("cli_args: --screenshot alone (no --frames) returns nullopt") {
+TEST_CASE("cli_args: --screenshot alone defaults to boot-frame capture") {
     auto a = make_argv({"player", "--screenshot", "out.ppm"});
+    const auto req = parse_screenshot_args(a.argc(), a.argv.data());
+    REQUIRE(req.has_value());
+    CHECK(req->path == "out.ppm");
+    CHECK(req->frames == 0U);
+}
+
+TEST_CASE("cli_args: --screenshot requires an output path") {
+    auto a = make_argv({"player", "--screenshot", "--frames", "60"});
     CHECK(parse_screenshot_args(a.argc(), a.argv.data()) == std::nullopt);
 }
 
-TEST_CASE("cli_args: --frames alone (no --screenshot) returns nullopt") {
+TEST_CASE("cli_args: malformed headless screenshot reports a launch-blocking error") {
+    auto missing = make_argv({"player", "--screenshot"});
+    const auto missing_error = validate_headless_request_args(missing.argc(), missing.argv.data());
+    REQUIRE(missing_error.has_value());
+    CHECK(*missing_error == "--screenshot requires an output path");
+
+    auto option = make_argv({"player", "--screenshot", "--frames", "60"});
+    const auto option_error = validate_headless_request_args(option.argc(), option.argv.data());
+    REQUIRE(option_error.has_value());
+    CHECK(*option_error == "--screenshot requires an output path");
+
+    auto valid = make_argv({"player", "--screenshot", "out.ppm", "--frames", "0"});
+    CHECK(validate_headless_request_args(valid.argc(), valid.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: malformed headless frame values report a launch-blocking error") {
+    auto missing = make_argv({"player", "--screenshot", "out.ppm", "--frames"});
+    const auto missing_error = validate_headless_request_args(missing.argc(), missing.argv.data());
+    REQUIRE(missing_error.has_value());
+    CHECK(*missing_error == "--frames requires a numeric value");
+
+    auto invalid = make_argv({"player", "--screenshot", "out.ppm", "--frames", "bogus"});
+    const auto invalid_error = validate_headless_request_args(invalid.argc(), invalid.argv.data());
+    REQUIRE(invalid_error.has_value());
+    CHECK(*invalid_error == "--frames requires a numeric value");
+}
+
+TEST_CASE("cli_args: record headless commands require a positive frame count") {
+    auto missing = make_argv({"player", "--record-gif", "clip.gif"});
+    const auto missing_error = validate_headless_request_args(missing.argc(), missing.argv.data());
+    REQUIRE(missing_error.has_value());
+    CHECK(*missing_error == "--record-gif/--record-movie require --frames N with N > 0");
+
+    auto zero = make_argv({"player", "--record-movie", "clip", "--frames", "0"});
+    const auto zero_error = validate_headless_request_args(zero.argc(), zero.argv.data());
+    REQUIRE(zero_error.has_value());
+    CHECK(*zero_error == "--record-gif/--record-movie require --frames N with N > 0");
+
+    auto valid = make_argv({"player", "--record-gif", "clip.gif", "--frames", "2"});
+    CHECK(validate_headless_request_args(valid.argc(), valid.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --frames alone reports a launch-blocking error") {
     auto a = make_argv({"player", "--frames", "100"});
     CHECK(parse_screenshot_args(a.argc(), a.argv.data()) == std::nullopt);
+    const auto error = validate_headless_request_args(a.argc(), a.argv.data());
+    REQUIRE(error.has_value());
+    CHECK(*error ==
+          "--frames/--extract-frames/--run-cycles require a frame-stepped headless command");
+}
+
+TEST_CASE("cli_args: --run-cycles alone reports a launch-blocking error") {
+    auto separated = make_argv({"player", "--run-cycles", "1234"});
+    const auto separated_error =
+        validate_headless_request_args(separated.argc(), separated.argv.data());
+    REQUIRE(separated_error.has_value());
+    CHECK(*separated_error ==
+          "--frames/--extract-frames/--run-cycles require a frame-stepped headless command");
+
+    auto joined = make_argv({"player", "--run-cycles=1234"});
+    const auto joined_error = validate_headless_request_args(joined.argc(), joined.argv.data());
+    REQUIRE(joined_error.has_value());
+    CHECK(*joined_error ==
+          "--frames/--extract-frames/--run-cycles require a frame-stepped headless command");
 }
 
 TEST_CASE("cli_args: --save-state accepts an output path and optional frame count") {
@@ -191,6 +262,28 @@ TEST_CASE("cli_args: --save-state rejects missing and option-shaped paths") {
 
     auto option = make_argv({"player", "--save-state", "--frames", "60"});
     CHECK(parse_save_state_args(option.argc(), option.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --dump-battery accepts an output path and optional frame count") {
+    auto a = make_argv({"player", "--dump-battery", "scratch/game.srm"});
+    const auto boot_req = parse_dump_battery_args(a.argc(), a.argv.data());
+    REQUIRE(boot_req.has_value());
+    CHECK(boot_req->path == "scratch/game.srm");
+    CHECK(boot_req->frames == 0U);
+
+    auto b = make_argv({"player", "--dump-battery", "scratch/game-after.srm", "--frames", "120"});
+    const auto stepped_req = parse_dump_battery_args(b.argc(), b.argv.data());
+    REQUIRE(stepped_req.has_value());
+    CHECK(stepped_req->path == "scratch/game-after.srm");
+    CHECK(stepped_req->frames == 120U);
+}
+
+TEST_CASE("cli_args: --dump-battery rejects missing and option-shaped paths") {
+    auto missing = make_argv({"player", "--dump-battery"});
+    CHECK(parse_dump_battery_args(missing.argc(), missing.argv.data()) == std::nullopt);
+
+    auto option = make_argv({"player", "--dump-battery", "--frames", "60"});
+    CHECK(parse_dump_battery_args(option.argc(), option.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: --load-state accepts only a concrete path") {
@@ -235,6 +328,10 @@ TEST_CASE("cli_args: --extract-assets rejects an option-shaped value") {
 TEST_CASE("cli_args: --extract-frames alone (no --extract-assets) returns nullopt") {
     auto a = make_argv({"player", "--extract-frames", "30"});
     CHECK(parse_extract_assets_args(a.argc(), a.argv.data()) == std::nullopt);
+    const auto error = validate_headless_request_args(a.argc(), a.argv.data());
+    REQUIRE(error.has_value());
+    CHECK(*error ==
+          "--frames/--extract-frames/--run-cycles require a frame-stepped headless command");
 }
 
 TEST_CASE("cli_args: --extract-assets without a value returns nullopt") {

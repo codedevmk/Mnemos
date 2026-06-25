@@ -11,6 +11,7 @@
 #include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "cli_args.hpp"
 #include "headless_commands.hpp"
+#include "player_audio.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
@@ -266,6 +267,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dip_arg;
+    using mnemos::apps::player::adapters::parse_dump_battery_args;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
@@ -284,6 +286,13 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_system_arg;
     using mnemos::apps::player::adapters::state_path_for;
     using mnemos::apps::player::adapters::srm_path_for;
+    using mnemos::apps::player::adapters::validate_headless_request_args;
+
+    if (const auto headless_error = validate_headless_request_args(argc, argv)) {
+        std::fprintf(stderr, "%s\n", headless_error->c_str());
+        std::fflush(stderr);
+        return 1;
+    }
 
     const auto rom_paths = parse_rom_args(argc, argv);
     const auto system_arg = parse_system_arg(argc, argv);
@@ -300,6 +309,7 @@ int main(int argc, char* argv[]) {
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
         .save_state = parse_save_state_args(argc, argv),
+        .dump_battery = parse_dump_battery_args(argc, argv),
         .load_state = parse_load_state_arg(argc, argv),
         .extract_assets = parse_extract_assets_args(argc, argv),
         .extract_audio = parse_extract_audio_args(argc, argv),
@@ -524,7 +534,7 @@ int main(int argc, char* argv[]) {
     SDL_AudioStream* audio_stream = nullptr;
     if (system) {
         const auto chunk = system->drain_audio(); // probe for sample rate
-        const std::uint32_t rate = chunk.sample_rate != 0U ? chunk.sample_rate : 48000U;
+        const std::uint32_t rate = mnemos::apps::player::select_audio_stream_sample_rate(chunk);
         SDL_AudioSpec spec{};
         spec.format = SDL_AUDIO_S16;
         spec.channels = 2;

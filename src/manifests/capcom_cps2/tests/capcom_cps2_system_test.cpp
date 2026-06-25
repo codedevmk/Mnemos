@@ -15,6 +15,7 @@
 #include <iterator>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -26,7 +27,9 @@ namespace {
     using mnemos::manifests::capcom_cps2::crypto_key_size;
     using mnemos::manifests::capcom_cps2::encrypt_opcodes;
     using mnemos::manifests::common::parse_rom_set_decl;
+    using mnemos::manifests::common::rom_set_decl;
     using mnemos::manifests::common::rom_set_image;
+    using mnemos::manifests::common::rom_set_region;
 
     std::array<std::uint8_t, crypto_key_size> sample_key() {
         std::array<std::uint8_t, crypto_key_size> k{};
@@ -213,6 +216,43 @@ namespace {
         return false;
     }
 
+    [[nodiscard]] rom_set_decl parse_checked_in_cps2_game(std::string_view stem) {
+        namespace fs = std::filesystem;
+        const fs::path path = fs::path{MNEMOS_CPS2_GAMES_DIR} / (std::string{stem} + ".toml");
+
+        std::ifstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        const std::string text{std::istreambuf_iterator<char>{file},
+                               std::istreambuf_iterator<char>{}};
+        auto result = parse_rom_set_decl(text, path.string());
+        REQUIRE(result.ok());
+        return *result.value;
+    }
+
+    [[nodiscard]] const rom_set_region* find_region(const rom_set_decl& decl,
+                                                    std::string_view name) noexcept {
+        const auto it = std::find_if(decl.regions.begin(), decl.regions.end(),
+                                     [name](const auto& region) { return region.name == name; });
+        return it != decl.regions.end() ? &*it : nullptr;
+    }
+
+    [[nodiscard]] bool region_files_cover_destination_offset(const rom_set_region& region,
+                                                            std::size_t offset) noexcept {
+        for (const auto& file : region.files) {
+            const std::size_t stride = file.stride != 0U ? file.stride : 1U;
+            const std::size_t unit = file.unit != 0U ? file.unit : 1U;
+            const std::size_t source_bytes = file.length != 0U ? file.length : file.size;
+            const std::size_t chunks = source_bytes / unit;
+            for (std::size_t c = 0; c < chunks; ++c) {
+                const std::size_t base = file.offset + c * stride;
+                if (offset >= base && offset < base + unit) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 } // namespace
 
 TEST_CASE("cps2 ROM skeleton declares the fixed executable regions", "[capcom_cps2][system]") {
@@ -259,7 +299,50 @@ TEST_CASE("cps2 checked-in game TOMLs parse and declare QSound HLE",
                 return hle.chip == "capcom.qsound" && !hle.rationale.empty();
             });
         CHECK(has_qsound_hle);
+
+        const auto audio_region =
+            std::find_if(result.value->regions.begin(), result.value->regions.end(),
+                         [](const auto& region) { return region.name == "audiocpu"; });
+        if (audio_region != result.value->regions.end()) {
+            CHECK(audio_region->fill == 0x00U);
+        }
     }
+}
+
+TEST_CASE("hsf2 preserves the expanded QSound Z80 ROM holes as zero",
+          "[capcom_cps2][manifest][sound]") {
+    const auto decl = parse_checked_in_cps2_game("hsf2");
+    const auto* audio = find_region(decl, "audiocpu");
+    REQUIRE(audio != nullptr);
+    REQUIRE(audio->files.size() == 3U);
+
+    CHECK(audio->size == cps2::z80_qsound_cpu_rom_region_size);
+    CHECK(audio->fill == 0x00U);
+
+    const auto& fixed = audio->files[0];
+    CHECK(fixed.name == "hs2.01");
+    CHECK(fixed.offset == 0x00000U);
+    CHECK(fixed.source_offset == 0x00000U);
+    CHECK(fixed.length == 0x08000U);
+    CHECK(fixed.size == 0x20000U);
+
+    const auto& expanded = audio->files[1];
+    CHECK(expanded.name == "hs2.01");
+    CHECK(expanded.offset == 0x10000U);
+    CHECK(expanded.source_offset == 0x08000U);
+    CHECK(expanded.length == 0x18000U);
+    CHECK(expanded.size == 0x20000U);
+
+    const auto& packed_next = audio->files[2];
+    CHECK(packed_next.name == "hs2.02");
+    CHECK(packed_next.offset == 0x20000U);
+    CHECK(packed_next.source_offset == 0x00000U);
+    CHECK(packed_next.length == 0x00000U);
+    CHECK(packed_next.size == 0x20000U);
+
+    // HSF2's driver reads through high expanded banks during attract mode. Old
+    // CPS2 loaders calloc this region, so uncovered addresses must read zero.
+    CHECK_FALSE(region_files_cover_destination_offset(*audio, 0x401C9U));
 }
 
 TEST_CASE("cps2 system boots the 68000 from the decrypted opcode image", "[capcom_cps2][system]") {
@@ -550,11 +633,15 @@ TEST_CASE("cps2 system maps object RAM through the selected bank and alternate w
     CHECK(bus.read16_be(cps2::object_ram_base + cps2::object_bank_bytes) == 0xFFFFU);
 
     bus.write16_be(cps2::object_ram_alt_base + cps2::object_bank_bytes, 0x3333U);
-    CHECK(bus.read16_be(cps2::object_ram_alt_base + cps2::object_bank_bytes) == 0xFFFFU);
-    CHECK(bus.read16_be(cps2::object_ram_alt_base) == 0x2222U);
+    CHECK(bus.read16_be(cps2::object_ram_alt_base + cps2::object_bank_bytes) == 0x3333U);
+    CHECK(bus.read16_be(cps2::object_ram_alt_base) == 0x3333U);
+    bus.write32_be(cps2::object_ram_alt_base + 0x2018U, 0x89ABCDEFU);
+    CHECK(bus.read32_be(cps2::object_ram_alt_base + 0x18U) == 0x89ABCDEFU);
+    CHECK(bus.read32_be(cps2::object_ram_alt_base + 0x6018U) == 0x89ABCDEFU);
 
     bus.write8(0x8040E0U, 0x01U); // selected bank flips to bank 1
-    CHECK(bus.read16_be(cps2::object_ram_base) == 0x2222U);
+    CHECK(bus.read16_be(cps2::object_ram_base) == 0x3333U);
+    CHECK(bus.read32_be(cps2::object_ram_base + 0x18U) == 0x89ABCDEFU);
     CHECK(bus.read16_be(cps2::object_ram_alt_base) == 0x1111U);
 
     bus.write16_be(cps2::object_ram_base + 0x10U, 0x4444U);
@@ -562,7 +649,7 @@ TEST_CASE("cps2 system maps object RAM through the selected bank and alternate w
     CHECK(sys.object_ram()[cps2::object_bank_bytes + 0x11U] == 0x44U);
 }
 
-TEST_CASE("cps2 system latches sprites from the CPS-A object base inside the selected bank",
+TEST_CASE("cps2 system latches sprites from the selected object bank start",
           "[capcom_cps2][system][video]") {
     const auto k = sample_key();
     rom_set_image image;
@@ -577,20 +664,25 @@ TEST_CASE("cps2 system latches sprites from the CPS-A object base inside the sel
     auto& bus = sys.bus();
 
     constexpr std::uint32_t palette_source = 0x20000U;
+    bus.write16_be(cps2::video_ram_base + palette_source + 0x34U, 0xF0F0U);
     bus.write16_be(cps2::video_ram_base + palette_source + 0x54U, 0xFF00U);
     bus.write16_be(cps2::cps_a_base + cps2::cps_a_palette_base * 2U,
                    static_cast<std::uint16_t>((cps2::video_ram_base + palette_source) >> 8U));
 
-    // Entry 0 terminates the base table. If the CPS-A object-base register is
-    // ignored, no sprite can render.
-    bus.write16_be(cps2::object_ram_base + 0x02U, 0xFFFFU);
+    bus.write16_be(cps2::object_ram_base + 0x0U, 0x0000U); // raw_x
+    bus.write16_be(cps2::object_ram_base + 0x2U, 0x0000U); // raw_y
+    bus.write16_be(cps2::object_ram_base + 0x4U, 0x0001U); // tile
+    bus.write16_be(cps2::object_ram_base + 0x6U, 0x0002U); // palette 2 = red
+    bus.write16_be(cps2::object_ram_base + 0xAU, 0xFFFFU); // terminator
 
     constexpr std::uint32_t table_offset = 0x0800U;
     bus.write16_be(cps2::object_ram_base + table_offset + 0x0U, 0x0000U); // raw_x
     bus.write16_be(cps2::object_ram_base + table_offset + 0x2U, 0x0000U); // raw_y
     bus.write16_be(cps2::object_ram_base + table_offset + 0x4U, 0x0001U); // tile
-    bus.write16_be(cps2::object_ram_base + table_offset + 0x6U, 0x0002U); // palette 2
+    bus.write16_be(cps2::object_ram_base + table_offset + 0x6U, 0x0001U); // palette 1 = green
     bus.write16_be(cps2::object_ram_base + table_offset + 0xAU, 0xFFFFU); // terminator
+    // Real CPS-2 games write nonzero values here, but hardware does not use this
+    // CPS-A register as the sprite table base.
     bus.write16_be(cps2::cps_a_base + cps2::cps_a_obj_base * 2U,
                    static_cast<std::uint16_t>((cps2::object_ram_base + table_offset) >> 8U));
 
@@ -816,6 +908,68 @@ TEST_CASE("cps2 system QSound: shared comm RAM, Z80 boot, reset gating", "[capco
     CHECK(z80.read8(0xD007U) == z80.read8(0xD007U));
 }
 
+TEST_CASE("cps2 system records QSound shared-bus diagnostics", "[capcom_cps2][system]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    image.regions["audiocpu"].assign(0x8000U, 0x00U);
+    image.regions["qsound"].assign(0x1000U, 0x00U);
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto& main = sys.bus();
+    auto& sound = sys.sound_bus();
+
+    main.write8(cps2::qsound_shared_base, 0x12U); // even byte: open bus, counted only
+    main.write8(cps2::qsound_shared_base + 1U, 0x34U);
+    main.write8(cps2::qsound_shared_base + (0x000FU << 1U) + 1U, 0x56U);
+
+    const auto& after_main_writes = sys.qsound_bus_diagnostics();
+    CHECK(after_main_writes.shared_68k_even_write_count == 1U);
+    CHECK(after_main_writes.shared_68k_even_non_ff_write_count == 1U);
+    CHECK(after_main_writes.shared_68k_write_count == 2U);
+    CHECK(after_main_writes.shared_68k_non_ff_write_count == 2U);
+    CHECK(after_main_writes.shared_68k_command_signal_write_count == 1U);
+    CHECK(after_main_writes.shared_last_even_68k_index == 0U);
+    CHECK(after_main_writes.shared_last_even_68k_value == 0x12U);
+    CHECK(after_main_writes.shared_last_68k_index == 0x000FU);
+    CHECK(after_main_writes.shared_last_68k_value == 0x56U);
+    CHECK(after_main_writes.shared_command_signal_last_68k_value == 0x56U);
+    CHECK(after_main_writes.shared_command_snapshot[0] == 0x34U);
+    CHECK(after_main_writes.shared_command_snapshot[0x0FU] == 0x56U);
+    CHECK(sys.qsound_shared_ram()[0] == 0x34U);
+    CHECK(sys.qsound_shared_ram()[0x0FU] == 0x56U);
+
+    CHECK(main.read8(cps2::qsound_shared_base + (0x0FFFU << 1U) + 1U) == 0x00U);
+    CHECK(main.read8(cps2::qsound_shared_base + (0x0FFDU << 1U) + 1U) == 0x00U);
+    CHECK(main.read8(cps2::qsound_shared_base + (0x0002U << 1U)) == 0xFFU);
+
+    const auto& after_reads = sys.qsound_bus_diagnostics();
+    CHECK(after_reads.shared_68k_read_count == 3U);
+    CHECK(after_reads.shared_68k_odd_read_count == 2U);
+    CHECK(after_reads.shared_68k_even_read_count == 1U);
+    CHECK(after_reads.shared_68k_status_read_count == 1U);
+    CHECK(after_reads.shared_68k_magic_read_count == 1U);
+    CHECK(after_reads.shared_status_first_read_seen);
+    CHECK(after_reads.shared_status_first_read_value == 0x00U);
+    CHECK(after_reads.shared_status_last_read_value == 0x00U);
+    CHECK(after_reads.shared_last_68k_read_index == 0x0002U);
+    CHECK(after_reads.shared_last_68k_read_value == 0xFFU);
+
+    sound.write8(cps2::z80_shared_base + 0x000FU, 0xA5U);
+    CHECK(sound.read8(cps2::z80_shared_base + 0x000FU) == 0xA5U);
+    sound.write8(cps2::z80_work_base + 0x0023U, 0xC3U);
+
+    const auto& after_z80 = sys.qsound_bus_diagnostics();
+    CHECK(after_z80.shared_z80_write_count == 1U);
+    CHECK(after_z80.shared_last_z80_addr == cps2::z80_shared_base + 0x000FU);
+    CHECK(after_z80.shared_last_z80_value == 0xA5U);
+    CHECK(after_z80.shared_z80_command_signal_read_count == 1U);
+    CHECK(after_z80.shared_command_signal_last_z80_value == 0xA5U);
+    CHECK(after_z80.work_z80_write_count == 1U);
+    CHECK(after_z80.work_last_z80_addr == cps2::z80_work_base + 0x0023U);
+    CHECK(after_z80.work_last_z80_value == 0xC3U);
+}
+
 TEST_CASE("cps2 system maps QSound DSP ports to PCM output",
           "[capcom_cps2][system][sound]") {
     const auto k = sample_key();
@@ -826,11 +980,17 @@ TEST_CASE("cps2 system maps QSound DSP ports to PCM output",
     image.regions["qsound"][0x10U] = 0x40U;
 
     cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    auto regs = sys.sound_cpu().cpu_registers();
+    regs.pc = 0x2468U;
+    sys.sound_cpu().set_registers(regs);
 
     qsound_port_write(sys, 1U, 0x0010U);  // voice 0 address
     qsound_port_write(sys, 2U, 0x0100U);  // voice 0 rate
     qsound_port_write(sys, 5U, 0x1000U);  // voice 0 end address
     qsound_port_write(sys, 6U, 0x4000U);  // voice 0 volume
+    CHECK(sys.qsound_dsp().last_register() == 6U);
+    CHECK(sys.qsound_dsp().last_register_data() == 0x4000U);
+    CHECK(sys.qsound_dsp().last_register_pc() == 0x2468U);
     qsound_port_write(sys, 0x80U, 0x20U); // voice 0 pan, centered
 
     std::array<std::int16_t, 16> samples{};
@@ -881,6 +1041,28 @@ TEST_CASE("cps2 system maps compact QSound Z80 banks from the 32 KiB split",
     CHECK(sys.sound_bus().read8(cps2::z80_bank_base) == 0x5AU);
 }
 
+TEST_CASE("cps2 system zero-fills partial expanded QSound Z80 bank regions",
+          "[capcom_cps2][system][sound]") {
+    const auto k = sample_key();
+    rom_set_image image;
+    image.regions["maincpu"] = encrypted_program(k);
+    auto& audio = image.regions["audiocpu"];
+    audio.assign(0x28000U, 0xFFU);
+    audio[cps2::z80_bank_rom_base_large + 2U * cps2::z80_bank_window] = 0x5AU;
+    image.regions["qsound"].assign(0x1000U, 0x00U);
+
+    cps2_system sys(std::move(image), cps2_board_params{.key = k});
+    const auto* sound = sys.rom_set().region("audiocpu");
+    REQUIRE(sound != nullptr);
+    CHECK(sound->size() == cps2::z80_qsound_cpu_rom_region_size);
+
+    sys.sound_bus().write8(cps2::z80_bank_reg, 0x02U);
+    CHECK(sys.sound_bus().read8(cps2::z80_bank_base) == 0x5AU);
+
+    sys.sound_bus().write8(cps2::z80_bank_reg, 0x07U);
+    CHECK(sys.sound_bus().read8(cps2::z80_bank_base) == 0x00U);
+}
+
 TEST_CASE("cps2 system maps full QSound Z80 banks from the 64 KiB split",
           "[capcom_cps2][system][sound]") {
     const auto k = sample_key();
@@ -898,7 +1080,8 @@ TEST_CASE("cps2 system maps full QSound Z80 banks from the 64 KiB split",
     CHECK(sys.sound_bus().read8(cps2::z80_bank_base) == 0x5AU);
 }
 
-TEST_CASE("cps2 system clocks the QSound Z80 at the board ratio", "[capcom_cps2][system]") {
+TEST_CASE("cps2 system clocks the QSound Z80 with reference catch-up cadence",
+          "[capcom_cps2][system]") {
     const auto k = sample_key();
     rom_set_image image;
     image.regions["maincpu"] = encrypted_program(k, 0x60FEU); // BRA * for steady 68K cycles
@@ -916,10 +1099,24 @@ TEST_CASE("cps2 system clocks the QSound Z80 at the board ratio", "[capcom_cps2]
         main_cycles * cps2::qsound_z80_clock_hz / cps2::m68k_clock_hz;
     INFO("main=" << main_cycles << " sound=" << sound_cycles << " expected=" << expected);
 
-    // The Z80 is whole-instruction stepped; allow one NOP of scheduling slack
-    // while requiring the long-run 8 MHz / 16 MHz board ratio.
-    CHECK(sound_cycles + 4U >= expected);
-    CHECK(sound_cycles <= expected + 4U);
+    REQUIRE(main_cycles % 10U == 0U); // BRA * consumes ten 68K cycles.
+    // Whole Z80 instructions can overshoot the target by one instruction; CPS2
+    // QSound command cadence matches the reference path when each 68K slice
+    // discards that local overshoot.
+    CHECK(sound_cycles >= expected);
+    std::uint64_t reference_sound = 0U;
+    std::uint64_t reference_accum = 0U;
+    for (std::uint64_t step = 0U; step < main_cycles / 10U; ++step) {
+        reference_accum += 10U * cps2::qsound_z80_clock_hz;
+        const std::uint64_t due = reference_accum / cps2::m68k_clock_hz;
+        reference_accum -= due * cps2::m68k_clock_hz;
+        // The NOP-stream Z80 test program consumes whole 4T instructions. CPS2
+        // does not carry this per-slice whole-instruction overshoot into the
+        // next 68K slice; this is the cadence HSF2's QSound driver expects.
+        reference_sound += ((due + 3U) / 4U) * 4U;
+    }
+    CHECK(sound_cycles == reference_sound);
+    CHECK(sys.sound_cycle_debt() == 0);
 }
 
 TEST_CASE("cps2 system frame budget follows the CPS2 raster cadence",
@@ -938,18 +1135,29 @@ TEST_CASE("cps2 system frame budget follows the CPS2 raster cadence",
     const std::uint64_t elapsed = sys.cpu().elapsed_cycles();
     INFO("elapsed=" << elapsed << " expected=" << expected);
 
-    CHECK(cps2::m68k_clock_hz == 16'000'000U);
+    CHECK(cps2::m68k_clock_hz == 11'800'000U);
     CHECK(cps2::qsound_z80_clock_hz == 8'000'000U);
     CHECK(cps2::refresh_hz_num == 59'637'405U);
     CHECK(cps2::refresh_hz_den == 1'000'000U);
     CHECK(cps2::frame_rate_millihz == 59'637U);
     CHECK(cps2::cpu_cycles_per_frame == expected);
+    CHECK(cps2::frame_scanlines == 262U);
+    CHECK(cps2::vblank_start_line == 224U);
+    CHECK(cps2::cpu_cycles_per_scanline == 755U);
 
-    // The 68000 runs whole instructions, so the frame can overshoot by the final
-    // instruction in each visible/vblank slice, but its budget must be derived
-    // from the native 59.637405 Hz board cadence rather than a rounded 60 Hz frame.
+    // Carry final whole-instruction overshoot into the next frame so a long
+    // frame sequence stays on the native CPS2 frame budget.
     CHECK(elapsed >= expected);
     CHECK(elapsed <= expected + 64U);
+
+    for (int i = 0; i < 31; ++i) {
+        sys.run_frame();
+    }
+    const std::uint64_t expected_32 = 32ULL * expected;
+    const std::uint64_t elapsed_32 = sys.cpu().elapsed_cycles();
+    INFO("elapsed_32=" << elapsed_32 << " expected_32=" << expected_32);
+    CHECK(elapsed_32 >= expected_32);
+    CHECK(elapsed_32 <= expected_32 + 64U);
 }
 
 TEST_CASE("cps2 system save/load reproduces whole-board forward evolution",

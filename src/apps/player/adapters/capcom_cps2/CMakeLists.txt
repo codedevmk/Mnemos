@@ -24,6 +24,7 @@ target_link_libraries(
         mnemos::apps::player::adapters::common
         mnemos::io
         mnemos::compression
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_apps_player_capcom_cps2_adapter PUBLIC)
@@ -38,6 +39,7 @@ mnemos_declare_tier(
         mnemos_apps_player_adapters_common
         mnemos_io
         mnemos_compression
+        mnemos_security_cryptography
 )
 
 if(BUILD_TESTING)

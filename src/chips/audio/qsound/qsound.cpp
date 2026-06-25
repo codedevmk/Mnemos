@@ -3,12 +3,13 @@
 #include "chip_registry.hpp"
 #include "state.hpp"
 
+#include <cstdio>
 #include <memory>
 
 namespace mnemos::chips::audio {
     namespace {
         constexpr std::uint32_t qsound_state_magic = 0x32445351U; // "QSD2", little-endian
-        constexpr std::uint32_t qsound_state_version = 2U;
+        constexpr std::uint32_t qsound_state_version = 3U;
         constexpr std::array<std::int16_t, 16> adpcm_step_scale = {
             154, 154, 128, 102, 77, 58, 58, 58,
             58,  58,  58,  58, 77, 102, 128, 154,
@@ -62,6 +63,34 @@ namespace mnemos::chips::audio {
             right_gain = pan;
         }
     } // namespace
+
+    qsound::qsound() {
+        initialize_trace_register_names();
+        introspection_.with_registers([this] { return register_snapshot(); });
+        reset(reset_kind::power_on);
+    }
+
+    void qsound::initialize_trace_register_names() noexcept {
+        constexpr std::array<const char*, register_histogram_fields> hist_fields = {
+            "WR", "DATA", "PC"};
+        for (std::size_t reg = 0U; reg < 256U; ++reg) {
+            for (std::size_t field = 0U; field < register_histogram_fields; ++field) {
+                auto& name =
+                    histogram_register_names_[reg * register_histogram_fields + field];
+                std::snprintf(name.data(), name.size(), "REG%02zX_%s", reg,
+                              hist_fields[field]);
+            }
+        }
+
+        constexpr std::array<const char*, register_trace_fields> fields = {
+            "SEQ", "REG", "DATA", "PC"};
+        for (std::size_t i = 0U; i < register_trace_capacity; ++i) {
+            for (std::size_t field = 0U; field < register_trace_fields; ++field) {
+                auto& name = trace_register_names_[i * register_trace_fields + field];
+                std::snprintf(name.data(), name.size(), "TRACE%03zu_%s", i, fields[field]);
+            }
+        }
+    }
 
     chip_metadata qsound::metadata() const noexcept {
         return {
@@ -165,7 +194,8 @@ namespace mnemos::chips::audio {
         return voice.last_sample;
     }
 
-    void qsound::write_register(std::uint8_t reg, std::uint16_t data) noexcept {
+    void qsound::write_register(std::uint8_t reg, std::uint16_t data,
+                                std::uint16_t writer_pc) noexcept {
         if (reg < 0x80U) {
             const std::uint32_t voice_index = static_cast<std::uint32_t>(reg) >> 3U;
             const std::uint8_t voice_reg = static_cast<std::uint8_t>(reg & 0x07U);
@@ -222,6 +252,12 @@ namespace mnemos::chips::audio {
                 break;
             case 3:
                 v.volume = data;
+                if (data != 0U) {
+                    ++nonzero_adpcm_volume_write_count_;
+                    last_nonzero_adpcm_volume_voice_ = static_cast<std::uint8_t>(voice_index);
+                    last_nonzero_adpcm_volume_data_ = data;
+                    last_nonzero_adpcm_volume_pc_ = writer_pc;
+                }
                 break;
             default:
                 break;
@@ -229,7 +265,14 @@ namespace mnemos::chips::audio {
             return;
         }
         if (reg >= 0xD6U && reg < 0xD6U + adpcm_voice_count) {
-            adpcm_[reg - 0xD6U].flag = data;
+            const std::uint32_t voice_index = static_cast<std::uint32_t>(reg - 0xD6U);
+            adpcm_[voice_index].flag = data;
+            if (data != 0U) {
+                ++adpcm_trigger_count_;
+            }
+            last_adpcm_trigger_voice_ = static_cast<std::uint8_t>(voice_index);
+            last_adpcm_trigger_flag_ = data;
+            last_adpcm_trigger_pc_ = writer_pc;
             return;
         }
         if (reg == 0xD9U) {
@@ -245,6 +288,12 @@ namespace mnemos::chips::audio {
     }
 
     void qsound::write_port(std::uint8_t offset, std::uint8_t value) noexcept {
+        write_port_with_pc(offset, value, 0U);
+    }
+
+    void qsound::write_port_with_pc(std::uint8_t offset, std::uint8_t value,
+                                    std::uint16_t writer_pc) noexcept {
+        ++port_write_count_;
         switch (offset & 0x03U) {
         case 0:
             data_latch_ = static_cast<std::uint16_t>((data_latch_ & 0x00FFU) |
@@ -253,10 +302,31 @@ namespace mnemos::chips::audio {
         case 1:
             data_latch_ = static_cast<std::uint16_t>((data_latch_ & 0xFF00U) | value);
             break;
-        case 2:
-            write_register(value, data_latch_);
+        case 2: {
+            ++register_write_count_;
+            ++register_write_histogram_[value];
+            register_last_data_[value] = data_latch_;
+            register_last_pc_[value] = writer_pc;
+            last_register_ = value;
+            last_register_data_ = data_latch_;
+            last_register_pc_ = writer_pc;
+            const std::uint32_t trace_index =
+                register_trace_count_ % static_cast<std::uint32_t>(register_trace_.size());
+            register_trace_[trace_index] = register_trace_entry{.sequence = register_trace_count_,
+                                                                .reg = value,
+                                                                .data = data_latch_,
+                                                                .pc = writer_pc};
+            ++register_trace_count_;
+            if (value < 0x80U && (value & 0x07U) == 6U && data_latch_ != 0U) {
+                ++nonzero_pcm_volume_write_count_;
+                last_nonzero_pcm_volume_reg_ = value;
+                last_nonzero_pcm_volume_data_ = data_latch_;
+                last_nonzero_pcm_volume_pc_ = writer_pc;
+            }
+            write_register(value, data_latch_, writer_pc);
             ready_ = ready_flag;
             break;
+        }
         default:
             break;
         }
@@ -337,6 +407,28 @@ namespace mnemos::chips::audio {
         }
         data_latch_ = 0U;
         ready_ = ready_flag;
+        port_write_count_ = 0U;
+        register_write_count_ = 0U;
+        register_write_histogram_.fill(0U);
+        register_last_data_.fill(0U);
+        register_last_pc_.fill(0U);
+        nonzero_pcm_volume_write_count_ = 0U;
+        last_nonzero_pcm_volume_reg_ = 0U;
+        last_nonzero_pcm_volume_data_ = 0U;
+        last_nonzero_pcm_volume_pc_ = 0U;
+        nonzero_adpcm_volume_write_count_ = 0U;
+        last_nonzero_adpcm_volume_voice_ = 0U;
+        last_nonzero_adpcm_volume_data_ = 0U;
+        last_nonzero_adpcm_volume_pc_ = 0U;
+        adpcm_trigger_count_ = 0U;
+        last_adpcm_trigger_voice_ = 0U;
+        last_adpcm_trigger_flag_ = 0U;
+        last_adpcm_trigger_pc_ = 0U;
+        last_register_ = 0U;
+        last_register_data_ = 0U;
+        last_register_pc_ = 0U;
+        register_trace_count_ = 0U;
+        register_trace_.fill(register_trace_entry{});
         adpcm_phase_ = 0U;
         reset_echo_state();
         last_l_ = 0;
@@ -425,6 +517,39 @@ namespace mnemos::chips::audio {
         }
         writer.u16(static_cast<std::uint16_t>(last_l_));
         writer.u16(static_cast<std::uint16_t>(last_r_));
+        writer.u32(port_write_count_);
+        writer.u32(register_write_count_);
+        for (const std::uint32_t count : register_write_histogram_) {
+            writer.u32(count);
+        }
+        for (const std::uint16_t data : register_last_data_) {
+            writer.u16(data);
+        }
+        for (const std::uint16_t pc : register_last_pc_) {
+            writer.u16(pc);
+        }
+        writer.u32(nonzero_pcm_volume_write_count_);
+        writer.u8(last_nonzero_pcm_volume_reg_);
+        writer.u16(last_nonzero_pcm_volume_data_);
+        writer.u16(last_nonzero_pcm_volume_pc_);
+        writer.u32(nonzero_adpcm_volume_write_count_);
+        writer.u8(last_nonzero_adpcm_volume_voice_);
+        writer.u16(last_nonzero_adpcm_volume_data_);
+        writer.u16(last_nonzero_adpcm_volume_pc_);
+        writer.u32(adpcm_trigger_count_);
+        writer.u8(last_adpcm_trigger_voice_);
+        writer.u16(last_adpcm_trigger_flag_);
+        writer.u16(last_adpcm_trigger_pc_);
+        writer.u8(last_register_);
+        writer.u16(last_register_data_);
+        writer.u16(last_register_pc_);
+        writer.u32(register_trace_count_);
+        for (const register_trace_entry& entry : register_trace_) {
+            writer.u32(entry.sequence);
+            writer.u8(entry.reg);
+            writer.u16(entry.data);
+            writer.u16(entry.pc);
+        }
     }
 
     void qsound::load_state(state_reader& reader) {
@@ -492,6 +617,64 @@ namespace mnemos::chips::audio {
         }
         last_l_ = static_cast<std::int16_t>(reader.u16());
         last_r_ = static_cast<std::int16_t>(reader.u16());
+        if (!legacy && version >= 3U) {
+            port_write_count_ = reader.u32();
+            register_write_count_ = reader.u32();
+            for (std::uint32_t& count : register_write_histogram_) {
+                count = reader.u32();
+            }
+            for (std::uint16_t& data : register_last_data_) {
+                data = reader.u16();
+            }
+            for (std::uint16_t& pc : register_last_pc_) {
+                pc = reader.u16();
+            }
+            nonzero_pcm_volume_write_count_ = reader.u32();
+            last_nonzero_pcm_volume_reg_ = reader.u8();
+            last_nonzero_pcm_volume_data_ = reader.u16();
+            last_nonzero_pcm_volume_pc_ = reader.u16();
+            nonzero_adpcm_volume_write_count_ = reader.u32();
+            last_nonzero_adpcm_volume_voice_ = reader.u8();
+            last_nonzero_adpcm_volume_data_ = reader.u16();
+            last_nonzero_adpcm_volume_pc_ = reader.u16();
+            adpcm_trigger_count_ = reader.u32();
+            last_adpcm_trigger_voice_ = reader.u8();
+            last_adpcm_trigger_flag_ = reader.u16();
+            last_adpcm_trigger_pc_ = reader.u16();
+            last_register_ = reader.u8();
+            last_register_data_ = reader.u16();
+            last_register_pc_ = reader.u16();
+            register_trace_count_ = reader.u32();
+            for (register_trace_entry& entry : register_trace_) {
+                entry.sequence = reader.u32();
+                entry.reg = reader.u8();
+                entry.data = reader.u16();
+                entry.pc = reader.u16();
+            }
+        } else {
+            port_write_count_ = 0U;
+            register_write_count_ = 0U;
+            register_write_histogram_.fill(0U);
+            register_last_data_.fill(0U);
+            register_last_pc_.fill(0U);
+            nonzero_pcm_volume_write_count_ = 0U;
+            last_nonzero_pcm_volume_reg_ = 0U;
+            last_nonzero_pcm_volume_data_ = 0U;
+            last_nonzero_pcm_volume_pc_ = 0U;
+            nonzero_adpcm_volume_write_count_ = 0U;
+            last_nonzero_adpcm_volume_voice_ = 0U;
+            last_nonzero_adpcm_volume_data_ = 0U;
+            last_nonzero_adpcm_volume_pc_ = 0U;
+            adpcm_trigger_count_ = 0U;
+            last_adpcm_trigger_voice_ = 0U;
+            last_adpcm_trigger_flag_ = 0U;
+            last_adpcm_trigger_pc_ = 0U;
+            last_register_ = 0U;
+            last_register_data_ = 0U;
+            last_register_pc_ = 0U;
+            register_trace_count_ = 0U;
+            register_trace_.fill(register_trace_entry{});
+        }
     }
 
     instrumentation::ichip_introspection& qsound::introspection() noexcept {
@@ -500,14 +683,95 @@ namespace mnemos::chips::audio {
 
     std::span<const register_descriptor> qsound::register_snapshot() noexcept {
         using fmt = register_value_format;
-        register_view_[0] = {"READY", ready_, 8U, fmt::flags};
-        register_view_[1] = {"V0BANK", voices_[0].bank, 16U, fmt::unsigned_integer};
-        register_view_[2] = {"V0ADDR", voices_[0].addr, 16U, fmt::unsigned_integer};
-        register_view_[3] = {"V0VOL", voices_[0].volume, 16U, fmt::unsigned_integer};
-        register_view_[4] = {"ECHOFB", static_cast<std::uint16_t>(echo_feedback_), 16U,
-                             fmt::signed_integer};
-        register_view_[5] = {"ECHOLEN", echo_delay_length(), 16U, fmt::unsigned_integer};
-        return register_view_;
+        constexpr std::array<std::array<const char*, adpcm_register_fields>,
+                             adpcm_voice_count>
+            adpcm_names = {{
+                {"ADPCM0_START", "ADPCM0_END", "ADPCM0_BANK", "ADPCM0_VOL",
+                 "ADPCM0_PLAY", "ADPCM0_FLAG", "ADPCM0_CUR", "ADPCM0_STEP",
+                 "ADPCM0_PRED", "ADPCM0_LAST"},
+                {"ADPCM1_START", "ADPCM1_END", "ADPCM1_BANK", "ADPCM1_VOL",
+                 "ADPCM1_PLAY", "ADPCM1_FLAG", "ADPCM1_CUR", "ADPCM1_STEP",
+                 "ADPCM1_PRED", "ADPCM1_LAST"},
+                {"ADPCM2_START", "ADPCM2_END", "ADPCM2_BANK", "ADPCM2_VOL",
+                 "ADPCM2_PLAY", "ADPCM2_FLAG", "ADPCM2_CUR", "ADPCM2_STEP",
+                 "ADPCM2_PRED", "ADPCM2_LAST"},
+            }};
+
+        std::size_t out = 0U;
+        const auto add = [this, &out](const char* name, std::uint64_t value,
+                                      std::uint8_t bit_width, fmt format) {
+            register_view_[out++] = {name, value, bit_width, format};
+        };
+
+        add("READY", ready_, 8U, fmt::flags);
+        add("V0BANK", voices_[0].bank, 16U, fmt::unsigned_integer);
+        add("V0ADDR", voices_[0].addr, 16U, fmt::unsigned_integer);
+        add("V0VOL", voices_[0].volume, 16U, fmt::unsigned_integer);
+        add("ECHOFB", static_cast<std::uint16_t>(echo_feedback_), 16U,
+            fmt::signed_integer);
+        add("ECHOLEN", echo_delay_length(), 16U, fmt::unsigned_integer);
+        add("PORTWR", port_write_count_, 32U, fmt::unsigned_integer);
+        add("REGWR", register_write_count_, 32U, fmt::unsigned_integer);
+        add("TRACECOUNT", register_trace_count_, 32U, fmt::unsigned_integer);
+        add("LASTREG", last_register_, 8U, fmt::unsigned_integer);
+        add("LASTDATA", last_register_data_, 16U, fmt::unsigned_integer);
+        add("LASTPC", last_register_pc_, 16U, fmt::unsigned_integer);
+        add("PCM_VOLWR", nonzero_pcm_volume_write_count_, 32U, fmt::unsigned_integer);
+        add("ADPCM_VOLWR", nonzero_adpcm_volume_write_count_, 32U, fmt::unsigned_integer);
+        add("ADPCM_TRIG", adpcm_trigger_count_, 32U, fmt::unsigned_integer);
+
+        for (std::size_t i = 0U; i < adpcm_.size(); ++i) {
+            const adpcm_voice& v = adpcm_[i];
+            const auto& names = adpcm_names[i];
+            add(names[0], v.start_addr, 16U, fmt::unsigned_integer);
+            add(names[1], v.end_addr, 16U, fmt::unsigned_integer);
+            add(names[2], v.bank, 16U, fmt::unsigned_integer);
+            add(names[3], v.volume, 16U, fmt::unsigned_integer);
+            add(names[4], v.play_volume, 16U, fmt::unsigned_integer);
+            add(names[5], v.flag, 16U, fmt::flags);
+            add(names[6], v.cur_addr, 16U, fmt::unsigned_integer);
+            add(names[7], static_cast<std::uint16_t>(v.step_size), 16U,
+                fmt::signed_integer);
+            add(names[8], static_cast<std::uint16_t>(v.cur_vol), 16U,
+                fmt::signed_integer);
+            add(names[9], static_cast<std::uint16_t>(v.last_sample), 16U,
+                fmt::signed_integer);
+        }
+
+        for (std::size_t reg = 0U; reg < register_write_histogram_.size(); ++reg) {
+            const std::uint32_t writes = register_write_histogram_[reg];
+            if (writes == 0U) {
+                continue;
+            }
+            const std::size_t name_index = reg * register_histogram_fields;
+            add(histogram_register_names_[name_index + 0U].data(), writes, 32U,
+                fmt::unsigned_integer);
+            add(histogram_register_names_[name_index + 1U].data(),
+                register_last_data_[reg], 16U, fmt::unsigned_integer);
+            add(histogram_register_names_[name_index + 2U].data(), register_last_pc_[reg],
+                16U, fmt::unsigned_integer);
+        }
+
+        const std::uint32_t trace_total = register_trace_count_;
+        const std::uint32_t trace_kept =
+            trace_total > register_trace_capacity
+                ? static_cast<std::uint32_t>(register_trace_capacity)
+                : trace_total;
+        const std::uint32_t trace_start = trace_total - trace_kept;
+        for (std::uint32_t i = 0U; i < trace_kept; ++i) {
+            const register_trace_entry entry = register_trace(trace_start + i);
+            const std::size_t name_index = static_cast<std::size_t>(i) * register_trace_fields;
+            add(trace_register_names_[name_index + 0U].data(), entry.sequence, 32U,
+                fmt::unsigned_integer);
+            add(trace_register_names_[name_index + 1U].data(), entry.reg, 8U,
+                fmt::unsigned_integer);
+            add(trace_register_names_[name_index + 2U].data(), entry.data, 16U,
+                fmt::unsigned_integer);
+            add(trace_register_names_[name_index + 3U].data(), entry.pc, 16U,
+                fmt::unsigned_integer);
+        }
+
+        return std::span<const register_descriptor>{register_view_.data(), out};
     }
 
     namespace {

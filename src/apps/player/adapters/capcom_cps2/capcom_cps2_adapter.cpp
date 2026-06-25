@@ -1,10 +1,12 @@
 #include "capcom_cps2_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "crc32.hpp"
 #include "cps2_game_manifests.hpp"
 #include "cps2_crypto.hpp"
 #include "file.hpp"
 #include "input_pack.hpp"
+#include "introspection_adapters.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 #include "zip_archive.hpp"
@@ -28,10 +30,11 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         using mnemos::manifests::common::rom_set_image;
         namespace cps2 = mnemos::manifests::capcom_cps2;
 
-        constexpr std::uint32_t cps2_adapter_state_version = 3U;
+        constexpr std::uint32_t cps2_adapter_state_version = 4U;
 
         struct loaded_set final {
             rom_set_image image;
+            std::string set_name;
             frontend_sdk::display_orientation orientation{
                 frontend_sdk::display_orientation::horizontal};
             std::uint8_t players{2U};
@@ -53,6 +56,251 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
         [[nodiscard]] std::vector<key_file_candidate>
         collect_zip_key_candidates(std::span<const std::uint8_t> archive_bytes);
+
+        class cps2_board_debug_chip final : public chips::iperipheral {
+          public:
+            explicit cps2_board_debug_chip(cps2::cps2_system& system) : system_(&system) {
+                introspection_.with_registers([this] { return register_snapshot(); });
+            }
+
+            [[nodiscard]] chips::chip_metadata metadata() const noexcept override {
+                return {.manufacturer = "Capcom",
+                        .part_number = "CPS2_BUS",
+                        .family = "CPS2 board diagnostics",
+                        .klass = chips::chip_class::peripheral,
+                        .revision = 1U};
+            }
+
+            void tick(std::uint64_t /*cycles*/) override {}
+            void reset(chips::reset_kind /*kind*/) override {}
+            void save_state(chips::state_writer& /*writer*/) const override {}
+            void load_state(chips::state_reader& /*reader*/) override {}
+
+            [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+                return introspection_;
+            }
+
+          private:
+            [[nodiscard]] std::span<const chips::register_descriptor>
+            register_snapshot() noexcept {
+                using fmt = chips::register_value_format;
+                const cps2::cps2_qsound_bus_diagnostics& q =
+                    system_->qsound_bus_diagnostics();
+                std::size_t out = 0U;
+                const auto add = [this, &out](const char* name, std::uint64_t value,
+                                              std::uint8_t bits, fmt format) {
+                    register_view_[out++] = {name, value, bits, format};
+                };
+                const auto control_word = [this](std::size_t offset) -> std::uint16_t {
+                    const auto regs = system_->control_registers();
+                    if (offset + 1U >= regs.size()) {
+                        return 0U;
+                    }
+                    return static_cast<std::uint16_t>(
+                        (static_cast<std::uint16_t>(regs[offset]) << 8U) | regs[offset + 1U]);
+                };
+
+                add("CPSA_OBJBASE", system_->cps_a_register(cps2::cps_a_obj_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR1BASE", system_->cps_a_register(cps2::cps_a_scroll1_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR2BASE", system_->cps_a_register(cps2::cps_a_scroll2_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR3BASE", system_->cps_a_register(cps2::cps_a_scroll3_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_ROWBASE", system_->cps_a_register(cps2::cps_a_rowscroll_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_PALBASE", system_->cps_a_register(cps2::cps_a_palette_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR1X", system_->cps_a_register(cps2::cps_a_scroll1_x), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR1Y", system_->cps_a_register(cps2::cps_a_scroll1_y), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR2X", system_->cps_a_register(cps2::cps_a_scroll2_x), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR2Y", system_->cps_a_register(cps2::cps_a_scroll2_y), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR3X", system_->cps_a_register(cps2::cps_a_scroll3_x), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR3Y", system_->cps_a_register(cps2::cps_a_scroll3_y), 16U,
+                    fmt::signed_integer);
+                add("CPSA_ROWOFFS", system_->cps_a_register(cps2::cps_a_rowscroll_offset), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_VCTRL", system_->cps_a_register(cps2::cps_a_video_control), 16U,
+                    fmt::flags);
+                add("PAL_SRC", system_->active_palette_source(), 32U, fmt::unsigned_integer);
+                add("CPSB_LAYER", system_->cps_b_register(0x13U), 16U, fmt::flags);
+                add("CPSB_PALCTRL", system_->active_palette_control(), 16U, fmt::flags);
+                add("CTRL_OBJPRI", control_word(0x04U), 16U, fmt::flags);
+                add("CTRL_SPRX", control_word(0x08U), 16U, fmt::signed_integer);
+                add("CTRL_SPRY", control_word(0x0AU), 16U, fmt::signed_integer);
+
+                add("S68K_W", q.shared_68k_write_count, 32U, fmt::unsigned_integer);
+                add("S68K_NFFW", q.shared_68k_non_ff_write_count, 32U,
+                    fmt::unsigned_integer);
+                add("S68K_EW", q.shared_68k_even_write_count, 32U, fmt::unsigned_integer);
+                add("S68K_ENFFW", q.shared_68k_even_non_ff_write_count, 32U,
+                    fmt::unsigned_integer);
+                add("S68K_R", q.shared_68k_read_count, 32U, fmt::unsigned_integer);
+                add("S68K_OR", q.shared_68k_odd_read_count, 32U, fmt::unsigned_integer);
+                add("S68K_ER", q.shared_68k_even_read_count, 32U, fmt::unsigned_integer);
+                add("S68K_STATUSR", q.shared_68k_status_read_count, 32U,
+                    fmt::unsigned_integer);
+                add("S68K_MAGICR", q.shared_68k_magic_read_count, 32U,
+                    fmt::unsigned_integer);
+                add("CMD68K_W", q.shared_68k_command_signal_write_count, 32U,
+                    fmt::unsigned_integer);
+                add("CMDZ80_R", q.shared_z80_command_signal_read_count, 32U,
+                    fmt::unsigned_integer);
+                add("SZ80_W", q.shared_z80_write_count, 32U, fmt::unsigned_integer);
+                add("WZ80_W", q.work_z80_write_count, 32U, fmt::unsigned_integer);
+                add("LAST68K_IDX", q.shared_last_68k_index, 16U, fmt::unsigned_integer);
+                add("LAST68K_VAL", q.shared_last_68k_value, 8U, fmt::unsigned_integer);
+                add("LAST68K_WPC", q.shared_last_68k_write_pc, 24U, fmt::unsigned_integer);
+                add("LAST68K_NFFWPC", q.shared_last_68k_non_ff_write_pc, 24U,
+                    fmt::unsigned_integer);
+                add("LAST68K_RIDX", q.shared_last_68k_read_index, 16U,
+                    fmt::unsigned_integer);
+                add("LAST68K_RVAL", q.shared_last_68k_read_value, 8U,
+                    fmt::unsigned_integer);
+                add("LAST68K_RPC", q.shared_last_68k_read_pc, 24U, fmt::unsigned_integer);
+                add("LAST68K_EIDX", q.shared_last_even_68k_index, 16U,
+                    fmt::unsigned_integer);
+                add("LAST68K_EVAL", q.shared_last_even_68k_value, 8U,
+                    fmt::unsigned_integer);
+                add("LASTZ80_ADDR", q.shared_last_z80_addr, 16U, fmt::unsigned_integer);
+                add("LASTZ80_VAL", q.shared_last_z80_value, 8U, fmt::unsigned_integer);
+                add("STATUS_FIRST_SEEN", q.shared_status_first_read_seen ? 1U : 0U, 1U,
+                    fmt::flags);
+                add("STATUS_FIRST_VAL", q.shared_status_first_read_value, 8U,
+                    fmt::unsigned_integer);
+                add("STATUS_FIRST_PC", q.shared_status_first_read_pc, 24U,
+                    fmt::unsigned_integer);
+                add("STATUS_LAST_VAL", q.shared_status_last_read_value, 8U,
+                    fmt::unsigned_integer);
+                add("STATUS_LAST_PC", q.shared_status_last_read_pc, 24U,
+                    fmt::unsigned_integer);
+                add("CMD68K_VAL", q.shared_command_signal_last_68k_value, 8U,
+                    fmt::unsigned_integer);
+                add("CMD68K_PC", q.shared_command_signal_last_68k_pc, 24U,
+                    fmt::unsigned_integer);
+                add("CMDZ80_VAL", q.shared_command_signal_last_z80_value, 8U,
+                    fmt::unsigned_integer);
+                add("WORKZ80_ADDR", q.work_last_z80_addr, 16U, fmt::unsigned_integer);
+                add("WORKZ80_VAL", q.work_last_z80_value, 8U, fmt::unsigned_integer);
+                add("MAINCYC", system_->cpu().elapsed_cycles(), 64U, fmt::unsigned_integer);
+                add("SNDCYC", system_->sound_cpu().elapsed_cycles(), 64U, fmt::unsigned_integer);
+                add("SNDDEBT", static_cast<std::uint64_t>(system_->sound_cycle_debt()), 64U,
+                    fmt::signed_integer);
+                add("SNDACCUM", system_->sound_cycle_accum(), 64U, fmt::unsigned_integer);
+                add("SNDIRQACC", system_->qsound_irq_accum(), 32U, fmt::unsigned_integer);
+                add("SNDIRQLINE", system_->qsound_irq_line() ? 1U : 0U, 1U, fmt::flags);
+                add("SNDRESET", system_->sound_cpu().reset_line_held() ? 1U : 0U, 1U,
+                    fmt::flags);
+                add("SNAP00", q.shared_command_snapshot[0], 8U, fmt::unsigned_integer);
+                add("SNAP01", q.shared_command_snapshot[1], 8U, fmt::unsigned_integer);
+                add("SNAP02", q.shared_command_snapshot[2], 8U, fmt::unsigned_integer);
+                add("SNAP03", q.shared_command_snapshot[3], 8U, fmt::unsigned_integer);
+                add("SNAP04", q.shared_command_snapshot[4], 8U, fmt::unsigned_integer);
+                add("SNAP05", q.shared_command_snapshot[5], 8U, fmt::unsigned_integer);
+                add("SNAP06", q.shared_command_snapshot[6], 8U, fmt::unsigned_integer);
+                add("SNAP07", q.shared_command_snapshot[7], 8U, fmt::unsigned_integer);
+                add("SNAP08", q.shared_command_snapshot[8], 8U, fmt::unsigned_integer);
+                add("SNAP09", q.shared_command_snapshot[9], 8U, fmt::unsigned_integer);
+                add("SNAP10", q.shared_command_snapshot[10], 8U, fmt::unsigned_integer);
+                add("SNAP11", q.shared_command_snapshot[11], 8U, fmt::unsigned_integer);
+                add("SNAP12", q.shared_command_snapshot[12], 8U, fmt::unsigned_integer);
+                add("SNAP13", q.shared_command_snapshot[13], 8U, fmt::unsigned_integer);
+                add("SNAP14", q.shared_command_snapshot[14], 8U, fmt::unsigned_integer);
+                add("SNAP15", q.shared_command_snapshot[15], 8U, fmt::unsigned_integer);
+
+                return std::span<const chips::register_descriptor>{register_view_.data(), out};
+            }
+
+            cps2::cps2_system* system_{};
+            std::array<chips::register_descriptor, 77> register_view_{};
+            instrumentation::introspection_builder introspection_;
+        };
+
+        [[nodiscard]] std::unique_ptr<chips::ichip>
+        make_board_debug_chip(cps2::cps2_system& system) {
+            return std::make_unique<cps2_board_debug_chip>(system);
+        }
+
+        [[nodiscard]] std::span<const std::uint8_t> as_bytes(std::string_view text) noexcept {
+            return std::span<const std::uint8_t>(
+                reinterpret_cast<const std::uint8_t*>(text.data()), text.size());
+        }
+
+        [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc,
+                                               std::uint64_t value) noexcept {
+            std::array<std::uint8_t, 8> bytes{};
+            for (std::size_t i = 0; i < bytes.size(); ++i) {
+                bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+            }
+            return mnemos::security::cryptography::crc32(
+                std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+        }
+
+        [[nodiscard]] std::uint32_t crc32_string(std::uint32_t crc,
+                                                 std::string_view text) noexcept {
+            crc = crc32_u64(crc, text.size());
+            return mnemos::security::cryptography::crc32(text, crc);
+        }
+
+        [[nodiscard]] std::string hex32(std::uint32_t value) {
+            static constexpr char digits[] = "0123456789abcdef";
+            std::string out(8U, '0');
+            for (std::size_t i = 0; i < out.size(); ++i) {
+                const auto shift = static_cast<unsigned>((out.size() - 1U - i) * 4U);
+                out[i] = digits[(value >> shift) & 0x0FU];
+            }
+            return out;
+        }
+
+        [[nodiscard]] std::uint64_t resident_image_byte_count(const rom_set_image& image) noexcept {
+            std::uint64_t bytes = 0U;
+            for (const auto& [_, region] : image.regions) {
+                bytes += region.size();
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] bool resident_image_is_complete(const rom_set_image& image) noexcept {
+            if (!image.ok()) {
+                return false;
+            }
+            for (std::string_view region_name : {"maincpu", "gfx", "audiocpu", "qsound", "key"}) {
+                const std::vector<std::uint8_t>* region = image.region(region_name);
+                if (region == nullptr || region->empty()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        [[nodiscard]] std::string resident_media_crc32(const loaded_set& set) {
+            const rom_set_image& image = set.image;
+            if (image.regions.empty()) {
+                return {};
+            }
+            std::uint32_t crc =
+                mnemos::security::cryptography::crc32("capcom_cps2.resident_media.v1");
+            crc = crc32_string(crc, set.set_name);
+            crc = crc32_u64(crc, static_cast<std::uint64_t>(set.orientation));
+            crc = crc32_u64(crc, set.players);
+            crc = crc32_u64(crc, static_cast<std::uint64_t>(set.input_profile));
+            crc = crc32_u64(crc, static_cast<std::uint64_t>(set.analog_input_mode));
+            crc = crc32_u64(crc, set.coin_lockout_active_high ? 1U : 0U);
+            crc = crc32_u64(crc, image.regions.size());
+            for (const auto& [name, bytes] : image.regions) {
+                crc = crc32_string(crc, name);
+                crc = crc32_u64(crc, bytes.size());
+                crc = mnemos::security::cryptography::crc32(
+                    std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+            }
+            return hex32(crc);
+        }
 
         [[nodiscard]] frontend_sdk::display_orientation
         to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
@@ -81,14 +329,19 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         }
 
         frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
-                                                                    std::uint64_t byte_count) {
+                                                                    const loaded_set& set,
+                                                                    std::uint64_t source_bytes,
+                                                                    std::string full_hash) {
+            const std::uint64_t resident_bytes = resident_image_byte_count(set.image);
             frontend_sdk::media_capability_info media{};
             media.media.push_back(frontend_sdk::media_image_info{
                 .id = "rom_set",
                 .label = display_name.empty() ? std::string{"ROM set"} : std::string{display_name},
                 .residency = frontend_sdk::media_residency::resident,
-                .byte_count = byte_count,
-                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .byte_count = resident_bytes == 0U ? source_bytes : resident_bytes,
+                .hash_algorithm = full_hash.empty() ? frontend_sdk::media_hash_algorithm::none
+                                                    : frontend_sdk::media_hash_algorithm::crc32,
+                .full_hash = std::move(full_hash),
                 .provider_id = "cps2.adapter",
                 .revision = "loaded",
                 .cache_hint = "resident"});
@@ -544,6 +797,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                              source_name.c_str(), parsed.value->board.c_str());
                 return result;
             }
+            result.set_name = parsed.value->name;
             result.orientation = manifest_declares_orientation(text)
                                      ? to_display_orientation(parsed.value->orientation)
                                      : default_orientation_for_set(parsed.value->name,
@@ -582,6 +836,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             loaded_set result;
             const bool is_zip = rom.size() >= 4U && rom[0] == 'P' && rom[1] == 'K';
             if (!is_zip) {
+                result.set_name = set_id_from_rom_path(rom_path);
                 result.image.regions.emplace("maincpu", std::move(rom));
                 return result;
             }
@@ -711,8 +966,13 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     // its own run_frame(), so there is no per-chip master-clock schedule to
     // build; the scheduler_factory override does not apply.
     {
-        media_ = make_media_capabilities(display_name, rom.size());
+        const std::uint64_t source_bytes = rom.size();
         loaded_set set = load_set(std::move(rom), rom_path);
+        resident_media_hash_ = resident_media_crc32(set);
+        media_ = make_media_capabilities(display_name, set, source_bytes,
+                                         resident_image_is_complete(set.image)
+                                             ? resident_media_hash_
+                                             : std::string{});
         orientation_ = set.orientation;
         player_count_ = set.players;
         input_profile_ = set.input_profile;
@@ -724,7 +984,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                 {static_cast<std::uint8_t>(*dip_override & 0xFFU),
                  static_cast<std::uint8_t>((*dip_override >> 8U) & 0xFFU), 0xFFU});
         }
-        chip_view_ = {&sys_->video(), &sys_->cpu(), &sys_->sound_cpu(), &sys_->qsound_dsp()};
+        board_debug_chip_ = make_board_debug_chip(*sys_);
+        chip_view_ = {&sys_->video(), &sys_->cpu(), &sys_->sound_cpu(), &sys_->qsound_dsp(),
+                      board_debug_chip_.get()};
         publish_memory_views();
         spec_ = {{"System", "Arcade"},
                  {"Board", "Capcom CPS2"},
@@ -770,7 +1032,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         const std::uint64_t pending = due - samples_drained_;
         samples_drained_ = due;
         if (pending == 0U) {
-            return {};
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = rate};
         }
         audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
         sys_->qsound_dsp().generate(audio_buf_);
@@ -971,7 +1233,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
     runtime::save_target build_save_target(capcom_cps2_adapter& adapter) {
         runtime::save_target target;
-        target.manifest_id = "capcom_cps2";
+        target.manifest_id = adapter.resident_media_hash_.empty()
+                                 ? std::string{"capcom_cps2"}
+                                 : "capcom_cps2:" + adapter.resident_media_hash_;
         target.manifest_rev = 1U;
         target.master_cycle = adapter.sys_->cpu().elapsed_cycles();
         target.components.push_back(
@@ -985,6 +1249,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  writer.u8(adapter.player_count_);
                  writer.u8(static_cast<std::uint8_t>(adapter.input_profile_));
                  writer.u8(static_cast<std::uint8_t>(adapter.orientation_));
+                 writer.blob(as_bytes(adapter.resident_media_hash_));
                  writer.u64(adapter.frames_stepped_);
                  writer.u64(adapter.samples_drained_);
                  for (const frontend_sdk::controller_state& port : adapter.ports_) {
@@ -996,13 +1261,17 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  const std::uint8_t players = reader.u8();
                  const std::uint8_t profile = reader.u8();
                  const std::uint8_t orientation = reader.u8();
+                 const std::vector<std::uint8_t> media_hash_bytes =
+                     version >= 4U ? reader.blob() : std::vector<std::uint8_t>{};
+                 const std::string media_hash(media_hash_bytes.begin(), media_hash_bytes.end());
                  if (version < 2U || version > cps2_adapter_state_version ||
                      players != adapter.player_count_ ||
                      !valid_input_profile(profile) ||
                      static_cast<cps2_input_profile>(profile) != adapter.input_profile_ ||
                      !valid_orientation(orientation) ||
                      static_cast<frontend_sdk::display_orientation>(orientation) !=
-                         adapter.orientation_) {
+                         adapter.orientation_ ||
+                     (version >= 4U && media_hash != adapter.resident_media_hash_)) {
                      reader.fail();
                      return;
                  }

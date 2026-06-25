@@ -123,8 +123,9 @@ namespace mnemos::manifests::genesis {
         // until the 68K releases its RESET via $A11200). build_system does NOT
         // reset chips, and the 68000 ctor can't read vectors with no bus
         // attached, so without this the 68000 would start at PC=0 and run garbage.
-        // Resetting after configure() is safe -- the irq_ack/tas/z80_bus_latency
-        // settings survive reset (assemble_genesis installs them pre-reset too).
+        // Resetting after configure() is safe -- the irq_ack/tas/z80_bus_latency/
+        // genesis_dram_refresh settings survive reset (assemble_genesis installs
+        // them pre-reset too).
         rt->state.z80->reset(chips::reset_kind::power_on);
         rt->state.cpu->reset(chips::reset_kind::power_on);
 

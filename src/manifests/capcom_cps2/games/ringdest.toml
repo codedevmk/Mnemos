@@ -74,6 +74,7 @@ crc32         = 0xf931b76b
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "smb.01"

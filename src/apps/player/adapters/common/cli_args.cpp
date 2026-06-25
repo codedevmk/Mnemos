@@ -10,6 +10,24 @@
 namespace mnemos::apps::player::adapters {
 
     namespace {
+        [[nodiscard]] bool is_option_token(std::string_view value) noexcept {
+            return value.starts_with("--");
+        }
+
+        [[nodiscard]] std::optional<std::uint64_t>
+        parse_u64_decimal_token(std::string_view token) {
+            if (token.empty()) {
+                return std::nullopt;
+            }
+            std::string value{token};
+            char* end = nullptr;
+            const unsigned long long parsed = std::strtoull(value.c_str(), &end, 10);
+            if (end == value.c_str() || *end != '\0') {
+                return std::nullopt;
+            }
+            return static_cast<std::uint64_t>(parsed);
+        }
+
         std::optional<std::string> parse_lowercase_value_arg(int argc, char* argv[],
                                                              std::string_view flag) {
             for (int i = 1; i < argc - 1; ++i) {
@@ -145,6 +163,128 @@ namespace mnemos::apps::player::adapters {
             }
         }
         return false;
+    }
+
+    std::optional<std::string> validate_headless_request_args(int argc, char* argv[]) {
+        bool has_headless = false;
+        bool has_frame_stepped_headless_action = false;
+        bool has_timing_modifier = false;
+        bool has_record = false;
+        bool record_frames_seen = false;
+        std::optional<std::string> first_error;
+
+        auto set_error = [&](std::string error) {
+            if (!first_error.has_value()) {
+                first_error = std::move(error);
+            }
+        };
+        auto require_value = [&](int index, std::string_view flag, std::string_view noun) {
+            has_headless = true;
+            if (index + 1 >= argc || std::string_view{argv[index + 1]}.empty() ||
+                is_option_token(argv[index + 1])) {
+                set_error(std::string{flag} + " requires " + std::string{noun});
+                return false;
+            }
+            return true;
+        };
+
+        for (int i = 1; i < argc; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--capabilities") {
+                has_headless = true;
+            } else if (a == "--screenshot") {
+                has_frame_stepped_headless_action = true;
+                if (require_value(i, a, "an output path")) {
+                    ++i;
+                }
+            } else if (a == "--save-state") {
+                has_frame_stepped_headless_action = true;
+                if (require_value(i, a, "an output path")) {
+                    ++i;
+                }
+            } else if (a == "--dump-battery") {
+                has_frame_stepped_headless_action = true;
+                if (require_value(i, a, "an output path")) {
+                    ++i;
+                }
+            } else if (a == "--load-state") {
+                if (require_value(i, a, "a state path")) {
+                    ++i;
+                }
+            } else if (a == "--extract-assets") {
+                has_frame_stepped_headless_action = true;
+                if (require_value(i, a, "an output base path")) {
+                    ++i;
+                }
+            } else if (a == "--extract-audio") {
+                has_frame_stepped_headless_action = true;
+                if (require_value(i, a, "an output base path")) {
+                    ++i;
+                }
+            } else if (a == "--record-gif" || a == "--record-movie") {
+                has_frame_stepped_headless_action = true;
+                has_record = true;
+                if (require_value(i, a, "an output path")) {
+                    ++i;
+                }
+            } else if (a == "--frames") {
+                has_timing_modifier = true;
+                if (i + 1 >= argc || is_option_token(argv[i + 1])) {
+                    set_error("--frames requires a numeric value");
+                } else if (const auto frames = parse_u64_decimal_token(argv[i + 1])) {
+                    if (*frames > 0U) {
+                        record_frames_seen = true;
+                    }
+                    ++i;
+                } else {
+                    set_error("--frames requires a numeric value");
+                    ++i;
+                }
+            } else if (a == "--extract-frames") {
+                has_timing_modifier = true;
+                if (i + 1 >= argc || is_option_token(argv[i + 1])) {
+                    set_error("--extract-frames requires a numeric value");
+                } else if (parse_u64_decimal_token(argv[i + 1])) {
+                    ++i;
+                } else {
+                    set_error("--extract-frames requires a numeric value");
+                    ++i;
+                }
+            } else if (a == "--run-cycles") {
+                has_timing_modifier = true;
+                if (i + 1 >= argc || is_option_token(argv[i + 1])) {
+                    set_error("--run-cycles requires a numeric value");
+                } else if (parse_u64_decimal_token(argv[i + 1])) {
+                    ++i;
+                } else {
+                    set_error("--run-cycles requires a numeric value");
+                    ++i;
+                }
+            } else {
+                constexpr std::string_view run_cycles_prefix = "--run-cycles=";
+                if (a.rfind(run_cycles_prefix, 0U) == 0U) {
+                    has_timing_modifier = true;
+                    if (!parse_u64_decimal_token(a.substr(run_cycles_prefix.size())).has_value()) {
+                        set_error("--run-cycles requires a numeric value");
+                    }
+                }
+            }
+        }
+
+        if (first_error) {
+            return first_error;
+        }
+        if (has_timing_modifier && !has_frame_stepped_headless_action) {
+            return std::string{
+                "--frames/--extract-frames/--run-cycles require a frame-stepped headless command"};
+        }
+        if (!has_headless) {
+            return std::nullopt;
+        }
+        if (has_record && !record_frames_seen) {
+            return std::string{"--record-gif/--record-movie require --frames N with N > 0"};
+        }
+        return std::nullopt;
     }
 
     namespace {
@@ -308,17 +448,22 @@ namespace mnemos::apps::player::adapters {
 
     std::optional<screenshot_request> parse_screenshot_args(int argc, char* argv[]) {
         std::optional<std::string> path;
-        std::optional<std::uint64_t> frames;
-        for (int i = 1; i < argc - 1; ++i) {
+        std::uint64_t frames = 0U;
+        for (int i = 1; i < argc; ++i) {
             const std::string_view a{argv[i]};
-            if (a == "--screenshot") {
-                path = std::string{argv[i + 1]};
-            } else if (a == "--frames") {
+            if (a == "--screenshot" && i < argc - 1) {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    path = std::string{value};
+                    ++i;
+                }
+            } else if (a == "--frames" && i < argc - 1) {
                 frames = std::strtoull(argv[i + 1], nullptr, 10);
+                ++i;
             }
         }
-        if (path && frames) {
-            return screenshot_request{*path, *frames};
+        if (path) {
+            return screenshot_request{*path, frames};
         }
         return std::nullopt;
     }
@@ -341,6 +486,28 @@ namespace mnemos::apps::player::adapters {
         }
         if (path) {
             return save_state_request{*path, frames};
+        }
+        return std::nullopt;
+    }
+
+    std::optional<dump_battery_request> parse_dump_battery_args(int argc, char* argv[]) {
+        std::optional<std::string> path;
+        std::uint64_t frames = 0U;
+        for (int i = 1; i < argc; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--dump-battery" && i < argc - 1) {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    path = std::string{value};
+                    ++i;
+                }
+            } else if (a == "--frames" && i < argc - 1) {
+                frames = std::strtoull(argv[i + 1], nullptr, 10);
+                ++i;
+            }
+        }
+        if (path) {
+            return dump_battery_request{*path, frames};
         }
         return std::nullopt;
     }
@@ -372,7 +539,7 @@ namespace mnemos::apps::player::adapters {
                     const std::string_view value{argv[i + 1]};
                     // Reject an option-shaped token (e.g. a stray "--extract-frames"
                     // with no base path); leaving base unset disables the path.
-                    if (!value.empty() && !value.starts_with("--")) {
+                    if (!value.empty() && !is_option_token(value)) {
                         base = std::string{value};
                         ++i; // skip the consumed value
                     }

@@ -49,6 +49,7 @@ crc32         = 0x02ee9efc
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "rm2.01a"

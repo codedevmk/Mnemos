@@ -65,10 +65,10 @@ namespace mnemos::apps::player::adapters {
     // return the 16-bit DIP bank, or nullopt when absent/malformed.
     [[nodiscard]] std::optional<std::uint16_t> parse_dip_arg(int argc, char* argv[]);
 
-    // --screenshot <path> --frames N: headless run, dump the resulting
-    // framebuffer (a PNG when `path` ends in .png, otherwise a PPM), exit. Both
-    // flags must be present together; a missing or unparseable value disables the
-    // headless path.
+    // --screenshot <path> [--frames N]: headless run, dump the resulting
+    // framebuffer (a PNG when `path` ends in .png, otherwise a PPM), exit.
+    // Missing --frames captures the boot frame; the path must be present and must
+    // not be another option.
     struct screenshot_request final {
         std::string path;
         std::uint64_t frames{};
@@ -86,6 +86,17 @@ namespace mnemos::apps::player::adapters {
 
     [[nodiscard]] std::optional<save_state_request> parse_save_state_args(int argc,
                                                                           char* argv[]);
+
+    // --dump-battery <path> [--frames N]: headless run, advances N frames
+    // (default 0), writes the live battery-backed media image, and exits. The
+    // path must be present and must not be another option.
+    struct dump_battery_request final {
+        std::string path;
+        std::uint64_t frames{};
+    };
+
+    [[nodiscard]] std::optional<dump_battery_request> parse_dump_battery_args(int argc,
+                                                                              char* argv[]);
 
     // --load-state <path>: restore a raw Mnemos save-state container before
     // running a headless operation or entering the windowed player.
@@ -120,6 +131,12 @@ namespace mnemos::apps::player::adapters {
     // --capabilities: headless frontend query. Loads the requested system/media,
     // prints a deterministic capability/control summary, and exits.
     [[nodiscard]] bool parse_capabilities_arg(int argc, char* argv[]);
+
+    // Validate headless command syntax before the player launches a system or
+    // opens SDL. Returns the first user-facing error, or nullopt when all
+    // present headless flags are well-formed.
+    [[nodiscard]] std::optional<std::string> validate_headless_request_args(int argc,
+                                                                            char* argv[]);
 
     enum class animation_record_format : std::uint8_t {
         gif,

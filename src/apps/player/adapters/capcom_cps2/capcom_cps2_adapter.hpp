@@ -1,6 +1,7 @@
 #pragma once
 
 #include "capcom_cps2_system.hpp"
+#include "chip.hpp"
 #include "introspection_views.hpp"
 #include "player_system.hpp"
 #include "save_state.hpp" // runtime::save_target
@@ -117,6 +118,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         frontend_sdk::session_capability_info session_{};
         frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::capcom_cps2::cps2_system> sys_;
+        std::unique_ptr<chips::ichip> board_debug_chip_{};
         std::vector<chips::ichip*> chip_view_{};
         std::array<std::unique_ptr<instrumentation::span_memory_view>, 11> memory_view_storage_{};
         std::array<instrumentation::memory_view*, 11> system_mem_view_{};
@@ -124,6 +126,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         std::uint8_t player_count_{2U};
         cps2_input_profile input_profile_{cps2_input_profile::six_button};
         std::uint64_t frames_stepped_{};
+        std::string resident_media_hash_{};
         std::vector<frontend_sdk::spec_field> spec_{};
         std::vector<std::int16_t> audio_buf_{};
         std::uint64_t samples_drained_{};
