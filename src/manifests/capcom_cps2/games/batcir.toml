@@ -85,6 +85,7 @@ crc32         = 0x1203db08
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "btc.01"

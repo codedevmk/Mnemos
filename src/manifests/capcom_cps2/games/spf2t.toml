@@ -40,6 +40,7 @@ crc32         = 0xb80649e2
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "pzf.01"

@@ -56,6 +56,7 @@ crc32         = 0x806e8f38
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "sfz.01"

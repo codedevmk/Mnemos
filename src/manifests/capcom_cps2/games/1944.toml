@@ -50,6 +50,7 @@ crc32         = 0xea813eb7
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "nff.01"

@@ -49,6 +49,7 @@ crc32         = 0xf1fd2b84
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "mmx.01"
