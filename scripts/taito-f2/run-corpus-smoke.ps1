@@ -4145,8 +4145,11 @@ function Test-FeatureObserved {
                 }
             }
             "tmp82c265_panel_coin_outputs" {
-                if (Test-EvidenceIntEquals -Evidence $row -Name "board_profile_io_profile" `
-                        -Value 3) {
+                if ((Test-EvidenceIntEquals -Evidence $row `
+                        -Name "board_profile_input_profile" -Value 1) -and
+                    (Test-EvidenceIntEquals -Evidence $row `
+                        -Name "io_split_panel_input" -Value 1) -and
+                    (Get-EvidenceInt -Evidence $row -Name "io_coin_counter_slots") -ge 4) {
                     return $true
                 }
             }
