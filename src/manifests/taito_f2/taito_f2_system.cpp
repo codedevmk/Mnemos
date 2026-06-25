@@ -30,7 +30,9 @@ namespace mnemos::manifests::taito_f2 {
             ninjak,
             footchmp_deadconx,
             dinorex_suspect,
-            priority_register_suspect
+            priority_register_suspect,
+            tc0220ioc_integrated,
+            tc0510nio_integrated
         };
 
         enum class io_access_window_kind : std::uint8_t {
@@ -166,6 +168,8 @@ namespace mnemos::manifests::taito_f2 {
             case taito_f2_address_map::growl:
             case taito_f2_address_map::solfigtr:
             case taito_f2_address_map::dinorex:
+            case taito_f2_address_map::gunfront:
+            case taito_f2_address_map::metalb:
             case taito_f2_address_map::qzchikyu:
             case taito_f2_address_map::qzquest:
                 return taito_f2_io_profile::tc0510nio;
@@ -173,12 +177,10 @@ namespace mnemos::manifests::taito_f2 {
                 return taito_f2_io_profile::te7750;
             case taito_f2_address_map::synthetic:
             case taito_f2_address_map::dondokod:
-            case taito_f2_address_map::gunfront:
             case taito_f2_address_map::liquidk:
             case taito_f2_address_map::pulirula:
             case taito_f2_address_map::quizhq:
             case taito_f2_address_map::qtorimon:
-            case taito_f2_address_map::metalb:
             case taito_f2_address_map::footchmp:
             case taito_f2_address_map::deadconx:
             case taito_f2_address_map::thundfox:
@@ -636,6 +638,75 @@ namespace mnemos::manifests::taito_f2 {
                 return watchdog_window_kind::none;
             }
             return watchdog_window_kind::none;
+        }
+
+        [[nodiscard]] std::uint32_t input_address(taito_f2_address_map map,
+                                                  bool real_map) noexcept;
+
+        [[nodiscard]] bool
+        uses_tc0510nio_wordswap(taito_f2_address_map map) noexcept {
+            return map == taito_f2_address_map::gunfront ||
+                   map == taito_f2_address_map::metalb;
+        }
+
+        [[nodiscard]] bool
+        io_profile_has_integrated_watchdog(taito_f2_io_profile profile) noexcept {
+            return profile == taito_f2_io_profile::tc0220ioc ||
+                   profile == taito_f2_io_profile::tc0510nio;
+        }
+
+        [[nodiscard]] std::uint32_t
+        io_watchdog_byte_offset(const taito_f2_board_params& params) noexcept {
+            return params.io_profile == taito_f2_io_profile::tc0510nio &&
+                           uses_tc0510nio_wordswap(params.address_map)
+                       ? 0x02U
+                       : 0x00U;
+        }
+
+        [[nodiscard]] std::uint32_t
+        integrated_io_watchdog_address(const taito_f2_board_params& params,
+                                       bool real_map) noexcept {
+            if (!io_profile_has_integrated_watchdog(params.io_profile)) {
+                return 0U;
+            }
+            return input_address(params.address_map, real_map) + io_watchdog_byte_offset(params);
+        }
+
+        [[nodiscard]] watchdog_window_kind
+        integrated_io_watchdog_window(const taito_f2_board_params& params) noexcept {
+            if (params.io_profile == taito_f2_io_profile::tc0220ioc) {
+                return watchdog_window_kind::tc0220ioc_integrated;
+            }
+            if (params.io_profile == taito_f2_io_profile::tc0510nio) {
+                return watchdog_window_kind::tc0510nio_integrated;
+            }
+            return watchdog_window_kind::none;
+        }
+
+        [[nodiscard]] std::uint32_t
+        confirmed_watchdog_address(const taito_f2_board_params& params,
+                                   bool real_map) noexcept {
+            const std::uint32_t explicit_address =
+                confirmed_watchdog_address(params.address_map);
+            return explicit_address != 0U ? explicit_address
+                                          : integrated_io_watchdog_address(params, real_map);
+        }
+
+        [[nodiscard]] bool
+        io_write_resets_integrated_watchdog(const taito_f2_board_params& params,
+                                            std::uint32_t window_base,
+                                            std::uint32_t address) noexcept {
+            if (!io_profile_has_integrated_watchdog(params.io_profile) ||
+                address < window_base) {
+                return false;
+            }
+            const std::uint32_t byte_offset = address - window_base;
+            std::uint32_t register_index = byte_offset >> 1U;
+            if (params.io_profile == taito_f2_io_profile::tc0510nio &&
+                uses_tc0510nio_wordswap(params.address_map)) {
+                register_index ^= 1U;
+            }
+            return register_index == 0U;
         }
 
         [[nodiscard]] std::uint32_t suspect_watchdog_address(
@@ -1536,6 +1607,7 @@ namespace mnemos::manifests::taito_f2 {
                     return value;
                 },
                 [this, input_window_base](std::uint32_t address, std::uint8_t value) {
+                    record_integrated_io_watchdog_write(input_window_base, address, value);
                     record_io_output_write(input_window_base, address, value);
                 },
                 1);
@@ -2291,6 +2363,17 @@ namespace mnemos::manifests::taito_f2 {
         update_watchdog_state();
     }
 
+    void taito_f2_system::record_integrated_io_watchdog_write(
+        std::uint32_t window_base, std::uint32_t address, std::uint8_t value) noexcept {
+        if (!io_write_resets_integrated_watchdog(params, window_base, address)) {
+            return;
+        }
+        record_watchdog_write(address, value,
+                              static_cast<std::uint8_t>(
+                                  integrated_io_watchdog_window(params)),
+                              true);
+    }
+
     void taito_f2_system::update_watchdog_state() noexcept {
         watchdog_state.fill(0U);
 
@@ -2302,7 +2385,7 @@ namespace mnemos::manifests::taito_f2 {
         };
 
         const std::uint32_t confirmed_address =
-            confirmed_watchdog_address(params.address_map);
+            confirmed_watchdog_address(params, uses_real_map());
         const std::uint32_t suspect_address =
             suspect_watchdog_address(params.address_map);
         const std::uint32_t priority_suspect_address =

@@ -527,6 +527,9 @@ namespace mnemos::manifests::taito_f2 {
                                    std::uint8_t value,
                                    std::uint8_t window_id,
                                    bool confirmed) noexcept;
+        void record_integrated_io_watchdog_write(std::uint32_t window_base,
+                                                 std::uint32_t address,
+                                                 std::uint8_t value) noexcept;
         void update_watchdog_state() noexcept;
         void record_main_bus_access(const topology::access_event& event) noexcept;
         void update_main_bus_state() noexcept;

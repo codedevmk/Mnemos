@@ -300,6 +300,7 @@ TEST_CASE("taito_f2 derives real board wiring from a ROM-set declaration", "[tai
     CHECK(metalb_params.address_map == taito::taito_f2_address_map::metalb);
     CHECK(metalb_params.video_profile == taito::taito_f2_video_profile::tc0480scp);
     CHECK(metalb_params.tc0480scp_profile == taito::taito_f2_tc0480scp_profile::metalb);
+    CHECK(metalb_params.io_profile == taito::taito_f2_io_profile::tc0510nio);
 
     decl.taito_f2_map = "footchmp";
     const auto footchmp_params = taito::board_params_from_decl(decl);
@@ -2081,6 +2082,19 @@ TEST_CASE("taito_f2 watchdog windows publish per-map diagnostics",
     CHECK(ninjak->watchdog_confirmed_write_count == 1U);
     CHECK(ninjak->watchdog_state[21] == 3U);
 
+    auto gunfront_params = taito::taito_f2_board_params{};
+    gunfront_params.address_map = taito::taito_f2_address_map::gunfront;
+    auto gunfront = taito::assemble_taito_f2(make_image(), gunfront_params);
+    CHECK(read32_le(gunfront->watchdog_state, 24U) ==
+          taito::real_input_base + 2U);
+    CHECK(gunfront->watchdog_state[32] == 1U);
+    gunfront->main_bus.write8(taito::real_input_base + 2U, 0x22U);
+    CHECK(gunfront->watchdog_confirmed_write_count == 1U);
+    CHECK(gunfront->watchdog_suspect_write_count == 0U);
+    CHECK(gunfront->last_watchdog_address == taito::real_input_base + 2U);
+    CHECK(gunfront->watchdog_state[21] == 8U);
+    CHECK(gunfront->watchdog_state[44] == 1U);
+
     auto footchmp_params = taito::taito_f2_board_params{};
     footchmp_params.address_map = taito::taito_f2_address_map::footchmp;
     auto footchmp = taito::assemble_taito_f2(make_image(), footchmp_params);
@@ -2099,8 +2113,9 @@ TEST_CASE("taito_f2 watchdog windows publish per-map diagnostics",
     auto dinorex_params = taito::taito_f2_board_params{};
     dinorex_params.address_map = taito::taito_f2_address_map::dinorex;
     auto dinorex = taito::assemble_taito_f2(make_image(), dinorex_params);
-    CHECK(dinorex->watchdog_state[32] == 0U);
+    CHECK(dinorex->watchdog_state[32] == 1U);
     CHECK(dinorex->watchdog_state[33] == 1U);
+    CHECK(read32_le(dinorex->watchdog_state, 24U) == taito::real_input_base);
     CHECK(read32_le(dinorex->watchdog_state, 28U) == taito::dinorex_watchdog_base);
     dinorex->main_bus.write8(taito::dinorex_watchdog_base, 0x77U);
     CHECK(dinorex->watchdog_confirmed_write_count == 0U);
