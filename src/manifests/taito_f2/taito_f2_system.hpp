@@ -468,6 +468,7 @@ namespace mnemos::manifests::taito_f2 {
                                  taito_f2_board_params board_params = {});
 
         void run_frame();
+        void run_palette_readback_probe() noexcept;
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system,
                         std::uint8_t dsw_a, std::uint8_t dsw_b) noexcept {
             input_p1 = p1;

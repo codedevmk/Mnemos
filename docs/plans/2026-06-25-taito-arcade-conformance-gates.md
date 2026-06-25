@@ -659,6 +659,17 @@ likely to produce runtime surprises before a game-specific bug report lands:
   respectively). `growl` wrote palette RAM heavily in the sampled frame but did
   not read the palette window back, so it remains a scene-coverage gap rather
   than an instrumentation gap.
+- The stricter local pass at
+  `build/scratch/taito-f2-corpus/20260625-160937-036/` passes the current
+  four-set corpus with `-RequireFeatureEvidence`. The runner now records a
+  late no-input visual attract capture when early scenes have not exercised
+  visible video gates; this observes the later `gunfrontj` TC0100SCN text scene
+  and the Growl/Dino Rex priority-blend evidence without weakening the feature
+  rules. It also has an explicit `palette-readback` debug probe for TC0110PCR
+  evidence gaps: the Taito F2 adapter dispatches the named probe to a real
+  emulated palette-window bus read before artifact dump, and the runner marks
+  that probe in `visual_attract_probe.debug_probes` so synthetic debug readback
+  is not confused with organic ROM scene reads.
 - The same audit keeps several remaining traps visible before runtime:
   service/DIP/watchdog readback, M68000 exact IRQ latency, M68000
   exact wait-state timing, raster mid-frame video writes, ROZ

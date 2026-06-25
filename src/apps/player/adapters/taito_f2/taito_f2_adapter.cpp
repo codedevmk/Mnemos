@@ -554,6 +554,14 @@ namespace mnemos::apps::player::adapters::taito_f2 {
         ++frames_stepped_;
     }
 
+    bool taito_f2_adapter::run_debug_probe(std::string_view id) noexcept {
+        if (id == "palette-readback") {
+            sys_->run_palette_readback_probe();
+            return true;
+        }
+        return false;
+    }
+
     frontend_sdk::audio_chunk taito_f2_adapter::drain_audio() noexcept {
         constexpr std::uint32_t sample_rate = manifests::taito_f2::ym2610_clock_hz /
                                               chips::audio::ym2610::default_clock_divider;

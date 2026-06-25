@@ -9,7 +9,9 @@
 # MNEMOS_TAITO_F2_GOLDENS once a real-ROM frame has been accepted as golden.
 # Optional rendered-audio evidence can be enabled with -AudioProbe or
 # MNEMOS_TAITO_F2_AUDIO_PROBE=1; -RequireAudioEvidence fails sets whose probe is
-# missing, invalid, or silent.
+# missing, invalid, or silent. Strict feature-evidence runs may also trigger a
+# late no-input visual attract capture when the early scene has not exercised a
+# visible video feature yet.
 
 param(
     [string]$BuildDir = "build/windows-msvc-debug",
@@ -29,6 +31,7 @@ param(
     [switch]$AudioProbe,
     [int]$AudioFrames = 1800,
     [string[]]$AudioPress = @("select@30+4", "start@180+8"),
+    [int]$VisualAttractFrames = 4800,
     [switch]$RequireAudioEvidence
 )
 
@@ -4528,6 +4531,12 @@ function Get-TaitoF2RuntimeFeatureCoverage {
                     $null -ne $row.gameplay_probe.runtime_evidence) {
                     $evidence.Add($row.gameplay_probe.runtime_evidence)
                 }
+                $visualAttractProbe = $row.PSObject.Properties["visual_attract_probe"]
+                if ($null -ne $visualAttractProbe -and
+                    $row.visual_attract_probe.enabled -and
+                    $null -ne $row.visual_attract_probe.runtime_evidence) {
+                    $evidence.Add($row.visual_attract_probe.runtime_evidence)
+                }
                 if ($row.audio_probe.enabled -and
                     $null -ne $row.audio_probe.runtime_evidence) {
                     $evidence.Add($row.audio_probe.runtime_evidence)
@@ -4653,6 +4662,14 @@ if (-not [string]::IsNullOrWhiteSpace($audioPressEnv)) {
         $audioPressEnv.Split(
             [System.IO.Path]::PathSeparator,
             [System.StringSplitOptions]::RemoveEmptyEntries))
+}
+$visualAttractFramesEnv =
+    [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_F2_VISUAL_ATTRACT_FRAMES")
+if (-not [string]::IsNullOrWhiteSpace($visualAttractFramesEnv)) {
+    $VisualAttractFrames = [int]$visualAttractFramesEnv
+}
+if ($VisualAttractFrames -lt 1) {
+    $VisualAttractFrames = 1
 }
 $requireAudioEvidenceEnv =
     [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_F2_REQUIRE_AUDIO_EVIDENCE")
@@ -4800,6 +4817,8 @@ foreach ($romPath in $uniqueRoms) {
     $screenshotPath = Join-Path $setOut "$setId.after-load.ppm"
     $gameplayLog = Join-Path $setOut "$setId.gameplay.log"
     $gameplayScreenshotPath = Join-Path $setOut "$setId.gameplay.ppm"
+    $visualAttractLog = Join-Path $setOut "$setId.visual-attract.log"
+    $visualAttractScreenshotPath = Join-Path $setOut "$setId.visual-attract.ppm"
     $audioLog = Join-Path $setOut "$setId.audio.log"
     $audioBasePath = Join-Path $setOut "$setId.audio"
     $audioAttractLog = Join-Path $setOut "$setId.audio-attract.log"
@@ -4909,6 +4928,122 @@ foreach ($romPath in $uniqueRoms) {
                 -ScreenshotPath $gameplayScreenshotPath
         }
     }
+    $visualAttractExit = $null
+    $visualAttractFrameLit = $false
+    $visualAttractHash = $null
+    $visualAttractCaptureFrames =
+        [Math]::Max($VisualAttractFrames, [Math]::Max($Frames, $GameplayFrames))
+    $visualAttractPrioritySummary = [pscustomobject]@{
+        present = $false
+        path = $null
+        bytes = 0
+        valid = $false
+        records = 0
+        final_sources = [pscustomobject]@{}
+        attempted_sources = [pscustomobject]@{}
+        rejected_sources = [pscustomobject]@{}
+        last_rejected_sources = [pscustomobject]@{}
+        final_source_bounds = [pscustomobject]@{}
+        attempted_source_bounds = [pscustomobject]@{}
+        rejected_source_bounds = [pscustomobject]@{}
+        non_backdrop_bounds = [pscustomobject]@{ present = $false; pixels = 0 }
+        sprite_occupied_pixels = 0
+        sprite_priority_reject_pixels = 0
+        sprite_occupancy_reject_pixels = 0
+        layer_priority_reject_pixels = 0
+    }
+    $visualAttractDecodedSpriteSummary = [pscustomobject]@{
+        present = $false
+        path = $null
+        bytes = 0
+        valid = $false
+        records = 0
+    }
+    $visualAttractRuntimeEvidence = Get-RuntimeFeatureEvidence `
+        -PrioritySummary $visualAttractPrioritySummary `
+        -DecodedSpriteSummary $visualAttractDecodedSpriteSummary
+    $visualAttractProbeEnabled = $false
+    $manifestProfile = $null
+    foreach ($candidateProfile in @($manifestProfiles)) {
+        if ([string]::Equals(
+                [string]$candidateProfile.set,
+                [string]$setId,
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+            $manifestProfile = $candidateProfile
+            break
+        }
+    }
+    $visualProbeEvidence = [System.Collections.Generic.List[object]]::new()
+    if ($null -ne $runtimeEvidence) {
+        $visualProbeEvidence.Add($runtimeEvidence)
+    }
+    if ($GameplayProbe -and $null -ne $gameplayRuntimeEvidence) {
+        $visualProbeEvidence.Add($gameplayRuntimeEvidence)
+    }
+    $lateVisualProbeFeatures = @(
+        "tc0100scn_bg_text",
+        "tc0100scn_text_priority_model",
+        "tc0360pri_priority_blend",
+        "tc0480scp",
+        "tc0480scp_text_source_sidecars",
+        "tc0480scp_layer_disable_priority",
+        "roz",
+        "roz_fixed_point_offsets",
+        "roz_priority_palette_bank",
+        "roz_wrap_clip_flip_semantics",
+        "dual_tc0100scn",
+        "dual_tc0100scn_priority_merge"
+    )
+    $needsVisualAttractProbe = $false
+    if ($RequireFeatureEvidence -and $null -ne $manifestProfile) {
+        foreach ($feature in $lateVisualProbeFeatures) {
+            if ($manifestProfile.features -contains $feature -and
+                -not (Test-FeatureObserved -Feature $feature `
+                    -Evidence @($visualProbeEvidence))) {
+                $needsVisualAttractProbe = $true
+                break
+            }
+        }
+    }
+    $needsPaletteReadbackProbe =
+        $RequireFeatureEvidence -and
+        $null -ne $manifestProfile -and
+        $manifestProfile.features -contains "tc0110pcr_palette_readback" -and
+        -not (Test-FeatureObserved -Feature "tc0110pcr_palette_readback" `
+            -Evidence @($visualProbeEvidence))
+    $visualAttractDebugProbes = @()
+    if ($needsPaletteReadbackProbe) {
+        $visualAttractDebugProbes += "palette-readback"
+    }
+    if ($needsVisualAttractProbe -or $needsPaletteReadbackProbe) {
+        $visualAttractProbeEnabled = $true
+        $visualAttractArgs = @(
+            "--system", "taito_f2",
+            "--rom", $runRomPath,
+            "--frames", $visualAttractCaptureFrames.ToString(),
+            "--screenshot", $visualAttractScreenshotPath
+        )
+        foreach ($probe in $visualAttractDebugProbes) {
+            $visualAttractArgs += @("--debug-probe", $probe)
+        }
+        $visualAttractExit = Invoke-Player -Player $player `
+            -LogPath $visualAttractLog -Arguments $visualAttractArgs
+        if (Test-Path -LiteralPath $visualAttractScreenshotPath -PathType Leaf) {
+            $visualAttractFrameLit =
+                Test-PpmNonBlank -Path $visualAttractScreenshotPath
+            $visualAttractHash =
+                (Get-FileHash -LiteralPath $visualAttractScreenshotPath `
+                    -Algorithm SHA256).Hash.ToLowerInvariant()
+            $visualAttractPrioritySummary =
+                Get-PriorityDecisionSummary -ScreenshotPath $visualAttractScreenshotPath
+            $visualAttractDecodedSpriteSummary =
+                Get-DecodedSpriteObjectSummary -ScreenshotPath $visualAttractScreenshotPath
+            $visualAttractRuntimeEvidence = Get-RuntimeFeatureEvidence `
+                -PrioritySummary $visualAttractPrioritySummary `
+                -DecodedSpriteSummary $visualAttractDecodedSpriteSummary `
+                -ScreenshotPath $visualAttractScreenshotPath
+        }
+    }
     $audioExit = $null
     $audioSummary = New-MissingAudioSummary -BasePath $audioBasePath
     $audioRuntimeEvidence = Get-AudioRuntimeEvidence -AudioSummary $audioSummary
@@ -5003,6 +5138,20 @@ foreach ($romPath in $uniqueRoms) {
             decoded_sprite_objects = $gameplayDecodedSpriteSummary
             runtime_evidence = $gameplayRuntimeEvidence
             log = $gameplayLog
+        }
+        visual_attract_probe = [pscustomobject]@{
+            enabled = [bool]$visualAttractProbeEnabled
+            frames = $visualAttractCaptureFrames
+            presses = @()
+            debug_probes = @($visualAttractDebugProbes)
+            exit = $visualAttractExit
+            frame_lit = $visualAttractFrameLit
+            screenshot_sha256 = $visualAttractHash
+            screenshot = $visualAttractScreenshotPath
+            priority_decisions = $visualAttractPrioritySummary
+            decoded_sprite_objects = $visualAttractDecodedSpriteSummary
+            runtime_evidence = $visualAttractRuntimeEvidence
+            log = $visualAttractLog
         }
         audio_probe = [pscustomobject]@{
             enabled = [bool]$AudioProbe

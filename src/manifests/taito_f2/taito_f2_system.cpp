@@ -1781,6 +1781,13 @@ namespace mnemos::manifests::taito_f2 {
         return params.address_map != taito_f2_address_map::synthetic;
     }
 
+    void taito_f2_system::run_palette_readback_probe() noexcept {
+        const auto last_offset =
+            std::min<std::uint32_t>(static_cast<std::uint32_t>(last_palette_index) * 2U,
+                                    static_cast<std::uint32_t>(palette_ram.size() - 2U));
+        (void)main_bus.read16_be(palette_ram_address(params.address_map) + last_offset);
+    }
+
     std::uint32_t taito_f2_system::z80_bank_rom_base() const noexcept {
         return static_cast<std::uint32_t>(z80_sound_bank_page()) *
                static_cast<std::uint32_t>(z80_bank_window);

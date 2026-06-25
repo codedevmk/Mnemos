@@ -216,6 +216,13 @@ namespace mnemos::frontend_sdk {
             return {};
         }
 
+        // Optional, named runtime diagnostics requested by headless tooling before
+        // artifact dump. Default unsupported keeps system-specific probes explicit.
+        virtual bool run_debug_probe(std::string_view id) noexcept {
+            (void)id;
+            return false;
+        }
+
         // Cartridge battery-backed RAM (SRAM), exposed so the frontend can persist
         // it to a .srm file across sessions: the frontend loads saved bytes into
         // this span on boot and writes it back on exit. The span is the adapter's

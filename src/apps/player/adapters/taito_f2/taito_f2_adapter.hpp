@@ -12,6 +12,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mnemos::apps::player::adapters::taito_f2 {
@@ -60,6 +61,7 @@ namespace mnemos::apps::player::adapters::taito_f2 {
         memory_views() const noexcept override {
             return system_mem_view_;
         }
+        bool run_debug_probe(std::string_view id) noexcept override;
         [[nodiscard]] std::vector<std::uint8_t> save_state() override;
         [[nodiscard]] runtime::load_result load_state(std::span<const std::uint8_t> data) override;
 

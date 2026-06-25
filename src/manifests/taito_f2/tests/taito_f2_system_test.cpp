@@ -1718,6 +1718,37 @@ TEST_CASE("taito_f2 palette writes publish decoded palette state",
     CHECK(restored->last_palette_read_color == source->last_palette_read_color);
 }
 
+TEST_CASE("taito_f2 palette readback probe uses the active board palette window",
+          "[taito_f2][palette]") {
+    auto params = taito::taito_f2_board_params{};
+    params.address_map = taito::taito_f2_address_map::growl;
+    params.palette_format = taito::taito_f2_palette_format::rrrr_gggg_bbbb_rgbx;
+    params.palette_profile = taito::taito_f2_palette_profile::tc0260dar;
+    auto system = taito::assemble_taito_f2(make_image(), params);
+
+    system->main_bus.write16_be(taito::palette_ram_base + 6U, 0x0F0FU);
+    CHECK(system->palette_read_count == 0U);
+
+    system->run_palette_readback_probe();
+
+    const std::uint32_t expected_color =
+        mnemos::chips::video::taito_f2_video::decode_color(
+            mnemos::chips::video::taito_f2_video::palette_format::rrrr_gggg_bbbb_rgbx,
+            0x0F0FU);
+    CHECK(system->palette_read_count == 2U);
+    CHECK(system->last_palette_read_address == taito::palette_ram_base + 7U);
+    CHECK(system->last_palette_read_index == 3U);
+    CHECK(system->last_palette_read_word == 0x0F0FU);
+    CHECK(system->last_palette_read_color == expected_color);
+    CHECK(system->palette_write_state[20] == 1U);
+    CHECK(system->palette_write_state[22] ==
+          static_cast<std::uint8_t>(taito::taito_f2_palette_profile::tc0260dar));
+    CHECK(system->palette_write_state[23] == 1U);
+    CHECK(read32_le(system->palette_write_state, 24U) == 2U);
+    CHECK(read32_le(system->palette_write_state, 28U) ==
+          taito::palette_ram_base + 7U);
+}
+
 TEST_CASE("taito_f2 sound Z80 reaches the YM2610 port pair", "[taito_f2][sound]") {
     auto image = make_image();
     auto& sound = image.regions["audiocpu"];

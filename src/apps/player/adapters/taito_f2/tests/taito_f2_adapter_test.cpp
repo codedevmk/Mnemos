@@ -47,6 +47,12 @@ namespace {
                (static_cast<std::uint32_t>(bytes[at + 3U]) << 24U);
     }
 
+    [[nodiscard]] std::uint16_t read16_le(std::span<const std::uint8_t> bytes,
+                                          std::size_t at) {
+        return static_cast<std::uint16_t>(bytes[at]) |
+               static_cast<std::uint16_t>(bytes[at + 1U] << 8U);
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> make_program() {
         std::vector<std::uint8_t> rom(taito::main_rom_size, 0xFFU);
         poke32(rom, 0x0U, taito::work_ram_base + taito::work_ram_size);
@@ -416,6 +422,26 @@ TEST_CASE("taito_f2_adapter publishes board memory views", "[taito_f2][adapter]"
     REQUIRE(adapter.memory_views()[24]->bytes().size() == taito::io_access_state_bytes);
     CHECK(adapter.memory_views()[24]->bytes()[0] == 1U);
     CHECK(adapter.memory_views()[24]->bytes()[1] == 0U);
+}
+
+TEST_CASE("taito_f2_adapter debug probe records palette readback",
+          "[taito_f2][adapter][palette]") {
+    taito_f2_adapter adapter(make_program(), "smoke");
+
+    adapter.machine().main_bus.write16_be(taito::palette_ram_base + 8U, 0x1234U);
+    CHECK(adapter.machine().palette_read_count == 0U);
+
+    CHECK(adapter.run_debug_probe("palette-readback"));
+    CHECK_FALSE(adapter.run_debug_probe("unknown-probe"));
+
+    REQUIRE(adapter.memory_views()[12]->bytes().size() == taito::palette_write_state_bytes);
+    const auto palette_state = adapter.memory_views()[12]->bytes();
+    CHECK(adapter.machine().palette_read_count == 2U);
+    CHECK(palette_state[20] == 1U);
+    CHECK(read32_le(palette_state, 24U) == 2U);
+    CHECK(read32_le(palette_state, 28U) == taito::palette_ram_base + 9U);
+    CHECK(read16_le(palette_state, 32U) == 0x1234U);
+    CHECK(read16_le(palette_state, 34U) == 4U);
 }
 
 TEST_CASE("taito_f2_adapter exposes TC0140SYT sound communication diagnostics",

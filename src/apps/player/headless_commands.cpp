@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -25,6 +26,30 @@ namespace {
             }
         }
         return frames;
+    }
+
+    [[nodiscard]] std::vector<std::string> parse_debug_probes(int argc, char* argv[]) {
+        std::vector<std::string> probes;
+        for (int i = 1; i + 1 < argc; ++i) {
+            if (std::string_view{argv[i]} == "--debug-probe") {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    probes.emplace_back(value);
+                    ++i;
+                }
+            }
+        }
+        return probes;
+    }
+
+    void run_debug_probes(mnemos::frontend_sdk::player_system& sys,
+                          const std::vector<std::string>& probes) noexcept {
+        for (const std::string& probe : probes) {
+            if (!sys.run_debug_probe(probe)) {
+                std::fprintf(stderr, "[mnemos_player] unsupported debug probe: %s\n",
+                             probe.c_str());
+            }
+        }
     }
 
     void apply_disk_swaps(mnemos::frontend_sdk::player_system& sys,
@@ -286,6 +311,7 @@ namespace mnemos::apps::player {
 
             const auto press_events = parse_press_events(argc, argv);
             const auto swap_frames = parse_swap_frames(argc, argv);
+            const auto debug_probes = parse_debug_probes(argc, argv);
             const std::uint64_t progress_interval = headless_progress_interval();
             headless_breadcrumb_session breadcrumb("screenshot", requests.screenshot->frames);
             for (std::uint64_t i = 0; i < requests.screenshot->frames; ++i) {
@@ -302,6 +328,7 @@ namespace mnemos::apps::player {
             }
 
             breadcrumb.mark("before_dump", requests.screenshot->frames);
+            run_debug_probes(*system, debug_probes);
             if (!debug::dump_screenshot_artifacts(*system, requests.screenshot->path)) {
                 breadcrumb.mark("dump_failed", requests.screenshot->frames);
                 std::fprintf(stderr, "could not write screenshot: %s\n",
