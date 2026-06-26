@@ -141,6 +141,118 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m92_sound_irq_priority_program() {
+        std::vector<std::uint8_t> rom(m92::sound_rom_size, 0xFFU);
+        const std::size_t intp0_vector =
+            static_cast<std::size_t>(m92::sound_irq_vector_ym2151) * 4U;
+        const std::size_t intp1_vector =
+            static_cast<std::size_t>(m92::sound_irq_vector_command_latch) * 4U;
+        rom[intp0_vector + 0U] = 0x00U; // IVT[INTP0] -> 0000:0300
+        rom[intp0_vector + 1U] = 0x03U;
+        rom[intp0_vector + 2U] = 0x00U;
+        rom[intp0_vector + 3U] = 0x00U;
+        rom[intp1_vector + 0U] = 0x20U; // IVT[INTP1] -> 0000:0320
+        rom[intp1_vector + 1U] = 0x03U;
+        rom[intp1_vector + 2U] = 0x00U;
+        rom[intp1_vector + 3U] = 0x00U;
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::vector<std::uint8_t> wait_program{
+            0xFBU, // STI
+            0xF4U, // HLT, then wake on the selected sound IRQ
+            0xF4U  // HLT again if the handler ever returns
+        };
+        for (std::size_t i = 0; i < wait_program.size(); ++i) {
+            rom[0x0200U + i] = wait_program[i];
+        }
+        const std::vector<std::uint8_t> intp0_handler{
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xB0U, 0xA0U,        // MOV AL,A0
+            0xA2U, 0x02U, 0x00U, // MOV [0002],AL
+            0xF4U                // HLT
+        };
+        const std::vector<std::uint8_t> intp1_handler{
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xB0U, 0xC1U,        // MOV AL,C1
+            0xA2U, 0x02U, 0x00U, // MOV [0002],AL
+            0xF4U                // HLT
+        };
+        for (std::size_t i = 0; i < intp0_handler.size(); ++i) {
+            rom[0x0300U + i] = intp0_handler[i];
+        }
+        for (std::size_t i = 0; i < intp1_handler.size(); ++i) {
+            rom[0x0320U + i] = intp1_handler[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m92_sound_irq_priority_chain_program() {
+        std::vector<std::uint8_t> rom(m92::sound_rom_size, 0xFFU);
+        const std::size_t intp0_vector =
+            static_cast<std::size_t>(m92::sound_irq_vector_ym2151) * 4U;
+        const std::size_t intp1_vector =
+            static_cast<std::size_t>(m92::sound_irq_vector_command_latch) * 4U;
+        rom[intp0_vector + 0U] = 0x00U; // IVT[INTP0] -> 0000:0300
+        rom[intp0_vector + 1U] = 0x03U;
+        rom[intp0_vector + 2U] = 0x00U;
+        rom[intp0_vector + 3U] = 0x00U;
+        rom[intp1_vector + 0U] = 0x40U; // IVT[INTP1] -> 0000:0340
+        rom[intp1_vector + 1U] = 0x03U;
+        rom[intp1_vector + 2U] = 0x00U;
+        rom[intp1_vector + 3U] = 0x00U;
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::vector<std::uint8_t> wait_program{
+            0xFBU, // STI
+            0xF4U, // HLT, then wake on the selected sound IRQ
+            0xF4U  // HLT again if the handlers ever return
+        };
+        for (std::size_t i = 0; i < wait_program.size(); ++i) {
+            rom[0x0200U + i] = wait_program[i];
+        }
+        const std::vector<std::uint8_t> intp0_handler{
+            0xB8U, 0x00U, 0xA8U, // MOV AX,A800
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xB0U, 0x14U,        // MOV AL,14
+            0xA2U, 0x40U, 0x00U, // MOV [0040],AL (YM2151 timer control address)
+            0xB0U, 0x15U,        // MOV AL,15 (reset Timer A flag, keep Timer A/IRQ enabled)
+            0xA2U, 0x41U, 0x00U, // MOV [0041],AL
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xB0U, 0xA0U,        // MOV AL,A0
+            0xA2U, 0x02U, 0x00U, // MOV [0002],AL
+            0xFBU,               // STI, then let the pending lower-priority source through
+            0xF4U                // HLT
+        };
+        const std::vector<std::uint8_t> intp1_handler{
+            0xB8U, 0x00U, 0xA8U, // MOV AX,A800
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xA0U, 0x44U, 0x00U, // MOV AL,[0044] (main sound command latch)
+            0x88U, 0xC3U,        // MOV BL,AL
+            0xA2U, 0x44U, 0x00U, // MOV [0044],AL (acknowledge command IRQ)
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0x8AU, 0xC3U,        // MOV AL,BL
+            0xA2U, 0x03U, 0x00U, // MOV [0003],AL
+            0xF4U                // HLT
+        };
+        for (std::size_t i = 0; i < intp0_handler.size(); ++i) {
+            rom[0x0300U + i] = intp0_handler[i];
+        }
+        for (std::size_t i = 0; i < intp1_handler.size(); ++i) {
+            rom[0x0340U + i] = intp1_handler[i];
+        }
+        return rom;
+    }
+
     [[nodiscard]] mnemos::manifests::common::rom_set_image synthetic_m92_image() {
         mnemos::manifests::common::rom_set_image image;
         image.regions.emplace("maincpu", synthetic_m92_program());
@@ -290,6 +402,67 @@ TEST_CASE("m92 YM2151 IRQ reaches the V35 INTP0 vector", "[m92][board][audio]") 
 
     system->sound_cpu.tick(256U);
     CHECK(system->sound_ram[1] == 0xA5U);
+}
+
+TEST_CASE("m92 simultaneous sound IRQs prefer YM2151 INTP0 over command INTP1",
+          "[m92][board][audio]") {
+    auto image = synthetic_m92_image();
+    image.regions["soundcpu"] = synthetic_m92_sound_irq_priority_program();
+
+    auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+    CHECK(system->sound_ram[2] == 0x00U);
+    REQUIRE(system->sound_cpu.halted());
+
+    system->write_sound_latch(0x44U);
+    REQUIRE(system->sound_latch_pending);
+
+    system->fm.write_address(0x10U);
+    system->fm.write_data(0xFFU);
+    system->fm.write_address(0x11U);
+    system->fm.write_data(0x02U);
+    system->fm.write_address(0x14U);
+    system->fm.write_data(0x05U);
+    system->fm.tick(128U);
+    REQUIRE(system->fm.irq_asserted());
+
+    system->sound_cpu.tick(256U);
+    CHECK(system->sound_ram[2] == 0xA0U);
+    CHECK(system->sound_latch_pending);
+}
+
+TEST_CASE("m92 pending command IRQ is serviced after YM2151 INTP0 clears", "[m92][board][audio]") {
+    auto image = synthetic_m92_image();
+    image.regions["soundcpu"] = synthetic_m92_sound_irq_priority_chain_program();
+
+    auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+    CHECK(system->sound_ram[2] == 0x00U);
+    CHECK(system->sound_ram[3] == 0x00U);
+    REQUIRE(system->sound_cpu.halted());
+
+    system->write_sound_latch(0x44U);
+    REQUIRE(system->sound_latch_pending);
+
+    system->fm.write_address(0x10U);
+    system->fm.write_data(0xFFU);
+    system->fm.write_address(0x11U);
+    system->fm.write_data(0x02U);
+    system->fm.write_address(0x14U);
+    system->fm.write_data(0x05U);
+    system->fm.tick(128U);
+    REQUIRE(system->fm.irq_asserted());
+
+    system->sound_cpu.tick(4096U);
+    CHECK(system->sound_ram[2] == 0xA0U);
+    CHECK(system->sound_ram[3] == 0x44U);
+    CHECK_FALSE(system->fm.irq_asserted());
+    CHECK_FALSE(system->sound_latch_pending);
+    CHECK(system->sound_cpu.halted());
 }
 
 TEST_CASE("m92 save state preserves board identity and runtime state", "[m92][board]") {

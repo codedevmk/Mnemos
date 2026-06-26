@@ -111,7 +111,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - `nbbatman` is the complete local Ninja Baseball Bat Man parent wrapper route; `nbbatmanu` declares parent `nbbatman` and carries the changed lower main-program pair plus parent-fallback declarations for the unchanged upper main-program pair.
 - The M92 adapter now resolves clone parents beside the selected set path via direct `parent.zip`, unpacked parent directories, or sibling single-inner wrapper ZIPs such as `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip`.
 - Player adapter remains first-pass: NEC V33/V35 shell, YM2151/GA20 windows, diagnostic GA21/GA22-era video path, resident media validation, rollback-ready save-state, and capability discovery.
-- The M92 sound-command latch now asserts the modeled V35 command IRQ through INTP1/vector 25 on main V33 writes; latch reads do not acknowledge it, sound-side writes to `$a8044` acknowledge/clear it, YM2151 Timer A IRQ dispatches through V35 INTP0/vector 24, command/reply state is preserved in board save state version 3, and synthetic V33-to-V35 proof covers command IRQ dispatch, latch acknowledge, reply, and sound-RAM storage.
+- The M92 sound-command latch now asserts the modeled V35 command IRQ through INTP1/vector 25 on main V33 writes; latch reads do not acknowledge it, sound-side writes to `$a8044` acknowledge/clear it, YM2151 Timer A IRQ dispatches through V35 INTP0/vector 24, simultaneous pending YM/command IRQs prefer INTP0 before INTP1, a still-pending command IRQ is serviced after the YM source clears, command/reply state is preserved in board save state version 3, and synthetic V33-to-V35 proof covers command IRQ dispatch, latch acknowledge, reply, and sound-RAM storage.
 - `MNEMOS_M92_SET_DIR=D:\emu\irem` now data-gates twelve M92 sets. Direct `mnemos_player` smokes for `gunforceu`, `gunforcej`, `mysticri`, `gunhohki`, `mysticrib`, `nbbatman`, and `nbbatmanu` write 320x240 nonblank PPMs plus save states after one frame.
 - Remaining: encrypted V35 sound execution/decryption/protocol proof, cycle-exact V35 interrupt latency, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
 
@@ -342,6 +342,17 @@ M92 command IRQ continuation validation on 2026-06-26:
 - Full preset build through `VsDevCmd.bat`: `cmake --build --preset windows-msvc-debug` passed.
 - Full preset CTest without data env vars: `ctest --preset windows-msvc-debug --output-on-failure` passed `210/210`, with expected ROM/oracle-gated skips including the M92 corpus golden.
 - This proves the currently modeled M92 V33-to-V35 command IRQ assertion, vector dispatch, explicit acknowledge, YM IRQ dispatch, and reply path. It does not prove encrypted V35 sound-program decryption, cycle-exact V35 interrupt latency, GA21/GA22 video, GA20 analog balance/filtering, or final M92 parity.
+
+M92 sound IRQ arbitration proof on 2026-06-26:
+
+- Added focused M92 proof that simultaneous pending YM2151 Timer A and command-latch IRQs dispatch through V35 INTP0/vector 24 before INTP1/vector 25.
+- Added follow-on proof that after the YM source is cleared by the V35 handler, the still-pending command IRQ is serviced through INTP1, acknowledges `$a8044`, and stores the command byte in sound RAM.
+- Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m92_system_test` passed `1/1`.
+- Data-gated M92 CTest with `MNEMOS_M92_SET_DIR=D:\emu\irem`: `3/3` passed for the M92 system test, adapter test, and corpus golden.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings, and `clang-format --dry-run --Werror` passed on `src\manifests\irem_m92\tests\m92_system_test.cpp`.
+- Full preset build through `VsDevCmd.bat`: `cmake --build --preset windows-msvc-debug` passed.
+- Full preset CTest without data env vars: `ctest --preset windows-msvc-debug --output-on-failure` passed `210/210`, with expected ROM/oracle-gated skips including the M92 corpus golden.
+- This strengthens the modeled IRQ-priority proof only; it is not encrypted V35 sound-program decryption, cycle-exact V35 interrupt latency, GA21/GA22 video parity, GA20 analog balance/filtering, or final M92 audio parity.
 
 M107 GA20 player-mixer continuation validation on 2026-06-26:
 
