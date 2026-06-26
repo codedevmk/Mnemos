@@ -57,6 +57,19 @@ TEST_CASE("v30 registers through the chip registry and reports cpu metadata", "[
     CHECK(chip->metadata().klass == mnemos::chips::chip_class::cpu);
 }
 
+TEST_CASE("v30 core reports configured NEC V-series model metadata", "[v30]") {
+    v30 cpu;
+    CHECK(cpu.metadata().part_number == "v30");
+
+    cpu.set_model(v30::model::v33);
+    CHECK(cpu.cpu_model() == v30::model::v33);
+    CHECK(cpu.metadata().part_number == "v33");
+
+    cpu.set_model(v30::model::v35);
+    CHECK(cpu.cpu_model() == v30::model::v35);
+    CHECK(cpu.metadata().part_number == "v35");
+}
+
 TEST_CASE("v30 powers on at FFFF:0000 and takes a far jump", "[v30]") {
     flat_bus bus;
     v30 cpu;

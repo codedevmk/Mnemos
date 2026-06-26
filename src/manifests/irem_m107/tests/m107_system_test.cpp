@@ -404,6 +404,20 @@ TEST_CASE("m107 executable board maps V-series reset and RAM", "[m107][board]") 
     CHECK(frame_has_nonblack(system->video.framebuffer()));
 }
 
+TEST_CASE("m107 board declares V33 main and V35 sound CPU clocks", "[m107][board]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto system = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
+    REQUIRE(system != nullptr);
+
+    CHECK(system->main_cpu.metadata().part_number == "v33");
+    CHECK(system->sound_cpu.metadata().part_number == "v35");
+    CHECK(m107::main_clock_hz == 14'000'000U);
+    CHECK(m107::sound_cpu_clock_hz == 14'318'181U);
+    CHECK(m107::main_cycles_per_frame == 254'462U);
+    CHECK(m107::sound_cycles_per_frame == 260'245U);
+}
+
 TEST_CASE("m107 sound CPU drives the Irem GA20 register window", "[m107][board][audio]") {
     namespace m107 = mnemos::manifests::irem_m107;
 

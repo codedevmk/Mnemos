@@ -189,6 +189,9 @@ namespace mnemos::manifests::irem_m107 {
         auto& sound_prog = pinned_region(roms, "soundcpu", sound_rom_size);
         auto& samples = pinned_region(roms, "samples", 0U);
 
+        main_cpu.set_model(chips::cpu::v30::model::v33);
+        sound_cpu.set_model(chips::cpu::v30::model::v35);
+
         main_bus.map_rom(0x00000U, std::span<const std::uint8_t>(main_prog));
         main_bus.map_ram(work_ram_base, work_ram, 1);
         main_bus.map_ram(shared_ram_base, shared_ram, 1);

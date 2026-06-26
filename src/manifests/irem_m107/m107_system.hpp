@@ -29,8 +29,8 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::uint32_t visible_height = 256U;
     inline constexpr std::uint32_t frame_lines = 284U;
     inline constexpr std::uint32_t frame_rate_x1000 = 55018U;
-    inline constexpr std::uint32_t main_clock_hz = 14'318'181U;
-    inline constexpr std::uint32_t sound_cpu_clock_hz = 7'159'090U;
+    inline constexpr std::uint32_t main_clock_hz = 14'000'000U;
+    inline constexpr std::uint32_t sound_cpu_clock_hz = 14'318'181U;
     inline constexpr std::uint32_t fm_clock_hz = 3'579'545U;
     inline constexpr std::uint32_t pcm_clock_hz = 3'579'545U;
     inline constexpr std::uint64_t main_cycles_per_frame =
