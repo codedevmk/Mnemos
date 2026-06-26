@@ -93,7 +93,7 @@ function Get-Cps2AudioFrameCount {
             $SetId -eq "choko" -or $SetId -eq "cybots" -or $SetId -eq "ddsom" -or
             $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
             $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "megaman2" -or
-            $SetId -eq "mmatrix") -and $DefaultFrames -lt 2500) {
+            $SetId -eq "mmatrix" -or $SetId -eq "mpang") -and $DefaultFrames -lt 2500) {
         return 2500
     }
 
@@ -128,8 +128,8 @@ function Test-Cps2AudioStateProbeDefault {
         $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
         $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "hsf2" -or
         $SetId -eq "megaman2" -or $SetId -eq "mmatrix" -or $SetId -eq "mshvsf" -or
-        $SetId -eq "mvsc" -or $SetId -eq "progear" -or $SetId -eq "ringdest" -or
-        $SetId -eq "spf2t"
+        $SetId -eq "mpang" -or $SetId -eq "mvsc" -or $SetId -eq "progear" -or
+        $SetId -eq "ringdest" -or $SetId -eq "spf2t"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
@@ -140,7 +140,8 @@ function Test-Cps2AudioGameplayProbeDefault {
         $SetId -eq "choko" -or $SetId -eq "cybots" -or $SetId -eq "ddsom" -or
         $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
         $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "ringdest" -or
-        $SetId -eq "megaman2" -or $SetId -eq "mmatrix" -or $SetId -eq "spf2t"
+        $SetId -eq "megaman2" -or $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or
+        $SetId -eq "spf2t"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
@@ -160,7 +161,7 @@ function Get-Cps2AudioGameplayPlayerCount {
     }
     if ($SetId -eq "cybots" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
         $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "megaman2" -or
-        $SetId -eq "mmatrix" -or $SetId -eq "spf2t") {
+        $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or $SetId -eq "spf2t") {
         return 2
     }
     return $DefaultPlayers
