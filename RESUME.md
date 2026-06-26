@@ -122,7 +122,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
 - The previous OKI6295 placeholder has been replaced by a native GA20 PCM model, and the M107 player now captures GA20 PCM at the YM output cadence and mixes drained GA20 stereo samples into the player audio buffer with signed clamping.
 - The M107 adapter now consumes explicit arcade `service` and `test` frontend inputs: service maps active-low to the `COINS_DSW3` service-credit bit `0x10`, `mode` remains a legacy service alias, operator test maps active-low to the `COINS_DSW3` operator-service bit `0x20`, and adapter state version 2 persists those fields while still loading version 1 snapshots.
-- The M107 sound-command latch now asserts the first-pass V35 command IRQ line through INTP1/vector 25 on main V33 writes; sound-side reads fetch the command without acknowledging it, sound-side writes to `$a8044` acknowledge/clear the command IRQ, YM2151 Timer A IRQ dispatches through V35 INTP0/vector 24, and command/reply state is preserved in board save state version 8.
+- The M107 sound-command latch now asserts the first-pass V35 command IRQ line through INTP1/vector 25 on main V33 writes; sound-side reads fetch the command without acknowledging it, sound-side writes to `$a8044` acknowledge/clear the command IRQ, YM2151 Timer A IRQ dispatches through V35 INTP0/vector 24, simultaneous pending YM/command IRQs prefer the modeled INTP0/vector 24 path before INTP1/vector 25, and command/reply state is preserved in board save state version 8.
 - The M107 map now models VRAM at `$d0000`, work RAM at `$e0000`, sprite RAM at `$f8000`, palette RAM at `$f9000`, sound RAM at `$a0000`, and sound-side GA20/YM2151/command-latch/reply MMIO at `$a8000`/`$a8040`/`$a8044`/`$a8046`. Port fallbacks remain for the current synthetic command path.
 - Checked-in Air Assault and Fire Barrel manifests now carry the shared SW1/SW2 and SW3 DIP profile from the Fire Barrel input profile. The adapter retains the 12 parsed DIP entries, folds SW1/SW2 defaults into the board DIP word (`0xffbf`), folds SW3 defaults into the separate `COINS_DSW3` word (`0xebff`), and exposes `DIP switches=12` in the player system spec.
 - Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, deeper M107 I/O behavior, GA21/GA22 video/priority behavior, full V35 interrupt-controller priority/latency proof, remaining GA20 analog balance/filtering proof, raster timing, and screenshot parity.
@@ -907,6 +907,21 @@ M107 YM2151 INTP0 IRQ continuation validation on 2026-06-26:
 - `clang-format --dry-run --Werror` passed for the touched M107 C++ file.
 - `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
 - This proves the currently modeled YM2151-to-V35 INTP0 dispatch path. It does not prove full V35 interrupt-controller priority/latency, GA21/GA22 video, GA20 analog balance/filtering, or final M107 parity.
+
+M107 sound IRQ arbitration continuation validation on 2026-06-26:
+
+- Added synthetic dual-vector V35 proof that when command-latch INTP1 and YM2151 INTP0 are both pending, the modeled M107 IRQ acknowledge chooses YM2151 INTP0/vector 24 first.
+- The INTP0 handler writes `0xa0` to sound RAM while the INTP1 handler would write `0xc1`; the test asserts `0xa0` and that the command latch remains pending.
+- Focused M107 board build/test:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test`
+  - `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m107_test`: `1/1`
+- Focused M107 adapter/corpus CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `3/3`
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- `clang-format --dry-run --Werror` passed for the touched M107 C++ file.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- This proves first-pass modeled arbitration only. It does not prove full V35 interrupt-controller priority/latency, GA21/GA22 video, GA20 analog balance/filtering, or final M107 parity.
 
 Earlier branch validation that passed before the M107 slice:
 

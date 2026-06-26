@@ -159,8 +159,9 @@ multiple independent open-source implementations.
   metadata, and local Air Assault / Fire Barrel set identities. The first-pass
   M107 main RAM, video/sprite/palette RAM, sound RAM, YM2151, GA20,
   command-latch acknowledge path, reply, YM2151 Timer A IRQ routing, V35
-  INTP0/INTP1 sound IRQ vector assignments, COINS_DSW3 window, and
-  service/operator input-bit assignments are cross-checked against public
+  INTP0/INTP1 sound IRQ vector assignments, first-pass INTP0-over-INTP1
+  arbitration, COINS_DSW3 window, and service/operator input-bit assignments
+  are cross-checked against public
   driver-level hardware notes; no
   MAME driver code or ROM bytes are copied into Mnemos. Current M107 execution
   remains diagnostic rather than parity-authentic until V33/V35 peripheral

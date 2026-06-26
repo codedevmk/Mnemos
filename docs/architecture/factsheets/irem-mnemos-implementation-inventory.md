@@ -393,8 +393,9 @@ visual and audio parity proof.
 - **Correct gfx/music:** not certified. Current rendering is an M107-local
   diagnostic path; GA20 exists, the command/reply latch now has pending-state,
   V35 INTP1/vector-25 dispatch, explicit acknowledge, reply proof, and YM2151
-  Timer A INTP0/vector-24 dispatch proof, and the modeled main/sound windows
-  match the current board evidence for work RAM, VRAM, sprite RAM, palette RAM,
+  Timer A INTP0/vector-24 dispatch proof plus simultaneous pending YM/command
+  arbitration proof selecting INTP0 before INTP1, and the modeled main/sound
+  windows match the current board evidence for work RAM, VRAM, sprite RAM, palette RAM,
   sound RAM, GA20, YM2151, command latch, and sound reply. Full V35
   interrupt-controller priority/latency and analog balance/filtering are not
   proven.
