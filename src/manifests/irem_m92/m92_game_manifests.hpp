@@ -1,8 +1,8 @@
 #pragma once
 
-// Checked-in Irem M92 game manifests embedded for corpus tooling lookup. This
-// target is intentionally a ROM-contract surface; executable M92 board wiring
-// comes later with V33/V35, GA20, and GA21/GA22 support.
+// Checked-in Irem M92 game manifests embedded for corpus tooling lookup. The
+// companion system target provides a first-pass executable V33/V35/GA20 shell;
+// encrypted V35 programs and GA21/GA22 video remain authenticity gaps.
 
 #include "m92_embedded_game_manifests.hpp"
 

@@ -33,12 +33,15 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_m92 INTERFACE)
+add_library(
+    mnemos_manifests_irem_m92
+    m92_system.cpp
+)
 add_library(mnemos::manifests::irem_m92 ALIAS mnemos_manifests_irem_m92)
 
 target_include_directories(
     mnemos_manifests_irem_m92
-    INTERFACE
+    PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
@@ -46,16 +49,24 @@ target_include_directories(
 
 target_link_libraries(
     mnemos_manifests_irem_m92
-    INTERFACE
+    PUBLIC
+        mnemos::topology
+        mnemos::chips::cpu::v30
+        mnemos::chips::audio::ym2151
+        mnemos::chips::audio::irem_ga20
         mnemos::manifests::common
+        mnemos::security::cryptography
 )
 
-mnemos_apply_common_target_options(mnemos_manifests_irem_m92 INTERFACE)
+mnemos_apply_common_target_options(mnemos_manifests_irem_m92 PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_irem_m92
     TIER 4
     DEPENDS
+        mnemos_topology
         mnemos_manifests_common
+        mnemos_security_cryptography
+        mnemos_chips_shared
         mnemos_foundation
 )
 
@@ -71,6 +82,20 @@ if(BUILD_TESTING)
     )
     target_compile_definitions(
         mnemos_manifests_irem_m92_test
+        PRIVATE
+            MNEMOS_IREM_M92_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+    mnemos_add_test(
+        mnemos_manifests_irem_m92_system_test
+        SOURCES tests/m92_system_test.cpp
+        LIBRARIES
+            mnemos::manifests::irem_m92
+            mnemos::manifests::common
+            mnemos::compression
+            mnemos::io
+    )
+    target_compile_definitions(
+        mnemos_manifests_irem_m92_system_test
         PRIVATE
             MNEMOS_IREM_M92_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
     )

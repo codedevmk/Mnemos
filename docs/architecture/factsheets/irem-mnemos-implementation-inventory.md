@@ -16,10 +16,10 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 
 That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
 `M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 65 currently match a
-checked-in Mnemos Irem manifest, 54 have a direct player-loadable route through
-ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 5 are M92
-contract-only matches that load CRC-clean through manifests but have no runnable
-M92 board profile yet.
+checked-in Mnemos Irem manifest, 59 have a direct player-loadable route through
+ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
+items remain metadata-only until converted or unpacked. No tracked Irem item is
+now contract-only.
 
 ## Status Terms
 
@@ -56,7 +56,7 @@ M92 board profile yet.
 | M84 | `irem_m84` wrapper | 35% | `hharryb`, `hharryu` | both local split sets | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry priority/raster/DIP proof, Cosmic Cop/Ken-Go |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | none | 5% shared V35/YM groundwork | None | None | None | V35 on-die interrupt/timer behavior, GA25 video, Bomber Man/Hasamu/Quiz F-1 manifests |
-| M92 | `irem_m92` ROM contracts | 18% contract-only | `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` | None | None | Encrypted V35 sound CPU handling, GA21/GA22, M92 memory/I/O, executable board profile, protection/audio/video parity |
+| M92 | `irem_m92` | 32% first-pass | `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` | all 5 data-gated first-pass sets | None | Encrypted V35 sound CPU handling, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 45% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load | None | V33/V35-specific behavior, M107 memory/I/O, GA21/GA22 video, GA20 protocol/analog mix, DIP/raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
@@ -71,7 +71,7 @@ targets:
   wiring, scanline composition, and 19 clean local smoke sets.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests and four R-Type II set routes.
-- M15, M81, M84, and M107 all have player-routable first-pass boards with
+- M15, M81, M84, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
 
 No game should be marked "correct gfx and music" until a later artifact records
@@ -258,17 +258,21 @@ visual and audio parity proof.
   Ninja Baseball Bat Man, Blade Master, Mystic Riders, Major Title 2, Hook,
   Superior/Perfect Soldiers, Gunforce 2.
 - **Mnemos games:** `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` as
-  checked-in ROM-contract manifests under `irem_m92`.
-- **Smoke playable:** none under an M92 profile.
-- **Correct gfx/music:** none.
+  checked-in manifests under `irem_m92`.
+- **Smoke playable:** all five local wrapper ZIPs load through `--system
+  irem_m92`/the M92 adapter data gate, step one frame, produce a 320x240
+  nonblank diagnostic frame, and produce save-state bytes.
+- **Correct gfx/music:** not certified. Current video is a diagnostic
+  region/RAM/PLD-driven first-pass compositor, and current sound only proves the
+  YM2151/GA20 shell plus synthetic GA20 MMIO.
 - **Local corpus note:** five local M92-era title-wrapper ZIPs now resolve to
   embedded set IDs and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
   (`bmaster`), Gunforce (`gunforce`), Gunforce 2 (`gunforc2`), Hook (`hook`),
-  and In the Hunt (`inthunt`). They are contract-only and are not
-  player-loadable until an executable M92 board profile exists.
-- **Remaining:** implement the M92 V33/V35 board, encrypted sound CPU handling,
-  GA20/YM2151 sound protocol, GA21/GA22 video, memory/I/O maps, protection
-  details, and parity proof.
+  and In the Hunt (`inthunt`). In the current sorted corpus they live under
+  `D:\emu\irem\M72`, which is a storage artifact rather than board proof.
+- **Remaining:** encrypted V35 sound CPU handling, exact GA20/YM2151 sound
+  protocol, GA21/GA22 video/priority behavior, exact memory/I/O maps,
+  protection details, DIP/raster behavior, and visual/audio parity proof.
 
 ### M107
 
@@ -300,5 +304,5 @@ visual and audio parity proof.
    adjust manifests/docs if needed.
 3. Continue M72 artifact closure for `gallopm72` and World `nspirit` by finding
    the exact MCU dumps, without substituting Japan `nspiritj` or synthetic bytes.
-4. Convert the M92 ROM-contract slice into an executable board profile only
-   after accepting the encrypted V35 sound-CPU and GA21/GA22 scope.
+4. Advance the M92 first-pass profile from diagnostic execution to authenticity
+   by resolving encrypted V35 sound-CPU behavior and GA21/GA22 video evidence.

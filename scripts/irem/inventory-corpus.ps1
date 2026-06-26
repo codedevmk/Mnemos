@@ -367,7 +367,8 @@ function New-ArchiveItem {
     $m107Match = $M107ManifestIds.Contains($setId)
     $trackedMatch = $m15Match -or $m72Match -or $m81Match -or $m82Match -or $m84Match -or $m92Match -or $m107Match
     $loadRoute = Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
-    $loadableByMnemos = $trackedMatch -and -not $m92Match -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
+    $contractOnly = $false
+    $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $trackedFamily = Get-TrackedFamilyName -M15Match $m15Match -M72Match $m72Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M92Match $m92Match -M107Match $m107Match
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
@@ -396,9 +397,9 @@ function New-ArchiveItem {
         archive_composition = $archiveComposition
         loadable_by_mnemos = $loadableByMnemos
         supported_by_mnemos = $loadableByMnemos
-        load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -ContractOnly $m92Match -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
+        load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         board_candidate_family = $boardCandidateFamily
-        next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $m92Match -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
+        next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         entry_count = $entries.Count
         nested_archives = @($nestedArchives)
         sample_entries = @($entries | Select-Object -First $MaxEntries)
@@ -434,7 +435,8 @@ function New-DirectoryItem {
     $m107Match = $M107ManifestIds.Contains($setId)
     $trackedMatch = $m15Match -or $m72Match -or $m81Match -or $m82Match -or $m84Match -or $m92Match -or $m107Match
     $loadRoute = Get-LoadRouteForItem -Kind "directory" -Extension "" -NestedArchives @()
-    $loadableByMnemos = $trackedMatch -and -not $m92Match -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
+    $contractOnly = $false
+    $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $trackedFamily = Get-TrackedFamilyName -M15Match $m15Match -M72Match $m72Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M92Match $m92Match -M107Match $m107Match
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
@@ -461,9 +463,9 @@ function New-DirectoryItem {
         archive_composition = Get-ArchiveComposition -Kind "directory" -Extension "" -EntryCount $files.Count -NestedArchives @()
         loadable_by_mnemos = $loadableByMnemos
         supported_by_mnemos = $loadableByMnemos
-        load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -ContractOnly $m92Match -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
+        load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         board_candidate_family = $boardCandidateFamily
-        next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $m92Match -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
+        next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         entry_count = $files.Count
         nested_archives = @()
         sample_entries = @($files | Sort-Object Name | Select-Object -First $MaxEntries -ExpandProperty Name)

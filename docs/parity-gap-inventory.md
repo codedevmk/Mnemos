@@ -299,17 +299,18 @@ golden gates. The recursive mixed-corpus smoke path still rejects
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
-121 items across `root`, `m72`, `M15`, `M81`, `m82`, `M84`, `M107`, and `i8751`.
-One item matches a checked-in M15 manifest contract, thirty-seven items match
+123 items across `root`, `m72`, `M15`, `M81`, `m82`, `M84`, `M107`, and `i8751`.
+One item matches a checked-in M15 manifest contract, thirty-nine items match
 checked-in playable M72 manifests, five items match checked-in M81 manifest
 contracts, five items match checked-in M82 R-Type II manifests, two items match
-checked-in M84 manifest contracts, and eight items match checked-in M107
-manifest contracts. The inventory now separates manifest tracking from player
-loadability: 58 items match a checked-in Irem manifest, 52 are loadable through
-current ZIP / single-inner-ZIP / folder routes, and six `.7z` matches remain
+checked-in M84 manifest contracts, five items match checked-in M92 manifests,
+and eight items match checked-in M107 manifest contracts. The inventory now
+separates manifest tracking from player loadability: 65 items match a checked-in
+Irem manifest, 59 are loadable through current ZIP / single-inner-ZIP / folder
+routes, no tracked item remains contract-only, and six `.7z` matches remain
 metadata-only until they are converted to ZIP or unpacked folders. No sorted
 top-level board bucket is completely untracked anymore; `board_family_candidates`
-now only keeps 19 untracked / misbucketed `M72`-folder items visible instead of
+now only keeps 14 untracked / misbucketed `M72`-folder items visible instead of
 silently treating them as true-M72 proof. The report also carries per-item
 `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
 `load_readiness` fields plus a `tracked_sets` grouping; this currently separates
@@ -354,10 +355,16 @@ not yet exact raster-phase or visual-priority authentic. The data-gated M82
 artifact/player tests use `MNEMOS_M82_SET_DIR=D:\emu\irem` to unwrap the local
 R-Type II collection ZIPs and load `rtype2`, `rtype2j`, `rtype2jc`, and
 `rtype2m82b` CRC-clean through the embedded manifests and clone-parent fallback.
-M15, M84, and M107 now have executable board/profile layers, but all three still
+M92 now has checked-in manifests plus a first-pass executable V33/V35 board and
+player adapter for `bmaster`, `gunforce`, `gunforc2`, `hook`, and `inthunt`;
+`MNEMOS_M92_SET_DIR=D:\emu\irem\M72` proves the five local title-wrapper ZIPs
+load CRC-clean, produce 320x240 nonblank diagnostic frames, and save state
+through the M92 adapter. They remain diagnostic, not graphics/music-authentic,
+until encrypted V35 sound CPU handling and GA21/GA22 video behavior are proven.
+M15, M84, M92, and M107 now have executable board/profile layers, but all four still
 need board-authentic video/priority, sound, exact raster phase, and
-screenshot-parity closure before they can be called authentic; M84 and M107 also
-retain memory/I/O and DIP validation gaps.
+screenshot-parity closure before they can be called authentic; M84, M92, and
+M107 also retain memory/I/O and DIP validation gaps.
 
 Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible. The M72 palette CPU map now models the disconnected A9 mirror and low-byte-only 5-bit gun writes/reads while preserving the renderer's canonical R/G/B plane storage.
 
@@ -430,6 +437,11 @@ callers, map operator test onto the active-low system bit 6, and persist those
 fields in adapter state version 2.
 
 ---
+
+## Irem M92 — 1 / 2
+
+- [x] **I92-1** Local M92 ROM-set contract — `src/manifests/irem_m92` carries checked-in embedded ROM-contract manifests for `bmaster`, `gunforce`, `gunforc2`, `hook`, and `inthunt`, including declared 1 MiB main program regions, 128 KiB encrypted V35 sound-program regions, tile/sprite/sample/PLD regions, cabinet metadata, and local wrapper-ZIP CRCs. `MNEMOS_M92_SET_DIR=D:\emu\irem\M72` data-gates the sorted local title-wrapper ZIPs and proves all five load CRC-clean; `scripts/irem/inventory-corpus.ps1` now records five direct player-loadable M92 matches in the current mixed `M72` bucket rather than treating them as contract-only metadata · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m92/games/*.toml` + `src/manifests/irem_m92/tests/m92_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [~] **I92-2** Executable M92 board profile — `src/manifests/irem_m92` now assembles a first-pass M92-owned V-series shell with the main CPU configured as NEC V33 at 9 MHz, the sound CPU configured as NEC V35 at 14.318181 MHz, a 320x240 / 60.011 Hz raster contract, M92 work/video/sprite/palette RAM windows, sound RAM, memory-mapped YM2151/GA20/latch/reply windows, input/DIP ports, whole-board save/load identity, and an M92-local diagnostic video path driven by the checked-in tile/sprite/PLD/sample regions plus board RAM. `src/apps/player/adapters/irem_m92` registers `--system irem_m92` / `m92`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M92_SET_DIR=D:\emu\irem\M72`; all five checked-in sets step one frame, produce nonblank 320x240 diagnostic output, and emit save-state bytes. Remaining: encrypted V35 sound CPU execution/decryption/protocol proof, exact M92 memory/I/O behavior, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP behavior, raster timing, protection details, and authentic screenshot/audio parity before calling the profile authentic · PARTIAL · HIGH · L · beyond Emu · Evidence: `src/chips/cpu/v30/v30.cpp` + `src/chips/audio/irem_ga20/irem_ga20.cpp` + `src/manifests/irem_m92/m92_system.cpp` + `src/manifests/irem_m92/tests/m92_system_test.cpp` + `src/apps/player/adapters/irem_m92/irem_m92_adapter.cpp` + `src/apps/player/adapters/irem_m92/tests/irem_m92_adapter_test.cpp`
 
 ## Irem M107 — 1 / 2
 

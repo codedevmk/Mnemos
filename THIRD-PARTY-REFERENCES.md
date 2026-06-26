@@ -144,13 +144,14 @@ multiple independent open-source implementations.
   jumps from the same public profile targets; they are declared simulated
   behavior, not authentic dumped i8751 firmware. No wholesale fake protection
   routines, emulator source code, or ROM data are copied into Mnemos.
-- **Irem M92 ROM-set metadata** — declarative game manifests under
+- **Irem M92 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m92/games/` use public MAME M92 driver metadata for dump
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the
-  encrypted V35 sound-program classification. The local corpus tests validate
-  user-provided wrapper ZIPs by CRC only; no MAME driver code or ROM bytes are
-  copied into Mnemos, and the manifests remain contract-only until a native M92
-  board profile lands.
+  encrypted V35 sound-program classification. The first-pass M92 board constants
+  and memory windows are cross-checked against public driver-level hardware
+  notes; no MAME driver code or ROM bytes are copied into Mnemos. Current M92
+  execution remains diagnostic rather than parity-authentic until encrypted V35
+  sound and GA21/GA22 video behavior are implemented from acceptable evidence.
 - **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
   CPS-B custom chip has a per-board scrambled register map (layer-control,
   priority, palette-control, layer-enable, protection ports) and a graphics-code

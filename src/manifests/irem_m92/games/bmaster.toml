@@ -1,6 +1,6 @@
 # Blade Master -- Irem M92 set.
-# Schema mnemos-romset/1; ROM-contract manifest only. The M92 sound program is
-# encrypted V35 code and requires the future M92 board profile to execute.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
 
 [set]
 schema      = "mnemos-romset/1"
