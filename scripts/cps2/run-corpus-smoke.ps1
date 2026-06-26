@@ -91,7 +91,8 @@ function Get-Cps2AudioFrameCount {
     if (($SetId -eq "1944" -or $SetId -eq "1944_mn" -or
             $SetId -eq "armwar" -or $SetId -eq "avsp" -or $SetId -eq "batcir" -or
             $SetId -eq "choko" -or $SetId -eq "cybots" -or $SetId -eq "ddsom" -or
-            $SetId -eq "ddtod" -or $SetId -eq "dimahoo") -and $DefaultFrames -lt 2500) {
+            $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk") -and
+        $DefaultFrames -lt 2500) {
         return 2500
     }
 
@@ -123,9 +124,9 @@ function Test-Cps2AudioStateProbeDefault {
     return $SetId -eq "1944" -or $SetId -eq "1944_mn" -or
         $SetId -eq "armwar" -or $SetId -eq "avsp" -or $SetId -eq "batcir" -or
         $SetId -eq "choko" -or $SetId -eq "cybots" -or $SetId -eq "ddsom" -or
-        $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "hsf2" -or
-        $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear" -or
-        $SetId -eq "ringdest" -or $SetId -eq "spf2t"
+        $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
+        $SetId -eq "hsf2" -or $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or
+        $SetId -eq "progear" -or $SetId -eq "ringdest" -or $SetId -eq "spf2t"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
@@ -134,8 +135,8 @@ function Test-Cps2AudioGameplayProbeDefault {
     return $SetId -eq "1944" -or $SetId -eq "1944_mn" -or
         $SetId -eq "armwar" -or $SetId -eq "avsp" -or $SetId -eq "batcir" -or
         $SetId -eq "choko" -or $SetId -eq "cybots" -or $SetId -eq "ddsom" -or
-        $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "ringdest" -or
-        $SetId -eq "spf2t"
+        $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
+        $SetId -eq "ringdest" -or $SetId -eq "spf2t"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
@@ -153,7 +154,8 @@ function Get-Cps2AudioGameplayPlayerCount {
     if ($SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "ddtod") {
         return 4
     }
-    if ($SetId -eq "cybots" -or $SetId -eq "dimahoo" -or $SetId -eq "spf2t") {
+    if ($SetId -eq "cybots" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
+        $SetId -eq "spf2t") {
         return 2
     }
     return $DefaultPlayers
