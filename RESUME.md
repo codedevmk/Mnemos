@@ -112,18 +112,19 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - M107 now has a first-pass executable board, not only ROM-contract metadata.
 - Board implementation lives in `src/manifests/irem_m107/m107_system.hpp` and `src/manifests/irem_m107/m107_system.cpp`.
-- The board owns a main V-series CPU configured as NEC V33 at 14 MHz, a sound V-series CPU configured as NEC V35 at 14.318181 MHz, M107 video diagnostic path, YM2151, Irem/Nanao GA20 PCM, 20-bit little-endian main/sound buses, RAM windows, I/O ports, frame stepping, and whole-board save/load with identity checks.
+- The board owns a main V-series CPU configured as NEC V33 at 14 MHz, a sound V-series CPU configured as NEC V35 at 14.318181 MHz, M107 video diagnostic path, YM2151, Irem/Nanao GA20 PCM, 20-bit little-endian main/sound buses, board-evidenced main/sound RAM and MMIO windows, I/O ports, frame stepping, and whole-board save/load with identity checks.
 - M107 board save-state identity now includes the CPU model and clock semantics, so states from the previous V30/half-rate sound-clock contract are rejected by the board revision instead of loading silently.
 - Checked-in manifests and tests cover the local M107 sets currently embedded in the corpus gate, including `airass` and `firebarr`.
 - Player adapter lives in `src/apps/player/adapters/irem_m107`.
 - CLI/system-family routing is available through `--system irem_m107` and alias `m107`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
-- Capability discovery reports M107 memory views, V30 trace surfaces, YM2151/GA20 chip registers, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
+- Capability discovery reports M107 memory views, V30 trace surfaces, YM2151/GA20 chip registers, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media. The false `shared_ram` memory view was removed; current views are `work_ram`, `sprite_ram`, `palette_ram`, `vram`, and `sound_ram`.
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
 - The previous OKI6295 placeholder has been replaced by a native GA20 PCM model, and the M107 player now captures GA20 PCM at the YM output cadence and mixes drained GA20 stereo samples into the player audio buffer with signed clamping.
 - The M107 adapter now consumes explicit arcade `service` frontend input for the currently modeled service bit, keeps `mode` as a legacy service alias, and persists explicit `service` / `test` fields in adapter state version 2. Operator-test board wiring remains unassigned until the M107 input map is verified.
-- The M107 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 5, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, exact M107 memory/I/O map, GA21/GA22 video/priority behavior, command IRQ timing plus remaining GA20 analog balance/filtering proof, DIP behavior, raster timing, and screenshot parity.
+- The M107 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 6, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
+- The M107 map now models VRAM at `$d0000`, work RAM at `$e0000`, sprite RAM at `$f8000`, palette RAM at `$f9000`, sound RAM at `$a0000`, and sound-side GA20/YM2151/command-latch/reply MMIO at `$a8000`/`$a8040`/`$a8044`/`$a8046`. Port fallbacks remain for the current synthetic command path.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, remaining M107 input/DIP/operator-test I/O details, GA21/GA22 video/priority behavior, command IRQ timing plus remaining GA20 analog balance/filtering proof, raster timing, and screenshot parity.
 
 ### Irem M15
 
@@ -791,6 +792,32 @@ M107 sound-command latch continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 - This proves the modeled M107 command/reply latch contract and save-state persistence. It is not command IRQ timing, full V35 on-die peripheral proof, GA20 analog balance/filtering, or final M107 audio parity proof.
+
+M107 memory-mapped sound/main map continuation validation on 2026-06-26:
+
+- Corrected the M107 first-pass map to use VRAM `$d0000`, work RAM `$e0000`, sprite RAM `$f8000-$f8fff`, palette RAM `$f9000-$f9fff`, sound RAM `$a0000-$a3fff`, GA20 `$a8000-$a801f`, YM2151 `$a8040-$a8043`, command latch `$a8044`, and sound reply `$a8046`.
+- Removed the false M107 shared RAM window and adapter `shared_ram` memory view; the adapter now exposes only the modeled M107 memory surfaces.
+- Bumped M107 board save-state version to `6` and board identity to the map-corrected revision so pre-correction states are rejected.
+- Added M107 system assertions for every corrected main/sound window and switched synthetic M107 GA20 plus command/reply programs to the memory-mapped sound path.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test mnemos_player`
+- Focused M107 CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `3/3`
+  - `mnemos_manifests_irem_m107_test`
+  - `mnemos_apps_player_irem_m107_adapter_test`
+  - `mnemos_apps_player_irem_m107_corpus_golden_test`
+- Direct player smokes:
+  - `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\airass.zip --screenshot build\scratch\irem-m107\airass-map.ppm --frames 1`
+  - `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\airass.zip --save-state build\scratch\irem-m107\airass-map.mns --frames 1`
+  - `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\firebarr.zip --screenshot build\scratch\irem-m107\firebarr-map.ppm --frames 1`
+  - `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\firebarr.zip --save-state build\scratch\irem-m107\firebarr-map.mns --frames 1`
+  - Screenshot proof: both PPMs are `384x256`, `294912` payload bytes, `256` unique payload byte values, and nonzero RGB payloads (`293877` nonzero bytes for Air Assault, `293764` for Fire Barrel).
+  - Save-state proof: `airass-map.mns` is `181041` bytes and `firebarr-map.mns` is `118959` bytes after one frame.
+- `clang-format --dry-run --Werror` passed for the touched M107 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- This proves the modeled M107 memory windows and sound-side MMIO route. It is not V33/V35 on-die peripheral proof, command IRQ timing proof, GA21/GA22 video parity, DIP/operator I/O proof, or final visual/audio parity.
 
 Earlier branch validation that passed before the M107 slice:
 

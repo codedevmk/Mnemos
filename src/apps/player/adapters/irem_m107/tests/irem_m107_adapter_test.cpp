@@ -8,8 +8,8 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -38,7 +38,7 @@ namespace {
         rom[0xFFFF2U] = 0x02U;
         rom[0xFFFF3U] = 0x00U;
         rom[0xFFFF4U] = 0x00U;
-        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, 0xB0U,
                                                 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x200U + i] = program[i];
@@ -53,15 +53,16 @@ namespace {
         rom[0x1FFF2U] = 0x02U;
         rom[0x1FFF3U] = 0x00U;
         rom[0x1FFF4U] = 0xE0U;
-        const std::array<std::uint8_t, 29> program = {
-            0xB0U, 0x10U, 0xE6U, 0x20U, // GA20 ch0 start low  -> 0x100
-            0xB0U, 0x00U, 0xE6U, 0x21U, // GA20 ch0 start high
-            0xB0U, 0x40U, 0xE6U, 0x22U, // GA20 ch0 end low    -> 0x400
-            0xB0U, 0x00U, 0xE6U, 0x23U, // GA20 ch0 end high
-            0xB0U, 0x00U, 0xE6U, 0x24U, // slowest byte advance
-            0xB0U, 0xF6U, 0xE6U, 0x25U, // audible volume
-            0xB0U, 0x02U, 0xE6U, 0x26U, // control bit 1 = key-on
-            0xF4U};                      // HLT
+        const std::array<std::uint8_t, 41> program = {
+            0xB8U, 0x00U, 0xA8U, 0x8EU, 0xD8U, // MOV DS,A800
+            0xB0U, 0x10U, 0xA2U, 0x00U, 0x00U, // GA20 ch0 start low  -> 0x100
+            0xB0U, 0x00U, 0xA2U, 0x01U, 0x00U, // GA20 ch0 start high
+            0xB0U, 0x40U, 0xA2U, 0x02U, 0x00U, // GA20 ch0 end low    -> 0x400
+            0xB0U, 0x00U, 0xA2U, 0x03U, 0x00U, // GA20 ch0 end high
+            0xB0U, 0x00U, 0xA2U, 0x04U, 0x00U, // slowest byte advance
+            0xB0U, 0xF6U, 0xA2U, 0x05U, 0x00U, // audible volume
+            0xB0U, 0x02U, 0xA2U, 0x06U, 0x00U, // control bit 1 = key-on
+            0xF4U};                            // HLT
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x0200U + i] = program[i];
         }

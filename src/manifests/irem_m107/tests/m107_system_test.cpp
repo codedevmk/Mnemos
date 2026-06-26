@@ -257,7 +257,7 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_program() {
         return make_m107_program(
-            {0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U, 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U});
+            {0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, 0xB0U, 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U});
     }
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_program() {
@@ -278,15 +278,16 @@ namespace {
         rom[0x1FFF2U] = 0x02U;
         rom[0x1FFF3U] = 0x00U;
         rom[0x1FFF4U] = 0xE0U;
-        const std::array<std::uint8_t, 29> program = {
-            0xB0U, 0x10U, 0xE6U, 0x20U, // GA20 ch0 start low  -> 0x100
-            0xB0U, 0x00U, 0xE6U, 0x21U, // GA20 ch0 start high
-            0xB0U, 0x40U, 0xE6U, 0x22U, // GA20 ch0 end low    -> 0x400
-            0xB0U, 0x00U, 0xE6U, 0x23U, // GA20 ch0 end high
-            0xB0U, 0x00U, 0xE6U, 0x24U, // slowest byte advance
-            0xB0U, 0xF6U, 0xE6U, 0x25U, // audible volume
-            0xB0U, 0x02U, 0xE6U, 0x26U, // control bit 1 = key-on
-            0xF4U};                     // HLT
+        const std::array<std::uint8_t, 41> program = {
+            0xB8U, 0x00U, 0xA8U, 0x8EU, 0xD8U, // MOV DS,A800
+            0xB0U, 0x10U, 0xA2U, 0x00U, 0x00U, // GA20 ch0 start low  -> 0x100
+            0xB0U, 0x00U, 0xA2U, 0x01U, 0x00U, // GA20 ch0 start high
+            0xB0U, 0x40U, 0xA2U, 0x02U, 0x00U, // GA20 ch0 end low    -> 0x400
+            0xB0U, 0x00U, 0xA2U, 0x03U, 0x00U, // GA20 ch0 end high
+            0xB0U, 0x00U, 0xA2U, 0x04U, 0x00U, // slowest byte advance
+            0xB0U, 0xF6U, 0xA2U, 0x05U, 0x00U, // audible volume
+            0xB0U, 0x02U, 0xA2U, 0x06U, 0x00U, // control bit 1 = key-on
+            0xF4U};                            // HLT
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x0200U + i] = program[i];
         }
@@ -301,11 +302,15 @@ namespace {
         rom[0x1FFF3U] = 0x00U;
         rom[0x1FFF4U] = 0xE0U;
         const std::vector<std::uint8_t> program{
-            0xB8U, 0x00U, 0xD0U, // MOV AX,D000
+            0xB8U, 0x00U, 0xA8U, // MOV AX,A800
             0x8EU, 0xD8U,        // MOV DS,AX
-            0xE4U, 0x00U,        // IN AL,00   (main sound command latch)
+            0xA0U, 0x44U, 0x00U, // MOV AL,[0044] (main sound command latch)
+            0x88U, 0xC3U,        // MOV BL,AL
+            0xA2U, 0x46U, 0x00U, // MOV [0046],AL (sound reply)
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0x8AU, 0xC3U,        // MOV AL,BL
             0xA2U, 0x00U, 0x00U, // MOV [0000],AL
-            0xE6U, 0x02U,        // OUT 02,AL  (sound reply)
             0xF4U                // HLT
         };
         for (std::size_t i = 0; i < program.size(); ++i) {
@@ -417,6 +422,45 @@ TEST_CASE("m107 executable board maps V-series reset and RAM", "[m107][board]") 
 
     CHECK(system->main_bus.read8(0xFFFF0U) == 0xEAU);
     CHECK(system->sound_bus.read8(0xFFFF0U) == 0xEAU);
+    system->main_bus.write8(m107::work_ram_base, 0x12U);
+    system->main_bus.write8(m107::vram_base, 0x34U);
+    system->main_bus.write8(
+        m107::sprite_ram_base + static_cast<std::uint32_t>(m107::sprite_ram_size - 1U), 0x56U);
+    system->main_bus.write8(
+        m107::palette_ram_base + static_cast<std::uint32_t>(m107::palette_ram_size - 1U), 0x78U);
+    CHECK(system->work_ram[0] == 0x12U);
+    CHECK(system->vram[0] == 0x34U);
+    CHECK(system->sprite_ram.back() == 0x56U);
+    CHECK(system->palette_ram.back() == 0x78U);
+
+    system->sound_bus.write8(m107::sound_work_ram_base, 0x9AU);
+    CHECK(system->sound_ram[0] == 0x9AU);
+    system->sound_bus.write8(m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_start_low,
+                             0x10U);
+    system->sound_bus.write8(
+        m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_start_high, 0x00U);
+    system->sound_bus.write8(m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_end_low,
+                             0x40U);
+    system->sound_bus.write8(m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_end_high,
+                             0x00U);
+    system->sound_bus.write8(m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_rate,
+                             0x00U);
+    system->sound_bus.write8(m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_volume,
+                             0xF6U);
+    system->sound_bus.write8(m107::sound_ga20_base + mnemos::chips::audio::irem_ga20::reg_control,
+                             mnemos::chips::audio::irem_ga20::control_key_on);
+    CHECK(system->sound_bus.read8(m107::sound_ga20_base +
+                                  mnemos::chips::audio::irem_ga20::reg_status) ==
+          mnemos::chips::audio::irem_ga20::status_active);
+    system->sound_bus.write8(m107::sound_ym2151_base, 0x20U);
+    CHECK(system->ym_address == 0x20U);
+    system->write_sound_latch(0x5CU);
+    CHECK(system->sound_bus.read8(m107::sound_latch_addr) == 0x5CU);
+    CHECK_FALSE(system->sound_latch_pending);
+    system->sound_bus.write8(m107::sound_reply_addr, 0x6DU);
+    CHECK(system->sound_reply == 0x6DU);
+    CHECK(system->sound_reply_pending);
+
     system->run_frame();
     CHECK(system->work_ram[0] == 0x42U);
     CHECK(frame_has_nonblack(system->video.framebuffer()));

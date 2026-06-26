@@ -103,7 +103,8 @@ namespace mnemos::apps::player::adapters::irem_m107 {
             if (set.image.regions.empty()) {
                 return {};
             }
-            std::uint32_t crc = mnemos::security::cryptography::crc32("irem_m107.resident_media.v1");
+            std::uint32_t crc =
+                mnemos::security::cryptography::crc32("irem_m107.resident_media.v1");
             crc = crc32_string(crc, set.set_name);
             crc = crc32_u64(crc, set.image.regions.size());
             for (const auto& [name, bytes] : set.image.regions) {
@@ -287,9 +288,9 @@ namespace mnemos::apps::player::adapters::irem_m107 {
                                    set_name);
         }
 
-        [[nodiscard]] loaded_set load_declared_set(
-            mnemos::manifests::common::rom_set_decl decl,
-            const mnemos::manifests::common::rom_file_provider& provider) {
+        [[nodiscard]] loaded_set
+        load_declared_set(mnemos::manifests::common::rom_set_decl decl,
+                          const mnemos::manifests::common::rom_file_provider& provider) {
             loaded_set result;
             result.image = mnemos::manifests::common::load_rom_set(decl, provider);
             result.set_name = decl.name;
@@ -352,8 +353,8 @@ namespace mnemos::apps::player::adapters::irem_m107 {
                             return load_declared_set(std::move(*decl), *provider);
                         }
                     }
-                    for (const char* region : {"maincpu", "soundcpu", "gfx", "samples",
-                                               "subdata"}) {
+                    for (const char* region :
+                         {"maincpu", "soundcpu", "gfx", "samples", "subdata"}) {
                         if (auto bytes = (*provider)(std::string{region} + ".bin")) {
                             result.image.regions.emplace(region, std::move(*bytes));
                         }
@@ -369,8 +370,7 @@ namespace mnemos::apps::player::adapters::irem_m107 {
             return m107::assemble_m107(std::move(set.image), m107::board_params_for(set.set_name));
         }
 
-        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample,
-                                               std::int16_t addend) noexcept {
+        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample, std::int16_t addend) noexcept {
             const std::int32_t mixed = static_cast<std::int32_t>(sample) + addend;
             if (mixed > 32767) {
                 return 32767;
@@ -474,11 +474,10 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         };
 
         publish(0U, "work_ram", sys_->work_ram);
-        publish(1U, "shared_ram", sys_->shared_ram);
-        publish(2U, "sprite_ram", sys_->sprite_ram);
-        publish(3U, "palette_ram", sys_->palette_ram);
-        publish(4U, "vram", sys_->vram);
-        publish(5U, "sound_ram", sys_->sound_ram);
+        publish(1U, "sprite_ram", sys_->sprite_ram);
+        publish(2U, "palette_ram", sys_->palette_ram);
+        publish(3U, "vram", sys_->vram);
+        publish(4U, "sound_ram", sys_->sound_ram);
     }
 
     void irem_m107_adapter::sync_inputs_from_ports() noexcept {

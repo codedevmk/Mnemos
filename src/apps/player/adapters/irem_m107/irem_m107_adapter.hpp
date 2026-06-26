@@ -78,8 +78,8 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::irem_m107::m107_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
-        std::array<std::unique_ptr<instrumentation::span_memory_view>, 6> memory_view_storage_{};
-        std::array<instrumentation::memory_view*, 6> system_mem_view_{};
+        std::array<std::unique_ptr<instrumentation::span_memory_view>, 5> memory_view_storage_{};
+        std::array<instrumentation::memory_view*, 5> system_mem_view_{};
         std::array<frontend_sdk::controller_state, 2> ports_{};
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};

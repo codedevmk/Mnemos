@@ -112,7 +112,7 @@ namespace mnemos::manifests::irem_m107 {
                                                        const chips::cpu::v30& main_cpu,
                                                        const chips::cpu::v30& sound_cpu) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m107.board.identity.v2"});
+                security::cryptography::crc32(std::string_view{"m107.board.identity.v3"});
             crc = crc32_u16(crc, params.dip_default);
             crc = crc32_u8(crc, layout_code(params.rom_layout));
             crc = crc32_u8(crc, cpu_model_code(main_cpu.cpu_model()));
@@ -224,7 +224,6 @@ namespace mnemos::manifests::irem_m107 {
 
         main_bus.map_rom(0x00000U, std::span<const std::uint8_t>(main_prog));
         main_bus.map_ram(work_ram_base, work_ram, 1);
-        main_bus.map_ram(shared_ram_base, shared_ram, 1);
         main_bus.map_ram(sprite_ram_base, sprite_ram, 1);
         main_bus.map_ram(palette_ram_base, palette_ram, 1);
         main_bus.map_ram(vram_base, vram, 1);
@@ -261,7 +260,39 @@ namespace mnemos::manifests::irem_m107 {
         sound_bus.map_rom(0x00000U, std::span<const std::uint8_t>(sound_prog));
         sound_bus.map_rom(0xE0000U, std::span<const std::uint8_t>(sound_prog));
         sound_bus.map_ram(sound_work_ram_base, sound_ram, 1);
-        sound_bus.map_ram(shared_ram_base, shared_ram, 1);
+        sound_bus.map_mmio(
+            sound_ga20_base, chips::audio::irem_ga20::register_count,
+            [this](std::uint32_t address) -> std::uint8_t {
+                return pcm.read_register(static_cast<std::uint8_t>(address - sound_ga20_base));
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                pcm.write_register(static_cast<std::uint8_t>(address - sound_ga20_base), value);
+            },
+            1);
+        sound_bus.map_mmio(
+            sound_ym2151_base, 4U,
+            [this](std::uint32_t address) -> std::uint8_t {
+                (void)address;
+                return fm.read_status();
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                if ((address & 1U) == 0U) {
+                    ym_address = value;
+                    fm.write_address(value);
+                } else {
+                    fm.write_address(ym_address);
+                    fm.write_data(value);
+                }
+            },
+            1);
+        sound_bus.map_mmio(
+            sound_latch_addr, 1U,
+            [this](std::uint32_t) -> std::uint8_t { return read_sound_latch(); },
+            [](std::uint32_t, std::uint8_t) {}, 1);
+        sound_bus.map_mmio(
+            sound_reply_addr, 1U,
+            [this](std::uint32_t) -> std::uint8_t { return read_sound_reply(); },
+            [this](std::uint32_t, std::uint8_t value) { write_sound_reply(value); }, 1);
         sound_cpu.attach_bus(sound_bus);
         sound_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
             if (port >= sound_port_ga20_base && port < sound_port_ga20_limit) {
@@ -358,7 +389,6 @@ namespace mnemos::manifests::irem_m107 {
         fm.save_state(writer);
         pcm.save_state(writer);
         writer.bytes(work_ram);
-        writer.bytes(shared_ram);
         writer.bytes(sprite_ram);
         writer.bytes(palette_ram);
         writer.bytes(vram);
@@ -394,7 +424,6 @@ namespace mnemos::manifests::irem_m107 {
         fm.load_state(reader);
         pcm.load_state(reader);
         reader.bytes(work_ram);
-        reader.bytes(shared_ram);
         reader.bytes(sprite_ram);
         reader.bytes(palette_ram);
         reader.bytes(vram);

@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 5U;
+    inline constexpr std::uint32_t m107_system_state_version = 6U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -47,18 +47,20 @@ namespace mnemos::manifests::irem_m107 {
                       chips::audio::irem_ga20::clocks_per_sample ==
                   0U);
 
-    inline constexpr std::uint32_t work_ram_base = 0xA0000U;
-    inline constexpr std::size_t work_ram_size = 0x10000U;
-    inline constexpr std::uint32_t shared_ram_base = 0xB0000U;
-    inline constexpr std::size_t shared_ram_size = 0x1000U;
-    inline constexpr std::uint32_t sprite_ram_base = 0xC0000U;
-    inline constexpr std::size_t sprite_ram_size = 0x10000U;
-    inline constexpr std::uint32_t palette_ram_base = 0xD0000U;
-    inline constexpr std::size_t palette_ram_size = 0x4000U;
-    inline constexpr std::uint32_t vram_base = 0xE0000U;
+    inline constexpr std::uint32_t vram_base = 0xD0000U;
     inline constexpr std::size_t vram_size = 0x10000U;
-    inline constexpr std::uint32_t sound_work_ram_base = 0xD0000U;
+    inline constexpr std::uint32_t work_ram_base = 0xE0000U;
+    inline constexpr std::size_t work_ram_size = 0x10000U;
+    inline constexpr std::uint32_t sprite_ram_base = 0xF8000U;
+    inline constexpr std::size_t sprite_ram_size = 0x1000U;
+    inline constexpr std::uint32_t palette_ram_base = 0xF9000U;
+    inline constexpr std::size_t palette_ram_size = 0x1000U;
+    inline constexpr std::uint32_t sound_work_ram_base = 0xA0000U;
     inline constexpr std::size_t sound_work_ram_size = 0x4000U;
+    inline constexpr std::uint32_t sound_ga20_base = 0xA8000U;
+    inline constexpr std::uint32_t sound_ym2151_base = 0xA8040U;
+    inline constexpr std::uint32_t sound_latch_addr = 0xA8044U;
+    inline constexpr std::uint32_t sound_reply_addr = 0xA8046U;
 
     inline constexpr std::uint16_t port_in_p1 = 0x00U;
     inline constexpr std::uint16_t port_in_p2 = 0x01U;
@@ -123,7 +125,6 @@ namespace mnemos::manifests::irem_m107 {
         m107_board_params params;
 
         std::array<std::uint8_t, work_ram_size> work_ram{};
-        std::array<std::uint8_t, shared_ram_size> shared_ram{};
         std::array<std::uint8_t, sprite_ram_size> sprite_ram{};
         std::array<std::uint8_t, palette_ram_size> palette_ram{};
         std::array<std::uint8_t, vram_size> vram{};
