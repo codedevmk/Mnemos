@@ -175,6 +175,17 @@ namespace {
         return nested;
     }
 
+    [[nodiscard]] bool preferred_m84_source(const std::filesystem::path& candidate,
+                                            const std::filesystem::path& existing) {
+        std::error_code ec;
+        const bool candidate_zip = std::filesystem::is_regular_file(candidate, ec) &&
+                                   ends_with_zip(candidate.filename().string());
+        ec.clear();
+        const bool existing_zip = std::filesystem::is_regular_file(existing, ec) &&
+                                  ends_with_zip(existing.filename().string());
+        return candidate_zip && !existing_zip;
+    }
+
     [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
     index_source_roots(const std::vector<std::filesystem::path>& roots,
                        const std::set<std::string, std::less<>>& known) {
@@ -182,8 +193,15 @@ namespace {
 
         auto maybe_add = [&](const std::filesystem::path& path) {
             auto set_id = identify_m84_source(path, known);
-            if (set_id.has_value() && sources.find(*set_id) == sources.end()) {
-                sources.emplace(std::move(*set_id), path);
+            if (!set_id.has_value()) {
+                return;
+            }
+            std::string id = std::move(*set_id);
+            auto existing = sources.find(id);
+            if (existing == sources.end()) {
+                sources.emplace(std::move(id), path);
+            } else if (preferred_m84_source(path, existing->second)) {
+                existing->second = path;
             }
         };
 
@@ -321,9 +339,10 @@ TEST_CASE("irem_m84_adapter validates real M84 ROM sets", "[irem_m84][data]") {
                                        source_path.string(), std::move(supplemental_roms),
                                        std::move(supplemental_paths));
         CHECK(adapter.set_name() == set_name);
+        const bool v35_set = set_name == "gallop" || set_name == "ltswords";
         CHECK(adapter.machine().main_cpu.cpu_model() ==
-              (set_name == "ltswords" ? mnemos::chips::cpu::v30::model::v35
-                                       : mnemos::chips::cpu::v30::model::v30));
+              (v35_set ? mnemos::chips::cpu::v30::model::v35
+                       : mnemos::chips::cpu::v30::model::v30));
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m84::visible_width);

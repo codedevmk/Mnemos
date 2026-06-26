@@ -1,0 +1,161 @@
+# Gallop / Cosmic Cop -- local Irem M84 V35-family set.
+# Schema mnemos-romset/1; this manifest records the complete local ZIP routed
+# from the mixed M72 corpus bucket without treating it as true-M72 gallopm72.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "gallop"
+board       = "irem_m84"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "cc_d-h0-.ic55"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0xdac9eec3
+
+[[region.file]]
+name   = "cc_d-l0-.ic61"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x10e37ee1
+
+[[region.file]]
+name   = "cc_d-h0-.ic55"
+offset = 0x80001
+stride = 2
+size   = 0x40000
+crc32  = 0xdac9eec3
+
+[[region.file]]
+name   = "cc_d-l0-.ic61"
+offset = 0x80000
+stride = 2
+size   = 0x40000
+crc32  = 0x10e37ee1
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name   = "cc_d-sp-.ic17"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3e3ace60
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "cc_b-n0-.ic31"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x9d99deaa
+
+[[region.file]]
+name   = "cc_b-n1-.ic21"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x7eb083ed
+
+[[region.file]]
+name   = "cc_b-n2-.ic32"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x9421489e
+
+[[region.file]]
+name   = "cc_b-n3-.ic22"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x920ec735
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "cc_d-g00-.ic51"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xe7f3d772
+
+[[region.file]]
+name   = "cc_d-g10-.ic57"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x418b4e4c
+
+[[region.file]]
+name   = "cc_d-g20-.ic66"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa4b558eb
+
+[[region.file]]
+name   = "cc_d-g30-.ic64"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0xf64a3166
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "cc_d-vo-.ic14"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x6247bade
+
+[[region]]
+name = "proms"
+size = 0x0200
+
+[[region.file]]
+name   = "ken_b-4n-.ic23"
+offset = 0x0000
+size   = 0x0100
+crc32  = 0xb460c438
+
+[[region.file]]
+name   = "ken_b-4p-.ic24"
+offset = 0x0100
+size   = 0x0100
+crc32  = 0x526f10ca
+
+[[region]]
+name = "plds"
+size = 0x0800
+
+[[region.file]]
+name   = "ken_d-2h-.ic5"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xa83807e9
+
+[[region.file]]
+name   = "ken_d-5l-.ic33"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0xc719b8a3
+
+[[region.file]]
+name   = "cc_d-7b-.ic45"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x75ff4517
+
+[[region.file]]
+name   = "ken_b-3a-.ic9"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0xad1a7942

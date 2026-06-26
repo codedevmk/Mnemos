@@ -1,4 +1,5 @@
 set(_irem_m84_game_manifest_files
+    "games/gallop.toml"
     "games/hharryb.toml"
     "games/hharryu.toml"
     "games/ltswords.toml"

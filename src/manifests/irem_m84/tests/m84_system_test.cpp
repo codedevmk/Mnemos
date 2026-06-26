@@ -247,6 +247,17 @@ namespace {
         return nested;
     }
 
+    [[nodiscard]] bool preferred_m84_source(const std::filesystem::path& candidate,
+                                            const std::filesystem::path& existing) {
+        std::error_code ec;
+        const bool candidate_zip = std::filesystem::is_regular_file(candidate, ec) &&
+                                   ends_with_zip(candidate.filename().string());
+        ec.clear();
+        const bool existing_zip = std::filesystem::is_regular_file(existing, ec) &&
+                                  ends_with_zip(existing.filename().string());
+        return candidate_zip && !existing_zip;
+    }
+
     [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
     index_source_roots(const std::vector<std::filesystem::path>& roots,
                        const std::set<std::string, std::less<>>& known) {
@@ -254,8 +265,15 @@ namespace {
 
         auto maybe_add = [&](const std::filesystem::path& path) {
             auto set_id = identify_source(path, known);
-            if (set_id.has_value() && sources.find(*set_id) == sources.end()) {
-                sources.emplace(std::move(*set_id), path);
+            if (!set_id.has_value()) {
+                return;
+            }
+            std::string id = std::move(*set_id);
+            auto existing = sources.find(id);
+            if (existing == sources.end()) {
+                sources.emplace(std::move(id), path);
+            } else if (preferred_m84_source(path, existing->second)) {
+                existing->second = path;
             }
         };
 
@@ -397,7 +415,8 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
         declarations.emplace(decl.name, std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"hharryb", "hharryu", "ltswords"};
+    const std::set<std::string, std::less<>> expected_names{"gallop", "hharryb", "hharryu",
+                                                            "ltswords"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, decl] : declarations) {
         INFO("set=" << set_name);
@@ -433,6 +452,21 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
             CHECK(find_region(decl, "samples") != nullptr);
             CHECK(find_region(decl, "plds") == nullptr);
             require_explicit_prom_pld_hle(decl);
+        } else if (set_name == "gallop") {
+            CHECK_FALSE(decl.parent.has_value());
+            require_boot_chunk_reload(*maincpu, 0x80000U, 0x40000U);
+            CHECK(find_region(decl, "soundcpu") != nullptr);
+            CHECK(find_region(decl, "tiles") != nullptr);
+            CHECK(find_region(decl, "sprites") != nullptr);
+            CHECK(find_region(decl, "samples") != nullptr);
+            const rom_set_region* proms = find_region(decl, "proms");
+            REQUIRE(proms != nullptr);
+            require_region_contract(*proms);
+            CHECK(proms->size == 0x0200U);
+            const rom_set_region* plds = find_region(decl, "plds");
+            REQUIRE(plds != nullptr);
+            require_region_contract(*plds);
+            CHECK(plds->size == 0x0800U);
         }
     }
 
@@ -445,12 +479,17 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
           "v35_program_pair");
     CHECK(mnemos::manifests::irem_m84::board_params_for("ltswords").main_cpu_model ==
           mnemos::chips::cpu::v30::model::v35);
+    CHECK(mnemos::manifests::irem_m84::board_params_for("gallop").rom_layout ==
+          "v35_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("gallop").main_cpu_model ==
+          mnemos::chips::cpu::v30::model::v35);
 }
 
 TEST_CASE("m84 embedded game manifests mirror the checked-in roster", "[m84][romset]") {
     using mnemos::manifests::irem_m84::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 3U);
+    CHECK(game_manifests.size() == 4U);
+    CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("gallop").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryb").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryu").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("ltswords").empty());
@@ -619,7 +658,7 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
                 parent_decl, std::move(effective_decl));
             provider = mnemos::manifests::common::make_fallback_rom_provider(
                 std::move(provider), require_provider(parent_source->second));
-        } else {
+        } else if (set_name == "ltswords") {
             require_explicit_prom_pld_hle(effective_decl);
         }
 
