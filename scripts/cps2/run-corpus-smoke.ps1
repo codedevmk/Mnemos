@@ -105,7 +105,7 @@ function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
     return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or
-        $SetId -eq "mshvsf" -or $SetId -eq "mvsc"
+        $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
