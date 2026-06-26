@@ -677,6 +677,9 @@ foreach ($target in $missing | Select-Object -First 20) {
     $suggestion = @($target.suggested_locations | Select-Object -First 1)
     $suffix = if ($suggestion.Count -gt 0) { " suggested={0}" -f $suggestion[0] } else { "" }
     Write-Host ("  [missing] {0}:{1}:{2} crc={3} size={4}{5}" -f $target.set, $target.region, $target.name, $target.crc32, $target.size, $suffix) -ForegroundColor DarkYellow
+    foreach ($nameHit in @($target.name_hits | Select-Object -First 3)) {
+        Write-Host ("    [name-hit] {0}!{1} crc={2} size={3} (matching name or alias, wrong CRC)" -f $nameHit.source, $nameHit.entry, $nameHit.crc32, $nameHit.size) -ForegroundColor DarkYellow
+    }
     foreach ($related in @($target.related_hits | Select-Object -First 3)) {
         Write-Host ("    [related] {0}!{1} crc={2} size={3} ({4})" -f $related.source, $related.entry, $related.crc32, $related.size, $related.reason) -ForegroundColor DarkYellow
     }
