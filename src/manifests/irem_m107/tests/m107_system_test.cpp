@@ -450,6 +450,17 @@ TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][
     source->save_state(writer);
     REQUIRE_FALSE(state.empty());
 
+    mnemos::chips::state_reader header_reader(state);
+    CHECK(header_reader.u32() == m107::m107_system_state_version);
+
+    std::vector<std::uint8_t> old_version_state = state;
+    REQUIRE(old_version_state.size() >= sizeof(std::uint32_t));
+    old_version_state[0] = static_cast<std::uint8_t>(m107::m107_system_state_version - 1U);
+    auto old_version = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
+    mnemos::chips::state_reader old_reader(old_version_state);
+    old_version->load_state(old_reader);
+    CHECK_FALSE(old_reader.ok());
+
     auto restored = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
     mnemos::chips::state_reader reader(state);
     restored->load_state(reader);

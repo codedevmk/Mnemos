@@ -57,6 +57,17 @@ namespace mnemos::manifests::irem_m107 {
                 std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
         }
 
+        [[nodiscard]] std::uint32_t crc32_u32(std::uint32_t crc, std::uint32_t value) noexcept {
+            std::array<std::uint8_t, 4> bytes{
+                static_cast<std::uint8_t>(value),
+                static_cast<std::uint8_t>(value >> 8U),
+                static_cast<std::uint8_t>(value >> 16U),
+                static_cast<std::uint8_t>(value >> 24U),
+            };
+            return security::cryptography::crc32(
+                std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+        }
+
         [[nodiscard]] std::uint32_t crc32_u8(std::uint32_t crc, std::uint8_t value) noexcept {
             std::array<std::uint8_t, 1> bytes{value};
             return security::cryptography::crc32(
@@ -73,6 +84,18 @@ namespace mnemos::manifests::irem_m107 {
             return 0U;
         }
 
+        [[nodiscard]] std::uint8_t cpu_model_code(chips::cpu::v30::model model) noexcept {
+            switch (model) {
+            case chips::cpu::v30::model::v33:
+                return 2U;
+            case chips::cpu::v30::model::v35:
+                return 3U;
+            case chips::cpu::v30::model::v30:
+            default:
+                return 1U;
+            }
+        }
+
         [[nodiscard]] std::uint8_t layout_tint(std::string_view layout) noexcept {
             switch (layout_code(layout)) {
             case 1U:
@@ -84,12 +107,20 @@ namespace mnemos::manifests::irem_m107 {
             }
         }
 
-        [[nodiscard]] std::uint32_t rom_identity_crc(const common::rom_set_image& roms,
-                                                     const m107_board_params& params) {
+        [[nodiscard]] std::uint32_t board_identity_crc(const common::rom_set_image& roms,
+                                                       const m107_board_params& params,
+                                                       const chips::cpu::v30& main_cpu,
+                                                       const chips::cpu::v30& sound_cpu) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m107.rom.identity.v1"});
+                security::cryptography::crc32(std::string_view{"m107.board.identity.v2"});
             crc = crc32_u16(crc, params.dip_default);
             crc = crc32_u8(crc, layout_code(params.rom_layout));
+            crc = crc32_u8(crc, cpu_model_code(main_cpu.cpu_model()));
+            crc = crc32_u32(crc, main_clock_hz);
+            crc = crc32_u8(crc, cpu_model_code(sound_cpu.cpu_model()));
+            crc = crc32_u32(crc, sound_cpu_clock_hz);
+            crc = crc32_u32(crc, fm_clock_hz);
+            crc = crc32_u32(crc, pcm_clock_hz);
             crc = crc32_u64(crc, roms.regions.size());
             for (const auto& [name, bytes] : roms.regions) {
                 crc = crc32_u64(crc, name.size());
@@ -301,7 +332,7 @@ namespace mnemos::manifests::irem_m107 {
         writer.u32(m107_system_state_version);
         writer.u16(params.dip_default);
         writer.u8(layout_code(params.rom_layout));
-        writer.u32(rom_identity_crc(roms, params));
+        writer.u32(board_identity_crc(roms, params, main_cpu, sound_cpu));
         main_cpu.save_state(writer);
         sound_cpu.save_state(writer);
         video.save_state(writer);
@@ -332,7 +363,7 @@ namespace mnemos::manifests::irem_m107 {
         const std::uint8_t saved_layout = reader.u8();
         const std::uint32_t saved_identity = reader.u32();
         if (saved_dip != params.dip_default || saved_layout != layout_code(params.rom_layout) ||
-            saved_identity != rom_identity_crc(roms, params)) {
+            saved_identity != board_identity_crc(roms, params, main_cpu, sound_cpu)) {
             reader.fail();
             return;
         }

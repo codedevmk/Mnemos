@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 3U;
+    inline constexpr std::uint32_t m107_system_state_version = 4U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;

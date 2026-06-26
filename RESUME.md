@@ -70,6 +70,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - M107 now has a first-pass executable board, not only ROM-contract metadata.
 - Board implementation lives in `src/manifests/irem_m107/m107_system.hpp` and `src/manifests/irem_m107/m107_system.cpp`.
 - The board owns a main V-series CPU configured as NEC V33 at 14 MHz, a sound V-series CPU configured as NEC V35 at 14.318181 MHz, M107 video diagnostic path, YM2151, Irem/Nanao GA20 PCM, 20-bit little-endian main/sound buses, RAM windows, I/O ports, frame stepping, and whole-board save/load with identity checks.
+- M107 board save-state identity now includes the CPU model and clock semantics, so states from the previous V30/half-rate sound-clock contract are rejected by the board revision instead of loading silently.
 - Checked-in manifests and tests cover the local M107 sets currently embedded in the corpus gate, including `airass` and `firebarr`.
 - Player adapter lives in `src/apps/player/adapters/irem_m107`.
 - CLI/system-family routing is available through `--system irem_m107` and alias `m107`.
@@ -153,6 +154,15 @@ M107 V33/V35 model-clock continuation validation on 2026-06-26:
 - Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_chips_cpu_v30_test mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test`
 - Focused CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `5/5` passed for the V-series core metadata test, M107 board tests, M107 adapter tests, and real M107 corpus gate; V30 singlestep corpus skipped as expected because `MNEMOS_V30_TESTS_DIR` was unset.
 - Direct capability smoke after rebuilding `mnemos_player`: `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\airass.zip --capabilities` now reports `debug.v33.cpu_trace`, `debug.v35.cpu_trace`, `memory.v33.registers`, `memory.v35.registers`, `audio.ga20.samples`, and `media.rom_set state=available`.
+- `git diff --check`: clean, with only existing LF-to-CRLF working-copy warnings.
+- Full build: `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `189/189`, with expected conformance/media skips and the expected M72 roster skip.
+
+M107 save-state identity continuation validation on 2026-06-26:
+
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test`
+- Focused CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `3/3` passed for M107 board, adapter, and real corpus gates.
+- M107 board-state revision is now `4`; tests assert the written revision and reject a version-3 board chunk.
 - `git diff --check`: clean, with only existing LF-to-CRLF working-copy warnings.
 - Full build: `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `189/189`, with expected conformance/media skips and the expected M72 roster skip.
