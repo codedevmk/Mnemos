@@ -265,7 +265,9 @@ namespace mnemos::manifests::irem_m107 {
 
         dip_switches = params.dip_default;
         pcm.set_input_clock(pcm_clock_hz);
+        pcm.set_capture_divider(pcm_capture_divider);
         pcm.set_sample_rom(std::span<const std::uint8_t>(samples));
+        pcm.enable_audio_capture(true);
     }
 
     void m107_system::run_frame() {

@@ -117,6 +117,23 @@ TEST_CASE("irem_ga20 capture sink queues stereo frames at clock divided by four"
     REQUIRE(out[4] == -3936);
 }
 
+TEST_CASE("irem_ga20 capture divider decimates native PCM samples", "[irem_ga20][audio]") {
+    const auto rom = make_sample_rom();
+    irem_ga20 chip;
+    chip.set_sample_rom(rom);
+    chip.enable_audio_capture(true);
+    chip.set_capture_divider(2U);
+    configure_channel0(chip);
+
+    chip.tick(12U); // three native GA20 samples, one captured after decimation
+    REQUIRE(chip.pending_samples() == 1U);
+
+    std::array<std::int16_t, 2> out{};
+    REQUIRE(chip.drain_samples(out.data(), 1U) == 1U);
+    REQUIRE(out[0] == out[1]);
+    REQUIRE(out[0] == 7872);
+}
+
 TEST_CASE("irem_ga20 save_state/load_state round-trips playback state", "[irem_ga20][audio]") {
     const auto rom = make_sample_rom();
     irem_ga20 a;

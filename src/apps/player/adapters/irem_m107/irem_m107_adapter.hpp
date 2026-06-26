@@ -85,6 +85,7 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         std::vector<frontend_sdk::spec_field> spec_{};
         std::string loaded_set_name_{};
         std::vector<std::int16_t> audio_buf_{};
+        std::vector<std::int16_t> pcm_audio_buf_{};
         std::uint64_t samples_drained_{};
     };
 

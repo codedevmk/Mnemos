@@ -369,6 +369,18 @@ namespace mnemos::apps::player::adapters::irem_m107 {
             return m107::assemble_m107(std::move(set.image), m107::board_params_for(set.set_name));
         }
 
+        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample,
+                                               std::int16_t addend) noexcept {
+            const std::int32_t mixed = static_cast<std::int32_t>(sample) + addend;
+            if (mixed > 32767) {
+                return 32767;
+            }
+            if (mixed < -32768) {
+                return -32768;
+            }
+            return static_cast<std::int16_t>(mixed);
+        }
+
         constexpr std::uint32_t irem_m107_adapter_state_version = 2U;
         constexpr std::uint32_t irem_m107_adapter_save_target_manifest_rev = 1U;
 
@@ -542,6 +554,13 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         }
         audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
         sys_->fm.update(audio_buf_);
+        pcm_audio_buf_.assign(audio_buf_.size(), 0);
+        const std::size_t pcm_frames =
+            sys_->pcm.drain_samples(pcm_audio_buf_.data(), static_cast<std::size_t>(pending));
+        const std::size_t pcm_samples = std::min(pcm_frames * 2U, audio_buf_.size());
+        for (std::size_t i = 0; i < pcm_samples; ++i) {
+            audio_buf_[i] = add_clamped(audio_buf_[i], pcm_audio_buf_[i]);
+        }
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = 55930U};
@@ -556,6 +575,7 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         const runtime::load_result result = runtime::read_save_state(data, target);
         if (result.ok()) {
             audio_buf_.clear();
+            pcm_audio_buf_.clear();
         }
         return result;
     }

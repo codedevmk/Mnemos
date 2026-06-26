@@ -414,6 +414,7 @@ TEST_CASE("m107 sound CPU drives the Irem GA20 register window", "[m107][board][
     auto system = m107::assemble_m107(std::move(image), m107::board_params_for("airass"));
     REQUIRE(system != nullptr);
     CHECK(system->pcm.metadata().part_number == "GA20");
+    CHECK(system->pcm.capture_divider() == m107::pcm_capture_divider);
 
     system->run_frame();
 

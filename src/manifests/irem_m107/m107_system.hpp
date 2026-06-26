@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 2U;
+    inline constexpr std::uint32_t m107_system_state_version = 3U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -41,6 +41,11 @@ namespace mnemos::manifests::irem_m107 {
         (static_cast<std::uint64_t>(fm_clock_hz) * 1000U) / frame_rate_x1000;
     inline constexpr std::uint64_t pcm_cycles_per_frame =
         (static_cast<std::uint64_t>(pcm_clock_hz) * 1000U) / frame_rate_x1000;
+    inline constexpr std::uint32_t pcm_capture_divider =
+        chips::audio::ym2151::clocks_per_sample / chips::audio::irem_ga20::clocks_per_sample;
+    static_assert(chips::audio::ym2151::clocks_per_sample %
+                      chips::audio::irem_ga20::clocks_per_sample ==
+                  0U);
 
     inline constexpr std::uint32_t work_ram_base = 0xA0000U;
     inline constexpr std::size_t work_ram_size = 0x10000U;

@@ -74,6 +74,11 @@ namespace mnemos::chips::audio {
 
         void enable_audio_capture(bool on) noexcept { audio_capture_ = on; }
         [[nodiscard]] bool audio_capture_enabled() const noexcept { return audio_capture_; }
+        void set_capture_divider(std::uint32_t divider) noexcept {
+            capture_divider_ = divider != 0U ? divider : 1U;
+            capture_counter_ %= capture_divider_;
+        }
+        [[nodiscard]] std::uint32_t capture_divider() const noexcept { return capture_divider_; }
         [[nodiscard]] std::size_t pending_samples() const noexcept {
             return sample_queue_.size() / 2U;
         }
@@ -114,6 +119,8 @@ namespace mnemos::chips::audio {
         std::uint32_t sample_clock_{};
         std::int16_t last_sample_{};
         bool audio_capture_{};
+        std::uint32_t capture_divider_{1U};
+        std::uint32_t capture_counter_{};
         std::vector<std::int16_t> sample_queue_{};
 
         std::array<register_descriptor, 10> register_view_{};

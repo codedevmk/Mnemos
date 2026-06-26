@@ -7,11 +7,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <set>
@@ -26,6 +29,7 @@ namespace {
 
     namespace irem = mnemos::apps::player::adapters::irem_m107;
     namespace m107 = mnemos::manifests::irem_m107;
+    namespace fs = std::filesystem;
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_program() {
         std::vector<std::uint8_t> rom(m107::main_rom_size, 0xFFU);
@@ -40,6 +44,124 @@ namespace {
             rom[0x200U + i] = program[i];
         }
         return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_ga20_program() {
+        std::vector<std::uint8_t> rom(m107::sound_rom_size, 0xFFU);
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::array<std::uint8_t, 29> program = {
+            0xB0U, 0x10U, 0xE6U, 0x20U, // GA20 ch0 start low  -> 0x100
+            0xB0U, 0x00U, 0xE6U, 0x21U, // GA20 ch0 start high
+            0xB0U, 0x40U, 0xE6U, 0x22U, // GA20 ch0 end low    -> 0x400
+            0xB0U, 0x00U, 0xE6U, 0x23U, // GA20 ch0 end high
+            0xB0U, 0x00U, 0xE6U, 0x24U, // slowest byte advance
+            0xB0U, 0xF6U, 0xE6U, 0x25U, // audible volume
+            0xB0U, 0x02U, 0xE6U, 0x26U, // control bit 1 = key-on
+            0xF4U};                      // HLT
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x0200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    struct temp_set_dir final {
+        fs::path path;
+
+        temp_set_dir() {
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            path = fs::temp_directory_path() /
+                   ("mnemos_m107_ga20_adapter_test_" + std::to_string(stamp));
+            std::error_code ec;
+            fs::remove_all(path, ec);
+            REQUIRE(fs::create_directories(path));
+        }
+
+        temp_set_dir(const temp_set_dir&) = delete;
+        temp_set_dir& operator=(const temp_set_dir&) = delete;
+
+        temp_set_dir(temp_set_dir&& other) noexcept : path(std::move(other.path)) {}
+
+        temp_set_dir& operator=(temp_set_dir&& other) noexcept {
+            if (this != &other) {
+                cleanup();
+                path = std::move(other.path);
+            }
+            return *this;
+        }
+
+        ~temp_set_dir() { cleanup(); }
+
+        void cleanup() noexcept {
+            if (path.empty()) {
+                return;
+            }
+            std::error_code ec;
+            fs::remove_all(path, ec);
+            path.clear();
+        }
+    };
+
+    void write_binary_file(const fs::path& path, std::span<const std::uint8_t> bytes) {
+        std::ofstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        file.write(reinterpret_cast<const char*>(bytes.data()),
+                   static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(file.good());
+    }
+
+    void write_text_file(const fs::path& path, std::string_view text) {
+        std::ofstream file(path);
+        REQUIRE(file.good());
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        REQUIRE(file.good());
+    }
+
+    [[nodiscard]] temp_set_dir make_ga20_audio_set() {
+        temp_set_dir dir;
+        write_text_file(dir.path / "game.toml", R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "ga20mix"
+board = "irem_m107"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name = "maincpu.bin"
+offset = 0
+size = 0x100000
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name = "soundcpu.bin"
+offset = 0
+size = 0x020000
+
+[[region]]
+name = "samples"
+size = 0x001000
+
+[[region.file]]
+name = "samples.bin"
+offset = 0
+size = 0x001000
+)toml");
+        write_binary_file(dir.path / "maincpu.bin", synthetic_m107_program());
+        write_binary_file(dir.path / "soundcpu.bin", synthetic_m107_sound_ga20_program());
+        std::vector<std::uint8_t> samples(0x1000U, 0x00U);
+        std::fill(samples.begin() + 0x100, samples.begin() + 0x400, std::uint8_t{0x90U});
+        write_binary_file(dir.path / "samples.bin", samples);
+        return dir;
     }
 
     [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
@@ -276,6 +398,25 @@ TEST_CASE("irem_m107_adapter save state restores board and adapter state", "[ire
     CHECK(restored.drain_audio().frame_count == 0U);
     restored.step_one_frame();
     CHECK(restored.frames_stepped() == source.frames_stepped() + 1U);
+}
+
+TEST_CASE("irem_m107_adapter mixes GA20 PCM into drained audio", "[irem_m107]") {
+    auto set = make_ga20_audio_set();
+    irem::irem_m107_adapter adapter({}, "GA20 mix", nullptr, {}, set.path.string());
+    REQUIRE(validation_issue_count(adapter.media_capabilities()) == 0U);
+
+    adapter.step_one_frame();
+    const auto audio = adapter.drain_audio();
+    REQUIRE(audio.frame_count > 0U);
+    REQUIRE(audio.sample_rate == 55930U);
+    REQUIRE(adapter.machine().pcm.pending_samples() == 0U);
+
+    bool any_nonzero = false;
+    const std::size_t sample_count = static_cast<std::size_t>(audio.frame_count) * 2U;
+    for (std::size_t i = 0; i < sample_count; ++i) {
+        any_nonzero = any_nonzero || audio.samples[i] != 0;
+    }
+    CHECK(any_nonzero);
 }
 
 TEST_CASE("irem_m107_adapter validates real M107 ROM sets", "[irem_m107][data]") {

@@ -76,8 +76,9 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
 - Capability discovery reports M107 memory views, V30 trace surfaces, YM2151/GA20 chip registers, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
+- The previous OKI6295 placeholder has been replaced by a native GA20 PCM model, and the M107 player now captures GA20 PCM at the YM output cadence and mixes drained GA20 stereo samples into the player audio buffer with signed clamping.
 - The M107 adapter now consumes explicit arcade `service` frontend input for the currently modeled service bit, keeps `mode` as a legacy service alias, and persists explicit `service` / `test` fields in adapter state version 2. Operator-test board wiring remains unassigned until the M107 input map is verified.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/config proof if applicable, exact M107 memory/I/O map, GA21/GA22 video/priority behavior, remaining GA20 sound-CPU protocol and mixer integration details, DIP behavior, raster timing, and screenshot parity.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/config proof if applicable, exact M107 memory/I/O map, GA21/GA22 video/priority behavior, remaining GA20 sound-CPU protocol plus analog balance/filtering proof, DIP behavior, raster timing, and screenshot parity.
 
 ### Irem M15
 
@@ -122,6 +123,7 @@ Important local corpus facts:
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
 - World `nspirit` is incomplete locally: missing `mcu/nin_c-pr-b.ic1`, size `0x1000`, CRC `0x0f7b2713`.
 - Current scan of `D:\emu\irem\M72\nspirit.zip` finds `23/24` World `nspirit` artifacts and still misses only `nin_c-pr-b.ic1` (`0x0f7b2713`). The same ZIP contains `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), which is the Japan MCU and does not prove World `nspirit`.
+- Current exact-path scan of `D:\emu\irem\M72\nspirit.zip`, `D:\emu\irem\M72\gallopm72.zip`, and `D:\emu\irem\M72\gallop.zip` still finds `42/44` artifacts present and still misses only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`) and `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`). Direct ZIP inspection shows the Ninja Spirit ZIP's only MCU-like entry is the Japan `nspiritj/nin_c-pr-.ic1`; the Gallop ZIPs have PROM/sprite/voice entries but no matching MCU dump.
 - If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
 - Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1`, size `0x1000`, CRC `0x802d440a`; it did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
@@ -145,6 +147,16 @@ Final handoff validation completed on 2026-06-25 21:05 -05:00:
 - Irem M72 corpus smoke from the data-gated script: `2/2` passed for configured R-Type/protected/vertical artifacts
 - M72 roster golden still skipped because `MNEMOS_M72_SET_DIR` was intentionally unset; Gallop and World Ninja Spirit remain blocked by missing local MCU dumps
 - CPS2 corpus smoke skipped because no CPS2 env vars were set for this Irem handoff
+
+M107 GA20 player-mixer continuation validation on 2026-06-26:
+
+- Exact M72 archive scan: `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem\M72 -Recurse -Set 'gallopm72,nspirit'` found `42/44` artifacts present and still missed only `gallopm72:mcu:cc_c-pr-.ic1` plus `nspirit:mcu:nin_c-pr-b.ic1`.
+- Direct ZIP inspection: `D:\emu\irem\M72\nspirit.zip` contains `nspiritj/nin_c-pr-.ic1` only under MCU-like entries; `D:\emu\irem\M72\gallopm72.zip` contains PROM entries but no `cc_c-pr-.ic1`; `D:\emu\irem\M72\gallop.zip` contains sprite/voice entries but no `cc_c-pr-.ic1`.
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_chips_audio_irem_ga20_test mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test`
+- Focused CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `4/4` passed for `mnemos_chips_audio_irem_ga20_test`, `mnemos_manifests_irem_m107_test`, `mnemos_apps_player_irem_m107_adapter_test`, and `mnemos_apps_player_irem_m107_corpus_golden_test`
+- `git diff --check`: clean, with only existing LF-to-CRLF working-copy warnings.
+- Full build: `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `189/189`, with expected conformance/media skips and the expected M72 roster skip.
 
 Continuation validation on 2026-06-25 21:19 -05:00:
 
@@ -402,7 +414,7 @@ Repository hygiene notes:
 ## Suggested Next Work
 
 1. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
-2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
+2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
 5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.

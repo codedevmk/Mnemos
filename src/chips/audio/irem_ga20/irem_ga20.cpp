@@ -142,8 +142,12 @@ namespace mnemos::chips::audio {
             sample_clock_ = 0U;
             const std::int16_t sample = step();
             if (audio_capture_) {
-                sample_queue_.push_back(sample);
-                sample_queue_.push_back(sample);
+                ++capture_counter_;
+                if (capture_counter_ >= capture_divider_) {
+                    capture_counter_ = 0U;
+                    sample_queue_.push_back(sample);
+                    sample_queue_.push_back(sample);
+                }
             }
         }
     }
@@ -164,6 +168,7 @@ namespace mnemos::chips::audio {
         regs_.fill(0U);
         channels_ = {};
         sample_clock_ = 0U;
+        capture_counter_ = 0U;
         last_sample_ = 0;
         sample_queue_.clear();
     }
@@ -180,6 +185,8 @@ namespace mnemos::chips::audio {
         }
         writer.u32(input_clock_hz_);
         writer.u32(sample_clock_);
+        writer.u32(capture_divider_);
+        writer.u32(capture_counter_);
         writer.u16(static_cast<std::uint16_t>(last_sample_));
     }
 
@@ -195,6 +202,11 @@ namespace mnemos::chips::audio {
         }
         input_clock_hz_ = reader.u32();
         sample_clock_ = reader.u32() % clocks_per_sample;
+        capture_divider_ = reader.u32();
+        if (capture_divider_ == 0U) {
+            capture_divider_ = 1U;
+        }
+        capture_counter_ = reader.u32() % capture_divider_;
         last_sample_ = static_cast<std::int16_t>(reader.u16());
         sample_queue_.clear();
     }
