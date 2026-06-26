@@ -73,6 +73,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
 - Capability discovery reports M107 memory views, V30 trace surfaces, YM2151/OKI6295 chip registers, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
+- The M107 adapter now consumes explicit arcade `service` frontend input for the currently modeled service bit, keeps `mode` as a legacy service alias, and persists explicit `service` / `test` fields in adapter state version 2. Operator-test board wiring remains unassigned until the M107 input map is verified.
 - Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/config proof if applicable, exact M107 memory/I/O map, GA20/GA21/GA22 video/priority behavior, PCM behavior, sound-CPU details, DIP behavior, raster timing, and screenshot parity.
 
 ### Irem M15
@@ -173,6 +174,14 @@ M81/M82/M84 cabinet input continuation validation on 2026-06-26:
 - Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R "mnemos_apps_player_irem_m(81|82|84)_adapter_test"`: `3/3` passed
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - Local corpus CTest with `MNEMOS_M81_SET_DIR=D:\emu\irem\M81`, `MNEMOS_M82_SET_DIR=D:\emu\irem`, and `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`: `3/3` passed for `mnemos_apps_player_irem_m81_corpus_golden_test`, `mnemos_apps_player_irem_m82_rtype2_golden_test`, and `mnemos_apps_player_irem_m84_corpus_golden_test`
+
+M107 cabinet service input continuation validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing CRLF conversion warnings
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_apps_player_irem_m107_adapter_test`
+- Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_apps_player_irem_m107_adapter_test`: `1/1` passed
+- Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
+- Local corpus CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `2/2` passed for `mnemos_manifests_irem_m107_test` and `mnemos_apps_player_irem_m107_corpus_golden_test`
 
 M107 slice validation that passed:
 

@@ -257,7 +257,10 @@ TEST_CASE("irem_m107_adapter save state restores board and adapter state", "[ire
     p1.start = true;
     p1.select = true;
     p1.a = true;
+    p1.service = true;
     source.apply_input(0, p1);
+    CHECK(source.machine().input_system ==
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x04U & ~0x10U));
     source.step_one_frame();
     REQUIRE(source.drain_audio().frame_count > 0U);
 
