@@ -372,6 +372,40 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_ym_irq_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::sound_rom_size, 0xFFU);
+        const std::size_t intp0_vector =
+            static_cast<std::size_t>(mnemos::manifests::irem_m107::sound_irq_vector_ym2151) * 4U;
+        rom[intp0_vector + 0U] = 0x00U; // IVT[INTP0] -> 0000:0300
+        rom[intp0_vector + 1U] = 0x03U;
+        rom[intp0_vector + 2U] = 0x00U;
+        rom[intp0_vector + 3U] = 0x00U;
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::vector<std::uint8_t> wait_program{
+            0xFBU, // STI
+            0xF4U, // HLT, then wake on the YM2151 INTP0 IRQ
+            0xF4U  // HLT again if the handler ever returns
+        };
+        for (std::size_t i = 0; i < wait_program.size(); ++i) {
+            rom[0x0200U + i] = wait_program[i];
+        }
+        const std::vector<std::uint8_t> handler{
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xB0U, 0xA5U,        // MOV AL,A5
+            0xA2U, 0x01U, 0x00U, // MOV [0001],AL
+            0xF4U                // HLT
+        };
+        for (std::size_t i = 0; i < handler.size(); ++i) {
+            rom[0x0300U + i] = handler[i];
+        }
+        return rom;
+    }
+
     [[nodiscard]] rom_set_image synthetic_m107_image() {
         rom_set_image image;
         image.regions.emplace("maincpu", synthetic_m107_program());
@@ -648,6 +682,32 @@ TEST_CASE("m107 sound command latch reaches the V35 and returns a reply", "[m107
         CHECK(system->sound_reply_pending);
         CHECK(system->sound_ram[0] == 0x5AU);
     }
+}
+
+TEST_CASE("m107 YM2151 IRQ reaches the V35 INTP0 vector", "[m107][board][audio]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto image = synthetic_m107_image();
+    image.regions["soundcpu"] = synthetic_m107_sound_ym_irq_program();
+
+    auto system = m107::assemble_m107(std::move(image), m107::board_params_for("airass"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+    CHECK(system->sound_ram[1] == 0x00U);
+    CHECK(system->sound_cpu.halted());
+
+    system->fm.write_address(0x10U);
+    system->fm.write_data(0xFFU);
+    system->fm.write_address(0x11U);
+    system->fm.write_data(0x02U); // CLKA = 1022, overflow after 128 OPM clocks.
+    system->fm.write_address(0x14U);
+    system->fm.write_data(0x05U); // run Timer A + enable IRQ.
+    system->fm.tick(128U);
+    REQUIRE(system->fm.irq_asserted());
+
+    system->sound_cpu.tick(256U);
+    CHECK(system->sound_ram[1] == 0xA5U);
 }
 
 TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][board]") {

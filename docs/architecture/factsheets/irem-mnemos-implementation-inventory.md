@@ -57,7 +57,7 @@ now contract-only.
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 41% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling/IRQ timing, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
-| M107 | `irem_m107` | 54% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test and command IRQ proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, V35 IRQ priority/GA20 analog mix, raster/parity |
+| M107 | `irem_m107` | 55% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, V35 IRQ priority/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
 ## Correct Graphics And Music Certification
@@ -392,11 +392,12 @@ visual and audio parity proof.
   and operator-service bits.
 - **Correct gfx/music:** not certified. Current rendering is an M107-local
   diagnostic path; GA20 exists, the command/reply latch now has pending-state,
-  V35 INTP1/vector-25 dispatch, explicit acknowledge, and reply proof, and the
-  modeled main/sound windows match the current board evidence for work RAM,
-  VRAM, sprite RAM, palette RAM, sound RAM, GA20, YM2151, command latch, and
-  sound reply. Full V35 interrupt-controller priority/latency and analog
-  balance/filtering are not proven.
+  V35 INTP1/vector-25 dispatch, explicit acknowledge, reply proof, and YM2151
+  Timer A INTP0/vector-24 dispatch proof, and the modeled main/sound windows
+  match the current board evidence for work RAM, VRAM, sprite RAM, palette RAM,
+  sound RAM, GA20, YM2151, command latch, and sound reply. Full V35
+  interrupt-controller priority/latency and analog balance/filtering are not
+  proven.
 - **Remaining:** V33/V35-specific timing and on-die peripheral proof, deeper
   M107 I/O behavior, GA21/GA22 video and priority behavior, full V35
   interrupt-controller priority/latency, GA20 analog mix, raster timing, and
