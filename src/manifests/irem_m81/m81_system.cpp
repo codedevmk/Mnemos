@@ -674,7 +674,8 @@ namespace mnemos::manifests::irem_m81 {
 
     void m81_system::record_dac_write(std::uint8_t value) {
         dac.write(value);
-        const dac_write_event event{.sound_clock = fm.elapsed_clocks(), .output = dac.output()};
+        const dac_write_event event{.sound_clock = sound_cpu.elapsed_cycles(),
+                                    .output = dac.output()};
         if (!dac_write_events.empty() && dac_write_events.back().sound_clock == event.sound_clock) {
             dac_write_events.back() = event;
             return;

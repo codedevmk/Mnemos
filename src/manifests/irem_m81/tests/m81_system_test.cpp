@@ -346,6 +346,17 @@ namespace {
             {0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U, 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U});
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m81_sound_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m81::sound_rom_size, 0x00U);
+        rom[0x0000U] = 0x3EU; // LD A,$F0
+        rom[0x0001U] = 0xF0U;
+        rom[0x0002U] = 0xD3U; // OUT ($82),A
+        rom[0x0003U] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m81::z80_port_dac);
+        rom[0x0004U] = 0x76U; // HALT
+        return rom;
+    }
+
     [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
         for (std::uint32_t y = 0; y < frame.height; ++y) {
             for (std::uint32_t x = 0; x < frame.width; ++x) {
@@ -440,7 +451,7 @@ TEST_CASE("m81 executable board runs a V30/Z80/YM frame", "[m81]") {
 
     rom_set_image image;
     image.regions.emplace("maincpu", synthetic_m81_program());
-    image.regions.emplace("soundcpu", std::vector<std::uint8_t>(m81::sound_rom_size, 0x00U));
+    image.regions.emplace("soundcpu", synthetic_m81_sound_program());
     image.regions.emplace("tiles", std::vector<std::uint8_t>(0x1000U, 0x35U));
     image.regions.emplace("sprites", std::vector<std::uint8_t>(0x1000U, 0xA7U));
     image.regions.emplace("proms", std::vector<std::uint8_t>(0x100U, 0x11U));
@@ -452,6 +463,10 @@ TEST_CASE("m81 executable board runs a V30/Z80/YM frame", "[m81]") {
     CHECK(system->work_ram[0] == 0x42U);
     CHECK(system->video.frame_index() == 1U);
     CHECK(system->fm.elapsed_clocks() >= m81::sound_cycles_per_frame);
+    REQUIRE(system->dac_write_events.size() == 1U);
+    CHECK(system->dac_write_events[0].sound_clock > 0U);
+    CHECK(system->dac_write_events[0].sound_clock < m81::sound_cycles_per_frame);
+    CHECK(system->dac.level() == 0xF0U);
     CHECK(frame_has_nonblack(system->video.framebuffer()));
 }
 

@@ -448,6 +448,7 @@ TEST_CASE("irem_m72_adapter mixes DAC writes at sound sample boundaries", "[irem
     auto& machine = adapter.machine();
 
     machine.record_dac_write(0xC0U); // sound clock 0: affects the first sample.
+    machine.sound_cpu.tick(64U);
     machine.fm.tick(64U);
     machine.record_dac_write(0x80U); // sound clock 64: next sample boundary.
 
@@ -459,6 +460,7 @@ TEST_CASE("irem_m72_adapter mixes DAC writes at sound sample boundaries", "[irem
     REQUIRE(machine.dac_write_events.size() == 1U);
     CHECK(machine.dac_write_events[0].sound_clock == 64U);
 
+    machine.sound_cpu.tick(64U);
     machine.fm.tick(64U);
     const auto second = adapter.drain_audio();
     REQUIRE(second.frame_count == 1U);
@@ -1652,12 +1654,14 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     source.machine().main_to_mcu = 0x40U;
     source.machine().mcu_to_main = 0x41U;
     source.machine().record_dac_write(0xC0U);
+    source.machine().sound_cpu.tick(mnemos::chips::audio::ym2151::clocks_per_sample);
     source.machine().fm.tick(mnemos::chips::audio::ym2151::clocks_per_sample);
     const auto first_dac_audio = source.drain_audio();
     REQUIRE(first_dac_audio.frame_count == 1U);
     REQUIRE(first_dac_audio.samples != nullptr);
     CHECK(first_dac_audio.samples[0] == (0xC0 - 0x80) * 64);
     CHECK(first_dac_audio.samples[1] == (0xC0 - 0x80) * 64);
+    source.machine().sound_cpu.tick(mnemos::chips::audio::ym2151::clocks_per_sample);
     source.machine().fm.tick(mnemos::chips::audio::ym2151::clocks_per_sample);
 
     const mnemos::runtime::save_target board_target = irem::build_save_target(source.machine());

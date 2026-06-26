@@ -834,6 +834,9 @@ TEST_CASE("m72 Z80 streams sample bytes from the sample ROM into the DAC", "[m72
     }
     CHECK(system->dac.level() == 0xA0U); // cursor auto-incremented
     CHECK(system->sample_address == 6U);
+    REQUIRE(system->dac_write_events.size() == 2U);
+    CHECK(system->dac_write_events[0].sound_clock > 0U);
+    CHECK(system->dac_write_events[1].sound_clock > system->dac_write_events[0].sound_clock);
     CHECK(system->dac.output() == (0xA0 - 0x80) * 64);
 }
 
@@ -846,7 +849,7 @@ TEST_CASE("m72 records DAC writes on the sound-clock timeline", "[m72]") {
     CHECK(system->dac_write_events[0].sound_clock == 0U);
     CHECK(system->dac_write_events[0].output == (0xC0 - 0x80) * 64);
 
-    system->fm.tick(64U);
+    system->sound_cpu.tick(64U);
     system->record_dac_write(0x80U);
     REQUIRE(system->dac_write_events.size() == 2U);
     CHECK(system->dac_write_events[1].sound_clock == 64U);
@@ -1362,6 +1365,7 @@ TEST_CASE("m72 board save_state/load_state round-trips glue RAM and latches", "[
     source->protection_hle_startup_fill_completed = true;
     source->protection_hle_entry_write_next_offset = 0x0456U;
     source->protection_hle_entry_stub_active = true;
+    source->sound_cpu.tick(128U);
     source->fm.tick(128U);
     source->record_dac_write(0x9AU);
     source->sound_latch_irq = true;

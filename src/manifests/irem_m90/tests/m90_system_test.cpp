@@ -112,7 +112,9 @@ TEST_CASE("m90 Z80 sound CPU drives the board DAC", "[m90][board][audio]") {
 
     system->run_frame();
 
-    CHECK_FALSE(system->dac_write_events.empty());
+    REQUIRE(system->dac_write_events.size() == 1U);
+    CHECK(system->dac_write_events[0].sound_clock > 0U);
+    CHECK(system->dac_write_events[0].sound_clock < m90::sound_cycles_per_frame);
     CHECK(system->dac.level() == 0xF0U);
     CHECK(system->dac.output() > 0);
 }

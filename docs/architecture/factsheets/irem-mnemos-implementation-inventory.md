@@ -51,11 +51,11 @@ now contract-only.
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
-| M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
-| M82 | `irem_m82` | 65% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
+| M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
+| M82 | `irem_m82` | 66% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip`; Gallop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
-| M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
+| M90 / M97 / M99 | `irem_m90` first-pass | 26% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 41% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling/IRQ timing, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 56% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
@@ -276,7 +276,7 @@ visual and audio parity proof.
   resident media validation, rollback-ready state, capability discovery, and
   player smoke.
 - **Correct gfx/music:** not certified. Current video/audio are first-pass board
-  routes, not final parity.
+  routes with sound-Z80-clocked DAC event proof, not final parity.
 - **Remaining:** verify or replace first-pass video priority, raster timing,
   DIP behavior, palette-bank rendering/decode, board timing, and visual/audio
   parity.
@@ -294,7 +294,9 @@ visual and audio parity proof.
   Its dedicated `backgrounds` ROM region is now loaded and consumed by the rear
   tilemap renderer, with a focused empty-foreground regression test covering that
   path.
-- **Correct gfx/music:** not certified.
+- **Correct gfx/music:** not certified. Current audio now proves
+  sound-Z80-clocked DAC event ordering, but final music/audio parity remains
+  open.
 - **Classification note:** the factsheet places R-Type II under M84, while the
   current Mnemos implementation routes the local R-Type II sets through
   `irem_m82`. Keep this as an explicit board-evidence audit item rather than
@@ -351,7 +353,8 @@ visual and audio parity proof.
   save-state bytes.
 - **Correct gfx/music:** not certified. The board shell now matches the
   V35/Z80/YM2151/DAC topology, but rendering is a GA25 diagnostic compositor and
-  audio proof is limited to the Z80/YM/DAC route plus synthetic DAC mixing.
+  audio proof is limited to the Z80/YM/DAC route plus sound-Z80-clocked
+  synthetic DAC mixing.
 - **Local corpus note:** `Atomic-Punk_Arcade_EN.zip` currently lives under the
   `D:\emu\irem\M72` storage bucket and unwraps to `atompunk.zip`; the three
   `New-Atomic-Punk-Global-Quest_*` root wrappers unwrap to `newapunk`,
