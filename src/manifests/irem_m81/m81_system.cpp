@@ -64,6 +64,30 @@ namespace mnemos::manifests::irem_m81 {
             return (r << 16U) | (g << 8U) | b;
         }
 
+        [[nodiscard]] std::size_t
+        m81_palette_physical_offset(std::uint32_t address) noexcept {
+            return static_cast<std::size_t>((address - palette_ram_base) & ~0x200U);
+        }
+
+        [[nodiscard]] std::uint8_t
+        m81_palette_read(std::span<const std::uint8_t> palette,
+                         std::uint32_t address) noexcept {
+            const std::size_t offset = m81_palette_physical_offset(address);
+            if ((offset & 1U) != 0U || offset >= palette.size()) {
+                return 0xFFU;
+            }
+            return static_cast<std::uint8_t>(palette[offset] | 0xE0U);
+        }
+
+        void m81_palette_write(std::span<std::uint8_t> palette,
+                               std::uint32_t address,
+                               std::uint8_t value) noexcept {
+            const std::size_t offset = m81_palette_physical_offset(address);
+            if ((offset & 1U) == 0U && offset < palette.size()) {
+                palette[offset] = static_cast<std::uint8_t>(value & 0x1FU);
+            }
+        }
+
         [[nodiscard]] std::uint16_t read_le16(std::span<const std::uint8_t> data,
                                               std::size_t offset) noexcept {
             if (offset + 1U >= data.size()) {
@@ -480,7 +504,15 @@ namespace mnemos::manifests::irem_m81 {
         main_bus.map_rom(0x00000U, std::span<const std::uint8_t>(main_prog));
         main_bus.map_ram(work_ram_base, work_ram, 1);
         main_bus.map_ram(sprite_ram_base, sprite_ram, 1);
-        main_bus.map_ram(palette_ram_base, palette_ram, 1);
+        main_bus.map_mmio(
+            palette_ram_base, static_cast<std::uint32_t>(palette_ram_size),
+            [this](std::uint32_t address) -> std::uint8_t {
+                return m81_palette_read(palette_ram, address);
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                m81_palette_write(palette_ram, address, value);
+            },
+            1);
         main_bus.map_ram(vram_base, vram, 1);
         main_bus.map_ram(rowscroll_ram_base, rowscroll_ram, 1);
         main_cpu.attach_bus(main_bus);

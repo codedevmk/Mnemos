@@ -449,6 +449,32 @@ TEST_CASE("m84 executable board runs the Hammerin' Harry-compatible V30/Z80 fram
     CHECK(frame_has_nonblack(system->video.framebuffer()));
 }
 
+TEST_CASE("m84 compatibility core exposes the shared KNA91 palette bus", "[m84]") {
+    namespace m81 = mnemos::manifests::irem_m81;
+    namespace m84 = mnemos::manifests::irem_m84;
+
+    rom_set_image image;
+    image.regions.emplace("maincpu", synthetic_m84_program());
+
+    auto system = m84::assemble_m84(std::move(image), m84::board_params_for("hharryb"));
+    REQUIRE(system != nullptr);
+
+    system->board.main_bus.write8(m81::palette_ram_base + 0x000U, 0xE7U);
+    CHECK(system->palette_ram[0x000U] == 0x07U);
+    CHECK(system->board.main_bus.read8(m81::palette_ram_base + 0x000U) == 0xE7U);
+    CHECK(system->board.main_bus.read8(m81::palette_ram_base + 0x001U) == 0xFFU);
+
+    system->board.main_bus.write8(m81::palette_ram_base + 0x200U, 0x3FU);
+    CHECK(system->palette_ram[0x000U] == 0x1FU);
+    CHECK(system->palette_ram[0x200U] == 0x00U);
+    CHECK(system->board.main_bus.read8(m81::palette_ram_base + 0x200U) == 0xFFU);
+
+    system->board.main_bus.write16_le(m81::palette_ram_base + 0xA00U, 0x001AU);
+    CHECK(system->palette_ram[0x800U] == 0x1AU);
+    CHECK(system->palette_ram[0xA00U] == 0x00U);
+    CHECK(system->board.main_bus.read16_le(m81::palette_ram_base + 0x800U) == 0xFFFAU);
+}
+
 TEST_CASE("m84 save state rejects a different M84 program-layout profile", "[m84]") {
     namespace m81 = mnemos::manifests::irem_m81;
     namespace m84 = mnemos::manifests::irem_m84;

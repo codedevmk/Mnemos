@@ -455,6 +455,40 @@ TEST_CASE("m81 executable board runs a V30/Z80/YM frame", "[m81]") {
     CHECK(frame_has_nonblack(system->video.framebuffer()));
 }
 
+TEST_CASE("m81 palette bus mirrors KNA91 low-byte access", "[m81]") {
+    namespace m81 = mnemos::manifests::irem_m81;
+
+    rom_set_image image;
+    image.regions.emplace("maincpu", synthetic_m81_program());
+
+    auto system = m81::assemble_m81(std::move(image), m81::board_params_for("dbreed"));
+    REQUIRE(system != nullptr);
+
+    system->main_bus.write8(m81::palette_ram_base + 0x000U, 0xE7U);
+    CHECK(system->palette_ram[0x000U] == 0x07U);
+    CHECK(system->main_bus.read8(m81::palette_ram_base + 0x000U) == 0xE7U);
+    CHECK(system->main_bus.read8(m81::palette_ram_base + 0x001U) == 0xFFU);
+
+    system->main_bus.write8(m81::palette_ram_base + 0x200U, 0x3FU);
+    CHECK(system->palette_ram[0x000U] == 0x1FU);
+    CHECK(system->palette_ram[0x200U] == 0x00U);
+    CHECK(system->main_bus.read8(m81::palette_ram_base + 0x200U) == 0xFFU);
+
+    system->main_bus.write8(m81::palette_ram_base + 0x201U, 0x00U);
+    CHECK(system->palette_ram[0x001U] == 0x00U);
+    CHECK(system->main_bus.read8(m81::palette_ram_base + 0x201U) == 0xFFU);
+
+    system->main_bus.write8(m81::palette_ram_base + 0x600U, 0x12U);
+    CHECK(system->palette_ram[0x400U] == 0x12U);
+    CHECK(system->palette_ram[0x600U] == 0x00U);
+    CHECK(system->main_bus.read8(m81::palette_ram_base + 0x400U) == 0xF2U);
+
+    system->main_bus.write16_le(m81::palette_ram_base + 0xA00U, 0x001AU);
+    CHECK(system->palette_ram[0x800U] == 0x1AU);
+    CHECK(system->palette_ram[0xA00U] == 0x00U);
+    CHECK(system->main_bus.read16_le(m81::palette_ram_base + 0x800U) == 0xFFFAU);
+}
+
 TEST_CASE("m81 save state rejects a different board layout profile", "[m81]") {
     namespace m81 = mnemos::manifests::irem_m81;
 

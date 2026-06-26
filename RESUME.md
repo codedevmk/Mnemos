@@ -42,6 +42,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Player adapter in `src/apps/player/adapters/irem_m81`.
 - CLI/system-family routing via `--system irem_m81` and alias `m81`.
 - Save-state identity across M81 board-layout profiles, capability discovery, rollback-ready save-state reporting, and real local data-gated smoke through `MNEMOS_M81_SET_DIR=D:\emu\irem\M81`.
+- The M81 palette window now uses the shared KNA91-style CPU-visible contract: low-byte-only 5-bit writes, high-byte open bus, and disconnected-A9 mirrors, while the renderer keeps canonical R/G/B plane storage.
 - The M81 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 
 ### Irem M82
@@ -60,6 +61,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - CLI/system-family routing via `--system irem_m84` and alias `m84`.
 - Clone-parent media routing composes M84 child media with supplemental M81 `hharry` parent media.
 - Capability discovery, rollback-ready save-state reporting, and real local player smoke are data-gated through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`.
+- The current M84 compatibility core exposes the same KNA91-style palette-bus contract through its owned M81 board while preserving M84 manifest/save identity.
 - The M84 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 - Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry video/priority, raster timing, DIP behavior, and screenshot parity before calling this authentic.
 
@@ -358,6 +360,20 @@ M82 KNA91 palette-bus continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips.
 
+M81/M84 KNA91 palette-bus continuation validation on 2026-06-26:
+
+- Extended the shared KNA91 CPU-visible palette-bus behavior to the M81 board core and verified the current M84 compatibility wrapper exposes the same bus semantics through its owned M81 board.
+- `git diff --check`: clean, with only existing CRLF conversion warnings.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m81_test mnemos_manifests_irem_m84_test`
+- Focused CTest with `MNEMOS_M81_SET_DIR=D:\emu\irem\M81` and `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`:
+  - `2/2`
+  - `mnemos_manifests_irem_m81_test`
+  - `mnemos_manifests_irem_m84_test`
+- Full build / CTest:
+  - `cmake --build --preset windows-msvc-debug`
+  - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -379,7 +395,7 @@ Repository hygiene notes:
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
-5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M82 palette-bank rendering/decode, M81 palette banking, and board timing.
+5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
 
 ## Resume Commands
 
