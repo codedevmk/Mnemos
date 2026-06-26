@@ -1,0 +1,185 @@
+# Vigilante (World Rev E) -- Irem M75 Z80/Z80/YM2151/DAC board.
+# Reference set is the complete parent stored locally as a single nested zip in
+# D:\emu\irem\Vigilante_Arcade_EN (3).zip. Clone ZIPs in the same corpus carry
+# only partial regional program/graphics deltas and intentionally remain outside
+# this first-pass parent contract.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "vigilant"
+board       = "irem_m75"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x030000
+
+[[region.file]]
+name   = "vg_a-8h-e.ic55"
+offset = 0x000000
+size   = 0x08000
+crc32  = 0x0d4e6866
+
+[[region.file]]
+name   = "vg_a-8l-a.ic57"
+offset = 0x010000
+size   = 0x10000
+crc32  = 0x690d812f
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "vg_a-5j-.ic37"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x10582b2d
+
+[[region]]
+name = "chars"
+size = 0x020000
+
+[[region.file]]
+name   = "vg_b-4f-.ic34"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x01579d20
+
+[[region.file]]
+name   = "vg_b-4j-.ic35"
+offset = 0x010000
+size   = 0x10000
+crc32  = 0x4f5872f0
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "vg_b-6l-.ic62"
+offset = 0x000000
+source_offset = 0x00000
+length = 0x10000
+size   = 0x20000
+crc32  = 0xfbe9552d
+
+[[region.file]]
+name   = "vg_b-6k-.ic61"
+offset = 0x010000
+source_offset = 0x00000
+length = 0x10000
+size   = 0x20000
+crc32  = 0xae09d5c0
+
+[[region.file]]
+name   = "vg_b-6l-.ic62"
+offset = 0x020000
+source_offset = 0x10000
+length = 0x10000
+size   = 0x20000
+crc32  = 0xfbe9552d
+
+[[region.file]]
+name   = "vg_b-6k-.ic61"
+offset = 0x030000
+source_offset = 0x10000
+length = 0x10000
+size   = 0x20000
+crc32  = 0xae09d5c0
+
+[[region.file]]
+name   = "vg_b-6p-.ic64"
+offset = 0x040000
+source_offset = 0x00000
+length = 0x10000
+size   = 0x20000
+crc32  = 0xafb77461
+
+[[region.file]]
+name   = "vg_b-6n-.ic63"
+offset = 0x050000
+source_offset = 0x00000
+length = 0x10000
+size   = 0x20000
+crc32  = 0x5065cd35
+
+[[region.file]]
+name   = "vg_b-6p-.ic64"
+offset = 0x060000
+source_offset = 0x10000
+length = 0x10000
+size   = 0x20000
+crc32  = 0xafb77461
+
+[[region.file]]
+name   = "vg_b-6n-.ic63"
+offset = 0x070000
+source_offset = 0x10000
+length = 0x10000
+size   = 0x20000
+crc32  = 0x5065cd35
+
+[[region]]
+name = "bgtiles"
+size = 0x040000
+
+[[region.file]]
+name   = "vg_b-1d-.ic2"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x81b1ee5c
+
+[[region.file]]
+name   = "vg_b-1f-.ic3"
+offset = 0x010000
+size   = 0x10000
+crc32  = 0xd0d33673
+
+[[region.file]]
+name   = "vg_b-1h-.ic4"
+offset = 0x020000
+size   = 0x10000
+crc32  = 0xaae81695
+
+[[region]]
+name = "samples"
+size = 0x010000
+
+[[region.file]]
+name   = "vg_a-4d-.ic26"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x9b85101d
+
+[[region]]
+name = "proms"
+size = 0x000100
+
+[[region.file]]
+name   = "tbp24s10_7a.ic52"
+offset = 0x000000
+size   = 0x00100
+crc32  = 0xc324835e
+
+[[region]]
+name = "plds"
+size = 0x000600
+
+[[region.file]]
+name   = "vg_b-8r.ic90"
+offset = 0x000000
+size   = 0x00117
+crc32  = 0xdf368a7a
+
+[[region.file]]
+name   = "vg_b-4m.ic38"
+offset = 0x000200
+size   = 0x00117
+crc32  = 0xdbca4204
+
+[[region.file]]
+name   = "vg_b-1b.ic1"
+offset = 0x000400
+size   = 0x00117
+crc32  = 0x922e5167

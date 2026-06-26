@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M84 Gallop / Cosmic Cop handoff commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M75 Vigilante handoff commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -47,6 +47,19 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - The M72 player adapter now consumes explicit arcade `service` and `test` frontend inputs: service 1/2 map active-low to system bits 4/5, `mode` remains a legacy service alias, operator test maps active-low to bit 6, and adapter save-state version 2 persists those fields while still loading version 1 input snapshots.
 - Real local R-Type/protected/vertical smoke passed with the configured local corpus.
 - Remaining: artifact-proof closure for the full roster, plus authenticity work for video priority, raster timing, DIP behavior, and board-specific timing.
+
+### Irem M75
+
+- M75 now has a first-pass executable Vigilante board and player adapter, not only corpus metadata.
+- Board implementation lives in `src/manifests/irem_m75/m75_system.hpp` and `src/manifests/irem_m75/m75_system.cpp`.
+- The current M75 route is intentionally Z80 main + Z80 sound + YM2151 + DAC for Vigilante, not the V30-family M-series core used by later Irem boards.
+- Checked-in manifest coverage starts with parent set `vigilant` from the local complete single-inner wrapper `D:\emu\irem\Vigilante_Arcade_EN (3).zip`.
+- The board owns fixed/banked main ROM mapping, sound latch/IRQ/ack state, YM2151 and DAC ports, sample-ROM reads, M75 RAM windows, palette/video/sprite RAM, frame stepping, audio draining, and whole-board save/load identity.
+- Player adapter lives in `src/apps/player/adapters/irem_m75`.
+- CLI/system-family routing is available through `--system irem_m75` and alias `m75`.
+- Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, resident CRC media reporting, rollback-ready save-state, capability discovery, and raw synthetic maincpu fallback.
+- Real local Vigilante wrapper ZIP loads through the data-gated corpus test and direct player screenshot/save-state smoke.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M75 closure still needs Vigilante tile/sprite/rear-layer priority, exact scroll behavior, DIP/input proof, Z80 sound protocol proof, sample/DAC timing, raster timing, clone/bootleg coverage, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M81
 
@@ -125,6 +138,7 @@ $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M52_SET_DIR="D:\emu\irem"
+$env:MNEMOS_M75_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72"
@@ -138,6 +152,7 @@ Important local corpus facts:
 - `D:\emu\irem\imgfight.zip`, `D:\emu\irem\imgfightj.zip`, `D:\emu\irem\imgfightj.7z`, `D:\emu\irem\imgfightjb.zip`, and `D:\emu\irem\imgfightjb.7z` are local corpus inputs for sorting Image Fight parent/clone composition.
 - `scripts\irem\inventory-corpus.ps1` now emits per-item `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and `load_readiness` fields plus a grouped `tracked_sets` section. Current local Image Fight grouping: `imgfight` is the M72 parent/standalone set with two direct player-loadable ZIP/folder routes plus one metadata-only `.7z`; `imgfightj` and `imgfightjb` are M72 clones declaring parent `imgfight`, each with one direct player-loadable ZIP plus one metadata-only `.7z`.
 - M52 Moon Patrol local wrapper routes are `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` for `mpatrol` and `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip` for `mpatrolw`; both are single-inner ZIP wrappers and directly player-loadable through `MNEMOS_M52_SET_DIR=D:\emu\irem`.
+- M75 Vigilante local wrapper route is `D:\emu\irem\Vigilante_Arcade_EN (3).zip`; it is a single-inner ZIP wrapper and directly player-loadable through `MNEMOS_M75_SET_DIR=D:\emu\irem`.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
@@ -541,6 +556,29 @@ M84 Gallop DIP-default continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `202/202`, with expected conformance/media skips and the expected M72 roster skip.
 
+M75 Vigilante first-pass continuation validation on 2026-06-26:
+
+- Added checked-in M75 Vigilante manifest, executable Z80/Z80/YM2151/DAC board, player adapter, CLI family routing, inventory grouping, and docs inventory updates.
+- Re-ran `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json`: `123` items, `75` manifest matches, `69` direct player-loadable routes, `6` metadata-only tracked routes, and `1` M75 manifest match for `vigilant`.
+- Configure/build:
+  - `cmake --preset windows-msvc-debug`
+  - focused build target set included `mnemos_manifests_irem_m75_test`, `mnemos_manifests_irem_m75_system_test`, `mnemos_apps_player_irem_m75_adapter_test`, `mnemos_apps_player_capability_summary_test`, `mnemos_apps_player_adapters_common_test`, and `mnemos_player`
+- Focused M75/adapters CTest with `MNEMOS_M75_SET_DIR=D:\emu\irem`: `6/6`
+  - `mnemos_manifests_irem_m75_test`
+  - `mnemos_manifests_irem_m75_system_test`
+  - `mnemos_apps_player_capability_summary_test`
+  - `mnemos_apps_player_adapters_common_test`
+  - `mnemos_apps_player_irem_m75_adapter_test`
+  - `mnemos_apps_player_irem_m75_corpus_golden_test`
+- Direct player smoke:
+  - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_EN (3).zip" --save-state build\scratch\irem_m75_vigilant.mns --frames 120`
+  - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_EN (3).zip" --screenshot build\scratch\irem_m75_vigilant.ppm --frames 120`
+  - Screenshot proof: `256x256`, `196608` payload bytes, `195761` nonzero payload bytes, SHA-256 `192d3ead0f72dfc049bfe6490fc909c2ea087bdab146159aa962e3e59e7dd39f`
+  - Save-state proof: `build\scratch\irem_m75_vigilant.mns`, `122423` bytes after 120 frames
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -558,12 +596,13 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
-2. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
-3. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
-4. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
-5. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
-6. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
+1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, Z80 sound protocol, sample/DAC timing, DIP/input proof, raster timing, clone/bootleg coverage, and screenshot/audio parity.
+2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
+3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
+4. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
+5. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
+6. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
+7. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
 
 ## Resume Commands
 
@@ -584,6 +623,7 @@ $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M52_SET_DIR="D:\emu\irem"
+$env:MNEMOS_M75_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72"

@@ -4,9 +4,9 @@ Chronological catalogue of Irem's "M-series" arcade system boards, oldest to
 newest, expanded with CPU, sound, custom-silicon, and representative titles.
 
 **How to read the year ranges:** dates are *usage spans* (first-to-last shipping
-title on the hardware), not single launch dates. This is why the V30 family
-(M72/M75/M81/M82/M84/M85) overlaps heavily — they were concurrent sister boards,
-not sequential generations.
+title on the hardware), not single launch dates. This is why the V30-era custom
+family (M72/M81/M82/M84/M85, plus adjacent M75-era hardware) overlaps heavily -
+they were concurrent sister boards, not sequential generations.
 
 **Confidence note:** the high-volume boards (M62, M72, M81/82/84/85, M90, M92,
 M107) are well-documented and cross-verified. The sparse boards (M57, M63, M77,
@@ -26,7 +26,7 @@ rather than assert it.
 | M62 | 1984–1988 | Z80, 8-bit (large family) | Kung-Fu Master |
 | M63 | 1984–1985 | Z80, 8-bit | Wily Tower |
 | M72 | 1987–1991 | NEC V30 | R-Type |
-| M75 | 1988 | NEC V30 | Vigilante (see notes) |
+| M75 | 1988 | Z80 + Z80, YM2151/DAC (Vigilante route) | Vigilante |
 | M77 | 1988 | (sparse) | — |
 | M81 | 1989–1990 | NEC V30 | Hammerin' Harry, Dragon Breed |
 | M82 | 1989–1990 | NEC V30 | Major Title |
@@ -100,13 +100,14 @@ rather than assert it.
 
 ---
 
-## Era 2 — NEC V30 "M72 family" (1987–1991)
+## Era 2 — Late-1980s custom "M72 family" (1987–1991)
 
-All boards in this family share a common architectural core:
+Most boards in this family share a common architectural core:
 **NEC V30 main CPU**, **Z80 @ 3.579545 MHz sound CPU**, **Yamaha YM2151 (OPM) FM
-@ 3.579545 MHz**. They differ mainly in board-stack topology and sprite/tilemap
-capability, not in fundamental architecture — which is why so many titles were
-ported across them.
+@ 3.579545 MHz**. M75/Vigilante is the important local exception: current
+reference-source evidence routes it as a **Z80 main CPU plus Z80 sound CPU** with
+the same YM2151/DAC audio generation. These boards still overlap in customs and
+era, but CPU family alone is not sufficient board proof.
 
 **Shared NANAO custom silicon across the family** (M72/M75/M81/M82/M84/M85):
 - `KNA91H014` — palette RAM
@@ -129,12 +130,13 @@ ported across them.
 
 ### M75
 - **Years:** 1988
-- **Main CPU:** NEC V30 (V30/Z80/YM2151 stack; shares the KNA91H014 palette and
-  KNA6032701/KNA6034201 customs)
-- **Notable titles:** documented use is thin; Vigilante is associated with this
-  generation but is driven under the M72 family in MAME — treat the exact
-  title-to-board mapping as unverified here.
-- **Notes:** Closely related to M72; sparse standalone documentation.
+- **Main CPU:** Zilog Z80 @ 3.579545 MHz for the current Vigilante route.
+- **Sound CPU:** Z80 @ 3.579545 MHz
+- **Sound chip:** YM2151 @ 3.579545 MHz plus 8-bit DAC/sample path
+- **Notable titles:** Vigilante.
+- **Notes:** Closely related in era/custom usage to the M72 family, but the
+  executable Vigilante path is not a V30 board. Keep M75 separated from M72/M81
+  routing unless new board evidence proves a different title-specific variant.
 
 ### M77
 - **Years:** 1988

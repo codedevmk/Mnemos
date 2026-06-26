@@ -8,6 +8,7 @@
 #include "irem_m15_adapter.hpp"
 #include "irem_m52_adapter.hpp"
 #include "irem_m72_adapter.hpp"
+#include "irem_m75_adapter.hpp"
 #include "irem_m81_adapter.hpp"
 #include "irem_m82_adapter.hpp"
 #include "irem_m84_adapter.hpp"
@@ -38,6 +39,7 @@ namespace {
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
     namespace irem_m52 = mnemos::apps::player::adapters::irem_m52;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
+    namespace irem_m75 = mnemos::apps::player::adapters::irem_m75;
     namespace irem_m81 = mnemos::apps::player::adapters::irem_m81;
     namespace irem_m82 = mnemos::apps::player::adapters::irem_m82;
     namespace irem_m84 = mnemos::apps::player::adapters::irem_m84;
@@ -201,6 +203,15 @@ namespace {
                                                 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m75_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m75::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0xE0U, 0x76U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
         }
         return rom;
     }
@@ -429,6 +440,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M72") {
         irem_m72::irem_m72_adapter adapter(irem_m72_program(), "Tiny M72");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M75") {
+        irem_m75::irem_m75_adapter adapter(irem_m75_program(), "Tiny M75");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");
