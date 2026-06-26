@@ -112,8 +112,9 @@ namespace mnemos::manifests::irem_m107 {
                                                        const chips::cpu::v30& main_cpu,
                                                        const chips::cpu::v30& sound_cpu) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m107.board.identity.v3"});
+                security::cryptography::crc32(std::string_view{"m107.board.identity.v4"});
             crc = crc32_u16(crc, params.dip_default);
+            crc = crc32_u16(crc, params.coins_dsw3_default);
             crc = crc32_u8(crc, layout_code(params.rom_layout));
             crc = crc32_u8(crc, cpu_model_code(main_cpu.cpu_model()));
             crc = crc32_u32(crc, main_clock_hz);
@@ -234,8 +235,10 @@ namespace mnemos::manifests::irem_m107 {
                 return input_p1;
             case port_in_p2:
                 return input_p2;
-            case port_in_system:
+            case port_in_coins_dsw3_lo:
                 return input_system;
+            case port_in_coins_dsw3_hi:
+                return static_cast<std::uint8_t>(coins_dsw3 >> 8U);
             case port_in_dsw_lo:
                 return static_cast<std::uint8_t>(dip_switches);
             case port_in_dsw_hi:
@@ -328,6 +331,7 @@ namespace mnemos::manifests::irem_m107 {
         });
 
         dip_switches = params.dip_default;
+        coins_dsw3 = params.coins_dsw3_default;
         pcm.set_input_clock(pcm_clock_hz);
         pcm.set_capture_divider(pcm_capture_divider);
         pcm.set_sample_rom(std::span<const std::uint8_t>(samples));
@@ -381,6 +385,7 @@ namespace mnemos::manifests::irem_m107 {
     void m107_system::save_state(chips::state_writer& writer) const {
         writer.u32(m107_system_state_version);
         writer.u16(params.dip_default);
+        writer.u16(params.coins_dsw3_default);
         writer.u8(layout_code(params.rom_layout));
         writer.u32(board_identity_crc(roms, params, main_cpu, sound_cpu));
         main_cpu.save_state(writer);
@@ -397,6 +402,7 @@ namespace mnemos::manifests::irem_m107 {
         writer.u8(input_p2);
         writer.u8(input_system);
         writer.u16(dip_switches);
+        writer.u16(coins_dsw3);
         writer.u8(sound_latch);
         writer.u8(sound_reply);
         writer.u8(control_register);
@@ -411,9 +417,11 @@ namespace mnemos::manifests::irem_m107 {
             return;
         }
         const std::uint16_t saved_dip = reader.u16();
+        const std::uint16_t saved_coins_dsw3 = reader.u16();
         const std::uint8_t saved_layout = reader.u8();
         const std::uint32_t saved_identity = reader.u32();
-        if (saved_dip != params.dip_default || saved_layout != layout_code(params.rom_layout) ||
+        if (saved_dip != params.dip_default || saved_coins_dsw3 != params.coins_dsw3_default ||
+            saved_layout != layout_code(params.rom_layout) ||
             saved_identity != board_identity_crc(roms, params, main_cpu, sound_cpu)) {
             reader.fail();
             return;
@@ -432,6 +440,7 @@ namespace mnemos::manifests::irem_m107 {
         input_p2 = reader.u8();
         input_system = reader.u8();
         dip_switches = reader.u16();
+        coins_dsw3 = reader.u16();
         sound_latch = reader.u8();
         sound_reply = reader.u8();
         control_register = reader.u8();

@@ -451,9 +451,10 @@ TEST_CASE("irem_m107_adapter validates real M107 ROM sets", "[irem_m107][data]")
                                         source_path.string());
         CHECK(adapter.set_name() == set_name);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
-        CHECK(adapter.dip_switches().size() == 10U);
+        CHECK(adapter.dip_switches().size() == 12U);
         CHECK(adapter.machine().dip_switches == 0xFFBFU);
-        CHECK(spec_has(adapter, "DIP switches", "10"));
+        CHECK(adapter.machine().coins_dsw3 == 0xEBFFU);
+        CHECK(spec_has(adapter, "DIP switches", "12"));
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m107::visible_width);
         CHECK(adapter.current_frame().height == m107::visible_height);

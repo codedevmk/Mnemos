@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 6U;
+    inline constexpr std::uint32_t m107_system_state_version = 7U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -64,7 +64,8 @@ namespace mnemos::manifests::irem_m107 {
 
     inline constexpr std::uint16_t port_in_p1 = 0x00U;
     inline constexpr std::uint16_t port_in_p2 = 0x01U;
-    inline constexpr std::uint16_t port_in_system = 0x02U;
+    inline constexpr std::uint16_t port_in_coins_dsw3_lo = 0x02U;
+    inline constexpr std::uint16_t port_in_coins_dsw3_hi = 0x03U;
     inline constexpr std::uint16_t port_in_dsw_lo = 0x04U;
     inline constexpr std::uint16_t port_in_dsw_hi = 0x05U;
     inline constexpr std::uint16_t port_out_sound_latch = 0x00U;
@@ -79,6 +80,7 @@ namespace mnemos::manifests::irem_m107 {
 
     struct m107_board_params final {
         std::uint16_t dip_default{0xFFFFU};
+        std::uint16_t coins_dsw3_default{0xFFFFU};
         std::string_view rom_layout{"standard"};
     };
 
@@ -134,6 +136,7 @@ namespace mnemos::manifests::irem_m107 {
         std::uint8_t input_p2{0xFFU};
         std::uint8_t input_system{0xFFU};
         std::uint16_t dip_switches{0xFFFFU};
+        std::uint16_t coins_dsw3{0xFFFFU};
         std::uint8_t sound_latch{0xFFU};
         std::uint8_t sound_reply{0xFFU};
         std::uint8_t control_register{};

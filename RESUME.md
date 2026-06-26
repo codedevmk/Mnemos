@@ -124,8 +124,8 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - The M107 adapter now consumes explicit arcade `service` frontend input for the currently modeled service bit, keeps `mode` as a legacy service alias, and persists explicit `service` / `test` fields in adapter state version 2. Operator-test board wiring remains unassigned until the M107 input map is verified.
 - The M107 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 6, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
 - The M107 map now models VRAM at `$d0000`, work RAM at `$e0000`, sprite RAM at `$f8000`, palette RAM at `$f9000`, sound RAM at `$a0000`, and sound-side GA20/YM2151/command-latch/reply MMIO at `$a8000`/`$a8040`/`$a8044`/`$a8046`. Port fallbacks remain for the current synthetic command path.
-- Checked-in Air Assault and Fire Barrel manifests now carry the shared SW1/SW2 DIP profile from the Fire Barrel input profile. The adapter retains the 10 parsed DIP entries, folds their defaults into the board DIP word (`0xffbf`), and exposes `DIP switches=10` in the player system spec. The separate SW3 coin/system DIP word is still not represented by the current single-word manifest DIP surface.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, remaining M107 SW3 coin/system DIP and operator-test I/O details, GA21/GA22 video/priority behavior, command IRQ timing plus remaining GA20 analog balance/filtering proof, raster timing, and screenshot parity.
+- Checked-in Air Assault and Fire Barrel manifests now carry the shared SW1/SW2 and SW3 DIP profile from the Fire Barrel input profile. The adapter retains the 12 parsed DIP entries, folds SW1/SW2 defaults into the board DIP word (`0xffbf`), folds SW3 defaults into the separate `COINS_DSW3` word (`0xebff`), and exposes `DIP switches=12` in the player system spec.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, remaining M107 operator-test and deeper I/O details, GA21/GA22 video/priority behavior, command IRQ timing plus remaining GA20 analog balance/filtering proof, raster timing, and screenshot parity.
 
 ### Irem M15
 
@@ -823,7 +823,7 @@ M107 memory-mapped sound/main map continuation validation on 2026-06-26:
 M107 SW1/SW2 DIP metadata continuation validation on 2026-06-26:
 
 - Added the shared Fire Barrel / Air Assault SW1/SW2 DIP profile to `airass` and `firebarr`: Lives, Allow Continue, Demo Sounds, Service Mode, Flip Screen, Coin Slots, Coin Mode, Coinage, Coin A, and Coin B.
-- The M107 adapter now retains manifest DIP metadata, folds the manifest defaults into the board DIP word (`0xffbf`), exposes `DIP switches=10` in system spec, and still honors explicit `dip_override`.
+- At that point, the M107 adapter retained manifest DIP metadata, folded the manifest SW1/SW2 defaults into the board DIP word (`0xffbf`), exposed `DIP switches=10` in system spec, and still honored explicit `dip_override`.
 - Focused build/configure:
   - `cmake --preset windows-msvc-debug`
   - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test mnemos_player`
@@ -836,7 +836,27 @@ M107 SW1/SW2 DIP metadata continuation validation on 2026-06-26:
 - Full build:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
-- This proves the SW1/SW2 metadata/default path for checked-in M107 sets. It does not model the separate SW3 coin/system DIP word, Fire Barrel-specific Rapid Fire / Continuous Play switches, operator-test routing, V33/V35 peripherals, command IRQ timing, GA21/GA22 video, or final parity.
+- This proved the SW1/SW2 metadata/default path for checked-in M107 sets before the SW3 continuation below. At that point, it did not model the separate SW3 coin/system DIP word, Fire Barrel-specific Rapid Fire / Continuous Play switches, operator-test routing, V33/V35 peripherals, command IRQ timing, GA21/GA22 video, or final parity.
+
+M107 SW3 COINS_DSW3 continuation validation on 2026-06-26:
+
+- Added Fire Barrel / Air Assault SW3 Rapid Fire and Continuous Play DIP metadata to `airass` and `firebarr`.
+- The M107 board now owns a separate `coins_dsw3` word for ports `0x02/0x03`, while SW1/SW2 remain on ports `0x04/0x05`; board save-state version is now `7`.
+- The M107 adapter folds SW3 defaults into `coins_dsw3` (`0xebff`) separately from SW1/SW2 (`0xffbf`) and exposes `DIP switches=12`.
+- A synthetic V33 port-read test now verifies that the CPU sees the dynamic system low byte on port `0x02`, SW3 high byte `0xeb` on port `0x03`, and SW1/SW2 bytes `0xbf/0xff` on ports `0x04/0x05`.
+- Focused build/configure:
+  - `cmake --preset windows-msvc-debug`
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test mnemos_player`
+- Focused M107 CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `3/3`
+  - `mnemos_manifests_irem_m107_test`
+  - `mnemos_apps_player_irem_m107_adapter_test`
+  - `mnemos_apps_player_irem_m107_corpus_golden_test`
+- `clang-format --dry-run --Werror` passed for the touched M107 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- This proves the current SW3 metadata/default and CPU-visible port split for checked-in M107 sets. It does not prove operator-test routing, V33/V35 peripherals, command IRQ timing, GA21/GA22 video, or final parity.
 
 Earlier branch validation that passed before the M107 slice:
 
@@ -859,7 +879,7 @@ Repository hygiene notes:
 2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.
-5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, remaining SW3/operator I/O/DIP details, command IRQ timing, remaining GA20 analog balance/filtering, GA21/GA22 behavior, raster timing, and screenshot parity.
+5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, remaining operator-test/deeper I/O details, command IRQ timing, remaining GA20 analog balance/filtering, GA21/GA22 behavior, raster timing, and screenshot parity.
 6. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 7. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
 8. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.

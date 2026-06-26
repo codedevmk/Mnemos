@@ -118,11 +118,21 @@ namespace mnemos::apps::player::adapters::irem_m107 {
             return hex32(crc);
         }
 
+        [[nodiscard]] bool is_sw1_sw2_bank(std::string_view bank) noexcept {
+            return bank == "SW1" || bank == "SW2";
+        }
+
+        [[nodiscard]] bool is_sw3_bank(std::string_view bank) noexcept { return bank == "SW3"; }
+
+        template <typename Predicate>
         [[nodiscard]] std::uint16_t
         dip_default_from_manifest(std::span<const rom_set_dip_switch> switches,
-                                  std::uint16_t fallback) noexcept {
+                                  std::uint16_t fallback, Predicate&& include) noexcept {
             std::uint16_t value = fallback;
             for (const auto& dip : switches) {
+                if (!include(dip.bank)) {
+                    continue;
+                }
                 value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
             }
             return value;
@@ -381,7 +391,10 @@ namespace mnemos::apps::player::adapters::irem_m107 {
 
         [[nodiscard]] std::unique_ptr<m107::m107_system> assemble_from(loaded_set set) {
             m107::m107_board_params params = m107::board_params_for(set.set_name);
-            params.dip_default = dip_default_from_manifest(set.dip_switches, params.dip_default);
+            params.dip_default =
+                dip_default_from_manifest(set.dip_switches, params.dip_default, is_sw1_sw2_bank);
+            params.coins_dsw3_default =
+                dip_default_from_manifest(set.dip_switches, params.coins_dsw3_default, is_sw3_bank);
             return m107::assemble_m107(std::move(set.image), params);
         }
 

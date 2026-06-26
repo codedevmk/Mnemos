@@ -8,9 +8,8 @@ name        = "firebarr"
 board       = "irem_m107"
 orientation = "horizontal"
 
-# SW1/SW2 metadata from the shared Fire Barrel / Air Assault input profile.
-# The separate SW3 coin/system DIP word is not represented by the current
-# single-word manifest DIP surface.
+# SW1/SW2 and SW3 metadata from the shared Fire Barrel / Air Assault input
+# profile. M107 maps SW3 through the separate COINS_DSW3 port word.
 [[dip]]
 bank = "SW1"
 name = "Lives"
@@ -235,6 +234,42 @@ value = 0x4000
 
 [[dip.option]]
 label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW3"
+name = "Rapid Fire"
+mask = 0x0c00
+default = 0x0800
+
+[[dip.option]]
+label = "Button 1 Normal, Button 3 Rapid Fire"
+value = 0x0000
+
+[[dip.option]]
+label = "Button 1 Rapid Fire, Button 3 No Function"
+value = 0x0400
+
+[[dip.option]]
+label = "Off"
+value = 0x0800
+
+[[dip.option]]
+label = "Off"
+value = 0x0c00
+
+[[dip]]
+bank = "SW3"
+name = "Continuous Play"
+mask = 0x1000
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x1000
+
+[[dip.option]]
+label = "On"
 value = 0x0000
 
 [[region]]

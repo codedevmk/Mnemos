@@ -59,10 +59,20 @@ namespace {
         return it == decl.dips.end() ? nullptr : &*it;
     }
 
-    [[nodiscard]] std::uint16_t raw_dip_default(const rom_set_decl& decl,
-                                                std::uint16_t fallback) noexcept {
+    [[nodiscard]] bool is_sw1_sw2_bank(std::string_view bank) noexcept {
+        return bank == "SW1" || bank == "SW2";
+    }
+
+    [[nodiscard]] bool is_sw3_bank(std::string_view bank) noexcept { return bank == "SW3"; }
+
+    template <typename Predicate>
+    [[nodiscard]] std::uint16_t raw_dip_default(const rom_set_decl& decl, std::uint16_t fallback,
+                                                Predicate&& include) noexcept {
         std::uint16_t value = fallback;
         for (const auto& dip : decl.dips) {
+            if (!include(dip.bank)) {
+                continue;
+            }
             value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
         }
         return value;
@@ -278,6 +288,15 @@ namespace {
             {0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, 0xB0U, 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U});
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_input_port_program() {
+        return make_m107_program({0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, // MOV DS,E000
+                                  0xE4U, 0x02U, 0xA2U, 0x00U, 0x00U, // IN AL,02; MOV [0],AL
+                                  0xE4U, 0x03U, 0xA2U, 0x01U, 0x00U, // IN AL,03; MOV [1],AL
+                                  0xE4U, 0x04U, 0xA2U, 0x02U, 0x00U, // IN AL,04; MOV [2],AL
+                                  0xE4U, 0x05U, 0xA2U, 0x03U, 0x00U, // IN AL,05; MOV [3],AL
+                                  0xF4U});
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::sound_rom_size, 0xFFU);
         rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
@@ -417,7 +436,7 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
             require_region_contract(*subdata);
         }
 
-        CHECK(decl.dips.size() == 10U);
+        CHECK(decl.dips.size() == 12U);
         const rom_set_dip_switch* lives = find_dip(decl, "Lives");
         REQUIRE(lives != nullptr);
         CHECK(lives->bank == "SW1");
@@ -434,7 +453,23 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
         REQUIRE(coinage->condition.has_value());
         CHECK(coinage->condition->mask == 0x0800U);
         CHECK(coinage->condition->value == 0x0800U);
-        CHECK(raw_dip_default(decl, 0xFFFFU) == 0xFFBFU);
+
+        const rom_set_dip_switch* rapid_fire = find_dip(decl, "Rapid Fire");
+        REQUIRE(rapid_fire != nullptr);
+        CHECK(rapid_fire->bank == "SW3");
+        CHECK(rapid_fire->mask == 0x0C00U);
+        CHECK(rapid_fire->default_value == 0x0800U);
+        REQUIRE(rapid_fire->options.size() == 4U);
+
+        const rom_set_dip_switch* continuous_play = find_dip(decl, "Continuous Play");
+        REQUIRE(continuous_play != nullptr);
+        CHECK(continuous_play->bank == "SW3");
+        CHECK(continuous_play->mask == 0x1000U);
+        CHECK(continuous_play->default_value == 0x0000U);
+        REQUIRE(continuous_play->options.size() == 2U);
+
+        CHECK(raw_dip_default(decl, 0xFFFFU, is_sw1_sw2_bank) == 0xFFBFU);
+        CHECK(raw_dip_default(decl, 0xFFFFU, is_sw3_bank) == 0xEBFFU);
     }
 
     CHECK(names == expected_names);
@@ -501,6 +536,29 @@ TEST_CASE("m107 executable board maps V-series reset and RAM", "[m107][board]") 
     system->run_frame();
     CHECK(system->work_ram[0] == 0x42U);
     CHECK(frame_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m107 main CPU sees COINS_DSW3 and SW1/SW2 as separate port words",
+          "[m107][board][input]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto image = synthetic_m107_image();
+    image.regions["maincpu"] = synthetic_m107_input_port_program();
+
+    m107::m107_board_params params = m107::board_params_for("airass");
+    params.dip_default = 0xFFBFU;
+    params.coins_dsw3_default = 0xEBFFU;
+
+    auto system = m107::assemble_m107(std::move(image), params);
+    REQUIRE(system != nullptr);
+    system->set_inputs(0xFFU, 0xFFU, 0xE7U);
+
+    system->run_frame();
+
+    CHECK(system->work_ram[0] == 0xE7U);
+    CHECK(system->work_ram[1] == 0xEBU);
+    CHECK(system->work_ram[2] == 0xBFU);
+    CHECK(system->work_ram[3] == 0xFFU);
 }
 
 TEST_CASE("m107 board declares V33 main and V35 sound CPU clocks", "[m107][board]") {
@@ -576,6 +634,7 @@ TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][
 
     auto source = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
     source->set_inputs(0xFEU, 0xFDU, 0xFBU);
+    source->coins_dsw3 = 0xEBFFU;
     source->write_sound_latch(0x76U);
     source->write_sound_reply(0x34U);
     source->run_frame();
@@ -605,6 +664,7 @@ TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][
     CHECK(restored->work_ram[0] == 0x42U);
     CHECK(restored->work_ram[7] == 0x6CU);
     CHECK(restored->input_p1 == 0xFEU);
+    CHECK(restored->coins_dsw3 == 0xEBFFU);
     CHECK(restored->sound_latch == 0x76U);
     CHECK(restored->sound_latch_pending);
     CHECK(restored->sound_reply == 0x34U);
