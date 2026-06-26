@@ -158,12 +158,12 @@ multiple independent open-source implementations.
   DIP switch names/options/defaults, SW3 Rapid Fire / Continuous Play DIP
   metadata, and local Air Assault / Fire Barrel set identities. The first-pass
   M107 main RAM, video/sprite/palette RAM, sound RAM, YM2151, GA20,
-  command-latch, reply, and COINS_DSW3 windows are cross-checked against public
-  driver-level hardware notes; no MAME driver code or ROM bytes are copied into
-  Mnemos. Current M107 execution remains diagnostic rather than parity-authentic
-  until V33/V35 peripheral timing, GA21/GA22 video behavior, command IRQ timing,
-  remaining operator DIP/I/O behavior, and visual/audio parity are proven from
-  acceptable evidence.
+  command-latch, reply, COINS_DSW3 window, and service/operator input-bit
+  assignments are cross-checked against public driver-level hardware notes; no
+  MAME driver code or ROM bytes are copied into Mnemos. Current M107 execution
+  remains diagnostic rather than parity-authentic until V33/V35 peripheral
+  timing, GA21/GA22 video behavior, command IRQ timing, remaining operator I/O
+  behavior, and visual/audio parity are proven from acceptable evidence.
 - **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
   CPS-B custom chip has a per-board scrambled register map (layer-control,
   priority, palette-control, layer-enable, protection ports) and a graphics-code

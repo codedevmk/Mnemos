@@ -533,6 +533,9 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         if (ports_[0].service || ports_[0].mode) {
             system &= static_cast<std::uint8_t>(~0x10U);
         }
+        if (ports_[0].test || ports_[1].test) {
+            system &= static_cast<std::uint8_t>(~0x20U);
+        }
         sys_->set_inputs(pack(ports_[0]), pack(ports_[1]), system);
     }
 
