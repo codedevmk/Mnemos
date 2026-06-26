@@ -49,7 +49,7 @@ now contract-only.
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
-| M75 | `irem_m75` first-pass | 29% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers | None | Authentic Vigilante graphics priority, DIP proof, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
+| M75 | `irem_m75` first-pass | 30% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof | None | Authentic Vigilante graphics priority, full DIP/manual behavior, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 65% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
@@ -80,7 +80,8 @@ targets:
 - M15, M75, M81, M84, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
-  regional clone wrappers with a Z80/Z80/YM2151/DAC first-pass route.
+  regional clone wrappers with a Z80/Z80/YM2151/DAC first-pass route and
+  service/test input proof.
   M92 currently covers the complete local GunForce parent wrapper plus the local
   US/Japan split clone wrappers, and the Mystic Riders parent/Japan/bootleg
   wrappers through clone-parent fallback, plus Ninja Baseball Bat Man parent and
@@ -235,14 +236,18 @@ visual and audio parity proof.
   contracts. The M75 system tests now prove the sound Z80 can program the
   sample cursor, read consecutive sample ROM bytes through the modeled port,
   write them through the DAC, and acknowledge the latch.
+  The player adapter maps service/test frontend inputs to the board-visible
+  active-low system bits `0x10`/`0x20` and persists those fields in adapter
+  save-state version 2.
   `src/apps/player` registers `--system irem_m75` and alias `m75`, supports direct ZIPs,
   single-inner wrapper ZIPs, unpacked folders, in-archive `game.toml`, clone/parent
   fallback media resolution, resident media validation, rollback-ready save-state, capability discovery, and
   `MNEMOS_M75_SET_DIR=D:\emu\irem` corpus gating.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
-  Vigilante background/foreground/sprite priority, verify exact memory/I/O/DIP
-  and raster phase, prove sound CPU sample/DAC timing against board evidence,
-  add bootleg parent-fallback coverage for partial bootleg ZIPs, and
+  Vigilante background/foreground/sprite priority, verify exact memory/I/O,
+  full board-manual DIP behavior, and raster phase, prove sound CPU sample/DAC
+  timing against board evidence, add bootleg parent-fallback coverage for
+  partial bootleg ZIPs, and
   collect screenshot/audio parity evidence before marking graphics or music
   correct.
 

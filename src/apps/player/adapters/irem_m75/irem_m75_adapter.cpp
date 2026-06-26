@@ -495,8 +495,7 @@ namespace mnemos::apps::player::adapters::irem_m75 {
                         if (!decl.has_value()) {
                             return result;
                         }
-                        return load_declared_set(std::move(*decl), *provider,
-                                                 effective_rom_path);
+                        return load_declared_set(std::move(*decl), *provider, effective_rom_path);
                     }
                     if (auto set_id = set_id_from_rom_path(effective_rom_path)) {
                         if (auto decl = embedded_decl_for_set(*set_id)) {
@@ -520,8 +519,7 @@ namespace mnemos::apps::player::adapters::irem_m75 {
             return m75::assemble_m75(std::move(set.image), m75::board_params_for(set.set_name));
         }
 
-        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample,
-                                               std::int16_t addend) noexcept {
+        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample, std::int16_t addend) noexcept {
             const std::int32_t mixed = static_cast<std::int32_t>(sample) + addend;
             if (mixed > 32767) {
                 return 32767;
@@ -665,6 +663,9 @@ namespace mnemos::apps::player::adapters::irem_m75 {
         }
         if (ports_[0].service || ports_[0].mode) {
             system &= static_cast<std::uint8_t>(~0x10U);
+        }
+        if (ports_[0].test) {
+            system &= static_cast<std::uint8_t>(~0x20U);
         }
         sys_->set_inputs(pack(ports_[0]), pack(ports_[1]), system);
     }

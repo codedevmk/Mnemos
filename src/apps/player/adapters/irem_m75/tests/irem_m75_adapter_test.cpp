@@ -7,8 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -52,8 +52,8 @@ namespace {
 
         temp_set_dir() {
             const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-            path = fs::temp_directory_path() / ("mnemos_m75_dac_adapter_test_" +
-                                                std::to_string(stamp));
+            path = fs::temp_directory_path() /
+                   ("mnemos_m75_dac_adapter_test_" + std::to_string(stamp));
             std::error_code ec;
             fs::remove_all(path, ec);
             REQUIRE(fs::create_directories(path));
@@ -367,13 +367,45 @@ TEST_CASE("irem_m75_adapter mixes Z80 DAC writes into drained audio", "[irem_m75
     CHECK(adapter.drain_audio().frame_count == 0U);
 }
 
+TEST_CASE("irem_m75_adapter maps service and operator-test inputs to the system port",
+          "[irem_m75]") {
+    irem::irem_m75_adapter adapter(synthetic_m75_program(), "M75 inputs");
+
+    mnemos::frontend_sdk::controller_state p1{};
+    p1.start = true;
+    p1.select = true;
+    p1.service = true;
+    p1.test = true;
+    adapter.apply_input(0, p1);
+
+    CHECK(adapter.machine().input_system == 0xCAU);
+
+    p1.service = false;
+    p1.test = false;
+    p1.mode = true;
+    adapter.apply_input(0, p1);
+
+    CHECK(adapter.machine().input_system == 0xEAU);
+
+    mnemos::frontend_sdk::controller_state p2{};
+    p2.start = true;
+    p2.select = true;
+    adapter.apply_input(1, p2);
+
+    CHECK(adapter.machine().input_system == 0xE0U);
+}
+
 TEST_CASE("irem_m75_adapter preserves adapter and board state", "[irem_m75]") {
     irem::irem_m75_adapter source(synthetic_m75_program(), "Save M75");
     mnemos::frontend_sdk::controller_state p1{};
     p1.up = true;
     p1.a = true;
     p1.start = true;
+    p1.select = true;
+    p1.service = true;
+    p1.test = true;
     source.apply_input(0, p1);
+    REQUIRE(source.machine().input_system == 0xCAU);
     source.step_one_frame();
     source.machine().palette_ram[5] = 0x44U;
     REQUIRE(source.drain_audio().frame_count > 0U);
@@ -386,6 +418,7 @@ TEST_CASE("irem_m75_adapter preserves adapter and board state", "[irem_m75]") {
     CHECK(restored.frames_stepped() == 1U);
     CHECK(restored.machine().work_ram[0] == 0x42U);
     CHECK(restored.machine().palette_ram[5] == 0x44U);
+    CHECK(restored.machine().input_system == 0xCAU);
     CHECK(restored.drain_audio().frame_count == 0U);
 }
 
@@ -403,7 +436,8 @@ TEST_CASE("irem_m75_adapter validates real M75 ROM sets", "[irem_m75][data]") {
         REQUIRE(found != sources.end());
 
         auto bytes = read_source_bytes(found->second);
-        irem::irem_m75_adapter adapter(std::move(bytes), set_id, nullptr, {}, found->second.string());
+        irem::irem_m75_adapter adapter(std::move(bytes), set_id, nullptr, {},
+                                       found->second.string());
 
         CHECK(adapter.set_name() == set_id);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
