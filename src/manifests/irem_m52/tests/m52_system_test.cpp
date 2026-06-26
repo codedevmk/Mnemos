@@ -54,6 +54,12 @@ TEST_CASE("Irem M52 system runs Z80 memory and IO windows", "[irem_m52]") {
     CHECK(sys->scroll_regs[0] == 0x42U);
     CHECK(sys->sound_command == 0x05U);
     CHECK(sys->sound_command_write_count > 0U);
+    CHECK(sys->ay0.read_reg(mnemos::chips::audio::ssg::reg_port_a) == 0x05U);
+    CHECK(sys->ay1.read_reg(mnemos::chips::audio::ssg::reg_port_a) == 0xFAU);
+    CHECK(sys->ay0.volume(0) == 0x0FU);
+    CHECK(sys->ay1.volume(1) == 0x0CU);
+    CHECK(sys->ay0.pending_samples() > 0U);
+    CHECK(sys->ay1.pending_samples() > 0U);
     CHECK(sys->video.framebuffer().width == m52::visible_width);
     CHECK(sys->video.framebuffer().height == m52::visible_height);
     CHECK(nonblack_pixels(sys->video.framebuffer()) > 0U);
@@ -78,6 +84,9 @@ TEST_CASE("Irem M52 save-state preserves board identity and RAM", "[irem_m52]") 
     CHECK(restored->work_ram[0x10] == 0xA5U);
     CHECK(restored->video.framebuffer().width == source->video.framebuffer().width);
     CHECK(restored->sound_command == source->sound_command);
+    CHECK(restored->ay0.read_reg(mnemos::chips::audio::ssg::reg_port_a) ==
+          source->ay0.read_reg(mnemos::chips::audio::ssg::reg_port_a));
+    CHECK(restored->ay1.tone_period(1) == source->ay1.tone_period(1));
 
     auto wrong = m52::assemble_m52(synthetic_image(), {});
     mnemos::chips::state_reader wrong_reader(snapshot);

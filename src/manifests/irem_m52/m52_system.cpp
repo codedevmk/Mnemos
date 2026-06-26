@@ -98,6 +98,21 @@ namespace mnemos::manifests::irem_m52 {
             }
             return crc;
         }
+
+        void program_ssg_tone(chips::audio::ssg& chip, int channel, std::uint16_t period,
+                              std::uint8_t level) noexcept {
+            const auto base = static_cast<std::uint8_t>(channel * 2);
+            chip.write_reg(base, static_cast<std::uint8_t>(period & 0xFFU));
+            chip.write_reg(static_cast<std::uint8_t>(base + 1U),
+                           static_cast<std::uint8_t>((period >> 8U) & 0x0FU));
+            chip.write_reg(static_cast<std::uint8_t>(chips::audio::ssg::reg_a_level + channel),
+                           static_cast<std::uint8_t>(level & chips::audio::ssg::level_vol_mask));
+
+            std::uint8_t mixer = 0xFFU;
+            mixer = static_cast<std::uint8_t>(
+                mixer & ~static_cast<std::uint8_t>(chips::audio::ssg::mixer_tone_a << channel));
+            chip.write_reg(chips::audio::ssg::reg_mixer, mixer);
+        }
     } // namespace
 
     m52_board_params board_params_for(std::string_view set_name) noexcept {
@@ -260,9 +275,7 @@ namespace mnemos::manifests::irem_m52 {
             [this](std::uint32_t address, std::uint8_t value) {
                 switch (address & 0xFFFFU) {
                 case input0_address:
-                    sound_command = value;
-                    ++sound_command_write_count;
-                    audio_probe.set_speaker((value & 0x01U) != 0U);
+                    latch_sound_command(value);
                     break;
                 case input1_address:
                     flip_latch = value;
@@ -304,13 +317,16 @@ namespace mnemos::manifests::irem_m52 {
         });
         main_cpu.reset(chips::reset_kind::power_on);
 
-        audio_probe.set_clock(main_clock_hz, audio_rate_hz);
-        audio_probe.enable_audio_capture(true);
+        ay0.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        ay1.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        ay0.enable_audio_capture(true);
+        ay1.enable_audio_capture(true);
     }
 
     void m52_system::run_frame() {
         main_cpu.tick(main_cycles_per_frame);
-        audio_probe.tick(main_cycles_per_frame);
+        ay0.tick(main_cycles_per_frame);
+        ay1.tick(main_cycles_per_frame);
         video.tick(main_cycles_per_frame);
 
         const auto* main_program = roms.region("maincpu");
@@ -338,6 +354,18 @@ namespace mnemos::manifests::irem_m52 {
         input2 = system;
     }
 
+    void m52_system::latch_sound_command(std::uint8_t value) noexcept {
+        sound_command = value;
+        ++sound_command_write_count;
+
+        const auto low = static_cast<std::uint16_t>(value & 0x0FU);
+        const auto high = static_cast<std::uint16_t>((value >> 4U) & 0x0FU);
+        program_ssg_tone(ay0, 0, static_cast<std::uint16_t>(0x20U + low * 8U), 0x0FU);
+        program_ssg_tone(ay1, 1, static_cast<std::uint16_t>(0x30U + high * 12U), 0x0CU);
+        ay0.write_reg(chips::audio::ssg::reg_port_a, value);
+        ay1.write_reg(chips::audio::ssg::reg_port_a, static_cast<std::uint8_t>(value ^ 0xFFU));
+    }
+
     void m52_system::save_state(chips::state_writer& writer) const {
         writer.u32(m52_system_state_version);
         writer.u8(layout_code(params.rom_layout));
@@ -346,7 +374,8 @@ namespace mnemos::manifests::irem_m52 {
         writer.u32(board_identity_crc(roms, params));
         main_cpu.save_state(writer);
         video.save_state(writer);
-        audio_probe.save_state(writer);
+        ay0.save_state(writer);
+        ay1.save_state(writer);
         for (const auto& region :
              {std::span<const std::uint8_t>(video_ram), std::span<const std::uint8_t>(color_ram),
               std::span<const std::uint8_t>(sprite_ram), std::span<const std::uint8_t>(work_ram)}) {
@@ -390,7 +419,8 @@ namespace mnemos::manifests::irem_m52 {
         }
         main_cpu.load_state(reader);
         video.load_state(reader);
-        audio_probe.load_state(reader);
+        ay0.load_state(reader);
+        ay1.load_state(reader);
 
         const auto load_region = [&reader](std::span<std::uint8_t> region) {
             const std::uint32_t size = reader.u32();

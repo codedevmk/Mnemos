@@ -49,7 +49,7 @@ target_link_libraries(
     PUBLIC
         mnemos::topology
         mnemos::chips::cpu::z80
-        mnemos::chips::audio::beeper
+        mnemos::chips::audio::ssg
         mnemos::manifests::common
         mnemos::security::cryptography
 )
@@ -63,6 +63,7 @@ mnemos_declare_tier(
         mnemos_manifests_common
         mnemos_security_cryptography
         mnemos_chips_shared
+        mnemos_chips_audio_ssg
         mnemos_foundation
 )
 

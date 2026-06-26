@@ -1,10 +1,10 @@
 #pragma once
 
-#include "beeper.hpp"
 #include "bus.hpp"
 #include "chip.hpp"
 #include "m52_game_manifests.hpp"
 #include "rom_set.hpp"
+#include "ssg.hpp"
 #include "state.hpp"
 #include "z80.hpp"
 
@@ -18,7 +18,7 @@
 
 namespace mnemos::manifests::irem_m52 {
 
-    inline constexpr std::uint32_t m52_system_state_version = 1U;
+    inline constexpr std::uint32_t m52_system_state_version = 2U;
 
     inline constexpr std::uint32_t visible_width = 240U;
     inline constexpr std::uint32_t visible_height = 252U;
@@ -26,6 +26,7 @@ namespace mnemos::manifests::irem_m52 {
     inline constexpr std::uint32_t frame_rate_x1000 = 56737U;
     inline constexpr std::uint32_t main_clock_hz = 3'072'000U;
     inline constexpr std::uint32_t audio_rate_hz = 48'000U;
+    inline constexpr std::uint32_t ssg_clock_divider = main_clock_hz / audio_rate_hz;
     inline constexpr std::uint64_t main_cycles_per_frame =
         (static_cast<std::uint64_t>(main_clock_hz) * 1000U) / frame_rate_x1000;
 
@@ -97,7 +98,8 @@ namespace mnemos::manifests::irem_m52 {
     struct m52_system final {
         chips::cpu::z80 main_cpu;
         m52_video video;
-        chips::audio::beeper audio_probe;
+        chips::audio::ssg ay0;
+        chips::audio::ssg ay1;
         topology::bus main_bus{16U, topology::endianness::little};
 
         common::rom_set_image roms;
@@ -127,6 +129,7 @@ namespace mnemos::manifests::irem_m52 {
 
         void run_frame();
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept;
+        void latch_sound_command(std::uint8_t value) noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
     };

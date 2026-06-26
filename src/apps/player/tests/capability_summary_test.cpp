@@ -446,6 +446,8 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
     }
 
     SECTION("Irem M81") {

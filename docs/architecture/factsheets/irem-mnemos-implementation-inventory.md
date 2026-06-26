@@ -109,11 +109,15 @@ visual and audio parity proof.
 - **Current implementation:** first-pass Z80 board route with the Moon Patrol
   program, sound, text, sprite, and PROM regions, input/DIP MMIO, deterministic
   save-state, adapter capability discovery, and nonblank diagnostic framebuffer
-  output.
+  output. The board now owns two native YM2149/AY-compatible SSG instances:
+  command writes program deterministic SSG register state, save/load preserves
+  both chips, the adapter mixes both captured stereo queues, and capability
+  discovery exposes both register snapshots.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
-  parallax/road/sprite/text priority, implement the Irem Audio AY-3-8910 plus
-  MSM5205 sound path, add Tropical Angel coverage if M52/M57 evidence confirms
-  the route, and prove DIP/raster/screenshot/audio parity.
+  parallax/road/sprite/text priority, implement the M52 sound CPU/MSM5205 plus
+  discrete-analog path beyond the command-driven SSG surface, add Tropical Angel
+  coverage if M52/M57 evidence confirms the route, and prove
+  DIP/raster/screenshot/audio parity.
 
 ### M57
 

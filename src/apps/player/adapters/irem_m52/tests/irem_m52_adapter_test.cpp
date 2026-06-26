@@ -140,13 +140,20 @@ TEST_CASE("irem_m52_adapter preserves adapter and board state", "[irem_m52]") {
     CHECK(restored.machine().sound_command == source.machine().sound_command);
 }
 
-TEST_CASE("irem_m52_adapter drains first-pass audio probe samples", "[irem_m52]") {
+TEST_CASE("irem_m52_adapter drains mixed AY PSG samples", "[irem_m52]") {
     irem::irem_m52_adapter adapter(synthetic_m52_program(), "Audio M52");
     adapter.step_one_frame();
+    CHECK(adapter.machine().ay0.volume(0) == 0x0FU);
+    CHECK(adapter.machine().ay1.volume(1) == 0x0CU);
     const auto audio = adapter.drain_audio();
     CHECK(audio.sample_rate == m52::audio_rate_hz);
     CHECK(audio.frame_count > 0U);
     REQUIRE(audio.samples != nullptr);
+    bool any_nonzero = false;
+    for (std::uint32_t i = 0; i < audio.frame_count * 2U; ++i) {
+        any_nonzero = any_nonzero || audio.samples[i] != 0;
+    }
+    CHECK(any_nonzero);
 }
 
 TEST_CASE("irem_m52_adapter validates real M52 ROM sets", "[irem_m52][data]") {

@@ -87,7 +87,8 @@ namespace mnemos::apps::player::adapters::irem_m52 {
         std::vector<frontend_sdk::spec_field> spec_{};
         std::string loaded_set_name_{};
         std::vector<std::int16_t> audio_buf_{};
-        std::vector<std::int16_t> mono_buf_{};
+        std::vector<std::int16_t> ay0_buf_{};
+        std::vector<std::int16_t> ay1_buf_{};
     };
 
 } // namespace mnemos::apps::player::adapters::irem_m52
