@@ -88,7 +88,8 @@ function Get-Cps2AudioFrameCount {
     # These rows keep the save/load screenshot checkpoint at 600 frames while
     # using a longer repeated-gameplay audio window that proves nonzero QSound
     # output plus audio-state register counters.
-    if (($SetId -eq "batcir" -or $SetId -eq "ddsom") -and $DefaultFrames -lt 2500) {
+    if (($SetId -eq "1944" -or $SetId -eq "1944_mn" -or
+            $SetId -eq "batcir" -or $SetId -eq "ddsom") -and $DefaultFrames -lt 2500) {
         return 2500
     }
 
@@ -117,7 +118,8 @@ function Get-Cps2AudioFrameCount {
 function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or
+    return $SetId -eq "1944" -or $SetId -eq "1944_mn" -or
+        $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or
         $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear" -or
         $SetId -eq "ringdest" -or $SetId -eq "spf2t"
 }
@@ -125,7 +127,8 @@ function Test-Cps2AudioStateProbeDefault {
 function Test-Cps2AudioGameplayProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "ringdest" -or
+    return $SetId -eq "1944" -or $SetId -eq "1944_mn" -or
+        $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "ringdest" -or
         $SetId -eq "spf2t"
 }
 
@@ -135,6 +138,9 @@ function Get-Cps2AudioGameplayPlayerCount {
         [Parameter(Mandatory = $true)][int]$DefaultPlayers
     )
 
+    if ($SetId -eq "1944" -or $SetId -eq "1944_mn") {
+        return 1
+    }
     if ($SetId -eq "batcir" -or $SetId -eq "ddsom") {
         return 4
     }

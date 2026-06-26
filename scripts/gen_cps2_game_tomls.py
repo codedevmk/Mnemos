@@ -185,8 +185,7 @@ def gen(set_name, zip_path):
            "# never committed.",
            "", "[set]", 'schema = "mnemos-romset/1"',
            'name   = "%s"' % set_name, 'board  = "capcom_cps2"']
-    if is_vertical_set(set_name):
-        out.append('orientation = "vertical"')
+    out.append('orientation = "%s"' % ("vertical" if is_vertical_set(set_name) else "horizontal"))
     if set_name in INPUT_PROFILES:
         players, input_profile = INPUT_PROFILES[set_name]
         out.append("players = %d" % players)
