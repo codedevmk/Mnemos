@@ -291,7 +291,7 @@ namespace mnemos::manifests::irem_m107 {
         sound_bus.map_mmio(
             sound_latch_addr, 1U,
             [this](std::uint32_t) -> std::uint8_t { return read_sound_latch(); },
-            [](std::uint32_t, std::uint8_t) {}, 1);
+            [this](std::uint32_t, std::uint8_t) { acknowledge_sound_latch(); }, 1);
         sound_bus.map_mmio(
             sound_reply_addr, 1U,
             [this](std::uint32_t) -> std::uint8_t { return read_sound_reply(); },
@@ -329,6 +329,13 @@ namespace mnemos::manifests::irem_m107 {
                 break;
             }
         });
+        sound_cpu.set_irq_ack([this]() -> std::uint8_t {
+            if (fm.irq_asserted()) {
+                return sound_irq_vector_ym2151;
+            }
+            return sound_irq_vector_command_latch;
+        });
+        fm.set_irq([this](bool) { update_sound_irq(); });
 
         dip_switches = params.dip_default;
         coins_dsw3 = params.coins_dsw3_default;
@@ -362,14 +369,21 @@ namespace mnemos::manifests::irem_m107 {
         input_system = system;
     }
 
+    void m107_system::update_sound_irq() noexcept {
+        sound_cpu.set_irq_line(sound_latch_pending || fm.irq_asserted());
+    }
+
     void m107_system::write_sound_latch(std::uint8_t value) noexcept {
         sound_latch = value;
         sound_latch_pending = true;
+        update_sound_irq();
     }
 
-    std::uint8_t m107_system::read_sound_latch() noexcept {
+    std::uint8_t m107_system::read_sound_latch() noexcept { return sound_latch; }
+
+    void m107_system::acknowledge_sound_latch() noexcept {
         sound_latch_pending = false;
-        return sound_latch;
+        update_sound_irq();
     }
 
     void m107_system::write_sound_reply(std::uint8_t value) noexcept {
@@ -447,6 +461,7 @@ namespace mnemos::manifests::irem_m107 {
         ym_address = reader.u8();
         sound_latch_pending = reader.boolean();
         sound_reply_pending = reader.boolean();
+        update_sound_irq();
     }
 
     std::unique_ptr<m107_system> assemble_m107(common::rom_set_image image,

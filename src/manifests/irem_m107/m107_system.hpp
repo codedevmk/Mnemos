@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 7U;
+    inline constexpr std::uint32_t m107_system_state_version = 8U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -77,6 +77,8 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::uint16_t sound_port_ga20_base = 0x20U;
     inline constexpr std::uint16_t sound_port_ga20_limit =
         sound_port_ga20_base + chips::audio::irem_ga20::register_count;
+    inline constexpr std::uint8_t sound_irq_vector_ym2151 = 24U;        // V35 INTP0
+    inline constexpr std::uint8_t sound_irq_vector_command_latch = 25U; // V35 INTP1
 
     struct m107_board_params final {
         std::uint16_t dip_default{0xFFFFU};
@@ -148,8 +150,10 @@ namespace mnemos::manifests::irem_m107 {
 
         void run_frame();
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept;
+        void update_sound_irq() noexcept;
         void write_sound_latch(std::uint8_t value) noexcept;
         [[nodiscard]] std::uint8_t read_sound_latch() noexcept;
+        void acknowledge_sound_latch() noexcept;
         void write_sound_reply(std::uint8_t value) noexcept;
         [[nodiscard]] std::uint8_t read_sound_reply() noexcept;
         void save_state(chips::state_writer& writer) const;

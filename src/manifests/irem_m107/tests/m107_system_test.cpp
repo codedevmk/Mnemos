@@ -333,16 +333,32 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_command_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::sound_rom_size, 0xFFU);
+        const std::size_t intp1_vector =
+            static_cast<std::size_t>(mnemos::manifests::irem_m107::sound_irq_vector_command_latch) *
+            4U;
+        rom[intp1_vector + 0U] = 0x00U; // IVT[INTP1] -> 0000:0300
+        rom[intp1_vector + 1U] = 0x03U;
+        rom[intp1_vector + 2U] = 0x00U;
+        rom[intp1_vector + 3U] = 0x00U;
         rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
         rom[0x1FFF1U] = 0x00U;
         rom[0x1FFF2U] = 0x02U;
         rom[0x1FFF3U] = 0x00U;
         rom[0x1FFF4U] = 0xE0U;
-        const std::vector<std::uint8_t> program{
+        const std::vector<std::uint8_t> wait_program{
+            0xFBU, // STI
+            0xF4U, // HLT, then wake on the command-latch IRQ
+            0xF4U  // HLT again if the handler ever returns
+        };
+        for (std::size_t i = 0; i < wait_program.size(); ++i) {
+            rom[0x0200U + i] = wait_program[i];
+        }
+        const std::vector<std::uint8_t> handler{
             0xB8U, 0x00U, 0xA8U, // MOV AX,A800
             0x8EU, 0xD8U,        // MOV DS,AX
             0xA0U, 0x44U, 0x00U, // MOV AL,[0044] (main sound command latch)
             0x88U, 0xC3U,        // MOV BL,AL
+            0xA2U, 0x44U, 0x00U, // MOV [0044],AL (acknowledge command IRQ)
             0xA2U, 0x46U, 0x00U, // MOV [0046],AL (sound reply)
             0xB8U, 0x00U, 0xA0U, // MOV AX,A000
             0x8EU, 0xD8U,        // MOV DS,AX
@@ -350,8 +366,8 @@ namespace {
             0xA2U, 0x00U, 0x00U, // MOV [0000],AL
             0xF4U                // HLT
         };
-        for (std::size_t i = 0; i < program.size(); ++i) {
-            rom[0x0200U + i] = program[i];
+        for (std::size_t i = 0; i < handler.size(); ++i) {
+            rom[0x0300U + i] = handler[i];
         }
         return rom;
     }
@@ -527,7 +543,10 @@ TEST_CASE("m107 executable board maps V-series reset and RAM", "[m107][board]") 
     system->sound_bus.write8(m107::sound_ym2151_base, 0x20U);
     CHECK(system->ym_address == 0x20U);
     system->write_sound_latch(0x5CU);
+    CHECK(system->sound_latch_pending);
     CHECK(system->sound_bus.read8(m107::sound_latch_addr) == 0x5CU);
+    CHECK(system->sound_latch_pending);
+    system->sound_bus.write8(m107::sound_latch_addr, 0x00U);
     CHECK_FALSE(system->sound_latch_pending);
     system->sound_bus.write8(m107::sound_reply_addr, 0x6DU);
     CHECK(system->sound_reply == 0x6DU);
@@ -573,6 +592,8 @@ TEST_CASE("m107 board declares V33 main and V35 sound CPU clocks", "[m107][board
     CHECK(m107::sound_cpu_clock_hz == 14'318'181U);
     CHECK(m107::main_cycles_per_frame == 254'462U);
     CHECK(m107::sound_cycles_per_frame == 260'245U);
+    CHECK(m107::sound_irq_vector_ym2151 == 24U);
+    CHECK(m107::sound_irq_vector_command_latch == 25U);
 }
 
 TEST_CASE("m107 sound CPU drives the Irem GA20 register window", "[m107][board][audio]") {
@@ -613,7 +634,7 @@ TEST_CASE("m107 sound command latch reaches the V35 and returns a reply", "[m107
         CHECK_FALSE(system->sound_reply_pending);
     }
 
-    SECTION("V35 latch read clears pending and reply write is latched") {
+    SECTION("V35 INTP1 handler acknowledges the command latch and replies") {
         image.regions["soundcpu"] = synthetic_m107_sound_command_program();
 
         auto system = m107::assemble_m107(std::move(image), m107::board_params_for("airass"));

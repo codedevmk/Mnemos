@@ -122,10 +122,10 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
 - The previous OKI6295 placeholder has been replaced by a native GA20 PCM model, and the M107 player now captures GA20 PCM at the YM output cadence and mixes drained GA20 stereo samples into the player audio buffer with signed clamping.
 - The M107 adapter now consumes explicit arcade `service` and `test` frontend inputs: service maps active-low to the `COINS_DSW3` service-credit bit `0x10`, `mode` remains a legacy service alias, operator test maps active-low to the `COINS_DSW3` operator-service bit `0x20`, and adapter state version 2 persists those fields while still loading version 1 snapshots.
-- The M107 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 6, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
+- The M107 sound-command latch now asserts the first-pass V35 command IRQ line through INTP1/vector 25 on main V33 writes; sound-side reads fetch the command without acknowledging it, sound-side writes to `$a8044` acknowledge/clear the command IRQ, YM2151 IRQ uses INTP0/vector 24, and command/reply state is preserved in board save state version 8.
 - The M107 map now models VRAM at `$d0000`, work RAM at `$e0000`, sprite RAM at `$f8000`, palette RAM at `$f9000`, sound RAM at `$a0000`, and sound-side GA20/YM2151/command-latch/reply MMIO at `$a8000`/`$a8040`/`$a8044`/`$a8046`. Port fallbacks remain for the current synthetic command path.
 - Checked-in Air Assault and Fire Barrel manifests now carry the shared SW1/SW2 and SW3 DIP profile from the Fire Barrel input profile. The adapter retains the 12 parsed DIP entries, folds SW1/SW2 defaults into the board DIP word (`0xffbf`), folds SW3 defaults into the separate `COINS_DSW3` word (`0xebff`), and exposes `DIP switches=12` in the player system spec.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, deeper M107 I/O behavior, GA21/GA22 video/priority behavior, command IRQ timing plus remaining GA20 analog balance/filtering proof, raster timing, and screenshot parity.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, deeper M107 I/O behavior, GA21/GA22 video/priority behavior, full V35 interrupt-controller priority/latency proof, remaining GA20 analog balance/filtering proof, raster timing, and screenshot parity.
 
 ### Irem M15
 
@@ -792,7 +792,7 @@ M107 sound-command latch continuation validation on 2026-06-26:
 - Full build:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
-- This proves the modeled M107 command/reply latch contract and save-state persistence. It is not command IRQ timing, full V35 on-die peripheral proof, GA20 analog balance/filtering, or final M107 audio parity proof.
+- At that point, this proved the modeled M107 command/reply latch contract and save-state persistence. It did not prove command IRQ timing, full V35 on-die peripheral proof, GA20 analog balance/filtering, or final M107 audio parity proof.
 
 M107 memory-mapped sound/main map continuation validation on 2026-06-26:
 
@@ -818,7 +818,7 @@ M107 memory-mapped sound/main map continuation validation on 2026-06-26:
 - Full build:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
-- This proves the modeled M107 memory windows and sound-side MMIO route. It is not V33/V35 on-die peripheral proof, command IRQ timing proof, GA21/GA22 video parity, DIP/operator I/O proof, or final visual/audio parity.
+- At that point, this proved the modeled M107 memory windows and sound-side MMIO route. It did not prove V33/V35 on-die peripheral proof, command IRQ timing proof, GA21/GA22 video parity, DIP/operator I/O proof, or final visual/audio parity.
 
 M107 SW1/SW2 DIP metadata continuation validation on 2026-06-26:
 
@@ -874,7 +874,25 @@ M107 operator-service input continuation validation on 2026-06-26:
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 - `clang-format --dry-run --Werror` passed for the touched M107 C++ files.
 - `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
-- This proves the currently modeled player-to-board operator-service input path. It does not prove deeper M107 I/O behavior, V33/V35 peripherals, command IRQ timing, GA21/GA22 video, or final parity.
+- This proved the player-to-board operator-service input path before the command-IRQ continuation below. At that point, it did not prove deeper M107 I/O behavior, V33/V35 peripherals, command IRQ timing, GA21/GA22 video, or final parity.
+
+M107 command IRQ continuation validation on 2026-06-26:
+
+- Replaced the read-clears-command shortcut with the first-pass M107 sound-latch IRQ contract: main V33 sound-command writes assert the sound V35 IRQ line, the V35 INTP1 acknowledge vector is 25, latch reads do not clear pending state, and sound-side writes to `$a8044` acknowledge/clear the command IRQ. YM2151 IRQ is routed through V35 INTP0/vector 24.
+- Bumped M107 board save-state version to `8` so pre-command-IRQ states are rejected instead of silently restoring under the new latch/IRQ acknowledge semantics.
+- Focused M107 board build/test:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test`
+  - `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m107_test`: `1/1`
+- Focused M107 adapter/corpus build and CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `3/3`
+  - `mnemos_manifests_irem_m107_test`
+  - `mnemos_apps_player_irem_m107_adapter_test`
+  - `mnemos_apps_player_irem_m107_corpus_golden_test`
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- `clang-format --dry-run --Werror` passed for the touched M107 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- This proves the currently modeled V33-to-V35 command IRQ assertion, vector dispatch, explicit acknowledge, and reply path. It does not prove full V35 on-die interrupt-controller priority/latency, GA21/GA22 video, GA20 analog balance/filtering, or final M107 parity.
 
 Earlier branch validation that passed before the M107 slice:
 
@@ -897,7 +915,7 @@ Repository hygiene notes:
 2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.
-5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, deeper M107 I/O details, command IRQ timing, remaining GA20 analog balance/filtering, GA21/GA22 behavior, raster timing, and screenshot parity.
+5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, deeper M107 I/O details, full V35 interrupt-controller priority/latency proof, remaining GA20 analog balance/filtering, GA21/GA22 behavior, raster timing, and screenshot parity.
 6. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 7. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
 8. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
