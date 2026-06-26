@@ -22,6 +22,10 @@ items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only. The common data-gated runner and oracle registry now include
 G6-ratcheted corpus golden tests for every implemented Irem player family:
 M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
+For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
+wires `D:\emu\irem` into those data-gated tests, including the mixed-root
+M90/M92 wrappers, while leaving the strict full-M72 roster gate opt-in because
+`lohtj` and `lohtb2` are still incomplete locally.
 
 ## Status Terms
 
@@ -483,7 +487,10 @@ visual and audio parity proof.
    adjust manifests/docs if needed.
 4. Continue M72 artifact closure for `gallopm72`, `lohtb2`, and `lohtj` by
    finding the exact missing dumps without substituting sibling-set or synthetic bytes.
-5. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
+5. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` only when the
+   missing M72 artifacts have been supplied; without the switch it is the
+   available-artifact proof runner for every implemented Irem family.
+6. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.
-6. Advance the M92 first-pass profile from diagnostic execution to authenticity
+7. Advance the M92 first-pass profile from diagnostic execution to authenticity
    by resolving encrypted V35 sound-CPU behavior and GA21/GA22 video evidence.
