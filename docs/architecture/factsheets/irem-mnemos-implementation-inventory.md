@@ -57,7 +57,7 @@ M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 | M82 | `irem_m82` | 66% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip`; Gallop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
-| M90 / M97 / M99 | `irem_m90` first-pass | 26% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
+| M90 / M97 / M99 | `irem_m90` first-pass | 28% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, board-authentic DIP tables/runtime proof, visual/audio parity |
 | M92 | `irem_m92` | 41% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling/IRQ timing, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 56% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
@@ -375,7 +375,11 @@ visual and audio parity proof.
 - **Smoke playable:** all four current local Atomic Punk/Bomber Man World
   wrappers load CRC-clean through `--system irem_m90`/the M90 adapter data gate,
   step one frame, produce a 384x256 nonblank diagnostic frame, and produce
-  save-state bytes.
+  save-state bytes. The adapter also maps P1/P2 service plus operator-test
+  inputs to the board-visible active-low system port, preserves them across
+  save/load, retains parsed manifest DIP metadata, folds parsed DIP defaults
+  into the 16-bit board DIP register, exposes `DIP switches` when manifests
+  provide switch tables, and still honors explicit `--dip` overrides.
 - **Correct gfx/music:** not certified. The board shell now matches the
   V35/Z80/YM2151/DAC topology, but rendering is a GA25 diagnostic compositor and
   audio proof is limited to the Z80/YM/DAC route plus sound-Z80-clocked
@@ -388,7 +392,8 @@ visual and audio parity proof.
   not final visual parity evidence.
 - **Remaining:** authentic GA25 tile/sprite/row-scroll behavior, V35 on-die
   interrupt/timer behavior, complete Bomber Man World graphics media, Hasamu and
-  Quiz F-1 manifests/corpus proof, DIP behavior, and screenshot/audio parity.
+  Quiz F-1 manifests/corpus proof, board-authentic DIP tables/runtime behavior,
+  and screenshot/audio parity.
 
 ### M92
 

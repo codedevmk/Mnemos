@@ -611,14 +611,16 @@ GA25 graphics custom.
   bytes plus board RAM. `src/apps/player/adapters/irem_m90` registers
   `--system irem_m90` / `m90`, supports ZIPs, single-inner wrapper ZIPs,
   unpacked set folders, embedded or in-archive `game.toml` manifests, resident
-  media validation, rollback-ready save-state, capability discovery, and real
-  local player smoke through `MNEMOS_M90_SET_DIR=D:\emu\irem`; all four
+  media validation, rollback-ready save-state, capability discovery, parsed
+  DIP metadata retention/default folding, `DIP switches` player-spec exposure,
+  P1/P2 service plus operator-test input mapping with save-state proof, and
+  real local player smoke through `MNEMOS_M90_SET_DIR=D:\emu\irem`; all four
   checked-in sets step one frame, produce nonblank 384x256 diagnostic output,
   and emit save-state bytes. Remaining: authentic GA25 tile/sprite/row-scroll
   behavior, V35 on-die interrupt/timer behavior, complete Bomber Man World
-  graphics media, Hasamu and Quiz F-1 manifests/corpus proof, DIP behavior,
-  raster timing, and authentic screenshot/audio parity before calling this
-  profile authentic · PARTIAL · HIGH · L · beyond Emu · Evidence:
+  graphics media, Hasamu and Quiz F-1 manifests/corpus proof, board-authentic
+  DIP tables/runtime behavior, raster timing, and authentic screenshot/audio
+  parity before calling this profile authentic · PARTIAL · HIGH · L · beyond Emu · Evidence:
   `src/manifests/irem_m90/m90_system.cpp` +
   `src/manifests/irem_m90/tests/m90_system_test.cpp` +
   `src/apps/player/adapters/irem_m90/irem_m90_adapter.cpp` +

@@ -150,6 +150,77 @@ size = 0x020000
         return dir;
     }
 
+    [[nodiscard]] temp_set_dir make_dip_metadata_set() {
+        temp_set_dir dir;
+        write_text_file(dir.path / "game.toml", R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "dipmeta"
+board = "irem_m90"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Test Lives"
+mask = 0x0003
+default = 0x0002
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip]]
+bank = "SW2"
+name = "Test Flip"
+mask = 0x0100
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name = "maincpu.bin"
+offset = 0
+size = 0x100000
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name = "soundcpu.bin"
+offset = 0
+size = 0x010000
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name = "samples.bin"
+offset = 0
+size = 0x020000
+)toml");
+        write_binary_file(dir.path / "maincpu.bin", synthetic_m90_program());
+        write_binary_file(dir.path / "soundcpu.bin", synthetic_m90_sound_dac_program());
+        write_binary_file(dir.path / "samples.bin",
+                          std::vector<std::uint8_t>(m90::sample_rom_size, 0x80U));
+        return dir;
+    }
+
     [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
         for (std::uint32_t y = 0; y < frame.height; ++y) {
             for (std::uint32_t x = 0; x < frame.width; ++x) {
@@ -337,6 +408,14 @@ size = 0x020000
         return count;
     }
 
+    [[nodiscard]] bool spec_has(const irem::irem_m90_adapter& adapter, std::string_view label,
+                                std::string_view value) {
+        const auto& spec = adapter.system_spec();
+        return std::any_of(spec.begin(), spec.end(), [label, value](const auto& field) {
+            return field.label == label && field.value == value;
+        });
+    }
+
 } // namespace
 
 TEST_CASE("irem_m90_adapter boots a synthetic M90 program", "[irem_m90]") {
@@ -375,13 +454,78 @@ TEST_CASE("irem_m90_adapter mixes Z80 DAC writes into drained audio", "[irem_m90
     CHECK(adapter.drain_audio().frame_count == 0U);
 }
 
+TEST_CASE("irem_m90_adapter applies manifest DIP defaults and override", "[irem_m90]") {
+    const auto set = make_dip_metadata_set();
+    irem::irem_m90_adapter adapter({}, "DIP metadata", nullptr, {}, set.path.string());
+
+    CHECK(adapter.dip_switches().size() == 2U);
+    CHECK(adapter.machine().dip_switches == 0xFEFEU);
+    CHECK(spec_has(adapter, "DIP switches", "2"));
+
+    irem::irem_m90_adapter overridden({}, "DIP metadata", nullptr,
+                                      static_cast<std::uint16_t>(0x1234U), set.path.string());
+    CHECK(overridden.dip_switches().size() == 2U);
+    CHECK(overridden.machine().dip_switches == 0x1234U);
+    CHECK(spec_has(overridden, "DIP switches", "2"));
+}
+
+TEST_CASE("irem_m90_adapter maps service and operator-test inputs to the system port",
+          "[irem_m90]") {
+    irem::irem_m90_adapter adapter(synthetic_m90_program(), "M90 inputs");
+
+    mnemos::frontend_sdk::controller_state p1{};
+    p1.start = true;
+    p1.select = true;
+    p1.service = true;
+    p1.test = true;
+    adapter.apply_input(0, p1);
+
+    CHECK(adapter.machine().input_system == 0xAAU);
+
+    p1.service = false;
+    p1.test = false;
+    p1.mode = true;
+    adapter.apply_input(0, p1);
+
+    CHECK(adapter.machine().input_system == 0xEAU);
+
+    p1 = {};
+    adapter.apply_input(0, p1);
+
+    mnemos::frontend_sdk::controller_state p2{};
+    p2.start = true;
+    p2.select = true;
+    p2.service = true;
+    p2.test = true;
+    adapter.apply_input(1, p2);
+
+    CHECK(adapter.machine().input_system == 0x95U);
+
+    p2.service = false;
+    p2.test = false;
+    p2.mode = true;
+    adapter.apply_input(1, p2);
+
+    CHECK(adapter.machine().input_system == 0xD5U);
+}
+
 TEST_CASE("irem_m90_adapter preserves adapter and board state", "[irem_m90]") {
     irem::irem_m90_adapter source(synthetic_m90_program(), "Save M90");
     mnemos::frontend_sdk::controller_state p1{};
     p1.up = true;
     p1.a = true;
     p1.start = true;
+    p1.select = true;
+    p1.service = true;
+    p1.test = true;
     source.apply_input(0, p1);
+    mnemos::frontend_sdk::controller_state p2{};
+    p2.down = true;
+    p2.b = true;
+    p2.start = true;
+    p2.service = true;
+    source.apply_input(1, p2);
+    REQUIRE(source.machine().input_system == 0x88U);
     source.step_one_frame();
     source.machine().rowscroll_ram[5] = 0x44U;
     REQUIRE(source.drain_audio().frame_count > 0U);
@@ -394,6 +538,7 @@ TEST_CASE("irem_m90_adapter preserves adapter and board state", "[irem_m90]") {
     CHECK(restored.frames_stepped() == 1U);
     CHECK(restored.machine().work_ram[0] == 0x42U);
     CHECK(restored.machine().rowscroll_ram[5] == 0x44U);
+    CHECK(restored.machine().input_system == 0x88U);
     CHECK(restored.drain_audio().frame_count == 0U);
 }
 

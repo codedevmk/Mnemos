@@ -33,11 +33,13 @@ namespace mnemos::apps::player::adapters::irem_m90 {
         namespace m90 = mnemos::manifests::irem_m90;
 
         using mnemos::manifests::common::rom_load_issue;
+        using mnemos::manifests::common::rom_set_dip_switch;
         using mnemos::manifests::common::rom_set_image;
 
         struct loaded_set final {
             rom_set_image image;
             std::string set_name;
+            std::vector<rom_set_dip_switch> dip_switches{};
         };
 
         struct nested_zip_source final {
@@ -89,6 +91,16 @@ namespace mnemos::apps::player::adapters::irem_m90 {
                                                  std::string_view text) noexcept {
             crc = crc32_u64(crc, text.size());
             return mnemos::security::cryptography::crc32(text, crc);
+        }
+
+        [[nodiscard]] std::uint16_t
+        dip_default_from_manifest(std::span<const rom_set_dip_switch> switches,
+                                  std::uint16_t fallback) noexcept {
+            std::uint16_t value = fallback;
+            for (const rom_set_dip_switch& dip : switches) {
+                value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
+            }
+            return value;
         }
 
         [[nodiscard]] std::uint64_t resident_image_byte_count(const rom_set_image& image) noexcept {
@@ -293,6 +305,7 @@ namespace mnemos::apps::player::adapters::irem_m90 {
             loaded_set result;
             result.image = mnemos::manifests::common::load_rom_set(decl, provider);
             result.set_name = decl.name;
+            result.dip_switches = decl.dips;
             for (const auto& issue : result.image.issues) {
                 std::fprintf(stderr, "[irem_m90] %s: %s\n", issue.file.c_str(),
                              issue.message.c_str());
@@ -365,7 +378,9 @@ namespace mnemos::apps::player::adapters::irem_m90 {
         }
 
         [[nodiscard]] std::unique_ptr<m90::m90_system> assemble_from(loaded_set set) {
-            return m90::assemble_m90(std::move(set.image), m90::board_params_for(set.set_name));
+            auto params = m90::board_params_for(set.set_name);
+            params.dip_default = dip_default_from_manifest(set.dip_switches, params.dip_default);
+            return m90::assemble_m90(std::move(set.image), params);
         }
 
         [[nodiscard]] std::int16_t add_clamped(std::int16_t sample,
@@ -464,6 +479,7 @@ namespace mnemos::apps::player::adapters::irem_m90 {
         loaded_set set = load_set(std::move(rom), rom_path);
         media_ = make_media_capabilities(display_name, set, source_byte_count);
         loaded_set_name_ = set.set_name;
+        dip_switches_ = set.dip_switches;
         sys_ = assemble_from(std::move(set));
         if (dip_override.has_value()) {
             sys_->dip_switches = *dip_override;
@@ -475,6 +491,9 @@ namespace mnemos::apps::player::adapters::irem_m90 {
                 ? loaded_set_name_
                 : (display_name.empty() ? std::string{"unknown"} : display_name);
         spec_ = {{"System", "Arcade"}, {"Board", "Irem M90"}, {"Game", game_label}};
+        if (!dip_switches_.empty()) {
+            spec_.push_back({"DIP switches", std::to_string(dip_switches_.size())});
+        }
     }
 
     void irem_m90_adapter::publish_memory_views() {
@@ -513,6 +532,12 @@ namespace mnemos::apps::player::adapters::irem_m90 {
         }
         if (ports_[0].service || ports_[0].mode) {
             system &= static_cast<std::uint8_t>(~0x10U);
+        }
+        if (ports_[1].service || ports_[1].mode) {
+            system &= static_cast<std::uint8_t>(~0x20U);
+        }
+        if (ports_[0].test || ports_[1].test) {
+            system &= static_cast<std::uint8_t>(~0x40U);
         }
         sys_->set_inputs(pack(ports_[0]), pack(ports_[1]), system);
     }
