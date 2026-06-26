@@ -249,46 +249,37 @@ Loader note: no-dump HLE profiles now also disable when their declared `samples`
 Protection-HLE note: `dbreedm72` and `dkgensanm72` no-dump MCU profiles now also expose their profile-specific service-ROM checksum response bytes at the shared-RAM request trigger, matching the declared HLE surface instead of leaving service-test reads as stale RAM.
 
 #### System / variants
-- [~] **M3** Additional M72 board variants beyond R-Type — `board_params_for` now records the known true-M72 work-RAM map families (`rtype*`, standard protected M72, `xmultiplm72`, and `dbreed*m72`) plus set-specific DIP defaults without admitting M81/M82/M84/M85/M92 boards into the M72 profile; the player resolves standard set zips, single-inner-set wrapper zips, or unpacked set directories by basename through the embedded checked-in game manifests, keeps source-local `game.toml` as a development override, resolves declarative clone `parent` zips/directories beside the clone set, reports missing/corrupt/unsafe/undeclared/mismatched parent resolutions as media validation issues, refuses fallback bytes from a parent zip whose manifest does not validate as the declared parent, and inherits parent manifest regions plus parent DIP/HLE metadata when the clone manifest omits replacements; source-local declarations for non-M72 boards now surface loader issues instead of falling through as empty M72 development sets; checked-in M72 game manifests now cover the true-M72 roster: `rtype`, `bchopper`, `mrheli`, `nspirit`, `nspiritj`, `loht`, `lohtj`, `lohtb2`, `lohtb3`, `imgfight`, `airduelm72`, `rtypej`, `rtypejp`, `rtypeu`, `rtypeb`, `imgfightj`, `imgfightjb`, `airdueljm72`, `xmultiplm72`, `dbreedm72`, `dbreedjm72`, `dkgensanm72`, and `gallopm72` with parser/region-contract coverage plus explicit no-dump MCU HLE declarations for `dbreedm72` / `dkgensanm72`; the ROM-set schema/player adapter now parse and retain roster-level true-M72 DIP option metadata, including conditional Irem coinage tables, unsupported MCU HLE profiles now report loader issues instead of silently booting as unprotected boards, unprotected boards leave the absent MCU latch port as open bus, and the player media descriptor publishes a CRC32 over resolved set metadata plus loaded resident ROM regions while carrying ROM-set validation issues so capability discovery degrades CRC-mismatched or incomplete M72 media instead of reporting it available; no-dump HLE profiles now cover the startup inversion surface, V30 command-latch acknowledge, and manifest-declared profile-bounded sample-trigger cursor; control-register coin-counter outputs now count rising edges, the CPU-visible sprite-DMA-complete bit stays asserted, flip-screen mirrors the composed frame while both round-trip through board/video state, mid-frame video save-state now preserves already-composed scanlines, the M72 board save-target manifest revision tracks the media-fingerprinted board-state schema, the player-adapter save/load overrides now expose that target to `mnemos_player`, and the target also captures adapter frame count, audio-drain cursor, DAC mix continuity, and frontend input snapshots, capability discovery exposes that frame-exact target as rollback-ready for the M72 player session, and visible scanlines compose at beam-line start so raster-time scroll writes affect later lines without repainting earlier lines; `MNEMOS_M72_VERTICAL_SET` provides a data-gated real-ROM orientation/framebuffer sanity hook for vertical true-M72 sets, `MNEMOS_M72_SET_DIR` now drives a full checked-in true-M72 roster gate from a mixed corpus root or platform path-list of roots containing `<set>.zip`, `<set>\`, or single-inner-set wrapper zips anywhere below each root per embedded manifest and validates CRC-clean loads, clone parent fallback, board wiring, orientation, sound release, and a non-blank frame, and `scripts/irem_m72/run-corpus-smoke.ps1` drives configured R-Type, protected, vertical, and roster artifacts through `mnemos_player` save/load/screenshot smoke proof with per-set fallback frame attempts for attract/blank intervals and per-set subsets for collection ZIPs. Current local proof treats `D:\emu\irem` as a mixed Irem corpus (`m72`, `M81`, `m82`, `M84`, `M15`, `i8751`, plus root archives) and proves clean save/load/screenshot smoke for 19 true-M72 sets: `airdueljm72`, `airduelm72`, `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `imgfight`, `imgfightj`, `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspiritj`, `rtype`, `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`, and `xmultiplm72`; the smoke runner now refuses media-validation issues when deciding pass/fail, so incomplete discovered local artifacts are rejected for `gallopm72` (`cc_c-pr-.ic1` missing) and `nspirit` (`nin_c-pr-b.ic1` missing); `scripts/irem_m72/find-missing-artifacts.ps1` now records a repeatable name/CRC scan across `D:\emu\irem` plus `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z`, finding 83/94 artifacts for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2` but no matching `gallopm72` or `nspirit` MCU dumps, while current `D:\emu\irem` recursion proves `lohtb3` discoverable through `i8751\Legend-of-Hero-Tonma_Arcade_EN.zip` and still finds no matches for `lohtj`'s two set-specific program ROMs plus MCU or `lohtb2`'s four set-specific program ROMs, 8 KiB MCU dump, and one sprite ROM. Remaining: complete and validate no-dump HLE protection entry behavior beyond the covered startup/latch/sample surfaces, verify any board-manual corrections for MAME-assumed DIP locations, exercise the full roster real-ROM hook with complete authentic artifacts, and resolve remaining set-specific protection/sample behavior · PARTIAL · MED · M–L per game · beyond Emu · Evidence: `src/manifests/irem_m72/games/*.toml` + `src/manifests/irem_m72/m72_game_manifests.hpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` + `scripts/irem_m72/run-corpus-smoke.ps1` / `progress-analysis.md` M72 board roster
+- [~] **M3** Additional M72 board variants beyond R-Type — `board_params_for` now records the known true-M72 work-RAM map families (`rtype*`, standard protected M72, `xmultiplm72`, and `dbreed*m72`) plus set-specific DIP defaults without admitting M81/M82/M84/M85/M92 boards into the M72 profile; the player resolves standard set zips, single-inner-set wrapper zips, or unpacked set directories by basename through the embedded checked-in game manifests, keeps source-local `game.toml` as a development override, resolves declarative clone `parent` zips/directories beside the clone set, reports missing/corrupt/unsafe/undeclared/mismatched parent resolutions as media validation issues, refuses fallback bytes from a parent zip whose manifest does not validate as the declared parent, and inherits parent manifest regions plus parent DIP/HLE metadata when the clone manifest omits replacements; source-local declarations for non-M72 boards now surface loader issues instead of falling through as empty M72 development sets; checked-in M72 game manifests now cover the true-M72 roster: `rtype`, `bchopper`, `mrheli`, `nspirit`, `nspiritj`, `loht`, `lohtj`, `lohtb2`, `lohtb3`, `imgfight`, `airduelm72`, `rtypej`, `rtypejp`, `rtypeu`, `rtypeb`, `imgfightj`, `imgfightjb`, `airdueljm72`, `xmultiplm72`, `dbreedm72`, `dbreedjm72`, `dkgensanm72`, and `gallopm72` with parser/region-contract coverage plus explicit no-dump MCU HLE declarations for `dbreedm72` / `dkgensanm72`; the ROM-set schema/player adapter now parse and retain roster-level true-M72 DIP option metadata, including conditional Irem coinage tables, unsupported MCU HLE profiles now report loader issues instead of silently booting as unprotected boards, unprotected boards leave the absent MCU latch port as open bus, and the player media descriptor publishes a CRC32 over resolved set metadata plus loaded resident ROM regions while carrying ROM-set validation issues so capability discovery degrades CRC-mismatched or incomplete M72 media instead of reporting it available; no-dump HLE profiles now cover the startup inversion surface, V30 command-latch acknowledge, and manifest-declared profile-bounded sample-trigger cursor; control-register coin-counter outputs now count rising edges, the CPU-visible sprite-DMA-complete bit stays asserted, flip-screen mirrors the composed frame while both round-trip through board/video state, mid-frame video save-state now preserves already-composed scanlines, the M72 board save-target manifest revision tracks the media-fingerprinted board-state schema, the player-adapter save/load overrides now expose that target to `mnemos_player`, and the target also captures adapter frame count, audio-drain cursor, DAC mix continuity, and frontend input snapshots, capability discovery exposes that frame-exact target as rollback-ready for the M72 player session, and visible scanlines compose at beam-line start so raster-time scroll writes affect later lines without repainting earlier lines; `MNEMOS_M72_VERTICAL_SET` provides a data-gated real-ROM orientation/framebuffer sanity hook for vertical true-M72 sets, `MNEMOS_M72_SET_DIR` now drives a full checked-in true-M72 roster gate from a mixed corpus root or platform path-list of roots containing `<set>.zip`, `<set>\`, or single-inner-set wrapper zips anywhere below each root per embedded manifest and validates CRC-clean loads, clone parent fallback, board wiring, orientation, sound release, and a non-blank frame, and `scripts/irem_m72/run-corpus-smoke.ps1` drives configured R-Type, protected, vertical, and roster artifacts through `mnemos_player` save/load/screenshot smoke proof with per-set fallback frame attempts for attract/blank intervals and per-set subsets for collection ZIPs. Current local proof treats `D:\emu\irem` as a mixed Irem corpus (`m72`, `M81`, `m82`, `M84`, `M15`, `i8751`, plus root archives) and proves clean save/load/screenshot smoke for 20 true-M72 sets: `airdueljm72`, `airduelm72`, `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `imgfight`, `imgfightj`, `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspirit`, `nspiritj`, `rtype`, `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`, and `xmultiplm72`; the smoke runner now refuses media-validation issues when deciding pass/fail, so incomplete discovered local artifacts are rejected for `gallopm72` (`cc_c-pr-.ic1` missing) while stale unpacked `D:\emu\irem\M72\nspirit` is bypassed in favor of the CRC-complete `D:\emu\irem\M72\nspirit.zip`; `scripts/irem_m72/find-missing-artifacts.ps1` now records a repeatable name/CRC scan across `D:\emu\irem` plus `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z`, finding 84/94 artifacts for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2` with `nspirit` complete and only `gallopm72`'s MCU plus the remaining `lohtj`/`lohtb2` set-specific artifacts missing, while current `D:\emu\irem` recursion proves `lohtb3` discoverable through `i8751\Legend-of-Hero-Tonma_Arcade_EN.zip` and still finds no matches for `lohtj`'s two set-specific program ROMs plus MCU or `lohtb2`'s four set-specific program ROMs, 8 KiB MCU dump, and one sprite ROM. Remaining: complete and validate no-dump HLE protection entry behavior beyond the covered startup/latch/sample surfaces, verify any board-manual corrections for MAME-assumed DIP locations, exercise the full roster real-ROM hook with complete authentic artifacts, and resolve remaining set-specific protection/sample behavior · PARTIAL · MED · M–L per game · beyond Emu · Evidence: `src/manifests/irem_m72/games/*.toml` + `src/manifests/irem_m72/m72_game_manifests.hpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` + `scripts/irem_m72/run-corpus-smoke.ps1` / `progress-analysis.md` M72 board roster
 
-Artifact note: extracting the Darksoft raw `gallop`/`nspirit` folders proves
-the raw-name aliases load through `mnemos_player`; the extracted-folder scan is
-42/44 present and still missing only `gallopm72:mcu:cc_c-pr-.ic1:ac4421b1` and
-`nspirit:mcu:nin_c-pr-b.ic1:0f7b2713`; the artifact scanner reports suggested
-local placements under `D:\emu\irem\m72\gallop\` and
-`D:\emu\irem\m72\nspirit\` for lawful dumps and now includes `related_hits`
-when a same-size, set-local MCU-looking candidate exists with a different CRC.
-`nspirit` can reach a lit fallback
-frame with the MCU disabled, but it is still not counted as protected-board
-complete because the media remains incomplete. A bounded CRC scan of
-`D:\emu\arcade` finds the Cosmic Cop/Gallop non-MCU files but still no
-`cc_c-pr-.ic1` MCU dump, and no matching Ninja Spirit set. Current scan of the
-newly supplied `D:\emu\irem\M72\nspirit.zip` finds `23/24` World `nspirit`
-artifacts and still misses only `nin_c-pr-b.ic1` (`0x0f7b2713`); the ZIP also
-contains the Japan `nspiritj/nin_c-pr-.ic1` MCU (`0x802d440a`), which the
-scanner reports as related-but-wrong-CRC evidence and not as a substitute for
-the World MCU.
+Artifact note: stale extracted raw folders are no longer treated as sufficient
+proof when a complete exact set ZIP is present. Direct scanning of the current
+`D:\emu\irem\M72\nspirit.zip` reports `48/48` artifacts present for `nspirit`
+plus `nspiritj`, including `nin_c-pr-b.ic1` (`0x0f7b2713`) and
+`nspiritj/nin_c-pr-.ic1` (`0x802d440a`). The unpacked
+`D:\emu\irem\M72\nspirit` folder is still incomplete, so the smoke runner now
+ranks the exact `nspirit.zip` ahead of that same-name folder instead of failing
+on stale extracted media. The scanner still reports suggested local placement
+under `D:\emu\irem\m72\gallop\` for the remaining lawful `gallopm72` MCU dump.
 
 Follow-up scan of the exact current M72 paths
 `D:\emu\irem\M72\nspirit.zip`, `D:\emu\irem\M72\gallopm72.zip`, and
-`D:\emu\irem\M72\gallop.zip` still reports `42/44` artifacts present for
+`D:\emu\irem\M72\gallop.zip` now reports `43/44` artifacts present for
 `gallopm72` plus World `nspirit`, missing only `gallopm72:mcu:cc_c-pr-.ic1`
-(`0xac4421b1`) and `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`). Direct ZIP
-inspection shows `nspirit.zip` contains only the Japan `nspiritj/nin_c-pr-.ic1`
-MCU under MCU-like entries; the current scanner report lists that entry under
-`related_hits` with CRC `0x802d440a`, while `gallopm72.zip` has PROM entries and
-`gallop.zip` has sprite/voice entries but no `cc_c-pr-.ic1`. An exhaustive CRC
-scan of ZIP members and loose files under `D:\emu\irem\M72` likewise found zero
-matches for `0xac4421b1` or `0x0f7b2713`.
+(`0xac4421b1`). Direct ZIP inspection confirms `nspirit.zip` contains both the
+World `nin_c-pr-b.ic1` MCU (`0x0f7b2713`) and the Japan
+`nspiritj/nin_c-pr-.ic1` MCU (`0x802d440a`), while `gallopm72.zip` has PROM
+entries and `gallop.zip` has sprite/voice entries but no `cc_c-pr-.ic1`. An
+exhaustive CRC scan of ZIP members and loose files under `D:\emu\irem\M72`
+still finds zero matches for `0xac4421b1`.
 The artifact scanner now tolerates unreadable entries while walking unrelated
 `.7z` archives, so a broad mixed storage probe can skip bad archive members
 instead of aborting before Irem evidence is collected; the patched scanner
 finishes the previously failing
 `D:\emu\Chaos Field (English v1.0)[Analog Stick Enabled][cdi].7z` case as a
 clean 0/20 non-match. A current rerun across `D:\emu\irem` plus
-`D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` still reports `83/94` present
-for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, with the same 11 missing
-targets.
+`D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` now reports `84/94` present for
+`gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, with the remaining missing
+targets limited to the `gallopm72` MCU plus `lohtb2`/`lohtj` set-specific files.
 
 Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
 `-RomDir` values, handles collection ZIP forms, and treats sorted non-M72 roots
@@ -314,8 +305,10 @@ snapshots.
 2026-06-25 artifact proof note: `MNEMOS_M72_RTYPE_SET=D:\emu\irem\R-Type_Arcade_EN.zip`,
 `MNEMOS_M72_PROTECTED_SET=D:\emu\irem\imgfight.zip`, and
 `MNEMOS_M72_VERTICAL_SET=D:\emu\irem\imgfight.zip` pass their dedicated CTest
-golden gates. The recursive mixed-corpus smoke path still rejects
-`gallopm72`/`nspirit` until their missing MCU dumps are present.
+golden gates. The recursive mixed-corpus smoke path now passes targeted
+`nspirit` from `D:\emu\irem\M72\nspirit.zip`; the full open-roster proof still
+rejects `gallopm72` and remains blocked by missing `lohtb2`/`lohtj` source
+artifacts.
 
 2026-06-26 roster discovery note: the CTest roster gate now walks mixed corpus
 roots recursively, so `MNEMOS_M72_SET_DIR=D:\emu\irem` discovers
@@ -326,8 +319,12 @@ PowerShell smoke runner also supports `-Set` filtering and the top-level
 smoke runs; targeted proof with
 `scripts\irem_m72\run-corpus-smoke.ps1 -BuildDir build/windows-msvc-debug -RomDir D:\emu\irem -Recurse -Set lohtb3`
 passes `1/1`, using the nested `lohtb3` wrapper plus parent `loht` sources and
-a lit 300-frame fallback screenshot with no media-validation issues. The same
-current scan still reports only `lohtb2` and `lohtj` as missing source sets.
+a lit 300-frame fallback screenshot with no media-validation issues. Targeted
+proof with
+`scripts\irem_m72\run-corpus-smoke.ps1 -BuildDir build/windows-msvc-debug -RomDir D:\emu\irem\M72 -Recurse -Set nspirit`
+passes `1/1`, resolving `D:\emu\irem\M72\nspirit.zip` first and retaining the
+stale same-name folder only as a secondary source. The same current scan still
+reports only `lohtb2` and `lohtj` as missing source sets.
 
 2026-06-26 category proof note: the current local M72 category proof uses
 `MNEMOS_M72_RTYPE_SET=D:\emu\irem\M72\rtype.zip`,

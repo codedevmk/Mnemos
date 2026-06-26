@@ -50,7 +50,7 @@ M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
-| M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
+| M72 | `irem_m72` | 70% | 23 checked-in manifests | 20 clean smoke-proven sets; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
@@ -70,7 +70,7 @@ The closest current player routes are useful smoke targets, not final parity
 targets:
 
 - M72 has the strongest current game-level route: full V30/Z80/YM2151/video/DAC
-  wiring, scanline composition, and 19 clean local smoke sets.
+  wiring, scanline composition, and 20 clean local smoke sets.
 - M52 now has a Moon Patrol ROM-contract/player route for the local parent and
   Williams clone wrappers, but video remains a diagnostic first-pass path rather
   than authentic parallax/road behavior. Audio now routes modeled AY/MSM writes
@@ -196,8 +196,8 @@ visual and audio parity proof.
   `xmultiplm72`.
 - **Smoke playable / media-clean local proof:** `airdueljm72`, `airduelm72`,
   `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `imgfight`, `imgfightj`,
-  `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspiritj`, `rtype`, `rtypeb`,
-  `rtypej`, `rtypejp`, `rtypeu`, `xmultiplm72`.
+  `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspirit`, `nspiritj`, `rtype`,
+  `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`, `xmultiplm72`.
 - **Oracle proof:** G6 high-water now records `GLD-M72-RTYPE`,
   `GLD-M72-PROTECTED`, `GLD-M72-PROTECTED-AUDIO`, and `GLD-M72-VERTICAL` as passed with
   `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`, and
@@ -211,9 +211,12 @@ visual and audio parity proof.
   audio during the smoke window, but is still weaker than music/audio parity
   certification.
 - **Known blocked or incomplete local proof:** `gallopm72` still lacks
-  `cc_c-pr-.ic1` CRC `0xac4421b1`; World `nspirit` still lacks
-  `nin_c-pr-b.ic1` CRC `0x0f7b2713`; `lohtj` and `lohtb2` still lack complete
-  local set-specific artifacts in the broader scans. The recursive
+  `cc_c-pr-.ic1` CRC `0xac4421b1`; `lohtj` and `lohtb2` still lack complete
+  local set-specific artifacts in the broader scans. The stale unpacked
+  `D:\emu\irem\M72\nspirit` folder is incomplete, but the current
+  `D:\emu\irem\M72\nspirit.zip` is CRC-complete for both `nspirit` and
+  `nspiritj`; the corpus smoke runner now ranks that ZIP ahead of the stale
+  same-name folder. The recursive
   mixed-corpus roster gate now finds the local `lohtb3` wrapper under
   `D:\emu\irem\i8751` from the single root `MNEMOS_M72_SET_DIR=D:\emu\irem`;
   the M72 smoke runner's targeted `-Set lohtb3` proof passes through that
@@ -221,21 +224,20 @@ visual and audio parity proof.
 - **Current exact local ZIP evidence:** direct CRC scanning of every entry in
   `D:\emu\irem\M72\gallopm72.zip`,
   `D:\emu\irem\M72\gallop.zip`, and
-  `D:\emu\irem\M72\nspirit.zip` found no entry with CRC `0xac4421b1` or
-  `0x0f7b2713`. The `nspirit.zip` archive contains
-  `nspiritj/nin_c-pr-.ic1` with CRC `0x802d440a`; the artifact scanner now
-  records that under `related_hits` as a same-size, set-local MCU-looking
-  candidate with the wrong CRC, not as a substitute for the World
-  `nin_c-pr-b.ic1` target. An exhaustive CRC scan
-  of ZIP members and loose files under `D:\emu\irem\M72` also found zero matches
-  for `0xac4421b1` or `0x0f7b2713`.
+  `D:\emu\irem\M72\nspirit.zip` now reports `43/44` artifacts present for
+  `gallopm72` plus World `nspirit`, missing only
+  `gallopm72:mcu:cc_c-pr-.ic1` CRC `0xac4421b1`. Direct ZIP inspection confirms
+  `D:\emu\irem\M72\nspirit.zip` contains `nin_c-pr-b.ic1` CRC `0x0f7b2713` and
+  `nspiritj/nin_c-pr-.ic1` CRC `0x802d440a`; the scanner reports `48/48`
+  present when checking `nspirit` and `nspiritj` from that ZIP.
 - **Current mixed-archive scan evidence:** the M72 artifact scanner now skips
   unreadable entries inside unrelated `.7z` archives instead of aborting the
   corpus walk. The previously failing
   `D:\emu\Chaos Field (English v1.0)[Analog Stick Enabled][cdi].7z` probe now
   completes as a 0/20 non-match, and a rerun across `D:\emu\irem` plus
-  `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` still reports `83/94` present
-  for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`.
+  `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` now reports `84/94` present
+  for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, missing only
+  `gallopm72`'s MCU plus the remaining `lohtb2`/`lohtj` set-specific files.
 - **Correct gfx/music:** not certified. The board has the strongest current
   graphics/music implementation, but final visual priority, protection behavior,
   DIP/manual proof, raster phase, and audio parity are still open.
@@ -473,8 +475,8 @@ visual and audio parity proof.
    analog behavior.
 3. Resolve the M82/M84 R-Type II classification mismatch with board evidence and
    adjust manifests/docs if needed.
-4. Continue M72 artifact closure for `gallopm72` and World `nspirit` by finding
-   the exact MCU dumps, without substituting Japan `nspiritj` or synthetic bytes.
+4. Continue M72 artifact closure for `gallopm72`, `lohtb2`, and `lohtj` by
+   finding the exact missing dumps without substituting sibling-set or synthetic bytes.
 5. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.
 6. Advance the M92 first-pass profile from diagnostic execution to authenticity

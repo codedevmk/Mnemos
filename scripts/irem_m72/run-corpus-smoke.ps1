@@ -383,12 +383,16 @@ function Get-M72RomCandidateSetIds {
     } else {
         $stem = [System.IO.Path]::GetFileNameWithoutExtension($Path)
     }
+    $exactRank = 0
+    if (Test-Path -LiteralPath $Path -PathType Container) {
+        $exactRank = 3
+    }
     if ($ManifestIds.Contains($stem)) {
-        Add-M72Candidate -Candidates $candidates -Set $stem -Rank 0
+        Add-M72Candidate -Candidates $candidates -Set $stem -Rank $exactRank
     }
     $m72SuffixedStem = $stem + "m72"
     if ($ManifestIds.Contains($m72SuffixedStem)) {
-        Add-M72Candidate -Candidates $candidates -Set $m72SuffixedStem -Rank 1
+        Add-M72Candidate -Candidates $candidates -Set $m72SuffixedStem -Rank ($exactRank + 1)
     }
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
         $nestedSet = Get-M72NestedZipSetId -Path $Path -ManifestIds $ManifestIds
@@ -397,7 +401,9 @@ function Get-M72RomCandidateSetIds {
         }
         $collectionSets = @(Get-M72CollectionZipSetIds -Path $Path -ManifestIds $ManifestIds)
         if ($collectionSets.Count -gt 0) {
-            $candidates.Clear()
+            if (-not $ManifestIds.Contains($stem)) {
+                $candidates.Clear()
+            }
         }
         foreach ($collectionSet in $collectionSets) {
             Add-M72Candidate -Candidates $candidates -Set $collectionSet -Rank 2
@@ -765,7 +771,9 @@ foreach ($romGroup in $romGroups) {
                 continue
             }
         }
-        if (($collectionSets.Count -gt 0) -and (-not $collectionHasSet)) {
+        $sourceStemMatchesSet = (Test-Path -LiteralPath $sourcePath -PathType Leaf) -and
+            ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath).Equals($setId, [System.StringComparison]::OrdinalIgnoreCase))
+        if (($collectionSets.Count -gt 0) -and (-not $collectionHasSet) -and (-not $sourceStemMatchesSet)) {
             continue
         }
         $effectiveSources.Add([pscustomobject]@{ Path = $sourcePath; Rank = $rank; Source = $sourcePath }) | Out-Null

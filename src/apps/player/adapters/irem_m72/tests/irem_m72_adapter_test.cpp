@@ -171,10 +171,19 @@ namespace {
             known.emplace(std::string{set_name}, true);
         }
 
-        std::map<std::string, std::filesystem::path, std::less<>> sources;
-        auto maybe_add = [&](std::string set_id, const std::filesystem::path& path) {
-            if (known.find(set_id) != known.end() && sources.find(set_id) == sources.end()) {
-                sources.emplace(std::move(set_id), path);
+        struct indexed_source final {
+            std::filesystem::path path;
+            int rank{};
+        };
+
+        std::map<std::string, indexed_source, std::less<>> indexed;
+        auto maybe_add = [&](std::string set_id, const std::filesystem::path& path, int rank) {
+            if (known.find(set_id) == known.end()) {
+                return;
+            }
+            const auto existing = indexed.find(set_id);
+            if (existing == indexed.end() || rank < existing->second.rank) {
+                indexed[std::move(set_id)] = indexed_source{.path = path, .rank = rank};
             }
         };
 
@@ -198,7 +207,7 @@ namespace {
 
             for (const auto& path : candidates) {
                 if (std::filesystem::is_directory(path, ec)) {
-                    maybe_add(path.filename().string(), path);
+                    maybe_add(path.filename().string(), path, 2);
                     continue;
                 }
                 if (!std::filesystem::is_regular_file(path, ec) ||
@@ -207,13 +216,18 @@ namespace {
                 }
                 const std::string stem = path.stem().string();
                 if (known.find(stem) != known.end()) {
-                    maybe_add(stem, path);
+                    maybe_add(stem, path, 0);
                     continue;
                 }
                 if (auto nested_set = single_nested_zip_set_id(path)) {
-                    maybe_add(std::move(*nested_set), path);
+                    maybe_add(std::move(*nested_set), path, 1);
                 }
             }
+        }
+
+        std::map<std::string, std::filesystem::path, std::less<>> sources;
+        for (const auto& [set_id, source] : indexed) {
+            sources.emplace(set_id, source.path);
         }
         return sources;
     }
@@ -2468,6 +2482,26 @@ TEST_CASE("irem_m72 roster discovery indexes exact sets and wrapper zips", "[ire
     CHECK(indexed.find("rtype")->second == rtype_path);
     REQUIRE(indexed.find("imgfight") != indexed.end());
     CHECK(indexed.find("imgfight")->second == imgfight_wrapper_path);
+}
+
+TEST_CASE("irem_m72 roster discovery prefers a set zip over a stale set directory",
+          "[irem_m72][adapter]") {
+    const auto nspirit_decl = require_embedded_decl("nspirit");
+
+    const auto root =
+        std::filesystem::temp_directory_path() / "mnemos_irem_m72_zip_over_directory";
+    const auto stale_dir = root / "nspirit";
+    const auto zip_path = root / "nspirit.zip";
+    std::error_code cleanup_ec;
+    std::filesystem::remove_all(root, cleanup_ec);
+    REQUIRE((std::filesystem::create_directories(root) || std::filesystem::exists(root)));
+    write_directory_rom_set(stale_dir, {{"placeholder.bin", {0xFFU}}});
+    REQUIRE(mnemos::io::write_file(
+        zip_path.string(), make_stored_zip(placeholder_entries_for(nspirit_decl, 0x33U))));
+
+    const auto indexed = index_m72_source_roots({root});
+    REQUIRE(indexed.find("nspirit") != indexed.end());
+    CHECK(indexed.find("nspirit")->second == zip_path);
 }
 
 TEST_CASE("irem_m72_adapter resolves checked-in manifests for standard set directories",
