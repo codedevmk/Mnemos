@@ -5,6 +5,7 @@
 #include "file.hpp"
 #include "m72_game_manifests.hpp"
 #include "rom_set_toml.hpp"
+#include "sha256.hpp"
 #include "zip_archive.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -312,6 +313,41 @@ namespace {
             }
         }
         return false;
+    }
+
+    [[nodiscard]] std::string sha256_hex(std::span<const std::uint8_t> bytes) {
+        return mnemos::security::cryptography::sha256(bytes).hex();
+    }
+
+    [[nodiscard]] std::string
+    hash_framebuffer_rgba(const mnemos::chips::frame_buffer_view& view) {
+        std::vector<std::uint8_t> bytes;
+        bytes.reserve(static_cast<std::size_t>(view.width) * view.height * 4U);
+        const std::uint32_t stride = view.effective_stride();
+        for (std::uint32_t y = 0; y < view.height; ++y) {
+            const std::uint32_t* row =
+                view.pixels != nullptr ? view.pixels + static_cast<std::size_t>(y) * stride
+                                       : nullptr;
+            for (std::uint32_t x = 0; x < view.width; ++x) {
+                const std::uint32_t p = row != nullptr ? row[x] : 0U;
+                bytes.push_back(static_cast<std::uint8_t>((p >> 16U) & 0xFFU));
+                bytes.push_back(static_cast<std::uint8_t>((p >> 8U) & 0xFFU));
+                bytes.push_back(static_cast<std::uint8_t>(p & 0xFFU));
+                bytes.push_back(0xFFU);
+            }
+        }
+        return sha256_hex(bytes);
+    }
+
+    [[nodiscard]] std::string hash_audio_pcm_s16le(std::span<const std::int16_t> samples) {
+        std::vector<std::uint8_t> bytes;
+        bytes.reserve(samples.size() * 2U);
+        for (const std::int16_t sample : samples) {
+            const auto value = static_cast<std::uint16_t>(sample);
+            bytes.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+            bytes.push_back(static_cast<std::uint8_t>(value >> 8U));
+        }
+        return sha256_hex(bytes);
     }
 
     template <std::size_t N>
@@ -1100,6 +1136,97 @@ TEST_CASE("irem_m72_adapter emits rendered audio for a real protected M72 set",
     CHECK(last_sample_rate == 55930U);
     CHECK(total_audio_frames > 0U);
     CHECK(nonzero_audio);
+}
+
+TEST_CASE("irem_m72_adapter matches optional visual/audio parity hashes for a real M72 set",
+          "[irem_m72][adapter][data]") {
+    struct parity_result final {
+        std::string set_name;
+        std::string frame_hash;
+        std::string audio_hash;
+        std::uint64_t audio_frames{};
+        std::uint32_t sample_rate{};
+    };
+
+    const char* set_env = opt_env("MNEMOS_M72_PARITY_SET");
+    if (set_env == nullptr) {
+        SKIP("set MNEMOS_M72_PARITY_SET to a reference-captured M72 set");
+    }
+    const char* expected_frame_hash = opt_env("MNEMOS_M72_PARITY_FRAME_SHA256");
+    const char* expected_audio_hash = opt_env("MNEMOS_M72_PARITY_AUDIO_SHA256");
+    if (expected_frame_hash == nullptr && expected_audio_hash == nullptr) {
+        SKIP("set MNEMOS_M72_PARITY_FRAME_SHA256 and/or MNEMOS_M72_PARITY_AUDIO_SHA256");
+    }
+
+    const int frames = env_positive_int("MNEMOS_M72_PARITY_FRAMES", 600);
+    const bool collect_audio = expected_audio_hash != nullptr;
+
+    auto run_once = [&](bool want_audio) -> parity_result {
+        auto source = load_m72_source(set_env);
+        mnemos::frontend_sdk::adapter_options options{};
+        options.rom = std::move(source.bytes);
+        options.display_name = "m72-parity";
+        options.rom_path = source.path;
+        auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
+            "irem_m72", std::move(options));
+        REQUIRE(system != nullptr);
+        auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
+        auto& machine = adapter.machine();
+        REQUIRE(machine.roms.issues.empty());
+        REQUIRE_FALSE(adapter.set_name().empty());
+
+        std::vector<std::int16_t> audio_samples;
+        std::uint32_t sample_rate = 0U;
+        std::uint64_t audio_frames = 0U;
+        for (int frame = 0; frame < frames; ++frame) {
+            adapter.step_one_frame();
+            if (want_audio) {
+                const auto audio = adapter.drain_audio();
+                sample_rate = audio.sample_rate;
+                audio_frames += audio.frame_count;
+                if (audio.samples != nullptr && audio.frame_count != 0U) {
+                    const auto* begin = audio.samples;
+                    const auto* end = begin + static_cast<std::size_t>(audio.frame_count) * 2U;
+                    audio_samples.insert(audio_samples.end(), begin, end);
+                }
+            }
+        }
+
+        const auto frame = adapter.current_frame();
+        CHECK(frame_has_variation(frame));
+
+        parity_result result{};
+        result.set_name = adapter.set_name();
+        result.frame_hash = hash_framebuffer_rgba(frame);
+        if (want_audio) {
+            result.audio_hash = hash_audio_pcm_s16le(audio_samples);
+            result.audio_frames = audio_frames;
+            result.sample_rate = sample_rate;
+        }
+        return result;
+    };
+
+    const parity_result first = run_once(collect_audio);
+    const parity_result second = run_once(collect_audio);
+
+    INFO("set=" << first.set_name << " frames=" << frames
+                << " frame_sha256=" << first.frame_hash
+                << " audio_sha256=" << first.audio_hash
+                << " audio_frames=" << first.audio_frames
+                << " sample_rate=" << first.sample_rate);
+    CHECK(second.set_name == first.set_name);
+    CHECK(second.frame_hash == first.frame_hash);
+    if (expected_frame_hash != nullptr) {
+        CHECK(first.frame_hash == expected_frame_hash);
+    }
+    if (expected_audio_hash != nullptr) {
+        REQUIRE(first.audio_frames > 0U);
+        CHECK(first.sample_rate == 55930U);
+        CHECK(second.audio_frames == first.audio_frames);
+        CHECK(second.sample_rate == first.sample_rate);
+        CHECK(second.audio_hash == first.audio_hash);
+        CHECK(first.audio_hash == expected_audio_hash);
+    }
 }
 
 TEST_CASE("irem_m72_adapter validates a real vertical M72 set orientation",

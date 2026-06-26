@@ -207,7 +207,9 @@ visual and audio parity proof.
   `GLD-M72-PROTECTED-MCU`, and `GLD-M72-VERTICAL` as passed with
   `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`,
   `D:\emu\irem\M72\nspirit.zip`, and
-  `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` remains skipped.
+  `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-PARITY-HASH` now exists
+  as an opt-in final-frame/audio SHA-256 ratchet and remains skipped until
+  trusted reference hashes are supplied; `GLD-M72-ROSTER` also remains skipped.
 - **Dumped-MCU protected proof:** `MNEMOS_M72_PROTECTED_MCU_SET` points at a
   protected true-M72 set that must contain a real MCU dump; the local
   `D:\emu\irem\M72\nspirit.zip` route passes this golden and proves the adapter
@@ -219,7 +221,9 @@ visual and audio parity proof.
   dedicated adapter-level CTest golden that steps the protected no-dump-HLE
   route for 120 frames and requires nonzero rendered PCM. This proves rendered
   audio during the smoke window, but is still weaker than music/audio parity
-  certification.
+  certification. `MNEMOS_M72_PARITY_SET` can now pair a trusted ROM path with
+  `MNEMOS_M72_PARITY_FRAME_SHA256` and/or `MNEMOS_M72_PARITY_AUDIO_SHA256` to
+  turn that parity evidence into a deterministic CTest assertion.
 - **Known blocked or incomplete local proof:** `gallopm72` still lacks
   `cc_c-pr-.ic1` CRC `0xac4421b1`; `lohtj` and `lohtb2` still lack complete
   local set-specific artifacts in the broader scans. The stale unpacked
@@ -253,7 +257,7 @@ visual and audio parity proof.
   DIP/manual proof, raster phase, and audio parity are still open.
 - **Remaining:** finish protected-game behavior with authentic MCU artifacts or
   bounded no-dump HLE, complete the full roster corpus, prove board-manual DIP
-  behavior, and add screenshot/audio parity gates.
+  behavior, and populate/pass trusted screenshot/audio parity hashes.
 
 ### M75
 

@@ -16,6 +16,10 @@
 #   MNEMOS_M72_PROTECTED_SET  a protected true-M72 zip or directory -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_PROTECTED_AUDIO_SET  protected true-M72 audio-proof set -> irem_m72 rendered-audio golden
 #   MNEMOS_M72_PROTECTED_MCU_SET  protected true-M72 set with dumped MCU -> irem_m72 dumped-MCU golden/corpus smoke
+#   MNEMOS_M72_PARITY_SET     a reference-captured M72 zip or directory -> irem_m72 visual/audio parity hash golden
+#   MNEMOS_M72_PARITY_FRAME_SHA256  expected final RGBA framebuffer SHA-256 for MNEMOS_M72_PARITY_SET
+#   MNEMOS_M72_PARITY_AUDIO_SHA256  expected interleaved s16le rendered-audio SHA-256 for MNEMOS_M72_PARITY_SET
+#   MNEMOS_M72_PARITY_FRAMES  frame count for the M72 parity hash golden (default: 600)
 #   MNEMOS_M72_VERTICAL_SET   a vertical true-M72 zip or directory  -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_SET_DIR        path-list of mixed roots or dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
 #   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest/player smoke
@@ -67,6 +71,7 @@ $vars = @(
     @{ Name = "MNEMOS_M72_PROTECTED_SET"; Test = "irem_m72 golden/corpus smoke" },
     @{ Name = "MNEMOS_M72_PROTECTED_AUDIO_SET"; Test = "irem_m72 rendered-audio golden" },
     @{ Name = "MNEMOS_M72_PROTECTED_MCU_SET"; Test = "irem_m72 dumped-MCU golden/corpus smoke" },
+    @{ Name = "MNEMOS_M72_PARITY_SET"; Test = "irem_m72 visual/audio parity hash golden" },
     @{ Name = "MNEMOS_M72_VERTICAL_SET"; Test = "irem_m72 golden/corpus smoke" },
     @{ Name = "MNEMOS_M72_SET_DIR";      Test = "irem_m72 roster/corpus smoke" },
     @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest/player smoke" },

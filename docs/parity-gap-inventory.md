@@ -348,6 +348,13 @@ payload. The current local proof
 passes `1/1`, including the grouped `dbreedm72` sources discovered under the
 M72 corpus bucket. This proves a non-silent rendered-audio path for that protected
 smoke route; it is not music parity or reference-audio certification.
+
+2026-06-26 parity-hash oracle note: `GLD-M72-PARITY-HASH` now exposes an
+opt-in deterministic final-frame/audio SHA-256 ratchet through
+`MNEMOS_M72_PARITY_SET`, `MNEMOS_M72_PARITY_FRAME_SHA256`,
+`MNEMOS_M72_PARITY_AUDIO_SHA256`, and optional `MNEMOS_M72_PARITY_FRAMES`.
+The gate self-skips without trusted hashes, so it does not certify correct
+graphics or music until a reference capture is supplied and the CTest passes.
 `GLD-M72-PROTECTED-AUDIO` now registers the same protected audio requirement as
 a G6 data-gated oracle through
 `MNEMOS_M72_PROTECTED_AUDIO_SET=D:\emu\irem\M72\dbreedm72`; the standard
