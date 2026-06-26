@@ -320,6 +320,18 @@ passes `1/1`, using the nested `lohtb3` wrapper plus parent `loht` sources and
 a lit 300-frame fallback screenshot with no media-validation issues. The same
 current scan still reports only `lohtb2` and `lohtj` as missing source sets.
 
+2026-06-26 category proof note: the current local M72 category proof uses
+`MNEMOS_M72_RTYPE_SET=D:\emu\irem\M72\rtype.zip`,
+`MNEMOS_M72_PROTECTED_SET=D:\emu\irem\M72\dbreedm72`, and
+`MNEMOS_M72_VERTICAL_SET=D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`; the common
+data-gated runner passes the R-Type, protected, and vertical CTest goldens and
+the M72 player corpus smoke resolves/passes `rtype`, `dbreedm72`, and
+`airdueljm72` 3/3. `tests/oracles/highwater.json` records those three G6 goldens
+as `passed`. `GLD-M72-ROSTER` remains `skipped`: the all-set artifact scanner now
+works without `-Set`, but the current `D:\emu\irem\M72` scan reports only
+322/417 checked-in M72 artifacts present, so full checked-in roster proof is not
+complete.
+
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports

@@ -11,7 +11,7 @@
     },
     "GLD-M72-PROTECTED": {
       "ctest": "mnemos_apps_player_irem_m72_protected_golden_test",
-      "high_water": "skipped"
+      "high_water": "passed"
     },
     "GLD-M72-ROSTER": {
       "ctest": "mnemos_apps_player_irem_m72_roster_golden_test",
@@ -19,11 +19,11 @@
     },
     "GLD-M72-RTYPE": {
       "ctest": "mnemos_apps_player_irem_m72_rtype_golden_test",
-      "high_water": "skipped"
+      "high_water": "passed"
     },
     "GLD-M72-VERTICAL": {
       "ctest": "mnemos_apps_player_irem_m72_vertical_golden_test",
-      "high_water": "skipped"
+      "high_water": "passed"
     },
     "GLD-M75-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m75_corpus_golden_test",

@@ -101,7 +101,9 @@ function Add-TargetAlias {
 function Read-M72ManifestTargets {
     param(
         [Parameter(Mandatory = $true)][string]$ManifestPath,
-        [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$WantedSets
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.Collections.Generic.HashSet[string]]$WantedSets
     )
 
     $setId = [System.IO.Path]::GetFileNameWithoutExtension($ManifestPath)

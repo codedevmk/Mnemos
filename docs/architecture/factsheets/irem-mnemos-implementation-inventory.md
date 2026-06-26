@@ -198,6 +198,10 @@ visual and audio parity proof.
   `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `imgfight`, `imgfightj`,
   `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspiritj`, `rtype`, `rtypeb`,
   `rtypej`, `rtypejp`, `rtypeu`, `xmultiplm72`.
+- **Oracle proof:** G6 high-water now records `GLD-M72-RTYPE`,
+  `GLD-M72-PROTECTED`, and `GLD-M72-VERTICAL` as passed with
+  `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`, and
+  `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` remains skipped.
 - **Known blocked or incomplete local proof:** `gallopm72` still lacks
   `cc_c-pr-.ic1` CRC `0xac4421b1`; World `nspirit` still lacks
   `nin_c-pr-b.ic1` CRC `0x0f7b2713`; `lohtj` and `lohtb2` still lack complete
