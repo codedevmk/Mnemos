@@ -42,11 +42,13 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Player adapter in `src/apps/player/adapters/irem_m81`.
 - CLI/system-family routing via `--system irem_m81` and alias `m81`.
 - Save-state identity across M81 board-layout profiles, capability discovery, rollback-ready save-state reporting, and real local data-gated smoke through `MNEMOS_M81_SET_DIR=D:\emu\irem\M81`.
+- The M81 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 
 ### Irem M82
 
 - Player-routable R-Type II profile via `--system irem_m82`.
 - Wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real R-Type II data-gated smoke.
+- The M82 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 
 ### Irem M84
 
@@ -57,6 +59,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - CLI/system-family routing via `--system irem_m84` and alias `m84`.
 - Clone-parent media routing composes M84 child media with supplemental M81 `hharry` parent media.
 - Capability discovery, rollback-ready save-state reporting, and real local player smoke are data-gated through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`.
+- The M84 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 - Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry video/priority, raster timing, DIP behavior, and screenshot parity before calling this authentic.
 
 ### Irem M107
@@ -162,6 +165,14 @@ M72 cabinet input continuation validation on 2026-06-26:
 - Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R "mnemos_(apps_player_irem_m72_adapter|manifests_irem_m72)_test"`: `2/2` passed
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\R-Type_Arcade_EN.zip,D:\emu\irem\imgfight.zip -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-234550\summary.json`
+
+M81/M82/M84 cabinet input continuation validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing CRLF conversion warnings
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_apps_player_irem_m81_adapter_test mnemos_apps_player_irem_m82_adapter_test mnemos_apps_player_irem_m84_adapter_test`
+- Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R "mnemos_apps_player_irem_m(81|82|84)_adapter_test"`: `3/3` passed
+- Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
+- Local corpus CTest with `MNEMOS_M81_SET_DIR=D:\emu\irem\M81`, `MNEMOS_M82_SET_DIR=D:\emu\irem`, and `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`: `3/3` passed for `mnemos_apps_player_irem_m81_corpus_golden_test`, `mnemos_apps_player_irem_m82_rtype2_golden_test`, and `mnemos_apps_player_irem_m84_corpus_golden_test`
 
 M107 slice validation that passed:
 

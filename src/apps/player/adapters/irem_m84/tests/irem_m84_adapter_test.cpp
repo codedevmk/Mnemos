@@ -264,7 +264,16 @@ TEST_CASE("irem_m84_adapter save state restores board and adapter state", "[irem
     p1.start = true;
     p1.select = true;
     p1.a = true;
+    p1.service = true;
+    p1.test = true;
     source.apply_input(0, p1);
+    mnemos::frontend_sdk::controller_state p2{};
+    p2.start = true;
+    p2.mode = true; // legacy service alias
+    source.apply_input(1, p2);
+    CHECK(source.machine().input_system ==
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
+                                    ~0x20U & ~0x40U));
     source.step_one_frame();
     REQUIRE(source.drain_audio().frame_count > 0U);
 

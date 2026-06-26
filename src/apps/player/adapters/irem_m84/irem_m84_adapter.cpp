@@ -631,7 +631,7 @@ namespace mnemos::apps::player::adapters::irem_m84 {
             }
         }
 
-        constexpr std::uint32_t irem_m84_adapter_state_version = 1U;
+        constexpr std::uint32_t irem_m84_adapter_state_version = 2U;
         constexpr std::uint32_t irem_m84_adapter_save_target_manifest_rev = 1U;
 
         void write_i16(chips::state_writer& writer, std::int16_t value) {
@@ -657,13 +657,15 @@ namespace mnemos::apps::player::adapters::irem_m84 {
             writer.boolean(state.y);
             writer.boolean(state.z);
             writer.boolean(state.mode);
+            writer.boolean(state.service);
+            writer.boolean(state.test);
             write_i16(writer, state.aim_x);
             write_i16(writer, state.aim_y);
             writer.boolean(state.trigger);
         }
 
         [[nodiscard]] frontend_sdk::controller_state
-        load_controller_state(chips::state_reader& reader) noexcept {
+        load_controller_state(chips::state_reader& reader, std::uint32_t version) noexcept {
             frontend_sdk::controller_state state{};
             state.up = reader.boolean();
             state.down = reader.boolean();
@@ -678,6 +680,10 @@ namespace mnemos::apps::player::adapters::irem_m84 {
             state.y = reader.boolean();
             state.z = reader.boolean();
             state.mode = reader.boolean();
+            if (version >= 2U) {
+                state.service = reader.boolean();
+                state.test = reader.boolean();
+            }
             state.aim_x = read_i16(reader);
             state.aim_y = read_i16(reader);
             state.trigger = reader.boolean();
@@ -755,11 +761,14 @@ namespace mnemos::apps::player::adapters::irem_m84 {
         if (ports_[1].select) {
             system &= static_cast<std::uint8_t>(~0x08U);
         }
-        if (ports_[0].mode) {
+        if (ports_[0].service || ports_[0].mode) {
             system &= static_cast<std::uint8_t>(~0x10U);
         }
-        if (ports_[1].mode) {
+        if (ports_[1].service || ports_[1].mode) {
             system &= static_cast<std::uint8_t>(~0x20U);
+        }
+        if (ports_[0].test || ports_[1].test) {
+            system &= static_cast<std::uint8_t>(~0x40U);
         }
         sys_->set_inputs(pack(ports_[0]), pack(ports_[1]), system);
     }
@@ -775,7 +784,8 @@ namespace mnemos::apps::player::adapters::irem_m84 {
     }
 
     void irem_m84_adapter::load_adapter_state(chips::state_reader& reader) {
-        if (reader.u32() != irem_m84_adapter_state_version) {
+        const std::uint32_t version = reader.u32();
+        if (version == 0U || version > irem_m84_adapter_state_version) {
             reader.fail();
             return;
         }
@@ -783,7 +793,7 @@ namespace mnemos::apps::player::adapters::irem_m84 {
         samples_drained_ = reader.u64();
         dac_mix_output_ = read_i16(reader);
         for (auto& port : ports_) {
-            port = load_controller_state(reader);
+            port = load_controller_state(reader, version);
         }
         if (reader.ok()) {
             sync_inputs_from_ports();
