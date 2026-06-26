@@ -85,6 +85,13 @@ function Get-Cps2AudioFrameCount {
         [Parameter(Mandatory = $true)][int]$DefaultFrames
     )
 
+    # Battle Circuit's attract-mode QSound program is active in the default
+    # window, but the regression row needs a gameplay-audio proof that exercises
+    # sustained PCM volume writes rather than only the first attract cue.
+    if ($SetId -eq "batcir" -and $DefaultFrames -lt 2500) {
+        return 2500
+    }
+
     # HSF2's first significant QSound output lands after frame 1198. Keep the
     # screenshot/save-state gate at 600 frames, but preserve the focused
     # HSF2-vs-Emu oracle window in the committed audio row.
@@ -97,7 +104,25 @@ function Get-Cps2AudioFrameCount {
 function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "hsf2"
+    return $SetId -eq "batcir" -or $SetId -eq "hsf2"
+}
+
+function Test-Cps2AudioGameplayProbeDefault {
+    param([Parameter(Mandatory = $true)][string]$SetId)
+
+    return $SetId -eq "batcir"
+}
+
+function Get-Cps2AudioGameplayPlayerCount {
+    param(
+        [Parameter(Mandatory = $true)][string]$SetId,
+        [Parameter(Mandatory = $true)][int]$DefaultPlayers
+    )
+
+    if ($SetId -eq "batcir") {
+        return 4
+    }
+    return $DefaultPlayers
 }
 
 function Invoke-Player {
@@ -945,14 +970,20 @@ foreach ($romPath in $uniqueRoms) {
     $defaultAudioFrames = Get-Cps2AudioFrameCount -SetId $setId -DefaultFrames $effectiveFrames
     $effectiveAudioFrames = if ($AudioFrames -gt 0) { $AudioFrames } else { $defaultAudioFrames }
     $effectiveAudioStateProbe = $AudioStateProbe.IsPresent -or (Test-Cps2AudioStateProbeDefault -SetId $setId)
+    $effectiveAudioGameplayInput =
+        $GameplayInput.IsPresent -or (Test-Cps2AudioGameplayProbeDefault -SetId $setId)
+    $effectiveAudioGameplayRepeat = $GameplayRepeat.IsPresent -or
+        (Test-Cps2AudioGameplayProbeDefault -SetId $setId)
+    $effectiveAudioGameplayPlayers =
+        Get-Cps2AudioGameplayPlayerCount -SetId $setId -DefaultPlayers $GameplayPlayers
     $savePressArgs = Get-Cps2PressArguments -FrameCount $effectiveFrames `
         -UseGameplayInput:$GameplaySaveInput.IsPresent `
         -GameplayPlayers $GameplayPlayers `
         -UseGameplayRepeat:$GameplayRepeat.IsPresent
     $audioPressArgs = Get-Cps2PressArguments -FrameCount $effectiveAudioFrames `
-        -UseGameplayInput:$GameplayInput.IsPresent `
-        -GameplayPlayers $GameplayPlayers `
-        -UseGameplayRepeat:$GameplayRepeat.IsPresent
+        -UseGameplayInput:$effectiveAudioGameplayInput `
+        -GameplayPlayers $effectiveAudioGameplayPlayers `
+        -UseGameplayRepeat:$effectiveAudioGameplayRepeat
 
     $saveArgs = @(
         "--system", "cps2",
