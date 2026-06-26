@@ -1,0 +1,160 @@
+# Gunforce -- Irem M92 set.
+# Schema mnemos-romset/1; ROM-contract manifest only. The M92 sound program is
+# encrypted V35 code and requires the future M92 board profile to execute.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "gunforce"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "gf_b-h0-c.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x20000
+crc32  = 0xc09bb634
+
+[[region.file]]
+name   = "gf_b-l0-c.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x20000
+crc32  = 0x1bef6f7d
+
+[[region.file]]
+name   = "gf_b-h1-c.ic27"
+offset = 0x040001
+stride = 2
+size   = 0x20000
+crc32  = 0xc84188b7
+
+[[region.file]]
+name   = "gf_b-l1-c.ic26"
+offset = 0x040000
+stride = 2
+size   = 0x20000
+crc32  = 0xb189f72a
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "gf_b-sh0-.ic14"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x3f8f16e0
+
+[[region.file]]
+name   = "gf_b-sl0-.ic17"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0xdb0b13a3
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "gf_c0.ic9"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0xb3b74979
+
+[[region.file]]
+name   = "gf_c1.ic10"
+offset = 0x040000
+size   = 0x40000
+crc32  = 0xf5c8590a
+
+[[region.file]]
+name   = "gf_c2.ic11"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0x30f9fb64
+
+[[region.file]]
+name   = "gf_c3.ic12"
+offset = 0x0C0000
+size   = 0x40000
+crc32  = 0x87b3e621
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "gf_000.ic38"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0x209e8e8d
+
+[[region.file]]
+name   = "gf_010.ic39"
+offset = 0x040000
+size   = 0x40000
+crc32  = 0x6e6e7808
+
+[[region.file]]
+name   = "gf_020.ic40"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0x6f5c3cb0
+
+[[region.file]]
+name   = "gf_030.ic41"
+offset = 0x0C0000
+size   = 0x40000
+crc32  = 0x18978a9f
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "gf-da.ic8"
+offset = 0x000000
+size   = 0x20000
+crc32  = 0x933ba935
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_b-2l-.ic7"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x3bab14ee
+
+[[region.file]]
+name   = "m92_b-7h-.ic43"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0x5de0795b

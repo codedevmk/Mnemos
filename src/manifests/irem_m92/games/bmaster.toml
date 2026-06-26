@@ -1,0 +1,160 @@
+# Blade Master -- Irem M92 set.
+# Schema mnemos-romset/1; ROM-contract manifest only. The M92 sound program is
+# encrypted V35 code and requires the future M92 board profile to execute.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "bmaster"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "bm_d-h0-b.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x49b257c7
+
+[[region.file]]
+name   = "bm_d-l0-b.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xa873523e
+
+[[region.file]]
+name   = "bm_d-h1-b.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x10000
+crc32  = 0x082b7158
+
+[[region.file]]
+name   = "bm_d-l1-b.ic26"
+offset = 0x080000
+stride = 2
+size   = 0x10000
+crc32  = 0x6ff0c04e
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "bm_d-sh0.ic14"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x9f7c075b
+
+[[region.file]]
+name   = "bm_d-sl0.ic17"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x1fa87c89
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "bm_c0.ic9"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0x2cc966b8
+
+[[region.file]]
+name   = "bm_c1.ic10"
+offset = 0x040000
+size   = 0x40000
+crc32  = 0x46df773e
+
+[[region.file]]
+name   = "bm_c2.ic11"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0x05b867bd
+
+[[region.file]]
+name   = "bm_c3.ic12"
+offset = 0x0C0000
+size   = 0x40000
+crc32  = 0x0a2227a4
+
+[[region]]
+name = "sprites"
+size = 0x200000
+
+[[region.file]]
+name   = "bm_000.ic38"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x339fc9f3
+
+[[region.file]]
+name   = "bm_010.ic39"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0x6a14377d
+
+[[region.file]]
+name   = "bm_020.ic40"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x31532198
+
+[[region.file]]
+name   = "bm_030.ic41"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0xd1a041d3
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "bm_da.ic8"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x62ce5798
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_b-2l-.ic7"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x3bab14ee
+
+[[region.file]]
+name   = "m92_b-7h-a.ic43"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0x29481115
