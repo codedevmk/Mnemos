@@ -415,8 +415,7 @@ TEST_CASE("irem_m72_adapter maps pads onto the board's input bytes", "[irem_m72]
     // start1/start2 (bits 0/1), coin1 (bit 2), service1/2 (bits 4/5),
     // and operator test (bit 6) held low.
     CHECK(machine.input_system ==
-          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
-                                    ~0x20U & ~0x40U));
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U & ~0x20U & ~0x40U));
 
     adapter.apply_input(2, p1); // out-of-range port ignored
     CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U));
@@ -568,9 +567,9 @@ namespace {
         }
     }
 
-    [[nodiscard]] std::vector<std::uint8_t>
-    make_crc32_blob(std::size_t size, std::array<std::uint8_t, 4> suffix,
-                    std::uint32_t expected_crc) {
+    [[nodiscard]] std::vector<std::uint8_t> make_crc32_blob(std::size_t size,
+                                                            std::array<std::uint8_t, 4> suffix,
+                                                            std::uint32_t expected_crc) {
         REQUIRE(size >= suffix.size());
         std::vector<std::uint8_t> bytes(size, 0x00U);
         std::copy(suffix.begin(), suffix.end(), bytes.end() - static_cast<std::ptrdiff_t>(4U));
@@ -1254,21 +1253,16 @@ size = 1
 
 TEST_CASE("irem_m72_adapter infers a misnamed unpacked clone from program CRCs",
           "[irem_m72][adapter]") {
-    const auto root =
-        std::filesystem::temp_directory_path() / "mnemos_irem_m72_misnamed_airduel";
+    const auto root = std::filesystem::temp_directory_path() / "mnemos_irem_m72_misnamed_airduel";
     const auto set_dir = root / "airduelm72";
     std::filesystem::remove_all(root);
     write_directory_rom_set(
         set_dir,
         {
-            {"ad-c-h0.bin", make_crc32_blob(0x20000U, {0x97U, 0x50U, 0x37U, 0x7AU},
-                                            0x12140276U)},
-            {"ad-c-l0.bin", make_crc32_blob(0x20000U, {0x12U, 0xB1U, 0x66U, 0xE3U},
-                                            0x4ac0b91dU)},
-            {"ad-c-h3.bin", make_crc32_blob(0x20000U, {0xECU, 0x8CU, 0x6AU, 0x8EU},
-                                            0x9f7cfca3U)},
-            {"ad-c-l3.bin", make_crc32_blob(0x20000U, {0x2EU, 0x4FU, 0x10U, 0xCCU},
-                                            0x9dd343f7U)},
+            {"ad-c-h0.bin", make_crc32_blob(0x20000U, {0x97U, 0x50U, 0x37U, 0x7AU}, 0x12140276U)},
+            {"ad-c-l0.bin", make_crc32_blob(0x20000U, {0x12U, 0xB1U, 0x66U, 0xE3U}, 0x4ac0b91dU)},
+            {"ad-c-h3.bin", make_crc32_blob(0x20000U, {0xECU, 0x8CU, 0x6AU, 0x8EU}, 0x9f7cfca3U)},
+            {"ad-c-l3.bin", make_crc32_blob(0x20000U, {0x2EU, 0x4FU, 0x10U, 0xCCU}, 0x9dd343f7U)},
         });
 
     irem_m72_adapter adapter({}, "airduel-misnamed", nullptr, {}, set_dir.string());
@@ -1280,6 +1274,42 @@ TEST_CASE("irem_m72_adapter infers a misnamed unpacked clone from program CRCs",
     }));
     CHECK(std::any_of(issues.begin(), issues.end(), [](const auto& issue) {
         return issue.file == "ad_c-pr-.ic1" &&
+               issue.message.find("missing from the ROM set") != std::string::npos;
+    }));
+}
+
+TEST_CASE("irem_m72_adapter keeps canonical M72 set selection for collection zips",
+          "[irem_m72][adapter]") {
+    const auto root = std::filesystem::temp_directory_path() / "mnemos_irem_m72_airduel_collection";
+    std::filesystem::remove_all(root);
+    REQUIRE((std::filesystem::create_directories(root) || std::filesystem::exists(root)));
+    const auto set_path = root / "airduel.zip";
+    const auto collection_zip = make_stored_zip({
+        {"airduelm72/ad_c-h0-c.ic40",
+         make_crc32_blob(0x20000U, {0x60U, 0x89U, 0x94U, 0x6BU}, 0x6467ed0fU)},
+        {"airduelm72/ad_c-l0-c.ic37",
+         make_crc32_blob(0x20000U, {0xEAU, 0x1FU, 0xFEU, 0x88U}, 0xb90c4ffdU)},
+        {"airdueljm72/ad_c-h0-.ic40",
+         make_crc32_blob(0x20000U, {0x97U, 0x50U, 0x37U, 0x7AU}, 0x12140276U)},
+        {"airdueljm72/ad_c-l0-.ic37",
+         make_crc32_blob(0x20000U, {0x12U, 0xB1U, 0x66U, 0xE3U}, 0x4ac0b91dU)},
+        {"airdueljm72/ad_c-h3-.ic43",
+         make_crc32_blob(0x20000U, {0xECU, 0x8CU, 0x6AU, 0x8EU}, 0x9f7cfca3U)},
+        {"airdueljm72/ad_c-l3-.ic34",
+         make_crc32_blob(0x20000U, {0x2EU, 0x4FU, 0x10U, 0xCCU}, 0x9dd343f7U)},
+    });
+    REQUIRE(mnemos::io::write_file(set_path.string(), collection_zip));
+
+    irem_m72_adapter adapter(collection_zip, "airduel-collection", nullptr, {}, set_path.string());
+
+    CHECK(adapter.set_name() == "airduelm72");
+    const auto& issues = adapter.machine().roms.issues;
+    CHECK(std::none_of(issues.begin(), issues.end(), [](const auto& issue) {
+        return issue.file == "ad_c-h0-c.ic40" || issue.file == "ad_c-l0-c.ic37" ||
+               issue.file == "ad_c-h3-.ic43" || issue.file == "ad_c-l3-.ic34";
+    }));
+    CHECK(std::any_of(issues.begin(), issues.end(), [](const auto& issue) {
+        return issue.file == "ad_c-pr-c.ic1" &&
                issue.message.find("missing from the ROM set") != std::string::npos;
     }));
 }
@@ -1298,10 +1328,9 @@ TEST_CASE("irem_m72_adapter resolves canonical M72 manifests for unpacked folder
     REQUIRE(adapter.machine().roms.region("maincpu") != nullptr);
     REQUIRE(adapter.machine().roms.region("sprites") != nullptr);
     CHECK(has_only_crc_issues(adapter.machine().roms.issues));
-    CHECK(std::none_of(adapter.machine().roms.issues.begin(),
-                       adapter.machine().roms.issues.end(), [](const auto& issue) {
-                           return issue.message.find("no embedded manifest") !=
-                                  std::string::npos;
+    CHECK(std::none_of(adapter.machine().roms.issues.begin(), adapter.machine().roms.issues.end(),
+                       [](const auto& issue) {
+                           return issue.message.find("no embedded manifest") != std::string::npos;
                        }));
 }
 
@@ -1666,8 +1695,7 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     CHECK(restored.machine().input_p1 == static_cast<std::uint8_t>(0xFFU & ~0x08U & ~0x80U));
     CHECK(restored.machine().input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x40U));
     CHECK(restored.machine().input_system ==
-          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
-                                    ~0x20U & ~0x40U));
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U & ~0x20U & ~0x40U));
     CHECK(restored.machine().dac.level() == 0xC0U);
 
     const auto restored_dac_audio = restored.drain_audio();
@@ -1719,17 +1747,16 @@ TEST_CASE("irem_m72_adapter loads v1 adapter input snapshots", "[irem_m72][adapt
     mnemos::runtime::save_target legacy_target = irem::build_save_target(legacy_source);
     REQUIRE(legacy_target.components.size() == 2U);
     legacy_target.components.pop_back();
-    legacy_target.components.push_back(
-        {"adapter",
-         [&](mnemos::chips::state_writer& writer) {
-             writer.u32(1U); // pre-service/test adapter payload
-             writer.u64(7U);
-             writer.u64(0U);
-             write_i16_legacy(writer, 0);
-             write_v1_controller(writer, p1);
-             write_v1_controller(writer, p2);
-         },
-         [](mnemos::chips::state_reader&) {}});
+    legacy_target.components.push_back({"adapter",
+                                        [&](mnemos::chips::state_writer& writer) {
+                                            writer.u32(1U); // pre-service/test adapter payload
+                                            writer.u64(7U);
+                                            writer.u64(0U);
+                                            write_i16_legacy(writer, 0);
+                                            write_v1_controller(writer, p1);
+                                            write_v1_controller(writer, p2);
+                                        },
+                                        [](mnemos::chips::state_reader&) {}});
 
     const std::vector<std::uint8_t> blob = mnemos::runtime::write_save_state(legacy_target);
     REQUIRE_FALSE(blob.empty());
@@ -1970,8 +1997,8 @@ size = 4
         std::filesystem::temp_directory_path() / "mnemos_irem_m72_supplemental_parent";
     const auto clone_root = root / "clone";
     const auto parent_dir = root / "supplemental" / "bchopper";
-    REQUIRE((std::filesystem::create_directories(clone_root) ||
-             std::filesystem::exists(clone_root)));
+    REQUIRE(
+        (std::filesystem::create_directories(clone_root) || std::filesystem::exists(clone_root)));
 
     const std::vector<std::uint8_t> parent_gfx{0x30U, 0x31U, 0x32U, 0x33U};
     write_directory_rom_set(

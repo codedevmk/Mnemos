@@ -260,6 +260,10 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
         [[nodiscard]] std::optional<std::string> set_id_from_rom_path(const std::string& rom_path);
 
+        [[nodiscard]] bool is_embedded_m72_set_id(std::string_view set_name);
+
+        [[nodiscard]] bool ends_with_m72_suffix(std::string_view value) noexcept;
+
         [[nodiscard]] std::optional<nested_zip_source>
         unwrap_single_nested_zip(std::span<const std::uint8_t> archive_bytes) {
             auto outer = mnemos::compression::zip_archive::open(archive_bytes);
@@ -350,32 +354,30 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                     }
                     auto provider = make_m72_zip_rom_provider(std::move(nested->bytes));
                     if (provider.has_value()) {
-                        return nested_zip_provider{.provider = std::move(*provider),
-                                                   .source = fs::path{nested->entry_name}
-                                                                 .filename()
-                                                                 .string()};
+                        return nested_zip_provider{
+                            .provider = std::move(*provider),
+                            .source = fs::path{nested->entry_name}.filename().string()};
                     }
                     continue;
                 }
 
-                if (auto set_id = set_id_from_rom_path(source.path); !set_id.has_value() ||
-                                                                  *set_id != parent) {
-                    if (auto nested =
-                            make_single_nested_zip_provider_from_path(fs::path{source.path},
-                                                                      parent)) {
+                if (auto set_id = set_id_from_rom_path(source.path);
+                    !set_id.has_value() || *set_id != parent) {
+                    if (auto nested = make_single_nested_zip_provider_from_path(
+                            fs::path{source.path}, parent)) {
                         return nested;
                     }
                     continue;
                 }
 
                 if (is_directory_path(source.path)) {
-                    return nested_zip_provider{.provider = make_m72_directory_rom_provider(
-                                                   source.path),
+                    return nested_zip_provider{.provider =
+                                                   make_m72_directory_rom_provider(source.path),
                                                .source = fs::path{source.path}.filename().string()};
                 }
                 bool unreadable_zip = false;
-                if (auto provider = make_m72_zip_rom_provider_from_path(source.path,
-                                                                        &unreadable_zip)) {
+                if (auto provider =
+                        make_m72_zip_rom_provider_from_path(source.path, &unreadable_zip)) {
                     return nested_zip_provider{.provider = std::move(*provider),
                                                .source = fs::path{source.path}.filename().string()};
                 }
@@ -431,6 +433,30 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             return key;
         }
 
+        [[nodiscard]] std::string normalized_zip_path(std::string_view name) {
+            std::string normalized{name};
+            std::replace(normalized.begin(), normalized.end(), '\\', '/');
+            return normalized;
+        }
+
+        [[nodiscard]] std::optional<std::string>
+        collection_relative_path(std::string_view entry_name, std::string_view prefix) {
+            if (prefix.empty()) {
+                return std::nullopt;
+            }
+            const std::string normalized = normalized_zip_path(entry_name);
+            if (normalized.size() <= prefix.size() ||
+                normalized.compare(0U, prefix.size(), prefix) != 0 ||
+                normalized[prefix.size()] != '/') {
+                return std::nullopt;
+            }
+            std::string relative = normalized.substr(prefix.size() + 1U);
+            if (relative.empty() || relative.back() == '/') {
+                return std::nullopt;
+            }
+            return relative;
+        }
+
         [[nodiscard]] std::string replace_board_token(std::string value, char from, char to) {
             const std::string needle = std::string{"-"} + from + "-";
             const std::size_t pos = value.find(needle);
@@ -462,8 +488,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             }
             const std::size_t prefix_count = keys.size();
             for (std::size_t i = 0; i < prefix_count; ++i) {
-                if (const std::size_t dash = keys[i].find('-'); dash != std::string::npos &&
-                                                               dash + 1U < keys[i].size()) {
+                if (const std::size_t dash = keys[i].find('-');
+                    dash != std::string::npos && dash + 1U < keys[i].size()) {
                     push_unique(keys, keys[i].substr(dash + 1U));
                 }
             }
@@ -489,8 +515,45 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             return keys;
         }
 
+        [[nodiscard]] bool zip_has_collection_prefix(std::span<const std::uint8_t> archive,
+                                                     std::string_view prefix) {
+            if (prefix.empty()) {
+                return false;
+            }
+            auto opened = mnemos::compression::zip_archive::open(archive);
+            if (!opened.has_value()) {
+                return false;
+            }
+            for (const auto& entry : opened->entries()) {
+                if (collection_relative_path(entry.name, prefix).has_value()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        [[nodiscard]] std::optional<std::string>
+        preferred_collection_prefix(std::string_view set_id,
+                                    std::span<const std::uint8_t> archive) {
+            if (set_id.empty()) {
+                return std::nullopt;
+            }
+            if (is_embedded_m72_set_id(set_id) && zip_has_collection_prefix(archive, set_id)) {
+                return std::string{set_id};
+            }
+            if (!ends_with_m72_suffix(set_id)) {
+                const std::string suffixed = std::string{set_id} + "m72";
+                if (is_embedded_m72_set_id(suffixed) &&
+                    zip_has_collection_prefix(archive, suffixed)) {
+                    return suffixed;
+                }
+            }
+            return std::nullopt;
+        }
+
         [[nodiscard]] std::optional<mnemos::manifests::common::rom_file_provider>
-        make_m72_zip_rom_provider(std::vector<std::uint8_t> archive) {
+        make_m72_zip_rom_provider_with_collection_prefix(std::vector<std::uint8_t> archive,
+                                                         std::string preferred_prefix) {
             auto bytes = std::make_shared<std::vector<std::uint8_t>>(std::move(archive));
             auto opened = mnemos::compression::zip_archive::open(*bytes);
             if (!opened.has_value()) {
@@ -498,26 +561,63 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             }
             auto zip = std::make_shared<mnemos::compression::zip_archive>(std::move(*opened));
             return mnemos::manifests::common::rom_file_provider{
-                [bytes, zip](std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
-                    for (const auto& entry : zip->entries()) {
-                        if (entry.name == name) {
-                            return zip->extract(entry);
+                [bytes, zip, preferred_prefix = std::move(preferred_prefix)](
+                    std::string_view name) -> std::optional<std::vector<std::uint8_t>> {
+                    const auto try_entries =
+                        [&](bool scoped) -> std::optional<std::vector<std::uint8_t>> {
+                        const auto wanted = directory_filename_keys(name);
+                        for (const auto& entry : zip->entries()) {
+                            std::string candidate_name;
+                            if (scoped) {
+                                auto relative =
+                                    collection_relative_path(entry.name, preferred_prefix);
+                                if (!relative.has_value()) {
+                                    continue;
+                                }
+                                candidate_name = std::move(*relative);
+                            } else {
+                                candidate_name = entry.name;
+                            }
+                            if (candidate_name == name) {
+                                return zip->extract(entry);
+                            }
                         }
-                    }
+                        for (const auto& entry : zip->entries()) {
+                            std::string candidate_name;
+                            if (scoped) {
+                                auto relative =
+                                    collection_relative_path(entry.name, preferred_prefix);
+                                if (!relative.has_value()) {
+                                    continue;
+                                }
+                                candidate_name = std::move(*relative);
+                            } else {
+                                if (entry.name.empty() ||
+                                    (entry.name.back() == '/' || entry.name.back() == '\\')) {
+                                    continue;
+                                }
+                                candidate_name = entry.name;
+                            }
+                            const std::string key = directory_filename_key(candidate_name);
+                            if (std::find(wanted.begin(), wanted.end(), key) != wanted.end()) {
+                                return zip->extract(entry);
+                            }
+                        }
+                        return std::nullopt;
+                    };
 
-                    const auto wanted = directory_filename_keys(name);
-                    for (const auto& entry : zip->entries()) {
-                        if (entry.name.empty() ||
-                            (entry.name.back() == '/' || entry.name.back() == '\\')) {
-                            continue;
-                        }
-                        const std::string key = directory_filename_key(entry.name);
-                        if (std::find(wanted.begin(), wanted.end(), key) != wanted.end()) {
-                            return zip->extract(entry);
+                    if (!preferred_prefix.empty()) {
+                        if (auto scoped = try_entries(true)) {
+                            return scoped;
                         }
                     }
-                    return std::nullopt;
+                    return try_entries(false);
                 }};
+        }
+
+        [[nodiscard]] std::optional<mnemos::manifests::common::rom_file_provider>
+        make_m72_zip_rom_provider(std::vector<std::uint8_t> archive) {
+            return make_m72_zip_rom_provider_with_collection_prefix(std::move(archive), {});
         }
 
         [[nodiscard]] std::optional<mnemos::manifests::common::rom_file_provider>
@@ -644,9 +744,9 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             std::uint32_t missing{};
         };
 
-        [[nodiscard]] embedded_identity_score score_decl_identity(
-            const mnemos::manifests::common::rom_set_decl& decl,
-            const mnemos::manifests::common::rom_file_provider& provider) {
+        [[nodiscard]] embedded_identity_score
+        score_decl_identity(const mnemos::manifests::common::rom_set_decl& decl,
+                            const mnemos::manifests::common::rom_file_provider& provider) {
             embedded_identity_score score{};
             if (!provider) {
                 return score;
@@ -705,6 +805,22 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         [[nodiscard]] std::optional<mnemos::manifests::common::rom_set_decl>
         embedded_decl_for_source(std::string_view hinted_set,
                                  const mnemos::manifests::common::rom_file_provider& provider) {
+            if (!ends_with_m72_suffix(hinted_set)) {
+                const std::string suffixed_set = std::string{hinted_set} + "m72";
+                if (auto suffixed = embedded_decl_for_set(suffixed_set)) {
+                    const embedded_identity_score suffixed_score =
+                        score_decl_identity(*suffixed, provider);
+                    if (suffixed_score.exact > 0U) {
+                        std::fprintf(stderr,
+                                     "[irem_m72] ROM source id '%.*s' matched embedded set '%s' "
+                                     "by canonical M72 suffix\n",
+                                     static_cast<int>(hinted_set.size()), hinted_set.data(),
+                                     suffixed_set.c_str());
+                        return suffixed;
+                    }
+                }
+            }
+
             std::vector<std::string> seeded_names;
             auto add_seed = [&](std::string name) {
                 if (std::find(seeded_names.begin(), seeded_names.end(), name) ==
@@ -742,7 +858,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                 consider(set_name, false);
             }
 
-            for (const auto& [set_name, _] : mnemos::manifests::irem_m72::embedded::game_manifests) {
+            for (const auto& [set_name, _] :
+                 mnemos::manifests::irem_m72::embedded::game_manifests) {
                 if (std::find(seeded_names.begin(), seeded_names.end(), set_name) !=
                     seeded_names.end()) {
                     continue;
@@ -823,13 +940,14 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             return false;
         }
 
-        [[nodiscard]] std::optional<nested_zip_provider> make_supplemental_provider_for_decl(
-            const mnemos::manifests::common::rom_set_decl& decl, supplemental_rom_source source,
-            std::vector<rom_load_issue>& issues) {
+        [[nodiscard]] std::optional<nested_zip_provider>
+        make_supplemental_provider_for_decl(const mnemos::manifests::common::rom_set_decl& decl,
+                                            supplemental_rom_source source,
+                                            std::vector<rom_load_issue>& issues) {
             mnemos::manifests::common::rom_file_provider provider;
             std::string effective_path = source.path;
-            std::string source_label = source.path.empty() ? std::string{"supplemental ROM set"}
-                                                           : source.path;
+            std::string source_label =
+                source.path.empty() ? std::string{"supplemental ROM set"} : source.path;
 
             if (source.rom.empty() && is_directory_path(source.path)) {
                 provider = make_m72_directory_rom_provider(source.path);
@@ -861,13 +979,13 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
             if (auto manifest_bytes = provider("game.toml")) {
                 const std::string text(manifest_bytes->begin(), manifest_bytes->end());
-                const std::string_view expected_set =
-                    path_set_id.has_value() && decl.parent.has_value() &&
-                            *path_set_id == *decl.parent
-                        ? std::string_view{*decl.parent}
-                        : std::string_view{decl.name};
-                auto parsed = parse_irem_decl(text, source_label + "/game.toml",
-                                              expected_set, &issues);
+                const std::string_view expected_set = path_set_id.has_value() &&
+                                                              decl.parent.has_value() &&
+                                                              *path_set_id == *decl.parent
+                                                          ? std::string_view{*decl.parent}
+                                                          : std::string_view{decl.name};
+                auto parsed =
+                    parse_irem_decl(text, source_label + "/game.toml", expected_set, &issues);
                 if (!parsed.has_value()) {
                     return std::nullopt;
                 }
@@ -904,11 +1022,10 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         }
 
         [[nodiscard]] mnemos::manifests::common::rom_file_provider
-        with_supplemental_fallbacks(
-            const mnemos::manifests::common::rom_set_decl& decl,
-            mnemos::manifests::common::rom_file_provider provider,
-            std::span<supplemental_rom_source> supplemental_sources,
-            std::vector<rom_load_issue>& issues) {
+        with_supplemental_fallbacks(const mnemos::manifests::common::rom_set_decl& decl,
+                                    mnemos::manifests::common::rom_file_provider provider,
+                                    std::span<supplemental_rom_source> supplemental_sources,
+                                    std::vector<rom_load_issue>& issues) {
             for (supplemental_rom_source& source : supplemental_sources) {
                 if (auto supplemental =
                         make_supplemental_provider_for_decl(decl, std::move(source), issues)) {
@@ -1136,8 +1253,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         // ...) loaded whole. A bare binary is the V30 program image.
         [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
                                           const std::string& rom_path,
-                                          std::span<supplemental_rom_source>
-                                              supplemental_sources) {
+                                          std::span<supplemental_rom_source> supplemental_sources) {
             loaded_set result;
             if (rom.empty() && is_directory_path(rom_path)) {
                 auto provider = make_m72_directory_rom_provider(rom_path);
@@ -1174,7 +1290,15 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             }
             const bool is_zip = has_zip_signature(rom);
             if (is_zip) {
-                if (auto provider = make_m72_zip_rom_provider(std::move(rom))) {
+                std::optional<std::string> collection_prefix;
+                if (auto set_id = set_id_from_rom_path(effective_rom_path)) {
+                    collection_prefix = preferred_collection_prefix(*set_id, rom);
+                }
+                auto provider = collection_prefix.has_value()
+                                    ? make_m72_zip_rom_provider_with_collection_prefix(
+                                          std::move(rom), std::move(*collection_prefix))
+                                    : make_m72_zip_rom_provider(std::move(rom));
+                if (provider.has_value()) {
                     if (auto manifest_bytes = (*provider)("game.toml")) {
                         const std::string text(manifest_bytes->begin(), manifest_bytes->end());
                         auto decl =
@@ -1330,10 +1454,10 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         std::vector<supplemental_rom_source> supplemental_sources;
         supplemental_sources.reserve(supplemental_roms.size());
         for (std::size_t i = 0; i < supplemental_roms.size(); ++i) {
-            supplemental_sources.push_back(
-                {.rom = std::move(supplemental_roms[i]),
-                 .path = i < supplemental_rom_paths.size() ? std::move(supplemental_rom_paths[i])
-                                                           : std::string{}});
+            supplemental_sources.push_back({.rom = std::move(supplemental_roms[i]),
+                                            .path = i < supplemental_rom_paths.size()
+                                                        ? std::move(supplemental_rom_paths[i])
+                                                        : std::string{}});
         }
         loaded_set set = load_set(std::move(rom), rom_path, supplemental_sources);
         media_ = make_media_capabilities(display_name, set, source_byte_count);

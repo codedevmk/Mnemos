@@ -282,12 +282,18 @@ scan of ZIP members and loose files under `D:\emu\irem\M72` likewise found zero
 matches for `0xac4421b1` or `0x0f7b2713`.
 
 Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
-`-RomDir` values and treats sorted non-M72 roots such as `D:\emu\irem\M81`,
-`D:\emu\irem\m82`, and `D:\emu\irem\M84` as a clean zero-candidate result
-instead of folding them into M72 proof; `D:\emu\irem\m72 -MaxSets 2` remains a
-positive smoke path. The default fallback frame list includes 900 frames because
-`rtypeb` stays black at the 300/600-frame attract probes but reaches a lit
-post-load frame at 900.
+`-RomDir` values, handles collection ZIP forms, and treats sorted non-M72 roots
+such as `D:\emu\irem\M81`, `D:\emu\irem\m82`, and `D:\emu\irem\M84` as a clean
+zero-candidate result instead of folding them into M72 proof; the
+`D:\emu\irem\m72` / `-MaxSets 2` probe remains a positive smoke path. The player
+adapter now also prefers a
+checked-in canonical M72-suffixed top-level directory when a plain source stem is
+used: `D:\emu\irem\M72\airduel.zip` identifies as `airduelm72` instead of being
+mis-selected as `airdueljm72` by shared program CRCs. That ZIP still reports
+missing Air Duel graphics/tile/sample artifacts, so it is loader-classified
+correctly but remains excluded from clean roster proof. The default fallback
+frame list includes 900 frames because `rtypeb` stays black at the 300/600-frame
+attract probes but reaches a lit post-load frame at 900.
 
 Input note: the M72 player adapter now maps the shared frontend arcade inputs
 directly to the board-visible system byte: `service` clears service 1/2 bits
