@@ -511,8 +511,11 @@ visual and audio parity proof.
 4. Continue M72 artifact closure for `gallopm72`, `lohtb2`, and `lohtj` by
    finding the exact missing dumps without substituting sibling-set or synthetic bytes.
 5. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` only when the
-   missing M72 artifacts have been supplied; without the switch it is the
-   available-artifact proof runner for every implemented Irem family.
+   missing M72 artifacts have been supplied. With the switch, the runner now
+   prints a strict checked-in-manifest artifact preflight before CTest so
+   present-but-incomplete sets such as `gallopm72` are reported alongside
+   missing source sets; without the switch it is the available-artifact proof
+   runner for every implemented Irem family.
 6. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.
 7. Advance the M92 first-pass profile from diagnostic execution to authenticity

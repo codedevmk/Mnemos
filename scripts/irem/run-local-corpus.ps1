@@ -16,6 +16,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $runner = Join-Path $repoRoot "scripts\run-data-gated-tests.ps1"
+$m72ArtifactScanner = Join-Path $repoRoot "scripts\irem_m72\find-missing-artifacts.ps1"
 if (-not (Test-Path $runner)) {
     throw "Data-gated test runner not found: $runner"
 }
@@ -86,6 +87,7 @@ function Set-EnvIfPathListExists {
 
 $rootPath = (Resolve-Path -LiteralPath $Root).Path
 $m72Root = Join-CorpusPath -Base $rootPath -Child "M72"
+$m72ArtifactPreflightExitCode = 0
 
 Write-Host "Wiring local Irem corpus from $rootPath" -ForegroundColor Cyan
 
@@ -151,10 +153,25 @@ foreach ($name in @(
 
 if ($IncludeFullM72Roster) {
     Set-EnvIfPathExists -Name "MNEMOS_M72_SET_DIR" -Path $rootPath
+    if (Test-Path $m72ArtifactScanner) {
+        Write-Host ""
+        Write-Host "Running strict M72 artifact preflight from checked-in manifests..." -ForegroundColor Cyan
+        & $m72ArtifactScanner -Root $rootPath -Recurse -ScanAllSevenZipEntries
+        $m72ArtifactPreflightExitCode = $LASTEXITCODE
+        if ($m72ArtifactPreflightExitCode -ne 0) {
+            Write-Host "M72 artifact preflight found missing required files; continuing to CTest for the existing roster gate details." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  [skip]  M72 artifact preflight       scanner missing: $m72ArtifactScanner" -ForegroundColor DarkGray
+    }
 } else {
     [Environment]::SetEnvironmentVariable("MNEMOS_M72_SET_DIR", $null, "Process")
     Write-Host "  [skip]  MNEMOS_M72_SET_DIR             full roster gate omitted; pass -IncludeFullM72Roster to require it" -ForegroundColor DarkGray
 }
 
 & $runner -BuildDir $BuildDir
-exit $LASTEXITCODE
+$runnerExitCode = $LASTEXITCODE
+if ($runnerExitCode -ne 0) {
+    exit $runnerExitCode
+}
+exit $m72ArtifactPreflightExitCode

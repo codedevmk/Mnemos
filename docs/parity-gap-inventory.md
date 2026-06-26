@@ -335,6 +335,12 @@ passes `1/1`, resolving `D:\emu\irem\M72\nspirit.zip` first and retaining the
 stale same-name folder only as a secondary source. The same current scan still
 reports only `lohtb2` and `lohtj` as missing source sets.
 
+Full-roster runner note: `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster`
+now runs the strict checked-in-manifest artifact scanner before CTest. That
+preflight reports the complete current blocker list, including present but
+incomplete sets such as `gallopm72`, before the roster CTest stops at missing
+source-set discovery.
+
 2026-06-26 category proof note: the current local M72 category proof uses
 `MNEMOS_M72_RTYPE_SET=D:\emu\irem\M72\rtype.zip`,
 `MNEMOS_M72_PROTECTED_SET=D:\emu\irem\M72\dbreedm72`,
