@@ -13,6 +13,10 @@
       "ctest": "mnemos_apps_player_irem_m72_protected_golden_test",
       "high_water": "passed"
     },
+    "GLD-M72-PROTECTED-AUDIO": {
+      "ctest": "mnemos_apps_player_irem_m72_protected_audio_golden_test",
+      "high_water": "passed"
+    },
     "GLD-M72-ROSTER": {
       "ctest": "mnemos_apps_player_irem_m72_roster_golden_test",
       "high_water": "skipped"

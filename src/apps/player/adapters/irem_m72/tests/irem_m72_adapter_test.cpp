@@ -286,6 +286,20 @@ namespace {
         return static_cast<std::size_t>(std::unique(pixels.begin(), pixels.end()) - pixels.begin());
     }
 
+    [[nodiscard]] bool audio_chunk_has_nonzero_pcm(
+        const mnemos::frontend_sdk::audio_chunk& chunk) noexcept {
+        if (chunk.samples == nullptr || chunk.frame_count == 0U) {
+            return false;
+        }
+        const std::uint32_t sample_count = chunk.frame_count * 2U;
+        for (std::uint32_t i = 0; i < sample_count; ++i) {
+            if (chunk.samples[i] != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     template <std::size_t N>
     void record_recent_pc(std::array<std::uint32_t, N>& pcs, std::size_t& count,
                           std::size_t& cursor, std::uint32_t pc) noexcept {
@@ -952,6 +966,75 @@ TEST_CASE("irem_m72_adapter boots a real protected M72 set", "[irem_m72][adapter
                          << " vram_b=" << nonzero_count(machine.vram_b));
     CHECK(sound_released);
     CHECK(frame_lit);
+}
+
+TEST_CASE("irem_m72_adapter emits rendered audio for a real protected M72 set",
+          "[irem_m72][adapter][data]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    // Data-gated (never committed): MNEMOS_M72_PROTECTED_AUDIO_SET points at a
+    // protected true-M72 set with a known non-silent early runtime path, such as
+    // the local dbreedm72 route. This proves the adapter's rendered audio path
+    // against real media; it is not a reference-audio parity claim.
+    const char* set_env = opt_env("MNEMOS_M72_PROTECTED_AUDIO_SET");
+    if (set_env == nullptr) {
+        SKIP("set MNEMOS_M72_PROTECTED_AUDIO_SET to a protected M72 audio-proof set");
+    }
+    auto source = load_m72_source(set_env);
+
+    mnemos::frontend_sdk::adapter_options options{};
+    options.rom = std::move(source.bytes);
+    options.display_name = "protected-m72-audio";
+    options.rom_path = source.path;
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    REQUIRE(system != nullptr);
+    auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
+    auto& machine = adapter.machine();
+
+    REQUIRE(machine.roms.issues.empty());
+    REQUIRE_FALSE(adapter.set_name().empty());
+    REQUIRE((machine.mcu_present || machine.protection_hle_present));
+    if (machine.protection_hle_present) {
+        REQUIRE(machine.params.protection_hle_profile.has_value());
+        CHECK((*machine.params.protection_hle_profile == "irem_m72.dbreedm72_no_dump_mcu" ||
+               *machine.params.protection_hle_profile == "irem_m72.dkgensanm72_no_dump_mcu"));
+        CHECK_FALSE(machine.params.protection_hle_sample_triggers.empty());
+        const auto expected_params = m72::board_params_for(adapter.set_name());
+        CHECK(machine.params.work_ram_base == expected_params.work_ram_base);
+    }
+
+    const int proof_frames = env_positive_int("MNEMOS_M72_PROTECTED_AUDIO_FRAMES", 120);
+    bool nonzero_audio = false;
+    std::uint64_t total_audio_frames = 0U;
+    std::uint32_t last_sample_rate = 0U;
+    int first_signal_frame = -1;
+    for (int frame = 0; frame < proof_frames && !nonzero_audio; ++frame) {
+        mnemos::frontend_sdk::controller_state p1{};
+        p1.start = frame >= 1 && frame < 3;
+        p1.select = frame >= 2 && frame < 4;
+        p1.service = frame >= 3 && frame < 5;
+        adapter.apply_input(0, p1);
+        adapter.step_one_frame();
+        const auto audio = adapter.drain_audio();
+        total_audio_frames += audio.frame_count;
+        last_sample_rate = audio.sample_rate;
+        if (audio_chunk_has_nonzero_pcm(audio)) {
+            nonzero_audio = true;
+            first_signal_frame = frame;
+        }
+    }
+
+    INFO("set=" << adapter.set_name() << " proof_frames=" << proof_frames
+                << " stepped=" << adapter.frames_stepped()
+                << " total_audio_frames=" << total_audio_frames
+                << " last_sample_rate=" << last_sample_rate
+                << " first_signal_frame=" << first_signal_frame
+                << " sample_address=0x" << std::hex << machine.sample_address
+                << " dac_events=" << std::dec << machine.dac_write_events.size());
+    CHECK(last_sample_rate == 55930U);
+    CHECK(total_audio_frames > 0U);
+    CHECK(nonzero_audio);
 }
 
 TEST_CASE("irem_m72_adapter validates a real vertical M72 set orientation",

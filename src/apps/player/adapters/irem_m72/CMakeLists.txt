@@ -62,6 +62,12 @@ if(BUILD_TESTING)
             "irem_m72_adapter boots a real protected M72 set"
     )
     add_test(
+        NAME mnemos_apps_player_irem_m72_protected_audio_golden_test
+        COMMAND
+            mnemos_apps_player_irem_m72_adapter_test
+            "irem_m72_adapter emits rendered audio for a real protected M72 set"
+    )
+    add_test(
         NAME mnemos_apps_player_irem_m72_vertical_golden_test
         COMMAND
             mnemos_apps_player_irem_m72_adapter_test
@@ -76,6 +82,7 @@ if(BUILD_TESTING)
     set_tests_properties(
         mnemos_apps_player_irem_m72_rtype_golden_test
         mnemos_apps_player_irem_m72_protected_golden_test
+        mnemos_apps_player_irem_m72_protected_audio_golden_test
         mnemos_apps_player_irem_m72_vertical_golden_test
         mnemos_apps_player_irem_m72_roster_golden_test
         PROPERTIES SKIP_RETURN_CODE 4

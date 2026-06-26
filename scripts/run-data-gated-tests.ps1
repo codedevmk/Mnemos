@@ -14,6 +14,7 @@
 #   MNEMOS_SMS_BIOS           an SMS BIOS/cart image (A/B comparator) -> sms_manifest_parity_test
 #   MNEMOS_M72_RTYPE_SET      an R-Type-family M72 zip or directory -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_PROTECTED_SET  a protected true-M72 zip or directory -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_PROTECTED_AUDIO_SET  protected true-M72 audio-proof set -> irem_m72 rendered-audio golden
 #   MNEMOS_M72_VERTICAL_SET   a vertical true-M72 zip or directory  -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_SET_DIR        path-list of mixed roots or dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
 #   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest/player smoke
@@ -63,6 +64,7 @@ $vars = @(
     @{ Name = "MNEMOS_32X_ROM";          Test = "sega32x_adapter_test (boot golden)" },
     @{ Name = "MNEMOS_M72_RTYPE_SET";    Test = "irem_m72 golden/corpus smoke" },
     @{ Name = "MNEMOS_M72_PROTECTED_SET"; Test = "irem_m72 golden/corpus smoke" },
+    @{ Name = "MNEMOS_M72_PROTECTED_AUDIO_SET"; Test = "irem_m72 rendered-audio golden" },
     @{ Name = "MNEMOS_M72_VERTICAL_SET"; Test = "irem_m72 golden/corpus smoke" },
     @{ Name = "MNEMOS_M72_SET_DIR";      Test = "irem_m72 roster/corpus smoke" },
     @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest/player smoke" },

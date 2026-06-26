@@ -199,15 +199,16 @@ visual and audio parity proof.
   `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspiritj`, `rtype`, `rtypeb`,
   `rtypej`, `rtypejp`, `rtypeu`, `xmultiplm72`.
 - **Oracle proof:** G6 high-water now records `GLD-M72-RTYPE`,
-  `GLD-M72-PROTECTED`, and `GLD-M72-VERTICAL` as passed with
+  `GLD-M72-PROTECTED`, `GLD-M72-PROTECTED-AUDIO`, and `GLD-M72-VERTICAL` as passed with
   `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`, and
   `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` remains skipped.
 - **Rendered-audio smoke proof:** the M72 corpus smoke runner now has an opt-in
   `-RequireRenderedAudio` gate that runs `mnemos_player --extract-audio` and
   requires the exported rendered WAVE payload to contain nonzero PCM.
-  `D:\emu\irem\M72` targeted to `-Set dbreedm72` passes this gate with
-  `-AudioFrames 120`, proving the protected no-dump-HLE route can emit rendered
-  audio during the smoke window. This is still weaker than music/audio parity
+  `MNEMOS_M72_PROTECTED_AUDIO_SET=D:\emu\irem\M72\dbreedm72` also drives a
+  dedicated adapter-level CTest golden that steps the protected no-dump-HLE
+  route for 120 frames and requires nonzero rendered PCM. This proves rendered
+  audio during the smoke window, but is still weaker than music/audio parity
   certification.
 - **Known blocked or incomplete local proof:** `gallopm72` still lacks
   `cc_c-pr-.ic1` CRC `0xac4421b1`; World `nspirit` still lacks

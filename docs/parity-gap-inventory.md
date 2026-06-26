@@ -340,6 +340,11 @@ payload. The current local proof
 passes `1/1`, including the grouped `dbreedm72` sources discovered under the
 M72 corpus bucket. This proves a non-silent rendered-audio path for that protected
 smoke route; it is not music parity or reference-audio certification.
+`GLD-M72-PROTECTED-AUDIO` now registers the same protected audio requirement as
+a G6 data-gated oracle through
+`MNEMOS_M72_PROTECTED_AUDIO_SET=D:\emu\irem\M72\dbreedm72`; the standard
+data-gated sweep includes `mnemos_apps_player_irem_m72_protected_audio_golden_test`
+and passes it alongside the existing R-Type, protected, and vertical goldens.
 
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
