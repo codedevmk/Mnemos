@@ -15,7 +15,7 @@
 #   MNEMOS_M72_RTYPE_SET      an R-Type-family M72 zip or directory -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_PROTECTED_SET  a protected true-M72 zip or directory -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_VERTICAL_SET   a vertical true-M72 zip or directory  -> irem_m72 golden/corpus smoke
-#   MNEMOS_M72_SET_DIR        path-list of dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
+#   MNEMOS_M72_SET_DIR        path-list of mixed roots or dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
 #   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest/player smoke
 #   MNEMOS_M52_SET_DIR        path-list of dirs with M52 zips/dirs/wrappers -> irem_m52 manifest/player smoke
 #   MNEMOS_M81_SET_DIR        path-list of dirs with M81 zips/dirs/wrappers -> irem_m81 manifest/player smoke
@@ -96,7 +96,7 @@ if ($ctestExit -ne 0) {
 $m72Runner = Join-Path $PSScriptRoot "irem_m72/run-corpus-smoke.ps1"
 if (Test-Path $m72Runner) {
     Write-Host "`nRunning Irem M72 corpus smoke ..." -ForegroundColor Cyan
-    & $m72Runner -BuildDir $BuildDir
+    & $m72Runner -BuildDir $BuildDir -Recurse
     $m72Exit = $LASTEXITCODE
     if ($m72Exit -ne 0) {
         exit $m72Exit

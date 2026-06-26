@@ -311,7 +311,13 @@ golden gates. The recursive mixed-corpus smoke path still rejects
 2026-06-26 roster discovery note: the CTest roster gate now walks mixed corpus
 roots recursively, so `MNEMOS_M72_SET_DIR=D:\emu\irem` discovers
 `D:\emu\irem\i8751\Legend-of-Hero-Tonma_Arcade_EN.zip` as the `lohtb3`
-single-inner wrapper without adding `D:\emu\irem\i8751` manually. The same
+single-inner wrapper without adding `D:\emu\irem\i8751` manually. The M72
+PowerShell smoke runner also supports `-Set` filtering and the top-level
+`scripts/run-data-gated-tests.ps1` entrypoint now passes `-Recurse` for M72
+smoke runs; targeted proof with
+`scripts\irem_m72\run-corpus-smoke.ps1 -BuildDir build/windows-msvc-debug -RomDir D:\emu\irem -Recurse -Set lohtb3`
+passes `1/1`, using the nested `lohtb3` wrapper plus parent `loht` sources and
+a lit 300-frame fallback screenshot with no media-validation issues. The same
 current scan still reports only `lohtb2` and `lohtj` as missing source sets.
 
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with

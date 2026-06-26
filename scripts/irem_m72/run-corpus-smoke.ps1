@@ -3,12 +3,16 @@
 #
 # ROM sets are never committed. Point this at one or more zips/directories with -Rom,
 # MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET, MNEMOS_M72_VERTICAL_SET, or
-# at true-M72 roster directories with -RomDir / MNEMOS_M72_SET_DIR.
+# at true-M72 roster directories with -RomDir / MNEMOS_M72_SET_DIR. Pass
+# -Recurse for mixed corpus roots such as D:\emu\irem; the top-level
+# scripts/run-data-gated-tests.ps1 entrypoint does this for M72 automatically.
+# Use -Set to narrow a mixed root to one or more checked-in M72 manifest ids.
 
 param(
     [string]$BuildDir = "build/windows-msvc-debug",
     [string[]]$Rom = @(),
     [string[]]$RomDir = @(),
+    [string[]]$Set = @(),
     [int]$Frames = 600,
     [int[]]$FallbackFrames = @(300, 900),
     [int]$MaxSets = 0,
@@ -81,8 +85,23 @@ function Invoke-Player {
         [Parameter(Mandatory = $true)][string]$LogPath,
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
-    & $Player @Arguments *> $LogPath
-    return $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    $hasNativeErrorPreference =
+        $null -ne (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)
+    if ($hasNativeErrorPreference) {
+        $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+    try {
+        $ErrorActionPreference = "Continue"
+        & $Player @Arguments *> $LogPath
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($hasNativeErrorPreference) {
+            $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
+        }
+    }
 }
 
 function Get-M72MediaValidationIssues {
@@ -607,12 +626,30 @@ if (-not [string]::IsNullOrWhiteSpace($extra)) {
 
 $romGroups = @(New-M72RomGroups -Paths @($roms) -ManifestIds $manifestIds)
 Add-M72ParentGroupSources -Groups $romGroups -Parents $manifestParents
+$requestedSets = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($setValue in Split-CommaList $Set) {
+    if (-not $manifestIds.Contains($setValue)) {
+        Write-Warning "Irem M72 set filter is not a checked-in manifest: $setValue"
+        continue
+    }
+    [void]$requestedSets.Add($setValue)
+}
+if ($requestedSets.Count -gt 0) {
+    $filteredGroups = @($romGroups | Where-Object { $requestedSets.Contains($_.Set) })
+    foreach ($setValue in $requestedSets) {
+        $matched = @($filteredGroups | Where-Object { $_.Set -ieq $setValue }).Count -gt 0
+        if (-not $matched) {
+            Write-Warning "Irem M72 set filter did not match discovered media: $setValue"
+        }
+    }
+    $romGroups = $filteredGroups
+}
 if ($MaxSets -gt 0) {
     $romGroups = @($romGroups | Select-Object -First $MaxSets)
 }
 
 if ($romGroups.Count -eq 0) {
-    Write-Host "No Irem M72 ROMs configured; set MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET, MNEMOS_M72_VERTICAL_SET, or MNEMOS_M72_SET_DIR to run this gate." -ForegroundColor DarkGray
+    Write-Host "No Irem M72 ROMs configured; set MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET, MNEMOS_M72_VERTICAL_SET, or MNEMOS_M72_SET_DIR to run this gate. If -Set was used, no requested set was discovered." -ForegroundColor DarkGray
     exit 0
 }
 
