@@ -16,7 +16,7 @@
 #   MNEMOS_M72_PROTECTED_SET  a protected true-M72 zip or directory -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_VERTICAL_SET   a vertical true-M72 zip or directory  -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_SET_DIR        path-list of dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
-#   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest corpus
+#   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest/player smoke
 #   MNEMOS_M81_SET_DIR        path-list of dirs with M81 zips/dirs/wrappers -> irem_m81 manifest/player smoke
 #   MNEMOS_M82_SET_DIR        path-list of dirs with M82 R-Type II zips/dirs/wrappers -> irem_m82 smoke
 #   MNEMOS_M84_SET_DIR        path-list of dirs with M84 zips/dirs/wrappers plus M81 parent -> irem_m84 manifest/player smoke
@@ -61,7 +61,7 @@ $vars = @(
     @{ Name = "MNEMOS_M72_PROTECTED_SET"; Test = "irem_m72 golden/corpus smoke" },
     @{ Name = "MNEMOS_M72_VERTICAL_SET"; Test = "irem_m72 golden/corpus smoke" },
     @{ Name = "MNEMOS_M72_SET_DIR";      Test = "irem_m72 roster/corpus smoke" },
-    @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest corpus" },
+    @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest/player smoke" },
     @{ Name = "MNEMOS_M81_SET_DIR";      Test = "irem_m81 manifest/player smoke" },
     @{ Name = "MNEMOS_M82_SET_DIR";      Test = "irem_m82 R-Type II smoke" },
     @{ Name = "MNEMOS_M84_SET_DIR";      Test = "irem_m84 manifest/player smoke" },
@@ -85,7 +85,7 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(15|81|82|84|107)_test|irem_m72_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden|irem_m107_.*golden"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(15|81|82|84|107)_test|irem_m15_.*golden|irem_m72_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden|irem_m107_.*golden"
 $ctestExit = $LASTEXITCODE
 if ($ctestExit -ne 0) {
     exit $ctestExit

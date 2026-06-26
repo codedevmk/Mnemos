@@ -7,7 +7,7 @@ Date: 2026-06-25
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-25 M107 handoff commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-25 M15 handoff commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -71,8 +71,15 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 ### Irem M15
 
-- M15 has checked-in ROM-contract manifests and corpus gates.
-- It remains non-executable. The next M15 slice should implement the Head On style i8080/discrete video/input/sound path and real screenshot smoke.
+- M15 now has a first-pass executable board and player adapter for `headoni`, not only ROM-contract metadata.
+- Board implementation lives in `src/manifests/irem_m15/m15_system.hpp` and `src/manifests/irem_m15/m15_system.cpp`.
+- The board owns a traceable Intel 8080 diagnostic CPU shim, M15 diagnostic video path, 1-bit beeper, ROM/work/video/color RAM windows, input/DIP ports, frame stepping, and whole-board save/load with identity checks.
+- Player adapter lives in `src/apps/player/adapters/irem_m15`.
+- CLI/system-family routing is available through `--system irem_m15` and alias `m15`.
+- Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
+- Capability discovery reports i8080 trace/register surfaces, M15 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
+- Real local Head On player smoke wrote nonblank screenshots and successfully saved/loaded state.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M15 closure still needs full i8080 opcode/timing coverage, exact M15 memory/I/O map, discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and screenshot parity.
 
 ## Local ROM Corpus Notes
 
@@ -106,6 +113,15 @@ Validation was run from `C:\dev\emu\Mnemos-irem-arcade` under:
 cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && <command>'
 ```
 
+Final handoff validation completed on 2026-06-25 21:05 -05:00:
+
+- Full preset build: `cmake --build --preset windows-msvc-debug`
+- Full preset CTest: `188/188`, with expected conformance/media skips where ROM or oracle env vars were unset
+- Data-gated script with local Irem env vars: `24/24` selected tests, `0` failures
+- Irem M72 corpus smoke from the data-gated script: `2/2` passed for configured R-Type/protected/vertical artifacts
+- M72 roster golden still skipped because `MNEMOS_M72_SET_DIR` was intentionally unset; Gallop and World Ninja Spirit remain blocked by missing local MCU dumps
+- CPS2 corpus smoke skipped because no CPS2 env vars were set for this Irem handoff
+
 M107 slice validation that passed:
 
 - `cmake --preset windows-msvc-debug`
@@ -134,6 +150,34 @@ M107 slice validation that passed:
   - save state: `build\scratch\irem_m107_airass.state`, 181160 bytes
   - loaded screenshot: `build\scratch\irem_m107_airass_loaded.ppm`, `384x256`, nonzero pixel payload
 
+M15 slice validation that passed after the M107 handoff:
+
+- `cmake --preset windows-msvc-debug`
+- Focused M15/player build:
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_irem_m15_adapter_test`
+  - `mnemos_apps_player_adapters_common_test`
+  - `mnemos_apps_player_capability_summary_test`
+  - `mnemos_player`
+- Focused CTest: `4/4`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_capability_summary_test`
+  - `mnemos_apps_player_adapters_common_test`
+  - `mnemos_apps_player_irem_m15_adapter_test`
+- M15 data-gated CTest with `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`: `2/2`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_irem_m15_corpus_golden_test`
+- Direct M15 player capability smoke:
+  - ROM: `D:\emu\irem\M15\Head-On_Arcade_EN.zip`
+  - command included `--system irem_m15 --capabilities`
+  - output reported `media.rom_set state=available`, rollback available, i8080 trace/register surfaces, and M15 RAM views
+- Screenshot smoke:
+  - command included `--system irem_m15 --rom "D:\emu\irem\M15\Head-On_Arcade_EN.zip" --screenshot build\scratch\irem_m15_headoni.ppm --frames 120`
+  - wrote `224x256` PPM with nonzero pixel payload
+- Save/load smoke:
+  - save state: `build\scratch\irem_m15_headoni.state`, 15230 bytes
+  - loaded screenshot: `build\scratch\irem_m15_headoni_loaded.ppm`, `224x256`, nonzero pixel payload
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -151,8 +195,8 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
-2. Implement the M15 executable profile for `headoni`, including i8080/discrete video/input/sound path and real screenshot smoke.
+1. Continue M15 authenticity work: complete i8080 opcode/timing coverage, exact M15 memory/I/O map, discrete video/sound behavior, DIP behavior, raster timing, and screenshot parity.
+2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
 5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, palette banking, and board timing.

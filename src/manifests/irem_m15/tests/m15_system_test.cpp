@@ -292,6 +292,45 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_m15_program(const std::vector<std::uint8_t>& program) {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
+        REQUIRE(program.size() <= rom.size());
+        std::copy(program.begin(), program.end(), rom.begin());
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m15_program() {
+        return make_m15_program({0x3EU, 0x42U,       // MVI A,$42
+                                 0x32U, 0x00U, 0x20U, // STA $2000
+                                 0x3EU, 0x81U,       // MVI A,$81
+                                 0x32U, 0x00U, 0x24U, // STA $2400
+                                 0xD3U, 0x00U,       // OUT $00
+                                 0x76U});            // HLT
+    }
+
+    [[nodiscard]] rom_set_image synthetic_m15_image() {
+        rom_set_image image;
+        image.regions.emplace("maincpu", synthetic_m15_program());
+        return image;
+    }
+
+    [[nodiscard]] bool
+    framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
+        REQUIRE(frame.pixels != nullptr);
+        REQUIRE(frame.width > 0U);
+        REQUIRE(frame.height > 0U);
+        const std::uint32_t stride = frame.effective_stride();
+        for (std::uint32_t y = 0; y < frame.height; ++y) {
+            for (std::uint32_t x = 0; x < frame.width; ++x) {
+                if (frame.pixels[static_cast<std::size_t>(y) * stride + x] != 0U) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 } // namespace
 
 TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus",
@@ -402,4 +441,55 @@ TEST_CASE("m15 local artifacts load CRC-clean through embedded manifests",
 
         require_loaded_region(image, "maincpu", m15::main_rom_size);
     }
+}
+
+TEST_CASE("m15 executable board runs first-pass i8080 memory and video path", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+
+    CHECK(system->work_ram[0] == 0x42U);
+    CHECK(system->video_ram[0] == 0x81U);
+    CHECK(system->speaker_latch == 0x81U);
+    CHECK(system->main_cpu.unsupported_opcode_count() == 0U);
+    CHECK(system->video.framebuffer().width == m15::visible_width);
+    CHECK(system->video.framebuffer().height == m15::visible_height);
+    CHECK(framebuffer_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto source = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(source != nullptr);
+    source->set_inputs(0xEEU, 0xDDU, 0xCCU);
+    source->run_frame();
+    source->work_ram[3] = 0x5AU;
+
+    std::vector<std::uint8_t> state;
+    mnemos::chips::state_writer writer(state);
+    source->save_state(writer);
+    REQUIRE_FALSE(state.empty());
+
+    auto restored = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(restored != nullptr);
+    mnemos::chips::state_reader reader(state);
+    restored->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(restored->work_ram[0] == 0x42U);
+    CHECK(restored->work_ram[3] == 0x5AU);
+    CHECK(restored->video_ram[0] == 0x81U);
+    CHECK(restored->input_p1 == 0xEEU);
+    CHECK(restored->input_p2 == 0xDDU);
+    CHECK(restored->input_system == 0xCCU);
+
+    auto incompatible =
+        m15::assemble_m15(synthetic_m15_image(), m15::m15_board_params{.dip_default = 0x7FU});
+    REQUIRE(incompatible != nullptr);
+    mnemos::chips::state_reader rejected(state);
+    incompatible->load_state(rejected);
+    CHECK_FALSE(rejected.ok());
 }

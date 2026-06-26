@@ -44,6 +44,9 @@ target_link_libraries(
     mnemos_manifests_irem_m15
     PUBLIC
         mnemos::manifests::common
+        mnemos::chips::audio::beeper
+    PRIVATE
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_irem_m15 PUBLIC)
@@ -51,8 +54,11 @@ mnemos_declare_tier(
     NAME mnemos_manifests_irem_m15
     TIER 4
     DEPENDS
+        mnemos_chips_audio_beeper
+        mnemos_chips_shared
         mnemos_manifests_common
         mnemos_foundation
+        mnemos_security_cryptography
 )
 
 if(BUILD_TESTING)

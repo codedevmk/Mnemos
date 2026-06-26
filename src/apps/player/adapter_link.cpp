@@ -5,6 +5,7 @@
 #include "capcom_cps1_adapter.hpp"
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
+#include "irem_m15_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "irem_m81_adapter.hpp"
 #include "irem_m82_adapter.hpp"
@@ -27,6 +28,7 @@ namespace mnemos::apps::player {
         adapters::c64::force_link();
         adapters::segacd::force_link();
         adapters::sega32x::force_link();
+        adapters::irem_m15::force_link();
         adapters::irem_m72::force_link();
         adapters::irem_m81::force_link();
         adapters::irem_m82::force_link();
