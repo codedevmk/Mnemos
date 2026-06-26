@@ -167,6 +167,11 @@ M107 save-state identity continuation validation on 2026-06-26:
 - Full build: `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `189/189`, with expected conformance/media skips and the expected M72 roster skip.
 
+M72 exact-path artifact recheck on 2026-06-26:
+
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root 'D:\emu\irem\M72\nspirit.zip','D:\emu\irem\M72\gallopm72.zip','D:\emu\irem\M72\gallop.zip' -Set 'gallopm72,nspirit' -Out build\scratch\m72-current-missing.json`: `42/44` present and still missing only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`) plus `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`).
+- The three-ROM `run-corpus-smoke.ps1` attempt exceeded the two-minute tool timeout, so it is not counted as pass/fail evidence; the artifact report above is the current authoritative proof for the ZIP-exists-versus-MCU-missing question.
+
 M107 GA20 player-mixer continuation validation on 2026-06-26:
 
 - Exact M72 archive scan: `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem\M72 -Recurse -Set 'gallopm72,nspirit'` found `42/44` artifacts present and still missed only `gallopm72:mcu:cc_c-pr-.ic1` plus `nspirit:mcu:nin_c-pr-b.ic1`.
