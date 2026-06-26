@@ -341,6 +341,13 @@ preflight reports the complete current blocker list, including present but
 incomplete sets such as `gallopm72`, before the roster CTest stops at missing
 source-set discovery.
 
+Scanner evidence note: `scripts/irem_m72/find-missing-artifacts.ps1` now writes
+a per-run `run_id` and a collision-resistant default report filename using
+fractional timestamp, process id, and the run-id prefix. Rapid or parallel
+artifact probes no longer overwrite each other when they start within the same
+second; current same-second checks against `nspirit.zip` and `gallopm72.zip`
+produce distinct `build/scratch/irem-m72-artifacts/*.json` reports.
+
 2026-06-26 category proof note: the current local M72 category proof uses
 `MNEMOS_M72_RTYPE_SET=D:\emu\irem\M72\rtype.zip`,
 `MNEMOS_M72_PROTECTED_SET=D:\emu\irem\M72\dbreedm72`,

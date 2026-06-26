@@ -662,7 +662,10 @@ $resultTargets = @($allTargets | ForEach-Object {
     }
 })
 
+$reportRunId = [guid]::NewGuid().ToString("N")
 $summary = [pscustomobject]@{
+    generated_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+    run_id = $reportRunId
     roots = @($resolvedRoots)
     selected_sets = @($allTargets | Select-Object -ExpandProperty set -Unique)
     target_count = $allTargets.Count
@@ -672,10 +675,11 @@ $summary = [pscustomobject]@{
 }
 
 if ([string]::IsNullOrWhiteSpace($Out)) {
-    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss-ffff"
+    $runSuffix = $reportRunId.Substring(0, 8)
     $outDir = Join-Path $repoRoot "build/scratch/irem-m72-artifacts"
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-    $Out = Join-Path $outDir "$stamp.json"
+    $Out = Join-Path $outDir "$stamp-$PID-$runSuffix.json"
 } else {
     $Out = Resolve-RepoPath $Out
     $parent = Split-Path -Parent $Out
