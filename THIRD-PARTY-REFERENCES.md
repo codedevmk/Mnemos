@@ -132,6 +132,14 @@ multiple independent open-source implementations.
   (`src/manifests/sms/sms_system.cpp`), compiled from the community Game Gear
   cartridge database and cross-checked against open-source Sega emulators' game
   lists. The 93C46 Microwire protocol is the published Microchip datasheet.
+- **Irem M52 Moon Patrol manual and ROM-set metadata** — the checked-in
+  `mpatrol` manifest uses the Moon Patrol Instruction Manual game-adjustment
+  and diagnostic DIP switch tables for SW1/SW2 DIP names, options, conditions,
+  active-high ON/OFF polarity, and factory defaults, and public set metadata
+  for ROM dump filenames, offsets, region sizes, CRC-32s, and parent/clone
+  relationships. The M52 adapter folds those DIP defaults into the
+  board-visible `dsw1`/`dsw2` bytes and exposes the parsed switch count. No
+  manual scans, emulator source, or ROM bytes are committed.
 - **Irem M72 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m72/games/` use public MAME M72 driver metadata for dump
   filenames, offsets, reloads, CRC-32s, parent/clone relationships, cabinet

@@ -19,7 +19,7 @@
 
 namespace mnemos::manifests::irem_m52 {
 
-    inline constexpr std::uint32_t m52_system_state_version = 4U;
+    inline constexpr std::uint32_t m52_system_state_version = 5U;
 
     inline constexpr std::uint32_t visible_width = 240U;
     inline constexpr std::uint32_t visible_height = 252U;
@@ -70,8 +70,8 @@ namespace mnemos::manifests::irem_m52 {
     inline constexpr std::uint8_t z80_rst_idle = 0xFFU;
     inline constexpr std::uint8_t z80_rst_latch = 0xDFU;
 
-    inline constexpr std::uint8_t mpatrol_dsw1_default = 0xFFU;
-    inline constexpr std::uint8_t mpatrol_dsw2_default = 0xFFU;
+    inline constexpr std::uint8_t mpatrol_dsw1_default = 0x01U;
+    inline constexpr std::uint8_t mpatrol_dsw2_default = 0x02U;
 
     struct m52_board_params final {
         std::string_view rom_layout{"standard"};

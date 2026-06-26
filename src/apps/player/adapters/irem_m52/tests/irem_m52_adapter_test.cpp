@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -21,12 +22,114 @@ namespace {
     namespace irem = mnemos::apps::player::adapters::irem_m52;
     namespace m52 = mnemos::manifests::irem_m52;
 
+    struct temp_set_dir final {
+        fs::path path;
+
+        temp_set_dir() {
+            const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+            path = fs::temp_directory_path() / ("mnemos_m52_adapter_" + std::to_string(ticks));
+            REQUIRE(fs::create_directories(path));
+        }
+
+        temp_set_dir(const temp_set_dir&) = delete;
+        temp_set_dir& operator=(const temp_set_dir&) = delete;
+
+        temp_set_dir(temp_set_dir&& other) noexcept : path(std::move(other.path)) {
+            other.path.clear();
+        }
+
+        temp_set_dir& operator=(temp_set_dir&& other) noexcept {
+            if (this != &other) {
+                cleanup();
+                path = std::move(other.path);
+                other.path.clear();
+            }
+            return *this;
+        }
+
+        ~temp_set_dir() { cleanup(); }
+
+        void cleanup() noexcept {
+            if (path.empty()) {
+                return;
+            }
+            std::error_code ec;
+            fs::remove_all(path, ec);
+            path.clear();
+        }
+    };
+
+    void write_binary_file(const fs::path& path, std::span<const std::uint8_t> bytes) {
+        std::ofstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        file.write(reinterpret_cast<const char*>(bytes.data()),
+                   static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(file.good());
+    }
+
+    void write_text_file(const fs::path& path, std::string_view text) {
+        std::ofstream file(path);
+        REQUIRE(file.good());
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        REQUIRE(file.good());
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m52_program() {
         std::vector<std::uint8_t> rom(m52::main_rom_size, 0x00U);
         const std::uint8_t program[] = {0x3EU, 0x77U, 0x32U, 0x00U, 0x80U, 0xD3U, 0x10U, 0x3EU,
                                         0x01U, 0x32U, 0x00U, 0xD0U, 0xC3U, 0x00U, 0x00U};
         std::copy(std::begin(program), std::end(program), rom.begin());
         return rom;
+    }
+
+    [[nodiscard]] temp_set_dir make_dip_metadata_set() {
+        temp_set_dir dir;
+        write_text_file(dir.path / "game.toml", R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "dipmeta"
+board = "irem_m52"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Test Cars"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip]]
+bank = "SW2"
+name = "Test Flip"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0100
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name = "maincpu.bin"
+offset = 0
+size = 0x10000
+)toml");
+        write_binary_file(dir.path / "maincpu.bin", synthetic_m52_program());
+        return dir;
     }
 
     [[nodiscard]] std::size_t nonblack_pixels(mnemos::chips::frame_buffer_view view) {
@@ -106,6 +209,14 @@ namespace {
         }
         return result;
     }
+
+    [[nodiscard]] bool spec_has(const irem::irem_m52_adapter& adapter, std::string_view label,
+                                std::string_view value) {
+        const auto& spec = adapter.system_spec();
+        return std::any_of(spec.begin(), spec.end(), [label, value](const auto& field) {
+            return field.label == label && field.value == value;
+        });
+    }
 } // namespace
 
 TEST_CASE("irem_m52_adapter boots a synthetic M52 program", "[irem_m52]") {
@@ -118,12 +229,29 @@ TEST_CASE("irem_m52_adapter boots a synthetic M52 program", "[irem_m52]") {
     CHECK(adapter.machine().scroll_regs[0] == 0x77U);
     CHECK(adapter.machine().sound_command_write_count > 0U);
     CHECK(adapter.machine().sound_cpu.elapsed_cycles() > 0U);
-    CHECK(irem::build_save_target(adapter).manifest_rev == 4U);
+    CHECK(irem::build_save_target(adapter).manifest_rev == 5U);
     REQUIRE(adapter.chips().size() == 6U);
     CHECK(adapter.chips()[2]->metadata().part_number == "Z80");
     CHECK(adapter.chips()[5]->metadata().part_number == "MSM5205");
     CHECK(adapter.machine().msm.vclk_count() > 0U);
     CHECK(nonblack_pixels(adapter.current_frame()) > 0U);
+}
+
+TEST_CASE("irem_m52_adapter applies manifest DIP defaults and override", "[irem_m52]") {
+    const auto set = make_dip_metadata_set();
+    irem::irem_m52_adapter adapter({}, "DIP metadata", nullptr, {}, set.path.string());
+
+    CHECK(adapter.dip_switches().size() == 2U);
+    CHECK(adapter.machine().dsw1 == 0x03U);
+    CHECK(adapter.machine().dsw2 == 0x03U);
+    CHECK(spec_has(adapter, "DIP switches", "2"));
+
+    irem::irem_m52_adapter overridden({}, "DIP metadata", nullptr,
+                                      static_cast<std::uint16_t>(0x1234U), set.path.string());
+    CHECK(overridden.dip_switches().size() == 2U);
+    CHECK(overridden.machine().dsw1 == 0x34U);
+    CHECK(overridden.machine().dsw2 == 0x12U);
+    CHECK(spec_has(overridden, "DIP switches", "2"));
 }
 
 TEST_CASE("irem_m52_adapter maps service and operator-test inputs to the system port",
@@ -215,6 +343,10 @@ TEST_CASE("irem_m52_adapter validates real M52 ROM sets", "[irem_m52][data]") {
     REQUIRE(adapter.set_name() == "mpatrol");
     REQUIRE_FALSE(adapter.media_capabilities().media.empty());
     CHECK(adapter.media_capabilities().media.front().validation_issues.empty());
+    CHECK(adapter.dip_switches().size() == 13U);
+    CHECK(adapter.machine().dsw1 == m52::mpatrol_dsw1_default);
+    CHECK(adapter.machine().dsw2 == m52::mpatrol_dsw2_default);
+    CHECK(spec_has(adapter, "DIP switches", "13"));
 
     adapter.step_one_frame();
     CHECK(nonblack_pixels(adapter.current_frame()) > 0U);
@@ -230,6 +362,10 @@ TEST_CASE("irem_m52_adapter validates real M52 ROM sets", "[irem_m52][data]") {
         REQUIRE(clone.set_name() == "mpatrolw");
         REQUIRE_FALSE(clone.media_capabilities().media.empty());
         CHECK(clone.media_capabilities().media.front().validation_issues.empty());
+        CHECK(clone.dip_switches().size() == 13U);
+        CHECK(clone.machine().dsw1 == m52::mpatrol_dsw1_default);
+        CHECK(clone.machine().dsw2 == m52::mpatrol_dsw2_default);
+        CHECK(spec_has(clone, "DIP switches", "13"));
         clone.step_one_frame();
         CHECK(nonblack_pixels(clone.current_frame()) > 0U);
     }

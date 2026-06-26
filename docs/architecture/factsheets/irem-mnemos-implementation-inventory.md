@@ -43,7 +43,7 @@ now contract-only.
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
-| M52 | `irem_m52` first-pass | 35% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof | None | Authentic parallax/road/sprite video, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, full DIP/raster/audio/video parity |
+| M52 | `irem_m52` first-pass | 36% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults | None | Authentic parallax/road/sprite video, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, raster/audio/video parity |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
@@ -72,7 +72,8 @@ targets:
 - M52 now has a Moon Patrol ROM-contract/player route for the local parent and
   Williams clone wrappers, but the video and audio are diagnostic first-pass
   paths rather than authentic parallax, road, sound-CPU, or discrete analog
-  behavior.
+  behavior. Its manual-backed DIP defaults are now wired, but runtime DIP
+  behavior beyond those defaults remains open.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
@@ -132,14 +133,17 @@ visual and audio parity proof.
   exposes both Z80 register snapshots plus the audio register snapshots.
   The adapter maps service/test frontend inputs to board-visible active-low
   system bits `0x08`/`0x10` and persists those fields in adapter save-state
-  version 1.
+  version 1. The parent manifest carries 13 Moon Patrol manual SW1/SW2 DIP
+  definitions, the Williams clone inherits them, and the adapter folds the
+  active-high factory defaults to `dsw1=0x01` / `dsw2=0x02` while reporting
+  `DIP switches=13`.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
   parallax/road/sprite/text priority, verify the exact M52 sound CPU port map
   and MSM5205 stream timing against board evidence, implement the
   discrete-analog path beyond the current command-driven SSG/MSM observability
   surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route,
-  and prove full board-manual DIP behavior, raster timing, screenshot parity,
-  and audio parity.
+  and prove runtime DIP behavior beyond current manual defaults, raster timing,
+  screenshot parity, and audio parity.
 
 ### M57
 

@@ -59,6 +59,8 @@ TEST_CASE("Irem M52 system runs Z80 memory and IO windows", "[irem_m52]") {
     namespace m52 = mnemos::manifests::irem_m52;
 
     auto sys = m52::assemble_m52(synthetic_image(), m52::board_params_for("mpatrol"));
+    CHECK(sys->dsw1 == m52::mpatrol_dsw1_default);
+    CHECK(sys->dsw2 == m52::mpatrol_dsw2_default);
     sys->run_frame();
 
     CHECK(sys->video_ram[0] == 0x42U);
