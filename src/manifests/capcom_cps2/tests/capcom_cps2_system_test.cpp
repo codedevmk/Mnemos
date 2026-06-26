@@ -300,8 +300,8 @@ TEST_CASE("cps2 checked-in game TOMLs parse and declare orientation plus QSound 
 
         const std::string stem = path.stem().string();
         const auto expected_orientation =
-            (stem == "1944" || stem == "19xx") ? screen_orientation::vertical
-                                                : screen_orientation::horizontal;
+            (stem == "19xx" || stem == "dimahoo") ? screen_orientation::vertical
+                                                   : screen_orientation::horizontal;
         CHECK(result.value->orientation == expected_orientation);
 
         const auto has_qsound_hle =

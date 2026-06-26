@@ -41,7 +41,7 @@ GFX_SLOT_LANE = {13: (0, 0), 15: (0, 2), 17: (0, 4), 19: (0, 6),
 SIMM_GFX_GROUP_LANES = {1: 0, 3: 4}          # group -> base byte lane
 SIMM_SUB_BYTE_LANE = [2, 3, 0, 1]            # sub-chip a/b/c/d -> lane within group
 SIMM_QSOUND_GROUPS = (5, 6)
-VERTICAL_SET_PREFIXES = ("19xx", "1944")
+VERTICAL_SET_PREFIXES = ("19xx", "dimahoo", "gmahou")
 INPUT_PROFILES = {
     "19xx": (2, "two_player_two_button"),
     "1944": (2, "two_player_two_button"),

@@ -8,7 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "1944"
 board  = "capcom_cps2"
-orientation = "vertical"
+orientation = "horizontal"
 players = 2
 input   = "two_player_two_button"
 
