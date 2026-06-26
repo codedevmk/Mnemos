@@ -221,6 +221,50 @@ TEST_CASE("Irem M52 video renders sprite RAM records through sprite graphics", "
     CHECK(object_pixels[transparent_index] == blank_pixels[transparent_index]);
 }
 
+TEST_CASE("Irem M52 video mirrors text layer position on flip-screen", "[irem_m52]") {
+    namespace m52 = mnemos::manifests::irem_m52;
+
+    std::array<std::uint8_t, m52::video_ram_size> blank_video_ram{};
+    std::array<std::uint8_t, m52::video_ram_size> text_video_ram{};
+    std::array<std::uint8_t, m52::color_ram_size> color_ram{};
+    std::array<std::uint8_t, m52::sprite_ram_size> sprite_ram{};
+    std::array<std::uint8_t, m52::work_ram_size> work_ram{};
+    std::array<std::uint8_t, 32> scroll_regs{};
+    std::array<std::uint8_t, 2> bg_x{};
+    std::array<std::uint8_t, 2> bg_y{};
+    std::vector<std::uint8_t> tx_gfx(m52::tx_gfx_size, 0U);
+    std::vector<std::uint8_t> sprite_gfx(m52::sprite_gfx_size, 0U);
+    std::vector<std::uint8_t> program(m52::main_rom_size, 0U);
+    const std::vector<std::uint8_t> proms = prom_ramp();
+
+    const std::uint32_t tile_x = 3U;
+    const std::uint32_t tile_y = 2U;
+    text_video_ram[static_cast<std::size_t>(tile_y) * 32U + tile_x] = 1U;
+    tx_gfx[1U * 8U + 7U] = 0x01U;
+
+    m52::m52_video blank;
+    blank.compose(program, program, tx_gfx, sprite_gfx, proms, blank_video_ram, color_ram,
+                  sprite_ram, work_ram, scroll_regs, bg_x, bg_y, 0x00U, true, "moon_patrol");
+    m52::m52_video with_text;
+    with_text.compose(program, program, tx_gfx, sprite_gfx, proms, text_video_ram, color_ram,
+                      sprite_ram, work_ram, scroll_regs, bg_x, bg_y, 0x00U, true,
+                      "moon_patrol");
+
+    const auto blank_pixels = frame_pixels(blank.framebuffer());
+    const auto text_pixels = frame_pixels(with_text.framebuffer());
+    const std::uint32_t unflipped_x = tile_x * 8U - 8U;
+    const std::uint32_t unflipped_y = tile_y * 8U;
+    const std::uint32_t flipped_x = m52::visible_width - 1U - unflipped_x;
+    const std::uint32_t flipped_y = m52::visible_height - 1U - unflipped_y;
+    const auto unflipped_index =
+        static_cast<std::size_t>(unflipped_y) * m52::visible_width + unflipped_x;
+    const auto flipped_index =
+        static_cast<std::size_t>(flipped_y) * m52::visible_width + flipped_x;
+
+    CHECK(text_pixels[flipped_index] != blank_pixels[flipped_index]);
+    CHECK(text_pixels[unflipped_index] == blank_pixels[unflipped_index]);
+}
+
 TEST_CASE("Irem M52 save-state preserves board identity and RAM", "[irem_m52]") {
     namespace m52 = mnemos::manifests::irem_m52;
 

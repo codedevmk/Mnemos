@@ -78,9 +78,8 @@ namespace mnemos::manifests::irem_m52 {
             return (sample_byte(sprite_gfx, base, 0U) & (0x80U >> (x & 0x07U))) != 0U;
         }
 
-        void plot_sprite_pixel(std::vector<std::uint32_t>& pixels, std::uint32_t x,
-                               std::uint32_t y, std::uint32_t color,
-                               bool flip_screen) noexcept {
+        void plot_layer_pixel(std::vector<std::uint32_t>& pixels, std::uint32_t x,
+                              std::uint32_t y, std::uint32_t color, bool flip_screen) noexcept {
             if (x >= visible_width || y >= visible_height) {
                 return;
             }
@@ -222,8 +221,8 @@ namespace mnemos::manifests::irem_m52 {
                         continue;
                     }
                     if (sprite_pixel_on(sprite_gfx, code, px, py, flip_x, flip_y)) {
-                        plot_sprite_pixel(pixels_, static_cast<std::uint32_t>(x),
-                                          static_cast<std::uint32_t>(y), color, flip_screen);
+                        plot_layer_pixel(pixels_, static_cast<std::uint32_t>(x),
+                                         static_cast<std::uint32_t>(y), color, flip_screen);
                     }
                 }
             }
@@ -255,8 +254,10 @@ namespace mnemos::manifests::irem_m52 {
                         if (text_pixel_on(tx_gfx, code, px, py, flip_screen)) {
                             const std::uint8_t pen =
                                 static_cast<std::uint8_t>((attr & 0x7FU) ^ tile ^ tint);
-                            pixels_[static_cast<std::size_t>(y) * visible_width + x] =
-                                prom_color(proms, pen, static_cast<std::uint8_t>(attr + tint));
+                            plot_layer_pixel(
+                                pixels_, x, y,
+                                prom_color(proms, pen, static_cast<std::uint8_t>(attr + tint)),
+                                flip_screen);
                         }
                     }
                 }
