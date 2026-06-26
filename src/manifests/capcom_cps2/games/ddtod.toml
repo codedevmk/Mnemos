@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "ddtod"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 4
 input   = "four_player_four_button"
 

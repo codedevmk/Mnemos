@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "choko"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 1
 input   = "one_player_three_button"
 

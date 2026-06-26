@@ -30,6 +30,7 @@ namespace {
     using mnemos::manifests::common::rom_set_decl;
     using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
+    using mnemos::manifests::common::screen_orientation;
 
     std::array<std::uint8_t, crypto_key_size> sample_key() {
         std::array<std::uint8_t, crypto_key_size> k{};
@@ -269,7 +270,7 @@ TEST_CASE("cps2 ROM skeleton declares the fixed executable regions", "[capcom_cp
     CHECK(decl.regions[1].fill == 0x00U);
 }
 
-TEST_CASE("cps2 checked-in game TOMLs parse and declare QSound HLE",
+TEST_CASE("cps2 checked-in game TOMLs parse and declare orientation plus QSound HLE",
           "[capcom_cps2][manifest]") {
     namespace fs = std::filesystem;
     const fs::path games_dir{MNEMOS_CPS2_GAMES_DIR};
@@ -293,6 +294,15 @@ TEST_CASE("cps2 checked-in game TOMLs parse and declare QSound HLE",
         const auto result = parse_rom_set_decl(text, path.string());
         REQUIRE(result.ok());
         CHECK(result.value->board == "capcom_cps2");
+        CHECK((text.find("\norientation =") != std::string::npos ||
+               text.find("\r\norientation =") != std::string::npos ||
+               text.rfind("orientation =", 0U) == 0U));
+
+        const std::string stem = path.stem().string();
+        const auto expected_orientation =
+            (stem == "1944" || stem == "19xx") ? screen_orientation::vertical
+                                                : screen_orientation::horizontal;
+        CHECK(result.value->orientation == expected_orientation);
 
         const auto has_qsound_hle =
             std::any_of(result.value->hle.begin(), result.value->hle.end(), [](const auto& hle) {

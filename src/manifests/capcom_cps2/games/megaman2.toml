@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "megaman2"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "two_player_three_button"
 

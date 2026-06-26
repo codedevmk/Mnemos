@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "armwar"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 3
 input   = "three_player_three_button"
 

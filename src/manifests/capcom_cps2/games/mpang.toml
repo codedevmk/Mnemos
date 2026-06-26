@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "mpang"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "two_player_one_button"
 

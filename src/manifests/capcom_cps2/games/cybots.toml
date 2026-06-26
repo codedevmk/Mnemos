@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "cybots"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "cybots_four_button"
 

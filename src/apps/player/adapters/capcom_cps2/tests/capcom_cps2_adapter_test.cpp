@@ -469,6 +469,7 @@ TEST_CASE("capcom_cps2_adapter discovers a family-compatible board key inside th
 schema = "mnemos-romset/1"
 name = "1944"
 board = "capcom_cps2"
+orientation = "vertical"
 
 [[region]]
 name = "maincpu"
@@ -504,6 +505,7 @@ schema = "mnemos-romset/1"
 name = "1944_mn"
 board = "capcom_cps2"
 parent = "1944"
+orientation = "vertical"
 
 [[region]]
 name = "maincpu"
@@ -536,6 +538,32 @@ offset = 0
     REQUIRE(key_region != nullptr);
     CHECK(*key_region == std::vector<std::uint8_t>(key.begin(), key.end()));
     CHECK(adapter.machine().cpu().cpu_registers().pc == 0x00000008U);
+}
+
+TEST_CASE("capcom_cps2_adapter does not infer vertical orientation from the set name",
+          "[capcom_cps2][adapter]") {
+    const std::string manifest = R"(
+[set]
+schema = "mnemos-romset/1"
+name = "1944"
+board = "capcom_cps2"
+
+[[region]]
+name = "maincpu"
+size = 64
+
+[[region.file]]
+name = "prog"
+offset = 0
+)";
+    const auto zip = make_stored_zip({
+        {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
+        {"prog", std::vector<std::uint8_t>(64U, 0x00U)},
+    });
+
+    capcom_cps2_adapter adapter(zip, "manifest_orientation_default");
+
+    CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::horizontal);
 }
 
 TEST_CASE("capcom_cps2_adapter resolves a checked-in game manifest by zip stem",

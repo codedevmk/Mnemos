@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <span>
@@ -427,63 +426,6 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                    set_name.substr(0U, prefix.size()) == prefix;
         }
 
-        [[nodiscard]] bool starts_with_ascii(std::string_view value,
-                                             std::string_view prefix) noexcept {
-            return value.size() >= prefix.size() && value.substr(0U, prefix.size()) == prefix;
-        }
-
-        [[nodiscard]] bool is_vertical_cps2_family(std::string_view set_id) noexcept {
-            return starts_with_ascii(set_id, "19xx") || starts_with_ascii(set_id, "1944");
-        }
-
-        [[nodiscard]] bool manifest_declares_orientation(std::string_view text) noexcept {
-            std::size_t line_start = 0U;
-            while (line_start < text.size()) {
-                const std::size_t line_end = text.find('\n', line_start);
-                std::string_view line =
-                    text.substr(line_start, line_end == std::string_view::npos
-                                                ? std::string_view::npos
-                                                : line_end - line_start);
-                while (!line.empty() &&
-                       std::isspace(static_cast<unsigned char>(line.front())) != 0) {
-                    line.remove_prefix(1U);
-                }
-                if (!line.empty() && line.front() != '#' &&
-                    starts_with_ascii(line, "orientation")) {
-                    line.remove_prefix(std::string_view{"orientation"}.size());
-                    while (!line.empty() &&
-                           std::isspace(static_cast<unsigned char>(line.front())) != 0) {
-                        line.remove_prefix(1U);
-                    }
-                    if (!line.empty() && line.front() == '=') {
-                        return true;
-                    }
-                }
-                if (line_end == std::string_view::npos) {
-                    break;
-                }
-                line_start = line_end + 1U;
-            }
-            return false;
-        }
-
-        [[nodiscard]] frontend_sdk::display_orientation
-        default_orientation_for_set(const std::string& set_name,
-                                    const std::optional<std::string>& parent,
-                                    const std::string& rom_path) {
-            if (is_vertical_cps2_family(set_name) ||
-                (parent.has_value() && is_vertical_cps2_family(*parent))) {
-                return frontend_sdk::display_orientation::vertical;
-            }
-            if (!rom_path.empty()) {
-                namespace fs = std::filesystem;
-                if (is_vertical_cps2_family(fs::path(rom_path).stem().string())) {
-                    return frontend_sdk::display_orientation::vertical;
-                }
-            }
-            return frontend_sdk::display_orientation::horizontal;
-        }
-
         // Resolve a clone set's parent zip beside the clone on disk and compose a
         // fallback provider (clone first, then parent) while carrying any parent
         // zip-contained key candidates for validated CPS2 key recovery.
@@ -798,10 +740,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                 return result;
             }
             result.set_name = parsed.value->name;
-            result.orientation = manifest_declares_orientation(text)
-                                     ? to_display_orientation(parsed.value->orientation)
-                                     : default_orientation_for_set(parsed.value->name,
-                                                                   parsed.value->parent, rom_path);
+            result.orientation = to_display_orientation(parsed.value->orientation);
             result.players = parsed.value->players;
             result.input_profile = input_profile_for(parsed.value->input, result.players);
             result.analog_input_mode = analog_input_mode_for(result.input_profile);
