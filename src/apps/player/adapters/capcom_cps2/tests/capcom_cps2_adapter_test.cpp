@@ -399,35 +399,35 @@ TEST_CASE("capcom_cps2_adapter exposes CPS2 bus diagnostics registers",
     CHECK(saw_snapshot_tail);
 }
 
-TEST_CASE("capcom_cps2_adapter drains native QSound at the CPS2 frame cadence",
+TEST_CASE("capcom_cps2_adapter drains CPS2 QSound at the historical 44.1 kHz cadence",
           "[capcom_cps2][adapter][audio]") {
+    constexpr std::uint32_t cps2_audio_output_rate = 44'100U;
     std::vector<std::uint8_t> program(0x40U, 0x00U);
     capcom_cps2_adapter adapter(std::move(program), "audio");
 
     const auto initial = adapter.drain_audio();
     CHECK(initial.frame_count == 0U);
-    CHECK(initial.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
+    CHECK(initial.sample_rate == cps2_audio_output_rate);
 
     adapter.step_one_frame();
     const auto chunk = adapter.drain_audio();
     const std::uint32_t expected = static_cast<std::uint32_t>(
-        static_cast<std::uint64_t>(mnemos::chips::audio::qsound::native_sample_rate) *
-        cps2::refresh_hz_den / cps2::refresh_hz_num);
-    CHECK(chunk.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
+        static_cast<std::uint64_t>(cps2_audio_output_rate) * cps2::refresh_hz_den /
+        cps2::refresh_hz_num);
+    CHECK(chunk.sample_rate == cps2_audio_output_rate);
     CHECK(chunk.frame_count == expected);
     REQUIRE(chunk.samples != nullptr);
 
     const auto empty = adapter.drain_audio();
     CHECK(empty.frame_count == 0U);
-    CHECK(empty.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
+    CHECK(empty.sample_rate == cps2_audio_output_rate);
 
     for (int i = 0; i < 179; ++i) {
         adapter.step_one_frame();
     }
     const auto accumulated = adapter.drain_audio();
     const std::uint32_t expected_total = static_cast<std::uint32_t>(
-        180ULL * mnemos::chips::audio::qsound::native_sample_rate * cps2::refresh_hz_den /
-        cps2::refresh_hz_num);
+        180ULL * cps2_audio_output_rate * cps2::refresh_hz_den / cps2::refresh_hz_num);
     CHECK(accumulated.frame_count + chunk.frame_count == expected_total);
 }
 

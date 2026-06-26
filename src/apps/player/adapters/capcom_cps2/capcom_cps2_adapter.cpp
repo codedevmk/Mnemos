@@ -30,6 +30,10 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         namespace cps2 = mnemos::manifests::capcom_cps2;
 
         constexpr std::uint32_t cps2_adapter_state_version = 5U;
+        constexpr std::uint32_t cps2_audio_output_rate = 44'100U;
+        constexpr std::uint64_t cps2_qsound_rate_num = 60'000'000ULL / 2ULL;
+        constexpr std::uint64_t cps2_qsound_rate_den =
+            1'248ULL * static_cast<std::uint64_t>(cps2_audio_output_rate);
 
         struct loaded_set final {
             rom_set_image image;
@@ -968,22 +972,28 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     }
 
     frontend_sdk::audio_chunk capcom_cps2_adapter::drain_audio() noexcept {
-        // Match CPS1's QSound frontend contract: expose the DL-1425's native
-        // stream rate and let the player audio stream resample for the device.
-        constexpr std::uint32_t rate = chips::audio::qsound::native_sample_rate;
         const std::uint64_t due =
-            frames_stepped_ * static_cast<std::uint64_t>(rate) *
+            frames_stepped_ * static_cast<std::uint64_t>(cps2_audio_output_rate) *
             manifests::capcom_cps2::refresh_hz_den / manifests::capcom_cps2::refresh_hz_num;
         const std::uint64_t pending = due - samples_drained_;
         samples_drained_ = due;
         if (pending == 0U) {
-            return {.samples = nullptr, .frame_count = 0U, .sample_rate = rate};
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = cps2_audio_output_rate};
         }
         audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
-        sys_->qsound_dsp().generate(audio_buf_);
+        auto& qsound = sys_->qsound_dsp();
+        for (std::size_t frame = 0U; frame < static_cast<std::size_t>(pending); ++frame) {
+            qsound_output_accum_ += cps2_qsound_rate_num;
+            while (qsound_output_accum_ >= cps2_qsound_rate_den) {
+                qsound_output_accum_ -= cps2_qsound_rate_den;
+                qsound.step();
+            }
+            audio_buf_[frame * 2U] = qsound.last_left();
+            audio_buf_[frame * 2U + 1U] = qsound.last_right();
+        }
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
-                .sample_rate = rate};
+                .sample_rate = cps2_audio_output_rate};
     }
 
     void capcom_cps2_adapter::apply_input(int port,
