@@ -45,7 +45,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_apps_player_irem_m52_adapter_test
         SOURCES tests/irem_m52_adapter_test.cpp
-        LIBRARIES mnemos::apps::player::irem_m52_adapter mnemos::compression mnemos::io
+        LIBRARIES
+            mnemos::apps::player::irem_m52_adapter
+            mnemos::compression
+            mnemos::io
+            mnemos::security::cryptography
         ARGS "~[data]"
     )
 
@@ -57,6 +61,16 @@ if(BUILD_TESTING)
     )
     set_tests_properties(
         mnemos_apps_player_irem_m52_corpus_golden_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
+    add_test(
+        NAME mnemos_apps_player_irem_m52_parity_hash_golden_test
+        COMMAND
+            mnemos_apps_player_irem_m52_adapter_test
+            "irem_m52_adapter matches optional visual/audio parity hashes for a real M52 set"
+    )
+    set_tests_properties(
+        mnemos_apps_player_irem_m52_parity_hash_golden_test
         PROPERTIES SKIP_RETURN_CODE 4
     )
 endif()

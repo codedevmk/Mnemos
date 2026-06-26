@@ -214,6 +214,11 @@ machines:
         data_gated: true
         data_env: MNEMOS_M52_SET_DIR
         requires_apps: true
+      - id: GLD-M52-PARITY-HASH
+        ctest: mnemos_apps_player_irem_m52_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_M52_PARITY_SET
+        requires_apps: true
 
   irem_m72:
     module: src/manifests/irem_m72

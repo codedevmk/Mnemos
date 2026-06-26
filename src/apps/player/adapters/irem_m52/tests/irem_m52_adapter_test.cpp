@@ -3,6 +3,7 @@
 #include "file.hpp"
 #include "m52_game_manifests.hpp"
 #include "rom_set_toml.hpp"
+#include "sha256.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -190,6 +191,41 @@ size = 0x10000
         return count;
     }
 
+    [[nodiscard]] std::string sha256_hex(std::span<const std::uint8_t> bytes) {
+        return mnemos::security::cryptography::sha256(bytes).hex();
+    }
+
+    [[nodiscard]] std::string
+    hash_framebuffer_rgba(const mnemos::chips::frame_buffer_view& view) {
+        std::vector<std::uint8_t> bytes;
+        bytes.reserve(static_cast<std::size_t>(view.width) * view.height * 4U);
+        const std::uint32_t stride = view.effective_stride();
+        for (std::uint32_t y = 0; y < view.height; ++y) {
+            const std::uint32_t* row =
+                view.pixels != nullptr ? view.pixels + static_cast<std::size_t>(y) * stride
+                                       : nullptr;
+            for (std::uint32_t x = 0; x < view.width; ++x) {
+                const std::uint32_t p = row != nullptr ? row[x] : 0U;
+                bytes.push_back(static_cast<std::uint8_t>((p >> 16U) & 0xFFU));
+                bytes.push_back(static_cast<std::uint8_t>((p >> 8U) & 0xFFU));
+                bytes.push_back(static_cast<std::uint8_t>(p & 0xFFU));
+                bytes.push_back(0xFFU);
+            }
+        }
+        return sha256_hex(bytes);
+    }
+
+    [[nodiscard]] std::string hash_audio_pcm_s16le(std::span<const std::int16_t> samples) {
+        std::vector<std::uint8_t> bytes;
+        bytes.reserve(samples.size() * 2U);
+        for (const std::int16_t sample : samples) {
+            const auto value = static_cast<std::uint16_t>(sample);
+            bytes.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+            bytes.push_back(static_cast<std::uint8_t>(value >> 8U));
+        }
+        return sha256_hex(bytes);
+    }
+
     [[nodiscard]] std::optional<std::string> environment_value(const char* name) {
 #ifdef _WIN32
         char* raw = nullptr;
@@ -206,6 +242,19 @@ size = 0x10000
         }
         return std::nullopt;
 #endif
+    }
+
+    [[nodiscard]] int env_positive_int(const char* name, int fallback) {
+        const auto value = environment_value(name);
+        if (!value.has_value()) {
+            return fallback;
+        }
+        char* end = nullptr;
+        const long parsed = std::strtol(value->c_str(), &end, 10);
+        if (end == value->c_str() || parsed <= 0L) {
+            return fallback;
+        }
+        return static_cast<int>(parsed);
     }
 
     [[nodiscard]] std::vector<std::string> split_paths(const std::string& value) {
@@ -415,5 +464,91 @@ TEST_CASE("irem_m52_adapter validates real M52 ROM sets", "[irem_m52][data]") {
         CHECK(spec_has(clone, "DIP switches", "13"));
         clone.step_one_frame();
         CHECK(nonblack_pixels(clone.current_frame()) > 0U);
+    }
+}
+
+TEST_CASE("irem_m52_adapter matches optional visual/audio parity hashes for a real M52 set",
+          "[irem_m52][data]") {
+    struct parity_result final {
+        std::string set_name;
+        std::string frame_hash;
+        std::string audio_hash;
+        std::uint64_t audio_frames{};
+        std::uint32_t sample_rate{};
+    };
+
+    const auto set_env = environment_value("MNEMOS_M52_PARITY_SET");
+    if (!set_env.has_value()) {
+        SKIP("set MNEMOS_M52_PARITY_SET to a reference-captured M52 set");
+    }
+    const auto expected_frame_hash = environment_value("MNEMOS_M52_PARITY_FRAME_SHA256");
+    const auto expected_audio_hash = environment_value("MNEMOS_M52_PARITY_AUDIO_SHA256");
+    if (!expected_frame_hash.has_value() && !expected_audio_hash.has_value()) {
+        SKIP("set MNEMOS_M52_PARITY_FRAME_SHA256 and/or MNEMOS_M52_PARITY_AUDIO_SHA256");
+    }
+
+    const int frames = env_positive_int("MNEMOS_M52_PARITY_FRAMES", 600);
+    const bool collect_audio = expected_audio_hash.has_value();
+
+    auto run_once = [&](bool want_audio) -> parity_result {
+        auto bytes = mnemos::io::read_file(*set_env);
+        REQUIRE(bytes.has_value());
+        irem::irem_m52_adapter adapter(std::move(*bytes), "m52-parity", nullptr, {},
+                                       *set_env);
+        REQUIRE_FALSE(adapter.set_name().empty());
+        REQUIRE_FALSE(adapter.media_capabilities().media.empty());
+        REQUIRE(adapter.media_capabilities().media.front().validation_issues.empty());
+
+        std::vector<std::int16_t> audio_samples;
+        std::uint32_t sample_rate = 0U;
+        std::uint64_t audio_frames = 0U;
+        for (int frame = 0; frame < frames; ++frame) {
+            adapter.step_one_frame();
+            if (want_audio) {
+                const auto audio = adapter.drain_audio();
+                sample_rate = audio.sample_rate;
+                audio_frames += audio.frame_count;
+                if (audio.samples != nullptr && audio.frame_count != 0U) {
+                    const auto* begin = audio.samples;
+                    const auto* end = begin + static_cast<std::size_t>(audio.frame_count) * 2U;
+                    audio_samples.insert(audio_samples.end(), begin, end);
+                }
+            }
+        }
+
+        const auto frame = adapter.current_frame();
+        CHECK(nonblack_pixels(frame) > 0U);
+
+        parity_result result{};
+        result.set_name = adapter.set_name();
+        result.frame_hash = hash_framebuffer_rgba(frame);
+        if (want_audio) {
+            result.audio_hash = hash_audio_pcm_s16le(audio_samples);
+            result.audio_frames = audio_frames;
+            result.sample_rate = sample_rate;
+        }
+        return result;
+    };
+
+    const parity_result first = run_once(collect_audio);
+    const parity_result second = run_once(collect_audio);
+
+    INFO("set=" << first.set_name << " frames=" << frames
+                << " frame_sha256=" << first.frame_hash
+                << " audio_sha256=" << first.audio_hash
+                << " audio_frames=" << first.audio_frames
+                << " sample_rate=" << first.sample_rate);
+    CHECK(second.set_name == first.set_name);
+    CHECK(second.frame_hash == first.frame_hash);
+    if (expected_frame_hash.has_value()) {
+        CHECK(first.frame_hash == *expected_frame_hash);
+    }
+    if (expected_audio_hash.has_value()) {
+        REQUIRE(first.audio_frames > 0U);
+        CHECK(first.sample_rate == m52::audio_rate_hz);
+        CHECK(second.audio_frames == first.audio_frames);
+        CHECK(second.sample_rate == first.sample_rate);
+        CHECK(second.audio_hash == first.audio_hash);
+        CHECK(first.audio_hash == *expected_audio_hash);
     }
 }
