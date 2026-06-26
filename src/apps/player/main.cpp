@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -59,6 +60,10 @@ namespace {
     constexpr std::uint32_t kOverlayBgColor = 0xFF000000U; // opaque black panel
     constexpr std::uint32_t kOverlayFgColor = 0xFFFFFFFFU; // white text
     constexpr int kOverlayScreenMargin = 8;
+    constexpr int kAudioPrimeMs = 120;
+    constexpr int kAudioMaxCatchupFrames = 3;
+    constexpr int kAudioChannels = 2;
+    constexpr int kAudioBytesPerSample = static_cast<int>(sizeof(std::int16_t));
 
     struct dst_rect {
         int x{}, y{}, w{}, h{};
@@ -232,8 +237,40 @@ namespace {
         std::fflush(stderr);
     }
 
+    [[nodiscard]] int audio_prime_bytes(std::uint32_t source_rate) noexcept {
+        const std::uint64_t bytes =
+            static_cast<std::uint64_t>(source_rate) * kAudioPrimeMs *
+            static_cast<std::uint64_t>(kAudioChannels * kAudioBytesPerSample) / 1000ULL;
+        return bytes > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+                   ? std::numeric_limits<int>::max()
+                   : static_cast<int>(bytes);
+    }
+
+    void maybe_resume_primed_audio(SDL_AudioStream* audio_stream, bool& audio_started,
+                                   int prime_bytes) {
+        if (audio_stream == nullptr || audio_started) {
+            return;
+        }
+        const int queued = SDL_GetAudioStreamQueued(audio_stream);
+        if (queued >= prime_bytes && SDL_ResumeAudioStreamDevice(audio_stream)) {
+            audio_started = true;
+        }
+    }
+
+    void queue_audio_chunk(SDL_AudioStream* audio_stream, bool& audio_started, int prime_bytes,
+                           mnemos::frontend_sdk::audio_chunk audio) {
+        if (audio_stream == nullptr || audio.samples == nullptr || audio.frame_count == 0U) {
+            return;
+        }
+        const int byte_count =
+            static_cast<int>(audio.frame_count * kAudioChannels * sizeof(std::int16_t));
+        if (SDL_PutAudioStreamData(audio_stream, audio.samples, byte_count)) {
+            maybe_resume_primed_audio(audio_stream, audio_started, prime_bytes);
+        }
+    }
+
     void load_quick_state(mnemos::frontend_sdk::player_system* system, const std::string& path,
-                          SDL_AudioStream* audio_stream) {
+                          SDL_AudioStream* audio_stream, bool* audio_started) {
         if (system == nullptr || path.empty()) {
             return;
         }
@@ -254,7 +291,11 @@ namespace {
                          load_status_name(result.status));
         } else {
             if (audio_stream != nullptr) {
+                SDL_PauseAudioStreamDevice(audio_stream);
                 SDL_ClearAudioStream(audio_stream);
+                if (audio_started != nullptr) {
+                    *audio_started = false;
+                }
             }
             std::fprintf(stderr, "[mnemos_player] quick loaded: %s\n", path.c_str());
         }
@@ -532,9 +573,12 @@ int main(int argc, char* argv[]) {
     // The adapter reports its native stereo s16 sample rate via drain_audio();
     // SDL_AudioStream resamples to the device rate.
     SDL_AudioStream* audio_stream = nullptr;
+    bool audio_started = false;
+    int audio_prime_threshold = 0;
     if (system) {
         const auto chunk = system->drain_audio(); // probe for sample rate
         const std::uint32_t rate = mnemos::apps::player::select_audio_stream_sample_rate(chunk);
+        audio_prime_threshold = audio_prime_bytes(rate);
         SDL_AudioSpec spec{};
         spec.format = SDL_AUDIO_S16;
         spec.channels = 2;
@@ -542,8 +586,8 @@ int main(int argc, char* argv[]) {
         audio_stream =
             SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
         if (audio_stream != nullptr) {
-            SDL_ResumeAudioStreamDevice(audio_stream);
-            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16\n", rate);
+            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16 (prime %d ms)\n", rate,
+                         kAudioPrimeMs);
         } else {
             std::fprintf(stderr, "[mnemos_player] SDL_OpenAudioDeviceStream failed: %s\n",
                          SDL_GetError());
@@ -587,7 +631,7 @@ int main(int argc, char* argv[]) {
                 } else if (event.key.key == SDLK_F5) {
                     save_quick_state(system.get(), quick_state_path);
                 } else if (event.key.key == SDLK_F9) {
-                    load_quick_state(system.get(), quick_state_path, audio_stream);
+                    load_quick_state(system.get(), quick_state_path, audio_stream, &audio_started);
                 } else if (event.key.key == SDLK_F11) {
                     fullscreen = !fullscreen;
                     SDL_SetWindowFullscreen(window, fullscreen);
@@ -817,28 +861,26 @@ int main(int argc, char* argv[]) {
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
         const Uint64 now_ticks = SDL_GetPerformanceCounter();
-        const bool frame_due = !paused && now_ticks >= next_frame_at;
-        if (frame_due) {
-            next_frame_at += static_cast<Uint64>(frame_ticks);
-            // If we drifted far behind (e.g. window dragged), don't try to
-            // catch up infinitely -- skip ahead.
-            if (now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
+        int frames_due = 0;
+        if (!paused) {
+            while (now_ticks >= next_frame_at && frames_due < kAudioMaxCatchupFrames) {
+                ++frames_due;
+                next_frame_at += static_cast<Uint64>(frame_ticks);
+            }
+            // If the emulator is still far behind after the bounded catch-up
+            // pass, resync to wall clock instead of accumulating unbounded debt.
+            if (frames_due == kAudioMaxCatchupFrames &&
+                now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
                 next_frame_at = now_ticks + static_cast<Uint64>(frame_ticks);
             }
         }
         if (system) {
-            if (frame_due) {
+            for (int step = 0; step < frames_due; ++step) {
                 system->step_one_frame();
                 ++fps_window_frames;
                 ++total_frames;
-                if (audio_stream != nullptr) {
-                    const auto audio = system->drain_audio();
-                    if (audio.samples != nullptr && audio.frame_count > 0U) {
-                        SDL_PutAudioStreamData(
-                            audio_stream, audio.samples,
-                            static_cast<int>(audio.frame_count * 2U * sizeof(std::int16_t)));
-                    }
-                }
+                queue_audio_chunk(audio_stream, audio_started, audio_prime_threshold,
+                                  system->drain_audio());
             }
             const auto fb = system->current_frame();
             src_w = fb.width;
