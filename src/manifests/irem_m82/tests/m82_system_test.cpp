@@ -627,6 +627,40 @@ TEST_CASE("m82 composes visible scanlines before raster-time palette writes", "[
     CHECK(system->pic.isr() == 0x04U);
 }
 
+TEST_CASE("m82 palette bus mirrors KNA91 low-byte access", "[m82]") {
+    namespace m82 = mnemos::manifests::irem_m82;
+
+    rom_set_image image;
+    image.regions.emplace("maincpu", synthetic_m82_program());
+
+    auto system = m82::assemble_m82(std::move(image), m82::board_params_for("rtype2"));
+    REQUIRE(system != nullptr);
+
+    system->main_bus.write8(m82::palette_ram_base + 0x000U, 0xE7U);
+    CHECK(system->palette_ram[0x000U] == 0x07U);
+    CHECK(system->main_bus.read8(m82::palette_ram_base + 0x000U) == 0xE7U);
+    CHECK(system->main_bus.read8(m82::palette_ram_base + 0x001U) == 0xFFU);
+
+    system->main_bus.write8(m82::palette_ram_base + 0x200U, 0x3FU);
+    CHECK(system->palette_ram[0x000U] == 0x1FU);
+    CHECK(system->palette_ram[0x200U] == 0x00U);
+    CHECK(system->main_bus.read8(m82::palette_ram_base + 0x200U) == 0xFFU);
+
+    system->main_bus.write8(m82::palette_ram_base + 0x201U, 0x00U);
+    CHECK(system->palette_ram[0x001U] == 0x00U);
+    CHECK(system->main_bus.read8(m82::palette_ram_base + 0x201U) == 0xFFU);
+
+    system->main_bus.write8(m82::palette_ram_base + 0x600U, 0x12U);
+    CHECK(system->palette_ram[0x400U] == 0x12U);
+    CHECK(system->palette_ram[0x600U] == 0x00U);
+    CHECK(system->main_bus.read8(m82::palette_ram_base + 0x400U) == 0xF2U);
+
+    system->main_bus.write16_le(m82::palette_ram_base + 0xA00U, 0x001AU);
+    CHECK(system->palette_ram[0x800U] == 0x1AU);
+    CHECK(system->palette_ram[0xA00U] == 0x00U);
+    CHECK(system->main_bus.read16_le(m82::palette_ram_base + 0x800U) == 0xFFFAU);
+}
+
 TEST_CASE("m82 video renders VRAM-backed tile rows with rowscroll", "[m82][video]") {
     namespace m82 = mnemos::manifests::irem_m82;
 

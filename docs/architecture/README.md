@@ -19,3 +19,5 @@ Reading order:
   allocator, and observes execution from the outside (page-protection watchpoints, boundary
   diffs, lockstep cross-engine diff). Folder/module layout, dependency direction, and build
   order. Companion to `apm-tracer-tasks.md`.
+- `factsheets/irem-system-boards-reference.md` — Irem M-series board-family reference used
+  to keep M72/M81/M82/M84/M107 work classified by board lineage and shared custom silicon.

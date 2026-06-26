@@ -1,6 +1,6 @@
 # Irem Arcade Feature Handoff
 
-Date: 2026-06-25
+Date: 2026-06-26
 
 ## Resume Point
 
@@ -48,6 +48,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - Player-routable R-Type II profile via `--system irem_m82`.
 - Wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real R-Type II data-gated smoke.
+- The M82 palette window now uses the shared KNA91-style CPU-visible contract already proven for M72: low-byte-only 5-bit writes, high-byte open bus, and disconnected-A9 mirrors, while the renderer keeps canonical R/G/B plane storage.
 - The M82 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 
 ### Irem M84
@@ -111,6 +112,7 @@ $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 Important local corpus facts:
 
 - `D:\emu\irem\imgfightjb.zip` exists. ZIP versus unpacked folder is not the blocker; the loader supports both. The relevant distinction is split, merged, parent, and standalone composition.
+- `docs\architecture\factsheets\irem-system-boards-reference.md` records the local Irem M-series board-family reference; `docs\architecture\README.md` links it so M72/M81/M82/M84/M107 work stays classified by lineage and shared custom silicon.
 - `D:\emu\irem\imgfight.zip`, `D:\emu\irem\imgfightj.zip`, `D:\emu\irem\imgfightj.7z`, `D:\emu\irem\imgfightjb.zip`, and `D:\emu\irem\imgfightjb.7z` are local corpus inputs for sorting Image Fight parent/clone composition.
 - `scripts\irem\inventory-corpus.ps1` now emits per-item `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and `load_readiness` fields plus a grouped `tracked_sets` section. Current local Image Fight grouping: `imgfight` is the M72 parent/standalone set with two direct player-loadable ZIP/folder routes plus one metadata-only `.7z`; `imgfightj` and `imgfightjb` are M72 clones declaring parent `imgfight`, each with one direct player-loadable ZIP plus one metadata-only `.7z`.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
@@ -344,6 +346,18 @@ M82 broad-corpus selection continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips
 
+M82 KNA91 palette-bus continuation validation on 2026-06-26:
+
+- Imported the Irem M-series fact sheet into `docs\architecture\factsheets\irem-system-boards-reference.md` and linked it from `docs\architecture\README.md`.
+- `git diff --check`: clean, with only existing CRLF conversion warnings.
+- Focused M82 build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m82_test`
+- Focused M82 CTest with `MNEMOS_M82_SET_DIR=D:\emu\irem`: `1/1`
+  - `mnemos_manifests_irem_m82_test`
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -365,7 +379,7 @@ Repository hygiene notes:
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
-5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette banking, and board timing.
+5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M82 palette-bank rendering/decode, M81 palette banking, and board timing.
 
 ## Resume Commands
 
