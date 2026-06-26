@@ -183,14 +183,26 @@ namespace {
             if (!std::filesystem::is_directory(root, ec)) {
                 continue;
             }
-            for (std::filesystem::directory_iterator it{root, ec}, end; !ec && it != end;
-                 it.increment(ec)) {
-                const auto path = it->path();
-                if (it->is_directory(ec)) {
+
+            std::vector<std::filesystem::path> candidates;
+            for (std::filesystem::recursive_directory_iterator it{
+                     root, std::filesystem::directory_options::skip_permission_denied, ec},
+                 end;
+                 !ec && it != end; it.increment(ec)) {
+                if (!it->is_directory(ec) && !it->is_regular_file(ec)) {
+                    continue;
+                }
+                candidates.push_back(it->path());
+            }
+            std::sort(candidates.begin(), candidates.end());
+
+            for (const auto& path : candidates) {
+                if (std::filesystem::is_directory(path, ec)) {
                     maybe_add(path.filename().string(), path);
                     continue;
                 }
-                if (!it->is_regular_file(ec) || !ends_with_zip(path.filename().string())) {
+                if (!std::filesystem::is_regular_file(path, ec) ||
+                    !ends_with_zip(path.filename().string())) {
                     continue;
                 }
                 const std::string stem = path.stem().string();
@@ -987,9 +999,11 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
           "[irem_m72][adapter][data]") {
     namespace m72 = mnemos::manifests::irem_m72;
 
-    // Data-gated (never committed): MNEMOS_M72_SET_DIR points at one directory
-    // or a platform path-list of directories containing <set>.zip, <set>\, or
-    // single-inner-set wrapper zips for each checked-in true-M72 manifest.
+    // Data-gated (never committed): MNEMOS_M72_SET_DIR points at one mixed
+    // corpus root or a platform path-list of roots containing <set>.zip,
+    // <set>\, or single-inner-set wrapper zips for each checked-in true-M72
+    // manifest. Roots are walked recursively, but only checked-in M72 set IDs
+    // are accepted.
     // Clone sets use the resolved source directory for parent fallback.
     // MNEMOS_M72_ROSTER_FRAMES can raise or lower the per-set warm-up window.
     const char* dir_env = opt_env("MNEMOS_M72_SET_DIR");
@@ -2350,13 +2364,16 @@ TEST_CASE("irem_m72 roster discovery indexes exact sets and wrapper zips", "[ire
     const auto root = std::filesystem::temp_directory_path() / "mnemos_irem_m72_roster_discovery";
     const auto exact_root = root / "exact";
     const auto wrapper_root = root / "wrappers";
+    const auto nested_wrapper_root = wrapper_root / "i8751";
+    std::error_code cleanup_ec;
+    std::filesystem::remove_all(root, cleanup_ec);
     REQUIRE(
         (std::filesystem::create_directories(exact_root) || std::filesystem::exists(exact_root)));
-    REQUIRE((std::filesystem::create_directories(wrapper_root) ||
-             std::filesystem::exists(wrapper_root)));
+    REQUIRE((std::filesystem::create_directories(nested_wrapper_root) ||
+             std::filesystem::exists(nested_wrapper_root)));
 
     const auto rtype_path = exact_root / "rtype.zip";
-    const auto imgfight_wrapper_path = wrapper_root / "ImageFight_Arcade_EN.zip";
+    const auto imgfight_wrapper_path = nested_wrapper_root / "ImageFight_Arcade_EN.zip";
     REQUIRE(mnemos::io::write_file(rtype_path.string(),
                                    make_stored_zip(placeholder_entries_for(rtype_decl, 0x31U))));
     const auto imgfight_inner = make_stored_zip(placeholder_entries_for(imgfight_decl, 0x32U));

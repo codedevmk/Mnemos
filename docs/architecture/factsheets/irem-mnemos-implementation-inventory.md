@@ -199,7 +199,9 @@ visual and audio parity proof.
 - **Known blocked or incomplete local proof:** `gallopm72` still lacks
   `cc_c-pr-.ic1` CRC `0xac4421b1`; World `nspirit` still lacks
   `nin_c-pr-b.ic1` CRC `0x0f7b2713`; `lohtj` and `lohtb2` still lack complete
-  local set-specific artifacts in the broader scans.
+  local set-specific artifacts in the broader scans. The recursive
+  mixed-corpus roster gate now finds the local `lohtb3` wrapper under
+  `D:\emu\irem\i8751` from the single root `MNEMOS_M72_SET_DIR=D:\emu\irem`.
 - **Current exact local ZIP evidence:** direct CRC scanning of every entry in
   `D:\emu\irem\M72\gallopm72.zip`,
   `D:\emu\irem\M72\gallop.zip`, and
