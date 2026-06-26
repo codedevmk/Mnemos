@@ -85,10 +85,10 @@ function Get-Cps2AudioFrameCount {
         [Parameter(Mandatory = $true)][int]$DefaultFrames
     )
 
-    # Battle Circuit's attract-mode QSound program is active in the default
-    # window, but the regression row needs a gameplay-audio proof that exercises
-    # sustained PCM volume writes rather than only the first attract cue.
-    if ($SetId -eq "batcir" -and $DefaultFrames -lt 2500) {
+    # These rows keep the save/load screenshot checkpoint at 600 frames while
+    # using a longer repeated-gameplay audio window that proves nonzero QSound
+    # output plus audio-state register counters.
+    if (($SetId -eq "batcir" -or $SetId -eq "ddsom") -and $DefaultFrames -lt 2500) {
         return 2500
     }
 
@@ -104,13 +104,13 @@ function Get-Cps2AudioFrameCount {
 function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir" -or $SetId -eq "hsf2"
+    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir"
+    return $SetId -eq "batcir" -or $SetId -eq "ddsom"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
@@ -119,7 +119,7 @@ function Get-Cps2AudioGameplayPlayerCount {
         [Parameter(Mandatory = $true)][int]$DefaultPlayers
     )
 
-    if ($SetId -eq "batcir") {
+    if ($SetId -eq "batcir" -or $SetId -eq "ddsom") {
         return 4
     }
     return $DefaultPlayers
