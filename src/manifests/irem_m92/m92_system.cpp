@@ -90,6 +90,9 @@ namespace mnemos::manifests::irem_m92 {
             if (layout == "m92_e_b") {
                 return 5U;
             }
+            if (layout == "m92_b_d") {
+                return 6U;
+            }
             return 0U;
         }
 
@@ -117,6 +120,8 @@ namespace mnemos::manifests::irem_m92 {
                 return 0x43U;
             case 5U:
                 return 0x29U;
+            case 6U:
+                return 0x4DU;
             default:
                 return 0x23U;
             }
@@ -166,6 +171,9 @@ namespace mnemos::manifests::irem_m92 {
         }
         if (set_name == "inthunt") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_e_b"};
+        }
+        if (set_name == "nbbatman" || set_name == "nbbatmanu") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_d"};
         }
         return {};
     }

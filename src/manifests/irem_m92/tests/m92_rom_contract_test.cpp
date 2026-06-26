@@ -65,6 +65,16 @@ namespace {
              {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x040000U}},
             {"mysticrib",
              {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x040000U}},
+            {"nbbatman",
+             {.tiles_size = 0x200000U,
+              .sprites_size = 0x400000U,
+              .samples_size = 0x080000U,
+              .players = 4U}},
+            {"nbbatmanu",
+             {.tiles_size = 0x200000U,
+              .sprites_size = 0x400000U,
+              .samples_size = 0x080000U,
+              .players = 4U}},
         };
         return contracts;
     }
