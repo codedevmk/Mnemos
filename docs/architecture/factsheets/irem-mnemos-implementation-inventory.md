@@ -229,6 +229,13 @@ visual and audio parity proof.
   `nin_c-pr-b.ic1` target. An exhaustive CRC scan
   of ZIP members and loose files under `D:\emu\irem\M72` also found zero matches
   for `0xac4421b1` or `0x0f7b2713`.
+- **Current mixed-archive scan evidence:** the M72 artifact scanner now skips
+  unreadable entries inside unrelated `.7z` archives instead of aborting the
+  corpus walk. The previously failing
+  `D:\emu\Chaos Field (English v1.0)[Analog Stick Enabled][cdi].7z` probe now
+  completes as a 0/20 non-match, and a rerun across `D:\emu\irem` plus
+  `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` still reports `83/94` present
+  for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`.
 - **Correct gfx/music:** not certified. The board has the strongest current
   graphics/music implementation, but final visual priority, protection behavior,
   DIP/manual proof, raster phase, and audio parity are still open.

@@ -280,6 +280,15 @@ MCU under MCU-like entries; the current scanner report lists that entry under
 `gallop.zip` has sprite/voice entries but no `cc_c-pr-.ic1`. An exhaustive CRC
 scan of ZIP members and loose files under `D:\emu\irem\M72` likewise found zero
 matches for `0xac4421b1` or `0x0f7b2713`.
+The artifact scanner now tolerates unreadable entries while walking unrelated
+`.7z` archives, so a broad mixed storage probe can skip bad archive members
+instead of aborting before Irem evidence is collected; the patched scanner
+finishes the previously failing
+`D:\emu\Chaos Field (English v1.0)[Analog Stick Enabled][cdi].7z` case as a
+clean 0/20 non-match. A current rerun across `D:\emu\irem` plus
+`D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` still reports `83/94` present
+for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, with the same 11 missing
+targets.
 
 Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
 `-RomDir` values, handles collection ZIP forms, and treats sorted non-M72 roots

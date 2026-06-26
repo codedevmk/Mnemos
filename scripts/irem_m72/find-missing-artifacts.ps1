@@ -438,7 +438,13 @@ function Scan-ZipFile {
 
 function Scan-SevenZipFile {
     param([Parameter(Mandatory = $true)][string]$Path)
-    $entries = @(& tar -tf $Path 2>$null)
+    $entries = @()
+    try {
+        $entries = @(& tar -tf $Path 2>$null)
+    } catch {
+        Write-Verbose ("Unable to list archive with tar: {0}" -f $Path)
+        return
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Unable to list archive with tar: $Path"
         return
@@ -455,8 +461,14 @@ function Scan-SevenZipFile {
         }
         $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("mnemos-m72-artifact-{0}.bin" -f [guid]::NewGuid().ToString("N"))
         try {
-            & tar -xOf $Path $entry > $temp 2>$null
+            try {
+                & tar -xOf $Path $entry > $temp 2>$null
+            } catch {
+                Write-Verbose ("Skipping unreadable archive entry: {0}!{1}" -f $Path, $entry)
+                continue
+            }
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $temp -PathType Leaf)) {
+                Write-Verbose ("Skipping unreadable archive entry: {0}!{1}" -f $Path, $entry)
                 continue
             }
             $raw = [System.IO.File]::ReadAllBytes($temp)
