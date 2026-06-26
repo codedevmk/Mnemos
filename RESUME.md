@@ -100,10 +100,14 @@ Important local corpus facts:
 
 - `D:\emu\irem\imgfightjb.zip` exists. ZIP versus unpacked folder is not the blocker; the loader supports both. The relevant distinction is split, merged, parent, and standalone composition.
 - `D:\emu\irem\imgfight.zip`, `D:\emu\irem\imgfightj.zip`, `D:\emu\irem\imgfightj.7z`, `D:\emu\irem\imgfightjb.zip`, and `D:\emu\irem\imgfightjb.7z` are local corpus inputs for sorting Image Fight parent/clone composition.
+- `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
 - World `nspirit` is incomplete locally: missing `mcu/nin_c-pr-b.ic1`, size `0x1000`, CRC `0x0f7b2713`.
+- If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
-- `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. Dedicated M72 corpus smoke still passed for configured R-Type/protected/vertical artifacts.
+- `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\m72 -Recurse` currently passes `9/12` discovered M72 smoke groups. `gallopm72` and `nspirit` fail because `media_clean=False` from the missing MCU dumps. `imgfight` from `D:\emu\irem\m72\imgfight` alone fails because that raw folder lacks `if_c-pr-a.ic1`, but the mixed-source smoke `-Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight` passes `1/1`.
+- `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. Do not set it to the current partial `D:\emu\irem\m72` tree and call that a full-roster proof; use the smoke runner for partial corpus evidence until all authentic roster artifacts are present.
 
 ## Latest Validation Evidence
 
@@ -121,6 +125,13 @@ Final handoff validation completed on 2026-06-25 21:05 -05:00:
 - Irem M72 corpus smoke from the data-gated script: `2/2` passed for configured R-Type/protected/vertical artifacts
 - M72 roster golden still skipped because `MNEMOS_M72_SET_DIR` was intentionally unset; Gallop and World Ninja Spirit remain blocked by missing local MCU dumps
 - CPS2 corpus smoke skipped because no CPS2 env vars were set for this Irem handoff
+
+Continuation validation on 2026-06-25 21:19 -05:00:
+
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit`: `42/44` present, missing only `cc_c-pr-.ic1` and `nin_c-pr-b.ic1`, with suggested placements under `D:\emu\irem\m72\gallop\` and `D:\emu\irem\m72\nspirit\`
+- Same artifact command with `-Set 'gallopm72,nspirit'` validates the comma-separated set-list path
+- `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight -MaxSets 1`: `1/1` passed
+- `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\gallop.zip,D:\emu\irem\m72\gallop -MaxSets 1`: expected failure with `media_clean=False`, lit screenshot, and missing `cc_c-pr-.ic1`
 
 M107 slice validation that passed:
 

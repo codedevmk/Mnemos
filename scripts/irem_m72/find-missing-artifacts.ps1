@@ -73,6 +73,21 @@ function New-StringSet {
     return ,([System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase))
 }
 
+function Split-CommaList {
+    param([AllowEmptyCollection()][string[]]$Values)
+    foreach ($value in $Values) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            continue
+        }
+        foreach ($part in $value.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $trimmed = $part.Trim()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                $trimmed
+            }
+        }
+    }
+}
+
 function Add-TargetAlias {
     param(
         [Parameter(Mandatory = $true)][object]$Target,
@@ -431,8 +446,55 @@ function Scan-Path {
     }
 }
 
+function Get-SetDirectoryAliases {
+    param([Parameter(Mandatory = $true)][string]$SetId)
+
+    $aliases = [System.Collections.Generic.List[string]]::new()
+    $aliases.Add($SetId)
+    if ($SetId.EndsWith("m72", [System.StringComparison]::OrdinalIgnoreCase) -and
+        $SetId.Length -gt 3) {
+        $aliases.Add($SetId.Substring(0, $SetId.Length - 3))
+    }
+    return @($aliases | Sort-Object -Unique)
+}
+
+function Get-SuggestedMissingLocations {
+    param(
+        [Parameter(Mandatory = $true)][object]$Target,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Roots
+    )
+
+    $locations = [System.Collections.Generic.List[string]]::new()
+    $setAliases = @(Get-SetDirectoryAliases -SetId $Target.set)
+    foreach ($root in $Roots) {
+        if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+            continue
+        }
+        foreach ($setAlias in $setAliases) {
+            foreach ($baseDir in @($root, (Join-Path $root "m72"))) {
+                $setDir = Join-Path $baseDir $setAlias
+                if (Test-Path -LiteralPath $setDir -PathType Container) {
+                    $candidate = Join-Path $setDir $Target.name
+                    if (-not $locations.Contains($candidate)) {
+                        $locations.Add($candidate)
+                    }
+                }
+
+                $zipPath = Join-Path $baseDir ("{0}.zip" -f $setAlias)
+                if (Test-Path -LiteralPath $zipPath -PathType Leaf) {
+                    $candidate = "{0}!{1}" -f $zipPath, $Target.name
+                    if (-not $locations.Contains($candidate)) {
+                        $locations.Add($candidate)
+                    }
+                }
+            }
+        }
+    }
+    return @($locations)
+}
+
 $wantedSets = New-StringSet
-foreach ($setId in $Set) {
+foreach ($setId in Split-CommaList $Set) {
     if (-not [string]::IsNullOrWhiteSpace($setId)) {
         [void]$wantedSets.Add($setId)
     }
@@ -504,6 +566,7 @@ $resultTargets = @($allTargets | ForEach-Object {
         present = ($_.matches.Count -gt 0)
         matches = @($_.matches)
         name_hits = @($_.name_hits)
+        suggested_locations = @(Get-SuggestedMissingLocations -Target $_ -Roots @($resolvedRoots))
     }
 })
 
@@ -533,7 +596,9 @@ $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Out -Encoding utf
 $missing = @($resultTargets | Where-Object { -not $_.present })
 Write-Host ("Irem M72 artifact scan: {0}/{1} present; report: {2}" -f ($allTargets.Count - $missing.Count), $allTargets.Count, $Out)
 foreach ($target in $missing | Select-Object -First 20) {
-    Write-Host ("  [missing] {0}:{1}:{2} crc={3} size={4}" -f $target.set, $target.region, $target.name, $target.crc32, $target.size) -ForegroundColor DarkYellow
+    $suggestion = @($target.suggested_locations | Select-Object -First 1)
+    $suffix = if ($suggestion.Count -gt 0) { " suggested={0}" -f $suggestion[0] } else { "" }
+    Write-Host ("  [missing] {0}:{1}:{2} crc={3} size={4}{5}" -f $target.set, $target.region, $target.name, $target.crc32, $target.size, $suffix) -ForegroundColor DarkYellow
 }
 if ($missing.Count -gt 20) {
     Write-Host ("  ... {0} more missing artifact(s)" -f ($missing.Count - 20)) -ForegroundColor DarkYellow

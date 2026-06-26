@@ -41,6 +41,21 @@ function Split-PathList {
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 }
 
+function Split-CommaList {
+    param([AllowEmptyCollection()][string[]]$Values)
+    foreach ($value in $Values) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            continue
+        }
+        foreach ($part in $value.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $trimmed = $part.Trim()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                $trimmed
+            }
+        }
+    }
+}
+
 function Add-RomPath {
     param(
         [Parameter(Mandatory = $true)]
@@ -525,7 +540,7 @@ foreach ($frame in $FallbackFrames) {
 }
 
 $roms = [System.Collections.Generic.List[string]]::new()
-foreach ($path in $Rom) {
+foreach ($path in Split-CommaList $Rom) {
     Add-RomPath -Paths $roms -Path $path
 }
 foreach ($name in @("MNEMOS_M72_RTYPE_SET", "MNEMOS_M72_PROTECTED_SET", "MNEMOS_M72_VERTICAL_SET")) {
@@ -533,7 +548,7 @@ foreach ($name in @("MNEMOS_M72_RTYPE_SET", "MNEMOS_M72_PROTECTED_SET", "MNEMOS_
 }
 
 $romDirs = [System.Collections.Generic.List[string]]::new()
-foreach ($dirValue in $RomDir) {
+foreach ($dirValue in Split-CommaList $RomDir) {
     foreach ($dirPath in Split-PathList $dirValue) {
         $romDirs.Add($dirPath)
     }
@@ -771,7 +786,7 @@ $failed = @($results | Where-Object { -not $_.passed })
 Write-Host ("Irem M72 corpus smoke: {0}/{1} passed; summary: {2}" -f ($results.Count - $failed.Count), $results.Count, $summaryPath)
 if ($failed.Count -gt 0) {
     foreach ($row in $failed) {
-        Write-Host ("  [fail] {0} save={1} load={2} lit={3}" -f $row.set, $row.save_exit, $row.load_exit, $row.screenshot_lit) -ForegroundColor Red
+        Write-Host ("  [fail] {0} resolved={1} save={2} load={3} lit={4} media_clean={5}" -f $row.set, $row.resolved_set, $row.save_exit, $row.load_exit, $row.screenshot_lit, $row.media_clean) -ForegroundColor Red
         foreach ($issue in @($row.media_issues) | Select-Object -First 3) {
             Write-Host ("    {0}" -f $issue) -ForegroundColor DarkYellow
         }

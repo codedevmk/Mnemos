@@ -252,7 +252,9 @@ Loader note: no-dump HLE profiles now also disable when their declared `samples`
 Artifact note: extracting the Darksoft raw `gallop`/`nspirit` folders proves
 the raw-name aliases load through `mnemos_player`; the extracted-folder scan is
 42/44 present and still missing only `gallopm72:mcu:cc_c-pr-.ic1:ac4421b1` and
-`nspirit:mcu:nin_c-pr-b.ic1:0f7b2713`. `nspirit` can reach a lit fallback
+`nspirit:mcu:nin_c-pr-b.ic1:0f7b2713`; the artifact scanner reports suggested
+local placements under `D:\emu\irem\m72\gallop\` and
+`D:\emu\irem\m72\nspirit\` for lawful dumps. `nspirit` can reach a lit fallback
 frame with the MCU disabled, but it is still not counted as protected-board
 complete because the media remains incomplete. A bounded CRC scan of
 `D:\emu\arcade` finds the Cosmic Cop/Gallop non-MCU files but still no
