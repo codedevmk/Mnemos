@@ -2,7 +2,7 @@
 
 #include "bus.hpp"
 #include "chip.hpp"
-#include "okim6295.hpp"
+#include "irem_ga20.hpp"
 #include "rom_set.hpp"
 #include "state.hpp"
 #include "v30.hpp"
@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 1U;
+    inline constexpr std::uint32_t m107_system_state_version = 2U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -32,7 +32,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::uint32_t main_clock_hz = 14'318'181U;
     inline constexpr std::uint32_t sound_cpu_clock_hz = 7'159'090U;
     inline constexpr std::uint32_t fm_clock_hz = 3'579'545U;
-    inline constexpr std::uint32_t pcm_clock_hz = 1'000'000U;
+    inline constexpr std::uint32_t pcm_clock_hz = 3'579'545U;
     inline constexpr std::uint64_t main_cycles_per_frame =
         (static_cast<std::uint64_t>(main_clock_hz) * 1000U) / frame_rate_x1000;
     inline constexpr std::uint64_t sound_cycles_per_frame =
@@ -66,8 +66,9 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::uint16_t sound_port_reply = 0x02U;
     inline constexpr std::uint16_t sound_port_ym2151_addr = 0x10U;
     inline constexpr std::uint16_t sound_port_ym2151_data = 0x11U;
-    inline constexpr std::uint16_t sound_port_pcm_status = 0x20U;
-    inline constexpr std::uint16_t sound_port_pcm_command = 0x21U;
+    inline constexpr std::uint16_t sound_port_ga20_base = 0x20U;
+    inline constexpr std::uint16_t sound_port_ga20_limit =
+        sound_port_ga20_base + chips::audio::irem_ga20::register_count;
 
     struct m107_board_params final {
         std::uint16_t dip_default{0xFFFFU};
@@ -109,7 +110,7 @@ namespace mnemos::manifests::irem_m107 {
         chips::cpu::v30 sound_cpu;
         m107_video video;
         chips::audio::ym2151 fm;
-        chips::audio::okim6295 pcm;
+        chips::audio::irem_ga20 pcm;
         topology::bus main_bus{20U, topology::endianness::little};
         topology::bus sound_bus{20U, topology::endianness::little};
 

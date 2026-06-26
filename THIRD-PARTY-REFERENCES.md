@@ -107,6 +107,13 @@ multiple independent open-source implementations.
   names, byte counts, load offsets, and CRCs are catalog facts required to load
   user-provided sets; Mnemos records them in its own manifests and does not import
   MAME driver macros, implementation code, comments, or table structure.
+- **Irem/Nanao GA20 PCM** — the M92/M107 GA20 register map and playback semantics
+  were cross-checked against public MAME GA20 device notes and the local Irem
+  board fact sheet: four channels, eight registers per channel, 16-byte-unit
+  start/end registers, rate, hyperbolic volume, control bit 1 key-on/off, status
+  bit 0 active, and zero-byte sample termination. Mnemos's implementation is a
+  native chip model with its own tests and save-state format; no MAME source code
+  is vendored or copied.
 
 ## Cartridge / mapper protocol notes
 

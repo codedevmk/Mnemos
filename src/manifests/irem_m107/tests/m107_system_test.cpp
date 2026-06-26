@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
@@ -270,6 +271,28 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_ga20_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::sound_rom_size, 0xFFU);
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::array<std::uint8_t, 29> program = {
+            0xB0U, 0x10U, 0xE6U, 0x20U, // GA20 ch0 start low  -> 0x100
+            0xB0U, 0x00U, 0xE6U, 0x21U, // GA20 ch0 start high
+            0xB0U, 0x40U, 0xE6U, 0x22U, // GA20 ch0 end low    -> 0x400
+            0xB0U, 0x00U, 0xE6U, 0x23U, // GA20 ch0 end high
+            0xB0U, 0x00U, 0xE6U, 0x24U, // slowest byte advance
+            0xB0U, 0xF6U, 0xE6U, 0x25U, // audible volume
+            0xB0U, 0x02U, 0xE6U, 0x26U, // control bit 1 = key-on
+            0xF4U};                      // HLT
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x0200U + i] = program[i];
+        }
+        return rom;
+    }
+
     [[nodiscard]] rom_set_image synthetic_m107_image() {
         rom_set_image image;
         image.regions.emplace("maincpu", synthetic_m107_program());
@@ -379,6 +402,24 @@ TEST_CASE("m107 executable board maps V-series reset and RAM", "[m107][board]") 
     system->run_frame();
     CHECK(system->work_ram[0] == 0x42U);
     CHECK(frame_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m107 sound CPU drives the Irem GA20 register window", "[m107][board][audio]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto image = synthetic_m107_image();
+    image.regions["soundcpu"] = synthetic_m107_sound_ga20_program();
+    image.regions["samples"] = std::vector<std::uint8_t>(0x1000U, 0x55U);
+
+    auto system = m107::assemble_m107(std::move(image), m107::board_params_for("airass"));
+    REQUIRE(system != nullptr);
+    CHECK(system->pcm.metadata().part_number == "GA20");
+
+    system->run_frame();
+
+    CHECK(system->pcm.read_register(mnemos::chips::audio::irem_ga20::reg_status) ==
+          mnemos::chips::audio::irem_ga20::status_active);
+    CHECK(system->pcm.last_sample() < 0);
 }
 
 TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][board]") {

@@ -50,7 +50,7 @@ target_link_libraries(
         mnemos::topology
         mnemos::chips::cpu::v30
         mnemos::chips::audio::ym2151
-        mnemos::chips::audio::okim6295
+        mnemos::chips::audio::irem_ga20
         mnemos::manifests::common
         mnemos::security::cryptography
 )

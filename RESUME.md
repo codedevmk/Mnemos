@@ -69,15 +69,15 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - M107 now has a first-pass executable board, not only ROM-contract metadata.
 - Board implementation lives in `src/manifests/irem_m107/m107_system.hpp` and `src/manifests/irem_m107/m107_system.cpp`.
-- The board owns a main V30, sound V30, M107 video diagnostic path, YM2151, OKI6295, 20-bit little-endian main/sound buses, RAM windows, I/O ports, frame stepping, and whole-board save/load with identity checks.
+- The board owns a main V30, sound V30, M107 video diagnostic path, YM2151, Irem/Nanao GA20 PCM, 20-bit little-endian main/sound buses, RAM windows, I/O ports, frame stepping, and whole-board save/load with identity checks.
 - Checked-in manifests and tests cover the local M107 sets currently embedded in the corpus gate, including `airass` and `firebarr`.
 - Player adapter lives in `src/apps/player/adapters/irem_m107`.
 - CLI/system-family routing is available through `--system irem_m107` and alias `m107`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
-- Capability discovery reports M107 memory views, V30 trace surfaces, YM2151/OKI6295 chip registers, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
+- Capability discovery reports M107 memory views, V30 trace surfaces, YM2151/GA20 chip registers, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
 - The M107 adapter now consumes explicit arcade `service` frontend input for the currently modeled service bit, keeps `mode` as a legacy service alias, and persists explicit `service` / `test` fields in adapter state version 2. Operator-test board wiring remains unassigned until the M107 input map is verified.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/config proof if applicable, exact M107 memory/I/O map, GA20/GA21/GA22 video/priority behavior, PCM behavior, sound-CPU details, DIP behavior, raster timing, and screenshot parity.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/config proof if applicable, exact M107 memory/I/O map, GA21/GA22 video/priority behavior, remaining GA20 sound-CPU protocol and mixer integration details, DIP behavior, raster timing, and screenshot parity.
 
 ### Irem M15
 
@@ -121,6 +121,7 @@ Important local corpus facts:
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
 - World `nspirit` is incomplete locally: missing `mcu/nin_c-pr-b.ic1`, size `0x1000`, CRC `0x0f7b2713`.
+- Current scan of `D:\emu\irem\M72\nspirit.zip` finds `23/24` World `nspirit` artifacts and still misses only `nin_c-pr-b.ic1` (`0x0f7b2713`). The same ZIP contains `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), which is the Japan MCU and does not prove World `nspirit`.
 - If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
 - Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1`, size `0x1000`, CRC `0x802d440a`; it did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
@@ -156,6 +157,15 @@ M72 no-dump MCU checksum-response continuation validation on 2026-06-26:
 
 - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m72_test`
 - `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m72_test`: `1/1` passed
+
+M107 GA20 continuation validation on 2026-06-26:
+
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_chips_audio_irem_ga20_test mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test`
+- Focused CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `4/4` passed for `mnemos_chips_audio_irem_ga20_test`, `mnemos_manifests_irem_m107_test`, `mnemos_apps_player_irem_m107_adapter_test`, and `mnemos_apps_player_irem_m107_corpus_golden_test`
+- Full preset build: `cmake --build --preset windows-msvc-debug`
+- Full preset CTest with local Irem env vars and `MNEMOS_M72_SET_DIR` intentionally cleared: `189/189`, with expected data-gated skips including the M72 roster golden
+- Direct M107 capability smoke: `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\airass.zip --capabilities` reported `audio.ga20.samples`, `memory.ga20.registers`, `memory.ym2151.registers`, V30 trace surfaces, and `media.rom_set state=available`
+- Current `D:\emu\irem\M72\nspirit.zip` artifact scan: `23/24` World `nspirit` artifacts present; still missing `nin_c-pr-b.ic1` (`0x0f7b2713`). The ZIP contains `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), which remains Japan-only evidence.
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\dbreedm72,D:\emu\irem\m72\dkgensanm72 -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-231315\summary.json`
 
@@ -216,7 +226,7 @@ M107 slice validation that passed:
 - Direct M107 player capability smoke:
   - ROM: `D:\emu\irem\M107\airass.zip`
   - command included `--system irem_m107 --capabilities`
-  - output reported `media.rom_set state=available`, rollback available, V30 trace surfaces, YM2151/OKI6295 registers, and M107 RAM views
+  - output reported `media.rom_set state=available`, rollback available, V30 trace surfaces, YM2151/GA20 registers, and M107 RAM views
 - Screenshot smoke:
   - command included `--system irem_m107 --rom "D:\emu\irem\M107\airass.zip" --screenshot build\scratch\irem_m107_airass.ppm --frames 120`
   - wrote `384x256` PPM with nonzero pixel payload

@@ -231,16 +231,21 @@ namespace mnemos::manifests::irem_m107 {
         sound_bus.map_ram(shared_ram_base, shared_ram, 1);
         sound_cpu.attach_bus(sound_bus);
         sound_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
+            if (port >= sound_port_ga20_base && port < sound_port_ga20_limit) {
+                return pcm.read_register(static_cast<std::uint8_t>(port - sound_port_ga20_base));
+            }
             switch (port) {
             case sound_port_latch:
                 return sound_latch;
-            case sound_port_pcm_status:
-                return pcm.read_status();
             default:
                 return 0xFFU;
             }
         });
         sound_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
+            if (port >= sound_port_ga20_base && port < sound_port_ga20_limit) {
+                pcm.write_register(static_cast<std::uint8_t>(port - sound_port_ga20_base), value);
+                return;
+            }
             switch (port) {
             case sound_port_reply:
                 sound_reply = value;
@@ -253,9 +258,6 @@ namespace mnemos::manifests::irem_m107 {
                 fm.write_address(ym_address);
                 fm.write_data(value);
                 break;
-            case sound_port_pcm_command:
-                pcm.write_command(value);
-                break;
             default:
                 break;
             }
@@ -264,7 +266,6 @@ namespace mnemos::manifests::irem_m107 {
         dip_switches = params.dip_default;
         pcm.set_input_clock(pcm_clock_hz);
         pcm.set_sample_rom(std::span<const std::uint8_t>(samples));
-        pcm.enable_audio_capture(true);
     }
 
     void m107_system::run_frame() {
