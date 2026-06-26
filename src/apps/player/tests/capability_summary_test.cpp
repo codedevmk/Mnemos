@@ -191,12 +191,18 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> irem_m15_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
-        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0x20U,
-                                                0x3EU, 0x81U, 0x32U, 0x00U, 0x24U,
-                                                0xD3U, 0x00U, 0x76U};
+        const std::vector<std::uint8_t> program{0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U,
+                                                0xA9U, 0x81U, 0x8DU, 0x00U, 0x40U,
+                                                0x4CU, 0x0AU, 0x10U};
         for (std::size_t i = 0; i < program.size(); ++i) {
-            rom[i] = program[i];
+            rom[mnemos::manifests::irem_m15::program_rom_base + i] = program[i];
         }
+        rom[0xFFFCU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base);
+        rom[0xFFFDU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base >> 8U);
+        rom[0xFFFEU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base);
+        rom[0xFFFFU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base >> 8U);
         return rom;
     }
 

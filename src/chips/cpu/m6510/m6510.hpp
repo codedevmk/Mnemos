@@ -146,6 +146,11 @@ namespace mnemos::chips::cpu {
             jump,
         };
 
+        enum class variant : std::uint8_t {
+            mos_6510,
+            mos_6502,
+        };
+
         struct registers final {
             std::uint8_t a{};   // accumulator
             std::uint8_t x{};   // index X
@@ -209,6 +214,7 @@ namespace mnemos::chips::cpu {
         // the bare-6502 conformance corpus expects.
         void set_registers(const registers& values) noexcept;
         void set_port_enabled(bool enabled) noexcept;
+        void set_variant(variant value) noexcept;
 
       private:
         // Bridges the chip's diagnostic surface into the generic
@@ -254,6 +260,7 @@ namespace mnemos::chips::cpu {
         registers registers_{};
         std::uint64_t cycles_{};
         ibus* bus_{};
+        variant variant_{variant::mos_6510};
         bool port_enabled_{true};
         std::uint8_t port_ddr_{};
         std::uint8_t port_data_{};

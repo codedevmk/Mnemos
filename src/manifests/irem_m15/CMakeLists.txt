@@ -45,6 +45,7 @@ target_link_libraries(
     PUBLIC
         mnemos::manifests::common
         mnemos::chips::audio::beeper
+        mnemos::chips::cpu::m6510
     PRIVATE
         mnemos::security::cryptography
 )
@@ -55,6 +56,7 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_chips_audio_beeper
+        mnemos_chips_cpu_m6510
         mnemos_chips_shared
         mnemos_manifests_common
         mnemos_foundation

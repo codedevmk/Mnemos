@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <map>
@@ -25,21 +27,30 @@ namespace {
     namespace irem = mnemos::apps::player::adapters::irem_m15;
     namespace m15 = mnemos::manifests::irem_m15;
 
+    void poke16(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint16_t value) {
+        REQUIRE(offset + 1U < bytes.size());
+        bytes[offset] = static_cast<std::uint8_t>(value);
+        bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 8U);
+    }
+
     [[nodiscard]] std::vector<std::uint8_t>
     make_m15_program(const std::vector<std::uint8_t>& program) {
         std::vector<std::uint8_t> rom(m15::main_rom_size, 0xFFU);
-        REQUIRE(program.size() <= rom.size());
-        std::copy(program.begin(), program.end(), rom.begin());
+        REQUIRE(m15::program_rom_base + program.size() <= rom.size());
+        std::copy(program.begin(), program.end(), rom.begin() + m15::program_rom_base);
+        poke16(rom, 0xFFFCU, m15::program_rom_base);
+        poke16(rom, 0xFFFEU, m15::program_rom_base);
         return rom;
     }
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m15_program() {
-        return make_m15_program({0x3EU, 0x42U,       // MVI A,$42
-                                 0x32U, 0x00U, 0x20U, // STA $2000
-                                 0x3EU, 0x81U,       // MVI A,$81
-                                 0x32U, 0x00U, 0x24U, // STA $2400
-                                 0xD3U, 0x00U,       // OUT $00
-                                 0x76U});            // HLT
+        return make_m15_program({0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
+                                 0xA9U, 0x81U, 0x8DU, 0x00U, 0x40U, // LDA #$81 ; STA $4000
+                                 0xA9U, 0x2AU, 0x8DU, 0x00U, 0x48U, // LDA #$2A ; STA $4800
+                                 0xA9U, 0x18U, 0x8DU, 0x00U, 0x50U, // LDA #$18 ; STA $5000
+                                 0xA9U, 0x5AU, 0x8DU, 0x00U, 0xA1U, // LDA #$5A ; STA $A100
+                                 0xA9U, 0x04U, 0x8DU, 0x00U, 0xA4U, // LDA #$04 ; STA $A400
+                                 0x4CU, 0x1EU, 0x10U});             // JMP $101E
     }
 
     [[nodiscard]] bool framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
@@ -236,10 +247,12 @@ TEST_CASE("irem_m15_adapter boots a synthetic M15 program", "[irem_m15]") {
     adapter.step_one_frame();
 
     CHECK(adapter.frames_stepped() == 1U);
-    CHECK(adapter.machine().work_ram[0] == 0x42U);
+    CHECK(adapter.machine().scratch_ram[0] == 0x42U);
     CHECK(adapter.machine().video_ram[0] == 0x81U);
-    CHECK(adapter.machine().speaker_latch == 0x81U);
-    CHECK(adapter.machine().main_cpu.unsupported_opcode_count() == 0U);
+    CHECK(adapter.machine().color_ram[0] == 0x2AU);
+    CHECK(adapter.machine().chargen_ram[0] == 0x18U);
+    CHECK(adapter.machine().speaker_latch == 0x5AU);
+    CHECK(adapter.machine().control_register == 0x04U);
     CHECK(framebuffer_has_nonblack(adapter.current_frame()));
     CHECK_FALSE(adapter.save_state().empty());
 }
@@ -259,8 +272,10 @@ TEST_CASE("irem_m15_adapter save state restores board and adapter state", "[irem
     const auto result = restored.load_state(state);
     CHECK(result.ok());
     CHECK(restored.frames_stepped() == source.frames_stepped());
-    CHECK(restored.machine().work_ram[0] == 0x42U);
+    CHECK(restored.machine().scratch_ram[0] == 0x42U);
     CHECK(restored.machine().video_ram[0] == 0x81U);
+    CHECK(restored.machine().color_ram[0] == 0x2AU);
+    CHECK(restored.machine().chargen_ram[0] == 0x18U);
     CHECK(restored.machine().input_system == source.machine().input_system);
 }
 

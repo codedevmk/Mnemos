@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <initializer_list>
 #include <map>
 #include <optional>
 #include <set>
@@ -31,7 +30,6 @@
 namespace {
 
     using mnemos::manifests::common::rom_set_decl;
-    using mnemos::manifests::common::rom_set_file;
     using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
 
@@ -294,21 +292,33 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
+    void poke16(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint16_t value) {
+        REQUIRE(offset + 1U < bytes.size());
+        bytes[offset] = static_cast<std::uint8_t>(value);
+        bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 8U);
+    }
+
     [[nodiscard]] std::vector<std::uint8_t>
-    make_m15_program(const std::vector<std::uint8_t>& program) {
+    make_m15_program(std::uint16_t origin, const std::vector<std::uint8_t>& program,
+                     std::uint16_t irq_vector = 0x1000U) {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
-        REQUIRE(program.size() <= rom.size());
-        std::copy(program.begin(), program.end(), rom.begin());
+        REQUIRE(static_cast<std::size_t>(origin) + program.size() <= rom.size());
+        std::copy(program.begin(), program.end(), rom.begin() + origin);
+        poke16(rom, 0xFFFCU, origin);
+        poke16(rom, 0xFFFEU, irq_vector);
         return rom;
     }
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m15_program() {
-        return make_m15_program({0x3EU, 0x42U,       // MVI A,$42
-                                 0x32U, 0x00U, 0x20U, // STA $2000
-                                 0x3EU, 0x81U,       // MVI A,$81
-                                 0x32U, 0x00U, 0x24U, // STA $2400
-                                 0xD3U, 0x00U,       // OUT $00
-                                 0x76U});            // HLT
+        return make_m15_program(0x1000U,
+                                {0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
+                                 0xA9U, 0x81U, 0x8DU, 0x00U, 0x40U, // LDA #$81 ; STA $4000
+                                 0xA9U, 0x2AU, 0x8DU, 0x00U, 0x48U, // LDA #$2A ; STA $4800
+                                 0xA9U, 0x18U, 0x8DU, 0x00U, 0x50U, // LDA #$18 ; STA $5000
+                                 0xA9U, 0x5AU, 0x8DU, 0x00U, 0xA1U, // LDA #$5A ; STA $A100
+                                 0xA9U, 0x04U, 0x8DU, 0x00U, 0xA4U, // LDA #$04 ; STA $A400
+                                 0x4CU, 0x1EU, 0x10U},             // JMP $101E
+                                0x101EU);
     }
 
     [[nodiscard]] rom_set_image synthetic_m15_image() {
@@ -317,93 +327,26 @@ namespace {
         return image;
     }
 
-    struct i8080_harness final {
-        std::array<std::uint8_t, 0x10000U> memory{};
-        std::vector<std::pair<std::uint16_t, std::uint8_t>> port_writes;
-        mnemos::manifests::irem_m15::m15_i8080_cpu cpu;
+    [[nodiscard]] rom_set_image irq_m15_image() {
+        std::vector<std::uint8_t> program(0x30U, 0xEAU);
+        program[0x00U] = 0x58U; // CLI
+        program[0x01U] = 0xEAU; // NOP
+        program[0x02U] = 0x4CU; // JMP $1001
+        program[0x03U] = 0x01U;
+        program[0x04U] = 0x10U;
+        program[0x20U] = 0xA9U; // IRQ: LDA #$77
+        program[0x21U] = 0x77U;
+        program[0x22U] = 0x8DU; // STA $0002
+        program[0x23U] = 0x02U;
+        program[0x24U] = 0x00U;
+        program[0x25U] = 0x40U; // RTI
 
-        i8080_harness() {
-            cpu.set_memory(
-                [this](std::uint16_t address) { return memory[address]; },
-                [this](std::uint16_t address, std::uint8_t value) { memory[address] = value; });
-            cpu.set_ports(
-                [](std::uint16_t port) {
-                    return static_cast<std::uint8_t>(0xA0U | (port & 0x0FU));
-                },
-                [this](std::uint16_t port, std::uint8_t value) {
-                    port_writes.emplace_back(port, value);
-                });
-        }
+        rom_set_image image;
+        image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1020U));
+        return image;
+    }
 
-        void run(const std::vector<std::uint8_t>& program, std::uint64_t cycles = 20000U) {
-            memory.fill(0U);
-            REQUIRE(program.size() <= memory.size());
-            std::copy(program.begin(), program.end(), memory.begin());
-            port_writes.clear();
-            cpu.reset(mnemos::chips::reset_kind::power_on);
-            cpu.tick(cycles);
-        }
-
-        [[nodiscard]] std::uint8_t ram(std::uint16_t address) const noexcept {
-            return memory[address];
-        }
-
-        [[nodiscard]] std::uint64_t reg(std::string_view name) {
-            for (const auto& desc : cpu.register_snapshot()) {
-                if (desc.name == name) {
-                    return desc.value;
-                }
-            }
-            FAIL("missing i8080 register snapshot entry");
-            return 0U;
-        }
-    };
-
-    class program_builder final {
-      public:
-        void label(std::string name) { labels_.emplace(std::move(name), bytes_.size()); }
-
-        void emit(std::uint8_t value) { bytes_.push_back(value); }
-
-        void emit(std::initializer_list<std::uint8_t> values) {
-            bytes_.insert(bytes_.end(), values.begin(), values.end());
-        }
-
-        void ref16(std::string name) {
-            patches_.push_back({bytes_.size(), std::move(name)});
-            bytes_.push_back(0U);
-            bytes_.push_back(0U);
-        }
-
-        void pad_to(std::size_t offset) {
-            REQUIRE(bytes_.size() <= offset);
-            bytes_.resize(offset, 0x00U);
-        }
-
-        [[nodiscard]] std::vector<std::uint8_t> finish() {
-            for (const auto& patch : patches_) {
-                const auto label_it = labels_.find(patch.label);
-                REQUIRE(label_it != labels_.end());
-                const auto address = static_cast<std::uint16_t>(label_it->second);
-                bytes_[patch.offset] = static_cast<std::uint8_t>(address);
-                bytes_[patch.offset + 1U] = static_cast<std::uint8_t>(address >> 8U);
-            }
-            return bytes_;
-        }
-
-      private:
-        struct patch_ref final {
-            std::size_t offset{};
-            std::string label;
-        };
-
-        std::vector<std::uint8_t> bytes_;
-        std::map<std::string, std::size_t, std::less<>> labels_;
-        std::vector<patch_ref> patches_;
-    };
-
-    [[nodiscard]] bool
-    framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
+    [[nodiscard]] bool framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
         REQUIRE(frame.pixels != nullptr);
         REQUIRE(frame.width > 0U);
         REQUIRE(frame.height > 0U);
@@ -423,6 +366,7 @@ namespace {
 TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus",
           "[m15][romset]") {
     namespace fs = std::filesystem;
+    namespace m15 = mnemos::manifests::irem_m15;
 
     const fs::path games_dir{MNEMOS_IREM_M15_GAMES_DIR};
     REQUIRE_FALSE(games_dir.empty());
@@ -456,17 +400,23 @@ TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus"
 
         const rom_set_region* maincpu = find_region(decl, "maincpu");
         REQUIRE(maincpu != nullptr);
-        CHECK(maincpu->size == mnemos::manifests::irem_m15::main_rom_size);
-        REQUIRE(maincpu->files.size() == 6U);
+        CHECK(maincpu->size == m15::main_rom_size);
+        REQUIRE(maincpu->files.size() == 7U);
         require_region_contract(*maincpu);
+
+        const std::array<std::size_t, 7U> expected_offsets{
+            0x1000U, 0x1400U, 0x1800U, 0x1C00U, 0xFC00U, 0x2000U, 0x2400U};
         for (std::size_t i = 0U; i < maincpu->files.size(); ++i) {
-            CHECK(maincpu->files[i].offset == i * mnemos::manifests::irem_m15::program_rom_size);
+            CHECK(maincpu->files[i].offset == expected_offsets[i]);
         }
+        CHECK(maincpu->files[3].name == "e4.9d");
+        CHECK(maincpu->files[4].name == "e4.9d");
     }
 
     CHECK(names == expected_names);
-    CHECK(mnemos::manifests::irem_m15::board_params_for("headoni").rom_layout ==
-          "head_on_i8080");
+    const auto params = m15::board_params_for("headoni");
+    CHECK(params.cpu_clock_hz == m15::cpu_clock_hz);
+    CHECK(params.rom_layout == "m15_headon_6502");
 }
 
 TEST_CASE("m15 embedded game manifests mirror the checked-in roster", "[m15][romset]") {
@@ -475,167 +425,6 @@ TEST_CASE("m15 embedded game manifests mirror the checked-in roster", "[m15][rom
     CHECK(game_manifests.size() == 1U);
     CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("headoni").empty());
     CHECK(mnemos::manifests::irem_m15::game_manifest_toml("rtype").empty());
-}
-
-TEST_CASE("m15 i8080 executes expanded data stack and ALU opcode groups", "[m15][i8080]") {
-    i8080_harness h;
-    h.run({
-        0x31U, 0xF0U, 0x23U,             // LXI SP,$23F0
-        0x01U, 0x00U, 0x20U,             // LXI B,$2000
-        0x3EU, 0x12U,                    // MVI A,$12
-        0x02U,                           // STAX B
-        0x0AU,                           // LDAX B
-        0x32U, 0x01U, 0x20U,             // STA $2001
-        0x21U, 0x78U, 0x56U,             // LXI H,$5678
-        0x22U, 0x02U, 0x20U,             // SHLD $2002
-        0x21U, 0x00U, 0x00U,             // LXI H,$0000
-        0x2AU, 0x02U, 0x20U,             // LHLD $2002
-        0x7CU,                           // MOV A,H
-        0x32U, 0x04U, 0x20U,             // STA $2004
-        0x7DU,                           // MOV A,L
-        0x32U, 0x05U, 0x20U,             // STA $2005
-        0xEBU,                           // XCHG
-        0x7AU,                           // MOV A,D
-        0x32U, 0x06U, 0x20U,             // STA $2006
-        0x7BU,                           // MOV A,E
-        0x32U, 0x07U, 0x20U,             // STA $2007
-        0x21U, 0xBCU, 0x9AU,             // LXI H,$9ABC
-        0xE5U,                           // PUSH H
-        0x21U, 0x00U, 0x00U,             // LXI H,$0000
-        0xE1U,                           // POP H
-        0x7CU,                           // MOV A,H
-        0x32U, 0x08U, 0x20U,             // STA $2008
-        0x7DU,                           // MOV A,L
-        0x32U, 0x09U, 0x20U,             // STA $2009
-        0x3EU, 0x81U,                    // MVI A,$81
-        0x07U, 0x17U, 0x0FU, 0x1FU,       // RLC; RAL; RRC; RAR
-        0x32U, 0x0AU, 0x20U,             // STA $200A
-        0x3EU, 0x09U,                    // MVI A,$09
-        0xC6U, 0x09U,                    // ADI $09
-        0x27U,                           // DAA -> $18
-        0x32U, 0x0BU, 0x20U,             // STA $200B
-        0x3EU, 0xFEU,                    // MVI A,$FE
-        0xC6U, 0x02U,                    // ADI $02 -> carry
-        0xCEU, 0x00U,                    // ACI $00 -> $01
-        0x32U, 0x0CU, 0x20U,             // STA $200C
-        0x3EU, 0x10U,                    // MVI A,$10
-        0xD6U, 0x01U,                    // SUI $01
-        0xDEU, 0x0FU,                    // SBI $0F -> $00
-        0x32U, 0x0DU, 0x20U,             // STA $200D
-        0x3EU, 0xF0U,                    // MVI A,$F0
-        0xE6U, 0x0FU,                    // ANI $0F
-        0xF6U, 0x80U,                    // ORI $80
-        0xEEU, 0xFFU,                    // XRI $FF
-        0xFEU, 0x7FU,                    // CPI $7F
-        0xF5U,                           // PUSH PSW
-        0x3EU, 0x00U,                    // MVI A,$00
-        0xC6U, 0x01U,                    // ADI $01
-        0xF1U,                           // POP PSW
-        0x32U, 0x0EU, 0x20U,             // STA $200E
-        0x21U, 0x10U, 0x20U,             // LXI H,$2010
-        0x36U, 0x0FU,                    // MVI M,$0F
-        0x34U,                           // INR M
-        0x35U,                           // DCR M
-        0x7EU,                           // MOV A,M
-        0x32U, 0x0FU, 0x20U,             // STA $200F
-        0xDBU, 0x03U,                    // IN $03
-        0x32U, 0x10U, 0x20U,             // STA $2010
-        0x3EU, 0x5AU,                    // MVI A,$5A
-        0xD3U, 0x00U,                    // OUT $00
-        0x76U,                           // HLT
-    });
-
-    CHECK(h.ram(0x2000U) == 0x12U);
-    CHECK(h.ram(0x2001U) == 0x12U);
-    CHECK(h.ram(0x2002U) == 0x78U);
-    CHECK(h.ram(0x2003U) == 0x56U);
-    CHECK(h.ram(0x2004U) == 0x56U);
-    CHECK(h.ram(0x2005U) == 0x78U);
-    CHECK(h.ram(0x2006U) == 0x56U);
-    CHECK(h.ram(0x2007U) == 0x78U);
-    CHECK(h.ram(0x2008U) == 0x9AU);
-    CHECK(h.ram(0x2009U) == 0xBCU);
-    CHECK(h.ram(0x200AU) == 0xC1U);
-    CHECK(h.ram(0x200BU) == 0x18U);
-    CHECK(h.ram(0x200CU) == 0x01U);
-    CHECK(h.ram(0x200DU) == 0x00U);
-    CHECK(h.ram(0x200EU) == 0x7FU);
-    CHECK(h.ram(0x200FU) == 0x0FU);
-    CHECK(h.ram(0x2010U) == 0xA3U);
-    REQUIRE(h.port_writes.size() == 1U);
-    CHECK(h.port_writes[0] == std::make_pair<std::uint16_t, std::uint8_t>(0U, 0x5AU));
-    CHECK(h.reg("F") == 0x14U);
-    CHECK(h.cpu.unsupported_opcode_count() == 0U);
-}
-
-TEST_CASE("m15 i8080 executes conditional jumps calls and returns", "[m15][i8080]") {
-    program_builder p;
-    p.emit({0x31U, 0xF0U, 0x23U, 0x3EU, 0x00U, 0xFEU, 0x00U}); // Z set
-    p.emit(0xC4U);                                             // CNZ fail
-    p.ref16("fail");
-    p.emit(0xCCU); // CZ mark_z
-    p.ref16("mark_z");
-    p.emit(0xC2U); // JNZ fail
-    p.ref16("fail");
-    p.emit(0xCAU); // JZ after_z
-    p.ref16("after_z");
-
-    p.label("fail");
-    p.emit({0x3EU, 0xEEU, 0x32U, 0x12U, 0x20U, 0x76U});
-
-    p.label("after_z");
-    p.emit({0x3EU, 0xFEU, 0xC6U, 0x02U}); // A=0, carry set
-    p.emit(0xD2U);                        // JNC fail
-    p.ref16("fail");
-    p.emit(0xDAU); // JC after_c
-    p.ref16("after_c");
-
-    p.label("after_c");
-    p.emit(0xCDU); // CALL cond_ret
-    p.ref16("cond_ret");
-    p.emit({0x3EU, 0x33U, 0x32U, 0x13U, 0x20U, 0x76U});
-
-    p.label("mark_z");
-    p.emit({0x3EU, 0x11U, 0x32U, 0x11U, 0x20U, 0xC9U});
-
-    p.label("cond_ret");
-    p.emit({0x3EU, 0x44U, 0x37U, 0xD8U, 0x3EU, 0xEEU, 0x32U, 0x12U, 0x20U,
-            0xC9U});
-
-    i8080_harness h;
-    h.run(p.finish());
-
-    CHECK(h.ram(0x2011U) == 0x11U);
-    CHECK(h.ram(0x2012U) == 0x00U);
-    CHECK(h.ram(0x2013U) == 0x33U);
-    CHECK(h.reg("A") == 0x33U);
-    CHECK(h.cpu.unsupported_opcode_count() == 0U);
-}
-
-TEST_CASE("m15 i8080 executes RST vector calls", "[m15][i8080]") {
-    program_builder p;
-    p.emit(0xC3U); // JMP start
-    p.ref16("start");
-    p.pad_to(0x10U);
-
-    p.label("start");
-    p.emit({0x31U, 0xF0U, 0x23U, // LXI SP,$23F0
-            0xFFU,               // RST 7 -> $0038
-            0x3EU, 0x66U,        // MVI A,$66
-            0x32U, 0x14U, 0x20U, // STA $2014
-            0x76U});             // HLT
-
-    p.pad_to(0x38U);
-    p.emit({0x3EU, 0x55U,        // MVI A,$55
-            0x32U, 0x15U, 0x20U, // STA $2015
-            0xC9U});             // RET
-
-    i8080_harness h;
-    h.run(p.finish());
-
-    CHECK(h.ram(0x2014U) == 0x66U);
-    CHECK(h.ram(0x2015U) == 0x55U);
-    CHECK(h.cpu.unsupported_opcode_count() == 0U);
 }
 
 TEST_CASE("m15 local artifacts load CRC-clean through embedded manifests",
@@ -686,26 +475,45 @@ TEST_CASE("m15 local artifacts load CRC-clean through embedded manifests",
             INFO(issue.file << ": " << issue.message);
         }
         CHECK(image.issues.empty());
-
         require_loaded_region(image, "maincpu", m15::main_rom_size);
     }
 }
 
-TEST_CASE("m15 executable board runs first-pass i8080 memory and video path", "[m15][board]") {
+TEST_CASE("m15 executable board runs MOS 6502 memory video and sound path", "[m15][board]") {
     namespace m15 = mnemos::manifests::irem_m15;
 
     auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
     REQUIRE(system != nullptr);
 
+    const auto cpu_meta = system->main_cpu.metadata();
+    CHECK(cpu_meta.manufacturer == "MOS Technology");
+    CHECK(cpu_meta.part_number == "6502");
+    CHECK(cpu_meta.family == "6502");
+    CHECK(system->main_cpu.cpu_registers().pc == m15::program_rom_base);
+
     system->run_frame();
 
-    CHECK(system->work_ram[0] == 0x42U);
+    CHECK(system->scratch_ram[0] == 0x42U);
     CHECK(system->video_ram[0] == 0x81U);
-    CHECK(system->speaker_latch == 0x81U);
-    CHECK(system->main_cpu.unsupported_opcode_count() == 0U);
+    CHECK(system->color_ram[0] == 0x2AU);
+    CHECK(system->chargen_ram[0] == 0x18U);
+    CHECK(system->speaker_latch == 0x5AU);
+    CHECK(system->control_register == 0x04U);
     CHECK(system->video.framebuffer().width == m15::visible_width);
     CHECK(system->video.framebuffer().height == m15::visible_height);
     CHECK(framebuffer_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m15 frame tick pulses the 6502 IRQ vector", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(irq_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+
+    CHECK(system->scratch_ram[2] == 0x77U);
+    CHECK(system->main_cpu.elapsed_cycles() >= m15::cpu_cycles_per_frame);
 }
 
 TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][board]") {
@@ -715,7 +523,7 @@ TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][bo
     REQUIRE(source != nullptr);
     source->set_inputs(0xEEU, 0xDDU, 0xCCU);
     source->run_frame();
-    source->work_ram[3] = 0x5AU;
+    source->scratch_ram[3] = 0x5AU;
 
     std::vector<std::uint8_t> state;
     mnemos::chips::state_writer writer(state);
@@ -727,9 +535,11 @@ TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][bo
     mnemos::chips::state_reader reader(state);
     restored->load_state(reader);
     CHECK(reader.ok());
-    CHECK(restored->work_ram[0] == 0x42U);
-    CHECK(restored->work_ram[3] == 0x5AU);
+    CHECK(restored->scratch_ram[0] == 0x42U);
+    CHECK(restored->scratch_ram[3] == 0x5AU);
     CHECK(restored->video_ram[0] == 0x81U);
+    CHECK(restored->color_ram[0] == 0x2AU);
+    CHECK(restored->chargen_ram[0] == 0x18U);
     CHECK(restored->input_p1 == 0xEEU);
     CHECK(restored->input_p2 == 0xDDU);
     CHECK(restored->input_system == 0xCCU);

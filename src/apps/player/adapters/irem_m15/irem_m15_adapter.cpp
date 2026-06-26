@@ -452,9 +452,10 @@ namespace mnemos::apps::player::adapters::irem_m15 {
             system_mem_view_[index] = memory_view_storage_[index].get();
         };
 
-        publish(0U, "work_ram", sys_->work_ram);
+        publish(0U, "scratch_ram", sys_->scratch_ram);
         publish(1U, "video_ram", sys_->video_ram);
         publish(2U, "color_ram", sys_->color_ram);
+        publish(3U, "chargen_ram", sys_->chargen_ram);
     }
 
     void irem_m15_adapter::sync_inputs_from_ports() noexcept {
