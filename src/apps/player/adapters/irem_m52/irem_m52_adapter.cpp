@@ -584,7 +584,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
         }
 
         constexpr std::uint32_t irem_m52_adapter_state_version = 1U;
-        constexpr std::uint32_t irem_m52_adapter_save_target_manifest_rev = 2U;
+        constexpr std::uint32_t irem_m52_adapter_save_target_manifest_rev = 3U;
 
         void save_controller_state(chips::state_writer& writer,
                                    const frontend_sdk::controller_state& state) {
@@ -644,7 +644,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
             sys_->dsw1 = static_cast<std::uint8_t>(*dip_override);
             sys_->dsw2 = static_cast<std::uint8_t>(*dip_override >> 8U);
         }
-        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->ay0, &sys_->ay1};
+        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->ay0, &sys_->ay1, &sys_->msm};
         publish_memory_views();
         const std::string game_label =
             !loaded_set_name_.empty()
@@ -729,7 +729,8 @@ namespace mnemos::apps::player::adapters::irem_m52 {
 
     frontend_sdk::audio_chunk irem_m52_adapter::drain_audio() noexcept {
         const std::size_t pending =
-            std::max(sys_->ay0.pending_samples(), sys_->ay1.pending_samples());
+            std::max({sys_->ay0.pending_samples(), sys_->ay1.pending_samples(),
+                      sys_->msm.pending_samples()});
         if (pending == 0U) {
             return {};
         }
@@ -749,6 +750,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
         };
         mix_chip(sys_->ay0, ay0_buf_);
         mix_chip(sys_->ay1, ay1_buf_);
+        mix_chip(sys_->msm, msm_buf_);
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = m52::audio_rate_hz};
@@ -765,6 +767,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
             audio_buf_.clear();
             ay0_buf_.clear();
             ay1_buf_.clear();
+            msm_buf_.clear();
         }
         return result;
     }

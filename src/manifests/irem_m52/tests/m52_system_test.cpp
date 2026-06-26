@@ -60,6 +60,9 @@ TEST_CASE("Irem M52 system runs Z80 memory and IO windows", "[irem_m52]") {
     CHECK(sys->ay1.volume(1) == 0x0CU);
     CHECK(sys->ay0.pending_samples() > 0U);
     CHECK(sys->ay1.pending_samples() > 0U);
+    CHECK(sys->msm.vclk_count() > 0U);
+    CHECK(sys->msm.pending_samples() > 0U);
+    CHECK(sys->msm.last_sample() != 0);
     CHECK(sys->video.framebuffer().width == m52::visible_width);
     CHECK(sys->video.framebuffer().height == m52::visible_height);
     CHECK(nonblack_pixels(sys->video.framebuffer()) > 0U);
@@ -87,6 +90,10 @@ TEST_CASE("Irem M52 save-state preserves board identity and RAM", "[irem_m52]") 
     CHECK(restored->ay0.read_reg(mnemos::chips::audio::ssg::reg_port_a) ==
           source->ay0.read_reg(mnemos::chips::audio::ssg::reg_port_a));
     CHECK(restored->ay1.tone_period(1) == source->ay1.tone_period(1));
+    CHECK(restored->msm.data_latch() == source->msm.data_latch());
+    CHECK(restored->msm.last_sample() == source->msm.last_sample());
+    CHECK(restored->msm.step_index() == source->msm.step_index());
+    CHECK(restored->msm_sound_rom_cursor == source->msm_sound_rom_cursor);
 
     auto wrong = m52::assemble_m52(synthetic_image(), {});
     mnemos::chips::state_reader wrong_reader(snapshot);

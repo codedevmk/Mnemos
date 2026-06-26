@@ -32,10 +32,10 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Checked-in manifests cover `mpatrol` and `mpatrolw`; the Williams clone manifest declares parent `mpatrol` and includes same-region parent-shared sound/PROM declarations so parent fallback can compose cleanly.
 - Player adapter lives in `src/apps/player/adapters/irem_m52` and supports direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, supplemental parent media, and raw synthetic maincpu fallback.
 - CLI/system-family routing is available through `--system irem_m52` and alias `m52`.
-- The board owns two native YM2149/AY-compatible SSG instances instead of the earlier one-bit audio probe. Sound-command writes program deterministic SSG register state, save/load preserves both chips, and the adapter mixes both captured stereo queues for player audio.
-- Capability discovery reports Z80 trace/register surfaces, both YM2149 register snapshots, M52 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
+- The board owns two native YM2149/AY-compatible SSG instances and one native OKI MSM5205 decoder instead of the earlier one-bit audio probe. Sound-command writes program deterministic SSG register state and command-fed MSM5205 nibbles from the loaded `soundcpu` ROM, save/load preserves those chip phases, and the adapter mixes all captured stereo queues for player audio.
+- Capability discovery reports Z80 trace/register surfaces, both YM2149 register snapshots, MSM5205 register snapshots, M52 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Moon Patrol wrapper ZIPs load through the data-gated corpus test and direct player screenshot smoke.
-- Remaining: this is still first-pass diagnostic rendering and command-driven SSG audio. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity before it is counted as correct graphics/music.
+- Remaining: this is still first-pass diagnostic rendering and command-driven audio. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, sound CPU-owned MSM5205 stream timing, discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M72
 
@@ -184,6 +184,17 @@ M52 dual-SSG audio continuation validation on 2026-06-26:
 - Focused CTest with `MNEMOS_M52_SET_DIR=D:\emu\irem`: `5/5` passed for M52 manifests, M52 system, capability summary, adapter, and the local Moon Patrol corpus gate.
 - Direct player capability smoke against `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` reported `memory.ym2149_0.registers` and `memory.ym2149_1.registers` with `media.rom_set state=available`.
 - This is partial AY progress only; the M52 sound CPU, MSM5205, analog path, and audio parity remain open.
+
+M52 MSM5205 continuation validation on 2026-06-26:
+
+- Added `src\chips\audio\msm5205`, a native OKI MSM5205 ADPCM decoder with VCLK-driven nibble consumption, register introspection, audio capture, chip-factory registration, and save/load tests.
+- Wired M52 to own one MSM5205, feed deterministic command-seeded nibbles from the loaded `soundcpu` ROM, serialize decoder phase in board state version 3, expose the chip through the adapter, and mix its captured samples with both SSG queues.
+- Focused build passed for `mnemos_chips_audio_msm5205_test`, `mnemos_manifests_irem_m52_system_test`, `mnemos_apps_player_irem_m52_adapter_test`, `mnemos_apps_player_capability_summary_test`, and `mnemos_player`.
+- Focused CTest with `MNEMOS_M52_SET_DIR=D:\emu\irem`: `6/6` passed, including the local Moon Patrol corpus gate.
+- Direct player capability smoke against `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` reported `memory.msm5205.registers`, `memory.ym2149_0.registers`, `memory.ym2149_1.registers`, and `media.rom_set state=available`.
+- Full build passed: `cmake --build --preset windows-msvc-debug --parallel 1`.
+- Full CTest with clean local Irem gates for M52, M72 R-Type/protected/vertical, M15, M81, M82, M84, and M107 while leaving `MNEMOS_M72_SET_DIR` cleared: `202/202`, with expected conformance/media skips and the expected M72 full-roster skip.
+- Still partial: this is not the final Moon Patrol sound CPU protocol, real MSM5205 stream timing, or discrete analog audio path.
 
 M107 V33/V35 model-clock continuation validation on 2026-06-26:
 

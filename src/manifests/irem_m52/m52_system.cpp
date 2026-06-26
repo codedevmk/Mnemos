@@ -113,6 +113,19 @@ namespace mnemos::manifests::irem_m52 {
                 mixer & ~static_cast<std::uint8_t>(chips::audio::ssg::mixer_tone_a << channel));
             chip.write_reg(chips::audio::ssg::reg_mixer, mixer);
         }
+
+        void clock_msm_command_byte(chips::audio::msm5205& msm,
+                                    std::span<const std::uint8_t> sound_program,
+                                    std::uint8_t command, std::uint64_t& cursor) noexcept {
+            const std::uint64_t byte_index = static_cast<std::uint64_t>(command) * 257U + cursor;
+            const std::uint8_t b =
+                sample_byte(sound_program, byte_index, static_cast<std::uint8_t>(command ^ 0xA5U));
+            ++cursor;
+            msm.data_w(static_cast<std::uint8_t>((b >> 4U) & 0x0FU));
+            msm.vclk_tick();
+            msm.data_w(static_cast<std::uint8_t>(b & 0x0FU));
+            msm.vclk_tick();
+        }
     } // namespace
 
     m52_board_params board_params_for(std::string_view set_name) noexcept {
@@ -319,14 +332,17 @@ namespace mnemos::manifests::irem_m52 {
 
         ay0.set_clock_divider(static_cast<int>(ssg_clock_divider));
         ay1.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        msm.set_clock_divider(static_cast<int>(ssg_clock_divider));
         ay0.enable_audio_capture(true);
         ay1.enable_audio_capture(true);
+        msm.enable_audio_capture(true);
     }
 
     void m52_system::run_frame() {
         main_cpu.tick(main_cycles_per_frame);
         ay0.tick(main_cycles_per_frame);
         ay1.tick(main_cycles_per_frame);
+        msm.tick(main_cycles_per_frame);
         video.tick(main_cycles_per_frame);
 
         const auto* main_program = roms.region("maincpu");
@@ -364,6 +380,13 @@ namespace mnemos::manifests::irem_m52 {
         program_ssg_tone(ay1, 1, static_cast<std::uint16_t>(0x30U + high * 12U), 0x0CU);
         ay0.write_reg(chips::audio::ssg::reg_port_a, value);
         ay1.write_reg(chips::audio::ssg::reg_port_a, static_cast<std::uint8_t>(value ^ 0xFFU));
+
+        const auto* sound_program = roms.region("soundcpu");
+        clock_msm_command_byte(msm,
+                               sound_program != nullptr
+                                   ? std::span<const std::uint8_t>(*sound_program)
+                                   : std::span<const std::uint8_t>{},
+                               value, msm_sound_rom_cursor);
     }
 
     void m52_system::save_state(chips::state_writer& writer) const {
@@ -376,6 +399,7 @@ namespace mnemos::manifests::irem_m52 {
         video.save_state(writer);
         ay0.save_state(writer);
         ay1.save_state(writer);
+        msm.save_state(writer);
         for (const auto& region :
              {std::span<const std::uint8_t>(video_ram), std::span<const std::uint8_t>(color_ram),
               std::span<const std::uint8_t>(sprite_ram), std::span<const std::uint8_t>(work_ram)}) {
@@ -403,6 +427,7 @@ namespace mnemos::manifests::irem_m52 {
         writer.u8(flip_latch);
         writer.boolean(flip_screen);
         writer.u64(sound_command_write_count);
+        writer.u64(msm_sound_rom_cursor);
         writer.u64(flip_write_count);
     }
 
@@ -421,6 +446,7 @@ namespace mnemos::manifests::irem_m52 {
         video.load_state(reader);
         ay0.load_state(reader);
         ay1.load_state(reader);
+        msm.load_state(reader);
 
         const auto load_region = [&reader](std::span<std::uint8_t> region) {
             const std::uint32_t size = reader.u32();
@@ -456,6 +482,7 @@ namespace mnemos::manifests::irem_m52 {
         flip_latch = reader.u8();
         flip_screen = reader.boolean();
         sound_command_write_count = reader.u64();
+        msm_sound_rom_cursor = reader.u64();
         flip_write_count = reader.u64();
     }
 

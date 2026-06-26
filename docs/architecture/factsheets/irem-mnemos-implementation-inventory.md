@@ -43,7 +43,7 @@ now contract-only.
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
-| M52 | `irem_m52` first-pass | 25% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers | None | Authentic parallax/road/sprite video, Irem Audio AY/MSM path, Tropical Angel manifests, DIP/raster/audio/video parity |
+| M52 | `irem_m52` first-pass | 30% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers | None | Authentic parallax/road/sprite video, sound CPU-driven MSM stream timing, discrete analog path, Tropical Angel manifests, DIP/raster/audio/video parity |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
@@ -71,7 +71,8 @@ targets:
   wiring, scanline composition, and 19 clean local smoke sets.
 - M52 now has a Moon Patrol ROM-contract/player route for the local parent and
   Williams clone wrappers, but the video and audio are diagnostic first-pass
-  paths rather than authentic parallax, road, AY, or MSM5205 behavior.
+  paths rather than authentic parallax, road, sound-CPU, or discrete analog
+  behavior.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests and four R-Type II set routes.
 - M15, M81, M84, M92, and M107 all have player-routable first-pass boards with
@@ -109,14 +110,17 @@ visual and audio parity proof.
 - **Current implementation:** first-pass Z80 board route with the Moon Patrol
   program, sound, text, sprite, and PROM regions, input/DIP MMIO, deterministic
   save-state, adapter capability discovery, and nonblank diagnostic framebuffer
-  output. The board now owns two native YM2149/AY-compatible SSG instances:
-  command writes program deterministic SSG register state, save/load preserves
-  both chips, the adapter mixes both captured stereo queues, and capability
-  discovery exposes both register snapshots.
+  output. The board now owns two native YM2149/AY-compatible SSG instances and
+  one native OKI MSM5205 decoder: command writes program deterministic SSG
+  register state plus command-fed MSM5205 nibbles from the loaded `soundcpu`
+  ROM, save/load preserves the chip phases, the adapter mixes all three
+  captured stereo queues, and capability discovery exposes all three register
+  snapshots.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
-  parallax/road/sprite/text priority, implement the M52 sound CPU/MSM5205 plus
-  discrete-analog path beyond the command-driven SSG surface, add Tropical Angel
-  coverage if M52/M57 evidence confirms the route, and prove
+  parallax/road/sprite/text priority, implement the M52 sound CPU-owned MSM5205
+  stream timing plus the discrete-analog path beyond the command-driven
+  SSG/MSM surfaces, add Tropical Angel coverage if M52/M57 evidence confirms
+  the route, and prove
   DIP/raster/screenshot/audio parity.
 
 ### M57
@@ -329,8 +333,9 @@ visual and audio parity proof.
 1. Add visual/audio parity oracles for one already smoke-playable route before
    promoting any game to "correct gfx/music".
 2. Advance M52 Moon Patrol from first-pass route to authentic video/audio by
-   replacing the diagnostic compositor and audio probe with board-evidenced
-   parallax, road, sprite, AY, and MSM5205 behavior.
+   replacing the diagnostic compositor and command-fed audio with board-evidenced
+   parallax, road, sprite, sound-CPU-owned MSM5205 stream timing, and discrete
+   analog behavior.
 3. Resolve the M82/M84 R-Type II classification mismatch with board evidence and
    adjust manifests/docs if needed.
 4. Continue M72 artifact closure for `gallopm72` and World `nspirit` by finding

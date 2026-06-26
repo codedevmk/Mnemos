@@ -3,6 +3,7 @@
 #include "bus.hpp"
 #include "chip.hpp"
 #include "m52_game_manifests.hpp"
+#include "msm5205.hpp"
 #include "rom_set.hpp"
 #include "ssg.hpp"
 #include "state.hpp"
@@ -18,7 +19,7 @@
 
 namespace mnemos::manifests::irem_m52 {
 
-    inline constexpr std::uint32_t m52_system_state_version = 2U;
+    inline constexpr std::uint32_t m52_system_state_version = 3U;
 
     inline constexpr std::uint32_t visible_width = 240U;
     inline constexpr std::uint32_t visible_height = 252U;
@@ -100,6 +101,7 @@ namespace mnemos::manifests::irem_m52 {
         m52_video video;
         chips::audio::ssg ay0;
         chips::audio::ssg ay1;
+        chips::audio::msm5205 msm;
         topology::bus main_bus{16U, topology::endianness::little};
 
         common::rom_set_image roms;
@@ -123,6 +125,7 @@ namespace mnemos::manifests::irem_m52 {
         std::uint8_t flip_latch{};
         bool flip_screen{};
         std::uint64_t sound_command_write_count{};
+        std::uint64_t msm_sound_rom_cursor{};
         std::uint64_t flip_write_count{};
 
         explicit m52_system(common::rom_set_image image, m52_board_params board_params = {});

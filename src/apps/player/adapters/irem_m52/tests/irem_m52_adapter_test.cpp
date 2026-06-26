@@ -117,6 +117,9 @@ TEST_CASE("irem_m52_adapter boots a synthetic M52 program", "[irem_m52]") {
     CHECK(adapter.machine().video_ram[0] == 0x77U);
     CHECK(adapter.machine().scroll_regs[0] == 0x77U);
     CHECK(adapter.machine().sound_command_write_count > 0U);
+    REQUIRE(adapter.chips().size() == 5U);
+    CHECK(adapter.chips()[4]->metadata().part_number == "MSM5205");
+    CHECK(adapter.machine().msm.vclk_count() > 0U);
     CHECK(nonblack_pixels(adapter.current_frame()) > 0U);
 }
 
@@ -145,10 +148,12 @@ TEST_CASE("irem_m52_adapter drains mixed AY PSG samples", "[irem_m52]") {
     adapter.step_one_frame();
     CHECK(adapter.machine().ay0.volume(0) == 0x0FU);
     CHECK(adapter.machine().ay1.volume(1) == 0x0CU);
+    CHECK(adapter.machine().msm.pending_samples() > 0U);
     const auto audio = adapter.drain_audio();
     CHECK(audio.sample_rate == m52::audio_rate_hz);
     CHECK(audio.frame_count > 0U);
     REQUIRE(audio.samples != nullptr);
+    CHECK(adapter.machine().msm.pending_samples() == 0U);
     bool any_nonzero = false;
     for (std::uint32_t i = 0; i < audio.frame_count * 2U; ++i) {
         any_nonzero = any_nonzero || audio.samples[i] != 0;

@@ -89,6 +89,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
         std::vector<std::int16_t> audio_buf_{};
         std::vector<std::int16_t> ay0_buf_{};
         std::vector<std::int16_t> ay1_buf_{};
+        std::vector<std::int16_t> msm_buf_{};
     };
 
 } // namespace mnemos::apps::player::adapters::irem_m52
