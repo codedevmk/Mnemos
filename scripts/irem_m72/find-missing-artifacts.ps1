@@ -10,6 +10,7 @@ param(
     [switch]$Recurse,
     [switch]$ScanAllSevenZipEntries,
     [int]$MaxNestedZipDepth = 3,
+    [string]$MissingFromReport = "",
     [string]$Out = ""
 )
 
@@ -386,13 +387,63 @@ function Read-AllBytesFromStream {
     }
 }
 
+function Get-TarArchiveEntries {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $verboseEntries = @()
+    try {
+        $verboseEntries = @(& tar -tvf $Path 2>$null)
+    } catch {
+        $verboseEntries = @()
+    }
+    if ($LASTEXITCODE -eq 0 -and $verboseEntries.Count -gt 0) {
+        foreach ($line in $verboseEntries) {
+            if ($line -match '^\S+\s+\S+\s+\S+\s+\S+\s+(\d+)\s+\S+\s+\d+\s+\S+\s+(.+)$') {
+                $entry = $Matches[2]
+                [pscustomobject]@{
+                    entry = $entry
+                    size = [int64]$Matches[1]
+                    is_directory = $line.StartsWith("d", [System.StringComparison]::Ordinal) -or
+                        $entry.EndsWith("/", [System.StringComparison]::Ordinal)
+                }
+            }
+        }
+        return
+    }
+
+    $plainEntries = @()
+    try {
+        $plainEntries = @(& tar -tf $Path 2>$null)
+    } catch {
+        Write-Verbose ("Unable to list archive with tar: {0}" -f $Path)
+        return
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Unable to list archive with tar: $Path"
+        return
+    }
+    foreach ($entry in $plainEntries) {
+        [pscustomobject]@{
+            entry = $entry
+            size = [int64]-1
+            is_directory = $entry.EndsWith("/", [System.StringComparison]::Ordinal)
+        }
+    }
+}
+
 function Scan-ZipStream {
     param(
         [Parameter(Mandatory = $true)][System.IO.Stream]$Stream,
         [Parameter(Mandatory = $true)][string]$Source,
         [Parameter(Mandatory = $true)][int]$Depth
     )
-    $archive = [System.IO.Compression.ZipArchive]::new($Stream, [System.IO.Compression.ZipArchiveMode]::Read, $true)
+    $archive = $null
+    try {
+        $archive = [System.IO.Compression.ZipArchive]::new($Stream, [System.IO.Compression.ZipArchiveMode]::Read, $true)
+    } catch {
+        Write-Verbose ("Unable to open ZIP archive: {0}" -f $Source)
+        return
+    }
     try {
         foreach ($entry in $archive.Entries) {
             if ([string]::IsNullOrEmpty($entry.Name)) {
@@ -438,23 +489,13 @@ function Scan-ZipFile {
 
 function Scan-SevenZipFile {
     param([Parameter(Mandatory = $true)][string]$Path)
-    $entries = @()
-    try {
-        $entries = @(& tar -tf $Path 2>$null)
-    } catch {
-        Write-Verbose ("Unable to list archive with tar: {0}" -f $Path)
-        return
-    }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Unable to list archive with tar: $Path"
-        return
-    }
-    foreach ($entry in $entries) {
-        if ([string]::IsNullOrWhiteSpace($entry) -or $entry.EndsWith("/")) {
+    foreach ($archiveEntry in @(Get-TarArchiveEntries -Path $Path)) {
+        $entry = $archiveEntry.entry
+        if ([string]::IsNullOrWhiteSpace($entry) -or $archiveEntry.is_directory) {
             continue
         }
         $leaf = [System.IO.Path]::GetFileName($entry)
-        if (-not (Test-ShouldReadCandidate -EntryName $leaf -Size -1) -and
+        if (-not (Test-ShouldReadCandidate -EntryName $leaf -Size $archiveEntry.size) -and
             -not $ScanAllSevenZipEntries -and
             -not $entry.EndsWith(".zip", [System.StringComparison]::OrdinalIgnoreCase)) {
             continue
@@ -482,7 +523,8 @@ function Scan-SevenZipFile {
                     $nested.Dispose()
                 }
             }
-            if ($ScanAllSevenZipEntries -or (Test-ShouldReadCandidate -EntryName $leaf -Size $raw.LongLength)) {
+            if ($ScanAllSevenZipEntries -or
+                (Test-ShouldReadCandidate -EntryName $leaf -Size $raw.LongLength)) {
                 Compare-CandidateBytes -Bytes $raw -Source $Path -Entry $entry
             }
         } finally {
@@ -597,6 +639,34 @@ if ($allTargets.Count -eq 0) {
     throw "No Irem M72 manifest targets selected."
 }
 
+$missingFromReportPath = ""
+if (-not [string]::IsNullOrWhiteSpace($MissingFromReport)) {
+    $missingFromReportPath = Resolve-RepoPath $MissingFromReport
+    if (-not (Test-Path -LiteralPath $missingFromReportPath -PathType Leaf)) {
+        throw "Missing report not found: $MissingFromReport"
+    }
+    $missingReport = Get-Content -LiteralPath $missingFromReportPath -Raw | ConvertFrom-Json
+    $missingKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($target in @($missingReport.targets)) {
+        if (-not [bool]$target.present) {
+            [void]$missingKeys.Add(("{0}`t{1}`t{2}`t{3}" -f $target.set, $target.region,
+                    $target.name, $target.crc32))
+        }
+    }
+    $filteredTargets = [System.Collections.Generic.List[object]]::new()
+    foreach ($target in $allTargets) {
+        $key = "{0}`t{1}`t{2}`t{3}" -f $target.set, $target.region, $target.name,
+            $target.crc32_hex
+        if ($missingKeys.Contains($key)) {
+            $filteredTargets.Add($target)
+        }
+    }
+    $allTargets = $filteredTargets
+    if ($allTargets.Count -eq 0) {
+        throw "No selected targets matched missing entries from report: $MissingFromReport"
+    }
+}
+
 $script:targetsByCrc = [System.Collections.Generic.Dictionary[uint32, System.Collections.Generic.List[object]]]::new()
 $script:targetsByName = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[object]]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $script:targetsBySize = [System.Collections.Generic.Dictionary[int64, System.Collections.Generic.List[object]]]::new()
@@ -668,6 +738,7 @@ $summary = [pscustomobject]@{
     run_id = $reportRunId
     roots = @($resolvedRoots)
     selected_sets = @($allTargets | Select-Object -ExpandProperty set -Unique)
+    missing_from_report = $missingFromReportPath
     target_count = $allTargets.Count
     present_count = @($resultTargets | Where-Object { $_.present }).Count
     missing_count = @($resultTargets | Where-Object { -not $_.present }).Count

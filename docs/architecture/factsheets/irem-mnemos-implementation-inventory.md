@@ -260,8 +260,8 @@ visual and audio parity proof.
   `nspiritj/nin_c-pr-.ic1` CRC `0x802d440a`; the scanner reports `48/48`
   present when checking `nspirit` and `nspiritj` from that ZIP.
 - **Current mixed-archive scan evidence:** the M72 artifact scanner now skips
-  unreadable entries inside unrelated `.7z` archives instead of aborting the
-  corpus walk. The previously failing
+  unreadable entries inside unrelated `.7z` archives and malformed ZIPs instead
+  of aborting the corpus walk. The previously failing
   `D:\emu\Chaos Field (English v1.0)[Analog Stick Enabled][cdi].7z` probe now
   completes as a 0/20 non-match, and a rerun across `D:\emu\irem` plus
   `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` now reports `84/94` present
@@ -271,6 +271,14 @@ visual and audio parity proof.
   blocker group: `nspirit` is complete, `lohtj` and `lohtb2` are not
   discoverable as clean source sets, and `gallopm72` is discoverable but fails
   media validation on `cc_c-pr-.ic1`.
+- **Focused blocker-search evidence:** `scripts/irem_m72/find-missing-artifacts.ps1`
+  now accepts `-MissingFromReport <json>` to search only the prior report's
+  missing targets and records the seed report path. Size-aware `.7z` listing
+  keeps that mode usable without extracting every unrelated archive member.
+  Current missing-only scans find `0/10` blockers under `D:\emu\irem`,
+  `D:\emu\arcade`, `D:\emu\archive`, and the Darksoft M72 archive; a fast
+  `rg --files D:\emu` probe finds only the known `loht` parent files plus
+  `gallopm72.zip`, not the missing clone/MCU artifacts.
 - **Correct gfx/music:** not certified. The board has the strongest current
   graphics/music implementation, but final visual priority, protection behavior,
   DIP/manual proof, raster phase, and audio parity are still open.

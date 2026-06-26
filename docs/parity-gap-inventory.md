@@ -347,6 +347,16 @@ fractional timestamp, process id, and the run-id prefix. Rapid or parallel
 artifact probes no longer overwrite each other when they start within the same
 second; current same-second checks against `nspirit.zip` and `gallopm72.zip`
 produce distinct `build/scratch/irem-m72-artifacts/*.json` reports.
+The same scanner now accepts `-MissingFromReport <json>` to seed a focused
+search from the prior report's missing targets, records that seed path in the
+new report, tolerates malformed ZIPs, and uses `tar -tvf` sizes for `.7z`
+members so broad archive walks do not need `-ScanAllSevenZipEntries` just to
+find differently named same-size targets. Current missing-only scans report
+`0/10` found under `D:\emu\irem`, `D:\emu\arcade`,
+`D:\emu\archive`, and `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z`; an
+`rg --files D:\emu` filename probe found only the known `loht` parent files and
+`D:\emu\irem\M72\gallopm72.zip`, not the missing `gallopm72`, `lohtb2`, or
+`lohtj` blockers.
 
 2026-06-26 category proof note: the current local M72 category proof uses
 `MNEMOS_M72_RTYPE_SET=D:\emu\irem\M72\rtype.zip`,
