@@ -144,13 +144,21 @@ namespace {
         return names;
     }
 
-    [[nodiscard]] std::optional<std::string>
+    struct identified_m82_source final {
+        std::string set_id;
+        std::uint8_t rank{};
+    };
+
+    [[nodiscard]] std::optional<identified_m82_source>
     identify_m82_source(const std::filesystem::path& path,
                         const std::set<std::string, std::less<>>& known) {
         std::error_code ec;
         if (std::filesystem::is_directory(path, ec)) {
             const std::string set_id = path.filename().string();
-            return known.contains(set_id) ? std::optional<std::string>{set_id} : std::nullopt;
+            if (!known.contains(set_id)) {
+                return std::nullopt;
+            }
+            return identified_m82_source{.set_id = set_id, .rank = 2U};
         }
         if (!std::filesystem::is_regular_file(path, ec) ||
             !ends_with_zip(path.filename().string())) {
@@ -159,7 +167,7 @@ namespace {
 
         const std::string stem = path.stem().string();
         if (known.contains(stem)) {
-            return stem;
+            return identified_m82_source{.set_id = stem, .rank = 1U};
         }
 
         auto bytes = mnemos::io::read_file(path.string());
@@ -170,18 +178,24 @@ namespace {
         if (!nested.has_value() || !known.contains(*nested)) {
             return std::nullopt;
         }
-        return nested;
+        return identified_m82_source{.set_id = std::move(*nested), .rank = 0U};
     }
 
     [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
     index_m82_source_roots(const std::vector<std::filesystem::path>& roots) {
         const auto known = embedded_set_names();
         std::map<std::string, std::filesystem::path, std::less<>> sources;
+        std::map<std::string, std::uint8_t, std::less<>> ranks;
 
         auto maybe_add = [&](const std::filesystem::path& path) {
-            auto set_id = identify_m82_source(path, known);
-            if (set_id.has_value() && sources.find(*set_id) == sources.end()) {
-                sources.emplace(std::move(*set_id), path);
+            auto identified = identify_m82_source(path, known);
+            if (!identified.has_value()) {
+                return;
+            }
+            const auto rank_it = ranks.find(identified->set_id);
+            if (rank_it == ranks.end() || identified->rank < rank_it->second) {
+                ranks[identified->set_id] = identified->rank;
+                sources[identified->set_id] = path;
             }
         };
 

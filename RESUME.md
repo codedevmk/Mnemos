@@ -103,7 +103,7 @@ $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
-$env:MNEMOS_M82_SET_DIR="D:\emu\irem\R-Type-II_Arcade_EN.zip;D:\emu\irem\R-Type-II_Arcade_JA.zip;D:\emu\irem\R-Type-II_Arcade_JA (1).zip;D:\emu\irem\M82\R-Type-II_Arcade_JA.zip"
+$env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 ```
@@ -120,7 +120,7 @@ Important local corpus facts:
 - If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
 - Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1`, size `0x1000`, CRC `0x802d440a`; it did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
-- For M82 validation, prefer the exact four R-Type II wrapper files listed above. A broad `MNEMOS_M82_SET_DIR=D:\emu\irem` can pick incomplete or wrong earlier-sorted local candidates such as `D:\emu\irem\M72\rtype2` before the complete wrapper ZIPs.
+- M82 validation now supports broad `MNEMOS_M82_SET_DIR=D:\emu\irem` again. The M82 manifest/player data gates rank single-inner wrapper ZIPs before direct set ZIPs and unpacked folders, so complete local R-Type II collection wrappers win over incomplete earlier-sorted candidates such as `D:\emu\irem\M72\rtype2`.
 - `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\m72 -Recurse` currently passes `9/12` discovered M72 smoke groups. `gallopm72` and `nspirit` fail because `media_clean=False` from the missing MCU dumps. `imgfight` from `D:\emu\irem\m72\imgfight` alone fails because that raw folder lacks `if_c-pr-a.ic1`, but the mixed-source smoke `-Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight` passes `1/1`.
 - `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. Do not set it to the current partial `D:\emu\irem\m72` tree and call that a full-roster proof; use the smoke runner for partial corpus evidence until all authentic roster artifacts are present.
 
@@ -332,6 +332,18 @@ M15 scanline-paced video continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, exact-file M82 wrappers, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips
 
+M82 broad-corpus selection continuation validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing CRLF conversion warnings
+- Focused M82 build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m82_test mnemos_apps_player_irem_m82_adapter_test`
+- Focused M82 CTest with `MNEMOS_M82_SET_DIR=D:\emu\irem`: `2/2`
+  - `mnemos_manifests_irem_m82_test`
+  - `mnemos_apps_player_irem_m82_rtype2_golden_test`
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -374,7 +386,7 @@ $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
-$env:MNEMOS_M82_SET_DIR="D:\emu\irem\R-Type-II_Arcade_EN.zip;D:\emu\irem\R-Type-II_Arcade_JA.zip;D:\emu\irem\R-Type-II_Arcade_JA (1).zip;D:\emu\irem\M82\R-Type-II_Arcade_JA.zip"
+$env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug
