@@ -332,6 +332,15 @@ works without `-Set`, but the current `D:\emu\irem\M72` scan reports only
 322/417 checked-in M72 artifacts present, so full checked-in roster proof is not
 complete.
 
+2026-06-26 rendered-audio smoke note: `scripts/irem_m72/run-corpus-smoke.ps1`
+now accepts `-RequireRenderedAudio` plus `-AudioFrames` to run a separate
+`mnemos_player --extract-audio` pass and require nonzero PCM in the rendered WAVE
+payload. The current local proof
+`scripts\irem_m72\run-corpus-smoke.ps1 -BuildDir build/windows-msvc-debug -RomDir D:\emu\irem\M72 -Set dbreedm72 -Frames 300 -FallbackFrames 600 -RequireRenderedAudio -AudioFrames 120`
+passes `1/1`, including the grouped `dbreedm72` sources discovered under the
+M72 corpus bucket. This proves a non-silent rendered-audio path for that protected
+smoke route; it is not music parity or reference-audio certification.
+
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports

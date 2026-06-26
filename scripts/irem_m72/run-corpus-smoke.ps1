@@ -7,6 +7,8 @@
 # -Recurse for mixed corpus roots such as D:\emu\irem; the top-level
 # scripts/run-data-gated-tests.ps1 entrypoint does this for M72 automatically.
 # Use -Set to narrow a mixed root to one or more checked-in M72 manifest ids.
+# Use -RequireRenderedAudio to require an --extract-audio pass whose rendered
+# WAVE payload contains nonzero PCM. -AudioFrames controls that proof pass.
 
 param(
     [string]$BuildDir = "build/windows-msvc-debug",
@@ -17,7 +19,9 @@ param(
     [int[]]$FallbackFrames = @(300, 900),
     [int]$MaxSets = 0,
     [switch]$IncludeAllZips,
-    [switch]$Recurse
+    [switch]$Recurse,
+    [switch]$RequireRenderedAudio,
+    [int]$AudioFrames = 120
 )
 
 Set-StrictMode -Version Latest
@@ -549,6 +553,58 @@ function Test-PpmHasLitPixel {
     return $false
 }
 
+function Read-U32Le {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Bytes,
+        [Parameter(Mandatory = $true)][int]$Offset
+    )
+    if ($Offset -lt 0 -or $Offset + 4 -gt $Bytes.Length) {
+        return 0
+    }
+    return [uint32](([uint32]$Bytes[$Offset]) -bor
+        (([uint32]$Bytes[($Offset + 1)]) -shl 8) -bor
+        (([uint32]$Bytes[($Offset + 2)]) -shl 16) -bor
+        (([uint32]$Bytes[($Offset + 3)]) -shl 24))
+}
+
+function Test-WavHasNonZeroPcm {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $false
+    }
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 12) {
+        return $false
+    }
+    $riff = [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4)
+    $wave = [System.Text.Encoding]::ASCII.GetString($bytes, 8, 4)
+    if ($riff -ne "RIFF" -or $wave -ne "WAVE") {
+        return $false
+    }
+    $offset = 12
+    while ($offset + 8 -le $bytes.Length) {
+        $tag = [System.Text.Encoding]::ASCII.GetString($bytes, $offset, 4)
+        $size = [int](Read-U32Le -Bytes $bytes -Offset ($offset + 4))
+        $payload = $offset + 8
+        if ($size -lt 0 -or $payload + $size -gt $bytes.Length) {
+            return $false
+        }
+        if ($tag -eq "data") {
+            for ($i = $payload; $i -lt ($payload + $size); ++$i) {
+                if ($bytes[$i] -ne 0) {
+                    return $true
+                }
+            }
+            return $false
+        }
+        $offset = $payload + $size
+        if (($size % 2) -ne 0) {
+            $offset += 1
+        }
+    }
+    return $false
+}
+
 if ($Frames -le 0) {
     throw "-Frames must be positive."
 }
@@ -556,6 +612,9 @@ foreach ($frame in $FallbackFrames) {
     if ($frame -le 0) {
         throw "-FallbackFrames values must be positive."
     }
+}
+if ($AudioFrames -le 0) {
+    throw "-AudioFrames must be positive."
 }
 
 $roms = [System.Collections.Generic.List[string]]::new()
@@ -728,9 +787,14 @@ foreach ($romGroup in $romGroups) {
     $saveLog = $null
     $loadLog = $null
     $screenshotPath = $null
+    $audioBase = $null
+    $audioLog = $null
+    $audioPath = $null
     $saveExit = $null
     $loadExit = $null
+    $audioExit = $null
     $litScreenshot = $false
+    $renderedAudioNonZero = -not $RequireRenderedAudio
     $passed = $false
     $passedFrames = $null
     $mediaIssues = @()
@@ -743,6 +807,9 @@ foreach ($romGroup in $romGroups) {
         $saveLog = Join-Path $setOut "$setId$suffix.save.log"
         $loadLog = Join-Path $setOut "$setId$suffix.load.log"
         $screenshotPath = Join-Path $setOut "$setId$suffix.after-load.ppm"
+        $audioBase = Join-Path $setOut "$setId$suffix.audio"
+        $audioLog = Join-Path $setOut "$setId$suffix.audio.log"
+        $audioPath = "$audioBase.rendered.wav"
 
         $saveArgs = [System.Collections.Generic.List[string]]::new()
         $saveArgs.Add("--system")
@@ -779,13 +846,36 @@ foreach ($romGroup in $romGroups) {
             }
         }
 
-        $mediaIssues = @(Get-M72MediaValidationIssues -LogPaths @($saveLog, $loadLog))
+        $audioExit = $null
+        $renderedAudioNonZero = -not $RequireRenderedAudio
+        if ($RequireRenderedAudio -and $saveExit -eq 0) {
+            $audioArgs = [System.Collections.Generic.List[string]]::new()
+            $audioArgs.Add("--system")
+            $audioArgs.Add("irem_m72")
+            Add-M72RomArguments -Arguments $audioArgs -RomPaths $romPaths
+            foreach ($arg in @(
+                "--press", "start@1+2",
+                "--press", "select@2+2",
+                "--press", "service@3+2",
+                "--extract-audio", $audioBase,
+                "--extract-frames", $AudioFrames.ToString()
+            )) {
+                $audioArgs.Add($arg)
+            }
+            $audioExit = Invoke-Player -Player $player -LogPath $audioLog -Arguments $audioArgs.ToArray()
+            if ($audioExit -eq 0) {
+                $renderedAudioNonZero = Test-WavHasNonZeroPcm -Path $audioPath
+            }
+        }
+
+        $mediaIssues = @(Get-M72MediaValidationIssues -LogPaths @($saveLog, $loadLog, $audioLog))
         $resolution = Get-M72ResolvedSetFromLog -LogPaths @($saveLog, $loadLog) -DefaultSet $setId
         $resolvedSet = $resolution.Set
         $resolvedFrom = $resolution.InferredFrom
         $mediaClean = ($mediaIssues.Count -eq 0)
         $passed = ($saveExit -eq 0 -and $loadExit -eq 0 -and (Test-Path -LiteralPath $statePath) -and
-            (Test-Path -LiteralPath $screenshotPath) -and $litScreenshot -and $mediaClean)
+            (Test-Path -LiteralPath $screenshotPath) -and $litScreenshot -and $mediaClean -and
+            $renderedAudioNonZero)
         if ($passed) {
             $passedFrames = $attemptFrames
             break
@@ -805,13 +895,18 @@ foreach ($romGroup in $romGroups) {
         attempted_frames = @($frameAttempts)
         save_exit = $saveExit
         load_exit = $loadExit
+        audio_exit = $audioExit
         screenshot_lit = $litScreenshot
+        audio_required = [bool]$RequireRenderedAudio
+        rendered_audio_nonzero = $renderedAudioNonZero
         media_clean = ($mediaIssues.Count -eq 0)
         passed = $passed
         state = $statePath
         screenshot = $screenshotPath
+        rendered_audio = $audioPath
         save_log = $saveLog
         load_log = $loadLog
+        audio_log = $audioLog
         media_issues = @($mediaIssues)
     })
 }
@@ -823,7 +918,7 @@ $failed = @($results | Where-Object { -not $_.passed })
 Write-Host ("Irem M72 corpus smoke: {0}/{1} passed; summary: {2}" -f ($results.Count - $failed.Count), $results.Count, $summaryPath)
 if ($failed.Count -gt 0) {
     foreach ($row in $failed) {
-        Write-Host ("  [fail] {0} resolved={1} save={2} load={3} lit={4} media_clean={5}" -f $row.set, $row.resolved_set, $row.save_exit, $row.load_exit, $row.screenshot_lit, $row.media_clean) -ForegroundColor Red
+        Write-Host ("  [fail] {0} resolved={1} save={2} load={3} lit={4} audio={5} media_clean={6}" -f $row.set, $row.resolved_set, $row.save_exit, $row.load_exit, $row.screenshot_lit, $row.rendered_audio_nonzero, $row.media_clean) -ForegroundColor Red
         foreach ($issue in @($row.media_issues) | Select-Object -First 3) {
             Write-Host ("    {0}" -f $issue) -ForegroundColor DarkYellow
         }

@@ -50,7 +50,7 @@ families.
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
-| M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
+| M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
@@ -202,6 +202,13 @@ visual and audio parity proof.
   `GLD-M72-PROTECTED`, and `GLD-M72-VERTICAL` as passed with
   `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`, and
   `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` remains skipped.
+- **Rendered-audio smoke proof:** the M72 corpus smoke runner now has an opt-in
+  `-RequireRenderedAudio` gate that runs `mnemos_player --extract-audio` and
+  requires the exported rendered WAVE payload to contain nonzero PCM.
+  `D:\emu\irem\M72` targeted to `-Set dbreedm72` passes this gate with
+  `-AudioFrames 120`, proving the protected no-dump-HLE route can emit rendered
+  audio during the smoke window. This is still weaker than music/audio parity
+  certification.
 - **Known blocked or incomplete local proof:** `gallopm72` still lacks
   `cc_c-pr-.ic1` CRC `0xac4421b1`; World `nspirit` still lacks
   `nin_c-pr-b.ic1` CRC `0x0f7b2713`; `lohtj` and `lohtb2` still lack complete
