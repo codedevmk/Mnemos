@@ -303,14 +303,15 @@ ignores archive-only container folders as unpacked sets, and currently reports
 One item matches a checked-in M15 manifest contract, thirty-nine items match
 checked-in playable M72 manifests, five items match checked-in M81 manifest
 contracts, five items match checked-in M82 R-Type II manifests, two items match
-checked-in M84 manifest contracts, five items match checked-in M92 manifests,
-and eight items match checked-in M107 manifest contracts. The inventory now
-separates manifest tracking from player loadability: 65 items match a checked-in
-Irem manifest, 59 are loadable through current ZIP / single-inner-ZIP / folder
+checked-in M84 manifest contracts, four items match checked-in M90 manifests,
+five items match checked-in M92 manifests, and eight items match checked-in M107
+manifest contracts. The inventory now separates manifest tracking from player
+loadability: 69 items match a checked-in Irem manifest, 63 are loadable through
+current ZIP / single-inner-ZIP / folder
 routes, no tracked item remains contract-only, and six `.7z` matches remain
 metadata-only until they are converted to ZIP or unpacked folders. No sorted
 top-level board bucket is completely untracked anymore; `board_family_candidates`
-now only keeps 14 untracked / misbucketed `M72`-folder items visible instead of
+now only keeps 13 untracked / misbucketed `M72`-folder items visible instead of
 silently treating them as true-M72 proof. The report also carries per-item
 `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
 `load_readiness` fields plus a `tracked_sets` grouping; this currently separates
@@ -355,16 +356,23 @@ not yet exact raster-phase or visual-priority authentic. The data-gated M82
 artifact/player tests use `MNEMOS_M82_SET_DIR=D:\emu\irem` to unwrap the local
 R-Type II collection ZIPs and load `rtype2`, `rtype2j`, `rtype2jc`, and
 `rtype2m82b` CRC-clean through the embedded manifests and clone-parent fallback.
+M90 now has checked-in manifests plus a first-pass executable V35/Z80 board and
+player adapter for `atompunk`, `newapunk`, `bbmanwj`, and `bbmanwja`;
+`MNEMOS_M90_SET_DIR=D:\emu\irem` proves the current Atomic Punk/Bomber Man World
+wrapper ZIPs load CRC-clean, produce 384x256 nonblank diagnostic frames, and
+save state through the M90 adapter. The local wrappers do not include complete
+GA25 graphics media, so this is route/topology proof rather than
+graphics/music-authentic proof.
 M92 now has checked-in manifests plus a first-pass executable V33/V35 board and
 player adapter for `bmaster`, `gunforce`, `gunforc2`, `hook`, and `inthunt`;
 `MNEMOS_M92_SET_DIR=D:\emu\irem\M72` proves the five local title-wrapper ZIPs
 load CRC-clean, produce 320x240 nonblank diagnostic frames, and save state
 through the M92 adapter. They remain diagnostic, not graphics/music-authentic,
 until encrypted V35 sound CPU handling and GA21/GA22 video behavior are proven.
-M15, M84, M92, and M107 now have executable board/profile layers, but all four still
-need board-authentic video/priority, sound, exact raster phase, and
-screenshot-parity closure before they can be called authentic; M84, M92, and
-M107 also retain memory/I/O and DIP validation gaps.
+M15, M84, M90, M92, and M107 now have executable board/profile layers, but all
+five still need board-authentic video/priority, sound, exact raster phase, and
+screenshot-parity closure before they can be called authentic; M84, M90, M92,
+and M107 also retain memory/I/O and DIP validation gaps.
 
 Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible. The M72 palette CPU map now models the disconnected A9 mirror and low-byte-only 5-bit gun writes/reads while preserving the renderer's canonical R/G/B plane storage.
 
@@ -435,6 +443,52 @@ Cabinet input note: M81, M82, and M84 adapters now consume explicit frontend
 `service` / `test` arcade inputs, keep `mode` as the service alias for older
 callers, map operator test onto the active-low system bit 6, and persist those
 fields in adapter state version 2.
+
+---
+
+## Irem M90 / M97 / M99 — 1 / 2
+
+This section covers the M90-generation V35/Z80/YM2151/DAC board path used by
+the local Atomic Punk / Bomber Man World artifacts. It remains separate from
+M92 because M90 retains the classic Z80 sound CPU and DAC path while using the
+GA25 graphics custom.
+
+#### Manifests / board bring-up
+- [x] **I90-1** Local M90 ROM-set contract — `src/manifests/irem_m90`
+  carries checked-in embedded ROM-contract manifests for `atompunk`, `newapunk`,
+  `bbmanwj`, and `bbmanwja`, with parser/region-contract coverage for the 1 MiB
+  interleaved V35 main program region plus the locally present Z80 program and
+  DAC sample regions on the Japan variants. `MNEMOS_M90_SET_DIR=D:\emu\irem`
+  data-gates the current local wrapper ZIPs, including the older
+  `Atomic-Punk_Arcade_EN.zip` wrapper under the mixed `M72` storage bucket, and
+  proves all four load CRC-clean; `scripts/irem/inventory-corpus.ps1` now
+  records four direct player-loadable M90 matches instead of treating those
+  wrappers as unsupported candidates · DONE · MED · S · beyond Emu · Evidence:
+  `src/manifests/irem_m90/games/*.toml` +
+  `src/manifests/irem_m90/tests/m90_rom_contract_test.cpp` +
+  `scripts/irem/inventory-corpus.ps1`
+- [~] **I90-2** Executable M90 board profile — `src/manifests/irem_m90` now
+  assembles a first-pass M90-owned V35/Z80 shell with the main CPU configured as
+  NEC V35 at 14.318181 MHz, a Z80 sound CPU at 3.579545 MHz, YM2151 plus
+  unsigned 8-bit DAC output, M90 work/video/sprite/palette/rowscroll RAM
+  windows, sound RAM, input/DIP ports, whole-board save/load identity, and an
+  M90-local GA25 diagnostic video path driven by loaded program/audio/sample
+  bytes plus board RAM. `src/apps/player/adapters/irem_m90` registers
+  `--system irem_m90` / `m90`, supports ZIPs, single-inner wrapper ZIPs,
+  unpacked set folders, embedded or in-archive `game.toml` manifests, resident
+  media validation, rollback-ready save-state, capability discovery, and real
+  local player smoke through `MNEMOS_M90_SET_DIR=D:\emu\irem`; all four
+  checked-in sets step one frame, produce nonblank 384x256 diagnostic output,
+  and emit save-state bytes. Remaining: authentic GA25 tile/sprite/row-scroll
+  behavior, V35 on-die interrupt/timer behavior, complete Bomber Man World
+  graphics media, Hasamu and Quiz F-1 manifests/corpus proof, DIP behavior,
+  raster timing, and authentic screenshot/audio parity before calling this
+  profile authentic · PARTIAL · HIGH · L · beyond Emu · Evidence:
+  `src/manifests/irem_m90/m90_system.cpp` +
+  `src/manifests/irem_m90/tests/m90_system_test.cpp` +
+  `src/apps/player/adapters/irem_m90/irem_m90_adapter.cpp` +
+  `src/apps/player/adapters/irem_m90/tests/irem_m90_adapter_test.cpp` +
+  `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 ---
 

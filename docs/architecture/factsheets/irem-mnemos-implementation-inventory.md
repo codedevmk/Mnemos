@@ -15,8 +15,8 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 65 currently match a
-checked-in Mnemos Irem manifest, 59 have a direct player-loadable route through
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 69 currently match a
+checked-in Mnemos Irem manifest, 63 have a direct player-loadable route through
 ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only.
@@ -55,7 +55,7 @@ now contract-only.
 | M82 | `irem_m82` | 60% | `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 4 local sets | None | Board classification audit, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 35% | `hharryb`, `hharryu` | both local split sets | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry priority/raster/DIP proof, Cosmic Cop/Ken-Go |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
-| M90 / M97 / M99 | none | 5% shared V35/YM groundwork | None | None | None | V35 on-die interrupt/timer behavior, GA25 video, Bomber Man/Hasamu/Quiz F-1 manifests |
+| M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 32% first-pass | `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` | all 5 data-gated first-pass sets | None | Encrypted V35 sound CPU handling, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 45% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load | None | V33/V35-specific behavior, M107 memory/I/O, GA21/GA22 video, GA20 protocol/analog mix, DIP/raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
@@ -242,15 +242,23 @@ visual and audio parity proof.
 
 - **Techsheet games:** Bomber Man / Bomber Man World / Dyna Blaster / Atomic
   Punk, Hasamu, Quiz F-1.
-- **Mnemos games:** none.
-- **Smoke playable:** none.
-- **Correct gfx/music:** none.
-- **Local corpus note:** `Atomic-Punk_Arcade_EN.zip` appears in the current
-  local tree as an untracked board-family candidate, not a supported Mnemos M90
-  route.
-- **Remaining:** implement V35 on-die interrupt behavior, Z80/YM2151 audio
-  integration for this board family, GA25 video, ROM manifests, save-state, and
-  parity proof.
+- **Mnemos games:** `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja`.
+- **Smoke playable:** all four current local Atomic Punk/Bomber Man World
+  wrappers load CRC-clean through `--system irem_m90`/the M90 adapter data gate,
+  step one frame, produce a 384x256 nonblank diagnostic frame, and produce
+  save-state bytes.
+- **Correct gfx/music:** not certified. The board shell now matches the
+  V35/Z80/YM2151/DAC topology, but rendering is a GA25 diagnostic compositor and
+  audio proof is limited to the Z80/YM/DAC route plus synthetic DAC mixing.
+- **Local corpus note:** `Atomic-Punk_Arcade_EN.zip` currently lives under the
+  `D:\emu\irem\M72` storage bucket and unwraps to `atompunk.zip`; the three
+  `New-Atomic-Punk-Global-Quest_*` root wrappers unwrap to `newapunk`,
+  `bbmanwj`, and `bbmanwja`. The available local wrappers do not include a
+  complete GA25 graphics ROM set, so they are route/protection/audio evidence,
+  not final visual parity evidence.
+- **Remaining:** authentic GA25 tile/sprite/row-scroll behavior, V35 on-die
+  interrupt/timer behavior, complete Bomber Man World graphics media, Hasamu and
+  Quiz F-1 manifests/corpus proof, DIP behavior, and screenshot/audio parity.
 
 ### M92
 
@@ -304,5 +312,7 @@ visual and audio parity proof.
    adjust manifests/docs if needed.
 3. Continue M72 artifact closure for `gallopm72` and World `nspirit` by finding
    the exact MCU dumps, without substituting Japan `nspiritj` or synthetic bytes.
-4. Advance the M92 first-pass profile from diagnostic execution to authenticity
+4. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
+   once complete graphics media and board evidence are available.
+5. Advance the M92 first-pass profile from diagnostic execution to authenticity
    by resolving encrypted V35 sound-CPU behavior and GA21/GA22 video evidence.

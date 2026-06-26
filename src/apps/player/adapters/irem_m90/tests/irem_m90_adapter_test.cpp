@@ -1,0 +1,424 @@
+#include "irem_m90_adapter.hpp"
+
+#include "file.hpp"
+#include "m90_game_manifests.hpp"
+#include "zip_archive.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <algorithm>
+#include <chrono>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <set>
+#include <span>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
+
+namespace {
+
+    namespace irem = mnemos::apps::player::adapters::irem_m90;
+    namespace m90 = mnemos::manifests::irem_m90;
+    namespace fs = std::filesystem;
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m90_program() {
+        std::vector<std::uint8_t> rom(m90::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m90_sound_dac_program() {
+        std::vector<std::uint8_t> rom(m90::sound_rom_size, 0x00U);
+        rom[0x0000U] = 0x3EU; // LD A,$F0
+        rom[0x0001U] = 0xF0U;
+        rom[0x0002U] = 0xD3U; // OUT ($82),A
+        rom[0x0003U] = static_cast<std::uint8_t>(m90::z80_port_dac);
+        rom[0x0004U] = 0x76U; // HALT
+        return rom;
+    }
+
+    struct temp_set_dir final {
+        fs::path path;
+
+        temp_set_dir() {
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            path = fs::temp_directory_path() / ("mnemos_m90_dac_adapter_test_" +
+                                                std::to_string(stamp));
+            std::error_code ec;
+            fs::remove_all(path, ec);
+            REQUIRE(fs::create_directories(path));
+        }
+
+        temp_set_dir(const temp_set_dir&) = delete;
+        temp_set_dir& operator=(const temp_set_dir&) = delete;
+
+        temp_set_dir(temp_set_dir&& other) noexcept : path(std::move(other.path)) {}
+
+        temp_set_dir& operator=(temp_set_dir&& other) noexcept {
+            if (this != &other) {
+                cleanup();
+                path = std::move(other.path);
+            }
+            return *this;
+        }
+
+        ~temp_set_dir() { cleanup(); }
+
+        void cleanup() noexcept {
+            if (path.empty()) {
+                return;
+            }
+            std::error_code ec;
+            fs::remove_all(path, ec);
+            path.clear();
+        }
+    };
+
+    void write_binary_file(const fs::path& path, std::span<const std::uint8_t> bytes) {
+        std::ofstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        file.write(reinterpret_cast<const char*>(bytes.data()),
+                   static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(file.good());
+    }
+
+    void write_text_file(const fs::path& path, std::string_view text) {
+        std::ofstream file(path);
+        REQUIRE(file.good());
+        file.write(text.data(), static_cast<std::streamsize>(text.size()));
+        REQUIRE(file.good());
+    }
+
+    [[nodiscard]] temp_set_dir make_dac_audio_set() {
+        temp_set_dir dir;
+        write_text_file(dir.path / "game.toml", R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "dacmix"
+board = "irem_m90"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name = "maincpu.bin"
+offset = 0
+size = 0x100000
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name = "soundcpu.bin"
+offset = 0
+size = 0x010000
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name = "samples.bin"
+offset = 0
+size = 0x020000
+)toml");
+        write_binary_file(dir.path / "maincpu.bin", synthetic_m90_program());
+        write_binary_file(dir.path / "soundcpu.bin", synthetic_m90_sound_dac_program());
+        std::vector<std::uint8_t> samples(m90::sample_rom_size, 0x80U);
+        write_binary_file(dir.path / "samples.bin", samples);
+        return dir;
+    }
+
+    [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
+        for (std::uint32_t y = 0; y < frame.height; ++y) {
+            for (std::uint32_t x = 0; x < frame.width; ++x) {
+                if (frame.pixels[static_cast<std::size_t>(y) * frame.effective_stride() + x] !=
+                    0U) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] std::optional<std::string> environment_value(const char* name) {
+#if defined(_WIN32)
+        char* raw = nullptr;
+        std::size_t size = 0U;
+        if (_dupenv_s(&raw, &size, name) != 0 || raw == nullptr) {
+            return std::nullopt;
+        }
+        std::string value{raw, size > 0U ? size - 1U : 0U};
+        std::free(raw);
+        return value;
+#else
+        const char* raw = std::getenv(name);
+        return raw != nullptr ? std::optional<std::string>{raw} : std::nullopt;
+#endif
+    }
+
+    [[nodiscard]] std::vector<std::filesystem::path> source_roots(const char* env_value) {
+        std::vector<std::filesystem::path> roots;
+        if (env_value == nullptr || *env_value == '\0') {
+            return roots;
+        }
+#if defined(_WIN32)
+        constexpr char separator = ';';
+#else
+        constexpr char separator = ':';
+#endif
+        std::string_view text{env_value};
+        std::size_t start = 0U;
+        while (start <= text.size()) {
+            const std::size_t end = text.find(separator, start);
+            const std::string_view part = text.substr(
+                start, end == std::string_view::npos ? std::string_view::npos : end - start);
+            if (!part.empty()) {
+                roots.emplace_back(std::string{part});
+            }
+            if (end == std::string_view::npos) {
+                break;
+            }
+            start = end + 1U;
+        }
+        return roots;
+    }
+
+    [[nodiscard]] bool ends_with_zip(std::string_view name) {
+        constexpr std::string_view suffix = ".zip";
+        if (name.size() < suffix.size()) {
+            return false;
+        }
+        return std::equal(suffix.rbegin(), suffix.rend(), name.rbegin(), [](char lhs, char rhs) {
+            return std::tolower(static_cast<unsigned char>(lhs)) ==
+                   std::tolower(static_cast<unsigned char>(rhs));
+        });
+    }
+
+    [[nodiscard]] bool zip_entry_is_file(const mnemos::compression::zip_entry& entry) noexcept {
+        return !entry.name.empty() && entry.name.back() != '/' && entry.name.back() != '\\';
+    }
+
+    [[nodiscard]] std::optional<std::string>
+    single_nested_zip_set_id(std::span<const std::uint8_t> bytes) {
+        auto archive = mnemos::compression::zip_archive::open(bytes);
+        if (!archive.has_value()) {
+            return std::nullopt;
+        }
+
+        const mnemos::compression::zip_entry* nested = nullptr;
+        std::size_t file_count = 0U;
+        for (const auto& entry : archive->entries()) {
+            if (!zip_entry_is_file(entry)) {
+                continue;
+            }
+            ++file_count;
+            if (ends_with_zip(entry.name)) {
+                nested = &entry;
+            }
+        }
+        if (file_count != 1U || nested == nullptr) {
+            return std::nullopt;
+        }
+        return std::filesystem::path{nested->name}.stem().string();
+    }
+
+    [[nodiscard]] std::set<std::string, std::less<>> embedded_set_names() {
+        std::set<std::string, std::less<>> names;
+        for (const auto& [set_name, _] : m90::embedded::game_manifests) {
+            names.emplace(std::string{set_name});
+        }
+        return names;
+    }
+
+    [[nodiscard]] std::optional<std::string>
+    identify_source(const std::filesystem::path& path,
+                    const std::set<std::string, std::less<>>& known) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(path, ec)) {
+            const std::string set_id = path.filename().string();
+            return known.contains(set_id) ? std::optional<std::string>{set_id} : std::nullopt;
+        }
+        if (!std::filesystem::is_regular_file(path, ec) ||
+            !ends_with_zip(path.filename().string())) {
+            return std::nullopt;
+        }
+
+        const std::string stem = path.stem().string();
+        if (known.contains(stem)) {
+            return stem;
+        }
+
+        auto bytes = mnemos::io::read_file(path.string());
+        if (!bytes.has_value()) {
+            return std::nullopt;
+        }
+        auto nested = single_nested_zip_set_id(*bytes);
+        if (!nested.has_value() || !known.contains(*nested)) {
+            return std::nullopt;
+        }
+        return nested;
+    }
+
+    [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
+    index_source_roots(const std::vector<std::filesystem::path>& roots) {
+        const auto known = embedded_set_names();
+        std::map<std::string, std::filesystem::path, std::less<>> sources;
+
+        auto maybe_add = [&](const std::filesystem::path& path) {
+            auto set_id = identify_source(path, known);
+            if (set_id.has_value() && sources.find(*set_id) == sources.end()) {
+                sources.emplace(std::move(*set_id), path);
+            }
+        };
+
+        for (const auto& root : roots) {
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(root, ec)) {
+                maybe_add(root);
+                continue;
+            }
+            if (!std::filesystem::is_directory(root, ec)) {
+                continue;
+            }
+
+            maybe_add(root);
+            std::vector<std::filesystem::path> candidates;
+            for (std::filesystem::recursive_directory_iterator it{root, ec}, end; !ec && it != end;
+                 it.increment(ec)) {
+                candidates.push_back(it->path());
+            }
+            std::sort(candidates.begin(), candidates.end());
+            for (const auto& path : candidates) {
+                maybe_add(path);
+            }
+        }
+
+        return sources;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> read_source_bytes(const std::filesystem::path& path) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(path, ec)) {
+            return {};
+        }
+        auto bytes = mnemos::io::read_file(path.string());
+        REQUIRE(bytes.has_value());
+        return std::move(*bytes);
+    }
+
+    [[nodiscard]] std::size_t
+    validation_issue_count(const mnemos::frontend_sdk::media_capability_info& media) noexcept {
+        std::size_t count = 0U;
+        for (const auto& image : media.media) {
+            count += image.validation_issues.size();
+        }
+        return count;
+    }
+
+} // namespace
+
+TEST_CASE("irem_m90_adapter boots a synthetic M90 program", "[irem_m90]") {
+    irem::irem_m90_adapter adapter(synthetic_m90_program(), "Tiny M90");
+
+    CHECK(adapter.region().frames_per_second_x1000 == m90::frame_rate_x1000);
+    CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::horizontal);
+    CHECK(adapter.session_capabilities().save_state_supported);
+    CHECK(adapter.session_capabilities().frame_exact_save_state);
+    REQUIRE(adapter.chips().size() == 5U);
+    REQUIRE(adapter.memory_views().size() == 6U);
+
+    adapter.step_one_frame();
+
+    CHECK(adapter.frames_stepped() == 1U);
+    CHECK(adapter.machine().work_ram[0] == 0x42U);
+    CHECK(frame_has_nonblack(adapter.current_frame()));
+    CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
+
+    const auto state = adapter.save_state();
+    CHECK_FALSE(state.empty());
+}
+
+TEST_CASE("irem_m90_adapter mixes Z80 DAC writes into drained audio", "[irem_m90]") {
+    auto set = make_dac_audio_set();
+    irem::irem_m90_adapter adapter({}, "DAC mix", nullptr, {}, set.path.string());
+
+    adapter.step_one_frame();
+
+    const auto audio = adapter.drain_audio();
+    REQUIRE(audio.frame_count > 0U);
+    REQUIRE(audio.samples != nullptr);
+    CHECK(std::any_of(audio.samples, audio.samples + audio.frame_count * 2U,
+                      [](std::int16_t sample) { return sample != 0; }));
+    CHECK(adapter.machine().dac.level() == 0xF0U);
+    CHECK(adapter.drain_audio().frame_count == 0U);
+}
+
+TEST_CASE("irem_m90_adapter preserves adapter and board state", "[irem_m90]") {
+    irem::irem_m90_adapter source(synthetic_m90_program(), "Save M90");
+    mnemos::frontend_sdk::controller_state p1{};
+    p1.up = true;
+    p1.a = true;
+    p1.start = true;
+    source.apply_input(0, p1);
+    source.step_one_frame();
+    source.machine().rowscroll_ram[5] = 0x44U;
+    REQUIRE(source.drain_audio().frame_count > 0U);
+
+    const auto state = source.save_state();
+    irem::irem_m90_adapter restored(synthetic_m90_program(), "Save M90");
+    const auto result = restored.load_state(state);
+    REQUIRE(result.ok());
+
+    CHECK(restored.frames_stepped() == 1U);
+    CHECK(restored.machine().work_ram[0] == 0x42U);
+    CHECK(restored.machine().rowscroll_ram[5] == 0x44U);
+    CHECK(restored.drain_audio().frame_count == 0U);
+}
+
+TEST_CASE("irem_m90_adapter validates real M90 ROM sets", "[irem_m90][data]") {
+    const auto dir_env = environment_value("MNEMOS_M90_SET_DIR");
+    if (!dir_env.has_value() || dir_env->empty()) {
+        SKIP("set MNEMOS_M90_SET_DIR to directories containing the M90 zip/folder corpus");
+    }
+
+    const auto sources = index_source_roots(source_roots(dir_env->c_str()));
+    const std::set<std::string, std::less<>> expected{"atompunk", "newapunk", "bbmanwj",
+                                                      "bbmanwja"};
+    for (const auto& set_id : expected) {
+        INFO("set=" << set_id);
+        auto found = sources.find(set_id);
+        REQUIRE(found != sources.end());
+
+        auto bytes = read_source_bytes(found->second);
+        irem::irem_m90_adapter adapter(std::move(bytes), set_id, nullptr, {}, found->second.string());
+
+        CHECK(adapter.set_name() == set_id);
+        CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
+
+        adapter.step_one_frame();
+        CHECK(frame_has_nonblack(adapter.current_frame()));
+        CHECK_FALSE(adapter.save_state().empty());
+    }
+}

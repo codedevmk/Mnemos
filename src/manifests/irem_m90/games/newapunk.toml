@@ -1,0 +1,26 @@
+# New Atomic Punk - Global Quest (US) -- Irem M90 Bomber Man World family.
+# The local corpus wrapper currently carries only the V35 program pair.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "newapunk"
+board       = "irem_m90"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "bbm2-h0-a.ic77"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x7d858682
+
+[[region.file]]
+name   = "bbm2-l0-a.ic79"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xc7568031
