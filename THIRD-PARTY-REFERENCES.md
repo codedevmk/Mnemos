@@ -154,14 +154,15 @@ multiple independent open-source implementations.
   sound and GA21/GA22 video behavior are implemented from acceptable evidence.
 - **Irem M107 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m107/games/` use public MAME M107 driver metadata for dump
-  filenames, offsets, reloads, region sizes, CRC-32s, cabinet metadata, and local
-  Air Assault / Fire Barrel set identities. The first-pass M107 main RAM,
-  video/sprite/palette RAM, sound RAM, YM2151, GA20, command-latch, and reply
-  windows are cross-checked against public driver-level hardware notes; no MAME
-  driver code or ROM bytes are copied into Mnemos. Current M107 execution
-  remains diagnostic rather than parity-authentic until V33/V35 peripheral
-  timing, GA21/GA22 video behavior, command IRQ timing, DIP behavior, and
-  visual/audio parity are proven from acceptable evidence.
+  filenames, offsets, reloads, region sizes, CRC-32s, cabinet metadata, SW1/SW2
+  DIP switch names/options/defaults, and local Air Assault / Fire Barrel set
+  identities. The first-pass M107 main RAM, video/sprite/palette RAM, sound RAM,
+  YM2151, GA20, command-latch, and reply windows are cross-checked against public
+  driver-level hardware notes; no MAME driver code or ROM bytes are copied into
+  Mnemos. Current M107 execution remains diagnostic rather than parity-authentic
+  until V33/V35 peripheral timing, GA21/GA22 video behavior, command IRQ timing,
+  remaining SW3/operator DIP behavior, and visual/audio parity are proven from
+  acceptable evidence.
 - **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
   CPS-B custom chip has a per-board scrambled register map (layer-control,
   priority, palette-control, layer-enable, protection ports) and a graphics-code

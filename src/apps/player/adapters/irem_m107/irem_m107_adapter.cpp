@@ -33,11 +33,13 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         namespace m107 = mnemos::manifests::irem_m107;
 
         using mnemos::manifests::common::rom_load_issue;
+        using mnemos::manifests::common::rom_set_dip_switch;
         using mnemos::manifests::common::rom_set_image;
 
         struct loaded_set final {
             rom_set_image image;
             std::string set_name;
+            std::vector<rom_set_dip_switch> dip_switches{};
         };
 
         struct nested_zip_source final {
@@ -114,6 +116,16 @@ namespace mnemos::apps::player::adapters::irem_m107 {
                     std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
             }
             return hex32(crc);
+        }
+
+        [[nodiscard]] std::uint16_t
+        dip_default_from_manifest(std::span<const rom_set_dip_switch> switches,
+                                  std::uint16_t fallback) noexcept {
+            std::uint16_t value = fallback;
+            for (const auto& dip : switches) {
+                value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
+            }
+            return value;
         }
 
         frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
@@ -294,6 +306,7 @@ namespace mnemos::apps::player::adapters::irem_m107 {
             loaded_set result;
             result.image = mnemos::manifests::common::load_rom_set(decl, provider);
             result.set_name = decl.name;
+            result.dip_switches = decl.dips;
             for (const auto& issue : result.image.issues) {
                 std::fprintf(stderr, "[irem_m107] %s: %s\n", issue.file.c_str(),
                              issue.message.c_str());
@@ -367,7 +380,9 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         }
 
         [[nodiscard]] std::unique_ptr<m107::m107_system> assemble_from(loaded_set set) {
-            return m107::assemble_m107(std::move(set.image), m107::board_params_for(set.set_name));
+            m107::m107_board_params params = m107::board_params_for(set.set_name);
+            params.dip_default = dip_default_from_manifest(set.dip_switches, params.dip_default);
+            return m107::assemble_m107(std::move(set.image), params);
         }
 
         [[nodiscard]] std::int16_t add_clamped(std::int16_t sample, std::int16_t addend) noexcept {
@@ -452,6 +467,7 @@ namespace mnemos::apps::player::adapters::irem_m107 {
         loaded_set set = load_set(std::move(rom), rom_path);
         media_ = make_media_capabilities(display_name, set, source_byte_count);
         loaded_set_name_ = set.set_name;
+        dip_switches_ = set.dip_switches;
         sys_ = assemble_from(std::move(set));
         if (dip_override.has_value()) {
             sys_->dip_switches = *dip_override;
@@ -463,6 +479,9 @@ namespace mnemos::apps::player::adapters::irem_m107 {
                 ? loaded_set_name_
                 : (display_name.empty() ? std::string{"unknown"} : display_name);
         spec_ = {{"System", "Arcade"}, {"Board", "Irem M107"}, {"Game", game_label}};
+        if (!dip_switches_.empty()) {
+            spec_.push_back({"DIP switches", std::to_string(dip_switches_.size())});
+        }
     }
 
     void irem_m107_adapter::publish_memory_views() {

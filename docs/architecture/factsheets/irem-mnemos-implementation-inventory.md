@@ -57,7 +57,7 @@ now contract-only.
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 41% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling/IRQ timing, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
-| M107 | `irem_m107` | 50% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load | None | V33/V35-specific behavior, remaining M107 I/O/DIP proof, GA21/GA22 video, command IRQ/GA20 analog mix, raster/parity |
+| M107 | `irem_m107` | 51% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf` | None | V33/V35-specific behavior, remaining M107 SW3/operator-test I/O/DIP proof, GA21/GA22 video, command IRQ/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
 ## Correct Graphics And Music Certification
@@ -384,7 +384,9 @@ visual and audio parity proof.
 - **Mnemos games:** `airass`, `firebarr`.
 - **Smoke playable:** both sets are data-gated through `MNEMOS_M107_SET_DIR`;
   Air Assault has direct nonblank screenshot and save/load smoke. Fire Barrel is
-  CRC-clean and player-routable, but not parity-certified.
+  CRC-clean and player-routable, but not parity-certified. Both manifests carry
+  the shared Fire Barrel / Air Assault SW1/SW2 DIP profile; the adapter applies
+  the composed default (`0xffbf`) and exposes 10 DIP definitions in system spec.
 - **Correct gfx/music:** not certified. Current rendering is an M107-local
   diagnostic path; GA20 exists, the command/reply latch now has pending-state
   proof, and the modeled main/sound windows match the current board evidence for
@@ -392,9 +394,9 @@ visual and audio parity proof.
   latch, and sound reply. Command IRQ timing and analog balance/filtering are not
   proven.
 - **Remaining:** V33/V35-specific timing and on-die peripheral proof, remaining
-  M107 I/O/DIP/operator-test details, GA21/GA22 video and priority behavior,
-  command IRQ timing, GA20 analog mix, raster timing, and screenshot/audio
-  parity.
+  M107 SW3 coin/system DIP word and operator-test I/O details, GA21/GA22 video
+  and priority behavior, command IRQ timing, GA20 analog mix, raster timing, and
+  screenshot/audio parity.
 
 ### M119
 

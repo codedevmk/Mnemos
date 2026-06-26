@@ -8,6 +8,235 @@ name        = "firebarr"
 board       = "irem_m107"
 orientation = "horizontal"
 
+# SW1/SW2 metadata from the shared Fire Barrel / Air Assault input profile.
+# The separate SW3 coin/system DIP word is not represented by the current
+# single-word manifest DIP surface.
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0000
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0002
+
+[[dip.option]]
+label = "5"
+value = 0x0001
+
+[[dip]]
+bank = "SW1"
+name = "Allow Continue"
+mask = 0x0020
+default = 0x0020
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0020
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0040
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0040
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Service Mode"
+mask = 0x0080
+default = 0x0080
+
+[[dip.option]]
+label = "Off"
+value = 0x0080
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Slots"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Common"
+value = 0x0400
+
+[[dip.option]]
+label = "Separate"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0800
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coinage"
+mask = 0xf000
+default = 0xf000
+condition_mask = 0x0800
+condition_value = 0x0800
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0xa000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0xb000
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0xc000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0xd000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0xe000
+
+[[dip.option]]
+label = "2 Coins to Start/1 to Continue"
+value = 0x1000
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x3000
+
+[[dip.option]]
+label = "4 Coins / 3 Credits"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0xf000
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x9000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x7000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x6000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x5000
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin A"
+mask = 0x3000
+default = 0x3000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x1000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x3000
+
+[[dip]]
+bank = "SW2"
+name = "Coin B"
+mask = 0xc000
+default = 0xc000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0xc000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
 [[region]]
 name = "maincpu"
 size = 0x100000

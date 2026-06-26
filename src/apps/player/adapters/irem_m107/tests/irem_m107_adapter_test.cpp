@@ -352,6 +352,16 @@ size = 0x001000
         return count;
     }
 
+    [[nodiscard]] bool spec_has(const irem::irem_m107_adapter& adapter, std::string_view key,
+                                std::string_view value) noexcept {
+        for (const auto& field : adapter.system_spec()) {
+            if (field.label == key && field.value == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 } // namespace
 
 TEST_CASE("irem_m107_adapter boots a synthetic M107 program", "[irem_m107]") {
@@ -441,6 +451,9 @@ TEST_CASE("irem_m107_adapter validates real M107 ROM sets", "[irem_m107][data]")
                                         source_path.string());
         CHECK(adapter.set_name() == set_name);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
+        CHECK(adapter.dip_switches().size() == 10U);
+        CHECK(adapter.machine().dip_switches == 0xFFBFU);
+        CHECK(spec_has(adapter, "DIP switches", "10"));
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m107::visible_width);
         CHECK(adapter.current_frame().height == m107::visible_height);

@@ -30,6 +30,7 @@
 namespace {
 
     using mnemos::manifests::common::rom_set_decl;
+    using mnemos::manifests::common::rom_set_dip_switch;
     using mnemos::manifests::common::rom_set_file;
     using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
@@ -48,6 +49,23 @@ namespace {
             std::find_if(decl.regions.begin(), decl.regions.end(),
                          [name](const rom_set_region& region) { return region.name == name; });
         return it == decl.regions.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] const rom_set_dip_switch* find_dip(const rom_set_decl& decl,
+                                                     std::string_view name) noexcept {
+        const auto it =
+            std::find_if(decl.dips.begin(), decl.dips.end(),
+                         [name](const rom_set_dip_switch& dip) { return dip.name == name; });
+        return it == decl.dips.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] std::uint16_t raw_dip_default(const rom_set_decl& decl,
+                                                std::uint16_t fallback) noexcept {
+        std::uint16_t value = fallback;
+        for (const auto& dip : decl.dips) {
+            value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
+        }
+        return value;
     }
 
     [[nodiscard]] const rom_set_file* find_file_at_or_after(const rom_set_region& region,
@@ -398,6 +416,25 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
         if (const auto* subdata = find_region(decl, "subdata")) {
             require_region_contract(*subdata);
         }
+
+        CHECK(decl.dips.size() == 10U);
+        const rom_set_dip_switch* lives = find_dip(decl, "Lives");
+        REQUIRE(lives != nullptr);
+        CHECK(lives->bank == "SW1");
+        CHECK(lives->mask == 0x0003U);
+        REQUIRE(lives->options.size() == 4U);
+
+        const rom_set_dip_switch* coin_mode = find_dip(decl, "Coin Mode");
+        REQUIRE(coin_mode != nullptr);
+        CHECK(coin_mode->mask == 0x0800U);
+        CHECK(coin_mode->default_value == 0x0800U);
+
+        const rom_set_dip_switch* coinage = find_dip(decl, "Coinage");
+        REQUIRE(coinage != nullptr);
+        REQUIRE(coinage->condition.has_value());
+        CHECK(coinage->condition->mask == 0x0800U);
+        CHECK(coinage->condition->value == 0x0800U);
+        CHECK(raw_dip_default(decl, 0xFFFFU) == 0xFFBFU);
     }
 
     CHECK(names == expected_names);
