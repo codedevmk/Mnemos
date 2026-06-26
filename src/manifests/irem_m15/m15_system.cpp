@@ -38,21 +38,6 @@ namespace mnemos::manifests::irem_m15 {
             return data[static_cast<std::size_t>(index % data.size())];
         }
 
-        [[nodiscard]] bool has_nonzero(std::span<const std::uint8_t> data) noexcept {
-            return std::any_of(data.begin(), data.end(),
-                               [](std::uint8_t value) { return value != 0U; });
-        }
-
-        [[nodiscard]] std::uint32_t rgb_from_luma(std::uint8_t luma,
-                                                  std::uint8_t tint) noexcept {
-            const std::uint32_t r = static_cast<std::uint32_t>((luma * 5U + tint) & 0xFFU);
-            const std::uint32_t g =
-                static_cast<std::uint32_t>(((luma << 1U) ^ (tint * 3U)) & 0xFFU);
-            const std::uint32_t b =
-                static_cast<std::uint32_t>(((luma >> 1U) + (tint * 9U)) & 0xFFU);
-            return (r << 16U) | (g << 8U) | b;
-        }
-
         [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
             std::array<std::uint8_t, 8> bytes{};
             for (std::size_t i = 0; i < bytes.size(); ++i) {
@@ -69,8 +54,41 @@ namespace mnemos::manifests::irem_m15 {
             return 0U;
         }
 
-        [[nodiscard]] std::uint8_t layout_tint(std::string_view layout) noexcept {
-            return layout_code(layout) == 1U ? 0x31U : 0x17U;
+        [[nodiscard]] std::uint32_t palette_color(std::uint8_t color_code) noexcept {
+            const std::uint8_t pen = static_cast<std::uint8_t>(((color_code & 0x07U) << 1U) | 1U);
+            const std::uint8_t inverted = static_cast<std::uint8_t>(~pen);
+            const std::uint32_t r = (inverted & 0x08U) != 0U ? 0xFFU : 0x00U;
+            const std::uint32_t g = (inverted & 0x04U) != 0U ? 0xFFU : 0x00U;
+            const std::uint32_t b = (inverted & 0x02U) != 0U ? 0xFFU : 0x00U;
+            return (r << 16U) | (g << 8U) | b;
+        }
+
+        [[nodiscard]] std::uint16_t visible_tile_index(std::uint32_t x, std::uint32_t y,
+                                                       bool flip_screen) noexcept {
+            std::uint32_t raw_x = y;
+            std::uint32_t raw_y = 239U - x;
+            if (flip_screen) {
+                raw_x = 255U - raw_x;
+                raw_y = 255U - raw_y;
+            }
+            const std::uint32_t col = (raw_x >> 3U) & 0x1FU;
+            const std::uint32_t row = (raw_y >> 3U) & 0x1FU;
+            return static_cast<std::uint16_t>(((31U - col) * 32U + row) & 0x03FFU);
+        }
+
+        [[nodiscard]] bool tile_pixel_on(std::span<const std::uint8_t> chargen_ram,
+                                         std::uint8_t tile, std::uint32_t x, std::uint32_t y,
+                                         bool flip_screen) noexcept {
+            std::uint32_t raw_x = y;
+            std::uint32_t raw_y = 239U - x;
+            if (flip_screen) {
+                raw_x = 255U - raw_x;
+                raw_y = 255U - raw_y;
+            }
+            const std::uint32_t row = raw_y & 0x07U;
+            const std::uint32_t bit = 7U - (raw_x & 0x07U);
+            const std::uint64_t offset = static_cast<std::uint64_t>(tile) * 8U + row;
+            return (sample_byte(chargen_ram, offset, 0U) & (1U << bit)) != 0U;
         }
 
         [[nodiscard]] std::uint32_t rom_identity_crc(const common::rom_set_image& roms,
@@ -106,7 +124,7 @@ namespace mnemos::manifests::irem_m15 {
     m15_board_params board_params_for(std::string_view set_name) noexcept {
         if (set_name == "headoni") {
             return {.cpu_clock_hz = cpu_clock_hz, .rom_layout = "m15_headon_6502",
-                    .dip_default = 0xFFU};
+                    .dip_default = headoni_dip_default};
         }
         return {};
     }
@@ -136,7 +154,7 @@ namespace mnemos::manifests::irem_m15 {
         case dip_switch_address:
             return system_->dip_switches;
         case input_p1_address:
-            return static_cast<std::uint8_t>(system_->input_p1 & system_->input_system);
+            return system_->input_p1;
         default:
             break;
         }
@@ -173,10 +191,11 @@ namespace mnemos::manifests::irem_m15 {
         switch (a) {
         case sound_latch_address:
             system_->speaker_latch = value;
-            system_->speaker.set_speaker((value & 0x01U) != 0U);
+            system_->speaker.set_speaker((value & 0x40U) == 0U);
             break;
         case control_register_address:
             system_->control_register = value;
+            system_->flip_screen = (value & control_flip_active_low_bit) == 0U;
             break;
         default:
             break;
@@ -211,45 +230,18 @@ namespace mnemos::manifests::irem_m15 {
                 .stride = visible_width};
     }
 
-    void m15_video::compose(std::span<const std::uint8_t> program_rom,
-                            std::span<const std::uint8_t> video_ram,
+    void m15_video::compose(std::span<const std::uint8_t> video_ram,
                             std::span<const std::uint8_t> color_ram,
                             std::span<const std::uint8_t> chargen_ram,
-                            std::span<const std::uint8_t> scratch_ram, std::uint8_t control,
-                            std::string_view rom_layout) {
-        const bool video_ready = has_nonzero(video_ram);
-        const bool chargen_ready = has_nonzero(chargen_ram);
-        const std::uint8_t tint = static_cast<std::uint8_t>(layout_tint(rom_layout) ^ control);
-
+                            bool flip_screen) {
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             for (std::uint32_t x = 0; x < visible_width; ++x) {
-                const std::uint64_t linear =
-                    static_cast<std::uint64_t>(y) * visible_width + x + frame_index_;
-                std::uint8_t bit = 0U;
-                std::uint8_t color = tint;
-                if (video_ready && chargen_ready) {
-                    const std::uint32_t tile_x = x >> 3U;
-                    const std::uint32_t tile_y = y >> 3U;
-                    const std::uint32_t tile_index = (tile_y * 32U + tile_x) & 0x03FFU;
-                    const std::uint8_t tile = sample_byte(video_ram, tile_index, 0U);
-                    const std::uint8_t glyph =
-                        sample_byte(chargen_ram,
-                                    static_cast<std::uint64_t>(tile) * 8U + (y & 7U), 0U);
-                    bit = static_cast<std::uint8_t>((glyph >> (7U - (x & 7U))) & 1U);
-                    color = sample_byte(color_ram, tile_index, tint);
-                } else {
-                    const std::uint8_t src = video_ready
-                                                 ? sample_byte(video_ram, linear >> 3U, 0x00U)
-                                                 : sample_byte(program_rom, linear >> 2U, 0x5AU);
-                    bit = static_cast<std::uint8_t>((src >> (7U - (x & 7U))) & 1U);
-                    color = sample_byte(color_ram, (linear >> 3U) + y, tint);
-                }
-                const std::uint8_t scratch =
-                    sample_byte(scratch_ram, (linear >> 4U) + (x * 3U), 0x21U);
-                const std::uint8_t luma = static_cast<std::uint8_t>(
-                    (bit != 0U ? 0xD0U : 0x20U) ^ color ^ scratch ^ tint);
+                const std::uint16_t tile_index = visible_tile_index(x, y, flip_screen);
+                const std::uint8_t tile = sample_byte(video_ram, tile_index, 0U);
+                const bool bit = tile_pixel_on(chargen_ram, tile, x, y, flip_screen);
+                const std::uint8_t color = sample_byte(color_ram, tile_index, 0U);
                 pixels_[static_cast<std::size_t>(y) * visible_width + x] =
-                    rgb_from_luma(luma, tint);
+                    bit ? palette_color(color) : 0U;
             }
         }
         ++frame_index_;
@@ -304,17 +296,14 @@ namespace mnemos::manifests::irem_m15 {
 
         speaker.tick(cpu_cycles_per_frame);
         video.tick(cpu_cycles_per_frame);
-        const auto* main_prog = roms.region("maincpu");
-        video.compose(main_prog != nullptr ? std::span<const std::uint8_t>(*main_prog)
-                                           : std::span<const std::uint8_t>{},
-                      video_ram, color_ram, chargen_ram, scratch_ram, control_register,
-                      params.rom_layout);
+        video.compose(video_ram, color_ram, chargen_ram, flip_screen);
     }
 
     void m15_system::set_inputs(std::uint8_t p1, std::uint8_t p2,
                                 std::uint8_t system) noexcept {
         input_p1 = p1;
         input_p2 = p2;
+        main_cpu.set_nmi_line((system & coin1_bit) != 0U);
         input_system = system;
     }
 
@@ -336,6 +325,7 @@ namespace mnemos::manifests::irem_m15 {
         writer.u8(input_system);
         writer.u8(dip_switches);
         writer.u8(control_register);
+        writer.boolean(flip_screen);
         writer.u8(speaker_latch);
     }
 
@@ -365,9 +355,10 @@ namespace mnemos::manifests::irem_m15 {
         input_system = reader.u8();
         dip_switches = reader.u8();
         control_register = reader.u8();
+        flip_screen = reader.boolean();
         speaker_latch = reader.u8();
         if (reader.ok()) {
-            speaker.set_speaker((speaker_latch & 0x01U) != 0U);
+            speaker.set_speaker((speaker_latch & 0x40U) == 0U);
         }
     }
 

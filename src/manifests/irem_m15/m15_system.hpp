@@ -20,7 +20,7 @@ namespace mnemos::manifests::irem_m15 {
 
     inline constexpr std::size_t main_rom_size = 0x10000U;
     inline constexpr std::size_t program_rom_size = 0x0400U;
-    inline constexpr std::uint32_t m15_system_state_version = 2U;
+    inline constexpr std::uint32_t m15_system_state_version = 3U;
 
     inline constexpr std::uint32_t visible_width = 224U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -49,10 +49,22 @@ namespace mnemos::manifests::irem_m15 {
     inline constexpr std::uint16_t input_p1_address = 0xA300U;
     inline constexpr std::uint16_t control_register_address = 0xA400U;
 
+    inline constexpr std::uint8_t headoni_dip_default = 0x11U;
+
+    inline constexpr std::uint8_t p1_start1_bit = 0x01U;
+    inline constexpr std::uint8_t p1_start2_bit = 0x02U;
+    inline constexpr std::uint8_t panel_button1_bit = 0x04U;
+    inline constexpr std::uint8_t panel_up_bit = 0x08U;
+    inline constexpr std::uint8_t panel_down_bit = 0x10U;
+    inline constexpr std::uint8_t panel_left_bit = 0x20U;
+    inline constexpr std::uint8_t panel_right_bit = 0x40U;
+    inline constexpr std::uint8_t coin1_bit = 0x01U;
+    inline constexpr std::uint8_t control_flip_active_low_bit = 0x04U;
+
     struct m15_board_params final {
         std::uint32_t cpu_clock_hz{mnemos::manifests::irem_m15::cpu_clock_hz};
         std::string_view rom_layout{"m15_headon_6502"};
-        std::uint8_t dip_default{0xFFU};
+        std::uint8_t dip_default{headoni_dip_default};
     };
 
     [[nodiscard]] m15_board_params board_params_for(std::string_view set_name) noexcept;
@@ -84,12 +96,10 @@ namespace mnemos::manifests::irem_m15 {
 
         [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frame_index_; }
         [[nodiscard]] chips::frame_buffer_view framebuffer() const noexcept override;
-        void compose(std::span<const std::uint8_t> program_rom,
-                     std::span<const std::uint8_t> video_ram,
+        void compose(std::span<const std::uint8_t> video_ram,
                      std::span<const std::uint8_t> color_ram,
                      std::span<const std::uint8_t> chargen_ram,
-                     std::span<const std::uint8_t> scratch_ram, std::uint8_t control,
-                     std::string_view rom_layout);
+                     bool flip_screen);
 
       private:
         std::vector<std::uint32_t> pixels_;
@@ -112,11 +122,12 @@ namespace mnemos::manifests::irem_m15 {
         std::array<std::uint8_t, color_ram_size> color_ram{};
         std::array<std::uint8_t, chargen_ram_size> chargen_ram{};
 
-        std::uint8_t input_p1{0xFFU};
-        std::uint8_t input_p2{0xFFU};
-        std::uint8_t input_system{0xFFU};
-        std::uint8_t dip_switches{0xFFU};
+        std::uint8_t input_p1{};
+        std::uint8_t input_p2{};
+        std::uint8_t input_system{};
+        std::uint8_t dip_switches{headoni_dip_default};
         std::uint8_t control_register{};
+        bool flip_screen{};
         std::uint8_t speaker_latch{};
 
         explicit m15_system(common::rom_set_image image, m15_board_params board_params = {});

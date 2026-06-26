@@ -289,9 +289,11 @@ metadata-only until they are converted to ZIP or unpacked folders. No sorted
 top-level board bucket is completely untracked anymore; `board_family_candidates`
 now only keeps 19 untracked / misbucketed `M72`-folder items visible instead of
 silently treating them as true-M72 proof.
-M15 now has a checked-in `headoni` manifest plus a first-pass executable
-MOS 6502 board/player path with source-aligned Head On ROM/vector placement,
-RAM/MMIO windows, and frame IRQ coverage; `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`
+M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
+board/player path with source-aligned Head On ROM/vector placement, RAM/MMIO
+windows, frame IRQ coverage, active-high P1/P2 input wiring, coin-triggered NMI,
+Head On DIP defaults, active-low flip control, and a tile/color/chargen renderer
+using the M-15 tile scan order and 1bpp palette lookup; `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`
 proves the sorted local wrapper ZIP loads CRC-clean through the embedded
 manifest, including the directory-prefixed entry aliases used by the local
 nested ZIP, and the player route produces nonblank screenshot plus save/load
@@ -323,9 +325,10 @@ not yet exact raster-phase or visual-priority authentic. The data-gated M82
 artifact/player tests use `MNEMOS_M82_SET_DIR=D:\emu\irem` to unwrap the local
 R-Type II collection ZIPs and load `rtype2`, `rtype2j`, `rtype2jc`, and
 `rtype2m82b` CRC-clean through the embedded manifests and clone-parent fallback.
-M15, M84, and M107 now have first-pass executable board/profile layers, but all
-three still need board-authentic memory/I/O, video/priority, sound, DIP, raster,
-and screenshot-parity closure before they can be called authentic.
+M15, M84, and M107 now have executable board/profile layers, but all three still
+need board-authentic video/priority, sound, raster, and screenshot-parity closure
+before they can be called authentic; M84 and M107 also retain memory/I/O and DIP
+validation gaps.
 
 Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible.
 
@@ -347,7 +350,7 @@ a 6502-era M15 profile instead of being folded into later V30 boards.
 
 #### Manifests / board bring-up
 - [x] **I15-1** Local M15 ROM-set contract — `src/manifests/irem_m15` carries a checked-in embedded ROM-contract manifest for `headoni`, with parser/region-contract coverage for the six 1 KiB program ROMs, the `e4.9d` reset-vector reload at `$fc00`, and aliases for the local nested wrapper ZIP's `headoni/` entry prefix. `MNEMOS_M15_SET_DIR=D:\emu\irem\M15` data-gates the sorted local artifact and proves it loads CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records the M15 bucket as tracked/loadable instead of an unsupported board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m15/games/headoni.toml` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
-- [~] **I15-2** Executable M15 board profile — `src/manifests/irem_m15` now assembles an M15-owned first-pass MOS 6502 board shell at `733125 Hz` with the M-15 memory map: scratch RAM `$0000-$02ff`, ROM `$1000-$33ff` plus vectors `$fc00-$ffff`, video RAM `$4000-$43ff`, color RAM `$4800-$4bff`, chargen RAM `$5000-$57ff`, and `$a000/$a100/$a200/$a300/$a400` input/sound/DIP/control MMIO. It reuses the shared 6502-family CPU core in bare-6502 mode, pulses the IRQ vector during frame stepping, exposes 6502 trace/register capability discovery, owns 1-bit beeper output, vertical 224x256 diagnostic framebuffer, whole-board save/load identity, and save-state rejection across mismatched DIP/layout identity. `src/apps/player/adapters/irem_m15` registers `--system irem_m15` / `m15`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`; direct Head On screenshot and save/load smoke both produce 224x256 nonblank frames. Remaining: discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and authentic screenshot parity before calling the profile authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m15/m15_system.cpp` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `src/apps/player/adapters/irem_m15/irem_m15_adapter.cpp` + `src/apps/player/adapters/irem_m15/tests/irem_m15_adapter_test.cpp`
+- [~] **I15-2** Executable M15 board profile — `src/manifests/irem_m15` now assembles an M15-owned MOS 6502 board shell at `733125 Hz` with the M-15 memory map: scratch RAM `$0000-$02ff`, ROM `$1000-$33ff` plus vectors `$fc00-$ffff`, video RAM `$4000-$43ff`, color RAM `$4800-$4bff`, chargen RAM `$5000-$57ff`, and `$a000/$a100/$a200/$a300/$a400` P2/sound/DIP/P1/control MMIO. It reuses the shared 6502-family CPU core in bare-6502 mode, pulses the IRQ vector during frame stepping, maps coin insertion to the NMI edge, uses Head On's active-high P1/P2 controls and `0x11` DIP default, preserves the active-low flip control bit in save states, exposes 6502 trace/register capability discovery, and renders the vertical 224x256 frame through M-15 tile scan order, color RAM lower-three-bit palette selection, and runtime chargen RAM instead of the old program-ROM diagnostic fallback. Whole-board save/load identity rejects mismatched DIP/layout identity. `src/apps/player/adapters/irem_m15` registers `--system irem_m15` / `m15`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`; direct Head On screenshot and save/load smoke both produce 224x256 nonblank frames. Remaining: discrete sample/sound behavior, analog color proof, raster timing, and authentic screenshot parity before calling the profile authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m15/m15_system.cpp` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `src/apps/player/adapters/irem_m15/irem_m15_adapter.cpp` + `src/apps/player/adapters/irem_m15/tests/irem_m15_adapter_test.cpp`
 
 ---
 

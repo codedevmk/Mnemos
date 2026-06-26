@@ -27,6 +27,8 @@ namespace {
     namespace irem = mnemos::apps::player::adapters::irem_m15;
     namespace m15 = mnemos::manifests::irem_m15;
 
+    constexpr std::uint16_t visible_probe_tile_index = 1021U;
+
     void poke16(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint16_t value) {
         REQUIRE(offset + 1U < bytes.size());
         bytes[offset] = static_cast<std::uint8_t>(value);
@@ -45,9 +47,9 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m15_program() {
         return make_m15_program({0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
-                                 0xA9U, 0x81U, 0x8DU, 0x00U, 0x40U, // LDA #$81 ; STA $4000
-                                 0xA9U, 0x2AU, 0x8DU, 0x00U, 0x48U, // LDA #$2A ; STA $4800
-                                 0xA9U, 0x18U, 0x8DU, 0x00U, 0x50U, // LDA #$18 ; STA $5000
+                                 0xA9U, 0x01U, 0x8DU, 0xFDU, 0x43U, // LDA #$01 ; STA $43FD
+                                 0xA9U, 0x00U, 0x8DU, 0xFDU, 0x4BU, // LDA #$00 ; STA $4BFD
+                                 0xA9U, 0x80U, 0x8DU, 0x0FU, 0x50U, // LDA #$80 ; STA $500F
                                  0xA9U, 0x5AU, 0x8DU, 0x00U, 0xA1U, // LDA #$5A ; STA $A100
                                  0xA9U, 0x04U, 0x8DU, 0x00U, 0xA4U, // LDA #$04 ; STA $A400
                                  0x4CU, 0x1EU, 0x10U});             // JMP $101E
@@ -248,9 +250,9 @@ TEST_CASE("irem_m15_adapter boots a synthetic M15 program", "[irem_m15]") {
 
     CHECK(adapter.frames_stepped() == 1U);
     CHECK(adapter.machine().scratch_ram[0] == 0x42U);
-    CHECK(adapter.machine().video_ram[0] == 0x81U);
-    CHECK(adapter.machine().color_ram[0] == 0x2AU);
-    CHECK(adapter.machine().chargen_ram[0] == 0x18U);
+    CHECK(adapter.machine().video_ram[visible_probe_tile_index] == 0x01U);
+    CHECK(adapter.machine().color_ram[visible_probe_tile_index] == 0x00U);
+    CHECK(adapter.machine().chargen_ram[0x0FU] == 0x80U);
     CHECK(adapter.machine().speaker_latch == 0x5AU);
     CHECK(adapter.machine().control_register == 0x04U);
     CHECK(framebuffer_has_nonblack(adapter.current_frame()));
@@ -263,7 +265,16 @@ TEST_CASE("irem_m15_adapter save state restores board and adapter state", "[irem
     mnemos::frontend_sdk::controller_state p1{};
     p1.start = true;
     p1.a = true;
+    p1.left = true;
     source.apply_input(0, p1);
+    CHECK(source.machine().input_p1 ==
+          static_cast<std::uint8_t>(m15::p1_start1_bit | m15::panel_button1_bit |
+                                    m15::panel_left_bit));
+    CHECK(source.machine().input_system == 0x00U);
+
+    p1.select = true;
+    source.apply_input(0, p1);
+    CHECK(source.machine().input_system == m15::coin1_bit);
 
     const auto state = source.save_state();
     REQUIRE_FALSE(state.empty());
@@ -273,9 +284,10 @@ TEST_CASE("irem_m15_adapter save state restores board and adapter state", "[irem
     CHECK(result.ok());
     CHECK(restored.frames_stepped() == source.frames_stepped());
     CHECK(restored.machine().scratch_ram[0] == 0x42U);
-    CHECK(restored.machine().video_ram[0] == 0x81U);
-    CHECK(restored.machine().color_ram[0] == 0x2AU);
-    CHECK(restored.machine().chargen_ram[0] == 0x18U);
+    CHECK(restored.machine().video_ram[visible_probe_tile_index] == 0x01U);
+    CHECK(restored.machine().color_ram[visible_probe_tile_index] == 0x00U);
+    CHECK(restored.machine().chargen_ram[0x0FU] == 0x80U);
+    CHECK(restored.machine().input_p1 == source.machine().input_p1);
     CHECK(restored.machine().input_system == source.machine().input_system);
 }
 
@@ -326,7 +338,9 @@ TEST_CASE("irem_m15_adapter validates real M15 ROM sets", "[irem_m15][data]") {
         CHECK(adapter.media_capabilities().media.front().validation_issues.empty());
         CHECK(adapter.set_name() == set_name);
 
-        adapter.step_one_frame();
+        for (std::uint32_t frame = 0; frame < 120U; ++frame) {
+            adapter.step_one_frame();
+        }
         CHECK(adapter.current_frame().width == m15::visible_width);
         CHECK(adapter.current_frame().height == m15::visible_height);
         CHECK(framebuffer_has_nonblack(adapter.current_frame()));

@@ -33,6 +33,9 @@ namespace {
     using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
 
+    constexpr std::uint16_t visible_probe_tile_index = 1021U;
+    constexpr std::uint16_t flipped_probe_tile_index = 2U;
+
     [[nodiscard]] std::string read_text_file(const std::filesystem::path& path) {
         std::ifstream in(path, std::ios::binary);
         REQUIRE(in.good());
@@ -300,10 +303,12 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t>
     make_m15_program(std::uint16_t origin, const std::vector<std::uint8_t>& program,
-                     std::uint16_t irq_vector = 0x1000U) {
+                     std::uint16_t irq_vector = 0x1000U,
+                     std::uint16_t nmi_vector = 0x1000U) {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
         REQUIRE(static_cast<std::size_t>(origin) + program.size() <= rom.size());
         std::copy(program.begin(), program.end(), rom.begin() + origin);
+        poke16(rom, 0xFFFAU, nmi_vector);
         poke16(rom, 0xFFFCU, origin);
         poke16(rom, 0xFFFEU, irq_vector);
         return rom;
@@ -312,9 +317,9 @@ namespace {
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m15_program() {
         return make_m15_program(0x1000U,
                                 {0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
-                                 0xA9U, 0x81U, 0x8DU, 0x00U, 0x40U, // LDA #$81 ; STA $4000
-                                 0xA9U, 0x2AU, 0x8DU, 0x00U, 0x48U, // LDA #$2A ; STA $4800
-                                 0xA9U, 0x18U, 0x8DU, 0x00U, 0x50U, // LDA #$18 ; STA $5000
+                                 0xA9U, 0x01U, 0x8DU, 0xFDU, 0x43U, // LDA #$01 ; STA $43FD
+                                 0xA9U, 0x00U, 0x8DU, 0xFDU, 0x4BU, // LDA #$00 ; STA $4BFD
+                                 0xA9U, 0x80U, 0x8DU, 0x0FU, 0x50U, // LDA #$80 ; STA $500F
                                  0xA9U, 0x5AU, 0x8DU, 0x00U, 0xA1U, // LDA #$5A ; STA $A100
                                  0xA9U, 0x04U, 0x8DU, 0x00U, 0xA4U, // LDA #$04 ; STA $A400
                                  0x4CU, 0x1EU, 0x10U},             // JMP $101E
@@ -343,6 +348,24 @@ namespace {
 
         rom_set_image image;
         image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1020U));
+        return image;
+    }
+
+    [[nodiscard]] rom_set_image nmi_m15_image() {
+        std::vector<std::uint8_t> program(0x50U, 0xEAU);
+        program[0x00U] = 0xEAU; // NOP
+        program[0x01U] = 0x4CU; // JMP $1000
+        program[0x02U] = 0x00U;
+        program[0x03U] = 0x10U;
+        program[0x20U] = 0xA9U; // NMI: LDA #$99
+        program[0x21U] = 0x99U;
+        program[0x22U] = 0x8DU; // STA $0004
+        program[0x23U] = 0x04U;
+        program[0x24U] = 0x00U;
+        program[0x25U] = 0x40U; // RTI
+
+        rom_set_image image;
+        image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1000U, 0x1020U));
         return image;
     }
 
@@ -417,6 +440,7 @@ TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus"
     const auto params = m15::board_params_for("headoni");
     CHECK(params.cpu_clock_hz == m15::cpu_clock_hz);
     CHECK(params.rom_layout == "m15_headon_6502");
+    CHECK(params.dip_default == m15::headoni_dip_default);
 }
 
 TEST_CASE("m15 embedded game manifests mirror the checked-in roster", "[m15][romset]") {
@@ -494,14 +518,64 @@ TEST_CASE("m15 executable board runs MOS 6502 memory video and sound path", "[m1
     system->run_frame();
 
     CHECK(system->scratch_ram[0] == 0x42U);
-    CHECK(system->video_ram[0] == 0x81U);
-    CHECK(system->color_ram[0] == 0x2AU);
-    CHECK(system->chargen_ram[0] == 0x18U);
+    CHECK(system->video_ram[visible_probe_tile_index] == 0x01U);
+    CHECK(system->color_ram[visible_probe_tile_index] == 0x00U);
+    CHECK(system->chargen_ram[0x0FU] == 0x80U);
     CHECK(system->speaker_latch == 0x5AU);
     CHECK(system->control_register == 0x04U);
+    CHECK_FALSE(system->flip_screen);
     CHECK(system->video.framebuffer().width == m15::visible_width);
     CHECK(system->video.framebuffer().height == m15::visible_height);
     CHECK(framebuffer_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m15 input ports are active high and coin pulses NMI", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(nmi_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    CHECK(system->main_bus.read8(m15::input_p1_address) == 0x00U);
+    CHECK(system->main_bus.read8(m15::input_p2_address) == 0x00U);
+    CHECK(system->main_bus.read8(m15::dip_switch_address) == m15::headoni_dip_default);
+
+    const std::uint8_t p1 = m15::p1_start1_bit | m15::panel_button1_bit | m15::panel_left_bit;
+    const std::uint8_t p2 = m15::panel_button1_bit | m15::panel_right_bit;
+    system->set_inputs(p1, p2, 0x00U);
+    CHECK(system->main_bus.read8(m15::input_p1_address) == p1);
+    CHECK(system->main_bus.read8(m15::input_p2_address) == p2);
+
+    system->set_inputs(p1, p2, m15::coin1_bit);
+    system->main_cpu.tick(96U);
+    CHECK(system->scratch_ram[4] == 0x99U);
+}
+
+TEST_CASE("m15 video uses tile scan order palette and active-low flip control", "[m15][video]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->video_ram[visible_probe_tile_index] = 1U;
+    system->color_ram[visible_probe_tile_index] = 0U;
+    system->chargen_ram[0x0FU] = 0x80U;
+    system->video.compose(system->video_ram, system->color_ram, system->chargen_ram, false);
+    auto frame = system->video.framebuffer();
+    REQUIRE(frame.pixels != nullptr);
+    CHECK(frame.pixels[0] == 0xFFFFFFU);
+
+    std::fill(system->video_ram.begin(), system->video_ram.end(), std::uint8_t{0});
+    std::fill(system->color_ram.begin(), system->color_ram.end(), std::uint8_t{0});
+    std::fill(system->chargen_ram.begin(), system->chargen_ram.end(), std::uint8_t{0});
+    system->video_ram[flipped_probe_tile_index] = 2U;
+    system->color_ram[flipped_probe_tile_index] = 5U;
+    system->chargen_ram[0x10U] = 0x01U;
+    system->main_bus.write8(m15::control_register_address, 0x00U);
+    CHECK(system->flip_screen);
+    system->video.compose(system->video_ram, system->color_ram, system->chargen_ram,
+                          system->flip_screen);
+    frame = system->video.framebuffer();
+    CHECK(frame.pixels[0] == 0x00FF00U);
 }
 
 TEST_CASE("m15 frame tick pulses the 6502 IRQ vector", "[m15][board]") {
@@ -537,12 +611,13 @@ TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][bo
     CHECK(reader.ok());
     CHECK(restored->scratch_ram[0] == 0x42U);
     CHECK(restored->scratch_ram[3] == 0x5AU);
-    CHECK(restored->video_ram[0] == 0x81U);
-    CHECK(restored->color_ram[0] == 0x2AU);
-    CHECK(restored->chargen_ram[0] == 0x18U);
+    CHECK(restored->video_ram[visible_probe_tile_index] == 0x01U);
+    CHECK(restored->color_ram[visible_probe_tile_index] == 0x00U);
+    CHECK(restored->chargen_ram[0x0FU] == 0x80U);
     CHECK(restored->input_p1 == 0xEEU);
     CHECK(restored->input_p2 == 0xDDU);
     CHECK(restored->input_system == 0xCCU);
+    CHECK_FALSE(restored->flip_screen);
 
     auto incompatible =
         m15::assemble_m15(synthetic_m15_image(), m15::m15_board_params{.dip_default = 0x7FU});

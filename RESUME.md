@@ -73,15 +73,17 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - M15 now has a first-pass executable board and player adapter for `headoni`, not only ROM-contract metadata.
 - Board implementation lives in `src/manifests/irem_m15/m15_system.hpp` and `src/manifests/irem_m15/m15_system.cpp`.
-- The board owns a MOS 6502 execution path via the shared `m6510` core in bare-6502 mode, M15 diagnostic video path, 1-bit beeper, scratch/video/color/chargen RAM windows, input/DIP/control MMIO, frame IRQ pulse, and whole-board save/load with identity checks.
+- The board owns a MOS 6502 execution path via the shared `m6510` core in bare-6502 mode, M15 tile/color/chargen video path, 1-bit beeper, scratch/video/color/chargen RAM windows, input/DIP/control MMIO, frame IRQ pulse, and whole-board save/load with identity checks.
 - The M15 map is now aligned with MAME/source metadata for Head On: scratch RAM `$0000-$02ff`, program ROM `$1000-$33ff`, vector ROM `$fc00-$ffff`, video RAM `$4000-$43ff`, color RAM `$4800-$4bff`, chargen RAM `$5000-$57ff`, P2 read `$a000`, sound write `$a100`, DIP read `$a200`, P1 read `$a300`, and control write `$a400`.
 - The checked-in `headoni` manifest now uses full 64 KiB CPU address space and reloads `e4.9d` at `$fc00` for the 6502 reset/IRQ vectors.
+- M15 inputs now follow Head On's active-high P1/P2 ports, `0x11` DIP default, and coin-triggered NMI edge; the active-low control flip bit is part of board state/save state.
+- M15 video now renders from video/color/chargen RAM using the M-15 tile scan order and 1bpp palette lookup. The old program-ROM diagnostic fallback was removed.
 - Player adapter lives in `src/apps/player/adapters/irem_m15`.
 - CLI/system-family routing is available through `--system irem_m15` and alias `m15`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
 - Capability discovery reports 6502 trace/register surfaces, scratch/video/color/chargen RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Head On player smoke wrote nonblank screenshots and successfully saved/loaded state.
-- Remaining: this is still diagnostic rendering and first-pass board wiring. Authentic M15 closure still needs discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and screenshot parity.
+- Remaining: authentic M15 closure still needs discrete sample/sound behavior, analog color proof, raster timing, and screenshot parity.
 
 ## Local ROM Corpus Notes
 
@@ -226,6 +228,29 @@ M15 6502 correction validation on 2026-06-25 22:41 -05:00:
   - save state: `build\scratch\irem_m15_headoni_6502.state`, 3061 bytes after 60 frames
   - loaded screenshot: `build\scratch\irem_m15_headoni_6502_loaded.ppm`, `224x256`, 172047 bytes, nonzero RGB payload
 
+M15 input/video authenticity continuation validation on 2026-06-26:
+
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m15_test mnemos_apps_player_irem_m15_adapter_test mnemos_apps_player_capability_summary_test mnemos_player`
+- Focused CTest with `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`: `4/4`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_capability_summary_test`
+  - `mnemos_apps_player_irem_m15_adapter_test`
+  - `mnemos_apps_player_irem_m15_corpus_golden_test`
+- Direct M15 player screenshot smoke:
+  - command included `--system irem_m15 --rom "D:\emu\irem\M15\Head-On_Arcade_EN.zip" --screenshot "C:\dev\emu\Mnemos-irem-arcade\build\scratch\irem_m15_headoni_active_high_120.ppm" --frames 120`
+  - wrote `224x256` PPM, 172047 bytes, nonzero RGB payload
+  - same check at `600` frames also produced a nonzero RGB payload
+- Direct M15 player capability smoke:
+  - command included `--system irem_m15 --rom "D:\emu\irem\M15\Head-On_Arcade_EN.zip" --capabilities`
+  - output reported 6502 trace/registers, M15 RAM views, input ports, rollback, and `media.rom_set state=available`
+- Direct M15 player save/load smoke:
+  - save state: `build\scratch\irem_m15_headoni_active_high.state`, 1597 bytes after 120 frames
+  - loaded screenshot: `build\scratch\irem_m15_headoni_active_high_loaded.ppm`, `224x256`, 172047 bytes, nonzero RGB payload
+- Full validation after this slice:
+  - `cmake --build --preset windows-msvc-debug`: no work to do
+  - `ctest --preset windows-msvc-debug --output-on-failure`: `188/188`, expected corpus/conformance skips
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -243,7 +268,7 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M15 authenticity work: discrete video/sound behavior, DIP behavior, raster timing, and screenshot parity.
+1. Continue M15 authenticity work: discrete sample/sound behavior, analog color proof, raster timing, and screenshot parity.
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.

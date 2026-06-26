@@ -3,7 +3,6 @@
 #include "adapter_registry.hpp"
 #include "crc32.hpp"
 #include "file.hpp"
-#include "input_pack.hpp"
 #include "m15_game_manifests.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
@@ -459,23 +458,40 @@ namespace mnemos::apps::player::adapters::irem_m15 {
     }
 
     void irem_m15_adapter::sync_inputs_from_ports() noexcept {
-        const auto pack = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
-            return pack_active_low_pad(c, dpad_layout{}, {{c.a, 0x10U}, {c.b, 0x20U}});
+        const auto pack_controls = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
+            std::uint8_t value = 0U;
+            if (c.a) {
+                value |= m15::panel_button1_bit;
+            }
+            if (c.up) {
+                value |= m15::panel_up_bit;
+            }
+            if (c.down) {
+                value |= m15::panel_down_bit;
+            }
+            if (c.left) {
+                value |= m15::panel_left_bit;
+            }
+            if (c.right) {
+                value |= m15::panel_right_bit;
+            }
+            return value;
         };
-        std::uint8_t system = 0xFFU;
+        std::uint8_t p1 = pack_controls(ports_[0]);
         if (ports_[0].start) {
-            system &= static_cast<std::uint8_t>(~0x01U);
+            p1 |= m15::p1_start1_bit;
         }
         if (ports_[1].start) {
-            system &= static_cast<std::uint8_t>(~0x02U);
+            p1 |= m15::p1_start2_bit;
         }
+        std::uint8_t system = 0U;
         if (ports_[0].select) {
-            system &= static_cast<std::uint8_t>(~0x04U);
+            system |= m15::coin1_bit;
         }
         if (ports_[1].select) {
-            system &= static_cast<std::uint8_t>(~0x08U);
+            system |= m15::coin1_bit;
         }
-        sys_->set_inputs(pack(ports_[0]), pack(ports_[1]), system);
+        sys_->set_inputs(p1, pack_controls(ports_[1]), system);
     }
 
     void irem_m15_adapter::save_adapter_state(chips::state_writer& writer) const {
