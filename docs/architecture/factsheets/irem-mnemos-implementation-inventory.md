@@ -49,7 +49,7 @@ now contract-only.
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
-| M75 | `irem_m75` first-pass | 28% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers | None | Authentic Vigilante graphics priority, DIP proof, raster phase, audio parity, bootleg parent-fallback coverage |
+| M75 | `irem_m75` first-pass | 29% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers | None | Authentic Vigilante graphics priority, DIP proof, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 65% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
@@ -224,21 +224,24 @@ visual and audio parity proof.
   save/load; `D:\emu\irem\Vigilante_Arcade_JA.zip` also has direct screenshot and
   save-state smoke evidence.
 - **Correct gfx/music:** none. The board has a first-pass diagnostic video path
-  and executable Z80/Z80/YM2151/DAC ownership, not authentic Vigilante
-  graphics/music certification.
+  and executable Z80/Z80/YM2151/DAC ownership, including synthetic
+  sample-ROM-read-to-DAC proof, not authentic Vigilante graphics/music
+  certification.
 - **Current implementation:** `src/manifests/irem_m75` owns a Z80 main CPU, Z80
   sound CPU, YM2151, DAC, 16-bit Z80 memory buses, Vigilante ROM banking, RAM
   windows, inputs/DIPs, sound latch/ack, sample-address/DAC ports, the two-bank
   5-bit KNA91-style palette bus, rear color/disable register semantics,
   whole-board save/load identity, and embedded parent/clone Vigilante ROM
-  contracts.
+  contracts. The M75 system tests now prove the sound Z80 can program the
+  sample cursor, read consecutive sample ROM bytes through the modeled port,
+  write them through the DAC, and acknowledge the latch.
   `src/apps/player` registers `--system irem_m75` and alias `m75`, supports direct ZIPs,
   single-inner wrapper ZIPs, unpacked folders, in-archive `game.toml`, clone/parent
   fallback media resolution, resident media validation, rollback-ready save-state, capability discovery, and
   `MNEMOS_M75_SET_DIR=D:\emu\irem` corpus gating.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
   Vigilante background/foreground/sprite priority, verify exact memory/I/O/DIP
-  and raster phase, prove sound CPU sample/DAC behavior against board evidence,
+  and raster phase, prove sound CPU sample/DAC timing against board evidence,
   add bootleg parent-fallback coverage for partial bootleg ZIPs, and
   collect screenshot/audio parity evidence before marking graphics or music
   correct.

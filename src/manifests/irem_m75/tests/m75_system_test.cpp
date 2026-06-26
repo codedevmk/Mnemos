@@ -18,8 +18,8 @@ namespace {
         const std::uint8_t program[] = {
             0x3EU, 0x42U, 0x32U, 0x00U, 0xE0U, // LD A,$42 ; LD ($E000),A
             0x3EU, 0x37U, 0x32U, 0x00U, 0xD0U, // LD A,$37 ; LD ($D000),A
-            0x3EU, 0x02U, 0xD3U, 0x04U,       // LD A,$02 ; OUT ($04),A
-            0x3EU, 0x5AU, 0xD3U, 0x00U,       // LD A,$5A ; OUT ($00),A
+            0x3EU, 0x02U, 0xD3U, 0x04U,        // LD A,$02 ; OUT ($04),A
+            0x3EU, 0x5AU, 0xD3U, 0x00U,        // LD A,$5A ; OUT ($00),A
             0x76U                              // HALT
         };
         std::copy(std::begin(program), std::end(program), rom.begin());
@@ -31,11 +31,31 @@ namespace {
     [[nodiscard]] std::vector<std::uint8_t> synthetic_sound_program() {
         std::vector<std::uint8_t> rom(m75::sound_rom_size, 0x00U);
         const std::uint8_t program[] = {
-            0xDBU, 0x80U,       // IN A,($80)
-            0xD3U, 0x83U,       // OUT ($83),A
-            0x3EU, 0xF0U,       // LD A,$F0
-            0xD3U, 0x82U,       // OUT ($82),A
-            0x76U               // HALT
+            0xDBU, 0x80U, // IN A,($80)
+            0xD3U, 0x83U, // OUT ($83),A
+            0x3EU, 0xF0U, // LD A,$F0
+            0xD3U, 0x82U, // OUT ($82),A
+            0x76U         // HALT
+        };
+        std::copy(std::begin(program), std::end(program), rom.begin());
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_sound_sample_program() {
+        std::vector<std::uint8_t> rom(m75::sound_rom_size, 0x00U);
+        const std::uint8_t program[] = {
+            0x3EU, 0x34U,        // LD A,$34
+            0xD3U, 0x80U,        // OUT ($80),A
+            0x3EU, 0x12U,        // LD A,$12
+            0xD3U, 0x81U,        // OUT ($81),A
+            0xDBU, 0x84U,        // IN A,($84)
+            0x32U, 0x01U, 0xF0U, // LD ($F001),A
+            0xD3U, 0x82U,        // OUT ($82),A
+            0xDBU, 0x84U,        // IN A,($84)
+            0x32U, 0x02U, 0xF0U, // LD ($F002),A
+            0xD3U, 0x82U,        // OUT ($82),A
+            0xD3U, 0x83U,        // OUT ($83),A
+            0x76U                // HALT
         };
         std::copy(std::begin(program), std::end(program), rom.begin());
         return rom;
@@ -68,8 +88,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m75 executable board maps Z80 RAM, banked ROM, and diagnostic frame",
-          "[m75][board]") {
+TEST_CASE("m75 executable board maps Z80 RAM, banked ROM, and diagnostic frame", "[m75][board]") {
     auto system = m75::assemble_m75(synthetic_m75_image(), m75::board_params_for("vigilant"));
     REQUIRE(system != nullptr);
 
@@ -89,8 +108,7 @@ TEST_CASE("m75 executable board maps Z80 RAM, banked ROM, and diagnostic frame",
     CHECK(frame_has_nonblack(system->video.framebuffer()));
 }
 
-TEST_CASE("m75 board declares Z80/Z80/YM2151/DAC clocks and 256x256 raster",
-          "[m75][board]") {
+TEST_CASE("m75 board declares Z80/Z80/YM2151/DAC clocks and 256x256 raster", "[m75][board]") {
     auto system = m75::assemble_m75(synthetic_m75_image(), m75::board_params_for("vigilant"));
     REQUIRE(system != nullptr);
 
@@ -143,8 +161,8 @@ TEST_CASE("m75 rear color register selects the rear palette bank and disable bit
     palette[0x504U] = 0x1FU; // green, rear bank
 
     m75::m75_video rear_enabled;
-    rear_enabled.compose(zeros, zeros, zeros, zeros, zeros, zeros, zeros, vram, palette,
-                         sprite_ram, 0U, 0U, 0x00U, "vigilant");
+    rear_enabled.compose(zeros, zeros, zeros, zeros, zeros, zeros, zeros, vram, palette, sprite_ram,
+                         0U, 0U, 0x00U, "vigilant");
     CHECK(rear_enabled.framebuffer().pixels[0] == 0x0000FF00U);
 
     m75::m75_video rear_disabled;
@@ -164,6 +182,29 @@ TEST_CASE("m75 Z80 sound CPU acknowledges latch and drives DAC", "[m75][board][a
     CHECK_FALSE(system->dac_write_events.empty());
     CHECK(system->dac.level() == 0xF0U);
     CHECK(system->dac.output() > 0);
+}
+
+TEST_CASE("m75 sound CPU streams sample ROM bytes through the DAC", "[m75][board][audio]") {
+    auto image = synthetic_m75_image();
+    image.regions["soundcpu"] = synthetic_sound_sample_program();
+    image.regions["samples"].assign(m75::sample_rom_size, 0x00U);
+    image.regions["samples"][0x1234U] = 0x7DU;
+    image.regions["samples"][0x1235U] = 0x41U;
+
+    auto system = m75::assemble_m75(std::move(image), m75::board_params_for("vigilant"));
+    REQUIRE(system != nullptr);
+    system->sound_latch_irq = true;
+    system->update_sound_irq();
+
+    system->sound_cpu.tick(256U);
+
+    CHECK(system->sound_cpu.cpu_registers().halted);
+    CHECK(system->sound_ram[0x001U] == 0x7DU);
+    CHECK(system->sound_ram[0x002U] == 0x41U);
+    CHECK(system->sample_address == 0x1236U);
+    CHECK_FALSE(system->sound_latch_irq);
+    CHECK(system->dac.level() == 0x41U);
+    CHECK(system->dac.output() < 0);
 }
 
 TEST_CASE("m75 save state preserves board identity and runtime state", "[m75][board]") {
