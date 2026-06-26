@@ -43,7 +43,7 @@ now contract-only.
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
-| M52 | `irem_m52` first-pass | 36% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults | None | Authentic parallax/road/sprite video, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, raster/audio/video parity |
+| M52 | `irem_m52` first-pass | 38% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof | None | Authentic parallax/road/sprite video, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, raster/audio/video parity |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
@@ -70,9 +70,10 @@ targets:
 - M72 has the strongest current game-level route: full V30/Z80/YM2151/video/DAC
   wiring, scanline composition, and 19 clean local smoke sets.
 - M52 now has a Moon Patrol ROM-contract/player route for the local parent and
-  Williams clone wrappers, but the video and audio are diagnostic first-pass
-  paths rather than authentic parallax, road, sound-CPU, or discrete analog
-  behavior. Its manual-backed DIP defaults are now wired, but runtime DIP
+  Williams clone wrappers, but video remains a diagnostic first-pass path rather
+  than authentic parallax/road behavior. Audio now routes modeled AY/MSM writes
+  through the sound Z80 instead of command-fed shortcuts, but discrete analog
+  behavior and timing parity are still open. Its manual-backed DIP defaults are now wired, but runtime DIP
   behavior beyond those defaults remains open.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
@@ -126,8 +127,8 @@ visual and audio parity proof.
   output. The board now owns and schedules a second Z80 sound CPU with mapped
   sound ROM/RAM, sound-command latch IRQ/ack state, two native
   YM2149/AY-compatible SSG instances, and one native OKI MSM5205 decoder.
-  Command writes still seed deterministic SSG/MSM observability, while the
-  sound CPU can read/ack the latch and write the modeled AY/MSM ports.
+  Command writes only update the latch and IRQ line; focused coverage proves
+  AY/MSM state changes only after the sound Z80 executes its modeled port writes.
   Save/load preserves both Z80s, sound RAM, latch state, and audio chip phases;
   the adapter mixes all three captured stereo queues and capability discovery
   exposes both Z80 register snapshots plus the audio register snapshots.
@@ -140,8 +141,7 @@ visual and audio parity proof.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
   parallax/road/sprite/text priority, verify the exact M52 sound CPU port map
   and MSM5205 stream timing against board evidence, implement the
-  discrete-analog path beyond the current command-driven SSG/MSM observability
-  surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route,
+  discrete-analog path beyond the currently modeled AY/MSM port surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route,
   and prove runtime DIP behavior beyond current manual defaults, raster timing,
   screenshot parity, and audio parity.
 
@@ -434,7 +434,7 @@ visual and audio parity proof.
 1. Add visual/audio parity oracles for one already smoke-playable route before
    promoting any game to "correct gfx/music".
 2. Advance M52 Moon Patrol from first-pass route to authentic video/audio by
-   replacing the diagnostic compositor and command-fed audio with board-evidenced
+   replacing the diagnostic compositor and first-pass digital audio with board-evidenced
    parallax, road, sprite, sound-CPU-owned MSM5205 stream timing, and discrete
    analog behavior.
 3. Resolve the M82/M84 R-Type II classification mismatch with board evidence and

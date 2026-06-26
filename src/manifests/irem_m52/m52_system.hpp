@@ -19,7 +19,7 @@
 
 namespace mnemos::manifests::irem_m52 {
 
-    inline constexpr std::uint32_t m52_system_state_version = 5U;
+    inline constexpr std::uint32_t m52_system_state_version = 6U;
 
     inline constexpr std::uint32_t visible_width = 240U;
     inline constexpr std::uint32_t visible_height = 252U;
@@ -151,7 +151,6 @@ namespace mnemos::manifests::irem_m52 {
         std::uint64_t sound_command_write_count{};
         std::uint64_t sound_latch_ack_count{};
         std::uint64_t sound_cpu_msm_write_count{};
-        std::uint64_t msm_sound_rom_cursor{};
         std::uint64_t flip_write_count{};
 
         explicit m52_system(common::rom_set_image image, m52_board_params board_params = {});

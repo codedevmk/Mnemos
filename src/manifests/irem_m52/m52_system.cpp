@@ -99,33 +99,6 @@ namespace mnemos::manifests::irem_m52 {
             return crc;
         }
 
-        void program_ssg_tone(chips::audio::ssg& chip, int channel, std::uint16_t period,
-                              std::uint8_t level) noexcept {
-            const auto base = static_cast<std::uint8_t>(channel * 2);
-            chip.write_reg(base, static_cast<std::uint8_t>(period & 0xFFU));
-            chip.write_reg(static_cast<std::uint8_t>(base + 1U),
-                           static_cast<std::uint8_t>((period >> 8U) & 0x0FU));
-            chip.write_reg(static_cast<std::uint8_t>(chips::audio::ssg::reg_a_level + channel),
-                           static_cast<std::uint8_t>(level & chips::audio::ssg::level_vol_mask));
-
-            std::uint8_t mixer = 0xFFU;
-            mixer = static_cast<std::uint8_t>(
-                mixer & ~static_cast<std::uint8_t>(chips::audio::ssg::mixer_tone_a << channel));
-            chip.write_reg(chips::audio::ssg::reg_mixer, mixer);
-        }
-
-        void clock_msm_command_byte(chips::audio::msm5205& msm,
-                                    std::span<const std::uint8_t> sound_program,
-                                    std::uint8_t command, std::uint64_t& cursor) noexcept {
-            const std::uint64_t byte_index = static_cast<std::uint64_t>(command) * 257U + cursor;
-            const std::uint8_t b =
-                sample_byte(sound_program, byte_index, static_cast<std::uint8_t>(command ^ 0xA5U));
-            ++cursor;
-            msm.data_w(static_cast<std::uint8_t>((b >> 4U) & 0x0FU));
-            msm.vclk_tick();
-            msm.data_w(static_cast<std::uint8_t>(b & 0x0FU));
-            msm.vclk_tick();
-        }
     } // namespace
 
     m52_board_params board_params_for(std::string_view set_name) noexcept {
@@ -434,20 +407,6 @@ namespace mnemos::manifests::irem_m52 {
         sound_latch_irq = true;
         ++sound_command_write_count;
         update_sound_irq();
-
-        const auto low = static_cast<std::uint16_t>(value & 0x0FU);
-        const auto high = static_cast<std::uint16_t>((value >> 4U) & 0x0FU);
-        program_ssg_tone(ay0, 0, static_cast<std::uint16_t>(0x20U + low * 8U), 0x0FU);
-        program_ssg_tone(ay1, 1, static_cast<std::uint16_t>(0x30U + high * 12U), 0x0CU);
-        ay0.write_reg(chips::audio::ssg::reg_port_a, value);
-        ay1.write_reg(chips::audio::ssg::reg_port_a, static_cast<std::uint8_t>(value ^ 0xFFU));
-
-        const auto* sound_program = roms.region("soundcpu");
-        clock_msm_command_byte(msm,
-                               sound_program != nullptr
-                                   ? std::span<const std::uint8_t>(*sound_program)
-                                   : std::span<const std::uint8_t>{},
-                               value, msm_sound_rom_cursor);
     }
 
     void m52_system::update_sound_irq() noexcept { sound_cpu.set_irq_line(sound_latch_irq); }
@@ -503,7 +462,6 @@ namespace mnemos::manifests::irem_m52 {
         writer.u64(sound_command_write_count);
         writer.u64(sound_latch_ack_count);
         writer.u64(sound_cpu_msm_write_count);
-        writer.u64(msm_sound_rom_cursor);
         writer.u64(flip_write_count);
     }
 
@@ -564,7 +522,6 @@ namespace mnemos::manifests::irem_m52 {
         sound_command_write_count = reader.u64();
         sound_latch_ack_count = reader.u64();
         sound_cpu_msm_write_count = reader.u64();
-        msm_sound_rom_cursor = reader.u64();
         flip_write_count = reader.u64();
         if (reader.ok()) {
             ay0.address(sound_ay0_address);

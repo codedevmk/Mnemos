@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M75 sample ROM/DAC continuation commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M52 sound-CPU ownership continuation commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -33,13 +33,13 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - The parent manifest carries 13 Moon Patrol Instruction Manual active-high SW1/SW2 DIP definitions; the Williams clone inherits them.
 - Player adapter lives in `src/apps/player/adapters/irem_m52` and supports direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, supplemental parent media, and raw synthetic maincpu fallback.
 - CLI/system-family routing is available through `--system irem_m52` and alias `m52`.
-- The board owns two native YM2149/AY-compatible SSG instances and one native OKI MSM5205 decoder instead of the earlier one-bit audio probe. Sound-command writes program deterministic SSG register state and command-fed MSM5205 nibbles from the loaded `soundcpu` ROM, and the adapter mixes all captured stereo queues for player audio.
+- The board owns two native YM2149/AY-compatible SSG instances and one native OKI MSM5205 decoder instead of the earlier one-bit audio probe. Sound-command writes now only update the command latch and IRQ line; AY/MSM state is mutated through sound-Z80 port writes, and the adapter mixes all captured stereo queues for player audio.
 - The board also owns and schedules a second Z80 sound CPU with mapped `soundcpu` ROM/RAM, sound-command latch IRQ/ack state, modeled AY/MSM port writes, and save/load coverage for both Z80s, sound RAM, latch state, and audio chip phases.
 - The M52 adapter consumes explicit arcade `service` and `test` frontend inputs: service maps active-low to system bit `0x08`, `mode` remains a legacy service alias, operator-test maps active-low to bit `0x10`, and adapter save-state version 1 persists those fields.
-- The M52 adapter retains DIP metadata, folds manual-backed factory defaults to `dsw1=0x01` / `dsw2=0x02`, exposes `DIP switches=13`, still lets explicit `--dip` override raw bytes, and uses board/save-target revision 5 for the corrected identity.
+- The M52 adapter retains DIP metadata, folds manual-backed factory defaults to `dsw1=0x01` / `dsw2=0x02`, exposes `DIP switches=13`, still lets explicit `--dip` override raw bytes, and uses board/save-target revision 6 for the corrected sound-ownership/state identity.
 - Capability discovery reports main/sound Z80 trace/register surfaces, both YM2149 register snapshots, MSM5205 register snapshots, M52 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Moon Patrol wrapper ZIPs load through the data-gated corpus test and direct player screenshot smoke.
-- Remaining: this is still first-pass diagnostic rendering and partial sound-protocol ownership. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, exact sound CPU port/protocol proof, MSM5205 stream timing, discrete sound behavior, exact raster timing, runtime DIP behavior beyond current manual defaults, and screenshot/audio parity before it is counted as correct graphics/music.
+- Remaining: this is still first-pass diagnostic rendering and partial sound-protocol timing. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, exact sound CPU port/protocol proof, MSM5205 stream timing, discrete sound behavior, exact raster timing, runtime DIP behavior beyond current manual defaults, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M72
 
@@ -202,6 +202,19 @@ Validation was run from `C:\dev\emu\Mnemos-irem-arcade` under:
 ```bat
 cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && <command>'
 ```
+
+M52 sound-CPU ownership continuation validation on 2026-06-26:
+
+- Removed the M52 command-fed AY/MSM shortcut: main-CPU sound-command writes now update only the latch and IRQ line; the modeled sound Z80 owns AY/MSM port writes.
+- Bumped M52 board state and adapter save-target revisions to `6` because the old synthetic MSM sound-ROM cursor is no longer part of the state payload.
+- Added focused synthetic coverage proving a latch write leaves AY/MSM state untouched until the sound Z80 executes its port sequence, plus adapter audio coverage using a declared synthetic set with a real `soundcpu` region.
+- Focused build passed for `mnemos_manifests_irem_m52_system_test`, `mnemos_apps_player_irem_m52_adapter_test`, and `mnemos_player`.
+- Focused CTest with `MNEMOS_M52_SET_DIR=D:\emu\irem`: `4/4` passed for M52 manifest, system, adapter, and local corpus golden tests.
+- `clang-format --dry-run --Werror` passed for touched M52 C++ files; `git diff --check` passed with only recurring LF-to-CRLF warnings.
+- Full build passed: `cmake --build --preset windows-msvc-debug`.
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84, M90, broad-root M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- Data-gated helper passed: `scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug` reported `26/26` selected tests passed plus M72 corpus smoke `2/2`.
+- This is M52 sound-ownership progress only; it is not final Moon Patrol sound-port timing, MSM5205 stream timing, discrete analog behavior, graphics parity, or audio parity proof.
 
 Final handoff validation completed on 2026-06-25 21:05 -05:00:
 

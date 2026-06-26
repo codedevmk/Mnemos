@@ -82,6 +82,52 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m52_sound_program() {
+        std::vector<std::uint8_t> rom(m52::sound_rom_size, 0x00U);
+        const std::uint8_t program[] = {
+            0xDBU, 0x02U, // IN A,($02)
+            0xD3U, 0x06U, // OUT ($06),A
+            0x3EU, 0x07U, 0xD3U, 0x00U, 0x3EU, 0xFEU, 0xD3U, 0x01U, 0x3EU, 0x08U, 0xD3U,
+            0x00U, 0x3EU, 0x0FU, 0xD3U, 0x01U, 0x3EU, 0x00U, 0xD3U, 0x00U, 0x3EU, 0x1FU,
+            0xD3U, 0x01U, 0x3EU, 0x07U, 0xD3U, 0x04U, 0x3EU, 0xFDU, 0xD3U, 0x05U, 0x3EU,
+            0x09U, 0xD3U, 0x04U, 0x3EU, 0x0CU, 0xD3U, 0x05U, 0x3EU, 0x02U, 0xD3U, 0x04U,
+            0x3EU, 0x23U, 0xD3U, 0x05U, 0x3EU, 0x07U, 0xD3U, 0x08U, 0xC3U, 0x00U, 0x00U};
+        std::copy(std::begin(program), std::end(program), rom.begin());
+        return rom;
+    }
+
+    [[nodiscard]] temp_set_dir make_audio_metadata_set() {
+        temp_set_dir dir;
+        write_text_file(dir.path / "game.toml", R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "audiometa"
+board = "irem_m52"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name = "maincpu.bin"
+offset = 0
+size = 0x10000
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name = "soundcpu.bin"
+offset = 0
+size = 0x10000
+)toml");
+        write_binary_file(dir.path / "maincpu.bin", synthetic_m52_program());
+        write_binary_file(dir.path / "soundcpu.bin", synthetic_m52_sound_program());
+        return dir;
+    }
+
     [[nodiscard]] temp_set_dir make_dip_metadata_set() {
         temp_set_dir dir;
         write_text_file(dir.path / "game.toml", R"toml(
@@ -229,7 +275,7 @@ TEST_CASE("irem_m52_adapter boots a synthetic M52 program", "[irem_m52]") {
     CHECK(adapter.machine().scroll_regs[0] == 0x77U);
     CHECK(adapter.machine().sound_command_write_count > 0U);
     CHECK(adapter.machine().sound_cpu.elapsed_cycles() > 0U);
-    CHECK(irem::build_save_target(adapter).manifest_rev == 5U);
+    CHECK(irem::build_save_target(adapter).manifest_rev == 6U);
     REQUIRE(adapter.chips().size() == 6U);
     CHECK(adapter.chips()[2]->metadata().part_number == "Z80");
     CHECK(adapter.chips()[5]->metadata().part_number == "MSM5205");
@@ -308,7 +354,8 @@ TEST_CASE("irem_m52_adapter preserves adapter and board state", "[irem_m52]") {
 }
 
 TEST_CASE("irem_m52_adapter drains mixed AY PSG samples", "[irem_m52]") {
-    irem::irem_m52_adapter adapter(synthetic_m52_program(), "Audio M52");
+    const auto set = make_audio_metadata_set();
+    irem::irem_m52_adapter adapter({}, "Audio M52", nullptr, {}, set.path.string());
     adapter.step_one_frame();
     CHECK(adapter.machine().ay0.volume(0) == 0x0FU);
     CHECK(adapter.machine().ay1.volume(1) == 0x0CU);

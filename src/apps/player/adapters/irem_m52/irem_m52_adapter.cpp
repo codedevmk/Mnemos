@@ -603,7 +603,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
         }
 
         constexpr std::uint32_t irem_m52_adapter_state_version = 1U;
-        constexpr std::uint32_t irem_m52_adapter_save_target_manifest_rev = 5U;
+        constexpr std::uint32_t irem_m52_adapter_save_target_manifest_rev = 6U;
 
         void save_controller_state(chips::state_writer& writer,
                                    const frontend_sdk::controller_state& state) {
