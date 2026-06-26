@@ -660,6 +660,36 @@ TEST_CASE("m72 raster port arms the compare line and withdraws a pending request
     CHECK_FALSE(system->video.raster_compare_matches(207U));
 }
 
+TEST_CASE("m72 palette bus mirrors disconnected A9 and exposes 5-bit low bytes", "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    auto system = assemble_m72(rom_set_image{});
+
+    system->main_bus.write8(m72::palette_a_base + 0x000U, 0xE7U);
+    CHECK(system->palette_a[0x000U] == 0x07U);
+    CHECK(system->main_bus.read8(m72::palette_a_base + 0x000U) == 0xE7U);
+    CHECK(system->main_bus.read8(m72::palette_a_base + 0x001U) == 0xFFU);
+
+    system->main_bus.write8(m72::palette_a_base + 0x200U, 0x3FU);
+    CHECK(system->palette_a[0x000U] == 0x1FU);
+    CHECK(system->palette_a[0x200U] == 0x00U);
+    CHECK(system->main_bus.read8(m72::palette_a_base + 0x200U) == 0xFFU);
+
+    system->main_bus.write8(m72::palette_a_base + 0x201U, 0x00U);
+    CHECK(system->palette_a[0x001U] == 0x00U);
+    CHECK(system->main_bus.read8(m72::palette_a_base + 0x201U) == 0xFFU);
+
+    system->main_bus.write8(m72::palette_b_base + 0x600U, 0x12U);
+    CHECK(system->palette_b[0x400U] == 0x12U);
+    CHECK(system->palette_b[0x600U] == 0x00U);
+    CHECK(system->main_bus.read8(m72::palette_b_base + 0x400U) == 0xF2U);
+
+    system->main_bus.write16_le(m72::palette_b_base + 0xA00U, 0x001AU);
+    CHECK(system->palette_b[0x800U] == 0x1AU);
+    CHECK(system->palette_b[0xA00U] == 0x00U);
+    CHECK(system->main_bus.read16_le(m72::palette_b_base + 0x800U) == 0xFFFAU);
+}
+
 TEST_CASE("m72 sprite DMA latches a stable copy for the renderer", "[m72]") {
     // A 16x16 sprite of solid pen 15 at the visible origin; sprite palette
     // color 0 pen 15 = full red. OUT 04 copies live sprite RAM into the

@@ -332,14 +332,14 @@ need board-authentic video/priority, sound, raster, and screenshot-parity closur
 before they can be called authentic; M84 and M107 also retain memory/I/O and DIP
 validation gaps.
 
-Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible.
+Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible. The M72 palette CPU map now models the disconnected A9 mirror and low-byte-only 5-bit gun writes/reads while preserving the renderer's canonical R/G/B plane storage.
 
 #### Mapper / ROM
 - [x] **M2** Z80 sound-program ROM path / `$8000` banked variants · DONE · MED · S · beyond Emu · ROM-backed sound maps activate when a set supplies a `soundcpu` region; public 64 KiB sound ROM declarations are accepted, with only `$0000-$EFFF` mapped as ROM and `$F000-$FFFF` shadowed by Z80 RAM, and the development zip `soundcpu.bin` path is covered. The suspected `$8000` bank-register variants are not part of the true-M72 board profile and must be routed to later M81/M84/M92 profiles or ADRs instead of folded into M72. · Evidence: `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` R9
 
 > Done (exceeds Emu): V30 (including hermetic 0F INS/EXT bitfield regressions
 > and FPO2/BRKEM operand-consumption stubs), Z80 (shared-RAM boot handshake + ROM-backed sound map), full video (scanline-composed
-> tilemaps / sprites / palette with raster-time scroll changes), YM2151, DAC/PCM sample playback with sound-clocked
+> tilemaps / sprites / palette with raster-time scroll changes and CPU-visible disconnected-A9 palette mirrors), YM2151, DAC/PCM sample playback with sound-clocked
 > write-boundary mixing, 8259 PIC, raster compare,
 > shared sound RAM, inputs/DIPs.
 

@@ -30,8 +30,9 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - First-pass playable profile with checked-in true-M72 manifests.
 - Protected-set handling, MCS-51/i8751 plumbing, selected no-dump HLE declarations, parent/clone loader hardening, media validation reporting, vertical/R-Type/protected gates, and corpus smoke tooling.
 - `dbreedm72` and `dkgensanm72` no-dump MCU HLE profiles now cover startup inversion, entry continuation stubs, command-latch acknowledge, sample-trigger cursor setup, and profile-specific service-ROM checksum response bytes.
+- Palette RAM now exposes the M72 CPU-visible disconnected-A9 mirror and low-byte-only 5-bit gun behavior while keeping canonical R/G/B plane storage for rendering and save states.
 - Real local R-Type/protected/vertical smoke passed with the configured local corpus.
-- Remaining: artifact-proof closure for the full roster, plus authenticity work for video priority, raster timing, DIP behavior, palette behavior, and board-specific timing.
+- Remaining: artifact-proof closure for the full roster, plus authenticity work for video priority, raster timing, DIP behavior, and board-specific timing.
 
 ### Irem M81
 
@@ -145,6 +146,13 @@ M72 no-dump MCU checksum-response continuation validation on 2026-06-26:
 - `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m72_test`: `1/1` passed
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\dbreedm72,D:\emu\irem\m72\dkgensanm72 -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-231315\summary.json`
+
+M72 palette-bus continuation validation on 2026-06-26:
+
+- Focused build/test: `mnemos_manifests_irem_m72_test` passed
+- Focused M72 adjacent CTest sweep passed: `mnemos_chips_video_irem_m72_video_test`, `mnemos_manifests_irem_m72_test`, and `mnemos_apps_player_irem_m72_adapter_test`
+- Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
+- `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\R-Type_Arcade_EN.zip,D:\emu\irem\imgfight.zip -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-233344\summary.json`
 
 M107 slice validation that passed:
 
@@ -280,7 +288,7 @@ Repository hygiene notes:
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
-5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, palette banking, and board timing.
+5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette banking, and board timing.
 
 ## Resume Commands
 

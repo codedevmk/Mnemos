@@ -118,6 +118,34 @@ namespace mnemos::manifests::irem_m72 {
             return offset >= mcu_shared_ram_size - 2U && offset < mcu_shared_ram_size;
         }
 
+        [[nodiscard]] std::size_t
+        m72_palette_physical_offset(std::uint32_t address, std::uint32_t base) noexcept {
+            // Palette RAM leaves word-address A9 disconnected: each 0x200-byte
+            // lane mirror aliases the preceding physical lane.
+            return static_cast<std::size_t>((address - base) & ~0x200U);
+        }
+
+        [[nodiscard]] std::uint8_t
+        m72_palette_read(std::span<const std::uint8_t> palette,
+                         std::uint32_t address,
+                         std::uint32_t base) noexcept {
+            const std::size_t offset = m72_palette_physical_offset(address, base);
+            if ((offset & 1U) != 0U || offset >= palette.size()) {
+                return 0xFFU;
+            }
+            return static_cast<std::uint8_t>(palette[offset] | 0xE0U);
+        }
+
+        void m72_palette_write(std::span<std::uint8_t> palette,
+                               std::uint32_t address,
+                               std::uint32_t base,
+                               std::uint8_t value) noexcept {
+            const std::size_t offset = m72_palette_physical_offset(address, base);
+            if ((offset & 1U) == 0U && offset < palette.size()) {
+                palette[offset] = static_cast<std::uint8_t>(value & 0x1FU);
+            }
+        }
+
         [[nodiscard]] std::uint32_t
         crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
             std::array<std::uint8_t, 8> bytes{};
@@ -262,8 +290,24 @@ namespace mnemos::manifests::irem_m72 {
         auto& main_prog = pinned_region(roms, "maincpu", main_rom_size);
         main_bus.map_rom(0x00000U, std::span<const std::uint8_t>(main_prog));
         main_bus.map_ram(sprite_ram_base, sprite_ram, 1);
-        main_bus.map_ram(palette_a_base, palette_a, 1);
-        main_bus.map_ram(palette_b_base, palette_b, 1);
+        main_bus.map_mmio(
+            palette_a_base, static_cast<std::uint32_t>(palette_size),
+            [this](std::uint32_t address) -> std::uint8_t {
+                return m72_palette_read(palette_a, address, palette_a_base);
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                m72_palette_write(palette_a, address, palette_a_base, value);
+            },
+            1);
+        main_bus.map_mmio(
+            palette_b_base, static_cast<std::uint32_t>(palette_size),
+            [this](std::uint32_t address) -> std::uint8_t {
+                return m72_palette_read(palette_b, address, palette_b_base);
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                m72_palette_write(palette_b, address, palette_b_base, value);
+            },
+            1);
         main_bus.map_ram(vram_a_base, vram_a, 1);
         main_bus.map_ram(vram_b_base, vram_b, 1);
         main_bus.map_ram(params.work_ram_base, work_ram, 1);
