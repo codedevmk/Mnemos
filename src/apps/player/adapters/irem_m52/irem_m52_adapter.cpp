@@ -584,7 +584,7 @@ namespace mnemos::apps::player::adapters::irem_m52 {
         }
 
         constexpr std::uint32_t irem_m52_adapter_state_version = 1U;
-        constexpr std::uint32_t irem_m52_adapter_save_target_manifest_rev = 3U;
+        constexpr std::uint32_t irem_m52_adapter_save_target_manifest_rev = 4U;
 
         void save_controller_state(chips::state_writer& writer,
                                    const frontend_sdk::controller_state& state) {
@@ -644,7 +644,8 @@ namespace mnemos::apps::player::adapters::irem_m52 {
             sys_->dsw1 = static_cast<std::uint8_t>(*dip_override);
             sys_->dsw2 = static_cast<std::uint8_t>(*dip_override >> 8U);
         }
-        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->ay0, &sys_->ay1, &sys_->msm};
+        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu,
+                      &sys_->ay0,   &sys_->ay1,      &sys_->msm};
         publish_memory_views();
         const std::string game_label =
             !loaded_set_name_.empty()

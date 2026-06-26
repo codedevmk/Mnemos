@@ -43,7 +43,7 @@ now contract-only.
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
-| M52 | `irem_m52` first-pass | 30% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers | None | Authentic parallax/road/sprite video, sound CPU-driven MSM stream timing, discrete analog path, Tropical Angel manifests, DIP/raster/audio/video parity |
+| M52 | `irem_m52` first-pass | 34% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers | None | Authentic parallax/road/sprite video, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP/raster/audio/video parity |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
@@ -110,17 +110,20 @@ visual and audio parity proof.
 - **Current implementation:** first-pass Z80 board route with the Moon Patrol
   program, sound, text, sprite, and PROM regions, input/DIP MMIO, deterministic
   save-state, adapter capability discovery, and nonblank diagnostic framebuffer
-  output. The board now owns two native YM2149/AY-compatible SSG instances and
-  one native OKI MSM5205 decoder: command writes program deterministic SSG
-  register state plus command-fed MSM5205 nibbles from the loaded `soundcpu`
-  ROM, save/load preserves the chip phases, the adapter mixes all three
-  captured stereo queues, and capability discovery exposes all three register
-  snapshots.
+  output. The board now owns and schedules a second Z80 sound CPU with mapped
+  sound ROM/RAM, sound-command latch IRQ/ack state, two native
+  YM2149/AY-compatible SSG instances, and one native OKI MSM5205 decoder.
+  Command writes still seed deterministic SSG/MSM observability, while the
+  sound CPU can read/ack the latch and write the modeled AY/MSM ports.
+  Save/load preserves both Z80s, sound RAM, latch state, and audio chip phases;
+  the adapter mixes all three captured stereo queues and capability discovery
+  exposes both Z80 register snapshots plus the audio register snapshots.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
-  parallax/road/sprite/text priority, implement the M52 sound CPU-owned MSM5205
-  stream timing plus the discrete-analog path beyond the command-driven
-  SSG/MSM surfaces, add Tropical Angel coverage if M52/M57 evidence confirms
-  the route, and prove
+  parallax/road/sprite/text priority, verify the exact M52 sound CPU port map
+  and MSM5205 stream timing against board evidence, implement the
+  discrete-analog path beyond the current command-driven SSG/MSM observability
+  surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route,
+  and prove
   DIP/raster/screenshot/audio parity.
 
 ### M57

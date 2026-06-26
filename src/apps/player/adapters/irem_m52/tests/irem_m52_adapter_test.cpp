@@ -117,8 +117,11 @@ TEST_CASE("irem_m52_adapter boots a synthetic M52 program", "[irem_m52]") {
     CHECK(adapter.machine().video_ram[0] == 0x77U);
     CHECK(adapter.machine().scroll_regs[0] == 0x77U);
     CHECK(adapter.machine().sound_command_write_count > 0U);
-    REQUIRE(adapter.chips().size() == 5U);
-    CHECK(adapter.chips()[4]->metadata().part_number == "MSM5205");
+    CHECK(adapter.machine().sound_cpu.elapsed_cycles() > 0U);
+    CHECK(irem::build_save_target(adapter).manifest_rev == 4U);
+    REQUIRE(adapter.chips().size() == 6U);
+    CHECK(adapter.chips()[2]->metadata().part_number == "Z80");
+    CHECK(adapter.chips()[5]->metadata().part_number == "MSM5205");
     CHECK(adapter.machine().msm.vclk_count() > 0U);
     CHECK(nonblack_pixels(adapter.current_frame()) > 0U);
 }

@@ -19,23 +19,30 @@
 
 namespace mnemos::manifests::irem_m52 {
 
-    inline constexpr std::uint32_t m52_system_state_version = 3U;
+    inline constexpr std::uint32_t m52_system_state_version = 4U;
 
     inline constexpr std::uint32_t visible_width = 240U;
     inline constexpr std::uint32_t visible_height = 252U;
     inline constexpr std::uint32_t frame_lines = 256U;
     inline constexpr std::uint32_t frame_rate_x1000 = 56737U;
     inline constexpr std::uint32_t main_clock_hz = 3'072'000U;
+    inline constexpr std::uint32_t sound_clock_hz = 3'072'000U;
     inline constexpr std::uint32_t audio_rate_hz = 48'000U;
     inline constexpr std::uint32_t ssg_clock_divider = main_clock_hz / audio_rate_hz;
     inline constexpr std::uint64_t main_cycles_per_frame =
         (static_cast<std::uint64_t>(main_clock_hz) * 1000U) / frame_rate_x1000;
+    inline constexpr std::uint64_t sound_cycles_per_frame =
+        (static_cast<std::uint64_t>(sound_clock_hz) * 1000U) / frame_rate_x1000;
 
     inline constexpr std::size_t main_rom_size = 0x10000U;
     inline constexpr std::size_t sound_rom_size = 0x10000U;
     inline constexpr std::size_t tx_gfx_size = 0x2000U;
     inline constexpr std::size_t sprite_gfx_size = 0x1000U;
     inline constexpr std::size_t proms_size = 0x0540U;
+    inline constexpr std::uint16_t sound_rom_base = 0x0000U;
+    inline constexpr std::size_t sound_rom_mapped_size = 0xF000U;
+    inline constexpr std::uint16_t sound_work_ram_base = 0xF000U;
+    inline constexpr std::size_t sound_work_ram_size = 0x1000U;
 
     inline constexpr std::uint16_t protection_address = 0x8800U;
     inline constexpr std::uint16_t video_ram_base = 0x8000U;
@@ -51,6 +58,17 @@ namespace mnemos::manifests::irem_m52 {
     inline constexpr std::uint16_t dsw2_address = 0xD004U;
     inline constexpr std::uint16_t work_ram_base = 0xE000U;
     inline constexpr std::size_t work_ram_size = 0x0800U;
+
+    inline constexpr std::uint16_t z80_port_ay0_address = 0x00U;
+    inline constexpr std::uint16_t z80_port_ay0_data = 0x01U;
+    inline constexpr std::uint16_t z80_port_latch = 0x02U;
+    inline constexpr std::uint16_t z80_port_ay1_address = 0x04U;
+    inline constexpr std::uint16_t z80_port_ay1_data = 0x05U;
+    inline constexpr std::uint16_t z80_port_latch_ack = 0x06U;
+    inline constexpr std::uint16_t z80_port_msm_data = 0x08U;
+    inline constexpr std::uint16_t z80_port_msm_control = 0x09U;
+    inline constexpr std::uint8_t z80_rst_idle = 0xFFU;
+    inline constexpr std::uint8_t z80_rst_latch = 0xDFU;
 
     inline constexpr std::uint8_t mpatrol_dsw1_default = 0xFFU;
     inline constexpr std::uint8_t mpatrol_dsw2_default = 0xFFU;
@@ -98,11 +116,13 @@ namespace mnemos::manifests::irem_m52 {
 
     struct m52_system final {
         chips::cpu::z80 main_cpu;
+        chips::cpu::z80 sound_cpu;
         m52_video video;
         chips::audio::ssg ay0;
         chips::audio::ssg ay1;
         chips::audio::msm5205 msm;
         topology::bus main_bus{16U, topology::endianness::little};
+        topology::bus sound_bus{16U, topology::endianness::little};
 
         common::rom_set_image roms;
         m52_board_params params;
@@ -111,6 +131,7 @@ namespace mnemos::manifests::irem_m52 {
         std::array<std::uint8_t, color_ram_size> color_ram{};
         std::array<std::uint8_t, sprite_ram_size> sprite_ram{};
         std::array<std::uint8_t, work_ram_size> work_ram{};
+        std::array<std::uint8_t, sound_work_ram_size> sound_ram{};
         std::array<std::uint8_t, 32> scroll_regs{};
         std::array<std::uint8_t, 2> bg_x{};
         std::array<std::uint8_t, 2> bg_y{};
@@ -122,9 +143,14 @@ namespace mnemos::manifests::irem_m52 {
         std::uint8_t dsw2{mpatrol_dsw2_default};
         std::uint8_t bg_control{};
         std::uint8_t sound_command{};
+        std::uint8_t sound_ay0_address{};
+        std::uint8_t sound_ay1_address{};
         std::uint8_t flip_latch{};
         bool flip_screen{};
+        bool sound_latch_irq{};
         std::uint64_t sound_command_write_count{};
+        std::uint64_t sound_latch_ack_count{};
+        std::uint64_t sound_cpu_msm_write_count{};
         std::uint64_t msm_sound_rom_cursor{};
         std::uint64_t flip_write_count{};
 
@@ -133,6 +159,8 @@ namespace mnemos::manifests::irem_m52 {
         void run_frame();
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept;
         void latch_sound_command(std::uint8_t value) noexcept;
+        void update_sound_irq() noexcept;
+        void sound_cpu_write_msm(std::uint8_t value) noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
     };
