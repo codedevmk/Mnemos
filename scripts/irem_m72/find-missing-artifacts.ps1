@@ -140,6 +140,7 @@ function Read-M72ManifestTargets {
                 crc32_hex = ConvertTo-HexCrc -Value ([uint32]$script:crc)
                 matches = [System.Collections.Generic.List[object]]::new()
                 name_hits = [System.Collections.Generic.List[object]]::new()
+                related_hits = [System.Collections.Generic.List[object]]::new()
             })
         }
         $script:inFile = $false
@@ -264,6 +265,66 @@ function Add-NameHit {
     })
 }
 
+function Test-CandidateMentionsSet {
+    param(
+        [Parameter(Mandatory = $true)][object]$Target,
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Entry
+    )
+
+    $combined = "{0}!{1}" -f $Source, $Entry
+    foreach ($setAlias in Get-SetDirectoryAliases -SetId $Target.set) {
+        if ($combined.IndexOf($setAlias, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Test-McuLikeCandidate {
+    param(
+        [Parameter(Mandatory = $true)][object]$Target,
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Entry
+    )
+
+    if (-not $Target.region.Equals("mcu", [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    if (-not (Test-CandidateMentionsSet -Target $Target -Source $Source -Entry $Entry)) {
+        return $false
+    }
+    $leaf = [System.IO.Path]::GetFileName($Entry)
+    return ($leaf -match '(?i)(mcu|8751|80c31|c-pr|pr-|\.ic1$)')
+}
+
+function Add-RelatedHit {
+    param(
+        [Parameter(Mandatory = $true)][object]$Target,
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Entry,
+        [Parameter(Mandatory = $true)][int64]$Size,
+        [Parameter(Mandatory = $true)][uint32]$Crc,
+        [Parameter(Mandatory = $true)][string]$Reason
+    )
+
+    foreach ($existing in $Target.related_hits) {
+        if ($existing.source -eq $Source -and $existing.entry -eq $Entry) {
+            return
+        }
+    }
+    if ($Target.related_hits.Count -ge 8) {
+        return
+    }
+    $Target.related_hits.Add([pscustomobject]@{
+        source = $Source
+        entry = $Entry
+        size = $Size
+        crc32 = ConvertTo-HexCrc -Value $Crc
+        reason = $Reason
+    })
+}
+
 function Test-ShouldReadCandidate {
     param(
         [Parameter(Mandatory = $true)][string]$EntryName,
@@ -296,6 +357,17 @@ function Compare-CandidateBytes {
         foreach ($target in $script:targetsByName[$leaf]) {
             if ($target.crc32 -ne $crc) {
                 Add-NameHit -Target $target -Source $Source -Entry $Entry -Size $Bytes.LongLength -Crc $crc
+            }
+        }
+    }
+    if ($script:targetsBySize.ContainsKey($Bytes.LongLength)) {
+        foreach ($target in $script:targetsBySize[$Bytes.LongLength]) {
+            if ($target.crc32 -eq $crc) {
+                continue
+            }
+            if (Test-McuLikeCandidate -Target $target -Source $Source -Entry $Entry) {
+                Add-RelatedHit -Target $target -Source $Source -Entry $Entry -Size $Bytes.LongLength -Crc $crc `
+                    -Reason "same-size set-local MCU-like candidate with different CRC"
             }
         }
     }
@@ -513,6 +585,7 @@ if ($allTargets.Count -eq 0) {
 
 $script:targetsByCrc = [System.Collections.Generic.Dictionary[uint32, System.Collections.Generic.List[object]]]::new()
 $script:targetsByName = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.List[object]]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$script:targetsBySize = [System.Collections.Generic.Dictionary[int64, System.Collections.Generic.List[object]]]::new()
 $script:targetNames = New-StringSet
 $script:targetSizes = [System.Collections.Generic.HashSet[int64]]::new()
 foreach ($target in $allTargets) {
@@ -521,6 +594,10 @@ foreach ($target in $allTargets) {
     }
     $script:targetsByCrc[$target.crc32].Add($target)
     [void]$script:targetSizes.Add([int64]$target.size)
+    if (-not $script:targetsBySize.ContainsKey([int64]$target.size)) {
+        $script:targetsBySize[[int64]$target.size] = [System.Collections.Generic.List[object]]::new()
+    }
+    $script:targetsBySize[[int64]$target.size].Add($target)
     foreach ($aliasName in $target.alias_names) {
         [void]$script:targetNames.Add($aliasName)
         if (-not $script:targetsByName.ContainsKey($aliasName)) {
@@ -566,6 +643,7 @@ $resultTargets = @($allTargets | ForEach-Object {
         present = ($_.matches.Count -gt 0)
         matches = @($_.matches)
         name_hits = @($_.name_hits)
+        related_hits = @($_.related_hits)
         suggested_locations = @(Get-SuggestedMissingLocations -Target $_ -Roots @($resolvedRoots))
     }
 })
@@ -599,6 +677,9 @@ foreach ($target in $missing | Select-Object -First 20) {
     $suggestion = @($target.suggested_locations | Select-Object -First 1)
     $suffix = if ($suggestion.Count -gt 0) { " suggested={0}" -f $suggestion[0] } else { "" }
     Write-Host ("  [missing] {0}:{1}:{2} crc={3} size={4}{5}" -f $target.set, $target.region, $target.name, $target.crc32, $target.size, $suffix) -ForegroundColor DarkYellow
+    foreach ($related in @($target.related_hits | Select-Object -First 3)) {
+        Write-Host ("    [related] {0}!{1} crc={2} size={3} ({4})" -f $related.source, $related.entry, $related.crc32, $related.size, $related.reason) -ForegroundColor DarkYellow
+    }
 }
 if ($missing.Count -gt 20) {
     Write-Host ("  ... {0} more missing artifact(s)" -f ($missing.Count - 20)) -ForegroundColor DarkYellow

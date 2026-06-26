@@ -191,8 +191,10 @@ visual and audio parity proof.
   `D:\emu\irem\M72\gallop.zip`, and
   `D:\emu\irem\M72\nspirit.zip` found no entry with CRC `0xac4421b1` or
   `0x0f7b2713`. The `nspirit.zip` archive contains
-  `nspiritj/nin_c-pr-.ic1` with CRC `0x802d440a`, which is the Japan MCU and is
-  not a substitute for the World `nin_c-pr-b.ic1` target. An exhaustive CRC scan
+  `nspiritj/nin_c-pr-.ic1` with CRC `0x802d440a`; the artifact scanner now
+  records that under `related_hits` as a same-size, set-local MCU-looking
+  candidate with the wrong CRC, not as a substitute for the World
+  `nin_c-pr-b.ic1` target. An exhaustive CRC scan
   of ZIP members and loose files under `D:\emu\irem\M72` also found zero matches
   for `0xac4421b1` or `0x0f7b2713`.
 - **Correct gfx/music:** not certified. The board has the strongest current

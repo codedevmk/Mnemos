@@ -256,15 +256,18 @@ the raw-name aliases load through `mnemos_player`; the extracted-folder scan is
 42/44 present and still missing only `gallopm72:mcu:cc_c-pr-.ic1:ac4421b1` and
 `nspirit:mcu:nin_c-pr-b.ic1:0f7b2713`; the artifact scanner reports suggested
 local placements under `D:\emu\irem\m72\gallop\` and
-`D:\emu\irem\m72\nspirit\` for lawful dumps. `nspirit` can reach a lit fallback
+`D:\emu\irem\m72\nspirit\` for lawful dumps and now includes `related_hits`
+when a same-size, set-local MCU-looking candidate exists with a different CRC.
+`nspirit` can reach a lit fallback
 frame with the MCU disabled, but it is still not counted as protected-board
 complete because the media remains incomplete. A bounded CRC scan of
 `D:\emu\arcade` finds the Cosmic Cop/Gallop non-MCU files but still no
 `cc_c-pr-.ic1` MCU dump, and no matching Ninja Spirit set. Current scan of the
 newly supplied `D:\emu\irem\M72\nspirit.zip` finds `23/24` World `nspirit`
 artifacts and still misses only `nin_c-pr-b.ic1` (`0x0f7b2713`); the ZIP also
-contains the Japan `nspiritj/nin_c-pr-.ic1` MCU (`0x802d440a`), which is not a
-substitute for the World MCU.
+contains the Japan `nspiritj/nin_c-pr-.ic1` MCU (`0x802d440a`), which the
+scanner reports as related-but-wrong-CRC evidence and not as a substitute for
+the World MCU.
 
 Follow-up scan of the exact current M72 paths
 `D:\emu\irem\M72\nspirit.zip`, `D:\emu\irem\M72\gallopm72.zip`, and
@@ -272,7 +275,8 @@ Follow-up scan of the exact current M72 paths
 `gallopm72` plus World `nspirit`, missing only `gallopm72:mcu:cc_c-pr-.ic1`
 (`0xac4421b1`) and `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`). Direct ZIP
 inspection shows `nspirit.zip` contains only the Japan `nspiritj/nin_c-pr-.ic1`
-MCU under MCU-like entries, while `gallopm72.zip` has PROM entries and
+MCU under MCU-like entries; the current scanner report lists that entry under
+`related_hits` with CRC `0x802d440a`, while `gallopm72.zip` has PROM entries and
 `gallop.zip` has sprite/voice entries but no `cc_c-pr-.ic1`. An exhaustive CRC
 scan of ZIP members and loose files under `D:\emu\irem\M72` likewise found zero
 matches for `0xac4421b1` or `0x0f7b2713`.
