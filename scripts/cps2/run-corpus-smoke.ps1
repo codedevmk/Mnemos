@@ -89,7 +89,7 @@ function Get-Cps2AudioFrameCount {
     # using a longer repeated-gameplay audio window that proves nonzero QSound
     # output plus audio-state register counters.
     if (($SetId -eq "1944" -or $SetId -eq "1944_mn" -or
-            $SetId -eq "armwar" -or $SetId -eq "batcir" -or
+            $SetId -eq "armwar" -or $SetId -eq "avsp" -or $SetId -eq "batcir" -or
             $SetId -eq "ddsom") -and $DefaultFrames -lt 2500) {
         return 2500
     }
@@ -120,17 +120,18 @@ function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
     return $SetId -eq "1944" -or $SetId -eq "1944_mn" -or
-        $SetId -eq "armwar" -or $SetId -eq "batcir" -or $SetId -eq "ddsom" -or
-        $SetId -eq "hsf2" -or $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or
-        $SetId -eq "progear" -or $SetId -eq "ringdest" -or $SetId -eq "spf2t"
+        $SetId -eq "armwar" -or $SetId -eq "avsp" -or $SetId -eq "batcir" -or
+        $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or $SetId -eq "mshvsf" -or
+        $SetId -eq "mvsc" -or $SetId -eq "progear" -or $SetId -eq "ringdest" -or
+        $SetId -eq "spf2t"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
     return $SetId -eq "1944" -or $SetId -eq "1944_mn" -or
-        $SetId -eq "armwar" -or $SetId -eq "batcir" -or $SetId -eq "ddsom" -or
-        $SetId -eq "ringdest" -or $SetId -eq "spf2t"
+        $SetId -eq "armwar" -or $SetId -eq "avsp" -or $SetId -eq "batcir" -or
+        $SetId -eq "ddsom" -or $SetId -eq "ringdest" -or $SetId -eq "spf2t"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
@@ -141,6 +142,9 @@ function Get-Cps2AudioGameplayPlayerCount {
 
     if ($SetId -eq "1944" -or $SetId -eq "1944_mn") {
         return 1
+    }
+    if ($SetId -eq "avsp") {
+        return 3
     }
     if ($SetId -eq "batcir" -or $SetId -eq "ddsom") {
         return 4
