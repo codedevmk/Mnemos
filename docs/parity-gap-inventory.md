@@ -280,6 +280,11 @@ clean 0/20 non-match. A current rerun across `D:\emu\irem` plus
 `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` now reports `84/94` present for
 `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, with the remaining missing
 targets limited to the `gallopm72` MCU plus `lohtb2`/`lohtj` set-specific files.
+Current live recheck against `D:\emu\irem` alone still reports `84/94` present
+for that blocker group: `nspirit` is complete, the strict roster CTest stops at
+missing source discovery for `lohtb2` and `lohtj`, and targeted `gallopm72`
+smoke fails media validation on missing `cc_c-pr-.ic1` rather than a runtime
+boot issue.
 
 Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
 `-RomDir` values, handles collection ZIP forms, and treats sorted non-M72 roots
@@ -294,6 +299,10 @@ missing Air Duel graphics/tile/sample artifacts, so it is loader-classified
 correctly but remains excluded from clean roster proof. The default fallback
 frame list includes 900 frames because `rtypeb` stays black at the 300/600-frame
 attract probes but reaches a lit post-load frame at 900.
+The runner now parses comma-separated `-FallbackFrames` values reliably under
+`pwsh -File` and stops trying longer frame fallbacks once media-validation
+issues appear, so incomplete sets such as current `gallopm72` fail fast on the
+missing MCU instead of launching irrelevant long-frame probes.
 
 Input note: the M72 player adapter now maps the shared frontend arcade inputs
 directly to the board-visible system byte: `service` clears service 1/2 bits

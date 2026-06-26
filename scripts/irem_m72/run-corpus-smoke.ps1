@@ -17,7 +17,7 @@ param(
     [string[]]$RomDir = @(),
     [string[]]$Set = @(),
     [int]$Frames = 600,
-    [int[]]$FallbackFrames = @(300, 900),
+    [string[]]$FallbackFrames = @("300", "900"),
     [int]$MaxSets = 0,
     [switch]$IncludeAllZips,
     [switch]$Recurse,
@@ -63,6 +63,26 @@ function Split-CommaList {
             }
         }
     }
+}
+
+function ConvertTo-PositiveIntList {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Values,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $result = [System.Collections.Generic.List[int]]::new()
+    foreach ($part in Split-CommaList $Values) {
+        $parsed = 0
+        if (-not [int]::TryParse($part, [ref]$parsed)) {
+            throw "$Name value '$part' is not an integer."
+        }
+        if ($parsed -le 0) {
+            throw "$Name values must be positive."
+        }
+        $result.Add($parsed)
+    }
+    return @($result)
 }
 
 function Add-RomPath {
@@ -616,11 +636,7 @@ function Test-WavHasNonZeroPcm {
 if ($Frames -le 0) {
     throw "-Frames must be positive."
 }
-foreach ($frame in $FallbackFrames) {
-    if ($frame -le 0) {
-        throw "-FallbackFrames values must be positive."
-    }
-}
+$fallbackFrameValues = @(ConvertTo-PositiveIntList -Values $FallbackFrames -Name "-FallbackFrames")
 if ($AudioFrames -le 0) {
     throw "-AudioFrames must be positive."
 }
@@ -787,7 +803,7 @@ foreach ($romGroup in $romGroups) {
     Write-Host ("[irem_m72] {0} ({1} source(s))" -f $setId, $romPaths.Count) -ForegroundColor Cyan
 
     $frameAttempts = [System.Collections.Generic.List[int]]::new()
-    foreach ($frame in @($Frames) + $FallbackFrames) {
+    foreach ($frame in @($Frames) + $fallbackFrameValues) {
         if (-not $frameAttempts.Contains($frame)) {
             $frameAttempts.Add($frame)
         }
@@ -883,6 +899,12 @@ foreach ($romGroup in $romGroups) {
         $resolvedSet = $resolution.Set
         $resolvedFrom = $resolution.InferredFrom
         $mediaClean = ($mediaIssues.Count -eq 0)
+        if (-not $mediaClean) {
+            if ($frameAttempts.Count -gt 1) {
+                Write-Host ("  [media] {0} has validation issues; skipping longer frame fallbacks" -f $setId) -ForegroundColor DarkYellow
+            }
+            break
+        }
         $passed = ($saveExit -eq 0 -and $loadExit -eq 0 -and (Test-Path -LiteralPath $statePath) -and
             (Test-Path -LiteralPath $screenshotPath) -and $litScreenshot -and $mediaClean -and
             $renderedAudioNonZero)

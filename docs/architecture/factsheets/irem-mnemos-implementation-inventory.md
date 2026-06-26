@@ -252,6 +252,10 @@ visual and audio parity proof.
   `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` now reports `84/94` present
   for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, missing only
   `gallopm72`'s MCU plus the remaining `lohtb2`/`lohtj` set-specific files.
+  Current live proof against `D:\emu\irem` alone still reports `84/94` for that
+  blocker group: `nspirit` is complete, `lohtj` and `lohtb2` are not
+  discoverable as clean source sets, and `gallopm72` is discoverable but fails
+  media validation on `cc_c-pr-.ic1`.
 - **Correct gfx/music:** not certified. The board has the strongest current
   graphics/music implementation, but final visual priority, protection behavior,
   DIP/manual proof, raster phase, and audio parity are still open.
