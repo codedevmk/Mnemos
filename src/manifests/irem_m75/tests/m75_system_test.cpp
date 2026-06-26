@@ -179,7 +179,9 @@ TEST_CASE("m75 Z80 sound CPU acknowledges latch and drives DAC", "[m75][board][a
 
     CHECK(system->sound_latch == 0x5AU);
     CHECK_FALSE(system->sound_latch_irq);
-    CHECK_FALSE(system->dac_write_events.empty());
+    REQUIRE(system->dac_write_events.size() == 1U);
+    CHECK(system->dac_write_events[0].sound_clock > 0U);
+    CHECK(system->dac_write_events[0].sound_clock < m75::sound_cycles_per_frame);
     CHECK(system->dac.level() == 0xF0U);
     CHECK(system->dac.output() > 0);
 }
@@ -203,6 +205,9 @@ TEST_CASE("m75 sound CPU streams sample ROM bytes through the DAC", "[m75][board
     CHECK(system->sound_ram[0x002U] == 0x41U);
     CHECK(system->sample_address == 0x1236U);
     CHECK_FALSE(system->sound_latch_irq);
+    REQUIRE(system->dac_write_events.size() == 2U);
+    CHECK(system->dac_write_events[0].sound_clock > 0U);
+    CHECK(system->dac_write_events[1].sound_clock > system->dac_write_events[0].sound_clock);
     CHECK(system->dac.level() == 0x41U);
     CHECK(system->dac.output() < 0);
 }

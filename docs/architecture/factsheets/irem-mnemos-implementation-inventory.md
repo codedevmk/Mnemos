@@ -49,7 +49,7 @@ now contract-only.
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
-| M75 | `irem_m75` first-pass | 31% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
+| M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 65% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
@@ -233,17 +233,18 @@ visual and audio parity proof.
   save-state smoke evidence.
 - **Correct gfx/music:** none. The board has a first-pass diagnostic video path
   and executable Z80/Z80/YM2151/DAC ownership, including synthetic
-  sample-ROM-read-to-DAC proof, not authentic Vigilante graphics/music
-  certification.
+  sample-ROM-read-to-DAC proof on the sound Z80 elapsed-clock timeline, not
+  authentic Vigilante graphics/music certification.
 - **Current implementation:** `src/manifests/irem_m75` owns a Z80 main CPU, Z80
   sound CPU, YM2151, DAC, 16-bit Z80 memory buses, Vigilante ROM banking, RAM
   windows, inputs/DIPs, sound latch/ack, sample-address/DAC ports, the two-bank
   5-bit KNA91-style palette bus, rear color/disable register semantics,
   whole-board save/load identity, 14 Vigilante manual SW1/SW2 DIP definitions
   folded to active-low defaults `dsw1=0xff` / `dsw2=0xfd`, and embedded
-  parent/clone Vigilante ROM contracts. The M75 system tests now prove the sound Z80 can program the
-  sample cursor, read consecutive sample ROM bytes through the modeled port,
-  write them through the DAC, and acknowledge the latch.
+  parent/clone Vigilante ROM contracts. The M75 system tests now prove the
+  sound Z80 can program the sample cursor, read consecutive sample ROM bytes
+  through the modeled port, write them through the DAC as ordered
+  sound-clocked events, and acknowledge the latch.
   The player adapter maps service/test frontend inputs to the board-visible
   active-low system bits `0x10`/`0x20`, persists those fields in adapter
   save-state version 2, and reports `DIP switches=14` from the parsed manifest.
