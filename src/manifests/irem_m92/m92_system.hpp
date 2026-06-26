@@ -19,7 +19,7 @@
 
 namespace mnemos::manifests::irem_m92 {
 
-    inline constexpr std::uint32_t m92_system_state_version = 1U;
+    inline constexpr std::uint32_t m92_system_state_version = 2U;
 
     inline constexpr std::uint32_t visible_width = 320U;
     inline constexpr std::uint32_t visible_height = 240U;
@@ -97,10 +97,9 @@ namespace mnemos::manifests::irem_m92 {
         [[nodiscard]] chips::frame_buffer_view framebuffer() const noexcept override;
 
         void compose(std::span<const std::uint8_t> tiles, std::span<const std::uint8_t> sprites,
-                     std::span<const std::uint8_t> plds,
-                     std::span<const std::uint8_t> samples, std::span<const std::uint8_t> vram,
-                     std::span<const std::uint8_t> palette, std::span<const std::uint8_t> sprite_ram,
-                     std::string_view rom_layout);
+                     std::span<const std::uint8_t> plds, std::span<const std::uint8_t> samples,
+                     std::span<const std::uint8_t> vram, std::span<const std::uint8_t> palette,
+                     std::span<const std::uint8_t> sprite_ram, std::string_view rom_layout);
 
       private:
         std::vector<std::uint32_t> pixels_;
@@ -135,16 +134,22 @@ namespace mnemos::manifests::irem_m92 {
         std::uint8_t sound_reply{0xFFU};
         std::uint8_t control_register{};
         std::uint8_t ym_address{};
+        bool sound_latch_pending{};
+        bool sound_reply_pending{};
 
         explicit m92_system(common::rom_set_image image, m92_board_params board_params = {});
 
         void run_frame();
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept;
+        void write_sound_latch(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint8_t read_sound_latch() noexcept;
+        void write_sound_reply(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint8_t read_sound_reply() noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
     };
 
     [[nodiscard]] std::unique_ptr<m92_system> assemble_m92(common::rom_set_image image,
-                                                             m92_board_params board_params = {});
+                                                           m92_board_params board_params = {});
 
 } // namespace mnemos::manifests::irem_m92

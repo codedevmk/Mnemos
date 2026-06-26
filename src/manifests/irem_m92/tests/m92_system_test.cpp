@@ -60,7 +60,28 @@ namespace {
             0xB0U, 0x00U, 0xA2U, 0x04U, 0x00U, // slowest byte advance
             0xB0U, 0xF6U, 0xA2U, 0x05U, 0x00U, // audible volume
             0xB0U, 0x02U, 0xA2U, 0x06U, 0x00U, // control bit 1 = key-on
-            0xF4U};                              // HLT
+            0xF4U};                            // HLT
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x0200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m92_sound_command_program() {
+        std::vector<std::uint8_t> rom(m92::sound_rom_size, 0xFFU);
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::vector<std::uint8_t> program{
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xE4U, 0x00U,        // IN AL,00   (main sound command latch)
+            0xA2U, 0x00U, 0x00U, // MOV [0000],AL
+            0xE6U, 0x02U,        // OUT 02,AL  (sound reply)
+            0xF4U                // HLT
+        };
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x0200U + i] = program[i];
         }
@@ -155,9 +176,44 @@ TEST_CASE("m92 sound CPU drives the memory-mapped Irem GA20 window", "[m92][boar
     CHECK(system->pcm.last_sample() < 0);
 }
 
+TEST_CASE("m92 sound command latch reaches the V35 and returns a reply", "[m92][board][audio]") {
+    auto image = synthetic_m92_image();
+    image.regions["maincpu"] = make_m92_program({0xB0U, 0x5AU, 0xE6U, 0x00U, 0xF4U});
+
+    SECTION("unread command remains pending") {
+        image.regions["soundcpu"] = synthetic_m92_sound_program();
+
+        auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
+        REQUIRE(system != nullptr);
+
+        system->run_frame();
+
+        CHECK(system->sound_latch == 0x5AU);
+        CHECK(system->sound_latch_pending);
+        CHECK_FALSE(system->sound_reply_pending);
+    }
+
+    SECTION("V35 latch read clears pending and reply write is latched") {
+        image.regions["soundcpu"] = synthetic_m92_sound_command_program();
+
+        auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
+        REQUIRE(system != nullptr);
+
+        system->run_frame();
+
+        CHECK(system->sound_latch == 0x5AU);
+        CHECK_FALSE(system->sound_latch_pending);
+        CHECK(system->sound_reply == 0x5AU);
+        CHECK(system->sound_reply_pending);
+        CHECK(system->sound_ram[0] == 0x5AU);
+    }
+}
+
 TEST_CASE("m92 save state preserves board identity and runtime state", "[m92][board]") {
     auto source = m92::assemble_m92(synthetic_m92_image(), m92::board_params_for("bmaster"));
     source->set_inputs(0xFEU, 0xFDU, 0xFBU);
+    source->write_sound_latch(0x76U);
+    source->write_sound_reply(0x34U);
     source->run_frame();
     source->work_ram[7] = 0x6CU;
 
@@ -184,6 +240,10 @@ TEST_CASE("m92 save state preserves board identity and runtime state", "[m92][bo
     CHECK(restored->work_ram[0] == 0x42U);
     CHECK(restored->work_ram[7] == 0x6CU);
     CHECK(restored->input_p1 == 0xFEU);
+    CHECK(restored->sound_latch == 0x76U);
+    CHECK(restored->sound_latch_pending);
+    CHECK(restored->sound_reply == 0x34U);
+    CHECK(restored->sound_reply_pending);
 
     auto wrong_layout = m92::assemble_m92(synthetic_m92_image(), m92::board_params_for("hook"));
     mnemos::chips::state_reader wrong_reader(state);

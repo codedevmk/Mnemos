@@ -104,8 +104,9 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - `nbbatman` is the complete local Ninja Baseball Bat Man parent wrapper route; `nbbatmanu` declares parent `nbbatman` and carries the changed lower main-program pair plus parent-fallback declarations for the unchanged upper main-program pair.
 - The M92 adapter now resolves clone parents beside the selected set path via direct `parent.zip`, unpacked parent directories, or sibling single-inner wrapper ZIPs such as `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip`.
 - Player adapter remains first-pass: NEC V33/V35 shell, YM2151/GA20 windows, diagnostic GA21/GA22-era video path, resident media validation, rollback-ready save-state, and capability discovery.
+- The M92 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 2, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
 - `MNEMOS_M92_SET_DIR=D:\emu\irem` now data-gates twelve M92 sets. Direct `mnemos_player` smokes for `gunforceu`, `gunforcej`, `mysticri`, `gunhohki`, `mysticrib`, `nbbatman`, and `nbbatmanu` write 320x240 nonblank PPMs plus save states after one frame.
-- Remaining: encrypted V35 sound execution/decryption/protocol proof, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
+- Remaining: encrypted V35 sound execution/decryption/IRQ timing proof, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
 
 ### Irem M107
 
@@ -752,6 +753,26 @@ M82 Major Title background graphics continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 - This proves loader-to-renderer consumption of the Major Title background ROM region and no-crash player execution. It is not final Major Title visual-priority, palette-bank, raster-phase, DIP, or audio parity proof.
+
+M92 sound-command latch continuation validation on 2026-06-26:
+
+- Added explicit M92 sound-command latch/reply helpers. Main V33 sound-command writes now set `sound_latch_pending`; V35 latch reads clear it; V35 reply writes set `sound_reply_pending`; both pending bits are preserved in M92 board save-state version 2.
+- Added `m92 sound command latch reaches the V35 and returns a reply`, with one section proving unread commands remain pending and another proving a synthetic V35 sound program reads the command, stores it in sound RAM, and writes it back through the reply port.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m92_system_test mnemos_apps_player_irem_m92_adapter_test mnemos_player`
+- Targeted retry after fixing the synthetic program ordering:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m92_system_test && ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m92_system_test`: `1/1`
+- Focused M92 CTest with `MNEMOS_M92_SET_DIR=D:\emu\irem`: `4/4`
+  - `mnemos_manifests_irem_m92_test`
+  - `mnemos_manifests_irem_m92_system_test`
+  - `mnemos_apps_player_irem_m92_adapter_test`
+  - `mnemos_apps_player_irem_m92_corpus_golden_test`
+- `clang-format --dry-run --Werror` passed for the touched M92 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- This proves the modeled command/reply latch contract and save-state persistence. It is not encrypted V35 program decryption, command IRQ timing, GA20 analog behavior, or final M92 audio parity proof.
 
 Earlier branch validation that passed before the M107 slice:
 

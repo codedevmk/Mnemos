@@ -281,7 +281,7 @@ namespace mnemos::manifests::irem_m92 {
         main_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
             switch (port) {
             case port_out_sound_latch:
-                sound_latch = value;
+                write_sound_latch(value);
                 break;
             case port_out_control:
                 control_register = value;
@@ -320,11 +320,13 @@ namespace mnemos::manifests::irem_m92 {
             },
             1);
         sound_bus.map_mmio(
-            sound_latch_addr, 1U, [this](std::uint32_t) -> std::uint8_t { return sound_latch; },
+            sound_latch_addr, 1U,
+            [this](std::uint32_t) -> std::uint8_t { return read_sound_latch(); },
             [](std::uint32_t, std::uint8_t) {}, 1);
         sound_bus.map_mmio(
-            sound_reply_addr, 1U, [this](std::uint32_t) -> std::uint8_t { return sound_reply; },
-            [this](std::uint32_t, std::uint8_t value) { sound_reply = value; }, 1);
+            sound_reply_addr, 1U,
+            [this](std::uint32_t) -> std::uint8_t { return read_sound_reply(); },
+            [this](std::uint32_t, std::uint8_t value) { write_sound_reply(value); }, 1);
         sound_cpu.attach_bus(sound_bus);
         sound_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
             if (port >= sound_port_ga20_base && port < sound_port_ga20_limit) {
@@ -332,7 +334,7 @@ namespace mnemos::manifests::irem_m92 {
             }
             switch (port) {
             case sound_port_latch:
-                return sound_latch;
+                return read_sound_latch();
             default:
                 return 0xFFU;
             }
@@ -344,7 +346,7 @@ namespace mnemos::manifests::irem_m92 {
             }
             switch (port) {
             case sound_port_reply:
-                sound_reply = value;
+                write_sound_reply(value);
                 break;
             case sound_port_ym2151_addr:
                 ym_address = value;
@@ -393,6 +395,26 @@ namespace mnemos::manifests::irem_m92 {
         input_system = system;
     }
 
+    void m92_system::write_sound_latch(std::uint8_t value) noexcept {
+        sound_latch = value;
+        sound_latch_pending = true;
+    }
+
+    std::uint8_t m92_system::read_sound_latch() noexcept {
+        sound_latch_pending = false;
+        return sound_latch;
+    }
+
+    void m92_system::write_sound_reply(std::uint8_t value) noexcept {
+        sound_reply = value;
+        sound_reply_pending = true;
+    }
+
+    std::uint8_t m92_system::read_sound_reply() noexcept {
+        sound_reply_pending = false;
+        return sound_reply;
+    }
+
     void m92_system::save_state(chips::state_writer& writer) const {
         writer.u32(m92_system_state_version);
         writer.u16(params.dip_default);
@@ -416,6 +438,8 @@ namespace mnemos::manifests::irem_m92 {
         writer.u8(sound_reply);
         writer.u8(control_register);
         writer.u8(ym_address);
+        writer.boolean(sound_latch_pending);
+        writer.boolean(sound_reply_pending);
     }
 
     void m92_system::load_state(chips::state_reader& reader) {
@@ -449,6 +473,8 @@ namespace mnemos::manifests::irem_m92 {
         sound_reply = reader.u8();
         control_register = reader.u8();
         ym_address = reader.u8();
+        sound_latch_pending = reader.boolean();
+        sound_reply_pending = reader.boolean();
     }
 
     std::unique_ptr<m92_system> assemble_m92(common::rom_set_image image,
