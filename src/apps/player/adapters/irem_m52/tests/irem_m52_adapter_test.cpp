@@ -126,14 +126,46 @@ TEST_CASE("irem_m52_adapter boots a synthetic M52 program", "[irem_m52]") {
     CHECK(nonblack_pixels(adapter.current_frame()) > 0U);
 }
 
+TEST_CASE("irem_m52_adapter maps service and operator-test inputs to the system port",
+          "[irem_m52]") {
+    irem::irem_m52_adapter adapter(synthetic_m52_program(), "M52 inputs");
+
+    mnemos::frontend_sdk::controller_state p1{};
+    p1.start = true;
+    p1.select = true;
+    p1.service = true;
+    p1.test = true;
+    adapter.apply_input(0, p1);
+
+    CHECK(adapter.machine().input2 == 0xE2U);
+
+    p1.service = false;
+    p1.test = false;
+    p1.mode = true;
+    adapter.apply_input(0, p1);
+
+    CHECK(adapter.machine().input2 == 0xF2U);
+
+    mnemos::frontend_sdk::controller_state p2{};
+    p2.start = true;
+    p2.select = true;
+    adapter.apply_input(1, p2);
+
+    CHECK(adapter.machine().input2 == 0xF0U);
+}
+
 TEST_CASE("irem_m52_adapter preserves adapter and board state", "[irem_m52]") {
     irem::irem_m52_adapter source(synthetic_m52_program(), "Save M52");
     source.step_one_frame();
     mnemos::frontend_sdk::controller_state input_state{};
     input_state.up = true;
     input_state.start = true;
+    input_state.select = true;
     input_state.a = true;
+    input_state.service = true;
+    input_state.test = true;
     source.apply_input(0, input_state);
+    REQUIRE(source.machine().input2 == 0xE2U);
 
     const std::vector<std::uint8_t> state = source.save_state();
     REQUIRE_FALSE(state.empty());
@@ -143,6 +175,7 @@ TEST_CASE("irem_m52_adapter preserves adapter and board state", "[irem_m52]") {
     REQUIRE(result.ok());
     CHECK(restored.frames_stepped() == source.frames_stepped());
     CHECK(restored.machine().input0 == source.machine().input0);
+    CHECK(restored.machine().input2 == 0xE2U);
     CHECK(restored.machine().sound_command == source.machine().sound_command);
 }
 

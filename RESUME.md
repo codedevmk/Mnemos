@@ -34,9 +34,10 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - CLI/system-family routing is available through `--system irem_m52` and alias `m52`.
 - The board owns two native YM2149/AY-compatible SSG instances and one native OKI MSM5205 decoder instead of the earlier one-bit audio probe. Sound-command writes program deterministic SSG register state and command-fed MSM5205 nibbles from the loaded `soundcpu` ROM, and the adapter mixes all captured stereo queues for player audio.
 - The board also owns and schedules a second Z80 sound CPU with mapped `soundcpu` ROM/RAM, sound-command latch IRQ/ack state, modeled AY/MSM port writes, and save/load coverage for both Z80s, sound RAM, latch state, and audio chip phases.
+- The M52 adapter consumes explicit arcade `service` and `test` frontend inputs: service maps active-low to system bit `0x08`, `mode` remains a legacy service alias, operator-test maps active-low to bit `0x10`, and adapter save-state version 1 persists those fields.
 - Capability discovery reports main/sound Z80 trace/register surfaces, both YM2149 register snapshots, MSM5205 register snapshots, M52 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Moon Patrol wrapper ZIPs load through the data-gated corpus test and direct player screenshot smoke.
-- Remaining: this is still first-pass diagnostic rendering and partial sound-protocol ownership. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, exact sound CPU port/protocol proof, MSM5205 stream timing, discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity before it is counted as correct graphics/music.
+- Remaining: this is still first-pass diagnostic rendering and partial sound-protocol ownership. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, exact sound CPU port/protocol proof, MSM5205 stream timing, discrete sound behavior, exact raster timing, full board-manual DIP behavior, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M72
 
@@ -249,6 +250,24 @@ M52 sound-CPU ownership continuation validation on 2026-06-26:
 - Full serialized build passed: `cmake --build --preset windows-msvc-debug --parallel 1`.
 - Full CTest with clean local Irem gates for M52, M72 R-Type/protected/vertical, M15, M81, M82, M84, and M107 while leaving `MNEMOS_M72_SET_DIR` cleared: `202/202`, with expected conformance/media skips and the expected M72 full-roster skip.
 - Still partial: M52 now has sound CPU ownership and scheduling, but the exact Moon Patrol sound CPU port map, MSM5205 stream timing, and discrete analog path remain unproven.
+
+M52 service/test input continuation validation on 2026-06-26:
+
+- Mapped explicit frontend `test` input to the M52 operator-test system bit `0x10`, while `service` / legacy `mode` continue to drive the service-credit bit `0x08`.
+- Adapter save/load coverage now asserts an input snapshot with start, coin, service, and operator-test asserted restores the exact board-visible system byte.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_apps_player_irem_m52_adapter_test mnemos_player`
+- Focused M52 CTest with `MNEMOS_M52_SET_DIR=D:\emu\irem`: `4/4`
+  - `mnemos_manifests_irem_m52_test`
+  - `mnemos_manifests_irem_m52_system_test`
+  - `mnemos_apps_player_irem_m52_adapter_test`
+  - `mnemos_apps_player_irem_m52_corpus_golden_test`
+- Full preset build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full preset CTest without ROM env vars in that command environment: `206/206`, with expected media/conformance skips.
+- `clang-format --dry-run --Werror` passed for the touched M52 C++ file.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- This proves the M52 player-to-board service/test input path and persistence. It does not prove full board-manual DIP behavior, Moon Patrol video priority, raster timing, or final visual/audio parity.
 
 M107 V33/V35 model-clock continuation validation on 2026-06-26:
 
@@ -985,7 +1004,7 @@ Repository hygiene notes:
 ## Suggested Next Work
 
 1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, reference-backed Z80 sound protocol/sample timing, full board-manual DIP behavior, raster timing, bootleg coverage, and screenshot/audio parity.
-2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
+2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, full board-manual DIP behavior, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.
 5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, deeper M107 I/O details, full V35 interrupt-controller priority/latency proof, remaining GA20 analog balance/filtering, GA21/GA22 behavior, raster timing, and screenshot parity.
