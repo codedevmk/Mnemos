@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M92 Ninja Baseball Bat Man manifest/corpus-proof commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M82 Major Title background graphics commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -75,7 +75,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - Player-routable M82 profile via `--system irem_m82` for Major Title and R-Type II local routes.
 - Wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real M82 data-gated smoke.
-- Checked-in manifests now cover `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, and `rtype2m82b`; the Major Title parent declares the additional `backgrounds` graphics ROM region so those bytes are CRC-checked even though the current renderer path remains first-pass.
+- Checked-in manifests now cover `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, and `rtype2m82b`; the Major Title parent declares the additional `backgrounds` graphics ROM region, and the M82 renderer now uses that region as the rear tilemap graphics source when present while falling back to the normal `tiles` region for sets without dedicated background graphics.
 - The M82 palette window now uses the shared KNA91-style CPU-visible contract already proven for M72: low-byte-only 5-bit writes, high-byte open bus, and disconnected-A9 mirrors, while the renderer keeps canonical R/G/B plane storage.
 - The M82 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 
@@ -732,6 +732,26 @@ M82 Major Title manifest/corpus continuation validation on 2026-06-26:
 - Full build:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+
+M82 Major Title background graphics continuation validation on 2026-06-26:
+
+- Wired the checked-in M82 `backgrounds` ROM region through board pinning, raw fallback loading, scanline composition, and the convenience frame compositor. The video path now feeds dedicated background graphics into the rear tilemap when present and preserves the existing `tiles` fallback for R-Type II-style sets.
+- Added `m82 video renders a dedicated background graphics region`, which renders the rear tilemap from `backgrounds` while passing an empty foreground tile span. This fails if the background region is ignored or if rear tile rendering still depends on foreground tiles.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m82_test mnemos_apps_player_irem_m82_adapter_test mnemos_player`
+- Focused M82 CTest with `MNEMOS_M82_SET_DIR=D:\emu\irem`: `3/3`
+  - `mnemos_manifests_irem_m82_test`
+  - `mnemos_apps_player_irem_m82_adapter_test`
+  - `mnemos_apps_player_irem_m82_corpus_golden_test`
+- Direct player smokes:
+  - `mnemos_player --system irem_m82 --rom "D:\emu\irem\Major-Title_Arcade_EN.zip" --screenshot build\scratch\irem-m82\majtitle-background.ppm --frames 1`
+  - `mnemos_player --system irem_m82 --rom "D:\emu\irem\Major-Title_Arcade_JA.zip" --screenshot build\scratch\irem-m82\majtitlej-background.ppm --frames 1`
+- `clang-format --dry-run --Werror` passed for the touched M82 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- This proves loader-to-renderer consumption of the Major Title background ROM region and no-crash player execution. It is not final Major Title visual-priority, palette-bank, raster-phase, DIP, or audio parity proof.
 
 Earlier branch validation that passed before the M107 slice:
 

@@ -115,18 +115,16 @@ namespace mnemos::manifests::irem_m82 {
         void latch_sprites(std::span<const std::uint8_t> sprite_ram) noexcept;
 
         void begin_frame() noexcept;
-        void compose_scanline(std::span<const std::uint8_t> tiles,
-                              std::span<const std::uint8_t> sprites,
-                              std::span<const std::uint8_t> proms,
-                              std::span<const std::uint8_t> vram,
-                              std::span<const std::uint8_t> rowscroll,
-                              std::span<const std::uint8_t> palette, std::uint32_t line,
-                              bool bootleg_layout);
+        void compose_scanline(
+            std::span<const std::uint8_t> tiles, std::span<const std::uint8_t> backgrounds,
+            std::span<const std::uint8_t> sprites, std::span<const std::uint8_t> proms,
+            std::span<const std::uint8_t> vram, std::span<const std::uint8_t> rowscroll,
+            std::span<const std::uint8_t> palette, std::uint32_t line, bool bootleg_layout);
         void end_frame() noexcept;
-        void compose(std::span<const std::uint8_t> tiles, std::span<const std::uint8_t> sprites,
-                     std::span<const std::uint8_t> proms, std::span<const std::uint8_t> vram,
-                     std::span<const std::uint8_t> rowscroll, std::span<const std::uint8_t> palette,
-                     bool bootleg_layout);
+        void compose(std::span<const std::uint8_t> tiles, std::span<const std::uint8_t> backgrounds,
+                     std::span<const std::uint8_t> sprites, std::span<const std::uint8_t> proms,
+                     std::span<const std::uint8_t> vram, std::span<const std::uint8_t> rowscroll,
+                     std::span<const std::uint8_t> palette, bool bootleg_layout);
 
       private:
         std::vector<std::uint32_t> pixels_;

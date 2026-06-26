@@ -685,12 +685,30 @@ TEST_CASE("m82 video renders VRAM-backed tile rows with rowscroll", "[m82][video
     rowscroll[2U] = 8U; // line 1 samples the next tile column
 
     video.set_scroll(512U - 64U, 0U);
-    video.compose(tiles, std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{}, vram,
-                  rowscroll, palette, false);
+    video.compose(tiles, std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{},
+                  std::span<const std::uint8_t>{}, vram, rowscroll, palette, false);
 
     const auto frame = video.framebuffer();
     CHECK(frame.pixels[0] == 0x00FF0000U);
     CHECK(frame.pixels[frame.effective_stride()] == 0x0000FF00U);
+}
+
+TEST_CASE("m82 video renders a dedicated background graphics region", "[m82][video]") {
+    namespace m82 = mnemos::manifests::irem_m82;
+
+    constexpr std::size_t tilemap_bytes = 64U * 64U * 4U;
+    const auto backgrounds = make_tiles({5U});
+    std::vector<std::uint8_t> vram(tilemap_bytes * 2U, 0U);
+    vram[tilemap_bytes + 1U] = 0x40U;
+    const auto palette = make_palette(5U, 0x1FU, 0U, 0U);
+
+    m82::m82_video video;
+    video.set_scroll(512U - 64U, 0U);
+    video.compose(std::span<const std::uint8_t>{}, backgrounds, std::span<const std::uint8_t>{},
+                  std::span<const std::uint8_t>{}, vram, std::span<const std::uint8_t>{}, palette,
+                  false);
+
+    CHECK(video.framebuffer().pixels[0] == 0x00FF0000U);
 }
 
 TEST_CASE("m82 video tile priority groups arbitrate front pens against sprites", "[m82][video]") {
@@ -714,16 +732,18 @@ TEST_CASE("m82 video tile priority groups arbitrate front pens against sprites",
 
     SECTION("group 0 front pens render below sprites") {
         vram[2U] = 0x00U;
-        video.compose(tiles, sprites, std::span<const std::uint8_t>{}, vram,
-                      std::span<const std::uint8_t>{}, palette, false);
+        video.compose(tiles, std::span<const std::uint8_t>{}, sprites,
+                      std::span<const std::uint8_t>{}, vram, std::span<const std::uint8_t>{},
+                      palette, false);
 
         CHECK(video.framebuffer().pixels[0] == 0x000000FFU);
     }
 
     SECTION("group 2 front pens render above sprites") {
         vram[2U] = 0x80U;
-        video.compose(tiles, sprites, std::span<const std::uint8_t>{}, vram,
-                      std::span<const std::uint8_t>{}, palette, false);
+        video.compose(tiles, std::span<const std::uint8_t>{}, sprites,
+                      std::span<const std::uint8_t>{}, vram, std::span<const std::uint8_t>{},
+                      palette, false);
 
         CHECK(video.framebuffer().pixels[0] == 0x0000FF00U);
     }
@@ -739,8 +759,9 @@ TEST_CASE("m82 video renders latched sprite RAM and preserves it in state", "[m8
 
     m82::m82_video video;
     video.latch_sprites(sprite_ram);
-    video.compose(std::span<const std::uint8_t>{}, sprites, std::span<const std::uint8_t>{},
-                  std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{}, palette, false);
+    video.compose(std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{}, sprites,
+                  std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{},
+                  std::span<const std::uint8_t>{}, palette, false);
     CHECK(video.framebuffer().pixels[0] == 0x000000FFU);
 
     std::vector<std::uint8_t> snapshot;
@@ -751,9 +772,9 @@ TEST_CASE("m82 video renders latched sprite RAM and preserves it in state", "[m8
     mnemos::chips::state_reader reader(snapshot);
     restored.load_state(reader);
     REQUIRE(reader.ok());
-    restored.compose(std::span<const std::uint8_t>{}, sprites, std::span<const std::uint8_t>{},
-                     std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{}, palette,
-                     false);
+    restored.compose(std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{}, sprites,
+                     std::span<const std::uint8_t>{}, std::span<const std::uint8_t>{},
+                     std::span<const std::uint8_t>{}, palette, false);
     CHECK(restored.framebuffer().pixels[0] == 0x000000FFU);
 }
 

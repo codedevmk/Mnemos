@@ -575,8 +575,8 @@ namespace mnemos::apps::player::adapters::irem_m82 {
                                                      effective_rom_path, supplemental_sources);
                         }
                     }
-                    for (const char* region :
-                         {"maincpu", "soundcpu", "samples", "tiles", "sprites", "proms"}) {
+                    for (const char* region : {"maincpu", "soundcpu", "samples", "tiles",
+                                               "backgrounds", "sprites", "proms"}) {
                         if (auto bytes = (*provider)(std::string{region} + ".bin")) {
                             result.image.regions.emplace(region, std::move(*bytes));
                         }

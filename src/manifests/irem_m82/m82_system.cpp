@@ -190,13 +190,11 @@ namespace mnemos::manifests::irem_m82 {
 
     void m82_video::begin_frame() noexcept { std::fill(pixels_.begin(), pixels_.end(), 0U); }
 
-    void m82_video::compose_scanline(std::span<const std::uint8_t> tiles,
-                                     std::span<const std::uint8_t> sprites,
-                                     std::span<const std::uint8_t> proms,
-                                     std::span<const std::uint8_t> vram,
-                                     std::span<const std::uint8_t> rowscroll,
-                                     std::span<const std::uint8_t> palette, std::uint32_t line,
-                                     bool bootleg_layout) {
+    void m82_video::compose_scanline(
+        std::span<const std::uint8_t> tiles, std::span<const std::uint8_t> backgrounds,
+        std::span<const std::uint8_t> sprites, std::span<const std::uint8_t> proms,
+        std::span<const std::uint8_t> vram, std::span<const std::uint8_t> rowscroll,
+        std::span<const std::uint8_t> palette, std::uint32_t line, bool bootleg_layout) {
         if (line >= visible_height) {
             return;
         }
@@ -215,11 +213,13 @@ namespace mnemos::manifests::irem_m82 {
         constexpr std::uint32_t map_pixels = 64U * 8U;
         constexpr std::uint32_t beam_x_origin = 64U;
 
-        const std::size_t tile_plane_size = tiles.size() / 4U;
-        const std::size_t tile_count = tile_plane_size / tile_cell_bytes;
+        const bool has_dedicated_backgrounds = !backgrounds.empty();
+        const auto back_tiles = has_dedicated_backgrounds ? backgrounds : tiles;
+        const std::size_t back_tile_plane_size = back_tiles.size() / 4U;
+        const std::size_t back_tile_count = back_tile_plane_size / tile_cell_bytes;
         const std::size_t sprite_plane_size = sprites.size() / 4U;
         const std::size_t sprite_cell_count = sprite_plane_size / sprite_cell_bytes;
-        const bool tile_path_ready = tile_count > 0U && vram.size() >= tilemap_bytes &&
+        const bool tile_path_ready = back_tile_count > 0U && vram.size() >= tilemap_bytes &&
                                      palette.size() >= 0xC00U && has_nonzero(vram) &&
                                      has_nonzero(palette);
         const bool sprite_path_ready = sprite_cell_count > 0U && palette.size() >= 0xC00U &&
@@ -234,10 +234,13 @@ namespace mnemos::manifests::irem_m82 {
                 pixels_[static_cast<std::size_t>(out_y) * visible_width + out_x] = rgb;
             };
 
-            auto render_layer = [&](std::span<const std::uint8_t> map,
+            auto render_layer = [&](std::span<const std::uint8_t> gfx,
+                                    std::span<const std::uint8_t> map,
                                     std::span<const std::uint16_t, 4> skip_masks,
                                     std::uint16_t scroll_bias) {
-                if (map.size() < tilemap_bytes || tile_count == 0U) {
+                const std::size_t gfx_plane_size = gfx.size() / 4U;
+                const std::size_t gfx_tile_count = gfx_plane_size / tile_cell_bytes;
+                if (map.size() < tilemap_bytes || gfx_tile_count == 0U) {
                     return;
                 }
                 const std::uint16_t row_scroll =
@@ -257,7 +260,7 @@ namespace mnemos::manifests::irem_m82 {
                         (static_cast<std::size_t>(map_y / 8U) * 64U + map_x / 8U) * 4U;
                     const std::uint16_t word0 = read_le16(map, entry);
                     const std::uint16_t word1 = read_le16(map, entry + 2U);
-                    const std::size_t code = (word0 & 0x3FFFU) % tile_count;
+                    const std::size_t code = (word0 & 0x3FFFU) % gfx_tile_count;
                     const std::uint32_t group = (word1 >> 6U) & 0x03U;
                     const std::uint32_t tx =
                         (word0 & 0x4000U) != 0U ? 7U - (map_x & 7U) : (map_x & 7U);
@@ -267,7 +270,7 @@ namespace mnemos::manifests::irem_m82 {
                     const std::uint32_t bit = 7U - tx;
                     std::uint32_t pixel = 0U;
                     for (std::uint32_t plane = 0; plane < 4U; ++plane) {
-                        pixel |= ((tiles[plane * tile_plane_size + row] >> bit) & 1U) << plane;
+                        pixel |= ((gfx[plane * gfx_plane_size + row] >> bit) & 1U) << plane;
                     }
                     if (((skip_masks[group] >> pixel) & 1U) != 0U) {
                         continue;
@@ -368,16 +371,16 @@ namespace mnemos::manifests::irem_m82 {
                                       ? vram.subspan(tilemap_bytes, tilemap_bytes)
                                       : vram.first(tilemap_bytes);
                 const auto front = vram.first(tilemap_bytes);
-                render_layer(back, bg_below, 0U);
+                render_layer(back_tiles, back, bg_below, 0U);
                 if (vram.size() >= tilemap_bytes * 2U) {
-                    render_layer(front, fg_below, 0U);
+                    render_layer(tiles, front, fg_below, 0U);
                 }
                 if (sprite_path_ready) {
                     render_sprites();
                 }
-                render_layer(back, bg_above, 0U);
+                render_layer(back_tiles, back, bg_above, 0U);
                 if (vram.size() >= tilemap_bytes * 2U) {
-                    render_layer(front, fg_above, 0U);
+                    render_layer(tiles, front, fg_above, 0U);
                 }
             } else if (sprite_path_ready) {
                 render_sprites();
@@ -419,13 +422,15 @@ namespace mnemos::manifests::irem_m82 {
     void m82_video::end_frame() noexcept { ++frame_index_; }
 
     void m82_video::compose(std::span<const std::uint8_t> tiles,
+                            std::span<const std::uint8_t> backgrounds,
                             std::span<const std::uint8_t> sprites,
                             std::span<const std::uint8_t> proms, std::span<const std::uint8_t> vram,
                             std::span<const std::uint8_t> rowscroll,
                             std::span<const std::uint8_t> palette, bool bootleg_layout) {
         begin_frame();
         for (std::uint32_t line = 0; line < visible_height; ++line) {
-            compose_scanline(tiles, sprites, proms, vram, rowscroll, palette, line, bootleg_layout);
+            compose_scanline(tiles, backgrounds, sprites, proms, vram, rowscroll, palette, line,
+                             bootleg_layout);
         }
         end_frame();
     }
@@ -466,6 +471,7 @@ namespace mnemos::manifests::irem_m82 {
         auto& sound_prog = pinned_region(roms, "soundcpu", sound_rom_size);
         (void)pinned_region(roms, "samples", sample_rom_size);
         (void)pinned_region(roms, "tiles", 0U);
+        (void)pinned_region(roms, "backgrounds", 0U);
         (void)pinned_region(roms, "sprites", 0U);
         (void)pinned_region(roms, "proms", 0U);
 
@@ -670,9 +676,9 @@ namespace mnemos::manifests::irem_m82 {
             const std::uint64_t next_cycle =
                 (main_cycles_per_frame * static_cast<std::uint64_t>(line + 1U)) / frame_lines;
             if (line < visible_height) {
-                video.compose_scanline(roms.regions["tiles"], roms.regions["sprites"],
-                                       roms.regions["proms"], vram, rowscroll_ram, palette_ram,
-                                       line, params.bootleg_layout);
+                video.compose_scanline(roms.regions["tiles"], roms.regions["backgrounds"],
+                                       roms.regions["sprites"], roms.regions["proms"], vram,
+                                       rowscroll_ram, palette_ram, line, params.bootleg_layout);
             }
             pic.set_irq_line(0U, line == visible_height);
             pic.set_irq_line(2U, video.raster_compare_matches(line));
