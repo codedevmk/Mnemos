@@ -242,7 +242,7 @@ All "beyond Emu" — Emu's M72 is a non-rendering scaffold, so these are board-f
 hardware completeness, not Emu-parity gaps.
 
 #### CPU
-- [~] **M1** mcs51 (8051) protection MCU — the optional `mcu` region is now player-loadable via `mcu.bin`, scheduled when present, and covered through the MCU MOVX sample/latch/shared-RAM path (`V30 $B0000` / MCU `$C000`) using both DPTR and P2-latched `@R0` / `@R1` external-data forms; declarative protected sets with a missing MCU dump now carry the ROM-set issue but clear the filled `mcu` region before board construction, so Mnemos does not schedule an all-`0xFF` fake protection CPU; port read-modify-write instructions now use the output latch rather than external pin levels, matching the 8051 behavior real i8751 code relies on when updating P0-P3; the MCS-51 core now implements the classic IE/IP two-level priority model so high-priority external/timer/serial interrupts can preempt a low-priority ISR while equal/lower-priority requests wait for RETI plus the following foreground instruction, including the same one-instruction deferral when an IE/IP access leaves a serviceable request pending, timer mode 0's 13-bit counter, timer mode 3's split TL0/TH0 behavior, TMOD GATE-controlled timers, T0/T1 external counter pins, serial RI/TI arbitration through the shared `0x0023` vector with firmware-owned flag clearing, frame-level SBUF transmit/receive timing, and a mechanical all-opcode operand-consumption regression covering the complete i8751 decoder surface including AJMP/ACALL page forms and call stack byte order; no-dump true-M72 sets can now declare explicit `[[hle]]` MCU profiles, with `dbreedm72` / `dkgensanm72` mapped to the startup protection RAM inversion surface, V30 command-latch acknowledge, and manifest-declared profile-bounded sample-trigger cursor setup; duplicate sample-trigger declarations are schema errors, and supported no-dump profiles without trigger metadata or with trigger starts outside the loaded `samples` region are reported and disabled instead of activating partial HLE; `MNEMOS_M72_PROTECTED_SET` provides a data-gated real-ROM player check for protected true-M72 sets with either a dumped MCU or an explicit no-dump HLE profile. Remaining: validate / complete protected-game behavior against authentic per-game MCU + ROM-set artifacts, including the no-dump profile entry routines beyond startup RAM inversion, command-latch acknowledge, and sample trigger setup (R-Type needs none) · PARTIAL · HIGH · M · beyond Emu · R9 · Evidence: `src/chips/cpu/mcs51/mcs51.cpp` + `src/chips/cpu/mcs51/tests/mcs51_test.cpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` R9
+- [~] **M1** mcs51 (8051) protection MCU — the optional `mcu` region is now player-loadable via `mcu.bin`, scheduled when present, and covered through the MCU MOVX sample/latch/shared-RAM path (`V30 $B0000` / MCU `$C000`) using both DPTR and P2-latched `@R0` / `@R1` external-data forms; declarative protected sets with a missing MCU dump now carry the ROM-set issue but clear the filled `mcu` region before board construction, so Mnemos does not schedule an all-`0xFF` fake protection CPU; port read-modify-write instructions now use the output latch rather than external pin levels, matching the 8051 behavior real i8751 code relies on when updating P0-P3; the MCS-51 core now implements the classic IE/IP two-level priority model so high-priority external/timer/serial interrupts can preempt a low-priority ISR while equal/lower-priority requests wait for RETI plus the following foreground instruction, including the same one-instruction deferral when an IE/IP access leaves a serviceable request pending, timer mode 0's 13-bit counter, timer mode 3's split TL0/TH0 behavior, TMOD GATE-controlled timers, T0/T1 external counter pins, serial RI/TI arbitration through the shared `0x0023` vector with firmware-owned flag clearing, frame-level SBUF transmit/receive timing, and a mechanical all-opcode operand-consumption regression covering the complete i8751 decoder surface including AJMP/ACALL page forms and call stack byte order; no-dump true-M72 sets can now declare explicit `[[hle]]` MCU profiles, with `dbreedm72` / `dkgensanm72` mapped to the startup protection RAM inversion surface, V30 command-latch acknowledge, and manifest-declared profile-bounded sample-trigger cursor setup; duplicate sample-trigger declarations are schema errors, and supported no-dump profiles without trigger metadata or with trigger starts outside the loaded `samples` region are reported and disabled instead of activating partial HLE; `MNEMOS_M72_PROTECTED_SET` provides a data-gated real-ROM player check for protected true-M72 sets with either a dumped MCU or an explicit no-dump HLE profile, and `MNEMOS_M72_PROTECTED_MCU_SET` now separately proves a CRC-clean protected set with a real dumped MCU by requiring the MCS-51 chip to be scheduled. Local proof with `D:\emu\irem\M72\nspirit.zip` passes that dumped-MCU golden. Remaining: validate / complete protected-game behavior against authentic per-game MCU + ROM-set artifacts, including the no-dump profile entry routines beyond startup RAM inversion, command-latch acknowledge, and sample trigger setup (R-Type needs none) · PARTIAL · HIGH · M · beyond Emu · R9 · Evidence: `src/chips/cpu/mcs51/mcs51.cpp` + `src/chips/cpu/mcs51/tests/mcs51_test.cpp` + `src/manifests/irem_m72/m72_system.cpp` + `src/manifests/irem_m72/tests/m72_system_test.cpp` + `src/apps/player/adapters/irem_m72/tests/irem_m72_adapter_test.cpp` / `progress-analysis.md` R9
 
 Loader note: no-dump HLE profiles now also disable when their declared `samples` region has missing file issues, preventing sample fill bytes from driving protection-HLE cursors.
 
@@ -328,12 +328,14 @@ reports only `lohtb2` and `lohtj` as missing source sets.
 
 2026-06-26 category proof note: the current local M72 category proof uses
 `MNEMOS_M72_RTYPE_SET=D:\emu\irem\M72\rtype.zip`,
-`MNEMOS_M72_PROTECTED_SET=D:\emu\irem\M72\dbreedm72`, and
+`MNEMOS_M72_PROTECTED_SET=D:\emu\irem\M72\dbreedm72`,
+`MNEMOS_M72_PROTECTED_MCU_SET=D:\emu\irem\M72\nspirit.zip`, and
 `MNEMOS_M72_VERTICAL_SET=D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`; the common
-data-gated runner passes the R-Type, protected, and vertical CTest goldens and
-the M72 player corpus smoke resolves/passes `rtype`, `dbreedm72`, and
-`airdueljm72` 3/3. `tests/oracles/highwater.json` records those three G6 goldens
-as `passed`. `GLD-M72-ROSTER` remains `skipped`: the all-set artifact scanner now
+data-gated runner passes the R-Type, protected, dumped-MCU protected, and
+vertical CTest goldens and the M72 player corpus smoke resolves/passes `rtype`,
+`dbreedm72`, `nspirit`, and `airdueljm72` 4/4.
+`tests/oracles/highwater.json` records those G6 goldens as `passed`.
+`GLD-M72-ROSTER` remains `skipped`: the all-set artifact scanner now
 works without `-Set`, but the current `D:\emu\irem\M72` scan reports only
 322/417 checked-in M72 artifacts present, so full checked-in roster proof is not
 complete.
@@ -351,6 +353,14 @@ a G6 data-gated oracle through
 `MNEMOS_M72_PROTECTED_AUDIO_SET=D:\emu\irem\M72\dbreedm72`; the standard
 data-gated sweep includes `mnemos_apps_player_irem_m72_protected_audio_golden_test`
 and passes it alongside the existing R-Type, protected, and vertical goldens.
+
+2026-06-26 dumped-MCU protection note:
+`MNEMOS_M72_PROTECTED_MCU_SET=D:\emu\irem\M72\nspirit.zip` drives the new
+`mnemos_apps_player_irem_m72_protected_mcu_golden_test`, which requires a
+CRC-clean `mcu` region, `machine.mcu_present`, no protection-HLE fallback, and a
+scheduled MCS-51 chip before it runs the lit-frame/sound-release proof. This is
+separate from the generic protected golden so no-dump HLE sets cannot satisfy
+the dumped-MCU requirement.
 
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,

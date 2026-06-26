@@ -982,6 +982,57 @@ TEST_CASE("irem_m72_adapter boots a real protected M72 set", "[irem_m72][adapter
     CHECK(frame_lit);
 }
 
+TEST_CASE("irem_m72_adapter boots a real dumped-MCU protected M72 set",
+          "[irem_m72][adapter][data]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    // Data-gated (never committed): MNEMOS_M72_PROTECTED_MCU_SET points at a
+    // protected true-M72 set with a dumped MCU, such as nspirit.zip.
+    const char* set_env = opt_env("MNEMOS_M72_PROTECTED_MCU_SET");
+    if (set_env == nullptr) {
+        SKIP("set MNEMOS_M72_PROTECTED_MCU_SET to a dumped-MCU protected M72 set");
+    }
+    auto source = load_m72_source(set_env);
+
+    mnemos::frontend_sdk::adapter_options options{};
+    options.rom = std::move(source.bytes);
+    options.display_name = "protected-m72-mcu";
+    options.rom_path = source.path;
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    REQUIRE(system != nullptr);
+    auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
+    auto& machine = adapter.machine();
+
+    REQUIRE(machine.roms.issues.empty());
+    REQUIRE_FALSE(adapter.set_name().empty());
+    const auto expected_params = m72::board_params_for(adapter.set_name());
+    CHECK(machine.params.work_ram_base == expected_params.work_ram_base);
+    CHECK(machine.dip_switches == expected_params.dip_default);
+    REQUIRE(machine.mcu_present);
+    CHECK_FALSE(machine.protection_hle_present);
+    REQUIRE(adapter.chips().size() == 7U);
+    CHECK(adapter.chips().back()->metadata().part_number == "mcs51");
+    REQUIRE(machine.roms.region("mcu") != nullptr);
+    CHECK_FALSE(machine.roms.region("mcu")->empty());
+
+    const int warmup_frames = env_positive_int("MNEMOS_M72_PROTECTED_MCU_FRAMES", 900);
+    bool sound_released = !machine.sound_cpu.reset_line_held();
+    bool frame_lit = frame_has_variation(adapter.current_frame());
+    for (int frame = 0; frame < warmup_frames && !(sound_released && frame_lit); ++frame) {
+        adapter.step_one_frame();
+        sound_released = sound_released || !machine.sound_cpu.reset_line_held();
+        frame_lit = frame_lit || frame_has_variation(adapter.current_frame());
+    }
+
+    INFO("set=" << adapter.set_name() << " frames=" << adapter.frames_stepped()
+                << " warmup=" << warmup_frames << " sound_released=" << sound_released
+                << " frame_lit=" << frame_lit
+                << " frame_distinct_pixels=" << distinct_pixel_count(adapter.current_frame()));
+    CHECK(sound_released);
+    CHECK(frame_lit);
+}
+
 TEST_CASE("irem_m72_adapter emits rendered audio for a real protected M72 set",
           "[irem_m72][adapter][data]") {
     namespace m72 = mnemos::manifests::irem_m72;

@@ -2,8 +2,9 @@
 # Data-gated Irem M72 corpus smoke runner.
 #
 # ROM sets are never committed. Point this at one or more zips/directories with -Rom,
-# MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET, MNEMOS_M72_VERTICAL_SET, or
-# at true-M72 roster directories with -RomDir / MNEMOS_M72_SET_DIR. Pass
+# MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET,
+# MNEMOS_M72_PROTECTED_MCU_SET, MNEMOS_M72_VERTICAL_SET, or at true-M72
+# roster directories with -RomDir / MNEMOS_M72_SET_DIR. Pass
 # -Recurse for mixed corpus roots such as D:\emu\irem; the top-level
 # scripts/run-data-gated-tests.ps1 entrypoint does this for M72 automatically.
 # Use -Set to narrow a mixed root to one or more checked-in M72 manifest ids.
@@ -401,9 +402,10 @@ function Get-M72RomCandidateSetIds {
         }
         $collectionSets = @(Get-M72CollectionZipSetIds -Path $Path -ManifestIds $ManifestIds)
         if ($collectionSets.Count -gt 0) {
-            if (-not $ManifestIds.Contains($stem)) {
-                $candidates.Clear()
+            if ($ManifestIds.Contains($stem)) {
+                return @($candidates)
             }
+            $candidates.Clear()
         }
         foreach ($collectionSet in $collectionSets) {
             Add-M72Candidate -Candidates $candidates -Set $collectionSet -Rank 2
@@ -627,7 +629,7 @@ $roms = [System.Collections.Generic.List[string]]::new()
 foreach ($path in Split-CommaList $Rom) {
     Add-RomPath -Paths $roms -Path $path
 }
-foreach ($name in @("MNEMOS_M72_RTYPE_SET", "MNEMOS_M72_PROTECTED_SET", "MNEMOS_M72_VERTICAL_SET")) {
+foreach ($name in @("MNEMOS_M72_RTYPE_SET", "MNEMOS_M72_PROTECTED_SET", "MNEMOS_M72_PROTECTED_MCU_SET", "MNEMOS_M72_VERTICAL_SET")) {
     Add-RomPath -Paths $roms -Path ([Environment]::GetEnvironmentVariable($name))
 }
 

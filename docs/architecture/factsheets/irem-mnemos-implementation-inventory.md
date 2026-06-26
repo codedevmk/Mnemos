@@ -199,9 +199,15 @@ visual and audio parity proof.
   `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspirit`, `nspiritj`, `rtype`,
   `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`, `xmultiplm72`.
 - **Oracle proof:** G6 high-water now records `GLD-M72-RTYPE`,
-  `GLD-M72-PROTECTED`, `GLD-M72-PROTECTED-AUDIO`, and `GLD-M72-VERTICAL` as passed with
-  `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`, and
+  `GLD-M72-PROTECTED`, `GLD-M72-PROTECTED-AUDIO`,
+  `GLD-M72-PROTECTED-MCU`, and `GLD-M72-VERTICAL` as passed with
+  `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`,
+  `D:\emu\irem\M72\nspirit.zip`, and
   `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` remains skipped.
+- **Dumped-MCU protected proof:** `MNEMOS_M72_PROTECTED_MCU_SET` points at a
+  protected true-M72 set that must contain a real MCU dump; the local
+  `D:\emu\irem\M72\nspirit.zip` route passes this golden and proves the adapter
+  schedules the MCS-51 instead of falling back to no-dump HLE.
 - **Rendered-audio smoke proof:** the M72 corpus smoke runner now has an opt-in
   `-RequireRenderedAudio` gate that runs `mnemos_player --extract-audio` and
   requires the exported rendered WAVE payload to contain nonzero PCM.
