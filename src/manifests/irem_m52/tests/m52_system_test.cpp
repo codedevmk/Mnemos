@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -60,6 +61,26 @@ namespace {
             }
         }
         return count;
+    }
+
+    [[nodiscard]] std::vector<std::uint32_t>
+    frame_pixels(mnemos::chips::frame_buffer_view view) {
+        std::vector<std::uint32_t> pixels;
+        pixels.reserve(static_cast<std::size_t>(view.width) * view.height);
+        for (std::uint32_t y = 0; y < view.height; ++y) {
+            const std::uint32_t* row =
+                view.pixels + static_cast<std::size_t>(y) * view.effective_stride();
+            pixels.insert(pixels.end(), row, row + view.width);
+        }
+        return pixels;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> prom_ramp() {
+        std::vector<std::uint8_t> proms(mnemos::manifests::irem_m52::proms_size);
+        for (std::size_t i = 0; i < proms.size(); ++i) {
+            proms[i] = static_cast<std::uint8_t>(i);
+        }
+        return proms;
     }
 } // namespace
 
@@ -120,6 +141,84 @@ TEST_CASE("Irem M52 sound command is owned by the sound Z80 ports", "[irem_m52]"
     CHECK(sys->ay1.tone_period(1) == 0x0023U);
     CHECK(sys->sound_cpu_msm_write_count > 0U);
     CHECK(sys->msm.vclk_count() > 0U);
+}
+
+TEST_CASE("Irem M52 video output ignores executable ROM entropy", "[irem_m52]") {
+    namespace m52 = mnemos::manifests::irem_m52;
+
+    std::array<std::uint8_t, m52::video_ram_size> video_ram{};
+    std::array<std::uint8_t, m52::color_ram_size> color_ram{};
+    std::array<std::uint8_t, m52::sprite_ram_size> sprite_ram{};
+    std::array<std::uint8_t, m52::work_ram_size> work_ram_a{};
+    std::array<std::uint8_t, m52::work_ram_size> work_ram_b{};
+    std::array<std::uint8_t, 32> scroll_regs{};
+    std::array<std::uint8_t, 2> bg_x{0x11U, 0x23U};
+    std::array<std::uint8_t, 2> bg_y{0x07U, 0x19U};
+    std::vector<std::uint8_t> tx_gfx(m52::tx_gfx_size, 0U);
+    std::vector<std::uint8_t> sprite_gfx(m52::sprite_gfx_size, 0U);
+    std::vector<std::uint8_t> main_program_a(m52::main_rom_size, 0x00U);
+    std::vector<std::uint8_t> main_program_b(m52::main_rom_size, 0xFFU);
+    std::vector<std::uint8_t> sound_program_a(m52::sound_rom_size, 0x55U);
+    std::vector<std::uint8_t> sound_program_b(m52::sound_rom_size, 0xAAU);
+    const std::vector<std::uint8_t> proms = prom_ramp();
+
+    video_ram[0] = 0x02U;
+    color_ram[0] = 0x80U;
+    tx_gfx[0x10] = 0x80U;
+    std::fill(work_ram_b.begin(), work_ram_b.end(), static_cast<std::uint8_t>(0xEEU));
+    scroll_regs[0] = 0x2AU;
+
+    m52::m52_video first;
+    first.compose(main_program_a, sound_program_a, tx_gfx, sprite_gfx, proms, video_ram,
+                  color_ram, sprite_ram, work_ram_a, scroll_regs, bg_x, bg_y, 0x31U, false,
+                  "moon_patrol");
+    m52::m52_video second;
+    second.compose(main_program_b, sound_program_b, tx_gfx, sprite_gfx, proms, video_ram,
+                   color_ram, sprite_ram, work_ram_b, scroll_regs, bg_x, bg_y, 0x31U, false,
+                   "moon_patrol");
+
+    CHECK(frame_pixels(first.framebuffer()) == frame_pixels(second.framebuffer()));
+}
+
+TEST_CASE("Irem M52 video renders sprite RAM records through sprite graphics", "[irem_m52]") {
+    namespace m52 = mnemos::manifests::irem_m52;
+
+    std::array<std::uint8_t, m52::video_ram_size> video_ram{};
+    std::array<std::uint8_t, m52::color_ram_size> color_ram{};
+    std::array<std::uint8_t, m52::sprite_ram_size> blank_sprite_ram{};
+    std::array<std::uint8_t, m52::sprite_ram_size> object_sprite_ram{};
+    std::array<std::uint8_t, m52::work_ram_size> work_ram{};
+    std::array<std::uint8_t, 32> scroll_regs{};
+    std::array<std::uint8_t, 2> bg_x{};
+    std::array<std::uint8_t, 2> bg_y{};
+    std::vector<std::uint8_t> tx_gfx(m52::tx_gfx_size, 0U);
+    std::vector<std::uint8_t> sprite_gfx(m52::sprite_gfx_size, 0U);
+    std::vector<std::uint8_t> program(m52::main_rom_size, 0U);
+    const std::vector<std::uint8_t> proms = prom_ramp();
+
+    for (std::uint32_t row = 0; row < 16U; ++row) {
+        sprite_gfx[static_cast<std::size_t>(row) * 2U] = 0x80U;
+    }
+    object_sprite_ram[0] = static_cast<std::uint8_t>(241U - 40U);
+    object_sprite_ram[1] = 0x00U;
+    object_sprite_ram[2] = 0x05U;
+    object_sprite_ram[3] = 24U;
+
+    m52::m52_video blank;
+    blank.compose(program, program, tx_gfx, sprite_gfx, proms, video_ram, color_ram,
+                  blank_sprite_ram, work_ram, scroll_regs, bg_x, bg_y, 0x00U, false,
+                  "moon_patrol");
+    m52::m52_video with_object;
+    with_object.compose(program, program, tx_gfx, sprite_gfx, proms, video_ram, color_ram,
+                        object_sprite_ram, work_ram, scroll_regs, bg_x, bg_y, 0x00U, false,
+                        "moon_patrol");
+
+    const auto blank_pixels = frame_pixels(blank.framebuffer());
+    const auto object_pixels = frame_pixels(with_object.framebuffer());
+    const auto lit_index = static_cast<std::size_t>(40U) * m52::visible_width + 24U;
+    const auto transparent_index = static_cast<std::size_t>(40U) * m52::visible_width + 25U;
+    CHECK(object_pixels[lit_index] != blank_pixels[lit_index]);
+    CHECK(object_pixels[transparent_index] == blank_pixels[transparent_index]);
 }
 
 TEST_CASE("Irem M52 save-state preserves board identity and RAM", "[irem_m52]") {

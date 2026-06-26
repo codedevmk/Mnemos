@@ -49,7 +49,7 @@ M90/M92 wrappers, while leaving the strict full-M72 roster gate opt-in because
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
-| M52 | `irem_m52` first-pass | 39% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; optional visual/audio hash oracle | None | Authentic parallax/road/sprite video, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
+| M52 | `irem_m52` first-pass | 41% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
@@ -80,9 +80,11 @@ targets:
   than authentic parallax/road behavior. Audio now routes modeled AY/MSM writes
   through the sound Z80 instead of command-fed shortcuts, but discrete analog
   behavior and timing parity are still open. Its manual-backed DIP defaults are now wired, but runtime DIP
-  behavior beyond those defaults remains open. `GLD-M52-PARITY-HASH` is now
-  registered as a skipped-until-pinned visual/audio SHA-256 oracle for a
-  reference-captured M52 set.
+  behavior beyond those defaults remains open. The video path no longer uses
+  executable program/sound ROM bytes as pixel entropy, and now renders a
+  bounded sprite-RAM record pass through the declared `sprite_gfx` region before
+  the text layer. `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned
+  visual/audio SHA-256 oracle for a reference-captured M52 set.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
@@ -140,6 +142,10 @@ visual and audio parity proof.
   Save/load preserves both Z80s, sound RAM, latch state, and audio chip phases;
   the adapter mixes all three captured stereo queues and capability discovery
   exposes both Z80 register snapshots plus the audio register snapshots.
+  The compositor now keeps executable ROM and generic work RAM bytes out of the
+  direct pixel path, uses the declared control/scroll latches for its remaining
+  first-pass background placeholder, and renders 4-byte sprite RAM records
+  through the declared 16x16 sprite graphics before the text pass.
   The adapter maps service/test frontend inputs to board-visible active-low
   system bits `0x08`/`0x10` and persists those fields in adapter save-state
   version 1. The parent manifest carries 13 Moon Patrol manual SW1/SW2 DIP
@@ -150,8 +156,8 @@ visual and audio parity proof.
   `MNEMOS_M52_PARITY_SET`, but remains skipped until trusted
   `MNEMOS_M52_PARITY_FRAME_SHA256` and/or `MNEMOS_M52_PARITY_AUDIO_SHA256`
   values are supplied.
-- **Remaining:** replace the diagnostic compositor with board-evidenced
-  parallax/road/sprite/text priority, verify the exact M52 sound CPU port map
+- **Remaining:** replace the remaining first-pass background placeholder with
+  board-evidenced parallax/road/text priority, verify the exact M52 sound CPU port map
   and MSM5205 stream timing against board evidence, implement the
   discrete-analog path beyond the currently modeled AY/MSM port surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route,
   and prove runtime DIP behavior beyond current manual defaults, raster timing,

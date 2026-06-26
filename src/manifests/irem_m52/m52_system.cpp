@@ -64,6 +64,33 @@ namespace mnemos::manifests::irem_m52 {
             return (sample_byte(tx_gfx, base, 0U) & (0x80U >> x)) != 0U;
         }
 
+        [[nodiscard]] bool sprite_pixel_on(std::span<const std::uint8_t> sprite_gfx,
+                                           std::uint16_t code, std::uint32_t x, std::uint32_t y,
+                                           bool flip_x, bool flip_y) noexcept {
+            if (flip_x) {
+                x = 15U - x;
+            }
+            if (flip_y) {
+                y = 15U - y;
+            }
+            const std::uint64_t base =
+                static_cast<std::uint64_t>(code & 0x7FU) * 32U + y * 2U + (x >> 3U);
+            return (sample_byte(sprite_gfx, base, 0U) & (0x80U >> (x & 0x07U))) != 0U;
+        }
+
+        void plot_sprite_pixel(std::vector<std::uint32_t>& pixels, std::uint32_t x,
+                               std::uint32_t y, std::uint32_t color,
+                               bool flip_screen) noexcept {
+            if (x >= visible_width || y >= visible_height) {
+                return;
+            }
+            if (flip_screen) {
+                x = visible_width - 1U - x;
+                y = visible_height - 1U - y;
+            }
+            pixels[static_cast<std::size_t>(y) * visible_width + x] = color;
+        }
+
         [[nodiscard]] std::uint8_t layout_code(std::string_view layout) noexcept {
             if (layout == "moon_patrol") {
                 return 1U;
@@ -138,34 +165,67 @@ namespace mnemos::manifests::irem_m52 {
     }
 
     void m52_video::compose(
-        std::span<const std::uint8_t> main_program, std::span<const std::uint8_t> sound_program,
+        std::span<const std::uint8_t> /*main_program*/,
+        std::span<const std::uint8_t> /*sound_program*/,
         std::span<const std::uint8_t> tx_gfx, std::span<const std::uint8_t> sprite_gfx,
         std::span<const std::uint8_t> proms, std::span<const std::uint8_t> video_ram,
         std::span<const std::uint8_t> color_ram, std::span<const std::uint8_t> sprite_ram,
-        std::span<const std::uint8_t> work_ram, const std::array<std::uint8_t, 32>& scroll_regs,
-        const std::array<std::uint8_t, 2>& bg_x, const std::array<std::uint8_t, 2>& bg_y,
-        std::uint8_t bg_control, bool flip_screen, std::string_view rom_layout) {
+        std::span<const std::uint8_t> /*work_ram*/,
+        const std::array<std::uint8_t, 32>& scroll_regs, const std::array<std::uint8_t, 2>& bg_x,
+        const std::array<std::uint8_t, 2>& bg_y, std::uint8_t bg_control, bool flip_screen,
+        std::string_view rom_layout) {
         const std::uint8_t tint = static_cast<std::uint8_t>(0x31U + layout_code(rom_layout));
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             const std::uint8_t scroll =
-                y >= 192U ? scroll_regs[(y >> 3U) & 0x1FU] : static_cast<std::uint8_t>(0xFFU);
+                y >= 192U ? scroll_regs[(y >> 3U) & 0x1FU] : static_cast<std::uint8_t>(0x00U);
             for (std::uint32_t x = 0; x < visible_width; ++x) {
                 const std::uint32_t sx = flip_screen ? visible_width - 1U - x : x;
                 const std::uint32_t sy = flip_screen ? visible_height - 1U - y : y;
-                const std::uint64_t linear =
-                    static_cast<std::uint64_t>(sy) * visible_width + sx + frame_index_;
-                const std::uint8_t far =
-                    sample_byte(main_program, linear + bg_x[0] + (bg_y[0] * 17U), 0x42U);
-                const std::uint8_t near =
-                    sample_byte(sound_program, (linear >> 1U) + bg_x[1] + (bg_y[1] * 13U), 0x24U);
-                const std::uint8_t spr = sample_byte(
-                    sprite_gfx, (linear >> 2U) + sample_byte(sprite_ram, x + y, 0U), 0x18U);
+                const std::uint8_t sky_band = static_cast<std::uint8_t>((sy >> 4U) & 0x07U);
+                const std::uint8_t far = static_cast<std::uint8_t>(
+                    (((sx + bg_x[0]) >> 5U) ^ ((sy + bg_y[0]) >> 4U)) & 0x0FU);
+                const std::uint8_t near = static_cast<std::uint8_t>(
+                    ((((sx + bg_x[1]) >> 4U) + ((sy + bg_y[1]) >> 3U)) & 0x0FU) << 1U);
                 const std::uint8_t road =
-                    sample_byte(work_ram, (static_cast<std::size_t>(y) * 8U + x + scroll), 0x00U);
-                const std::uint8_t mix = static_cast<std::uint8_t>(
-                    far ^ static_cast<std::uint8_t>(near << 1U) ^ spr ^ road ^ bg_control ^ tint);
+                    y >= 192U ? static_cast<std::uint8_t>(((sx + scroll) >> 3U) & 0x0FU) : 0U;
+                const std::uint8_t mix =
+                    static_cast<std::uint8_t>(sky_band ^ far ^ near ^ road ^ bg_control ^ tint);
                 pixels_[static_cast<std::size_t>(y) * visible_width + x] =
                     prom_color(proms, static_cast<std::uint8_t>(mix + (x >> 3U)), tint);
+            }
+        }
+
+        for (std::size_t offset = 0; offset + 3U < sprite_ram.size(); offset += 4U) {
+            const std::uint8_t raw_y = sprite_ram[offset + 0U];
+            const std::uint8_t code = sprite_ram[offset + 1U];
+            const std::uint8_t attr = sprite_ram[offset + 2U];
+            const std::uint8_t raw_x = sprite_ram[offset + 3U];
+            if ((raw_y == 0U && code == 0U && attr == 0U && raw_x == 0U) ||
+                (raw_y == 0xFFU && code == 0xFFU && attr == 0xFFU && raw_x == 0xFFU)) {
+                continue;
+            }
+            const int base_x = static_cast<int>(raw_x);
+            const int base_y = 241 - static_cast<int>(raw_y);
+            const bool flip_x = (attr & 0x40U) != 0U;
+            const bool flip_y = (attr & 0x80U) != 0U;
+            const std::uint32_t color =
+                prom_color(proms, static_cast<std::uint8_t>(attr & 0x3FU),
+                           static_cast<std::uint8_t>(tint ^ code));
+            for (std::uint32_t py = 0; py < 16U; ++py) {
+                const int y = base_y + static_cast<int>(py);
+                if (y < 0 || y >= static_cast<int>(visible_height)) {
+                    continue;
+                }
+                for (std::uint32_t px = 0; px < 16U; ++px) {
+                    const int x = base_x + static_cast<int>(px);
+                    if (x < 0 || x >= static_cast<int>(visible_width)) {
+                        continue;
+                    }
+                    if (sprite_pixel_on(sprite_gfx, code, px, py, flip_x, flip_y)) {
+                        plot_sprite_pixel(pixels_, static_cast<std::uint32_t>(x),
+                                          static_cast<std::uint32_t>(y), color, flip_screen);
+                    }
+                }
             }
         }
 
