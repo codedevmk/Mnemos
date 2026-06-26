@@ -595,6 +595,26 @@ TEST_CASE("capcom_cps2_adapter resolves a checked-in game manifest by zip stem",
     CHECK(adapter.machine().cpu().cpu_registers().pc == 0x00000008U);
 }
 
+TEST_CASE("capcom_cps2_adapter reports checked-in orientation by zip stem",
+          "[capcom_cps2][adapter]") {
+    const auto empty_zip = make_stored_zip({});
+
+    temp_directory dir("mnemos_cps2_checked_in_orientation");
+    const std::filesystem::path vertical_path = dir.path / "19xx.zip";
+    const std::filesystem::path horizontal_path = dir.path / "1944.zip";
+    REQUIRE(mnemos::io::write_file(vertical_path.string(), empty_zip));
+    REQUIRE(mnemos::io::write_file(horizontal_path.string(), empty_zip));
+
+    capcom_cps2_adapter vertical(empty_zip, "checked_in_vertical", nullptr, {},
+                                 vertical_path.string());
+    capcom_cps2_adapter horizontal(empty_zip, "checked_in_horizontal", nullptr, {},
+                                   horizontal_path.string());
+
+    CHECK(vertical.region().orientation == mnemos::frontend_sdk::display_orientation::vertical);
+    CHECK(horizontal.region().orientation ==
+          mnemos::frontend_sdk::display_orientation::horizontal);
+}
+
 TEST_CASE("capcom_cps2_adapter rejects a game.toml for another board", "[capcom_cps2][adapter]") {
     const std::string manifest = R"(
 [set]

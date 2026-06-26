@@ -254,6 +254,11 @@ namespace {
         return false;
     }
 
+    [[nodiscard]] screen_orientation checked_in_cps2_orientation(std::string_view stem) noexcept {
+        return (stem == "19xx" || stem == "dimahoo") ? screen_orientation::vertical
+                                                       : screen_orientation::horizontal;
+    }
+
 } // namespace
 
 TEST_CASE("cps2 ROM skeleton declares the fixed executable regions", "[capcom_cps2][system]") {
@@ -299,10 +304,7 @@ TEST_CASE("cps2 checked-in game TOMLs parse and declare orientation plus QSound 
                text.rfind("orientation =", 0U) == 0U));
 
         const std::string stem = path.stem().string();
-        const auto expected_orientation =
-            (stem == "19xx" || stem == "dimahoo") ? screen_orientation::vertical
-                                                   : screen_orientation::horizontal;
-        CHECK(result.value->orientation == expected_orientation);
+        CHECK(result.value->orientation == checked_in_cps2_orientation(stem));
 
         const auto has_qsound_hle =
             std::any_of(result.value->hle.begin(), result.value->hle.end(), [](const auto& hle) {
