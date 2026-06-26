@@ -150,7 +150,7 @@ namespace mnemos::chips::audio {
                                               std::uint32_t nibble_phase) noexcept;
         void reset_echo_state() noexcept;
         [[nodiscard]] std::uint16_t echo_delay_length() const noexcept;
-        [[nodiscard]] std::int16_t apply_echo(std::int64_t input) noexcept;
+        void advance_echo_state(std::int64_t input) noexcept;
 
         std::array<voice, voice_count> voices_{};
         std::array<adpcm_voice, adpcm_voice_count> adpcm_{};

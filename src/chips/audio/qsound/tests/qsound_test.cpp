@@ -275,7 +275,7 @@ TEST_CASE("qsound records CPS2 sound-driver register diagnostics", "[qsound][tra
     CHECK(introspection_value(q, "TRACE002_PC") == 0x3456U);
 }
 
-TEST_CASE("qsound applies PCM echo delay and feedback registers", "[qsound][echo]") {
+TEST_CASE("qsound captures PCM echo registers without altering the mix", "[qsound][echo]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
     q.set_sample_rom(rom);
@@ -293,12 +293,12 @@ TEST_CASE("qsound applies PCM echo delay and feedback registers", "[qsound][echo
     CHECK(q.last_right() == 2048);
 
     q.step();
-    CHECK(q.last_left() == 4096);
-    CHECK(q.last_right() == 4096);
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
 
     q.step();
-    CHECK(q.last_left() == 7168);
-    CHECK(q.last_right() == 7168);
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
     CHECK(introspection_value(q, "ECHOFB") == 0x4000U);
     CHECK(introspection_value(q, "ECHOLEN") == 1U);
 }

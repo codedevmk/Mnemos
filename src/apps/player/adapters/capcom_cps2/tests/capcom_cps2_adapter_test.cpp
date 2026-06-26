@@ -1,6 +1,5 @@
 #include "capcom_cps2_adapter.hpp"
 
-#include "audio_resampler.hpp"
 #include "cps2_crypto.hpp"
 #include "cps2_game_manifests.hpp"
 #include "eeprom_93c46.hpp"
@@ -400,34 +399,35 @@ TEST_CASE("capcom_cps2_adapter exposes CPS2 bus diagnostics registers",
     CHECK(saw_snapshot_tail);
 }
 
-TEST_CASE("capcom_cps2_adapter drains QSound at the CPS2 frame cadence",
+TEST_CASE("capcom_cps2_adapter drains native QSound at the CPS2 frame cadence",
           "[capcom_cps2][adapter][audio]") {
     std::vector<std::uint8_t> program(0x40U, 0x00U);
     capcom_cps2_adapter adapter(std::move(program), "audio");
 
     const auto initial = adapter.drain_audio();
     CHECK(initial.frame_count == 0U);
-    CHECK(initial.sample_rate == mnemos::dsp::kOutputRate);
+    CHECK(initial.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
 
     adapter.step_one_frame();
     const auto chunk = adapter.drain_audio();
     const std::uint32_t expected = static_cast<std::uint32_t>(
-        static_cast<std::uint64_t>(mnemos::dsp::kOutputRate) * cps2::refresh_hz_den /
-        cps2::refresh_hz_num);
-    CHECK(chunk.sample_rate == mnemos::dsp::kOutputRate);
+        static_cast<std::uint64_t>(mnemos::chips::audio::qsound::native_sample_rate) *
+        cps2::refresh_hz_den / cps2::refresh_hz_num);
+    CHECK(chunk.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
     CHECK(chunk.frame_count == expected);
     REQUIRE(chunk.samples != nullptr);
 
     const auto empty = adapter.drain_audio();
     CHECK(empty.frame_count == 0U);
-    CHECK(empty.sample_rate == mnemos::dsp::kOutputRate);
+    CHECK(empty.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
 
     for (int i = 0; i < 179; ++i) {
         adapter.step_one_frame();
     }
     const auto accumulated = adapter.drain_audio();
     const std::uint32_t expected_total = static_cast<std::uint32_t>(
-        180ULL * mnemos::dsp::kOutputRate * cps2::refresh_hz_den / cps2::refresh_hz_num);
+        180ULL * mnemos::chips::audio::qsound::native_sample_rate * cps2::refresh_hz_den /
+        cps2::refresh_hz_num);
     CHECK(accumulated.frame_count + chunk.frame_count == expected_total);
 }
 
@@ -610,7 +610,8 @@ TEST_CASE("capcom_cps2_adapter reports checked-in orientation by zip stem",
     capcom_cps2_adapter horizontal(empty_zip, "checked_in_horizontal", nullptr, {},
                                    horizontal_path.string());
 
-    CHECK(vertical.region().orientation == mnemos::frontend_sdk::display_orientation::vertical);
+    CHECK(vertical.region().orientation ==
+          mnemos::frontend_sdk::display_orientation::vertical_counterclockwise);
     CHECK(horizontal.region().orientation ==
           mnemos::frontend_sdk::display_orientation::horizontal);
 }

@@ -803,12 +803,17 @@ int main(int argc, char* argv[]) {
         // and just re-presents the same VDP framebuffer -- keeping the game
         // and its audio at the right rate. While paused we skip stepping
         // entirely but keep rendering / accepting input.
-        // Vertical (TATE) systems are rotated 90 degrees clockwise at the
-        // transfer-buffer copy; downstream (upload/letterbox/blit) then sees
-        // the swapped dimensions.
-        const bool rotate_vertical =
-            system != nullptr &&
-            system->region().orientation == mnemos::frontend_sdk::display_orientation::vertical;
+        // Vertical (TATE) systems are rotated at the transfer-buffer copy;
+        // downstream (upload/letterbox/blit) then sees the swapped dimensions.
+        const auto display_orientation =
+            system != nullptr ? system->region().orientation
+                              : mnemos::frontend_sdk::display_orientation::horizontal;
+        const bool rotate_vertical_cw =
+            display_orientation == mnemos::frontend_sdk::display_orientation::vertical_clockwise;
+        const bool rotate_vertical_ccw =
+            display_orientation ==
+            mnemos::frontend_sdk::display_orientation::vertical_counterclockwise;
+        const bool rotate_vertical = rotate_vertical_cw || rotate_vertical_ccw;
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
         const Uint64 now_ticks = SDL_GetPerformanceCounter();
@@ -869,11 +874,11 @@ int main(int argc, char* argv[]) {
                 // Copy framebuffer into the transfer buffer as a packed
                 // image. When stride > width (H32 mode etc.) the per-row copy
                 // avoids bleeding the stale stride tail. A vertical (TATE)
-                // system is rotated 90 degrees clockwise here, so everything
-                // downstream just sees a src_h x src_w image.
+                // system is rotated here, so everything downstream just sees
+                // a src_h x src_w image.
                 void* mapped = SDL_MapGPUTransferBuffer(device, xfer, true);
                 if (mapped != nullptr) {
-                    if (rotate_vertical) {
+                    if (rotate_vertical_cw) {
                         auto* out = static_cast<std::uint32_t*>(mapped);
                         for (std::uint32_t y = 0; y < src_w; ++y) {
                             for (std::uint32_t x = 0; x < src_h; ++x) {
@@ -881,6 +886,15 @@ int main(int argc, char* argv[]) {
                                     fb.pixels[static_cast<std::size_t>(src_h - 1U - x) *
                                                   src_stride +
                                               y];
+                            }
+                        }
+                    } else if (rotate_vertical_ccw) {
+                        auto* out = static_cast<std::uint32_t*>(mapped);
+                        for (std::uint32_t y = 0; y < src_w; ++y) {
+                            for (std::uint32_t x = 0; x < src_h; ++x) {
+                                out[static_cast<std::size_t>(y) * src_h + x] =
+                                    fb.pixels[static_cast<std::size_t>(x) * src_stride +
+                                              (src_w - 1U - y)];
                             }
                         }
                     } else if (src_stride == src_w) {

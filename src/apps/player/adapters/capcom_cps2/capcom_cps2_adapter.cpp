@@ -1,7 +1,6 @@
 #include "capcom_cps2_adapter.hpp"
 
 #include "adapter_registry.hpp"
-#include "audio_resampler.hpp"
 #include "crc32.hpp"
 #include "cps2_game_manifests.hpp"
 #include "cps2_crypto.hpp"
@@ -304,9 +303,15 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
         [[nodiscard]] frontend_sdk::display_orientation
         to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
-            return orientation == mnemos::manifests::common::screen_orientation::vertical
-                       ? frontend_sdk::display_orientation::vertical
-                       : frontend_sdk::display_orientation::horizontal;
+            switch (orientation) {
+            case mnemos::manifests::common::screen_orientation::vertical_counterclockwise:
+                return frontend_sdk::display_orientation::vertical_counterclockwise;
+            case mnemos::manifests::common::screen_orientation::vertical:
+                return frontend_sdk::display_orientation::vertical_clockwise;
+            case mnemos::manifests::common::screen_orientation::horizontal:
+            default:
+                return frontend_sdk::display_orientation::horizontal;
+            }
         }
 
         frontend_sdk::session_capability_info make_session_capabilities(std::uint8_t players) {
@@ -890,6 +895,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             switch (static_cast<frontend_sdk::display_orientation>(value)) {
             case frontend_sdk::display_orientation::horizontal:
             case frontend_sdk::display_orientation::vertical:
+            case frontend_sdk::display_orientation::vertical_counterclockwise:
                 return true;
             }
             return false;
@@ -962,11 +968,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     }
 
     frontend_sdk::audio_chunk capcom_cps2_adapter::drain_audio() noexcept {
-        // QSound emits a fixed ~24 kHz stream; the player-side contract is 48 kHz.
-        // Step the DSP at the native cadence and hold the latest stereo sample
-        // between native ticks, matching the reference HLE's rate accumulator.
-        constexpr std::uint32_t rate = mnemos::dsp::kOutputRate;
-        constexpr std::uint32_t native_rate = chips::audio::qsound::native_sample_rate;
+        // Match CPS1's QSound frontend contract: expose the DL-1425's native
+        // stream rate and let the player audio stream resample for the device.
+        constexpr std::uint32_t rate = chips::audio::qsound::native_sample_rate;
         const std::uint64_t due =
             frames_stepped_ * static_cast<std::uint64_t>(rate) *
             manifests::capcom_cps2::refresh_hz_den / manifests::capcom_cps2::refresh_hz_num;
@@ -976,16 +980,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = rate};
         }
         audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
-        auto& qsound = sys_->qsound_dsp();
-        for (std::size_t i = 0; i < static_cast<std::size_t>(pending); ++i) {
-            qsound_output_accum_ += native_rate;
-            while (qsound_output_accum_ >= rate) {
-                qsound_output_accum_ -= rate;
-                qsound.step();
-            }
-            audio_buf_[i * 2U + 0U] = qsound.last_left();
-            audio_buf_[i * 2U + 1U] = qsound.last_right();
-        }
+        sys_->qsound_dsp().generate(audio_buf_);
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = rate};

@@ -92,7 +92,7 @@ crc32         = 0x8d931196
 
 [[region]]
 name = "audiocpu"
-size = 0x28000
+size = 0x50000
 fill = 0x00
 
 [[region.file]]
@@ -110,6 +110,12 @@ source_offset = 0x8000
 length        = 0x18000
 size          = 0x20000
 crc32         = 0xc976e6f9
+
+[[region.file]]
+name          = "msh.02"
+offset        = 0x28000
+size          = 0x20000
+crc32         = 0xce67d0d9
 
 [[region]]
 name = "qsound"

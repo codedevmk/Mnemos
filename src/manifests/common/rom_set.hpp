@@ -55,8 +55,14 @@ namespace mnemos::manifests::common {
 
     // Monitor orientation the board is wired for. A vertical (TATE) set is
     // rotated by the frontend for upright presentation; absent in the TOML =>
-    // horizontal.
-    enum class screen_orientation : std::uint8_t { horizontal, vertical };
+    // horizontal. `vertical` preserves the legacy clockwise presentation;
+    // `vertical_ccw` exists for ROT270 boards such as 19XX and Dimahoo.
+    enum class screen_orientation : std::uint8_t {
+        horizontal,
+        vertical,
+        vertical_clockwise = vertical,
+        vertical_counterclockwise,
+    };
 
     // Sprite-list draw order the board renders in (board-interpreted; capcom_cps1
     // maps it to its video chip). Some bootleg sets relocate the object list and

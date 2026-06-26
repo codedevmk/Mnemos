@@ -373,9 +373,10 @@ namespace mnemos::chips::audio {
             left += v.last_sample;
             right += v.last_sample;
         }
-        const std::int16_t echo_sample = apply_echo(echo_input);
-        left += echo_sample;
-        right += echo_sample;
+        // Keep the HLE aligned with the older CPS2 path: echo registers are
+        // tracked for diagnostics/save-state, but the unvalidated echo mix is
+        // not fed into the audible output.
+        advance_echo_state(echo_input);
         last_l_ = clamp_i16(left >> mix_shift);
         last_r_ = clamp_i16(right >> mix_shift);
         ready_ = ready_flag;
@@ -453,12 +454,12 @@ namespace mnemos::chips::audio {
             length > echo_delay_capacity ? echo_delay_capacity : length);
     }
 
-    std::int16_t qsound::apply_echo(std::int64_t input) noexcept {
+    void qsound::advance_echo_state(std::int64_t input) noexcept {
         const std::uint16_t length = echo_delay_length();
         if (length == 0U) {
             echo_delay_pos_ = 0U;
             echo_last_sample_ = 0;
-            return 0;
+            return;
         }
         if (echo_delay_pos_ >= length) {
             echo_delay_pos_ = 0U;
@@ -476,7 +477,6 @@ namespace mnemos::chips::audio {
         if (echo_delay_pos_ >= length) {
             echo_delay_pos_ = 0U;
         }
-        return static_cast<std::int16_t>(averaged);
     }
 
     void qsound::save_state(state_writer& writer) const {

@@ -255,8 +255,9 @@ namespace {
     }
 
     [[nodiscard]] screen_orientation checked_in_cps2_orientation(std::string_view stem) noexcept {
-        return (stem == "19xx" || stem == "dimahoo") ? screen_orientation::vertical
-                                                       : screen_orientation::horizontal;
+        return (stem == "19xx" || stem == "dimahoo")
+                   ? screen_orientation::vertical_counterclockwise
+                   : screen_orientation::horizontal;
     }
 
 } // namespace

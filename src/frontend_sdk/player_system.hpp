@@ -34,9 +34,14 @@ namespace mnemos::frontend_sdk {
 
     // How the system's framebuffer is meant to face the player. Vertical
     // (TATE) arcade games render a portrait image on a rotated monitor; the
-    // frontend rotates presentation 90 degrees clockwise. Consoles are
-    // horizontal.
-    enum class display_orientation : std::uint8_t { horizontal, vertical };
+    // frontend rotates presentation upright. `vertical` is the legacy clockwise
+    // direction; ROT270 boards use the counterclockwise value.
+    enum class display_orientation : std::uint8_t {
+        horizontal,
+        vertical,
+        vertical_clockwise = vertical,
+        vertical_counterclockwise,
+    };
 
     // Video timing of the booted system. `frames_per_second_x1000` is the
     // refresh rate scaled by 1000 so NTSC (~59.94) and PAL (50.00) both fit
