@@ -522,11 +522,60 @@ TEST_CASE("m15 executable board runs MOS 6502 memory video and sound path", "[m1
     CHECK(system->color_ram[visible_probe_tile_index] == 0x00U);
     CHECK(system->chargen_ram[0x0FU] == 0x80U);
     CHECK(system->speaker_latch == 0x5AU);
+    CHECK(system->sound_latch_write_count == 1U);
+    CHECK(system->sound_bit_rise_count[1] == 1U);
+    CHECK(system->sound_bit_rise_count[3] == 1U);
+    CHECK(system->sound_bit_rise_count[4] == 1U);
+    CHECK(system->sound_bit_rise_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 1U);
+    CHECK_FALSE(system->speaker_output_high);
     CHECK(system->control_register == 0x04U);
     CHECK_FALSE(system->flip_screen);
     CHECK(system->video.framebuffer().width == m15::visible_width);
     CHECK(system->video.framebuffer().height == m15::visible_height);
     CHECK(framebuffer_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m15 sound latch records discrete bit and speaker edges", "[m15][board][sound]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    CHECK(system->speaker_output_high);
+    system->main_bus.write8(m15::sound_latch_address, 0x00U);
+    CHECK(system->speaker_latch == 0x00U);
+    CHECK(system->sound_latch_write_count == 1U);
+    CHECK(system->speaker_output_edge_count == 0U);
+
+    system->main_bus.write8(m15::sound_latch_address, m15::sound_speaker_active_low_bit);
+    CHECK(system->speaker_latch == m15::sound_speaker_active_low_bit);
+    CHECK(system->sound_latch_write_count == 2U);
+    CHECK(system->sound_bit_rise_count[6] == 1U);
+    CHECK(system->sound_bit_fall_count[6] == 0U);
+    CHECK(system->speaker_output_edge_count == 1U);
+    CHECK_FALSE(system->speaker_output_high);
+
+    system->main_bus.write8(m15::sound_latch_address, 0x5AU);
+    CHECK(system->sound_latch_write_count == 3U);
+    CHECK(system->sound_bit_rise_count[1] == 1U);
+    CHECK(system->sound_bit_rise_count[3] == 1U);
+    CHECK(system->sound_bit_rise_count[4] == 1U);
+    CHECK(system->sound_bit_rise_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 1U);
+    CHECK_FALSE(system->speaker_output_high);
+
+    system->main_bus.write8(m15::sound_latch_address, 0x1AU);
+    CHECK(system->speaker_latch == 0x1AU);
+    CHECK(system->sound_latch_write_count == 4U);
+    CHECK(system->sound_bit_fall_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 2U);
+    CHECK(system->speaker_output_high);
+
+    system->main_bus.write8(m15::sound_latch_address, 0x1AU);
+    CHECK(system->sound_latch_write_count == 5U);
+    CHECK(system->sound_bit_fall_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 2U);
 }
 
 TEST_CASE("m15 input ports are active high and coin pulses NMI", "[m15][board]") {
@@ -614,6 +663,14 @@ TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][bo
     CHECK(restored->video_ram[visible_probe_tile_index] == 0x01U);
     CHECK(restored->color_ram[visible_probe_tile_index] == 0x00U);
     CHECK(restored->chargen_ram[0x0FU] == 0x80U);
+    CHECK(restored->speaker_latch == 0x5AU);
+    CHECK(restored->sound_latch_write_count == 1U);
+    CHECK(restored->sound_bit_rise_count[1] == 1U);
+    CHECK(restored->sound_bit_rise_count[3] == 1U);
+    CHECK(restored->sound_bit_rise_count[4] == 1U);
+    CHECK(restored->sound_bit_rise_count[6] == 1U);
+    CHECK(restored->speaker_output_edge_count == 1U);
+    CHECK_FALSE(restored->speaker_output_high);
     CHECK(restored->input_p1 == 0xEEU);
     CHECK(restored->input_p2 == 0xDDU);
     CHECK(restored->input_system == 0xCCU);

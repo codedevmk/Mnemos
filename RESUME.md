@@ -81,6 +81,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - M15 now has a first-pass executable board and player adapter for `headoni`, not only ROM-contract metadata.
 - Board implementation lives in `src/manifests/irem_m15/m15_system.hpp` and `src/manifests/irem_m15/m15_system.cpp`.
 - The board owns a MOS 6502 execution path via the shared `m6510` core in bare-6502 mode, M15 tile/color/chargen video path, 1-bit beeper, scratch/video/color/chargen RAM windows, input/DIP/control MMIO, frame IRQ pulse, and whole-board save/load with identity checks.
+- M15 sound writes to `$a100` now retain board-owned discrete latch evidence: total write count, per-bit rise/fall counters, the active-low bit-6 speaker output, and speaker output edge count, with board and adapter save-state coverage.
 - The M15 map is now aligned with MAME/source metadata for Head On: scratch RAM `$0000-$02ff`, program ROM `$1000-$33ff`, vector ROM `$fc00-$ffff`, video RAM `$4000-$43ff`, color RAM `$4800-$4bff`, chargen RAM `$5000-$57ff`, P2 read `$a000`, sound write `$a100`, DIP read `$a200`, P1 read `$a300`, and control write `$a400`.
 - The checked-in `headoni` manifest now uses full 64 KiB CPU address space and reloads `e4.9d` at `$fc00` for the 6502 reset/IRQ vectors.
 - M15 inputs now follow Head On's active-high P1/P2 ports, `0x11` DIP default, and coin-triggered NMI edge; the active-low control flip bit is part of board state/save state.
@@ -90,7 +91,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
 - Capability discovery reports 6502 trace/register surfaces, scratch/video/color/chargen RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Head On player smoke wrote nonblank screenshots and successfully saved/loaded state.
-- Remaining: authentic M15 closure still needs discrete sample/sound behavior, analog color proof, raster timing, and screenshot parity.
+- Remaining: authentic M15 closure still needs board-evidenced discrete sample mappings/analog sound behavior, analog color proof, raster timing, and screenshot parity.
 
 ## Local ROM Corpus Notes
 
@@ -303,6 +304,18 @@ M15 input/video authenticity continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`: no work to do
   - `ctest --preset windows-msvc-debug --output-on-failure`: `188/188`, expected corpus/conformance skips
 
+M15 sound-latch continuation validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing CRLF conversion warnings
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m15_test mnemos_apps_player_irem_m15_adapter_test`
+- Focused CTest with `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`: `2/2`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_irem_m15_adapter_test`
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -320,7 +333,7 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M15 authenticity work: discrete sample/sound behavior, analog color proof, raster timing, and screenshot parity.
+1. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, raster timing, and screenshot parity.
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.

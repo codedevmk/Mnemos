@@ -366,7 +366,7 @@ namespace mnemos::apps::player::adapters::irem_m15 {
         }
 
         constexpr std::uint32_t irem_m15_adapter_state_version = 1U;
-        constexpr std::uint32_t irem_m15_adapter_save_target_manifest_rev = 1U;
+        constexpr std::uint32_t irem_m15_adapter_save_target_manifest_rev = 2U;
 
         void write_i16(chips::state_writer& writer, std::int16_t value) {
             writer.u16(static_cast<std::uint16_t>(static_cast<std::int32_t>(value) + 32768));

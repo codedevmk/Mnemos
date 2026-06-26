@@ -20,7 +20,7 @@ namespace mnemos::manifests::irem_m15 {
 
     inline constexpr std::size_t main_rom_size = 0x10000U;
     inline constexpr std::size_t program_rom_size = 0x0400U;
-    inline constexpr std::uint32_t m15_system_state_version = 3U;
+    inline constexpr std::uint32_t m15_system_state_version = 4U;
 
     inline constexpr std::uint32_t visible_width = 224U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -59,6 +59,7 @@ namespace mnemos::manifests::irem_m15 {
     inline constexpr std::uint8_t panel_left_bit = 0x20U;
     inline constexpr std::uint8_t panel_right_bit = 0x40U;
     inline constexpr std::uint8_t coin1_bit = 0x01U;
+    inline constexpr std::uint8_t sound_speaker_active_low_bit = 0x40U;
     inline constexpr std::uint8_t control_flip_active_low_bit = 0x04U;
 
     struct m15_board_params final {
@@ -129,11 +130,17 @@ namespace mnemos::manifests::irem_m15 {
         std::uint8_t control_register{};
         bool flip_screen{};
         std::uint8_t speaker_latch{};
+        std::uint64_t sound_latch_write_count{};
+        std::array<std::uint64_t, 8> sound_bit_rise_count{};
+        std::array<std::uint64_t, 8> sound_bit_fall_count{};
+        std::uint64_t speaker_output_edge_count{};
+        bool speaker_output_high{};
 
         explicit m15_system(common::rom_set_image image, m15_board_params board_params = {});
 
         void run_frame();
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept;
+        void write_sound_latch(std::uint8_t value) noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
     };

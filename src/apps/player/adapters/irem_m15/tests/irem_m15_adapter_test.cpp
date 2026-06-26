@@ -254,6 +254,10 @@ TEST_CASE("irem_m15_adapter boots a synthetic M15 program", "[irem_m15]") {
     CHECK(adapter.machine().color_ram[visible_probe_tile_index] == 0x00U);
     CHECK(adapter.machine().chargen_ram[0x0FU] == 0x80U);
     CHECK(adapter.machine().speaker_latch == 0x5AU);
+    CHECK(adapter.machine().sound_latch_write_count == 1U);
+    CHECK(adapter.machine().sound_bit_rise_count[6] == 1U);
+    CHECK(adapter.machine().speaker_output_edge_count == 1U);
+    CHECK_FALSE(adapter.machine().speaker_output_high);
     CHECK(adapter.machine().control_register == 0x04U);
     CHECK(framebuffer_has_nonblack(adapter.current_frame()));
     CHECK_FALSE(adapter.save_state().empty());
@@ -287,6 +291,14 @@ TEST_CASE("irem_m15_adapter save state restores board and adapter state", "[irem
     CHECK(restored.machine().video_ram[visible_probe_tile_index] == 0x01U);
     CHECK(restored.machine().color_ram[visible_probe_tile_index] == 0x00U);
     CHECK(restored.machine().chargen_ram[0x0FU] == 0x80U);
+    CHECK(restored.machine().speaker_latch == source.machine().speaker_latch);
+    CHECK(restored.machine().sound_latch_write_count ==
+          source.machine().sound_latch_write_count);
+    CHECK(restored.machine().sound_bit_rise_count[6] ==
+          source.machine().sound_bit_rise_count[6]);
+    CHECK(restored.machine().speaker_output_edge_count ==
+          source.machine().speaker_output_edge_count);
+    CHECK(restored.machine().speaker_output_high == source.machine().speaker_output_high);
     CHECK(restored.machine().input_p1 == source.machine().input_p1);
     CHECK(restored.machine().input_system == source.machine().input_system);
 }

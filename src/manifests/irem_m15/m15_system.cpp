@@ -119,6 +119,10 @@ namespace mnemos::manifests::irem_m15 {
             }
             return (*main_prog)[address];
         }
+
+        [[nodiscard]] bool speaker_output_from_latch(std::uint8_t latch) noexcept {
+            return (latch & sound_speaker_active_low_bit) == 0U;
+        }
     } // namespace
 
     m15_board_params board_params_for(std::string_view set_name) noexcept {
@@ -190,8 +194,7 @@ namespace mnemos::manifests::irem_m15 {
 
         switch (a) {
         case sound_latch_address:
-            system_->speaker_latch = value;
-            system_->speaker.set_speaker((value & 0x40U) == 0U);
+            system_->write_sound_latch(value);
             break;
         case control_register_address:
             system_->control_register = value;
@@ -276,6 +279,8 @@ namespace mnemos::manifests::irem_m15 {
 
         speaker.set_clock(params.cpu_clock_hz, audio_rate_hz);
         speaker.enable_audio_capture(true);
+        speaker_output_high = speaker_output_from_latch(speaker_latch);
+        speaker.set_speaker(speaker_output_high);
     }
 
     void m15_system::run_frame() {
@@ -307,6 +312,31 @@ namespace mnemos::manifests::irem_m15 {
         input_system = system;
     }
 
+    void m15_system::write_sound_latch(std::uint8_t value) noexcept {
+        ++sound_latch_write_count;
+
+        const std::uint8_t changed = static_cast<std::uint8_t>(speaker_latch ^ value);
+        for (std::size_t bit = 0U; bit < sound_bit_rise_count.size(); ++bit) {
+            const std::uint8_t mask = static_cast<std::uint8_t>(1U << bit);
+            if ((changed & mask) == 0U) {
+                continue;
+            }
+            if ((value & mask) != 0U) {
+                ++sound_bit_rise_count[bit];
+            } else {
+                ++sound_bit_fall_count[bit];
+            }
+        }
+
+        speaker_latch = value;
+        const bool output = speaker_output_from_latch(value);
+        if (output != speaker_output_high) {
+            ++speaker_output_edge_count;
+            speaker_output_high = output;
+        }
+        speaker.set_speaker(speaker_output_high);
+    }
+
     void m15_system::save_state(chips::state_writer& writer) const {
         writer.u32(m15_system_state_version);
         writer.u8(params.dip_default);
@@ -327,6 +357,15 @@ namespace mnemos::manifests::irem_m15 {
         writer.u8(control_register);
         writer.boolean(flip_screen);
         writer.u8(speaker_latch);
+        writer.u64(sound_latch_write_count);
+        for (const std::uint64_t count : sound_bit_rise_count) {
+            writer.u64(count);
+        }
+        for (const std::uint64_t count : sound_bit_fall_count) {
+            writer.u64(count);
+        }
+        writer.u64(speaker_output_edge_count);
+        writer.boolean(speaker_output_high);
     }
 
     void m15_system::load_state(chips::state_reader& reader) {
@@ -357,8 +396,17 @@ namespace mnemos::manifests::irem_m15 {
         control_register = reader.u8();
         flip_screen = reader.boolean();
         speaker_latch = reader.u8();
+        sound_latch_write_count = reader.u64();
+        for (std::uint64_t& count : sound_bit_rise_count) {
+            count = reader.u64();
+        }
+        for (std::uint64_t& count : sound_bit_fall_count) {
+            count = reader.u64();
+        }
+        speaker_output_edge_count = reader.u64();
+        speaker_output_high = reader.boolean();
         if (reader.ok()) {
-            speaker.set_speaker((speaker_latch & 0x40U) == 0U);
+            speaker.set_speaker(speaker_output_high);
         }
     }
 
