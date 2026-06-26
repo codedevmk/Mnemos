@@ -144,6 +144,13 @@ multiple independent open-source implementations.
   jumps from the same public profile targets; they are declared simulated
   behavior, not authentic dumped i8751 firmware. No wholesale fake protection
   routines, emulator source code, or ROM data are copied into Mnemos.
+- **Irem M75 Vigilante manual and ROM-set metadata** — the checked-in `vigilant`
+  manifest uses the Vigilante Installation & Service Manual game-options table
+  for SW1/SW2 DIP names, options, conditions, and defaults, and public set
+  metadata for ROM dump filenames, offsets, region sizes, CRC-32s, and
+  parent/clone relationships. The M75 adapter folds those DIP defaults into the
+  board-visible `dsw1`/`dsw2` bytes and exposes the parsed switch count. No
+  manual scans, emulator source, or ROM bytes are committed.
 - **Irem M92 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m92/games/` use public MAME M92 driver metadata for dump
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the

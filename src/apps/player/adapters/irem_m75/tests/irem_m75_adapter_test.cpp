@@ -142,6 +142,77 @@ size = 0x010000
         return dir;
     }
 
+    [[nodiscard]] temp_set_dir make_dip_metadata_set() {
+        temp_set_dir dir;
+        write_text_file(dir.path / "game.toml", R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "dipmeta"
+board = "irem_m75"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Test Lives"
+mask = 0x0003
+default = 0x0002
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip]]
+bank = "SW2"
+name = "Test Flip"
+mask = 0x0100
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x030000
+
+[[region.file]]
+name = "maincpu.bin"
+offset = 0
+size = 0x030000
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name = "soundcpu.bin"
+offset = 0
+size = 0x010000
+
+[[region]]
+name = "samples"
+size = 0x010000
+
+[[region.file]]
+name = "samples.bin"
+offset = 0
+size = 0x010000
+)toml");
+        write_binary_file(dir.path / "maincpu.bin", synthetic_m75_program());
+        write_binary_file(dir.path / "soundcpu.bin", synthetic_m75_sound_dac_program());
+        write_binary_file(dir.path / "samples.bin",
+                          std::vector<std::uint8_t>(m75::sample_rom_size, 0x80U));
+        return dir;
+    }
+
     [[nodiscard]] bool frame_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
         for (std::uint32_t y = 0; y < frame.height; ++y) {
             for (std::uint32_t x = 0; x < frame.width; ++x) {
@@ -329,6 +400,14 @@ size = 0x010000
         return count;
     }
 
+    [[nodiscard]] bool spec_has(const irem::irem_m75_adapter& adapter, std::string_view label,
+                                std::string_view value) {
+        const auto& spec = adapter.system_spec();
+        return std::any_of(spec.begin(), spec.end(), [label, value](const auto& field) {
+            return field.label == label && field.value == value;
+        });
+    }
+
 } // namespace
 
 TEST_CASE("irem_m75_adapter boots a synthetic M75 program", "[irem_m75]") {
@@ -365,6 +444,23 @@ TEST_CASE("irem_m75_adapter mixes Z80 DAC writes into drained audio", "[irem_m75
                       [](std::int16_t sample) { return sample != 0; }));
     CHECK(adapter.machine().dac.level() == 0xF0U);
     CHECK(adapter.drain_audio().frame_count == 0U);
+}
+
+TEST_CASE("irem_m75_adapter applies manifest DIP defaults and override", "[irem_m75]") {
+    const auto set = make_dip_metadata_set();
+    irem::irem_m75_adapter adapter({}, "DIP metadata", nullptr, {}, set.path.string());
+
+    CHECK(adapter.dip_switches().size() == 2U);
+    CHECK(adapter.machine().dsw1 == 0xFEU);
+    CHECK(adapter.machine().dsw2 == 0xFCU);
+    CHECK(spec_has(adapter, "DIP switches", "2"));
+
+    irem::irem_m75_adapter overridden({}, "DIP metadata", nullptr,
+                                      static_cast<std::uint16_t>(0x1234U), set.path.string());
+    CHECK(overridden.dip_switches().size() == 2U);
+    CHECK(overridden.machine().dsw1 == 0x34U);
+    CHECK(overridden.machine().dsw2 == 0x12U);
+    CHECK(spec_has(overridden, "DIP switches", "2"));
 }
 
 TEST_CASE("irem_m75_adapter maps service and operator-test inputs to the system port",
@@ -441,6 +537,10 @@ TEST_CASE("irem_m75_adapter validates real M75 ROM sets", "[irem_m75][data]") {
 
         CHECK(adapter.set_name() == set_id);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
+        CHECK(adapter.dip_switches().size() == 14U);
+        CHECK(adapter.machine().dsw1 == m75::vigilant_dsw1_default);
+        CHECK(adapter.machine().dsw2 == m75::vigilant_dsw2_default);
+        CHECK(spec_has(adapter, "DIP switches", "14"));
 
         adapter.step_one_frame();
         CHECK(frame_has_nonblack(adapter.current_frame()));

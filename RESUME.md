@@ -55,13 +55,15 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Board implementation lives in `src/manifests/irem_m75/m75_system.hpp` and `src/manifests/irem_m75/m75_system.cpp`.
 - The current M75 route is intentionally Z80 main + Z80 sound + YM2151 + DAC for Vigilante, not the V30-family M-series core used by later Irem boards.
 - Checked-in manifest coverage includes parent set `vigilant` plus official regional clones `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, and `vigilanto`. The parent comes from the local complete single-inner wrapper `D:\emu\irem\Vigilante_Arcade_EN (3).zip`; clone wrappers carry partial regional deltas and now resolve shared media through the parent fallback path.
+- The parent manifest carries 14 Vigilante Installation & Service Manual SW1/SW2 DIP definitions; clones inherit them through the parent manifest path.
 - The board owns fixed/banked main ROM mapping, sound latch/IRQ/ack state, YM2151 and DAC ports, sample-ROM reads, M75 RAM windows, two-bank 5-bit KNA91-style palette writes/readback, rear color/disable register behavior, palette/video/sprite RAM, frame stepping, audio draining, and whole-board save/load identity. A synthetic sound-Z80 proof now verifies the sample-address ports, consecutive sample ROM reads, DAC writes, and latch acknowledge path.
 - Player adapter lives in `src/apps/player/adapters/irem_m75`.
 - CLI/system-family routing is available through `--system irem_m75` and alias `m75`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, clone/parent fallback media resolution, resident CRC media reporting, rollback-ready save-state, capability discovery, and raw synthetic maincpu fallback.
 - The M75 adapter now consumes explicit arcade `service` and `test` frontend inputs: service maps active-low to system bit `0x10`, `mode` remains a legacy service alias, operator-test maps active-low to bit `0x20`, and adapter save-state version 2 persists those fields.
+- The M75 adapter retains DIP metadata, folds active-low manifest defaults to `dsw1=0xff` / `dsw2=0xfd`, exposes `DIP switches=14`, and still lets explicit `--dip` override the raw bytes.
 - Real local Vigilante parent and official regional clone wrapper ZIPs load through the data-gated corpus test; the Japan clone also has direct player screenshot/save-state smoke evidence.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M75 closure still needs Vigilante tile/sprite/rear-layer priority, exact scroll behavior, full board-manual DIP behavior, reference-backed Z80 sound protocol/sample timing, raster timing, bootleg coverage, and screenshot/audio parity before it is counted as correct graphics/music.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M75 closure still needs Vigilante tile/sprite/rear-layer priority, exact scroll behavior, DIP runtime behavior beyond current manual defaults, reference-backed Z80 sound protocol/sample timing, raster timing, bootleg coverage, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M81
 
@@ -690,7 +692,26 @@ M75 service/test input continuation validation on 2026-06-26:
 - Full preset CTest without ROM env vars in that command environment: `206/206`, with expected media/conformance skips.
 - `clang-format --dry-run --Werror` passed for the touched M75 C++ files.
 - `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
-- This proves the M75 player-to-board service/test input path and persistence. It does not prove full board-manual DIP behavior, Vigilante video priority, raster timing, or final visual/audio parity.
+- This proves the M75 player-to-board service/test input path and persistence. It does not prove runtime DIP behavior beyond current manual defaults, Vigilante video priority, raster timing, or final visual/audio parity.
+
+M75 manual DIP metadata continuation validation on 2026-06-26:
+
+- Added 14 manual-backed Vigilante SW1/SW2 DIP entries to the `vigilant` manifest: fighters, difficulty, energy decrease, conditional Coin Mode 1/2 coinage, flip picture, cabinet type, coin mode, demo sound, buy-in, demo freeze, no-death, and switch 8.
+- The M75 adapter now retains parsed DIP metadata, folds manifest defaults into board-visible active-low `dsw1=0xff` / `dsw2=0xfd`, exposes `DIP switches=14`, and still honors explicit `--dip` override.
+- Source evidence: Vigilante Installation & Service Manual game-options tables for DIP SWITCH 1 and DIP SWITCH 2.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m75_test mnemos_apps_player_irem_m75_adapter_test mnemos_player`
+- Focused M75 CTest with `MNEMOS_M75_SET_DIR=D:\emu\irem`: `4/4`
+  - `mnemos_manifests_irem_m75_test`
+  - `mnemos_manifests_irem_m75_system_test`
+  - `mnemos_apps_player_irem_m75_adapter_test`
+  - `mnemos_apps_player_irem_m75_corpus_golden_test`
+- `clang-format --dry-run --Werror` passed for the touched M75 C++ files.
+- Full preset build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full preset CTest without ROM env vars in that command environment: `206/206`, with expected media/conformance skips.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- This proves manual-backed M75 DIP metadata/default plumbing. It does not prove runtime DIP UI parity, Vigilante video priority, raster timing, sound timing, or final visual/audio parity.
 
 M92 GunForce clone parent-fallback validation on 2026-06-26:
 
@@ -1003,7 +1024,7 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, reference-backed Z80 sound protocol/sample timing, full board-manual DIP behavior, raster timing, bootleg coverage, and screenshot/audio parity.
+1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, reference-backed Z80 sound protocol/sample timing, DIP runtime behavior beyond current manual defaults, raster timing, bootleg coverage, and screenshot/audio parity.
 2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, full board-manual DIP behavior, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.

@@ -9,6 +9,284 @@ name        = "vigilant"
 board       = "irem_m75"
 orientation = "horizontal"
 
+[[dip]]
+bank = "SW1"
+name = "Number of Fighters"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x0004
+default = 0x0004
+
+[[dip.option]]
+label = "Normal"
+value = 0x0004
+
+[[dip.option]]
+label = "Hard"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Decrease of Energy"
+mask = 0x0008
+default = 0x0008
+
+[[dip.option]]
+label = "Slow"
+value = 0x0008
+
+[[dip.option]]
+label = "Fast"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coin 1"
+mask = 0x0030
+default = 0x0030
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x0030
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x0020
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x0010
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coin 2"
+mask = 0x00c0
+default = 0x00c0
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x00c0
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x00e0
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x00d0
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0x00c0
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x00b0
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0x00a0
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x0090
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x0070
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0060
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0050
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x0030
+
+[[dip.option]]
+label = "5 Coins / 3 Credits"
+value = 0x0020
+
+[[dip.option]]
+label = "8 Coins / 3 Credits"
+value = 0x0010
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Picture"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "No"
+value = 0x0100
+
+[[dip.option]]
+label = "Yes"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet Type"
+mask = 0x0200
+default = 0x0000
+
+[[dip.option]]
+label = "Table"
+value = 0x0200
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0400
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Sound in Demo Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Yes"
+value = 0x0800
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Buy-In Mode"
+mask = 0x1000
+default = 0x1000
+
+[[dip.option]]
+label = "Yes"
+value = 0x1000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Demo Freeze Mode"
+mask = 0x2000
+default = 0x2000
+
+[[dip.option]]
+label = "No"
+value = 0x2000
+
+[[dip.option]]
+label = "2P Stop / 1P Continue"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "No Death Mode"
+mask = 0x4000
+default = 0x4000
+
+[[dip.option]]
+label = "No"
+value = 0x4000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Switch 8"
+mask = 0x8000
+default = 0x8000
+
+[[dip.option]]
+label = "Off"
+value = 0x8000
+
 [[region]]
 name = "maincpu"
 size = 0x030000

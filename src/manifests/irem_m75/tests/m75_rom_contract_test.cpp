@@ -21,6 +21,7 @@
 namespace {
 
     using mnemos::manifests::common::rom_set_decl;
+    using mnemos::manifests::common::rom_set_dip_switch;
     using mnemos::manifests::common::rom_set_file;
     using mnemos::manifests::common::rom_set_region;
 
@@ -29,25 +30,23 @@ namespace {
         std::optional<std::size_t> file_count{};
     };
 
-    [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>&
-    expected_regions() {
+    [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>& expected_regions() {
         static const std::map<std::string, expected_contract, std::less<>> regions{
-            {"maincpu", {.region_size = mnemos::manifests::irem_m75::main_rom_size,
-                         .file_count = 2U}},
-            {"soundcpu", {.region_size = mnemos::manifests::irem_m75::sound_rom_size,
-                          .file_count = 1U}},
-            {"chars", {.region_size = mnemos::manifests::irem_m75::char_gfx_size,
-                       .file_count = 2U}},
-            {"sprites", {.region_size = mnemos::manifests::irem_m75::sprite_gfx_size,
-                         .file_count = 8U}},
-            {"bgtiles", {.region_size = mnemos::manifests::irem_m75::bg_tile_gfx_size,
-                         .file_count = std::nullopt}},
-            {"samples", {.region_size = mnemos::manifests::irem_m75::sample_rom_size,
-                         .file_count = 1U}},
-            {"proms", {.region_size = mnemos::manifests::irem_m75::proms_size,
-                       .file_count = 1U}},
-            {"plds", {.region_size = mnemos::manifests::irem_m75::plds_size,
-                      .file_count = 3U}},
+            {"maincpu",
+             {.region_size = mnemos::manifests::irem_m75::main_rom_size, .file_count = 2U}},
+            {"soundcpu",
+             {.region_size = mnemos::manifests::irem_m75::sound_rom_size, .file_count = 1U}},
+            {"chars",
+             {.region_size = mnemos::manifests::irem_m75::char_gfx_size, .file_count = 2U}},
+            {"sprites",
+             {.region_size = mnemos::manifests::irem_m75::sprite_gfx_size, .file_count = 8U}},
+            {"bgtiles",
+             {.region_size = mnemos::manifests::irem_m75::bg_tile_gfx_size,
+              .file_count = std::nullopt}},
+            {"samples",
+             {.region_size = mnemos::manifests::irem_m75::sample_rom_size, .file_count = 1U}},
+            {"proms", {.region_size = mnemos::manifests::irem_m75::proms_size, .file_count = 1U}},
+            {"plds", {.region_size = mnemos::manifests::irem_m75::plds_size, .file_count = 3U}},
         };
         return regions;
     }
@@ -66,6 +65,23 @@ namespace {
             std::find_if(decl.regions.begin(), decl.regions.end(),
                          [name](const rom_set_region& region) { return region.name == name; });
         return it == decl.regions.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] const rom_set_dip_switch* find_dip(const rom_set_decl& decl,
+                                                     std::string_view name) noexcept {
+        const auto it =
+            std::find_if(decl.dips.begin(), decl.dips.end(),
+                         [name](const rom_set_dip_switch& dip) { return dip.name == name; });
+        return it == decl.dips.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] std::uint16_t raw_dip_default(const rom_set_decl& decl,
+                                                std::uint16_t fallback) noexcept {
+        std::uint16_t value = fallback;
+        for (const auto& dip : decl.dips) {
+            value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
+        }
+        return value;
     }
 
     void require_region_contract(const rom_set_region& region) {
@@ -93,8 +109,7 @@ namespace {
         return std::move(*parsed.value);
     }
 
-    [[nodiscard]] std::map<std::string, rom_set_decl, std::less<>>
-    embedded_declarations() {
+    [[nodiscard]] std::map<std::string, rom_set_decl, std::less<>> embedded_declarations() {
         std::map<std::string, rom_set_decl, std::less<>> declarations;
         for (const auto& [set_name, toml] : mnemos::manifests::irem_m75::embedded::game_manifests) {
             rom_set_decl decl = parse_decl(toml, "embedded:irem_m75/" + std::string{set_name});
@@ -106,8 +121,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts",
-          "[m75][rom]") {
+TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts", "[m75][rom]") {
     const auto declarations = embedded_declarations();
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, raw_decl] : declarations) {
@@ -133,11 +147,14 @@ TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts
             }
             require_region_contract(*region);
         }
+
+        CHECK(decl.dips.size() == 14U);
+        CHECK(raw_dip_default(decl, 0xFFFFU) == 0xFDFFU);
     }
 
-    CHECK(names == std::set<std::string, std::less<>>{
-                       "vigilant", "vigilanta", "vigilantb", "vigilantc",
-                       "vigilantd", "vigilantg", "vigilanto"});
+    CHECK(names == std::set<std::string, std::less<>>{"vigilant", "vigilanta", "vigilantb",
+                                                      "vigilantc", "vigilantd", "vigilantg",
+                                                      "vigilanto"});
     CHECK_FALSE(mnemos::manifests::irem_m75::game_manifest_toml("vigilant").empty());
     REQUIRE(declarations.at("vigilanta").parent.has_value());
     CHECK(*declarations.at("vigilanta").parent == "vigilant");
@@ -151,6 +168,39 @@ TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts
     CHECK(*declarations.at("vigilantg").parent == "vigilant");
     REQUIRE(declarations.at("vigilanto").parent.has_value());
     CHECK(*declarations.at("vigilanto").parent == "vigilant");
+
+    const auto& vigilant = declarations.at("vigilant");
+    const rom_set_dip_switch* fighters = find_dip(vigilant, "Number of Fighters");
+    REQUIRE(fighters != nullptr);
+    CHECK(fighters->mask == 0x0003U);
+    CHECK(fighters->default_value == 0x0003U);
+    REQUIRE(fighters->options.size() == 4U);
+
+    const rom_set_dip_switch* coinage = find_dip(vigilant, "Coinage");
+    REQUIRE(coinage != nullptr);
+    CHECK(coinage->mask == 0x00F0U);
+    CHECK(coinage->default_value == 0x00F0U);
+    REQUIRE(coinage->condition.has_value());
+    CHECK(coinage->condition->mask == 0x0400U);
+    CHECK(coinage->condition->value == 0x0400U);
+    REQUIRE(coinage->options.size() == 16U);
+
+    const rom_set_dip_switch* coin1 = find_dip(vigilant, "Coin 1");
+    REQUIRE(coin1 != nullptr);
+    CHECK(coin1->mask == 0x0030U);
+    REQUIRE(coin1->condition.has_value());
+    CHECK(coin1->condition->mask == 0x0400U);
+    CHECK(coin1->condition->value == 0x0000U);
+
+    const rom_set_dip_switch* cabinet = find_dip(vigilant, "Cabinet Type");
+    REQUIRE(cabinet != nullptr);
+    CHECK(cabinet->mask == 0x0200U);
+    CHECK(cabinet->default_value == 0x0000U);
+
+    const rom_set_dip_switch* switch8 = find_dip(vigilant, "Switch 8");
+    REQUIRE(switch8 != nullptr);
+    CHECK(switch8->mask == 0x8000U);
+    CHECK(switch8->default_value == 0x8000U);
 }
 
 TEST_CASE("m75 embedded manifests stay in sync with disk TOML", "[m75][rom]") {
