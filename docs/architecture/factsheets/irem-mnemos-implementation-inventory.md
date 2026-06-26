@@ -20,8 +20,8 @@ checked-in Mnemos Irem manifest, 84 have a direct player-loadable route through
 ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only. The common data-gated runner and oracle registry now include
-the implemented M75, M90, and M92 corpus golden tests alongside the earlier Irem
-families.
+G6-ratcheted corpus golden tests for every implemented Irem player family:
+M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 
 ## Status Terms
 
@@ -81,7 +81,7 @@ targets:
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
   present.
-- M15, M75, M81, M84, M92, and M107 all have player-routable first-pass boards with
+- M15, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
   regional clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,

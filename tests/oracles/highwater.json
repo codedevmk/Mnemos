@@ -9,6 +9,18 @@
       "ctest": "mnemos_gg_visual_corpus_test",
       "high_water": "skipped"
     },
+    "GLD-M107-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m107_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M15-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m15_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M52-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m52_corpus_golden_test",
+      "high_water": "passed"
+    },
     "GLD-M72-PROTECTED": {
       "ctest": "mnemos_apps_player_irem_m72_protected_golden_test",
       "high_water": "passed"
@@ -31,6 +43,18 @@
     },
     "GLD-M75-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m75_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M81-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m81_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M82-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m82_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M84-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m84_corpus_golden_test",
       "high_water": "passed"
     },
     "GLD-M90-CORPUS": {

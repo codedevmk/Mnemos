@@ -369,10 +369,12 @@ the local Image Fight material into `imgfight` as the M72 parent/standalone set
 with two direct player-loadable routes plus one metadata-only `.7z`, and
 `imgfightj` / `imgfightjb` as clones declaring parent `imgfight`, each with one
 direct player-loadable ZIP route plus one metadata-only `.7z`.
-The standard data-gated runner now also reports, runs, and oracle-registers the
-M75, M90, and M92 corpus golden tests through `MNEMOS_M75_SET_DIR`,
-`MNEMOS_M90_SET_DIR`, and `MNEMOS_M92_SET_DIR`, closing the previous gap where
-those implemented player smoke gates existed but were absent from the common
+The standard data-gated runner now also reports, runs, and oracle-registers
+every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
+M82, M84, M90, M92, and M107. The newest G6 high-water raises cover
+`GLD-M15-CORPUS`, `GLD-M52-CORPUS`, `GLD-M81-CORPUS`, `GLD-M82-CORPUS`,
+`GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
+implemented player smoke gates existed but were absent from the common oracle
 proof command.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
 board/player path with source-aligned Head On ROM/vector placement, RAM/MMIO
