@@ -86,7 +86,18 @@ namespace mnemos::manifests::irem_m15 {
         [[nodiscard]] std::uint8_t fetch8();
         [[nodiscard]] std::uint16_t fetch16();
         [[nodiscard]] int step_instruction();
-        void set_zero_sign_flags(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint16_t pair_bc() const noexcept;
+        [[nodiscard]] std::uint16_t pair_de() const noexcept;
+        [[nodiscard]] std::uint16_t pair_for_index(std::uint8_t index) const noexcept;
+        void set_pair_for_index(std::uint8_t index, std::uint16_t value) noexcept;
+        [[nodiscard]] bool condition_met(std::uint8_t condition) const noexcept;
+        void set_szp_flags(std::uint8_t value, std::uint8_t preserved = 0U) noexcept;
+        void add_to_a(std::uint8_t value, std::uint8_t carry) noexcept;
+        void sub_from_a(std::uint8_t value, std::uint8_t borrow) noexcept;
+        void compare_with_a(std::uint8_t value) noexcept;
+        void logic_to_a(std::uint8_t value, char op) noexcept;
+        void push_word(std::uint16_t value);
+        [[nodiscard]] std::uint16_t pop_word();
         [[nodiscard]] std::uint8_t reg_at(std::uint8_t index) const noexcept;
         void set_reg_at(std::uint8_t index, std::uint8_t value) noexcept;
         [[nodiscard]] std::uint16_t hl() const noexcept {

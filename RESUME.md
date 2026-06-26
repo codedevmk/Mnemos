@@ -73,13 +73,14 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - M15 now has a first-pass executable board and player adapter for `headoni`, not only ROM-contract metadata.
 - Board implementation lives in `src/manifests/irem_m15/m15_system.hpp` and `src/manifests/irem_m15/m15_system.cpp`.
-- The board owns a traceable Intel 8080 diagnostic CPU shim, M15 diagnostic video path, 1-bit beeper, ROM/work/video/color RAM windows, input/DIP ports, frame stepping, and whole-board save/load with identity checks.
+- The board owns a traceable Intel 8080 CPU shim, M15 diagnostic video path, 1-bit beeper, ROM/work/video/color RAM windows, input/DIP ports, frame stepping, and whole-board save/load with identity checks.
+- The i8080 shim now covers the core documented data-transfer, register-pair, stack/PSW, rotate, arithmetic/logical, decimal-adjust, conditional jump/call/return, RST, I/O, and parity/aux-carry flag behavior used by first-generation 8080 arcade code.
 - Player adapter lives in `src/apps/player/adapters/irem_m15`.
 - CLI/system-family routing is available through `--system irem_m15` and alias `m15`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
 - Capability discovery reports i8080 trace/register surfaces, M15 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Head On player smoke wrote nonblank screenshots and successfully saved/loaded state.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M15 closure still needs full i8080 opcode/timing coverage, exact M15 memory/I/O map, discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and screenshot parity.
+- Remaining: this is still diagnostic rendering and first-pass board wiring. Authentic M15 closure still needs cycle/interrupt-level i8080 verification against a real exerciser or board trace, exact M15 memory/I/O map, discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and screenshot parity.
 
 ## Local ROM Corpus Notes
 
@@ -189,6 +190,17 @@ M15 slice validation that passed after the M107 handoff:
   - save state: `build\scratch\irem_m15_headoni.state`, 15230 bytes
   - loaded screenshot: `build\scratch\irem_m15_headoni_loaded.ppm`, `224x256`, nonzero pixel payload
 
+M15 opcode-coverage continuation validation:
+
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m15_test mnemos_apps_player_irem_m15_adapter_test mnemos_apps_player_capability_summary_test mnemos_player`
+- Focused CTest: `3/3`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_capability_summary_test`
+  - `mnemos_apps_player_irem_m15_adapter_test`
+- M15 data-gated CTest with `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`: `2/2`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_irem_m15_corpus_golden_test`
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -206,7 +218,7 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M15 authenticity work: complete i8080 opcode/timing coverage, exact M15 memory/I/O map, discrete video/sound behavior, DIP behavior, raster timing, and screenshot parity.
+1. Continue M15 authenticity work: cycle/interrupt-level i8080 verification, exact M15 memory/I/O map, discrete video/sound behavior, DIP behavior, raster timing, and screenshot parity.
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.

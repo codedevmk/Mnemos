@@ -290,11 +290,12 @@ top-level board bucket is completely untracked anymore; `board_family_candidates
 now only keeps 19 untracked / misbucketed `M72`-folder items visible instead of
 silently treating them as true-M72 proof.
 M15 now has a checked-in `headoni` manifest plus a first-pass executable
-i8080-era board/player path; `MNEMOS_M15_SET_DIR=D:\emu\irem\M15` proves the
-sorted local wrapper ZIP loads CRC-clean through the embedded manifest,
-including the directory-prefixed entry aliases used by the local nested ZIP,
-and the player route produces nonblank screenshot plus save/load smoke for
-`--system irem_m15`. M84 now has a ROM-contract-only manifest
+i8080-era board/player path with expanded documented opcode-group and flag
+coverage; `MNEMOS_M15_SET_DIR=D:\emu\irem\M15` proves the sorted local wrapper
+ZIP loads CRC-clean through the embedded manifest, including the
+directory-prefixed entry aliases used by the local nested ZIP, and the player
+route produces nonblank screenshot plus save/load smoke for `--system irem_m15`.
+M84 now has a ROM-contract-only manifest
 layer for `hharryb` and `hharryu`;
 `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81` proves the sorted split
 wrapper ZIPs load CRC-clean when composed with the M81 `hharry` parent, while
@@ -323,7 +324,9 @@ R-Type II collection ZIPs and load `rtype2`, `rtype2j`, `rtype2jc`, and
 `rtype2m82b` CRC-clean through the embedded manifests and clone-parent fallback.
 M15, M84, and M107 now have first-pass executable board/profile layers, but all
 three still need board-authentic memory/I/O, video/priority, sound, DIP, raster,
-and screenshot-parity closure before they can be called authentic.
+and screenshot-parity closure before they can be called authentic; M15 also
+needs cycle/interrupt-level i8080 verification against a real exerciser or board
+trace.
 
 Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible.
 
@@ -345,7 +348,7 @@ an i8080-era M15 profile instead of being folded into later V30 boards.
 
 #### Manifests / board bring-up
 - [x] **I15-1** Local M15 ROM-set contract — `src/manifests/irem_m15` carries a checked-in embedded ROM-contract manifest for `headoni`, with parser/region-contract coverage for the six 1 KiB program ROMs in the local nested wrapper ZIP and aliases for its `headoni/` entry prefix. `MNEMOS_M15_SET_DIR=D:\emu\irem\M15` data-gates the sorted local artifact and proves it loads CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` now records the M15 bucket as tracked/loadable instead of an unsupported board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m15/games/headoni.toml` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
-- [~] **I15-2** Executable M15 board profile — `src/manifests/irem_m15` now assembles an M15-owned first-pass i8080-era board shell with a traceable Intel 8080 diagnostic CPU shim, ROM/work/video/color RAM windows, input/DIP ports, 1-bit beeper output, vertical 224x256 diagnostic framebuffer, whole-board save/load identity, and save-state rejection across mismatched DIP/layout identity. `src/apps/player/adapters/irem_m15` registers `--system irem_m15` / `m15`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`; direct Head On screenshot and save/load smoke both produce 224x256 nonblank frames. Remaining: replace/verify the first-pass i8080 opcode coverage, exact M15 memory and I/O map, discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and authentic screenshot parity before calling the profile authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m15/m15_system.cpp` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `src/apps/player/adapters/irem_m15/irem_m15_adapter.cpp` + `src/apps/player/adapters/irem_m15/tests/irem_m15_adapter_test.cpp`
+- [~] **I15-2** Executable M15 board profile — `src/manifests/irem_m15` now assembles an M15-owned first-pass i8080-era board shell with a traceable Intel 8080 CPU shim covering the core documented data-transfer, register-pair, stack/PSW, rotate, arithmetic/logical, decimal-adjust, conditional flow, RST, I/O, and parity/aux-carry flag behavior; it also owns ROM/work/video/color RAM windows, input/DIP ports, 1-bit beeper output, vertical 224x256 diagnostic framebuffer, whole-board save/load identity, and save-state rejection across mismatched DIP/layout identity. `src/apps/player/adapters/irem_m15` registers `--system irem_m15` / `m15`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`; direct Head On screenshot and save/load smoke both produce 224x256 nonblank frames. Remaining: cycle/interrupt-level i8080 verification against a real exerciser or board trace, exact M15 memory and I/O map, discrete video timing/palette behavior, beeper/discrete sound timing, DIP behavior, raster timing, and authentic screenshot parity before calling the profile authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m15/m15_system.cpp` + `src/manifests/irem_m15/tests/m15_system_test.cpp` + `src/apps/player/adapters/irem_m15/irem_m15_adapter.cpp` + `src/apps/player/adapters/irem_m15/tests/irem_m15_adapter_test.cpp`
 
 ---
 

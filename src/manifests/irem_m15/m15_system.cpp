@@ -15,6 +15,8 @@ namespace mnemos::manifests::irem_m15 {
 
     namespace {
         inline constexpr std::uint8_t flag_c = 0x01U;
+        inline constexpr std::uint8_t flag_p = 0x04U;
+        inline constexpr std::uint8_t flag_ac = 0x10U;
         inline constexpr std::uint8_t flag_z = 0x40U;
         inline constexpr std::uint8_t flag_s = 0x80U;
 
@@ -96,6 +98,13 @@ namespace mnemos::manifests::irem_m15 {
 
         [[nodiscard]] std::uint16_t make_word(std::uint8_t lo, std::uint8_t hi) noexcept {
             return static_cast<std::uint16_t>(lo | (hi << 8U));
+        }
+
+        [[nodiscard]] bool even_parity(std::uint8_t value) noexcept {
+            value = static_cast<std::uint8_t>(value ^ (value >> 4U));
+            value = static_cast<std::uint8_t>(value ^ (value >> 2U));
+            value = static_cast<std::uint8_t>(value ^ (value >> 1U));
+            return (value & 1U) == 0U;
         }
     } // namespace
 
@@ -206,14 +215,151 @@ namespace mnemos::manifests::irem_m15 {
         }
     }
 
-    void m15_i8080_cpu::set_zero_sign_flags(std::uint8_t value) noexcept {
-        flags_ = static_cast<std::uint8_t>(flags_ & flag_c);
+    std::uint16_t m15_i8080_cpu::pair_bc() const noexcept {
+        return static_cast<std::uint16_t>((b_ << 8U) | c_);
+    }
+
+    std::uint16_t m15_i8080_cpu::pair_de() const noexcept {
+        return static_cast<std::uint16_t>((d_ << 8U) | e_);
+    }
+
+    std::uint16_t m15_i8080_cpu::pair_for_index(std::uint8_t index) const noexcept {
+        switch (index & 3U) {
+        case 0U:
+            return pair_bc();
+        case 1U:
+            return pair_de();
+        case 2U:
+            return hl();
+        default:
+            return sp_;
+        }
+    }
+
+    void m15_i8080_cpu::set_pair_for_index(std::uint8_t index, std::uint16_t value) noexcept {
+        switch (index & 3U) {
+        case 0U:
+            b_ = static_cast<std::uint8_t>(value >> 8U);
+            c_ = static_cast<std::uint8_t>(value);
+            break;
+        case 1U:
+            d_ = static_cast<std::uint8_t>(value >> 8U);
+            e_ = static_cast<std::uint8_t>(value);
+            break;
+        case 2U:
+            set_hl(value);
+            break;
+        default:
+            sp_ = value;
+            break;
+        }
+    }
+
+    bool m15_i8080_cpu::condition_met(std::uint8_t condition) const noexcept {
+        switch (condition & 7U) {
+        case 0U:
+            return (flags_ & flag_z) == 0U;
+        case 1U:
+            return (flags_ & flag_z) != 0U;
+        case 2U:
+            return (flags_ & flag_c) == 0U;
+        case 3U:
+            return (flags_ & flag_c) != 0U;
+        case 4U:
+            return (flags_ & flag_p) == 0U;
+        case 5U:
+            return (flags_ & flag_p) != 0U;
+        case 6U:
+            return (flags_ & flag_s) == 0U;
+        default:
+            return (flags_ & flag_s) != 0U;
+        }
+    }
+
+    void m15_i8080_cpu::set_szp_flags(std::uint8_t value, std::uint8_t preserved) noexcept {
+        flags_ = preserved;
         if (value == 0U) {
             flags_ |= flag_z;
         }
         if ((value & 0x80U) != 0U) {
             flags_ |= flag_s;
         }
+        if (even_parity(value)) {
+            flags_ |= flag_p;
+        }
+    }
+
+    void m15_i8080_cpu::add_to_a(std::uint8_t value, std::uint8_t carry) noexcept {
+        const std::uint16_t sum =
+            static_cast<std::uint16_t>(a_) + value + static_cast<std::uint16_t>(carry != 0U);
+        const std::uint8_t result = static_cast<std::uint8_t>(sum);
+        std::uint8_t preserved = 0U;
+        if (sum > 0xFFU) {
+            preserved |= flag_c;
+        }
+        if (((a_ & 0x0FU) + (value & 0x0FU) + (carry != 0U ? 1U : 0U)) > 0x0FU) {
+            preserved |= flag_ac;
+        }
+        a_ = result;
+        set_szp_flags(a_, preserved);
+    }
+
+    void m15_i8080_cpu::sub_from_a(std::uint8_t value, std::uint8_t borrow) noexcept {
+        const std::uint16_t rhs =
+            static_cast<std::uint16_t>(value) + static_cast<std::uint16_t>(borrow != 0U);
+        const std::uint16_t diff = static_cast<std::uint16_t>(a_) - rhs;
+        const std::uint8_t result = static_cast<std::uint8_t>(diff);
+        std::uint8_t preserved = 0U;
+        if (static_cast<std::uint16_t>(a_) < rhs) {
+            preserved |= flag_c;
+        }
+        if ((a_ & 0x0FU) < ((value & 0x0FU) + (borrow != 0U ? 1U : 0U))) {
+            preserved |= flag_ac;
+        }
+        a_ = result;
+        set_szp_flags(a_, preserved);
+    }
+
+    void m15_i8080_cpu::compare_with_a(std::uint8_t value) noexcept {
+        const std::uint16_t diff = static_cast<std::uint16_t>(a_) - value;
+        std::uint8_t preserved = 0U;
+        if (a_ < value) {
+            preserved |= flag_c;
+        }
+        if ((a_ & 0x0FU) < (value & 0x0FU)) {
+            preserved |= flag_ac;
+        }
+        set_szp_flags(static_cast<std::uint8_t>(diff), preserved);
+    }
+
+    void m15_i8080_cpu::logic_to_a(std::uint8_t value, char op) noexcept {
+        std::uint8_t preserved = 0U;
+        switch (op) {
+        case '&':
+            a_ = static_cast<std::uint8_t>(a_ & value);
+            preserved = flag_ac;
+            break;
+        case '^':
+            a_ = static_cast<std::uint8_t>(a_ ^ value);
+            break;
+        default:
+            a_ = static_cast<std::uint8_t>(a_ | value);
+            break;
+        }
+        set_szp_flags(a_, preserved);
+    }
+
+    void m15_i8080_cpu::push_word(std::uint16_t value) {
+        sp_ = static_cast<std::uint16_t>(sp_ - 2U);
+        write8(sp_, static_cast<std::uint8_t>(value));
+        write8(static_cast<std::uint16_t>(sp_ + 1U), static_cast<std::uint8_t>(value >> 8U));
+    }
+
+    std::uint16_t m15_i8080_cpu::pop_word() {
+        const std::uint16_t value =
+            make_word(read8(sp_), read8(static_cast<std::uint16_t>(sp_ + 1U)));
+        sp_ = static_cast<std::uint16_t>(sp_ + 2U);
+        return value;
     }
 
     int m15_i8080_cpu::step_instruction() {
@@ -227,103 +373,259 @@ namespace mnemos::manifests::irem_m15 {
         }
         const std::uint8_t op = fetch8();
 
+        if ((op & 0xC7U) == 0x00U) { // 8080 NOP plus undocumented NOP aliases.
+            return 4;
+        }
+
         if ((op & 0xC0U) == 0x40U && op != 0x76U) {
             set_reg_at(static_cast<std::uint8_t>((op >> 3U) & 7U),
                        reg_at(static_cast<std::uint8_t>(op & 7U)));
             return ((op & 7U) == 6U || ((op >> 3U) & 7U) == 6U) ? 7 : 5;
         }
 
-        switch (op) {
-        case 0x00U: // NOP
-            return 4;
-        case 0x06U:
-        case 0x0EU:
-        case 0x16U:
-        case 0x1EU:
-        case 0x26U:
-        case 0x2EU:
-        case 0x36U:
-        case 0x3EU:
+        if ((op & 0xC7U) == 0x06U) {
             set_reg_at(static_cast<std::uint8_t>((op >> 3U) & 7U), fetch8());
-            return (op == 0x36U) ? 10 : 7;
-        case 0x01U:
-            c_ = fetch8();
-            b_ = fetch8();
+            return ((op >> 3U) & 7U) == 6U ? 10 : 7;
+        }
+
+        if ((op & 0xCFU) == 0x01U) {
+            set_pair_for_index(static_cast<std::uint8_t>((op >> 4U) & 3U), fetch16());
             return 10;
-        case 0x11U:
-            e_ = fetch8();
-            d_ = fetch8();
-            return 10;
-        case 0x21U:
-            set_hl(fetch16());
-            return 10;
-        case 0x31U:
-            sp_ = fetch16();
-            return 10;
-        case 0x23U:
-            set_hl(static_cast<std::uint16_t>(hl() + 1U));
+        }
+
+        if ((op & 0xCFU) == 0x03U) {
+            const std::uint8_t pair = static_cast<std::uint8_t>((op >> 4U) & 3U);
+            set_pair_for_index(pair, static_cast<std::uint16_t>(pair_for_index(pair) + 1U));
             return 5;
+        }
+
+        if ((op & 0xCFU) == 0x0BU) {
+            const std::uint8_t pair = static_cast<std::uint8_t>((op >> 4U) & 3U);
+            set_pair_for_index(pair, static_cast<std::uint16_t>(pair_for_index(pair) - 1U));
+            return 5;
+        }
+
+        if ((op & 0xCFU) == 0x09U) {
+            const std::uint32_t sum =
+                static_cast<std::uint32_t>(hl()) +
+                pair_for_index(static_cast<std::uint8_t>((op >> 4U) & 3U));
+            set_hl(static_cast<std::uint16_t>(sum));
+            flags_ = static_cast<std::uint8_t>((flags_ & ~flag_c) |
+                                               (sum > 0xFFFFU ? flag_c : 0U));
+            return 10;
+        }
+
+        if ((op & 0xC7U) == 0x04U) {
+            const std::uint8_t index = static_cast<std::uint8_t>((op >> 3U) & 7U);
+            const std::uint8_t old = reg_at(index);
+            const std::uint8_t value = static_cast<std::uint8_t>(old + 1U);
+            std::uint8_t preserved = static_cast<std::uint8_t>(flags_ & flag_c);
+            if ((old & 0x0FU) == 0x0FU) {
+                preserved |= flag_ac;
+            }
+            set_reg_at(index, value);
+            set_szp_flags(value, preserved);
+            return index == 6U ? 10 : 5;
+        }
+
+        if ((op & 0xC7U) == 0x05U) {
+            const std::uint8_t index = static_cast<std::uint8_t>((op >> 3U) & 7U);
+            const std::uint8_t old = reg_at(index);
+            const std::uint8_t value = static_cast<std::uint8_t>(old - 1U);
+            std::uint8_t preserved = static_cast<std::uint8_t>(flags_ & flag_c);
+            if ((old & 0x0FU) == 0U) {
+                preserved |= flag_ac;
+            }
+            set_reg_at(index, value);
+            set_szp_flags(value, preserved);
+            return index == 6U ? 10 : 5;
+        }
+
+        if ((op & 0xC0U) == 0x80U) {
+            const std::uint8_t rhs = reg_at(static_cast<std::uint8_t>(op & 7U));
+            switch ((op >> 3U) & 7U) {
+            case 0U:
+                add_to_a(rhs, 0U);
+                break;
+            case 1U:
+                add_to_a(rhs, static_cast<std::uint8_t>(flags_ & flag_c));
+                break;
+            case 2U:
+                sub_from_a(rhs, 0U);
+                break;
+            case 3U:
+                sub_from_a(rhs, static_cast<std::uint8_t>(flags_ & flag_c));
+                break;
+            case 4U:
+                logic_to_a(rhs, '&');
+                break;
+            case 5U:
+                logic_to_a(rhs, '^');
+                break;
+            case 6U:
+                logic_to_a(rhs, '|');
+                break;
+            default:
+                compare_with_a(rhs);
+                break;
+            }
+            return (op & 7U) == 6U ? 7 : 4;
+        }
+
+        if ((op & 0xC7U) == 0xC0U) {
+            if (condition_met(static_cast<std::uint8_t>((op >> 3U) & 7U))) {
+                pc_ = pop_word();
+                return 11;
+            }
+            return 5;
+        }
+
+        if ((op & 0xC7U) == 0xC2U) {
+            const std::uint16_t target = fetch16();
+            if (condition_met(static_cast<std::uint8_t>((op >> 3U) & 7U))) {
+                pc_ = target;
+            }
+            return 10;
+        }
+
+        if ((op & 0xC7U) == 0xC4U) {
+            const std::uint16_t target = fetch16();
+            if (condition_met(static_cast<std::uint8_t>((op >> 3U) & 7U))) {
+                push_word(pc_);
+                pc_ = target;
+                return 17;
+            }
+            return 11;
+        }
+
+        if ((op & 0xC7U) == 0xC7U) {
+            push_word(pc_);
+            pc_ = static_cast<std::uint16_t>(op & 0x38U);
+            return 11;
+        }
+
+        switch (op) {
+        case 0x02U:
+            write8(pair_bc(), a_);
+            return 7;
+        case 0x07U: {
+            const bool carry = (a_ & 0x80U) != 0U;
+            a_ = static_cast<std::uint8_t>((a_ << 1U) | (carry ? 1U : 0U));
+            flags_ = static_cast<std::uint8_t>((flags_ & ~flag_c) | (carry ? flag_c : 0U));
+            return 4;
+        }
+        case 0x0AU:
+            a_ = read8(pair_bc());
+            return 7;
+        case 0x0FU: {
+            const bool carry = (a_ & 0x01U) != 0U;
+            a_ = static_cast<std::uint8_t>((a_ >> 1U) | (carry ? 0x80U : 0U));
+            flags_ = static_cast<std::uint8_t>((flags_ & ~flag_c) | (carry ? flag_c : 0U));
+            return 4;
+        }
+        case 0x12U:
+            write8(pair_de(), a_);
+            return 7;
+        case 0x17U: {
+            const bool old_carry = (flags_ & flag_c) != 0U;
+            const bool new_carry = (a_ & 0x80U) != 0U;
+            a_ = static_cast<std::uint8_t>((a_ << 1U) | (old_carry ? 1U : 0U));
+            flags_ = static_cast<std::uint8_t>((flags_ & ~flag_c) | (new_carry ? flag_c : 0U));
+            return 4;
+        }
+        case 0x1AU:
+            a_ = read8(pair_de());
+            return 7;
+        case 0x1FU: {
+            const bool old_carry = (flags_ & flag_c) != 0U;
+            const bool new_carry = (a_ & 0x01U) != 0U;
+            a_ = static_cast<std::uint8_t>((a_ >> 1U) | (old_carry ? 0x80U : 0U));
+            flags_ = static_cast<std::uint8_t>((flags_ & ~flag_c) | (new_carry ? flag_c : 0U));
+            return 4;
+        }
+        case 0x22U: {
+            const std::uint16_t address = fetch16();
+            write8(address, l_);
+            write8(static_cast<std::uint16_t>(address + 1U), h_);
+            return 16;
+        }
+        case 0x27U: {
+            const std::uint8_t old_a = a_;
+            std::uint8_t correction = 0U;
+            bool carry = (flags_ & flag_c) != 0U;
+            if ((a_ & 0x0FU) > 9U || (flags_ & flag_ac) != 0U) {
+                correction = static_cast<std::uint8_t>(correction | 0x06U);
+            }
+            if (a_ > 0x99U || carry) {
+                correction = static_cast<std::uint8_t>(correction | 0x60U);
+                carry = true;
+            }
+            const std::uint16_t sum = static_cast<std::uint16_t>(a_) + correction;
+            std::uint8_t preserved = carry || sum > 0xFFU ? flag_c : 0U;
+            if (((old_a & 0x0FU) + (correction & 0x0FU)) > 0x0FU) {
+                preserved |= flag_ac;
+            }
+            a_ = static_cast<std::uint8_t>(sum);
+            set_szp_flags(a_, preserved);
+            return 4;
+        }
+        case 0x2AU: {
+            const std::uint16_t address = fetch16();
+            l_ = read8(address);
+            h_ = read8(static_cast<std::uint16_t>(address + 1U));
+            return 16;
+        }
+        case 0x2FU:
+            a_ = static_cast<std::uint8_t>(~a_);
+            return 4;
         case 0x32U:
             write8(fetch16(), a_);
             return 13;
+        case 0x37U:
+            flags_ = static_cast<std::uint8_t>(flags_ | flag_c);
+            return 4;
         case 0x3AU:
             a_ = read8(fetch16());
-            set_zero_sign_flags(a_);
             return 13;
-        case 0x3CU:
-            a_ = static_cast<std::uint8_t>(a_ + 1U);
-            set_zero_sign_flags(a_);
-            return 5;
-        case 0x3DU:
-            a_ = static_cast<std::uint8_t>(a_ - 1U);
-            set_zero_sign_flags(a_);
-            return 5;
+        case 0x3FU:
+            flags_ = static_cast<std::uint8_t>(flags_ ^ flag_c);
+            return 4;
         case 0x76U:
             halted_ = true;
             return 7;
-        case 0xAFU:
-            a_ = 0U;
-            flags_ = flag_z;
-            return 4;
-        case 0xB7U:
-            set_zero_sign_flags(a_);
-            return 4;
-        case 0xC2U: {
-            const std::uint16_t target = fetch16();
-            if ((flags_ & flag_z) == 0U) {
-                pc_ = target;
-            }
+        case 0xC1U:
+        case 0xD1U:
+        case 0xE1U: {
+            const std::uint8_t pair = static_cast<std::uint8_t>((op >> 4U) & 3U);
+            set_pair_for_index(pair, pop_word());
             return 10;
         }
         case 0xC3U:
             pc_ = fetch16();
             return 10;
-        case 0xCAU: {
-            const std::uint16_t target = fetch16();
-            if ((flags_ & flag_z) != 0U) {
-                pc_ = target;
-            }
-            return 10;
+        case 0xC5U:
+        case 0xD5U:
+        case 0xE5U: {
+            const std::uint8_t pair = static_cast<std::uint8_t>((op >> 4U) & 3U);
+            push_word(pair_for_index(pair));
+            return 11;
         }
         case 0xC6U: {
-            const std::uint16_t sum = static_cast<std::uint16_t>(a_) + fetch8();
-            a_ = static_cast<std::uint8_t>(sum);
-            flags_ = sum > 0xFFU ? flag_c : 0U;
-            set_zero_sign_flags(a_);
+            add_to_a(fetch8(), 0U);
             return 7;
         }
+        case 0xC9U:
+            pc_ = pop_word();
+            return 10;
+        case 0xCEU:
+            add_to_a(fetch8(), static_cast<std::uint8_t>(flags_ & flag_c));
+            return 7;
         case 0xCDU: {
             const std::uint16_t target = fetch16();
-            sp_ = static_cast<std::uint16_t>(sp_ - 2U);
-            write8(sp_, static_cast<std::uint8_t>(pc_));
-            write8(static_cast<std::uint16_t>(sp_ + 1U), static_cast<std::uint8_t>(pc_ >> 8U));
+            push_word(pc_);
             pc_ = target;
             return 17;
         }
-        case 0xC9U:
-            pc_ = make_word(read8(sp_), read8(static_cast<std::uint16_t>(sp_ + 1U)));
-            sp_ = static_cast<std::uint16_t>(sp_ + 2U);
-            return 10;
         case 0xD3U: {
             const std::uint8_t port = fetch8();
             if (port_out_) {
@@ -334,62 +636,60 @@ namespace mnemos::manifests::irem_m15 {
         case 0xDBU: {
             const std::uint8_t port = fetch8();
             a_ = port_in_ ? port_in_(port) : 0xFFU;
-            set_zero_sign_flags(a_);
             return 10;
         }
         case 0xD6U: {
-            const std::uint8_t rhs = fetch8();
-            const std::uint16_t diff = static_cast<std::uint16_t>(a_ - rhs);
-            a_ = static_cast<std::uint8_t>(diff);
-            flags_ = diff > 0xFFU ? flag_c : 0U;
-            set_zero_sign_flags(a_);
+            sub_from_a(fetch8(), 0U);
             return 7;
+        }
+        case 0xDEU:
+            sub_from_a(fetch8(), static_cast<std::uint8_t>(flags_ & flag_c));
+            return 7;
+        case 0xE3U: {
+            const std::uint8_t low = read8(sp_);
+            const std::uint8_t high = read8(static_cast<std::uint16_t>(sp_ + 1U));
+            write8(sp_, l_);
+            write8(static_cast<std::uint16_t>(sp_ + 1U), h_);
+            l_ = low;
+            h_ = high;
+            return 18;
+        }
+        case 0xE6:
+            logic_to_a(fetch8(), '&');
+            return 7;
+        case 0xE9U:
+            pc_ = hl();
+            return 5;
+        case 0xEBU:
+            std::swap(d_, h_);
+            std::swap(e_, l_);
+            return 5;
+        case 0xEEU:
+            logic_to_a(fetch8(), '^');
+            return 7;
+        case 0xF1U: {
+            const std::uint16_t value = pop_word();
+            flags_ = static_cast<std::uint8_t>(value & (flag_s | flag_z | flag_ac | flag_p | flag_c));
+            a_ = static_cast<std::uint8_t>(value >> 8U);
+            return 10;
         }
         case 0xF3U:
         case 0xFBU:
             return 4;
+        case 0xF5U:
+            push_word(static_cast<std::uint16_t>((a_ << 8U) | (flags_ | 0x02U)));
+            return 11;
+        case 0xF6U:
+            logic_to_a(fetch8(), '|');
+            return 7;
+        case 0xF9U:
+            sp_ = hl();
+            return 5;
         case 0xFEU: {
-            const std::uint8_t rhs = fetch8();
-            const std::uint16_t diff = static_cast<std::uint16_t>(a_ - rhs);
-            std::uint8_t flags = diff > 0xFFU ? flag_c : 0U;
-            if (static_cast<std::uint8_t>(diff) == 0U) {
-                flags |= flag_z;
-            }
-            if ((diff & 0x80U) != 0U) {
-                flags |= flag_s;
-            }
-            flags_ = flags;
+            compare_with_a(fetch8());
             return 7;
         }
         default:
-            if ((op & 0xF8U) == 0x80U) {
-                const std::uint16_t sum =
-                    static_cast<std::uint16_t>(a_) + reg_at(static_cast<std::uint8_t>(op & 7U));
-                a_ = static_cast<std::uint8_t>(sum);
-                flags_ = sum > 0xFFU ? flag_c : 0U;
-                set_zero_sign_flags(a_);
-                return (op & 7U) == 6U ? 7 : 4;
-            }
-            if ((op & 0xF8U) == 0x90U) {
-                const std::uint16_t diff =
-                    static_cast<std::uint16_t>(a_ - reg_at(static_cast<std::uint8_t>(op & 7U)));
-                a_ = static_cast<std::uint8_t>(diff);
-                flags_ = diff > 0xFFU ? flag_c : 0U;
-                set_zero_sign_flags(a_);
-                return (op & 7U) == 6U ? 7 : 4;
-            }
-            if ((op & 0xF8U) == 0xA0U) {
-                a_ = static_cast<std::uint8_t>(a_ & reg_at(static_cast<std::uint8_t>(op & 7U)));
-                flags_ = 0U;
-                set_zero_sign_flags(a_);
-                return (op & 7U) == 6U ? 7 : 4;
-            }
-            if ((op & 0xF8U) == 0xB0U) {
-                a_ = static_cast<std::uint8_t>(a_ | reg_at(static_cast<std::uint8_t>(op & 7U)));
-                flags_ = 0U;
-                set_zero_sign_flags(a_);
-                return (op & 7U) == 6U ? 7 : 4;
-            }
             ++unsupported_opcodes_;
             return 4;
         }

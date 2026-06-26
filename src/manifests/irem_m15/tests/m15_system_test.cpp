@@ -7,10 +7,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <map>
 #include <optional>
 #include <set>
@@ -315,6 +317,91 @@ namespace {
         return image;
     }
 
+    struct i8080_harness final {
+        std::array<std::uint8_t, 0x10000U> memory{};
+        std::vector<std::pair<std::uint16_t, std::uint8_t>> port_writes;
+        mnemos::manifests::irem_m15::m15_i8080_cpu cpu;
+
+        i8080_harness() {
+            cpu.set_memory(
+                [this](std::uint16_t address) { return memory[address]; },
+                [this](std::uint16_t address, std::uint8_t value) { memory[address] = value; });
+            cpu.set_ports(
+                [](std::uint16_t port) {
+                    return static_cast<std::uint8_t>(0xA0U | (port & 0x0FU));
+                },
+                [this](std::uint16_t port, std::uint8_t value) {
+                    port_writes.emplace_back(port, value);
+                });
+        }
+
+        void run(const std::vector<std::uint8_t>& program, std::uint64_t cycles = 20000U) {
+            memory.fill(0U);
+            REQUIRE(program.size() <= memory.size());
+            std::copy(program.begin(), program.end(), memory.begin());
+            port_writes.clear();
+            cpu.reset(mnemos::chips::reset_kind::power_on);
+            cpu.tick(cycles);
+        }
+
+        [[nodiscard]] std::uint8_t ram(std::uint16_t address) const noexcept {
+            return memory[address];
+        }
+
+        [[nodiscard]] std::uint64_t reg(std::string_view name) {
+            for (const auto& desc : cpu.register_snapshot()) {
+                if (desc.name == name) {
+                    return desc.value;
+                }
+            }
+            FAIL("missing i8080 register snapshot entry");
+            return 0U;
+        }
+    };
+
+    class program_builder final {
+      public:
+        void label(std::string name) { labels_.emplace(std::move(name), bytes_.size()); }
+
+        void emit(std::uint8_t value) { bytes_.push_back(value); }
+
+        void emit(std::initializer_list<std::uint8_t> values) {
+            bytes_.insert(bytes_.end(), values.begin(), values.end());
+        }
+
+        void ref16(std::string name) {
+            patches_.push_back({bytes_.size(), std::move(name)});
+            bytes_.push_back(0U);
+            bytes_.push_back(0U);
+        }
+
+        void pad_to(std::size_t offset) {
+            REQUIRE(bytes_.size() <= offset);
+            bytes_.resize(offset, 0x00U);
+        }
+
+        [[nodiscard]] std::vector<std::uint8_t> finish() {
+            for (const auto& patch : patches_) {
+                const auto label_it = labels_.find(patch.label);
+                REQUIRE(label_it != labels_.end());
+                const auto address = static_cast<std::uint16_t>(label_it->second);
+                bytes_[patch.offset] = static_cast<std::uint8_t>(address);
+                bytes_[patch.offset + 1U] = static_cast<std::uint8_t>(address >> 8U);
+            }
+            return bytes_;
+        }
+
+      private:
+        struct patch_ref final {
+            std::size_t offset{};
+            std::string label;
+        };
+
+        std::vector<std::uint8_t> bytes_;
+        std::map<std::string, std::size_t, std::less<>> labels_;
+        std::vector<patch_ref> patches_;
+    };
+
     [[nodiscard]] bool
     framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
         REQUIRE(frame.pixels != nullptr);
@@ -388,6 +475,167 @@ TEST_CASE("m15 embedded game manifests mirror the checked-in roster", "[m15][rom
     CHECK(game_manifests.size() == 1U);
     CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("headoni").empty());
     CHECK(mnemos::manifests::irem_m15::game_manifest_toml("rtype").empty());
+}
+
+TEST_CASE("m15 i8080 executes expanded data stack and ALU opcode groups", "[m15][i8080]") {
+    i8080_harness h;
+    h.run({
+        0x31U, 0xF0U, 0x23U,             // LXI SP,$23F0
+        0x01U, 0x00U, 0x20U,             // LXI B,$2000
+        0x3EU, 0x12U,                    // MVI A,$12
+        0x02U,                           // STAX B
+        0x0AU,                           // LDAX B
+        0x32U, 0x01U, 0x20U,             // STA $2001
+        0x21U, 0x78U, 0x56U,             // LXI H,$5678
+        0x22U, 0x02U, 0x20U,             // SHLD $2002
+        0x21U, 0x00U, 0x00U,             // LXI H,$0000
+        0x2AU, 0x02U, 0x20U,             // LHLD $2002
+        0x7CU,                           // MOV A,H
+        0x32U, 0x04U, 0x20U,             // STA $2004
+        0x7DU,                           // MOV A,L
+        0x32U, 0x05U, 0x20U,             // STA $2005
+        0xEBU,                           // XCHG
+        0x7AU,                           // MOV A,D
+        0x32U, 0x06U, 0x20U,             // STA $2006
+        0x7BU,                           // MOV A,E
+        0x32U, 0x07U, 0x20U,             // STA $2007
+        0x21U, 0xBCU, 0x9AU,             // LXI H,$9ABC
+        0xE5U,                           // PUSH H
+        0x21U, 0x00U, 0x00U,             // LXI H,$0000
+        0xE1U,                           // POP H
+        0x7CU,                           // MOV A,H
+        0x32U, 0x08U, 0x20U,             // STA $2008
+        0x7DU,                           // MOV A,L
+        0x32U, 0x09U, 0x20U,             // STA $2009
+        0x3EU, 0x81U,                    // MVI A,$81
+        0x07U, 0x17U, 0x0FU, 0x1FU,       // RLC; RAL; RRC; RAR
+        0x32U, 0x0AU, 0x20U,             // STA $200A
+        0x3EU, 0x09U,                    // MVI A,$09
+        0xC6U, 0x09U,                    // ADI $09
+        0x27U,                           // DAA -> $18
+        0x32U, 0x0BU, 0x20U,             // STA $200B
+        0x3EU, 0xFEU,                    // MVI A,$FE
+        0xC6U, 0x02U,                    // ADI $02 -> carry
+        0xCEU, 0x00U,                    // ACI $00 -> $01
+        0x32U, 0x0CU, 0x20U,             // STA $200C
+        0x3EU, 0x10U,                    // MVI A,$10
+        0xD6U, 0x01U,                    // SUI $01
+        0xDEU, 0x0FU,                    // SBI $0F -> $00
+        0x32U, 0x0DU, 0x20U,             // STA $200D
+        0x3EU, 0xF0U,                    // MVI A,$F0
+        0xE6U, 0x0FU,                    // ANI $0F
+        0xF6U, 0x80U,                    // ORI $80
+        0xEEU, 0xFFU,                    // XRI $FF
+        0xFEU, 0x7FU,                    // CPI $7F
+        0xF5U,                           // PUSH PSW
+        0x3EU, 0x00U,                    // MVI A,$00
+        0xC6U, 0x01U,                    // ADI $01
+        0xF1U,                           // POP PSW
+        0x32U, 0x0EU, 0x20U,             // STA $200E
+        0x21U, 0x10U, 0x20U,             // LXI H,$2010
+        0x36U, 0x0FU,                    // MVI M,$0F
+        0x34U,                           // INR M
+        0x35U,                           // DCR M
+        0x7EU,                           // MOV A,M
+        0x32U, 0x0FU, 0x20U,             // STA $200F
+        0xDBU, 0x03U,                    // IN $03
+        0x32U, 0x10U, 0x20U,             // STA $2010
+        0x3EU, 0x5AU,                    // MVI A,$5A
+        0xD3U, 0x00U,                    // OUT $00
+        0x76U,                           // HLT
+    });
+
+    CHECK(h.ram(0x2000U) == 0x12U);
+    CHECK(h.ram(0x2001U) == 0x12U);
+    CHECK(h.ram(0x2002U) == 0x78U);
+    CHECK(h.ram(0x2003U) == 0x56U);
+    CHECK(h.ram(0x2004U) == 0x56U);
+    CHECK(h.ram(0x2005U) == 0x78U);
+    CHECK(h.ram(0x2006U) == 0x56U);
+    CHECK(h.ram(0x2007U) == 0x78U);
+    CHECK(h.ram(0x2008U) == 0x9AU);
+    CHECK(h.ram(0x2009U) == 0xBCU);
+    CHECK(h.ram(0x200AU) == 0xC1U);
+    CHECK(h.ram(0x200BU) == 0x18U);
+    CHECK(h.ram(0x200CU) == 0x01U);
+    CHECK(h.ram(0x200DU) == 0x00U);
+    CHECK(h.ram(0x200EU) == 0x7FU);
+    CHECK(h.ram(0x200FU) == 0x0FU);
+    CHECK(h.ram(0x2010U) == 0xA3U);
+    REQUIRE(h.port_writes.size() == 1U);
+    CHECK(h.port_writes[0] == std::make_pair<std::uint16_t, std::uint8_t>(0U, 0x5AU));
+    CHECK(h.reg("F") == 0x14U);
+    CHECK(h.cpu.unsupported_opcode_count() == 0U);
+}
+
+TEST_CASE("m15 i8080 executes conditional jumps calls and returns", "[m15][i8080]") {
+    program_builder p;
+    p.emit({0x31U, 0xF0U, 0x23U, 0x3EU, 0x00U, 0xFEU, 0x00U}); // Z set
+    p.emit(0xC4U);                                             // CNZ fail
+    p.ref16("fail");
+    p.emit(0xCCU); // CZ mark_z
+    p.ref16("mark_z");
+    p.emit(0xC2U); // JNZ fail
+    p.ref16("fail");
+    p.emit(0xCAU); // JZ after_z
+    p.ref16("after_z");
+
+    p.label("fail");
+    p.emit({0x3EU, 0xEEU, 0x32U, 0x12U, 0x20U, 0x76U});
+
+    p.label("after_z");
+    p.emit({0x3EU, 0xFEU, 0xC6U, 0x02U}); // A=0, carry set
+    p.emit(0xD2U);                        // JNC fail
+    p.ref16("fail");
+    p.emit(0xDAU); // JC after_c
+    p.ref16("after_c");
+
+    p.label("after_c");
+    p.emit(0xCDU); // CALL cond_ret
+    p.ref16("cond_ret");
+    p.emit({0x3EU, 0x33U, 0x32U, 0x13U, 0x20U, 0x76U});
+
+    p.label("mark_z");
+    p.emit({0x3EU, 0x11U, 0x32U, 0x11U, 0x20U, 0xC9U});
+
+    p.label("cond_ret");
+    p.emit({0x3EU, 0x44U, 0x37U, 0xD8U, 0x3EU, 0xEEU, 0x32U, 0x12U, 0x20U,
+            0xC9U});
+
+    i8080_harness h;
+    h.run(p.finish());
+
+    CHECK(h.ram(0x2011U) == 0x11U);
+    CHECK(h.ram(0x2012U) == 0x00U);
+    CHECK(h.ram(0x2013U) == 0x33U);
+    CHECK(h.reg("A") == 0x33U);
+    CHECK(h.cpu.unsupported_opcode_count() == 0U);
+}
+
+TEST_CASE("m15 i8080 executes RST vector calls", "[m15][i8080]") {
+    program_builder p;
+    p.emit(0xC3U); // JMP start
+    p.ref16("start");
+    p.pad_to(0x10U);
+
+    p.label("start");
+    p.emit({0x31U, 0xF0U, 0x23U, // LXI SP,$23F0
+            0xFFU,               // RST 7 -> $0038
+            0x3EU, 0x66U,        // MVI A,$66
+            0x32U, 0x14U, 0x20U, // STA $2014
+            0x76U});             // HLT
+
+    p.pad_to(0x38U);
+    p.emit({0x3EU, 0x55U,        // MVI A,$55
+            0x32U, 0x15U, 0x20U, // STA $2015
+            0xC9U});             // RET
+
+    i8080_harness h;
+    h.run(p.finish());
+
+    CHECK(h.ram(0x2014U) == 0x66U);
+    CHECK(h.ram(0x2015U) == 0x55U);
+    CHECK(h.cpu.unsupported_opcode_count() == 0U);
 }
 
 TEST_CASE("m15 local artifacts load CRC-clean through embedded manifests",
