@@ -358,10 +358,13 @@ rollback-ready save-state, capability discovery, and real local wrapper-ZIP
 player smoke for all three checked-in sets. The inventory also identifies
 duplicate / misbucketed `dbreed` copies outside `M81`; M81 still lacks final
 authentic video/raster priority, DIP, and board-timing parity. M107 now has a
-ROM-contract-only manifest layer for `airass` and `firebarr`;
-`MNEMOS_M107_SET_DIR=D:\emu\irem\M107` proves the sorted ZIPs load CRC-clean,
-while root and `m72`-folder duplicates are also visible as M107 artifacts; the
-two Fire Barrel `.7z` copies remain metadata-only until converted or unpacked.
+first-pass executable V33/V35/YM2151/GA20 board and player route for `airass`
+and `firebarr`; `MNEMOS_M107_SET_DIR=D:\emu\irem\M107` proves the sorted ZIPs
+load CRC-clean, and the board tests cover pending command/reply state from main
+V33 latch write through V35 latch read, sound-RAM storage, reply-port write, and
+save-state persistence. Root and `m72`-folder duplicates are also visible as M107
+artifacts; the two Fire Barrel `.7z` copies remain metadata-only until converted
+or unpacked.
 M82 is player-routable
 through its own first-pass board profile, including scanline-composed video for
 mid-frame palette writes and M72-style tile priority groups around sprites, but

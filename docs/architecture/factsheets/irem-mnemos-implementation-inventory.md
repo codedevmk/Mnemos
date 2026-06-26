@@ -57,7 +57,7 @@ now contract-only.
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 41% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling/IRQ timing, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
-| M107 | `irem_m107` | 45% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load | None | V33/V35-specific behavior, M107 memory/I/O, GA21/GA22 video, GA20 protocol/analog mix, DIP/raster/parity |
+| M107 | `irem_m107` | 48% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load | None | V33/V35-specific behavior, M107 memory/I/O, GA21/GA22 video, command IRQ/GA20 analog mix, DIP/raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
 ## Correct Graphics And Music Certification
@@ -386,11 +386,11 @@ visual and audio parity proof.
   Air Assault has direct nonblank screenshot and save/load smoke. Fire Barrel is
   CRC-clean and player-routable, but not parity-certified.
 - **Correct gfx/music:** not certified. Current rendering is an M107-local
-  diagnostic path; GA20 exists, but the full sound-CPU protocol and analog
-  balance/filtering are not proven.
+  diagnostic path; GA20 exists, and the command/reply latch now has pending-state
+  proof, but command IRQ timing and analog balance/filtering are not proven.
 - **Remaining:** V33/V35-specific timing and on-die peripheral proof, exact M107
-  memory/I/O map, GA21/GA22 video and priority behavior, GA20 sound protocol and
-  analog mix, DIP behavior, raster timing, and screenshot/audio parity.
+  memory/I/O map, GA21/GA22 video and priority behavior, command IRQ timing,
+  GA20 analog mix, DIP behavior, raster timing, and screenshot/audio parity.
 
 ### M119
 

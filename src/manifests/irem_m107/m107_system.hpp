@@ -23,7 +23,7 @@ namespace mnemos::manifests::irem_m107 {
     inline constexpr std::size_t gfx_rom_size = 0x600000U;
     inline constexpr std::size_t sample_rom_size = 0x080000U;
     inline constexpr std::size_t subdata_rom_size = 0x040000U;
-    inline constexpr std::uint32_t m107_system_state_version = 4U;
+    inline constexpr std::uint32_t m107_system_state_version = 5U;
 
     inline constexpr std::uint32_t visible_width = 384U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -137,11 +137,17 @@ namespace mnemos::manifests::irem_m107 {
         std::uint8_t sound_reply{0xFFU};
         std::uint8_t control_register{};
         std::uint8_t ym_address{};
+        bool sound_latch_pending{};
+        bool sound_reply_pending{};
 
         explicit m107_system(common::rom_set_image image, m107_board_params board_params = {});
 
         void run_frame();
         void set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept;
+        void write_sound_latch(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint8_t read_sound_latch() noexcept;
+        void write_sound_reply(std::uint8_t value) noexcept;
+        [[nodiscard]] std::uint8_t read_sound_reply() noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
     };

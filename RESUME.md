@@ -122,7 +122,8 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Real local Air Assault player smoke wrote nonblank screenshots and successfully saved/loaded state.
 - The previous OKI6295 placeholder has been replaced by a native GA20 PCM model, and the M107 player now captures GA20 PCM at the YM output cadence and mixes drained GA20 stereo samples into the player audio buffer with signed clamping.
 - The M107 adapter now consumes explicit arcade `service` frontend input for the currently modeled service bit, keeps `mode` as a legacy service alias, and persists explicit `service` / `test` fields in adapter state version 2. Operator-test board wiring remains unassigned until the M107 input map is verified.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, exact M107 memory/I/O map, GA21/GA22 video/priority behavior, remaining GA20 sound-CPU protocol plus analog balance/filtering proof, DIP behavior, raster timing, and screenshot parity.
+- The M107 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 5, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M107 closure still needs V33/V35-specific timing and on-die peripheral proof beyond the shared V30-compatible core, exact M107 memory/I/O map, GA21/GA22 video/priority behavior, command IRQ timing plus remaining GA20 analog balance/filtering proof, DIP behavior, raster timing, and screenshot parity.
 
 ### Irem M15
 
@@ -774,6 +775,23 @@ M92 sound-command latch continuation validation on 2026-06-26:
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 - This proves the modeled command/reply latch contract and save-state persistence. It is not encrypted V35 program decryption, command IRQ timing, GA20 analog behavior, or final M92 audio parity proof.
 
+M107 sound-command latch continuation validation on 2026-06-26:
+
+- Added explicit M107 sound-command latch/reply helpers. Main V33 sound-command writes now set `sound_latch_pending`; V35 latch reads clear it; V35 reply writes set `sound_reply_pending`; both pending bits are preserved in M107 board save-state version 5.
+- Added `m107 sound command latch reaches the V35 and returns a reply`, with one section proving unread commands remain pending and another proving a synthetic V35 sound program reads the command, stores it in sound RAM, and writes it back through the reply port.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test mnemos_player`
+- Focused M107 CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `3/3`
+  - `mnemos_manifests_irem_m107_test`
+  - `mnemos_apps_player_irem_m107_adapter_test`
+  - `mnemos_apps_player_irem_m107_corpus_golden_test`
+- `clang-format --dry-run --Werror` passed for the touched M107 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+- This proves the modeled M107 command/reply latch contract and save-state persistence. It is not command IRQ timing, full V35 on-die peripheral proof, GA20 analog balance/filtering, or final M107 audio parity proof.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -795,7 +813,7 @@ Repository hygiene notes:
 2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.
-5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
+5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, command IRQ timing, remaining GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 6. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 7. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
 8. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.

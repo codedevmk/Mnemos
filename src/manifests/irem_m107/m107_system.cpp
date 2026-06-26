@@ -176,8 +176,7 @@ namespace mnemos::manifests::irem_m107 {
                              std::span<const std::uint8_t> samples,
                              std::span<const std::uint8_t> vram,
                              std::span<const std::uint8_t> palette,
-                             std::span<const std::uint8_t> sprites,
-                             std::string_view rom_layout) {
+                             std::span<const std::uint8_t> sprites, std::string_view rom_layout) {
         const std::uint8_t tint = layout_tint(rom_layout);
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             for (std::uint32_t x = 0; x < visible_width; ++x) {
@@ -249,7 +248,7 @@ namespace mnemos::manifests::irem_m107 {
         main_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
             switch (port) {
             case port_out_sound_latch:
-                sound_latch = value;
+                write_sound_latch(value);
                 break;
             case port_out_control:
                 control_register = value;
@@ -270,7 +269,7 @@ namespace mnemos::manifests::irem_m107 {
             }
             switch (port) {
             case sound_port_latch:
-                return sound_latch;
+                return read_sound_latch();
             default:
                 return 0xFFU;
             }
@@ -282,7 +281,7 @@ namespace mnemos::manifests::irem_m107 {
             }
             switch (port) {
             case sound_port_reply:
-                sound_reply = value;
+                write_sound_reply(value);
                 break;
             case sound_port_ym2151_addr:
                 ym_address = value;
@@ -313,7 +312,8 @@ namespace mnemos::manifests::irem_m107 {
         const auto* gfx = roms.region("gfx");
         const auto* subdata = roms.region("subdata");
         const auto* samples = roms.region("samples");
-        video.compose(gfx != nullptr ? std::span<const std::uint8_t>(*gfx) : std::span<const std::uint8_t>{},
+        video.compose(gfx != nullptr ? std::span<const std::uint8_t>(*gfx)
+                                     : std::span<const std::uint8_t>{},
                       subdata != nullptr ? std::span<const std::uint8_t>(*subdata)
                                          : std::span<const std::uint8_t>{},
                       samples != nullptr ? std::span<const std::uint8_t>(*samples)
@@ -321,11 +321,30 @@ namespace mnemos::manifests::irem_m107 {
                       vram, palette_ram, sprite_ram, params.rom_layout);
     }
 
-    void m107_system::set_inputs(std::uint8_t p1, std::uint8_t p2,
-                                 std::uint8_t system) noexcept {
+    void m107_system::set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept {
         input_p1 = p1;
         input_p2 = p2;
         input_system = system;
+    }
+
+    void m107_system::write_sound_latch(std::uint8_t value) noexcept {
+        sound_latch = value;
+        sound_latch_pending = true;
+    }
+
+    std::uint8_t m107_system::read_sound_latch() noexcept {
+        sound_latch_pending = false;
+        return sound_latch;
+    }
+
+    void m107_system::write_sound_reply(std::uint8_t value) noexcept {
+        sound_reply = value;
+        sound_reply_pending = true;
+    }
+
+    std::uint8_t m107_system::read_sound_reply() noexcept {
+        sound_reply_pending = false;
+        return sound_reply;
     }
 
     void m107_system::save_state(chips::state_writer& writer) const {
@@ -352,6 +371,8 @@ namespace mnemos::manifests::irem_m107 {
         writer.u8(sound_reply);
         writer.u8(control_register);
         writer.u8(ym_address);
+        writer.boolean(sound_latch_pending);
+        writer.boolean(sound_reply_pending);
     }
 
     void m107_system::load_state(chips::state_reader& reader) {
@@ -386,6 +407,8 @@ namespace mnemos::manifests::irem_m107 {
         sound_reply = reader.u8();
         control_register = reader.u8();
         ym_address = reader.u8();
+        sound_latch_pending = reader.boolean();
+        sound_reply_pending = reader.boolean();
     }
 
     std::unique_ptr<m107_system> assemble_m107(common::rom_set_image image,

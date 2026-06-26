@@ -52,9 +52,9 @@ namespace {
 
     [[nodiscard]] const rom_set_file* find_file_at_or_after(const rom_set_region& region,
                                                             std::size_t offset) noexcept {
-        const auto it = std::find_if(
-            region.files.begin(), region.files.end(),
-            [offset](const rom_set_file& file) { return file.offset >= offset; });
+        const auto it =
+            std::find_if(region.files.begin(), region.files.end(),
+                         [offset](const rom_set_file& file) { return file.offset >= offset; });
         return it == region.files.end() ? nullptr : &*it;
     }
 
@@ -286,7 +286,28 @@ namespace {
             0xB0U, 0x00U, 0xE6U, 0x24U, // slowest byte advance
             0xB0U, 0xF6U, 0xE6U, 0x25U, // audible volume
             0xB0U, 0x02U, 0xE6U, 0x26U, // control bit 1 = key-on
-            0xF4U};                      // HLT
+            0xF4U};                     // HLT
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x0200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m107_sound_command_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::sound_rom_size, 0xFFU);
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::vector<std::uint8_t> program{
+            0xB8U, 0x00U, 0xD0U, // MOV AX,D000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xE4U, 0x00U,        // IN AL,00   (main sound command latch)
+            0xA2U, 0x00U, 0x00U, // MOV [0000],AL
+            0xE6U, 0x02U,        // OUT 02,AL  (sound reply)
+            0xF4U                // HLT
+        };
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x0200U + i] = program[i];
         }
@@ -361,8 +382,7 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
         require_boot_chunk_reload(*maincpu);
 
         REQUIRE(find_region(decl, "soundcpu") != nullptr);
-        CHECK(find_region(decl, "soundcpu")->size ==
-              mnemos::manifests::irem_m107::sound_rom_size);
+        CHECK(find_region(decl, "soundcpu")->size == mnemos::manifests::irem_m107::sound_rom_size);
         require_region_contract(*find_region(decl, "soundcpu"));
 
         REQUIRE(find_region(decl, "gfx") != nullptr);
@@ -376,10 +396,8 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
     }
 
     CHECK(names == expected_names);
-    CHECK(mnemos::manifests::irem_m107::board_params_for("airass").rom_layout ==
-          "air_assault");
-    CHECK(mnemos::manifests::irem_m107::board_params_for("firebarr").rom_layout ==
-          "fire_barrel");
+    CHECK(mnemos::manifests::irem_m107::board_params_for("airass").rom_layout == "air_assault");
+    CHECK(mnemos::manifests::irem_m107::board_params_for("firebarr").rom_layout == "fire_barrel");
 }
 
 TEST_CASE("m107 embedded game manifests mirror the checked-in roster", "[m107][romset]") {
@@ -437,11 +455,48 @@ TEST_CASE("m107 sound CPU drives the Irem GA20 register window", "[m107][board][
     CHECK(system->pcm.last_sample() < 0);
 }
 
+TEST_CASE("m107 sound command latch reaches the V35 and returns a reply", "[m107][board][audio]") {
+    namespace m107 = mnemos::manifests::irem_m107;
+
+    auto image = synthetic_m107_image();
+    image.regions["maincpu"] = make_m107_program({0xB0U, 0x5AU, 0xE6U, 0x00U, 0xF4U});
+
+    SECTION("unread command remains pending") {
+        image.regions["soundcpu"] = synthetic_m107_sound_program();
+
+        auto system = m107::assemble_m107(std::move(image), m107::board_params_for("airass"));
+        REQUIRE(system != nullptr);
+
+        system->run_frame();
+
+        CHECK(system->sound_latch == 0x5AU);
+        CHECK(system->sound_latch_pending);
+        CHECK_FALSE(system->sound_reply_pending);
+    }
+
+    SECTION("V35 latch read clears pending and reply write is latched") {
+        image.regions["soundcpu"] = synthetic_m107_sound_command_program();
+
+        auto system = m107::assemble_m107(std::move(image), m107::board_params_for("airass"));
+        REQUIRE(system != nullptr);
+
+        system->run_frame();
+
+        CHECK(system->sound_latch == 0x5AU);
+        CHECK_FALSE(system->sound_latch_pending);
+        CHECK(system->sound_reply == 0x5AU);
+        CHECK(system->sound_reply_pending);
+        CHECK(system->sound_ram[0] == 0x5AU);
+    }
+}
+
 TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][board]") {
     namespace m107 = mnemos::manifests::irem_m107;
 
     auto source = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
     source->set_inputs(0xFEU, 0xFDU, 0xFBU);
+    source->write_sound_latch(0x76U);
+    source->write_sound_reply(0x34U);
     source->run_frame();
     source->work_ram[7] = 0x6CU;
 
@@ -456,7 +511,8 @@ TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][
     std::vector<std::uint8_t> old_version_state = state;
     REQUIRE(old_version_state.size() >= sizeof(std::uint32_t));
     old_version_state[0] = static_cast<std::uint8_t>(m107::m107_system_state_version - 1U);
-    auto old_version = m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
+    auto old_version =
+        m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("airass"));
     mnemos::chips::state_reader old_reader(old_version_state);
     old_version->load_state(old_reader);
     CHECK_FALSE(old_reader.ok());
@@ -468,6 +524,10 @@ TEST_CASE("m107 save state preserves board identity and runtime state", "[m107][
     CHECK(restored->work_ram[0] == 0x42U);
     CHECK(restored->work_ram[7] == 0x6CU);
     CHECK(restored->input_p1 == 0xFEU);
+    CHECK(restored->sound_latch == 0x76U);
+    CHECK(restored->sound_latch_pending);
+    CHECK(restored->sound_reply == 0x34U);
+    CHECK(restored->sound_reply_pending);
 
     auto wrong_layout =
         m107::assemble_m107(synthetic_m107_image(), m107::board_params_for("firebarr"));
