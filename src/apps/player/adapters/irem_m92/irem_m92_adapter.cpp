@@ -40,9 +40,20 @@ namespace mnemos::apps::player::adapters::irem_m92 {
             std::string set_name;
         };
 
+        struct parent_resolution final {
+            mnemos::manifests::common::rom_file_provider provider;
+            std::optional<mnemos::manifests::common::rom_set_decl> decl;
+            std::vector<rom_load_issue> issues;
+        };
+
         struct nested_zip_source final {
             std::vector<std::uint8_t> bytes;
             std::string entry_name;
+        };
+
+        struct nested_zip_provider final {
+            mnemos::manifests::common::rom_file_provider provider;
+            std::string source;
         };
 
         frontend_sdk::session_capability_info make_session_capabilities() {
@@ -241,6 +252,54 @@ namespace mnemos::apps::player::adapters::irem_m92 {
             return nested_zip_source{.bytes = std::move(*inner), .entry_name = nested->name};
         }
 
+        [[nodiscard]] std::optional<nested_zip_provider>
+        make_single_nested_zip_provider_from_path(const fs::path& path,
+                                                  std::string_view expected_set) {
+            auto bytes = mnemos::io::read_file(path.string());
+            if (!bytes.has_value()) {
+                return std::nullopt;
+            }
+            auto nested = unwrap_single_nested_zip(*bytes);
+            if (!nested.has_value()) {
+                return std::nullopt;
+            }
+            const fs::path nested_path{nested->entry_name};
+            if (nested_path.stem().string() != expected_set) {
+                return std::nullopt;
+            }
+            auto provider =
+                mnemos::manifests::common::make_zip_rom_provider(std::move(nested->bytes));
+            if (!provider.has_value()) {
+                return std::nullopt;
+            }
+            return nested_zip_provider{.provider = std::move(*provider),
+                                       .source = path.filename().string() + "/" +
+                                                 nested_path.filename().string()};
+        }
+
+        [[nodiscard]] std::optional<nested_zip_provider>
+        find_sibling_nested_zip_parent(const fs::path& sibling_dir, std::string_view parent) {
+            if (sibling_dir.empty()) {
+                return std::nullopt;
+            }
+            std::error_code ec;
+            if (!fs::is_directory(sibling_dir, ec)) {
+                return std::nullopt;
+            }
+            for (fs::directory_iterator it{sibling_dir, ec}, end; !ec && it != end;
+                 it.increment(ec)) {
+                std::error_code entry_ec;
+                if (!it->is_regular_file(entry_ec) ||
+                    !ends_with_zip(it->path().filename().string())) {
+                    continue;
+                }
+                if (auto nested = make_single_nested_zip_provider_from_path(it->path(), parent)) {
+                    return nested;
+                }
+            }
+            return std::nullopt;
+        }
+
         [[nodiscard]] std::optional<mnemos::manifests::common::rom_set_decl>
         parse_irem_decl(std::string_view text, std::string source,
                         std::optional<std::string_view> expected_set = std::nullopt,
@@ -287,11 +346,104 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                                    set_name);
         }
 
-        [[nodiscard]] loaded_set load_declared_set(
-            mnemos::manifests::common::rom_set_decl decl,
-            const mnemos::manifests::common::rom_file_provider& provider) {
+        [[nodiscard]] parent_resolution
+        with_parent_fallback(const mnemos::manifests::common::rom_file_provider& clone,
+                             const std::string& parent, const std::string& rom_path) {
+            parent_resolution resolved;
+            resolved.provider = clone;
+            if (rom_path.empty()) {
+                std::fprintf(stderr,
+                             "[irem_m92] set declares parent '%s' but no path is known to "
+                             "locate it; shared ROMs will be missing\n",
+                             parent.c_str());
+                resolved.issues.push_back(
+                    {parent + ".zip",
+                     "set declares parent '" + parent + "' but no ROM path is known to locate it"});
+                return resolved;
+            }
+            if (!is_plain_set_id(parent)) {
+                std::fprintf(stderr,
+                             "[irem_m92] refusing to resolve parent '%s': not a plain set id\n",
+                             parent.c_str());
+                resolved.issues.push_back(
+                    {"parent", "refusing to resolve parent '" + parent + "': not a plain set id"});
+                return resolved;
+            }
+
+            const fs::path source_path{rom_path};
+            const fs::path sibling_dir =
+                source_path.has_parent_path() ? source_path.parent_path() : fs::path{};
+            const fs::path parent_zip_path = sibling_dir / (parent + ".zip");
+            const fs::path parent_dir_path = sibling_dir / parent;
+            std::string parent_source = parent + ".zip";
+            bool unreadable_zip = false;
+            auto parent_provider = mnemos::manifests::common::make_zip_rom_provider_from_path(
+                parent_zip_path.string(), &unreadable_zip);
+            if (!parent_provider.has_value() && !unreadable_zip &&
+                is_directory_path(parent_dir_path.string())) {
+                parent_provider = mnemos::manifests::common::make_directory_rom_provider(
+                    parent_dir_path.string());
+                parent_source = parent;
+            }
+            if (!parent_provider.has_value() && !unreadable_zip) {
+                if (auto nested = find_sibling_nested_zip_parent(sibling_dir, parent)) {
+                    parent_provider = std::move(nested->provider);
+                    parent_source = std::move(nested->source);
+                }
+            }
+            if (!parent_provider.has_value()) {
+                std::fprintf(stderr, "[irem_m92] parent set %s or %s: %s\n",
+                             parent_zip_path.string().c_str(), parent_dir_path.string().c_str(),
+                             unreadable_zip ? "zip is not readable" : "not found");
+                resolved.issues.push_back(
+                    {parent + ".zip",
+                     "parent set '" + parent_zip_path.string() + "' or '" +
+                         parent_dir_path.string() +
+                         (unreadable_zip ? "' has an unreadable zip" : "' not found")});
+                return resolved;
+            }
+
+            if (auto manifest_bytes = (*parent_provider)("game.toml")) {
+                const std::string text(manifest_bytes->begin(), manifest_bytes->end());
+                resolved.decl = parse_irem_decl(text, parent_source + "/game.toml",
+                                                std::string_view{parent}, &resolved.issues);
+                if (!resolved.decl.has_value()) {
+                    return resolved;
+                }
+            } else {
+                resolved.decl = embedded_decl_for_set(parent);
+                if (!resolved.decl.has_value()) {
+                    resolved.issues.push_back(
+                        {parent_source + "/game.toml",
+                         "parent set '" + parent + "' has no game.toml and no embedded manifest"});
+                    return resolved;
+                }
+            }
+            resolved.provider = mnemos::manifests::common::make_fallback_rom_provider(
+                clone, std::move(*parent_provider));
+            return resolved;
+        }
+
+        [[nodiscard]] loaded_set
+        load_declared_set(mnemos::manifests::common::rom_set_decl decl,
+                          mnemos::manifests::common::rom_file_provider provider,
+                          const std::string& rom_path) {
             loaded_set result;
-            result.image = mnemos::manifests::common::load_rom_set(decl, provider);
+            mnemos::manifests::common::rom_file_provider effective = std::move(provider);
+            std::vector<rom_load_issue> parent_issues;
+            if (decl.parent.has_value()) {
+                parent_resolution parent = with_parent_fallback(effective, *decl.parent, rom_path);
+                if (parent.decl.has_value()) {
+                    decl = mnemos::manifests::common::inherit_parent_regions(*parent.decl,
+                                                                             std::move(decl));
+                }
+                parent_issues = std::move(parent.issues);
+                effective = std::move(parent.provider);
+            }
+            result.image = mnemos::manifests::common::load_rom_set(decl, effective);
+            for (auto& issue : parent_issues) {
+                result.image.issues.push_back(std::move(issue));
+            }
             result.set_name = decl.name;
             for (const auto& issue : result.image.issues) {
                 std::fprintf(stderr, "[irem_m92] %s: %s\n", issue.file.c_str(),
@@ -312,11 +464,11 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                     if (!decl.has_value()) {
                         return result;
                     }
-                    return load_declared_set(std::move(*decl), provider);
+                    return load_declared_set(std::move(*decl), std::move(provider), rom_path);
                 }
                 if (auto set_id = set_id_from_rom_path(rom_path)) {
                     if (auto decl = embedded_decl_for_set(*set_id)) {
-                        return load_declared_set(std::move(*decl), provider);
+                        return load_declared_set(std::move(*decl), std::move(provider), rom_path);
                     }
                 }
                 result.image.issues.push_back(
@@ -345,11 +497,13 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                         if (!decl.has_value()) {
                             return result;
                         }
-                        return load_declared_set(std::move(*decl), *provider);
+                        return load_declared_set(std::move(*decl), std::move(*provider),
+                                                 effective_rom_path);
                     }
                     if (auto set_id = set_id_from_rom_path(effective_rom_path)) {
                         if (auto decl = embedded_decl_for_set(*set_id)) {
-                            return load_declared_set(std::move(*decl), *provider);
+                            return load_declared_set(std::move(*decl), std::move(*provider),
+                                                     effective_rom_path);
                         }
                     }
                     for (const char* region :
@@ -369,8 +523,7 @@ namespace mnemos::apps::player::adapters::irem_m92 {
             return m92::assemble_m92(std::move(set.image), m92::board_params_for(set.set_name));
         }
 
-        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample,
-                                               std::int16_t addend) noexcept {
+        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample, std::int16_t addend) noexcept {
             const std::int32_t mixed = static_cast<std::int32_t>(sample) + addend;
             if (mixed > 32767) {
                 return 32767;
@@ -443,9 +596,9 @@ namespace mnemos::apps::player::adapters::irem_m92 {
     } // namespace
 
     irem_m92_adapter::irem_m92_adapter(std::vector<std::uint8_t> rom, std::string display_name,
-                                         frontend_sdk::scheduler_factory* scheduler_factory,
-                                         std::optional<std::uint16_t> dip_override,
-                                         std::string rom_path)
+                                       frontend_sdk::scheduler_factory* scheduler_factory,
+                                       std::optional<std::uint16_t> dip_override,
+                                       std::string rom_path)
         : session_(make_session_capabilities()) {
         (void)scheduler_factory;
         const std::uint64_t source_byte_count = rom.size();
@@ -535,7 +688,7 @@ namespace mnemos::apps::player::adapters::irem_m92 {
     }
 
     void irem_m92_adapter::apply_input(int port,
-                                        const frontend_sdk::controller_state& state) noexcept {
+                                       const frontend_sdk::controller_state& state) noexcept {
         if (port < 0 || port > 1) {
             return;
         }

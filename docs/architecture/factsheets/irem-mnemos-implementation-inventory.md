@@ -15,8 +15,8 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 75 currently match a
-checked-in Mnemos Irem manifest, 69 have a direct player-loadable route through
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 83 currently match a
+checked-in Mnemos Irem manifest, 77 have a direct player-loadable route through
 ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only.
@@ -56,7 +56,7 @@ now contract-only.
 | M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip`; Gallop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
-| M92 | `irem_m92` | 32% first-pass | `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` | all 5 data-gated first-pass sets | None | Encrypted V35 sound CPU handling, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
+| M92 | `irem_m92` | 34% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `hook`, `inthunt` | all 7 data-gated first-pass sets; `gunforcej`/`gunforceu` direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 45% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load | None | V33/V35-specific behavior, M107 memory/I/O, GA21/GA22 video, GA20 protocol/analog mix, DIP/raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
@@ -79,6 +79,8 @@ targets:
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
   regional clone wrappers with a Z80/Z80/YM2151/DAC first-pass route.
+  M92 currently covers the complete local GunForce parent wrapper plus the local
+  US/Japan split clone wrappers through clone-parent fallback.
   M84 now includes V35-profile `ltswords` and `gallop` routes; `ltswords`
   declares missing PROM/PLD artifacts, while `gallop.zip` supplies the complete
   listed PROM/PLD set but still needs board-parity evidence.
@@ -337,19 +339,21 @@ visual and audio parity proof.
 - **Techsheet games:** Gunforce, R-Type Leo, In the Hunt, Undercover Cops,
   Ninja Baseball Bat Man, Blade Master, Mystic Riders, Major Title 2, Hook,
   Superior/Perfect Soldiers, Gunforce 2.
-- **Mnemos games:** `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` as
-  checked-in manifests under `irem_m92`.
-- **Smoke playable:** all five local wrapper ZIPs load through `--system
+- **Mnemos games:** `bmaster`, `gunforce`, `gunforcej`, `gunforceu`,
+  `gunforc2`, `hook`, `inthunt` as checked-in manifests under `irem_m92`.
+- **Smoke playable:** all seven local wrapper ZIPs load through `--system
   irem_m92`/the M92 adapter data gate, step one frame, produce a 320x240
-  nonblank diagnostic frame, and produce save-state bytes.
+  nonblank diagnostic frame, and produce save-state bytes. `gunforcej` and
+  `gunforceu` also have direct `mnemos_player` screenshot/save-state smokes.
 - **Correct gfx/music:** not certified. Current video is a diagnostic
   region/RAM/PLD-driven first-pass compositor, and current sound only proves the
   YM2151/GA20 shell plus synthetic GA20 MMIO.
-- **Local corpus note:** five local M92-era title-wrapper ZIPs now resolve to
+- **Local corpus note:** seven local M92-era title-wrapper ZIPs now resolve to
   embedded set IDs and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
-  (`bmaster`), Gunforce (`gunforce`), Gunforce 2 (`gunforc2`), Hook (`hook`),
-  and In the Hunt (`inthunt`). In the current sorted corpus they live under
-  `D:\emu\irem\M72`, which is a storage artifact rather than board proof.
+  (`bmaster`), Gunforce parent (`gunforce`), Gunforce Japan/US split clones
+  (`gunforcej`, `gunforceu`) via parent fallback, Gunforce 2 (`gunforc2`), Hook
+  (`hook`), and In the Hunt (`inthunt`). In the current sorted corpus they live
+  under `D:\emu\irem\M72`, which is a storage artifact rather than board proof.
 - **Remaining:** encrypted V35 sound CPU handling, exact GA20/YM2151 sound
   protocol, GA21/GA22 video/priority behavior, exact memory/I/O maps,
   protection details, DIP/raster behavior, and visual/audio parity proof.

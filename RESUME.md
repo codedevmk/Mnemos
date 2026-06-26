@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M75 Vigilante clone-loading commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M92 GunForce clone-loading commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -95,6 +95,15 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - The M84 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 - Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry/Cosmic Cop/Ken-Go video/priority, raster timing, board-authentic DIP behavior, recover/prove the `ltswords` PROM/PLD artifacts, and screenshot/audio parity before calling this authentic.
 
+### Irem M92
+
+- Checked-in manifests now cover `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `hook`, and `inthunt`.
+- `gunforcej` and `gunforceu` are local split clone sets declaring parent `gunforce`; their manifests carry only the changed main CPU ROMs and inherit shared sound, tile, sprite, sample, and PLD regions from the parent.
+- The M92 adapter now resolves clone parents beside the selected set path via direct `parent.zip`, unpacked parent directories, or sibling single-inner wrapper ZIPs such as `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip`.
+- Player adapter remains first-pass: NEC V33/V35 shell, YM2151/GA20 windows, diagnostic GA21/GA22-era video path, resident media validation, rollback-ready save-state, and capability discovery.
+- `MNEMOS_M92_SET_DIR=D:\emu\irem\M72` now data-gates seven M92 sets. Direct `mnemos_player` smokes for `gunforceu` and `gunforcej` write 320x240 nonblank PPMs plus 266-byte save states after one frame.
+- Remaining: encrypted V35 sound execution/decryption/protocol proof, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
+
 ### Irem M107
 
 - M107 now has a first-pass executable board, not only ROM-contract metadata.
@@ -153,6 +162,7 @@ Important local corpus facts:
 - `scripts\irem\inventory-corpus.ps1` now emits per-item `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and `load_readiness` fields plus a grouped `tracked_sets` section. Current local Image Fight grouping: `imgfight` is the M72 parent/standalone set with two direct player-loadable ZIP/folder routes plus one metadata-only `.7z`; `imgfightj` and `imgfightjb` are M72 clones declaring parent `imgfight`, each with one direct player-loadable ZIP plus one metadata-only `.7z`.
 - M52 Moon Patrol local wrapper routes are `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` for `mpatrol` and `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip` for `mpatrolw`; both are single-inner ZIP wrappers and directly player-loadable through `MNEMOS_M52_SET_DIR=D:\emu\irem`.
 - M75 Vigilante local wrapper route is `D:\emu\irem\Vigilante_Arcade_EN (3).zip`; it is a single-inner ZIP wrapper and directly player-loadable through `MNEMOS_M75_SET_DIR=D:\emu\irem`.
+- M92 GunForce local wrapper routes are `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip` for parent `gunforce`, `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_JA.zip` for clone `gunforcej`, and `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN (1).zip` for clone `gunforceu`. The two clone wrappers are split sets and require parent fallback to the parent wrapper.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths plus bounded `related_hits` for same-size, set-local MCU-looking candidates with the wrong CRC.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
@@ -619,6 +629,27 @@ M75 official clone parent-fallback validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 
+M92 GunForce clone parent-fallback validation on 2026-06-26:
+
+- Added checked-in M92 manifests for `gunforcej` and `gunforceu`, each declaring parent `gunforce` and only the changed main CPU ROMs from the local split wrappers.
+- Added M92 adapter parent fallback resolution for direct parent ZIPs, unpacked parent directories, and sibling single-inner wrapper ZIPs.
+- Re-ran `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-corpus\inventory-m92-clones.json`: `123` items, `83` tracked items, `77` direct player-loadable routes, `6` metadata-only tracked routes, and `7` M92 manifest matches. The M72-bucket board-family candidates dropped from 10 to 8 because `gunforcej` and `gunforceu` are now tracked M92 sets.
+- Configure/build:
+  - `cmake --preset windows-msvc-debug`
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m92_test mnemos_manifests_irem_m92_system_test mnemos_apps_player_irem_m92_adapter_test`
+- Focused M92 CTest with `MNEMOS_M92_SET_DIR=D:\emu\irem\M72`: `4/4`
+  - `mnemos_manifests_irem_m92_test`
+  - `mnemos_manifests_irem_m92_system_test`
+  - `mnemos_apps_player_irem_m92_adapter_test`
+  - `mnemos_apps_player_irem_m92_corpus_golden_test`
+- Direct player smokes:
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN (1).zip" --screenshot build\scratch\irem-m92\gunforceu.ppm --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN (1).zip" --save-state build\scratch\irem-m92\gunforceu.mns --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_JA.zip" --screenshot build\scratch\irem-m92\gunforcej.ppm --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_JA.zip" --save-state build\scratch\irem-m92\gunforcej.mns --frames 1`
+  - Screenshot proof: both PPMs are `320x240`, `230400` payload bytes, and nonzero RGB payloads.
+  - Save-state proof: both M92 clone save states are `266` bytes after one frame.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -639,10 +670,11 @@ Repository hygiene notes:
 1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, Z80 sound protocol, sample/DAC timing, DIP/input proof, raster timing, bootleg coverage, and screenshot/audio parity.
 2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
-4. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
-5. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
-6. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
-7. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
+4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.
+5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
+6. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
+7. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
+8. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
 
 ## Resume Commands
 

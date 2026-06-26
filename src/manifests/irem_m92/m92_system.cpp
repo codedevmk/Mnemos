@@ -152,7 +152,7 @@ namespace mnemos::manifests::irem_m92 {
         if (set_name == "bmaster") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_b"};
         }
-        if (set_name == "gunforce") {
+        if (set_name == "gunforce" || set_name == "gunforcej" || set_name == "gunforceu") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_a"};
         }
         if (set_name == "gunforc2") {
@@ -167,8 +167,7 @@ namespace mnemos::manifests::irem_m92 {
         return {};
     }
 
-    m92_video::m92_video()
-        : pixels_(static_cast<std::size_t>(visible_width) * visible_height, 0U) {
+    m92_video::m92_video() : pixels_(static_cast<std::size_t>(visible_width) * visible_height, 0U) {
         reset(chips::reset_kind::power_on);
     }
 
@@ -195,14 +194,11 @@ namespace mnemos::manifests::irem_m92 {
                 .stride = visible_width};
     }
 
-    void m92_video::compose(std::span<const std::uint8_t> tiles,
-                             std::span<const std::uint8_t> sprites,
-                             std::span<const std::uint8_t> plds,
-                             std::span<const std::uint8_t> samples,
-                             std::span<const std::uint8_t> vram,
-                             std::span<const std::uint8_t> palette,
-                             std::span<const std::uint8_t> sprite_ram,
-                             std::string_view rom_layout) {
+    void
+    m92_video::compose(std::span<const std::uint8_t> tiles, std::span<const std::uint8_t> sprites,
+                       std::span<const std::uint8_t> plds, std::span<const std::uint8_t> samples,
+                       std::span<const std::uint8_t> vram, std::span<const std::uint8_t> palette,
+                       std::span<const std::uint8_t> sprite_ram, std::string_view rom_layout) {
         const std::uint8_t tint = layout_tint(rom_layout);
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             for (std::uint32_t x = 0; x < visible_width; ++x) {
@@ -369,7 +365,8 @@ namespace mnemos::manifests::irem_m92 {
         const auto* sprites = roms.region("sprites");
         const auto* plds = roms.region("plds");
         const auto* samples = roms.region("samples");
-        video.compose(tiles != nullptr ? std::span<const std::uint8_t>(*tiles) : std::span<const std::uint8_t>{},
+        video.compose(tiles != nullptr ? std::span<const std::uint8_t>(*tiles)
+                                       : std::span<const std::uint8_t>{},
                       sprites != nullptr ? std::span<const std::uint8_t>(*sprites)
                                          : std::span<const std::uint8_t>{},
                       plds != nullptr ? std::span<const std::uint8_t>(*plds)
@@ -379,8 +376,7 @@ namespace mnemos::manifests::irem_m92 {
                       vram, palette_ram, sprite_ram, params.rom_layout);
     }
 
-    void m92_system::set_inputs(std::uint8_t p1, std::uint8_t p2,
-                                 std::uint8_t system) noexcept {
+    void m92_system::set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept {
         input_p1 = p1;
         input_p2 = p2;
         input_system = system;
@@ -445,7 +441,7 @@ namespace mnemos::manifests::irem_m92 {
     }
 
     std::unique_ptr<m92_system> assemble_m92(common::rom_set_image image,
-                                               m92_board_params board_params) {
+                                             m92_board_params board_params) {
         return std::make_unique<m92_system>(std::move(image), board_params);
     }
 

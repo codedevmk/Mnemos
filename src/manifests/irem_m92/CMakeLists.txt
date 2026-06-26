@@ -1,6 +1,8 @@
 set(_irem_m92_game_manifest_files
     "games/bmaster.toml"
     "games/gunforce.toml"
+    "games/gunforcej.toml"
+    "games/gunforceu.toml"
     "games/gunforc2.toml"
     "games/hook.toml"
     "games/inthunt.toml"

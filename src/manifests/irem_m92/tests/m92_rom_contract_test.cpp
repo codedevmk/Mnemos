@@ -42,16 +42,23 @@ namespace {
     [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>&
     expected_contracts() {
         static const std::map<std::string, expected_contract, std::less<>> contracts{
-            {"bmaster", {.tiles_size = 0x100000U, .sprites_size = 0x200000U,
-                         .samples_size = 0x080000U}},
-            {"gunforce", {.tiles_size = 0x100000U, .sprites_size = 0x100000U,
-                          .samples_size = 0x020000U}},
-            {"gunforc2", {.tiles_size = 0x200000U, .sprites_size = 0x400000U,
-                          .samples_size = 0x100000U}},
-            {"hook", {.tiles_size = 0x100000U, .sprites_size = 0x400000U,
-                      .samples_size = 0x080000U, .players = 4U}},
-            {"inthunt", {.tiles_size = 0x200000U, .sprites_size = 0x400000U,
-                         .samples_size = 0x080000U}},
+            {"bmaster",
+             {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x080000U}},
+            {"gunforce",
+             {.tiles_size = 0x100000U, .sprites_size = 0x100000U, .samples_size = 0x020000U}},
+            {"gunforcej",
+             {.tiles_size = 0x100000U, .sprites_size = 0x100000U, .samples_size = 0x020000U}},
+            {"gunforceu",
+             {.tiles_size = 0x100000U, .sprites_size = 0x100000U, .samples_size = 0x020000U}},
+            {"gunforc2",
+             {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x100000U}},
+            {"hook",
+             {.tiles_size = 0x100000U,
+              .sprites_size = 0x400000U,
+              .samples_size = 0x080000U,
+              .players = 4U}},
+            {"inthunt",
+             {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x080000U}},
         };
         return contracts;
     }
@@ -91,8 +98,7 @@ namespace {
         }
     }
 
-    void require_interleaved_region(const rom_set_region& region,
-                                    std::size_t expected_size) {
+    void require_interleaved_region(const rom_set_region& region, std::size_t expected_size) {
         CHECK(region.size == expected_size);
         require_region_contract(region);
         REQUIRE((region.files.size() % 2U) == 0U);
@@ -335,8 +341,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m92 checked-in game manifests parse and cover local candidate corpus",
-          "[m92][romset]") {
+TEST_CASE("m92 checked-in game manifests parse and cover local candidate corpus", "[m92][romset]") {
     namespace fs = std::filesystem;
 
     const fs::path games_dir{MNEMOS_IREM_M92_GAMES_DIR};
@@ -367,39 +372,48 @@ TEST_CASE("m92 checked-in game manifests parse and cover local candidate corpus"
         const auto expected_it = expected.find(set_name);
         REQUIRE(expected_it != expected.end());
         const expected_contract& contract = expected_it->second;
+        rom_set_decl effective_decl = decl;
+        if (decl.parent.has_value()) {
+            const auto parent_it = declarations.find(*decl.parent);
+            REQUIRE(parent_it != declarations.end());
+            effective_decl =
+                mnemos::manifests::common::inherit_parent_regions(parent_it->second, decl);
+        }
+        const rom_set_decl& checked_decl = effective_decl;
 
         INFO("set=" << set_name);
         names.insert(decl.name);
-        CHECK(decl.board == "irem_m92");
-        CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
-        REQUIRE(decl.sound.has_value());
-        CHECK(*decl.sound == "encrypted_v35");
-        CHECK(decl.players == contract.players);
+        CHECK(checked_decl.board == "irem_m92");
+        CHECK(checked_decl.orientation ==
+              mnemos::manifests::common::screen_orientation::horizontal);
+        REQUIRE(checked_decl.sound.has_value());
+        CHECK(*checked_decl.sound == "encrypted_v35");
+        CHECK(checked_decl.players == contract.players);
 
-        const rom_set_region* maincpu = find_region(decl, "maincpu");
+        const rom_set_region* maincpu = find_region(checked_decl, "maincpu");
         REQUIRE(maincpu != nullptr);
         require_interleaved_region(*maincpu, mnemos::manifests::irem_m92::main_rom_size);
 
-        const rom_set_region* soundcpu = find_region(decl, "soundcpu");
+        const rom_set_region* soundcpu = find_region(checked_decl, "soundcpu");
         REQUIRE(soundcpu != nullptr);
         require_interleaved_region(*soundcpu, mnemos::manifests::irem_m92::sound_rom_size);
 
-        const rom_set_region* tiles = find_region(decl, "tiles");
+        const rom_set_region* tiles = find_region(checked_decl, "tiles");
         REQUIRE(tiles != nullptr);
         CHECK(tiles->size == contract.tiles_size);
         require_region_contract(*tiles);
 
-        const rom_set_region* sprites = find_region(decl, "sprites");
+        const rom_set_region* sprites = find_region(checked_decl, "sprites");
         REQUIRE(sprites != nullptr);
         CHECK(sprites->size == contract.sprites_size);
         require_region_contract(*sprites);
 
-        const rom_set_region* samples = find_region(decl, "samples");
+        const rom_set_region* samples = find_region(checked_decl, "samples");
         REQUIRE(samples != nullptr);
         CHECK(samples->size == contract.samples_size);
         require_region_contract(*samples);
 
-        const rom_set_region* plds = find_region(decl, "plds");
+        const rom_set_region* plds = find_region(checked_decl, "plds");
         REQUIRE(plds != nullptr);
         CHECK(plds->size == mnemos::manifests::irem_m92::plds_rom_size);
         require_region_contract(*plds);
@@ -419,8 +433,7 @@ TEST_CASE("m92 embedded game manifests mirror the checked-in roster", "[m92][rom
     CHECK(mnemos::manifests::irem_m92::game_manifest_toml("firebarr").empty());
 }
 
-TEST_CASE("m92 local artifacts load CRC-clean through embedded manifests",
-          "[m92][romset][data]") {
+TEST_CASE("m92 local artifacts load CRC-clean through embedded manifests", "[m92][romset][data]") {
     const auto dir_env = environment_value("MNEMOS_M92_SET_DIR");
     if (!dir_env.has_value() || dir_env->empty()) {
         SKIP("set MNEMOS_M92_SET_DIR to directories containing the M92 zip/folder corpus");
@@ -455,6 +468,7 @@ TEST_CASE("m92 local artifacts load CRC-clean through embedded manifests",
     for (const auto& set_name : expected_sets) {
         INFO("set=" << set_name);
         const auto decl = require_embedded_decl(set_name);
+        auto effective_decl = decl;
         const auto contract_it = expected_contracts().find(set_name);
         REQUIRE(contract_it != expected_contracts().end());
 
@@ -462,8 +476,19 @@ TEST_CASE("m92 local artifacts load CRC-clean through embedded manifests",
         REQUIRE(source_it != indexed_sources.end());
         INFO("source=" << source_it->second.string());
 
-        const auto image =
-            mnemos::manifests::common::load_rom_set(decl, require_provider(source_it->second));
+        auto provider = require_provider(source_it->second);
+        if (decl.parent.has_value()) {
+            const auto parent_source_it = indexed_sources.find(*decl.parent);
+            REQUIRE(parent_source_it != indexed_sources.end());
+            INFO("parent_source=" << parent_source_it->second.string());
+            const auto parent_decl = require_embedded_decl(*decl.parent);
+            effective_decl =
+                mnemos::manifests::common::inherit_parent_regions(parent_decl, effective_decl);
+            provider = mnemos::manifests::common::make_fallback_rom_provider(
+                std::move(provider), require_provider(parent_source_it->second));
+        }
+
+        const auto image = mnemos::manifests::common::load_rom_set(effective_decl, provider);
         for (const auto& issue : image.issues) {
             INFO(issue.file << ": " << issue.message);
         }
