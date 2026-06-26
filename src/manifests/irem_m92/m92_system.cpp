@@ -152,6 +152,9 @@ namespace mnemos::manifests::irem_m92 {
         if (set_name == "bmaster") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_b"};
         }
+        if (set_name == "mysticri" || set_name == "gunhohki" || set_name == "mysticrib") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_b"};
+        }
         if (set_name == "gunforce" || set_name == "gunforcej" || set_name == "gunforceu") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_a"};
         }

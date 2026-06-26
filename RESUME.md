@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M92 GunForce clone-loading commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M92 Mystic Riders manifest/corpus-proof commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -97,11 +97,12 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 ### Irem M92
 
-- Checked-in manifests now cover `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `hook`, and `inthunt`.
+- Checked-in manifests now cover `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, and `mysticrib`.
 - `gunforcej` and `gunforceu` are local split clone sets declaring parent `gunforce`; their manifests carry only the changed main CPU ROMs and inherit shared sound, tile, sprite, sample, and PLD regions from the parent.
+- `gunhohki` and `mysticrib` are local Mystic Riders family split clone routes declaring parent `mysticri`; `gunhohki` carries changed main CPU ROMs, while `mysticrib` carries changed main and sound CPU ROMs and inherits graphics, samples, and PLDs from the parent.
 - The M92 adapter now resolves clone parents beside the selected set path via direct `parent.zip`, unpacked parent directories, or sibling single-inner wrapper ZIPs such as `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip`.
 - Player adapter remains first-pass: NEC V33/V35 shell, YM2151/GA20 windows, diagnostic GA21/GA22-era video path, resident media validation, rollback-ready save-state, and capability discovery.
-- `MNEMOS_M92_SET_DIR=D:\emu\irem\M72` now data-gates seven M92 sets. Direct `mnemos_player` smokes for `gunforceu` and `gunforcej` write 320x240 nonblank PPMs plus 266-byte save states after one frame.
+- `MNEMOS_M92_SET_DIR=D:\emu\irem` now data-gates ten M92 sets. Direct `mnemos_player` smokes for `gunforceu`, `gunforcej`, `mysticri`, `gunhohki`, and `mysticrib` write 320x240 nonblank PPMs plus save states after one frame.
 - Remaining: encrypted V35 sound execution/decryption/protocol proof, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
 
 ### Irem M107
@@ -163,6 +164,7 @@ Important local corpus facts:
 - M52 Moon Patrol local wrapper routes are `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` for `mpatrol` and `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip` for `mpatrolw`; both are single-inner ZIP wrappers and directly player-loadable through `MNEMOS_M52_SET_DIR=D:\emu\irem`.
 - M75 Vigilante local wrapper route is `D:\emu\irem\Vigilante_Arcade_EN (3).zip`; it is a single-inner ZIP wrapper and directly player-loadable through `MNEMOS_M75_SET_DIR=D:\emu\irem`.
 - M92 GunForce local wrapper routes are `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip` for parent `gunforce`, `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_JA.zip` for clone `gunforcej`, and `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN (1).zip` for clone `gunforceu`. The two clone wrappers are split sets and require parent fallback to the parent wrapper.
+- M92 Mystic Riders local wrapper routes are `D:\emu\irem\Mystic-Riders_Arcade_EN.zip` for parent `mysticri`, `D:\emu\irem\Mystic-Riders_Arcade_JA.zip` for clone `gunhohki`, and `D:\emu\irem\Mystic-Riders_Arcade_EN (1).zip` for clone `mysticrib`. The Japan and split bootleg routes require parent fallback to the parent wrapper.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths plus bounded `related_hits` for same-size, set-local MCU-looking candidates with the wrong CRC.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
@@ -650,6 +652,33 @@ M92 GunForce clone parent-fallback validation on 2026-06-26:
   - Screenshot proof: both PPMs are `320x240`, `230400` payload bytes, and nonzero RGB payloads.
   - Save-state proof: both M92 clone save states are `266` bytes after one frame.
 
+M92 Mystic Riders manifest/corpus continuation validation on 2026-06-26:
+
+- Added checked-in M92 manifests for `mysticri`, `gunhohki`, and `mysticrib`. `mysticri` is the complete local parent wrapper route; `gunhohki` and `mysticrib` declare parent `mysticri` and compose through the existing M92 sibling-wrapper parent fallback.
+- Re-ran `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-corpus\inventory-m92-mystic.json`: `123` items, `86` tracked items, `80` direct player-loadable routes, `6` metadata-only tracked routes, and `10` M92 manifest matches. The three Mystic Riders root wrappers now resolve as tracked M92 sets.
+- Configure/build:
+  - `cmake --preset windows-msvc-debug`
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m92_test mnemos_manifests_irem_m92_system_test mnemos_apps_player_irem_m92_adapter_test mnemos_player`
+- Focused M92 CTest with `MNEMOS_M92_SET_DIR=D:\emu\irem`: `4/4`
+  - `mnemos_manifests_irem_m92_test`
+  - `mnemos_manifests_irem_m92_system_test`
+  - `mnemos_apps_player_irem_m92_adapter_test`
+  - `mnemos_apps_player_irem_m92_corpus_golden_test`
+- Direct player smokes:
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\Mystic-Riders_Arcade_EN.zip" --screenshot build\scratch\irem-m92\mysticri.ppm --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\Mystic-Riders_Arcade_EN.zip" --save-state build\scratch\irem-m92\mysticri.mns --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\Mystic-Riders_Arcade_JA.zip" --screenshot build\scratch\irem-m92\gunhohki.ppm --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\Mystic-Riders_Arcade_JA.zip" --save-state build\scratch\irem-m92\gunhohki.mns --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\Mystic-Riders_Arcade_EN (1).zip" --screenshot build\scratch\irem-m92\mysticrib.ppm --frames 1`
+  - `mnemos_player --system irem_m92 --rom "D:\emu\irem\Mystic-Riders_Arcade_EN (1).zip" --save-state build\scratch\irem-m92\mysticrib.mns --frames 1`
+  - Screenshot proof: all three PPMs are `320x240`, `230400` payload bytes, `256` unique payload byte values, and nonzero RGB payloads.
+  - Save-state proof: `mysticri.mns` is `147118` bytes, `gunhohki.mns` is `147108` bytes, and `mysticrib.mns` is `147105` bytes after one frame.
+- `clang-format --dry-run --Werror` passed for the touched M92 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92 including Mystic Riders, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -700,7 +729,7 @@ $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72"
 $env:MNEMOS_M90_SET_DIR="D:\emu\irem"
-$env:MNEMOS_M92_SET_DIR="D:\emu\irem\M72"
+$env:MNEMOS_M92_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug
 ```

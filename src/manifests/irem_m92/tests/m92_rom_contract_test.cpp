@@ -52,6 +52,8 @@ namespace {
              {.tiles_size = 0x100000U, .sprites_size = 0x100000U, .samples_size = 0x020000U}},
             {"gunforc2",
              {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x100000U}},
+            {"gunhohki",
+             {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x040000U}},
             {"hook",
              {.tiles_size = 0x100000U,
               .sprites_size = 0x400000U,
@@ -59,6 +61,10 @@ namespace {
               .players = 4U}},
             {"inthunt",
              {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x080000U}},
+            {"mysticri",
+             {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x040000U}},
+            {"mysticrib",
+             {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x040000U}},
         };
         return contracts;
     }

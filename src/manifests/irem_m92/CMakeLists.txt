@@ -4,8 +4,11 @@ set(_irem_m92_game_manifest_files
     "games/gunforcej.toml"
     "games/gunforceu.toml"
     "games/gunforc2.toml"
+    "games/gunhohki.toml"
     "games/hook.toml"
     "games/inthunt.toml"
+    "games/mysticri.toml"
+    "games/mysticrib.toml"
 )
 set(MNEMOS_IREM_M92_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M92_EMBEDDED_CONSTANTS "")
