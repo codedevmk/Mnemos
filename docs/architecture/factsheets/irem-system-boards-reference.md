@@ -133,13 +133,17 @@ era, but CPU family alone is not sufficient board proof.
 - **Main CPU:** Zilog Z80 @ 3.579545 MHz for the current Vigilante route.
 - **Sound CPU:** Z80 @ 3.579545 MHz
 - **Sound chip:** YM2151 @ 3.579545 MHz plus 8-bit DAC/sample path
-- **Notable titles:** Vigilante.
+- **Notable titles:** Vigilante, including official regional revisions now
+  tracked as `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`,
+  `vigilantg`, and `vigilanto`.
 - **Notes:** Closely related in era/custom usage to the M72 family, but the
   executable Vigilante path is not a V30 board. Keep M75 separated from M72/M81
   routing unless new board evidence proves a different title-specific variant.
 - **Current Mnemos hardware hooks:** two-bank KNA91-style 5-bit palette RAM is
   modeled for CPU-visible writes/readback, and the Vigilante rear-color register
   preserves the rear-layer disable bit separately from the masked color code.
+  Official split clone wrappers resolve their shared media through the complete
+  local `vigilant` parent; bootleg coverage remains separate.
 
 ### M77
 - **Years:** 1988

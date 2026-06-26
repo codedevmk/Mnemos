@@ -1,8 +1,7 @@
 # Vigilante (World Rev E) -- Irem M75 Z80/Z80/YM2151/DAC board.
 # Reference set is the complete parent stored locally as a single nested zip in
-# D:\emu\irem\Vigilante_Arcade_EN (3).zip. Clone ZIPs in the same corpus carry
-# only partial regional program/graphics deltas and intentionally remain outside
-# this first-pass parent contract.
+# D:\emu\irem\Vigilante_Arcade_EN (3).zip. Official regional clone ZIPs in the
+# same corpus carry only partial program/graphics deltas and inherit this parent.
 
 [set]
 schema      = "mnemos-romset/1"

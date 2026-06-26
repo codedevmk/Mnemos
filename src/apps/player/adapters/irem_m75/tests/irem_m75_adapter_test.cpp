@@ -396,7 +396,7 @@ TEST_CASE("irem_m75_adapter validates real M75 ROM sets", "[irem_m75][data]") {
     }
 
     const auto sources = index_source_roots(source_roots(dir_env->c_str()));
-    const std::set<std::string, std::less<>> expected{"vigilant"};
+    const std::set<std::string, std::less<>> expected = embedded_set_names();
     for (const auto& set_id : expected) {
         INFO("set=" << set_id);
         auto found = sources.find(set_id);

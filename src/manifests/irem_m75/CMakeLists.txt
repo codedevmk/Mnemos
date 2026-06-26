@@ -1,5 +1,11 @@
 set(_irem_m75_game_manifest_files
     "games/vigilant.toml"
+    "games/vigilanta.toml"
+    "games/vigilantb.toml"
+    "games/vigilantc.toml"
+    "games/vigilantd.toml"
+    "games/vigilantg.toml"
+    "games/vigilanto.toml"
 )
 set(MNEMOS_IREM_M75_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M75_EMBEDDED_CONSTANTS "")

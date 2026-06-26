@@ -49,7 +49,7 @@ now contract-only.
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
-| M75 | `irem_m75` first-pass | 24% | `vigilant` | local Vigilante parent wrapper | None | Authentic Vigilante graphics priority, DIP proof, raster phase, audio parity, clone/bootleg parent-fallback coverage |
+| M75 | `irem_m75` first-pass | 28% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers | None | Authentic Vigilante graphics priority, DIP proof, raster phase, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 60% | `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 4 local sets | None | Board classification audit, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
@@ -77,8 +77,8 @@ targets:
   tests and four R-Type II set routes.
 - M15, M75, M81, M84, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
-  M75 currently covers only the complete local Vigilante parent wrapper with a
-  Z80/Z80/YM2151/DAC first-pass route.
+  M75 currently covers the complete local Vigilante parent wrapper plus official
+  regional clone wrappers with a Z80/Z80/YM2151/DAC first-pass route.
   M84 now includes V35-profile `ltswords` and `gallop` routes; `ltswords`
   declares missing PROM/PLD artifacts, while `gallop.zip` supplies the complete
   listed PROM/PLD set but still needs board-parity evidence.
@@ -205,11 +205,16 @@ visual and audio parity proof.
 ### M75
 
 - **Techsheet games:** Vigilante.
-- **Mnemos games:** `vigilant`.
+- **Mnemos games:** `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`,
+  `vigilantd`, `vigilantg`, `vigilanto`.
 - **Smoke playable:** the complete local parent wrapper
-  `D:\emu\irem\Vigilante_Arcade_EN (3).zip` unwraps to `vigilant.zip`, matches
-  the checked-in M75 manifest, loads CRC-clean through `--system irem_m75`, steps
-  frames, produces nonblank diagnostic output, and supports save/load.
+  `D:\emu\irem\Vigilante_Arcade_EN (3).zip` unwraps to `vigilant.zip`, and the
+  official regional clone wrappers `D:\emu\irem\Vigilante_Arcade_EN (1).zip`
+  through `D:\emu\irem\Vigilante_Arcade_EN (6).zip` plus
+  `D:\emu\irem\Vigilante_Arcade_JA.zip` load CRC-clean through clone/parent fallback. The data-gated corpus test steps
+  all seven M75 manifests, produces nonblank diagnostic output, and supports
+  save/load; `D:\emu\irem\Vigilante_Arcade_JA.zip` also has direct screenshot and
+  save-state smoke evidence.
 - **Correct gfx/music:** none. The board has a first-pass diagnostic video path
   and executable Z80/Z80/YM2151/DAC ownership, not authentic Vigilante
   graphics/music certification.
@@ -217,15 +222,16 @@ visual and audio parity proof.
   sound CPU, YM2151, DAC, 16-bit Z80 memory buses, Vigilante ROM banking, RAM
   windows, inputs/DIPs, sound latch/ack, sample-address/DAC ports, the two-bank
   5-bit KNA91-style palette bus, rear color/disable register semantics,
-  whole-board save/load identity, and embedded `vigilant` ROM contract.
+  whole-board save/load identity, and embedded parent/clone Vigilante ROM
+  contracts.
   `src/apps/player` registers `--system irem_m75` and alias `m75`, supports direct ZIPs,
-  single-inner wrapper ZIPs, unpacked folders, in-archive `game.toml`, resident
-  media validation, rollback-ready save-state, capability discovery, and
+  single-inner wrapper ZIPs, unpacked folders, in-archive `game.toml`, clone/parent
+  fallback media resolution, resident media validation, rollback-ready save-state, capability discovery, and
   `MNEMOS_M75_SET_DIR=D:\emu\irem` corpus gating.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
   Vigilante background/foreground/sprite priority, verify exact memory/I/O/DIP
   and raster phase, prove sound CPU sample/DAC behavior against board evidence,
-  add clone/bootleg parent-fallback coverage for partial regional ZIPs, and
+  add bootleg parent-fallback coverage for partial bootleg ZIPs, and
   collect screenshot/audio parity evidence before marking graphics or music
   correct.
 

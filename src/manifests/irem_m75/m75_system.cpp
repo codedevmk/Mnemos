@@ -86,6 +86,13 @@ namespace mnemos::manifests::irem_m75 {
             }
         }
 
+        [[nodiscard]] bool is_vigilante_set(std::string_view set_name) noexcept {
+            return set_name == "vigilant" || set_name == "vigilantg" ||
+                   set_name == "vigilanto" || set_name == "vigilanta" ||
+                   set_name == "vigilantb" || set_name == "vigilantc" ||
+                   set_name == "vigilantd";
+        }
+
         [[nodiscard]] std::uint8_t layout_code(std::string_view layout) noexcept {
             if (layout == "vigilant") {
                 return 1U;
@@ -132,7 +139,7 @@ namespace mnemos::manifests::irem_m75 {
     } // namespace
 
     m75_board_params board_params_for(std::string_view set_name) noexcept {
-        if (set_name == "vigilant") {
+        if (is_vigilante_set(set_name)) {
             return {.dsw1_default = vigilant_dsw1_default,
                     .dsw2_default = vigilant_dsw2_default,
                     .rom_layout = "vigilant"};

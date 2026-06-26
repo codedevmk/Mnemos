@@ -26,7 +26,7 @@ namespace {
 
     struct expected_contract final {
         std::size_t region_size{};
-        std::size_t file_count{};
+        std::optional<std::size_t> file_count{};
     };
 
     [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>&
@@ -41,7 +41,7 @@ namespace {
             {"sprites", {.region_size = mnemos::manifests::irem_m75::sprite_gfx_size,
                          .file_count = 8U}},
             {"bgtiles", {.region_size = mnemos::manifests::irem_m75::bg_tile_gfx_size,
-                         .file_count = 3U}},
+                         .file_count = std::nullopt}},
             {"samples", {.region_size = mnemos::manifests::irem_m75::sample_rom_size,
                          .file_count = 1U}},
             {"proms", {.region_size = mnemos::manifests::irem_m75::proms_size,
@@ -93,16 +93,34 @@ namespace {
         return std::move(*parsed.value);
     }
 
+    [[nodiscard]] std::map<std::string, rom_set_decl, std::less<>>
+    embedded_declarations() {
+        std::map<std::string, rom_set_decl, std::less<>> declarations;
+        for (const auto& [set_name, toml] : mnemos::manifests::irem_m75::embedded::game_manifests) {
+            rom_set_decl decl = parse_decl(toml, "embedded:irem_m75/" + std::string{set_name});
+            CHECK(decl.name == set_name);
+            declarations.emplace(std::string{set_name}, std::move(decl));
+        }
+        return declarations;
+    }
+
 } // namespace
 
-TEST_CASE("m75 embedded manifest covers the Vigilante parent contract", "[m75][rom]") {
+TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts",
+          "[m75][rom]") {
+    const auto declarations = embedded_declarations();
     std::set<std::string, std::less<>> names;
-    for (const auto& [set_name, toml] : mnemos::manifests::irem_m75::embedded::game_manifests) {
+    for (const auto& [set_name, raw_decl] : declarations) {
         INFO("set=" << set_name);
-        names.emplace(std::string{set_name});
 
-        rom_set_decl decl = parse_decl(toml, "embedded:irem_m75/" + std::string{set_name});
-        CHECK(decl.name == set_name);
+        rom_set_decl decl = raw_decl;
+        if (decl.parent.has_value()) {
+            const auto parent_it = declarations.find(*decl.parent);
+            REQUIRE(parent_it != declarations.end());
+            decl = mnemos::manifests::common::inherit_parent_regions(parent_it->second,
+                                                                     std::move(decl));
+        }
+        names.emplace(decl.name);
         CHECK(decl.board == "irem_m75");
         CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
 
@@ -110,13 +128,29 @@ TEST_CASE("m75 embedded manifest covers the Vigilante parent contract", "[m75][r
             const rom_set_region* region = find_region(decl, region_name);
             REQUIRE(region != nullptr);
             CHECK(region->size == contract.region_size);
-            CHECK(region->files.size() == contract.file_count);
+            if (contract.file_count.has_value()) {
+                CHECK(region->files.size() == *contract.file_count);
+            }
             require_region_contract(*region);
         }
     }
 
-    CHECK(names == std::set<std::string, std::less<>>{"vigilant"});
+    CHECK(names == std::set<std::string, std::less<>>{
+                       "vigilant", "vigilanta", "vigilantb", "vigilantc",
+                       "vigilantd", "vigilantg", "vigilanto"});
     CHECK_FALSE(mnemos::manifests::irem_m75::game_manifest_toml("vigilant").empty());
+    REQUIRE(declarations.at("vigilanta").parent.has_value());
+    CHECK(*declarations.at("vigilanta").parent == "vigilant");
+    REQUIRE(declarations.at("vigilantb").parent.has_value());
+    CHECK(*declarations.at("vigilantb").parent == "vigilant");
+    REQUIRE(declarations.at("vigilantc").parent.has_value());
+    CHECK(*declarations.at("vigilantc").parent == "vigilant");
+    REQUIRE(declarations.at("vigilantd").parent.has_value());
+    CHECK(*declarations.at("vigilantd").parent == "vigilant");
+    REQUIRE(declarations.at("vigilantg").parent.has_value());
+    CHECK(*declarations.at("vigilantg").parent == "vigilant");
+    REQUIRE(declarations.at("vigilanto").parent.has_value());
+    CHECK(*declarations.at("vigilanto").parent == "vigilant");
 }
 
 TEST_CASE("m75 embedded manifests stay in sync with disk TOML", "[m75][rom]") {
@@ -124,11 +158,26 @@ TEST_CASE("m75 embedded manifests stay in sync with disk TOML", "[m75][rom]") {
         SKIP("MNEMOS_IREM_M75_GAMES_DIR is not defined");
     }
 
-    const std::filesystem::path path =
-        std::filesystem::path{MNEMOS_IREM_M75_GAMES_DIR} / "vigilant.toml";
-    const std::string disk = read_text_file(path);
-    CHECK(mnemos::manifests::irem_m75::game_manifest_toml("vigilant") == disk);
-    rom_set_decl decl = parse_decl(disk, path.string());
-    CHECK(decl.name == "vigilant");
-    CHECK(decl.board == "irem_m75");
+    const auto declarations = embedded_declarations();
+    std::set<std::string, std::less<>> disk_names;
+    for (const std::filesystem::directory_entry& entry :
+         std::filesystem::directory_iterator{MNEMOS_IREM_M75_GAMES_DIR}) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".toml") {
+            continue;
+        }
+        const std::string set_name = entry.path().stem().string();
+        INFO("set=" << set_name);
+        const std::string disk = read_text_file(entry.path());
+        CHECK(mnemos::manifests::irem_m75::game_manifest_toml(set_name) == disk);
+        rom_set_decl decl = parse_decl(disk, entry.path().string());
+        CHECK(decl.name == set_name);
+        CHECK(decl.board == "irem_m75");
+        disk_names.emplace(set_name);
+    }
+
+    std::set<std::string, std::less<>> embedded_names;
+    for (const auto& [set_name, _] : declarations) {
+        embedded_names.emplace(set_name);
+    }
+    CHECK(disk_names == embedded_names);
 }

@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M75 Vigilante handoff commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M75 Vigilante clone-loading commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -53,13 +53,13 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - M75 now has a first-pass executable Vigilante board and player adapter, not only corpus metadata.
 - Board implementation lives in `src/manifests/irem_m75/m75_system.hpp` and `src/manifests/irem_m75/m75_system.cpp`.
 - The current M75 route is intentionally Z80 main + Z80 sound + YM2151 + DAC for Vigilante, not the V30-family M-series core used by later Irem boards.
-- Checked-in manifest coverage starts with parent set `vigilant` from the local complete single-inner wrapper `D:\emu\irem\Vigilante_Arcade_EN (3).zip`.
+- Checked-in manifest coverage includes parent set `vigilant` plus official regional clones `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, and `vigilanto`. The parent comes from the local complete single-inner wrapper `D:\emu\irem\Vigilante_Arcade_EN (3).zip`; clone wrappers carry partial regional deltas and now resolve shared media through the parent fallback path.
 - The board owns fixed/banked main ROM mapping, sound latch/IRQ/ack state, YM2151 and DAC ports, sample-ROM reads, M75 RAM windows, two-bank 5-bit KNA91-style palette writes/readback, rear color/disable register behavior, palette/video/sprite RAM, frame stepping, audio draining, and whole-board save/load identity.
 - Player adapter lives in `src/apps/player/adapters/irem_m75`.
 - CLI/system-family routing is available through `--system irem_m75` and alias `m75`.
-- Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, resident CRC media reporting, rollback-ready save-state, capability discovery, and raw synthetic maincpu fallback.
-- Real local Vigilante wrapper ZIP loads through the data-gated corpus test and direct player screenshot/save-state smoke.
-- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M75 closure still needs Vigilante tile/sprite/rear-layer priority, exact scroll behavior, DIP/input proof, Z80 sound protocol proof, sample/DAC timing, raster timing, clone/bootleg coverage, and screenshot/audio parity before it is counted as correct graphics/music.
+- Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, clone/parent fallback media resolution, resident CRC media reporting, rollback-ready save-state, capability discovery, and raw synthetic maincpu fallback.
+- Real local Vigilante parent and official regional clone wrapper ZIPs load through the data-gated corpus test; the Japan clone also has direct player screenshot/save-state smoke evidence.
+- Remaining: this is still first-pass diagnostic rendering and executable wiring. Authentic M75 closure still needs Vigilante tile/sprite/rear-layer priority, exact scroll behavior, DIP/input proof, Z80 sound protocol proof, sample/DAC timing, raster timing, bootleg coverage, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M81
 
@@ -601,6 +601,24 @@ M75 palette/rear-color continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 
+M75 official clone parent-fallback validation on 2026-06-26:
+
+- Added checked-in M75 manifests for official Vigilante clones `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, and `vigilanto`, each declaring parent `vigilant` and only the changed program/graphics regions needed by the local split wrappers.
+- Added M75 adapter parent fallback resolution for `parent.zip`, unpacked parent directories, and sibling single-inner ZIP wrappers such as `D:\emu\irem\Vigilante_Arcade_EN (3).zip`.
+- Re-ran `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json`: `123` items, `81` manifest matches, `75` direct player-loadable routes, `6` metadata-only tracked routes, and `7` M75 manifest matches for the parent plus official clones.
+- Focused configure/build/test:
+  - `cmake --preset windows-msvc-debug`
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m75_test mnemos_manifests_irem_m75_system_test mnemos_apps_player_irem_m75_adapter_test mnemos_player`
+  - `MNEMOS_M75_SET_DIR=D:\emu\irem ctest --preset windows-msvc-debug --output-on-failure -R "irem_m75"`: `4/4`
+- Direct Japan-clone smoke:
+  - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_JA.zip" --save-state build\scratch\irem_m75_vigilantd_clone.mns --frames 120`
+  - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_JA.zip" --screenshot build\scratch\irem_m75_vigilantd_clone.ppm --frames 120`
+  - Screenshot proof: `256x256`, `196608` payload bytes, `195738` nonzero payload bytes, SHA-256 `7968e643bef602092d3082bcf3fd5ddf4665807ea673aa8ac5bbac8005195c30`
+  - Save-state proof: `build\scratch\irem_m75_vigilantd_clone.mns`, `122490` bytes after 120 frames
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -618,7 +636,7 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, Z80 sound protocol, sample/DAC timing, DIP/input proof, raster timing, clone/bootleg coverage, and screenshot/audio parity.
+1. Continue M75 authenticity work: Vigilante tile/sprite/rear-layer priority, exact scroll behavior, Z80 sound protocol, sample/DAC timing, DIP/input proof, raster timing, bootleg coverage, and screenshot/audio parity.
 2. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, sound CPU/MSM5205/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
 3. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 4. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.

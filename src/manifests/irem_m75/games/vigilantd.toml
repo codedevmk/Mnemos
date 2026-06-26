@@ -1,0 +1,62 @@
+# Vigilante (Japan Rev D) -- clone of the complete World Rev E parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "vigilantd"
+parent      = "vigilant"
+board       = "irem_m75"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x030000
+
+[[region.file]]
+name   = "vg_a-8h-d.ic55"
+offset = 0x000000
+size   = 0x08000
+crc32  = 0xba848713
+
+[[region.file]]
+name   = "vg_a-8l-d.ic57"
+offset = 0x010000
+size   = 0x10000
+crc32  = 0x3b12b1d8
+
+[[region]]
+name = "chars"
+size = 0x020000
+
+[[region.file]]
+name          = "613.ic34"
+offset        = 0x000000
+source_offset = 0x00000
+length        = 0x10000
+size          = 0x20000
+crc32         = 0xee7a6c2f
+
+[[region.file]]
+name          = "614.ic35"
+offset        = 0x010000
+source_offset = 0x00000
+length        = 0x10000
+size          = 0x20000
+crc32         = 0x6422e8ba
+
+[[region]]
+name = "bgtiles"
+size = 0x040000
+
+[[region.file]]
+name   = "619.ic2"
+offset = 0x000000
+size   = 0x20000
+crc32  = 0x9e2f8759
+
+[[region.file]]
+name          = "612.ic4"
+offset        = 0x020000
+source_offset = 0x00000
+length        = 0x10000
+size          = 0x20000
+crc32         = 0x85057c81
