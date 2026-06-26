@@ -7,7 +7,7 @@ Date: 2026-06-26
 - Worktree: `C:\dev\emu\Mnemos-irem-arcade`
 - Branch: `feature/irem-arcade`
 - Remote: `origin` -> `https://github.com/codedevmk/Mnemos.git`
-- Resume from: `origin/feature/irem-arcade` after the 2026-06-25 M15 handoff commit and push.
+- Resume from: `origin/feature/irem-arcade` after the 2026-06-26 M52 Moon Patrol handoff commit and push.
 - Root checkout `C:\dev\emu\Mnemos` was intentionally not used for feature edits.
 - This root-level `RESUME.md` is intentional because the user explicitly requested a handoff file at the workspace root.
 - Do not mark the user goal complete. "100% working Irem arcade emulation" remains broader than the proven slice.
@@ -24,6 +24,17 @@ git log -1 --oneline
 Expected state after this handoff: clean working tree on `feature/irem-arcade`, tracking `origin/feature/irem-arcade`.
 
 ## Current Implemented Coverage
+
+### Irem M52
+
+- M52 now has a first-pass executable Moon Patrol board and player adapter, not only corpus metadata.
+- Board implementation lives in `src/manifests/irem_m52/m52_system.hpp` and `src/manifests/irem_m52/m52_system.cpp`.
+- Checked-in manifests cover `mpatrol` and `mpatrolw`; the Williams clone manifest declares parent `mpatrol` and includes same-region parent-shared sound/PROM declarations so parent fallback can compose cleanly.
+- Player adapter lives in `src/apps/player/adapters/irem_m52` and supports direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, supplemental parent media, and raw synthetic maincpu fallback.
+- CLI/system-family routing is available through `--system irem_m52` and alias `m52`.
+- Capability discovery reports Z80 trace/register surfaces, M52 RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
+- Real local Moon Patrol wrapper ZIPs load through the data-gated corpus test and direct player screenshot smoke.
+- Remaining: this is first-pass diagnostic rendering/audio. Authentic M52 closure still needs true Moon Patrol background/road/sprite priority, AY/MSM/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity before it is counted as correct graphics/music.
 
 ### Irem M72
 
@@ -107,6 +118,7 @@ $env:MNEMOS_M72_RTYPE_SET="D:\emu\irem\R-Type_Arcade_EN.zip"
 $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
+$env:MNEMOS_M52_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
@@ -119,12 +131,14 @@ Important local corpus facts:
 - `docs\architecture\factsheets\irem-system-boards-reference.md` records the local Irem M-series board-family reference; `docs\architecture\README.md` links it so M72/M81/M82/M84/M107 work stays classified by lineage and shared custom silicon.
 - `D:\emu\irem\imgfight.zip`, `D:\emu\irem\imgfightj.zip`, `D:\emu\irem\imgfightj.7z`, `D:\emu\irem\imgfightjb.zip`, and `D:\emu\irem\imgfightjb.7z` are local corpus inputs for sorting Image Fight parent/clone composition.
 - `scripts\irem\inventory-corpus.ps1` now emits per-item `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and `load_readiness` fields plus a grouped `tracked_sets` section. Current local Image Fight grouping: `imgfight` is the M72 parent/standalone set with two direct player-loadable ZIP/folder routes plus one metadata-only `.7z`; `imgfightj` and `imgfightjb` are M72 clones declaring parent `imgfight`, each with one direct player-loadable ZIP plus one metadata-only `.7z`.
+- M52 Moon Patrol local wrapper routes are `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` for `mpatrol` and `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip` for `mpatrolw`; both are single-inner ZIP wrappers and directly player-loadable through `MNEMOS_M52_SET_DIR=D:\emu\irem`.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
 - World `nspirit` is incomplete locally: missing `mcu/nin_c-pr-b.ic1`, size `0x1000`, CRC `0x0f7b2713`.
 - Current scan of `D:\emu\irem\M72\nspirit.zip` finds `23/24` World `nspirit` artifacts and still misses only `nin_c-pr-b.ic1` (`0x0f7b2713`). The same ZIP contains `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), which is the Japan MCU and does not prove World `nspirit`.
 - Current exact-path scan of `D:\emu\irem\M72\nspirit.zip`, `D:\emu\irem\M72\gallopm72.zip`, and `D:\emu\irem\M72\gallop.zip` still finds `42/44` artifacts present and still misses only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`) and `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`). Direct ZIP inspection shows the Ninja Spirit ZIP's only MCU-like entry is the Japan `nspiritj/nin_c-pr-.ic1`; the Gallop ZIPs have PROM/sprite/voice entries but no matching MCU dump.
+- Exhaustive CRC scanning of ZIP members and loose files under `D:\emu\irem\M72` found zero matches for `0xac4421b1` or `0x0f7b2713`; the missing-MCU statement is not based on ZIP existence, it is based on exact CRC evidence.
 - If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
 - Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1`, size `0x1000`, CRC `0x802d440a`; it did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
@@ -148,6 +162,19 @@ Final handoff validation completed on 2026-06-25 21:05 -05:00:
 - Irem M72 corpus smoke from the data-gated script: `2/2` passed for configured R-Type/protected/vertical artifacts
 - M72 roster golden still skipped because `MNEMOS_M72_SET_DIR` was intentionally unset; Gallop and World Ninja Spirit remain blocked by missing local MCU dumps
 - CPS2 corpus smoke skipped because no CPS2 env vars were set for this Irem handoff
+
+M52 Moon Patrol first-pass validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing LF-to-CRLF working-copy warnings.
+- `clang-format --dry-run --Werror` over touched C++ headers/sources passed; `m52_embedded_game_manifests.hpp.in` was intentionally excluded because it contains CMake placeholders.
+- Inventory refresh: `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json` reported `123` items, `71` tracked items, `65` directly player-loadable items, `6` tracked metadata-only artifacts, and `2` M52 manifest matches.
+- Focused M52/player build passed for `mnemos_manifests_irem_m52_test`, `mnemos_manifests_irem_m52_system_test`, `mnemos_apps_player_irem_m52_adapter_test`, `mnemos_apps_player_adapters_common_test`, `mnemos_apps_player_capability_summary_test`, and `mnemos_player`.
+- Focused CTest with `MNEMOS_M52_SET_DIR=D:\emu\irem`: `6/6` passed, including `mnemos_apps_player_irem_m52_corpus_golden_test`.
+- Direct player screenshot smoke passed for `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` and `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip`, both writing `240x252` nonblank PPMs under `build\scratch\irem-m52\`.
+- Full serialized build under the Windows MSVC preset completed with `ninja: no work to do` after the prior full link finished.
+- Full preset CTest: `201/201`, `0` failures, with expected conformance/media skips where external corpora/env vars were unset.
+- Post-doc-edit focused CTest with `MNEMOS_M52_SET_DIR=D:\emu\irem`: `6/6` passed again.
+- M52 remains first-pass only: no correct graphics/music claim is made.
 
 M107 V33/V35 model-clock continuation validation on 2026-06-26:
 
@@ -437,11 +464,12 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
-2. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
-3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
-4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
-5. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
+1. Continue M52 authenticity work: Moon Patrol background/road/sprite priority, AY/MSM/discrete sound behavior, exact raster timing, DIP/input proof, and screenshot/audio parity.
+2. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
+3. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, exact M107 memory/I/O map, sound CPU protocol, GA20 analog balance/filtering, GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
+4. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
+5. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
+6. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
 
 ## Resume Commands
 
@@ -461,6 +489,7 @@ $env:MNEMOS_M72_RTYPE_SET="D:\emu\irem\R-Type_Arcade_EN.zip"
 $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
+$env:MNEMOS_M52_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"

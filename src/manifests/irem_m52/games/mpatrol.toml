@@ -1,0 +1,148 @@
+# Moon Patrol -- local Irem M52 corpus set.
+# Schema mnemos-romset/1. This is a ROM-contract manifest; the board profile is
+# a first-pass M52 route and does not yet certify AY/MSM audio or parallax parity.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "mpatrol"
+board       = "irem_m52"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mpa-1.3m"
+aliases = ["mpatrol/mpa-1.3m"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x5873a860
+
+[[region.file]]
+name    = "mpa-2.3l"
+aliases = ["mpatrol/mpa-2.3l"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0xf4b85974
+
+[[region.file]]
+name    = "mpa-3.3k"
+aliases = ["mpatrol/mpa-3.3k"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0x2e1a598c
+
+[[region.file]]
+name    = "mpa-4.3j"
+aliases = ["mpatrol/mpa-4.3j"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0xdd05b587
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mpe-1.3l"
+aliases = ["mpatrol/mpe-1.3l"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xc46a7f72
+
+[[region.file]]
+name    = "mpe-2.3k"
+aliases = ["mpatrol/mpe-2.3k"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0xc7aa1fb0
+
+[[region.file]]
+name    = "mpe-3.3h"
+aliases = ["mpatrol/mpe-3.3h"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0xa0919392
+
+[[region.file]]
+name    = "mpe-4.3f"
+aliases = ["mpatrol/mpe-4.3f"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0xcca6d023
+
+[[region.file]]
+name    = "mpe-5.3e"
+aliases = ["mpatrol/mpe-5.3e"]
+offset  = 0x4000
+size    = 0x1000
+crc32   = 0xe3ee7f75
+
+[[region]]
+name = "tx_gfx"
+size = 0x2000
+
+[[region.file]]
+name    = "mpb-1.3n"
+aliases = ["mpatrol/mpb-1.3n"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x9b72133a
+
+[[region.file]]
+name    = "mpb-2.3m"
+aliases = ["mpatrol/mpb-2.3m"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0x707ace5e
+
+[[region]]
+name = "sprite_gfx"
+size = 0x1000
+
+[[region.file]]
+name    = "mp-s1.1a"
+aliases = ["mpatrol/mp-s1.1a"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x561d3108
+
+[[region]]
+name = "proms"
+size = 0x0540
+
+[[region.file]]
+name    = "mpc-1.1f"
+aliases = ["mpatrol/mpc-1.1f"]
+offset  = 0x0000
+size    = 0x0020
+crc32   = 0x26979b13
+
+[[region.file]]
+name    = "mpc-3.1m"
+aliases = ["mpatrol/mpc-3.1m"]
+offset  = 0x0020
+size    = 0x0020
+crc32   = 0x6a57eff2
+
+[[region.file]]
+name    = "mpc-2.2h"
+aliases = ["mpatrol/mpc-2.2h"]
+offset  = 0x0040
+size    = 0x0100
+crc32   = 0x7ae4cd97
+
+[[region.file]]
+name    = "mpc-4.2a"
+aliases = ["mpatrol/mpc-4.2a"]
+offset  = 0x0140
+size    = 0x0200
+crc32   = 0x07f99284
+
+[[region.file]]
+name    = "mp_7621-5.7h"
+aliases = ["mpatrol/mp_7621-5.7h"]
+offset  = 0x0340
+size    = 0x0200
+crc32   = 0xcf1fd9d0

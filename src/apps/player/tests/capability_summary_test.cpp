@@ -4,14 +4,15 @@
 #include "capcom_cps1_adapter.hpp"
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
+#include "irem_m107_adapter.hpp"
 #include "irem_m15_adapter.hpp"
+#include "irem_m52_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "irem_m81_adapter.hpp"
 #include "irem_m82_adapter.hpp"
 #include "irem_m84_adapter.hpp"
 #include "irem_m90_adapter.hpp"
 #include "irem_m92_adapter.hpp"
-#include "irem_m107_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
@@ -35,6 +36,7 @@ namespace {
     namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
+    namespace irem_m52 = mnemos::apps::player::adapters::irem_m52;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
     namespace irem_m81 = mnemos::apps::player::adapters::irem_m81;
     namespace irem_m82 = mnemos::apps::player::adapters::irem_m82;
@@ -178,6 +180,16 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> irem_m52_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m52::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{0x3EU, 0x77U, 0x32U, 0x00U, 0x80U,
+                                                0xD3U, 0x10U, 0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> irem_m82_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m82::main_rom_size, 0xFFU);
         rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
@@ -195,9 +207,8 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> irem_m15_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
-        const std::vector<std::uint8_t> program{0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U,
-                                                0xA9U, 0x81U, 0x8DU, 0x00U, 0x40U,
-                                                0x4CU, 0x0AU, 0x10U};
+        const std::vector<std::uint8_t> program{0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, 0xA9U, 0x81U,
+                                                0x8DU, 0x00U, 0x40U, 0x4CU, 0x0AU, 0x10U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[mnemos::manifests::irem_m15::program_rom_base + i] = program[i];
         }
@@ -425,6 +436,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M15") {
         irem_m15::irem_m15_adapter adapter(irem_m15_program(), "Tiny M15");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M52") {
+        irem_m52::irem_m52_adapter adapter(irem_m52_program(), "Tiny M52");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");

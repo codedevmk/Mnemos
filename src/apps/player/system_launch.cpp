@@ -97,20 +97,21 @@ namespace mnemos::apps::player {
 
         const system_family family = *family_opt;
         const bool arcade_family =
-            family == system_family::irem_m15 || family == system_family::irem_m72 ||
-            family == system_family::irem_m81 || family == system_family::irem_m82 ||
-            family == system_family::irem_m84 || family == system_family::irem_m90 ||
-            family == system_family::irem_m92 || family == system_family::irem_m107 ||
-            family == system_family::taito_f2 ||
+            family == system_family::irem_m15 || family == system_family::irem_m52 ||
+            family == system_family::irem_m72 || family == system_family::irem_m81 ||
+            family == system_family::irem_m82 || family == system_family::irem_m84 ||
+            family == system_family::irem_m90 || family == system_family::irem_m92 ||
+            family == system_family::irem_m107 || family == system_family::taito_f2 ||
             family == system_family::capcom_cps1 || family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
                                     : load_rom(options.rom_paths.front());
         const bool directory_backed_irem =
             loaded && loaded->directory_source &&
-            (family == system_family::irem_m15 || family == system_family::irem_m72 ||
-             family == system_family::irem_m81 || family == system_family::irem_m82 ||
-             family == system_family::irem_m84 || family == system_family::irem_m90 ||
-             family == system_family::irem_m92 || family == system_family::irem_m107);
+            (family == system_family::irem_m15 || family == system_family::irem_m52 ||
+             family == system_family::irem_m72 || family == system_family::irem_m81 ||
+             family == system_family::irem_m82 || family == system_family::irem_m84 ||
+             family == system_family::irem_m90 || family == system_family::irem_m92 ||
+             family == system_family::irem_m107);
         if (!loaded || (loaded->bytes.empty() && !directory_backed_irem)) {
             std::fprintf(stderr, "could not read ROM: %s\n", options.rom_paths.front().c_str());
             outcome.exit_code = 1;
@@ -121,10 +122,11 @@ namespace mnemos::apps::player {
         std::vector<std::string> additional_media_paths;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
             const bool irem_family =
-                family == system_family::irem_m15 || family == system_family::irem_m72 ||
-                family == system_family::irem_m81 || family == system_family::irem_m82 ||
-                family == system_family::irem_m84 || family == system_family::irem_m90 ||
-                family == system_family::irem_m92 || family == system_family::irem_m107;
+                family == system_family::irem_m15 || family == system_family::irem_m52 ||
+                family == system_family::irem_m72 || family == system_family::irem_m81 ||
+                family == system_family::irem_m82 || family == system_family::irem_m84 ||
+                family == system_family::irem_m90 || family == system_family::irem_m92 ||
+                family == system_family::irem_m107;
             auto extra = irem_family ? load_rom_verbatim(options.rom_paths[i])
                                      : load_rom(options.rom_paths[i]);
             const bool directory_backed_extra = extra && extra->directory_source && irem_family;
@@ -174,6 +176,7 @@ namespace mnemos::apps::player {
             break;
         case system_family::segacd:
         case system_family::irem_m15:
+        case system_family::irem_m52:
         case system_family::irem_m72:
         case system_family::irem_m81:
         case system_family::irem_m82:

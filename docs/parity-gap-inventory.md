@@ -273,7 +273,9 @@ Follow-up scan of the exact current M72 paths
 (`0xac4421b1`) and `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`). Direct ZIP
 inspection shows `nspirit.zip` contains only the Japan `nspiritj/nin_c-pr-.ic1`
 MCU under MCU-like entries, while `gallopm72.zip` has PROM entries and
-`gallop.zip` has sprite/voice entries but no `cc_c-pr-.ic1`.
+`gallop.zip` has sprite/voice entries but no `cc_c-pr-.ic1`. An exhaustive CRC
+scan of ZIP members and loose files under `D:\emu\irem\M72` likewise found zero
+matches for `0xac4421b1` or `0x0f7b2713`.
 
 Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
 `-RomDir` values and treats sorted non-M72 roots such as `D:\emu\irem\M81`,
@@ -399,6 +401,18 @@ a 6502-era M15 profile instead of being folded into later V30 boards.
 Continuation: `$a100` sound writes now persist total write count, per-bit rise/fall counters, active-low bit-6 speaker output state, and speaker output edge count through both board and adapter save-state paths. This narrows the sound gap to board-evidenced discrete sample mappings/analog sound behavior rather than raw latch observability.
 
 Continuation: M15 frame stepping now slices CPU/audio/video by scanline and composes each visible line before that line's CPU slice; focused coverage proves the frame IRQ can change color RAM for later scanlines without repainting an earlier line. This narrows the raster gap to exact phase proof and external visual parity rather than raw mid-frame write visibility.
+
+---
+
+## Irem M52 — 1 / 2
+
+This section is split from both M15 and M72 so Moon Patrol-era Z80 hardware gets
+its own board identity instead of being treated as either early 6502 hardware or
+later V30 M72-family hardware.
+
+#### Manifests / board bring-up
+- [x] **I52-1** Moon Patrol ROM-set contract — `src/manifests/irem_m52` carries checked-in embedded ROM-contract manifests for `mpatrol` and `mpatrolw`, including program, sound, text, sprite, and PROM regions. The local wrappers `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` and `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip` are now tracked M52 single-inner ZIP routes in `scripts/irem/inventory-corpus.ps1`; `mpatrolw` declares `mpatrol` as parent and resolves shared parent dumps from a sibling wrapper or supplemental media instead of accepting missing shared files as clean proof · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m52/games/*.toml` + `src/manifests/irem_m52/tests/m52_rom_contract_test.cpp` + `src/apps/player/adapters/irem_m52/tests/irem_m52_adapter_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [~] **I52-2** Executable M52 board profile — `src/manifests/irem_m52` now assembles a first-pass Irem M52 board route with Z80 main CPU, Moon Patrol memory windows, input/DIP MMIO, scroll/background control latches, deterministic board identity, rollback-ready save/load, player adapter registration under `--system irem_m52` / `m52`, capability discovery, real local corpus data-gate, and nonblank diagnostic framebuffer output. Remaining: replace the diagnostic compositor with board-evidenced parallax/road/sprite/text priority, implement the Irem Audio AY-3-8910 plus MSM5205 path instead of the current audio probe, add Tropical Angel coverage if M52/M57 evidence confirms the route, and prove DIP/raster/screenshot/audio parity before calling Moon Patrol authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m52/m52_system.cpp` + `src/manifests/irem_m52/tests/m52_system_test.cpp` + `src/apps/player/adapters/irem_m52/irem_m52_adapter.cpp` + `src/apps/player/adapters/irem_m52/tests/irem_m52_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 ---
 
