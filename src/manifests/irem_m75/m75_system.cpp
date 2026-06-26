@@ -51,17 +51,39 @@ namespace mnemos::manifests::irem_m75 {
         [[nodiscard]] std::uint32_t palette_rgb(std::span<const std::uint8_t> palette,
                                                 std::size_t index,
                                                 std::uint8_t fallback) noexcept {
-            if (palette.size() < 0x300U) {
+            const std::size_t bank = (index & 0x100U) != 0U ? 0x400U : 0U;
+            const std::size_t byte = index & 0xFFU;
+            if (palette.size() <= bank + byte + 0x200U) {
                 return rgb_from_byte(fallback, 0x43U);
             }
-            const std::size_t byte = (index & 0xFFU);
-            const std::uint32_t r = expand5(palette[byte]);
-            const std::uint32_t g = expand5(palette[byte + 0x100U]);
-            const std::uint32_t b = expand5(palette[byte + 0x200U]);
+            const std::uint32_t r = expand5(palette[bank + byte]);
+            const std::uint32_t g = expand5(palette[bank + byte + 0x100U]);
+            const std::uint32_t b = expand5(palette[bank + byte + 0x200U]);
             if ((r | g | b) == 0U) {
                 return rgb_from_byte(fallback, 0x43U);
             }
             return (r << 16U) | (g << 8U) | b;
+        }
+
+        [[nodiscard]] std::uint8_t
+        m75_palette_read(std::span<const std::uint8_t> palette,
+                         std::uint32_t address) noexcept {
+            const std::size_t offset =
+                static_cast<std::size_t>((address - palette_ram_base) & 0x7FFU);
+            if (offset >= palette.size()) {
+                return 0xFFU;
+            }
+            return static_cast<std::uint8_t>(palette[offset] | 0xE0U);
+        }
+
+        void m75_palette_write(std::span<std::uint8_t> palette,
+                               std::uint32_t address,
+                               std::uint8_t value) noexcept {
+            const std::size_t offset =
+                static_cast<std::size_t>((address - palette_ram_base) & 0x7FFU);
+            if (offset < palette.size()) {
+                palette[offset] = static_cast<std::uint8_t>(value & 0x1FU);
+            }
         }
 
         [[nodiscard]] std::uint8_t layout_code(std::string_view layout) noexcept {
@@ -158,8 +180,10 @@ namespace mnemos::manifests::irem_m75 {
                             std::span<const std::uint8_t> sprite_ram, std::uint16_t scroll,
                             std::uint16_t rear_scroll, std::uint8_t rear_color,
                             std::string_view rom_layout) {
+        const bool rear_disabled = (rear_color & 0x40U) != 0U;
+        const std::uint8_t rear_color_code = rear_color & 0x0DU;
         const std::uint8_t tint =
-            static_cast<std::uint8_t>(layout_tint(rom_layout) ^ rear_color);
+            static_cast<std::uint8_t>(layout_tint(rom_layout) ^ rear_color_code);
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             for (std::uint32_t x = 0; x < visible_width; ++x) {
                 const std::uint64_t linear =
@@ -186,10 +210,17 @@ namespace mnemos::manifests::irem_m75 {
                                 0x00U);
                 const std::uint8_t prom = sample_byte(proms, bg ^ spr ^ chr, tint);
                 const std::uint8_t mixed = static_cast<std::uint8_t>(
-                    bg ^ static_cast<std::uint8_t>(rear << 1U) ^ spr ^
+                    bg ^ static_cast<std::uint8_t>((rear_disabled ? 0U : rear) << 1U) ^ spr ^
                     static_cast<std::uint8_t>(chr << 2U) ^ snd ^ vram ^ prom ^ tint);
+                const std::size_t palette_index =
+                    rear_disabled
+                        ? mixed
+                        : (0x100U |
+                           ((static_cast<std::size_t>(rear_color_code) * 16U +
+                             static_cast<std::size_t>(mixed & 0x1FU)) &
+                            0xFFU));
                 pixels_[static_cast<std::size_t>(y) * visible_width + x] =
-                    palette_rgb(palette_ram, mixed, mixed);
+                    palette_rgb(palette_ram, palette_index, mixed);
             }
         }
         ++frame_index_;
@@ -231,7 +262,15 @@ namespace mnemos::manifests::irem_m75 {
             main_bank_rom_base,
             std::span<const std::uint8_t>(main_prog).subspan(0x10000U, main_bank_rom_size));
         main_bus.map_ram(sprite_ram_base, sprite_ram, 1);
-        main_bus.map_ram(palette_ram_base, palette_ram, 1);
+        main_bus.map_mmio(
+            palette_ram_base, static_cast<std::uint32_t>(palette_ram_size),
+            [this](std::uint32_t address) -> std::uint8_t {
+                return m75_palette_read(palette_ram, address);
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                m75_palette_write(palette_ram, address, value);
+            },
+            1);
         main_bus.map_ram(video_ram_base, video_ram, 1);
         main_bus.map_ram(work_ram_base, work_ram, 1);
         main_cpu.attach_bus(main_bus);

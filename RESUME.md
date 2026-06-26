@@ -54,7 +54,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Board implementation lives in `src/manifests/irem_m75/m75_system.hpp` and `src/manifests/irem_m75/m75_system.cpp`.
 - The current M75 route is intentionally Z80 main + Z80 sound + YM2151 + DAC for Vigilante, not the V30-family M-series core used by later Irem boards.
 - Checked-in manifest coverage starts with parent set `vigilant` from the local complete single-inner wrapper `D:\emu\irem\Vigilante_Arcade_EN (3).zip`.
-- The board owns fixed/banked main ROM mapping, sound latch/IRQ/ack state, YM2151 and DAC ports, sample-ROM reads, M75 RAM windows, palette/video/sprite RAM, frame stepping, audio draining, and whole-board save/load identity.
+- The board owns fixed/banked main ROM mapping, sound latch/IRQ/ack state, YM2151 and DAC ports, sample-ROM reads, M75 RAM windows, two-bank 5-bit KNA91-style palette writes/readback, rear color/disable register behavior, palette/video/sprite RAM, frame stepping, audio draining, and whole-board save/load identity.
 - Player adapter lives in `src/apps/player/adapters/irem_m75`.
 - CLI/system-family routing is available through `--system irem_m75` and alias `m75`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, resident CRC media reporting, rollback-ready save-state, capability discovery, and raw synthetic maincpu fallback.
@@ -575,6 +575,28 @@ M75 Vigilante first-pass continuation validation on 2026-06-26:
   - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_EN (3).zip" --screenshot build\scratch\irem_m75_vigilant.ppm --frames 120`
   - Screenshot proof: `256x256`, `196608` payload bytes, `195761` nonzero payload bytes, SHA-256 `192d3ead0f72dfc049bfe6490fc909c2ea087bdab146159aa962e3e59e7dd39f`
   - Save-state proof: `build\scratch\irem_m75_vigilant.mns`, `122423` bytes after 120 frames
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+
+M75 palette/rear-color continuation validation on 2026-06-26:
+
+- M75 palette RAM now routes through a two-bank 5-bit KNA91-style CPU-visible contract instead of raw RAM mapping: CPU writes retain only bits 0-4, reads return the stored 5-bit value with high bits set, and bank `0x400` is used by the rear/background palette path.
+- The Vigilante rear-color output now preserves bit 6 as the rear-layer disable flag and masks the color code through bits `0,2,3` for the diagnostic rear-background palette selection.
+- Focused build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m75_system_test`
+- Focused CTest:
+  - `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m75_system_test`: `1/1`
+- Focused M75 CTest with `MNEMOS_M75_SET_DIR=D:\emu\irem`: `4/4`
+  - `mnemos_manifests_irem_m75_test`
+  - `mnemos_manifests_irem_m75_system_test`
+  - `mnemos_apps_player_irem_m75_adapter_test`
+  - `mnemos_apps_player_irem_m75_corpus_golden_test`
+- Direct player smoke:
+  - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_EN (3).zip" --save-state build\scratch\irem_m75_vigilant_palette.mns --frames 120`
+  - `mnemos_player --system irem_m75 --rom "D:\emu\irem\Vigilante_Arcade_EN (3).zip" --screenshot build\scratch\irem_m75_vigilant_palette.ppm --frames 120`
+  - Screenshot proof: `256x256`, `196608` payload bytes, `195761` nonzero payload bytes, SHA-256 `192d3ead0f72dfc049bfe6490fc909c2ea087bdab146159aa962e3e59e7dd39f`
+  - Save-state proof: `build\scratch\irem_m75_vigilant_palette.mns`, `122423` bytes after 120 frames
 - Full build:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.

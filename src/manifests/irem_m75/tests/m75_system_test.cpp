@@ -107,6 +107,52 @@ TEST_CASE("m75 board declares Z80/Z80/YM2151/DAC clocks and 256x256 raster",
     CHECK(m75::frame_lines == 284U);
 }
 
+TEST_CASE("m75 palette bus exposes two 5-bit KNA91 banks", "[m75][board][palette]") {
+    auto system = m75::assemble_m75(synthetic_m75_image(), m75::board_params_for("vigilant"));
+    REQUIRE(system != nullptr);
+
+    system->main_bus.write8(m75::palette_ram_base + 0x000U, 0xE7U);
+    CHECK(system->palette_ram[0x000U] == 0x07U);
+    CHECK(system->main_bus.read8(m75::palette_ram_base + 0x000U) == 0xE7U);
+
+    system->main_bus.write8(m75::palette_ram_base + 0x100U, 0x32U);
+    CHECK(system->palette_ram[0x100U] == 0x12U);
+    CHECK(system->main_bus.read8(m75::palette_ram_base + 0x100U) == 0xF2U);
+
+    system->main_bus.write8(m75::palette_ram_base + 0x200U, 0xBAU);
+    CHECK(system->palette_ram[0x200U] == 0x1AU);
+    CHECK(system->main_bus.read8(m75::palette_ram_base + 0x200U) == 0xFAU);
+
+    system->main_bus.write8(m75::palette_ram_base + 0x404U, 0x1FU);
+    system->main_bus.write8(m75::palette_ram_base + 0x504U, 0x00U);
+    system->main_bus.write8(m75::palette_ram_base + 0x604U, 0x00U);
+    CHECK(system->palette_ram[0x404U] == 0x1FU);
+    CHECK(system->main_bus.read8(m75::palette_ram_base + 0x404U) == 0xFFU);
+}
+
+TEST_CASE("m75 rear color register selects the rear palette bank and disable bit",
+          "[m75][video][palette]") {
+    std::vector<std::uint8_t> zeros(1U, 0U);
+    std::vector<std::uint8_t> vram(m75::video_ram_size, 0U);
+    std::vector<std::uint8_t> palette(m75::palette_ram_size, 0U);
+    std::vector<std::uint8_t> sprite_ram(m75::sprite_ram_size, 0U);
+
+    // Pixel 0 resolves to palette index 0x104 when the rear layer is enabled
+    // with color code 0, and to 0x64 when bit 6 disables the rear layer.
+    palette[0x064U] = 0x1FU; // red, front bank
+    palette[0x504U] = 0x1FU; // green, rear bank
+
+    m75::m75_video rear_enabled;
+    rear_enabled.compose(zeros, zeros, zeros, zeros, zeros, zeros, zeros, vram, palette,
+                         sprite_ram, 0U, 0U, 0x00U, "vigilant");
+    CHECK(rear_enabled.framebuffer().pixels[0] == 0x0000FF00U);
+
+    m75::m75_video rear_disabled;
+    rear_disabled.compose(zeros, zeros, zeros, zeros, zeros, zeros, zeros, vram, palette,
+                          sprite_ram, 0U, 0U, 0x40U, "vigilant");
+    CHECK(rear_disabled.framebuffer().pixels[0] == 0x00FF0000U);
+}
+
 TEST_CASE("m75 Z80 sound CPU acknowledges latch and drives DAC", "[m75][board][audio]") {
     auto system = m75::assemble_m75(synthetic_m75_image(), m75::board_params_for("vigilant"));
     REQUIRE(system != nullptr);

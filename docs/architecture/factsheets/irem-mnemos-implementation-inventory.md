@@ -49,7 +49,7 @@ now contract-only.
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | 19 clean smoke-proven sets | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
-| M75 | `irem_m75` first-pass | 22% | `vigilant` | local Vigilante parent wrapper | None | Authentic Vigilante graphics priority, exact palette/video map, DIP proof, raster phase, audio parity, clone/bootleg parent-fallback coverage |
+| M75 | `irem_m75` first-pass | 24% | `vigilant` | local Vigilante parent wrapper | None | Authentic Vigilante graphics priority, DIP proof, raster phase, audio parity, clone/bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 60% | `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 4 local sets | None | Board classification audit, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
@@ -215,18 +215,19 @@ visual and audio parity proof.
   graphics/music certification.
 - **Current implementation:** `src/manifests/irem_m75` owns a Z80 main CPU, Z80
   sound CPU, YM2151, DAC, 16-bit Z80 memory buses, Vigilante ROM banking, RAM
-  windows, inputs/DIPs, sound latch/ack, sample-address/DAC ports, whole-board
-  save/load identity, and embedded `vigilant` ROM contract. `src/apps/player`
-  registers `--system irem_m75` and alias `m75`, supports direct ZIPs,
+  windows, inputs/DIPs, sound latch/ack, sample-address/DAC ports, the two-bank
+  5-bit KNA91-style palette bus, rear color/disable register semantics,
+  whole-board save/load identity, and embedded `vigilant` ROM contract.
+  `src/apps/player` registers `--system irem_m75` and alias `m75`, supports direct ZIPs,
   single-inner wrapper ZIPs, unpacked folders, in-archive `game.toml`, resident
   media validation, rollback-ready save-state, capability discovery, and
   `MNEMOS_M75_SET_DIR=D:\emu\irem` corpus gating.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
-  Vigilante background/foreground/sprite priority and palette behavior, verify
-  exact memory/I/O/DIP/raster phase, prove sound CPU sample/DAC behavior against
-  board evidence, add clone/bootleg parent-fallback coverage for partial
-  regional ZIPs, and collect screenshot/audio parity evidence before marking
-  graphics or music correct.
+  Vigilante background/foreground/sprite priority, verify exact memory/I/O/DIP
+  and raster phase, prove sound CPU sample/DAC behavior against board evidence,
+  add clone/bootleg parent-fallback coverage for partial regional ZIPs, and
+  collect screenshot/audio parity evidence before marking graphics or music
+  correct.
 
 ### M77
 
