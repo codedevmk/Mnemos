@@ -62,7 +62,7 @@ M90/M92 wrappers, while leaving the strict full-M72 roster gate opt-in because
 | M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip`; Gallop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 28% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, board-authentic DIP tables/runtime proof, visual/audio parity |
-| M92 | `irem_m92` | 41% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes | None | Encrypted V35 sound CPU handling/IRQ timing, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
+| M92 | `irem_m92` | 43% first-pass | `bmaster`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 12 data-gated first-pass sets; GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes; modeled V35 command/YM IRQ proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 56% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
@@ -456,8 +456,11 @@ visual and audio parity proof.
 - **Correct gfx/music:** not certified. Current video is a diagnostic
   region/RAM/PLD-driven first-pass compositor. Current sound proves the
   YM2151/GA20 shell, synthetic GA20 MMIO, and a synthetic V33-to-V35
-  command/reply latch path with save-state persistence, but not encrypted V35
-  program behavior or audio parity.
+  command/reply latch path with save-state persistence. Main V33 command writes
+  now assert the modeled V35 command IRQ through INTP1/vector 25, latch reads do
+  not acknowledge it, sound-side writes to `$a8044` acknowledge it, and YM2151
+  Timer A dispatches through INTP0/vector 24. This is still not encrypted V35
+  program behavior, cycle-exact interrupt latency, or audio parity.
 - **Local corpus note:** twelve local M92-era title-wrapper ZIPs now resolve to
   embedded set IDs and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
   (`bmaster`), Gunforce parent (`gunforce`), Gunforce Japan/US split clones
@@ -468,9 +471,10 @@ visual and audio parity proof.
   fallback. In the current sorted corpus, older M92 routes live under
   `D:\emu\irem\M72` while the Mystic Riders and Ninja Baseball wrappers live at
   `D:\emu\irem`; both are storage artifacts rather than board proof.
-- **Remaining:** encrypted V35 sound CPU handling and command IRQ timing, exact
-  GA20/YM2151 sound protocol, GA21/GA22 video/priority behavior, exact memory/I/O maps,
-  protection details, DIP/raster behavior, and visual/audio parity proof.
+- **Remaining:** encrypted V35 sound CPU behavior/decryption, cycle-exact V35
+  interrupt latency, exact GA20/YM2151 sound protocol, GA21/GA22 video/priority
+  behavior, exact memory/I/O maps, protection details, DIP/raster behavior, and
+  visual/audio parity proof.
 
 ### M107
 

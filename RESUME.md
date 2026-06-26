@@ -111,9 +111,9 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - `nbbatman` is the complete local Ninja Baseball Bat Man parent wrapper route; `nbbatmanu` declares parent `nbbatman` and carries the changed lower main-program pair plus parent-fallback declarations for the unchanged upper main-program pair.
 - The M92 adapter now resolves clone parents beside the selected set path via direct `parent.zip`, unpacked parent directories, or sibling single-inner wrapper ZIPs such as `D:\emu\irem\M72\GunForce-Battle-Fire-Engulfed-Terror-Island_Arcade_EN.zip`.
 - Player adapter remains first-pass: NEC V33/V35 shell, YM2151/GA20 windows, diagnostic GA21/GA22-era video path, resident media validation, rollback-ready save-state, and capability discovery.
-- The M92 sound-command latch now tracks pending command/reply state, clears the command-pending bit when the V35 reads the latch, preserves those bits in board save state version 2, and has synthetic V33-to-V35 command/reply proof through the sound latch and reply port.
+- The M92 sound-command latch now asserts the modeled V35 command IRQ through INTP1/vector 25 on main V33 writes; latch reads do not acknowledge it, sound-side writes to `$a8044` acknowledge/clear it, YM2151 Timer A IRQ dispatches through V35 INTP0/vector 24, command/reply state is preserved in board save state version 3, and synthetic V33-to-V35 proof covers command IRQ dispatch, latch acknowledge, reply, and sound-RAM storage.
 - `MNEMOS_M92_SET_DIR=D:\emu\irem` now data-gates twelve M92 sets. Direct `mnemos_player` smokes for `gunforceu`, `gunforcej`, `mysticri`, `gunhohki`, `mysticrib`, `nbbatman`, and `nbbatmanu` write 320x240 nonblank PPMs plus save states after one frame.
-- Remaining: encrypted V35 sound execution/decryption/IRQ timing proof, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
+- Remaining: encrypted V35 sound execution/decryption/protocol proof, cycle-exact V35 interrupt latency, exact M92 memory/I/O maps, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP/raster behavior, protection details, and screenshot/audio parity before calling M92 authentic.
 
 ### Irem M107
 
@@ -329,6 +329,19 @@ M72 exact-path artifact recheck on 2026-06-26:
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root 'D:\emu\irem\M72\nspirit.zip' -Set nspirit,nspiritj`: `48/48` present for the World and Japan Ninja Spirit routes.
 - `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\M72 -Recurse -Set nspirit,nspiritj -Frames 120 -FallbackFrames 300`: `2/2` passed after the runner learned to keep exact-stem ZIP candidates while also discovering manifest-named collection folders.
 - Post-patch validation: `git diff --check` clean except the existing LF-to-CRLF working-copy warnings; `cmake --build --preset windows-msvc-debug` reported `ninja: no work to do`; `ctest --preset windows-msvc-debug --output-on-failure` passed `210/210` with expected ROM/oracle-gated skips.
+
+M92 command IRQ continuation validation on 2026-06-26:
+
+- Replaced the M92 read-clears-command shortcut with the first-pass V35 sound-latch IRQ contract: main V33 sound-command writes assert INTP1/vector 25, latch reads return the command without acknowledging it, sound-side writes to `$a8044` acknowledge/clear the command IRQ, and YM2151 Timer A IRQ routes through INTP0/vector 24.
+- Bumped `m92_system_state_version` to `3` and the board identity string to `m92.board.identity.v3`, so older M92 save states do not load silently under the corrected latch/IRQ semantics.
+- Added focused M92 proof for unread commands staying pending, explicit latch acknowledge, V35 command IRQ handler reply/storage, and YM2151 INTP0 dispatch.
+- The first focused build attempt without `VsDevCmd.bat` failed before source compilation with missing MSVC standard headers (`cstdint`). The README-style dev-env command succeeded: `cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m92_system_test mnemos_apps_player_irem_m92_adapter_test'`.
+- Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R "mnemos_manifests_irem_m92_system_test|mnemos_apps_player_irem_m92_adapter_test"` passed `2/2`.
+- `git diff --check` passed with only existing LF-to-CRLF working-copy warnings, and `clang-format --dry-run --Werror` passed on the touched M92 C++ files.
+- Data-gated M92 CTest with `MNEMOS_M92_SET_DIR=D:\emu\irem`: `3/3` passed for the M92 system test, adapter test, and corpus golden.
+- Full preset build through `VsDevCmd.bat`: `cmake --build --preset windows-msvc-debug` passed.
+- Full preset CTest without data env vars: `ctest --preset windows-msvc-debug --output-on-failure` passed `210/210`, with expected ROM/oracle-gated skips including the M92 corpus golden.
+- This proves the currently modeled M92 V33-to-V35 command IRQ assertion, vector dispatch, explicit acknowledge, YM IRQ dispatch, and reply path. It does not prove encrypted V35 sound-program decryption, cycle-exact V35 interrupt latency, GA21/GA22 video, GA20 analog balance/filtering, or final M92 parity.
 
 M107 GA20 player-mixer continuation validation on 2026-06-26:
 
@@ -869,7 +882,7 @@ M82 Major Title background graphics continuation validation on 2026-06-26:
 
 M92 sound-command latch continuation validation on 2026-06-26:
 
-- Added explicit M92 sound-command latch/reply helpers. Main V33 sound-command writes now set `sound_latch_pending`; V35 latch reads clear it; V35 reply writes set `sound_reply_pending`; both pending bits are preserved in M92 board save-state version 2.
+- Added the older explicit M92 sound-command latch/reply helpers. That read-clears-command behavior is superseded by the 2026-06-26 M92 command IRQ continuation above: current M92 latch reads do not acknowledge pending commands, sound-side writes to `$a8044` acknowledge them, and command/reply state is preserved in board save-state version 3.
 - Added `m92 sound command latch reaches the V35 and returns a reply`, with one section proving unread commands remain pending and another proving a synthetic V35 sound program reads the command, stores it in sound RAM, and writes it back through the reply port.
 - Focused build:
   - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m92_system_test mnemos_apps_player_irem_m92_adapter_test mnemos_player`

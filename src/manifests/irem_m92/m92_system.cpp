@@ -132,7 +132,7 @@ namespace mnemos::manifests::irem_m92 {
                                                        const chips::cpu::v30& main_cpu,
                                                        const chips::cpu::v30& sound_cpu) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m92.board.identity.v2"});
+                security::cryptography::crc32(std::string_view{"m92.board.identity.v3"});
             crc = crc32_u16(crc, params.dip_default);
             crc = crc32_u8(crc, layout_code(params.rom_layout));
             crc = crc32_u8(crc, cpu_model_code(main_cpu.cpu_model()));
@@ -322,7 +322,7 @@ namespace mnemos::manifests::irem_m92 {
         sound_bus.map_mmio(
             sound_latch_addr, 1U,
             [this](std::uint32_t) -> std::uint8_t { return read_sound_latch(); },
-            [](std::uint32_t, std::uint8_t) {}, 1);
+            [this](std::uint32_t, std::uint8_t) { acknowledge_sound_latch(); }, 1);
         sound_bus.map_mmio(
             sound_reply_addr, 1U,
             [this](std::uint32_t) -> std::uint8_t { return read_sound_reply(); },
@@ -360,6 +360,13 @@ namespace mnemos::manifests::irem_m92 {
                 break;
             }
         });
+        sound_cpu.set_irq_ack([this]() -> std::uint8_t {
+            if (fm.irq_asserted()) {
+                return sound_irq_vector_ym2151;
+            }
+            return sound_irq_vector_command_latch;
+        });
+        fm.set_irq([this](bool) { update_sound_irq(); });
 
         dip_switches = params.dip_default;
         pcm.set_input_clock(pcm_clock_hz);
@@ -395,14 +402,21 @@ namespace mnemos::manifests::irem_m92 {
         input_system = system;
     }
 
+    void m92_system::update_sound_irq() noexcept {
+        sound_cpu.set_irq_line(sound_latch_pending || fm.irq_asserted());
+    }
+
     void m92_system::write_sound_latch(std::uint8_t value) noexcept {
         sound_latch = value;
         sound_latch_pending = true;
+        update_sound_irq();
     }
 
-    std::uint8_t m92_system::read_sound_latch() noexcept {
+    std::uint8_t m92_system::read_sound_latch() noexcept { return sound_latch; }
+
+    void m92_system::acknowledge_sound_latch() noexcept {
         sound_latch_pending = false;
-        return sound_latch;
+        update_sound_irq();
     }
 
     void m92_system::write_sound_reply(std::uint8_t value) noexcept {
@@ -475,6 +489,7 @@ namespace mnemos::manifests::irem_m92 {
         ym_address = reader.u8();
         sound_latch_pending = reader.boolean();
         sound_reply_pending = reader.boolean();
+        update_sound_irq();
     }
 
     std::unique_ptr<m92_system> assemble_m92(common::rom_set_image image,

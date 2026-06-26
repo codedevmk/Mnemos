@@ -69,21 +69,74 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_m92_sound_command_program() {
         std::vector<std::uint8_t> rom(m92::sound_rom_size, 0xFFU);
+        const std::size_t intp1_vector =
+            static_cast<std::size_t>(m92::sound_irq_vector_command_latch) * 4U;
+        rom[intp1_vector + 0U] = 0x00U; // IVT[INTP1] -> 0000:0300
+        rom[intp1_vector + 1U] = 0x03U;
+        rom[intp1_vector + 2U] = 0x00U;
+        rom[intp1_vector + 3U] = 0x00U;
         rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
         rom[0x1FFF1U] = 0x00U;
         rom[0x1FFF2U] = 0x02U;
         rom[0x1FFF3U] = 0x00U;
         rom[0x1FFF4U] = 0xE0U;
-        const std::vector<std::uint8_t> program{
+        const std::vector<std::uint8_t> wait_program{
+            0xFBU, // STI
+            0xF4U, // HLT, then wake on the command-latch IRQ
+            0xF4U  // HLT again if the handler ever returns
+        };
+        for (std::size_t i = 0; i < wait_program.size(); ++i) {
+            rom[0x0200U + i] = wait_program[i];
+        }
+        const std::vector<std::uint8_t> handler{
+            0xB8U, 0x00U, 0xA8U, // MOV AX,A800
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xA0U, 0x44U, 0x00U, // MOV AL,[0044] (main sound command latch)
+            0x88U, 0xC3U,        // MOV BL,AL
+            0xA2U, 0x44U, 0x00U, // MOV [0044],AL (acknowledge command IRQ)
+            0xA2U, 0x46U, 0x00U, // MOV [0046],AL (sound reply)
             0xB8U, 0x00U, 0xA0U, // MOV AX,A000
             0x8EU, 0xD8U,        // MOV DS,AX
-            0xE4U, 0x00U,        // IN AL,00   (main sound command latch)
+            0x8AU, 0xC3U,        // MOV AL,BL
             0xA2U, 0x00U, 0x00U, // MOV [0000],AL
-            0xE6U, 0x02U,        // OUT 02,AL  (sound reply)
             0xF4U                // HLT
         };
-        for (std::size_t i = 0; i < program.size(); ++i) {
-            rom[0x0200U + i] = program[i];
+        for (std::size_t i = 0; i < handler.size(); ++i) {
+            rom[0x0300U + i] = handler[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m92_sound_ym_irq_program() {
+        std::vector<std::uint8_t> rom(m92::sound_rom_size, 0xFFU);
+        const std::size_t intp0_vector =
+            static_cast<std::size_t>(m92::sound_irq_vector_ym2151) * 4U;
+        rom[intp0_vector + 0U] = 0x00U; // IVT[INTP0] -> 0000:0300
+        rom[intp0_vector + 1U] = 0x03U;
+        rom[intp0_vector + 2U] = 0x00U;
+        rom[intp0_vector + 3U] = 0x00U;
+        rom[0x1FFF0U] = 0xEAU; // JMP E000:0200 through the mirrored sound ROM window
+        rom[0x1FFF1U] = 0x00U;
+        rom[0x1FFF2U] = 0x02U;
+        rom[0x1FFF3U] = 0x00U;
+        rom[0x1FFF4U] = 0xE0U;
+        const std::vector<std::uint8_t> wait_program{
+            0xFBU, // STI
+            0xF4U, // HLT, then wake on the YM2151 INTP0 IRQ
+            0xF4U  // HLT again if the handler ever returns
+        };
+        for (std::size_t i = 0; i < wait_program.size(); ++i) {
+            rom[0x0200U + i] = wait_program[i];
+        }
+        const std::vector<std::uint8_t> handler{
+            0xB8U, 0x00U, 0xA0U, // MOV AX,A000
+            0x8EU, 0xD8U,        // MOV DS,AX
+            0xB0U, 0xA5U,        // MOV AL,A5
+            0xA2U, 0x01U, 0x00U, // MOV [0001],AL
+            0xF4U                // HLT
+        };
+        for (std::size_t i = 0; i < handler.size(); ++i) {
+            rom[0x0300U + i] = handler[i];
         }
         return rom;
     }
@@ -158,6 +211,8 @@ TEST_CASE("m92 board declares M92 V33/V35 clocks and 320x240 raster", "[m92][boa
     CHECK(m92::visible_width == 320U);
     CHECK(m92::visible_height == 240U);
     CHECK(m92::frame_lines == 262U);
+    CHECK(m92::sound_irq_vector_ym2151 == 24U);
+    CHECK(m92::sound_irq_vector_command_latch == 25U);
 }
 
 TEST_CASE("m92 sound CPU drives the memory-mapped Irem GA20 window", "[m92][board][audio]") {
@@ -190,10 +245,14 @@ TEST_CASE("m92 sound command latch reaches the V35 and returns a reply", "[m92][
 
         CHECK(system->sound_latch == 0x5AU);
         CHECK(system->sound_latch_pending);
+        CHECK(system->sound_bus.read8(m92::sound_latch_addr) == 0x5AU);
+        CHECK(system->sound_latch_pending);
+        system->sound_bus.write8(m92::sound_latch_addr, 0x00U);
+        CHECK_FALSE(system->sound_latch_pending);
         CHECK_FALSE(system->sound_reply_pending);
     }
 
-    SECTION("V35 latch read clears pending and reply write is latched") {
+    SECTION("V35 INTP1 handler acknowledges the command latch and replies") {
         image.regions["soundcpu"] = synthetic_m92_sound_command_program();
 
         auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
@@ -207,6 +266,30 @@ TEST_CASE("m92 sound command latch reaches the V35 and returns a reply", "[m92][
         CHECK(system->sound_reply_pending);
         CHECK(system->sound_ram[0] == 0x5AU);
     }
+}
+
+TEST_CASE("m92 YM2151 IRQ reaches the V35 INTP0 vector", "[m92][board][audio]") {
+    auto image = synthetic_m92_image();
+    image.regions["soundcpu"] = synthetic_m92_sound_ym_irq_program();
+
+    auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+    CHECK(system->sound_ram[1] == 0x00U);
+    CHECK(system->sound_cpu.halted());
+
+    system->fm.write_address(0x10U);
+    system->fm.write_data(0xFFU);
+    system->fm.write_address(0x11U);
+    system->fm.write_data(0x02U); // CLKA = 1022, overflow after 128 OPM clocks.
+    system->fm.write_address(0x14U);
+    system->fm.write_data(0x05U); // run Timer A + enable IRQ.
+    system->fm.tick(128U);
+    REQUIRE(system->fm.irq_asserted());
+
+    system->sound_cpu.tick(256U);
+    CHECK(system->sound_ram[1] == 0xA5U);
 }
 
 TEST_CASE("m92 save state preserves board identity and runtime state", "[m92][board]") {
