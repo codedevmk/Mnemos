@@ -422,10 +422,9 @@ function Get-M72RomCandidateSetIds {
         }
         $collectionSets = @(Get-M72CollectionZipSetIds -Path $Path -ManifestIds $ManifestIds)
         if ($collectionSets.Count -gt 0) {
-            if ($ManifestIds.Contains($stem)) {
-                return @($candidates)
+            if (-not $ManifestIds.Contains($stem)) {
+                $candidates.Clear()
             }
-            $candidates.Clear()
         }
         foreach ($collectionSet in $collectionSets) {
             Add-M72Candidate -Candidates $candidates -Set $collectionSet -Rank 2

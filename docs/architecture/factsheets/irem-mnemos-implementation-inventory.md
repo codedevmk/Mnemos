@@ -245,7 +245,8 @@ visual and audio parity proof.
   `D:\emu\irem\M72\nspirit` folder is incomplete, but the current
   `D:\emu\irem\M72\nspirit.zip` is CRC-complete for both `nspirit` and
   `nspiritj`; the corpus smoke runner now ranks that ZIP ahead of the stale
-  same-name folder. The recursive
+  same-name folder and preserves manifest-named top-level folders inside an
+  exact-stem ZIP, so the same archive can smoke both routes. The recursive
   mixed-corpus roster gate now finds the local `lohtb3` wrapper under
   `D:\emu\irem\i8751` from the single root `MNEMOS_M72_SET_DIR=D:\emu\irem`;
   the M72 smoke runner's targeted `-Set lohtb3` proof passes through that

@@ -180,18 +180,16 @@ Important local corpus facts:
 - M92 Mystic Riders local wrapper routes are `D:\emu\irem\Mystic-Riders_Arcade_EN.zip` for parent `mysticri`, `D:\emu\irem\Mystic-Riders_Arcade_JA.zip` for clone `gunhohki`, and `D:\emu\irem\Mystic-Riders_Arcade_EN (1).zip` for clone `mysticrib`. The Japan and split bootleg routes require parent fallback to the parent wrapper.
 - M92 Ninja Baseball Bat Man local wrapper routes are `D:\emu\irem\Ninja-Baseball-Bat-Man_Arcade_EN.zip` for parent `nbbatman` and `D:\emu\irem\Ninja-Baseball-Bat-Man_Arcade_EN (1).zip` for clone `nbbatmanu`. The US clone wrapper contains only the changed main-program pair and requires parent fallback to the parent wrapper for the unchanged upper program, sound, graphics, samples, and PLDs.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
-- `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths plus bounded `related_hits` for same-size, set-local MCU-looking candidates with the wrong CRC.
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `43/44` artifacts present for those two sets.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
-- World `nspirit` is incomplete locally: missing `mcu/nin_c-pr-b.ic1`, size `0x1000`, CRC `0x0f7b2713`.
-- Current scan of `D:\emu\irem\M72\nspirit.zip` finds `23/24` World `nspirit` artifacts and still misses only `nin_c-pr-b.ic1` (`0x0f7b2713`). The same ZIP contains `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), which is the Japan MCU and does not prove World `nspirit`.
-- Current exact-path scan of `D:\emu\irem\M72\nspirit.zip`, `D:\emu\irem\M72\gallopm72.zip`, and `D:\emu\irem\M72\gallop.zip` still finds `42/44` artifacts present and still misses only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`) and `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`). The scanner now reports the Ninja Spirit ZIP's related-but-wrong MCU candidate, `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), as `related_hits` evidence instead of treating ZIP presence as proof. The Gallop ZIPs have PROM/sprite/voice entries but no matching MCU dump.
-- Exhaustive CRC scanning of ZIP members and loose files under `D:\emu\irem\M72` found zero matches for `0xac4421b1` or `0x0f7b2713`; the missing-MCU statement is not based on ZIP existence, it is based on exact CRC evidence.
-- If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
-- `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
-- Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only Japan Ninja Spirit MCU candidates for the World `nspirit` gap: `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1` and `D:\emu\irem\M72\nspirit.zip!nspiritj/nin_c-pr-.ic1`, both size `0x1000`, CRC `0x802d440a`. It did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
+- Current scan of `D:\emu\irem\M72\nspirit.zip` finds `48/48` artifacts present for World `nspirit` and Japan `nspiritj`.
+- Current exact-path scan of `D:\emu\irem\M72\nspirit.zip`, `D:\emu\irem\M72\gallopm72.zip`, and `D:\emu\irem\M72\gallop.zip` finds `43/44` artifacts present for `gallopm72` plus World `nspirit`, missing only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`). Direct ZIP inspection confirms `D:\emu\irem\M72\nspirit.zip` contains `nin_c-pr-b.ic1` (`0x0f7b2713`) and `nspiritj/nin_c-pr-.ic1` (`0x802d440a`).
+- If a lawful Gallop M72 MCU dump becomes available, the scanner points at this unpacked destination: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filename and CRC.
+- `nspiritj` is a valid Japan variant and has `nspiritj/nin_c-pr-.ic1`, CRC `0x802d440a`; it is separate from the now-present World `nspirit` MCU `nin_c-pr-b.ic1`, CRC `0x0f7b2713`.
+- `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\M72 -Recurse -Set nspirit,nspiritj -Frames 120 -FallbackFrames 300` now passes `2/2`; the runner keeps the exact-stem `nspirit` ZIP route and also discovers the manifest-named `nspiritj/` collection folder inside the same ZIP.
 - M82 validation now supports broad `MNEMOS_M82_SET_DIR=D:\emu\irem` again. The M82 manifest/player data gates rank single-inner wrapper ZIPs before direct set ZIPs and unpacked folders, so complete local R-Type II collection wrappers win over incomplete earlier-sorted candidates such as `D:\emu\irem\M72\rtype2`.
 - M82 Major Title local wrapper routes are `D:\emu\irem\Major-Title_Arcade_EN.zip` for parent `majtitle` and `D:\emu\irem\Major-Title_Arcade_JA.zip` for clone `majtitlej`. The Japan wrapper is a split program-only route and requires parent fallback to source shared sound, sample, tile, background, sprite, and PROM media from the parent wrapper.
-- `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\m72 -Recurse` currently passes `9/12` discovered M72 smoke groups. `gallopm72` and `nspirit` fail because `media_clean=False` from the missing MCU dumps. `imgfight` from `D:\emu\irem\m72\imgfight` alone fails because that raw folder lacks `if_c-pr-a.ic1`, but the mixed-source smoke `-Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight` passes `1/1`.
+- The broad `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\m72 -Recurse` count from earlier handoff notes is stale for Ninja Spirit. Re-run it before quoting a broad pass count; the focused current proof above shows `nspirit` and `nspiritj` both pass from `D:\emu\irem\M72`.
 - Direct `mnemos_player --system irem_m72 --rom D:\emu\irem\M72\airduel.zip` now identifies the collection as `airduelm72` through the canonical M72 suffix and prefix-preferred provider. It still emits media-validation issues for the missing `ad-00/ad-10/ad-20/ad-30`, tile-bank, and sample entries, so leave Air Duel collection ZIPs out of clean roster counts until those artifacts are present or supplied through a validated parent/source route.
 - `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. Do not set it to the current partial `D:\emu\irem\m72` tree and call that a full-roster proof; use the smoke runner for partial corpus evidence until all authentic roster artifacts are present.
 
@@ -222,7 +220,7 @@ Final handoff validation completed on 2026-06-25 21:05 -05:00:
 - Full preset CTest: `188/188`, with expected conformance/media skips where ROM or oracle env vars were unset
 - Data-gated script with local Irem env vars: `24/24` selected tests, `0` failures
 - Irem M72 corpus smoke from the data-gated script: `2/2` passed for configured R-Type/protected/vertical artifacts
-- M72 roster golden still skipped because `MNEMOS_M72_SET_DIR` was intentionally unset; Gallop and World Ninja Spirit remain blocked by missing local MCU dumps
+- M72 roster golden still skipped because `MNEMOS_M72_SET_DIR` was intentionally unset. This older validation is superseded by the later 2026-06-26 exact ZIP recheck: World/Japan Ninja Spirit are complete in `D:\emu\irem\M72\nspirit.zip`, while Gallop M72 still lacks `cc_c-pr-.ic1`.
 - CPS2 corpus smoke skipped because no CPS2 env vars were set for this Irem handoff
 
 M52 Moon Patrol first-pass validation on 2026-06-26:
@@ -327,13 +325,15 @@ M107 save-state identity continuation validation on 2026-06-26:
 
 M72 exact-path artifact recheck on 2026-06-26:
 
-- `scripts\irem_m72\find-missing-artifacts.ps1 -Root 'D:\emu\irem\M72\nspirit.zip','D:\emu\irem\M72\gallopm72.zip','D:\emu\irem\M72\gallop.zip' -Set 'gallopm72,nspirit' -Out build\scratch\m72-current-missing.json`: `42/44` present and still missing only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`) plus `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`); the report's `related_hits` lists `D:\emu\irem\M72\nspirit.zip!nspiritj/nin_c-pr-.ic1` (`0x802d440a`) as the same-size Japan MCU, not a World MCU match.
-- The three-ROM `run-corpus-smoke.ps1` attempt exceeded the two-minute tool timeout, so it is not counted as pass/fail evidence; the artifact report above is the current authoritative proof for the ZIP-exists-versus-MCU-missing question.
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root 'D:\emu\irem\M72\nspirit.zip','D:\emu\irem\M72\gallopm72.zip','D:\emu\irem\M72\gallop.zip' -Set 'gallopm72,nspirit'`: `43/44` present and missing only `gallopm72:mcu:cc_c-pr-.ic1` (`0xac4421b1`). The same current corpus has `nspirit:mcu:nin_c-pr-b.ic1` (`0x0f7b2713`) inside `D:\emu\irem\M72\nspirit.zip`.
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root 'D:\emu\irem\M72\nspirit.zip' -Set nspirit,nspiritj`: `48/48` present for the World and Japan Ninja Spirit routes.
+- `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\M72 -Recurse -Set nspirit,nspiritj -Frames 120 -FallbackFrames 300`: `2/2` passed after the runner learned to keep exact-stem ZIP candidates while also discovering manifest-named collection folders.
+- Post-patch validation: `git diff --check` clean except the existing LF-to-CRLF working-copy warnings; `cmake --build --preset windows-msvc-debug` reported `ninja: no work to do`; `ctest --preset windows-msvc-debug --output-on-failure` passed `210/210` with expected ROM/oracle-gated skips.
 
 M107 GA20 player-mixer continuation validation on 2026-06-26:
 
-- Exact M72 archive scan: `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem\M72 -Recurse -Set 'gallopm72,nspirit'` found `42/44` artifacts present and still missed only `gallopm72:mcu:cc_c-pr-.ic1` plus `nspirit:mcu:nin_c-pr-b.ic1`.
-- Direct ZIP inspection: `D:\emu\irem\M72\nspirit.zip` contains `nspiritj/nin_c-pr-.ic1` only under MCU-like entries; `D:\emu\irem\M72\gallopm72.zip` contains PROM entries but no `cc_c-pr-.ic1`; `D:\emu\irem\M72\gallop.zip` contains sprite/voice entries but no `cc_c-pr-.ic1`.
+- Exact M72 archive scan superseded by the later 2026-06-26 recheck above: `nspirit` is now complete in `D:\emu\irem\M72\nspirit.zip`; `gallopm72:mcu:cc_c-pr-.ic1` remains missing.
+- Direct ZIP inspection now shows `D:\emu\irem\M72\nspirit.zip` contains both `nin_c-pr-b.ic1` for World `nspirit` and `nspiritj/nin_c-pr-.ic1` for Japan `nspiritj`; `D:\emu\irem\M72\gallopm72.zip` and `D:\emu\irem\M72\gallop.zip` still do not contain `cc_c-pr-.ic1`.
 - Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_chips_audio_irem_ga20_test mnemos_manifests_irem_m107_test mnemos_apps_player_irem_m107_adapter_test`
 - Focused CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `4/4` passed for `mnemos_chips_audio_irem_ga20_test`, `mnemos_manifests_irem_m107_test`, `mnemos_apps_player_irem_m107_adapter_test`, and `mnemos_apps_player_irem_m107_corpus_golden_test`
 - `git diff --check`: clean, with only existing LF-to-CRLF working-copy warnings.
@@ -342,7 +342,7 @@ M107 GA20 player-mixer continuation validation on 2026-06-26:
 
 Continuation validation on 2026-06-25 21:19 -05:00:
 
-- `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit`: `42/44` present, missing only `cc_c-pr-.ic1` and `nin_c-pr-b.ic1`, with suggested placements under `D:\emu\irem\m72\gallop\` and `D:\emu\irem\m72\nspirit\`
+- `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit`: now `43/44` present in the current corpus, missing only `cc_c-pr-.ic1`, with suggested placement under `D:\emu\irem\m72\gallop\`
 - Same artifact command with `-Set 'gallopm72,nspirit'` validates the comma-separated set-list path
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight -MaxSets 1`: `1/1` passed
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\gallop.zip,D:\emu\irem\m72\gallop -MaxSets 1`: expected failure with `media_clean=False`, lit screenshot, and missing `cc_c-pr-.ic1`
@@ -359,7 +359,7 @@ M107 GA20 continuation validation on 2026-06-26:
 - Full preset build: `cmake --build --preset windows-msvc-debug`
 - Full preset CTest with local Irem env vars and `MNEMOS_M72_SET_DIR` intentionally cleared: `189/189`, with expected data-gated skips including the M72 roster golden
 - Direct M107 capability smoke: `mnemos_player --system irem_m107 --rom D:\emu\irem\M107\airass.zip --capabilities` reported `audio.ga20.samples`, `memory.ga20.registers`, `memory.ym2151.registers`, V30 trace surfaces, and `media.rom_set state=available`
-- Current `D:\emu\irem\M72\nspirit.zip` artifact scan: `23/24` World `nspirit` artifacts present; still missing `nin_c-pr-b.ic1` (`0x0f7b2713`). The ZIP contains `nspiritj/nin_c-pr-.ic1` (`0x802d440a`), which remains Japan-only evidence.
+- Current `D:\emu\irem\M72\nspirit.zip` artifact scan: `48/48` present for `nspirit` and `nspiritj`; World `nspirit` now has `nin_c-pr-b.ic1` (`0x0f7b2713`) and Japan `nspiritj` has `nspiritj/nin_c-pr-.ic1` (`0x802d440a`).
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\dbreedm72,D:\emu\irem\m72\dkgensanm72 -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-231315\summary.json`
 
@@ -1066,7 +1066,7 @@ Repository hygiene notes:
 4. Continue M92 authenticity work: encrypted V35 behavior, GA21/GA22 video/priority, exact M92 memory/I/O, GA20 protocol, DIP/raster behavior, and screenshot/audio parity.
 5. Continue M107 authenticity work: V33/V35-specific timing and on-die peripheral behavior, deeper M107 I/O details, full V35 interrupt-controller priority/latency proof, remaining GA20 analog balance/filtering, GA21/GA22 behavior, raster timing, and screenshot parity.
 6. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
-7. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
+7. Continue M72 artifact closure by locating the exact Gallop M72 MCU dump `cc_c-pr-.ic1` CRC `0xac4421b1`. World Ninja Spirit is now complete in the current local `nspirit.zip`; do not reintroduce the older missing-`nspirit` claim without a fresh CRC scan.
 8. Continue authenticity passes for M81/M82/M72 video priority, raster phase/timing, DIP behavior, M81/M82 palette-bank rendering/decode, and board timing.
 
 ## Resume Commands
