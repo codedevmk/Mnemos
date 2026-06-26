@@ -66,6 +66,10 @@ namespace mnemos::apps::player::adapters::irem_m84 {
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::irem_m84::m84_system& machine() noexcept { return *sys_; }
+        [[nodiscard]] std::span<const manifests::common::rom_set_dip_switch>
+        dip_switches() const noexcept {
+            return dip_switches_;
+        }
         [[nodiscard]] const std::string& set_name() const noexcept { return loaded_set_name_; }
 
       private:
@@ -85,6 +89,7 @@ namespace mnemos::apps::player::adapters::irem_m84 {
         std::array<frontend_sdk::controller_state, 2> ports_{};
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};
+        std::vector<manifests::common::rom_set_dip_switch> dip_switches_{};
         std::string loaded_set_name_{};
         std::vector<std::int16_t> audio_buf_{};
         std::uint64_t samples_drained_{};

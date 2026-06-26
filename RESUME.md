@@ -73,13 +73,14 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Hammerin' Harry M84 profiles select V30; `ltswords` and `gallop` select V35 and reject save-state restore under the wrong M84 CPU/layout identity.
 - `ltswords` loads the CRC-verified program, sound, graphics, and sample ROMs from `D:\emu\irem\M72\ltswords`, but the small PROM/PLD artifacts remain missing and are explicitly declared through `irem_m84_prom_pld` HLE metadata rather than treated as authentic video proof.
 - `gallop` loads the complete CRC-verified local M84 Gallop / Cosmic Cop archive from `D:\emu\irem\M72\gallop.zip`, including program, sound, graphics, samples, PROMs, and PLDs. The same `M72` bucket also contains a misleading `D:\emu\irem\M72\gallop` unpacked folder with different true-M72-style filenames; M84 corpus tests now prefer the complete ZIP when both are present.
+- `gallop` now carries 10 manifest DIP switch definitions. The M84 adapter retains that metadata, applies the composed manifest default (`0xf9bf`) to the board DIP register, and exposes the switch count in the player system spec.
 - Player adapter added at `src/apps/player/adapters/irem_m84`.
 - CLI/system-family routing via `--system irem_m84` and alias `m84`.
 - Clone-parent media routing composes M84 child media with supplemental M81 `hharry` parent media when a set declares `parent`; standalone M84 folders load directly.
 - Capability discovery, rollback-ready save-state reporting, and real local player smoke are data-gated through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`.
 - The current M84 compatibility core exposes the same KNA91-style palette-bus contract through its owned M81 board while preserving M84 manifest/save identity.
 - The M84 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
-- Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry/Cosmic Cop/Ken-Go video/priority, raster timing, DIP behavior, recover/prove the `ltswords` PROM/PLD artifacts, and screenshot/audio parity before calling this authentic.
+- Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry/Cosmic Cop/Ken-Go video/priority, raster timing, board-authentic DIP behavior, recover/prove the `ltswords` PROM/PLD artifacts, and screenshot/audio parity before calling this authentic.
 
 ### Irem M107
 
@@ -518,6 +519,26 @@ M84 Gallop / Cosmic Cop continuation validation on 2026-06-26:
   - `mnemos_player --system irem_m84 --rom D:\emu\irem\M72\gallop.zip --save-state build\scratch\irem_m84_gallop.mns --frames 120`
   - `mnemos_player --system irem_m84 --rom D:\emu\irem\M72\gallop.zip --load-state build\scratch\irem_m84_gallop.mns --screenshot build\scratch\irem_m84_gallop.ppm --frames 1`
   - Screenshot proof: `384x256`, `98304` pixels, `247` unique RGB colors, `98304` nonblack pixels.
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `202/202`, with expected conformance/media skips and the expected M72 roster skip.
+
+M84 Gallop DIP-default continuation validation on 2026-06-26:
+
+- Added 10 Gallop DIP switch definitions to the M84 `gallop` manifest and verified the composed raw default is `0xf9bf`.
+- The M84 adapter now retains parsed DIP metadata, applies manifest defaults before board assembly, and exposes a `DIP switches = 10` player spec field for Gallop.
+- Focused build targets:
+  - `mnemos_manifests_irem_m84_test`
+  - `mnemos_apps_player_irem_m84_adapter_test`
+  - `mnemos_player`
+- Focused M84 CTest with `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`: `3/3`
+  - `mnemos_manifests_irem_m84_test`
+  - `mnemos_apps_player_irem_m84_adapter_test`
+  - `mnemos_apps_player_irem_m84_corpus_golden_test`
+- Direct player smoke:
+  - `mnemos_player --system irem_m84 --rom D:\emu\irem\M72\gallop.zip --save-state build\scratch\irem_m84_gallop_dip.mns --frames 120`
+  - `mnemos_player --system irem_m84 --rom D:\emu\irem\M72\gallop.zip --load-state build\scratch\irem_m84_gallop_dip.mns --screenshot build\scratch\irem_m84_gallop_dip.ppm --frames 1`
+  - Screenshot proof: `384x256`, `98304` pixels, `247` unique RGB colors, `98304` nonblack pixels.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M81, broad-root M82, M84 including `gallop`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `202/202`, with expected conformance/media skips and the expected M72 roster skip.
 
 Earlier branch validation that passed before the M107 slice:

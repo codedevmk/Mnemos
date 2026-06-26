@@ -254,6 +254,15 @@ namespace {
         return count;
     }
 
+    [[nodiscard]] bool spec_has(const irem::irem_m84_adapter& adapter,
+                                std::string_view label,
+                                std::string_view value) {
+        const auto& spec = adapter.system_spec();
+        return std::any_of(spec.begin(), spec.end(), [label, value](const auto& field) {
+            return field.label == label && field.value == value;
+        });
+    }
+
 } // namespace
 
 TEST_CASE("irem_m84_adapter boots a synthetic M84 program", "[irem_m84]") {
@@ -343,6 +352,13 @@ TEST_CASE("irem_m84_adapter validates real M84 ROM sets", "[irem_m84][data]") {
         CHECK(adapter.machine().main_cpu.cpu_model() ==
               (v35_set ? mnemos::chips::cpu::v30::model::v35
                        : mnemos::chips::cpu::v30::model::v30));
+        if (set_name == "gallop") {
+            CHECK(adapter.dip_switches().size() == 10U);
+            CHECK(adapter.machine().dip_switches == 0xF9BFU);
+            CHECK(spec_has(adapter, "DIP switches", "10"));
+        } else {
+            CHECK(adapter.dip_switches().empty());
+        }
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m84::visible_width);

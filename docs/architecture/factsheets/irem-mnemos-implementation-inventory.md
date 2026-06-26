@@ -53,7 +53,7 @@ now contract-only.
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 60% | `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 4 local sets | None | Board classification audit, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
-| M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster/DIP proof, `ltswords` PROM/PLD artifacts |
+| M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip`; Gallop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 32% first-pass | `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` | all 5 data-gated first-pass sets | None | Encrypted V35 sound CPU handling, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
@@ -257,7 +257,8 @@ visual and audio parity proof.
   set using CRC-verified program, sound, graphics, and sample regions.
   `D:\emu\irem\M72\gallop.zip` loads as standalone M84 V35-profile Gallop /
   Cosmic Cop media with CRC-verified program, sound, graphics, samples, PROMs,
-  and PLDs.
+  and PLDs. The Gallop manifest also carries 10 DIP switch definitions, and the
+  adapter applies their composed default (`0xf9bf`) to the board DIP register.
 - **Correct gfx/music:** not certified.
 - **Local corpus note:** `ltswords` and `gallop.zip` are stored under the `M72`
   corpus bucket, but their Mnemos manifests track them as M84. The current
@@ -265,11 +266,13 @@ visual and audio parity proof.
   board; the manifest carries an explicit `irem_m84_prom_pld` HLE declaration
   for that first-pass route. The same bucket also contains a `gallop` unpacked
   folder with different true-M72-style filenames; the proved M84 Gallop route is
-  the complete `D:\emu\irem\M72\gallop.zip` archive.
+  the complete `D:\emu\irem\M72\gallop.zip` archive with manifest-backed DIP
+  defaults.
 - **Remaining:** replace or verify the M81-compatible wrapper assumptions with
   board evidence, resolve the R-Type II classification mismatch, recover/prove
   the `ltswords` PROM/PLD artifacts, and prove M84-specific memory/I/O,
-  priority, raster timing, DIP behavior, and screenshot/audio parity.
+  priority, raster timing, DIP behavior beyond current manifest defaults, and
+  screenshot/audio parity.
 
 ### M85
 

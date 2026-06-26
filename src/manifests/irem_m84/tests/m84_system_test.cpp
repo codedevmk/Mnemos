@@ -31,6 +31,7 @@
 namespace {
 
     using mnemos::manifests::common::rom_set_decl;
+    using mnemos::manifests::common::rom_set_dip_switch;
     using mnemos::manifests::common::rom_set_file;
     using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
@@ -57,6 +58,24 @@ namespace {
             std::find_if(region.files.begin(), region.files.end(),
                          [offset](const rom_set_file& file) { return file.offset == offset; });
         return it == region.files.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] const rom_set_dip_switch*
+    find_dip(const rom_set_decl& decl, std::string_view name) noexcept {
+        const auto it = std::find_if(decl.dips.begin(), decl.dips.end(),
+                                     [name](const rom_set_dip_switch& dip) {
+                                         return dip.name == name;
+                                     });
+        return it == decl.dips.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] std::uint16_t raw_dip_default(const rom_set_decl& decl,
+                                                std::uint16_t fallback) noexcept {
+        std::uint16_t value = fallback;
+        for (const auto& dip : decl.dips) {
+            value = static_cast<std::uint16_t>((value & ~dip.mask) | dip.default_value);
+        }
+        return value;
     }
 
     void require_region_contract(const rom_set_region& region) {
@@ -455,6 +474,16 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
         } else if (set_name == "gallop") {
             CHECK_FALSE(decl.parent.has_value());
             require_boot_chunk_reload(*maincpu, 0x80000U, 0x40000U);
+            CHECK(decl.dips.size() == 10U);
+            const rom_set_dip_switch* lives = find_dip(decl, "Lives");
+            REQUIRE(lives != nullptr);
+            CHECK(lives->mask == 0x0003U);
+            CHECK(lives->default_value == 0x0003U);
+            const rom_set_dip_switch* coin_mode = find_dip(decl, "Coin Mode");
+            REQUIRE(coin_mode != nullptr);
+            CHECK(coin_mode->mask == 0x0800U);
+            CHECK(coin_mode->default_value == 0x0800U);
+            CHECK(raw_dip_default(decl, 0xFFFFU) == 0xF9BFU);
             CHECK(find_region(decl, "soundcpu") != nullptr);
             CHECK(find_region(decl, "tiles") != nullptr);
             CHECK(find_region(decl, "sprites") != nullptr);
