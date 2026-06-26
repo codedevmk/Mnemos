@@ -85,13 +85,13 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - The M15 map is now aligned with MAME/source metadata for Head On: scratch RAM `$0000-$02ff`, program ROM `$1000-$33ff`, vector ROM `$fc00-$ffff`, video RAM `$4000-$43ff`, color RAM `$4800-$4bff`, chargen RAM `$5000-$57ff`, P2 read `$a000`, sound write `$a100`, DIP read `$a200`, P1 read `$a300`, and control write `$a400`.
 - The checked-in `headoni` manifest now uses full 64 KiB CPU address space and reloads `e4.9d` at `$fc00` for the 6502 reset/IRQ vectors.
 - M15 inputs now follow Head On's active-high P1/P2 ports, `0x11` DIP default, and coin-triggered NMI edge; the active-low control flip bit is part of board state/save state.
-- M15 video now renders from video/color/chargen RAM using the M-15 tile scan order and 1bpp palette lookup. The old program-ROM diagnostic fallback was removed.
+- M15 video now renders from video/color/chargen RAM using the M-15 tile scan order and 1bpp palette lookup. Frame stepping is scanline-paced: visible lines compose before the CPU slice for that beam line, and the frame IRQ can change color/video state for later scanlines without repainting earlier ones. The old program-ROM diagnostic fallback was removed.
 - Player adapter lives in `src/apps/player/adapters/irem_m15`.
 - CLI/system-family routing is available through `--system irem_m15` and alias `m15`.
 - Adapter accepts direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml`, and raw synthetic maincpu fallback.
 - Capability discovery reports 6502 trace/register surfaces, scratch/video/color/chargen RAM views, rollback-ready save-state, and `media.rom_set state=available` for valid corpus media.
 - Real local Head On player smoke wrote nonblank screenshots and successfully saved/loaded state.
-- Remaining: authentic M15 closure still needs board-evidenced discrete sample mappings/analog sound behavior, analog color proof, raster timing, and screenshot parity.
+- Remaining: authentic M15 closure still needs board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 
 ## Local ROM Corpus Notes
 
@@ -103,7 +103,7 @@ $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
-$env:MNEMOS_M82_SET_DIR="D:\emu\irem"
+$env:MNEMOS_M82_SET_DIR="D:\emu\irem\R-Type-II_Arcade_EN.zip;D:\emu\irem\R-Type-II_Arcade_JA.zip;D:\emu\irem\R-Type-II_Arcade_JA (1).zip;D:\emu\irem\M82\R-Type-II_Arcade_JA.zip"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 ```
@@ -120,6 +120,7 @@ Important local corpus facts:
 - If lawful dumps become available, the scanner points at these unpacked destinations: `D:\emu\irem\m72\gallop\cc_c-pr-.ic1` and `D:\emu\irem\m72\nspirit\nin_c-pr-b.ic1`. Equivalent ZIP entries are also valid if the matching set ZIP is rebuilt with the same filenames and CRCs.
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
 - Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1`, size `0x1000`, CRC `0x802d440a`; it did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
+- For M82 validation, prefer the exact four R-Type II wrapper files listed above. A broad `MNEMOS_M82_SET_DIR=D:\emu\irem` can pick incomplete or wrong earlier-sorted local candidates such as `D:\emu\irem\M72\rtype2` before the complete wrapper ZIPs.
 - `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\m72 -Recurse` currently passes `9/12` discovered M72 smoke groups. `gallopm72` and `nspirit` fail because `media_clean=False` from the missing MCU dumps. `imgfight` from `D:\emu\irem\m72\imgfight` alone fails because that raw folder lacks `if_c-pr-a.ic1`, but the mixed-source smoke `-Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight` passes `1/1`.
 - `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. Do not set it to the current partial `D:\emu\irem\m72` tree and call that a full-roster proof; use the smoke runner for partial corpus evidence until all authentic roster artifacts are present.
 
@@ -316,6 +317,21 @@ M15 sound-latch continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips
 
+M15 scanline-paced video continuation validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing CRLF conversion warnings
+- Focused M15 build:
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m15_test mnemos_apps_player_irem_m15_adapter_test`
+- Focused M15 CTest with `MNEMOS_M15_SET_DIR=D:\emu\irem\M15`: `2/2`
+  - `mnemos_manifests_irem_m15_test`
+  - `mnemos_apps_player_irem_m15_adapter_test`
+- Focused M82 corpus rerun with exact wrapper files: `2/2`
+  - `mnemos_manifests_irem_m82_test`
+  - `mnemos_apps_player_irem_m82_rtype2_golden_test`
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, exact-file M82 wrappers, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -333,7 +349,7 @@ Repository hygiene notes:
 
 ## Suggested Next Work
 
-1. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, raster timing, and screenshot parity.
+1. Continue M15 authenticity work: board-evidenced discrete sample mappings/analog sound behavior, analog color proof, exact raster phase proof, and screenshot parity.
 2. Continue M107 authenticity work: exact board clocks, V33/V30 facts, M107 memory/I/O map, sound CPU protocol, GA20/GA21/GA22 behavior, DIP behavior, raster timing, and screenshot parity.
 3. Do the M84 authenticity pass and replace or validate the M81-compatible assumptions.
 4. Continue M72 artifact closure by locating exact Gallop and World Ninja Spirit MCU dumps. Do not substitute Japan `nspiritj` or synthetic fill bytes.
@@ -358,7 +374,7 @@ $env:MNEMOS_M72_PROTECTED_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M72_VERTICAL_SET="D:\emu\irem\imgfight.zip"
 $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
-$env:MNEMOS_M82_SET_DIR="D:\emu\irem"
+$env:MNEMOS_M82_SET_DIR="D:\emu\irem\R-Type-II_Arcade_EN.zip;D:\emu\irem\R-Type-II_Arcade_JA.zip;D:\emu\irem\R-Type-II_Arcade_JA (1).zip;D:\emu\irem\M82\R-Type-II_Arcade_JA.zip"
 $env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug

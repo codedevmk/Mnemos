@@ -215,7 +215,7 @@ namespace mnemos::manifests::irem_m15 {
                 .part_number = "m15_video_first_pass",
                 .family = "irem_m15",
                 .klass = chips::chip_class::video,
-                .revision = 2U};
+                .revision = 3U};
     }
 
     void m15_video::tick(std::uint64_t cycles) { elapsed_cycles_ += cycles; }
@@ -233,21 +233,40 @@ namespace mnemos::manifests::irem_m15 {
                 .stride = visible_width};
     }
 
+    void m15_video::begin_frame() noexcept { std::fill(pixels_.begin(), pixels_.end(), 0U); }
+
+    void m15_video::compose_scanline(std::span<const std::uint8_t> video_ram,
+                                     std::span<const std::uint8_t> color_ram,
+                                     std::span<const std::uint8_t> chargen_ram,
+                                     std::uint32_t line,
+                                     bool flip_screen) {
+        if (line >= visible_height) {
+            return;
+        }
+
+        const auto row = static_cast<std::ptrdiff_t>(line * visible_width);
+        std::fill_n(pixels_.begin() + row, visible_width, 0U);
+        for (std::uint32_t x = 0; x < visible_width; ++x) {
+            const std::uint16_t tile_index = visible_tile_index(x, line, flip_screen);
+            const std::uint8_t tile = sample_byte(video_ram, tile_index, 0U);
+            const bool bit = tile_pixel_on(chargen_ram, tile, x, line, flip_screen);
+            const std::uint8_t color = sample_byte(color_ram, tile_index, 0U);
+            pixels_[static_cast<std::size_t>(line) * visible_width + x] =
+                bit ? palette_color(color) : 0U;
+        }
+    }
+
+    void m15_video::end_frame() noexcept { ++frame_index_; }
+
     void m15_video::compose(std::span<const std::uint8_t> video_ram,
                             std::span<const std::uint8_t> color_ram,
                             std::span<const std::uint8_t> chargen_ram,
                             bool flip_screen) {
+        begin_frame();
         for (std::uint32_t y = 0; y < visible_height; ++y) {
-            for (std::uint32_t x = 0; x < visible_width; ++x) {
-                const std::uint16_t tile_index = visible_tile_index(x, y, flip_screen);
-                const std::uint8_t tile = sample_byte(video_ram, tile_index, 0U);
-                const bool bit = tile_pixel_on(chargen_ram, tile, x, y, flip_screen);
-                const std::uint8_t color = sample_byte(color_ram, tile_index, 0U);
-                pixels_[static_cast<std::size_t>(y) * visible_width + x] =
-                    bit ? palette_color(color) : 0U;
-            }
+            compose_scanline(video_ram, color_ram, chargen_ram, y, flip_screen);
         }
-        ++frame_index_;
+        end_frame();
     }
 
     void m15_video::save_state(chips::state_writer& writer) const {
@@ -284,24 +303,35 @@ namespace mnemos::manifests::irem_m15 {
     }
 
     void m15_system::run_frame() {
-        const std::uint64_t irq_at =
-            (cpu_cycles_per_frame * static_cast<std::uint64_t>(visible_height - 16U)) /
-            frame_lines;
-        const std::uint64_t pre_irq = std::min(irq_at, cpu_cycles_per_frame);
-        const std::uint64_t remaining = cpu_cycles_per_frame - pre_irq;
-        const std::uint64_t irq_pulse = std::min<std::uint64_t>(remaining, 16U);
+        std::uint64_t cycles_elapsed = 0U;
+        video.begin_frame();
+        for (std::uint32_t line = 0U; line < frame_lines; ++line) {
+            const std::uint64_t next_cycle =
+                (cpu_cycles_per_frame * static_cast<std::uint64_t>(line + 1U)) / frame_lines;
+            const std::uint64_t line_cycles = next_cycle - cycles_elapsed;
 
-        main_cpu.tick(pre_irq);
-        if (irq_pulse > 0U) {
-            main_cpu.set_irq_line(true);
-            main_cpu.tick(irq_pulse);
-            main_cpu.set_irq_line(false);
+            if (line < visible_height) {
+                video.compose_scanline(video_ram, color_ram, chargen_ram, line, flip_screen);
+            }
+
+            if (line == visible_height - 16U) {
+                const std::uint64_t irq_pulse = std::min<std::uint64_t>(line_cycles, 16U);
+                if (irq_pulse > 0U) {
+                    main_cpu.set_irq_line(true);
+                    main_cpu.tick(irq_pulse);
+                    main_cpu.set_irq_line(false);
+                }
+                main_cpu.tick(line_cycles - irq_pulse);
+            } else {
+                main_cpu.tick(line_cycles);
+            }
+
+            speaker.tick(line_cycles);
+            video.tick(line_cycles);
+            cycles_elapsed = next_cycle;
         }
-        main_cpu.tick(remaining - irq_pulse);
-
-        speaker.tick(cpu_cycles_per_frame);
-        video.tick(cpu_cycles_per_frame);
-        video.compose(video_ram, color_ram, chargen_ram, flip_screen);
+        main_cpu.set_irq_line(false);
+        video.end_frame();
     }
 
     void m15_system::set_inputs(std::uint8_t p1, std::uint8_t p2,

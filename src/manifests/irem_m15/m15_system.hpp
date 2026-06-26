@@ -97,6 +97,13 @@ namespace mnemos::manifests::irem_m15 {
 
         [[nodiscard]] std::uint64_t frame_index() const noexcept override { return frame_index_; }
         [[nodiscard]] chips::frame_buffer_view framebuffer() const noexcept override;
+        void begin_frame() noexcept;
+        void compose_scanline(std::span<const std::uint8_t> video_ram,
+                              std::span<const std::uint8_t> color_ram,
+                              std::span<const std::uint8_t> chargen_ram,
+                              std::uint32_t line,
+                              bool flip_screen);
+        void end_frame() noexcept;
         void compose(std::span<const std::uint8_t> video_ram,
                      std::span<const std::uint8_t> color_ram,
                      std::span<const std::uint8_t> chargen_ram,

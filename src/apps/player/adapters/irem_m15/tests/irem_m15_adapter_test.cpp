@@ -259,6 +259,8 @@ TEST_CASE("irem_m15_adapter boots a synthetic M15 program", "[irem_m15]") {
     CHECK(adapter.machine().speaker_output_edge_count == 1U);
     CHECK_FALSE(adapter.machine().speaker_output_high);
     CHECK(adapter.machine().control_register == 0x04U);
+    adapter.step_one_frame();
+    CHECK(adapter.frames_stepped() == 2U);
     CHECK(framebuffer_has_nonblack(adapter.current_frame()));
     CHECK_FALSE(adapter.save_state().empty());
 }

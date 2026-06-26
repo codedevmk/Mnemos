@@ -369,6 +369,33 @@ namespace {
         return image;
     }
 
+    [[nodiscard]] std::uint16_t visible_tile_index_at(std::uint32_t x,
+                                                      std::uint32_t y) noexcept {
+        const std::uint32_t raw_x = y;
+        const std::uint32_t raw_y = 239U - x;
+        const std::uint32_t col = (raw_x >> 3U) & 0x1FU;
+        const std::uint32_t row = (raw_y >> 3U) & 0x1FU;
+        return static_cast<std::uint16_t>(((31U - col) * 32U + row) & 0x03FFU);
+    }
+
+    [[nodiscard]] rom_set_image raster_irq_m15_image(std::uint16_t color_address) {
+        std::vector<std::uint8_t> program(0x30U, 0xEAU);
+        program[0x00U] = 0x58U; // CLI
+        program[0x01U] = 0x4CU; // JMP $1001
+        program[0x02U] = 0x01U;
+        program[0x03U] = 0x10U;
+        program[0x20U] = 0xA9U; // IRQ: LDA #$05
+        program[0x21U] = 0x05U;
+        program[0x22U] = 0x8DU; // STA color_address
+        program[0x23U] = static_cast<std::uint8_t>(color_address);
+        program[0x24U] = static_cast<std::uint8_t>(color_address >> 8U);
+        program[0x25U] = 0x40U; // RTI
+
+        rom_set_image image;
+        image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1020U));
+        return image;
+    }
+
     [[nodiscard]] bool framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
         REQUIRE(frame.pixels != nullptr);
         REQUIRE(frame.width > 0U);
@@ -533,6 +560,7 @@ TEST_CASE("m15 executable board runs MOS 6502 memory video and sound path", "[m1
     CHECK_FALSE(system->flip_screen);
     CHECK(system->video.framebuffer().width == m15::visible_width);
     CHECK(system->video.framebuffer().height == m15::visible_height);
+    system->run_frame();
     CHECK(framebuffer_has_nonblack(system->video.framebuffer()));
 }
 
@@ -637,6 +665,35 @@ TEST_CASE("m15 frame tick pulses the 6502 IRQ vector", "[m15][board]") {
 
     CHECK(system->scratch_ram[2] == 0x77U);
     CHECK(system->main_cpu.elapsed_cycles() >= m15::cpu_cycles_per_frame);
+}
+
+TEST_CASE("m15 composes visible scanlines before frame IRQ writes", "[m15][video][raster]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    constexpr std::uint32_t before_irq_line = m15::visible_height - 17U;
+    constexpr std::uint32_t after_irq_line = m15::visible_height - 9U;
+    const std::uint16_t before_index = visible_tile_index_at(0U, before_irq_line);
+    const std::uint16_t after_index = visible_tile_index_at(0U, after_irq_line);
+
+    auto system = m15::assemble_m15(
+        raster_irq_m15_image(static_cast<std::uint16_t>(m15::color_ram_base + after_index)),
+        m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->video_ram[before_index] = 1U;
+    system->video_ram[after_index] = 1U;
+    system->color_ram[before_index] = 0U;
+    system->color_ram[after_index] = 0U;
+    system->chargen_ram[0x0FU] = 0xFFU;
+
+    system->run_frame();
+
+    const auto frame = system->video.framebuffer();
+    const std::uint32_t stride = frame.effective_stride();
+    CHECK(frame.pixels[before_irq_line * stride] == 0xFFFFFFU);
+    CHECK(frame.pixels[after_irq_line * stride] == 0x00FF00U);
+    CHECK(system->color_ram[before_index] == 0U);
+    CHECK(system->color_ram[after_index] == 5U);
 }
 
 TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][board]") {
