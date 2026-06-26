@@ -104,7 +104,8 @@ function Get-Cps2AudioFrameCount {
 function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2"
+    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or
+        $SetId -eq "mshvsf"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
