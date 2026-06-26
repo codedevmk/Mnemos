@@ -19,7 +19,9 @@ That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
 checked-in Mnemos Irem manifest, 84 have a direct player-loadable route through
 ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
-now contract-only.
+now contract-only. The common data-gated runner and oracle registry now include
+the implemented M75, M90, and M92 corpus golden tests alongside the earlier Irem
+families.
 
 ## Status Terms
 

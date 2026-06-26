@@ -224,3 +224,30 @@ machines:
       - id: ORC-M72-SYSTEM
         ctest: mnemos_manifests_irem_m72_test
         data_gated: false
+
+  irem_m75:
+    module: src/manifests/irem_m75
+    golden:
+      - id: GLD-M75-CORPUS
+        ctest: mnemos_apps_player_irem_m75_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M75_SET_DIR
+        requires_apps: true
+
+  irem_m90:
+    module: src/manifests/irem_m90
+    golden:
+      - id: GLD-M90-CORPUS
+        ctest: mnemos_apps_player_irem_m90_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M90_SET_DIR
+        requires_apps: true
+
+  irem_m92:
+    module: src/manifests/irem_m92
+    golden:
+      - id: GLD-M92-CORPUS
+        ctest: mnemos_apps_player_irem_m92_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M92_SET_DIR
+        requires_apps: true

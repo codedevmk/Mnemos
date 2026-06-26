@@ -343,6 +343,11 @@ the local Image Fight material into `imgfight` as the M72 parent/standalone set
 with two direct player-loadable routes plus one metadata-only `.7z`, and
 `imgfightj` / `imgfightjb` as clones declaring parent `imgfight`, each with one
 direct player-loadable ZIP route plus one metadata-only `.7z`.
+The standard data-gated runner now also reports, runs, and oracle-registers the
+M75, M90, and M92 corpus golden tests through `MNEMOS_M75_SET_DIR`,
+`MNEMOS_M90_SET_DIR`, and `MNEMOS_M92_SET_DIR`, closing the previous gap where
+those implemented player smoke gates existed but were absent from the common
+proof command.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
 board/player path with source-aligned Head On ROM/vector placement, RAM/MMIO
 windows, frame IRQ coverage, active-high P1/P2 input wiring, coin-triggered NMI,
