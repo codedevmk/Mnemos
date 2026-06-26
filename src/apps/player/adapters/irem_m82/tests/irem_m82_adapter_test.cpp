@@ -279,8 +279,7 @@ TEST_CASE("irem_m82_adapter save state restores board and adapter state", "[irem
     p2.mode = true; // legacy service alias
     source.apply_input(1, p2);
     CHECK(source.machine().input_system ==
-          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
-                                    ~0x20U & ~0x40U));
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U & ~0x20U & ~0x40U));
     source.step_one_frame();
     REQUIRE(source.drain_audio().frame_count > 0U);
 
@@ -298,31 +297,37 @@ TEST_CASE("irem_m82_adapter save state restores board and adapter state", "[irem
     CHECK(restored.frames_stepped() == source.frames_stepped() + 1U);
 }
 
-TEST_CASE("irem_m82_adapter validates real R-Type II ROM sets", "[irem_m82][data]") {
+TEST_CASE("irem_m82_adapter validates real M82 ROM sets", "[irem_m82][data]") {
     const auto dir_env = environment_value("MNEMOS_M82_SET_DIR");
     if (!dir_env.has_value() || dir_env->empty()) {
-        SKIP("set MNEMOS_M82_SET_DIR to directories containing the R-Type II zip/folder corpus");
+        SKIP("set MNEMOS_M82_SET_DIR to directories containing the M82 zip/folder corpus");
     }
 
     const auto roots = source_roots(dir_env->c_str());
     REQUIRE_FALSE(roots.empty());
     const auto sources = index_m82_source_roots(roots);
     const auto expected_sets = embedded_set_names();
+    const std::map<std::string, std::string, std::less<>> parents{
+        {"majtitlej", "majtitle"},
+        {"rtype2j", "rtype2"},
+        {"rtype2jc", "rtype2"},
+        {"rtype2m82b", "rtype2"},
+    };
     for (const auto& set_name : expected_sets) {
         INFO("set=" << set_name);
         REQUIRE(sources.find(set_name) != sources.end());
     }
-    REQUIRE(sources.find("rtype2") != sources.end());
-    const std::filesystem::path parent_path = sources.at("rtype2");
-    std::vector<std::uint8_t> parent_bytes = read_source_bytes(parent_path);
 
     for (const auto& set_name : expected_sets) {
         INFO("set=" << set_name);
         const std::filesystem::path source_path = sources.at(set_name);
         std::vector<std::vector<std::uint8_t>> supplemental_roms;
         std::vector<std::string> supplemental_paths;
-        if (set_name != "rtype2") {
-            supplemental_roms.push_back(parent_bytes);
+        const auto parent_it = parents.find(set_name);
+        if (parent_it != parents.end()) {
+            REQUIRE(sources.find(parent_it->second) != sources.end());
+            const std::filesystem::path parent_path = sources.at(parent_it->second);
+            supplemental_roms.push_back(read_source_bytes(parent_path));
             supplemental_paths.push_back(parent_path.string());
         }
         irem::irem_m82_adapter adapter(read_source_bytes(source_path), set_name, nullptr, {},

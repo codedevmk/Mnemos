@@ -1,0 +1,187 @@
+# Major Title -- Irem M82 parent set.
+# Schema mnemos-romset/1. This is a first-pass M82 ROM contract; the current
+# executable board path is not final golf-board video/audio parity.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "majtitle"
+board  = "irem_m82"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "mt_a-h0-a.ic52"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x36aadb67
+
+[[region.file]]
+name   = "mt_a-l0-a.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x2e1b6242
+
+[[region.file]]
+name   = "mt_a-h1-a.ic51"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xe1402a22
+
+[[region.file]]
+name   = "mt_a-l1-a.ic59"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x0efa409a
+
+# Reset-vector reload of the second pair at the top of the 1 MiB region.
+[[region.file]]
+name   = "mt_a-h1-a.ic51"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xe1402a22
+
+[[region.file]]
+name   = "mt_a-l1-a.ic59"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x0efa409a
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "mt_a-sp.ic15"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xe44260a9
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "mt_vo.ic12"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xeb24bb2c
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "mt_f0.ic38"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2d5e05d5
+
+[[region.file]]
+name   = "mt_f1.ic39"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xc68cd65f
+
+[[region.file]]
+name   = "mt_f2.ic40"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa71feb2d
+
+[[region.file]]
+name   = "mt_f3.ic41"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x179f7562
+
+[[region]]
+name = "backgrounds"
+size = 0x080000
+
+[[region.file]]
+name   = "mt_c0.ic49"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x780e7a02
+
+[[region.file]]
+name   = "mt_c1.ic48"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x45ad1381
+
+[[region.file]]
+name   = "mt_c2.ic57"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x5df5856d
+
+[[region.file]]
+name   = "mt_c3.ic56"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0xf5316cc8
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "mt_n0.ic44"
+offset = 0x00000
+size   = 0x40000
+crc32  = 0x5618cddc
+
+[[region.file]]
+name   = "mt_n1.ic45"
+offset = 0x40000
+size   = 0x40000
+crc32  = 0x483b873b
+
+[[region.file]]
+name   = "mt_n2.ic46"
+offset = 0x80000
+size   = 0x40000
+crc32  = 0x4f5d665b
+
+[[region.file]]
+name   = "mt_n3.ic36"
+offset = 0xC0000
+size   = 0x40000
+crc32  = 0x83571549
+
+[[region]]
+name = "proms"
+size = 0x0800
+
+[[region.file]]
+name   = "mt_a-2h-.ic5"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "mt_a-5l-.ic31"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0xe3064bfe
+
+[[region.file]]
+name   = "mt_a-7d-.ic43"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0xd7ec1cc6
+
+[[region.file]]
+name   = "mt_b-3q-.ic23"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x8c864543

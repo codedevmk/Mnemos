@@ -1,4 +1,6 @@
 set(_irem_m82_game_manifest_files
+    "games/majtitle.toml"
+    "games/majtitlej.toml"
     "games/rtype2.toml"
     "games/rtype2j.toml"
     "games/rtype2jc.toml"

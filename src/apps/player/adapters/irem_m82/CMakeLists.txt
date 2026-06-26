@@ -50,13 +50,13 @@ if(BUILD_TESTING)
     )
 
     add_test(
-        NAME mnemos_apps_player_irem_m82_rtype2_golden_test
+        NAME mnemos_apps_player_irem_m82_corpus_golden_test
         COMMAND
             mnemos_apps_player_irem_m82_adapter_test
-            "irem_m82_adapter validates real R-Type II ROM sets"
+            "irem_m82_adapter validates real M82 ROM sets"
     )
     set_tests_properties(
-        mnemos_apps_player_irem_m82_rtype2_golden_test
+        mnemos_apps_player_irem_m82_corpus_golden_test
         PROPERTIES SKIP_RETURN_CODE 4
     )
 endif()

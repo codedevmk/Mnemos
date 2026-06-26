@@ -308,11 +308,11 @@ ignores archive-only container folders as unpacked sets, and currently reports
 123 items across `root`, `m72`, `M15`, `M81`, `m82`, `M84`, `M107`, and `i8751`.
 One item matches a checked-in M15 manifest contract, thirty-nine items match
 checked-in playable M72 manifests, five items match checked-in M81 manifest
-contracts, five items match checked-in M82 R-Type II manifests, five items match
+contracts, seven items match checked-in M82 manifests, five items match
 checked-in M84 manifest contracts, four items match checked-in M90 manifests,
 twelve items match checked-in M92 manifests, and eight items match checked-in M107
 manifest contracts. The inventory now separates manifest tracking from player
-loadability: 88 items match a checked-in Irem manifest, 82 are loadable through
+loadability: 90 items match a checked-in Irem manifest, 84 are loadable through
 current ZIP / single-inner-ZIP / folder
 routes, no tracked item remains contract-only, and six `.7z` matches remain
 metadata-only until they are converted to ZIP or unpacked folders. No sorted
@@ -367,8 +367,9 @@ through its own first-pass board profile, including scanline-composed video for
 mid-frame palette writes and M72-style tile priority groups around sprites, but
 not yet exact raster-phase or visual-priority authentic. The data-gated M82
 artifact/player tests use `MNEMOS_M82_SET_DIR=D:\emu\irem` to unwrap the local
-R-Type II collection ZIPs and load `rtype2`, `rtype2j`, `rtype2jc`, and
-`rtype2m82b` CRC-clean through the embedded manifests and clone-parent fallback.
+Major Title and R-Type II collection ZIPs and load `majtitle`, `majtitlej`,
+`rtype2`, `rtype2j`, `rtype2jc`, and `rtype2m82b` CRC-clean through the
+embedded manifests and clone-parent fallback.
 M90 now has checked-in manifests plus a first-pass executable V35/Z80 board and
 player adapter for `atompunk`, `newapunk`, `bbmanwj`, and `bbmanwja`;
 `MNEMOS_M90_SET_DIR=D:\emu\irem` proves the current Atomic Punk/Bomber Man World
@@ -387,8 +388,8 @@ split wrappers, Mystic Riders Japan/bootleg split wrappers, and Ninja Baseball
 Bat Man US split wrapper. They remain
 diagnostic, not graphics/music-authentic, until encrypted V35 sound CPU handling
 and GA21/GA22 video behavior are proven.
-M15, M84, M90, M92, and M107 now have executable board/profile layers, but all
-five still need board-authentic video/priority, sound, exact raster phase, and
+M15, M82, M84, M90, M92, and M107 now have executable board/profile layers, but all
+six still need board-authentic video/priority, sound, exact raster phase, and
 screenshot-parity closure before they can be called authentic; M84, M90, M92,
 and M107 also retain memory/I/O and DIP validation gaps.
 
@@ -457,8 +458,8 @@ sets do not inherit true-M72 board wiring when they are local M81 artifacts.
 
 ## Irem M82 — 1 / 2
 
-This section is split from M72 so R-Type II does not inherit true-M72
-assumptions. M82 now has its own executable profile, and the video path has a
+This section is split from M72 so local M82 artifacts, including R-Type II and
+Major Title, do not inherit true-M72 assumptions. M82 now has its own executable profile, and the video path has a
 RAM-backed first-pass tile/sprite/palette renderer composed per visible
 scanline plus scanline-paced vblank / raster-compare IRQ delivery, with
 tile priority groups partitioned into below-sprite and above-sprite passes and
@@ -466,8 +467,8 @@ a diagnostic fallback for uninitialized development launches pending
 board-accurate DIP / raster-phase proof.
 
 #### Manifests / board bring-up
-- [x] **I82-1** R-Type II ROM-set contract — `src/manifests/irem_m82` carries checked-in embedded manifests for `rtype2`, `rtype2j`, `rtype2jc`, and the local nested `rtype2m82b` artifact, with parser/region-contract coverage for clone-parent inheritance, the 1 MiB main-program reset-vector reload, sound CPU ROM, voice/sample ROM, graphics regions, and PROM metadata. `MNEMOS_M82_SET_DIR=D:\emu\irem` data-gates real local artifacts and proves all four embedded R-Type II sets load CRC-clean from standard wrapper ZIPs through parent fallback, including reset-vector reload equality and non-fill resident regions; the data-gate source index ranks single-inner wrapper ZIPs before direct set ZIPs and unpacked folders so complete local collection wrappers win over incomplete moved-folder candidates · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m82/games/*.toml` + `src/manifests/irem_m82/m82_game_manifests.hpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp`
-- [~] **I82-2** Executable M82 board profile — `src/manifests/irem_m82/m82_system.cpp` now assembles an explicit M82 V30/Z80/YM2151/DAC/8259 board with a 1 MiB V30 program map, sound ROM + Z80 work RAM, inputs/DIPs, frame stepping, audio drain timing, whole-board save/load, scanline-sliced V30 execution with one-line IR0 vblank and IR2 raster-compare pulses, and an M82-local video path that uses VRAM-backed 8x8 planar tilemaps, rowscroll RAM, 5-bit palette RAM with CPU-visible KNA91-style low-byte writes and disconnected-A9 mirrors, sprite-DMA-latched 16x16 planar cells, flip-screen state, scanline composition before the CPU tick for that beam line, M72-style tile priority groups split into below-sprite and above-sprite passes, and save/load of the latched sprite buffer, while retaining a diagnostic fallback only when no hardware render state is initialized; focused board/video tests now prove a raster-compare V30 handler changing palette RAM affects later scanlines without repainting earlier scanlines, KNA91 low-byte palette bus behavior, group-0 front pens stay below sprites, and group-2 front pens cover sprites. `src/apps/player/adapters/irem_m82` registers `--system irem_m82`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, clone parent fallback, supplemental parent media, resident media CRC/validation reporting, rollback-ready save-state, capability discovery, and real R-Type II player smoke. `MNEMOS_M82_SET_DIR=D:\emu\irem` proves all four embedded R-Type II sets through the adapter; direct parent and clone+parent `mnemos_player --system irem_m82` smokes both produce 384x256 nonblank frames. Remaining: verify/replace first-pass M82 palette-bank rendering/decode, exact raster phase/timing, board-manual DIP behavior, and real visual-priority parity before calling R-Type II visually authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m82/m82_system.cpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp` + `src/apps/player/adapters/irem_m82/irem_m82_adapter.cpp` + `src/apps/player/adapters/irem_m82/tests/irem_m82_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
+- [x] **I82-1** Local M82 ROM-set contract — `src/manifests/irem_m82` carries checked-in embedded manifests for `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, and the local nested `rtype2m82b` artifact, with parser/region-contract coverage for clone-parent inheritance, the 1 MiB main-program reset-vector reload, sound CPU ROM, voice/sample ROM, tile/background/sprite graphics regions, and PROM metadata. `MNEMOS_M82_SET_DIR=D:\emu\irem` data-gates real local artifacts and proves all six embedded M82 sets load CRC-clean from standard wrapper ZIPs through parent fallback, including reset-vector reload equality and non-fill resident regions; the local Major Title parent wrapper is `D:\emu\irem\Major-Title_Arcade_EN.zip`, the Japan wrapper is `D:\emu\irem\Major-Title_Arcade_JA.zip`, and the data-gate source index ranks single-inner wrapper ZIPs before direct set ZIPs and unpacked folders so complete local collection wrappers win over incomplete moved-folder candidates · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m82/games/*.toml` + `src/manifests/irem_m82/m82_game_manifests.hpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp`
+- [~] **I82-2** Executable M82 board profile — `src/manifests/irem_m82/m82_system.cpp` now assembles an explicit M82 V30/Z80/YM2151/DAC/8259 board with a 1 MiB V30 program map, sound ROM + Z80 work RAM, inputs/DIPs, frame stepping, audio drain timing, whole-board save/load, scanline-sliced V30 execution with one-line IR0 vblank and IR2 raster-compare pulses, and an M82-local video path that uses VRAM-backed 8x8 planar tilemaps, rowscroll RAM, 5-bit palette RAM with CPU-visible KNA91-style low-byte writes and disconnected-A9 mirrors, sprite-DMA-latched 16x16 planar cells, flip-screen state, scanline composition before the CPU tick for that beam line, M72-style tile priority groups split into below-sprite and above-sprite passes, and save/load of the latched sprite buffer, while retaining a diagnostic fallback only when no hardware render state is initialized; focused board/video tests now prove a raster-compare V30 handler changing palette RAM affects later scanlines without repainting earlier scanlines, KNA91 low-byte palette bus behavior, group-0 front pens stay below sprites, and group-2 front pens cover sprites. `src/apps/player/adapters/irem_m82` registers `--system irem_m82`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, clone parent fallback, supplemental parent media, resident media CRC/validation reporting, rollback-ready save-state, capability discovery, and real M82 player smoke. `MNEMOS_M82_SET_DIR=D:\emu\irem` proves all six embedded M82 sets through the adapter; direct Major Title parent/Japan and R-Type II parent/clone `mnemos_player --system irem_m82` smokes produce 384x256 nonblank frames. Remaining: render/prove Major Title's background graphics path, verify/replace first-pass M82 palette-bank rendering/decode, exact raster phase/timing, board-manual DIP behavior, and real visual-priority parity before calling any M82 game visually authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m82/m82_system.cpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp` + `src/apps/player/adapters/irem_m82/irem_m82_adapter.cpp` + `src/apps/player/adapters/irem_m82/tests/irem_m82_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 ---
 

@@ -416,7 +416,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m82 checked-in game manifests parse and cover local R-Type II corpus", "[m82][romset]") {
+TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m82][romset]") {
     namespace fs = std::filesystem;
 
     const fs::path games_dir{MNEMOS_IREM_M82_GAMES_DIR};
@@ -442,8 +442,8 @@ TEST_CASE("m82 checked-in game manifests parse and cover local R-Type II corpus"
         declarations.emplace(std::move(set_name), std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"rtype2", "rtype2j", "rtype2jc",
-                                                            "rtype2m82b"};
+    const std::set<std::string, std::less<>> expected_names{"majtitle", "majtitlej", "rtype2",
+                                                            "rtype2j",  "rtype2jc",  "rtype2m82b"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, raw_decl] : declarations) {
         INFO("set=" << set_name);
@@ -476,9 +476,14 @@ TEST_CASE("m82 checked-in game manifests parse and cover local R-Type II corpus"
         require_region_contract(*find_region(decl, "tiles"));
         require_region_contract(*find_region(decl, "sprites"));
         require_region_contract(*find_region(decl, "proms"));
+        if (const rom_set_region* backgrounds = find_region(decl, "backgrounds")) {
+            require_region_contract(*backgrounds);
+        }
     }
 
     CHECK(names == expected_names);
+    REQUIRE(declarations.at("majtitlej").parent.has_value());
+    CHECK(*declarations.at("majtitlej").parent == "majtitle");
     REQUIRE(declarations.at("rtype2j").parent.has_value());
     CHECK(*declarations.at("rtype2j").parent == "rtype2");
     REQUIRE(declarations.at("rtype2jc").parent.has_value());
@@ -487,13 +492,16 @@ TEST_CASE("m82 checked-in game manifests parse and cover local R-Type II corpus"
     CHECK(*declarations.at("rtype2m82b").parent == "rtype2");
 
     CHECK_FALSE(mnemos::manifests::irem_m82::board_params_for("rtype2").bootleg_layout);
+    CHECK_FALSE(mnemos::manifests::irem_m82::board_params_for("majtitle").bootleg_layout);
     CHECK(mnemos::manifests::irem_m82::board_params_for("rtype2m82b").bootleg_layout);
 }
 
 TEST_CASE("m82 embedded game manifests mirror the checked-in roster", "[m82][romset]") {
     using mnemos::manifests::irem_m82::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 4U);
+    CHECK(game_manifests.size() == 6U);
+    CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("majtitle").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("majtitlej").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("rtype2").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("rtype2j").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("rtype2jc").empty());
@@ -749,15 +757,14 @@ TEST_CASE("m82 video renders latched sprite RAM and preserves it in state", "[m8
     CHECK(restored.framebuffer().pixels[0] == 0x000000FFU);
 }
 
-TEST_CASE("m82 local R-Type II artifacts load CRC-clean through embedded manifests",
-          "[m82][romset][data]") {
+TEST_CASE("m82 local artifacts load CRC-clean through embedded manifests", "[m82][romset][data]") {
     namespace m82 = mnemos::manifests::irem_m82;
 
-    // Artifact-only gate: this validates local R-Type II dump composition and
+    // Artifact-only gate: this validates local M82 dump composition and
     // parent fallback, but it is not executable M82 board proof.
     const auto dir_env = environment_value("MNEMOS_M82_SET_DIR");
     if (!dir_env.has_value() || dir_env->empty()) {
-        SKIP("set MNEMOS_M82_SET_DIR to directories containing the R-Type II zip/folder corpus");
+        SKIP("set MNEMOS_M82_SET_DIR to directories containing the M82 zip/folder corpus");
     }
 
     const auto roots = m82_source_roots(dir_env->c_str());
@@ -783,7 +790,7 @@ TEST_CASE("m82 local R-Type II artifacts load CRC-clean through embedded manifes
             }
             missing << missing_sets[i];
         }
-        FAIL("missing M82 R-Type II artifacts: " << missing.str());
+        FAIL("missing M82 artifacts: " << missing.str());
     }
 
     for (const auto& set_name : expected_sets) {
@@ -818,12 +825,16 @@ TEST_CASE("m82 local R-Type II artifacts load CRC-clean through embedded manifes
         const auto* tiles = find_region(effective_decl, "tiles");
         const auto* sprites = find_region(effective_decl, "sprites");
         const auto* proms = find_region(effective_decl, "proms");
+        const auto* backgrounds = find_region(effective_decl, "backgrounds");
         REQUIRE(tiles != nullptr);
         REQUIRE(sprites != nullptr);
         REQUIRE(proms != nullptr);
         require_loaded_region(image, "tiles", tiles->size);
         require_loaded_region(image, "sprites", sprites->size);
         require_loaded_region(image, "proms", proms->size);
+        if (backgrounds != nullptr) {
+            require_loaded_region(image, "backgrounds", backgrounds->size);
+        }
 
         const auto* maincpu = image.region("maincpu");
         REQUIRE(maincpu != nullptr);

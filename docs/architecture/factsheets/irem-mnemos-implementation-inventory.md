@@ -15,8 +15,8 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 88 currently match a
-checked-in Mnemos Irem manifest, 82 have a direct player-loadable route through
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 90 currently match a
+checked-in Mnemos Irem manifest, 84 have a direct player-loadable route through
 ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only.
@@ -52,7 +52,7 @@ now contract-only.
 | M75 | `irem_m75` first-pass | 28% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers | None | Authentic Vigilante graphics priority, DIP proof, raster phase, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
-| M82 | `irem_m82` | 60% | `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 4 local sets | None | Board classification audit, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
+| M82 | `irem_m82` | 64% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches | None | Board classification audit, Major Title background rendering, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 42% | `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder and `gallop.zip`; Gallop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
@@ -74,7 +74,7 @@ targets:
   paths rather than authentic parallax, road, sound-CPU, or discrete analog
   behavior.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
-  tests and four R-Type II set routes.
+  tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes.
 - M15, M75, M81, M84, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
@@ -266,16 +266,20 @@ visual and audio parity proof.
 
 - **Techsheet games:** Major Title, plus M82 builds of Air Duel and Daiku no
   Gensan.
-- **Mnemos games:** `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b`.
-- **Smoke playable:** all four local R-Type II sets load through `--system
-  irem_m82` with clone-parent fallback and nonblank player smoke.
+- **Mnemos games:** `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`,
+  `rtype2m82b`.
+- **Smoke playable:** all six checked-in local M82 sets load through `--system
+  irem_m82` with clone-parent fallback where needed and nonblank player smoke.
+  Major Title uses the local `D:\emu\irem\Major-Title_Arcade_EN.zip` parent
+  wrapper and `D:\emu\irem\Major-Title_Arcade_JA.zip` Japan split wrapper.
 - **Correct gfx/music:** not certified.
 - **Classification note:** the factsheet places R-Type II under M84, while the
   current Mnemos implementation routes the local R-Type II sets through
   `irem_m82`. Keep this as an explicit board-evidence audit item rather than
   treating either label as final.
-- **Remaining:** prove board classification, palette-bank rendering/decode,
-  exact raster phase, DIP behavior, visual-priority parity, and audio parity.
+- **Remaining:** prove board classification, Major Title background layer
+  rendering, palette-bank rendering/decode, exact raster phase, DIP behavior,
+  visual-priority parity, and audio parity.
 
 ### M84
 

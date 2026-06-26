@@ -63,14 +63,12 @@ namespace mnemos::manifests::irem_m82 {
             return (r << 16U) | (g << 8U) | b;
         }
 
-        [[nodiscard]] std::size_t
-        m82_palette_physical_offset(std::uint32_t address) noexcept {
+        [[nodiscard]] std::size_t m82_palette_physical_offset(std::uint32_t address) noexcept {
             return static_cast<std::size_t>((address - palette_ram_base) & ~0x200U);
         }
 
-        [[nodiscard]] std::uint8_t
-        m82_palette_read(std::span<const std::uint8_t> palette,
-                         std::uint32_t address) noexcept {
+        [[nodiscard]] std::uint8_t m82_palette_read(std::span<const std::uint8_t> palette,
+                                                    std::uint32_t address) noexcept {
             const std::size_t offset = m82_palette_physical_offset(address);
             if ((offset & 1U) != 0U || offset >= palette.size()) {
                 return 0xFFU;
@@ -78,8 +76,7 @@ namespace mnemos::manifests::irem_m82 {
             return static_cast<std::uint8_t>(palette[offset] | 0xE0U);
         }
 
-        void m82_palette_write(std::span<std::uint8_t> palette,
-                               std::uint32_t address,
+        void m82_palette_write(std::span<std::uint8_t> palette, std::uint32_t address,
                                std::uint8_t value) noexcept {
             const std::size_t offset = m82_palette_physical_offset(address);
             if ((offset & 1U) == 0U && offset < palette.size()) {
@@ -145,7 +142,8 @@ namespace mnemos::manifests::irem_m82 {
         if (set_name == "rtype2m82b") {
             return {.dip_default = 0xFFFFU, .bootleg_layout = true};
         }
-        if (set_name == "rtype2" || set_name == "rtype2j" || set_name == "rtype2jc") {
+        if (set_name == "rtype2" || set_name == "rtype2j" || set_name == "rtype2jc" ||
+            set_name == "majtitle" || set_name == "majtitlej") {
             return {.dip_default = 0xFFFFU, .bootleg_layout = false};
         }
         return {};

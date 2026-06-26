@@ -73,8 +73,9 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 ### Irem M82
 
-- Player-routable R-Type II profile via `--system irem_m82`.
-- Wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real R-Type II data-gated smoke.
+- Player-routable M82 profile via `--system irem_m82` for Major Title and R-Type II local routes.
+- Wrapper ZIP/unpacked-folder handling, clone parent fallback, save/load, capability reporting, and real M82 data-gated smoke.
+- Checked-in manifests now cover `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, and `rtype2m82b`; the Major Title parent declares the additional `backgrounds` graphics ROM region so those bytes are CRC-checked even though the current renderer path remains first-pass.
 - The M82 palette window now uses the shared KNA91-style CPU-visible contract already proven for M72: low-byte-only 5-bit writes, high-byte open bus, and disconnected-A9 mirrors, while the renderer keeps canonical R/G/B plane storage.
 - The M82 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
 
@@ -178,6 +179,7 @@ Important local corpus facts:
 - `nspiritj` is a valid Japan variant and has `nin_c-pr-.ic1`, CRC `0x802d440a`; do not use it as proof for World `nspirit`.
 - Follow-up recursive zip/nested-zip scan across `D:\emu\irem` found only Japan Ninja Spirit MCU candidates for the World `nspirit` gap: `D:\emu\irem\Ninja-Spirit_Arcade_JA.zip!nspiritj.zip!nin_c-pr-.ic1` and `D:\emu\irem\M72\nspirit.zip!nspiritj/nin_c-pr-.ic1`, both size `0x1000`, CRC `0x802d440a`. It did not find `gallopm72:mcu:cc_c-pr-.ic1:0xac4421b1` or `nspirit:mcu:nin_c-pr-b.ic1:0x0f7b2713`.
 - M82 validation now supports broad `MNEMOS_M82_SET_DIR=D:\emu\irem` again. The M82 manifest/player data gates rank single-inner wrapper ZIPs before direct set ZIPs and unpacked folders, so complete local R-Type II collection wrappers win over incomplete earlier-sorted candidates such as `D:\emu\irem\M72\rtype2`.
+- M82 Major Title local wrapper routes are `D:\emu\irem\Major-Title_Arcade_EN.zip` for parent `majtitle` and `D:\emu\irem\Major-Title_Arcade_JA.zip` for clone `majtitlej`. The Japan wrapper is a split program-only route and requires parent fallback to source shared sound, sample, tile, background, sprite, and PROM media from the parent wrapper.
 - `scripts\irem_m72\run-corpus-smoke.ps1 -RomDir D:\emu\irem\m72 -Recurse` currently passes `9/12` discovered M72 smoke groups. `gallopm72` and `nspirit` fail because `media_clean=False` from the missing MCU dumps. `imgfight` from `D:\emu\irem\m72\imgfight` alone fails because that raw folder lacks `if_c-pr-a.ic1`, but the mixed-source smoke `-Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight` passes `1/1`.
 - `MNEMOS_M72_SET_DIR` was intentionally unset in the latest full CTest run, so the full M72 roster golden test skipped. Do not set it to the current partial `D:\emu\irem\m72` tree and call that a full-roster proof; use the smoke runner for partial corpus evidence until all authentic roster artifacts are present.
 
@@ -706,6 +708,30 @@ M92 Ninja Baseball Bat Man manifest/corpus continuation validation on 2026-06-26
 - Full build:
   - `cmake --build --preset windows-msvc-debug`
 - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
+
+M82 Major Title manifest/corpus continuation validation on 2026-06-26:
+
+- Added checked-in M82 manifests for `majtitle` and `majtitlej`. `majtitle` is the complete local parent wrapper route; `majtitlej` declares parent `majtitle` and carries the changed main-program ROMs while inheriting shared sound, sample, tile, background, sprite, and PROM media.
+- Re-ran `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-corpus\inventory-m82-majtitle.json`: `123` items, `90` tracked items, `84` direct player-loadable routes, `6` metadata-only tracked routes, and `7` M82 manifest matches.
+- Configure/build:
+  - `cmake --preset windows-msvc-debug`
+  - `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m82_test mnemos_apps_player_irem_m82_adapter_test mnemos_player`
+- Focused M82 CTest with `MNEMOS_M82_SET_DIR=D:\emu\irem`: `3/3`
+  - `mnemos_manifests_irem_m82_test`
+  - `mnemos_apps_player_irem_m82_adapter_test`
+  - `mnemos_apps_player_irem_m82_corpus_golden_test`
+- Direct player smokes:
+  - `mnemos_player --system irem_m82 --rom "D:\emu\irem\Major-Title_Arcade_EN.zip" --screenshot build\scratch\irem-m82\majtitle.ppm --frames 1`
+  - `mnemos_player --system irem_m82 --rom "D:\emu\irem\Major-Title_Arcade_EN.zip" --save-state build\scratch\irem-m82\majtitle.mns --frames 1`
+  - `mnemos_player --system irem_m82 --rom "D:\emu\irem\Major-Title_Arcade_JA.zip" --screenshot build\scratch\irem-m82\majtitlej.ppm --frames 1`
+  - `mnemos_player --system irem_m82 --rom "D:\emu\irem\Major-Title_Arcade_JA.zip" --save-state build\scratch\irem-m82\majtitlej.mns --frames 1`
+  - Screenshot proof: both PPMs are `384x256`, `294927` bytes, at least `33` unique sampled payload byte values, and `913` nonzero sampled payload bytes.
+  - Save-state proof: both save states are `27133` bytes after one frame.
+- `clang-format --dry-run --Werror` passed for the touched M82 C++ files.
+- `git diff --check` passed with only recurring LF-to-CRLF conversion warnings.
+- Full build:
+  - `cmake --build --preset windows-msvc-debug`
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M75, M81, broad-root M82 including Major Title, M84 including `gallop`, M90, broad-root M92 including Ninja Baseball Bat Man, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `206/206`, with expected conformance/media skips and the expected M72 roster skip.
 
 Earlier branch validation that passed before the M107 slice:
 
