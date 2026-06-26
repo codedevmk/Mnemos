@@ -99,6 +99,12 @@ function Get-Cps2AudioFrameCount {
         return 1200
     }
 
+    # Super Puzzle Fighter II Turbo follows the older Emu two-player repeat
+    # profile and reaches meaningful QSound output well after the boot window.
+    if ($SetId -eq "spf2t" -and $DefaultFrames -lt 3600) {
+        return 3600
+    }
+
     # HSF2's first significant QSound output lands after frame 1198. Keep the
     # screenshot/save-state gate at 600 frames, but preserve the focused
     # HSF2-vs-Emu oracle window in the committed audio row.
@@ -113,13 +119,14 @@ function Test-Cps2AudioStateProbeDefault {
 
     return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or
         $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear" -or
-        $SetId -eq "ringdest"
+        $SetId -eq "ringdest" -or $SetId -eq "spf2t"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "ringdest"
+    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "ringdest" -or
+        $SetId -eq "spf2t"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
@@ -130,6 +137,9 @@ function Get-Cps2AudioGameplayPlayerCount {
 
     if ($SetId -eq "batcir" -or $SetId -eq "ddsom") {
         return 4
+    }
+    if ($SetId -eq "spf2t") {
+        return 2
     }
     return $DefaultPlayers
 }
