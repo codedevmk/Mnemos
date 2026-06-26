@@ -60,6 +60,16 @@ namespace mnemos::manifests::irem_m72 {
             std::uint16_t cs{};
         };
 
+        inline constexpr std::size_t no_dump_hle_crc_response_offset = 0x0FE0U;
+        inline constexpr std::size_t no_dump_hle_crc_request_offset = 0x0FFFU;
+        inline constexpr std::uint8_t no_dump_hle_crc_request_value = 0x00U;
+        inline constexpr std::array<std::uint8_t, 18> dbreedm72_crc_response{
+            0xA4U, 0x96U, 0x5FU, 0xC0U, 0xABU, 0x49U, 0x9FU, 0x19U, 0x84U,
+            0xE6U, 0xD6U, 0xCAU, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+        inline constexpr std::array<std::uint8_t, 18> dkgensanm72_crc_response{
+            0xC8U, 0xB4U, 0xDCU, 0xF8U, 0xD3U, 0xBAU, 0x48U, 0xEDU, 0x79U,
+            0x08U, 0x1CU, 0xB3U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+
         [[nodiscard]] std::optional<no_dump_hle_entry_target>
         no_dump_hle_entry_target_for(std::string_view profile) noexcept {
             if (profile == "irem_m72.dbreedm72_no_dump_mcu") {
@@ -91,6 +101,17 @@ namespace mnemos::manifests::irem_m72 {
             default:
                 return std::nullopt;
             }
+        }
+
+        [[nodiscard]] std::span<const std::uint8_t>
+        no_dump_hle_crc_response_for(std::string_view profile) noexcept {
+            if (profile == "irem_m72.dbreedm72_no_dump_mcu") {
+                return dbreedm72_crc_response;
+            }
+            if (profile == "irem_m72.dkgensanm72_no_dump_mcu") {
+                return dkgensanm72_crc_response;
+            }
+            return {};
         }
 
         [[nodiscard]] bool mcu_dpram_interrupt_byte(std::size_t offset) noexcept {
@@ -675,6 +696,13 @@ namespace mnemos::manifests::irem_m72 {
             protection_hle_entry_write_next_offset = 0U;
         }
         mcu_shared_ram[offset] = value;
+        if (offset == no_dump_hle_crc_request_offset &&
+            value == no_dump_hle_crc_request_value && params.protection_hle_profile.has_value()) {
+            const auto response = no_dump_hle_crc_response_for(*params.protection_hle_profile);
+            for (std::size_t i = 0; i < response.size(); ++i) {
+                mcu_shared_ram[no_dump_hle_crc_response_offset + i] = response[i];
+            }
+        }
     }
 
     void m72_system::save_state(chips::state_writer& writer) const {

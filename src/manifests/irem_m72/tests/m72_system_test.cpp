@@ -15,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #ifndef MNEMOS_IREM_M72_GAMES_DIR
@@ -1082,6 +1083,57 @@ TEST_CASE("m72 Daiku no Gensan no-dump MCU HLE exposes its entry continuation", 
     CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 2U) == 0x00U);
     CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 3U) == 0x00U);
     CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 4U) == 0x10U);
+}
+
+TEST_CASE("m72 no-dump MCU HLE exposes profile-specific checksum responses", "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    auto make_hle_system = [](std::string_view set_name, std::string profile,
+                              std::uint8_t sample_trigger, std::uint32_t sample_start) {
+        rom_set_image image;
+        image.regions["maincpu"].assign(m72::main_rom_size, 0xFFU);
+        image.regions["samples"].assign(sample_start + 1U, 0x00U);
+        auto params = m72::board_params_for(set_name);
+        params.protection_hle_profile = std::move(profile);
+        params.protection_hle_sample_triggers = {{sample_trigger, sample_start}};
+        return assemble_m72(std::move(image), params);
+    };
+
+    SECTION("Dragon Breed") {
+        auto system =
+            make_hle_system("dbreedm72", "irem_m72.dbreedm72_no_dump_mcu", 0x06U, 0x13000U);
+        REQUIRE(system->protection_hle_present);
+        std::fill(system->mcu_shared_ram.begin() + 0x0FE0,
+                  system->mcu_shared_ram.begin() + 0x0FF2, std::uint8_t{0xEEU});
+
+        system->main_bus.write8(m72::mcu_shared_main_base + 0x0FFFU, 0x00U);
+
+        const std::vector<std::uint8_t> expected{0xA4U, 0x96U, 0x5FU, 0xC0U, 0xABU, 0x49U,
+                                                 0x9FU, 0x19U, 0x84U, 0xE6U, 0xD6U, 0xCAU,
+                                                 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+            CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 0x0FE0U +
+                                         static_cast<std::uint32_t>(i)) == expected[i]);
+        }
+    }
+
+    SECTION("Daiku no Gensan") {
+        auto system = make_hle_system("dkgensanm72", "irem_m72.dkgensanm72_no_dump_mcu", 0x14U,
+                                      0x12B20U);
+        REQUIRE(system->protection_hle_present);
+        std::fill(system->mcu_shared_ram.begin() + 0x0FE0,
+                  system->mcu_shared_ram.begin() + 0x0FF2, std::uint8_t{0xEEU});
+
+        system->main_bus.write8(m72::mcu_shared_main_base + 0x0FFFU, 0x00U);
+
+        const std::vector<std::uint8_t> expected{0xC8U, 0xB4U, 0xDCU, 0xF8U, 0xD3U, 0xBAU,
+                                                 0x48U, 0xEDU, 0x79U, 0x08U, 0x1CU, 0xB3U,
+                                                 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+            CHECK(system->main_bus.read8(m72::mcu_shared_main_base + 0x0FE0U +
+                                         static_cast<std::uint32_t>(i)) == expected[i]);
+        }
+    }
 }
 
 TEST_CASE("m72 rejects unsupported MCU HLE profiles at board construction", "[m72]") {

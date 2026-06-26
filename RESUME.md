@@ -29,6 +29,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 - First-pass playable profile with checked-in true-M72 manifests.
 - Protected-set handling, MCS-51/i8751 plumbing, selected no-dump HLE declarations, parent/clone loader hardening, media validation reporting, vertical/R-Type/protected gates, and corpus smoke tooling.
+- `dbreedm72` and `dkgensanm72` no-dump MCU HLE profiles now cover startup inversion, entry continuation stubs, command-latch acknowledge, sample-trigger cursor setup, and profile-specific service-ROM checksum response bytes.
 - Real local R-Type/protected/vertical smoke passed with the configured local corpus.
 - Remaining: artifact-proof closure for the full roster, plus authenticity work for video priority, raster timing, DIP behavior, palette behavior, and board-specific timing.
 
@@ -137,6 +138,13 @@ Continuation validation on 2026-06-25 21:19 -05:00:
 - Same artifact command with `-Set 'gallopm72,nspirit'` validates the comma-separated set-list path
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\imgfight.zip,D:\emu\irem\m72\imgfight -MaxSets 1`: `1/1` passed
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\gallop.zip,D:\emu\irem\m72\gallop -MaxSets 1`: expected failure with `media_clean=False`, lit screenshot, and missing `cc_c-pr-.ic1`
+
+M72 no-dump MCU checksum-response continuation validation on 2026-06-26:
+
+- `cmake --build --preset windows-msvc-debug --target mnemos_manifests_irem_m72_test`
+- `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_manifests_irem_m72_test`: `1/1` passed
+- Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
+- `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\m72\dbreedm72,D:\emu\irem\m72\dkgensanm72 -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-231315\summary.json`
 
 M107 slice validation that passed:
 
