@@ -1,6 +1,7 @@
 #include "capcom_cps2_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "audio_resampler.hpp"
 #include "crc32.hpp"
 #include "cps2_game_manifests.hpp"
 #include "cps2_crypto.hpp"
@@ -29,7 +30,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         using mnemos::manifests::common::rom_set_image;
         namespace cps2 = mnemos::manifests::capcom_cps2;
 
-        constexpr std::uint32_t cps2_adapter_state_version = 4U;
+        constexpr std::uint32_t cps2_adapter_state_version = 5U;
 
         struct loaded_set final {
             rom_set_image image;
@@ -961,10 +962,11 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     }
 
     frontend_sdk::audio_chunk capcom_cps2_adapter::drain_audio() noexcept {
-        // QSound emits a fixed ~24 kHz stereo stream independent of the CPU clock;
-        // pace the drain off the exact CPS-2 refresh rational and step the HLE
-        // mixer once per output sample frame via generate().
-        constexpr std::uint32_t rate = chips::audio::qsound::native_sample_rate;
+        // QSound emits a fixed ~24 kHz stream; the player-side contract is 48 kHz.
+        // Step the DSP at the native cadence and hold the latest stereo sample
+        // between native ticks, matching the reference HLE's rate accumulator.
+        constexpr std::uint32_t rate = mnemos::dsp::kOutputRate;
+        constexpr std::uint32_t native_rate = chips::audio::qsound::native_sample_rate;
         const std::uint64_t due =
             frames_stepped_ * static_cast<std::uint64_t>(rate) *
             manifests::capcom_cps2::refresh_hz_den / manifests::capcom_cps2::refresh_hz_num;
@@ -974,7 +976,16 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = rate};
         }
         audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
-        sys_->qsound_dsp().generate(audio_buf_);
+        auto& qsound = sys_->qsound_dsp();
+        for (std::size_t i = 0; i < static_cast<std::size_t>(pending); ++i) {
+            qsound_output_accum_ += native_rate;
+            while (qsound_output_accum_ >= rate) {
+                qsound_output_accum_ -= rate;
+                qsound.step();
+            }
+            audio_buf_[i * 2U + 0U] = qsound.last_left();
+            audio_buf_[i * 2U + 1U] = qsound.last_right();
+        }
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = rate};
@@ -1191,6 +1202,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  writer.blob(as_bytes(adapter.resident_media_hash_));
                  writer.u64(adapter.frames_stepped_);
                  writer.u64(adapter.samples_drained_);
+                 writer.u64(adapter.qsound_output_accum_);
                  for (const frontend_sdk::controller_state& port : adapter.ports_) {
                      save_controller_state(writer, port);
                  }
@@ -1216,6 +1228,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  }
                  adapter.frames_stepped_ = reader.u64();
                  adapter.samples_drained_ = reader.u64();
+                 adapter.qsound_output_accum_ = version >= 5U ? reader.u64() : 0U;
                  for (frontend_sdk::controller_state& port : adapter.ports_) {
                      port = load_controller_state(reader, version);
                  }

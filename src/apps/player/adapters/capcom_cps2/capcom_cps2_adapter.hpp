@@ -130,6 +130,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         std::vector<frontend_sdk::spec_field> spec_{};
         std::vector<std::int16_t> audio_buf_{};
         std::uint64_t samples_drained_{};
+        std::uint64_t qsound_output_accum_{};
         frontend_sdk::display_orientation orientation_{
             frontend_sdk::display_orientation::horizontal};
 
