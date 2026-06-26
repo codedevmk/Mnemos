@@ -321,6 +321,9 @@ TEST_CASE("irem_m84_adapter validates real M84 ROM sets", "[irem_m84][data]") {
                                        source_path.string(), std::move(supplemental_roms),
                                        std::move(supplemental_paths));
         CHECK(adapter.set_name() == set_name);
+        CHECK(adapter.machine().main_cpu.cpu_model() ==
+              (set_name == "ltswords" ? mnemos::chips::cpu::v30::model::v35
+                                       : mnemos::chips::cpu::v30::model::v30));
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m84::visible_width);

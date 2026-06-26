@@ -331,12 +331,14 @@ proves the sorted local wrapper ZIP loads CRC-clean through the embedded
 manifest, including the directory-prefixed entry aliases used by the local
 nested ZIP, and the player route produces nonblank screenshot plus save/load
 smoke for `--system irem_m15`.
-M84 now has a ROM-contract-only manifest
-layer for `hharryb` and `hharryu`;
-`MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81` proves the sorted split
-wrapper ZIPs load CRC-clean when composed with the M81 `hharry` parent, while
-keeping the M84-specific program/PAL regions separate from the inherited parent
-graphics, sound, samples, and PROMs.
+M84 now has a ROM-contract layer for `hharryb`, `hharryu`, and the local
+V35-profile `ltswords` folder;
+`MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72` proves the
+sorted Hammerin' Harry split wrapper ZIPs load CRC-clean when composed with the
+M81 `hharry` parent and that the unpacked `ltswords` folder loads its
+CRC-verified program, sound, graphics, and samples as a standalone M84 set. The
+`ltswords` manifest explicitly declares the missing small PROM/PLD artifacts
+instead of treating the current route as final board-authentic video proof.
 M81 now has a first-pass executable board/profile layer for `dbreed`, `hharry`,
 and `xmultipl`: the embedded manifests preserve the three M81 ROM layouts,
 `MNEMOS_M81_SET_DIR=D:\emu\irem\M81` proves those sorted wrapper ZIPs load
@@ -447,11 +449,13 @@ board-accurate DIP / raster-phase proof.
 
 This section is split from M81 because the local Hammerin' Harry M84 artifacts
 are split clone sets with M84-specific program/PAL dumps but inherited parent
-graphics, sound, sample, and PROM assets.
+graphics, sound, sample, and PROM assets. The local `ltswords` folder is also
+tracked here as an M84 V35-profile set even though it is physically stored in
+the `D:\emu\irem\M72` bucket.
 
 #### Manifests / board bring-up
-- [x] **I84-1** Local M84 ROM-set contract — `src/manifests/irem_m84` carries checked-in embedded ROM-contract manifests for `hharryb` and `hharryu`, with parser/region-contract coverage for the 1 MiB V30 program reload layout, M84-specific PAL/PLD regions, and clone-parent inheritance from the M81 `hharry` parent. `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81` data-gates the sorted local split wrapper ZIPs and proves both clone sets load CRC-clean when composed with the checked-in M81 parent manifest/provider; `scripts/irem/inventory-corpus.ps1` now records two total M84 manifest matches and no unsupported top-level board buckets · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m84/games/*.toml` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
-- [~] **I84-2** Executable M84 board profile — `src/manifests/irem_m84` now has an M84-owned executable wrapper for the local Hammerin' Harry M84 split sets, using the M81-compatible V30/Z80/YM2151/DAC board core behind an M84 manifest/save identity; the compatibility core now exposes the shared KNA91-style low-byte palette bus through the M84 wrapper while preserving M84 save identity. `src/apps/player/adapters/irem_m84` registers `--system irem_m84` / `m84`, composes M84 child zips or folders with the M81 `hharry` parent supplied as supplemental media, reports resident media validation, exposes rollback-ready save-state, and data-gates real local player smoke through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`. Remaining: replace/verify the compatibility-core assumptions with board evidence for M84-specific memory/I/O behavior, Hammerin' Harry video/priority, raster timing, DIP behavior, and screenshot parity before calling this authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m84/m84_system.cpp` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `src/apps/player/adapters/irem_m84/irem_m84_adapter.cpp` + `src/apps/player/adapters/irem_m84/tests/irem_m84_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
+- [x] **I84-1** Local M84 ROM-set contract — `src/manifests/irem_m84` carries checked-in embedded ROM-contract manifests for `hharryb`, `hharryu`, and `ltswords`, with parser/region-contract coverage for the 1 MiB V30/V35 program reload layouts, M84-specific Hammerin' Harry PAL/PLD regions, clone-parent inheritance from the M81 `hharry` parent, and the standalone local `ltswords` program/sound/graphics/sample ROMs. `ltswords` declares an explicit `irem_m84_prom_pld` HLE profile because the local folder lacks the small color PROM and PAL artifacts listed for the complete board. `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72` data-gates both sorted Hammerin' Harry split wrapper ZIPs plus the unpacked `ltswords` folder; `scripts/irem/inventory-corpus.ps1` now records three total M84 manifest matches, including `D:\emu\irem\M72\ltswords` as a direct unpacked-folder route · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m84/games/*.toml` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [~] **I84-2** Executable M84 board profile — `src/manifests/irem_m84` now has an M84-owned executable wrapper for the local Hammerin' Harry M84 split sets and the V35-profile `ltswords` route, using the M81-compatible Z80/YM2151/DAC/KNA91-style board core behind an M84 manifest/save identity while selecting V30 for Hammerin' Harry profiles and V35 for `ltswords`. The compatibility core exposes the shared KNA91-style low-byte palette bus through the M84 wrapper while preserving M84 save identity and rejecting save-states restored under the wrong M84 CPU/layout profile. `src/apps/player/adapters/irem_m84` registers `--system irem_m84` / `m84`, composes M84 child zips or folders with the M81 `hharry` parent when declared, loads standalone unpacked M84 folders, reports resident media validation, exposes rollback-ready save-state, and data-gates real local player smoke through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`. Remaining: replace/verify the compatibility-core assumptions with board evidence for M84-specific memory/I/O behavior, Hammerin' Harry/Ken-Go video/priority, raster timing, DIP behavior, missing `ltswords` PROM/PLD artifacts, and screenshot parity before calling this authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m84/m84_system.cpp` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `src/apps/player/adapters/irem_m84/irem_m84_adapter.cpp` + `src/apps/player/adapters/irem_m84/tests/irem_m84_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 Cabinet input note: M81, M82, and M84 adapters now consume explicit frontend
 `service` / `test` arcade inputs, keep `mode` as the service alias for older

@@ -1,6 +1,7 @@
 set(_irem_m84_game_manifest_files
     "games/hharryb.toml"
     "games/hharryu.toml"
+    "games/ltswords.toml"
 )
 set(MNEMOS_IREM_M84_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M84_EMBEDDED_CONSTANTS "")

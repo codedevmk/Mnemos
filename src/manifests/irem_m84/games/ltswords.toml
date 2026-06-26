@@ -1,0 +1,132 @@
+# Lightning Swords / Ken-Go (prototype) -- local Irem M84 V35-family set.
+# Schema mnemos-romset/1; this manifest records the program, graphics, sound,
+# and sample dumps present in the local loose corpus.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ltswords"
+board       = "irem_m84"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "h0.ic55"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x22f342b2
+
+[[region.file]]
+name   = "l0.ic61"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x0210d592
+
+[[region.file]]
+name   = "h0.ic55"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x22f342b2
+
+[[region.file]]
+name   = "l0.ic61"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x0210d592
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name    = "ken_d-sp-.ic17"
+aliases = ["ken_d-sp.rom"]
+offset  = 0x00000
+size    = 0x10000
+crc32   = 0x233ca1cf
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name    = "ken_m31.ic31"
+aliases = ["ken_m31.rom"]
+offset  = 0x00000
+size    = 0x20000
+crc32   = 0xe00b95a6
+
+[[region.file]]
+name    = "ken_m21.ic21"
+aliases = ["ken_m21.rom"]
+offset  = 0x20000
+size    = 0x20000
+crc32   = 0xd7722f87
+
+[[region.file]]
+name    = "ken_m32.ic32"
+aliases = ["ken_m32.rom"]
+offset  = 0x40000
+size    = 0x20000
+crc32   = 0x30a844c4
+
+[[region.file]]
+name    = "ken_m22.ic22"
+aliases = ["ken_m22.rom"]
+offset  = 0x60000
+size    = 0x20000
+crc32   = 0xa00dac85
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name    = "ken_m51.ic51"
+aliases = ["ken_m51.rom"]
+offset  = 0x00000
+size    = 0x20000
+crc32   = 0x1646cf4f
+
+[[region.file]]
+name    = "ken_m57.ic57"
+aliases = ["ken_m57.rom"]
+offset  = 0x20000
+size    = 0x20000
+crc32   = 0xa9f88d90
+
+[[region.file]]
+name    = "ken_m66.ic66"
+aliases = ["ken_m66.rom"]
+offset  = 0x40000
+size    = 0x20000
+crc32   = 0xe9d17645
+
+[[region.file]]
+name    = "ken_m64.ic64"
+aliases = ["ken_m64.rom"]
+offset  = 0x60000
+size    = 0x20000
+crc32   = 0xdf46709b
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name    = "ken_m14.ic14"
+aliases = ["ken_m14.rom"]
+offset  = 0x00000
+size    = 0x20000
+crc32   = 0x6651e9b7
+
+[[hle]]
+chip      = "irem_m84_prom_pld"
+profile   = "irem_m84.ltswords_prom_pld_reference_defaults"
+rationale = "The local ltswords corpus lacks the small color PROM and PAL artifacts listed for this board. The first-pass M84 route declares that gap explicitly while loading only CRC-verified resident program, graphics, sound, and sample ROMs."

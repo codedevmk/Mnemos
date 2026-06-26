@@ -67,16 +67,18 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 
 ### Irem M84
 
-- Checked-in manifests for `hharryb` and `hharryu`.
+- Checked-in manifests for `hharryb`, `hharryu`, and `ltswords`.
 - M84-owned executable wrapper in `src/manifests/irem_m84`.
-- The current executable M84 slice uses the M81-compatible V30/Z80/YM2151/DAC board core for local Hammerin' Harry split sets while preserving separate M84 manifest and save-state identity.
+- The current executable M84 slice uses the M81-compatible Z80/YM2151/DAC/KNA91-style board core for local Hammerin' Harry split sets and the standalone local `ltswords` folder while preserving separate M84 manifest and save-state identity.
+- Hammerin' Harry M84 profiles select V30; `ltswords` selects V35 and rejects save-state restore under the wrong M84 CPU/layout identity.
+- `ltswords` loads the CRC-verified program, sound, graphics, and sample ROMs from `D:\emu\irem\M72\ltswords`, but the small PROM/PLD artifacts remain missing and are explicitly declared through `irem_m84_prom_pld` HLE metadata rather than treated as authentic video proof.
 - Player adapter added at `src/apps/player/adapters/irem_m84`.
 - CLI/system-family routing via `--system irem_m84` and alias `m84`.
-- Clone-parent media routing composes M84 child media with supplemental M81 `hharry` parent media.
-- Capability discovery, rollback-ready save-state reporting, and real local player smoke are data-gated through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81`.
+- Clone-parent media routing composes M84 child media with supplemental M81 `hharry` parent media when a set declares `parent`; standalone M84 folders load directly.
+- Capability discovery, rollback-ready save-state reporting, and real local player smoke are data-gated through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`.
 - The current M84 compatibility core exposes the same KNA91-style palette-bus contract through its owned M81 board while preserving M84 manifest/save identity.
 - The M84 adapter now consumes explicit arcade `service` and `test` frontend inputs, keeps `mode` as a legacy service alias, maps operator test to the board-visible system bit 6, and persists those fields in adapter state version 2.
-- Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry video/priority, raster timing, DIP behavior, and screenshot parity before calling this authentic.
+- Remaining: replace or verify the compatibility-core assumptions with board evidence for M84 memory/I/O behavior, Hammerin' Harry/Ken-Go video/priority, raster timing, DIP behavior, recover/prove the `ltswords` PROM/PLD artifacts, and screenshot/audio parity before calling this authentic.
 
 ### Irem M107
 
@@ -123,7 +125,7 @@ $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M52_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
-$env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
+$env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 ```
 
@@ -481,6 +483,23 @@ M81/M84 KNA91 palette-bus continuation validation on 2026-06-26:
   - `cmake --build --preset windows-msvc-debug`
   - Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M81, broad-root M82, M84, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `188/188`, with the expected M72 roster and non-Irem media/conformance skips.
 
+M84 Lightning Swords / V35 continuation validation on 2026-06-26:
+
+- Added `ltswords` as a checked-in M84 manifest for the local unpacked folder at `D:\emu\irem\M72\ltswords`, with V35 board-parameter selection and explicit `irem_m84_prom_pld` HLE metadata for the missing small PROM/PLD artifacts.
+- Re-ran `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json`: `123` items, `72` manifest matches, `66` direct player-loadable routes; `D:\emu\irem\M72\ltswords` is tracked as M84 and direct unpacked-folder loadable.
+- Configure/build:
+  - `cmake --preset windows-msvc-debug`
+  - `cmake --build --preset windows-msvc-debug`
+- Focused M84 CTest with `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`: `3/3`
+  - `mnemos_manifests_irem_m84_test`
+  - `mnemos_apps_player_irem_m84_adapter_test`
+  - `mnemos_apps_player_irem_m84_corpus_golden_test`
+- Direct player smoke:
+  - `mnemos_player --system irem_m84 --rom D:\emu\irem\M72\ltswords --save-state build\scratch\irem_m84_ltswords.mns --frames 120`
+  - `mnemos_player --system irem_m84 --rom D:\emu\irem\M72\ltswords --load-state build\scratch\irem_m84_ltswords.mns --screenshot build\scratch\irem_m84_ltswords.ppm --frames 1`
+  - Screenshot proof: `384x256`, `294704` nonzero pixel bytes, `256` unique byte values.
+- Full CTest with local Irem env vars set for M72 R-Type/protected/vertical, M15, M52, M81, broad-root M82, M84 including `ltswords`, M90, M92, and M107 while `MNEMOS_M72_SET_DIR` stayed cleared: `202/202`, with the expected M72 roster and non-Irem media/conformance skips.
+
 Earlier branch validation that passed before the M107 slice:
 
 - M84 focused build and focused CTest: `4/4`
@@ -526,7 +545,9 @@ $env:MNEMOS_M15_SET_DIR="D:\emu\irem\M15"
 $env:MNEMOS_M52_SET_DIR="D:\emu\irem"
 $env:MNEMOS_M81_SET_DIR="D:\emu\irem\M81"
 $env:MNEMOS_M82_SET_DIR="D:\emu\irem"
-$env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81"
+$env:MNEMOS_M84_SET_DIR="D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72"
+$env:MNEMOS_M90_SET_DIR="D:\emu\irem"
+$env:MNEMOS_M92_SET_DIR="D:\emu\irem\M72"
 $env:MNEMOS_M107_SET_DIR="D:\emu\irem\M107"
 scripts\run-data-gated-tests.ps1 -BuildDir build\windows-msvc-debug
 ```

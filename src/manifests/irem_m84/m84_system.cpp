@@ -14,7 +14,22 @@ namespace mnemos::manifests::irem_m84 {
             if (layout == "us_program_pair") {
                 return 2U;
             }
+            if (layout == "v35_program_pair") {
+                return 3U;
+            }
             return 0U;
+        }
+
+        [[nodiscard]] std::uint8_t cpu_model_code(chips::cpu::v30::model model) noexcept {
+            switch (model) {
+            case chips::cpu::v30::model::v33:
+                return 2U;
+            case chips::cpu::v30::model::v35:
+                return 3U;
+            case chips::cpu::v30::model::v30:
+            default:
+                return 1U;
+            }
         }
 
         [[nodiscard]] irem_m81::m81_board_params
@@ -33,6 +48,11 @@ namespace mnemos::manifests::irem_m84 {
         }
         if (set_name == "hharryu") {
             return {.dip_default = 0xFDBFU, .rom_layout = "us_program_pair"};
+        }
+        if (set_name == "ltswords") {
+            return {.dip_default = 0xFFFFU,
+                    .rom_layout = "v35_program_pair",
+                    .main_cpu_model = chips::cpu::v30::model::v35};
         }
         return {};
     }
@@ -54,7 +74,9 @@ namespace mnemos::manifests::irem_m84 {
           sound_ram(board.sound_ram),
           input_system(board.input_system),
           dip_switches(board.dip_switches),
-          dac_write_events(board.dac_write_events) {}
+          dac_write_events(board.dac_write_events) {
+        main_cpu.set_model(params.main_cpu_model);
+    }
 
     void m84_system::run_frame() { board.run_frame(); }
 
@@ -71,6 +93,7 @@ namespace mnemos::manifests::irem_m84 {
         writer.u32(m84_system_state_version);
         writer.u16(params.dip_default);
         writer.u8(layout_code(params.rom_layout));
+        writer.u8(cpu_model_code(params.main_cpu_model));
         board.save_state(writer);
     }
 
@@ -81,7 +104,9 @@ namespace mnemos::manifests::irem_m84 {
         }
         const std::uint16_t saved_dip = reader.u16();
         const std::uint8_t saved_layout = reader.u8();
-        if (saved_dip != params.dip_default || saved_layout != layout_code(params.rom_layout)) {
+        const std::uint8_t saved_cpu = reader.u8();
+        if (saved_dip != params.dip_default || saved_layout != layout_code(params.rom_layout) ||
+            saved_cpu != cpu_model_code(params.main_cpu_model)) {
             reader.fail();
             return;
         }

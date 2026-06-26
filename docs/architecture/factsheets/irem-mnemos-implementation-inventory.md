@@ -15,8 +15,8 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 71 currently match a
-checked-in Mnemos Irem manifest, 65 have a direct player-loadable route through
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 72 currently match a
+checked-in Mnemos Irem manifest, 66 have a direct player-loadable route through
 ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only.
@@ -53,7 +53,7 @@ now contract-only.
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 55% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 60% | `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 4 local sets | None | Board classification audit, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
-| M84 | `irem_m84` wrapper | 35% | `hharryb`, `hharryu` | both local split sets | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry priority/raster/DIP proof, Cosmic Cop/Ken-Go |
+| M84 | `irem_m84` wrapper | 40% | `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Ken-Go priority/raster/DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 25% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, visual/audio parity |
 | M92 | `irem_m92` | 32% first-pass | `bmaster`, `gunforce`, `gunforc2`, `hook`, `inthunt` | all 5 data-gated first-pass sets | None | Encrypted V35 sound CPU handling, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
@@ -77,6 +77,8 @@ targets:
   tests and four R-Type II set routes.
 - M15, M81, M84, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
+  M84 now includes a V35-profile `ltswords` route, with the missing PROM/PLD
+  artifacts declared rather than hidden.
 
 No game should be marked "correct gfx and music" until a later artifact records
 visual and audio parity proof.
@@ -247,14 +249,21 @@ visual and audio parity proof.
 
 - **Techsheet games:** R-Type II, Hammerin' Harry / Daiku no Gensan, Cosmic Cop,
   Ken-Go.
-- **Mnemos games:** `hharryb`, `hharryu`.
+- **Mnemos games:** `hharryb`, `hharryu`, `ltswords`.
 - **Smoke playable:** both local split sets load through `--system irem_m84` when
-  composed with the M81 `hharry` parent media.
+  composed with the M81 `hharry` parent media. The local unpacked
+  `D:\emu\irem\M72\ltswords` folder now loads as a standalone M84 V35-profile
+  set using CRC-verified program, sound, graphics, and sample regions.
 - **Correct gfx/music:** not certified.
+- **Local corpus note:** `ltswords` is stored under the `M72` corpus bucket, but
+  the Mnemos manifest tracks it as M84. The current local folder lacks the small
+  PROM/PLD artifacts listed for the complete board; the manifest carries an
+  explicit `irem_m84_prom_pld` HLE declaration for that first-pass route.
 - **Remaining:** replace or verify the M81-compatible wrapper assumptions with
-  board evidence, resolve the R-Type II classification mismatch, add Cosmic
-  Cop/Ken-Go coverage if in scope, and prove M84-specific memory/I/O, priority,
-  raster timing, DIP behavior, and screenshot/audio parity.
+  board evidence, resolve the R-Type II classification mismatch, add Cosmic Cop
+  coverage if in scope, recover/prove the `ltswords` PROM/PLD artifacts, and
+  prove M84-specific memory/I/O, priority, raster timing, DIP behavior, and
+  screenshot/audio parity.
 
 ### M85
 

@@ -16,7 +16,7 @@ namespace mnemos::manifests::irem_m84 {
     inline constexpr std::size_t main_rom_size = 0x100000U;
     inline constexpr std::size_t hharryb_plds_size = 0x0104U;
     inline constexpr std::size_t hharryu_plds_size = 0x0345U;
-    inline constexpr std::uint32_t m84_system_state_version = 1U;
+    inline constexpr std::uint32_t m84_system_state_version = 2U;
 
     inline constexpr std::uint32_t visible_width = irem_m81::visible_width;
     inline constexpr std::uint32_t visible_height = irem_m81::visible_height;
@@ -30,6 +30,7 @@ namespace mnemos::manifests::irem_m84 {
     struct m84_board_params final {
         std::uint16_t dip_default{0xFDBFU};
         std::string_view rom_layout{"standard"};
+        chips::cpu::v30::model main_cpu_model{chips::cpu::v30::model::v30};
     };
 
     [[nodiscard]] m84_board_params board_params_for(std::string_view set_name) noexcept;
