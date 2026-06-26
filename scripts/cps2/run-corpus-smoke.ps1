@@ -151,7 +151,8 @@ function Get-Cps2AudioGameplayPlayerCount {
         [Parameter(Mandatory = $true)][int]$DefaultPlayers
     )
 
-    if ($SetId -eq "1944" -or $SetId -eq "1944_mn" -or $SetId -eq "choko") {
+    if ($SetId -eq "1944" -or $SetId -eq "1944_mn" -or $SetId -eq "choko" -or
+        $SetId -eq "msh") {
         return 1
     }
     if ($SetId -eq "avsp") {
@@ -162,8 +163,7 @@ function Get-Cps2AudioGameplayPlayerCount {
     }
     if ($SetId -eq "cybots" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
         $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "megaman2" -or
-        $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or $SetId -eq "msh" -or
-        $SetId -eq "spf2t") {
+        $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or $SetId -eq "spf2t") {
         return 2
     }
     return $DefaultPlayers
