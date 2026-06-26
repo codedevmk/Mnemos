@@ -92,6 +92,13 @@ function Get-Cps2AudioFrameCount {
         return 2500
     }
 
+    # Ring of Destruction reaches its first meaningful gameplay QSound output
+    # after the default 600-frame window; keep the visual checkpoint fixed and
+    # use a focused longer audio proof.
+    if ($SetId -eq "ringdest" -and $DefaultFrames -lt 1200) {
+        return 1200
+    }
+
     # HSF2's first significant QSound output lands after frame 1198. Keep the
     # screenshot/save-state gate at 600 frames, but preserve the focused
     # HSF2-vs-Emu oracle window in the committed audio row.
@@ -105,13 +112,14 @@ function Test-Cps2AudioStateProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
     return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "hsf2" -or
-        $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear"
+        $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear" -or
+        $SetId -eq "ringdest"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
     param([Parameter(Mandatory = $true)][string]$SetId)
 
-    return $SetId -eq "batcir" -or $SetId -eq "ddsom"
+    return $SetId -eq "batcir" -or $SetId -eq "ddsom" -or $SetId -eq "ringdest"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
