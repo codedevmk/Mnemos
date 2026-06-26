@@ -111,6 +111,7 @@ Important local corpus facts:
 
 - `D:\emu\irem\imgfightjb.zip` exists. ZIP versus unpacked folder is not the blocker; the loader supports both. The relevant distinction is split, merged, parent, and standalone composition.
 - `D:\emu\irem\imgfight.zip`, `D:\emu\irem\imgfightj.zip`, `D:\emu\irem\imgfightj.7z`, `D:\emu\irem\imgfightjb.zip`, and `D:\emu\irem\imgfightjb.7z` are local corpus inputs for sorting Image Fight parent/clone composition.
+- `scripts\irem\inventory-corpus.ps1` now emits per-item `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and `load_readiness` fields plus a grouped `tracked_sets` section. Current local Image Fight grouping: `imgfight` is the M72 parent/standalone set with two direct player-loadable ZIP/folder routes plus one metadata-only `.7z`; `imgfightj` and `imgfightjb` are M72 clones declaring parent `imgfight`, each with one direct player-loadable ZIP plus one metadata-only `.7z`.
 - `D:\emu\irem\m72` has moved/expanded M72 artifacts, including `gallop.zip`, an unpacked `gallop\`, and an unpacked `nspirit\`.
 - `scripts\irem_m72\find-missing-artifacts.ps1 -Root D:\emu\irem -Recurse -Set gallopm72,nspirit` now accepts the comma-separated set list and finds `42/44` artifacts present for those two sets. Missing entries include suggested local placement paths.
 - `gallopm72` is incomplete locally: missing `mcu/cc_c-pr-.ic1`, size `0x1000`, CRC `0xac4421b1`.
@@ -182,6 +183,12 @@ M107 cabinet service input continuation validation on 2026-06-26:
 - Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R mnemos_apps_player_irem_m107_adapter_test`: `1/1` passed
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - Local corpus CTest with `MNEMOS_M107_SET_DIR=D:\emu\irem\M107`: `2/2` passed for `mnemos_manifests_irem_m107_test` and `mnemos_apps_player_irem_m107_corpus_golden_test`
+
+Irem corpus inventory grouping validation on 2026-06-26:
+
+- `scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-corpus\inventory-after.json`
+- Report summary: `121` items, `58` tracked by checked-in Irem manifests, `52` directly player-loadable, and `6` tracked metadata-only `.7z` artifacts that need unpacking or ZIP conversion before player load.
+- `tracked_sets` now separates Image Fight parent/clone readiness: `imgfight` direct-loadable `2` / metadata-only `1`, `imgfightj` parent `imgfight` direct-loadable `1` / metadata-only `1`, and `imgfightjb` parent `imgfight` direct-loadable `1` / metadata-only `1`.
 
 M107 slice validation that passed:
 

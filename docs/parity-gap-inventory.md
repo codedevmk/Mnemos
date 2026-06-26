@@ -297,7 +297,13 @@ current ZIP / single-inner-ZIP / folder routes, and six `.7z` matches remain
 metadata-only until they are converted to ZIP or unpacked folders. No sorted
 top-level board bucket is completely untracked anymore; `board_family_candidates`
 now only keeps 19 untracked / misbucketed `M72`-folder items visible instead of
-silently treating them as true-M72 proof.
+silently treating them as true-M72 proof. The report also carries per-item
+`tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
+`load_readiness` fields plus a `tracked_sets` grouping; this currently separates
+the local Image Fight material into `imgfight` as the M72 parent/standalone set
+with two direct player-loadable routes plus one metadata-only `.7z`, and
+`imgfightj` / `imgfightjb` as clones declaring parent `imgfight`, each with one
+direct player-loadable ZIP route plus one metadata-only `.7z`.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
 board/player path with source-aligned Head On ROM/vector placement, RAM/MMIO
 windows, frame IRQ coverage, active-high P1/P2 input wiring, coin-triggered NMI,

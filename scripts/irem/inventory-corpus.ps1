@@ -117,6 +117,37 @@ function Read-GameManifestIds {
     return ,$ids
 }
 
+function Read-GameManifestParents {
+    param([Parameter(Mandatory = $true)][string]$RelativeGamesDir)
+
+    $parents = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $gamesDir = Join-Path $repoRoot $RelativeGamesDir
+    if (-not (Test-Path -LiteralPath $gamesDir -PathType Container)) {
+        return ,$parents
+    }
+    foreach ($manifest in Get-ChildItem -LiteralPath $gamesDir -Filter "*.toml" -File) {
+        foreach ($line in Get-Content -LiteralPath $manifest.FullName) {
+            if ($line -match '^\s*parent\s*=\s*"([^"]+)"') {
+                $parents[[System.IO.Path]::GetFileNameWithoutExtension($manifest.Name)] = $Matches[1]
+                break
+            }
+        }
+    }
+    return ,$parents
+}
+
+function Add-ManifestParents {
+    param(
+        [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$ManifestIds,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string, string]]$ParentMap
+    )
+    foreach ($setId in $ManifestIds) {
+        if ($ParentMap.ContainsKey($setId) -and -not $script:manifestParentBySet.ContainsKey($setId)) {
+            $script:manifestParentBySet[$setId] = $ParentMap[$setId]
+        }
+    }
+}
+
 function Get-ArchiveEntries {
     param([Parameter(Mandatory = $true)][string]$Path)
     $output = @(& tar -tf $Path 2>$null)
@@ -161,6 +192,104 @@ function Get-LoadRouteForItem {
 function Test-MnemosLoadableRoute {
     param([Parameter(Mandatory = $true)][string]$LoadRoute)
     return $LoadRoute -in @("zip", "single_inner_zip", "directory")
+}
+
+function Get-TrackedFamilyName {
+    param(
+        [Parameter(Mandatory = $true)][bool]$M15Match,
+        [Parameter(Mandatory = $true)][bool]$M72Match,
+        [Parameter(Mandatory = $true)][bool]$M81Match,
+        [Parameter(Mandatory = $true)][bool]$M82Match,
+        [Parameter(Mandatory = $true)][bool]$M84Match,
+        [Parameter(Mandatory = $true)][bool]$M107Match
+    )
+    $matches = [System.Collections.Generic.List[string]]::new()
+    if ($M15Match) { $matches.Add("M15") }
+    if ($M72Match) { $matches.Add("M72") }
+    if ($M81Match) { $matches.Add("M81") }
+    if ($M82Match) { $matches.Add("M82") }
+    if ($M84Match) { $matches.Add("M84") }
+    if ($M107Match) { $matches.Add("M107") }
+    return ($matches -join ";")
+}
+
+function Get-ManifestParentForSet {
+    param([Parameter(Mandatory = $true)][string]$SetId)
+    if ($script:manifestParentBySet.ContainsKey($SetId)) {
+        return $script:manifestParentBySet[$SetId]
+    }
+    return ""
+}
+
+function Get-SetRole {
+    param(
+        [Parameter(Mandatory = $true)][bool]$TrackedByMnemos,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$ManifestParent,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$BoardCandidateFamily
+    )
+    if ($TrackedByMnemos) {
+        if ([string]::IsNullOrWhiteSpace($ManifestParent)) {
+            return "parent_or_standalone"
+        }
+        return "clone_declares_parent"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($BoardCandidateFamily)) {
+        return "board_family_candidate"
+    }
+    return "unclassified"
+}
+
+function Get-ArchiveComposition {
+    param(
+        [Parameter(Mandatory = $true)][string]$Kind,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Extension,
+        [Parameter(Mandatory = $true)][int]$EntryCount,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$NestedArchives
+    )
+    if ($Kind -eq "directory") {
+        return "unpacked_folder"
+    }
+    if ($Extension.Equals(".zip", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($NestedArchives.Count -eq 1 -and $EntryCount -eq 1) {
+            return "single_inner_zip_wrapper"
+        }
+        if ($NestedArchives.Count -gt 1) {
+            return "collection_zip"
+        }
+        return "set_zip"
+    }
+    if ($Extension.Equals(".7z", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($NestedArchives.Count -eq 1 -and $EntryCount -eq 1) {
+            return "metadata_only_single_inner_7z_wrapper"
+        }
+        if ($NestedArchives.Count -gt 1) {
+            return "metadata_only_collection_7z"
+        }
+        return "metadata_only_set_7z"
+    }
+    return "unsupported_archive"
+}
+
+function Get-LoadReadiness {
+    param(
+        [Parameter(Mandatory = $true)][bool]$TrackedByMnemos,
+        [Parameter(Mandatory = $true)][bool]$LoadableByMnemos,
+        [Parameter(Mandatory = $true)][string]$LoadRoute,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$BoardCandidateFamily
+    )
+    if ($LoadableByMnemos) {
+        return "direct_player_loadable"
+    }
+    if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_7z") {
+        return "metadata_only_unpack_or_repack"
+    }
+    if ($TrackedByMnemos) {
+        return "tracked_but_not_player_loadable"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($BoardCandidateFamily)) {
+        return "candidate_needs_manifest_or_board"
+    }
+    return "untracked"
 }
 
 function Get-BoardCandidateFamily {
@@ -226,7 +355,10 @@ function New-ArchiveItem {
     $trackedMatch = $m15Match -or $m72Match -or $m81Match -or $m82Match -or $m84Match -or $m107Match
     $loadRoute = Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
+    $trackedFamily = Get-TrackedFamilyName -M15Match $m15Match -M72Match $m72Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M107Match $m107Match
+    $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
+    $archiveComposition = Get-ArchiveComposition -Kind "archive" -Extension $File.Extension -EntryCount $entries.Count -NestedArchives $nestedArchives
 
     return [pscustomobject]@{
         kind = "archive"
@@ -243,9 +375,14 @@ function New-ArchiveItem {
         m84_manifest_match = $m84Match
         m107_manifest_match = $m107Match
         tracked_by_mnemos = $trackedMatch
+        tracked_family = $trackedFamily
+        manifest_parent = $manifestParent
+        set_role = Get-SetRole -TrackedByMnemos $trackedMatch -ManifestParent $manifestParent -BoardCandidateFamily $boardCandidateFamily
         load_route = $loadRoute
+        archive_composition = $archiveComposition
         loadable_by_mnemos = $loadableByMnemos
         supported_by_mnemos = $loadableByMnemos
+        load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         board_candidate_family = $boardCandidateFamily
         next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         entry_count = $entries.Count
@@ -282,6 +419,8 @@ function New-DirectoryItem {
     $trackedMatch = $m15Match -or $m72Match -or $m81Match -or $m82Match -or $m84Match -or $m107Match
     $loadRoute = Get-LoadRouteForItem -Kind "directory" -Extension "" -NestedArchives @()
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
+    $trackedFamily = Get-TrackedFamilyName -M15Match $m15Match -M72Match $m72Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M107Match $m107Match
+    $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
     return [pscustomobject]@{
         kind = "directory"
@@ -298,9 +437,14 @@ function New-DirectoryItem {
         m84_manifest_match = $m84Match
         m107_manifest_match = $m107Match
         tracked_by_mnemos = $trackedMatch
+        tracked_family = $trackedFamily
+        manifest_parent = $manifestParent
+        set_role = Get-SetRole -TrackedByMnemos $trackedMatch -ManifestParent $manifestParent -BoardCandidateFamily $boardCandidateFamily
         load_route = $loadRoute
+        archive_composition = Get-ArchiveComposition -Kind "directory" -Extension "" -EntryCount $files.Count -NestedArchives @()
         loadable_by_mnemos = $loadableByMnemos
         supported_by_mnemos = $loadableByMnemos
+        load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         board_candidate_family = $boardCandidateFamily
         next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         entry_count = $files.Count
@@ -340,6 +484,19 @@ $m81ManifestIds = Read-GameManifestIds "src/manifests/irem_m81/games"
 $m82ManifestIds = Read-GameManifestIds "src/manifests/irem_m82/games"
 $m84ManifestIds = Read-GameManifestIds "src/manifests/irem_m84/games"
 $m107ManifestIds = Read-GameManifestIds "src/manifests/irem_m107/games"
+$m15ManifestParents = Read-GameManifestParents "src/manifests/irem_m15/games"
+$m72ManifestParents = Read-GameManifestParents "src/manifests/irem_m72/games"
+$m81ManifestParents = Read-GameManifestParents "src/manifests/irem_m81/games"
+$m82ManifestParents = Read-GameManifestParents "src/manifests/irem_m82/games"
+$m84ManifestParents = Read-GameManifestParents "src/manifests/irem_m84/games"
+$m107ManifestParents = Read-GameManifestParents "src/manifests/irem_m107/games"
+$script:manifestParentBySet = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+Add-ManifestParents -ManifestIds $m15ManifestIds -ParentMap $m15ManifestParents
+Add-ManifestParents -ManifestIds $m72ManifestIds -ParentMap $m72ManifestParents
+Add-ManifestParents -ManifestIds $m81ManifestIds -ParentMap $m81ManifestParents
+Add-ManifestParents -ManifestIds $m82ManifestIds -ParentMap $m82ManifestParents
+Add-ManifestParents -ManifestIds $m84ManifestIds -ParentMap $m84ManifestParents
+Add-ManifestParents -ManifestIds $m107ManifestIds -ParentMap $m107ManifestParents
 $items = [System.Collections.Generic.List[object]]::new()
 $resolvedRoots = [System.Collections.Generic.List[string]]::new()
 
@@ -412,6 +569,9 @@ $bucketRows = @($items |
             total_bytes = ($groupItems | Measure-Object size_bytes -Sum).Sum
             supported_by_mnemos = @($groupItems | Where-Object { $_.supported_by_mnemos }).Count
             unsupported_by_mnemos = @($groupItems | Where-Object { -not $_.supported_by_mnemos }).Count
+            metadata_only_tracked = @($groupItems | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
+            clone_items = @($groupItems | Where-Object { $_.set_role -eq "clone_declares_parent" }).Count
+            parent_or_standalone_items = @($groupItems | Where-Object { $_.set_role -eq "parent_or_standalone" }).Count
         }
     })
 
@@ -454,6 +614,39 @@ $boardFamilyCandidates = @($items |
         }
     })
 
+$trackedSetRows = @($items |
+    Where-Object { $_.tracked_by_mnemos } |
+    Group-Object tracked_family, set_id |
+    Sort-Object Name |
+    ForEach-Object {
+        $groupItems = @($_.Group | Sort-Object path)
+        $first = $groupItems[0]
+        [pscustomobject]@{
+            tracked_family = $first.tracked_family
+            set_id = $first.set_id
+            manifest_parent = $first.manifest_parent
+            set_role = $first.set_role
+            item_count = $groupItems.Count
+            direct_player_loadable_count = @($groupItems | Where-Object { $_.load_readiness -eq "direct_player_loadable" }).Count
+            metadata_only_count = @($groupItems | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
+            buckets = @($groupItems | Select-Object -ExpandProperty bucket -Unique)
+            load_routes = @($groupItems | Select-Object -ExpandProperty load_route -Unique)
+            archive_compositions = @($groupItems | Select-Object -ExpandProperty archive_composition -Unique)
+            sample_items = @($groupItems |
+                Select-Object -First $MaxEntries |
+                ForEach-Object {
+                    [pscustomobject]@{
+                        bucket = $_.bucket
+                        kind = $_.kind
+                        load_route = $_.load_route
+                        archive_composition = $_.archive_composition
+                        load_readiness = $_.load_readiness
+                        path = $_.path
+                    }
+                })
+        }
+    })
+
 $report = [pscustomobject]@{
     generated_at = (Get-Date).ToString("o")
     roots = @($resolvedRoots)
@@ -478,12 +671,16 @@ $report = [pscustomobject]@{
         tracked_item_count = @($items | Where-Object { $_.tracked_by_mnemos }).Count
         loadable_item_count = @($items | Where-Object { $_.loadable_by_mnemos }).Count
         supported_item_count = @($items | Where-Object { $_.supported_by_mnemos }).Count
+        metadata_only_tracked_item_count = @($items | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
+        tracked_clone_item_count = @($items | Where-Object { $_.set_role -eq "clone_declares_parent" }).Count
+        tracked_parent_or_standalone_item_count = @($items | Where-Object { $_.set_role -eq "parent_or_standalone" }).Count
         unsupported_item_count = @($items | Where-Object { -not $_.supported_by_mnemos }).Count
         unsupported_bucket_count = $unsupportedBuckets.Count
         unsupported_buckets = @($unsupportedBuckets)
     }
     buckets = @($bucketRows)
     board_family_candidates = @($boardFamilyCandidates)
+    tracked_sets = @($trackedSetRows)
     items = @($items)
 }
 
@@ -491,11 +688,18 @@ $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Out -Encoding UTF8
 
 Write-Host ("Irem corpus inventory: {0} item(s), {1} bucket(s); report: {2}" -f $items.Count, $bucketRows.Count, $Out)
 foreach ($bucket in $bucketRows) {
-    Write-Host ("  [{0}] items={1} archives={2} dirs={3} m15_matches={4} m72_matches={5} m81_matches={6} m82_matches={7} m84_matches={8} m107_matches={9} tracked={10} loadable={11} supported={12}" -f $bucket.bucket, $bucket.item_count, $bucket.archive_count, $bucket.directory_count, $bucket.m15_manifest_matches, $bucket.m72_manifest_matches, $bucket.m81_manifest_matches, $bucket.m82_manifest_matches, $bucket.m84_manifest_matches, $bucket.m107_manifest_matches, $bucket.tracked_by_mnemos, $bucket.loadable_by_mnemos, $bucket.supported_by_mnemos)
+    Write-Host ("  [{0}] items={1} archives={2} dirs={3} m15_matches={4} m72_matches={5} m81_matches={6} m82_matches={7} m84_matches={8} m107_matches={9} tracked={10} loadable={11} supported={12} metadata_only={13}" -f $bucket.bucket, $bucket.item_count, $bucket.archive_count, $bucket.directory_count, $bucket.m15_manifest_matches, $bucket.m72_manifest_matches, $bucket.m81_manifest_matches, $bucket.m82_manifest_matches, $bucket.m84_manifest_matches, $bucket.m107_manifest_matches, $bucket.tracked_by_mnemos, $bucket.loadable_by_mnemos, $bucket.supported_by_mnemos, $bucket.metadata_only_tracked)
 }
 if ($boardFamilyCandidates.Count -gt 0) {
     Write-Host "  board-family candidates:"
     foreach ($candidate in $boardFamilyCandidates) {
         Write-Host ("    [{0}] items={1} sets={2}" -f $candidate.board_family, $candidate.item_count, ($candidate.candidate_set_ids -join ","))
+    }
+}
+$metadataOnlyTracked = @($trackedSetRows | Where-Object { $_.metadata_only_count -gt 0 })
+if ($metadataOnlyTracked.Count -gt 0) {
+    Write-Host "  tracked metadata-only archives:"
+    foreach ($set in $metadataOnlyTracked) {
+        Write-Host ("    [{0}] {1} parent={2} direct_loadable={3} metadata_only={4}" -f $set.tracked_family, $set.set_id, $(if ([string]::IsNullOrWhiteSpace($set.manifest_parent)) { "-" } else { $set.manifest_parent }), $set.direct_player_loadable_count, $set.metadata_only_count)
     }
 }
