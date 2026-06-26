@@ -398,22 +398,25 @@ TEST_CASE("irem_m72_adapter maps pads onto the board's input bytes", "[irem_m72]
     p1.a = true;
     p1.start = true;
     p1.select = true; // coin 1
-    p1.mode = true;   // service 1
+    p1.service = true;
+    p1.test = true;
     adapter.apply_input(0, p1);
 
     mnemos::frontend_sdk::controller_state p2{};
     p2.right = true;
     p2.start = true;
-    p2.mode = true; // service 2
+    p2.mode = true; // legacy service 2 alias
     adapter.apply_input(1, p2);
 
     auto& machine = adapter.machine();
     // Hardware layout: up = bit 3, button 1 = bit 7; right = bit 0.
     CHECK(machine.input_p1 == static_cast<std::uint8_t>(0xFFU & ~0x08U & ~0x80U));
     CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U));
-    // start1/start2 (bits 0/1), coin1 (bit 2), and service1/2 (bits 4/5) held low.
+    // start1/start2 (bits 0/1), coin1 (bit 2), service1/2 (bits 4/5),
+    // and operator test (bit 6) held low.
     CHECK(machine.input_system ==
-          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U & ~0x20U));
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
+                                    ~0x20U & ~0x40U));
 
     adapter.apply_input(2, p1); // out-of-range port ignored
     CHECK(machine.input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U));
@@ -1601,7 +1604,8 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     p1.a = true;
     p1.start = true;
     p1.select = true;
-    p1.mode = true;
+    p1.service = true;
+    p1.test = true;
     p1.aim_x = 123;
     p1.aim_y = 45;
     p1.trigger = true;
@@ -1611,7 +1615,7 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     p2.right = true;
     p2.b = true;
     p2.start = true;
-    p2.mode = true;
+    p2.mode = true; // legacy service 2 alias remains serialised
     source.apply_input(1, p2);
 
     source.machine().work_ram[0x22U] = 0xABU;
@@ -1662,7 +1666,8 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     CHECK(restored.machine().input_p1 == static_cast<std::uint8_t>(0xFFU & ~0x08U & ~0x80U));
     CHECK(restored.machine().input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x40U));
     CHECK(restored.machine().input_system ==
-          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U & ~0x20U));
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
+                                    ~0x20U & ~0x40U));
     CHECK(restored.machine().dac.level() == 0xC0U);
 
     const auto restored_dac_audio = restored.drain_audio();
@@ -1675,6 +1680,66 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     CHECK(restored.machine().input_p1 == 0xFFU);
     CHECK(restored.machine().input_p2 == static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x40U));
     CHECK(restored.machine().input_system == static_cast<std::uint8_t>(0xFFU & ~0x02U & ~0x20U));
+}
+
+TEST_CASE("irem_m72_adapter loads v1 adapter input snapshots", "[irem_m72][adapter]") {
+    namespace irem = mnemos::apps::player::adapters::irem_m72;
+
+    irem::irem_m72_adapter legacy_source(make_program(), "legacy-input-source");
+
+    mnemos::frontend_sdk::controller_state p1{};
+    p1.mode = true;
+
+    mnemos::frontend_sdk::controller_state p2{};
+    p2.start = true;
+
+    const auto write_i16_legacy = [](mnemos::chips::state_writer& writer, std::int16_t value) {
+        writer.u16(static_cast<std::uint16_t>(static_cast<std::int32_t>(value) + 32768));
+    };
+    const auto write_v1_controller = [&](mnemos::chips::state_writer& writer,
+                                         const mnemos::frontend_sdk::controller_state& state) {
+        writer.boolean(state.up);
+        writer.boolean(state.down);
+        writer.boolean(state.left);
+        writer.boolean(state.right);
+        writer.boolean(state.start);
+        writer.boolean(state.select);
+        writer.boolean(state.a);
+        writer.boolean(state.b);
+        writer.boolean(state.c);
+        writer.boolean(state.x);
+        writer.boolean(state.y);
+        writer.boolean(state.z);
+        writer.boolean(state.mode);
+        write_i16_legacy(writer, state.aim_x);
+        write_i16_legacy(writer, state.aim_y);
+        writer.boolean(state.trigger);
+    };
+
+    mnemos::runtime::save_target legacy_target = irem::build_save_target(legacy_source);
+    REQUIRE(legacy_target.components.size() == 2U);
+    legacy_target.components.pop_back();
+    legacy_target.components.push_back(
+        {"adapter",
+         [&](mnemos::chips::state_writer& writer) {
+             writer.u32(1U); // pre-service/test adapter payload
+             writer.u64(7U);
+             writer.u64(0U);
+             write_i16_legacy(writer, 0);
+             write_v1_controller(writer, p1);
+             write_v1_controller(writer, p2);
+         },
+         [](mnemos::chips::state_reader&) {}});
+
+    const std::vector<std::uint8_t> blob = mnemos::runtime::write_save_state(legacy_target);
+    REQUIRE_FALSE(blob.empty());
+
+    irem::irem_m72_adapter restored(make_program(), "legacy-input-restored");
+    const mnemos::runtime::load_result result = restored.load_state(blob);
+    REQUIRE(result.ok());
+
+    CHECK(restored.frames_stepped() == 7U);
+    CHECK(restored.machine().input_system == static_cast<std::uint8_t>(0xFFU & ~0x10U & ~0x02U));
 }
 
 TEST_CASE("irem_m72_adapter resolves a declarative clone parent zip", "[irem_m72][adapter]") {

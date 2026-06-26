@@ -270,6 +270,13 @@ positive smoke path. The default fallback frame list includes 900 frames because
 `rtypeb` stays black at the 300/600-frame attract probes but reaches a lit
 post-load frame at 900.
 
+Input note: the M72 player adapter now maps the shared frontend arcade inputs
+directly to the board-visible system byte: `service` clears service 1/2 bits
+4/5, legacy `mode` remains a service alias for older callers and v1 adapter
+states, and `test` clears the operator-test bit 6. Adapter state version 2
+persists the explicit `service`/`test` fields while accepting version 1 input
+snapshots.
+
 2026-06-25 artifact proof note: `MNEMOS_M72_RTYPE_SET=D:\emu\irem\R-Type_Arcade_EN.zip`,
 `MNEMOS_M72_PROTECTED_SET=D:\emu\irem\imgfight.zip`, and
 `MNEMOS_M72_VERTICAL_SET=D:\emu\irem\imgfight.zip` pass their dedicated CTest

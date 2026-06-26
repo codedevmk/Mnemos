@@ -43,7 +43,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
     // Input mapping (first-cut, active low): joystick bytes carry up/down/
     // left/right in bits 0-3 and buttons A/B in bits 4-5; the system byte
     // carries start 1/2 in bits 0-1, coin 1/2 in bits 2-3 (the pads'
-    // `select`), and service 1/2 in bits 4-5 (the pads' `mode`). Audio: the
+    // `select`), service 1/2 in bits 4-5 (`service`, with `mode` retained as
+    // a legacy alias), and operator test in bit 6. Audio: the
     // YM2151 runs on its own 3.579545 MHz crystal via a rational-rate scheduler
     // entry and is drained at one stereo frame per 64 chip clocks (~55.93 kHz);
     // the board's DAC latch is mixed into the same stereo stream.

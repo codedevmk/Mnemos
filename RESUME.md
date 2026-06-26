@@ -31,6 +31,7 @@ Expected state after this handoff: clean working tree on `feature/irem-arcade`, 
 - Protected-set handling, MCS-51/i8751 plumbing, selected no-dump HLE declarations, parent/clone loader hardening, media validation reporting, vertical/R-Type/protected gates, and corpus smoke tooling.
 - `dbreedm72` and `dkgensanm72` no-dump MCU HLE profiles now cover startup inversion, entry continuation stubs, command-latch acknowledge, sample-trigger cursor setup, and profile-specific service-ROM checksum response bytes.
 - Palette RAM now exposes the M72 CPU-visible disconnected-A9 mirror and low-byte-only 5-bit gun behavior while keeping canonical R/G/B plane storage for rendering and save states.
+- The M72 player adapter now consumes explicit arcade `service` and `test` frontend inputs: service 1/2 map active-low to system bits 4/5, `mode` remains a legacy service alias, operator test maps active-low to bit 6, and adapter save-state version 2 persists those fields while still loading version 1 input snapshots.
 - Real local R-Type/protected/vertical smoke passed with the configured local corpus.
 - Remaining: artifact-proof closure for the full roster, plus authenticity work for video priority, raster timing, DIP behavior, and board-specific timing.
 
@@ -153,6 +154,14 @@ M72 palette-bus continuation validation on 2026-06-26:
 - Focused M72 adjacent CTest sweep passed: `mnemos_chips_video_irem_m72_video_test`, `mnemos_manifests_irem_m72_test`, and `mnemos_apps_player_irem_m72_adapter_test`
 - Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
 - `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\R-Type_Arcade_EN.zip,D:\emu\irem\imgfight.zip -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-233344\summary.json`
+
+M72 cabinet input continuation validation on 2026-06-26:
+
+- `git diff --check`: clean, with only existing CRLF conversion warnings
+- Focused build: `cmake --build --preset windows-msvc-debug --target mnemos_apps_player_irem_m72_adapter_test mnemos_manifests_irem_m72_test`
+- Focused CTest: `ctest --preset windows-msvc-debug --output-on-failure -R "mnemos_(apps_player_irem_m72_adapter|manifests_irem_m72)_test"`: `2/2` passed
+- Full preset build and CTest: `188/188` passed; ROM-gated corpus tests skipped where env vars were unset
+- `scripts\irem_m72\run-corpus-smoke.ps1 -Rom D:\emu\irem\R-Type_Arcade_EN.zip,D:\emu\irem\imgfight.zip -Frames 600`: `2/2` passed, summary `build\scratch\irem-m72-corpus\20260625-234550\summary.json`
 
 M107 slice validation that passed:
 
