@@ -34,7 +34,7 @@ namespace mnemos::apps::player::adapters::irem_m82 {
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
             return {.frames_per_second_x1000 = manifests::irem_m82::frame_rate_x1000,
-                    .orientation = frontend_sdk::display_orientation::horizontal};
+                    .orientation = orientation_};
         }
         [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
         system_spec() const noexcept override {
@@ -89,6 +89,8 @@ namespace mnemos::apps::player::adapters::irem_m82 {
         std::vector<std::int16_t> audio_buf_{};
         std::uint64_t samples_drained_{};
         std::int16_t dac_mix_output_{};
+        frontend_sdk::display_orientation orientation_{
+            frontend_sdk::display_orientation::horizontal};
     };
 
 } // namespace mnemos::apps::player::adapters::irem_m82

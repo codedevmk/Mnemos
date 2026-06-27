@@ -38,6 +38,8 @@ namespace mnemos::apps::player::adapters::irem_m82 {
         struct loaded_set final {
             rom_set_image image;
             std::string set_name;
+            frontend_sdk::display_orientation orientation{
+                frontend_sdk::display_orientation::horizontal};
         };
 
         struct nested_zip_source final {
@@ -113,6 +115,13 @@ namespace mnemos::apps::player::adapters::irem_m82 {
                 bytes += region.size();
             }
             return bytes;
+        }
+
+        [[nodiscard]] frontend_sdk::display_orientation
+        to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
+            return orientation == mnemos::manifests::common::screen_orientation::vertical
+                       ? frontend_sdk::display_orientation::vertical
+                       : frontend_sdk::display_orientation::horizontal;
         }
 
         [[nodiscard]] std::string resident_media_crc32(const loaded_set& set) {
@@ -512,6 +521,7 @@ namespace mnemos::apps::player::adapters::irem_m82 {
                 result.image.issues.push_back(std::move(issue));
             }
             result.set_name = decl.name;
+            result.orientation = to_display_orientation(decl.orientation);
             for (const auto& issue : result.image.issues) {
                 std::fprintf(stderr, "[irem_m82] %s: %s\n", issue.file.c_str(),
                              issue.message.c_str());
@@ -697,6 +707,7 @@ namespace mnemos::apps::player::adapters::irem_m82 {
 
         loaded_set set = load_set(std::move(rom), rom_path, supplemental_sources);
         media_ = make_media_capabilities(display_name, set, source_byte_count);
+        orientation_ = set.orientation;
         loaded_set_name_ = set.set_name;
         sys_ = assemble_from(std::move(set));
         if (dip_override.has_value()) {

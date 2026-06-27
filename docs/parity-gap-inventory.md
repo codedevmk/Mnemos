@@ -289,14 +289,14 @@ Corpus note: `scripts/irem_m72/run-corpus-smoke.ps1` now accepts multiple
 such as `D:\emu\irem\M81`, `D:\emu\irem\m82`, and `D:\emu\irem\M84` as a clean
 zero-candidate result instead of folding them into M72 proof; the
 `D:\emu\irem\m72` / `-MaxSets 2` probe remains a positive smoke path. The player
-adapter now also prefers a
-checked-in canonical M72-suffixed top-level directory when a plain source stem is
-used: `D:\emu\irem\M72\airduel.zip` identifies as `airduelm72` instead of being
-mis-selected as `airdueljm72` by shared program CRCs. That ZIP still reports
-missing Air Duel graphics/tile/sample artifacts, so it is loader-classified
-correctly but remains excluded from clean roster proof. The default fallback
-frame list includes 900 frames because `rtypeb` stays black at the 300/600-frame
-attract probes but reaches a lit post-load frame at 900.
+adapter now also prefers a checked-in canonical M72-suffixed top-level directory
+when a plain source stem is used, so collection ZIP forms are not mis-selected
+as `airdueljm72` by shared program CRCs. The local mixed
+`D:\emu\irem\M72\airduel.zip` is now tracked through the M82 `airduel` manifest
+instead of being counted as true-M72 proof; when explicitly forced through
+`--system irem_m72`, it remains excluded from clean M72 roster evidence. The
+default fallback frame list includes 900 frames because `rtypeb` stays black at
+the 300/600-frame attract probes but reaches a lit post-load frame at 900.
 The runner now parses comma-separated `-FallbackFrames` values reliably under
 `pwsh -File` and stops trying longer frame fallbacks once media-validation
 issues appear, so stale or partial media still fails fast instead of launching
@@ -416,18 +416,19 @@ ignores archive-only container folders as unpacked sets, and currently reports
 One item matches a checked-in M15 manifest contract, two match checked-in M52
 manifests, nine match checked-in M62 raw-media contracts, forty-four match
 checked-in M72 manifests, seven match checked-in M75 manifests, five match
-checked-in M81 manifest contracts, seven match checked-in M82 manifests, six
+checked-in M81 manifest contracts, ten match checked-in M82 manifests, six
 match checked-in M84 manifest contracts, four match checked-in M90 manifests,
 fifteen match checked-in M92 manifests, and eight match checked-in M107 manifest
 contracts. The inventory now separates manifest tracking, media loadability, and
-player support: 108 items match a checked-in Irem manifest, 100 are readable
-through current ZIP / single-inner-ZIP / folder routes, 91 are backed by an
+player support: 111 items match a checked-in Irem manifest, 103 are readable
+through current ZIP / single-inner-ZIP / folder routes, 94 are backed by an
 executable player-supported route, 9 M62 items are tracked contract-only, and
 8 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
 sorted top-level board bucket is completely untracked anymore;
-`board_family_candidates` now only keeps 5 untracked / duplicate / misbucketed
-`M72`-folder items visible (`airduel`, `airduelu`, `horizon`, and duplicate
-`loht (1)` material) instead of silently treating them as true-M72 proof.
+`board_family_candidates` now only keeps the remaining untracked / duplicate /
+misbucketed `M72`-folder items visible (`horizon` and duplicate `loht (1)`
+material) instead of silently treating them as true-M72 proof; the local Air
+Duel M82 parent/US clone wrappers now route through `irem_m82`.
 The report also carries per-item
 `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
 `load_readiness` fields plus a `tracked_sets` grouping; this currently separates
@@ -637,8 +638,8 @@ a diagnostic fallback for uninitialized development launches pending
 board-accurate DIP / raster-phase proof.
 
 #### Manifests / board bring-up
-- [x] **I82-1** Local M82 ROM-set contract — `src/manifests/irem_m82` carries checked-in embedded manifests for `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, and the local nested `rtype2m82b` artifact, with parser/region-contract coverage for clone-parent inheritance, the 1 MiB main-program reset-vector reload, sound CPU ROM, voice/sample ROM, tile/background/sprite graphics regions, and PROM metadata. `MNEMOS_M82_SET_DIR=D:\emu\irem` data-gates real local artifacts and proves all six embedded M82 sets load CRC-clean from standard wrapper ZIPs through parent fallback, including reset-vector reload equality and non-fill resident regions; the local Major Title parent wrapper is `D:\emu\irem\Major-Title_Arcade_EN.zip`, the Japan wrapper is `D:\emu\irem\Major-Title_Arcade_JA.zip`, and the data-gate source index ranks single-inner wrapper ZIPs before direct set ZIPs and unpacked folders so complete local collection wrappers win over incomplete moved-folder candidates · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m82/games/*.toml` + `src/manifests/irem_m82/m82_game_manifests.hpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp`
-- [~] **I82-2** Executable M82 board profile — `src/manifests/irem_m82/m82_system.cpp` now assembles an explicit M82 V30/Z80/YM2151/DAC/8259 board with a 1 MiB V30 program map, sound ROM + Z80 work RAM, inputs/DIPs, frame stepping, sound-Z80-clocked DAC event mixing plus YM drain timing, whole-board save/load, scanline-sliced V30 execution with one-line IR0 vblank and IR2 raster-compare pulses, and an M82-local video path that uses VRAM-backed 8x8 planar tilemaps, a dedicated `backgrounds` ROM region for the rear tilemap when present, rowscroll RAM, 5-bit palette RAM with CPU-visible KNA91-style low-byte writes and disconnected-A9 mirrors, sprite-DMA-latched 16x16 planar cells, flip-screen state, scanline composition before the CPU tick for that beam line, M72-style tile priority groups split into below-sprite and above-sprite passes, and save/load of the latched sprite buffer, while retaining a diagnostic fallback only when no hardware render state is initialized; focused board/video tests now prove a raster-compare V30 handler changing palette RAM affects later scanlines without repainting earlier scanlines, KNA91 low-byte palette bus behavior, group-0 front pens stay below sprites, group-2 front pens cover sprites, and the dedicated background graphics region renders even when foreground tile graphics are absent. `src/apps/player/adapters/irem_m82` registers `--system irem_m82`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, clone parent fallback, supplemental parent media, resident media CRC/validation reporting, rollback-ready save-state, capability discovery, and real M82 player smoke. `MNEMOS_M82_SET_DIR=D:\emu\irem` proves all six embedded M82 sets through the adapter; direct Major Title parent/Japan and R-Type II parent/clone `mnemos_player --system irem_m82` smokes produce 384x256 nonblank frames. Remaining: prove Major Title background priority/parity against reference evidence, verify/replace first-pass M82 palette-bank rendering/decode, exact raster phase/timing, board-manual DIP behavior, and real visual-priority parity before calling any M82 game visually authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m82/m82_system.cpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp` + `src/apps/player/adapters/irem_m82/irem_m82_adapter.cpp` + `src/apps/player/adapters/irem_m82/tests/irem_m82_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
+- [x] **I82-1** Local M82 ROM-set contract — `src/manifests/irem_m82` carries checked-in embedded manifests for `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, and the local nested `rtype2m82b` artifact, with parser/region-contract coverage for clone-parent inheritance, the 1 MiB main-program reset-vector reload, sound CPU ROM, voice/sample ROM, tile/background/sprite graphics regions, PROM metadata, and vertical Air Duel orientation. `MNEMOS_M82_SET_DIR=D:\emu\irem` data-gates real local artifacts and proves all eight embedded M82 sets load CRC-clean from standard wrapper ZIPs through parent fallback, including reset-vector reload equality and non-fill resident regions; the local Air Duel parent/US clone wrappers are `D:\emu\irem\M72\Air-Duel_Arcade_EN (1).zip` and `D:\emu\irem\M72\Air-Duel_Arcade_EN (2).zip`, the local Major Title parent wrapper is `D:\emu\irem\Major-Title_Arcade_EN.zip`, the Japan wrapper is `D:\emu\irem\Major-Title_Arcade_JA.zip`, and the data-gate source index ranks single-inner wrapper ZIPs before direct set ZIPs and unpacked folders so complete local collection wrappers win over incomplete moved-folder candidates · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m82/games/*.toml` + `src/manifests/irem_m82/m82_game_manifests.hpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp`
+- [~] **I82-2** Executable M82 board profile — `src/manifests/irem_m82/m82_system.cpp` now assembles an explicit M82 V30/Z80/YM2151/DAC/8259 board with a 1 MiB V30 program map, sound ROM + Z80 work RAM, inputs/DIPs, frame stepping, sound-Z80-clocked DAC event mixing plus YM drain timing, whole-board save/load, scanline-sliced V30 execution with one-line IR0 vblank and IR2 raster-compare pulses, and an M82-local video path that uses VRAM-backed 8x8 planar tilemaps, a dedicated `backgrounds` ROM region for the rear tilemap when present, rowscroll RAM, 5-bit palette RAM with CPU-visible KNA91-style low-byte writes and disconnected-A9 mirrors, sprite-DMA-latched 16x16 planar cells, flip-screen state, scanline composition before the CPU tick for that beam line, M72-style tile priority groups split into below-sprite and above-sprite passes, and save/load of the latched sprite buffer, while retaining a diagnostic fallback only when no hardware render state is initialized; focused board/video tests now prove a raster-compare V30 handler changing palette RAM affects later scanlines without repainting earlier scanlines, KNA91 low-byte palette bus behavior, group-0 front pens stay below sprites, group-2 front pens cover sprites, and the dedicated background graphics region renders even when foreground tile graphics are absent. `src/apps/player/adapters/irem_m82` registers `--system irem_m82`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked set folders, clone parent fallback, supplemental parent media, resident media CRC/validation reporting, rollback-ready save-state, capability discovery, and real M82 player smoke. `MNEMOS_M82_SET_DIR=D:\emu\irem` proves all eight embedded M82 sets through the adapter; direct Air Duel parent/US clone, Major Title parent/Japan, and R-Type II parent/clone `mnemos_player --system irem_m82` smokes produce 384x256 nonblank frames. Remaining: prove Major Title/Air Duel background priority/parity against reference evidence, verify/replace first-pass M82 palette-bank rendering/decode, exact raster phase/timing, board-manual DIP behavior, and real visual-priority parity before calling any M82 game visually authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m82/m82_system.cpp` + `src/manifests/irem_m82/tests/m82_system_test.cpp` + `src/apps/player/adapters/irem_m82/irem_m82_adapter.cpp` + `src/apps/player/adapters/irem_m82/tests/irem_m82_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 ---
 

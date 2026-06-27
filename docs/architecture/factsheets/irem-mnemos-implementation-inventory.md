@@ -15,9 +15,9 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 108 currently match
-a checked-in Mnemos Irem manifest, 100 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 91 have an
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 111 currently match
+a checked-in Mnemos Irem manifest, 103 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 94 have an
 executable player-supported route. The 9 M62 matches are intentionally tracked
 as contract-only raw-media manifests until an M62 board/player profile exists;
 8 tracked `.7z` items remain metadata-only until converted or unpacked. The
@@ -61,7 +61,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
-| M82 | `irem_m82` | 66% | `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 6 checked-in local sets; 7 local artifact matches; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title background priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
+| M82 | `irem_m82` | 68% | `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 8 checked-in local sets; local Air Duel M82 parent/US clone wrappers; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 44% | `cosmccop`, `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder, `gallop.zip`, and `cosmccop.zip`; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 28% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, board-authentic DIP tables/runtime proof, visual/audio parity |
@@ -381,10 +381,14 @@ visual and audio parity proof.
 
 - **Techsheet games:** Major Title, plus M82 builds of Air Duel and Daiku no
   Gensan.
-- **Mnemos games:** `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`,
-  `rtype2m82b`.
-- **Smoke playable:** all six checked-in local M82 sets load through `--system
+- **Mnemos games:** `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`,
+  `rtype2j`, `rtype2jc`, `rtype2m82b`.
+- **Smoke playable:** all eight checked-in local M82 sets load through `--system
   irem_m82` with clone-parent fallback where needed and nonblank player smoke.
+  Air Duel uses `D:\emu\irem\M72\Air-Duel_Arcade_EN (1).zip` for the M82 parent
+  and `D:\emu\irem\M72\Air-Duel_Arcade_EN (2).zip` for the US split clone,
+  while the duplicate mixed `D:\emu\irem\M72\airduel.zip` remains loadable by
+  explicit `--system irem_m82`.
   Major Title uses the local `D:\emu\irem\Major-Title_Arcade_EN.zip` parent
   wrapper and `D:\emu\irem\Major-Title_Arcade_JA.zip` Japan split wrapper.
   Its dedicated `backgrounds` ROM region is now loaded and consumed by the rear
@@ -397,7 +401,7 @@ visual and audio parity proof.
   current Mnemos implementation routes the local R-Type II sets through
   `irem_m82`. Keep this as an explicit board-evidence audit item rather than
   treating either label as final.
-- **Remaining:** prove board classification, Major Title background
+- **Remaining:** prove board classification, Major Title/Air Duel background
   priority/parity against reference evidence, palette-bank rendering/decode,
   exact raster phase, DIP behavior, visual-priority parity, and audio parity.
 

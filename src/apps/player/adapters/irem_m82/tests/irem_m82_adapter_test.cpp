@@ -308,6 +308,7 @@ TEST_CASE("irem_m82_adapter validates real M82 ROM sets", "[irem_m82][data]") {
     const auto sources = index_m82_source_roots(roots);
     const auto expected_sets = embedded_set_names();
     const std::map<std::string, std::string, std::less<>> parents{
+        {"airduelu", "airduel"},
         {"majtitlej", "majtitle"},
         {"rtype2j", "rtype2"},
         {"rtype2jc", "rtype2"},
@@ -334,6 +335,10 @@ TEST_CASE("irem_m82_adapter validates real M82 ROM sets", "[irem_m82][data]") {
                                        source_path.string(), std::move(supplemental_roms),
                                        std::move(supplemental_paths));
         CHECK(adapter.set_name() == set_name);
+        CHECK(adapter.region().orientation ==
+              (set_name == "airduel" || set_name == "airduelu"
+                   ? mnemos::frontend_sdk::display_orientation::vertical
+                   : mnemos::frontend_sdk::display_orientation::horizontal));
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m82::visible_width);

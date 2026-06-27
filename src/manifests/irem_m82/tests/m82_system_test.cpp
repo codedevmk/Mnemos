@@ -453,8 +453,9 @@ TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m8
         declarations.emplace(std::move(set_name), std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"majtitle", "majtitlej", "rtype2",
-                                                            "rtype2j",  "rtype2jc",  "rtype2m82b"};
+    const std::set<std::string, std::less<>> expected_names{
+        "airduel", "airduelu", "majtitle", "majtitlej",
+        "rtype2",  "rtype2j",  "rtype2jc",  "rtype2m82b"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, raw_decl] : declarations) {
         INFO("set=" << set_name);
@@ -493,6 +494,12 @@ TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m8
     }
 
     CHECK(names == expected_names);
+    CHECK(declarations.at("airduel").orientation ==
+          mnemos::manifests::common::screen_orientation::vertical);
+    REQUIRE(declarations.at("airduelu").parent.has_value());
+    CHECK(*declarations.at("airduelu").parent == "airduel");
+    CHECK(declarations.at("airduelu").orientation ==
+          mnemos::manifests::common::screen_orientation::vertical);
     REQUIRE(declarations.at("majtitlej").parent.has_value());
     CHECK(*declarations.at("majtitlej").parent == "majtitle");
     REQUIRE(declarations.at("rtype2j").parent.has_value());
@@ -510,7 +517,9 @@ TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m8
 TEST_CASE("m82 embedded game manifests mirror the checked-in roster", "[m82][romset]") {
     using mnemos::manifests::irem_m82::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 6U);
+    CHECK(game_manifests.size() == 8U);
+    CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("airduel").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("airduelu").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("majtitle").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("majtitlej").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("rtype2").empty());
