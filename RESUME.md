@@ -1,6 +1,6 @@
 # MSX / MSX2 Resume Handoff
 
-Generated: 2026-06-26 23:50 America/Chicago
+Generated: 2026-06-27 00:20 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
@@ -23,8 +23,8 @@ Get-Content .\README.md
 Get-Content .\RESUME.md
 ```
 
-The root checkout at `C:\dev\emu\Mnemos` was on an unrelated branch during the
-handoff work. Continue MSX/MSX2 work from `C:\dev\emu\Mnemos-msx2`.
+The root checkout at `C:\dev\emu\Mnemos` is not the active MSX/MSX2 worktree.
+Continue MSX/MSX2 work from `C:\dev\emu\Mnemos-msx2`.
 
 ## User Contract
 
@@ -52,6 +52,8 @@ D:\emu\msx\bios\cbios\cbios_main_msx1.rom
 D:\emu\msx\bios\cbios\cbios_logo_msx1.rom
 D:\emu\msx\bios\cbios\cbios_main_msx2.rom
 D:\emu\msx\bios\cbios\cbios_main_msx2_br.rom
+D:\emu\msx\bios\cbios\cbios_main_msx2_eu.rom
+D:\emu\msx\bios\cbios\cbios_main_msx2_jp.rom
 D:\emu\msx\bios\cbios\cbios_sub.rom
 D:\emu\msx\bios\cbios\cbios_logo_msx2.rom
 ```
@@ -105,145 +107,43 @@ Confirmed:
   - `-SkipRoms 156 -MaxRoms 12`: `26/26` passed; `b_game` retried on MSX2 at
     3600 frames and passed.
   - `-SkipRoms 168 -MaxRoms 12`: `26/26` passed.
-  - `-SkipRoms 180 -MaxRoms 12`: `25/25` passed; `barbarian_the_duel_v1.0-msxdev[ASCII16].rom`
-    is skipped on MSX by profile as MSX2-only and validated on MSX2.
+  - `-SkipRoms 180 -MaxRoms 12`: `25/25` passed;
+    `barbarian_the_duel_v1.0-msxdev[ASCII16].rom` is skipped on MSX by profile
+    as MSX2-only and validated on MSX2.
 
 Known gaps:
 
-- Continue the bounded corpus at `-SkipRoms 192 -MaxRoms 12`.
+- The current active blocker is the skip-192 corpus window: `bean.rom` passes
+  on MSX, but fails on MSX2 because the framebuffer remains uniform after retry.
 - This is not yet a representative compatibility matrix.
 - Earlier notes included Bosconia staying on the C-BIOS logo and MSX2 Bestial
   Warrior color fidelity suspicion; those still need confirmation in later
   slices.
 
-## Baseline Commit Before Handoff Update
+## Current Branch State
 
-Before this `RESUME.md` handoff update, the branch was clean and pushed at:
-
-```text
-af64b5c2 (HEAD -> feature/msx2, origin/feature/msx2) Advance MSX2 corpus to skip 156
-```
-
-The next commit after that baseline is expected to be a `RESUME.md`-only
-handoff update that records skip 156, 168, and 180 validation.
-
-## Latest Change
-
-The latest source/tooling changes are in:
+Before this handoff update, the branch was clean and pushed at:
 
 ```text
-scripts/msx/run-boot-smoke.ps1
-src/manifests/common/msx_cartridge_mapper.cpp
-src/manifests/common/tests/msx_cartridge_mapper_test.cpp
+788cbece (HEAD -> feature/msx2, origin/feature/msx2) Update MSX2 resume handoff
 ```
 
-`run-boot-smoke.ps1` now handles empty test logs in `Get-BootHashFromLog`
-without aborting the entire corpus window. A zero-byte baseline log should
-produce a structured "no framebuffer hash" failure unless a later rerun
-succeeds, not a PowerShell exception.
+Recent commits:
 
-`abbaye_v1.1.rom` carries three strong ASCII8 register writes at `$6800`,
-`$7000`, and `$7800`, but also writes to `$40C1` as self-modifying code. The
-old classifier treated that lower-page code patch as Generic8 evidence and
-chose Generic8 before considering the stronger ASCII8 loader signature. The
-new classifier lets `ascii8_count >= 3` win before the Generic8 path, and the
-regression test captures the same false-positive shape.
+```text
+788cbece Update MSX2 resume handoff
+af64b5c2 Advance MSX2 corpus to skip 156
+f02e37ba Harden MSX boot smoke hash parsing
+bff97edd Advance MSX2 corpus to skip 108
+4859188e Advance MSX2 corpus to skip 96
+691ccca9 Advance MSX2 corpus handoff
+631c4fb9 Fix MSX ASCII8 mapper priority
+65336c1f Refresh MSX2 resume handoff
+```
 
-## Latest Validation: Skip 60 Window
+## Latest Validation: Skip 192 Window
 
 Command run:
-
-```powershell
-$romDir='D:\emu\msx\MSX files [ROM]'
-.\scripts\msx\run-boot-smoke.ps1 `
-  -BuildDir 'build/windows-msvc-debug' `
-  -MsxBios 'D:\emu\msx\bios\cbios\cbios_main_msx1.rom' `
-  -MsxLogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx1.rom' `
-  -MsxRomDir $romDir `
-  -MsxRegion 'ntsc' `
-  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2.rom' `
-  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
-  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
-  -Msx2RomDir $romDir `
-  -Msx2ExpandedSlots '8' `
-  -Msx2SubSlot '3.0' `
-  -Msx2RamSlot '3.2' `
-  -Msx2RamSize '512K' `
-  -Msx2Region 'ntsc' `
-  -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
-  -Frames 600 `
-  -RetryFrames 3600 `
-  -SkipRoms 60 `
-  -MaxRoms 12 `
-  -RequireData
-```
-
-Result:
-
-```text
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231011-313-3300\summary.json
-```
-
-Important fixed-case hashes:
-
-```text
-MSX firmware baseline:
-697fe93903980d26d6ef37fc76b0511c8a76656ebdc70f7be616c4dd7bac836a
-
-MSX abbaye_v1.1:
-2089850df8c39e4ffac5a7f4d095b5dc46357e513cfb4b95fd13a2ada7dc63f2
-
-MSX2 firmware baseline:
-8572e9f4e74913c1a5d3de86da650c0a46ab5ec0643b2d6e5f80bf0c3fd5e1bb
-
-MSX2 abbaye_v1.1:
-69c453bc568503eb6ce377a406183182b131b620613a82ef737f4b849cbea2d5
-```
-
-Direct post-fix Catch2 proof for `abbaye_v1.1.rom`:
-
-```text
-resolved cartridge mapper: ASCII8
-boot framebuffer sha256: 2089850df8c39e4ffac5a7f4d095b5dc46357e513cfb4b95fd13a2ada7dc63f2
-diagnostic log: build\scratch\msx-abbaye-triage\20260626-2305\msx-abbaye-catch2-s-after-fix.txt
-```
-
-Explicit player proof:
-
-```text
-command included: --system msx --rom "D:\emu\msx\MSX files [ROM]\abbaye_v1.1.rom"
-output: build\scratch\msx-abbaye-proof\20260626-2310\abbaye-msx.ppm
-PPM SHA256: 893782F6AE8C5DD17DB8CF0E47CF084B5C2D9C1022E8117157F00BD19AC7E0AF
-sample_unique_bytes=4
-```
-
-## Fixed Failure Details
-
-ROM:
-
-```text
-D:\emu\msx\MSX files [ROM]\abbaye_v1.1.rom
-Size: 262144
-SHA256: A8F52BE42A9731DF93D68B78F1BA00F03BF2B04582CA532359B27AD8D3EF25B9
-```
-
-Observed:
-
-- Before the fix, MSX automatic mapping resolved to Generic8 and the framebuffer
-  stayed equal to the C-BIOS firmware baseline after 3600 frames.
-- Explicit mapper probes showed `ascii8` and `ascii16` both escaped the
-  baseline, while `generic8` reproduced the failure.
-- After the shared classifier fix, automatic mapping resolves to ASCII8 and the
-  MSX framebuffer differs from the firmware baseline.
-- The ROM header starts with `41 42 AE 40`, giving an init vector around
-  `$40AE`.
-- Early bytes include loader writes to `$6800`, `$7000`, and `$7800`, plus a
-  code patch at `$40C1`; the code patch caused the old Generic8 false positive.
-
-## Suggested Next Implementation Slice
-
-Run the next bounded MSX/MSX2 ROM corpus smoke:
 
 ```powershell
 $romDir='D:\emu\msx\MSX files [ROM]'
@@ -270,175 +170,245 @@ $romDir='D:\emu\msx\MSX files [ROM]'
   -RequireData
 ```
 
-## Build / Test Commands
-
-Windows MSVC build/test must run from a Visual Studio developer environment.
-This command form has worked reliably from PowerShell:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_msx_boot_test'
-```
-
-Focused tests:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|mnemos_msx_boot_test|mnemos_manifests_common_test" --output-on-failure'
-```
-
-If Ninja/MSVC hits a transient `LNK1104` archive race, retry the build with:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --parallel 1'
-```
-
-## Validation Already Completed
-
-Focused RAM-size/profile build:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_apps_player_system_launch_test mnemos_msx_boot_test mnemos_apps_player_msx_adapter_test mnemos_manifests_msx_test'
-```
-
 Result:
 
 ```text
-passed
+MSX/MSX2 boot smoke: 25/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-235230-882-50236\summary.json
+failure: msx2/rom-bean exit=42
+log: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-235230-882-50236\019-msx2-rom-bean.log
+retry log: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-235230-882-50236\019-msx2-rom-bean-retry-3600.log
 ```
 
-Focused RAM-size/profile tests:
+Hashes:
+
+```text
+MSX bean.rom:
+690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a
+
+MSX2 bean.rom:
+9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573
+```
+
+The MSX2 hash differs from the firmware baseline, but Catch2 failed because
+the framebuffer was uniform:
+
+```text
+CHECK_FALSE(framebuffer_is_uniform(fb)) failed
+frames rendered: 3600
+resolved cartridge mapper: Plain
+slot layout: expanded=8 ram=3.2 sub=3.0 disk=default cart2=default ram_size=524288
+CPU pc/sp/af/bc/de/hl: $CA3E/$E6FF/$5FBA/$0101/$5F01/$66B8 halted=true
+cycles=215049602
+slot state: primary=$D0 secondary0=$00 secondary1=$00 secondary2=$00 secondary3=$A0
+RAM mapper segments: [3,2,1,0]
+VDP: frame=3600 mode=4 r0=$02 r1=$E2 r2=$06 r7=$F4 vram_nonzero=6104
+V9938 extended: r8=$08 r9=$00 r3=$FF r4=$03 r5=$36 r6=$07 r10=$00 r11=$00 r18=$00 r13=$00 r23=$00 r44=$00 r45=$00 r46=$08 s2=$0C
+```
+
+Important interpretation:
+
+- `mode=4` is the emulator enum value for `graphics_ii`; it is not MSX2
+  Graphics 4.
+- The test's `visible_g4_*` diagnostics are generic probes and not proof that
+  Graphics 4 is active.
+- The current evidence points at a CPU/VDP interrupt or HALT wake issue in the
+  MSX2/V9938 path, not an invalid ROM and not a profile skip candidate.
+
+## Bean.rom Diagnostics
+
+ROM:
+
+```text
+D:\emu\msx\MSX files [ROM]\bean.rom
+Size: 16384 bytes
+Header starts at offset 0: 41 42 04 80 ...
+Init vector: $8004
+Mapper: Plain
+```
+
+MSX1 forced-diagnostics command:
 
 ```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_apps_player_system_launch_test|mnemos_msx_boot_test|mnemos_apps_player_msx_adapter_test|mnemos_manifests_msx_test" --output-on-failure'
+$env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
+$env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
+$env:MNEMOS_MSX_ROM='D:\emu\msx\MSX files [ROM]\bean.rom'
+$env:MNEMOS_MSX_REGION='ntsc'
+$env:MNEMOS_MSX_BOOT_FRAMES='600'
+$env:MNEMOS_MSX_BOOT_SHA256='force-diagnostics'
+& '.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe' '[golden][msx]' 2>&1 |
+  Tee-Object -FilePath 'build\scratch\msx-boot\bean-msx-diagnostics.log'
 ```
 
-Result:
+MSX1 result:
 
 ```text
-100% tests passed, 0 tests failed out of 4
+framebuffer nonuniform
+hash=690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a
+CPU pc/sp/af/bc/de/hl: $829D/$E395/$A68C/$0000/$0008/$9C56 halted=false
+slot state: primary=$D0 secondary0=$00 secondary1=$00 secondary2=$00 secondary3=$00
+VDP: frame=600 mode=3 r0=$02 r1=$E2 r2=$06 r7=$04 vram_nonzero=7336 first_pixel=5527021
 ```
 
-Mapper-focused build and tests:
+This proves the same ROM keeps running and displays on MSX1, while MSX2 reaches
+a HALT in RAM and never wakes to produce nonuniform output.
+
+Variants already tried:
+
+- RAM/slot variants: 512K, 64K, 128K, plain64, and a slot3_0_ram variant. The
+  useful variants still halted at `$CA3E` with the same VDP state.
+- C-BIOS regional variants: `cbios_main_msx2.rom`, `_br`, `_eu`, and `_jp`.
+  All failed the same; JP changed only backdrop register `r7` from `$F4` to
+  `$F7`.
+- Boot keys: none, `1`, `2`, `shift`, `ctrl`, `space`. Shift/ctrl/space parsed
+  and still failed; `1` and `2` did not map through the parser and printed
+  `none`.
+
+CPU trace command:
 
 ```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_common_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_common_test|mnemos_msx_boot_test" --output-on-failure'
+$out='build\scratch\msx-bean-trace\bean-msx2.ppm'
+New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+$env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2.rom'
+$env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
+$env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
+$env:MNEMOS_MSX2_EXPANDED_SLOTS='8'
+$env:MNEMOS_MSX2_SUB_SLOT='3.0'
+$env:MNEMOS_MSX2_RAM_SLOT='3.2'
+$env:MNEMOS_MSX2_RAM_SIZE='512K'
+$env:MNEMOS_CPU_TRACE='1'
+& '.\build\windows-msvc-debug\src\apps\player\mnemos_player.exe' `
+  --system msx2 `
+  --rom 'D:\emu\msx\MSX files [ROM]\bean.rom' `
+  --screenshot $out `
+  --frames 600 2>&1 |
+  Tee-Object -FilePath 'build\scratch\msx-bean-trace\player-msx2.log'
 ```
 
-Result:
+Trace artifacts:
 
 ```text
-100% tests passed, 0 tests failed out of 2
+build\scratch\msx-bean-trace\bean-msx2.ppm
+build\scratch\msx-bean-trace\bean-msx2.ppm.cpu_trace.csv
+PPM SHA256: 5202D0AB1B6E98088819151488F5D6347AC94CA1380EBCF5A086269A27889A74
 ```
 
-Real-data `3D Pool [cas2rom64ks]` MSX/MSX2 smoke:
+Trace tail:
 
 ```text
-MSX/MSX2 boot smoke: 4/4 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-221758-220-55992\summary.json
-MSX ROM hash: 28e81fcc84603a60d9c5fe8489a9292fb383bf85ce304f0622fe1906bb35894a
-MSX2 ROM hash: 39285647f88ac0fac02e87cc039f1e113246f52079eeea1da5c72f0afe874b0f
+245,459034,008294,14621505
+245,459035,008295,14621516
+245,459036,008296,14621527
+245,459037,008299,14621537
+245,459038,00829A,14621548
+245,459039,008282,14621558
+245,459040,008283,14621568
+245,459041,008284,14621578
+245,459042,00CA29,14621592
+...
+245,459061,00CA3C,14621711
+245,459062,00CA3D,14621718
 ```
 
-Explicit player proof for `3D Pool [cas2rom64ks]`:
+The trace stops after `$CA3D`; the retry log reports `halted=true` at `$CA3E`.
+This strongly suggests the ROM uses HALT plus VDP interrupt timing and the
+MSX2/V9938 path is not waking or accepting the interrupt correctly.
+
+## Code Pointers
+
+Read these first for the skip-192 failure:
 
 ```text
-MSX screenshot: build\scratch\msx-cas2rom-proof\20260626-221758\3d-pool-cas2rom-msx.ppm
-MSX screenshot SHA256: 73C06DC60666EAADDDBFD2F2A5A28FBA33001CB8C9C9D6562D4DF5FA1A10B8AF
-MSX2 screenshot: build\scratch\msx-cas2rom-proof\20260626-221758\3d-pool-cas2rom-msx2.ppm
-MSX2 screenshot SHA256: 4977EC40C4D19E041EDB1282C6083ADADEF1EB05A0E2A285DF3FEB9BFE1B0893
+src/chips/video/tms9918a.cpp
+src/chips/video/tms9918a.hpp
+src/chips/video/v9938.cpp
+src/chips/video/v9938.hpp
+src/chips/cpu/z80/z80.cpp
+src/chips/cpu/z80/z80.hpp
+src/manifests/msx/msx_system.cpp
+src/manifests/msx2/msx2_system.cpp
+src/manifests/msx2/tests/msx2_system_test.cpp
+tests/golden/msx_boot_test.cpp
 ```
 
-Arabic MSX2 BR C-BIOS proof:
+Known wiring:
 
-```text
-MSX/MSX2 boot smoke: 2/2 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224621-597-43940\summary.json
-rom hash: 7855330785cbb9bcd8ba95149af8eef1fa67f035abbdc88c61e38fc0b6d27d9d
+- `src/manifests/msx/msx_system.cpp` wires both `vdp` and `vdp2` IRQ callbacks
+  to `s->cpu.set_irq_line(asserted)`.
+- `src/manifests/msx2/msx2_system.cpp` wires V9938 IRQ callback to
+  `s->cpu.set_irq_line(asserted)`.
+- So the likely issue is not a missing callback. Inspect V9938 status/IRQ clear
+  semantics, status register selection via R15, frame IRQ enable handling, and
+  Z80 level IRQ/HALT wake behavior.
+
+Focused hypothesis:
+
+- V9938 sets `status_[0]` frame interrupt and updates IRQ at frame boundary.
+- V9938 status reads are selected through register 15.
+- The failing diagnostic shows `s2=$0C`; determine whether C-BIOS or the ROM is
+  reading S2 while the frame IRQ flag remains in S0, and whether the emulator
+  clears or preserves the IRQ line exactly like real V9938.
+- A held level IRQ should still wake HALT only when the Z80 IFF state and IM
+  behavior permit it. Verify Z80 interrupt acceptance and HALT exit timing
+  against existing Z80 tests.
+
+## Suggested Next Implementation Slice
+
+1. Add or find a focused hermetic regression for MSX2/V9938-to-Z80 interrupts.
+   A useful regression should drive a simple EI/HALT loop with VDP frame IRQ
+   enabled and verify that the CPU exits HALT/takes the interrupt.
+2. Compare TMS9918A and V9938 frame interrupt status behavior and status-read
+   clearing logic.
+3. Fix the V9938 IRQ/status or Z80 HALT/IRQ behavior at the root cause.
+4. Rebuild focused targets and run focused tests.
+5. Re-run `bean.rom` on both MSX and MSX2, then re-run the skip-192 corpus
+   window.
+6. If skip 192 passes, update this file with next window
+   `-SkipRoms 204 -MaxRoms 12`.
+
+Build and focused-test command shape:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_msx_boot_test mnemos_manifests_msx2_test mnemos_manifests_msx_test'
 ```
 
-Profile-driven Arabic MSX2 proof:
+Targeted validation after a fix should use the same C-BIOS args and either
+single-ROM `bean.rom` probes or the full skip-192 command above:
 
-```text
-MSX/MSX2 boot smoke: 2/2 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224755-972-58776\summary.json
+```powershell
+$romDir='D:\emu\msx\MSX files [ROM]'
+.\scripts\msx\run-boot-smoke.ps1 `
+  -BuildDir 'build/windows-msvc-debug' `
+  -MsxBios 'D:\emu\msx\bios\cbios\cbios_main_msx1.rom' `
+  -MsxLogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx1.rom' `
+  -MsxRomDir $romDir `
+  -MsxRegion 'ntsc' `
+  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2.rom' `
+  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
+  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
+  -Msx2RomDir $romDir `
+  -Msx2ExpandedSlots '8' `
+  -Msx2SubSlot '3.0' `
+  -Msx2RamSlot '3.2' `
+  -Msx2RamSize '512K' `
+  -Msx2Region 'ntsc' `
+  -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
+  -Frames 600 `
+  -RetryFrames 3600 `
+  -SkipRoms 192 `
+  -MaxRoms 12 `
+  -RequireData
 ```
 
-Explicit player proof for Arabic MSX2:
+## Do Not Do
 
-```text
-mnemos_player wrote build\scratch\msx2-a-test2-proof\20260626-225405\a-test2-msx2-br.ppm
-PPM SHA256: B4DD3D7053F38E6729A808858CC703CEFC063E856A4AE1CE89738F5E95CAAC19
-PPM non_uniform=True
-```
+- Do not profile-skip `bean.rom` unless there is hard evidence that the local
+  dump is invalid or MSX1-only. Current evidence points to a real emulation
+  gap.
+- Do not treat a player window without `--system` and `--rom` as validation.
+- Do not commit files from `build\`, firmware dumps, ROM corpus files,
+  screenshots, CPU traces, or logs.
+- Do not reuse the earlier broken PowerShell pixel-uniqueness snippet; it
+  produced excessive error spam/timeouts. If image uniqueness is needed, write
+  a small bounded parser under `build\scratch\` or use existing test helpers.
 
-Latest passing corpus windows:
-
-```text
--SkipRoms 24 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-222804-481-14904\summary.json
-
--SkipRoms 36 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-223029-317-62816\summary.json
-
--SkipRoms 48 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224915-455-69380\summary.json
-
--SkipRoms 60 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231011-313-3300\summary.json
-
--SkipRoms 72 -MaxRoms 12:
-MSX/MSX2 boot smoke: 25/25 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231514-754-50788\summary.json
-
--SkipRoms 84 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231740-241-85428\summary.json
-
--SkipRoms 96 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-232010-624-63392\summary.json
-
--SkipRoms 108 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-232327-103-55132\summary.json
-
--SkipRoms 120 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-232514-964-49592\summary.json
-
--SkipRoms 132 -MaxRoms 12:
-MSX/MSX2 boot smoke: 25/25 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233012-141-30268\summary.json
-
--SkipRoms 144 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233350-822-83380\summary.json
-
--SkipRoms 156 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233848-683-88144\summary.json
-note: `b_game` retried on MSX2 at 3600 frames and passed.
-
--SkipRoms 168 -MaxRoms 12:
-MSX/MSX2 boot smoke: 26/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-234201-996-89204\summary.json
-
--SkipRoms 180 -MaxRoms 12:
-MSX/MSX2 boot smoke: 25/25 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-234650-947-52368\summary.json
-note: `barbarian_the_duel_v1.0-msxdev[ASCII16].rom` is skipped on MSX by profile as MSX2-only and validated on MSX2.
-```
-
-## Handoff Notes
-
-- Use `rg` first for searches and batch reads where possible.
-- Use `apply_patch` for manual source edits.
-- Do not vendor emulator source or ROM data.
-- Do not treat a successful Catch2 process exit as proof when the smoke runner
-  reports a firmware-baseline framebuffer.
-- Preserve both MSX and MSX2 behavior in every shared fix.
-- If the next framebuffer issue is fixed, continue bounded corpus validation
-  rather than claiming broad compatibility from one ROM.
