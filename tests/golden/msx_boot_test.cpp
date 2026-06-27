@@ -1939,6 +1939,9 @@ TEST_CASE("msx boots real firmware to a deterministic golden framebuffer", "[gol
                                    << hex16(regs.af) << '/' << hex16(regs.bc) << '/'
                                    << hex16(regs.de) << '/' << hex16(regs.hl)
                                    << " halted=" << (regs.halted ? "true" : "false")
+                                   << " iff1=" << (regs.iff1 ? "true" : "false")
+                                   << " iff2=" << (regs.iff2 ? "true" : "false")
+                                   << " im=" << static_cast<unsigned>(regs.im)
                                    << " cycles=" << sys->cpu.elapsed_cycles());
     INFO("slot state: primary=" << hex8(sys->primary_slot_select)
                                 << " secondary0=" << hex8(sys->secondary_slot_select[0])
@@ -2205,6 +2208,9 @@ TEST_CASE("msx2 boots real firmware to a deterministic golden framebuffer", "[go
                                    << hex16(regs.af) << '/' << hex16(regs.bc) << '/'
                                    << hex16(regs.de) << '/' << hex16(regs.hl)
                                    << " halted=" << (regs.halted ? "true" : "false")
+                                   << " iff1=" << (regs.iff1 ? "true" : "false")
+                                   << " iff2=" << (regs.iff2 ? "true" : "false")
+                                   << " im=" << static_cast<unsigned>(regs.im)
                                    << " cycles=" << sys->cpu.elapsed_cycles());
     INFO("slot state: primary=" << hex8(sys->primary_slot)
                                 << " secondary0=" << hex8(sys->secondary_slot[0])
@@ -2229,6 +2235,10 @@ TEST_CASE("msx2 boots real firmware to a deterministic golden framebuffer", "[go
                              << " r1=" << hex8(sys->vdp.reg(1))
                              << " r2=" << hex8(sys->vdp.reg(2))
                              << " r7=" << hex8(sys->vdp.reg(7))
+                             << " r15=" << hex8(sys->vdp.reg(15))
+                             << " s0=" << hex8(sys->vdp.status(0))
+                             << " s1=" << hex8(sys->vdp.status(1))
+                             << " irq=" << (sys->vdp.irq_asserted() ? "true" : "false")
                              << " vram_nonzero=" << nonzero_bytes(sys->vdp.vram())
                              << " first_pixel="
                              << (fb.pixels == nullptr ? 0U : static_cast<unsigned>(fb.pixels[0])));

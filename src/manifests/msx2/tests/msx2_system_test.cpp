@@ -1125,6 +1125,39 @@ TEST_CASE("msx2 routes VDP, PSG and PPI ports", "[manifests][msx2][io]") {
     CHECK(sys->io_read(0xA9U) == 0xFDU);
 }
 
+TEST_CASE("msx2 VDP frame IRQ wakes the Z80 from HALT", "[manifests][msx2][irq]") {
+    std::vector<std::uint8_t> bios(0x8000U, 0x00U);
+    const std::array<std::uint8_t, 4> program = {
+        0xEDU, 0x56U, // IM 1
+        0xFBU,       // EI
+        0x76U,       // HALT
+    };
+    std::copy(program.begin(), program.end(), bios.begin());
+
+    const auto sys = assemble_msx2(bios);
+    REQUIRE(sys != nullptr);
+
+    sys->io_write(0x99U, 0x60U);
+    sys->io_write(0x99U, 0x81U); // VDP R#1 = display + frame IRQ enable
+
+    (void)sys->cpu.step_instruction(); // IM 1
+    (void)sys->cpu.step_instruction(); // EI
+    (void)sys->cpu.step_instruction(); // HALT with IFF1 enabled after EI delay
+    auto regs = sys->cpu.cpu_registers();
+    REQUIRE(regs.halted);
+    REQUIRE(regs.iff1);
+
+    sys->vdp.tick(static_cast<std::uint64_t>(v9938::cycles_per_line) *
+                  static_cast<std::uint64_t>(v9938::display_height_192 + 1));
+    REQUIRE(sys->vdp.irq_asserted());
+
+    (void)sys->cpu.step_instruction();
+    regs = sys->cpu.cpu_registers();
+    CHECK_FALSE(regs.halted);
+    CHECK(regs.pc == 0x0038U);
+    CHECK_FALSE(regs.iff1);
+}
+
 TEST_CASE("msx2 primary slot register is readable and writable from reset",
           "[manifests][msx2][io]") {
     const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
