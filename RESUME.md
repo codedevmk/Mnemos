@@ -5,9 +5,9 @@ Generated: 2026-06-27 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote branch: `origin/feature/msx2`
-Previous pushed checkpoint before this handoff update: `335d014c`
+Parent checkpoint before this handoff refresh: `3a30372c Update MSX2 handoff diagnostics`
 
-This file is the resume point for the MSX/MSX2 feature work. The original
+This is the resume point for the MSX/MSX2 implementation work. The original
 Codex session ran for roughly 30 hours and hit practical context-window limits.
 Continue from this file and the live worktree state instead of reconstructing
 the chat history.
@@ -36,13 +36,13 @@ cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\To
 
 ## User Contract
 
-- Implement both MSX and MSX2; they share common manifest, mapper, player
-  adapter, VDP, script, and golden-test surfaces.
+- Implement both MSX and MSX2; they share common manifests, mapper code, player
+  adapters, VDP behavior, smoke scripts, and golden-test surfaces.
 - Preserve the requested worktree and branch: `feature/msx2`.
-- C-BIOS is under `D:\emu\msx\bios`.
+- C-BIOS lives under `D:\emu\msx\bios`.
 - The ROM corpus used for this slice is `D:\emu\msx\MSX files [ROM]`.
 - Do not claim "100% working" until real ROM/media validation proves it.
-- A blank Mnemos Player window is not proof; launch with explicit `--system`
+- A blank Mnemos Player window is not proof. Launch with explicit `--system`
   and `--rom`, or use the data-gated smoke runner.
 - Do not commit ROMs, firmware, screenshots, logs, or build outputs.
 - Keep transient diagnostics under `build\scratch\...`.
@@ -58,7 +58,7 @@ Confirmed:
 - Shared RAM-size profile semantics, cartridge mapper resolution, smoke-script
   routing, and MSX/MSX2 golden-test hooks are in place.
 - Earlier bounded real-ROM smoke windows passed through skip 191.
-- The focused V9938 and MSX boot tests pass.
+- Focused V9938 and MSX boot tests pass at the last validated checkpoint.
 
 Active blocker:
 
@@ -68,29 +68,130 @@ Active blocker:
   after the 3600-frame retry.
 - Do not mark the goal complete until this and broader real-ROM coverage pass.
 
-## Current Checkpoint Contents
+## Latest Diagnosis
 
-This handoff checkpoint includes:
+The previous handoff focused on `$C000` staging and the bad `$BFFF/$C000`
+execution path. The latest forced diagnostics narrowed the likely root cause:
+MSX2 `bean.rom` reaches a halted CPU state after executing the staged `$C000`
+payload, and the final V9938 state has nonzero visible Graphics 4 VRAM, but the
+sampled framebuffer is still uniform.
 
-- `tests/golden/msx_boot_test.cpp`: enriches opt-in VDP I/O diagnostics with
-  V9938 frame index, decoded display mode, and registers `r5`, `r6`, `r8`,
-  `r9`, `r11`, and `r23`.
-- `tests/golden/msx_boot_test.cpp`: adds opt-in memory-write diagnostics via
+That points more strongly at V9938 bitmap rendering, source page selection,
+display-enable timing, or framebuffer update cadence than at C-BIOS region,
+expanded-slot profile, or the plain ROM mapper.
+
+Most important parsed MSX2 state from
+`build\scratch\msx-bean-diagnostics\variant-generic-3.2.log`:
+
+```text
+resolved cartridge mapper: Plain
+cpu pc/sp/af/bc/de/hl: $CA3E/$E6FF/$5FBA/$0101/$5F01/$66B8 halted=true iff1=false iff2=false im=0 cycles=215049602
+slot state: primary=$D0 ... secondary3=$A0
+ram mapper segments: [3,2,1,0]
+pc window: [$CA36=$33,$CA37=$33,$CA38=$33,$CA39=$33,$CA3A=$33,$CA3B=$35,$CA3C=$77,$CA3D=$76,$CA3E=$33,...]
+vdp state: frame=3600 mode=4 r0=$02 r1=$E2 r2=$06 r7=$F4 r15=$00 s0=$C4 s1=$01 irq=true vram_nonzero=6104 first_pixel=2368548
+v9938 extended state: r8=$08 r9=$00 r3=$FF r4=$03 r5=$36 r6=$07 r10=$00 r11=$00 r18=$00 r13=$00 r23=$00 r44=$00 r45=$00 r46=$08 s2=$0C vram_pages_32k=[6103,0,1,0] visible_g4_nonzero=6008 visible_g4_hist=[42176,3820,0,376,0,0,...]
+```
+
+Interpretation:
+
+- The CPU is not crashing immediately at reset; it runs the ROM path and halts
+  at `$CA3E`.
+- Page 3 remains RAM and the RAM mapper segments are stable.
+- V9938 reports Graphics 4 mode with nonzero visible Graphics 4 VRAM on page 0.
+- `first_pixel=2368548` is nonzero backdrop-like output, but the framebuffer
+  uniformity check still fails.
+- The next slice should inspect how/when `v9938::framebuffer()` is populated
+  relative to `v9938::tick(...)`, scanline rendering, and `render_frame()`.
+
+## Diagnostics Already Run
+
+Forced MSX1 diagnostic:
+
+```powershell
+$env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
+$env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
+$env:MNEMOS_MSX_ROM='D:\emu\msx\MSX files [ROM]\bean.rom'
+$env:MNEMOS_MSX_BOOT_FRAMES='600'
+$env:MNEMOS_MSX_BOOT_SHA256='force-diagnostics'
+$env:MNEMOS_MSX_MEM_WATCH='$C000-$C0FF'
+$env:MNEMOS_MSX_MEM_WATCH_PC='$8000-$8400'
+$env:MNEMOS_MSX_PC_WATCH='$BFF0-$C080'
+.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe '[golden][msx]'
+```
+
+Log:
+
+```text
+build\scratch\msx-bean-diagnostics\resume-msx-memwatch-c000-c0ff-pc8000-8400.log
+```
+
+Result: expected forced-hash exit 42; no `$C000` memory-watch or PC-watch events
+in that filtered window.
+
+Forced MSX2 diagnostic:
+
+```powershell
+$env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2.rom'
+$env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
+$env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
+$env:MNEMOS_MSX2_ROM='D:\emu\msx\MSX files [ROM]\bean.rom'
+$env:MNEMOS_MSX2_EXPANDED_SLOTS='8'
+$env:MNEMOS_MSX2_SUB_SLOT='3.0'
+$env:MNEMOS_MSX2_RAM_SLOT='3.2'
+$env:MNEMOS_MSX2_RAM_SIZE='512K'
+$env:MNEMOS_MSX2_REGION='ntsc'
+$env:MNEMOS_MSX2_BOOT_FRAMES='600'
+$env:MNEMOS_MSX2_BOOT_SHA256='force-diagnostics'
+$env:MNEMOS_MSX_MEM_WATCH='$C000-$C0FF'
+$env:MNEMOS_MSX_MEM_WATCH_PC='$8000-$8400'
+$env:MNEMOS_MSX_PC_WATCH='$BFF0-$C080'
+.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe '[golden][msx2]'
+```
+
+Log:
+
+```text
+build\scratch\msx-bean-diagnostics\resume-msx2-memwatch-c000-c0ff-pc8000-8400.log
+```
+
+Result: expected forced-hash exit 42.
+
+C-BIOS / slot / RAM variants tested at 3600 frames:
+
+```text
+variant-generic-3.2.log
+variant-eu-3.2.log
+variant-jp-3.2.log
+variant-br-3.2.log
+variant-generic-3.0.log
+variant-generic-3.1.log
+```
+
+All variants fail with the same uniform-framebuffer symptom. This is not a
+simple C-BIOS region, subslot, RAM slot, or RAM size-profile issue.
+
+## Existing Checkpoint Contents
+
+The branch already contains these relevant changes:
+
+- `tests/golden/msx_boot_test.cpp`: opt-in VDP I/O diagnostics with V9938 frame
+  index, decoded display mode, and registers `r5`, `r6`, `r8`, `r9`, `r11`,
+  and `r23`.
+- `tests/golden/msx_boot_test.cpp`: opt-in memory-write diagnostics via
   `MNEMOS_MSX_MEM_WATCH` and optional PC filtering through
   `MNEMOS_MSX_MEM_WATCH_PC`.
-- `src/chips/video/v9938/v9938.cpp`: changes S#0 reads so they clear only the
-  frame interrupt bit and preserve sprite overflow, collision, and low sprite
-  index state.
-- `src/chips/video/v9938/tests/v9938_test.cpp`: updates and adds focused V9938
-  S#0 regressions for preserved sprite overflow and collision state.
-- `RESUME.md`: this handoff.
+- `src/chips/video/v9938/v9938.cpp`: S#0 reads now clear only the frame
+  interrupt bit and preserve sprite overflow, collision, and low sprite index
+  state.
+- `src/chips/video/v9938/tests/v9938_test.cpp`: focused V9938 S#0 regressions
+  for preserved sprite overflow and collision state.
 
-Rationale for the V9938 change:
+Rationale for the V9938 S#0 change:
 
 - Yamaha V9938 documentation describes S#0 bit F as reset by reading S#0.
 - It does not describe S#0 sprite overflow/collision bits as reset by the read.
-- The new test coverage locks that behavior down.
-- This change is correct and test-backed, but it does not fix `bean.rom`.
+- The regression is correct and test-backed, but it did not fix `bean.rom`.
 
 Reference used during diagnosis:
 
@@ -98,35 +199,9 @@ Reference used during diagnosis:
 https://archive.org/stream/bitsavers_yamahaYamanicalDataBookAug85_6932685/Yamaha_V9938_MSX-Video_Technical_Data_Book_Aug85_djvu.txt
 ```
 
-## Latest Validation Evidence
+## Known Smoke Command
 
-Focused build and test command:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_msx_boot_test" --output-on-failure'
-```
-
-Result:
-
-```text
-mnemos_msx_boot_test passed
-```
-
-Earlier focused V9938 plus MSX boot command:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|mnemos_msx_boot_test" --output-on-failure'
-```
-
-Result:
-
-```text
-2/2 tests passed:
-mnemos_chips_video_v9938_test
-mnemos_msx_boot_test
-```
-
-Latest skip-192 smoke command:
+Skip-192 smoke command:
 
 ```powershell
 $romDir='D:\emu\msx\MSX files [ROM]'
@@ -153,33 +228,27 @@ $romDir='D:\emu\msx\MSX files [ROM]'
   -RequireData
 ```
 
-Result:
+Last known result:
 
 ```text
 MSX/MSX2 boot smoke: 25/26 passed
 failure: msx2/rom-bean exit=42
 ```
 
-Artifacts from that run:
+Do not treat a player boot without explicit `--system` and `--rom` as evidence.
+The blank-player screenshot from the user came from launching the player without
+the target system or ROM arguments.
 
-```text
-C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260627-004638-607-81136\summary.json
-C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260627-004638-607-81136\019-msx2-rom-bean.log
-C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260627-004638-607-81136\019-msx2-rom-bean-retry-3600.log
-```
+## New Diagnostic Knobs
 
-Do not commit these artifacts.
-
-## New Memory Watch Diagnostic
-
-`tests/golden/msx_boot_test.cpp` now supports:
+`tests/golden/msx_boot_test.cpp` supports:
 
 ```text
 MNEMOS_MSX_MEM_WATCH     trace memory writes in a range, or all writes with 1/true/all
 MNEMOS_MSX_MEM_WATCH_PC  optional PC range filter for memory-write trace
 ```
 
-Examples:
+Example:
 
 ```powershell
 $env:MNEMOS_MSX_MEM_WATCH='$C000-$C080'
@@ -198,82 +267,6 @@ Known caveat:
   diagnostics need wider capture, first summarize the output or cap by address
   subrange.
 
-## Bean.rom Diagnostic State
-
-ROM:
-
-```text
-D:\emu\msx\MSX files [ROM]\bean.rom
-Size: 16384 bytes
-Header starts at offset 0: 41 42 04 80 ...
-Init vector: $8004
-Mapper: Plain
-```
-
-Important MSX2 path:
-
-- The bad path reaches `$99DB`, then calls `$BFFF`.
-- `$BFFF` is the final byte of the 16 KiB ROM and contains `C5`.
-- Execution continues into `$C000` RAM and eventually reaches a bad HALT at
-  `$CA3E`.
-- Final slot state remains `primary=$D0`, meaning pages 0/1 BIOS, page 2
-  cartridge, page 3 RAM.
-- Current MSX2 RAM mapper segments at failure are `[3,2,1,0]`.
-
-Narrow PC watch evidence:
-
-```text
-range previous_pc=$99E3 current_pc=$BFFF cycles=14564941 ... sp=$E3AF ret0=$99E6
-prev_code=[$99DB=$21,$99DC=$FD,$99DD=$99,$99DE=$11,$99DF=$40,$99E0=$00,$99E1=$06,$99E2=$06,$99E3=$CD,$99E4=$FF,$99E5=$BF,$99E6=$21,...]
-code=[$BFF7=$01,$BFF8=$08,$BFF9=$00,$BFFA=$09,$BFFB=$C1,$BFFC=$10,$BFFD=$E1,$BFFE=$C9,$BFFF=$C5,$C000=$00,$C001=$00,$C002=$27,$C003=$03,$C004=$17,$C005=$01,$C006=$00]
-```
-
-Latest enriched VDP I/O diagnostic after the S#0 preservation fix:
-
-```text
-Log:
-build\scratch\msx-bean-diagnostics\bean-msx2-vdp-io-watch-82f0-8340-s0-preserve.log
-
-First selector read:
-pc=$8305 cycles=14093184 port=$99 value=$C4 selected_value=$44 s0=$44 frame=235 mode=graphics_i r0=$00 r1=$80 r2=$06 r5=$36 r6=$07 r8=$08 r9=$00 r11=$00 r23=$00
-
-Later selector state:
-value=$C4, then $44, then $44
-frame=243 mode=graphics_ii r0=$02 r1=$E2 r2=$06 r5=$36 r6=$07 r8=$08 r9=$00 r11=$00 r23=$00
-```
-
-Memory-watch diagnostics from this handoff update:
-
-```text
-MSX1 forced diagnostic:
-build\scratch\msx-bean-diagnostics\bean-msx-memwatch-c000-c020.log
-No memory-watch events for $C000-$C020 in the 600-frame forced window.
-
-MSX2 unfiltered diagnostic:
-build\scratch\msx-bean-diagnostics\bean-msx2-memwatch-c000-c020.log
-Early BIOS RAM-probe writes from $0D43/$0D48, then cartridge-side writes.
-
-MSX2 filtered diagnostic:
-build\scratch\msx-bean-diagnostics\bean-msx2-memwatch-c000-c080-pc8000-c100.log
-First cartridge copy to $C000-$C021 occurs at $82DC/$8321 and writes mostly zeroes.
-Later writes include nonzero staged code bytes.
-
-MSX2 narrow filtered diagnostic:
-build\scratch\msx-bean-diagnostics\bean-msx2-memwatch-c000-c080-pc99d0-c100.log
-No memory-write events from $99D0-$C100, but PC watch still enters $BFFF/$C000.
-```
-
-Current interpretation:
-
-- `$C000` code is deliberately staged earlier by cartridge code, not prepared
-  by the later `$99DB` / `$BFFF` path.
-- The staged `$C000` byte stream begins:
-  `$00,$00,$27,$03,$17,$01,$00,$00,$11,$01,$33,$03,$55,$05,$77,$07,$74,$06,$63,$05`.
-- The `S#0=$44` preservation change did not fix the failure.
-- The next root cause is likely in the staged payload source/decompression
-  path, RAM mapper or slot visibility during staging/execution, or a status
-  / selector-dependent branch that differs between MSX1 and MSX2.
-
 ## Relevant Source Surfaces
 
 - `src/chips/video/v9938/v9938.cpp`
@@ -288,28 +281,33 @@ Current interpretation:
 - `src/manifests/msx2/msx2_system.cpp`
 - `src/apps/player/adapters/msx2/`
 
-Mapping details to preserve:
+Useful immediate inspection commands:
 
-- `msx_plain_rom_physical_offset(...)` maps plain ROM reads below `$C000`.
-- MSX/MSX2 plain <=32 KiB cartridges return `0xFF` outside `$4000-$BFFF`.
-- Existing 32 KiB handoff logic is deliberately limited to 32 KiB plain ROMs.
-- Do not blindly map page 3 as cartridge for this 16 KiB ROM without a strong
-  regression and rationale.
+```powershell
+rg -n "void v9938::tick|finish_scanline|render_frame\(|framebuffer\(" src/chips/video/v9938 src/apps src/runtime src/manifests tests -g "*.cpp" -g "*.hpp"
+Get-Content src\chips\video\v9938\v9938.cpp | Select-Object -Skip 330 -First 120
+Get-Content src\chips\video\v9938\v9938.cpp | Select-Object -Skip 2080 -First 80
+Get-Content tests\golden\msx_boot_test.cpp | Select-Object -Skip 1880 -First 140
+Select-String -Path 'build\scratch\msx-bean-diagnostics\variant-generic-3.2.log' -Pattern 'palette=' -Context 0,0
+```
 
 ## Suggested Next Slice
 
-1. Disassemble or trace `bean.rom` around `$82D4-$8349`, `$99DB`, `$BFFF`, and
-   the staged `$C000` routine.
-2. Compare MSX and MSX2 `bean.rom` writes/reads/execution around
-   `$BFF0-$C080`.
-3. Determine whether the staged `$C000` payload differs between MSX and MSX2,
-   is copied from the wrong source, or is visible through the wrong RAM mapper
-   segment at execution time.
-4. If the issue is RAM mapper or slot visibility, add a focused system/golden
-   regression before changing behavior.
-5. Rerun the skip-192 smoke window.
-6. Only after the blocker passes, run broader MSX/MSX2 corpus windows and the
-   Windows MSVC preset tests.
+1. Inspect V9938 frame/scanline rendering cadence and every call site of
+   `render_frame()` and `framebuffer()`.
+2. Determine whether `bean.rom` writes visible Graphics 4 VRAM and enables
+   display after the last rendered scanline, leaving the framebuffer stale at
+   the test sample point.
+3. As a local diagnostic only, verify whether an explicit final
+   `sys->vdp.render_frame()` before the framebuffer uniformity check makes the
+   MSX2 `bean.rom` frame nonuniform.
+4. If final rendering fixes the symptom, implement the semantically correct
+   runtime/test/player path so presented frames reflect the current VDP state.
+5. If final rendering stays uniform, inspect Graphics 4 source base, palette
+   entries, color-0 transparency, display-enable state, and register-derived
+   page selection.
+6. Add a focused regression before changing behavior, then rerun the skip-192
+   smoke window and broader MSX/MSX2 corpus coverage.
 
 ## Completion Bar
 
