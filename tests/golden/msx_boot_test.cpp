@@ -50,6 +50,7 @@
 //   MNEMOS_MSX2_BOOT_FRAMES  (optional) frames before hashing (default 200)
 //   MNEMOS_MSX2_BOOT_SHA256  (optional) golden framebuffer hash
 //   MNEMOS_MSX_PC_WATCH      (optional) trace high-RAM entry and optional range
+//   MNEMOS_MSX_VDP_IO_WATCH  (optional) trace VDP I/O port reads/writes
 
 #include "cli.hpp"
 #include "msx_cartridge_mapper.hpp"
@@ -522,6 +523,148 @@ namespace {
             out << events[i];
         }
         UNSCOPED_INFO("vdp register watch: " << out.str());
+    }
+
+    [[nodiscard]] bool watched_vdp_io_port(std::uint16_t port) noexcept {
+        switch (static_cast<std::uint8_t>(port & 0xFFU)) {
+        case 0x99U:
+        case 0x9AU:
+        case 0x9BU:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    [[nodiscard]] bool vdp_io_watch_pc_in_scope(std::uint16_t pc) {
+        const auto watch_value = get_env("MNEMOS_MSX_VDP_IO_WATCH");
+        if (!watch_value) {
+            return false;
+        }
+        if (*watch_value == "1" || *watch_value == "true" || *watch_value == "all") {
+            return true;
+        }
+        const auto [first, last_exclusive] = pc_watch_range_from_env(*watch_value);
+        return pc >= first && pc < last_exclusive;
+    }
+
+    template <typename ReadByte>
+    void append_msx_vdp_io_event(const char* kind, std::uint16_t port, std::uint8_t value,
+                                 const mnemos::chips::cpu::z80& cpu, ReadByte& read,
+                                 const mnemos::chips::video::tms9918a& vdp,
+                                 std::vector<std::string>& events) {
+        const auto regs = cpu.cpu_registers();
+        if (events.size() >= 256U || !watched_vdp_io_port(port) ||
+            !vdp_io_watch_pc_in_scope(regs.pc)) {
+            return;
+        }
+        std::ostringstream out;
+        out << kind << " pc=" << hex16(regs.pc) << " cycles=" << cpu.elapsed_cycles()
+            << " port=" << hex8(static_cast<std::uint8_t>(port & 0xFFU))
+            << " value=" << hex8(value) << " af=" << hex16(regs.af)
+            << " bc=" << hex16(regs.bc) << " de=" << hex16(regs.de)
+            << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
+            << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
+            << " vdp_status=" << hex8(vdp.status()) << " r0=" << hex8(vdp.reg(0))
+            << " r1=" << hex8(vdp.reg(1)) << " r2=" << hex8(vdp.reg(2))
+            << " r7=" << hex8(vdp.reg(7)) << " e12d=" << hex8(read(0xE12DU))
+            << " e3c5=" << hex8(read(0xE3C5U))
+            << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
+        events.push_back(out.str());
+    }
+
+    template <typename ReadByte>
+    void append_msx2_vdp_io_event(const char* kind, std::uint16_t port, std::uint8_t value,
+                                  std::uint8_t selected_status,
+                                  const mnemos::chips::cpu::z80& cpu, ReadByte& read,
+                                  const mnemos::chips::video::v9938& vdp,
+                                  std::vector<std::string>& events) {
+        const auto regs = cpu.cpu_registers();
+        if (events.size() >= 256U || !watched_vdp_io_port(port) ||
+            !vdp_io_watch_pc_in_scope(regs.pc)) {
+            return;
+        }
+        std::ostringstream out;
+        out << kind << " pc=" << hex16(regs.pc) << " cycles=" << cpu.elapsed_cycles()
+            << " port=" << hex8(static_cast<std::uint8_t>(port & 0xFFU))
+            << " value=" << hex8(value) << " selected_s=" << static_cast<unsigned>(selected_status)
+            << " selected_value=" << hex8(vdp.status(selected_status))
+            << " s0=" << hex8(vdp.status(0)) << " s1=" << hex8(vdp.status(1))
+            << " s2=" << hex8(vdp.status(2)) << " af=" << hex16(regs.af)
+            << " bc=" << hex16(regs.bc) << " de=" << hex16(regs.de)
+            << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
+            << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
+            << " r0=" << hex8(vdp.reg(0)) << " r1=" << hex8(vdp.reg(1))
+            << " r2=" << hex8(vdp.reg(2)) << " r7=" << hex8(vdp.reg(7))
+            << " r15=" << hex8(vdp.reg(15)) << " e12d=" << hex8(read(0xE12DU))
+            << " e3c5=" << hex8(read(0xE3C5U))
+            << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
+        events.push_back(out.str());
+    }
+
+    void append_vdp_io_watch_info(const std::vector<std::string>& events) {
+        if (events.empty()) {
+            return;
+        }
+        std::ostringstream out;
+        for (std::size_t i = 0U; i < events.size(); ++i) {
+            if (i != 0U) {
+                out << " | ";
+            }
+            out << events[i];
+        }
+        UNSCOPED_INFO("vdp io watch: " << out.str());
+    }
+
+    void install_msx_vdp_io_watch(msx_system& sys, std::vector<std::string>& events) {
+        if (!get_env("MNEMOS_MSX_VDP_IO_WATCH")) {
+            return;
+        }
+        sys.cpu.set_port_in([&sys, &events](std::uint16_t port) {
+            const std::uint8_t value = sys.read_io(port);
+            if (sys.msx2_video()) {
+                auto read = [&sys](std::uint16_t address) { return sys.read_memory(address); };
+                const std::uint8_t selected = static_cast<std::uint8_t>(sys.vdp2.reg(15) & 0x0FU);
+                append_msx2_vdp_io_event("in", port, value, selected, sys.cpu, read, sys.vdp2,
+                                         events);
+            } else {
+                auto read = [&sys](std::uint16_t address) { return sys.read_memory(address); };
+                append_msx_vdp_io_event("in", port, value, sys.cpu, read, sys.vdp, events);
+            }
+            return value;
+        });
+        sys.cpu.set_port_out([&sys, &events](std::uint16_t port, std::uint8_t value) {
+            if (sys.msx2_video()) {
+                const std::uint8_t selected = static_cast<std::uint8_t>(sys.vdp2.reg(15) & 0x0FU);
+                sys.write_io(port, value);
+                auto read = [&sys](std::uint16_t address) { return sys.read_memory(address); };
+                append_msx2_vdp_io_event("out", port, value, selected, sys.cpu, read, sys.vdp2,
+                                         events);
+            } else {
+                sys.write_io(port, value);
+                auto read = [&sys](std::uint16_t address) { return sys.read_memory(address); };
+                append_msx_vdp_io_event("out", port, value, sys.cpu, read, sys.vdp, events);
+            }
+        });
+    }
+
+    void install_msx2_vdp_io_watch(msx2_system& sys, std::vector<std::string>& events) {
+        if (!get_env("MNEMOS_MSX_VDP_IO_WATCH")) {
+            return;
+        }
+        sys.cpu.set_port_in([&sys, &events](std::uint16_t port) {
+            const std::uint8_t selected = static_cast<std::uint8_t>(sys.vdp.reg(15) & 0x0FU);
+            const std::uint8_t value = sys.io_read(port);
+            auto read = [&sys](std::uint16_t address) { return sys.cpu_read(address); };
+            append_msx2_vdp_io_event("in", port, value, selected, sys.cpu, read, sys.vdp, events);
+            return value;
+        });
+        sys.cpu.set_port_out([&sys, &events](std::uint16_t port, std::uint8_t value) {
+            const std::uint8_t selected = static_cast<std::uint8_t>(sys.vdp.reg(15) & 0x0FU);
+            sys.io_write(port, value);
+            auto read = [&sys](std::uint16_t address) { return sys.cpu_read(address); };
+            append_msx2_vdp_io_event("out", port, value, selected, sys.cpu, read, sys.vdp, events);
+        });
     }
 
     [[nodiscard]] std::string vram_page_nonzero_summary(std::span<const std::uint8_t> vram,
@@ -1627,6 +1770,8 @@ namespace {
                 return sys->msx2_video() ? sys->vdp2.reg(index) : sys->vdp.reg(index);
             },
             vdp_register_watch_events);
+        std::vector<std::string> vdp_io_watch_events;
+        install_msx_vdp_io_watch(*sys, vdp_io_watch_events);
         std::vector<std::string> pc_watch_events;
         install_pc_range_watch(
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->read_memory(address); },
@@ -1643,6 +1788,7 @@ namespace {
         }
         append_d800_watch_info(d800_watch_events);
         append_vdp_register_watch_info(vdp_register_watch_events);
+        append_vdp_io_watch_info(vdp_io_watch_events);
         append_pc_range_watch_info(pc_watch_events);
         return sys;
     }
@@ -1687,6 +1833,8 @@ namespace {
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->cpu_read(address); },
             [sys = sys.get()](int index) { return sys->vdp.reg(index); },
             vdp_register_watch_events);
+        std::vector<std::string> vdp_io_watch_events;
+        install_msx2_vdp_io_watch(*sys, vdp_io_watch_events);
         std::vector<std::string> pc_watch_events;
         install_pc_range_watch(
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->cpu_read(address); },
@@ -1706,6 +1854,7 @@ namespace {
         }
         append_d800_watch_info(d800_watch_events);
         append_vdp_register_watch_info(vdp_register_watch_events);
+        append_vdp_io_watch_info(vdp_io_watch_events);
         append_pc_range_watch_info(pc_watch_events);
         return sys;
     }
