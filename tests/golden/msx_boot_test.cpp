@@ -51,6 +51,8 @@
 //   MNEMOS_MSX2_BOOT_SHA256  (optional) golden framebuffer hash
 //   MNEMOS_MSX_PC_WATCH      (optional) trace high-RAM entry and optional range
 //   MNEMOS_MSX_VDP_IO_WATCH  (optional) trace VDP I/O port reads/writes
+//   MNEMOS_MSX_MEM_WATCH     (optional) trace memory writes in a range
+//   MNEMOS_MSX_MEM_WATCH_PC  (optional) filter memory-write trace by PC range
 
 #include "cli.hpp"
 #include "msx_cartridge_mapper.hpp"
@@ -431,6 +433,126 @@ namespace {
             out << events[i];
         }
         UNSCOPED_INFO("pc watch: " << out.str());
+    }
+
+    [[nodiscard]] bool memory_watch_address_in_scope(std::uint16_t address) {
+        const auto watch_value = get_env("MNEMOS_MSX_MEM_WATCH");
+        if (!watch_value) {
+            return false;
+        }
+        if (*watch_value == "1" || *watch_value == "true" || *watch_value == "all") {
+            return true;
+        }
+        const auto [first, last_exclusive] = pc_watch_range_from_env(*watch_value);
+        return address >= first && address < last_exclusive;
+    }
+
+    [[nodiscard]] bool memory_watch_pc_in_scope(std::uint16_t pc) {
+        const auto watch_value = get_env("MNEMOS_MSX_MEM_WATCH_PC");
+        if (!watch_value) {
+            return true;
+        }
+        if (*watch_value == "1" || *watch_value == "true" || *watch_value == "all") {
+            return true;
+        }
+        const auto [first, last_exclusive] = pc_watch_range_from_env(*watch_value);
+        return pc >= first && pc < last_exclusive;
+    }
+
+    template <typename ReadByte, typename StateSummary>
+    void append_memory_write_event(std::uint16_t address, std::uint8_t value,
+                                   const mnemos::chips::cpu::z80& cpu, ReadByte& read,
+                                   StateSummary& state_summary,
+                                   std::vector<std::string>& events) {
+        const auto regs = cpu.cpu_registers();
+        if (events.size() >= 256U || !memory_watch_address_in_scope(address) ||
+            !memory_watch_pc_in_scope(regs.pc)) {
+            return;
+        }
+
+        std::ostringstream out;
+        out << "write pc=" << hex16(regs.pc) << " cycles=" << cpu.elapsed_cycles()
+            << " address=" << hex16(address) << " value=" << hex8(value)
+            << " af=" << hex16(regs.af) << " bc=" << hex16(regs.bc)
+            << " de=" << hex16(regs.de) << " hl=" << hex16(regs.hl)
+            << " ix=" << hex16(regs.ix) << " iy=" << hex16(regs.iy)
+            << " sp=" << hex16(regs.sp) << state_summary()
+            << " code=" << cpu_window_summary(regs.pc, read)
+            << " window=" << cpu_window_summary(address, read);
+        events.push_back(out.str());
+    }
+
+    void append_memory_watch_info(const std::vector<std::string>& events) {
+        if (events.empty()) {
+            return;
+        }
+        std::ostringstream out;
+        for (std::size_t i = 0U; i < events.size(); ++i) {
+            if (i != 0U) {
+                out << " | ";
+            }
+            out << events[i];
+        }
+        UNSCOPED_INFO("memory watch: " << out.str());
+    }
+
+    void install_msx_memory_watch(msx_system& sys, std::vector<std::string>& events) {
+        if (!get_env("MNEMOS_MSX_MEM_WATCH")) {
+            return;
+        }
+        sys.bus.set_access_observer([&sys, &events](const mnemos::topology::access_event& event) {
+            if (!event.write) {
+                return;
+            }
+            auto read = [&sys](std::uint16_t address) { return sys.read_memory(address); };
+            auto state_summary = [&sys] {
+                std::ostringstream out;
+                const std::uint8_t page3_slot =
+                    static_cast<std::uint8_t>((sys.primary_slot_select >> 6U) & 0x03U);
+                const std::uint8_t page3_subslot =
+                    (sys.expanded_primary_slots & (1U << page3_slot)) != 0U
+                        ? static_cast<std::uint8_t>(
+                              (sys.secondary_slot_select[page3_slot] >> 6U) & 0x03U)
+                        : 0U;
+                out << " page3_slot=" << static_cast<unsigned>(page3_slot) << '.'
+                    << static_cast<unsigned>(page3_subslot)
+                    << " primary=" << hex8(sys.primary_slot_select)
+                    << " secondary3=" << hex8(sys.secondary_slot_select[3])
+                    << " ram_pages=" << ram_mapper_segment_summary(sys.ram_mapper_page);
+                return out.str();
+            };
+            append_memory_write_event(static_cast<std::uint16_t>(event.address), event.value,
+                                      sys.cpu, read, state_summary, events);
+        });
+    }
+
+    void install_msx2_memory_watch(msx2_system& sys, std::vector<std::string>& events) {
+        if (!get_env("MNEMOS_MSX_MEM_WATCH")) {
+            return;
+        }
+        sys.bus.set_access_observer([&sys, &events](const mnemos::topology::access_event& event) {
+            if (!event.write) {
+                return;
+            }
+            auto read = [&sys](std::uint16_t address) { return sys.cpu_read(address); };
+            auto state_summary = [&sys] {
+                std::ostringstream out;
+                const std::uint8_t page3_slot =
+                    static_cast<std::uint8_t>((sys.primary_slot >> 6U) & 0x03U);
+                const std::uint8_t page3_subslot =
+                    sys.expanded_slot[page3_slot]
+                        ? static_cast<std::uint8_t>((sys.secondary_slot[page3_slot] >> 6U) & 0x03U)
+                        : 0U;
+                out << " page3_slot=" << static_cast<unsigned>(page3_slot) << '.'
+                    << static_cast<unsigned>(page3_subslot)
+                    << " primary=" << hex8(sys.primary_slot)
+                    << " secondary3=" << hex8(sys.secondary_slot[3])
+                    << " ram_segments=" << ram_mapper_segment_summary(sys.ram_segment);
+                return out.str();
+            };
+            append_memory_write_event(static_cast<std::uint16_t>(event.address), event.value,
+                                      sys.cpu, read, state_summary, events);
+        });
     }
 
     template <typename ReadReg>
@@ -1804,6 +1926,8 @@ namespace {
             vdp_register_watch_events);
         std::vector<std::string> vdp_io_watch_events;
         install_msx_vdp_io_watch(*sys, vdp_io_watch_events);
+        std::vector<std::string> memory_watch_events;
+        install_msx_memory_watch(*sys, memory_watch_events);
         std::vector<std::string> pc_watch_events;
         install_pc_range_watch(
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->read_memory(address); },
@@ -1818,9 +1942,11 @@ namespace {
         if (auto* trace = sys->cpu.introspection().trace(); trace != nullptr) {
             trace->install({});
         }
+        sys->bus.set_access_observer({});
         append_d800_watch_info(d800_watch_events);
         append_vdp_register_watch_info(vdp_register_watch_events);
         append_vdp_io_watch_info(vdp_io_watch_events);
+        append_memory_watch_info(memory_watch_events);
         append_pc_range_watch_info(pc_watch_events);
         return sys;
     }
@@ -1867,6 +1993,8 @@ namespace {
             vdp_register_watch_events);
         std::vector<std::string> vdp_io_watch_events;
         install_msx2_vdp_io_watch(*sys, vdp_io_watch_events);
+        std::vector<std::string> memory_watch_events;
+        install_msx2_memory_watch(*sys, memory_watch_events);
         std::vector<std::string> pc_watch_events;
         install_pc_range_watch(
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->cpu_read(address); },
@@ -1884,9 +2012,11 @@ namespace {
         if (auto* trace = sys->cpu.introspection().trace(); trace != nullptr) {
             trace->install({});
         }
+        sys->bus.set_access_observer({});
         append_d800_watch_info(d800_watch_events);
         append_vdp_register_watch_info(vdp_register_watch_events);
         append_vdp_io_watch_info(vdp_io_watch_events);
+        append_memory_watch_info(memory_watch_events);
         append_pc_range_watch_info(pc_watch_events);
         return sys;
     }

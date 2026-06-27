@@ -4,12 +4,13 @@ Generated: 2026-06-27 America/Chicago
 
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
-Remote: `origin/feature/msx2`
-Base before this handoff checkpoint: `97fab267`
+Remote branch: `origin/feature/msx2`
+Previous pushed checkpoint before this handoff update: `335d014c`
 
-This handoff exists because the original Codex session ran for roughly 30 hours
-and hit practical context-window limits. Continue from this file and the live
-worktree state instead of reconstructing the full chat.
+This file is the resume point for the MSX/MSX2 feature work. The original
+Codex session ran for roughly 30 hours and hit practical context-window limits.
+Continue from this file and the live worktree state instead of reconstructing
+the chat history.
 
 ## Start Here
 
@@ -35,8 +36,8 @@ cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\To
 
 ## User Contract
 
-- Implement both MSX and MSX2; the systems share common manifest, mapper,
-  player adapter, VDP, script, and golden-test surfaces.
+- Implement both MSX and MSX2; they share common manifest, mapper, player
+  adapter, VDP, script, and golden-test surfaces.
 - Preserve the requested worktree and branch: `feature/msx2`.
 - C-BIOS is under `D:\emu\msx\bios`.
 - The ROM corpus used for this slice is `D:\emu\msx\MSX files [ROM]`.
@@ -57,7 +58,7 @@ Confirmed:
 - Shared RAM-size profile semantics, cartridge mapper resolution, smoke-script
   routing, and MSX/MSX2 golden-test hooks are in place.
 - Earlier bounded real-ROM smoke windows passed through skip 191.
-- The latest focused V9938 and MSX boot tests pass.
+- The focused V9938 and MSX boot tests pass.
 
 Active blocker:
 
@@ -69,11 +70,14 @@ Active blocker:
 
 ## Current Checkpoint Contents
 
-This checkpoint includes:
+This handoff checkpoint includes:
 
 - `tests/golden/msx_boot_test.cpp`: enriches opt-in VDP I/O diagnostics with
   V9938 frame index, decoded display mode, and registers `r5`, `r6`, `r8`,
   `r9`, `r11`, and `r23`.
+- `tests/golden/msx_boot_test.cpp`: adds opt-in memory-write diagnostics via
+  `MNEMOS_MSX_MEM_WATCH` and optional PC filtering through
+  `MNEMOS_MSX_MEM_WATCH_PC`.
 - `src/chips/video/v9938/v9938.cpp`: changes S#0 reads so they clear only the
   frame interrupt bit and preserve sprite overflow, collision, and low sprite
   index state.
@@ -97,6 +101,18 @@ https://archive.org/stream/bitsavers_yamahaYamanicalDataBookAug85_6932685/Yamaha
 ## Latest Validation Evidence
 
 Focused build and test command:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_msx_boot_test" --output-on-failure'
+```
+
+Result:
+
+```text
+mnemos_msx_boot_test passed
+```
+
+Earlier focused V9938 plus MSX boot command:
 
 ```powershell
 cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|mnemos_msx_boot_test" --output-on-failure'
@@ -144,7 +160,7 @@ MSX/MSX2 boot smoke: 25/26 passed
 failure: msx2/rom-bean exit=42
 ```
 
-Artifacts:
+Artifacts from that run:
 
 ```text
 C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260627-004638-607-81136\summary.json
@@ -153,6 +169,34 @@ C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260627-004638-607-81136\019-msx2
 ```
 
 Do not commit these artifacts.
+
+## New Memory Watch Diagnostic
+
+`tests/golden/msx_boot_test.cpp` now supports:
+
+```text
+MNEMOS_MSX_MEM_WATCH     trace memory writes in a range, or all writes with 1/true/all
+MNEMOS_MSX_MEM_WATCH_PC  optional PC range filter for memory-write trace
+```
+
+Examples:
+
+```powershell
+$env:MNEMOS_MSX_MEM_WATCH='$C000-$C080'
+$env:MNEMOS_MSX_MEM_WATCH_PC='$8000-$C100'
+$env:MNEMOS_MSX_PC_WATCH='$BFF0-$C080'
+.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe '[golden][msx2]'
+```
+
+The watcher logs write PC, cycle count, address/value, Z80 registers, page 3
+slot and RAM mapper state, a byte window around PC, and a byte window around
+the write address. It is opt-in and clears the bus observer after each boot run.
+
+Known caveat:
+
+- Large watch ranges can produce huge Catch2 `UNSCOPED_INFO` lines. If further
+  diagnostics need wider capture, first summarize the output or cap by address
+  subrange.
 
 ## Bean.rom Diagnostic State
 
@@ -176,7 +220,7 @@ Important MSX2 path:
   cartridge, page 3 RAM.
 - Current MSX2 RAM mapper segments at failure are `[3,2,1,0]`.
 
-Narrow PC watch evidence from the prior diagnostic:
+Narrow PC watch evidence:
 
 ```text
 range previous_pc=$99E3 current_pc=$BFFF cycles=14564941 ... sp=$E3AF ret0=$99E6
@@ -198,15 +242,37 @@ value=$C4, then $44, then $44
 frame=243 mode=graphics_ii r0=$02 r1=$E2 r2=$06 r5=$36 r6=$07 r8=$08 r9=$00 r11=$00 r23=$00
 ```
 
-Interpretation:
+Memory-watch diagnostics from this handoff update:
 
-- Before the S#0 fix, the final selector reads became `$04` because S#0 reads
-  cleared the high sprite status bits.
-- After the fix, the selector sees `$44`, but `bean.rom` still takes the bad
-  path.
-- The root cause likely moved away from V9938 S#0 read-clearing and toward the
-  code/data path around `$BFFF`/`$C000`, RAM preparation, slot state, or RAM
-  mapper segment visibility.
+```text
+MSX1 forced diagnostic:
+build\scratch\msx-bean-diagnostics\bean-msx-memwatch-c000-c020.log
+No memory-watch events for $C000-$C020 in the 600-frame forced window.
+
+MSX2 unfiltered diagnostic:
+build\scratch\msx-bean-diagnostics\bean-msx2-memwatch-c000-c020.log
+Early BIOS RAM-probe writes from $0D43/$0D48, then cartridge-side writes.
+
+MSX2 filtered diagnostic:
+build\scratch\msx-bean-diagnostics\bean-msx2-memwatch-c000-c080-pc8000-c100.log
+First cartridge copy to $C000-$C021 occurs at $82DC/$8321 and writes mostly zeroes.
+Later writes include nonzero staged code bytes.
+
+MSX2 narrow filtered diagnostic:
+build\scratch\msx-bean-diagnostics\bean-msx2-memwatch-c000-c080-pc99d0-c100.log
+No memory-write events from $99D0-$C100, but PC watch still enters $BFFF/$C000.
+```
+
+Current interpretation:
+
+- `$C000` code is deliberately staged earlier by cartridge code, not prepared
+  by the later `$99DB` / `$BFFF` path.
+- The staged `$C000` byte stream begins:
+  `$00,$00,$27,$03,$17,$01,$00,$00,$11,$01,$33,$03,$55,$05,$77,$07,$74,$06,$63,$05`.
+- The `S#0=$44` preservation change did not fix the failure.
+- The next root cause is likely in the staged payload source/decompression
+  path, RAM mapper or slot visibility during staging/execution, or a status
+  / selector-dependent branch that differs between MSX1 and MSX2.
 
 ## Relevant Source Surfaces
 
@@ -232,12 +298,13 @@ Mapping details to preserve:
 
 ## Suggested Next Slice
 
-1. Add an opt-in diagnostic for writes to `$C000-$C020`, ideally test-only and
-   combinable with the existing PC and VDP I/O watches.
+1. Disassemble or trace `bean.rom` around `$82D4-$8349`, `$99DB`, `$BFFF`, and
+   the staged `$C000` routine.
 2. Compare MSX and MSX2 `bean.rom` writes/reads/execution around
-   `$BFF0-$C020`.
-3. Determine whether the expected `$C000` trampoline/code is missing, copied to
-   a different RAM mapper segment, or hidden by slot/mapper state.
+   `$BFF0-$C080`.
+3. Determine whether the staged `$C000` payload differs between MSX and MSX2,
+   is copied from the wrong source, or is visible through the wrong RAM mapper
+   segment at execution time.
 4. If the issue is RAM mapper or slot visibility, add a focused system/golden
    regression before changing behavior.
 5. Rerun the skip-192 smoke window.
