@@ -31,12 +31,13 @@ namespace mnemos::manifests::common {
             std::array<bool, 4> konami_scc{};
         };
 
-        constexpr std::array<known_crc_mapper, 5> k_known_crc_mapper_db{{
+        constexpr std::array<known_crc_mapper, 6> k_known_crc_mapper_db{{
             {0x7E59C936U, msx_cartridge_mapper_kind::korean_msx}, // 1942 (Zemina) [a2]
             {0xDDF0E6DFU, msx_cartridge_mapper_kind::ascii8},      // ADVKIDA
             {0x1944E3ECU, msx_cartridge_mapper_kind::ascii8}, // Aliens (Mr. Micro) (1987)
             {0xA5C35354U, msx_cartridge_mapper_kind::generic8}, // AshGuine Story II
             {0xDE7D193BU, msx_cartridge_mapper_kind::ascii8},   // Black Beard (Kabish)
+            {0x6B014594U, msx_cartridge_mapper_kind::ascii16},   // 3D Pool [cas2rom64ks]
         }};
 
         template <std::size_t N>

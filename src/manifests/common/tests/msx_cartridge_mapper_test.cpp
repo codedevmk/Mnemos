@@ -89,6 +89,21 @@ namespace {
         return rom;
     }
 
+    std::vector<std::uint8_t> known_3d_pool_cas2rom64ks_crc_cart() {
+        std::vector<std::uint8_t> rom(0x20000U, 0x00U);
+        rom[0] = 'A';
+        rom[1] = 'B';
+        constexpr std::string_view marker = "[cas2rom64ks]";
+        std::copy(marker.begin(), marker.end(), rom.begin() + 0x10U);
+        constexpr std::string_view kabish = "KABISH";
+        std::copy(kabish.begin(), kabish.end(), rom.begin() + 0x155U);
+        rom[rom.size() - 4U] = 0x8EU;
+        rom[rom.size() - 3U] = 0x9FU;
+        rom[rom.size() - 2U] = 0x08U;
+        rom[rom.size() - 1U] = 0xA2U;
+        return rom;
+    }
+
     std::vector<std::uint8_t> jam_ascii16_converter_cart_with_misleading_loader_bytes() {
         std::vector<std::uint8_t> rom(0x10000U, 0x00U);
         rom[0] = 'A';
@@ -268,6 +283,13 @@ TEST_CASE("msx cartridge mapper detection uses known Aliens CRC before converter
         known_aliens_crc_cart_with_ascii16_converter_marker();
 
     CHECK(detect_msx_cartridge_mapper(rom) == msx_cartridge_mapper_kind::ascii8);
+}
+
+TEST_CASE("msx cartridge mapper detection uses known 3D Pool CAS2ROM64KS CRC",
+          "[manifests][common][msx][mapper]") {
+    const std::vector<std::uint8_t> rom = known_3d_pool_cas2rom64ks_crc_cart();
+
+    CHECK(detect_msx_cartridge_mapper(rom) == msx_cartridge_mapper_kind::ascii16);
 }
 
 TEST_CASE("msx cartridge mapper helper resolves overrides, aliases and metadata",
