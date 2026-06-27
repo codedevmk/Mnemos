@@ -4,7 +4,7 @@ Generated: 2026-06-27
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote tracking branch: `origin/feature/msx2`
-Code implementation base before this handoff edit: `fdede017 Add MSX2 lower plain ROM handoff`
+Prior pushed base before the latest implementation slice: `54c02b79 Refresh MSX2 resume handoff`
 
 ## Resume Point
 
@@ -72,22 +72,50 @@ Confirmed:
   explicit `--system` and `--rom`.
 - Several MSX/MSX2 cartridges render visible, nonblank game/title output.
 - V9938 reset palette constants are fixed and covered by tests.
+- V9938 live palette RAM is exposed as a stable 32-byte introspection memory
+  view, so player screenshots now emit `.v9938.palette.bin` sidecars.
 - MSX2 now has the same lower-page C-BIOS-style plain 32 KiB ROM handoff
   behavior that was already implemented for MSX.
 
 Known gaps:
 
 - MSX/MSX2 are not proven across a representative compatibility matrix.
-- MSX2 `Bestial Warrior` renders title art, but color fidelity is still suspect.
+- MSX2 `Bestial Warrior` renders title art and now dumps the live V9938
+  palette; color fidelity is still suspect and needs separate triage.
 - Local `Bosconia.rom` still stays on the C-BIOS logo.
 - The local Bosconia dump appears to be a 16 KiB file while current MAME
   software-list metadata found during prior work lists Star Destroyer
   Bosconian entries as 32 KiB. Do not loosen global 16 KiB mirroring behavior
   just to force this local dump to run.
 
-## Latest Implemented Change
+## Latest Implemented Changes
 
-Latest pushed implementation commit:
+Latest implementation slice in this handoff:
+
+```text
+Expose V9938 palette bytes through introspection and player sidecars
+```
+
+Files changed:
+
+```text
+src/chips/video/v9938/v9938.hpp
+src/chips/video/v9938/v9938.cpp
+src/chips/video/v9938/tests/v9938_test.cpp
+RESUME.md
+```
+
+Behavior added:
+
+- Added a derived `palette_bytes_` mirror to V9938 with 16 little-endian RGB333
+  words, 32 bytes total.
+- Synced the byte mirror after reset, after each committed `palette_write`, and
+  after `load_state`.
+- Added a fifth V9938 introspection memory view named `palette`.
+- Updated the V9938 introspection regression to assert the new view, size, and
+  little-endian byte order for reset and written palette entries.
+
+Previous pushed implementation commit:
 
 ```text
 fdede017 Add MSX2 lower plain ROM handoff
@@ -133,7 +161,23 @@ mnemos_manifests_msx2_test passed
 focused MSX/MSX2/VDP/player slice passed: 12/12 tests
 ```
 
-No build or test was rerun after this documentation-only handoff edit.
+Validation for the V9938 palette-sidecar slice:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|msx|MSX|mnemos_apps_player_system_launch_test|mnemos_apps_player_capability_summary_test" --output-on-failure'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_player'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug --output-on-failure'
+```
+
+Results:
+
+```text
+focused V9938/MSX/MSX2/player slice passed: 11/11 tests
+full Windows preset build passed
+full Windows preset ctest passed: 175/175 configured tests, expected skips only
+```
 
 ## Explicit Player Proof
 
@@ -156,6 +200,35 @@ msx2 Bestial Warrior (Dinamic) (1989) (Version ROM del juego, creada por Kabish)
 Important: use the full Bestial filename shown above. The shorter
 `D:\emu\msx\MSX files [ROM]\Bestial Warrior.rom` was not readable in the
 latest process.
+
+Latest palette-sidecar proof:
+
+```text
+build\scratch\msx2-palette-sidecar-proof\20260627-v9938-palette
+```
+
+Command shape:
+
+```powershell
+build\windows-msvc-debug\src\apps\player\mnemos_player.exe --system msx2 --rom 'D:\emu\msx\MSX files [ROM]\Bestial Warrior (Dinamic) (1989) (Version ROM del juego, creada por Kabish).rom' --mapper ascii8 --screenshot build\scratch\msx2-palette-sidecar-proof\20260627-v9938-palette\bestial-msx2.png --frames 600
+```
+
+Observed artifacts:
+
+```text
+bestial-msx2.png                                7208 bytes, renders title art
+bestial-msx2.png.v9938.palette.bin               32 bytes
+bestial-msx2.png.v9938.vram.bin              131072 bytes
+bestial-msx2.png.v9938.expanded_vram.bin      65536 bytes
+bestial-msx2.png.v9938.registers.bin             64 bytes
+bestial-msx2.png.v9938.status.bin                10 bytes
+```
+
+Decoded palette sidecar:
+
+```text
+[$0000,$009F,$004F,$0000,$0049,$00DB,$006D,$00FF,$00F4,$00AB,$00EB,$00EA,$00F2,$00FA,$00E0,$00D0]
+```
 
 ## Bosconia State
 
@@ -216,34 +289,12 @@ path rewrote palette RAM:
 
 Useful next slice:
 
-- Expose live V9938 palette RAM through the normal chip introspection memory
-  views so the player produces a `.v9938.palette.bin` sidecar.
-- Keep the sidecar format stable and explicit, preferably 16 little-endian
-  RGB333 words, 32 bytes total.
-- Treat this as diagnostic/observability work; it should not require a
-  save-state version bump if the byte view is derived from `palette_`.
-
-Likely files for that slice:
-
-```text
-src/chips/video/v9938/v9938.hpp
-src/chips/video/v9938/v9938.cpp
-src/chips/video/v9938/tests/v9938_test.cpp
-src/chips/shared/introspection_views.hpp
-src/apps/player/debug_dump.cpp
-src/apps/player/debug_dump.hpp
-src/apps/player/headless_commands.cpp
-```
-
-Implementation sketch:
-
-- Add a private `std::array<std::uint8_t, palette_count * 2>` mirror to
-  `v9938`.
-- Sync it after reset, after each committed `palette_write`, and after
-  `load_state`.
-- Add an introspection memory view named `palette`.
-- Update V9938 introspection tests to expect the new view and verify byte order.
-- Run an explicit MSX2 player proof and verify `.v9938.palette.bin` exists.
+- Compare the dumped Bestial MSX2 V9938 palette and framebuffer against a
+  trusted emulator/reference capture to isolate whether remaining color issues
+  are palette writes, RGB333 expansion, register interpretation, or bitmap
+  rendering.
+- Continue Bosconia separately; do not conflate color work with the local
+  16 KiB Bosconia dump/profile question.
 
 ## Canonical Commands
 

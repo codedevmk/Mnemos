@@ -3,6 +3,7 @@
 #include "chip.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <span>
@@ -104,11 +105,13 @@ namespace mnemos::chips::video {
                 : vram_view_("vram", owner.vram_),
                   expanded_vram_view_("expanded_vram", owner.expanded_vram_),
                   regs_view_("registers", owner.reg_),
-                  status_view_("status", owner.status_) {
+                  status_view_("status", owner.status_),
+                  palette_view_("palette", owner.palette_bytes_) {
                 memory_views_[0] = &vram_view_;
                 memory_views_[1] = &expanded_vram_view_;
                 memory_views_[2] = &regs_view_;
                 memory_views_[3] = &status_view_;
+                memory_views_[4] = &palette_view_;
             }
 
             [[nodiscard]] std::span<instrumentation::memory_view* const> memory_views() override {
@@ -120,7 +123,8 @@ namespace mnemos::chips::video {
             instrumentation::span_memory_view expanded_vram_view_;
             instrumentation::span_memory_view regs_view_;
             instrumentation::span_memory_view status_view_;
-            std::array<instrumentation::memory_view*, 4> memory_views_{};
+            instrumentation::span_memory_view palette_view_;
+            std::array<instrumentation::memory_view*, 5> memory_views_{};
         };
 
         enum class command_stream_kind : std::uint8_t {
@@ -130,6 +134,8 @@ namespace mnemos::chips::video {
             lmcm,
         };
 
+        void sync_palette_entry(std::size_t index) noexcept;
+        void sync_palette_bytes() noexcept;
         [[nodiscard]] std::uint32_t palette_rgb(std::uint8_t colour) const noexcept;
         [[nodiscard]] std::uint32_t paletted_display_rgb(std::uint8_t colour) const noexcept;
         [[nodiscard]] std::uint32_t backdrop_rgb() const noexcept;
@@ -246,6 +252,7 @@ namespace mnemos::chips::video {
         std::array<std::uint8_t, register_count> reg_{};
         std::array<std::uint8_t, status_register_count> status_{};
         std::array<std::uint16_t, palette_count> palette_{};
+        std::array<std::uint8_t, palette_count * 2> palette_bytes_{};
 
         std::uint16_t addr_low_{};
         std::uint8_t code_{};

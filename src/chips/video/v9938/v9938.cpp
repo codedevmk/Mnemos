@@ -191,6 +191,21 @@ namespace mnemos::chips::video {
         total_scanlines_ = pal ? scanlines_pal : scanlines_ntsc;
     }
 
+    void v9938::sync_palette_entry(std::size_t index) noexcept {
+        if (index >= palette_.size()) {
+            return;
+        }
+        const std::uint16_t packed = palette_[index];
+        palette_bytes_[index * 2U] = static_cast<std::uint8_t>(packed & 0x00FFU);
+        palette_bytes_[index * 2U + 1U] = static_cast<std::uint8_t>(packed >> 8U);
+    }
+
+    void v9938::sync_palette_bytes() noexcept {
+        for (std::size_t index = 0; index < palette_.size(); ++index) {
+            sync_palette_entry(index);
+        }
+    }
+
     v9938::display_mode v9938::mode() const noexcept {
         const bool m1 = (reg_[1] & 0x10U) != 0U;
         const bool m2 = (reg_[1] & 0x08U) != 0U;
@@ -513,6 +528,7 @@ namespace mnemos::chips::video {
         const auto b = static_cast<std::uint16_t>(palette_first_ & 0x07U);
         const auto g = static_cast<std::uint16_t>(value & 0x07U);
         palette_[index] = static_cast<std::uint16_t>((r << 6U) | (g << 3U) | b);
+        sync_palette_entry(index);
         reg_[16] = static_cast<std::uint8_t>((reg_[16] + 1U) & 0x0FU);
     }
 
@@ -2147,6 +2163,7 @@ namespace mnemos::chips::video {
         palette_[13] = 0x195U; // magenta
         palette_[14] = 0x16DU; // gray
         palette_[15] = 0x1FFU; // white
+        sync_palette_bytes();
         addr_low_ = 0U;
         code_ = 0U;
         cmd_pending_ = false;
@@ -2236,6 +2253,7 @@ namespace mnemos::chips::video {
         for (std::uint16_t& colour : palette_) {
             colour = reader.u16();
         }
+        sync_palette_bytes();
         addr_low_ = reader.u16();
         code_ = reader.u8();
         cmd_pending_ = reader.boolean();

@@ -2257,16 +2257,20 @@ TEST_CASE("v9938 exposes VRAM and register bytes through introspection") {
     v9938 vdp;
     write_reg(vdp, 0, 0x06U);
     write_reg(vdp, 1, 0x40U);
+    write_reg(vdp, 16, 4U);
+    vdp.palette_write(0x41U);
+    vdp.palette_write(0x02U);
     set_addr(vdp, 0x12345U, true);
     vdp.data_write(0x5AU);
 
     auto& intro = vdp.introspection();
     const auto memories = intro.memory_views();
-    REQUIRE(memories.size() == 4U);
+    REQUIRE(memories.size() == 5U);
     REQUIRE(memories[0] != nullptr);
     REQUIRE(memories[1] != nullptr);
     REQUIRE(memories[2] != nullptr);
     REQUIRE(memories[3] != nullptr);
+    REQUIRE(memories[4] != nullptr);
     CHECK(memories[0]->name() == "vram");
     CHECK(memories[0]->bytes()[0x12345U] == 0x5AU);
     CHECK(memories[1]->name() == "expanded_vram");
@@ -2274,4 +2278,10 @@ TEST_CASE("v9938 exposes VRAM and register bytes through introspection") {
     CHECK(memories[2]->bytes()[0U] == 0x06U);
     CHECK(memories[2]->bytes()[1U] == 0x40U);
     CHECK(memories[3]->name() == "status");
+    CHECK(memories[4]->name() == "palette");
+    REQUIRE(memories[4]->bytes().size() == static_cast<std::size_t>(v9938::palette_count * 2));
+    CHECK(memories[4]->bytes()[4U] == 0x71U);
+    CHECK(memories[4]->bytes()[5U] == 0x00U);
+    CHECK(memories[4]->bytes()[8U] == 0x11U);
+    CHECK(memories[4]->bytes()[9U] == 0x01U);
 }
