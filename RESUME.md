@@ -1,6 +1,6 @@
 # MSX / MSX2 Resume Handoff
 
-Generated: 2026-06-26 23:03 America/Chicago
+Generated: 2026-06-26 23:50 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
@@ -84,7 +84,7 @@ Confirmed:
 - The MSX/MSX2 smoke runner now treats empty/zero-byte logs as "no hash" rather
   than throwing from the regex parser; this was hit by a profile-backed
   baseline probe during the skip-132 window.
-- Bounded real-ROM smoke windows have passed through skip 155:
+- Bounded real-ROM smoke windows have passed through skip 191:
   - `-SkipRoms 12 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 24 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 36 -MaxRoms 12`: `26/26` passed.
@@ -102,25 +102,30 @@ Confirmed:
     `ASHGUINZ.rom` is skipped on MSX by profile as MSX2-only and validated on
     MSX2.
   - `-SkipRoms 144 -MaxRoms 12`: `26/26` passed.
+  - `-SkipRoms 156 -MaxRoms 12`: `26/26` passed; `b_game` retried on MSX2 at
+    3600 frames and passed.
+  - `-SkipRoms 168 -MaxRoms 12`: `26/26` passed.
+  - `-SkipRoms 180 -MaxRoms 12`: `25/25` passed; `barbarian_the_duel_v1.0-msxdev[ASCII16].rom`
+    is skipped on MSX by profile as MSX2-only and validated on MSX2.
 
 Known gaps:
 
-- Continue the bounded corpus at `-SkipRoms 156 -MaxRoms 12`.
+- Continue the bounded corpus at `-SkipRoms 192 -MaxRoms 12`.
 - This is not yet a representative compatibility matrix.
 - Earlier notes included Bosconia staying on the C-BIOS logo and MSX2 Bestial
   Warrior color fidelity suspicion; those still need confirmation in later
   slices.
 
-## Latest Passing Commit Before Handoff
+## Baseline Commit Before Handoff Update
 
-The branch was clean and pushed at:
+Before this `RESUME.md` handoff update, the branch was clean and pushed at:
 
 ```text
-6ded9c47 (HEAD -> feature/msx2, origin/feature/msx2) Profile Arabic MSX2 regional BIOS boot
+af64b5c2 (HEAD -> feature/msx2, origin/feature/msx2) Advance MSX2 corpus to skip 156
 ```
 
-The current worktree should include a newer commit that fixes `abbaye_v1.1`
-mapper detection and updates this file.
+The next commit after that baseline is expected to be a `RESUME.md`-only
+handoff update that records skip 156, 168, and 180 validation.
 
 ## Latest Change
 
@@ -260,7 +265,7 @@ $romDir='D:\emu\msx\MSX files [ROM]'
   -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
   -Frames 600 `
   -RetryFrames 3600 `
-  -SkipRoms 156 `
+  -SkipRoms 192 `
   -MaxRoms 12 `
   -RequireData
 ```
@@ -411,6 +416,20 @@ summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233012-141-30268
 -SkipRoms 144 -MaxRoms 12:
 MSX/MSX2 boot smoke: 26/26 passed
 summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233350-822-83380\summary.json
+
+-SkipRoms 156 -MaxRoms 12:
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233848-683-88144\summary.json
+note: `b_game` retried on MSX2 at 3600 frames and passed.
+
+-SkipRoms 168 -MaxRoms 12:
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-234201-996-89204\summary.json
+
+-SkipRoms 180 -MaxRoms 12:
+MSX/MSX2 boot smoke: 25/25 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-234650-947-52368\summary.json
+note: `barbarian_the_duel_v1.0-msxdev[ASCII16].rom` is skipped on MSX by profile as MSX2-only and validated on MSX2.
 ```
 
 ## Handoff Notes
