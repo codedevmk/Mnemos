@@ -192,6 +192,41 @@ namespace {
         return out.str();
     }
 
+    template <typename ReadByte>
+    [[nodiscard]] std::string cpu_byte_window_summary(std::uint16_t start, std::uint16_t count,
+                                                      ReadByte read) {
+        std::ostringstream out;
+        out << '[';
+        for (std::uint16_t i = 0U; i < count; ++i) {
+            if (i != 0U) {
+                out << ',';
+            }
+            const auto address = static_cast<std::uint16_t>(start + i);
+            out << hex16(address) << '=' << hex8(read(address));
+        }
+        out << ']';
+        return out.str();
+    }
+
+    template <typename ReadByte>
+    [[nodiscard]] std::string cpu_stack_window_summary(std::uint16_t sp, std::uint16_t words,
+                                                       ReadByte read) {
+        std::ostringstream out;
+        out << '[';
+        for (std::uint16_t i = 0U; i < words; ++i) {
+            if (i != 0U) {
+                out << ',';
+            }
+            const auto address = static_cast<std::uint16_t>(sp + (i * 2U));
+            const auto low = static_cast<std::uint16_t>(read(address));
+            const auto high =
+                static_cast<std::uint16_t>(read(static_cast<std::uint16_t>(address + 1U)));
+            out << hex16(address) << '=' << hex16(static_cast<std::uint16_t>(low | (high << 8U)));
+        }
+        out << ']';
+        return out.str();
+    }
+
     [[nodiscard]] std::string ram_mapper_segment_summary(const std::array<std::uint8_t, 4>& pages) {
         std::ostringstream out;
         out << '[' << static_cast<unsigned>(pages[0]) << ',' << static_cast<unsigned>(pages[1])
@@ -413,6 +448,8 @@ namespace {
                     << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
                     << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
                     << " ret0=" << hex16(ret0)
+                    << " ix_window=" << cpu_byte_window_summary(regs.ix, 16U, read)
+                    << " sp_window=" << cpu_stack_window_summary(regs.sp, 4U, read)
                     << " prev_code=" << cpu_window_summary(last_pc, read)
                     << " code=" << cpu_window_summary(current_pc, read);
                 events.push_back(out.str());

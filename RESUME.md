@@ -5,7 +5,7 @@ Generated: 2026-06-27 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote branch: `origin/feature/msx2`
-Parent checkpoint before this handoff refresh: `8880b53b Refresh MSX2 resume handoff`
+Parent checkpoint before this handoff refresh: `2bfd161e Refresh MSX2 resume handoff`
 
 This file is the authoritative resume point for the MSX/MSX2 implementation
 thread. The original session ran for roughly 30 hours and is no longer a useful
@@ -89,18 +89,19 @@ Active blocker:
 
 ## Current Worktree State
 
-At the start of this handoff refresh:
+At the start of this continuation:
 
 ```text
 C:\dev\emu\Mnemos-msx2
 feature/msx2
-HEAD 8880b53b
+HEAD 2bfd161e
 status: clean, tracking origin/feature/msx2
 ```
 
-Only `RESUME.md` should be changed by this handoff commit. If any other source
-file is dirty, inspect it before continuing; do not use destructive git reset or
-checkout to discard user work.
+Only `RESUME.md` and the gated PC-watch diagnostics in
+`tests/golden/msx_boot_test.cpp` should be changed by the continuation after
+`2bfd161e`. If any other source file is dirty, inspect it before continuing; do
+not use destructive git reset or checkout to discard user work.
 
 ## Latest Diagnostic Evidence
 
@@ -336,6 +337,86 @@ reason: explain the exact slot/BIOS compatibility requirement
 
 Then run a bounded corpus smoke through and beyond skip 192.
 
+## Matrix Results From Continuation
+
+The matrix was run on 2026-06-27 with forced diagnostics and logs under:
+
+```text
+build\scratch\msx-bean-diagnostics\matrix-20260627\
+build\scratch\msx-bean-diagnostics\slot-factor-20260627\
+build\scratch\msx-bean-diagnostics\enriched-pcwatch-20260627\
+```
+
+Key result: no BIOS/slot combination in the matrix is a clean production
+profile for `bean.rom`.
+
+- `cbios_main_msx2.rom`, `_eu`, `_br`, and `_jp` all behave the same for the
+  meaningful layouts.
+- Leaving slot overrides unset avoids the `$CA3E` halt but is not a fix:
+  `primary=$30`, VDP registers remain zero, `vram_nonzero=0`, and the
+  framebuffer hash is the uniform blank `4f65b4ab...0cbb0c3`.
+- `sub_slot=3.0`, `ram_slot=3.2` reproduces the active failure:
+  `PC=$CA3E`, halted, `primary=$D0`, `secondary3=$A0`, Graphics II mode,
+  framebuffer hash `9886081a...cd39573`.
+- `sub_slot=3.1`, `ram_slot=3.0` and `sub_slot=3.1`, `ram_slot=3.2` also halt
+  at `$CA3E`.
+- `sub_slot=3.0` with RAM left at default `3.0` renders a nonuniform frame
+  (`36c21d67...9359823`) but is not valid proof: reads come from the sub-ROM
+  before RAM in `read_slot()`, while writes still go to RAM, so sub-ROM and RAM
+  overlap at `3.0`. The final CPU state has `SP=$FFFF` and should not become a
+  ROM profile.
+
+The matrix rules out a simple profile-only fix for `bean.rom`.
+
+## Enriched PC Watch
+
+`tests/golden/msx_boot_test.cpp` now includes gated PC-watch diagnostics for:
+
+- `ix_window=...` 16 bytes starting at `IX`
+- `sp_window=...` four little-endian words starting at `SP`
+
+This is diagnostic-only and is active only when `MNEMOS_MSX_PC_WATCH` is set.
+Use a single range such as `$832D-$832D`; comma-separated watch values are not
+parsed as multiple ranges.
+
+Important enriched trace facts for the failing `sub_slot=3.0`,
+`ram_slot=3.2` layout:
+
+```text
+range previous_pc=$8319 current_pc=$832D cycles=14564893
+af=$A68C bc=$FFA1 de=$0002 hl=$99DB ix=$99CF sp=$E3B1 ret0=$831C
+ix_window=[$99CF=$DB,$99D0=$99,$99D1=$45,$99D2=$9C,$99D3=$46,$99D4=$9C,$99D5=$56,$99D6=$9C,$99D7=$57,$99D8=$9C,$99D9=$3C,$99DA=$A1,$99DB=$21,$99DC=$FD,$99DD=$99,$99DE=$11]
+sp_window=[$E3B1=$831C,$E3B3=$0002,$E3B5=$99CD,$E3B7=$8226]
+```
+
+This confirms `$99CF` is a ROM table and `$99DB` is table-selected, not RAM
+corruption.
+
+The fallthrough remains:
+
+```text
+range previous_pc=$99E3 current_pc=$BFFF cycles=14564941
+af=$A68C bc=$06A1 de=$0040 hl=$99FD ix=$99CF sp=$E3AF ret0=$99E6
+sp_window=[$E3AF=$99E6,$E3B1=$831C,$E3B3=$0002,$E3B5=$99CD]
+
+range previous_pc=$BFFF current_pc=$C000 cycles=14564952
+af=$A68C bc=$06A1 de=$0040 hl=$99FD ix=$99CF sp=$E3AD ret0=$06A1
+sp_window=[$E3AD=$06A1,$E3AF=$99E6,$E3B1=$831C,$E3B3=$0002]
+code=[$BFF8=$08,$BFF9=$00,$BFFA=$09,$BFFB=$C1,$BFFC=$10,$BFFD=$E1,$BFFE=$C9,$BFFF=$C5,$C000=$00,$C001=$00,$C002=$27,$C003=$03,$C004=$17,$C005=$01,$C006=$00,$C007=$00]
+```
+
+The next implementation target should not be a broad mapper change or a ROM
+profile. The highest-value root-cause slice is why the MSX2 game script selects
+the `$99CF -> $99DB` table path and then reaches a one-byte `$BFFF` helper whose
+fallthrough lands in page-3 RAM data. Good next traces:
+
+- Compare writes/reads of the scheduler/work variables around `$E12D`,
+  `$E3C5`, and the table base selected by `IX`.
+- Trace `$829D` and `$823D` with the enriched `IX` and stack windows.
+- Inspect slot latch transitions immediately before the fourth `$832D` hit:
+  the failing final slot state is `primary=$D0`, `secondary3=$A0`, page 3
+  selecting RAM at `3.2`.
+
 ## Smoke Runner Reminder
 
 Inspect `scripts/msx/run-boot-smoke.ps1` before using it. A likely invocation
@@ -361,18 +442,25 @@ Adjust parameters based on the script's actual help and current source.
 Continue tracing the scheduler/control path rather than changing VDP rendering
 or broad mapper behavior.
 
-Recommended next trace additions:
+Recommended next trace work:
 
-- Add gated PC-watch enrichment in `tests/golden/msx_boot_test.cpp` that dumps
-  `ix_window=` and `sp_window=` around watch hits.
-- Run exact `$832D` PC watch with stack and IX windows to understand why the
-  fourth dispatch uses `IX=$99CF` and `HL=$99DB`.
 - Trace calls to `$829D`, `$823D`, and memory variables `$E12D/$E3C5`.
+- Compare the writes/reads that produce the fourth `$832D` dispatch using
+  `IX=$99CF` and `HL=$99DB`.
+- Trace slot latch transitions immediately before the fourth `$832D` hit.
 - Keep diagnostics under `build\scratch\msx-bean-diagnostics\`.
 
 ## Validation Before Claiming Progress
 
-For code changes in this slice, use the targeted build/test sweep:
+Latest targeted validation on 2026-06-27 passed:
+
+```text
+mnemos_chips_video_v9938_test: passed
+mnemos_manifests_msx2_test: passed
+mnemos_msx_boot_test: passed
+```
+
+Command:
 
 ```powershell
 cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx2_test mnemos_msx_boot_test mnemos_chips_video_v9938_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx2_test|mnemos_msx_boot_test|mnemos_chips_video_v9938_test" --output-on-failure'
