@@ -81,7 +81,7 @@ Confirmed:
   treated as a V9938 renderer failure.
 - `abbaye_v1.1.rom` now resolves its strong ASCII8 loader-write signature
   before a lower-page self-modifying-code hit can misclassify it as Generic8.
-- Bounded real-ROM smoke windows have passed through skip 71:
+- Bounded real-ROM smoke windows have passed through skip 83:
   - `-SkipRoms 12 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 24 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 36 -MaxRoms 12`: `26/26` passed.
@@ -89,10 +89,12 @@ Confirmed:
     `a_test2 [Arabic MSX].rom` against BR C-BIOS.
   - `-SkipRoms 60 -MaxRoms 12`: `26/26` passed after fixing the shared
     ASCII8-vs-Generic8 mapper classifier.
+  - `-SkipRoms 72 -MaxRoms 12`: `25/25` passed; `AKUPRO.rom` is skipped on
+    MSX by profile as MSX2-only and validated on MSX2.
 
 Known gaps:
 
-- Continue the bounded corpus at `-SkipRoms 72 -MaxRoms 12`.
+- Continue the bounded corpus at `-SkipRoms 84 -MaxRoms 12`.
 - This is not yet a representative compatibility matrix.
 - Earlier notes included Bosconia staying on the C-BIOS logo and MSX2 Bestial
   Warrior color fidelity suspicion; those still need confirmation in later
@@ -241,7 +243,7 @@ $romDir='D:\emu\msx\MSX files [ROM]'
   -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
   -Frames 600 `
   -RetryFrames 3600 `
-  -SkipRoms 72 `
+  -SkipRoms 84 `
   -MaxRoms 12 `
   -RequireData
 ```
@@ -360,6 +362,14 @@ summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-223029-317-62816
 -SkipRoms 48 -MaxRoms 12:
 MSX/MSX2 boot smoke: 26/26 passed
 summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224915-455-69380\summary.json
+
+-SkipRoms 60 -MaxRoms 12:
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231011-313-3300\summary.json
+
+-SkipRoms 72 -MaxRoms 12:
+MSX/MSX2 boot smoke: 25/25 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231514-754-50788\summary.json
 ```
 
 ## Handoff Notes
