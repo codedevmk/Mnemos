@@ -54,7 +54,7 @@ namespace mnemos::manifests::irem_m84 {
                     .rom_layout = "v35_program_pair",
                     .main_cpu_model = chips::cpu::v30::model::v35};
         }
-        if (set_name == "gallop") {
+        if (set_name == "gallop" || set_name == "cosmccop") {
             return {.dip_default = 0xFFFFU,
                     .rom_layout = "v35_program_pair",
                     .main_cpu_model = chips::cpu::v30::model::v35};

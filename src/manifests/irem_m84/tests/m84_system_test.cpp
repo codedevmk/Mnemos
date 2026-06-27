@@ -434,8 +434,8 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
         declarations.emplace(decl.name, std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"gallop", "hharryb", "hharryu",
-                                                            "ltswords"};
+    const std::set<std::string, std::less<>> expected_names{"cosmccop", "gallop", "hharryb",
+                                                            "hharryu", "ltswords"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, decl] : declarations) {
         INFO("set=" << set_name);
@@ -496,10 +496,24 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
             REQUIRE(plds != nullptr);
             require_region_contract(*plds);
             CHECK(plds->size == 0x0800U);
+        } else if (set_name == "cosmccop") {
+            REQUIRE(decl.parent.has_value());
+            CHECK(*decl.parent == "gallop");
+            require_boot_chunk_reload(*maincpu, 0x80000U, 0x40000U);
+            CHECK(find_region(decl, "soundcpu") != nullptr);
+            CHECK(find_region(decl, "tiles") != nullptr);
+            CHECK(find_region(decl, "sprites") != nullptr);
+            CHECK(find_region(decl, "samples") != nullptr);
+            CHECK(find_region(decl, "proms") == nullptr);
+            CHECK(find_region(decl, "plds") == nullptr);
         }
     }
 
     CHECK(names == expected_names);
+    CHECK(mnemos::manifests::irem_m84::board_params_for("cosmccop").rom_layout ==
+          "v35_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("cosmccop").main_cpu_model ==
+          mnemos::chips::cpu::v30::model::v35);
     CHECK(mnemos::manifests::irem_m84::board_params_for("hharryb").rom_layout ==
           "bootleg_program_pair");
     CHECK(mnemos::manifests::irem_m84::board_params_for("hharryu").rom_layout ==
@@ -517,7 +531,8 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
 TEST_CASE("m84 embedded game manifests mirror the checked-in roster", "[m84][romset]") {
     using mnemos::manifests::irem_m84::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 4U);
+    CHECK(game_manifests.size() == 5U);
+    CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("cosmccop").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("gallop").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryb").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryu").empty());
@@ -648,8 +663,8 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
     }
 
     const auto indexed_sources = index_source_roots(roots, embedded_m84_set_names());
-    const std::set<std::string, std::less<>> parent_names{"hharry"};
-    const auto indexed_parent_sources = index_source_roots(roots, parent_names);
+    const std::set<std::string, std::less<>> m81_parent_names{"hharry"};
+    const auto indexed_m81_parent_sources = index_source_roots(roots, m81_parent_names);
     REQUIRE_FALSE(m81::game_manifest_toml("hharry").empty());
 
     const auto expected_sets = embedded_m84_set_names();
@@ -670,7 +685,6 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
         FAIL("missing M84 artifacts: " << missing.str());
     }
 
-    const auto parent_decl = require_m81_parent_decl("hharry");
     for (const auto& set_name : expected_sets) {
         INFO("set=" << set_name);
         auto raw_decl = require_m84_decl(set_name);
@@ -680,11 +694,20 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
         auto effective_decl = std::move(raw_decl);
         auto provider = require_provider(source_it->second);
         if (effective_decl.parent.has_value()) {
-            const auto parent_source = indexed_parent_sources.find(*effective_decl.parent);
-            REQUIRE(parent_source != indexed_parent_sources.end());
+            const bool m81_parent = *effective_decl.parent == "hharry";
+            const auto parent_source = m81_parent
+                                           ? indexed_m81_parent_sources.find(*effective_decl.parent)
+                                           : indexed_sources.find(*effective_decl.parent);
+            if (m81_parent) {
+                REQUIRE(parent_source != indexed_m81_parent_sources.end());
+            } else {
+                REQUIRE(parent_source != indexed_sources.end());
+            }
             INFO("parent=" << parent_source->second.string());
-            effective_decl = mnemos::manifests::common::inherit_parent_regions(
-                parent_decl, std::move(effective_decl));
+            const auto parent_decl = m81_parent ? require_m81_parent_decl(*effective_decl.parent)
+                                                : require_m84_decl(*effective_decl.parent);
+            effective_decl = mnemos::manifests::common::inherit_parent_regions(parent_decl,
+                                                                               std::move(effective_decl));
             provider = mnemos::manifests::common::make_fallback_rom_provider(
                 std::move(provider), require_provider(parent_source->second));
         } else if (set_name == "ltswords") {

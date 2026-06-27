@@ -1,0 +1,43 @@
+# In the Hunt (US) -- Irem M92 clone of inthunt.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "inthuntu"
+parent      = "inthunt"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ith_-h0-c.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x563dcec0
+
+[[region.file]]
+name   = "ith_-l0-c.ic39"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x1638c705
+
+[[region.file]]
+name   = "ith_-h1-a.ic38"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x0253065f
+
+[[region.file]]
+name   = "ith_-l1-a.ic27"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0xa57d688d

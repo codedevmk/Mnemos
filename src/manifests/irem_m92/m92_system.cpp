@@ -162,7 +162,7 @@ namespace mnemos::manifests::irem_m92 {
     } // namespace
 
     m92_board_params board_params_for(std::string_view set_name) noexcept {
-        if (set_name == "bmaster") {
+        if (set_name == "bmaster" || set_name == "crossbld") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_b"};
         }
         if (set_name == "mysticri" || set_name == "gunhohki" || set_name == "mysticrib") {
@@ -171,13 +171,13 @@ namespace mnemos::manifests::irem_m92 {
         if (set_name == "gunforce" || set_name == "gunforcej" || set_name == "gunforceu") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_a"};
         }
-        if (set_name == "gunforc2") {
+        if (set_name == "gunforc2" || set_name == "geostorm") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_b_g"};
         }
         if (set_name == "hook") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_d_a"};
         }
-        if (set_name == "inthunt") {
+        if (set_name == "inthunt" || set_name == "inthuntu") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_e_b"};
         }
         if (set_name == "nbbatman" || set_name == "nbbatmanu") {

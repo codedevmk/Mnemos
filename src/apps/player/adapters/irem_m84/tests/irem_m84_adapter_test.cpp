@@ -348,11 +348,12 @@ TEST_CASE("irem_m84_adapter validates real M84 ROM sets", "[irem_m84][data]") {
                                        source_path.string(), std::move(supplemental_roms),
                                        std::move(supplemental_paths));
         CHECK(adapter.set_name() == set_name);
-        const bool v35_set = set_name == "gallop" || set_name == "ltswords";
+        const bool v35_set = set_name == "cosmccop" || set_name == "gallop" ||
+                             set_name == "ltswords";
         CHECK(adapter.machine().main_cpu.cpu_model() ==
               (v35_set ? mnemos::chips::cpu::v30::model::v35
                        : mnemos::chips::cpu::v30::model::v30));
-        if (set_name == "gallop") {
+        if (set_name == "cosmccop" || set_name == "gallop") {
             CHECK(adapter.dip_switches().size() == 10U);
             CHECK(adapter.machine().dip_switches == 0xF9BFU);
             CHECK(spec_has(adapter, "DIP switches", "10"));

@@ -1,5 +1,7 @@
 set(_irem_m92_game_manifest_files
     "games/bmaster.toml"
+    "games/crossbld.toml"
+    "games/geostorm.toml"
     "games/gunforce.toml"
     "games/gunforcej.toml"
     "games/gunforceu.toml"
@@ -7,6 +9,7 @@ set(_irem_m92_game_manifest_files
     "games/gunhohki.toml"
     "games/hook.toml"
     "games/inthunt.toml"
+    "games/inthuntu.toml"
     "games/mysticri.toml"
     "games/mysticrib.toml"
     "games/nbbatman.toml"

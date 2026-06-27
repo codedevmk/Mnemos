@@ -401,6 +401,14 @@ namespace mnemos::apps::player::adapters::irem_m84 {
                                    set_name, nullptr, "irem_m81");
         }
 
+        [[nodiscard]] std::optional<mnemos::manifests::common::rom_set_decl>
+        embedded_parent_decl_for_set(std::string_view set_name) {
+            if (auto decl = embedded_decl_for_set(set_name)) {
+                return decl;
+            }
+            return embedded_m81_parent_decl_for_set(set_name);
+        }
+
         [[nodiscard]] std::optional<nested_zip_provider>
         find_supplemental_parent(std::span<const supplemental_rom_source> supplemental_sources,
                                  std::string_view parent) {
@@ -496,14 +504,28 @@ namespace mnemos::apps::player::adapters::irem_m84 {
 
             if (auto manifest_bytes = (*parent_provider)("game.toml")) {
                 const std::string text(manifest_bytes->begin(), manifest_bytes->end());
+                std::vector<rom_load_issue> m84_issues;
                 resolved.decl = parse_irem_decl(text, parent_source + "/game.toml",
-                                                std::string_view{parent}, &resolved.issues,
-                                                "irem_m81");
+                                                std::string_view{parent}, &m84_issues);
+                if (!resolved.decl.has_value()) {
+                    std::vector<rom_load_issue> m81_issues;
+                    resolved.decl = parse_irem_decl(text, parent_source + "/game.toml",
+                                                    std::string_view{parent}, &m81_issues,
+                                                    "irem_m81");
+                    if (!resolved.decl.has_value()) {
+                        for (auto& issue : m84_issues) {
+                            resolved.issues.push_back(std::move(issue));
+                        }
+                        for (auto& issue : m81_issues) {
+                            resolved.issues.push_back(std::move(issue));
+                        }
+                    }
+                }
                 if (!resolved.decl.has_value()) {
                     return resolved;
                 }
             } else {
-                resolved.decl = embedded_m81_parent_decl_for_set(parent);
+                resolved.decl = embedded_parent_decl_for_set(parent);
                 if (!resolved.decl.has_value()) {
                     resolved.issues.push_back(
                         {parent_source + "/game.toml",
