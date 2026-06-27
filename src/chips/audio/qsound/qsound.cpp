@@ -752,7 +752,12 @@ namespace mnemos::chips::audio {
         if ((phase >> 12) >= static_cast<std::int32_t>(v.end_addr)) {
             phase -= static_cast<std::int32_t>(static_cast<std::uint32_t>(v.loop_len) << 12U);
         }
-        phase = clamp_i32(phase, -0x08000000, 0x07FFFFFF);
+        // A voice address is a full 16-bit sample index; with the 12-bit phase
+        // fraction the accumulator spans 28 bits, so the high bound must be
+        // 0x0FFFFFFF. The previous 0x07FFFFFF cap pinned any voice whose address
+        // reached 0x8000 to 0x7FFF, silencing every sample in the upper half of a
+        // bank (the melodic PCM voices) while low-half voices kept playing.
+        phase = clamp_i32(phase, -0x10000000, 0x0FFFFFFF);
         v.addr = static_cast<std::uint16_t>(phase >> 12);
         v.phase = static_cast<std::uint16_t>((static_cast<std::uint32_t>(phase) << 4U) & 0xFFFFU);
         return output;

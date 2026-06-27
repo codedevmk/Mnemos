@@ -247,13 +247,14 @@ TEST_CASE("qsound keeps advancing a PCM voice past end when loop length is zero"
     CHECK(q.last_right() == mixed_0x20);
 }
 
-TEST_CASE("qsound clamps high PCM addresses at the DL-1425 positive phase limit",
+TEST_CASE("qsound plays PCM voices at high (>=0x8000) sample addresses",
           "[qsound][pcm]") {
     qsound q;
     q.set_mixer_mode(qsound::mixer_mode::direct_pan);
     auto rom = std::vector<std::uint8_t>(0x10000, 0U);
     rom[0x8000U] = 0x40U;
-    rom[0x7FFFU] = 0x20U;
+    rom[0x8001U] = 0x40U;
+    rom[0x8002U] = 0x40U;
     q.set_sample_rom(rom);
 
     program(q, 1U, 0x8000U);  // high 16-bit sample address
@@ -262,15 +263,19 @@ TEST_CASE("qsound clamps high PCM addresses at the DL-1425 positive phase limit"
     program(q, 6U, 0x4000U);
     program(q, 0x80U, 0x20U);
 
+    // A voice address is a full 16-bit index, so it must advance through the
+    // upper half of the bank (0x8000, 0x8001, 0x8002) instead of being pinned
+    // at the old 0x7FFF phase cap that silenced every high-address (melodic)
+    // sample while low-half percussion/voice samples kept playing.
     q.step();
     CHECK(q.last_left() == 2048);
     CHECK(q.last_right() == 2048);
-    CHECK(introspection_value(q, "PCM00_ADDR") == 0x7FFFU);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x8001U);
 
     q.step();
-    CHECK(q.last_left() == 1024);
-    CHECK(q.last_right() == 1024);
-    CHECK(introspection_value(q, "PCM00_ADDR") == 0x7FFFU);
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x8002U);
 }
 
 TEST_CASE("qsound treats high PCM end registers as unsigned loop boundaries",
@@ -300,7 +305,7 @@ TEST_CASE("qsound treats high PCM end registers as unsigned loop boundaries",
     CHECK(introspection_value(q, "PCM00_ADDR") == 0x0012U);
 }
 
-TEST_CASE("qsound clamps PCM phase after loop subtraction like the DL-1425 HLE",
+TEST_CASE("qsound advances PCM voices across the full 16-bit address space",
           "[qsound][pcm]") {
     qsound q;
     q.set_mixer_mode(qsound::mixer_mode::direct_pan);
@@ -318,7 +323,9 @@ TEST_CASE("qsound clamps PCM phase after loop subtraction like the DL-1425 HLE",
 
     CHECK(q.last_left() == 2048);
     CHECK(q.last_right() == 2048);
-    CHECK(introspection_value(q, "PCM00_ADDR") == 0x7FFFU);
+    // 0xFFF0 + 0xFFFF saturates at the 28-bit phase ceiling -> address 0xFFFF,
+    // the true top of the 16-bit space (not the old 0x7FFF clamp).
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0xFFFFU);
     CHECK(introspection_value(q, "PCM00_PHASE") == 0xFFF0U);
 }
 
