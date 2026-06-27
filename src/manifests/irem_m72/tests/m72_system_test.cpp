@@ -936,15 +936,69 @@ TEST_CASE("m72 protection MCU answers the V30 through the latch pair", "[m72]") 
 
     run_until_halt(system->main_cpu, 8);
     CHECK(system->main_to_mcu == 0x41U);
+    CHECK(system->mcu_latch_irq_pending);
 
     system->mcu.tick(96U);
     CHECK(system->mcu_to_main == 0x42U);
+    CHECK_FALSE(system->mcu_latch_irq_pending);
     CHECK(system->mcu_shared_ram[0x10U] == 0x5AU);
     CHECK(system->main_bus.read8(mnemos::manifests::irem_m72::mcu_shared_main_base + 0x10U) ==
           0x5AU);
     CHECK(system->main_bus.read8(mnemos::manifests::irem_m72::mcu_shared_main_base + 0x11U) ==
           0x77U);
     CHECK(system->mcu_sample_address == 0x21U);
+}
+
+TEST_CASE("m72 protection MCU command latch holds INT1 until the MCU acknowledges", "[m72]") {
+    auto image = make_image({
+        0xB0U,
+        0x5CU, // MOV AL,5C
+        0xE6U,
+        0xC0U, // OUT C0,AL
+        0xF4U, // HLT
+    });
+
+    // Reset code enables level-sensed INT1 after the V30 command has already
+    // arrived. The pending board latch must still be visible at that point.
+    std::vector<std::uint8_t> mcu_program(0x28U, 0x00U);
+    mcu_program[0x00U] = 0x02U; // LJMP 0020
+    mcu_program[0x01U] = 0x00U;
+    mcu_program[0x02U] = 0x20U;
+    mcu_program[0x13U] = 0x90U; // MOV DPTR,#0002
+    mcu_program[0x14U] = 0x00U;
+    mcu_program[0x15U] = 0x02U;
+    mcu_program[0x16U] = 0xE0U; // MOVX A,@DPTR
+    mcu_program[0x17U] = 0xF5U; // MOV 30,A
+    mcu_program[0x18U] = 0x30U;
+    mcu_program[0x19U] = 0x05U; // INC 31
+    mcu_program[0x1AU] = 0x31U;
+    mcu_program[0x1BU] = 0x74U; // MOV A,#A6
+    mcu_program[0x1CU] = 0xA6U;
+    mcu_program[0x1DU] = 0xF0U; // MOVX @DPTR,A (acknowledge)
+    mcu_program[0x1EU] = 0x32U; // RETI
+    mcu_program[0x20U] = 0x75U; // MOV IE,EA|EX1
+    mcu_program[0x21U] = 0xA8U;
+    mcu_program[0x22U] = 0x84U;
+    mcu_program[0x23U] = 0x80U; // SJMP $
+    mcu_program[0x24U] = 0xFEU;
+    image.regions["mcu"] = std::move(mcu_program);
+
+    auto system = assemble_m72(std::move(image));
+    REQUIRE(system->mcu_present);
+
+    run_until_halt(system->main_cpu, 8);
+    REQUIRE(system->main_cpu.halted());
+    CHECK(system->main_to_mcu == 0x5CU);
+    CHECK(system->mcu_latch_irq_pending);
+
+    system->mcu.tick(512U);
+    CHECK(system->mcu.peek_direct(0x30U) == 0x5CU);
+    CHECK(system->mcu.peek_direct(0x31U) == 0x01U);
+    CHECK(system->mcu_to_main == 0xA6U);
+    CHECK_FALSE(system->mcu_latch_irq_pending);
+
+    system->mcu.tick(512U);
+    CHECK(system->mcu.peek_direct(0x31U) == 0x01U);
 }
 
 TEST_CASE("m72 protection MCU mailbox interrupt is asserted by the shared-RAM tail", "[m72]") {
@@ -1376,6 +1430,7 @@ TEST_CASE("m72 board save_state/load_state round-trips glue RAM and latches", "[
     source->sample_address = 0x10021U;
     source->main_to_mcu = 0x41U;
     source->mcu_to_main = 0x42U;
+    source->mcu_latch_irq_pending = true;
     source->mcu_sample_address = 0x23456U;
     source->protection_hle_startup_invert_active = true;
     source->protection_hle_startup_next_offset = 0x0123U;
@@ -1419,6 +1474,7 @@ TEST_CASE("m72 board save_state/load_state round-trips glue RAM and latches", "[
     CHECK(restored->sample_address == 0x10021U);
     CHECK(restored->main_to_mcu == 0x41U);
     CHECK(restored->mcu_to_main == 0x42U);
+    CHECK(restored->mcu_latch_irq_pending);
     CHECK(restored->mcu_sample_address == 0x23456U);
     CHECK(restored->protection_hle_startup_invert_active);
     CHECK(restored->protection_hle_startup_next_offset == 0x0123U);

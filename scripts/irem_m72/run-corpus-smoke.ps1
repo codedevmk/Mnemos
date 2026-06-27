@@ -9,7 +9,8 @@
 # scripts/run-data-gated-tests.ps1 entrypoint does this for M72 automatically.
 # Use -Set to narrow a mixed root to one or more checked-in M72 manifest ids.
 # Use -RequireRenderedAudio to require an --extract-audio pass whose rendered
-# WAVE payload contains nonzero PCM. -AudioFrames controls that proof pass.
+# WAVE payload contains nonzero PCM. -AudioFrames controls that proof pass;
+# known late-audio sets may raise the effective proof window.
 
 param(
     [string]$BuildDir = "build/windows-msvc-debug",
@@ -632,6 +633,17 @@ function Test-WavHasNonZeroPcm {
     return $false
 }
 
+function Get-M72AudioProofFrames {
+    param(
+        [Parameter(Mandatory = $true)][string]$SetId,
+        [Parameter(Mandatory = $true)][int]$DefaultFrames
+    )
+    switch -Regex ($SetId) {
+        "^(airduelm72|airdueljm72)$" { return [Math]::Max($DefaultFrames, 1800) }
+        default { return $DefaultFrames }
+    }
+}
+
 if ($Frames -le 0) {
     throw "-Frames must be positive."
 }
@@ -822,6 +834,7 @@ foreach ($romGroup in $romGroups) {
     $renderedAudioNonZero = -not $RequireRenderedAudio
     $passed = $false
     $passedFrames = $null
+    $audioProofFrames = Get-M72AudioProofFrames -SetId $setId -DefaultFrames $AudioFrames
     $mediaIssues = @()
     $resolvedSet = $setId
     $resolvedFrom = $null
@@ -883,7 +896,7 @@ foreach ($romGroup in $romGroups) {
                 "--press", "select@2+2",
                 "--press", "service@3+2",
                 "--extract-audio", $audioBase,
-                "--extract-frames", $AudioFrames.ToString()
+                "--extract-frames", $audioProofFrames.ToString()
             )) {
                 $audioArgs.Add($arg)
             }
@@ -927,6 +940,7 @@ foreach ($romGroup in $romGroups) {
         save_exit = $saveExit
         load_exit = $loadExit
         audio_exit = $audioExit
+        audio_frames = $audioProofFrames
         screenshot_lit = $litScreenshot
         audio_required = [bool]$RequireRenderedAudio
         rendered_audio_nonzero = $renderedAudioNonZero

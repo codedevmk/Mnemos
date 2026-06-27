@@ -71,6 +71,29 @@ namespace {
         return (value != nullptr && *value != '\0') ? value : nullptr;
     }
 
+    [[nodiscard]] std::vector<std::string> split_comma_list(std::string_view text) {
+        std::vector<std::string> values;
+        std::size_t start = 0U;
+        while (start <= text.size()) {
+            const std::size_t end = text.find(',', start);
+            std::string item{text.substr(start, end == std::string_view::npos ? text.size() - start
+                                                                              : end - start)};
+            const auto first = std::find_if_not(
+                item.begin(), item.end(), [](unsigned char ch) { return std::isspace(ch) != 0; });
+            const auto last = std::find_if_not(item.rbegin(), item.rend(), [](unsigned char ch) {
+                                  return std::isspace(ch) != 0;
+                              }).base();
+            if (first < last) {
+                values.emplace_back(first, last);
+            }
+            if (end == std::string_view::npos) {
+                break;
+            }
+            start = end + 1U;
+        }
+        return values;
+    }
+
     [[nodiscard]] mnemos::manifests::common::rom_set_decl
     require_embedded_decl(std::string_view set_name) {
         const std::string_view toml = mnemos::manifests::irem_m72::game_manifest_toml(set_name);
@@ -138,6 +161,66 @@ namespace {
         return std::filesystem::path{nested->name}.stem().string();
     }
 
+    [[nodiscard]] std::string normalized_zip_entry_path(std::string_view name) {
+        std::string normalized{name};
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+        return normalized;
+    }
+
+    [[nodiscard]] std::vector<std::string>
+    collection_zip_set_ids(const std::filesystem::path& path,
+                           const std::map<std::string, bool, std::less<>>& known) {
+        std::vector<std::string> ids;
+        auto bytes = mnemos::io::read_file(path.string());
+        if (!bytes.has_value()) {
+            return ids;
+        }
+        auto archive = mnemos::compression::zip_archive::open(*bytes);
+        if (!archive.has_value()) {
+            return ids;
+        }
+
+        const auto push_known = [&](std::string set_id) {
+            if (known.find(set_id) == known.end()) {
+                return;
+            }
+            if (std::find(ids.begin(), ids.end(), set_id) == ids.end()) {
+                ids.push_back(std::move(set_id));
+            }
+        };
+
+        for (const auto& entry : archive->entries()) {
+            if (entry.name.empty()) {
+                continue;
+            }
+            const std::string normalized = normalized_zip_entry_path(entry.name);
+            const std::size_t slash = normalized.find('/');
+            if (slash == std::string::npos || slash == 0U) {
+                continue;
+            }
+            std::string top = normalized.substr(0U, slash);
+            push_known(top);
+            push_known(top + "m72");
+        }
+        return ids;
+    }
+
+    struct indexed_m72_source final {
+        std::filesystem::path path;
+        int rank{};
+    };
+
+    [[nodiscard]] std::string source_list_for_info(std::span<const indexed_m72_source> sources) {
+        std::ostringstream out;
+        for (std::size_t i = 0; i < sources.size(); ++i) {
+            if (i != 0U) {
+                out << ", ";
+            }
+            out << sources[i].path.string() << "@" << sources[i].rank;
+        }
+        return out.str();
+    }
+
     [[nodiscard]] std::vector<std::filesystem::path> m72_source_roots(const char* env_value) {
         std::vector<std::filesystem::path> roots;
         if (env_value == nullptr || *env_value == '\0') {
@@ -165,26 +248,26 @@ namespace {
         return roots;
     }
 
-    [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
-    index_m72_source_roots(const std::vector<std::filesystem::path>& roots) {
+    [[nodiscard]] std::map<std::string, std::vector<indexed_m72_source>, std::less<>>
+    index_m72_source_candidates(const std::vector<std::filesystem::path>& roots) {
         std::map<std::string, bool, std::less<>> known;
         for (const auto& [set_name, _] : mnemos::manifests::irem_m72::embedded::game_manifests) {
             known.emplace(std::string{set_name}, true);
         }
 
-        struct indexed_source final {
-            std::filesystem::path path;
-            int rank{};
-        };
-
-        std::map<std::string, indexed_source, std::less<>> indexed;
+        std::map<std::string, std::vector<indexed_m72_source>, std::less<>> indexed;
         auto maybe_add = [&](std::string set_id, const std::filesystem::path& path, int rank) {
             if (known.find(set_id) == known.end()) {
                 return;
             }
-            const auto existing = indexed.find(set_id);
-            if (existing == indexed.end() || rank < existing->second.rank) {
-                indexed[std::move(set_id)] = indexed_source{.path = path, .rank = rank};
+            auto& sources = indexed[set_id];
+            const auto existing =
+                std::find_if(sources.begin(), sources.end(),
+                             [&](const indexed_m72_source& item) { return item.path == path; });
+            if (existing == sources.end()) {
+                sources.push_back(indexed_m72_source{.path = path, .rank = rank});
+            } else if (rank < existing->rank) {
+                existing->rank = rank;
             }
         };
 
@@ -195,8 +278,8 @@ namespace {
             }
 
             std::vector<std::filesystem::path> candidates;
-            for (std::filesystem::recursive_directory_iterator it{
-                     root, std::filesystem::directory_options::skip_permission_denied, ec},
+            for (std::filesystem::recursive_directory_iterator
+                     it{root, std::filesystem::directory_options::skip_permission_denied, ec},
                  end;
                  !ec && it != end; it.increment(ec)) {
                 if (!it->is_directory(ec) && !it->is_regular_file(ec)) {
@@ -207,28 +290,51 @@ namespace {
             std::sort(candidates.begin(), candidates.end());
 
             for (const auto& path : candidates) {
+                const std::string stem = path.stem().string();
                 if (std::filesystem::is_directory(path, ec)) {
-                    maybe_add(path.filename().string(), path, 2);
+                    const std::string dir_name = path.filename().string();
+                    maybe_add(dir_name, path, 4);
+                    maybe_add(dir_name + "m72", path, 6);
                     continue;
                 }
                 if (!std::filesystem::is_regular_file(path, ec) ||
                     !ends_with_zip(path.filename().string())) {
                     continue;
                 }
-                const std::string stem = path.stem().string();
                 if (known.find(stem) != known.end()) {
                     maybe_add(stem, path, 0);
-                    continue;
                 }
+                maybe_add(stem + "m72", path, 5);
                 if (auto nested_set = single_nested_zip_set_id(path)) {
-                    maybe_add(std::move(*nested_set), path, 1);
+                    maybe_add(std::move(*nested_set), path, 2);
+                }
+                for (std::string collection_set : collection_zip_set_ids(path, known)) {
+                    maybe_add(std::move(collection_set), path, 3);
                 }
             }
         }
 
+        for (auto& [_, sources] : indexed) {
+            std::sort(sources.begin(), sources.end(), [](const auto& lhs, const auto& rhs) {
+                if (lhs.rank != rhs.rank) {
+                    return lhs.rank < rhs.rank;
+                }
+                return lhs.path.string() < rhs.path.string();
+            });
+        }
+
+        return indexed;
+    }
+
+    [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
+    index_m72_source_roots(const std::vector<std::filesystem::path>& roots) {
+        const auto candidates = index_m72_source_candidates(roots);
+
         std::map<std::string, std::filesystem::path, std::less<>> sources;
-        for (const auto& [set_id, source] : indexed) {
-            sources.emplace(set_id, source.path);
+        for (const auto& [set_id, set_sources] : candidates) {
+            if (!set_sources.empty()) {
+                sources.emplace(set_id, set_sources.front().path);
+            }
         }
         return sources;
     }
@@ -301,8 +407,8 @@ namespace {
         return static_cast<std::size_t>(std::unique(pixels.begin(), pixels.end()) - pixels.begin());
     }
 
-    [[nodiscard]] bool audio_chunk_has_nonzero_pcm(
-        const mnemos::frontend_sdk::audio_chunk& chunk) noexcept {
+    [[nodiscard]] bool
+    audio_chunk_has_nonzero_pcm(const mnemos::frontend_sdk::audio_chunk& chunk) noexcept {
         if (chunk.samples == nullptr || chunk.frame_count == 0U) {
             return false;
         }
@@ -319,15 +425,14 @@ namespace {
         return mnemos::security::cryptography::sha256(bytes).hex();
     }
 
-    [[nodiscard]] std::string
-    hash_framebuffer_rgba(const mnemos::chips::frame_buffer_view& view) {
+    [[nodiscard]] std::string hash_framebuffer_rgba(const mnemos::chips::frame_buffer_view& view) {
         std::vector<std::uint8_t> bytes;
         bytes.reserve(static_cast<std::size_t>(view.width) * view.height * 4U);
         const std::uint32_t stride = view.effective_stride();
         for (std::uint32_t y = 0; y < view.height; ++y) {
-            const std::uint32_t* row =
-                view.pixels != nullptr ? view.pixels + static_cast<std::size_t>(y) * stride
-                                       : nullptr;
+            const std::uint32_t* row = view.pixels != nullptr
+                                           ? view.pixels + static_cast<std::size_t>(y) * stride
+                                           : nullptr;
             for (std::uint32_t x = 0; x < view.width; ++x) {
                 const std::uint32_t p = row != nullptr ? row[x] : 0U;
                 bytes.push_back(static_cast<std::uint8_t>((p >> 16U) & 0xFFU));
@@ -1126,12 +1231,10 @@ TEST_CASE("irem_m72_adapter emits rendered audio for a real protected M72 set",
         }
     }
 
-    INFO("set=" << adapter.set_name() << " proof_frames=" << proof_frames
-                << " stepped=" << adapter.frames_stepped()
-                << " total_audio_frames=" << total_audio_frames
-                << " last_sample_rate=" << last_sample_rate
-                << " first_signal_frame=" << first_signal_frame
-                << " sample_address=0x" << std::hex << machine.sample_address
+    INFO("set=" << adapter.set_name() << " proof_frames=" << proof_frames << " stepped="
+                << adapter.frames_stepped() << " total_audio_frames=" << total_audio_frames
+                << " last_sample_rate=" << last_sample_rate << " first_signal_frame="
+                << first_signal_frame << " sample_address=0x" << std::hex << machine.sample_address
                 << " dac_events=" << std::dec << machine.dac_write_events.size());
     CHECK(last_sample_rate == 55930U);
     CHECK(total_audio_frames > 0U);
@@ -1167,8 +1270,8 @@ TEST_CASE("irem_m72_adapter matches optional visual/audio parity hashes for a re
         options.rom = std::move(source.bytes);
         options.display_name = "m72-parity";
         options.rom_path = source.path;
-        auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
-            "irem_m72", std::move(options));
+        auto system = mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72",
+                                                                                std::move(options));
         REQUIRE(system != nullptr);
         auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
         auto& machine = adapter.machine();
@@ -1209,10 +1312,8 @@ TEST_CASE("irem_m72_adapter matches optional visual/audio parity hashes for a re
     const parity_result first = run_once(collect_audio);
     const parity_result second = run_once(collect_audio);
 
-    INFO("set=" << first.set_name << " frames=" << frames
-                << " frame_sha256=" << first.frame_hash
-                << " audio_sha256=" << first.audio_hash
-                << " audio_frames=" << first.audio_frames
+    INFO("set=" << first.set_name << " frames=" << frames << " frame_sha256=" << first.frame_hash
+                << " audio_sha256=" << first.audio_hash << " audio_frames=" << first.audio_frames
                 << " sample_rate=" << first.sample_rate);
     CHECK(second.set_name == first.set_name);
     CHECK(second.frame_hash == first.frame_hash);
@@ -1281,6 +1382,8 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
     // are accepted.
     // Clone sets use the resolved source directory for parent fallback.
     // MNEMOS_M72_ROSTER_FRAMES can raise or lower the per-set warm-up window.
+    // MNEMOS_M72_ROSTER_SET can narrow the run to a comma-separated set list
+    // for focused local diagnostics while keeping the same source resolution.
     const char* dir_env = opt_env("MNEMOS_M72_SET_DIR");
     if (dir_env == nullptr) {
         SKIP("set MNEMOS_M72_SET_DIR to directories containing the true-M72 zip/folder roster");
@@ -1291,10 +1394,21 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
         INFO("root=" << root.string());
         REQUIRE(std::filesystem::is_directory(root));
     }
-    const auto indexed_sources = index_m72_source_roots(roots);
+    const auto indexed_sources = index_m72_source_candidates(roots);
+    std::vector<std::string> roster_sets;
+    if (const char* selected_env = opt_env("MNEMOS_M72_ROSTER_SET")) {
+        roster_sets = split_comma_list(selected_env);
+        REQUIRE_FALSE(roster_sets.empty());
+    } else {
+        for (const auto& [set_name_view, _] : m72::embedded::game_manifests) {
+            roster_sets.emplace_back(set_name_view);
+        }
+    }
+
     std::vector<std::string> missing_sets;
-    for (const auto& [set_name_view, _] : m72::embedded::game_manifests) {
-        const std::string set_name{set_name_view};
+    for (const std::string& set_name : roster_sets) {
+        INFO("selected_set=" << set_name);
+        REQUIRE_FALSE(m72::game_manifest_toml(set_name).empty());
         if (indexed_sources.find(set_name) == indexed_sources.end()) {
             missing_sets.push_back(set_name);
         }
@@ -1311,19 +1425,44 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
     }
 
     const int warmup_frames = env_positive_int("MNEMOS_M72_ROSTER_FRAMES", 600);
-    for (const auto& [set_name_view, _] : m72::embedded::game_manifests) {
-        const std::string set_name{set_name_view};
+    for (const std::string& set_name : roster_sets) {
         INFO("set=" << set_name);
         const auto decl = require_embedded_decl(set_name);
-        const auto set_path = indexed_sources.find(set_name);
-        REQUIRE(set_path != indexed_sources.end());
-        INFO("source=" << set_path->second.string());
-        auto source = load_m72_source(set_path->second);
+        const auto set_sources = indexed_sources.find(set_name);
+        REQUIRE(set_sources != indexed_sources.end());
+        REQUIRE_FALSE(set_sources->second.empty());
+        INFO("source=" << set_sources->second.front().path.string());
+        INFO("sources=" << source_list_for_info(set_sources->second));
+        auto source = load_m72_source(set_sources->second.front().path);
 
         mnemos::frontend_sdk::adapter_options options{};
         options.rom = std::move(source.bytes);
         options.display_name = set_name;
         options.rom_path = source.path;
+        std::vector<std::string> supplemental_paths;
+        const auto add_supplemental = [&](const std::filesystem::path& path) {
+            const std::string path_string = path.string();
+            if (path_string == options.rom_path ||
+                std::find(supplemental_paths.begin(), supplemental_paths.end(), path_string) !=
+                    supplemental_paths.end()) {
+                return;
+            }
+            auto supplemental = load_m72_source(path);
+            supplemental_paths.push_back(supplemental.path);
+            options.additional_media.push_back(std::move(supplemental.bytes));
+            options.additional_media_paths.push_back(std::move(supplemental.path));
+        };
+        for (std::size_t i = 1; i < set_sources->second.size(); ++i) {
+            add_supplemental(set_sources->second[i].path);
+        }
+        if (decl.parent.has_value()) {
+            const auto parent_sources = indexed_sources.find(*decl.parent);
+            if (parent_sources != indexed_sources.end()) {
+                for (const auto& parent_source : parent_sources->second) {
+                    add_supplemental(parent_source.path);
+                }
+            }
+        }
         auto system = mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72",
                                                                                 std::move(options));
         REQUIRE(system != nullptr);
@@ -1362,6 +1501,21 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
             sound_released = sound_released || !machine.sound_cpu.reset_line_held();
             frame_lit = frame_lit || frame_has_variation(adapter.current_frame());
         }
+        const auto main_regs = machine.main_cpu.cpu_registers();
+        const auto sound_regs = machine.sound_cpu.cpu_registers();
+        const auto mcu_regs = machine.mcu.cpu_registers();
+        INFO("frames=" << adapter.frames_stepped() << " sound_released=" << sound_released
+                       << " frame_lit=" << frame_lit << " control=0x" << std::hex
+                       << static_cast<unsigned>(machine.control_register) << " main=0x"
+                       << main_regs.cs << ":0x" << main_regs.ip << " sound_pc=0x" << sound_regs.pc
+                       << " sound_reset=" << machine.sound_cpu.reset_line_held() << " mcu_pc=0x"
+                       << mcu_regs.pc << " main_to_mcu=0x"
+                       << static_cast<unsigned>(machine.main_to_mcu) << " mcu_to_main=0x"
+                       << static_cast<unsigned>(machine.mcu_to_main)
+                       << " mcu_irq_pending=" << machine.mcu_latch_irq_pending
+                       << " sound_ram_nonzero=" << std::dec << nonzero_count(machine.sound_ram)
+                       << " mcu_shared_nonzero=" << nonzero_count(machine.mcu_shared_ram)
+                       << " dac_events=" << machine.dac_write_events.size());
         CHECK(sound_released);
         CHECK(frame_lit);
     }
@@ -2662,20 +2816,49 @@ TEST_CASE("irem_m72 roster discovery indexes exact sets and wrapper zips", "[ire
     CHECK(indexed.find("imgfight")->second == imgfight_wrapper_path);
 }
 
+TEST_CASE("irem_m72 roster discovery keeps canonical and supplemental candidates",
+          "[irem_m72][adapter]") {
+    const auto root =
+        std::filesystem::temp_directory_path() / "mnemos_irem_m72_roster_candidate_sources";
+    const auto wrapper_root = root / "wrappers";
+    const auto exact_dir = root / "airduelm72";
+    const auto canonical_zip = root / "airduel.zip";
+    const auto wrapper_zip = wrapper_root / "Air-Duel_Arcade_EN.zip";
+    std::error_code cleanup_ec;
+    std::filesystem::remove_all(root, cleanup_ec);
+    REQUIRE((std::filesystem::create_directories(wrapper_root) ||
+             std::filesystem::exists(wrapper_root)));
+    write_directory_rom_set(exact_dir, {{"placeholder.bin", {0x30U}}});
+    REQUIRE(mnemos::io::write_file(canonical_zip.string(),
+                                   make_stored_zip({{"airduelm72/ad_c-h0-.ic40", {0x31U}}})));
+    REQUIRE(mnemos::io::write_file(
+        wrapper_zip.string(),
+        make_stored_zip({{"airduelm72.zip", make_stored_zip({{"placeholder.bin", {0x32U}}})}})));
+
+    const auto indexed = index_m72_source_candidates({root});
+    const auto found = indexed.find("airduelm72");
+    REQUIRE(found != indexed.end());
+    REQUIRE(found->second.size() >= 3U);
+    CHECK(found->second[0].path == wrapper_zip);
+    CHECK(std::any_of(found->second.begin(), found->second.end(),
+                      [&](const auto& source) { return source.path == canonical_zip; }));
+    CHECK(std::any_of(found->second.begin(), found->second.end(),
+                      [&](const auto& source) { return source.path == exact_dir; }));
+}
+
 TEST_CASE("irem_m72 roster discovery prefers a set zip over a stale set directory",
           "[irem_m72][adapter]") {
     const auto nspirit_decl = require_embedded_decl("nspirit");
 
-    const auto root =
-        std::filesystem::temp_directory_path() / "mnemos_irem_m72_zip_over_directory";
+    const auto root = std::filesystem::temp_directory_path() / "mnemos_irem_m72_zip_over_directory";
     const auto stale_dir = root / "nspirit";
     const auto zip_path = root / "nspirit.zip";
     std::error_code cleanup_ec;
     std::filesystem::remove_all(root, cleanup_ec);
     REQUIRE((std::filesystem::create_directories(root) || std::filesystem::exists(root)));
     write_directory_rom_set(stale_dir, {{"placeholder.bin", {0xFFU}}});
-    REQUIRE(mnemos::io::write_file(
-        zip_path.string(), make_stored_zip(placeholder_entries_for(nspirit_decl, 0x33U))));
+    REQUIRE(mnemos::io::write_file(zip_path.string(),
+                                   make_stored_zip(placeholder_entries_for(nspirit_decl, 0x33U))));
 
     const auto indexed = index_m72_source_roots({root});
     REQUIRE(indexed.find("nspirit") != indexed.end());

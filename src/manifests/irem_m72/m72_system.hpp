@@ -30,7 +30,7 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::size_t main_rom_size = 0x100000U; // V30 program, full 20-bit space
     // Whole-board save-state format. The player save-target manifest revision
     // follows this value so stale rollback states fail before board restore.
-    inline constexpr std::uint32_t m72_system_state_version = 10U;
+    inline constexpr std::uint32_t m72_system_state_version = 11U;
 
     // M72 memory map. The program ROM backs the whole space at low priority;
     // the RAM blocks overlay it at higher priority. Original M72 boards such
@@ -87,9 +87,10 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::uint16_t port_pic_a0 = 0x40U;
     inline constexpr std::uint16_t port_pic_a1 = 0x42U;
     // V30 <-> protection-MCU latch pair. On protected boards an OUT writes the
-    // main-to-MCU latch; real MCU boards pulse INT1, while declared no-dump
-    // HLE profiles only acknowledge the board-facing command and sample
-    // trigger. Unprotected boards leave the absent latch as open bus.
+    // main-to-MCU latch and asserts INT1 until the MCU writes its acknowledge
+    // response; declared no-dump HLE profiles only acknowledge the board-facing
+    // command and sample trigger. Unprotected boards leave the absent latch as
+    // open bus.
     inline constexpr std::uint16_t port_mcu_latch = 0xC0U;
     // Scroll registers as four little-endian words: +0/+2 = playfield A Y/X,
     // +4/+6 = playfield B Y/X.
@@ -196,7 +197,7 @@ namespace mnemos::manifests::irem_m72 {
         std::uint8_t input_p2{0xFFU};     // active low
         std::uint8_t input_system{0xFFU}; // start/coin/service, active low
         std::uint16_t dip_switches{0xFFFFU};
-        std::uint8_t control_register{}; // port 0x02 latch (coin/flip/blank/reset)
+        std::uint8_t control_register{};              // port 0x02 latch (coin/flip/blank/reset)
         std::array<std::uint32_t, 2> coin_counters{}; // rising edges on control bits 0/1
         std::array<std::uint8_t, 8> scroll_regs{};
         std::array<std::uint8_t, 2> raster_regs{};
@@ -215,6 +216,7 @@ namespace mnemos::manifests::irem_m72 {
         // V30 <-> protection-MCU latch pair.
         std::uint8_t main_to_mcu{};
         std::uint8_t mcu_to_main{};
+        bool mcu_latch_irq_pending{};
         std::uint32_t mcu_sample_address{};
         bool protection_hle_startup_invert_active{};
         std::uint16_t protection_hle_startup_next_offset{};
