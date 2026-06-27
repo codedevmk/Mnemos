@@ -75,25 +75,82 @@ Confirmed:
   launch, adapter, smoke script, and golden-test paths.
 - `3D Pool [cas2rom64ks]` now auto-detects as ASCII16 through the shared mapper
   resolver and boots through both MSX and MSX2.
-- Bounded real-ROM smoke windows passed through skip 47:
+- Bounded real-ROM smoke windows passed through skip 59:
   - `-SkipRoms 12 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 24 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 36 -MaxRoms 12`: `26/26` passed.
-- The next window, `-SkipRoms 48 -MaxRoms 12`, found one MSX2-only failure:
-  `a_test2 [Arabic MSX].rom`.
+  - `-SkipRoms 48 -MaxRoms 12`: `26/26` passed after profiling
+    `a_test2 [Arabic MSX].rom` against the BR C-BIOS MSX2 main ROM.
 
 Known gaps:
 
 - This is not yet a representative compatibility matrix.
-- The latest active failure appears to be V9938 framebuffer/render plumbing for
-  MSX2 Graphics I / 256-pixel output, not cartridge mapping.
+- Continue the bounded corpus at `-SkipRoms 60 -MaxRoms 12`.
 - Earlier notes included Bosconia staying on the C-BIOS logo and MSX2 Bestial
-  Warrior color fidelity suspicion; those still need confirmation after the
-  current V9938 issue is fixed.
+  Warrior color fidelity suspicion; those still need confirmation in later
+  slices.
 
-## Latest Failure To Resume
+## Latest Change
 
-Run this first if continuing implementation:
+The latest change adds a ROM profile for:
+
+```text
+D:\emu\msx\MSX files [ROM]\a_test2 [Arabic MSX].rom
+SHA256: A4D5EB1097D36B0C170603577F2A99546E01CC88171AEE649E58C7882182CCED
+```
+
+The earlier failure with generic MSX2 C-BIOS was not a V9938 renderer bug. The
+VDP state had `r1=$A0`, so display-enable bit 6 was clear and a uniform
+framebuffer was expected. The same cartridge boots visibly on MSX2 with
+`cbios_main_msx2_br.rom`, matching the existing note in `tests/golden/README.md`
+that some Arabic MSX2 cartridges need regional C-BIOS metadata.
+
+Profile added in:
+
+```text
+tests/golden/msx_rom_profiles.json
+```
+
+Profile behavior:
+
+```text
+system: msx2
+mapper: plain
+bios: cbios_main_msx2_br.rom
+boot_frames: 3600
+boot_sha256: 7855330785cbb9bcd8ba95149af8eef1fa67f035abbdc88c61e38fc0b6d27d9d
+```
+
+## Latest Validation
+
+Direct BR C-BIOS proof for `a_test2 [Arabic MSX].rom`:
+
+```powershell
+$rom='D:\emu\msx\MSX files [ROM]\a_test2 [Arabic MSX].rom'
+.\scripts\msx\run-boot-smoke.ps1 `
+  -BuildDir 'build/windows-msvc-debug' `
+  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2_br.rom' `
+  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
+  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
+  -Msx2Rom $rom `
+  -Msx2ExpandedSlots '8' `
+  -Msx2SubSlot '3.0' `
+  -Msx2RamSlot '3.2' `
+  -Msx2RamSize '512K' `
+  -Msx2Region 'ntsc' `
+  -Frames 3600 `
+  -RequireData
+```
+
+Result:
+
+```text
+MSX/MSX2 boot smoke: 2/2 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224621-597-43940\summary.json
+rom hash: 7855330785cbb9bcd8ba95149af8eef1fa67f035abbdc88c61e38fc0b6d27d9d
+```
+
+Profile-driven targeted proof using the generic base C-BIOS command:
 
 ```powershell
 $rom='D:\emu\msx\MSX files [ROM]\a_test2 [Arabic MSX].rom'
@@ -108,12 +165,24 @@ $rom='D:\emu\msx\MSX files [ROM]\a_test2 [Arabic MSX].rom'
   -Msx2RamSlot '3.2' `
   -Msx2RamSize '512K' `
   -Msx2Region 'ntsc' `
+  -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
   -Frames 600 `
   -RetryFrames 3600 `
   -RequireData
 ```
 
-Most recent corpus command that exposed it:
+Result:
+
+```text
+MSX/MSX2 boot smoke: 2/2 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224755-972-58776\summary.json
+```
+
+The summary records `hash=null` for this profile-backed case because the golden
+hash is asserted inside Catch2 and Catch2 does not print the computed hash on a
+passing assertion.
+
+Original failing corpus window after the profile fix:
 
 ```powershell
 $romDir='D:\emu\msx\MSX files [ROM]'
@@ -146,70 +215,71 @@ running. Older messages may contain a stale `-MsxLogoRom` path.
 Result:
 
 ```text
-MSX/MSX2 boot smoke: 25/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-223424-882-3140\summary.json
-failed case: msx2/rom-a_test2 [Arabic MSX]
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224915-455-69380\summary.json
 ```
 
-Failure details:
+Explicit player proof for the same ROM:
+
+```powershell
+$proofDir='build\scratch\msx2-a-test2-proof\20260626-225405'
+New-Item -ItemType Directory -Force -Path $proofDir | Out-Null
+$rom='D:\emu\msx\MSX files [ROM]\a_test2 [Arabic MSX].rom'
+$env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2_br.rom'
+$env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
+$env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
+$env:MNEMOS_MSX2_EXPANDED_SLOTS='8'
+$env:MNEMOS_MSX2_SUB_SLOT='3.0'
+$env:MNEMOS_MSX2_RAM_SLOT='3.2'
+$env:MNEMOS_MSX2_RAM_SIZE='512K'
+$env:MNEMOS_MSX2_REGION='ntsc'
+build\windows-msvc-debug\src\apps\player\mnemos_player.exe `
+  --system msx2 `
+  --rom $rom `
+  --screenshot "$proofDir\a-test2-msx2-br.ppm" `
+  --frames 3600
+```
+
+Result:
 
 ```text
-ROM: D:\emu\msx\MSX files [ROM]\a_test2 [Arabic MSX].rom
-Size: 32768 bytes
-SHA256: A4D5EB1097D36B0C170603577F2A99546E01CC88171AEE649E58C7882182CCED
-Mapper: Plain
-CPU PC: $C93B
-Current opcode byte: $33
-VDP mode: 0 / Graphics I
-VDP registers: r0=$00 r1=$A0 r2=$06 r7=$01
-VRAM nonzero bytes: 2399
-V9938 visible_g4_nonzero: 2303
-V9938 visible_g1_hist: [0,48107,0,0,0,185,0,0,0,0,0,0,0,0,0,860]
-First visible G1 non-backdrop: line=41 x=114 pen=$05 resolved=$05 pattern=$00
-Framebuffer check: still reported uniform
-Framebuffer hash: b08b67f5c82a88b2b691de151eab65f4c7a06c9a14bef0abe94a53b193fd8a9f
+mnemos_player wrote build\scratch\msx2-a-test2-proof\20260626-225405\a-test2-msx2-br.ppm
+PPM SHA256: B4DD3D7053F38E6729A808858CC703CEFC063E856A4AE1CE89738F5E95CAAC19
+PPM non_uniform=True
 ```
-
-The diagnostic data shows non-background Graphics I pixels in VRAM-derived
-render analysis while the exposed framebuffer remains uniform. Treat this as a
-V9938 render-to-framebuffer or viewport/copy issue until proven otherwise.
-
-## Files To Inspect Next
-
-Start with these files:
-
-```text
-src/chips/video/v9938/v9938.cpp
-src/chips/video/v9938/v9938.hpp
-src/chips/video/v9938/tests/v9938_test.cpp
-tests/golden/msx_boot_test.cpp
-```
-
-Relevant observations already made:
-
-- `v9938::mode()` maps `r0=$00`, `r1=$A0` to `display_mode::graphics_i`.
-- `visible_width()` returns 256 for Graphics I.
-- `render_unadjusted_scanline()` calls `render_graphics_i_scanline()` and
-  `render_sprites_mode1()` for Graphics I.
-- Existing V9938 Graphics I tests pass, but they likely do not exercise the
-  failing 256-width framebuffer/viewport path observed by `a_test2`.
-- The TMS9918A Graphics I path is useful as a reference because MSX1 passes
-  the same ROM.
 
 ## Suggested Next Implementation Slice
 
-1. Add a focused V9938 regression that reproduces Graphics I with the failure
-   register shape, especially `r1=$A0`, `r2=$06`, and a nonzero name/color/pattern
-   entry that should affect a visible pixel around line 41, x 114.
-2. Inspect `render_scanline()`, `render_unadjusted_scanline()`, framebuffer
-   dimensions, and any 256-to-512 width copy/centering logic.
-3. Fix the renderer so the public framebuffer reflects Graphics I pixels in
-   MSX2/V9938 mode.
-4. Re-run the focused V9938 tests and the targeted `a_test2` MSX2 smoke.
-5. Re-run the `-SkipRoms 48 -MaxRoms 12` corpus window and then continue to
-   the next bounded window.
-6. Take explicit player proof with `--system msx2 --rom ... --screenshot ...`;
-   do not use a blank player startup as proof.
+Run the next bounded MSX/MSX2 ROM corpus smoke:
+
+```powershell
+$romDir='D:\emu\msx\MSX files [ROM]'
+.\scripts\msx\run-boot-smoke.ps1 `
+  -BuildDir 'build/windows-msvc-debug' `
+  -MsxBios 'D:\emu\msx\bios\cbios\cbios_main_msx1.rom' `
+  -MsxLogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx1.rom' `
+  -MsxRomDir $romDir `
+  -MsxRegion 'ntsc' `
+  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2.rom' `
+  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
+  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
+  -Msx2RomDir $romDir `
+  -Msx2ExpandedSlots '8' `
+  -Msx2SubSlot '3.0' `
+  -Msx2RamSlot '3.2' `
+  -Msx2RamSize '512K' `
+  -Msx2Region 'ntsc' `
+  -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
+  -Frames 600 `
+  -RetryFrames 3600 `
+  -SkipRoms 60 `
+  -MaxRoms 12 `
+  -RequireData
+```
+
+Use the next failing case from that window to choose the next compatibility
+slice. Avoid broad renderer, slot, or mapper changes when a ROM profile captures
+a known firmware/regional dependency.
 
 ## Build / Test Commands
 
@@ -298,14 +368,10 @@ summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-222804-481-14904
 -SkipRoms 36 -MaxRoms 12:
 MSX/MSX2 boot smoke: 26/26 passed
 summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-223029-317-62816\summary.json
-```
 
-Latest failing corpus window:
-
-```text
 -SkipRoms 48 -MaxRoms 12:
-MSX/MSX2 boot smoke: 25/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-223424-882-3140\summary.json
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-224915-455-69380\summary.json
 ```
 
 ## Recent Commits

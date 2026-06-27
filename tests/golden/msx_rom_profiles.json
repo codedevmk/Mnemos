@@ -25,6 +25,16 @@
       "reason": "Arabic cartridge reaches visible output after the C-BIOS MSX2 startup path; 600 frames can false-fail as a uniform backdrop"
     },
     {
+      "system": "msx2",
+      "name": "a_test2 [Arabic MSX].rom",
+      "sha256": "a4d5eb1097d36b0c170603577f2a99546e01cc88171aee649e58c7882182cced",
+      "bios": "cbios_main_msx2_br.rom",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "boot_sha256": "7855330785cbb9bcd8ba95149af8eef1fa67f035abbdc88c61e38fc0b6d27d9d",
+      "reason": "Arabic educational cartridge depends on the BR C-BIOS MSX2 main ROM metadata; the generic MSX2 C-BIOS leaves display blanked with R#1 bit 6 clear"
+    },
+    {
       "system": "msx",
       "name": "AKUPRO.rom",
       "sha256": "57f11296ce5f898d562e58851700ae33365df2d60a23bc78fedc25e5d264f0ea",
