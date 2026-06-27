@@ -23,6 +23,14 @@ namespace mnemos::manifests::irem_m92 {
             return bytes;
         }
 
+        void build_sound_opcode_overlay(std::vector<std::uint8_t>& overlay,
+                                        std::span<const std::uint8_t> opcodes) {
+            overlay.assign(sound_opcode_overlay_size, 0xFFU);
+            const std::size_t copy_size = std::min(opcodes.size(), sound_rom_size);
+            std::copy_n(opcodes.data(), copy_size, overlay.begin());
+            std::copy_n(opcodes.data(), copy_size, overlay.begin() + 0xE0000U);
+        }
+
         [[nodiscard]] std::uint8_t sample_byte(std::span<const std::uint8_t> data,
                                                std::uint64_t index,
                                                std::uint8_t fallback) noexcept {
@@ -252,6 +260,11 @@ namespace mnemos::manifests::irem_m92 {
         auto& main_prog = pinned_region(roms, "maincpu", main_rom_size);
         auto& sound_prog = pinned_region(roms, "soundcpu", sound_rom_size);
         auto& samples = pinned_region(roms, "samples", 0U);
+        if (const auto* sound_opcodes = roms.region(sound_opcode_region);
+            sound_opcodes != nullptr && !sound_opcodes->empty()) {
+            build_sound_opcode_overlay(sound_opcode_rom,
+                                       std::span<const std::uint8_t>(*sound_opcodes));
+        }
 
         main_cpu.set_model(chips::cpu::v30::model::v33);
         sound_cpu.set_model(chips::cpu::v30::model::v35);
@@ -293,6 +306,9 @@ namespace mnemos::manifests::irem_m92 {
 
         sound_bus.map_rom(0x00000U, std::span<const std::uint8_t>(sound_prog));
         sound_bus.map_rom(0xE0000U, std::span<const std::uint8_t>(sound_prog));
+        if (!sound_opcode_rom.empty()) {
+            sound_bus.map_opcode_rom(0x00000U, std::span<const std::uint8_t>(sound_opcode_rom));
+        }
         sound_bus.map_ram(sound_work_ram_base, sound_ram, 1);
         sound_bus.map_mmio(
             sound_ga20_base, chips::audio::irem_ga20::register_count,

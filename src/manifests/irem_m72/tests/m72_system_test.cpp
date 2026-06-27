@@ -24,9 +24,9 @@
 
 namespace {
 
-    using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_decl;
     using mnemos::manifests::common::rom_set_hle_decl;
+    using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
     using mnemos::manifests::irem_m72::assemble_m72;
     using mnemos::manifests::irem_m72::m72_rom_skeleton;
@@ -65,15 +65,13 @@ namespace {
 
     [[nodiscard]] const rom_set_region* find_region(const rom_set_decl& decl,
                                                     std::string_view name) noexcept {
-        const auto it = std::find_if(decl.regions.begin(), decl.regions.end(),
-                                     [name](const rom_set_region& region) {
-                                         return region.name == name;
-                                     });
+        const auto it =
+            std::find_if(decl.regions.begin(), decl.regions.end(),
+                         [name](const rom_set_region& region) { return region.name == name; });
         return it == decl.regions.end() ? nullptr : &*it;
     }
 
-    [[nodiscard]] bool has_file_alias(const rom_set_decl& decl,
-                                      std::string_view file_name,
+    [[nodiscard]] bool has_file_alias(const rom_set_decl& decl, std::string_view file_name,
                                       std::string_view alias) noexcept {
         for (const auto& region : decl.regions) {
             for (const auto& file : region.files) {
@@ -91,40 +89,32 @@ namespace {
 
     [[nodiscard]] const rom_set_hle_decl* find_hle(const rom_set_decl& decl,
                                                    std::string_view chip) noexcept {
-        const auto it = std::find_if(decl.hle.begin(), decl.hle.end(),
-                                     [chip](const rom_set_hle_decl& hle) {
-                                         return hle.chip == chip;
-                                     });
+        const auto it =
+            std::find_if(decl.hle.begin(), decl.hle.end(),
+                         [chip](const rom_set_hle_decl& hle) { return hle.chip == chip; });
         return it == decl.hle.end() ? nullptr : &*it;
     }
 
-    [[nodiscard]] bool has_dip(const rom_set_decl& decl,
-                               std::string_view name,
-                               std::uint16_t mask,
+    [[nodiscard]] bool has_dip(const rom_set_decl& decl, std::string_view name, std::uint16_t mask,
                                std::uint16_t default_value) noexcept {
         return std::any_of(decl.dips.begin(), decl.dips.end(), [&](const auto& dip) {
             return dip.name == name && dip.mask == mask && dip.default_value == default_value;
         });
     }
 
-    [[nodiscard]] bool has_conditioned_dip(const rom_set_decl& decl,
-                                           std::string_view name,
-                                           std::uint16_t mask,
-                                           std::uint16_t condition_mask,
+    [[nodiscard]] bool has_conditioned_dip(const rom_set_decl& decl, std::string_view name,
+                                           std::uint16_t mask, std::uint16_t condition_mask,
                                            std::uint16_t condition_value) noexcept {
         return std::any_of(decl.dips.begin(), decl.dips.end(), [&](const auto& dip) {
             return dip.name == name && dip.mask == mask && dip.condition.has_value() &&
-                   dip.condition->mask == condition_mask &&
-                   dip.condition->value == condition_value;
+                   dip.condition->mask == condition_mask && dip.condition->value == condition_value;
         });
     }
 
     [[nodiscard]] std::size_t count_dips_named(const rom_set_decl& decl,
                                                std::string_view name) noexcept {
-        return static_cast<std::size_t>(
-            std::count_if(decl.dips.begin(), decl.dips.end(), [&](const auto& dip) {
-                return dip.name == name;
-            }));
+        return static_cast<std::size_t>(std::count_if(
+            decl.dips.begin(), decl.dips.end(), [&](const auto& dip) { return dip.name == name; }));
     }
 
     void require_region_contract(const rom_set_region& region) {
@@ -162,11 +152,10 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             continue;
         }
         const std::string text = read_text_file(entry.path());
-        auto parsed = mnemos::manifests::common::parse_rom_set_decl(
-            text, entry.path().filename().string());
+        auto parsed =
+            mnemos::manifests::common::parse_rom_set_decl(text, entry.path().filename().string());
         for (const auto& error : parsed.errors) {
-            INFO(error.source << ":" << error.line << ":" << error.column << ": "
-                              << error.message);
+            INFO(error.source << ":" << error.line << ":" << error.column << ": " << error.message);
         }
         REQUIRE(parsed.ok());
 
@@ -177,11 +166,11 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
     }
 
     const std::map<std::string, std::size_t, std::less<>> expected_dip_counts{
-        {"airdueljm72", 8U}, {"airduelm72", 8U}, {"bchopper", 13U}, {"dbreedjm72", 11U},
-        {"dbreedm72", 11U},  {"dkgensanm72", 11U}, {"gallopm72", 10U}, {"imgfight", 10U},
-        {"imgfightj", 10U},  {"imgfightjb", 10U},  {"loht", 11U},      {"lohtb2", 11U},
-        {"lohtb3", 11U},     {"lohtj", 11U},       {"mrheli", 13U},    {"nspirit", 12U},
-        {"nspiritj", 12U},   {"rtype", 13U},       {"rtypeb", 13U},    {"rtypej", 13U},
+        {"airdueljm72", 8U}, {"airduelm72", 8U},   {"bchopper", 13U},    {"dbreedjm72", 11U},
+        {"dbreedm72", 11U},  {"dkgensanm72", 11U}, {"gallopm72", 10U},   {"imgfight", 10U},
+        {"imgfightj", 10U},  {"imgfightjb", 10U},  {"loht", 11U},        {"lohtb2", 11U},
+        {"lohtb3", 11U},     {"lohtj", 11U},       {"mrheli", 13U},      {"nspirit", 12U},
+        {"nspiritj", 12U},   {"rtype", 13U},       {"rtypeb", 13U},      {"rtypej", 13U},
         {"rtypejp", 13U},    {"rtypeu", 13U},      {"xmultiplm72", 12U},
     };
 
@@ -297,8 +286,7 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             CHECK(has_dip(decl, "Lives", 0x0003U, 0x0003U));
             CHECK(has_conditioned_dip(decl, "Coinage", 0x00f0U, 0x0400U, 0x0400U));
         }
-        if (decl.name == "imgfight" || decl.name == "imgfightj" ||
-            decl.name == "imgfightjb") {
+        if (decl.name == "imgfight" || decl.name == "imgfightj" || decl.name == "imgfightjb") {
             CHECK(has_dip(decl, "Demo Sounds", 0x0800U, 0x0000U));
         }
         if (decl.name == "xmultiplm72") {
@@ -324,6 +312,23 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             CHECK(has_file_alias(decl, "cc_b-a0.ic21", "cc-b-a0.bin"));
             CHECK(has_file_alias(decl, "cc_b-b0.ic26", "cc-b-b0.bin"));
             CHECK(has_file_alias(decl, "cc_c-v0.ic44", "cc-c-v0.bin"));
+        }
+        if (decl.name == "lohtj") {
+            CHECK(has_file_alias(decl, "r200.ic53", "tom_m53.ic53"));
+            CHECK(has_file_alias(decl, "r210.ic51", "tom_m51.ic51"));
+            CHECK(has_file_alias(decl, "r220.ic49", "tom_m49.ic49"));
+            CHECK(has_file_alias(decl, "r230.ic47", "tom_m47.ic47"));
+            CHECK(has_file_alias(decl, "r2a0.a0.ic21", "tom_m21.ic21"));
+            CHECK(has_file_alias(decl, "078.b0.ic26", "tom_m26.ic26"));
+            CHECK(has_file_alias(decl, "082.ic44", "tom_m44.ic44"));
+        }
+        if (decl.name == "lohtb2") {
+            CHECK(has_file_alias(decl, "loht-a19.bin", "tom_m21.ic21"));
+            CHECK(has_file_alias(decl, "loht-a20.bin", "tom_m22.ic22"));
+            CHECK(has_file_alias(decl, "loht-a18.bin", "tom_m20.ic20"));
+            CHECK(has_file_alias(decl, "loht-a21.bin", "tom_m23.ic23"));
+            CHECK(has_file_alias(decl, "loht-a24.bin", "tom_m26.ic26"));
+            CHECK(has_file_alias(decl, "loht-a1.bin", "tom_m44.ic44"));
         }
         if (decl.name == "nspirit") {
             CHECK(has_file_alias(decl, "nin_c-h0-b.ic40", "nin_c-h0.6h"));
@@ -498,7 +503,7 @@ TEST_CASE("m72 control register bits 0 and 1 pulse the coin counters", "[m72]") 
         0xB0U, 0x02U, 0xE6U, 0x02U, // counter 0 falls
         0xB0U, 0x00U, 0xE6U, 0x02U, // both clear
         0xB0U, 0x03U, 0xE6U, 0x02U, // both rising edges
-        0xF4U                        // HLT
+        0xF4U                       // HLT
     }));
 
     run_until_halt(system->main_cpu, 32);
@@ -510,11 +515,17 @@ TEST_CASE("m72 control register bits 0 and 1 pulse the coin counters", "[m72]") 
 TEST_CASE("m72 system input port keeps the sprite DMA complete bit asserted", "[m72]") {
     // Main: MOV AX,A000; MOV DS,AX; IN AL,02; MOV [0010],AL; HLT
     auto system = assemble_m72(make_image({
-        0xB8U, 0x00U, 0xA0U, // MOV AX,A000
-        0x8EU, 0xD8U,        // MOV DS,AX
-        0xE4U, 0x02U,        // IN AL,02
-        0xA2U, 0x10U, 0x00U, // MOV [0010],AL
-        0xF4U,               // HLT
+        0xB8U,
+        0x00U,
+        0xA0U, // MOV AX,A000
+        0x8EU,
+        0xD8U, // MOV DS,AX
+        0xE4U,
+        0x02U, // IN AL,02
+        0xA2U,
+        0x10U,
+        0x00U, // MOV [0010],AL
+        0xF4U, // HLT
     }));
     system->input_system = 0x00U; // all active-low cabinet bits asserted
 
@@ -531,9 +542,8 @@ TEST_CASE("m72 soundcpu region selects the ROM-backed Z80 map", "[m72]") {
     sound_rom[0xF010U] = 0x99U; // the public 64 KiB region tail is shadowed by RAM
     // LD A,(F010); LD (F011),A; LD A,7B; LD (F010),A; LD A,(0000); LD (F012),A; HALT
     const std::vector<std::uint8_t> program{
-        0x3AU, 0x10U, 0xF0U, 0x32U, 0x11U, 0xF0U, 0x3EU, 0x7BU,
-        0x32U, 0x10U, 0xF0U, 0x3AU, 0x00U, 0x00U, 0x32U, 0x12U,
-        0xF0U, 0x76U,
+        0x3AU, 0x10U, 0xF0U, 0x32U, 0x11U, 0xF0U, 0x3EU, 0x7BU, 0x32U,
+        0x10U, 0xF0U, 0x3AU, 0x00U, 0x00U, 0x32U, 0x12U, 0xF0U, 0x76U,
     };
     for (std::size_t i = 0; i < program.size(); ++i) {
         sound_rom[i] = program[i];
@@ -937,8 +947,7 @@ TEST_CASE("m72 protection MCU answers the V30 through the latch pair", "[m72]") 
     CHECK(system->mcu_sample_address == 0x21U);
 }
 
-TEST_CASE("m72 protection MCU mailbox interrupt is asserted by the shared-RAM tail",
-          "[m72]") {
+TEST_CASE("m72 protection MCU mailbox interrupt is asserted by the shared-RAM tail", "[m72]") {
     namespace m72 = mnemos::manifests::irem_m72;
 
     // Reset jumps around the INT0 vector. The level-sensed ISR acknowledges
@@ -974,9 +983,9 @@ TEST_CASE("m72 protection MCU mailbox interrupt is asserted by the shared-RAM ta
     system->mcu.step_instruction(); // ordinary shared-RAM writes do not knock INT0
     CHECK(system->mcu.peek_direct(0x30U) == 0x00U);
 
-    system->main_bus.write8(
-        m72::mcu_shared_main_base + static_cast<std::uint32_t>(m72::mcu_shared_ram_size - 2U),
-        0xA5U);
+    system->main_bus.write8(m72::mcu_shared_main_base +
+                                static_cast<std::uint32_t>(m72::mcu_shared_ram_size - 2U),
+                            0xA5U);
     system->mcu.step_instruction(); // INT0 service entry
     CHECK(system->mcu.cpu_registers().pc == 0x0003U);
     system->mcu.step_instruction(); // MOV DPTR,#CFFE
@@ -1060,8 +1069,7 @@ TEST_CASE("m72 manifest-declared MCU HLE inverts only the startup fill pattern",
     REQUIRE(system->protection_hle_present);
 
     for (std::size_t offset = 0; offset < m72::mcu_shared_ram_size; ++offset) {
-        const auto pattern =
-            static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
+        const auto pattern = static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
         system->main_bus.write8(m72::mcu_shared_main_base + static_cast<std::uint32_t>(offset),
                                 pattern);
         CHECK(system->mcu_shared_ram[offset] == static_cast<std::uint8_t>(~pattern));
@@ -1100,8 +1108,7 @@ TEST_CASE("m72 Daiku no Gensan no-dump MCU HLE exposes its entry continuation", 
     REQUIRE(system->protection_hle_present);
 
     for (std::size_t offset = 0; offset < m72::mcu_shared_ram_size; ++offset) {
-        const auto pattern =
-            static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
+        const auto pattern = static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
         system->main_bus.write8(m72::mcu_shared_main_base + static_cast<std::uint32_t>(offset),
                                 pattern);
     }
@@ -1136,8 +1143,8 @@ TEST_CASE("m72 no-dump MCU HLE exposes profile-specific checksum responses", "[m
         auto system =
             make_hle_system("dbreedm72", "irem_m72.dbreedm72_no_dump_mcu", 0x06U, 0x13000U);
         REQUIRE(system->protection_hle_present);
-        std::fill(system->mcu_shared_ram.begin() + 0x0FE0,
-                  system->mcu_shared_ram.begin() + 0x0FF2, std::uint8_t{0xEEU});
+        std::fill(system->mcu_shared_ram.begin() + 0x0FE0, system->mcu_shared_ram.begin() + 0x0FF2,
+                  std::uint8_t{0xEEU});
 
         system->main_bus.write8(m72::mcu_shared_main_base + 0x0FFFU, 0x00U);
 
@@ -1151,11 +1158,11 @@ TEST_CASE("m72 no-dump MCU HLE exposes profile-specific checksum responses", "[m
     }
 
     SECTION("Daiku no Gensan") {
-        auto system = make_hle_system("dkgensanm72", "irem_m72.dkgensanm72_no_dump_mcu", 0x14U,
-                                      0x12B20U);
+        auto system =
+            make_hle_system("dkgensanm72", "irem_m72.dkgensanm72_no_dump_mcu", 0x14U, 0x12B20U);
         REQUIRE(system->protection_hle_present);
-        std::fill(system->mcu_shared_ram.begin() + 0x0FE0,
-                  system->mcu_shared_ram.begin() + 0x0FF2, std::uint8_t{0xEEU});
+        std::fill(system->mcu_shared_ram.begin() + 0x0FE0, system->mcu_shared_ram.begin() + 0x0FF2,
+                  std::uint8_t{0xEEU});
 
         system->main_bus.write8(m72::mcu_shared_main_base + 0x0FFFU, 0x00U);
 
@@ -1207,8 +1214,7 @@ TEST_CASE("m72 rejects no-dump MCU HLE profiles without sample trigger metadata"
     CHECK(system->main_bus.read8(m72::mcu_shared_main_base) == 0xFFU);
 }
 
-TEST_CASE("m72 rejects no-dump MCU HLE sample triggers outside the samples region",
-          "[m72]") {
+TEST_CASE("m72 rejects no-dump MCU HLE sample triggers outside the samples region", "[m72]") {
     namespace m72 = mnemos::manifests::irem_m72;
 
     rom_set_image image;
@@ -1224,8 +1230,7 @@ TEST_CASE("m72 rejects no-dump MCU HLE sample triggers outside the samples regio
     CHECK_FALSE(system->params.protection_hle_profile.has_value());
     REQUIRE(system->roms.issues.size() == 1U);
     CHECK(system->roms.issues[0].file == "mcu");
-    CHECK(system->roms.issues[0].message.find("beyond samples region size") !=
-          std::string::npos);
+    CHECK(system->roms.issues[0].message.find("beyond samples region size") != std::string::npos);
     CHECK(system->main_bus.read8(m72::mcu_shared_main_base) == 0xFFU);
 }
 
@@ -1233,17 +1238,25 @@ TEST_CASE("m72 no-dump MCU HLE sample trigger selects sample segments above 64K"
     namespace m72 = mnemos::manifests::irem_m72;
 
     auto image = make_image({
-        0xB8U, 0x00U, 0xA0U, // MOV AX,A000
-        0x8EU, 0xD8U,        // MOV DS,AX
-        0xB0U, 0x14U,        // MOV AL,14
-        0xE6U, 0xC0U,        // OUT C0,AL
-        0xE4U, 0xC0U,        // IN AL,C0
-        0xA2U, 0x10U, 0x00U, // MOV [0010],AL
-        0xF4U,               // HLT
+        0xB8U,
+        0x00U,
+        0xA0U, // MOV AX,A000
+        0x8EU,
+        0xD8U, // MOV DS,AX
+        0xB0U,
+        0x14U, // MOV AL,14
+        0xE6U,
+        0xC0U, // OUT C0,AL
+        0xE4U,
+        0xC0U, // IN AL,C0
+        0xA2U,
+        0x10U,
+        0x00U, // MOV [0010],AL
+        0xF4U, // HLT
     });
     auto& samples = image.regions["samples"];
     samples.assign(0x12B40U, 0x00U);
-    samples[0x20U] = 0x11U;    // trigger 1
+    samples[0x20U] = 0x11U; // trigger 1
     samples[0x21U] = 0x12U;
     samples[0x30U] = 0x00U;    // explicit separator
     samples[0x12B20U] = 0x99U; // trigger 20, beyond a 16-bit cursor
@@ -1280,9 +1293,11 @@ TEST_CASE("m72 dbreed no-dump MCU HLE sample trigger uses declared metadata", "[
     namespace m72 = mnemos::manifests::irem_m72;
 
     auto image = make_image({
-        0xB0U, 0x06U, // MOV AL,06
-        0xE6U, 0xC0U, // OUT C0,AL
-        0xF4U,        // HLT
+        0xB0U,
+        0x06U, // MOV AL,06
+        0xE6U,
+        0xC0U, // OUT C0,AL
+        0xF4U, // HLT
     });
     image.regions["samples"].assign(0x13020U, 0x00U);
     image.regions["samples"][0x13000U] = 0x7DU;
@@ -1304,9 +1319,11 @@ TEST_CASE("m72 no-dump MCU HLE leaves the sample cursor unchanged for unknown tr
     namespace m72 = mnemos::manifests::irem_m72;
 
     auto image = make_image({
-        0xB0U, 0xFFU, // MOV AL,FF
-        0xE6U, 0xC0U, // OUT C0,AL
-        0xF4U,        // HLT
+        0xB0U,
+        0xFFU, // MOV AL,FF
+        0xE6U,
+        0xC0U, // OUT C0,AL
+        0xF4U, // HLT
     });
     image.regions["samples"].assign(0x20000U, 0x55U);
 

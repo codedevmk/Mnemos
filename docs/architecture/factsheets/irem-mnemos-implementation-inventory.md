@@ -14,18 +14,18 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 123 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 90 currently match a
-checked-in Mnemos Irem manifest, 84 have a direct player-loadable route through
-ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 6 tracked `.7z`
+That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 95 currently match a
+checked-in Mnemos Irem manifest, 87 have a direct player-loadable route through
+ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 8 tracked `.7z`
 items remain metadata-only until converted or unpacked. No tracked Irem item is
 now contract-only. The common data-gated runner and oracle registry now include
 G6-ratcheted corpus golden tests for every implemented Irem player family:
 M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires `D:\emu\irem` into those data-gated tests, including the mixed-root
-M90/M92 wrappers, while leaving the strict full-M72 roster gate opt-in because
-`lohtj` and `lohtb2` are still incomplete locally.
+M90/M92 wrappers. The strict full-M72 roster gate remains opt-in because it is a
+data-heavy player proof, but the current M72 artifact preflight is clean.
 
 ## Status Terms
 
@@ -239,9 +239,13 @@ visual and audio parity proof.
   certification. `MNEMOS_M72_PARITY_SET` can now pair a trusted ROM path with
   `MNEMOS_M72_PARITY_FRAME_SHA256` and/or `MNEMOS_M72_PARITY_AUDIO_SHA256` to
   turn that parity evidence into a deterministic CTest assertion.
-- **Known blocked or incomplete local proof:** `gallopm72` still lacks
-  `cc_c-pr-.ic1` CRC `0xac4421b1`; `lohtj` and `lohtb2` still lack complete
-  local set-specific artifacts in the broader scans. The stale unpacked
+- **Current local artifact proof:** no checked-in M72 manifest artifact is
+  currently missing from `D:\emu\irem`: the full M72 artifact preflight reports
+  `417/417` present. The optional full-roster CTest is still not current proof:
+  with `MNEMOS_M72_SET_DIR=D:\emu\irem` it selects incomplete/wrapper routes or
+  same-directory-only parent fallbacks for several sets, so source ranking /
+  supplemental media composition must be fixed before treating that gate as a
+  one-command roster pass. The stale unpacked
   `D:\emu\irem\M72\nspirit` folder is incomplete, but the current
   `D:\emu\irem\M72\nspirit.zip` is CRC-complete for both `nspirit` and
   `nspiritj`; the corpus smoke runner now ranks that ZIP ahead of the stale
@@ -254,32 +258,33 @@ visual and audio parity proof.
 - **Current exact local ZIP evidence:** direct CRC scanning of every entry in
   `D:\emu\irem\M72\gallopm72.zip`,
   `D:\emu\irem\M72\gallop.zip`, and
-  `D:\emu\irem\M72\nspirit.zip` now reports `43/44` artifacts present for
-  `gallopm72` plus World `nspirit`, missing only
-  `gallopm72:mcu:cc_c-pr-.ic1` CRC `0xac4421b1`. Direct ZIP inspection confirms
-  `D:\emu\irem\M72\nspirit.zip` contains `nin_c-pr-b.ic1` CRC `0x0f7b2713` and
+  `D:\emu\irem\M72\nspirit.zip` now reports `44/44` artifacts present for
+  `gallopm72` plus World `nspirit`. Direct ZIP inspection confirms
+  `D:\emu\irem\M72\gallopm72.zip` contains `cc_c-pr-.ic1` CRC `0xac4421b1`,
+  while `D:\emu\irem\M72\nspirit.zip` contains `nin_c-pr-b.ic1` CRC `0x0f7b2713` and
   `nspiritj/nin_c-pr-.ic1` CRC `0x802d440a`; the scanner reports `48/48`
-  present when checking `nspirit` and `nspiritj` from that ZIP.
+  present when checking `nspirit` and `nspiritj` from that ZIP. Exact scans of
+  `D:\emu\irem\M72\lohtj.zip` plus `D:\emu\irem\M72\loht.zip` report `20/20`
+  for `lohtj`, and `D:\emu\irem\M72\lohtb2.zip` plus `D:\emu\irem\M72\loht.zip`
+  report `30/30` for `lohtb2`. The player manifest now aliases the local
+  `loht.zip` parent/shared filenames used by those clone routes, and targeted
+  `gallopm72` / `lohtj` / `lohtb2` corpus smoke passes `3/3`.
 - **Current mixed-archive scan evidence:** the M72 artifact scanner now skips
   unreadable entries inside unrelated `.7z` archives and malformed ZIPs instead
   of aborting the corpus walk. The previously failing
   `D:\emu\Chaos Field (English v1.0)[Analog Stick Enabled][cdi].7z` probe now
   completes as a 0/20 non-match, and a rerun across `D:\emu\irem` plus
-  `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` now reports `84/94` present
-  for `gallopm72`, `nspirit`, `lohtj`, and `lohtb2`, missing only
-  `gallopm72`'s MCU plus the remaining `lohtb2`/`lohtj` set-specific files.
-  Current live proof against `D:\emu\irem` alone still reports `84/94` for that
-  blocker group: `nspirit` is complete, `lohtj` and `lohtb2` are not
-  discoverable as clean source sets, and `gallopm72` is discoverable but fails
-  media validation on `cc_c-pr-.ic1`.
+  `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` previously reported partial
+  blocker counts, but those are superseded by the updated M72 ZIPs. Current live
+  proof against `D:\emu\irem` alone reports `94/94` for the prior
+  `gallopm72`/`nspirit`/`lohtj`/`lohtb2` blocker group and `417/417` for the
+  checked-in M72 manifest preflight.
 - **Focused blocker-search evidence:** `scripts/irem_m72/find-missing-artifacts.ps1`
   now accepts `-MissingFromReport <json>` to search only the prior report's
   missing targets and records the seed report path. Size-aware `.7z` listing
   keeps that mode usable without extracting every unrelated archive member.
-  Current missing-only scans find `0/10` blockers under `D:\emu\irem`,
-  `D:\emu\arcade`, `D:\emu\archive`, and the Darksoft M72 archive; a fast
-  `rg --files D:\emu` probe finds only the known `loht` parent files plus
-  `gallopm72.zip`, not the missing clone/MCU artifacts.
+  Older missing-only scans predate the updated Gallop and Legend of Hero Tonma
+  ZIPs and should not be quoted as current blockers.
 - **Correct gfx/music:** not certified. The board has the strongest current
   graphics/music implementation, but final visual priority, protection behavior,
   DIP/manual proof, raster phase, and audio parity are still open.
@@ -461,8 +466,11 @@ visual and audio parity proof.
   not acknowledge it, sound-side writes to `$a8044` acknowledge it, and YM2151
   Timer A dispatches through INTP0/vector 24. Simultaneous pending YM/command
   IRQ proof selects INTP0 before INTP1 and then services the still-pending
-  command IRQ after the YM source clears. This is still not encrypted V35
-  program behavior, cycle-exact interrupt latency, or audio parity.
+  command IRQ after the YM source clears. The V30/V33/V35 core now fetches
+  instruction bytes through the bus opcode path, and M92 can map an optional
+  `soundcpu_opcodes` decrypted V35 opcode image while data reads still see the
+  raw encrypted `soundcpu` ROM. This is still not the proprietary M92 V35
+  decrypt transform/key, cycle-exact interrupt latency, or audio parity.
 - **Local corpus note:** twelve local M92-era title-wrapper ZIPs now resolve to
   embedded set IDs and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
   (`bmaster`), Gunforce parent (`gunforce`), Gunforce Japan/US split clones
@@ -473,10 +481,10 @@ visual and audio parity proof.
   fallback. In the current sorted corpus, older M92 routes live under
   `D:\emu\irem\M72` while the Mystic Riders and Ninja Baseball wrappers live at
   `D:\emu\irem`; both are storage artifacts rather than board proof.
-- **Remaining:** encrypted V35 sound CPU behavior/decryption, cycle-exact V35
-  interrupt latency, exact GA20/YM2151 sound protocol, GA21/GA22 video/priority
-  behavior, exact memory/I/O maps, protection details, DIP/raster behavior, and
-  visual/audio parity proof.
+- **Remaining:** derive/verify the proprietary M92 V35 decrypt transform/key,
+  cycle-exact V35 interrupt latency, exact GA20/YM2151 sound protocol,
+  GA21/GA22 video/priority behavior, exact memory/I/O maps, protection details,
+  DIP/raster behavior, and visual/audio parity proof.
 
 ### M107
 
@@ -523,13 +531,14 @@ visual and audio parity proof.
    analog behavior.
 3. Resolve the M82/M84 R-Type II classification mismatch with board evidence and
    adjust manifests/docs if needed.
-4. Continue M72 artifact closure for `gallopm72`, `lohtb2`, and `lohtj` by
-   finding the exact missing dumps without substituting sibling-set or synthetic bytes.
-5. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` only when the
-   missing M72 artifacts have been supplied. With the switch, the runner now
-   prints a strict checked-in-manifest artifact preflight before CTest so
-   present-but-incomplete sets such as `gallopm72` are reported alongside
-   missing source sets; without the switch it is the available-artifact proof
+4. Fix the M72 roster-golden source ranking / supplemental-media composition,
+   then rerun the one-command full roster proof. The current artifact preflight
+   is clean and the formerly blocked `gallopm72` / `lohtj` / `lohtb2` targeted
+   smoke passes `3/3`, but `MNEMOS_M72_SET_DIR=D:\emu\irem` still picks
+   incomplete routes for several sets.
+5. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
+   M72 roster proof. With the switch, the runner prints a checked-in-manifest
+   artifact preflight before CTest; without the switch it is the available-artifact proof
    runner for every implemented Irem family.
 6. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.

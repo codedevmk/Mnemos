@@ -130,7 +130,7 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t v30::fetch8() noexcept {
-        const std::uint8_t value = rb(cs_, ip_);
+        const std::uint8_t value = bus_ != nullptr ? bus_->fetch_opcode8(phys(cs_, ip_)) : 0xFFU;
         ip_ = static_cast<std::uint16_t>(ip_ + 1U);
         return value;
     }

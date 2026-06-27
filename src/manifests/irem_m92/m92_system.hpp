@@ -57,6 +57,8 @@ namespace mnemos::manifests::irem_m92 {
     inline constexpr std::uint32_t sound_ym2151_base = 0xA8040U;
     inline constexpr std::uint32_t sound_latch_addr = 0xA8044U;
     inline constexpr std::uint32_t sound_reply_addr = 0xA8046U;
+    inline constexpr std::uint32_t sound_opcode_overlay_size = 0x100000U;
+    inline constexpr std::string_view sound_opcode_region = "soundcpu_opcodes";
 
     inline constexpr std::uint16_t port_in_p1 = 0x00U;
     inline constexpr std::uint16_t port_in_p2 = 0x01U;
@@ -127,6 +129,7 @@ namespace mnemos::manifests::irem_m92 {
         std::array<std::uint8_t, palette_ram_size> palette_ram{};
         std::array<std::uint8_t, vram_size> vram{};
         std::array<std::uint8_t, sound_work_ram_size> sound_ram{};
+        std::vector<std::uint8_t> sound_opcode_rom{};
 
         std::uint8_t input_p1{0xFFU};
         std::uint8_t input_p2{0xFFU};

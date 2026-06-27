@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace {
@@ -335,6 +336,28 @@ TEST_CASE("m92 sound CPU drives the memory-mapped Irem GA20 window", "[m92][boar
     REQUIRE(system != nullptr);
     CHECK(system->pcm.metadata().part_number == "GA20");
     CHECK(system->pcm.capture_divider() == m92::pcm_capture_divider);
+
+    system->run_frame();
+
+    CHECK(system->pcm.read_register(mnemos::chips::audio::irem_ga20::reg_status) ==
+          mnemos::chips::audio::irem_ga20::status_active);
+    CHECK(system->pcm.last_sample() < 0);
+}
+
+TEST_CASE("m92 V35 sound CPU fetches decrypted opcodes while data reads see encrypted ROM",
+          "[m92][board][audio][opcode]") {
+    auto image = synthetic_m92_image();
+    image.regions["soundcpu"] = std::vector<std::uint8_t>(m92::sound_rom_size, 0x00U);
+    image.regions[std::string{m92::sound_opcode_region}] = synthetic_m92_sound_ga20_program();
+
+    auto system = m92::assemble_m92(std::move(image), m92::board_params_for("bmaster"));
+    REQUIRE(system != nullptr);
+    REQUIRE(system->sound_opcode_rom.size() == m92::sound_opcode_overlay_size);
+
+    CHECK(system->sound_bus.read8(0xFFFF0U) == 0x00U);
+    CHECK(system->sound_bus.fetch_opcode8(0xFFFF0U) == 0xEAU);
+    CHECK(system->sound_bus.read8(0xE0200U) == 0x00U);
+    CHECK(system->sound_bus.fetch_opcode8(0xE0200U) == 0xB8U);
 
     system->run_frame();
 

@@ -21,9 +21,15 @@ namespace {
     class flat_bus final : public ibus {
       public:
         std::vector<std::uint8_t> memory = std::vector<std::uint8_t>(0x100000U, 0U);
+        std::vector<std::uint8_t> opcode_memory = std::vector<std::uint8_t>(0x100000U, 0U);
+        bool opcode_overlay{};
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override {
             return memory[address & 0xFFFFFU];
+        }
+
+        [[nodiscard]] std::uint8_t fetch_opcode8(std::uint32_t address) override {
+            return opcode_overlay ? opcode_memory[address & 0xFFFFFU] : read8(address);
         }
 
         void write8(std::uint32_t address, std::uint8_t value) override {
@@ -39,7 +45,9 @@ namespace {
     void load_program(flat_bus& bus, v30& cpu, std::uint16_t segment, std::uint16_t offset,
                       const std::vector<std::uint8_t>& code) {
         for (std::size_t i = 0; i < code.size(); ++i) {
-            bus.memory[(linear(segment, offset) + i) & 0xFFFFFU] = code[i];
+            const std::uint32_t address = (linear(segment, offset) + i) & 0xFFFFFU;
+            bus.memory[address] = code[i];
+            bus.opcode_memory[address] = code[i];
         }
         auto regs = cpu.cpu_registers();
         regs.cs = segment;
@@ -90,6 +98,45 @@ TEST_CASE("v30 powers on at FFFF:0000 and takes a far jump", "[v30]") {
     const auto after = cpu.cpu_registers();
     CHECK(after.cs == 0x1000U);
     CHECK(after.ip == 0x8000U);
+}
+
+TEST_CASE("v30 fetches instruction bytes from the opcode path and data from read8",
+          "[v30][opcode]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+    bus.opcode_overlay = true;
+
+    const std::uint16_t segment = 0x0100U;
+    const std::uint16_t offset = 0x0000U;
+    const std::uint32_t base = linear(segment, offset);
+    const std::vector<std::uint8_t> decrypted{
+        0xB0U, 0x7EU,        // MOV AL,7E
+        0xA2U, 0x00U, 0x20U, // MOV [2000],AL
+        0xA0U, 0x01U, 0x00U  // MOV AL,[0001]
+    };
+    const std::vector<std::uint8_t> encrypted{0x00U, 0xC7U, 0x00U, 0x00U,
+                                              0x00U, 0x00U, 0x00U, 0x00U};
+    for (std::size_t i = 0; i < decrypted.size(); ++i) {
+        bus.opcode_memory[(base + i) & 0xFFFFFU] = decrypted[i];
+        bus.memory[(base + i) & 0xFFFFFU] = encrypted[i];
+    }
+
+    auto regs = cpu.cpu_registers();
+    regs.cs = segment;
+    regs.ds = segment;
+    regs.ip = offset;
+    cpu.set_registers(regs);
+
+    cpu.step_instruction();
+    CHECK((cpu.cpu_registers().ax & 0x00FFU) == 0x7EU);
+    CHECK(bus.read8(base + 1U) == 0xC7U);
+
+    cpu.step_instruction();
+    CHECK(bus.memory[linear(segment, 0x2000U)] == 0x7EU);
+
+    cpu.step_instruction();
+    CHECK((cpu.cpu_registers().ax & 0x00FFU) == 0xC7U);
 }
 
 TEST_CASE("v30 arithmetic sets the documented flags", "[v30]") {
@@ -551,8 +598,7 @@ TEST_CASE("v30 FPO2 and BRKEM stubs consume operands", "[v30]") {
     SECTION("FPO2 memory form consumes ModR/M displacement") {
         // MOV AX,1234; FPO2 op,[BP+0010]; INC AX; HLT
         load_program(bus, cpu, 0x0100U, 0x0000U,
-                     {0xB8U, 0x34U, 0x12U, 0x66U, 0x86U, 0x10U, 0x00U, 0x40U,
-                      0xF4U});
+                     {0xB8U, 0x34U, 0x12U, 0x66U, 0x86U, 0x10U, 0x00U, 0x40U, 0xF4U});
         auto regs = cpu.cpu_registers();
         regs.ss = 0x3000U;
         regs.bp = 0x0020U;
@@ -567,8 +613,7 @@ TEST_CASE("v30 FPO2 and BRKEM stubs consume operands", "[v30]") {
 
     SECTION("FPO2 register form consumes ModR/M") {
         // MOV AX,0000; FPO2 op,AX; INC AX; HLT
-        load_program(bus, cpu, 0x0100U, 0x0000U,
-                     {0xB8U, 0x00U, 0x00U, 0x67U, 0xC0U, 0x40U, 0xF4U});
+        load_program(bus, cpu, 0x0100U, 0x0000U, {0xB8U, 0x00U, 0x00U, 0x67U, 0xC0U, 0x40U, 0xF4U});
 
         cpu.step_instruction(); // MOV
         cpu.step_instruction(); // FPO2
