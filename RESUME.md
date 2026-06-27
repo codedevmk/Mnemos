@@ -79,18 +79,20 @@ Confirmed:
   resolver and boots through both MSX and MSX2.
 - `a_test2 [Arabic MSX].rom` is profiled for MSX2 BR C-BIOS instead of being
   treated as a V9938 renderer failure.
-- Bounded real-ROM smoke windows have passed through skip 59:
+- `abbaye_v1.1.rom` now resolves its strong ASCII8 loader-write signature
+  before a lower-page self-modifying-code hit can misclassify it as Generic8.
+- Bounded real-ROM smoke windows have passed through skip 71:
   - `-SkipRoms 12 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 24 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 36 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 48 -MaxRoms 12`: `26/26` passed after profiling
     `a_test2 [Arabic MSX].rom` against BR C-BIOS.
+  - `-SkipRoms 60 -MaxRoms 12`: `26/26` passed after fixing the shared
+    ASCII8-vs-Generic8 mapper classifier.
 
 Known gaps:
 
-- The latest bounded corpus window at `-SkipRoms 60 -MaxRoms 12` exposed one
-  current failure: MSX `abbaye_v1.1.rom` stays at the firmware framebuffer
-  baseline while the MSX2 case renders distinct data.
+- Continue the bounded corpus at `-SkipRoms 72 -MaxRoms 12`.
 - This is not yet a representative compatibility matrix.
 - Earlier notes included Bosconia staying on the C-BIOS logo and MSX2 Bestial
   Warrior color fidelity suspicion; those still need confirmation in later
@@ -104,7 +106,24 @@ The branch was clean and pushed at:
 6ded9c47 (HEAD -> feature/msx2, origin/feature/msx2) Profile Arabic MSX2 regional BIOS boot
 ```
 
-This handoff update should be committed and pushed after writing this file.
+The current worktree should include a newer commit that fixes `abbaye_v1.1`
+mapper detection and updates this file.
+
+## Latest Change
+
+The latest source change is in:
+
+```text
+src/manifests/common/msx_cartridge_mapper.cpp
+src/manifests/common/tests/msx_cartridge_mapper_test.cpp
+```
+
+`abbaye_v1.1.rom` carries three strong ASCII8 register writes at `$6800`,
+`$7000`, and `$7800`, but also writes to `$40C1` as self-modifying code. The
+old classifier treated that lower-page code patch as Generic8 evidence and
+chose Generic8 before considering the stronger ASCII8 loader signature. The
+new classifier lets `ascii8_count >= 3` win before the Generic8 path, and the
+regression test captures the same false-positive shape.
 
 ## Latest Validation: Skip 60 Window
 
@@ -138,35 +157,44 @@ $romDir='D:\emu\msx\MSX files [ROM]'
 Result:
 
 ```text
-MSX/MSX2 boot smoke: 25/26 passed
-summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-225824-741-71812\summary.json
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-231011-313-3300\summary.json
 ```
 
-Only failure:
-
-```text
-[fail] msx/rom-abbaye_v1.1 exit=0 reason=framebuffer matched firmware baseline; media did not visibly affect boot
-log:      build\scratch\msx-boot\20260626-225824-741-71812\006-msx-rom-abbaye_v1.1.log
-retryLog: build\scratch\msx-boot\20260626-225824-741-71812\006-msx-rom-abbaye_v1.1-retry-3600.log
-```
-
-Important hashes:
+Important fixed-case hashes:
 
 ```text
 MSX firmware baseline:
 697fe93903980d26d6ef37fc76b0511c8a76656ebdc70f7be616c4dd7bac836a
 
-MSX abbaye_v1.1 after 600/3600 frames:
-697fe93903980d26d6ef37fc76b0511c8a76656ebdc70f7be616c4dd7bac836a
+MSX abbaye_v1.1:
+2089850df8c39e4ffac5a7f4d095b5dc46357e513cfb4b95fd13a2ada7dc63f2
 
 MSX2 firmware baseline:
 8572e9f4e74913c1a5d3de86da650c0a46ab5ec0643b2d6e5f80bf0c3fd5e1bb
 
 MSX2 abbaye_v1.1:
-9ad46a5888798bf12b44e407a91ac4e75e5087ccc2439a6427cae495a039bf9c
+69c453bc568503eb6ce377a406183182b131b620613a82ef737f4b849cbea2d5
 ```
 
-## Current Failure Details
+Direct post-fix Catch2 proof for `abbaye_v1.1.rom`:
+
+```text
+resolved cartridge mapper: ASCII8
+boot framebuffer sha256: 2089850df8c39e4ffac5a7f4d095b5dc46357e513cfb4b95fd13a2ada7dc63f2
+diagnostic log: build\scratch\msx-abbaye-triage\20260626-2305\msx-abbaye-catch2-s-after-fix.txt
+```
+
+Explicit player proof:
+
+```text
+command included: --system msx --rom "D:\emu\msx\MSX files [ROM]\abbaye_v1.1.rom"
+output: build\scratch\msx-abbaye-proof\20260626-2310\abbaye-msx.ppm
+PPM SHA256: 893782F6AE8C5DD17DB8CF0E47CF084B5C2D9C1022E8117157F00BD19AC7E0AF
+sample_unique_bytes=4
+```
+
+## Fixed Failure Details
 
 ROM:
 
@@ -178,67 +206,20 @@ SHA256: A8F52BE42A9731DF93D68B78F1BA00F03BF2B04582CA532359B27AD8D3EF25B9
 
 Observed:
 
-- MSX run exits successfully from Catch2 but the smoke runner rejects it because
-  the framebuffer hash equals the MSX C-BIOS firmware baseline.
-- Retry to 3600 frames still equals the same baseline hash.
-- MSX2 run for the same ROM is visibly affected and produces hash
-  `9ad46a5888798bf12b44e407a91ac4e75e5087ccc2439a6427cae495a039bf9c`.
+- Before the fix, MSX automatic mapping resolved to Generic8 and the framebuffer
+  stayed equal to the C-BIOS firmware baseline after 3600 frames.
+- Explicit mapper probes showed `ascii8` and `ascii16` both escaped the
+  baseline, while `generic8` reproduced the failure.
+- After the shared classifier fix, automatic mapping resolves to ASCII8 and the
+  MSX framebuffer differs from the firmware baseline.
 - The ROM header starts with `41 42 AE 40`, giving an init vector around
   `$40AE`.
-- Early bytes include writes to mapper-looking ranges such as `$7000` and
-  `$7800`, so confirm mapper selection before adding any skip profile.
-- `rg` found no existing profile for `abbaye` or its ROM hash.
+- Early bytes include loader writes to `$6800`, `$7000`, and `$7800`, plus a
+  code patch at `$40C1`; the code patch caused the old Generic8 false positive.
 
-## Resume Triage Steps
+## Suggested Next Implementation Slice
 
-First rerun the failing target with Catch2 success output enabled; the smoke
-runner suppresses INFO on successful Catch2 assertions:
-
-```powershell
-$env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
-$env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
-$env:MNEMOS_MSX_ROM='D:\emu\msx\MSX files [ROM]\abbaye_v1.1.rom'
-$env:MNEMOS_MSX_REGION='ntsc'
-$env:MNEMOS_MSX_BOOT_FRAMES='3600'
-build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe "[golden][msx]" -s
-```
-
-Then try explicit mapper overrides before deciding this is a profile skip:
-
-```powershell
-$rom='D:\emu\msx\MSX files [ROM]\abbaye_v1.1.rom'
-.\scripts\msx\run-boot-smoke.ps1 `
-  -BuildDir 'build/windows-msvc-debug' `
-  -MsxBios 'D:\emu\msx\bios\cbios\cbios_main_msx1.rom' `
-  -MsxLogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx1.rom' `
-  -MsxRom $rom `
-  -MsxMapper 'ascii16' `
-  -MsxRegion 'ntsc' `
-  -Frames 3600 `
-  -RequireData
-```
-
-If ASCII16 does not boot, also check the mapper names already accepted by the
-codebase for this surface, especially `ascii8` and `generic8`. Inspect
-`src\manifests\common\msx_cartridge_mapper.cpp`,
-`src\manifests\common\tests\msx_cartridge_mapper_test.cpp`, and
-`tests\golden\msx_boot_test.cpp` before editing.
-
-Decision points:
-
-- If a mapper override boots MSX, add a narrow SHA256-backed ROM profile or
-  mapper detector exception plus tests.
-- If MSX never boots but MSX2 does, add an MSX-only skip profile with a clear
-  reason that the cartridge is validated through MSX2/C-BIOS and is not an MSX1
-  compatibility datapoint.
-- If direct diagnostics show slot or BIOS handoff failure unrelated to mapper
-  metadata, implement the narrow shared slot/boot fix and validate both MSX and
-  MSX2.
-
-## Validation After The Next Fix
-
-At minimum, rerun a targeted `abbaye_v1.1` smoke for both systems or the
-relevant skip/profile path. Then rerun the full failing corpus window:
+Run the next bounded MSX/MSX2 ROM corpus smoke:
 
 ```powershell
 $romDir='D:\emu\msx\MSX files [ROM]'
@@ -260,20 +241,10 @@ $romDir='D:\emu\msx\MSX files [ROM]'
   -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
   -Frames 600 `
   -RetryFrames 3600 `
-  -SkipRoms 60 `
+  -SkipRoms 72 `
   -MaxRoms 12 `
   -RequireData
 ```
-
-If the window passes, continue with:
-
-```text
--SkipRoms 72 -MaxRoms 12
-```
-
-Use explicit player proof only for real render/boot fixes. If the next change is
-only a skip profile for an MSX2-only cartridge, document why player proof was
-not run.
 
 ## Build / Test Commands
 

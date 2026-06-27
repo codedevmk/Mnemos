@@ -216,6 +216,23 @@ TEST_CASE("msx cartridge mapper detection recognizes Kabish CAS2ROM64KS ASCII8 c
     CHECK(detect_msx_cartridge_mapper(rom) == msx_cartridge_mapper_kind::ascii8);
 }
 
+TEST_CASE("msx cartridge mapper detection prefers strong ASCII8 loader writes over "
+          "self-modifying code hits",
+          "[manifests][common][msx][mapper]") {
+    std::vector<std::uint8_t> rom(0x40000U, 0x00U);
+    rom[0] = 'A';
+    rom[1] = 'B';
+    rom[2] = 0xAEU;
+    rom[3] = 0x40U;
+
+    add_signature(rom, 0x020U, 0x7000U);
+    add_signature(rom, 0x040U, 0x7800U);
+    add_signature(rom, 0x060U, 0x6800U);
+    add_signature(rom, 0x0ABU, 0x40C1U);
+
+    CHECK(detect_msx_cartridge_mapper(rom) == msx_cartridge_mapper_kind::ascii8);
+}
+
 TEST_CASE("msx cartridge mapper detection recognizes padded plain ROM payloads",
           "[manifests][common][msx][mapper]") {
     const std::vector<std::uint8_t> rom = padded_plain_cart_with_header_at_payload(0x10000U);

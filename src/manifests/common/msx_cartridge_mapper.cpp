@@ -120,6 +120,10 @@ namespace mnemos::manifests::common {
             if (count_set(sig.konami_scc) >= 3) {
                 return msx_cartridge_mapper_kind::konami_scc;
             }
+            const int ascii8_count = count_set(sig.ascii8);
+            if (ascii8_count >= 3) {
+                return msx_cartridge_mapper_kind::ascii8;
+            }
             const int generic8_count = count_set(sig.generic8);
             if (sig.generic8[0] && generic8_count >= 2) {
                 return msx_cartridge_mapper_kind::generic8;
@@ -127,7 +131,6 @@ namespace mnemos::manifests::common {
             if (count_set(sig.konami) >= 2 && (sig.konami[1] || sig.konami[2])) {
                 return msx_cartridge_mapper_kind::konami;
             }
-            const int ascii8_count = count_set(sig.ascii8);
             if (ascii8_count >= 2 && (sig.ascii8[1] || sig.ascii8[3] || ascii8_count >= 3)) {
                 return msx_cartridge_mapper_kind::ascii8;
             }
