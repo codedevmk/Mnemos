@@ -413,16 +413,18 @@ Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
 129 items across `root`, `M15`, `M72`, `M81`, `M82`, `M84`, `M107`, and `i8751`.
-One item matches a checked-in M15 manifest contract, two match checked-in M52
-manifests, eleven match checked-in M62 raw-media contracts, forty-six match
+One item matches a checked-in M14 manifest contract, one item matches a checked-in
+M15 manifest contract, two match checked-in M52 manifests, eleven match
+checked-in M62 raw-media contracts, forty-six match
 checked-in M72 manifests, eight match checked-in M75 manifests, five match
 checked-in M81 manifest contracts, ten match checked-in M82 manifests, six
 match checked-in M84 manifest contracts, four match checked-in M90 manifests,
 fifteen match checked-in M92 manifests, and eight match checked-in M107 manifest
 contracts. The inventory now separates manifest tracking, media loadability, and
-player support: 116 items match a checked-in Irem manifest, 107 are readable
+player support: 117 items match a checked-in Irem manifest, 108 are readable
 through current ZIP / single-inner-ZIP / folder routes, 96 are backed by an
-executable player-supported route, 11 M62 items are tracked contract-only, and
+executable player-supported route, the 1 M14 item and 11 M62 items are tracked
+contract-only, and
 9 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
 sorted top-level board bucket is completely untracked anymore;
 `board_family_candidates` is now empty for the sorted top-level buckets. The
@@ -432,7 +434,7 @@ copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping, and the local Air Duel M82 parent/US clone wrappers now
 route through `irem_m82`. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1241/1241` required files present from
+manifests reports `1251/1251` required files present from
 `D:\emu\irem`, so there are no current file-level missing-artifact rows to list
 for those manifests.
 The report also carries per-item
@@ -446,13 +448,17 @@ The same grouping now keeps local M62 Lode Runner, Lot Lot, Spelunker II,
 Battle Road, Horizon, and Youjyuden wrappers as `tracked_contract_only` with `next_action =
 add_board_profile`, so raw-media coverage is not confused with a playable M62
 board profile.
+The local M14 grouping now tracks `D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip`
+as contract-only `ptrmj` with `next_action = add_board_profile`, so P.T. Reach
+Mahjong is no longer an unclassified root item.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract moves
 the local Lot Lot wrapper out of `classify_or_sort_corpus_item`, reducing the
-current root rows from 15 to 13.
+current root rows from 15 to 12.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
-M82, M84, M90, M92, and M107. The newest G6 high-water raises cover
+M82, M84, M90, M92, and M107, and also reports the M14 manifest-only
+data gate separately. The newest G6 high-water raises cover
 `GLD-M15-CORPUS`, `GLD-M52-CORPUS`, `GLD-M81-CORPUS`, `GLD-M82-CORPUS`,
 `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
@@ -549,6 +555,18 @@ Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sp
 > tilemaps / sprites / palette with raster-time scroll changes and CPU-visible disconnected-A9 palette mirrors), YM2151, DAC/PCM sample playback with sound-Z80-clocked
 > write-boundary mixing, 8259 PIC, raster compare,
 > shared sound RAM, inputs/DIPs.
+
+---
+
+## Irem M14 — 1 / 2
+
+This section is split from M10/M15 because the local P.T. Reach Mahjong artifact
+is classified by current public driver-level evidence as M14 hardware rather
+than the existing M15 Head On route.
+
+#### Manifests / board bring-up
+- [x] **I14-1** Local M14 ROM-set contract — `src/manifests/irem_m14` carries a checked-in embedded ROM-contract manifest for `ptrmj`, with parser/region-contract coverage for the eight 1 KiB 8085 program ROMs, two 1 KiB graphics ROMs, local nested-wrapper aliases, region sizes, offsets, and CRC32 values. `MNEMOS_M14_SET_DIR=D:\emu\irem` data-gates `D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip` and proves it loads CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records the root wrapper as M14 `tracked_contract_only` with `next_action = add_board_profile` instead of leaving it as `classify_or_sort_corpus_item` · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m14/games/ptrmj.toml` + `src/manifests/irem_m14/tests/m14_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **I14-2** Executable M14 board profile — Implement the real M14 board route for P.T. Reach Mahjong: NEC D8085AC/8085 CPU execution, ROM/RAM/video/color memory map, I/O ports for paddle/ball/control/DIP/coin IRQ behavior, sparse discrete/sample sound behavior, raster timing, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current `ptrmj` manifest is only a ROM contract and must not be counted as playable M14 support · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_m14/*` board implementation + `src/apps/player/adapters/irem_m14/*` + data-gated player smoke
 
 ---
 

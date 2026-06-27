@@ -15,21 +15,21 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 116 currently match
-a checked-in Mnemos Irem manifest, 107 are readable through the current ZIP,
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 117 currently match
+a checked-in Mnemos Irem manifest, 108 are readable through the current ZIP,
 single-inner wrapper ZIP, or unpacked-folder media routes, and 96 have an
-executable player-supported route. The 11 M62 matches are intentionally tracked
-as contract-only raw-media manifests until an M62 board/player profile exists;
-9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
+executable player-supported route. The 1 M14 match and 11 M62 matches are
+intentionally tracked as contract-only manifests until board/player profiles
+exist; 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
 copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping. A current all-Irem CRC artifact audit of the checked-in
 manifests reports
-`1241/1241` required files present from `D:\emu\irem`, so there are no current
+`1251/1251` required files present from `D:\emu\irem`, so there are no current
 file-level missing-artifact rows for the checked-in Irem manifest set. The
-common data-gated runner and oracle registry now include G6-ratcheted corpus
-golden tests for every implemented Irem player family: M15, M52, M72, M75,
-M81, M82, M84, M90, M92, and M107.
+common data-gated runner now includes the M14 manifest-load proof plus
+G6-ratcheted corpus golden tests for every implemented Irem player family: M15,
+M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires `D:\emu\irem` into those data-gated tests, including the mixed-root
 M90/M92 wrappers. The strict full-M72 roster gate remains opt-in because it is a
@@ -58,6 +58,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
+| M14 | `irem_m14` ROM contract | 8% contract-only | `ptrmj` | None; CRC-clean media-load contract only | None | Executable 8085 M14 board profile, video/color, paddle/ball/input behavior, discrete/sample sound, save-state/player adapter, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
@@ -95,6 +96,8 @@ targets:
   the text layer while mirroring text-layer final positions under flip-screen.
   `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned
   visual/audio SHA-256 oracle for a reference-captured M52 set.
+- M14 has a single `ptrmj` ROM contract with CRC-clean local wrapper proof, but
+  no executable board/player route.
 - M62 now has eleven raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
   load proof, but no executable board/player route. Treat these as corpus
   grouping and future board-input evidence only.
@@ -134,6 +137,24 @@ visual and audio parity proof.
   analog sample or music parity.
 - **Remaining:** broader M10/M15 roster, board-evidenced discrete sound and
   analog color, exact raster phase, and screenshot/audio parity.
+
+### M14
+
+- **Techsheet games:** P.T. Reach Mahjong.
+- **Mnemos games:** contract-only ROM manifest for `ptrmj`.
+- **Smoke playable:** none. `MNEMOS_M14_SET_DIR=D:\emu\irem` data-gates
+  CRC-clean loading for the local single-inner wrapper ZIP, but there is no
+  executable M14 player route yet.
+- **Correct gfx/music:** none.
+- **Current implementation:** `src/manifests/irem_m14` embeds the local
+  `ptrmj` ROM-set contract with public M14 `maincpu` and `gfx1` region
+  placement, exact local filenames, directory-prefixed aliases for the nested
+  wrapper, sizes, and CRC32 values. The focused test checks embedded TOML
+  synchronization, region/file invariants, and optional real-corpus loading
+  through `D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip`.
+- **Remaining:** implement the NEC D8085AC/8085 board route, M14 memory and I/O
+  map, raster/color behavior, paddle/ball/input behavior, sparse discrete or
+  sample sound, save-state/player adapter, and visual/audio parity.
 
 ### M52
 

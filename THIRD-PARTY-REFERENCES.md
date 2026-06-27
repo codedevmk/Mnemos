@@ -140,6 +140,12 @@ multiple independent open-source implementations.
   relationships. The M52 adapter folds those DIP defaults into the
   board-visible `dsw1`/`dsw2` bytes and exposes the parsed switch count. No
   manual scans, emulator source, or ROM bytes are committed.
+- **Irem M14 ROM-set metadata** — the checked-in `ptrmj` manifest uses public
+  Irem M14 driver metadata for P.T. Reach Mahjong dump filenames, main CPU and
+  graphics region offsets, region sizes, CRC-32s, orientation, and board-family
+  classification. The local wrapper remains contract-only until an executable
+  M14 board route exists. No MAME driver code or ROM bytes are copied into
+  Mnemos.
 - **Irem M62 ROM-set metadata** — declarative raw-media manifests under
   `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
   region sizes, CRC-32s, and board-family classification. The Horizon local
