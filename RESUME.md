@@ -84,7 +84,7 @@ Confirmed:
 - The MSX/MSX2 smoke runner now treats empty/zero-byte logs as "no hash" rather
   than throwing from the regex parser; this was hit by a profile-backed
   baseline probe during the skip-132 window.
-- Bounded real-ROM smoke windows have passed through skip 143:
+- Bounded real-ROM smoke windows have passed through skip 155:
   - `-SkipRoms 12 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 24 -MaxRoms 12`: `26/26` passed.
   - `-SkipRoms 36 -MaxRoms 12`: `26/26` passed.
@@ -101,10 +101,11 @@ Confirmed:
   - `-SkipRoms 132 -MaxRoms 12`: `25/25` passed after the runner parser fix;
     `ASHGUINZ.rom` is skipped on MSX by profile as MSX2-only and validated on
     MSX2.
+  - `-SkipRoms 144 -MaxRoms 12`: `26/26` passed.
 
 Known gaps:
 
-- Continue the bounded corpus at `-SkipRoms 144 -MaxRoms 12`.
+- Continue the bounded corpus at `-SkipRoms 156 -MaxRoms 12`.
 - This is not yet a representative compatibility matrix.
 - Earlier notes included Bosconia staying on the C-BIOS logo and MSX2 Bestial
   Warrior color fidelity suspicion; those still need confirmation in later
@@ -259,7 +260,7 @@ $romDir='D:\emu\msx\MSX files [ROM]'
   -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
   -Frames 600 `
   -RetryFrames 3600 `
-  -SkipRoms 144 `
+  -SkipRoms 156 `
   -MaxRoms 12 `
   -RequireData
 ```
@@ -406,6 +407,10 @@ summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-232514-964-49592
 -SkipRoms 132 -MaxRoms 12:
 MSX/MSX2 boot smoke: 25/25 passed
 summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233012-141-30268\summary.json
+
+-SkipRoms 144 -MaxRoms 12:
+MSX/MSX2 boot smoke: 26/26 passed
+summary: C:\dev\emu\Mnemos-msx2\build\scratch\msx-boot\20260626-233350-822-83380\summary.json
 ```
 
 ## Handoff Notes
