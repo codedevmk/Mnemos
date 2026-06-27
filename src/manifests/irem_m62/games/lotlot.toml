@@ -1,0 +1,164 @@
+# Lot Lot -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\Lot-Lot_Arcade_EN.zip -> lotlot.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "lotlot"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x1ce20
+
+[[region.file]]
+name   = "lot-a-3h"
+offset = 0x0
+size   = 0x2000
+crc32  = 0x0781cee7
+
+[[region.file]]
+name   = "lot-a-4d"
+offset = 0x2000
+size   = 0x4000
+crc32  = 0x0443095f
+
+[[region.file]]
+name   = "lot-a-4e"
+offset = 0x6000
+size   = 0x4000
+crc32  = 0x2913d08f
+
+[[region.file]]
+name   = "lot-b-1l"
+offset = 0xa000
+size   = 0x0100
+crc32  = 0x8b6fcde3
+
+[[region.file]]
+name   = "lot-b-1m"
+offset = 0xa100
+size   = 0x0100
+crc32  = 0xc146461d
+
+[[region.file]]
+name   = "lot-b-1n"
+offset = 0xa200
+size   = 0x0100
+crc32  = 0x01e07db6
+
+[[region.file]]
+name   = "lot-b-3n"
+offset = 0xa300
+size   = 0x2000
+crc32  = 0xbd486fff
+
+[[region.file]]
+name   = "lot-b-4c"
+offset = 0xc300
+size   = 0x2000
+crc32  = 0x3026ee6c
+
+[[region.file]]
+name   = "lot-b-4k"
+offset = 0xe300
+size   = 0x2000
+crc32  = 0xfd27cb90
+
+[[region.file]]
+name   = "lot-b-5p"
+offset = 0x10300
+size   = 0x0020
+crc32  = 0x110b21fd
+
+[[region.file]]
+name   = "lot-b-6f"
+offset = 0x10320
+size   = 0x0100
+crc32  = 0x34d88d3c
+
+[[region.file]]
+name   = "lot-k-2d"
+offset = 0x10420
+size   = 0x0100
+crc32  = 0x315ed9a8
+
+[[region.file]]
+name   = "lot-k-2e"
+offset = 0x10520
+size   = 0x0100
+crc32  = 0x9b1fa005
+
+[[region.file]]
+name   = "lot-k-2f"
+offset = 0x10620
+size   = 0x0100
+crc32  = 0xb820a05e
+
+[[region.file]]
+name   = "lot-k-2j"
+offset = 0x10720
+size   = 0x0100
+crc32  = 0xe791ef2a
+
+[[region.file]]
+name   = "lot-k-2k"
+offset = 0x10820
+size   = 0x0100
+crc32  = 0x1811ad2b
+
+[[region.file]]
+name   = "lot-k-2l"
+offset = 0x10920
+size   = 0x0100
+crc32  = 0xac3e230d
+
+[[region.file]]
+name   = "lot-k-4a"
+offset = 0x10a20
+size   = 0x2000
+crc32  = 0x1b3695f4
+
+[[region.file]]
+name   = "lot-k-4b"
+offset = 0x12a20
+size   = 0x2000
+crc32  = 0x930ddd55
+
+[[region.file]]
+name   = "lot-k-4c"
+offset = 0x14a20
+size   = 0x2000
+crc32  = 0xbd2b0730
+
+[[region.file]]
+name   = "lot-k-4l"
+offset = 0x16a20
+size   = 0x2000
+crc32  = 0xf98dca1f
+
+[[region.file]]
+name   = "lot-k-4n"
+offset = 0x18a20
+size   = 0x2000
+crc32  = 0xf0cd76a5
+
+[[region.file]]
+name   = "lot-k-4p"
+offset = 0x1aa20
+size   = 0x2000
+crc32  = 0x3b7d95ba
+
+[[region.file]]
+name   = "lot-k-7e"
+offset = 0x1ca20
+size   = 0x0200
+crc32  = 0x6cef0fbd
+
+[[region.file]]
+name   = "lot-k-7h"
+offset = 0x1cc20
+size   = 0x0200
+crc32  = 0x04442bee

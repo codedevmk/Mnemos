@@ -86,7 +86,7 @@ rather than assert it.
 - **Key customs:** KNA6034201 (shared with M72), KNA6032701 (shared with
   M72/M75)
 - **Notable titles:** Kung-Fu Master / Spartan X (1984), Kid Niki, Lode Runner,
-  Spelunker, Lightning Swords, Youjyuden, The Battle-Road
+  Lot Lot, Spelunker, Lightning Swords, Youjyuden, The Battle-Road
 - **Notes:** Genre-defining hardware — Kung-Fu Master is widely cited as the first
   beat 'em up. The sound topology (M6803 + dual AY-3-8910 + dual MSM5205) is the
   mature form of the "Irem Audio" board.

@@ -48,6 +48,7 @@ namespace {
             {"ldrun3", {.raw_size = 0x38820U, .file_count = 23U}},
             {"ldrun3j", {.raw_size = 0x18000U, .file_count = 6U}},
             {"ldrun4", {.raw_size = 0x3c820U, .file_count = 23U}},
+            {"lotlot", {.raw_size = 0x1ce20U, .file_count = 25U}},
             {"spelunk2", {.raw_size = 0x60a20U, .file_count = 28U}},
             {"youjyudn", {.raw_size = 0x50a24U, .file_count = 27U}},
         };

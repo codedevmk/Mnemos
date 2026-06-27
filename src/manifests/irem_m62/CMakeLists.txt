@@ -7,6 +7,7 @@ set(_irem_m62_game_manifest_files
     "games/ldrun3.toml"
     "games/ldrun3j.toml"
     "games/ldrun4.toml"
+    "games/lotlot.toml"
     "games/spelunk2.toml"
     "games/youjyudn.toml"
 )
