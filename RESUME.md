@@ -1,16 +1,16 @@
-# MSX / MSX2 Handoff
+# MSX / MSX2 Resume Handoff
 
 Generated: 2026-06-27 America/Chicago
 
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote branch: `origin/feature/msx2`
-Parent checkpoint before this handoff refresh: `bd905ece Update MSX2 resume handoff`
+Parent checkpoint before this handoff refresh: `8880b53b Refresh MSX2 resume handoff`
 
-This is the current resume point for the MSX/MSX2 implementation work. The
-original Codex session ran for roughly 30 hours and hit practical context-window
-limits. Continue from this file and the live worktree state instead of
-reconstructing the chat history.
+This file is the authoritative resume point for the MSX/MSX2 implementation
+thread. The original session ran for roughly 30 hours and is no longer a useful
+context source. Continue from this file, the live worktree, and executable
+evidence.
 
 ## Start Here
 
@@ -31,23 +31,36 @@ The root checkout at `C:\dev\emu\Mnemos` is not the active MSX/MSX2 worktree.
 Windows validation should run under Visual Studio DevCmd:
 
 ```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx2_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx2_test|mnemos_msx_boot_test" --output-on-failure'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx2_test mnemos_msx_boot_test mnemos_chips_video_v9938_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx2_test|mnemos_msx_boot_test|mnemos_chips_video_v9938_test" --output-on-failure'
 ```
+
+Repository rules that matter most here:
+
+- Read `CONSTITUTION.md` and `README.md` before toolchain work.
+- Product code lives under `src/`; build, log, and diagnostic output belongs
+  under `build/`.
+- Do not commit ROMs, firmware, screenshots, logs, build outputs, or generated
+  scratch artifacts.
+- Other emulators are reference material only; do not lift code.
 
 ## User Contract
 
-- Implement both MSX and MSX2; they share common manifests, mapper code, player
-  adapters, VDP behavior, smoke scripts, and golden-test surfaces.
+- Implement both MSX and MSX2; they share common manifests, cartridge mapper
+  code, player adapters, VDP behavior, smoke scripts, and golden-test surfaces.
 - Preserve the requested worktree and branch: `feature/msx2`.
-- C-BIOS lives under `D:\emu\msx\bios`.
-- The ROM corpus used for this slice is `D:\emu\msx\MSX files [ROM]`.
+- C-BIOS root: `D:\emu\msx\bios`.
+- C-BIOS files verified during this session:
+  - `D:\emu\msx\bios\cbios\cbios_main_msx1.rom`
+  - `D:\emu\msx\bios\cbios\cbios_logo_msx1.rom`
+  - `D:\emu\msx\bios\cbios\cbios_main_msx2.rom`
+  - `D:\emu\msx\bios\cbios\cbios_sub.rom`
+  - `D:\emu\msx\bios\cbios\cbios_logo_msx2.rom`
+- ROM corpus used for this slice: `D:\emu\msx\MSX files [ROM]`.
 - Use `Test-Path -LiteralPath` for paths under `MSX files [ROM]`; brackets are
   wildcard syntax in PowerShell.
 - A blank Mnemos Player window is not proof. Player proof must use explicit
   `--system` and `--rom` arguments.
 - Do not claim "100% working" until real ROM/media validation proves it.
-- Do not commit ROMs, firmware, screenshots, logs, or build outputs.
-- Keep transient diagnostics under `build\scratch\...`.
 
 ## Current Verdict
 
@@ -60,7 +73,8 @@ Confirmed:
 - Shared RAM-size profile semantics, cartridge mapper resolution, smoke-script
   routing, and MSX/MSX2 golden-test hooks are in place.
 - Earlier bounded real-ROM smoke windows passed through skip 191.
-- Focused V9938 and MSX boot tests passed at the last validated checkpoint.
+- Focused V9938 and MSX boot tests passed at the last validated checkpoint
+  before the temporary S#0 experiment described below.
 - The branch was clean and aligned with `origin/feature/msx2` before this
   handoff refresh.
 
@@ -69,14 +83,69 @@ Active blocker:
 - Skip-192 still fails on MSX2 for `bean.rom`.
 - MSX `bean.rom` stays alive and renders a nonuniform framebuffer in the same
   scenario.
-- MSX2 `bean.rom` halts at `$CA3E` after a divergent CPU/control-flow path
-  around `$99DB`, `$BFFF`, and `$C000`.
-- The goal is not complete until this and broader real-ROM coverage pass.
+- MSX2 `bean.rom` halts at `$CA3E` after divergent control flow around
+  `$832D`, `$99DB`, `$BFFF`, and `$C000`.
+- The goal remains open until this blocker and broader real-ROM coverage pass.
+
+## Current Worktree State
+
+At the start of this handoff refresh:
+
+```text
+C:\dev\emu\Mnemos-msx2
+feature/msx2
+HEAD 8880b53b
+status: clean, tracking origin/feature/msx2
+```
+
+Only `RESUME.md` should be changed by this handoff commit. If any other source
+file is dirty, inspect it before continuing; do not use destructive git reset or
+checkout to discard user work.
+
+## Latest Diagnostic Evidence
+
+The target ROM:
+
+```text
+path: D:\emu\msx\MSX files [ROM]\bean.rom
+size: 16384
+sha256: 7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8
+```
+
+The latest diagnostics used forced SHA mismatch so the test executable would
+dump detailed state. Exit code `42` was intentional.
+
+MSX2 command environment for the strongest `$BFFF-$C020` trace:
+
+```powershell
+$env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2.rom'
+$env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
+$env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
+$env:MNEMOS_MSX2_ROM='D:\emu\msx\MSX files [ROM]\bean.rom'
+$env:MNEMOS_MSX2_EXPANDED_SLOTS='8'
+$env:MNEMOS_MSX2_SUB_SLOT='3.0'
+$env:MNEMOS_MSX2_RAM_SLOT='3.2'
+$env:MNEMOS_MSX2_RAM_SIZE='512K'
+$env:MNEMOS_MSX2_REGION='ntsc'
+$env:MNEMOS_MSX2_BOOT_FRAMES='600'
+$env:MNEMOS_MSX2_BOOT_SHA256='force-diagnostics'
+$env:MNEMOS_MSX_PC_WATCH='$BFFF-$C020'
+$env:MNEMOS_MSX_MEM_WATCH='$C000-$C03F'
+.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe
+```
+
+Scratch logs from this phase were written under:
+
+```text
+build\scratch\msx-bean-diagnostics\
+```
+
+They are intentionally not committed.
 
 ## Important Correction
 
-The earlier handoff interpreted `mode=4` as V9938 Graphics IV. That is wrong
-for this codebase.
+An earlier handoff interpreted `mode=4` as V9938 Graphics IV. That is wrong for
+this codebase.
 
 In `src/chips/video/v9938/v9938.hpp`, the enum order is:
 
@@ -96,62 +165,9 @@ immediate blocker is more likely CPU/control-flow, slot/RAM/work-area behavior,
 or VDP status/timing selecting the wrong game script, not Graphics IV page
 rendering.
 
-## Latest Reproduced Diagnostics
+## `$832D`, `$99DB`, `$BFFF`, `$C000`
 
-Recent diagnostics used `bean.rom` for MSX1 and MSX2 with forced SHA mismatch.
-The commands intentionally exited 42 because `MNEMOS_*_BOOT_SHA256` was set to
-`force-diagnostics`.
-
-Scratch logs generated during the latest investigation:
-
-```text
-build\scratch\msx-bean-diagnostics\current-msx-d800-pcwatch.log
-build\scratch\msx-bean-diagnostics\current-msx2-d800-pcwatch.log
-build\scratch\msx-bean-diagnostics\current-msx2-c000-write-pc8000-8400.log
-build\scratch\msx-bean-diagnostics\current-msx2-c000-write-pc8080-8120.log
-build\scratch\msx-bean-diagnostics\current-msx-pcwatch-99d0-9a10.log
-build\scratch\msx-bean-diagnostics\current-msx2-pcwatch-99d0-9a10.log
-build\scratch\msx-bean-diagnostics\current-msx2-99c0-write-allpc.log
-build\scratch\msx-bean-diagnostics\current-msx-pcwatch-82f0-8330.log
-build\scratch\msx-bean-diagnostics\current-msx2-pcwatch-82f0-8330.log
-build\scratch\msx-bean-diagnostics\current-msx-pcwatch-832d.log
-build\scratch\msx-bean-diagnostics\current-msx2-pcwatch-832d.log
-```
-
-These are scratch artifacts only and are not committed.
-
-MSX1 final forced summary:
-
-```text
-cpu pc/sp/af/bc/de/hl: $829D/$E395/$A68C/$0000/$0008/$9C56 halted=false iff1=true iff2=true im=0 cycles=35841613
-slot state: primary=$D0 secondary3=$00
-ram state: pages16k=[0,0,64,1201]
-logical memory state: d800=[$F0,...]
-vdp state: frame=600 mode=3 r0=$02 r1=$E2 r2=$06 r7=$04 vram_nonzero=7336 first_pixel=5527021
-framebuffer SHA: 690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a
-```
-
-MSX2 final forced summary:
-
-```text
-cpu pc/sp/af/bc/de/hl: $CA3E/$E6FF/$5FBA/$0101/$5F01/$66B8 halted=true iff1=false iff2=false im=0 cycles=35841602
-slot state: primary=$D0 secondary0=$00 secondary1=$00 secondary2=$00 secondary3=$A0
-ram mapper segments: [3,2,1,0]
-logical memory state: d800=[$00,...,$04,$44,$38]
-vdp state: frame=600 mode=4 r0=$02 r1=$E2 r2=$06 r7=$F4 r15=$00 s0=$C4 s1=$01 irq=true vram_nonzero=6104 first_pixel=2368548
-framebuffer SHA: 9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573
-```
-
-Interpretation:
-
-- The MSX1 path remains alive at PC `$829D`, non-halted, and renders nonuniform
-  output.
-- The MSX2 path halts at `$CA3E` after a divergent game-control path.
-- Final MSX2 VDP mode is Graphics II.
-
-## Exact `$832D` Evidence
-
-The current strongest evidence is the computed jump helper at ROM `$832D`.
+The strongest current evidence is the ROM dispatcher at `$832D`.
 
 MSX2 reaches `$832D` four times in the 600-frame diagnostic:
 
@@ -170,12 +186,7 @@ code=[$99D3=$46,$99D4=$9C,$99D5=$56,$99D6=$9C,$99D7=$57,$99D8=$9C,$99D9=$3C,$99D
 ```
 
 MSX1 has zero hits for exact `current_pc=$832D` in the same 600-frame window.
-
-This confirms MSX2 selects a different object/script path. `$99DB` may be a
-valid setup routine in ROM data; do not assume pointer corruption without new
-evidence.
-
-## `$99DB` And `$BFFF` Details
+This confirms MSX2 selects a different object/script path.
 
 ROM bytes around `$99C0-$99F0`:
 
@@ -186,7 +197,7 @@ $99E0: 00 06 06 CD FF BF 21 2D 9A 11 58 00 06 04 CD DF
 $99F0: BF 21 4D 9A 11 60 00 06 10 CD FF BF C9 00 00 01
 ```
 
-`$99DB` begins with a plausible routine:
+`$99DB` begins with plausible code:
 
 ```text
 LD HL,$99FD
@@ -204,52 +215,71 @@ CALL $BFFF
 RET
 ```
 
-The bad-looking path:
+The current bad-looking path:
 
 ```text
 previous_pc=$99E3 current_pc=$BFFF cycles=14564941
+af=$A68C bc=$06A1 de=$0040 hl=$99FD ix=$99CF iy=$0184 sp=$E3AF ret0=$99E6
 prev_code=[$99DB=$21,$99DC=$FD,$99DD=$99,$99DE=$11,$99DF=$40,$99E0=$00,$99E1=$06,$99E2=$06,$99E3=$CD,$99E4=$FF,$99E5=$BF,$99E6=$21,...]
 code=[$BFF7=$01,$BFF8=$08,$BFF9=$00,$BFFA=$09,$BFFB=$C1,$BFFC=$10,$BFFD=$E1,$BFFE=$C9,$BFFF=$C5,$C000=$00,$C001=$00,$C002=$27,$C003=$03,$C004=$17,$C005=$01,$C006=$00]
 ```
 
-Relevant ROM bytes at CPU `$BFF0`:
+Then:
 
 ```text
-$BFC0: BC BF 21 DA BF 06 05 DD 7E 00 BE 30 03 23 10 FA
-$BFD0: EB 48 06 00 09 7E DD 77 02 C9 36 2C 24 1F 1C C5
-$BFE0: E5 D5 E5 EB 29 29 29 11 00 38 19 EB E1 01 08 00
-$BFF0: CD 7D 80 D1 13 13 E1 01 08 00 09 C1 10 E1 C9 C5
+previous_pc=$BFFF current_pc=$C000 cycles=14564952
+af=$A68C bc=$06A1 de=$0040 hl=$99FD ix=$99CF iy=$0184 sp=$E3AD ret0=$06A1
 ```
 
-The ROM executes `CALL $BFFF`, pushes return `$99E6`, executes `$BFFF=$C5`
-(`PUSH BC`), then falls into page-3 RAM at `$C000`. `$BFFF=$C5` is plausible
-because `bean.rom` is a 16 KiB upper-page plain ROM mirrored into
-`$8000-$BFFF`. Do not "fix" this by unmapping `$BFFF` unless new evidence proves
-the mapper should behave differently.
+Interpretation:
 
-`current-msx2-99c0-write-allpc.log` contains no `memory watch` section/events
-for `$99C0-$99E0`. That means the pointer area around `$99CF` appears to be ROM
-data, not RAM corruption.
+- `CALL $BFFF` pushes return `$99E6`.
+- `$BFFF=$C5` (`PUSH BC`) pushes `$06A1`, so top-of-stack becomes `$06A1`.
+- PC enters `$C000`, where the current page-3 bytes are data-like:
+  `$C000=$00,$C001=$00,$C002=$27,$C003=$03,$C004=$17,$C005=$01,$C006=$00`.
+- Execution continues through data-like bytes and eventually halts at `$CA3E`.
+- This confirms the `$BFFF/$C000` consequence, but the wrong decision likely
+  happens earlier around `$832D/$99DB`.
 
-## `$C000` Data Clue
+Do not "fix" this by blindly mapping 16 KiB plain ROM into page 3. Existing
+tests intentionally include C-BIOS handoff coverage for non-32 KiB plain
+cartridges remaining unmapped outside their valid window.
 
-The `$C000` write trace reconstructed from
-`build\scratch\msx-bean-diagnostics\current-msx2-c000-write-pc8080-8120.log`:
+## VDP S#0 Experiment
 
-```text
-events 256
-809F 32 C000-C01F first 00 00 27 03 27 03 27 03 ... last 27 03 ...
-80E1 75 C000-C014 first 00 27 17 17 17 37 ... last 64 64 64 64 64 00 27 17 03 13 33 55 77 74 63 73
-80F7 75 C000-C014 first 00 27 17 16 16 36 ... last 63 63 63 63 63 00 27 17 02 12 33 55 77 74 63 73
-8106 74 C001-C013 first 00 03 02 02 ... last 05 05 06 07 04 02 00 03 01 00 01 03 05 07 06 05
-C000: 00 00 27 03 17 01 02 00 12 01 33 03 55 05 77 07
-C010: 74 06 63 05 73 05 63 05 63 06 63 07 63 04 63 02
+A temporary experiment changed `src/chips/video/v9938/v9938.cpp` S#0 status
+read behavior from clearing only the frame IRQ bit to:
+
+```cpp
+status_[0] &= 0x1FU;
 ```
 
-Existing watch cap is 256, so it may miss later events, but this confirms
-`$C000` is data-like by the time the `$BFFF` fallthrough occurs.
+This was built and tested with:
 
-## Relevant Code Already Inspected
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_msx_boot_test'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+Result:
+
+- `mnemos_msx_boot_test` passed default tests.
+- `mnemos_chips_video_v9938_test` failed the existing tests that require sprite
+  overflow/collision bits to survive S#0 reads.
+- The experiment did not fix `bean.rom`; MSX2 still halted at `$CA3E` with the
+  same framebuffer hash:
+  `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`.
+- The experiment was reverted. `src/chips/video/v9938/v9938.cpp` should keep:
+
+```cpp
+status_[0] &= static_cast<std::uint8_t>(~k_status_frame_irq);
+```
+
+Before continuing, verify this file is clean with `git status`.
+
+## Slot And Mapper Context
+
+Files already inspected:
 
 - `src/manifests/msx2/msx2_system.cpp`
 - `src/manifests/msx/msx_system.cpp`
@@ -258,91 +288,105 @@ Existing watch cap is 256, so it may miss later events, but this confirms
 - `src/manifests/common/msx_cartridge_mapper.cpp`
 - `src/chips/video/v9938/v9938.cpp`
 - `src/chips/video/v9938/v9938.hpp`
-- `src/chips/video/tms9918a/tms9918a.cpp`
-- `src/chips/cpu/z80/z80.cpp`
 - `tests/golden/msx_boot_test.cpp`
+- `tests/golden/msx_rom_profiles.json`
+- `scripts/msx/run-boot-smoke.ps1`
 
-Important code facts:
+Relevant profile clue:
 
-- MSX2 `$FFFF` read/write is active when selected page-3 primary slot is
-  expanded; reads return `secondary_slot ^ 0xFF`, writes store the raw value.
-- MSX2 I/O `$98/$99` routes to VDP data/status.
-- MSX2 I/O `$A8` routes to the primary slot latch.
-- MSX2 I/O `$FC-$FF` routes to RAM mapper segments.
-- Final failing MSX2 state has primary `$D0`, secondary3 `$A0`, and RAM mapper
-  segments `[3,2,1,0]`.
-- `msx_ppi_port_a_output(control)` is `(control & 0x10) == 0`; reset
-  `ppi_control=$9B`, so port A is input at reset.
-- V9938 `status_read()` selects `R#15 & 0x0F`; selected S#0 clears only the
-  frame IRQ bit in the current branch.
-- Z80 implementation areas to inspect if evidence points there:
-  - `EXX`
-  - `JP (HL)`
-  - `DJNZ`
-  - DD/FD indexed paths
-  - stack push/pop
+- `tests/golden/msx_rom_profiles.json` has ROM-specific overrides for BIOS,
+  mapper, sub-slot, RAM slot, boot frames, and reasons.
+- Existing `BARBARIAN.rom` profile uses `sub_slot: 3.1` and `ram_slot: 3.0`
+  because the default `3.0/3.2` profile leaves it executing from an unmapped RAM
+  page.
+- `bean.rom` currently has no profile entry.
 
-## Likely Root-Cause Areas
+The next high-value path is to test `bean.rom` under a small C-BIOS/slot-layout
+matrix before changing mapper semantics.
 
-Current evidence favors one of these:
+## Next Diagnostic Matrix
 
-1. V9938 status/timing/IRQ behavior is causing the MSX2-only game path to
-   schedule the `$99DB` script.
-2. The `$99DB` routine is valid, and the actual fault is in the helper/fallthrough
-   path at `$BFFF/$C000`, stack state, or the generated data at `$C000`.
-3. A narrow Z80 bug affects this stack/fallthrough/computed-jump sequence.
-4. Slot or RAM mapper page-3 selection is wrong at the moment `$BFFF` falls into
-   `$C000`.
+Run a compact matrix for `bean.rom` with forced diagnostics:
 
-Do not make broad mapper or VDP rendering changes without a diagnostic that
-selects one of these.
+- BIOS variants:
+  - `D:\emu\msx\bios\cbios\cbios_main_msx2.rom`
+  - `D:\emu\msx\bios\cbios\cbios_main_msx2_eu.rom`
+  - `D:\emu\msx\bios\cbios\cbios_main_msx2_br.rom`
+  - `D:\emu\msx\bios\cbios\cbios_main_msx2_jp.rom`
+- Slot layouts:
+  - current: `MNEMOS_MSX2_SUB_SLOT=3.0`, `MNEMOS_MSX2_RAM_SLOT=3.2`
+  - alternate: `MNEMOS_MSX2_SUB_SLOT=3.1`, `MNEMOS_MSX2_RAM_SLOT=3.0`
+  - defaults/no overrides if the harness supports that cleanly
+- Mapper: leave automatic/plain unless evidence says otherwise.
+- Frames: 600 first; increase only after a promising profile keeps execution
+  alive.
+- Capture final PC, halted flag, framebuffer SHA, uniform/nonuniform, mode,
+  slot state, and whether `$832D/$99DB/$BFFF/$C000` repeats.
 
-## Best Next Actions
+If one profile fixes `bean.rom`, add a targeted profile entry to
+`tests/golden/msx_rom_profiles.json` with:
 
-1. Trace `$BFFF-$C020` more deeply with stack and IX context:
-
-```powershell
-$env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2.rom'
-$env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
-$env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
-$env:MNEMOS_MSX2_ROM='D:\emu\msx\MSX files [ROM]\bean.rom'
-$env:MNEMOS_MSX2_EXPANDED_SLOTS='8'
-$env:MNEMOS_MSX2_SUB_SLOT='3.0'
-$env:MNEMOS_MSX2_RAM_SLOT='3.2'
-$env:MNEMOS_MSX2_RAM_SIZE='512K'
-$env:MNEMOS_MSX2_REGION='ntsc'
-$env:MNEMOS_MSX2_BOOT_FRAMES='600'
-$env:MNEMOS_MSX2_BOOT_SHA256='force-diagnostics'
-$env:MNEMOS_MSX_PC_WATCH='$BFFF-$C020'
-$env:MNEMOS_MSX_MEM_WATCH='$C000-$C03F'
-.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe '[golden][msx2]'
+```text
+sha256: 7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8
+mapper: plain or the proven mapper
+bios/sub_slot/ram_slot overrides: only the proven minimum
+boot_frames: proven frame count
+reason: explain the exact slot/BIOS compatibility requirement
 ```
 
-2. If existing PC watch output is insufficient, add a gated diagnostic in
-   `tests/golden/msx_boot_test.cpp` that prints `ix_window=` and `sp_window=`
-   for PC watch hits. Keep it only if generally useful.
-3. Compare MSX1/MSX2 around `$82F8-$832D` and identify why MSX2 reaches the
-   fourth `$832D` call with `BC=$FFA1`, `IX=$99CF`, and `HL=$99DB`.
-4. Inspect V9938 status timing only through a narrow hypothesis: does an MSX2
-   status value select the `$99DB` script while MSX1 avoids it?
-5. After any candidate fix, run the targeted DevCmd build/test command above,
-   then rerun the real-ROM skip-192 smoke with explicit MSX/MSX2 ROM and BIOS
-   arguments.
+Then run a bounded corpus smoke through and beyond skip 192.
 
-## Completion Bar
+## Smoke Runner Reminder
 
-Do not mark the feature complete until all of these are true:
+Inspect `scripts/msx/run-boot-smoke.ps1` before using it. A likely invocation
+shape is:
 
-- `bean.rom` no longer halts on MSX2 and produces a stable nonblank/nonuniform
-  framebuffer.
-- MSX and MSX2 C-BIOS golden tests pass under the Windows preset.
-- The bounded real-ROM smoke advances beyond the current skip-192 blocker.
-- Player validation launches with explicit `--system` and `--rom` arguments and
-  renders real game output, not a blank default window.
-- The final report states exactly which ROMs, BIOS files, commands, and frame
-  counts were used.
+```powershell
+.\scripts\msx\run-boot-smoke.ps1 `
+  -BuildDir build/windows-msvc-debug `
+  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2.rom' `
+  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
+  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
+  -Msx2RomDir 'D:\emu\msx\MSX files [ROM]' `
+  -RomProfileManifest tests/golden/msx_rom_profiles.json `
+  -Frames 600 `
+  -SkipRoms 191 `
+  -MaxRoms 16
+```
 
-## Last Handoff Action
+Adjust parameters based on the script's actual help and current source.
 
-This handoff refresh only updated `RESUME.md`; it did not implement a semantic
-emulation fix and did not rerun the Windows validation suite.
+## If The Matrix Does Not Fix It
+
+Continue tracing the scheduler/control path rather than changing VDP rendering
+or broad mapper behavior.
+
+Recommended next trace additions:
+
+- Add gated PC-watch enrichment in `tests/golden/msx_boot_test.cpp` that dumps
+  `ix_window=` and `sp_window=` around watch hits.
+- Run exact `$832D` PC watch with stack and IX windows to understand why the
+  fourth dispatch uses `IX=$99CF` and `HL=$99DB`.
+- Trace calls to `$829D`, `$823D`, and memory variables `$E12D/$E3C5`.
+- Keep diagnostics under `build\scratch\msx-bean-diagnostics\`.
+
+## Validation Before Claiming Progress
+
+For code changes in this slice, use the targeted build/test sweep:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx2_test mnemos_msx_boot_test mnemos_chips_video_v9938_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx2_test|mnemos_msx_boot_test|mnemos_chips_video_v9938_test" --output-on-failure'
+```
+
+For player proof, launch with explicit system and ROM arguments. A player window
+without `--system` and `--rom` only proves the player starts.
+
+## Stop Condition
+
+Do not mark the MSX/MSX2 goal complete until:
+
+- `bean.rom` MSX2 skip-192 is understood and either fixed or correctly profiled.
+- Bounded smoke passes through the previous failure point and records hashes.
+- MSX and MSX2 both have explicit real-ROM proof, not just unit tests.
+- Any code changes are covered by focused tests plus the targeted Windows
+  validation sweep.
