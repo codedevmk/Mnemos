@@ -18,6 +18,7 @@
 //   MNEMOS_MSX_MAPPER2       (optional) second cartridge mapper override
 //   MNEMOS_MSX_EXPANDED_SLOTS (optional) expanded primary slots; mask or comma list
 //   MNEMOS_MSX_RAM_SLOT      (optional) RAM slot as primary or primary.secondary
+//   MNEMOS_MSX_RAM_SIZE      (optional) mapper RAM size in bytes, or K/M suffix
 //   MNEMOS_MSX_DISK_SLOT     (optional) disk ROM slot as primary or primary.secondary
 //   MNEMOS_MSX_CART2_SLOT    (optional) second cartridge slot as primary or primary.secondary
 //   MNEMOS_MSX_REGION        (optional) "ntsc" (default) or "pal"
@@ -1277,6 +1278,15 @@ namespace {
         return size;
     }
 
+    [[nodiscard]] std::size_t ram_mapper_segments_for_size(std::size_t bytes) noexcept {
+        constexpr std::size_t k_segment_size = 0x4000U;
+        constexpr std::size_t k_min_segments = 4U;
+        constexpr std::size_t k_max_segments = 0x100U;
+        const std::size_t requested =
+            (bytes + k_segment_size - 1U) / k_segment_size;
+        return std::min<std::size_t>(std::max(requested, k_min_segments), k_max_segments);
+    }
+
     [[nodiscard]] slot_layout_overrides parse_slot_layout_env(std::string_view prefix,
                                                               bool include_ram_size) {
         const std::string prefix_text(prefix);
@@ -1315,6 +1325,9 @@ namespace {
         if (layout.cartridge2_slot) {
             config.cartridge2_primary_slot = layout.cartridge2_slot->primary;
             config.cartridge2_secondary_slot = layout.cartridge2_slot->secondary;
+        }
+        if (layout.ram_size) {
+            config.ram_mapper_segments = ram_mapper_segments_for_size(*layout.ram_size);
         }
     }
 
@@ -1810,6 +1823,7 @@ TEST_CASE("msx golden boot slot overrides use shared machine-profile parsing",
     CHECK(msx.disk_secondary_slot == 1U);
     CHECK(msx.cartridge2_primary_slot == 2U);
     CHECK(msx.cartridge2_secondary_slot == 3U);
+    CHECK(msx.ram_mapper_segments == 16U);
 
     msx2_config msx2{};
     apply_slot_layout(msx2, layout);
@@ -1884,7 +1898,7 @@ TEST_CASE("msx boots real firmware to a deterministic golden framebuffer", "[gol
     const msx_cartridge_mapper mapper2 = msx_mapper_from_env("MNEMOS_MSX_MAPPER2");
     const mnemos::video_region region = parse_region("MNEMOS_MSX_REGION");
     const std::uint64_t frames = parse_frame_count("MNEMOS_MSX_BOOT_FRAMES", 200U);
-    const slot_layout_overrides slot_layout = parse_slot_layout_env("MNEMOS_MSX_", false);
+    const slot_layout_overrides slot_layout = parse_slot_layout_env("MNEMOS_MSX_", true);
     const std::vector<key_press> boot_keys = parse_boot_keys_env("MNEMOS_MSX_BOOT_KEYS");
 
     INFO("bios sha256: " << sha_hex(*bios));

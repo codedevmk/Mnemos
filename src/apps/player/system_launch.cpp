@@ -772,7 +772,7 @@ namespace mnemos::apps::player {
 
         mnemos::frontend_sdk::msx_machine_profile msx_profile{};
         if (family == system_family::msx) {
-            msx_profile = parse_msx_machine_profile("MNEMOS_MSX_", false);
+            msx_profile = parse_msx_machine_profile("MNEMOS_MSX_", true);
         } else if (family == system_family::msx2) {
             msx_profile = parse_msx_machine_profile("MNEMOS_MSX2_", true);
         }

@@ -20,6 +20,7 @@ param(
     [string]$MsxMapper2 = "",
     [string]$MsxExpandedSlots = "",
     [string]$MsxRamSlot = "",
+    [string]$MsxRamSize = "",
     [string]$MsxDiskSlot = "",
     [string]$MsxCart2Slot = "",
     [string]$MsxRegion = "",
@@ -78,6 +79,7 @@ $allEnvNames = @(
     "MNEMOS_MSX_MAPPER2",
     "MNEMOS_MSX_EXPANDED_SLOTS",
     "MNEMOS_MSX_RAM_SLOT",
+    "MNEMOS_MSX_RAM_SIZE",
     "MNEMOS_MSX_DISK_SLOT",
     "MNEMOS_MSX_CART2_SLOT",
     "MNEMOS_MSX_REGION",
@@ -529,6 +531,7 @@ function Apply-RomProfileEnv {
     Add-ManifestEnvValue -Env $Env -Case $Profile -Name "MNEMOS_MSX_REGION" -Properties @("region")
     Add-ManifestEnvValue -Env $Env -Case $Profile -Name "MNEMOS_MSX_EXPANDED_SLOTS" -Properties @("expanded_slots", "expandedSlots")
     Add-ManifestEnvValue -Env $Env -Case $Profile -Name "MNEMOS_MSX_RAM_SLOT" -Properties @("ram_slot", "ramSlot")
+    Add-ManifestEnvValue -Env $Env -Case $Profile -Name "MNEMOS_MSX_RAM_SIZE" -Properties @("ram_size", "ramSize")
     Add-ManifestEnvValue -Env $Env -Case $Profile -Name "MNEMOS_MSX_DISK_SLOT" -Properties @("disk_slot", "diskSlot")
     Add-ManifestEnvValue -Env $Env -Case $Profile -Name "MNEMOS_MSX_CART2_SLOT" -Properties @("cart2_slot", "cart2Slot")
 }
@@ -709,6 +712,7 @@ function New-ManifestSmokeCase {
     Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_MAPPER2" -Properties @("mapper2")
     Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_EXPANDED_SLOTS" -Properties @("expanded_slots", "expandedSlots")
     Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_RAM_SLOT" -Properties @("ram_slot", "ramSlot")
+    Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_RAM_SIZE" -Properties @("ram_size", "ramSize")
     Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_DISK_SLOT" -Properties @("disk_slot", "diskSlot")
     Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_CART2_SLOT" -Properties @("cart2_slot", "cart2Slot", "cartridge2_slot", "cartridge2Slot")
     Add-ManifestEnvValue -Env $env -Case $Case -Name "MNEMOS_MSX_REGION" -Properties @("region")
@@ -974,6 +978,7 @@ $msxMapperValue = Get-ConfiguredValue $MsxMapper "MNEMOS_MSX_MAPPER"
 $msxMapper2Value = Get-ConfiguredValue $MsxMapper2 "MNEMOS_MSX_MAPPER2"
 $msxExpandedSlotsValue = Get-ConfiguredValue $MsxExpandedSlots "MNEMOS_MSX_EXPANDED_SLOTS"
 $msxRamSlotValue = Get-ConfiguredValue $MsxRamSlot "MNEMOS_MSX_RAM_SLOT"
+$msxRamSizeValue = Get-ConfiguredValue $MsxRamSize "MNEMOS_MSX_RAM_SIZE"
 $msxDiskSlotValue = Get-ConfiguredValue $MsxDiskSlot "MNEMOS_MSX_DISK_SLOT"
 $msxCart2SlotValue = Get-ConfiguredValue $MsxCart2Slot "MNEMOS_MSX_CART2_SLOT"
 $msxRegionValue = Get-ConfiguredValue $MsxRegion "MNEMOS_MSX_REGION"
@@ -1034,6 +1039,7 @@ if (-not [string]::IsNullOrWhiteSpace($msxBiosPath)) {
     }
     Add-OptionalEnvValue -Env $baseEnv -Name "MNEMOS_MSX_EXPANDED_SLOTS" -Value $msxExpandedSlotsValue
     Add-OptionalEnvValue -Env $baseEnv -Name "MNEMOS_MSX_RAM_SLOT" -Value $msxRamSlotValue
+    Add-OptionalEnvValue -Env $baseEnv -Name "MNEMOS_MSX_RAM_SIZE" -Value $msxRamSizeValue
     Add-OptionalEnvValue -Env $baseEnv -Name "MNEMOS_MSX_DISK_SLOT" -Value $msxDiskSlotValue
     Add-OptionalEnvValue -Env $baseEnv -Name "MNEMOS_MSX_CART2_SLOT" -Value $msxCart2SlotValue
     if (-not [string]::IsNullOrWhiteSpace($msxHashValue)) {

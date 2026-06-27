@@ -420,6 +420,15 @@ namespace mnemos::apps::player::adapters::msx {
             return manifests::common::msx_cartridge_mapper_label(mapper_kind(mapper));
         }
 
+        [[nodiscard]] std::size_t ram_mapper_segments_for_size(std::size_t bytes) noexcept {
+            constexpr std::size_t k_segment_size = 0x4000U;
+            constexpr std::size_t k_min_segments = 4U;
+            constexpr std::size_t k_max_segments = 0x100U;
+            const std::size_t requested =
+                (bytes + k_segment_size - 1U) / k_segment_size;
+            return std::min<std::size_t>(std::max(requested, k_min_segments), k_max_segments);
+        }
+
         void apply_machine_profile(manifests::msx::msx_config& config,
                                    const frontend_sdk::msx_machine_profile& profile) {
             if (profile.expanded_primary_slots) {
@@ -436,6 +445,9 @@ namespace mnemos::apps::player::adapters::msx {
             if (profile.cartridge2_slot) {
                 config.cartridge2_primary_slot = profile.cartridge2_slot->primary;
                 config.cartridge2_secondary_slot = profile.cartridge2_slot->secondary;
+            }
+            if (profile.ram_size) {
+                config.ram_mapper_segments = ram_mapper_segments_for_size(*profile.ram_size);
             }
         }
 

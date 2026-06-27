@@ -72,6 +72,7 @@ output and, when a golden hash is supplied, exact framebuffer parity.
 | `MNEMOS_MSX_MAPPER2`      | optional second cartridge mapper override                   |
 | `MNEMOS_MSX_EXPANDED_SLOTS`| expanded slots: numeric mask or comma list like `0,3`      |
 | `MNEMOS_MSX_RAM_SLOT`     | RAM slot as `primary` or `primary.secondary`, e.g. `3.1`    |
+| `MNEMOS_MSX_RAM_SIZE`     | mapper RAM size in bytes, or with `K`/`M` suffix            |
 | `MNEMOS_MSX_DISK_SLOT`    | disk ROM slot as `primary` or `primary.secondary`           |
 | `MNEMOS_MSX_CART2_SLOT`   | second cartridge slot as `primary` or `primary.secondary`   |
 | `MNEMOS_MSX_REGION`       | `ntsc` (default) or `pal`                                   |
@@ -173,6 +174,7 @@ scripts/msx/run-boot-smoke.ps1 `
   -MsxMapper2 ascii16 `
   -MsxExpandedSlots 3 `
   -MsxRamSlot 3.0 `
+  -MsxRamSize 128K `
   -MsxDiskSlot 3.1 `
   -MsxBootKeys return `
   -Msx2Mapper konami-scc `
@@ -279,6 +281,7 @@ MSX or MSX2 firmware/media settings, then overrides any fields it defines.
       "mapper2": "ascii16",
       "expanded_slots": "3",
       "ram_slot": "3.0",
+      "ram_size": "128K",
       "disk_slot": "3.1",
       "boot_keys": "return",
       "frames": 300,

@@ -25,6 +25,7 @@
 #   MNEMOS_MSX_MAPPER2        second MSX cartridge mapper override   -> msx boot smoke
 #   MNEMOS_MSX_EXPANDED_SLOTS expanded primary-slot mask/list        -> msx boot smoke
 #   MNEMOS_MSX_RAM_SLOT       RAM slot primary[.secondary]           -> msx boot smoke
+#   MNEMOS_MSX_RAM_SIZE       mapper RAM size in bytes/K/M           -> msx boot smoke
 #   MNEMOS_MSX_DISK_SLOT      disk ROM slot primary[.secondary]      -> msx boot smoke
 #   MNEMOS_MSX_CART2_SLOT     second cart slot primary[.secondary]   -> msx boot smoke
 #   MNEMOS_MSX_ROM_DIR        dir with MSX cartridge images          -> msx boot smoke
@@ -99,6 +100,7 @@ $vars = @(
     @{ Name = "MNEMOS_MSX_MAPPER2";      Test = "msx boot smoke" },
     @{ Name = "MNEMOS_MSX_EXPANDED_SLOTS"; Test = "msx boot smoke" },
     @{ Name = "MNEMOS_MSX_RAM_SLOT";     Test = "msx boot smoke" },
+    @{ Name = "MNEMOS_MSX_RAM_SIZE";     Test = "msx boot smoke" },
     @{ Name = "MNEMOS_MSX_DISK_SLOT";    Test = "msx boot smoke" },
     @{ Name = "MNEMOS_MSX_CART2_SLOT";   Test = "msx boot smoke" },
     @{ Name = "MNEMOS_MSX_ROM_DIR";      Test = "msx boot smoke" },

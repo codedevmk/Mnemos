@@ -1018,8 +1018,7 @@ namespace mnemos::manifests::msx {
             s->fdc.reset(chips::reset_kind::power_on);
         }
         if (config.ram_mapper_segments != 0U) {
-            const auto segment_count =
-                static_cast<std::size_t>(std::max<std::uint8_t>(config.ram_mapper_segments, 4U));
+            const auto segment_count = std::max<std::size_t>(config.ram_mapper_segments, 4U);
             s->mapped_ram.assign(segment_count * 0x4000U, 0U);
             s->ram_mapper_page = common::msx_initial_ram_mapper_pages(segment_count);
         }

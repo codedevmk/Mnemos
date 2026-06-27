@@ -18,6 +18,7 @@
 #include "z80.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -52,7 +53,7 @@ namespace mnemos::manifests::msx {
         std::uint8_t expanded_primary_slots{};
         std::uint8_t ram_primary_slot{3U};
         std::uint8_t ram_secondary_slot{};
-        std::uint8_t ram_mapper_segments{};
+        std::size_t ram_mapper_segments{};
         bool rtc_enabled{};
         bool disk_enabled{};
         bool disk_write_protected{};

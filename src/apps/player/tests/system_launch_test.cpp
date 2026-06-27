@@ -77,6 +77,7 @@ namespace {
             if (saw_msx) {
                 capture("MNEMOS_MSX_EXPANDED_SLOTS");
                 capture("MNEMOS_MSX_RAM_SLOT");
+                capture("MNEMOS_MSX_RAM_SIZE");
                 capture("MNEMOS_MSX_DISK_SLOT");
                 capture("MNEMOS_MSX_CART2_SLOT");
                 capture("MNEMOS_MSX_LOGO_ROM");
@@ -413,6 +414,7 @@ TEST_CASE("system launch applies MSX machine slot profile environment",
     REQUIRE(set_env("MNEMOS_MSX_BIOS", bios.string()) == 0);
     REQUIRE(set_env("MNEMOS_MSX_EXPANDED_SLOTS", "0x8") == 0);
     REQUIRE(set_env("MNEMOS_MSX_RAM_SLOT", "3.2") == 0);
+    REQUIRE(set_env("MNEMOS_MSX_RAM_SIZE", "256K") == 0);
     REQUIRE(set_env("MNEMOS_MSX_DISK_SLOT", "3.1") == 0);
     REQUIRE(set_env("MNEMOS_MSX_CART2_SLOT", "2.3") == 0);
 
@@ -424,6 +426,7 @@ TEST_CASE("system launch applies MSX machine slot profile environment",
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);
     CHECK(has_spec(*outcome.system, "Slot Layout", "expanded=8 ram=3.2 disk=3.1 cart2=2.3"));
+    CHECK(has_spec(*outcome.system, "RAM Mapper", "256 KiB"));
 
     fs::remove_all(dir);
 }
