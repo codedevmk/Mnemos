@@ -15,9 +15,9 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 114 currently match
-a checked-in Mnemos Irem manifest, 105 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 95 have an
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 115 currently match
+a checked-in Mnemos Irem manifest, 106 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 96 have an
 executable player-supported route. The 10 M62 matches are intentionally tracked
 as contract-only raw-media manifests until an M62 board/player profile exists;
 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
@@ -25,7 +25,7 @@ copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping. A current all-Irem CRC artifact audit of the checked-in
 manifests reports
-`1195/1195` required files present from `D:\emu\irem`, so there are no current
+`1216/1216` required files present from `D:\emu\irem`, so there are no current
 file-level missing-artifact rows for the checked-in Irem manifest set. The
 common data-gated runner and oracle registry now include G6-ratcheted corpus
 golden tests for every implemented Irem player family: M15, M52, M72, M75,
@@ -64,7 +64,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | M62 | `irem_m62` raw-media contracts | 9% contract-only | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
-| M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
+| M75 | `irem_m75` first-pass | 34% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional and bootleg clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg PROM/color behavior proof |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 68% | `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 8 checked-in local sets; local Air Duel M82 parent/US clone wrappers; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
@@ -105,7 +105,7 @@ targets:
 - M15, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
-  regional clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,
+  regional and bootleg clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,
   service/test input proof, and Vigilante manual-backed DIP defaults.
   M92 currently covers the complete local GunForce parent wrapper plus the local
   US/Japan split clone wrappers, Blade Master parent/Japan clone, Gunforce 2 /
@@ -324,16 +324,18 @@ visual and audio parity proof.
 ### M75
 
 - **Techsheet games:** Vigilante.
-- **Mnemos games:** `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`,
-  `vigilantd`, `vigilantg`, `vigilanto`.
+- **Mnemos games:** `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`,
+  `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto`.
 - **Smoke playable:** the complete local parent wrapper
   `D:\emu\irem\Vigilante_Arcade_EN (3).zip` unwraps to `vigilant.zip`, and the
   official regional clone wrappers `D:\emu\irem\Vigilante_Arcade_EN (1).zip`
-  through `D:\emu\irem\Vigilante_Arcade_EN (6).zip` plus
-  `D:\emu\irem\Vigilante_Arcade_JA.zip` load CRC-clean through clone/parent fallback. The data-gated corpus test steps
-  all seven M75 manifests, produces nonblank diagnostic output, and supports
-  save/load; `D:\emu\irem\Vigilante_Arcade_JA.zip` also has direct screenshot and
-  save-state smoke evidence.
+  through `D:\emu\irem\Vigilante_Arcade_EN (6).zip`,
+  `D:\emu\irem\Vigilante_Arcade_JA.zip`, and the bootleg wrapper
+  `D:\emu\irem\Vigilante_Arcade_EN.zip` load CRC-clean through clone/parent
+  fallback. The data-gated corpus test steps all eight M75 manifests, produces
+  nonblank diagnostic output, and supports save/load;
+  `D:\emu\irem\Vigilante_Arcade_EN.zip` also has direct 256x256 nonblank
+  screenshot smoke evidence.
 - **Correct gfx/music:** none. The board has a first-pass diagnostic video path
   and executable Z80/Z80/YM2151/DAC ownership, including synthetic
   sample-ROM-read-to-DAC proof on the sound Z80 elapsed-clock timeline, not
@@ -344,7 +346,8 @@ visual and audio parity proof.
   5-bit KNA91-style palette bus, rear color/disable register semantics,
   whole-board save/load identity, 14 Vigilante manual SW1/SW2 DIP definitions
   folded to active-low defaults `dsw1=0xff` / `dsw2=0xfd`, and embedded
-  parent/clone Vigilante ROM contracts. The M75 system tests now prove the
+  parent/clone Vigilante ROM contracts including `vigilantbl` bootleg PROM/PAL
+  media. The M75 system tests now prove the
   sound Z80 can program the sample cursor, read consecutive sample ROM bytes
   through the modeled port, write them through the DAC as ordered
   sound-clocked events, and acknowledge the latch.
@@ -358,8 +361,7 @@ visual and audio parity proof.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
   Vigilante background/foreground/sprite priority, verify exact memory/I/O,
   DIP runtime behavior beyond current manual defaults, and raster phase, prove sound CPU sample/DAC
-  timing against board evidence, add bootleg parent-fallback coverage for
-  partial bootleg ZIPs, and
+  timing against board evidence, prove bootleg-specific PROM/color behavior, and
   collect screenshot/audio parity evidence before marking graphics or music
   correct.
 

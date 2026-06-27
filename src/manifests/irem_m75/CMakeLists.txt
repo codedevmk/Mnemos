@@ -2,6 +2,7 @@ set(_irem_m75_game_manifest_files
     "games/vigilant.toml"
     "games/vigilanta.toml"
     "games/vigilantb.toml"
+    "games/vigilantbl.toml"
     "games/vigilantc.toml"
     "games/vigilantd.toml"
     "games/vigilantg.toml"

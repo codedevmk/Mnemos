@@ -30,7 +30,34 @@ namespace {
         std::optional<std::size_t> file_count{};
     };
 
-    [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>& expected_regions() {
+    [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>&
+    expected_regions(std::string_view set_name) {
+        if (set_name == "vigilantbl") {
+            static const std::map<std::string, expected_contract, std::less<>> bootleg_regions{
+                {"maincpu",
+                 {.region_size = mnemos::manifests::irem_m75::main_rom_size,
+                  .file_count = 2U}},
+                {"soundcpu",
+                 {.region_size = mnemos::manifests::irem_m75::sound_rom_size,
+                  .file_count = 1U}},
+                {"chars",
+                 {.region_size = mnemos::manifests::irem_m75::char_gfx_size,
+                  .file_count = 2U}},
+                {"sprites",
+                 {.region_size = mnemos::manifests::irem_m75::sprite_gfx_size,
+                  .file_count = 8U}},
+                {"bgtiles",
+                 {.region_size = mnemos::manifests::irem_m75::bg_tile_gfx_size,
+                  .file_count = 3U}},
+                {"samples",
+                 {.region_size = mnemos::manifests::irem_m75::sample_rom_size,
+                  .file_count = 1U}},
+                {"proms", {.region_size = 0x000300U, .file_count = 3U}},
+                {"plds",
+                 {.region_size = mnemos::manifests::irem_m75::plds_size, .file_count = 1U}},
+            };
+            return bootleg_regions;
+        }
         static const std::map<std::string, expected_contract, std::less<>> regions{
             {"maincpu",
              {.region_size = mnemos::manifests::irem_m75::main_rom_size, .file_count = 2U}},
@@ -138,7 +165,7 @@ TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts
         CHECK(decl.board == "irem_m75");
         CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
 
-        for (const auto& [region_name, contract] : expected_regions()) {
+        for (const auto& [region_name, contract] : expected_regions(decl.name)) {
             const rom_set_region* region = find_region(decl, region_name);
             REQUIRE(region != nullptr);
             CHECK(region->size == contract.region_size);
@@ -153,13 +180,15 @@ TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts
     }
 
     CHECK(names == std::set<std::string, std::less<>>{"vigilant", "vigilanta", "vigilantb",
-                                                      "vigilantc", "vigilantd", "vigilantg",
-                                                      "vigilanto"});
+                                                      "vigilantbl", "vigilantc", "vigilantd",
+                                                      "vigilantg", "vigilanto"});
     CHECK_FALSE(mnemos::manifests::irem_m75::game_manifest_toml("vigilant").empty());
     REQUIRE(declarations.at("vigilanta").parent.has_value());
     CHECK(*declarations.at("vigilanta").parent == "vigilant");
     REQUIRE(declarations.at("vigilantb").parent.has_value());
     CHECK(*declarations.at("vigilantb").parent == "vigilant");
+    REQUIRE(declarations.at("vigilantbl").parent.has_value());
+    CHECK(*declarations.at("vigilantbl").parent == "vigilant");
     REQUIRE(declarations.at("vigilantc").parent.has_value());
     CHECK(*declarations.at("vigilantc").parent == "vigilant");
     REQUIRE(declarations.at("vigilantd").parent.has_value());

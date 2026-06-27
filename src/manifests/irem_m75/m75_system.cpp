@@ -89,7 +89,8 @@ namespace mnemos::manifests::irem_m75 {
         [[nodiscard]] bool is_vigilante_set(std::string_view set_name) noexcept {
             return set_name == "vigilant" || set_name == "vigilantg" ||
                    set_name == "vigilanto" || set_name == "vigilanta" ||
-                   set_name == "vigilantb" || set_name == "vigilantc" ||
+                   set_name == "vigilantb" || set_name == "vigilantbl" ||
+                   set_name == "vigilantc" ||
                    set_name == "vigilantd";
         }
 
