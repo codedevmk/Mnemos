@@ -147,8 +147,8 @@ multiple independent open-source implementations.
   M14 board route exists. No MAME driver code or ROM bytes are copied into
   Mnemos.
 - **Irem M27 ROM-set metadata** — the checked-in `panther` manifest uses public
-  Irem M27 driver metadata for Panther dump filenames, main CPU, graphics, and
-  PROM region offsets, region sizes, CRC-32s, orientation, and board-family
+  Irem M27 driver metadata for Panther dump filenames, M6502 program, audio CPU,
+  and PROM region offsets, region sizes, CRC-32s, orientation, and board-family
   classification. The local wrapper remains contract-only until an executable
   M27 board route exists. No MAME driver code or ROM bytes are copied into
   Mnemos.

@@ -41,7 +41,7 @@ namespace {
     [[nodiscard]] const std::map<std::string, expected_region, std::less<>>&
     expected_panther_regions() {
         static const std::map<std::string, expected_region, std::less<>> regions{
-            {"gfx1", {.size = 0x0800U, .file_count = 1U}},
+            {"audiocpu", {.size = 0x10000U, .file_count = 1U}},
             {"maincpu", {.size = 0x10000U, .file_count = 7U}},
             {"proms", {.size = 0x0200U, .file_count = 1U}},
         };
@@ -69,6 +69,14 @@ namespace {
         return it == decl.regions.end() ? nullptr : &*it;
     }
 
+    [[nodiscard]] const rom_set_file* find_file(const rom_set_region& region,
+                                                std::string_view name) noexcept {
+        const auto it =
+            std::find_if(region.files.begin(), region.files.end(),
+                         [name](const rom_set_file& file) { return file.name == name; });
+        return it == region.files.end() ? nullptr : &*it;
+    }
+
     void require_region_contract(const rom_set_region& region) {
         CHECK(region.size > 0U);
         REQUIRE_FALSE(region.files.empty());
@@ -86,6 +94,37 @@ namespace {
             const std::size_t last_start = file.offset + (chunks - 1U) * file.stride;
             CHECK(last_start < region.size);
         }
+    }
+
+    void require_file_contract(const rom_set_region& region, std::string_view name,
+                               std::size_t expected_offset, std::size_t expected_size,
+                               std::uint32_t expected_crc32) {
+        const rom_set_file* file = find_file(region, name);
+        REQUIRE(file != nullptr);
+        CHECK(file->offset == expected_offset);
+        CHECK(file->size == expected_size);
+        REQUIRE(file->crc32.has_value());
+        CHECK(*file->crc32 == expected_crc32);
+    }
+
+    void require_panther_file_layout(const rom_set_decl& decl) {
+        const rom_set_region* maincpu = find_region(decl, "maincpu");
+        REQUIRE(maincpu != nullptr);
+        require_file_contract(*maincpu, "qr-1.bin", 0x8000U, 0x0800U, 0x406dc606U);
+        require_file_contract(*maincpu, "qr-2.bin", 0x8800U, 0x0800U, 0xe7e64b11U);
+        require_file_contract(*maincpu, "qr-3.bin", 0x9000U, 0x0800U, 0xdfec33f2U);
+        require_file_contract(*maincpu, "qr-4.bin", 0x9800U, 0x0800U, 0x60571aa0U);
+        require_file_contract(*maincpu, "qr-5.bin", 0xa000U, 0x0800U, 0x2ac19b54U);
+        require_file_contract(*maincpu, "qr-6.bin", 0xa800U, 0x0800U, 0x02fbd9d9U);
+        require_file_contract(*maincpu, "qr-7.bin", 0xb000U, 0x0800U, 0xb3e2d6ccU);
+
+        const rom_set_region* audiocpu = find_region(decl, "audiocpu");
+        REQUIRE(audiocpu != nullptr);
+        require_file_contract(*audiocpu, "q7a.bin", 0x7000U, 0x0800U, 0xfebd1674U);
+
+        const rom_set_region* proms = find_region(decl, "proms");
+        REQUIRE(proms != nullptr);
+        require_file_contract(*proms, "6349-1j-8026.1a", 0x0000U, 0x0200U, 0xea9c2adaU);
     }
 
     [[nodiscard]] bool ends_with_zip(std::string_view name) {
@@ -342,6 +381,7 @@ TEST_CASE("m27 embedded manifests cover local ROM contracts", "[m27][romset]") {
             CHECK(region->files.size() == expected.file_count);
             require_region_contract(*region);
         }
+        require_panther_file_layout(decl);
     }
 }
 

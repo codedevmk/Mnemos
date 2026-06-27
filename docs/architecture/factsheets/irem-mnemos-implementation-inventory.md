@@ -178,11 +178,12 @@ visual and audio parity proof.
   `panther.zip`, but there is no executable M27 player route yet.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m27` embeds the local
-  `panther` ROM-set contract with public M27 `maincpu`, `gfx1`, and `proms`
-  region placement, exact local filenames, directory-prefixed aliases for the
-  nested wrapper, sizes, and CRC32 values. The focused test checks embedded TOML
-  synchronization, region/file invariants, and optional real-corpus loading
-  through `D:\emu\irem\Panther_Arcade_EN.zip`.
+  `panther` ROM-set contract with public M27 `maincpu`, `audiocpu`, and `proms`
+  region placement: seven 2 KiB M6502 program ROMs at `$8000-$B7FF`, one
+  Panther audio-board ROM at `$7000`, and the 512-byte color PROM. The focused
+  test checks embedded TOML synchronization, exact file offsets/CRCs,
+  region/file invariants, and optional real-corpus loading through
+  `D:\emu\irem\Panther_Arcade_EN.zip`.
 - **Remaining:** implement the M27 board route, CPU memory and I/O map,
   raster/color behavior, input/DIP behavior, sound behavior, save-state/player
   adapter, and visual/audio parity.
