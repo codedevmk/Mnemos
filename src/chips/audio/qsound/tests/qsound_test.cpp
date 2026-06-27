@@ -16,6 +16,8 @@ namespace {
     using mnemos::chips::state_reader;
     using mnemos::chips::state_writer;
     using mnemos::chips::audio::qsound;
+    constexpr std::int16_t mixed_0x40 = 16383;
+    constexpr std::int16_t mixed_0x20 = 8192;
 
     // Program one DSP register through the 3-port window the sound CPU uses:
     // data high byte, data low byte, then the register-select that commits.
@@ -29,6 +31,12 @@ namespace {
         q.write_port_with_pc(0, static_cast<std::uint8_t>(data >> 8U), pc);
         q.write_port_with_pc(1, static_cast<std::uint8_t>(data & 0xFFU), pc);
         q.write_port_with_pc(2, reg, pc);
+    }
+
+    void program_zero_dry_delay(qsound& q) {
+        program(q, 0xDFU, 0x0000U);
+        program(q, 0xE1U, 0x0000U);
+        program(q, 0xE2U, 0x0001U);
     }
 
     // A sample ROM with one known PCM byte at bank 0, address `addr`.
@@ -83,10 +91,10 @@ TEST_CASE("qsound mixes one centered voice at the expected level", "[qsound]") {
     program(q, 0x80U, 0x20U); // pan (centered)
 
     q.step();
-    // sample = (0x4000 * 16384) >> 14 = 16384; pan center -> each lane
-    // (16384 * 16) >> 5 = 8192; output >> mix_shift(2) = 2048.
-    CHECK(q.last_left() == 2048);
-    CHECK(q.last_right() == 2048);
+    // sample = (0x4000 * 0x4000) >> 14 = 16384; DL-1425 center pan
+    // routes the dry signal at full scale into both lanes.
+    CHECK(q.last_left() == mixed_0x40);
+    CHECK(q.last_right() == mixed_0x40);
 }
 
 TEST_CASE("qsound pans hard left, center, and hard right", "[qsound]") {
@@ -101,8 +109,7 @@ TEST_CASE("qsound pans hard left, center, and hard right", "[qsound]") {
         program(q, 6U, 0x4000U);
         program(q, 0x80U, 0x10U); // all to the left
         q.step();
-        // left = (16384 * 0x20) >> 5 = 16384 -> >> 2 = 4096; right = 0.
-        CHECK(q.last_left() == 4096);
+        CHECK(q.last_left() == mixed_0x40);
         CHECK(q.last_right() == 0);
     }
     SECTION("center (pan 0x20)") {
@@ -114,8 +121,8 @@ TEST_CASE("qsound pans hard left, center, and hard right", "[qsound]") {
         program(q, 6U, 0x4000U);
         program(q, 0x80U, 0x20U); // centered
         q.step();
-        CHECK(q.last_left() == 2048);
-        CHECK(q.last_right() == 2048);
+        CHECK(q.last_left() == mixed_0x40);
+        CHECK(q.last_right() == mixed_0x40);
     }
     SECTION("hard right (pan 0x30)") {
         qsound q;
@@ -127,8 +134,42 @@ TEST_CASE("qsound pans hard left, center, and hard right", "[qsound]") {
         program(q, 0x80U, 0x30U); // all to the right
         q.step();
         CHECK(q.last_left() == 0);
-        CHECK(q.last_right() == 4096);
+        CHECK(q.last_right() == mixed_0x40);
     }
+}
+
+TEST_CASE("qsound direct pan mixer matches the CPS2 bring-up attenuation", "[qsound]") {
+    qsound q;
+    q.set_mixer_mode(qsound::mixer_mode::direct_pan);
+    const auto rom = rom_with(0x10U, 0x40U);
+    q.set_sample_rom(rom);
+
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x0100U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+
+    q.step();
+
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+    CHECK(q.current_mixer_mode() == qsound::mixer_mode::direct_pan);
+}
+
+TEST_CASE("qsound power-on pan defaults to the DL-1425 center address", "[qsound]") {
+    qsound q;
+    const auto rom = rom_with(0x10U, 0x40U);
+    q.set_sample_rom(rom);
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x0100U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+
+    q.step();
+
+    CHECK(q.last_left() == mixed_0x40);
+    CHECK(q.last_right() == mixed_0x40);
 }
 
 TEST_CASE("qsound skips voices with zero volume", "[qsound]") {
@@ -145,6 +186,29 @@ TEST_CASE("qsound skips voices with zero volume", "[qsound]") {
     CHECK(q.last_right() == 0);
 }
 
+TEST_CASE("qsound direct pan keeps muted PCM voices parked", "[qsound]") {
+    qsound q;
+    q.set_mixer_mode(qsound::mixer_mode::direct_pan);
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[0x10U] = 0x40U;
+    rom[0x11U] = 0x20U;
+    q.set_sample_rom(rom);
+
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x1000U);
+    program(q, 5U, 0x0020U);
+    program(q, 0x80U, 0x20U);
+
+    q.step();
+    CHECK(q.last_left() == 0);
+    CHECK(q.last_right() == 0);
+
+    program(q, 6U, 0x4000U);
+    q.step();
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+}
+
 TEST_CASE("qsound emits stationary PCM voices when rate is zero", "[qsound]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
@@ -156,8 +220,8 @@ TEST_CASE("qsound emits stationary PCM voices when rate is zero", "[qsound]") {
 
     q.step();
 
-    CHECK(q.last_left() == 2048);
-    CHECK(q.last_right() == 2048);
+    CHECK(q.last_left() == mixed_0x40);
+    CHECK(q.last_right() == mixed_0x40);
 }
 
 TEST_CASE("qsound keeps advancing a PCM voice past end when loop length is zero",
@@ -172,14 +236,90 @@ TEST_CASE("qsound keeps advancing a PCM voice past end when loop length is zero"
     program(q, 5U, 0x0011U);
     program(q, 6U, 0x4000U);
     program(q, 0x80U, 0x20U);
+    program_zero_dry_delay(q);
+
+    q.step();
+    CHECK(q.last_left() == mixed_0x40);
+    CHECK(q.last_right() == mixed_0x40);
+
+    q.step();
+    CHECK(q.last_left() == mixed_0x20);
+    CHECK(q.last_right() == mixed_0x20);
+}
+
+TEST_CASE("qsound clamps high PCM addresses at the DL-1425 positive phase limit",
+          "[qsound][pcm]") {
+    qsound q;
+    q.set_mixer_mode(qsound::mixer_mode::direct_pan);
+    auto rom = std::vector<std::uint8_t>(0x10000, 0U);
+    rom[0x8000U] = 0x40U;
+    rom[0x7FFFU] = 0x20U;
+    q.set_sample_rom(rom);
+
+    program(q, 1U, 0x8000U);  // high 16-bit sample address
+    program(q, 2U, 0x1000U);  // advance one byte per QSound sample
+    program(q, 5U, 0x8004U);  // high 16-bit end address
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
 
     q.step();
     CHECK(q.last_left() == 2048);
     CHECK(q.last_right() == 2048);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x7FFFU);
 
     q.step();
     CHECK(q.last_left() == 1024);
     CHECK(q.last_right() == 1024);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x7FFFU);
+}
+
+TEST_CASE("qsound treats high PCM end registers as unsigned loop boundaries",
+          "[qsound][pcm]") {
+    qsound q;
+    q.set_mixer_mode(qsound::mixer_mode::direct_pan);
+    auto rom = std::vector<std::uint8_t>(0x10000, 0U);
+    rom[0x0010U] = 0x40U;
+    rom[0x0011U] = 0x20U;
+    q.set_sample_rom(rom);
+
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x1000U);
+    program(q, 4U, 0x0010U);
+    program(q, 5U, 0x8000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+
+    q.step();
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x0011U);
+
+    q.step();
+    CHECK(q.last_left() == 1024);
+    CHECK(q.last_right() == 1024);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x0012U);
+}
+
+TEST_CASE("qsound clamps PCM phase after loop subtraction like the DL-1425 HLE",
+          "[qsound][pcm]") {
+    qsound q;
+    q.set_mixer_mode(qsound::mixer_mode::direct_pan);
+    auto rom = std::vector<std::uint8_t>(0x10000, 0U);
+    rom[0xFFF0U] = 0x40U;
+    q.set_sample_rom(rom);
+
+    program(q, 1U, 0xFFF0U);
+    program(q, 2U, 0xFFFFU);
+    program(q, 5U, 0x0001U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+
+    q.step();
+
+    CHECK(q.last_left() == 2048);
+    CHECK(q.last_right() == 2048);
+    CHECK(introspection_value(q, "PCM00_ADDR") == 0x7FFFU);
+    CHECK(introspection_value(q, "PCM00_PHASE") == 0xFFF0U);
 }
 
 TEST_CASE("qsound read_sample addresses the ROM by bank:addr", "[qsound]") {
@@ -196,7 +336,28 @@ TEST_CASE("qsound read_sample addresses the ROM by bank:addr", "[qsound]") {
     program(q, 6U, 0x4000U);
     program(q, 0x80U, 0x00U);
     q.step();
-    CHECK(q.last_left() == 4096); // found the sample at bank 1
+    CHECK(q.last_left() == mixed_0x40); // found the sample at bank 1
+}
+
+TEST_CASE("qsound masks the bank high bit instead of treating it as an enable",
+          "[qsound]") {
+    qsound q;
+    auto rom = std::vector<std::uint8_t>(0x20000, 0U);
+    rom[(1U << 16U) | 0x20U] = 0x40U;
+    q.set_sample_rom(rom);
+
+    // Current QSound references address `(bank & 0x7fff) << 16 | addr`; the high
+    // bit is not a playback enable gate.
+    program(q, (15U << 3U) | 0U, 0x0001U); // voice 0 bank = low bank 1
+    program(q, 1U, 0x0020U);
+    program(q, 2U, 0x0100U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x00U);
+
+    q.step();
+
+    CHECK(q.last_left() == mixed_0x40);
 }
 
 TEST_CASE("qsound bank register programs the next voice", "[qsound]") {
@@ -212,7 +373,7 @@ TEST_CASE("qsound bank register programs the next voice", "[qsound]") {
     program(q, (4U << 3U) | 6U, 0x4000U); // voice 4 volume
     program(q, 0x80U + 4U, 0x00U);        // voice 4 pan (left)
     q.step();
-    CHECK(q.last_left() == 4096); // voice 4 found the sample in bank 2
+    CHECK(q.last_left() == mixed_0x40); // voice 4 found the sample in bank 2
 }
 
 TEST_CASE("qsound records CPS2 sound-driver register diagnostics", "[qsound][trace]") {
@@ -275,7 +436,8 @@ TEST_CASE("qsound records CPS2 sound-driver register diagnostics", "[qsound][tra
     CHECK(introspection_value(q, "TRACE002_PC") == 0x3456U);
 }
 
-TEST_CASE("qsound captures PCM echo registers without altering the mix", "[qsound][echo]") {
+TEST_CASE("qsound captures PCM echo registers and keeps output deterministic",
+          "[qsound][echo]") {
     qsound q;
     const auto rom = rom_with(0x10U, 0x40U);
     q.set_sample_rom(rom);
@@ -288,17 +450,22 @@ TEST_CASE("qsound captures PCM echo registers without altering the mix", "[qsoun
     program(q, 0x93U, 0x4000U); // echo feedback
     program(q, 0xD9U, static_cast<std::uint16_t>(qsound::echo_delay_base + 1U));
 
-    q.step();
-    CHECK(q.last_left() == 2048);
-    CHECK(q.last_right() == 2048);
-
-    q.step();
-    CHECK(q.last_left() == 2048);
-    CHECK(q.last_right() == 2048);
-
-    q.step();
-    CHECK(q.last_left() == 2048);
-    CHECK(q.last_right() == 2048);
+    std::array<std::int16_t, 6> first{};
+    std::array<std::int16_t, 6> second{};
+    q.generate(first);
+    q.reset(reset_kind::power_on);
+    q.set_sample_rom(rom);
+    program(q, 1U, 0x0010U);
+    program(q, 2U, 0x0000U);
+    program(q, 5U, 0x1000U);
+    program(q, 6U, 0x4000U);
+    program(q, 0x80U, 0x20U);
+    program(q, 0xBAU, 0x4000U);
+    program(q, 0x93U, 0x4000U);
+    program(q, 0xD9U, static_cast<std::uint16_t>(qsound::echo_delay_base + 1U));
+    q.generate(second);
+    CHECK(second == first);
+    CHECK(any_nonzero(second));
     CHECK(introspection_value(q, "ECHOFB") == 0x4000U);
     CHECK(introspection_value(q, "ECHOLEN") == 1U);
 }
@@ -323,7 +490,7 @@ TEST_CASE("qsound save/load round-trips voice state", "[qsound]") {
     q2.load_state(r);
     REQUIRE(r.ok());
     q2.step();
-    CHECK(q2.last_left() == 4096); // restored voice plays identically
+    CHECK(q2.last_left() == mixed_0x40); // restored voice plays identically
 }
 
 TEST_CASE("qsound save/load preserves register diagnostics", "[qsound][trace][save]") {
@@ -401,9 +568,9 @@ TEST_CASE("qsound decodes triggered ADPCM voices into both lanes", "[qsound][adp
     q.step();
 
     // predictor = 75 from the +7 nibble and initial step size 10; volume 0x4000
-    // gives sample 18, mixed mono into L/R, then the global mix shift divides by 4.
-    CHECK(q.last_left() == 4);
-    CHECK(q.last_right() == 4);
+    // gives sample 18, mixed mono into L/R.
+    CHECK(q.last_left() == 18);
+    CHECK(q.last_right() == 18);
 }
 
 TEST_CASE("qsound ADPCM trigger latches a late nonzero volume", "[qsound][adpcm]") {
@@ -506,8 +673,8 @@ TEST_CASE("qsound generate fills interleaved stereo pairs", "[qsound]") {
     program(q, 0x80U, 0x20U);
     std::array<std::int16_t, 8> buf{};
     q.generate(buf);
-    CHECK(buf[0] == 2048); // L
-    CHECK(buf[1] == 2048); // R
+    CHECK(buf[0] == mixed_0x40); // L
+    CHECK(buf[1] == mixed_0x40); // R
 }
 
 TEST_CASE("qsound reset restores power-on voice defaults", "[qsound]") {
@@ -523,5 +690,39 @@ TEST_CASE("qsound reset restores power-on voice defaults", "[qsound]") {
     // volume was cleared by reset and not re-programmed -> idle.
     q.step();
     CHECK(q.last_left() == 0);
+    q.tick(qsound::command_ready_cycles);
+    CHECK(q.read_status() == qsound::ready_flag);
+}
+
+TEST_CASE("qsound immediate ready mode keeps register scripts unthrottled", "[qsound]") {
+    qsound q;
+    q.set_ready_mode(qsound::ready_mode::immediate);
+    CHECK(q.current_ready_mode() == qsound::ready_mode::immediate);
+    CHECK(q.read_status() == qsound::ready_flag);
+
+    q.write_port(0, 0x12U);
+    q.write_port(1, 0x34U);
+    q.write_port(2, 0x93U);
+    CHECK(q.read_status() == qsound::ready_flag);
+
+    q.tick(qsound::command_ready_cycles - 1U);
+    CHECK(q.read_status() == qsound::ready_flag);
+}
+
+TEST_CASE("qsound register commit holds ready low for one sample interval", "[qsound]") {
+    qsound q;
+    CHECK(q.read_status() == qsound::ready_flag);
+
+    q.write_port(0, 0x12U);
+    q.write_port(1, 0x34U);
+    CHECK(q.read_status() == qsound::ready_flag);
+
+    q.write_port(2, 0x93U);
+    CHECK(q.read_status() == 0U);
+
+    q.tick(qsound::command_ready_cycles - 1U);
+    CHECK(q.read_status() == 0U);
+
+    q.tick(1U);
     CHECK(q.read_status() == qsound::ready_flag);
 }

@@ -16,6 +16,7 @@
 #include <bit>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -31,6 +32,8 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
         constexpr std::uint32_t cps2_adapter_state_version = 5U;
         constexpr std::uint32_t cps2_audio_output_rate = 44'100U;
+        constexpr std::uint64_t cps2_audio_slice_cycles =
+            cps2::m68k_clock_hz / cps2_audio_output_rate;
         constexpr std::uint64_t cps2_qsound_rate_num = 60'000'000ULL / 2ULL;
         constexpr std::uint64_t cps2_qsound_rate_den =
             1'248ULL * static_cast<std::uint64_t>(cps2_audio_output_rate);
@@ -56,6 +59,11 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             mnemos::manifests::common::rom_file_provider provider;
             std::vector<key_file_candidate> key_candidates;
         };
+
+        [[nodiscard]] std::uint64_t audio_due_after_frames(std::uint64_t frames) noexcept {
+            return frames * static_cast<std::uint64_t>(cps2_audio_output_rate) *
+                   cps2::refresh_hz_den / cps2::refresh_hz_num;
+        }
 
         [[nodiscard]] std::vector<key_file_candidate>
         collect_zip_key_candidates(std::span<const std::uint8_t> archive_bytes);
@@ -964,35 +972,107 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         publish(10U, "development_dips", sys_->development_dips());
     }
 
+    void capcom_cps2_adapter::capture_audio_slice_callback(
+        void* context,
+        std::uint64_t frame_budget,
+        std::uint64_t frame_cycles_done) noexcept {
+        auto* adapter = static_cast<capcom_cps2_adapter*>(context);
+        if (adapter == nullptr) {
+            return;
+        }
+        adapter->frame_audio_cycle_budget_ = frame_budget == 0U
+                                                  ? cps2::cpu_cycles_per_frame
+                                                  : frame_budget;
+        adapter->capture_audio_until(adapter->frame_audio_cycle_budget_, frame_cycles_done);
+    }
+
+    void capcom_cps2_adapter::capture_audio_until(
+        std::uint64_t frame_budget,
+        std::uint64_t frame_cycles_done) noexcept {
+        if (frame_audio_target_ == 0U || frame_budget == 0U) {
+            return;
+        }
+        const std::uint64_t clamped_cycles = std::min(frame_cycles_done, frame_budget);
+        const std::uint64_t target =
+            frame_audio_target_ * clamped_cycles / frame_budget;
+        while (frame_audio_generated_ < target) {
+            append_qsound_output_sample();
+        }
+    }
+
+    void capcom_cps2_adapter::append_qsound_output_sample() noexcept {
+        auto& qsound = sys_->qsound_dsp();
+        qsound_output_accum_ += cps2_qsound_rate_num;
+        while (qsound_output_accum_ >= cps2_qsound_rate_den) {
+            qsound_output_accum_ -= cps2_qsound_rate_den;
+            qsound_prev_left_ = qsound_curr_left_;
+            qsound_prev_right_ = qsound_curr_right_;
+            qsound.step();
+            qsound_curr_left_ = qsound.last_left();
+            qsound_curr_right_ = qsound.last_right();
+        }
+        const auto blend = [this](std::int16_t previous, std::int16_t current) noexcept {
+            const std::int64_t delta =
+                static_cast<std::int64_t>(current) - static_cast<std::int64_t>(previous);
+            const std::int64_t scaled =
+                static_cast<std::int64_t>(previous) +
+                (delta * static_cast<std::int64_t>(qsound_output_accum_)) /
+                    static_cast<std::int64_t>(cps2_qsound_rate_den);
+            return static_cast<std::int16_t>(std::clamp<std::int64_t>(
+                scaled,
+                static_cast<std::int64_t>(std::numeric_limits<std::int16_t>::min()),
+                static_cast<std::int64_t>(std::numeric_limits<std::int16_t>::max())));
+        };
+        pending_audio_.push_back(blend(qsound_prev_left_, qsound_curr_left_));
+        pending_audio_.push_back(blend(qsound_prev_right_, qsound_curr_right_));
+        ++frame_audio_generated_;
+    }
+
+    void capcom_cps2_adapter::reset_audio_pipeline(bool reset_timing) noexcept {
+        audio_buf_.clear();
+        pending_audio_.clear();
+        if (reset_timing) {
+            qsound_output_accum_ = 0U;
+        }
+        qsound_prev_left_ = 0;
+        qsound_prev_right_ = 0;
+        qsound_curr_left_ = 0;
+        qsound_curr_right_ = 0;
+        frame_audio_target_ = 0U;
+        frame_audio_generated_ = 0U;
+        frame_audio_cycle_budget_ = cps2::cpu_cycles_per_frame;
+    }
+
     void capcom_cps2_adapter::step_one_frame() {
-        // run_frame() integrates the 68000, the QSound subsystem, and the beam
-        // (incl. the vblank IRQ tail) for exactly one frame.
-        sys_->run_frame();
+        const std::uint64_t due_before = audio_due_after_frames(frames_stepped_);
+        const std::uint64_t due_after = audio_due_after_frames(frames_stepped_ + 1U);
+        frame_audio_target_ = due_after - due_before;
+        frame_audio_generated_ = 0U;
+        frame_audio_cycle_budget_ = cps2::cpu_cycles_per_frame;
+        pending_audio_.reserve(
+            pending_audio_.size() + static_cast<std::size_t>(frame_audio_target_ * 2U));
+
+        // Slice the frame at roughly one output sample of 68K time so short-lived
+        // QSound register changes are rendered before later driver writes replace
+        // them.
+        sys_->run_frame_sliced(cps2_audio_slice_cycles,
+                               &capcom_cps2_adapter::capture_audio_slice_callback,
+                               this);
+        capture_audio_until(frame_audio_cycle_budget_, frame_audio_cycle_budget_);
+        samples_drained_ = due_after;
+        frame_audio_target_ = 0U;
+        frame_audio_generated_ = 0U;
         ++frames_stepped_;
     }
 
     frontend_sdk::audio_chunk capcom_cps2_adapter::drain_audio() noexcept {
-        const std::uint64_t due =
-            frames_stepped_ * static_cast<std::uint64_t>(cps2_audio_output_rate) *
-            manifests::capcom_cps2::refresh_hz_den / manifests::capcom_cps2::refresh_hz_num;
-        const std::uint64_t pending = due - samples_drained_;
-        samples_drained_ = due;
-        if (pending == 0U) {
+        if (pending_audio_.empty()) {
             return {.samples = nullptr, .frame_count = 0U, .sample_rate = cps2_audio_output_rate};
         }
-        audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
-        auto& qsound = sys_->qsound_dsp();
-        for (std::size_t frame = 0U; frame < static_cast<std::size_t>(pending); ++frame) {
-            qsound_output_accum_ += cps2_qsound_rate_num;
-            while (qsound_output_accum_ >= cps2_qsound_rate_den) {
-                qsound_output_accum_ -= cps2_qsound_rate_den;
-                qsound.step();
-            }
-            audio_buf_[frame * 2U] = qsound.last_left();
-            audio_buf_[frame * 2U + 1U] = qsound.last_right();
-        }
+        audio_buf_.swap(pending_audio_);
+        pending_audio_.clear();
         return {.samples = audio_buf_.data(),
-                .frame_count = static_cast<std::uint32_t>(pending),
+                .frame_count = static_cast<std::uint32_t>(audio_buf_.size() / 2U),
                 .sample_rate = cps2_audio_output_rate};
     }
 
@@ -1013,7 +1093,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         runtime::save_target target = build_save_target(*this);
         const runtime::load_result result = runtime::read_save_state(data, target);
         if (result.ok()) {
-            audio_buf_.clear();
+            reset_audio_pipeline(false);
         }
         return result;
     }
@@ -1239,6 +1319,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  }
                  if (reader.ok()) {
                      adapter.refresh_inputs();
+                     adapter.reset_audio_pipeline(false);
                  }
              }});
         return target;

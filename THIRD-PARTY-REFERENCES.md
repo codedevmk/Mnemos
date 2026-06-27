@@ -166,8 +166,12 @@ multiple independent open-source implementations.
   behavioural reference and cross-checked against MAME as an independent
   black-box reference. The QSound DSP is intentionally modelled at the
   behavioural mixer level rather than as a DSP16 instruction core; that HLE
-  status is declared in the CPS2 manifests. No third-party emulator source is
-  vendored.
+  status is declared in the CPS2 manifests. The DL-1425 dry/wet/linear pan gain
+  tables, FIR coefficient tables, filter-offset selection behaviour, echo path,
+  and wet/dry delay-state model used by the QSound HLE were cross-checked
+  against the BSD-3-Clause `qsound-hle` reference by superctr / Ian Karlsson and
+  Valley Bell (2018), which documents behaviour derived from the DSP ROM. No
+  third-party emulator source is vendored.
 
 ## Cross-check emulators
 

@@ -43,7 +43,8 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint32_t qsound_shared_base = 0x618000U; // 68K side of the comm RAM
     inline constexpr std::size_t qsound_shared_window = 0x2000U;   // 8 KiB (odd-byte into 4 KiB)
     inline constexpr std::size_t qsound_shared_size = 0x1000U;     // the 4 KiB comm RAM
-    inline constexpr std::uint32_t sound_reset_port = 0x804041U;   // 68K: bit3 holds Z80 in reset
+    inline constexpr std::uint32_t output_low_port = 0x804041U;    // 68K: coin/output low byte
+    inline constexpr std::uint32_t sound_reset_port = output_low_port; // bit3: Z80 reset
 
     // Z80 sound-CPU map (16-bit, little-endian).
     inline constexpr std::uint16_t z80_rom_base = 0x0000U;
@@ -55,7 +56,7 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint32_t z80_bank_rom_base_small = 0x8000U;
     inline constexpr std::uint8_t z80_bank_mask = 0x0FU;         // 16 banks ($D003)
     inline constexpr std::uint16_t z80_shared_base = 0xC000U;    // 68K<->Z80 comm RAM (4 KiB)
-    inline constexpr std::uint16_t z80_ram_base = 0xD000U;       // 2 KiB scratch RAM
+    inline constexpr std::uint16_t z80_ram_base = 0xD000U;       // QSound Z80 scratch behind device ports
     inline constexpr std::uint32_t z80_ram_window = 0x800U;
     inline constexpr std::uint16_t z80_port_base = 0xD000U; // $D000-$D002 = DL-1425 ports
     inline constexpr std::uint16_t z80_bank_reg = 0xD003U;  // banked-window select (W)
@@ -117,6 +118,8 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::uint8_t eeprom_clk_bit = 0x20U;
     inline constexpr std::uint8_t eeprom_cs_bit = 0x40U;
     inline constexpr std::uint16_t qsound_volume_status = 0xE021U;
+    // CPS-2 boards carry a 16 MHz crystal, but the reference timing model scales
+    // the 68000 to the measured effective rate used by the game timing loops.
     inline constexpr std::uint32_t m68k_clock_hz = 11'800'000U;
     inline constexpr std::uint32_t refresh_hz_num = 59'637'405U;
     inline constexpr std::uint32_t refresh_hz_den = 1'000'000U;
@@ -213,8 +216,15 @@ namespace mnemos::manifests::capcom_cps2 {
 
         // Run whole 68000 instructions until at least `cycles` have elapsed.
         void run_cycles(std::uint64_t cycles);
+        using frame_slice_callback = void (*)(void* context,
+                                              std::uint64_t frame_budget,
+                                              std::uint64_t frame_cycles_done) noexcept;
+
         // Tick one CPS-2 field at the board's native 59.637405 Hz cadence.
         void run_frame();
+        void run_frame_sliced(std::uint64_t max_slice_cycles,
+                              frame_slice_callback callback,
+                              void* context);
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
 
@@ -366,8 +376,9 @@ namespace mnemos::manifests::capcom_cps2 {
         std::uint32_t sound_rom_size_{0U};
         std::uint8_t sound_bank_{0U};
         bool sound_reset_asserted_{true};    // the Z80 powers up held in reset
-        std::int64_t sound_cycle_debt_{0};   // retained diagnostic/state slot; CPS2 does not carry it
+        std::int64_t sound_cycle_debt_{0};   // whole-instruction Z80 catch-up overshoot
         std::uint64_t sound_cycle_accum_{0}; // fractional Z80/main-CPU clock accumulator
+        std::uint64_t qsound_dsp_cycle_accum_{0U};
         bool qsound_irq_line_{false};        // DL-1425 /INT line into the Z80
         std::uint32_t qsound_irq_accum_{0U}; // Z80 cycles toward the next /INT pulse
 
@@ -381,6 +392,9 @@ namespace mnemos::manifests::capcom_cps2 {
         [[nodiscard]] std::uint16_t input0_read_word(bool side_effects);
         void update_ecofighters_dial_direction() noexcept;
         void update_coin_outputs(std::uint8_t value) noexcept;
+        void reset_sound_cpu_control_state() noexcept;
+        void advance_qsound_dsp_from_z80(std::uint64_t z80_cycles) noexcept;
+        void write_output_low_port(std::uint8_t value) noexcept;
         [[nodiscard]] std::uint32_t object_ram_base_from_reg(std::uint16_t reg) const noexcept;
         [[nodiscard]] std::uint32_t object_ram_base_aligned(std::uint16_t reg,
                                                             std::uint32_t boundary) const noexcept;

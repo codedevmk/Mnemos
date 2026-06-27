@@ -705,6 +705,14 @@ namespace mnemos::manifests::capcom_cps1 {
 
             main_cpu.tick(slice);
 
+            qsound_dsp_cycle_accum_ +=
+                slice * static_cast<std::uint64_t>(chips::audio::qsound::master_clock_hz);
+            const std::uint64_t dsp_cycles = qsound_dsp_cycle_accum_ / m68k_clock_hz;
+            qsound_dsp_cycle_accum_ -= dsp_cycles * m68k_clock_hz;
+            if (dsp_cycles > 0U) {
+                qdsp.tick(dsp_cycles);
+            }
+
             cpu_cycle_accum_ += slice * qsound_z80_clock_hz;
             const std::uint64_t z80_cycles = cpu_cycle_accum_ / m68k_clock_hz;
             cpu_cycle_accum_ -= z80_cycles * m68k_clock_hz;

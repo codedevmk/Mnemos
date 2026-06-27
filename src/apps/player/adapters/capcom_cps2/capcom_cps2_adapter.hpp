@@ -114,6 +114,13 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         // Re-pack the latched pad state onto the board's active-low input words.
         void refresh_inputs() noexcept;
         void publish_memory_views();
+        static void capture_audio_slice_callback(void* context,
+                                                 std::uint64_t frame_budget,
+                                                 std::uint64_t frame_cycles_done) noexcept;
+        void capture_audio_until(std::uint64_t frame_budget,
+                                 std::uint64_t frame_cycles_done) noexcept;
+        void append_qsound_output_sample() noexcept;
+        void reset_audio_pipeline(bool reset_timing = true) noexcept;
 
         frontend_sdk::session_capability_info session_{};
         frontend_sdk::media_capability_info media_{};
@@ -129,8 +136,16 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         std::string resident_media_hash_{};
         std::vector<frontend_sdk::spec_field> spec_{};
         std::vector<std::int16_t> audio_buf_{};
+        std::vector<std::int16_t> pending_audio_{};
         std::uint64_t samples_drained_{};
         std::uint64_t qsound_output_accum_{};
+        std::int16_t qsound_prev_left_{};
+        std::int16_t qsound_prev_right_{};
+        std::int16_t qsound_curr_left_{};
+        std::int16_t qsound_curr_right_{};
+        std::uint64_t frame_audio_target_{};
+        std::uint64_t frame_audio_generated_{};
+        std::uint64_t frame_audio_cycle_budget_{manifests::capcom_cps2::cpu_cycles_per_frame};
         frontend_sdk::display_orientation orientation_{
             frontend_sdk::display_orientation::horizontal};
 

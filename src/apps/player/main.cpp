@@ -77,8 +77,9 @@ namespace {
     // (normal quit, --screenshot return, error returns) persists through it.
     class battery_save_guard {
       public:
-        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path)
-            : sys_(sys), path_(std::move(path)) {
+        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path,
+                           bool writeback)
+            : sys_(sys), path_(std::move(path)), writeback_(writeback) {
             const auto sram = ram();
             if (sram.empty()) {
                 return; // no battery RAM on this cart -- nothing to persist
@@ -93,7 +94,7 @@ namespace {
         battery_save_guard& operator=(const battery_save_guard&) = delete;
         ~battery_save_guard() {
             const auto sram = ram();
-            if (sram.empty()) {
+            if (sram.empty() || !writeback_) {
                 return;
             }
             const bool changed = sram.size() != loaded_.size() ||
@@ -112,8 +113,21 @@ namespace {
         }
         mnemos::frontend_sdk::player_system* sys_;
         std::string path_;
+        bool writeback_{};
         std::vector<std::uint8_t> loaded_;
     };
+
+    [[nodiscard]] bool headless_load_battery_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic flag.
+#endif
+        const char* value = std::getenv("MNEMOS_PLAYER_HEADLESS_LOAD_BATTERY");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }
 
     dst_rect integer_letterbox(int window_w, int window_h, int src_w, int src_h) {
         if (src_w <= 0 || src_h <= 0 || window_w <= 0 || window_h <= 0) {
@@ -380,8 +394,10 @@ int main(int argc, char* argv[]) {
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.
     std::optional<battery_save_guard> srm_guard;
-    if (system && !mnemos::apps::player::has_headless_request(headless)) {
-        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path));
+    const bool headless_request = mnemos::apps::player::has_headless_request(headless);
+    if (system && (!headless_request || headless_load_battery_enabled())) {
+        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path),
+                          !headless_request);
     }
 
     if (const auto exit_code =

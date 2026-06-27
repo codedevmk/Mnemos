@@ -98,6 +98,15 @@ namespace {
         return enc;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> patterned_bytes(std::size_t size,
+                                                            std::uint8_t seed) {
+        std::vector<std::uint8_t> out(size);
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            out[i] = static_cast<std::uint8_t>(seed + i * 37U + (i >> 8U));
+        }
+        return out;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t>
     make_stored_zip(const std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& entries) {
         std::vector<std::uint8_t> out;
@@ -614,6 +623,38 @@ TEST_CASE("capcom_cps2_adapter reports checked-in orientation by zip stem",
           mnemos::frontend_sdk::display_orientation::vertical_counterclockwise);
     CHECK(horizontal.region().orientation ==
           mnemos::frontend_sdk::display_orientation::horizontal);
+}
+
+TEST_CASE("capcom_cps2_adapter loads checked-in MSH QSound Z80 continuation by zip stem",
+          "[capcom_cps2][adapter][sound]") {
+    const auto msh01 = patterned_bytes(0x20000U, 0x11U);
+    const auto msh02 = patterned_bytes(0x20000U, 0x53U);
+    const auto zip = make_stored_zip({
+        {"msh.01", msh01},
+        {"msh.02", msh02},
+    });
+
+    temp_directory dir("mnemos_cps2_msh_audio_layout");
+    const std::filesystem::path set_path = dir.path / "msh.zip";
+    REQUIRE(mnemos::io::write_file(set_path.string(), zip));
+
+    capcom_cps2_adapter adapter(zip, "checked_in_msh_audio_layout", nullptr, {},
+                                set_path.string());
+
+    const auto* audio = adapter.machine().rom_set().region("audiocpu");
+    REQUIRE(audio != nullptr);
+    REQUIRE(audio->size() == cps2::z80_qsound_cpu_rom_region_size);
+
+    CHECK((*audio)[0x00000U] == msh01[0x00000U]);
+    CHECK((*audio)[0x07FFFU] == msh01[0x07FFFU]);
+    CHECK((*audio)[0x08000U] == 0x00U);
+    CHECK((*audio)[0x0FFFFU] == 0x00U);
+    CHECK((*audio)[0x10000U] == msh01[0x08000U]);
+    CHECK((*audio)[0x27FFFU] == msh01[0x1FFFFU]);
+    CHECK((*audio)[0x28000U] == msh02[0x00000U]);
+    CHECK((*audio)[0x47FFFU] == msh02[0x1FFFFU]);
+    CHECK((*audio)[0x48000U] == 0x00U);
+    CHECK((*audio)[0x4FFFFU] == 0x00U);
 }
 
 TEST_CASE("capcom_cps2_adapter rejects a game.toml for another board", "[capcom_cps2][adapter]") {
