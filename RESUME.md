@@ -1,6 +1,6 @@
 # MSX / MSX2 Resume Handoff
 
-Generated: 2026-06-27 00:19 America/Chicago
+Generated: 2026-06-27 00:28:43 -05:00 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
@@ -94,19 +94,21 @@ Known gaps:
 
 ## Branch State At Handoff
 
-Before the handoff commit, the branch was pushed at:
+Before this handoff update, the branch was clean and pushed at:
 
 ```text
-c9674c71 (HEAD -> feature/msx2, origin/feature/msx2) Update MSX2 resume handoff
+523051c3 (HEAD -> feature/msx2, origin/feature/msx2) Update MSX2 resume handoff
 ```
 
-The handoff commit includes:
+The preceding pushed commit already included:
 
-- `RESUME.md` refreshed with this current state.
-- `src/manifests/msx2/tests/msx2_system_test.cpp` with a new regression proving
-  a V9938 frame IRQ wakes a HALTed Z80 through the MSX2 system IRQ path.
+- `src/manifests/msx2/tests/msx2_system_test.cpp` with a regression proving a
+  V9938 frame IRQ wakes a HALTed Z80 through the MSX2 system IRQ path.
 - `tests/golden/msx_boot_test.cpp` with additional CPU and VDP diagnostics for
   MSX/MSX2 firmware failures.
+- `RESUME.md` with the prior checkpoint.
+
+This handoff commit updates `RESUME.md` only.
 
 ## Latest Validation
 
@@ -202,10 +204,148 @@ Init vector: $8004
 Mapper: Plain
 ```
 
-Latest MSX2 forced-diagnostics command:
+MSX1 600-frame forced-diagnostics run:
+
+```text
+Log:
+build\scratch\msx-bean-diagnostics\bean-msx-pcwatch-c000-ca80.log
+
+CPU pc/sp/af/bc/de/hl: $829D/$E395/$A68C/$0000/$0008/$9C56 halted=false iff1=true iff2=true im=0 cycles=35841613
+vdp state: frame=600 mode=3 r0=$02 r1=$E2 r2=$06 r7=$04 vram_nonzero=7336 first_pixel=5527021
+Hash:
+690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a
+```
+
+MSX2 600-frame forced-diagnostics run:
+
+```text
+Log:
+build\scratch\msx-bean-diagnostics\bean-msx2-pcwatch-c000-ca80.log
+
+CPU pc/sp/af/bc/de/hl: $CA3E/$E6FF/$5FBA/$0101/$5F01/$66B8 halted=true iff1=false iff2=false im=0 cycles=35841602
+slot state: primary=$D0 secondary0=$00 secondary1=$00 secondary2=$00 secondary3=$A0
+ram mapper segments: [3,2,1,0]
+vdp state: frame=600 mode=4 r0=$02 r1=$E2 r2=$06 r7=$F4 r15=$00 s0=$C4 s1=$01 irq=true vram_nonzero=6104 first_pixel=2368548
+v9938 extended: r8=$08 r9=$00 r3=$FF r4=$03 r5=$36 r6=$07 r10=$00 r11=$00 r18=$00 r13=$00 r23=$00 r44=$00 r45=$00 r46=$08 s2=$0C
+```
+
+Interpretation:
+
+- `bean.rom` does not enter `$C000-$CA80` on MSX1 in the 600-frame window.
+- On MSX2 it reaches `$CA3E`, HALTs, and leaves interrupts disabled.
+- `S2=$0C` has only the fixed status-2 bits set, so the V9938 command engine
+  is not obviously stuck in an active command from this run.
+- Changing MSX2 RAM size from `512K` to `64K` did not avoid the bad path.
+
+Narrow PC watch:
+
+```text
+Log:
+build\scratch\msx-bean-diagnostics\bean-msx2-pcwatch-bfe0-c020.log
+
+range previous_pc=$99E3 current_pc=$BFFF cycles=14564941 ... sp=$E3AF ret0=$99E6
+prev_code=[$99DB=$21,$99DC=$FD,$99DD=$99,$99DE=$11,$99DF=$40,$99E0=$00,$99E1=$06,$99E2=$06,$99E3=$CD,$99E4=$FF,$99E5=$BF,$99E6=$21,...]
+code=[$BFF7=$01,$BFF8=$08,$BFF9=$00,$BFFA=$09,$BFFB=$C1,$BFFC=$10,$BFFD=$E1,$BFFE=$C9,$BFFF=$C5,$C000=$00,$C001=$00,$C002=$27,$C003=$03,$C004=$17,$C005=$01,$C006=$00]
+```
+
+Interpretation:
+
+- The CPU did not accidentally fall through from `$BFFF`.
+- ROM code deliberately executed `CALL $BFFF` at `$99E3`.
+- `$BFFF` is the final byte of the 16 KiB ROM and contains `C5` (`PUSH BC`).
+- Execution then continues into `$C000` RAM bytes and eventually reaches the
+  bad HALT at `$CA3E`.
+
+MSX2 watch around the selecting code:
+
+```text
+Log:
+build\scratch\msx-bean-diagnostics\bean-msx2-pcwatch-9900-9a10.log
+
+range previous_pc=$832D current_pc=$99DB cycles=14564897 ... hl=$99DB ix=$99CF iy=$0184 sp=$E3B1 ret0=$831C
+prev_code=[$8325=$DD,$8326=$66,$8327=$01,$8328=$E5,$8329=$DD,$832A=$E1,$832B=$18,$832C=$CF,$832D=$E9,...]
+```
+
+Interpretation:
+
+- `$832D` is `JP (HL)`, with `HL=$99DB`.
+- The game deliberately indirect-jumps to `$99DB`.
+- `$99DB` begins:
+
+```text
+$99DB: 21 FD 99 11 40 00 06 06 CD FF BF ...
+```
+
+That disassembles as:
+
+```text
+LD HL,$99FD
+LD DE,$0040
+LD B,$06
+CALL $BFFF
+```
+
+## Rejected Hypothesis
+
+Do not change Z80 IFF2 interrupt semantics for this blocker.
+
+The current Z80 implementation accepts maskable interrupts by clearing both
+`IFF1` and `IFF2`, and restores `IFF1` from `IFF2` on `RETN/RETI`. That looked
+suspicious while diagnosing the HALT, but it is correct for Z80 maskable IRQ
+acceptance. The `bean.rom` MSX2 failure is not an IFF2-preservation bug.
+
+Useful source locations:
+
+```text
+src/chips/cpu/z80/z80.cpp
+  RETN/RETI: restores IFF1 from IFF2.
+  NMI: saves IFF1 into IFF2, then clears IFF1.
+  Maskable IRQ acceptance: clears both IFF1 and IFF2.
+
+src/chips/cpu/z80/tests/z80_test.cpp
+  Existing interrupt tests check PC behavior, but not IFF2 semantics deeply.
+```
+
+## Current Working Hypothesis
+
+The failing path is selected intentionally by the ROM on MSX2:
+
+- Code around `$82F8-$832D` uses `IN A,($99)`, stores the VDP status byte to
+  `$E3C5`, walks a table via `IX`, then reaches `$832D: JP (HL)`.
+- On the failing run `HL=$99DB`, which is the routine that calls `$BFFF` and
+  flows into `$C000`.
+- MSX1 avoids `$99DB` entirely in the same 600-frame diagnostics.
+- The likely root cause is earlier than the cartridge mirror itself: either
+  the emulator exposes wrong V9938/MSX2 status during the ROM probe, or an MSX2
+  slot/BIOS state difference makes the game choose an invalid table entry.
+
+Important caution:
+
+- Do not fix this by mirroring 16 KiB plain ROMs into page 3. Existing MSX/MSX2
+  plain ROM tests intentionally keep lower-entry 16 KiB ROMs out of `$C000`.
+  `bean.rom` is calling `$BFFF` as part of a selected MSX2 routine; the next
+  investigation should find why that routine/table is selected.
+
+## Recommended Next Step
+
+Instrument VDP port reads/writes around the selecting path and compare MSX1
+against MSX2.
+
+The most direct route is a gated diagnostic in `tests/golden/msx_boot_test.cpp`:
+
+- Add an env var such as `MNEMOS_MSX_VDP_IO_WATCH`.
+- Wrap the installed CPU port input/output handlers after system assembly.
+- Track the last traced PC in the CPU trace callback.
+- For ports `$98`, `$99`, `$9A`, and `$9B`, log cycle, last PC, port, value,
+  selected VDP status register (`R#15` on MSX2), and relevant VDP status bytes.
+- Run `bean.rom` on MSX and MSX2 with PC watch around `$82F8-$8330` and compare
+  the `IN A,($99)` result at the code that stores `$E3C5`.
+
+Concrete commands to rerun the current diagnostics:
 
 ```powershell
 New-Item -ItemType Directory -Force -Path 'build\scratch\msx-bean-diagnostics' | Out-Null
+
 $env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2.rom'
 $env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
 $env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
@@ -215,156 +355,61 @@ $env:MNEMOS_MSX2_SUB_SLOT='3.0'
 $env:MNEMOS_MSX2_RAM_SLOT='3.2'
 $env:MNEMOS_MSX2_RAM_SIZE='512K'
 $env:MNEMOS_MSX2_REGION='ntsc'
-$env:MNEMOS_MSX2_BOOT_FRAMES='3600'
-$env:MNEMOS_MSX2_BOOT_SHA256='force-diagnostics'
-& '.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe' '[golden][msx2]' 2>&1 |
-  Tee-Object -FilePath 'build\scratch\msx-bean-diagnostics\bean-msx2-3600-diagnostics.log'
-```
-
-Expected exit is 1 because the SHA is deliberately forced to mismatch and the
-framebuffer is uniform.
-
-Key output:
-
-```text
-CPU pc/sp/af/bc/de/hl: $CA3E/$E6FF/$5FBA/$0101/$5F01/$66B8 halted=true iff1=false iff2=false im=0 cycles=215049602
-VDP: frame=3600 mode=4 r0=$02 r1=$E2 r2=$06 r7=$F4 r15=$00 s0=$C4 s1=$01 irq=true vram_nonzero=6104 first_pixel=2368548
-V9938 extended: r8=$08 r9=$00 r3=$FF r4=$03 r5=$36 r6=$07 r10=$00 r11=$00 r18=$00 r13=$00 r23=$00 r44=$00 r45=$00 r46=$08 s2=$0C
-```
-
-Interpretation:
-
-- The V9938 IRQ line is asserted.
-- Status register 0 has the frame IRQ bit set.
-- VDP register 15 is 0, so status reads are not stuck on S#2 in this run.
-- The CPU is halted with both IFF flags false and IM 0.
-- This is not simply "VDP never interrupts." The ROM reaches a final HALT with
-  interrupts disabled or after an interrupt path fails to re-enable them.
-
-## PC Watch Evidence
-
-Run with:
-
-```powershell
 $env:MNEMOS_MSX2_BOOT_FRAMES='600'
-$env:MNEMOS_MSX_PC_WATCH='$CA00-$CA80'
+$env:MNEMOS_MSX2_BOOT_SHA256='force-diagnostics'
+$env:MNEMOS_MSX_PC_WATCH='$9900-$9A10'
 & '.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe' '[golden][msx2]' 2>&1 |
-  Tee-Object -FilePath 'build\scratch\msx-bean-diagnostics\bean-msx2-pcwatch-ca00.log'
+  Tee-Object 'build\scratch\msx-bean-diagnostics\bean-msx2-pcwatch-9900-9a10.log'
 ```
 
-Observed sequence:
-
-- The BIOS trampoline switches slots around `$F380`; previous PC was `$23FC`.
-- The CPU later enters `$CA00` from `$C9FF`, executing zero/data-like RAM.
-- At `$CA28` (`HALT`), a frame interrupt is accepted and vectors to `$0038`.
-- The interrupt path reaches `$8284`, which contains `ED 45` (`RETN`), then
-  returns to `$CA29`.
-- Execution continues through RAM data/NOPs to final `$CA3D=$76`; final PC is
-  `$CA3E` with `IFF1=false`.
-
-A broader watch used:
-
-```powershell
-$env:MNEMOS_MSX_PC_WATCH='$C800-$CA50'
-& '.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe' '[golden][msx2]' 2>&1 |
-  Tee-Object -FilePath 'build\scratch\msx-bean-diagnostics\bean-msx2-pcwatch-c800-ca50.log'
-```
-
-Key first transition:
+## High-Value Source References
 
 ```text
-range previous_pc=$C7FF current_pc=$C800 cycles=14574251 ... sp=$E5AF
-```
-
-The output is large and stored in `build\scratch`; inspect it locally if needed.
-
-## New Regression Added
-
-`src/manifests/msx2/tests/msx2_system_test.cpp` now contains:
-
-```text
-TEST_CASE("msx2 VDP frame IRQ wakes the Z80 from HALT", "[manifests][msx2][irq]")
-```
-
-The test:
-
-- Builds a zero-filled 32KB BIOS with `IM 1`, `EI`, `HALT`.
-- Enables VDP display and frame IRQ through R#1.
-- Ticks V9938 through one visible frame interval.
-- Asserts VDP IRQ is asserted.
-- Steps the CPU and verifies it exits HALT, vectors to `$0038`, and clears IFF1.
-
-This regression passes, so the generic MSX2 VDP-to-Z80 IRQ wire is not missing.
-
-## Diagnostic Fields Added
-
-`tests/golden/msx_boot_test.cpp` now reports:
-
-- MSX and MSX2 CPU `iff1`, `iff2`, and `im`.
-- MSX2 VDP `r15`, `s0`, `s1`, and `irq`.
-
-These are diagnostics only; they do not change golden expectations.
-
-## High-Value Hypotheses
-
-Investigate these next:
-
-1. Confirm Z80 maskable interrupt handling for IFF2. Current code clears both
-   `iff1_` and `iff2_` on maskable IRQ, while `RETN/RETI` restores `iff1_` from
-   `iff2_`. If real Z80 maskable INT must preserve IFF2, this would explain
-   why the BIOS `RETN` path returns with interrupts disabled.
-2. If IFF2 clearing is correct, trace why PC falls through into `$C800+` RAM.
-   The useful clue is the transition from `$C7FF` to `$C800`, followed by
-   execution of zero/data-like RAM.
-3. Compare an MSX1 PC watch for `bean.rom` over `$C800-$CA50` to identify
-   whether MSX1 avoids this high-RAM fallthrough or recovers differently.
-4. If touching CPU interrupt semantics, add focused Z80 regression coverage and
-   run `mnemos_chips_cpu_z80_test` before broader MSX/MSX2 validation.
-
-Important code locations:
-
-```text
-src/chips/cpu/z80/z80.cpp
-src/chips/cpu/z80/tests/z80_test.cpp
 src/chips/video/v9938/v9938.cpp
+  status constants near top
+  compose_status2()
+  status_read()
+  execute_command()
+  update_irq()
+
+src/manifests/msx/msx_system.cpp
+  plain_32k_handoff_cart_slot()
+  plain_16k_lower_page_visible()
+  read_cart()
+  read_memory()
+
+src/manifests/msx2/msx2_system.cpp
+  read_cartridge()
+  plain_32k_handoff_cart_slot()
+  plain_16k_lower_page_visible()
+  read_slot()
+  io_read() for VDP status at port $99
+  io_write() for VDP control, palette, and indirect-register ports
+
+src/manifests/common/msx_cartridge_mapper.cpp
+  msx_plain_rom_physical_offset()
+  mapper auto-detection and plain-ROM profile helpers
+
 src/manifests/msx2/tests/msx2_system_test.cpp
+  MSX2 plain 16 KiB cartridge visibility tests
+  VDP frame IRQ wakes HALTed Z80 regression
+
 tests/golden/msx_boot_test.cpp
+  MSX/MSX2 firmware and ROM golden diagnostics
+  PC watch infrastructure
 ```
 
-## Suggested Next Commands
+## Definition Of Done For This Slice
 
-If starting from a clean checkout of this branch:
+At minimum, the next implementation slice should:
 
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_cpu_z80_test mnemos_manifests_msx2_test mnemos_msx_boot_test'
+1. Explain why `bean.rom` selects `$99DB` on MSX2 and avoids it on MSX1.
+2. Fix the root cause without broad cartridge mirroring hacks.
+3. Add a focused regression for the fixed behavior.
+4. Rebuild `mnemos_manifests_msx2_test` and `mnemos_msx_boot_test`.
+5. Pass the skip-192 smoke window with `-RequireData`.
+6. Run a wider contiguous MSX/MSX2 smoke window before claiming broader
+   compatibility progress.
 
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_chips_cpu_z80_test|mnemos_manifests_msx2_test|mnemos_msx_boot_test" --output-on-failure'
-```
-
-To reproduce the active blocker, rerun the skip-192 smoke window from the
-section above.
-
-To compare MSX1 high-RAM behavior:
-
-```powershell
-New-Item -ItemType Directory -Force -Path 'build\scratch\msx-bean-diagnostics' | Out-Null
-$env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
-$env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
-$env:MNEMOS_MSX_ROM='D:\emu\msx\MSX files [ROM]\bean.rom'
-$env:MNEMOS_MSX_REGION='ntsc'
-$env:MNEMOS_MSX_BOOT_FRAMES='600'
-$env:MNEMOS_MSX_BOOT_SHA256='force-diagnostics'
-$env:MNEMOS_MSX_PC_WATCH='$C800-$CA50'
-& '.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe' '[golden][msx]' 2>&1 |
-  Tee-Object -FilePath 'build\scratch\msx-bean-diagnostics\bean-msx-pcwatch-c800-ca50.log'
-```
-
-## What Not To Do
-
-- Do not mark `bean.rom` as a profile skip. It passes on MSX and exposes a real
-  MSX2 execution/interrupt/state issue.
-- Do not treat the VDP IRQ line as unimplemented. The new regression proves the
-  generic line can wake a HALTed Z80.
-- Do not claim the MSX2 renderer is the root cause until CPU execution reaches a
-  sane game loop with nonzero visible name/pattern/color table usage.
-- Do not commit ROMs, BIOS files, screenshots, logs, or `build\` contents.
+Do not mark the overall MSX/MSX2 goal complete until substantially broader
+real-ROM validation exists.
