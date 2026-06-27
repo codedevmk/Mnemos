@@ -66,6 +66,62 @@ Repository rules that matter most here:
 
 MSX/MSX2 are partially working, not complete.
 
+## Continuation Update - 2026-06-27
+
+The post-handoff continuation added narrower diagnostics in
+`tests/golden/msx_boot_test.cpp`:
+
+- `MNEMOS_MSX_PC_WATCH` events now include fixed work bytes used by the
+  `bean.rom` dispatcher (`$E12D`, `$E132`, `$E168`, `$E3C5`, `$D800`,
+  `$D801`, `$F3DF`, `$FCAF`).
+- `MNEMOS_MSX_VDP_IO_WATCH_KIND=read|write|all` filters VDP I/O tracing so
+  early palette/VRAM writes no longer consume the entire event cap.
+
+New scratch logs were written under:
+
+```text
+build\scratch\msx-bean-diagnostics\focused-20260627\
+```
+
+Important new evidence:
+
+- MSX2 `bean.rom` reads V9938 S#0 at `$8303/$8305` and stores the result in
+  `$E3C5`.
+- The four cartridge-PC VDP reads in the failing MSX2 run were:
+  - cycle `14093184`: value `$C4`, S#0 after read `$44`, mode `graphics_i`,
+    frame `235`.
+  - cycle `14562955`: value `$C4`, S#0 after read `$44`, mode `graphics_ii`,
+    frame `243`.
+  - cycle `14563297`: value `$44`, S#0 after read `$44`, mode `graphics_ii`,
+    frame `243`.
+  - cycle `14564741`: value `$44`, S#0 after read `$44`, mode `graphics_ii`,
+    frame `243`.
+- The exact `$832D` watch shows `$E3C5` changes from `$C4` to `$44` before the
+  third and fourth dispatcher jumps. The fourth jump is still:
+
+```text
+previous_pc=$832D current_pc=$99DB cycles=14564897
+work=e12d:$00 e132:$00 e168:$00 e3c5:$44 d800:$00 d801:$00 f3df:$00 fcaf:$01
+```
+
+- MSX1 with the same cartridge-PC read-only VDP trace produced no VDP read
+  events before the 600-frame forced hash dump, and remains alive at `$829D`.
+- Cartridge-filtered writes to `$C000-$C03F` show `bean.rom` writes data-like
+  bytes there; it does not install executable code before the `$BFFF` call.
+- Do not "fix" this by clearing V9938 S#0 bit 6 on status read. The V9938
+  manual says S#0 read resets the F flag; the existing V9938 tests deliberately
+  preserve sprite overflow/collision state after an S#0 read.
+
+Current best next probe:
+
+- Add a slot/primary-selection trace around `$99DB`, `$BFFF`, and `$C000`, or
+  extend PC-watch with an MSX/MSX2 machine-state callback, to prove whether the
+  page-3 fall-through is using the intended slot/RAM mapping at the instant of
+  failure.
+- If page 3 is correctly RAM, trace why the V9938 fifth-sprite status selects
+  the `$99DB` script on MSX2 and whether that branch expects a machine profile
+  or mapper behavior Mnemos does not model yet.
+
 Confirmed:
 
 - C-BIOS MSX and MSX2 boot paths are wired through golden tests and explicit

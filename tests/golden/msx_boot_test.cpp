@@ -51,6 +51,7 @@
 //   MNEMOS_MSX2_BOOT_SHA256  (optional) golden framebuffer hash
 //   MNEMOS_MSX_PC_WATCH      (optional) trace high-RAM entry and optional range
 //   MNEMOS_MSX_VDP_IO_WATCH  (optional) trace VDP I/O port reads/writes
+//   MNEMOS_MSX_VDP_IO_WATCH_KIND (optional) "read"/"write"/"all" VDP I/O filter
 //   MNEMOS_MSX_MEM_WATCH     (optional) trace memory writes in a range
 //   MNEMOS_MSX_MEM_WATCH_PC  (optional) filter memory-write trace by PC range
 
@@ -224,6 +225,17 @@ namespace {
             out << hex16(address) << '=' << hex16(static_cast<std::uint16_t>(low | (high << 8U)));
         }
         out << ']';
+        return out.str();
+    }
+
+    template <typename ReadByte>
+    [[nodiscard]] std::string msx_dispatch_work_summary(ReadByte& read) {
+        std::ostringstream out;
+        out << " work="
+            << "e12d:" << hex8(read(0xE12DU)) << " e132:" << hex8(read(0xE132U))
+            << " e168:" << hex8(read(0xE168U)) << " e3c5:" << hex8(read(0xE3C5U))
+            << " d800:" << hex8(read(0xD800U)) << " d801:" << hex8(read(0xD801U))
+            << " f3df:" << hex8(read(0xF3DFU)) << " fcaf:" << hex8(read(0xFCAFU));
         return out.str();
     }
 
@@ -448,6 +460,7 @@ namespace {
                     << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
                     << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
                     << " ret0=" << hex16(ret0)
+                    << msx_dispatch_work_summary(read)
                     << " ix_window=" << cpu_byte_window_summary(regs.ix, 16U, read)
                     << " sp_window=" << cpu_stack_window_summary(regs.sp, 4U, read)
                     << " prev_code=" << cpu_window_summary(last_pc, read)
@@ -707,6 +720,30 @@ namespace {
         return pc >= first && pc < last_exclusive;
     }
 
+    [[nodiscard]] bool vdp_io_watch_kind_in_scope(std::string_view kind) {
+        const auto explicit_kind = get_env("MNEMOS_MSX_VDP_IO_WATCH_KIND");
+        if (explicit_kind) {
+            if (*explicit_kind == "all" || *explicit_kind == "1" || *explicit_kind == "true") {
+                return true;
+            }
+            if (*explicit_kind == "read" || *explicit_kind == "reads" ||
+                *explicit_kind == "in") {
+                return kind == "in";
+            }
+            if (*explicit_kind == "write" || *explicit_kind == "writes" ||
+                *explicit_kind == "out") {
+                return kind == "out";
+            }
+        }
+        if (get_env("MNEMOS_MSX_VDP_IO_WATCH_READS")) {
+            return kind == "in";
+        }
+        if (get_env("MNEMOS_MSX_VDP_IO_WATCH_WRITES")) {
+            return kind == "out";
+        }
+        return true;
+    }
+
     [[nodiscard]] const char*
     v9938_mode_name(mnemos::chips::video::v9938::display_mode mode) noexcept {
         using display_mode = mnemos::chips::video::v9938::display_mode;
@@ -742,7 +779,7 @@ namespace {
                                  std::vector<std::string>& events) {
         const auto regs = cpu.cpu_registers();
         if (events.size() >= 256U || !watched_vdp_io_port(port) ||
-            !vdp_io_watch_pc_in_scope(regs.pc)) {
+            !vdp_io_watch_pc_in_scope(regs.pc) || !vdp_io_watch_kind_in_scope(kind)) {
             return;
         }
         std::ostringstream out;
@@ -754,8 +791,7 @@ namespace {
             << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
             << " vdp_status=" << hex8(vdp.status()) << " r0=" << hex8(vdp.reg(0))
             << " r1=" << hex8(vdp.reg(1)) << " r2=" << hex8(vdp.reg(2))
-            << " r7=" << hex8(vdp.reg(7)) << " e12d=" << hex8(read(0xE12DU))
-            << " e3c5=" << hex8(read(0xE3C5U))
+            << " r7=" << hex8(vdp.reg(7)) << msx_dispatch_work_summary(read)
             << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
         events.push_back(out.str());
     }
@@ -768,7 +804,7 @@ namespace {
                                   std::vector<std::string>& events) {
         const auto regs = cpu.cpu_registers();
         if (events.size() >= 256U || !watched_vdp_io_port(port) ||
-            !vdp_io_watch_pc_in_scope(regs.pc)) {
+            !vdp_io_watch_pc_in_scope(regs.pc) || !vdp_io_watch_kind_in_scope(kind)) {
             return;
         }
         std::ostringstream out;
@@ -787,8 +823,7 @@ namespace {
             << " r6=" << hex8(vdp.reg(6)) << " r7=" << hex8(vdp.reg(7))
             << " r8=" << hex8(vdp.reg(8)) << " r9=" << hex8(vdp.reg(9))
             << " r11=" << hex8(vdp.reg(11)) << " r15=" << hex8(vdp.reg(15))
-            << " r23=" << hex8(vdp.reg(23)) << " e12d=" << hex8(read(0xE12DU))
-            << " e3c5=" << hex8(read(0xE3C5U))
+            << " r23=" << hex8(vdp.reg(23)) << msx_dispatch_work_summary(read)
             << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
         events.push_back(out.str());
     }
