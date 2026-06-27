@@ -41,6 +41,7 @@ namespace {
     expected_contracts() {
         static const std::map<std::string, expected_contract, std::less<>> contracts{
             {"battroad", {.raw_size = 0x30740U, .file_count = 33U}},
+            {"horizon", {.raw_size = 0x2e720U, .file_count = 21U}},
             {"ldrun", {.raw_size = 0x18720U, .file_count = 20U}},
             {"ldruna", {.raw_size = 0x6000U, .file_count = 3U}},
             {"ldrun2", {.raw_size = 0x24720U, .file_count = 26U}},

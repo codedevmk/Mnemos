@@ -140,6 +140,13 @@ multiple independent open-source implementations.
   relationships. The M52 adapter folds those DIP defaults into the
   board-visible `dsw1`/`dsw2` bytes and exposes the parsed switch count. No
   manual scans, emulator source, or ROM bytes are committed.
+- **Irem M62 ROM-set metadata** — declarative raw-media manifests under
+  `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
+  region sizes, CRC-32s, and board-family classification. The Horizon local
+  wrapper is stored under the local `M72` corpus folder, but public Irem M62
+  driver metadata classifies it with the M62 Z80/M6803-era family; Mnemos records
+  it as a contract-only M62 raw-media set rather than treating folder placement
+  as board proof. No MAME driver code or ROM bytes are copied into Mnemos.
 - **Irem M72 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m72/games/` use public MAME M72 driver metadata for dump
   filenames, offsets, reloads, CRC-32s, parent/clone relationships, cabinet

@@ -1,5 +1,6 @@
 set(_irem_m62_game_manifest_files
     "games/battroad.toml"
+    "games/horizon.toml"
     "games/ldrun.toml"
     "games/ldruna.toml"
     "games/ldrun2.toml"

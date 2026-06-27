@@ -15,17 +15,17 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 113 currently match
-a checked-in Mnemos Irem manifest, 104 are readable through the current ZIP,
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 114 currently match
+a checked-in Mnemos Irem manifest, 105 are readable through the current ZIP,
 single-inner wrapper ZIP, or unpacked-folder media routes, and 95 have an
-executable player-supported route. The 9 M62 matches are intentionally tracked
+executable player-supported route. The 10 M62 matches are intentionally tracked
 as contract-only raw-media manifests until an M62 board/player profile exists;
 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
 copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping. A current all-Irem CRC artifact audit of the checked-in
 manifests reports
-`1174/1174` required files present from `D:\emu\irem`, so there are no current
+`1195/1195` required files present from `D:\emu\irem`, so there are no current
 file-level missing-artifact rows for the checked-in Irem manifest set. The
 common data-gated runner and oracle registry now include G6-ratcheted corpus
 golden tests for every implemented Irem player family: M15, M52, M72, M75,
@@ -61,7 +61,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
-| M62 | `irem_m62` raw-media contracts | 8% contract-only | `battroad`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
+| M62 | `irem_m62` raw-media contracts | 9% contract-only | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
@@ -95,7 +95,7 @@ targets:
   the text layer while mirroring text-layer final positions under flip-screen.
   `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned
   visual/audio SHA-256 oracle for a reference-captured M52 set.
-- M62 now has nine raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
+- M62 now has ten raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
   load proof, but no executable board/player route. Treat these as corpus
   grouping and future board-input evidence only.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
@@ -201,21 +201,22 @@ visual and audio parity proof.
 ### M62
 
 - **Techsheet games:** Kung-Fu Master / Spartan X, Kid Niki, Lode Runner,
-  Spelunker, Lightning Swords, Youjyuden, The Battle-Road.
+  Spelunker, Lightning Swords, Youjyuden, The Battle-Road, Horizon.
 - **Mnemos games:** contract-only raw-media manifests for `battroad`, `ldrun`,
-  `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, and
-  `youjyudn`.
+  `horizon`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`,
+  and `youjyudn`.
 - **Smoke playable:** none. `MNEMOS_M62_SET_DIR=D:\emu\irem` data-gates
-  CRC-clean media loading for the nine local single-inner wrapper ZIPs, but
+  CRC-clean media loading for the ten local single-inner wrapper ZIPs, but
   there is no executable M62 player route yet.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m62` embeds raw-media ROM-set
-  contracts generated from the local Lode Runner, Spelunker II, Battle Road, and
-  Youjyuden artifacts. The manifests deliberately map the files into a single
-  `raw_media` region so CRCs, sizes, and set grouping are preserved without
-  pretending to know the final M62 CPU/video/audio bus placement. The focused
-  manifest test checks embedded TOML synchronization, region/file invariants,
-  and optional real-corpus loading through nested wrapper ZIPs.
+  contracts generated from the local Lode Runner, Spelunker II, Battle Road,
+  Horizon, and Youjyuden artifacts. The manifests deliberately map the files
+  into a single `raw_media` region so CRCs, sizes, and set grouping are
+  preserved without pretending to know the final M62 CPU/video/audio bus
+  placement. The focused manifest test checks embedded TOML synchronization,
+  region/file invariants, and optional real-corpus loading through nested wrapper
+  ZIPs.
 - **Remaining:** implement the large Z80/M6803 board family, exact title bus
   maps, dual AY-3-8910, dual MSM5205, KNA custom video behavior, inputs/DIPs,
   save-state/player adapter, and visual/audio parity before promoting any M62
