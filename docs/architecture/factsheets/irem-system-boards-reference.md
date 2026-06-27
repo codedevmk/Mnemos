@@ -9,8 +9,8 @@ family (M72/M81/M82/M84/M85, plus adjacent M75-era hardware) overlaps heavily -
 they were concurrent sister boards, not sequential generations.
 
 **Confidence note:** the high-volume boards (M62, M72, M81/82/84/85, M90, M92,
-M107) are well-documented and cross-verified. The sparse boards (M14, M57, M63,
-M77, M97, M99, M119) have thin public documentation; entries flag what is
+M107) are well-documented and cross-verified. The sparse boards (M14, M47, M57,
+M63, M77, M97, M99, M119) have thin public documentation; entries flag what is
 uncertain rather than assert it.
 
 ---
@@ -21,6 +21,7 @@ uncertain rather than assert it.
 |-------|-----|---------------------|--------------|
 | M10 / M15 | ~1978–1980 | Intel 8085A, discrete | IPM Invader |
 | M14 | 1979 | NEC D8085AC / Intel 8085A, discrete | P.T. Reach Mahjong |
+| M47 | 1981 | Z80 + Z80, early 8-bit isolated | Oli-Boo-Chu |
 | M52 | 1982 | Z80, 8-bit | Moon Patrol |
 | M57 | 1982–1983 | Z80, 8-bit | Tropical Angel |
 | M58 | 1983 | Z80, 8-bit | 10-Yard Fight |
@@ -65,6 +66,17 @@ uncertain rather than assert it.
   names M14 hardware and gives a small 8085 program/graphics ROM map, but color,
   sound, timing, and input behavior need board-specific proof before any
   executable profile is treated as authentic.
+
+### M47
+- **Years:** 1981
+- **Main CPU:** Zilog Z80
+- **Sound:** Zilog Z80 sound CPU with AY-3-8910 plus sample/CVSD-style path in
+  current driver-level evidence
+- **Notable titles:** Oli-Boo-Chu, Punching Kid
+- **Notes:** Public driver evidence labels this as "Irem M47 hardware?" from PCB
+  markings and explicitly separates it from the later M52 lineage. Treat M47 as
+  an isolated early-8-bit board until board photos, schematics, or manual data
+  prove deeper relationships.
 
 ### M52
 - **Years:** 1982

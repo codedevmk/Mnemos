@@ -416,17 +416,17 @@ Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 ignores archive-only container folders as unpacked sets, and currently reports
 129 items across `root`, `M15`, `M72`, `M81`, `M82`, `M84`, `M107`, and `i8751`.
 One item matches a checked-in M14 manifest contract, one item matches a checked-in
-M15 manifest contract, two match checked-in M52 manifests, eleven match
-checked-in M62 raw-media contracts, one matches a checked-in M63 ROM contract,
+M15 manifest contract, two match checked-in M47 manifests, two match checked-in
+M52 manifests, eleven match checked-in M62 raw-media contracts, one matches a checked-in M63 ROM contract,
 forty-six match
 checked-in M72 manifests, eight match checked-in M75 manifests, five match
 checked-in M81 manifest contracts, ten match checked-in M82 manifests, six
 match checked-in M84 manifest contracts, four match checked-in M90 manifests,
 seventeen match checked-in M92 manifests, and eight match checked-in M107 manifest
 contracts. The inventory now separates manifest tracking, media loadability, and
-player support: 120 items match a checked-in Irem manifest, 111 are readable
+player support: 122 items match a checked-in Irem manifest, 113 are readable
 through current ZIP / single-inner-ZIP / folder routes, 98 are backed by an
-executable player-supported route, the 1 M14 item, 1 M63 item, and 11 M62 items
+executable player-supported route, the 1 M14 item, 2 M47 items, 1 M63 item, and 11 M62 items
 are tracked contract-only, and
 9 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
 sorted top-level board bucket is completely untracked anymore;
@@ -437,7 +437,7 @@ copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping, and the local Air Duel M82 parent/US clone wrappers now
 route through `irem_m82`. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1314/1314` required files present from
+manifests reports `1345/1345` required files present from
 `D:\emu\irem`, so there are no current file-level missing-artifact rows to list
 for those manifests.
 The report also carries per-item
@@ -454,16 +454,21 @@ board profile.
 The local M14 grouping now tracks `D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip`
 as contract-only `ptrmj` with `next_action = add_board_profile`, so P.T. Reach
 Mahjong is no longer an unclassified root item.
+The local M47 grouping now tracks `D:\emu\irem\Oli-Boo-Chu_Arcade_EN.zip` as
+contract-only `olibochu` and `D:\emu\irem\Oli-Boo-Chu_Arcade_JA.zip` as
+contract-only split clone `punchkid` with `next_action = add_board_profile`, so
+both local Oli-Boo-Chu / Punching Kid wrappers are visible without being counted
+as playable M47 support.
 The local M63 grouping now tracks `D:\emu\irem\Wily-Tower_Arcade_EN.zip` as
 contract-only `wilytowr` with `next_action = add_board_profile`, so Wily Tower
 is no longer an unclassified root item.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract moves
-the local Lot Lot wrapper out of `classify_or_sort_corpus_item`; with M63 added,
-the current root classify/sort rows are down to 11.
+the local Lot Lot wrapper out of `classify_or_sort_corpus_item`; with M47 added,
+the current root classify/sort rows are down to 7.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
-M82, M84, M90, M92, and M107, and also reports the M14 and M63 manifest-only
+M82, M84, M90, M92, and M107, and also reports the M14, M47, and M63 manifest-only
 data gates separately. The newest G6 high-water raises cover
 `GLD-M15-CORPUS`, `GLD-M52-CORPUS`, `GLD-M81-CORPUS`, `GLD-M82-CORPUS`,
 `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
@@ -588,6 +593,18 @@ a 6502-era M15 profile instead of being folded into later V30 boards.
 Continuation: `$a100` sound writes now persist total write count, per-bit rise/fall counters, active-low bit-6 speaker output state, and speaker output edge count through both board and adapter save-state paths. This narrows the sound gap to board-evidenced discrete sample mappings/analog sound behavior rather than raw latch observability.
 
 Continuation: M15 frame stepping now slices CPU/audio/video by scanline and composes each visible line before that line's CPU slice; focused coverage proves the frame IRQ can change color RAM for later scanlines without repainting an earlier line. This narrows the raster gap to exact phase proof and external visual parity rather than raw mid-frame write visibility.
+
+---
+
+## Irem M47 — 1 / 2
+
+This section is split from M52/M62 because public driver-level evidence labels
+Oli-Boo-Chu / Punching Kid as isolated M47 hardware and explicitly separates it
+from the later M52 lineage.
+
+#### Manifests / board bring-up
+- [x] **I47-1** Local M47 Oli-Boo-Chu / Punching Kid ROM-set contracts — `src/manifests/irem_m47` carries checked-in embedded ROM-contract manifests for `olibochu` and `punchkid`, preserving the local filenames, region sizes, offsets, and CRC32 values for `maincpu`, `audiocpu`, `samples`, `gfx8x8`, `gfx16x16`, and `proms`. `punchkid` declares `olibochu` as parent and inherits shared audio, sample, 16x16 graphics, and PROM regions from the sibling parent wrapper while replacing its program and 8x8 graphics dumps. `MNEMOS_M47_SET_DIR=D:\emu\irem` data-gates the local single-inner wrapper ZIPs `D:\emu\irem\Oli-Boo-Chu_Arcade_EN.zip` and `D:\emu\irem\Oli-Boo-Chu_Arcade_JA.zip` and proves both load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies both matches as `tracked_contract_only` with `next_action = add_board_profile`, so they are visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m47/games/*.toml` + `src/manifests/irem_m47/tests/m47_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **I47-2** Executable M47 board profile — Implement the real board route for the M47 family: Z80 main CPU, Z80 sound CPU, AY/sample sound behavior, memory and I/O maps, video/color PROM behavior, inputs/DIPs, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current `olibochu` / `punchkid` manifests are only artifact contracts and must not be used as proof that either set is playable in Mnemos · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_m47/*` board implementation + `src/apps/player/adapters/irem_m47/*` + data-gated player smoke
 
 ---
 

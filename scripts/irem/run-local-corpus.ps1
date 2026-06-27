@@ -93,6 +93,7 @@ Write-Host "Wiring local Irem corpus from $rootPath" -ForegroundColor Cyan
 
 Set-EnvIfPathExists -Name "MNEMOS_M14_SET_DIR" -Path $rootPath
 Set-EnvIfPathExists -Name "MNEMOS_M15_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M15")
+Set-EnvIfPathExists -Name "MNEMOS_M47_SET_DIR" -Path $rootPath
 Set-EnvIfPathExists -Name "MNEMOS_M52_SET_DIR" -Path $rootPath
 Set-EnvIfPathExists -Name "MNEMOS_M62_SET_DIR" -Path $rootPath
 Set-EnvIfPathExists -Name "MNEMOS_M63_SET_DIR" -Path $rootPath

@@ -146,6 +146,12 @@ multiple independent open-source implementations.
   classification. The local wrapper remains contract-only until an executable
   M14 board route exists. No MAME driver code or ROM bytes are copied into
   Mnemos.
+- **Irem M47 ROM-set metadata** — the checked-in `olibochu` and `punchkid`
+  manifests use public Irem M47 driver metadata for Oli-Boo-Chu and Punching
+  Kid dump filenames, parent/clone relationship, region sizes, offsets, CRC-32s,
+  orientation, and sparse board-family classification. The local wrappers remain
+  contract-only until an executable M47 board route exists. No MAME driver code
+  or ROM bytes are copied into Mnemos.
 - **Irem M62 ROM-set metadata** — declarative raw-media manifests under
   `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
   region sizes, CRC-32s, and board-family classification. The Horizon local

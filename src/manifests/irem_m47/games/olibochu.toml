@@ -1,0 +1,160 @@
+# Oli-Boo-Chu (USA) -- Irem M47 ROM contract.
+# Local wrapper: D:\emu\irem\Oli-Boo-Chu_Arcade_EN.zip -> olibochu.zip.
+# Region placement follows public driver metadata; executable M47 board timing,
+# video/color, input, and sound behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "olibochu"
+board       = "irem_m47"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x8000
+
+[[region.file]]
+name   = "obc_1b.n3"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0xbf17f4f4
+
+[[region.file]]
+name   = "obc_2b.m3"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0x63833b0d
+
+[[region.file]]
+name   = "obc_3b.k3"
+offset = 0x2000
+size   = 0x1000
+crc32  = 0xa4038e8b
+
+[[region.file]]
+name   = "obc_4b.j3"
+offset = 0x3000
+size   = 0x1000
+crc32  = 0xaad4bec4
+
+[[region.file]]
+name   = "obc_5b.h3"
+offset = 0x4000
+size   = 0x1000
+crc32  = 0x66efa79f
+
+[[region.file]]
+name   = "obc_6b.f3"
+offset = 0x5000
+size   = 0x1000
+crc32  = 0x1123d1ef
+
+[[region.file]]
+name   = "obc_7c.e3"
+offset = 0x6000
+size   = 0x1000
+crc32  = 0x89c26fb4
+
+[[region.file]]
+name   = "obc_8b.d3"
+offset = 0x7000
+size   = 0x1000
+crc32  = 0xaf19e5a5
+
+[[region]]
+name = "audiocpu"
+size = 0x2000
+
+[[region.file]]
+name   = "obc_17.j4"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x57f07402
+
+[[region.file]]
+name   = "obc_18.l4"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0x0a903e9c
+
+[[region]]
+name = "samples"
+size = 0x2000
+
+[[region.file]]
+name   = "obc_15.k1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0xfb5dd281
+
+[[region.file]]
+name   = "obc_16.m1"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0xc07614a5
+
+[[region]]
+name = "gfx8x8"
+size = 0x2000
+
+[[region.file]]
+name   = "obc_13.n6"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0xb4fcf9af
+
+[[region.file]]
+name   = "obc_14.n4"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0xaf54407e
+
+[[region]]
+name = "gfx16x16"
+size = 0x4000
+
+[[region.file]]
+name   = "obc_9.a6"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0xfa69e16e
+
+[[region.file]]
+name   = "obc_10.a2"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0x10359f84
+
+[[region.file]]
+name   = "obc_11.a4"
+offset = 0x2000
+size   = 0x1000
+crc32  = 0x1d968f5f
+
+[[region.file]]
+name   = "obc_12.b2"
+offset = 0x3000
+size   = 0x1000
+crc32  = 0xd8f0c157
+
+[[region]]
+name = "proms"
+size = 0x0220
+
+[[region.file]]
+name   = "c-1.n2"
+offset = 0x0000
+size   = 0x0020
+crc32  = 0xe488e831
+
+[[region.file]]
+name   = "c-2.k6"
+offset = 0x0020
+size   = 0x0100
+crc32  = 0x698a3ba0
+
+[[region.file]]
+name   = "c-3.d6"
+offset = 0x0120
+size   = 0x0100
+crc32  = 0xefc4e408
