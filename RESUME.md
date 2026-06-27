@@ -1,14 +1,14 @@
 # MSX / MSX2 Resume Handoff
 
-Generated: 2026-06-26T20:24:51-05:00
+Generated: 2026-06-26T20:35:42-05:00
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote tracking branch: `origin/feature/msx2`
-Previous pushed commit before this handoff refresh: `032fe595c444a07cee5d839f418a7fbff540bec2` (`Document MSX2 resume handoff`)
+Pre-handoff HEAD: `26c7a2be Refresh MSX2 resume handoff`
 
 ## User Goal
 
-Implement both MSX and MSX2 in this worktree. They share common components, so fixes should be made in shared MSX/MSX2 infrastructure wherever the behavior is common.
+Implement both MSX and MSX2 in this worktree. They share common infrastructure, so fixes should land in shared MSX/MSX2 components wherever the behavior is common.
 
 The user's local C-BIOS root is:
 
@@ -16,38 +16,43 @@ The user's local C-BIOS root is:
 D:\emu\msx\bios
 ```
 
-Important user correction: a blank Mnemos Player window is not emulator proof. Any player proof must explicitly pass both `--system msx|msx2` and `--rom <path>`.
+Important user correction: a blank Mnemos Player window is not emulator proof. Player proof must explicitly pass both `--system msx|msx2` and `--rom <path>`.
 
 ## Current Verdict
 
 MSX and MSX2 are not yet in a proven "100% working" state.
 
-Latest live worktree state before this refresh:
+Current useful proof:
 
-- `git status --short --branch`: `## feature/msx2...origin/feature/msx2`
-- `HEAD`: `032fe595c444a07cee5d839f418a7fbff540bec2`
-- The intended resume workspace remains `C:\dev\emu\Mnemos-msx2`, not `C:\dev\emu\Mnemos`.
-- The active task remains open until both `--system msx` and `--system msx2` have ROM-backed player proof, not just a blank player window or green unit tests.
+- Explicit player launches with real `--system` and `--rom` now run several MSX/MSX2 cartridge cases.
+- MSX1 `Bestial Warrior` renders title art.
+- MSX2 `Bestial Warrior` renders title art, but color fidelity looks suspect compared to MSX1.
+- MSX2 `AshGuine Story II` renders Japanese text/game scene.
+- MSX1 `Boing-b` renders the game prompt screen.
+- MSX1 and MSX2 `Bosconia` still remain on the C-BIOS logo.
 
-Proven so far:
+Do not mark the goal complete until both MSX and MSX2 have ROM-backed player proof across representative cartridge paths, and the known Bosconia/color issues are resolved or explicitly triaged with accepted scope.
 
-- The Windows MSVC debug build passed before this handoff.
-- Focused MSX/MSX2, TMS9918A, V9938, system-launch, and capability-summary tests passed before this handoff.
-- Explicit player launches with real C-BIOS files and real cartridge ROMs run without process failure.
-- C-BIOS logo ROM support is wired for MSX1 and MSX2.
-- Bosconia reaches cartridge code after the logo ROM is mounted.
-- VDP frame IRQs are delivered to the Z80; IRQ delivery is not the current blocker.
+## Canonical Build And Test Commands
 
-Not proven:
+Per `README.md`, use the Windows MSVC preset from a Visual Studio developer environment:
 
-- Bosconia does not reach a playable display. The visible framebuffer remains the C-BIOS logo.
-- MSX2 Bosconia also remains on the C-BIOS logo.
-- `1Kpong!` shows C-BIOS/application output but reports `No enough memory`.
-- No broad MSX/MSX2 ROM corpus is green.
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug --output-on-failure'
+```
 
-## Local Firmware And ROMs
+Focused post-patch test slice:
 
-These paths were verified present on this machine during handoff:
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "msx|MSX|tms9918a|v9938|mnemos_apps_player_system_launch_test|mnemos_apps_player_capability_summary_test" --output-on-failure'
+```
+
+No new source patch was made after the latest trace reduction in this handoff. The next agent should rebuild after changing the isolated root cause.
+
+## Local Firmware And ROM Inputs
+
+Verified C-BIOS files:
 
 ```text
 D:\emu\msx\bios\cbios\cbios_main_msx1.rom
@@ -55,61 +60,32 @@ D:\emu\msx\bios\cbios\cbios_logo_msx1.rom
 D:\emu\msx\bios\cbios\cbios_main_msx2.rom
 D:\emu\msx\bios\cbios\cbios_sub.rom
 D:\emu\msx\bios\cbios\cbios_logo_msx2.rom
+```
+
+Validated player ROM inputs used during the latest run:
+
+```text
+D:\emu\msx\MSX files [ROM]\Bestial Warrior.rom
+D:\emu\msx\MSX files [ROM]\Avenger.rom
+D:\emu\msx\MSX files [ROM]\AshGuine Story II.rom
+D:\emu\msx\MSX files [ROM]\Boing-b.rom
 D:\emu\msx\MSX files [ROM]\Bosconia.rom
-D:\emu\msx\MSX files [ROM]\1Kpong! (Phoenix Software) (2005) (Version del juego en color azul).rom
 ```
 
-Bosconia observed cartridge facts:
+The useful output directory from the latest explicit profile proof is:
 
-- Plain 16 KiB ROM.
-- Header bytes at file offset 0 start with `41 42`.
-- Init vector is `$400F`.
-- The ROM maps as a lower-page 16K cartridge.
-
-## Validation Already Run
-
-Build:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug'
+```text
+build\scratch\msx-profile-proof\20260626-202745
 ```
 
-Result: passed.
+## Explicit Player Matrix
 
-Focused MSX/MSX2 tests:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "msx|MSX|tms9918a|v9938" --output-on-failure'
-```
-
-Result: 10/10 passed.
-
-Launch/capability tests:
-
-```powershell
-cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_apps_player_system_launch_test|mnemos_apps_player_capability_summary_test" --output-on-failure'
-```
-
-Result: 2/2 passed.
-
-No new build or ctest run was performed after the latest trace reduction. The next agent should rebuild after patching the isolated root cause.
-
-## Explicit Player Proof Attempts
-
-MSX1 Bosconia:
+Use these environment variables before replaying the matrix:
 
 ```powershell
 $env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
 $env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
 $env:MNEMOS_MSX_REGION='ntsc'
-build\windows-msvc-debug\src\apps\player\mnemos_player.exe --system msx --rom 'D:\emu\msx\MSX files [ROM]\Bosconia.rom' --screenshot build\scratch\msx-explicit-proof\post-logo\bosconia-msx1-3600.png --frames 3600
-```
-
-Result: process exits 0, screenshot is still the C-BIOS logo. At 10000 frames it is still the C-BIOS logo.
-
-MSX2 Bosconia:
-
-```powershell
 $env:MNEMOS_MSX2_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx2.rom'
 $env:MNEMOS_MSX2_SUB_ROM='D:\emu\msx\bios\cbios\cbios_sub.rom'
 $env:MNEMOS_MSX2_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx2.rom'
@@ -118,54 +94,124 @@ $env:MNEMOS_MSX2_SUB_SLOT='3.0'
 $env:MNEMOS_MSX2_RAM_SLOT='3.2'
 $env:MNEMOS_MSX2_RAM_SIZE='512K'
 $env:MNEMOS_MSX2_REGION='ntsc'
-build\windows-msvc-debug\src\apps\player\mnemos_player.exe --system msx2 --rom 'D:\emu\msx\MSX files [ROM]\Bosconia.rom' --screenshot build\scratch\msx-explicit-proof\post-logo\bosconia-msx2-3600.png --frames 3600
 ```
 
-Result: process exits 0, screenshot is still the C-BIOS logo.
+Observed cases:
 
-MSX1 `1Kpong!`:
+```text
+bestial-msx    msx   ascii8   frames=3600  renders Bestial Warrior title art
+bestial-msx2   msx2  ascii8   frames=3600  renders title art, color fidelity suspect
+avenger-msx    msx   ascii8   frames=3600  screenshot produced, not visually rechecked in this handoff
+ashguinz-msx2  msx2  generic8 frames=3600  renders Japanese text/game scene
+boingb-msx     msx   plain    frames=3600  renders "PULSA <FUEGO> PARA JUGAR"
+bosconia-msx   msx   plain    frames=3600  still C-BIOS logo
+bosconia-msx2  msx2  plain    frames=3600  still C-BIOS logo
+```
+
+Important sidecar state:
+
+```text
+bosconia-msx.png.z80.regs.txt:
+  AF=$0048 BC=$6D84 DE=$19C4 HL=$880C IX=$8010 SP=$F2FE PC=$108B IM=0 halted=true
+
+bestial-msx.png.z80.regs.txt:
+  AF=$0093 BC=$0001 DE=$1B00 HL=$94A9 IX=$405C SP=$F37C PC=$1804 IM=1
+
+boingb-msx.png.z80.regs.txt:
+  PC=$4E49
+```
+
+VDP/VRAM sidecars:
+
+```text
+bosconia-msx.png.tms9918a.regs.txt:
+  R0=$02 R1=$E0 R2=$06 R3=$9F R4=$00 R5=$36 R6=$07 R7=$F5 frame=$E10
+  VRAM remains logo-like, nonzero=5172
+
+bestial-msx.png.tms9918a.regs.txt:
+  R0=$02 R1=$E2 R2=$06 R3=$FF R4=$03 R5=$36 R6=$07 R7=$F1
+  VRAM nonzero=11094
+
+boingb-msx:
+  VRAM nonzero=10629
+```
+
+Do not treat final `$E780 == 0` as the unique Bosconia root cause. The final value is also zero in working Bestial/Boing/Avenger runs.
+
+## Bosconia Current Root-Cause Thread
+
+The most useful current trace is:
+
+```text
+build\scratch\msx-bosconia-flow\bosconia-msx-240.png.cpu_trace.csv
+```
+
+It was generated with:
 
 ```powershell
+$env:MNEMOS_CPU_TRACE='1'
 $env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
 $env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
-$env:MNEMOS_MSX_REGION='ntsc'
-build\windows-msvc-debug\src\apps\player\mnemos_player.exe --system msx --rom 'D:\emu\msx\MSX files [ROM]\1Kpong! (Phoenix Software) (2005) (Version del juego en color azul).rom' --screenshot build\scratch\msx-explicit-proof\post-logo\1kpong-msx1-3600.png --frames 3600
+build\windows-msvc-debug\src\apps\player\mnemos_player.exe --system msx --rom 'D:\emu\msx\MSX files [ROM]\Bosconia.rom' --mapper plain --screenshot build\scratch\msx-bosconia-flow\bosconia-msx-240.png --frames 240
+Remove-Item Env:MNEMOS_CPU_TRACE
 ```
 
-Result: process exits 0, screenshot shows `No enough memory`.
+Trace row count: 247710.
 
-## Current Diagnostic Evidence
-
-The useful CPU trace for Bosconia is:
+Key PC counts from the 240-frame trace:
 
 ```text
-build\scratch\msx-trace\bosconia-msx1-1200.png.cpu_trace.csv
+0024=1
+0047=14
+0056=7
+005C=31
+0093=0
+0138=1
+108B=203
+400F=1
+4018=8192
+4049=1
+4052=1
+4082=1
+4085=0
+409A=0
+40A5=0
+40AE=0
+40BB=0
+40C8=0
+40D1=0
+40E0=0
+4126=3
+491E=1
+8708=1
+8910=1
+89CD=0
+8AFB=1
+8B08=1
+FD9A=220
+FD9F=220
+F392=2
+80BB=2
 ```
 
-Exact counts from that trace:
+Interpretation:
+
+- BIOS reaches Bosconia init at `$400F`.
+- Bosconia copies CPU `$6000-$7FFF` to `$8000-$9FFF` with `LDIR`.
+- Bosconia calls BIOS `$0138`, `$0024`, `$0047`, then copied code at `$8708`, `$8910`, `$491E`.
+- Bosconia clears `$E000-$EFFF` and calls `$4126` three times.
+- Bosconia reaches `$4082` and calls copied ROM/RAM code at `$8AFB`.
+- Execution does not return to `$4085`.
+- Execution therefore does not reach `$409A`, which is where Bosconia should write a `JP $40AE` hook into `$FD9A-$FD9C`.
+- Later `$FD9A` hits are still C-BIOS default hook calls, not the Bosconia-installed hook.
+
+C-BIOS bytes around final MSX1 PC `$108B`:
 
 ```text
-00400F=8
-004010=0
-004128=528
-004A1E=40
-008010=9
-0080AD=90
-008AFB=8
-lower_4000_7fff=114264
-upper_8000_bfff=2443
+... FB C9 76 10 FD C9 3A AF FC ...
 ```
 
-First observed Bosconia lower-page cartridge entries:
-
-```text
-138,128728,00400F,8224739
-138,128729,004012,8224749
-138,128730,004015,8224759
-138,128731,004018,8224769
-```
-
-Interpretation: Bosconia's init at `$400F` is reached. The failure is not just a missing cartridge visibility/header path.
+So `$108B` is a BIOS HALT loop (`HALT; DJNZ -3; RET`).
 
 Bosconia startup disassembly summary:
 
@@ -173,205 +219,74 @@ Bosconia startup disassembly summary:
 400F LD HL,$6000
 4012 LD DE,$8000
 4015 LD BC,$2000
-4018 LDIR              ; copies $6000-$7FFF to $8000-$9FFF
+4018 LDIR
 401A LD SP,$E800
 401D CALL $0138
-4020 RRCA
-4021 RRCA
-4022 AND $03
-4036 CALL $0024        ; ENASLT
-4041 CALL $0047        ; DISSCR loop
-4049 CALL $8708        ; copied cartridge/RAM code
+4036 CALL $0024
+4039..4048 loop calling $0047
+4049 CALL $8708
 404C CALL $8910
 404F CALL $491E
-4052 clears E000-EFFF via LDIR
+4052 clear $E000-$EFFF
+405F..4074 setup via $4126
+4077 LD HL,$3F00; LD BC,$0080; LD A,$BF; CALL $0056
+4082 CALL $8AFB
+4085 expected continuation if $8AFB returns
+409A expected hook install: write $C3,$AE,$40 to $FD9A-$FD9C
+40AE expected main loop hook target
+40BB expected main loop over $E780
 ```
 
-`$8AFB` in the trace is copied cartridge code from Bosconia ROM offset `$2AFB`, not the logo ROM. `cbios_logo_msx1.rom` has `FF` at the corresponding offsets. This means page 2 was RAM at that point, then later returns to slot 0/logo visibility.
+Current focused question: why does copied Bosconia code at `$8AFB` not return to `$4085`?
 
-Golden diagnostic command for MSX1 Bosconia:
+## Likely Next Steps
+
+1. Disassemble Bosconia around copied code `$8AFB` and `$80AD/$80BB`.
+   - `$8AFB` maps to ROM source around file offset `$2AFB`.
+   - `$80AD/$80BB` came from the initial `$6000-$7FFF` to `$8000-$9FFF` copy, so inspect ROM source around `$60AD/$60BB` or file offset `$20AD/$20BB`.
+2. Decide whether the missing return is caused by CPU behavior, BIOS hook/vector behavior, slot/RAM visibility, or interrupt mode handling.
+3. Inspect Z80 implementation if the disassembly points at CPU behavior:
+   - `CALL`, `RET`, `EI`, `IM`, interrupt acknowledge, `LDIR`, `JP (IX)`, `RST 38`.
+   - Likely file: `src/chips/cpu/z80/z80.cpp`.
+4. Add or extend a focused diagnostic only if needed.
+   - Existing golden test supports `MNEMOS_MSX_PC_WATCH`, `MNEMOS_MSX_D800_WATCH`, and `MNEMOS_MSX_VDP_WATCH`.
+   - A configurable RAM watch for `$FD9A-$FD9C` could be useful, but the current trace already proves `$409A` is not reached.
+5. After patching, rerun the focused test slice and explicit player matrix.
+
+## Relevant Code Surfaces
+
+```text
+src/apps/player/system_launch.cpp
+src/apps/player/adapters/msx/msx_adapter.cpp
+src/apps/player/adapters/msx2/msx2_adapter.cpp
+src/apps/player/adapters/common/cli_args.cpp
+src/apps/player/headless_commands.cpp
+tests/golden/msx_boot_test.cpp
+tests/golden/msx_rom_profiles.json
+scripts/msx/run-boot-smoke.ps1
+```
+
+Notes:
+
+- `--mapper` and `--mapper2` are supported by the player CLI.
+- `system_launch.cpp` applies MSX/MSX2 machine-profile environment settings and passes mapper overrides.
+- `scripts/msx/run-boot-smoke.ps1` has profile manifest support and applies mapper, slot, BIOS, and frame settings.
+- Old raw-directory smoke runs can time out on `_BAD_` ROMs and are not a useful proof path.
+- CPU trace is enabled with `MNEMOS_CPU_TRACE=1`; output goes beside the requested screenshot as `<screenshot>.cpu_trace.csv`.
+
+## Do Not Do
+
+- Do not use a blank player window as proof.
+- Do not launch without explicit `--system` and `--rom`.
+- Do not claim global MSX/MSX2 completion from Bestial/Boing/AshGuine alone.
+- Do not chase final `$E780` zeros as the immediate root unless execution reaches `$40BB`.
+- Do not treat build/test success alone as "100% working" without ROM-backed player evidence.
+
+## Suggested Resume Command
 
 ```powershell
-$env:MNEMOS_MSX_BIOS='D:\emu\msx\bios\cbios\cbios_main_msx1.rom'
-$env:MNEMOS_MSX_LOGO_ROM='D:\emu\msx\bios\cbios\cbios_logo_msx1.rom'
-$env:MNEMOS_MSX_ROM='D:\emu\msx\MSX files [ROM]\Bosconia.rom'
-$env:MNEMOS_MSX_REGION='ntsc'
-$env:MNEMOS_MSX_BOOT_FRAMES='170'
-$env:MNEMOS_MSX_BOOT_SHA256='0000000000000000000000000000000000000000000000000000000000000000'
-$env:MNEMOS_MSX_PC_WATCH='4050-40D0'
-Remove-Item Env:MNEMOS_MSX_D800_WATCH -ErrorAction SilentlyContinue
-Remove-Item Env:MNEMOS_MSX_VDP_WATCH -ErrorAction SilentlyContinue
-.\build\windows-msvc-debug\tests\golden\mnemos_msx_boot_test.exe 'msx boots real firmware to a deterministic golden framebuffer' -s
+Set-Location C:\dev\emu\Mnemos-msx2
+git status --short --branch
+git log -1 --oneline
+Get-Content .\RESUME.md
 ```
-
-Expected failure because the hash is intentionally wrong. Useful final state:
-
-```text
-frame 170 hash: 10c97eadcc1c32ef552dfa7c028c14f1667b782b1aa6ee478ab14ec325445a52
-cpu pc/sp/af/bc/de/hl: $108B/$F2FE/$0048/$6B84/$19C4/$880C halted=true
-slot state: primary=$F4 secondary0=$00 secondary1=$00 secondary2=$00 secondary3=$00
-vdp state: frame=170 mode=3 r0=$02 r1=$E0 r2=$06 r7=$F5 vram_nonzero=5172 first_pixel=8222460
-f390=[98,F3,08,F1,D3,A8,08,C9,DD,E9,...]
-fd90=[00... C9 C9...]
-```
-
-Slot interpretation for `primary=$F4`:
-
-- page 0: BIOS slot 0
-- page 1: cartridge slot 1
-- page 2: RAM slot 3
-- page 3: RAM slot 3
-
-Collapsed PC stream after the first `$400F` entry:
-
-```text
-138,128728,00400F,8224739,x1
-138,128729,004012,8224749,x1
-138,128730,004015,8224759,x1
-138,128731,004018,8224769,x8192
-141,136923,00401A,8396796,x1
-141,136924,00401D,8396806,x1
-141,136925,000138,8396823,x1
-141,136926,00176A,8396833,x1
-141,136928,004020,8396854,x1
-141,136944,000024,8396972,x1
-141,136997,000047,8397312,x1
-141,137058,004044,8397913,x1
-141,137061,004047,8397933,x1
-141,137230,004049,8399348,x1
-141,137231,008708,8399365,x1
-141,137249,00870F,8399527,x1
-141,137251,004719,8399551,x1
-141,137252,00471B,8399558,x17
-141,137269,00471D,8399774,x1
-141,137270,00471E,8399778,x1
-```
-
-Key point: execution reaches copied cartridge/RAM code at `$8708`, then spends time around `$4719/$471B`. Later trace sections enter BIOS VRAM transfer loops around `$0278/$027A`, so VDP write paths are active but the visible logo remains.
-
-Latest continuation update:
-
-- The `$4719/$471B` region is a nested software delay loop, not a hardware wait: bytes at ROM offset `$0719` decode as `LD B,$11; DJNZ self; DEC A; JR NZ outer; RET`.
-- Current Bosconia post-logo sidecars show MSX1 at PC `$108B`, SP `$F2FE`, AF `$0048`, DE `$19C4`, HL `$880C`, halted=true after both 3600 and 10000 frames.
-- Current MSX2 Bosconia sidecar shows PC `$1130`, SP `$F2FE`, AF `$8E44`, DE `$82C8`, HL `$FAFC`; the screenshot is still the C-BIOS logo.
-- Current `1Kpong!` sidecar shows PC `$5F12`, SP `$C360`, AF `$0054`, DE `$C000`; VRAM contains the visible `No enough memory` message.
-- The useful post-logo output directory is `build\scratch\msx-explicit-proof\post-logo`.
-
-Additional counts from the continuation trace reduction:
-
-```text
-0040BE=306799
-0040BF=306799
-00108B=120
-00027A=4512
-004049=1
-008708=1
-008AFB=3
-004128=66
-0040BB=23600
-```
-
-Bosconia main-loop bytes around `$40BB`:
-
-```text
-AF 21 80 E7 5E CD 93 00 2C 3C FE 0D 20 F6 CD CD 89 3A 93 E7 0F 30 0F CD 08 8B CD 4D 5B 3A 94 E7 E6 03 FE 02 20 C5
-```
-
-Interpretation: the loop at `$40BB` walks 13 bytes from RAM around `$E780` and calls BIOS routine `$0093`. The final `work_ram.bin` sidecars currently show `$E780` as zeroed, so the next useful diagnostic is a write trace/watch for `$E780-$E78C` rather than more frame-count-only screenshots.
-
-PPI/slot inspection status:
-
-- `src/manifests/common/msx_io_ports.cpp` appears internally consistent: reset control `$9B` leaves ports as inputs; `$82` enables port A / port C output and leaves port B input.
-- `src/manifests/msx/msx_system.cpp` and `src/manifests/msx2/msx2_system.cpp` currently write the PPI port-A latch and primary slot select on every `$A8` write, including reset-state input mode.
-- Secondary-slot register reads return the inverted stored byte, and writes store the non-inverted value. That matches expanded-slot register convention.
-- Both MSX and MSX2 have similar `plain_32k_handoff_cart_slot` behavior; any fix in slot/latch/RAM handoff should be checked in both systems.
-
-Smoke-run caveat:
-
-- `scripts\msx\run-boot-smoke.ps1` was started with `-RequireData`, C-BIOS paths, and `-MaxRoms 10`, but the run timed out before producing `summary.json`.
-- The selected ROMs came from early `_BAD_` names in `D:\emu\msx\MSX files [ROM]`, so that run should not be treated as a useful compatibility result.
-- A better next smoke pass should use profile-backed ROMs from `tests\golden\msx_rom_profiles.json` such as ADONIS, ASHGUINZ, Bestial Warrior, Boing-b, and Anty, with explicit `--mapper` where the profile requires it.
-
-C-BIOS XML layout was checked:
-
-- MSX1: slot 0 main ROM `$0000-$7FFF`, slot 0 logo `$8000-$BFFF`, external slots 1/2, slot 3 full 64K RAM, TMS9918A.
-- MSX2: slot 0 main `$0000-$7FFF`, slot 0 logo `$8000-$BFFF`, external slots 1/2, slot 3 subslot 0 sub-ROM, slot 3 subslot 2 512K memory mapper, V9938.
-
-## Strong Current Hypotheses
-
-This is not a blank-launch or missing-ROM-argument issue. It is also probably not a dead VDP IRQ line.
-
-Most likely shared root areas:
-
-- MSX BIOS work-area and slot variable behavior, especially around `EXPTBL`/`SLTTBL` and `CALL $0138`.
-- `ENASLT`/PPI port `$A8` side effects and whether primary slot latch state is restored exactly as C-BIOS/game code expects.
-- Cartridge takeover semantics after init returns or jumps through BIOS hooks/vectors.
-- RAM discovery or usable-RAM bookkeeping; `1Kpong!` reporting `No enough memory` is an important clue.
-- Z80 block instructions or BIOS VRAM helper behavior only if slot/RAM work-area checks do not explain the failure.
-
-Lower-priority checks:
-
-- Keyboard/input progression. This can be tested with `MNEMOS_MSX_BOOT_KEYS=space,return`, but it should not explain Bosconia staying on the logo after cartridge display setup begins.
-
-## Recommended Resume Path
-
-1. Reproduce explicit player proof with profile-backed ROMs, not a raw directory walk that starts on `_BAD_` files.
-2. Add a focused diagnostic or temporary test hook that watches writes to `$E780-$E78C` and the relevant MSX BIOS work-area addresses.
-3. Determine why Bosconia's `$40BB` loop sees zeroed RAM and whether the cause is shared slot latch behavior, BIOS work-area setup, or RAM visibility.
-4. Patch the shared MSX/MSX2 root cause and add a regression test that covers both systems when the behavior is common.
-5. Rebuild and rerun focused MSX/MSX2, TMS9918A, V9938, system-launch, and capability-summary tests.
-6. Rerun explicit player proofs with `--system msx|msx2` and `--rom`, then run a small profile-backed real-ROM smoke set.
-
-Small smoke command template:
-
-```powershell
-.\scripts\msx\run-boot-smoke.ps1 `
-  -BuildDir build/windows-msvc-debug `
-  -MsxBios 'D:\emu\msx\bios\cbios\cbios_main_msx1.rom' `
-  -MsxLogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx1.rom' `
-  -MsxRegion ntsc `
-  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2.rom' `
-  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
-  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
-  -Msx2ExpandedSlots 8 `
-  -Msx2SubSlot 3.0 `
-  -Msx2RamSlot 3.2 `
-  -Msx2RamSize 512K `
-  -Msx2Region ntsc `
-  -MsxRomDir 'D:\emu\msx\MSX files [ROM]' `
-  -Msx2RomDir 'D:\emu\msx\MSX files [ROM]' `
-  -RomProfileManifest tests/golden/msx_rom_profiles.json `
-  -Frames 3600 `
-  -MaxRoms 5 `
-  -RequireData
-```
-
-## Useful Files
-
-- `src/manifests/msx/msx_system.cpp`
-- `src/manifests/msx/msx_system.hpp`
-- `src/manifests/msx2/msx2_system.cpp`
-- `src/manifests/msx2/msx2_system.hpp`
-- `src/manifests/common/msx_cartridge_mapper.cpp`
-- `src/manifests/common/msx_cartridge_mapper.hpp`
-- `src/manifests/common/msx_io_ports.cpp`
-- `src/manifests/common/msx_io_ports.hpp`
-- `src/apps/player/system_launch.cpp`
-- `src/apps/player/adapters/msx/msx_adapter.cpp`
-- `src/apps/player/adapters/msx2/msx2_adapter.cpp`
-- `tests/golden/msx_boot_test.cpp`
-- `tests/golden/README.md`
-- `tests/golden/msx_rom_profiles.json`
-- `scripts/msx/run-boot-smoke.ps1`
-- `src/chips/cpu/z80/z80.cpp`
-- `src/chips/video/tms9918a/tms9918a.cpp`
-
-## Git Notes
-
-Before this handoff update, `git status --short --branch` was clean:
-
-```text
-## feature/msx2...origin/feature/msx2
-```
-
-This file is the handoff artifact requested by the user before switching agents due to the long-running session context size.
