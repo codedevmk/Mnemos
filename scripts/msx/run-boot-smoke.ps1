@@ -810,6 +810,9 @@ function Get-BootHashFromLog {
         return $null
     }
     $text = Get-Content -LiteralPath $LogPath -Raw
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $null
+    }
     $matches = [regex]::Matches(
         $text,
         "(?:boot framebuffer sha256:|computed MSX2? boot framebuffer sha256 =)\s*([0-9a-f]{64})"
