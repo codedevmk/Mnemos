@@ -23,7 +23,11 @@ matches are intentionally tracked as contract-only manifests until board/player
 profiles exist; 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
 copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
-inventory grouping. A current all-Irem CRC artifact audit of the checked-in
+inventory grouping. The six remaining untracked root items are now explicit
+known-corpus classifications: `motorace`, `travrusab`, and `travrusab2` are Irem
+`irem/travrusa.cpp` split-clone wrappers blocked by the missing parent/shared
+set `travrusa.zip`; `headon` and `uniwars` / `uniwarsa` are non-Irem reference
+sets from `sega/vicdual.cpp` and `galaxian/galaxian.cpp`. A current all-Irem CRC artifact audit of the checked-in
 manifests reports `1354/1354` required files present from `D:\emu\irem`, so there are no current
 file-level missing-artifact rows for the checked-in Irem manifest set. The
 common data-gated runner now includes the M14, M27, M47, and M63 manifest-load proofs plus
@@ -650,29 +654,33 @@ visual and audio parity proof.
 
 1. Supply trusted visual/audio parity hashes for the new M52 hash oracle and
    the existing M72 hash oracle before promoting any game to "correct gfx/music".
-2. Advance M52 Moon Patrol from first-pass route to authentic video/audio by
+2. Add `travrusa.zip` or equivalent parent/shared media before adding
+   `motorace`, `travrusab`, or `travrusab2` manifests; the local wrappers are
+   split clones and the inventory now reports them as
+   `irem_split_clone_missing_parent`, not complete ROM sets.
+3. Advance M52 Moon Patrol from first-pass route to authentic video/audio by
    replacing the diagnostic compositor and first-pass digital audio with board-evidenced
    parallax, road, sprite, sound-CPU-owned MSM5205 stream timing, and discrete
    analog behavior.
-3. Resolve the M82/M84 R-Type II classification mismatch with board evidence and
+4. Resolve the M82/M84 R-Type II classification mismatch with board evidence and
    adjust manifests/docs if needed.
-4. Use the now-passing M72 roster golden as the baseline for the next
+5. Use the now-passing M72 roster golden as the baseline for the next
    protection/DIP/parity slices; the remaining M72 work is not missing media but
    stronger authenticity proof.
-5. Promote M63 Wily Tower from ROM contract to an executable board/profile route
+6. Promote M63 Wily Tower from ROM contract to an executable board/profile route
    before counting it as smoke playable.
-6. Promote M27 Panther from ROM contract to an executable board/profile route
+7. Promote M27 Panther from ROM contract to an executable board/profile route
    before counting it as smoke playable.
-7. Promote M47 Oli-Boo-Chu / Punching Kid from ROM contracts to an executable
+8. Promote M47 Oli-Boo-Chu / Punching Kid from ROM contracts to an executable
    board/profile route before counting either set as smoke playable.
-8. Promote M62 from raw-media contracts to a real board/profile route before
+9. Promote M62 from raw-media contracts to a real board/profile route before
    counting any Lode Runner, Spelunker II, Battle Road, or Youjyuden set as
    smoke playable.
-9. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
+10. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
    M72 roster proof. With the switch, the runner prints a checked-in-manifest
    artifact preflight before CTest; without the switch it is the available-artifact proof
    runner for every implemented Irem family.
-10. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
+11. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.
-11. Advance the M92 first-pass profile from diagnostic execution to authenticity
+12. Advance the M92 first-pass profile from diagnostic execution to authenticity
    by resolving encrypted V35 sound-CPU behavior and GA21/GA22 video evidence.

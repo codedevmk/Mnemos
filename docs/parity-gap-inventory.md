@@ -442,7 +442,8 @@ manifests reports `1354/1354` required files present from
 for those manifests.
 The report also carries per-item
 `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
-`load_readiness` fields plus a `tracked_sets` grouping; this currently separates
+`load_readiness` fields plus `tracked_sets` and `known_corpus_items` groupings;
+this currently separates
 the local Image Fight material into `imgfight` as the M72 parent/standalone set
 with two direct player-loadable routes plus one metadata-only `.7z`, and
 `imgfightj` / `imgfightjb` as clones declaring parent `imgfight`, each with one
@@ -467,8 +468,13 @@ contract-only `wilytowr` with `next_action = add_board_profile`, so Wily Tower
 is no longer an unclassified root item.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract moves
-the local Lot Lot wrapper out of `classify_or_sort_corpus_item`; with M27 added,
-the current root classify/sort rows are down to 6.
+the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The remaining
+six untracked root rows are now explicit classifications rather than generic
+sort work: `motorace`, `travrusab`, and `travrusab2` are Irem
+`irem/travrusa.cpp` split-clone wrappers blocked by missing parent/shared media
+`travrusa.zip`, while `headon` (`sega/vicdual.cpp`) and `uniwars` /
+`uniwarsa` (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not
+be counted as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
 M82, M84, M90, M92, and M107, and also reports the M14, M27, M47, and M63 manifest-only

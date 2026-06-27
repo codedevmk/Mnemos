@@ -260,6 +260,67 @@ function Get-ManifestParentForSet {
     return ""
 }
 
+function New-CorpusClassification {
+    param(
+        [string]$Classification = "",
+        [string]$SourceDriver = "",
+        [string]$SourceFamily = "",
+        [string]$SourceOwner = "",
+        [string]$MissingParentZip = "",
+        [string]$NextAction = ""
+    )
+    return [pscustomobject]@{
+        classification = $Classification
+        source_driver = $SourceDriver
+        source_family = $SourceFamily
+        source_owner = $SourceOwner
+        missing_parent_zip = $MissingParentZip
+        next_action = $NextAction
+    }
+}
+
+function Get-KnownCorpusClassification {
+    param([Parameter(Mandatory = $true)][string]$SetId)
+    switch ($SetId.ToLowerInvariant()) {
+        "travrusa" {
+            return New-CorpusClassification `
+                -Classification "irem_parent_candidate" `
+                -SourceDriver "irem/travrusa.cpp" `
+                -SourceFamily "travrusa" `
+                -SourceOwner "irem" `
+                -NextAction "add_manifest_and_board_profile"
+        }
+        { $_ -in @("motorace", "travrusab", "travrusab2") } {
+            return New-CorpusClassification `
+                -Classification "irem_split_clone_missing_parent" `
+                -SourceDriver "irem/travrusa.cpp" `
+                -SourceFamily "travrusa" `
+                -SourceOwner "irem" `
+                -MissingParentZip "travrusa.zip" `
+                -NextAction "add_missing_parent_zip_then_manifest_or_board_profile"
+        }
+        "headon" {
+            return New-CorpusClassification `
+                -Classification "non_irem_reference" `
+                -SourceDriver "sega/vicdual.cpp" `
+                -SourceFamily "headon" `
+                -SourceOwner "non_irem" `
+                -NextAction "move_or_ignore_non_irem_reference"
+        }
+        { $_ -in @("uniwars", "uniwarsa") } {
+            return New-CorpusClassification `
+                -Classification "non_irem_reference" `
+                -SourceDriver "galaxian/galaxian.cpp" `
+                -SourceFamily "uniwars" `
+                -SourceOwner "non_irem" `
+                -NextAction "move_or_ignore_non_irem_reference"
+        }
+        default {
+            return New-CorpusClassification
+        }
+    }
+}
+
 function Get-SetRole {
     param(
         [Parameter(Mandatory = $true)][bool]$TrackedByMnemos,
@@ -375,6 +436,17 @@ function Get-InventoryNextAction {
     return "classify_or_sort_corpus_item"
 }
 
+function Get-EffectiveInventoryNextAction {
+    param(
+        [Parameter(Mandatory = $true)][string]$DefaultAction,
+        [Parameter(Mandatory = $true)]$KnownClassification
+    )
+    if (-not [string]::IsNullOrWhiteSpace($KnownClassification.next_action)) {
+        return $KnownClassification.next_action
+    }
+    return $DefaultAction
+}
+
 function New-ArchiveItem {
     param(
         [Parameter(Mandatory = $true)][System.IO.FileInfo]$File,
@@ -426,6 +498,8 @@ function New-ArchiveItem {
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
     $archiveComposition = Get-ArchiveComposition -Kind "archive" -Extension $File.Extension -EntryCount $entries.Count -NestedArchives $nestedArchives
+    $knownClassification = Get-KnownCorpusClassification -SetId $setId
+    $defaultNextAction = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
 
     return [pscustomobject]@{
         kind = "archive"
@@ -460,7 +534,12 @@ function New-ArchiveItem {
         supported_by_mnemos = $supportedByMnemos
         load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         board_candidate_family = $boardCandidateFamily
-        next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
+        corpus_classification = $knownClassification.classification
+        known_source_driver = $knownClassification.source_driver
+        known_source_family = $knownClassification.source_family
+        known_source_owner = $knownClassification.source_owner
+        missing_parent_zip = $knownClassification.missing_parent_zip
+        next_action = Get-EffectiveInventoryNextAction -DefaultAction $defaultNextAction -KnownClassification $knownClassification
         entry_count = $entries.Count
         nested_archives = @($nestedArchives)
         sample_entries = @($entries | Select-Object -First $MaxEntries)
@@ -518,6 +597,8 @@ function New-DirectoryItem {
     $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
+    $knownClassification = Get-KnownCorpusClassification -SetId $setId
+    $defaultNextAction = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
     return [pscustomobject]@{
         kind = "directory"
         bucket = $Bucket
@@ -551,7 +632,12 @@ function New-DirectoryItem {
         supported_by_mnemos = $supportedByMnemos
         load_readiness = Get-LoadReadiness -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
         board_candidate_family = $boardCandidateFamily
-        next_action = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
+        corpus_classification = $knownClassification.classification
+        known_source_driver = $knownClassification.source_driver
+        known_source_family = $knownClassification.source_family
+        known_source_owner = $knownClassification.source_owner
+        missing_parent_zip = $knownClassification.missing_parent_zip
+        next_action = Get-EffectiveInventoryNextAction -DefaultAction $defaultNextAction -KnownClassification $knownClassification
         entry_count = $files.Count
         nested_archives = @()
         sample_entries = @($files | Sort-Object Name | Select-Object -First $MaxEntries -ExpandProperty Name)
@@ -790,6 +876,35 @@ $trackedSetRows = @($items |
         }
     })
 
+$knownCorpusRows = @($items |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_.corpus_classification) } |
+    Group-Object corpus_classification, known_source_driver, known_source_family, known_source_owner, missing_parent_zip |
+    Sort-Object Name |
+    ForEach-Object {
+        $groupItems = @($_.Group | Sort-Object set_id, path)
+        $first = $groupItems[0]
+        [pscustomobject]@{
+            corpus_classification = $first.corpus_classification
+            source_driver = $first.known_source_driver
+            source_family = $first.known_source_family
+            source_owner = $first.known_source_owner
+            missing_parent_zip = $first.missing_parent_zip
+            item_count = $groupItems.Count
+            set_ids = @($groupItems | Select-Object -ExpandProperty set_id -Unique)
+            next_actions = @($groupItems | Select-Object -ExpandProperty next_action -Unique)
+            sample_items = @($groupItems |
+                Select-Object -First $MaxEntries |
+                ForEach-Object {
+                    [pscustomobject]@{
+                        set_id = $_.set_id
+                        kind = $_.kind
+                        load_route = $_.load_route
+                        path = $_.path
+                    }
+                })
+        }
+    })
+
 $report = [pscustomobject]@{
     generated_at = (Get-Date).ToString("o")
     roots = @($resolvedRoots)
@@ -836,12 +951,17 @@ $report = [pscustomobject]@{
         metadata_only_tracked_item_count = @($items | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
         tracked_clone_item_count = @($items | Where-Object { $_.set_role -eq "clone_declares_parent" }).Count
         tracked_parent_or_standalone_item_count = @($items | Where-Object { $_.set_role -eq "parent_or_standalone" }).Count
+        known_corpus_classification_count = $knownCorpusRows.Count
+        known_untracked_item_count = @($items | Where-Object { -not $_.tracked_by_mnemos -and -not [string]::IsNullOrWhiteSpace($_.corpus_classification) }).Count
+        irem_split_clone_missing_parent_item_count = @($items | Where-Object { $_.corpus_classification -eq "irem_split_clone_missing_parent" }).Count
+        non_irem_reference_item_count = @($items | Where-Object { $_.corpus_classification -eq "non_irem_reference" }).Count
         unsupported_item_count = @($items | Where-Object { -not $_.supported_by_mnemos }).Count
         unsupported_bucket_count = $unsupportedBuckets.Count
         unsupported_buckets = @($unsupportedBuckets)
     }
     buckets = @($bucketRows)
     board_family_candidates = @($boardFamilyCandidates)
+    known_corpus_items = @($knownCorpusRows)
     tracked_sets = @($trackedSetRows)
     items = @($items)
 }
@@ -856,6 +976,13 @@ if ($boardFamilyCandidates.Count -gt 0) {
     Write-Host "  board-family candidates:"
     foreach ($candidate in $boardFamilyCandidates) {
         Write-Host ("    [{0}] items={1} sets={2}" -f $candidate.board_family, $candidate.item_count, ($candidate.candidate_set_ids -join ","))
+    }
+}
+if ($knownCorpusRows.Count -gt 0) {
+    Write-Host "  known corpus classifications:"
+    foreach ($known in $knownCorpusRows) {
+        $missing = if ([string]::IsNullOrWhiteSpace($known.missing_parent_zip)) { "-" } else { $known.missing_parent_zip }
+        Write-Host ("    [{0}] source={1} items={2} sets={3} missing_parent={4} next={5}" -f $known.corpus_classification, $known.source_driver, $known.item_count, ($known.set_ids -join ","), $missing, ($known.next_actions -join ","))
     }
 }
 $metadataOnlyTracked = @($trackedSetRows | Where-Object { $_.metadata_only_count -gt 0 })
