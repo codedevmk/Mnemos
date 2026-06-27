@@ -167,10 +167,22 @@ function Get-SetIdFromPath {
         [Parameter(Mandatory = $true)][string]$Path,
         [AllowEmptyCollection()][string[]]$NestedArchives
     )
-    if ($NestedArchives.Count -eq 1) {
-        return [System.IO.Path]::GetFileNameWithoutExtension($NestedArchives[0])
+    function Normalize-CopySuffixedSetId {
+        param([Parameter(Mandatory = $true)][string]$Value)
+
+        if ($Value -match '^[A-Za-z0-9_]+$') {
+            return $Value
+        }
+        if ($Value -match '^([A-Za-z0-9_]+) \([0-9]+\)$') {
+            return $Matches[1]
+        }
+        return $Value
     }
-    return [System.IO.Path]::GetFileNameWithoutExtension($Path)
+
+    if ($NestedArchives.Count -eq 1) {
+        return Normalize-CopySuffixedSetId ([System.IO.Path]::GetFileNameWithoutExtension($NestedArchives[0]))
+    }
+    return Normalize-CopySuffixedSetId ([System.IO.Path]::GetFileNameWithoutExtension($Path))
 }
 
 function Get-LoadRouteForItem {

@@ -2892,6 +2892,36 @@ TEST_CASE("irem_m72_adapter resolves checked-in manifests for standard set direc
     CHECK(has_only_crc_issues(adapter.machine().roms.issues));
 }
 
+TEST_CASE("irem_m72_adapter resolves Windows copy-suffixed checked-in set zips",
+          "[irem_m72][adapter]") {
+    const auto loht_decl = require_embedded_decl("loht");
+
+    const auto root = std::filesystem::temp_directory_path() / "mnemos_irem_m72_copy_suffix";
+    std::error_code cleanup_ec;
+    std::filesystem::remove_all(root, cleanup_ec);
+    REQUIRE((std::filesystem::create_directories(root) || std::filesystem::exists(root)));
+    const auto set_path = root / "loht (1).zip";
+    REQUIRE(mnemos::io::write_file(set_path.string(),
+                                   make_stored_zip(placeholder_entries_for(loht_decl, 0x37U))));
+    auto bytes = mnemos::io::read_file(set_path.string());
+    REQUIRE(bytes.has_value());
+
+    mnemos::frontend_sdk::adapter_options options{};
+    options.rom = std::move(*bytes);
+    options.display_name = "loht copy";
+    options.rom_path = set_path.string();
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    REQUIRE(system != nullptr);
+    auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
+
+    CHECK(adapter.set_name() == "loht");
+    CHECK(adapter.system_spec()[2].value == "loht");
+    REQUIRE(adapter.machine().roms.region("maincpu") != nullptr);
+    CHECK(adapter.machine().roms.region("maincpu")->front() == 0x37U);
+    CHECK(has_only_crc_issues(adapter.machine().roms.issues));
+}
+
 TEST_CASE("irem_m72_adapter resolves checked-in clone and parent manifests",
           "[irem_m72][adapter]") {
     const auto parent_decl = require_embedded_decl("rtype");

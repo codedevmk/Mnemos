@@ -201,6 +201,17 @@ function Get-M72ManifestParents {
     return $parents
 }
 
+function Get-M72CanonicalSetStem {
+    param([Parameter(Mandatory = $true)][string]$Value)
+    if ($Value -match '^[A-Za-z0-9_]+$') {
+        return $Value.ToLowerInvariant()
+    }
+    if ($Value -match '^([A-Za-z0-9_]+) \([0-9]+\)$') {
+        return $Matches[1].ToLowerInvariant()
+    }
+    return $Value
+}
+
 function Get-M72NestedZipSetId {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -225,7 +236,7 @@ function Get-M72NestedZipSetId {
                 if (-not $entry.FullName.EndsWith(".zip", [System.StringComparison]::OrdinalIgnoreCase)) {
                     return $null
                 }
-                $stem = [System.IO.Path]::GetFileNameWithoutExtension($entry.FullName)
+                $stem = Get-M72CanonicalSetStem ([System.IO.Path]::GetFileNameWithoutExtension($entry.FullName))
                 if ($ManifestIds.Contains($stem)) {
                     return $stem
                 }
@@ -264,7 +275,7 @@ function Get-M72CollectionZipSetIds {
                     if ($slash -le 0) {
                         continue
                     }
-                    $top = $normalized.Substring(0, $slash)
+                    $top = Get-M72CanonicalSetStem ($normalized.Substring(0, $slash))
                     if ($ManifestIds.Contains($top) -and -not $ids.Contains($top)) {
                         $ids.Add($top)
                     }
@@ -397,13 +408,13 @@ function Get-M72RomCandidateSetIds {
     )
     $candidates = [System.Collections.Generic.List[object]]::new()
     if ($IncludeAllZips) {
-        Add-M72Candidate -Candidates $candidates -Set ([System.IO.Path]::GetFileNameWithoutExtension($Path)) -Rank 0
+        Add-M72Candidate -Candidates $candidates -Set (Get-M72CanonicalSetStem ([System.IO.Path]::GetFileNameWithoutExtension($Path))) -Rank 0
         return @($candidates)
     }
     if (Test-Path -LiteralPath $Path -PathType Container) {
-        $stem = [System.IO.Path]::GetFileName($Path)
+        $stem = Get-M72CanonicalSetStem ([System.IO.Path]::GetFileName($Path))
     } else {
-        $stem = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+        $stem = Get-M72CanonicalSetStem ([System.IO.Path]::GetFileNameWithoutExtension($Path))
     }
     $exactRank = 0
     if (Test-Path -LiteralPath $Path -PathType Container) {
@@ -790,11 +801,12 @@ foreach ($romGroup in $romGroups) {
                 $collectionHasParent = $true
             }
         }
+        $sourceStem = Get-M72CanonicalSetStem ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath))
         $sourceStemMatchesSet = (Test-Path -LiteralPath $sourcePath -PathType Leaf) -and
-            ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath).Equals($setId, [System.StringComparison]::OrdinalIgnoreCase))
+            ($sourceStem.Equals($setId, [System.StringComparison]::OrdinalIgnoreCase))
         $sourceStemMatchesParent = (-not [string]::IsNullOrWhiteSpace($parentSetId)) -and
             (Test-Path -LiteralPath $sourcePath -PathType Leaf) -and
-            ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath).Equals($parentSetId, [System.StringComparison]::OrdinalIgnoreCase))
+            ($sourceStem.Equals($parentSetId, [System.StringComparison]::OrdinalIgnoreCase))
 
         if ($collectionHasParent) {
             $parentSubset = New-M72CollectionSubsetZip -Path $sourcePath -SetId $parentSetId -OutDir $outDir

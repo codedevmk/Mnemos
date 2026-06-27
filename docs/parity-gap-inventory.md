@@ -414,21 +414,27 @@ Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 ignores archive-only container folders as unpacked sets, and currently reports
 129 items across `root`, `M15`, `M72`, `M81`, `M82`, `M84`, `M107`, and `i8751`.
 One item matches a checked-in M15 manifest contract, two match checked-in M52
-manifests, nine match checked-in M62 raw-media contracts, forty-four match
+manifests, nine match checked-in M62 raw-media contracts, forty-six match
 checked-in M72 manifests, seven match checked-in M75 manifests, five match
 checked-in M81 manifest contracts, ten match checked-in M82 manifests, six
 match checked-in M84 manifest contracts, four match checked-in M90 manifests,
 fifteen match checked-in M92 manifests, and eight match checked-in M107 manifest
 contracts. The inventory now separates manifest tracking, media loadability, and
-player support: 111 items match a checked-in Irem manifest, 103 are readable
-through current ZIP / single-inner-ZIP / folder routes, 94 are backed by an
+player support: 113 items match a checked-in Irem manifest, 104 are readable
+through current ZIP / single-inner-ZIP / folder routes, 95 are backed by an
 executable player-supported route, 9 M62 items are tracked contract-only, and
-8 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
+9 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
 sorted top-level board bucket is completely untracked anymore;
-`board_family_candidates` now only keeps the remaining untracked / duplicate /
-misbucketed `M72`-folder items visible (`horizon` and duplicate `loht (1)`
-material) instead of silently treating them as true-M72 proof; the local Air
-Duel M82 parent/US clone wrappers now route through `irem_m82`.
+`board_family_candidates` now only keeps the remaining untracked / misbucketed
+`M72`-folder item visible (`horizon`) instead of silently treating it as
+true-M72 proof; Windows copy-suffixed checked-in set ZIPs such as
+`loht (1).zip` are canonicalized to their embedded manifest IDs for player
+loading, M72 corpus-smoke grouping, and inventory grouping, and the local Air
+Duel M82 parent/US clone wrappers now route through `irem_m82`. A current
+all-Irem CRC artifact audit of
+the checked-in manifests reports `1174/1174` required files present from
+`D:\emu\irem`, so there are no current file-level missing-artifact rows to list
+for those manifests.
 The report also carries per-item
 `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
 `load_readiness` fields plus a `tracked_sets` grouping; this currently separates

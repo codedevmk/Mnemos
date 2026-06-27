@@ -15,12 +15,18 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 111 currently match
-a checked-in Mnemos Irem manifest, 103 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 94 have an
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 113 currently match
+a checked-in Mnemos Irem manifest, 104 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 95 have an
 executable player-supported route. The 9 M62 matches are intentionally tracked
 as contract-only raw-media manifests until an M62 board/player profile exists;
-8 tracked `.7z` items remain metadata-only until converted or unpacked. The
+9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
+copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
+their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
+inventory grouping. A current all-Irem CRC artifact audit of the checked-in
+manifests reports
+`1174/1174` required files present from `D:\emu\irem`, so there are no current
+file-level missing-artifact rows for the checked-in Irem manifest set. The
 common data-gated runner and oracle registry now include G6-ratcheted corpus
 golden tests for every implemented Irem player family: M15, M52, M72, M75,
 M81, M82, M84, M90, M92, and M107.

@@ -198,6 +198,38 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             return true;
         }
 
+        [[nodiscard]] std::optional<std::string>
+        canonical_set_id_from_basename(std::string basename) {
+            auto normalize_plain = [](std::string value) -> std::optional<std::string> {
+                if (!is_plain_set_id(value)) {
+                    return std::nullopt;
+                }
+                for (char& c : value) {
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                return value;
+            };
+
+            if (auto plain = normalize_plain(basename)) {
+                return plain;
+            }
+
+            if (basename.size() < 5U || basename.back() != ')') {
+                return std::nullopt;
+            }
+            const std::size_t open = basename.rfind(" (");
+            if (open == std::string::npos || open + 2U >= basename.size() - 1U) {
+                return std::nullopt;
+            }
+            for (std::size_t i = open + 2U; i + 1U < basename.size(); ++i) {
+                if (std::isdigit(static_cast<unsigned char>(basename[i])) == 0) {
+                    return std::nullopt;
+                }
+            }
+            basename.resize(open);
+            return normalize_plain(std::move(basename));
+        }
+
         [[nodiscard]] bool ends_with_zip(std::string_view value) noexcept {
             constexpr std::string_view ext = ".zip";
             if (value.size() < ext.size()) {
@@ -679,13 +711,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             if (dot != std::string::npos) {
                 basename.resize(dot);
             }
-            if (!is_plain_set_id(basename)) {
-                return std::nullopt;
-            }
-            for (char& c : basename) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return basename;
+            return canonical_set_id_from_basename(std::move(basename));
         }
 
         [[nodiscard]] std::optional<mnemos::manifests::common::rom_set_decl>
