@@ -2132,21 +2132,21 @@ namespace mnemos::chips::video {
         reg_.fill(0U);
         status_.fill(0U);
         palette_.fill(0U);
-        palette_[1] = 0x0000U; // black
-        palette_[2] = 0x01C8U; // green
-        palette_[3] = 0x02D9U;
-        palette_[4] = 0x01B2U;
-        palette_[5] = 0x02DBU;
-        palette_[6] = 0x01B4U;
-        palette_[7] = 0x03F6U;
-        palette_[8] = 0x01D4U;
-        palette_[9] = 0x02F5U;
-        palette_[10] = 0x03D4U;
-        palette_[11] = 0x03EDU;
-        palette_[12] = 0x0148U;
-        palette_[13] = 0x02B5U;
-        palette_[14] = 0x03FFU;
-        palette_[15] = 0x03FFU;
+        palette_[1] = 0x000U; // black
+        palette_[2] = 0x071U; // medium green
+        palette_[3] = 0x0FBU; // light green
+        palette_[4] = 0x04FU; // dark blue
+        palette_[5] = 0x09FU; // light blue
+        palette_[6] = 0x149U; // dark red
+        palette_[7] = 0x0B7U; // cyan
+        palette_[8] = 0x1C9U; // medium red
+        palette_[9] = 0x1DBU; // light red
+        palette_[10] = 0x1B1U; // dark yellow
+        palette_[11] = 0x1B4U; // light yellow
+        palette_[12] = 0x061U; // dark green
+        palette_[13] = 0x195U; // magenta
+        palette_[14] = 0x16DU; // gray
+        palette_[15] = 0x1FFU; // white
         addr_low_ = 0U;
         code_ = 0U;
         cmd_pending_ = false;

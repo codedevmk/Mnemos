@@ -214,6 +214,29 @@ TEST_CASE("v9938 palette writes commit RGB333 entries and autoincrement") {
     CHECK(vdp.reg(16) == 3U);
 }
 
+TEST_CASE("v9938 reset palette matches MSX2 RGB333 defaults") {
+    v9938 vdp;
+
+    CHECK(vdp.palette(1) == 0x000U);
+    CHECK(vdp.palette(2) == 0x071U);
+    CHECK(vdp.palette(4) == 0x04FU);
+    CHECK(vdp.palette(15) == 0x1FFU);
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x01U); // name table: top-left tile uses pattern 1
+    set_addr(vdp, 0x0008U, true);
+    vdp.data_write(0x80U); // pattern 1 row 0: first pixel set
+    set_addr(vdp, 0x0200U, true);
+    vdp.data_write(0x24U); // foreground medium green, background dark blue
+
+    write_reg(vdp, 1, 0x40U);
+    write_reg(vdp, 3, 0x08U);
+    vdp.render_frame();
+
+    CHECK(pixel(vdp, 0, 0) == 0x0024DA24U);
+    CHECK(pixel(vdp, 1, 0) == 0x002424FFU);
+}
+
 TEST_CASE("v9938 renders TMS-compatible Graphics I tiles") {
     v9938 vdp;
     install_red_blue_palette(vdp);

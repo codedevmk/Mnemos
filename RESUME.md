@@ -1,10 +1,10 @@
 # MSX / MSX2 Resume Handoff
 
-Generated: 2026-06-26T20:35:42-05:00
+Generated: 2026-06-26T21:02:44-05:00
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote tracking branch: `origin/feature/msx2`
-Pre-handoff HEAD: `26c7a2be Refresh MSX2 resume handoff`
+Pre-handoff HEAD: `8a820e0e Refresh MSX2 handoff state`
 
 ## User Goal
 
@@ -26,10 +26,11 @@ Current useful proof:
 
 - Explicit player launches with real `--system` and `--rom` now run several MSX/MSX2 cartridge cases.
 - MSX1 `Bestial Warrior` renders title art.
-- MSX2 `Bestial Warrior` renders title art, but color fidelity looks suspect compared to MSX1.
+- MSX2 `Bestial Warrior` renders title art, but the running software/C-BIOS path rewrites the V9938 palette, so it is still not MSX1-faithful.
 - MSX2 `AshGuine Story II` renders Japanese text/game scene.
 - MSX1 `Boing-b` renders the game prompt screen.
 - MSX1 and MSX2 `Bosconia` still remain on the C-BIOS logo.
+- A V9938 reset-palette bug was fixed: the reset table now uses the same RGB333 packing as `palette_write`, and the regression test renders default-palette green/blue without manually seeding palette RAM.
 
 Do not mark the goal complete until both MSX and MSX2 have ROM-backed player proof across representative cartridge paths, and the known Bosconia/color issues are resolved or explicitly triaged with accepted scope.
 
@@ -48,7 +49,15 @@ Focused post-patch test slice:
 cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "msx|MSX|tms9918a|v9938|mnemos_apps_player_system_launch_test|mnemos_apps_player_capability_summary_test" --output-on-failure'
 ```
 
-No new source patch was made after the latest trace reduction in this handoff. The next agent should rebuild after changing the isolated root cause.
+Latest validation after the V9938 reset-palette patch:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_manifests_msx_test mnemos_manifests_msx2_test'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|mnemos_manifests_msx_test|mnemos_manifests_msx2_test" --output-on-failure'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_player'
+```
+
+Focused tests passed: `mnemos_chips_video_v9938_test`, `mnemos_manifests_msx_test`, `mnemos_manifests_msx2_test`.
 
 ## Local Firmware And ROM Inputs
 
@@ -76,6 +85,15 @@ The useful output directory from the latest explicit profile proof is:
 
 ```text
 build\scratch\msx-profile-proof\20260626-202745
+```
+
+Additional current diagnostic output directories:
+
+```text
+build\scratch\msx-bosconia-firmware-sweep\20260626-204626
+build\scratch\msx-bosconia-firmware-sweep\20260626-204726
+build\scratch\msx-bosconia-mapper-sweep\20260626-205450
+build\scratch\msx-v9938-palette-proof\20260626-205945
 ```
 
 ## Explicit Player Matrix
@@ -237,20 +255,24 @@ Bosconia startup disassembly summary:
 40BB expected main loop over $E780
 ```
 
-Current focused question: why does copied Bosconia code at `$8AFB` not return to `$4085`?
+Current corrected Bosconia evidence:
+
+- Bosconia still stays on the C-BIOS logo with MSX1 C-BIOS generic/BR/EU/JP and MSX2 C-BIOS generic/BR/EU/JP.
+- Bosconia still stays on the C-BIOS logo with mapper overrides `auto`, `plain`, `ascii8`, `ascii16`, `generic8`, `konami`, and `konami-scc`.
+- The current player trace at `build\scratch\msx-bosconia-slot-watch\bosconia-trace-240.png.cpu_trace.csv` shows `$4082 -> $8AFB`, then `$8AFC/$8AFD/...`, `$8B08`, `$88DB`, repeated `$4A1E` calls, `$8B21`, then `$0000`.
+- This means Mnemos is executing the mirrored ROM bytes from Bosconia file offset `$0AFB`, not the copied RAM routine from file offset `$2AFB`.
+- File offset `$0AFB` starts `49 E1 23 7E 32 23 E1 23 11 42 EE 06 06 CD DB 88...` and consumes the call return as inline data.
+- Work RAM at `$8AFB` after the failed run contains the copied file-offset `$2AFB` routine (`21 00 E2 11 ...`), but that routine is not the one reached in the trace.
+- Do not treat the older statement "`$8AFB` is copied RAM and should return to `$4085`" as proven.
+
+Current focused question: should this 16 KiB lower-page Bosconia dump be mirrored into page 2 when the cartridge slot is selected there, or is the local dump/profile unsupported? Avoid changing the shared 16 KiB mirror rule without a hermetic regression, because existing tests intentionally cover both upper-page-entry mirroring and lower-page-only non-mirroring.
 
 ## Likely Next Steps
 
-1. Disassemble Bosconia around copied code `$8AFB` and `$80AD/$80BB`.
-   - `$8AFB` maps to ROM source around file offset `$2AFB`.
-   - `$80AD/$80BB` came from the initial `$6000-$7FFF` to `$8000-$9FFF` copy, so inspect ROM source around `$60AD/$60BB` or file offset `$20AD/$20BB`.
-2. Decide whether the missing return is caused by CPU behavior, BIOS hook/vector behavior, slot/RAM visibility, or interrupt mode handling.
-3. Inspect Z80 implementation if the disassembly points at CPU behavior:
-   - `CALL`, `RET`, `EI`, `IM`, interrupt acknowledge, `LDIR`, `JP (IX)`, `RST 38`.
-   - Likely file: `src/chips/cpu/z80/z80.cpp`.
-4. Add or extend a focused diagnostic only if needed.
-   - Existing golden test supports `MNEMOS_MSX_PC_WATCH`, `MNEMOS_MSX_D800_WATCH`, and `MNEMOS_MSX_VDP_WATCH`.
-   - A configurable RAM watch for `$FD9A-$FD9C` could be useful, but the current trace already proves `$409A` is not reached.
+1. For Bosconia, verify the local dump against a known-good emulator or known-good ROM metadata before changing shared mapping semantics. The local SHA-256 is `1a76d08f33bf927b0e2977c13e62d6f87ece4a2275965c9134a436b852952368`.
+2. If the dump is valid, isolate whether the 16 KiB lower-page mirror rule should be conditional on cartridge hardware/profile rather than global `plain`.
+3. Add a hermetic MSX/MSX2 slot/mirror regression before changing shared cartridge behavior.
+4. Continue MSX2 color triage separately from reset palette: the Bestial MSX2 run ends with palette `[$0000,$009F,$004F,$0000,$0049,$00DB,$016D,$01FF,$01F4,$01AB,$01EB,$01EA,$01F2,$01FA,$01E0,$01D0]`, so software or C-BIOS is actively rewriting palette RAM.
 5. After patching, rerun the focused test slice and explicit player matrix.
 
 ## Relevant Code Surfaces
