@@ -1,0 +1,152 @@
+# Lode Runner IV - Teikoku Karano Dasshutsu -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\Lode-Runner-Teikoku-Karano-Dasshutsu_Arcade_JA.zip -> ldrun4.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun4"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x3c820
+
+[[region.file]]
+name   = "lr4-a-3d"
+offset = 0x0
+size   = 0x4000
+crc32  = 0x86c6d445
+
+[[region.file]]
+name   = "lr4-a-3f"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x097c6c0a
+
+[[region.file]]
+name   = "lr4-a-4d.c"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x298afa36
+
+[[region.file]]
+name   = "lr4-a-4e"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0x5383e9bf
+
+[[region.file]]
+name   = "lr4-b-1l"
+offset = 0x10000
+size   = 0x100
+crc32  = 0x0d89b692
+
+[[region.file]]
+name   = "lr4-b-1m"
+offset = 0x10100
+size   = 0x100
+crc32  = 0x5d8d17d0
+
+[[region.file]]
+name   = "lr4-b-1n"
+offset = 0x10200
+size   = 0x100
+crc32  = 0xda1129d2
+
+[[region.file]]
+name   = "lr4-b-3n"
+offset = 0x10300
+size   = 0x4000
+crc32  = 0xad1fba1b
+
+[[region.file]]
+name   = "lr4-b-4c"
+offset = 0x14300
+size   = 0x4000
+crc32  = 0x82c53669
+
+[[region.file]]
+name   = "lr4-b-4e"
+offset = 0x18300
+size   = 0x4000
+crc32  = 0x767a1352
+
+[[region.file]]
+name   = "lr4-b-4f"
+offset = 0x1c300
+size   = 0x4000
+crc32  = 0x6f0403db
+
+[[region.file]]
+name   = "lr4-b-4k"
+offset = 0x20300
+size   = 0x4000
+crc32  = 0xe7fe620c
+
+[[region.file]]
+name   = "lr4-b-4n"
+offset = 0x24300
+size   = 0x4000
+crc32  = 0x0e568fab
+
+[[region.file]]
+name   = "lr4-b-5p"
+offset = 0x28300
+size   = 0x20
+crc32  = 0xe01f69e2
+
+[[region.file]]
+name   = "lr4-b-6f"
+offset = 0x28320
+size   = 0x100
+crc32  = 0x34d88d3c
+
+[[region.file]]
+name   = "lr4-v-1m"
+offset = 0x28420
+size   = 0x100
+crc32  = 0xfe51bf1d
+
+[[region.file]]
+name   = "lr4-v-1n"
+offset = 0x28520
+size   = 0x100
+crc32  = 0xda0658e5
+
+[[region.file]]
+name   = "lr4-v-1p"
+offset = 0x28620
+size   = 0x100
+crc32  = 0x0df23ebe
+
+[[region.file]]
+name   = "lr4-v-2b"
+offset = 0x28720
+size   = 0x4000
+crc32  = 0x4118e60a
+
+[[region.file]]
+name   = "lr4-v-2c"
+offset = 0x2c720
+size   = 0x4000
+crc32  = 0xc765266c
+
+[[region.file]]
+name   = "lr4-v-2d"
+offset = 0x30720
+size   = 0x4000
+crc32  = 0x542bb5b5
+
+[[region.file]]
+name   = "lr4-v-4h"
+offset = 0x34720
+size   = 0x100
+crc32  = 0xdf674be9
+
+[[region.file]]
+name   = "lr4-v-4k"
+offset = 0x34820
+size   = 0x8000
+crc32  = 0x8b248abd

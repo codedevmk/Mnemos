@@ -1,6 +1,6 @@
 # Irem Mnemos Implementation Inventory
 
-Generated on 2026-06-26 from the Irem board factsheet and the current
+Generated on 2026-06-27 from the Irem board factsheet and the current
 `feature/irem-arcade` worktree.
 
 Primary board taxonomy source:
@@ -15,13 +15,15 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 95 currently match a
-checked-in Mnemos Irem manifest, 87 have a direct player-loadable route through
-ZIP, single-inner wrapper ZIP, or unpacked-folder handling, and 8 tracked `.7z`
-items remain metadata-only until converted or unpacked. No tracked Irem item is
-now contract-only. The common data-gated runner and oracle registry now include
-G6-ratcheted corpus golden tests for every implemented Irem player family:
-M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 104 currently match
+a checked-in Mnemos Irem manifest, 96 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 87 have an
+executable player-supported route. The 9 M62 matches are intentionally tracked
+as contract-only raw-media manifests until an M62 board/player profile exists;
+8 tracked `.7z` items remain metadata-only until converted or unpacked. The
+common data-gated runner and oracle registry now include G6-ratcheted corpus
+golden tests for every implemented Irem player family: M15, M52, M72, M75,
+M81, M82, M84, M90, M92, and M107.
 For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires `D:\emu\irem` into those data-gated tests, including the mixed-root
 M90/M92 wrappers. The strict full-M72 roster gate remains opt-in because it is a
@@ -53,7 +55,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
-| M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
+| M62 | `irem_m62` raw-media contracts | 8% contract-only | `battroad`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
@@ -87,6 +89,9 @@ targets:
   the text layer while mirroring text-layer final positions under flip-screen.
   `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned
   visual/audio SHA-256 oracle for a reference-captured M52 set.
+- M62 now has nine raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
+  load proof, but no executable board/player route. Treat these as corpus
+  grouping and future board-input evidence only.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
@@ -189,12 +194,24 @@ visual and audio parity proof.
 
 - **Techsheet games:** Kung-Fu Master / Spartan X, Kid Niki, Lode Runner,
   Spelunker, Lightning Swords, Youjyuden, The Battle-Road.
-- **Mnemos games:** none.
-- **Smoke playable:** none.
+- **Mnemos games:** contract-only raw-media manifests for `battroad`, `ldrun`,
+  `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, and
+  `youjyudn`.
+- **Smoke playable:** none. `MNEMOS_M62_SET_DIR=D:\emu\irem` data-gates
+  CRC-clean media loading for the nine local single-inner wrapper ZIPs, but
+  there is no executable M62 player route yet.
 - **Correct gfx/music:** none.
-- **Remaining:** implement the large Z80/M6803 board family, dual AY-3-8910,
-  dual MSM5205, KNA custom behavior, title manifests, save-state, and visual/audio
-  parity.
+- **Current implementation:** `src/manifests/irem_m62` embeds raw-media ROM-set
+  contracts generated from the local Lode Runner, Spelunker II, Battle Road, and
+  Youjyuden artifacts. The manifests deliberately map the files into a single
+  `raw_media` region so CRCs, sizes, and set grouping are preserved without
+  pretending to know the final M62 CPU/video/audio bus placement. The focused
+  manifest test checks embedded TOML synchronization, region/file invariants,
+  and optional real-corpus loading through nested wrapper ZIPs.
+- **Remaining:** implement the large Z80/M6803 board family, exact title bus
+  maps, dual AY-3-8910, dual MSM5205, KNA custom video behavior, inputs/DIPs,
+  save-state/player adapter, and visual/audio parity before promoting any M62
+  set from contract-only to smoke playable.
 
 ### M63
 
@@ -251,9 +268,10 @@ visual and audio parity proof.
   `D:\emu\irem\M72\nspirit` folder is incomplete, but the current
   `D:\emu\irem\M72\nspirit.zip` is CRC-complete for both `nspirit` and
   `nspiritj`; the corpus smoke runner now ranks that ZIP ahead of the stale
-  same-name folder and preserves manifest-named top-level folders inside an
-  exact-stem ZIP, so the same archive can smoke both routes. The recursive
-  mixed-corpus roster gate now finds the local `lohtb3` wrapper under
+  same-name folder, preserves manifest-named top-level folders inside an
+  exact-stem ZIP, and keeps the parent source when subsetting clone media, so
+  the same archive can smoke both routes. The recursive mixed-corpus roster gate
+  now finds the local `lohtb3` wrapper under
   `D:\emu\irem\i8751` from the single root `MNEMOS_M72_SET_DIR=D:\emu\irem`;
   the M72 smoke runner's targeted `-Set lohtb3` proof passes through that
   single mixed root with no media-validation issues.
@@ -536,11 +554,14 @@ visual and audio parity proof.
 4. Use the now-passing M72 roster golden as the baseline for the next
    protection/DIP/parity slices; the remaining M72 work is not missing media but
    stronger authenticity proof.
-5. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
+5. Promote M62 from raw-media contracts to a real board/profile route before
+   counting any Lode Runner, Spelunker II, Battle Road, or Youjyuden set as
+   smoke playable.
+6. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
    M72 roster proof. With the switch, the runner prints a checked-in-manifest
    artifact preflight before CTest; without the switch it is the available-artifact proof
    runner for every implemented Irem family.
-6. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
+7. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.
-7. Advance the M92 first-pass profile from diagnostic execution to authenticity
+8. Advance the M92 first-pass profile from diagnostic execution to authenticity
    by resolving encrypted V35 sound-CPU behavior and GA21/GA22 video evidence.

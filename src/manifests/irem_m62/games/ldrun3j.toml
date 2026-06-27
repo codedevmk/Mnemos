@@ -1,0 +1,50 @@
+# Lode Runner III - Golden Labyrinth (Japan) -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\Lode-Runner-Golden-Labyrinth_Arcade_JA.zip -> ldrun3j.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun3j"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x18000
+
+[[region.file]]
+name   = "lr3-a-4b.a"
+offset = 0x0
+size   = 0x4000
+crc32  = 0xbe09031d
+
+[[region.file]]
+name   = "lr3-a-4d.a"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xa84bc931
+
+[[region.file]]
+name   = "lr3-a-4e"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x5b334e8e
+
+[[region.file]]
+name   = "lr3-b-3n"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0xeab7ad91
+
+[[region.file]]
+name   = "lr3-b-4c"
+offset = 0x10000
+size   = 0x4000
+crc32  = 0x1a460a46
+
+[[region.file]]
+name   = "lr3-b-4k"
+offset = 0x14000
+size   = 0x4000
+crc32  = 0x63f070c7

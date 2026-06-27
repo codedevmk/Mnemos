@@ -790,18 +790,28 @@ foreach ($romGroup in $romGroups) {
                 $collectionHasParent = $true
             }
         }
+        $sourceStemMatchesSet = (Test-Path -LiteralPath $sourcePath -PathType Leaf) -and
+            ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath).Equals($setId, [System.StringComparison]::OrdinalIgnoreCase))
+        $sourceStemMatchesParent = (-not [string]::IsNullOrWhiteSpace($parentSetId)) -and
+            (Test-Path -LiteralPath $sourcePath -PathType Leaf) -and
+            ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath).Equals($parentSetId, [System.StringComparison]::OrdinalIgnoreCase))
+
         if ($collectionHasParent) {
-            $null = New-M72CollectionSubsetZip -Path $sourcePath -SetId $parentSetId -OutDir $outDir
+            $parentSubset = New-M72CollectionSubsetZip -Path $sourcePath -SetId $parentSetId -OutDir $outDir
+            if (-not [string]::IsNullOrWhiteSpace($parentSubset)) {
+                $effectiveSources.Add([pscustomobject]@{ Path = $parentSubset; Rank = 10; Source = $sourcePath }) | Out-Null
+            }
         }
         if ($collectionHasSet) {
             $subset = New-M72CollectionSubsetZip -Path $sourcePath -SetId $setId -OutDir $outDir
             if (-not [string]::IsNullOrWhiteSpace($subset)) {
                 $effectiveSources.Add([pscustomobject]@{ Path = $subset; Rank = 0; Source = $sourcePath }) | Out-Null
+                if ($sourceStemMatchesParent) {
+                    $effectiveSources.Add([pscustomobject]@{ Path = $sourcePath; Rank = 10; Source = $sourcePath }) | Out-Null
+                }
                 continue
             }
         }
-        $sourceStemMatchesSet = (Test-Path -LiteralPath $sourcePath -PathType Leaf) -and
-            ([System.IO.Path]::GetFileNameWithoutExtension($sourcePath).Equals($setId, [System.StringComparison]::OrdinalIgnoreCase))
         if (($collectionSets.Count -gt 0) -and (-not $collectionHasSet) -and (-not $sourceStemMatchesSet)) {
             continue
         }

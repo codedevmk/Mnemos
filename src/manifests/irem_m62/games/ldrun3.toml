@@ -1,0 +1,152 @@
+# Lode Runner III - Golden Labyrinth -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\Lode-Runner-Golden-Labyrinth_Arcade_EN.zip -> ldrun3.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun3"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x38820
+
+[[region.file]]
+name   = "lr3-a-3d"
+offset = 0x0
+size   = 0x4000
+crc32  = 0x28be68cd
+
+[[region.file]]
+name   = "lr3-a-3f"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xcb7186b7
+
+[[region.file]]
+name   = "lr3-b-1l"
+offset = 0x8000
+size   = 0x100
+crc32  = 0x5b11c41d
+
+[[region.file]]
+name   = "lr3-b-1m"
+offset = 0x8100
+size   = 0x100
+crc32  = 0xf02d7167
+
+[[region.file]]
+name   = "lr3-b-1n"
+offset = 0x8200
+size   = 0x100
+crc32  = 0x9e37f181
+
+[[region.file]]
+name   = "lr3-b-5p"
+offset = 0x8300
+size   = 0x20
+crc32  = 0xe01f69e2
+
+[[region.file]]
+name   = "lr3-b-6f"
+offset = 0x8320
+size   = 0x100
+crc32  = 0x34d88d3c
+
+[[region.file]]
+name   = "lr3-n-2a"
+offset = 0x8420
+size   = 0x4000
+crc32  = 0xf9b74dee
+
+[[region.file]]
+name   = "lr3-n-2b"
+offset = 0xc420
+size   = 0x4000
+crc32  = 0xaf3d27b9
+
+[[region.file]]
+name   = "lr3-n-2c"
+offset = 0x10420
+size   = 0x4000
+crc32  = 0xfef707ba
+
+[[region.file]]
+name   = "lr3-n-2k"
+offset = 0x14420
+size   = 0x100
+crc32  = 0x047ee051
+
+[[region.file]]
+name   = "lr3-n-2l"
+offset = 0x14520
+size   = 0x100
+crc32  = 0xe880b86b
+
+[[region.file]]
+name   = "lr3-n-2m"
+offset = 0x14620
+size   = 0x100
+crc32  = 0x69ad8678
+
+[[region.file]]
+name   = "lr3-n-4f"
+offset = 0x14720
+size   = 0x100
+crc32  = 0xdf674be9
+
+[[region.file]]
+name   = "lr3a4bb.bin"
+offset = 0x14820
+size   = 0x4000
+crc32  = 0x3d501a1a
+
+[[region.file]]
+name   = "lr3a4db.bin"
+offset = 0x18820
+size   = 0x4000
+crc32  = 0x23a02178
+
+[[region.file]]
+name   = "lr3a4eb.bin"
+offset = 0x1c820
+size   = 0x4000
+crc32  = 0x09affc47
+
+[[region.file]]
+name   = "lr3b3nb.bin"
+offset = 0x20820
+size   = 0x4000
+crc32  = 0xda8cffab
+
+[[region.file]]
+name   = "lr3b4kb.bin"
+offset = 0x24820
+size   = 0x4000
+crc32  = 0x21ecd8c5
+
+[[region.file]]
+name   = "snxb4cb.bin"
+offset = 0x28820
+size   = 0x4000
+crc32  = 0x585aa244
+
+[[region.file]]
+name   = "snxb4eb.bin"
+offset = 0x2c820
+size   = 0x4000
+crc32  = 0x2d3b69dd
+
+[[region.file]]
+name   = "snxb4fb.bin"
+offset = 0x30820
+size   = 0x4000
+crc32  = 0xed719d7b
+
+[[region.file]]
+name   = "snxb4nb.bin"
+offset = 0x34820
+size   = 0x4000
+crc32  = 0xdc675003

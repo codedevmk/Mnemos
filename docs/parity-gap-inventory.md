@@ -398,29 +398,46 @@ scheduled MCS-51 chip before it runs the lit-frame/sound-release proof. This is
 separate from the generic protected golden so no-dump HLE sets cannot satisfy
 the dumped-MCU requirement.
 
+2026-06-27 M72 clone-subset smoke note:
+`scripts/irem_m72/run-corpus-smoke.ps1` now preserves parent media when a
+collection-style ZIP is subset for a clone route. This keeps the `nspiritj`
+subset extracted from `D:\emu\irem\M72\nspirit.zip` paired with the exact-stem
+parent `nspirit.zip`, so clone parent fallback can resolve the shared program,
+graphics, samples, and MCU media instead of reporting a false incomplete clone.
+Targeted proof with
+`scripts\irem_m72\run-corpus-smoke.ps1 -BuildDir build\windows-msvc-debug -Rom D:\emu\irem\M72\nspirit.zip -Set nspiritj`
+passes `1/1`, and the common local corpus runner's trailing M72 smoke now passes
+`4/4`.
+
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
-123 items across `root`, `m72`, `M15`, `M81`, `m82`, `M84`, `M107`, and `i8751`.
-One item matches a checked-in M15 manifest contract, thirty-nine items match
-checked-in playable M72 manifests, five items match checked-in M81 manifest
-contracts, seven items match checked-in M82 manifests, five items match
-checked-in M84 manifest contracts, four items match checked-in M90 manifests,
-twelve items match checked-in M92 manifests, and eight items match checked-in M107
-manifest contracts. The inventory now separates manifest tracking from player
-loadability: 90 items match a checked-in Irem manifest, 84 are loadable through
-current ZIP / single-inner-ZIP / folder
-routes, no tracked item remains contract-only, and six `.7z` matches remain
-metadata-only until they are converted to ZIP or unpacked folders. No sorted
-top-level board bucket is completely untracked anymore; `board_family_candidates`
-now only keeps 8 untracked / misbucketed `M72`-folder items visible instead of
-silently treating them as true-M72 proof. The report also carries per-item
+129 items across `root`, `M15`, `M72`, `M81`, `M82`, `M84`, `M107`, and `i8751`.
+One item matches a checked-in M15 manifest contract, two match checked-in M52
+manifests, nine match checked-in M62 raw-media contracts, forty-four match
+checked-in M72 manifests, seven match checked-in M75 manifests, five match
+checked-in M81 manifest contracts, seven match checked-in M82 manifests, five
+match checked-in M84 manifest contracts, four match checked-in M90 manifests,
+twelve match checked-in M92 manifests, and eight match checked-in M107 manifest
+contracts. The inventory now separates manifest tracking, media loadability, and
+player support: 104 items match a checked-in Irem manifest, 96 are readable
+through current ZIP / single-inner-ZIP / folder routes, 87 are backed by an
+executable player-supported route, 9 M62 items are tracked contract-only, and
+8 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
+sorted top-level board bucket is completely untracked anymore;
+`board_family_candidates` now only keeps 9 untracked / misbucketed
+`M72`-folder items visible instead of silently treating them as true-M72 proof.
+The report also carries per-item
 `tracked_family`, `manifest_parent`, `set_role`, `archive_composition`, and
 `load_readiness` fields plus a `tracked_sets` grouping; this currently separates
 the local Image Fight material into `imgfight` as the M72 parent/standalone set
 with two direct player-loadable routes plus one metadata-only `.7z`, and
 `imgfightj` / `imgfightjb` as clones declaring parent `imgfight`, each with one
 direct player-loadable ZIP route plus one metadata-only `.7z`.
+The same grouping now keeps local M62 Lode Runner, Spelunker II, Battle Road,
+and Youjyuden wrappers as `tracked_contract_only` with `next_action =
+add_board_profile`, so raw-media coverage is not confused with a playable M62
+board profile.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
 M82, M84, M90, M92, and M107. The newest G6 high-water raises cover
@@ -556,6 +573,18 @@ DIP note: `mpatrol` now carries 13 active-high SW1/SW2 DIP entries transcribed
 from the Moon Patrol Instruction Manual. `mpatrolw` inherits the table; the
 adapter folds the factory default to `dsw1=0x01`, `dsw2=0x02`, publishes
 `DIP switches=13`, and still honors explicit `--dip` override.
+
+---
+
+## Irem M62 — 1 / 2
+
+This section is split from M52/M72 so the Lode Runner / Spelunker / Battle Road
+Z80+M6803 hardware is tracked as its own board-family contract instead of being
+folded into neighboring Irem profiles.
+
+#### Manifests / board bring-up
+- [x] **I62-1** Local M62 raw-media ROM-set contracts — `src/manifests/irem_m62` carries checked-in embedded raw-media manifests for `battroad`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `spelunk2`, and `youjyudn`. Each manifest preserves exact local file names, sizes, CRC32 values, and contiguous raw-media offsets without asserting a final CPU/video/audio bus map. `MNEMOS_M62_SET_DIR=D:\emu\irem` data-gates the nine local single-inner wrapper ZIPs and proves they load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies the nine matches as `tracked_contract_only` with `next_action = add_board_profile`, so they are visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m62/games/*.toml` + `src/manifests/irem_m62/tests/m62_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **I62-2** Executable M62 board profile — Implement the real board route for the M62 family: Z80 main CPU, M6803 sound/controller behavior, title-specific memory and I/O maps, dual AY-3-8910, dual MSM5205, KNA custom video/priority, inputs/DIPs, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current raw-media manifests are only artifact contracts and must not be used as proof that Lode Runner, Spelunker II, The Battle-Road, or Youjyuden are playable in Mnemos · HIGH · L · beyond Emu · Evidence needed: `src/manifests/irem_m62/*` board implementation + `src/apps/player/adapters/irem_m62/*` + data-gated player smoke
 
 ---
 
