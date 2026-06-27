@@ -5,7 +5,11 @@ Updated: 2026-06-27 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
-Checkpoint before this handoff commit: `1d43f8f0f91ec89eebe18952dc08c9d1b4611f19`
+Implementation checkpoint before this handoff-only refresh:
+`33be6e40835c81cbe0eefee3eb94de6fcf7f98b6`.
+
+The handoff refresh itself should be the current `HEAD` after the next agent
+runs `git log -1 --oneline --decorate`.
 
 This file is the resume point for the MSX/MSX2 implementation thread. The
 original Codex session ran for roughly 30 hours and should not be used as the
@@ -79,19 +83,19 @@ Active blocker:
 
 ## Current Commits
 
-The latest implementation commits before this handoff are:
+The latest commits before this handoff refresh are:
 
 ```text
+33be6e40 Add MSX diagnostic watch cycle filters
 3b1ba0e5 Refresh MSX2 resume handoff
 1d43f8f0 Add MSX boot slot-state PC diagnostics
 01c489c9 Narrow MSX2 bean ROM diagnostics
 e2fbcd07 Add MSX2 bean ROM trace diagnostics
 2bfd161e Refresh MSX2 resume handoff
-8880b53b Refresh MSX2 resume handoff
 ```
 
-The next commit after `3b1ba0e5` adds min-cycle filters to the diagnostic
-watchers and records the fresh post-handoff trace below.
+`33be6e40` adds min-cycle filters to the diagnostic watchers and records the
+fresh post-handoff trace below.
 
 ## Test And Build Entry Points
 
@@ -396,14 +400,20 @@ page-3 RAM data.
 
 Recommended probes:
 
-1. Continue disassembling `$9471->$96BB` and the `$99CD/$99DB` table path to
+1. Inspect Z80 EI/IRQ timing before changing mapper or VDP behavior. The bad
+   path crosses `EI` at `$8308`, and the next useful source files are:
+   `src/chips/cpu/z80/z80.cpp`, `src/chips/cpu/z80/z80.hpp`,
+   `src/chips/cpu/z80/tests/z80_test.cpp`, and MSX2 IRQ propagation in
+   `src/manifests/msx2/msx2_system.cpp`.
+2. Run a late-cycle PC watch on `$0038-$0038` and `$8308-$8319` to confirm
+   whether an interrupt is accepted between the dispatcher status read and the
+   fourth `$832D` jump.
+3. Continue disassembling `$9471->$96BB` and the `$99CD/$99DB` table path to
    determine whether the `$BFFF` fallthrough is intentional generated-RAM code,
    a page/slot expectation, or a prior-state corruption symptom.
-2. Trace writes to `$C000-$C03F` without the min-cycle filter only as needed,
-   then correlate the writer PC with the `$99DB` data tables.
-3. Trace slot latch transitions immediately before the fourth `$832D` hit.
-4. Continue manual or scratch disassembly under `build\scratch`; no local Z80
-   disassembler was found in PATH.
+4. Trace writes to `$C000-$C03F` without the min-cycle filter only as needed,
+   then correlate the writer PC with the `$99DB` data tables. Existing late
+   memory-watch evidence already shows no writes after cycle 13M.
 5. If a code fix emerges, run the focused Windows validation command above,
    then rerun bounded MSX/MSX2 real-ROM smoke through skip 192 and beyond.
 
