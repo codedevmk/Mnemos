@@ -416,9 +416,9 @@ namespace {
         return {first, last_exclusive};
     }
 
-    template <typename ReadByte>
+    template <typename ReadByte, typename StateSummary>
     void install_pc_range_watch(mnemos::chips::cpu::z80& cpu, ReadByte read,
-                                std::vector<std::string>& events) {
+                                StateSummary state_summary, std::vector<std::string>& events) {
         const auto watch_value = get_env("MNEMOS_MSX_PC_WATCH");
         if (!watch_value) {
             return;
@@ -429,8 +429,9 @@ namespace {
         }
         const auto [range_first, range_last_exclusive] = pc_watch_range_from_env(*watch_value);
 
-        trace->install([read = std::move(read), &events, &cpu, previous_pc = std::uint32_t{},
-                        saw_high_ram = false, range_first, range_last_exclusive](
+        trace->install([read = std::move(read), state_summary = std::move(state_summary), &events,
+                        &cpu, previous_pc = std::uint32_t{}, saw_high_ram = false, range_first,
+                        range_last_exclusive](
                            const mnemos::instrumentation::trace_event& event) mutable {
             const auto current_pc = static_cast<std::uint16_t>(event.pc);
             const auto last_pc = static_cast<std::uint16_t>(previous_pc);
@@ -460,6 +461,7 @@ namespace {
                     << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
                     << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
                     << " ret0=" << hex16(ret0)
+                    << state_summary()
                     << msx_dispatch_work_summary(read)
                     << " ix_window=" << cpu_byte_window_summary(regs.ix, 16U, read)
                     << " sp_window=" << cpu_stack_window_summary(regs.sp, 4U, read)
@@ -2003,6 +2005,35 @@ namespace {
         std::vector<std::string> pc_watch_events;
         install_pc_range_watch(
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->read_memory(address); },
+            [sys = sys.get()] {
+                std::ostringstream out;
+                const std::uint8_t page0_slot =
+                    static_cast<std::uint8_t>(sys->primary_slot_select & 0x03U);
+                const std::uint8_t page1_slot =
+                    static_cast<std::uint8_t>((sys->primary_slot_select >> 2U) & 0x03U);
+                const std::uint8_t page2_slot =
+                    static_cast<std::uint8_t>((sys->primary_slot_select >> 4U) & 0x03U);
+                const std::uint8_t page3_slot =
+                    static_cast<std::uint8_t>((sys->primary_slot_select >> 6U) & 0x03U);
+                auto subslot = [sys](std::uint8_t page, std::uint8_t slot) {
+                    return (sys->expanded_primary_slots & (1U << slot)) != 0U
+                               ? static_cast<std::uint8_t>(
+                                     (sys->secondary_slot_select[slot] >> (page * 2U)) & 0x03U)
+                               : 0U;
+                };
+                out << " slots=[" << static_cast<unsigned>(page0_slot) << '.'
+                    << static_cast<unsigned>(subslot(0U, page0_slot)) << ','
+                    << static_cast<unsigned>(page1_slot) << '.'
+                    << static_cast<unsigned>(subslot(1U, page1_slot)) << ','
+                    << static_cast<unsigned>(page2_slot) << '.'
+                    << static_cast<unsigned>(subslot(2U, page2_slot)) << ','
+                    << static_cast<unsigned>(page3_slot) << '.'
+                    << static_cast<unsigned>(subslot(3U, page3_slot)) << ']'
+                    << " primary=" << hex8(sys->primary_slot_select)
+                    << " secondary3=" << hex8(sys->secondary_slot_select[3])
+                    << " ram_pages=" << ram_mapper_segment_summary(sys->ram_mapper_page);
+                return out.str();
+            },
             pc_watch_events);
         std::vector<mnemos::runtime::scheduled_chip> chips = {
             {&sys->active_video(), 1U}, {&sys->cpu, 1U}, {&sys->psg, 1U}, {&sys->cassette, 1U}};
@@ -2070,6 +2101,34 @@ namespace {
         std::vector<std::string> pc_watch_events;
         install_pc_range_watch(
             sys->cpu, [sys = sys.get()](std::uint16_t address) { return sys->cpu_read(address); },
+            [sys = sys.get()] {
+                std::ostringstream out;
+                const std::uint8_t page0_slot = static_cast<std::uint8_t>(sys->primary_slot & 0x03U);
+                const std::uint8_t page1_slot =
+                    static_cast<std::uint8_t>((sys->primary_slot >> 2U) & 0x03U);
+                const std::uint8_t page2_slot =
+                    static_cast<std::uint8_t>((sys->primary_slot >> 4U) & 0x03U);
+                const std::uint8_t page3_slot =
+                    static_cast<std::uint8_t>((sys->primary_slot >> 6U) & 0x03U);
+                auto subslot = [sys](std::uint8_t page, std::uint8_t slot) {
+                    return sys->expanded_slot[slot]
+                               ? static_cast<std::uint8_t>(
+                                     (sys->secondary_slot[slot] >> (page * 2U)) & 0x03U)
+                               : 0U;
+                };
+                out << " slots=[" << static_cast<unsigned>(page0_slot) << '.'
+                    << static_cast<unsigned>(subslot(0U, page0_slot)) << ','
+                    << static_cast<unsigned>(page1_slot) << '.'
+                    << static_cast<unsigned>(subslot(1U, page1_slot)) << ','
+                    << static_cast<unsigned>(page2_slot) << '.'
+                    << static_cast<unsigned>(subslot(2U, page2_slot)) << ','
+                    << static_cast<unsigned>(page3_slot) << '.'
+                    << static_cast<unsigned>(subslot(3U, page3_slot)) << ']'
+                    << " primary=" << hex8(sys->primary_slot)
+                    << " secondary3=" << hex8(sys->secondary_slot[3])
+                    << " ram_segments=" << ram_mapper_segment_summary(sys->ram_segment);
+                return out.str();
+            },
             pc_watch_events);
         std::vector<mnemos::runtime::scheduled_chip> chips = {{&sys->vdp, 1U},
                                                               {&sys->cpu, 1U},

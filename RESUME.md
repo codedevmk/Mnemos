@@ -108,19 +108,20 @@ work=e12d:$00 e132:$00 e168:$00 e3c5:$44 d800:$00 d801:$00 f3df:$00 fcaf:$01
   events before the 600-frame forced hash dump, and remains alive at `$829D`.
 - Cartridge-filtered writes to `$C000-$C03F` show `bean.rom` writes data-like
   bytes there; it does not install executable code before the `$BFFF` call.
+- A slot-enriched `$BFFF-$C020` trace confirms the failing transition occurs
+  with `slots=[0.0,0.0,1.0,3.2]`, `primary=$D0`, `secondary3=$A0`, and
+  `ram_segments=[3,2,1,0]`. Page 2 is the primary cartridge, while page 3 is
+  RAM segment 0. There is no late slot-select race at the `$99E3->$BFFF` and
+  `$BFFF->$C000` boundary.
 - Do not "fix" this by clearing V9938 S#0 bit 6 on status read. The V9938
   manual says S#0 read resets the F flag; the existing V9938 tests deliberately
   preserve sprite overflow/collision state after an S#0 read.
 
 Current best next probe:
 
-- Add a slot/primary-selection trace around `$99DB`, `$BFFF`, and `$C000`, or
-  extend PC-watch with an MSX/MSX2 machine-state callback, to prove whether the
-  page-3 fall-through is using the intended slot/RAM mapping at the instant of
-  failure.
-- If page 3 is correctly RAM, trace why the V9938 fifth-sprite status selects
-  the `$99DB` script on MSX2 and whether that branch expects a machine profile
-  or mapper behavior Mnemos does not model yet.
+- Trace why the V9938 fifth-sprite status selects the `$99DB` script on MSX2
+  and whether that branch expects a machine profile or mapper behavior Mnemos
+  does not model yet.
 
 Confirmed:
 
