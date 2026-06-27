@@ -101,6 +101,9 @@ namespace mnemos::manifests::irem_m92 {
             if (layout == "m92_b_d") {
                 return 6U;
             }
+            if (layout == "m92_c_b") {
+                return 7U;
+            }
             return 0U;
         }
 
@@ -130,6 +133,8 @@ namespace mnemos::manifests::irem_m92 {
                 return 0x29U;
             case 6U:
                 return 0x4DU;
+            case 7U:
+                return 0x65U;
             default:
                 return 0x23U;
             }
@@ -176,6 +181,12 @@ namespace mnemos::manifests::irem_m92 {
         }
         if (set_name == "hook") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_d_a"};
+        }
+        if (set_name == "lethalth") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "m92_d_a"};
+        }
+        if (set_name == "thndblst") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "m92_c_b"};
         }
         if (set_name == "inthunt" || set_name == "inthuntu") {
             return {.dip_default = 0xFFFFU, .rom_layout = "m92_e_b"};

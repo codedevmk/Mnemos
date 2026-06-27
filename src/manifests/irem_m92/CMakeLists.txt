@@ -10,10 +10,12 @@ set(_irem_m92_game_manifest_files
     "games/hook.toml"
     "games/inthunt.toml"
     "games/inthuntu.toml"
+    "games/lethalth.toml"
     "games/mysticri.toml"
     "games/mysticrib.toml"
     "games/nbbatman.toml"
     "games/nbbatmanu.toml"
+    "games/thndblst.toml"
 )
 set(MNEMOS_IREM_M92_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M92_EMBEDDED_CONSTANTS "")

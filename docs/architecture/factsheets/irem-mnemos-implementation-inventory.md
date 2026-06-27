@@ -15,16 +15,16 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 118 currently match
-a checked-in Mnemos Irem manifest, 109 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 96 have an
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 120 currently match
+a checked-in Mnemos Irem manifest, 111 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 98 have an
 executable player-supported route. The 1 M14 match, 1 M63 match, and 11 M62
 matches are intentionally tracked as contract-only manifests until board/player
 profiles exist; 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
 copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1274/1274` required files present from `D:\emu\irem`, so there are no current
+manifests reports `1314/1314` required files present from `D:\emu\irem`, so there are no current
 file-level missing-artifact rows for the checked-in Irem manifest set. The
 common data-gated runner now includes the M14 and M63 manifest-load proofs plus
 G6-ratcheted corpus golden tests for every implemented Irem player family: M15,
@@ -71,7 +71,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | M84 | `irem_m84` wrapper | 44% | `cosmccop`, `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder, `gallop.zip`, and `cosmccop.zip`; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
 | M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
 | M90 / M97 / M99 | `irem_m90` first-pass | 28% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, board-authentic DIP tables/runtime proof, visual/audio parity |
-| M92 | `irem_m92` | 45% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu` | all 15 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Mystic Riders, and Ninja Baseball Bat Man direct nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
+| M92 | `irem_m92` | 45% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `thndblst` | all 17 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Lethal Thunder/Thunder Blaster, Mystic Riders, and Ninja Baseball Bat Man nonblank/save-state data-gated smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 56% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
@@ -113,7 +113,8 @@ targets:
   service/test input proof, and Vigilante manual-backed DIP defaults.
   M92 currently covers the complete local GunForce parent wrapper plus the local
   US/Japan split clone wrappers, Blade Master parent/Japan clone, Gunforce 2 /
-  Geostorm, In the Hunt parent/US clone, the Mystic Riders parent/Japan/bootleg
+  Geostorm, In the Hunt parent/US clone, Lethal Thunder parent/Japan clone,
+  the Mystic Riders parent/Japan/bootleg
   wrappers through clone-parent fallback, plus Ninja Baseball Bat Man parent and
   US split-wrapper routes.
   M84 now includes V35-profile `ltswords`, `gallop`, and `cosmccop` routes;
@@ -327,7 +328,9 @@ visual and audio parity proof.
   present when checking `nspirit` and `nspiritj` from that ZIP. Exact scans of
   `D:\emu\irem\M72\lohtj.zip` plus `D:\emu\irem\M72\loht.zip` report `20/20`
   for `lohtj`, and `D:\emu\irem\M72\lohtb2.zip` plus `D:\emu\irem\M72\loht.zip`
-  report `30/30` for `lohtb2`. The player manifest now aliases the local
+  report `30/30` for `lohtb2`; the current exact `.7z` check of
+  `D:\emu\irem\M72\lohtj.7z`, `D:\emu\irem\M72\lohtb2.7z`, and the parent
+  `loht.zip` reports `50/50`. The player manifest now aliases the local
   `loht.zip` parent/shared filenames used by those clone routes, and targeted
   `gallopm72` / `lohtj` / `lohtb2` corpus smoke passes `3/3`.
 - **Current mixed-archive scan evidence:** the M72 artifact scanner now skips
@@ -517,14 +520,16 @@ visual and audio parity proof.
 
 ### M92
 
-- **Techsheet games:** Gunforce, R-Type Leo, In the Hunt, Undercover Cops,
+- **Techsheet games:** Gunforce, Lethal Thunder / Thunder Blaster, R-Type Leo,
+  In the Hunt, Undercover Cops,
   Ninja Baseball Bat Man, Blade Master, Mystic Riders, Major Title 2, Hook,
   Superior/Perfect Soldiers, Gunforce 2.
 - **Mnemos games:** `bmaster`, `crossbld`, `geostorm`, `gunforce`,
   `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`,
-  `inthuntu`, `mysticri`, `mysticrib`, `nbbatman`, and `nbbatmanu`
+  `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`,
+  and `thndblst`
   as checked-in manifests under `irem_m92`.
-- **Smoke playable:** all fifteen local wrapper ZIPs load through `--system
+- **Smoke playable:** all seventeen local wrapper ZIPs load through `--system
   irem_m92`/the M92 adapter data gate, step one frame, produce a 320x240
   nonblank diagnostic frame, and produce save-state bytes. `crossbld`,
   `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`, `gunhohki`,
@@ -543,12 +548,13 @@ visual and audio parity proof.
   `soundcpu_opcodes` decrypted V35 opcode image while data reads still see the
   raw encrypted `soundcpu` ROM. This is still not the proprietary M92 V35
   decrypt transform/key, cycle-exact interrupt latency, or audio parity.
-- **Local corpus note:** fifteen local M92-era title-wrapper ZIPs now resolve to
+- **Local corpus note:** seventeen local M92-era title-wrapper ZIPs now resolve to
   embedded set IDs and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
   parent/Japan clone (`bmaster`, `crossbld`), Gunforce parent
   (`gunforce`), Gunforce Japan/US split clones (`gunforcej`, `gunforceu`) via
   parent fallback, Gunforce 2 / Geostorm (`gunforc2`, `geostorm`), Hook
-  (`hook`), In the Hunt parent/US clone (`inthunt`, `inthuntu`), Mystic Riders
+  (`hook`), In the Hunt parent/US clone (`inthunt`, `inthuntu`), Lethal Thunder
+  parent/Japan clone (`lethalth`, `thndblst`) via parent fallback, Mystic Riders
   (`mysticri`), Gun Hohki (`gunhohki`), the Mystic Riders split bootleg route
   (`mysticrib`), Ninja Baseball Bat Man (`nbbatman`), and the US split clone
   (`nbbatmanu`) via parent fallback. In the current sorted corpus, older M92

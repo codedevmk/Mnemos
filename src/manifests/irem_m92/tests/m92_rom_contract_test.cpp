@@ -37,6 +37,8 @@ namespace {
         std::size_t sprites_size{};
         std::size_t samples_size{};
         std::uint8_t players{2U};
+        mnemos::manifests::common::screen_orientation orientation{
+            mnemos::manifests::common::screen_orientation::horizontal};
     };
 
     [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>&
@@ -67,6 +69,11 @@ namespace {
              {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x080000U}},
             {"inthuntu",
              {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x080000U}},
+            {"lethalth",
+             {.tiles_size = 0x100000U,
+              .sprites_size = 0x100000U,
+              .samples_size = 0x040000U,
+              .orientation = mnemos::manifests::common::screen_orientation::vertical}},
             {"mysticri",
              {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x040000U}},
             {"mysticrib",
@@ -81,6 +88,11 @@ namespace {
               .sprites_size = 0x400000U,
               .samples_size = 0x080000U,
               .players = 4U}},
+            {"thndblst",
+             {.tiles_size = 0x100000U,
+              .sprites_size = 0x100000U,
+              .samples_size = 0x040000U,
+              .orientation = mnemos::manifests::common::screen_orientation::vertical}},
         };
         return contracts;
     }
@@ -406,8 +418,7 @@ TEST_CASE("m92 checked-in game manifests parse and cover local candidate corpus"
         INFO("set=" << set_name);
         names.insert(decl.name);
         CHECK(checked_decl.board == "irem_m92");
-        CHECK(checked_decl.orientation ==
-              mnemos::manifests::common::screen_orientation::horizontal);
+        CHECK(checked_decl.orientation == contract.orientation);
         REQUIRE(checked_decl.sound.has_value());
         CHECK(*checked_decl.sound == "encrypted_v35");
         CHECK(checked_decl.players == contract.players);

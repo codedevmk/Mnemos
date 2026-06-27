@@ -35,7 +35,7 @@ uncertain rather than assert it.
 | M85 | 1990 | NEC V30 | Pound for Pound |
 | M90 | 1991–1992 | NEC V35 (single board) | Bomber Man / Dyna Blaster |
 | M97 / M99 | 1992–1993 | NEC V35 (M90 variants) | (sparse) |
-| M92 | 1991–1994 | NEC V33 + V35 | Gunforce, In the Hunt, R-Type Leo |
+| M92 | 1991–1994 | NEC V33 + V35 | Gunforce, Lethal Thunder / Thunder Blaster, In the Hunt, R-Type Leo |
 | M107 | 1993–1995 | NEC V33 + V35 | Fire Barrel, Dream Soccer '94 |
 | M119 | ~2000 | (sparse / isolated) | — |
 
@@ -239,9 +239,9 @@ era, but CPU family alone is not sufficient board proof.
 - **Sound chips:** YM2151 (OPM) @ 3.579545 MHz + **Irem GA20** PCM @ 3.579545 MHz
 - **Graphics customs:** NANAO `GA21` & `GA22`
 - **Display:** 320×240, up to 32,768 colours (15-bit); up to 4 players, 6 buttons
-- **Notable titles:** Gunforce, R-Type Leo, In the Hunt, Undercover Cops,
-  Ninja Baseball Bat Man, Blade Master, Mystic Riders, Major Title 2,
-  Hook, Superior/Perfect Soldiers, Gunforce 2
+- **Notable titles:** Gunforce, Lethal Thunder / Thunder Blaster, R-Type Leo,
+  In the Hunt, Undercover Cops, Ninja Baseball Bat Man, Blade Master,
+  Mystic Riders, Major Title 2, Hook, Superior/Perfect Soldiers, Gunforce 2
 - **Notes:** Irem's mature 16-bit platform. The GA20 PCM chip replaces the older
   ADPCM approach and becomes the house sample engine through the end.
 

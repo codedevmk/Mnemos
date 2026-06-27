@@ -267,7 +267,9 @@ Follow-up scan of the exact current M72 paths
 contains both the World `nin_c-pr-b.ic1` MCU (`0x0f7b2713`) and the Japan
 `nspiritj/nin_c-pr-.ic1` MCU (`0x802d440a`), while `gallopm72.zip` contains
 `cc_c-pr-.ic1` (`0xac4421b1`). Exact scans of `lohtj.zip` plus `loht.zip`
-report `20/20`, and `lohtb2.zip` plus `loht.zip` report `30/30`. The manifests
+report `20/20`, and `lohtb2.zip` plus `loht.zip` report `30/30`; the current
+exact `.7z` check of `lohtj.7z`, `lohtb2.7z`, and the parent `loht.zip`
+reports `50/50`. The manifests
 now alias the local `loht.zip` parent/shared filenames used by those clone
 routes, and targeted `gallopm72` / `lohtj` / `lohtb2` corpus smoke passes
 `3/3`.
@@ -420,10 +422,10 @@ forty-six match
 checked-in M72 manifests, eight match checked-in M75 manifests, five match
 checked-in M81 manifest contracts, ten match checked-in M82 manifests, six
 match checked-in M84 manifest contracts, four match checked-in M90 manifests,
-fifteen match checked-in M92 manifests, and eight match checked-in M107 manifest
+seventeen match checked-in M92 manifests, and eight match checked-in M107 manifest
 contracts. The inventory now separates manifest tracking, media loadability, and
-player support: 118 items match a checked-in Irem manifest, 109 are readable
-through current ZIP / single-inner-ZIP / folder routes, 96 are backed by an
+player support: 120 items match a checked-in Irem manifest, 111 are readable
+through current ZIP / single-inner-ZIP / folder routes, 98 are backed by an
 executable player-supported route, the 1 M14 item, 1 M63 item, and 11 M62 items
 are tracked contract-only, and
 9 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
@@ -435,7 +437,7 @@ copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping, and the local Air Duel M82 parent/US clone wrappers now
 route through `irem_m82`. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1274/1274` required files present from
+manifests reports `1314/1314` required files present from
 `D:\emu\irem`, so there are no current file-level missing-artifact rows to list
 for those manifests.
 The report also carries per-item
@@ -536,12 +538,12 @@ graphics/music-authentic proof.
 M92 now has checked-in manifests plus a first-pass executable V33/V35 board and
 player adapter for `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`,
 `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`,
-`mysticri`, `mysticrib`, `nbbatman`, and `nbbatmanu`;
-`MNEMOS_M92_SET_DIR=D:\emu\irem` proves the fifteen local title-wrapper ZIPs load
+`lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, and `thndblst`;
+`MNEMOS_M92_SET_DIR=D:\emu\irem` proves the seventeen local title-wrapper ZIPs load
 CRC-clean, produce 320x240 nonblank diagnostic frames, and save state through
 the M92 adapter, including clone-parent fallback for the local Gunforce Japan/US
 split wrappers, Blade Master Japan, Geostorm, In the Hunt US, Mystic Riders
-Japan/bootleg split wrappers, and Ninja Baseball Bat Man US split wrapper. They remain
+Japan/bootleg split wrappers, Lethal Thunder Japan, and Ninja Baseball Bat Man US split wrapper. They remain
 diagnostic, not graphics/music-authentic, until encrypted V35 sound CPU handling
 and GA21/GA22 video behavior are proven.
 M15, M82, M84, M90, M92, and M107 now have executable board/profile layers, but all
@@ -756,8 +758,8 @@ GA25 graphics custom.
 
 ## Irem M92 — 1 / 2
 
-- [x] **I92-1** Local M92 ROM-set contract — `src/manifests/irem_m92` carries checked-in embedded ROM-contract manifests for `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `mysticri`, `mysticrib`, `nbbatman`, and `nbbatmanu`, including declared 1 MiB main program regions, 128 KiB encrypted V35 sound-program regions, tile/sprite/sample/PLD regions, cabinet metadata, local wrapper-ZIP CRCs, and clone-parent inheritance for the local Blade Master Japan, Gunforce Japan/US, Geostorm, In the Hunt US, Mystic Riders Japan/bootleg, and Ninja Baseball Bat Man US split sets. `MNEMOS_M92_SET_DIR=D:\emu\irem` data-gates the sorted local title-wrapper ZIPs and proves all fifteen load CRC-clean; `scripts/irem/inventory-corpus.ps1` now records fifteen direct player-loadable M92 matches across the mixed `M72` bucket and root wrappers rather than treating those split clones as unsupported board-family candidates · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m92/games/*.toml` + `src/manifests/irem_m92/tests/m92_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1`
-- [~] **I92-2** Executable M92 board profile — `src/manifests/irem_m92` now assembles a first-pass M92-owned V-series shell with the main CPU configured as NEC V33 at 9 MHz, the sound CPU configured as NEC V35 at 14.318181 MHz, a 320x240 / 60.011 Hz raster contract, M92 work/video/sprite/palette RAM windows, sound RAM, memory-mapped YM2151/GA20/latch/reply windows, input/DIP ports, whole-board save/load identity, and an M92-local diagnostic video path driven by the checked-in tile/sprite/PLD/sample regions plus board RAM. The modeled sound-command path now tracks pending command/reply state, asserts the V35 command IRQ through INTP1/vector 25 on main V33 writes, leaves latch reads non-acknowledging, clears command pending only on sound-side writes to `$a8044`, routes YM2151 Timer A through INTP0/vector 24, saves those bits in board-state version 3, and has synthetic V33-to-V35 command/reply proof through the IRQ handler, latch acknowledge, reply port, and sound RAM; simultaneous pending YM/command IRQs prefer INTP0 before INTP1, followed by proof that a still-pending command IRQ is serviced through INTP1 after the YM2151 source is cleared. The V30/V33/V35 core now fetches instruction bytes through the bus opcode path, and M92 can map an optional `soundcpu_opcodes` decrypted V35 opcode image over the 20-bit sound-bus fetch path while ordinary data reads still see the raw encrypted `soundcpu` ROM. `src/apps/player/adapters/irem_m92` registers `--system irem_m92` / `m92`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, clone-parent fallback beside the selected set path, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M92_SET_DIR=D:\emu\irem`; all fifteen checked-in sets step one frame, produce nonblank 320x240 diagnostic output, and emit save-state bytes, with direct `mnemos_player` screenshot/save-state smokes for `crossbld`, `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`, `gunhohki`, `mysticrib`, `nbbatman`, and `nbbatmanu`. Remaining: derive/verify the proprietary encrypted V35 decrypt transform/key and sound protocol, cycle-exact V35 interrupt latency, exact M92 memory/I/O behavior, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP behavior, raster timing, protection details, and authentic screenshot/audio parity before calling the profile authentic · PARTIAL · HIGH · L · beyond Emu · Evidence: `src/chips/cpu/v30/v30.cpp` + `src/chips/audio/irem_ga20/irem_ga20.cpp` + `src/manifests/irem_m92/m92_system.cpp` + `src/manifests/irem_m92/tests/m92_system_test.cpp` + `src/apps/player/adapters/irem_m92/irem_m92_adapter.cpp` + `src/apps/player/adapters/irem_m92/tests/irem_m92_adapter_test.cpp`
+- [x] **I92-1** Local M92 ROM-set contract — `src/manifests/irem_m92` carries checked-in embedded ROM-contract manifests for `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, and `thndblst`, including declared 1 MiB main program regions, 128 KiB encrypted V35 sound-program regions, tile/sprite/sample/PLD regions, cabinet metadata, local wrapper-ZIP CRCs, and clone-parent inheritance for the local Blade Master Japan, Gunforce Japan/US, Geostorm, In the Hunt US, Lethal Thunder Japan/Thunder Blaster, Mystic Riders Japan/bootleg, and Ninja Baseball Bat Man US split sets. `MNEMOS_M92_SET_DIR=D:\emu\irem` data-gates the sorted local title-wrapper ZIPs and proves all seventeen load CRC-clean; `scripts/irem/inventory-corpus.ps1` now records seventeen direct player-loadable M92 matches across the mixed `M72` bucket and root wrappers rather than treating those split clones as unsupported board-family candidates · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m92/games/*.toml` + `src/manifests/irem_m92/tests/m92_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [~] **I92-2** Executable M92 board profile — `src/manifests/irem_m92` now assembles a first-pass M92-owned V-series shell with the main CPU configured as NEC V33 at 9 MHz, the sound CPU configured as NEC V35 at 14.318181 MHz, a 320x240 / 60.011 Hz raster contract, M92 work/video/sprite/palette RAM windows, sound RAM, memory-mapped YM2151/GA20/latch/reply windows, input/DIP ports, whole-board save/load identity, and an M92-local diagnostic video path driven by the checked-in tile/sprite/PLD/sample regions plus board RAM. The modeled sound-command path now tracks pending command/reply state, asserts the V35 command IRQ through INTP1/vector 25 on main V33 writes, leaves latch reads non-acknowledging, clears command pending only on sound-side writes to `$a8044`, routes YM2151 Timer A through INTP0/vector 24, saves those bits in board-state version 3, and has synthetic V33-to-V35 command/reply proof through the IRQ handler, latch acknowledge, reply port, and sound RAM; simultaneous pending YM/command IRQs prefer INTP0 before INTP1, followed by proof that a still-pending command IRQ is serviced through INTP1 after the YM2151 source is cleared. The V30/V33/V35 core now fetches instruction bytes through the bus opcode path, and M92 can map an optional `soundcpu_opcodes` decrypted V35 opcode image over the 20-bit sound-bus fetch path while ordinary data reads still see the raw encrypted `soundcpu` ROM. `src/apps/player/adapters/irem_m92` registers `--system irem_m92` / `m92`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, clone-parent fallback beside the selected set path, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M92_SET_DIR=D:\emu\irem`; all seventeen checked-in sets step one frame, produce nonblank 320x240 diagnostic output, and emit save-state bytes, with direct `mnemos_player` screenshot/save-state smokes for `crossbld`, `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`, `gunhohki`, `mysticrib`, `nbbatman`, and `nbbatmanu`, plus data-gated Lethal Thunder / Thunder Blaster parent-fallback proof. Remaining: derive/verify the proprietary encrypted V35 decrypt transform/key and sound protocol, cycle-exact V35 interrupt latency, exact M92 memory/I/O behavior, GA21/GA22 video and priority behavior, GA20 analog balance/filtering, DIP behavior, raster timing, protection details, and authentic screenshot/audio parity before calling the profile authentic · PARTIAL · HIGH · L · beyond Emu · Evidence: `src/chips/cpu/v30/v30.cpp` + `src/chips/audio/irem_ga20/irem_ga20.cpp` + `src/manifests/irem_m92/m92_system.cpp` + `src/manifests/irem_m92/tests/m92_system_test.cpp` + `src/apps/player/adapters/irem_m92/irem_m92_adapter.cpp` + `src/apps/player/adapters/irem_m92/tests/irem_m92_adapter_test.cpp`
 
 ## Irem M107 — 1 / 2
 
