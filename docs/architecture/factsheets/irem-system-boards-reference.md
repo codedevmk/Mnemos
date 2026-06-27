@@ -106,7 +106,8 @@ uncertain rather than assert it.
 ### M63
 - **Years:** 1984–1985
 - **Main CPU:** Zilog Z80
-- **Sound:** Irem Audio (AY-3-8910 + MSM5205 lineage)
+- **Sound:** Intel 8039-class sound CPU with AY-3-8910 / sample-discrete path
+  evidence on Wily Tower
 - **Notable titles:** Wily Tower, Fighting Basketball
 - **Notes:** Minor late-8-bit board; sparse documentation.
 

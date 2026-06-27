@@ -153,6 +153,11 @@ multiple independent open-source implementations.
   driver metadata classifies it with the M62 Z80/M6803-era family; Mnemos records
   it as a contract-only M62 raw-media set rather than treating folder placement
   as board proof. No MAME driver code or ROM bytes are copied into Mnemos.
+- **Irem M63 ROM-set metadata** — the checked-in `wilytowr` manifest uses public
+  Irem M63 driver metadata for Wily Tower dump filenames, region sizes, offsets,
+  CRC-32s, orientation, and board-family classification. The local wrapper remains
+  contract-only until an executable M63 board route exists. No MAME driver code
+  or ROM bytes are copied into Mnemos.
 - **Irem M72 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m72/games/` use public MAME M72 driver metadata for dump
   filenames, offsets, reloads, CRC-32s, parent/clone relationships, cabinet

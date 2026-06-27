@@ -1,0 +1,198 @@
+# Wily Tower -- Irem M63 ROM-contract manifest.
+# Schema mnemos-romset/1. This preserves public M63 ROM placement for the local
+# Wily Tower wrapper without claiming an executable M63 board profile yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "wilytowr"
+board       = "irem_m63"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "wt4e.bin"
+aliases = ["wilytowr/wt4e.bin"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0xa38e4b8a
+
+[[region.file]]
+name    = "wt4h.bin"
+aliases = ["wilytowr/wt4h.bin"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0xc1405ceb
+
+[[region.file]]
+name    = "wt4j.bin"
+aliases = ["wilytowr/wt4j.bin"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0x379fb1c3
+
+[[region.file]]
+name    = "wt4k.bin"
+aliases = ["wilytowr/wt4k.bin"]
+offset  = 0x6000
+size    = 0x2000
+crc32   = 0x2dd6f9c7
+
+[[region.file]]
+name    = "wt_a-4m.bin"
+aliases = ["wilytowr/wt_a-4m.bin"]
+offset  = 0x8000
+size    = 0x2000
+crc32   = 0xc1f8a7d5
+
+[[region.file]]
+name    = "wt_a-4n.bin"
+aliases = ["wilytowr/wt_a-4n.bin"]
+offset  = 0xa000
+size    = 0x2000
+crc32   = 0xb212f7d2
+
+[[region]]
+name = "soundcpu"
+size = 0x1000
+
+[[region.file]]
+name    = "wt4d.bin"
+aliases = ["wilytowr/wt4d.bin"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x25a171bf
+
+[[region]]
+name = "gfx1"
+size = 0x2000
+
+[[region.file]]
+name    = "wt_b-5e.bin"
+aliases = ["wilytowr/wt_b-5e.bin"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xfe45df43
+
+[[region.file]]
+name    = "wt_b-5f.bin"
+aliases = ["wilytowr/wt_b-5f.bin"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0x87a17eff
+
+[[region]]
+name = "gfx2"
+size = 0x6000
+
+[[region.file]]
+name    = "wtb5a.bin"
+aliases = ["wilytowr/wtb5a.bin"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0xefc1cbfa
+
+[[region.file]]
+name    = "wtb5b.bin"
+aliases = ["wilytowr/wtb5b.bin"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0xab4bfd07
+
+[[region.file]]
+name    = "wtb5d.bin"
+aliases = ["wilytowr/wtb5d.bin"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0x40f23e1d
+
+[[region]]
+name = "gfx3"
+size = 0x6000
+
+[[region.file]]
+name    = "wt2j.bin"
+aliases = ["wilytowr/wt2j.bin"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xd1bf0670
+
+[[region.file]]
+name    = "wt3k.bin"
+aliases = ["wilytowr/wt3k.bin"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0x83c39a0e
+
+[[region.file]]
+name    = "wt_a-3m.bin"
+aliases = ["wilytowr/wt_a-3m.bin"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0xe7e468ae
+
+[[region.file]]
+name    = "wt_a-3n.bin"
+aliases = ["wilytowr/wt_a-3n.bin"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0x0741d1a9
+
+[[region.file]]
+name    = "wt_a-3p.bin"
+aliases = ["wilytowr/wt_a-3p.bin"]
+offset  = 0x4000
+size    = 0x1000
+crc32   = 0x7299f362
+
+[[region.file]]
+name    = "wt_a-3s.bin"
+aliases = ["wilytowr/wt_a-3s.bin"]
+offset  = 0x5000
+size    = 0x1000
+crc32   = 0x9b37d50d
+
+[[region]]
+name = "user1"
+size = 0x2000
+
+[[region.file]]
+name    = "wt_a-6d.bin"
+aliases = ["wilytowr/wt_a-6d.bin"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xa5dde29b
+
+[[region]]
+name = "proms"
+size = 0x0320
+
+[[region.file]]
+name    = "wt_a-5s-.bpr"
+aliases = ["wilytowr/wt_a-5s-.bpr"]
+offset  = 0x0000
+size    = 0x0100
+crc32   = 0x041950e7
+
+[[region.file]]
+name    = "wt_a-5r-.bpr"
+aliases = ["wilytowr/wt_a-5r-.bpr"]
+offset  = 0x0100
+size    = 0x0100
+crc32   = 0xbc04bf25
+
+[[region.file]]
+name    = "wt_a-5p-.bpr"
+aliases = ["wilytowr/wt_a-5p-.bpr"]
+offset  = 0x0200
+size    = 0x0100
+crc32   = 0xed819a19
+
+[[region.file]]
+name    = "wt_b-9l-.bpr"
+aliases = ["wilytowr/wt_b-9l-.bpr"]
+offset  = 0x0300
+size    = 0x0020
+crc32   = 0xd2728744

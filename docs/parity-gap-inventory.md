@@ -415,16 +415,17 @@ ignores archive-only container folders as unpacked sets, and currently reports
 129 items across `root`, `M15`, `M72`, `M81`, `M82`, `M84`, `M107`, and `i8751`.
 One item matches a checked-in M14 manifest contract, one item matches a checked-in
 M15 manifest contract, two match checked-in M52 manifests, eleven match
-checked-in M62 raw-media contracts, forty-six match
+checked-in M62 raw-media contracts, one matches a checked-in M63 ROM contract,
+forty-six match
 checked-in M72 manifests, eight match checked-in M75 manifests, five match
 checked-in M81 manifest contracts, ten match checked-in M82 manifests, six
 match checked-in M84 manifest contracts, four match checked-in M90 manifests,
 fifteen match checked-in M92 manifests, and eight match checked-in M107 manifest
 contracts. The inventory now separates manifest tracking, media loadability, and
-player support: 117 items match a checked-in Irem manifest, 108 are readable
+player support: 118 items match a checked-in Irem manifest, 109 are readable
 through current ZIP / single-inner-ZIP / folder routes, 96 are backed by an
-executable player-supported route, the 1 M14 item and 11 M62 items are tracked
-contract-only, and
+executable player-supported route, the 1 M14 item, 1 M63 item, and 11 M62 items
+are tracked contract-only, and
 9 `.7z` matches remain metadata-only until converted to ZIP or unpacked folders. No
 sorted top-level board bucket is completely untracked anymore;
 `board_family_candidates` is now empty for the sorted top-level buckets. The
@@ -434,7 +435,7 @@ copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping, and the local Air Duel M82 parent/US clone wrappers now
 route through `irem_m82`. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1251/1251` required files present from
+manifests reports `1274/1274` required files present from
 `D:\emu\irem`, so there are no current file-level missing-artifact rows to list
 for those manifests.
 The report also carries per-item
@@ -451,14 +452,17 @@ board profile.
 The local M14 grouping now tracks `D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip`
 as contract-only `ptrmj` with `next_action = add_board_profile`, so P.T. Reach
 Mahjong is no longer an unclassified root item.
+The local M63 grouping now tracks `D:\emu\irem\Wily-Tower_Arcade_EN.zip` as
+contract-only `wilytowr` with `next_action = add_board_profile`, so Wily Tower
+is no longer an unclassified root item.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract moves
-the local Lot Lot wrapper out of `classify_or_sort_corpus_item`, reducing the
-current root rows from 15 to 12.
+the local Lot Lot wrapper out of `classify_or_sort_corpus_item`; with M63 added,
+the current root classify/sort rows are down to 11.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
-M82, M84, M90, M92, and M107, and also reports the M14 manifest-only
-data gate separately. The newest G6 high-water raises cover
+M82, M84, M90, M92, and M107, and also reports the M14 and M63 manifest-only
+data gates separately. The newest G6 high-water raises cover
 `GLD-M15-CORPUS`, `GLD-M52-CORPUS`, `GLD-M81-CORPUS`, `GLD-M82-CORPUS`,
 `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
@@ -619,6 +623,18 @@ folded into neighboring Irem profiles.
 #### Manifests / board bring-up
 - [x] **I62-1** Local M62 raw-media ROM-set contracts — `src/manifests/irem_m62` carries checked-in embedded raw-media manifests for `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, and `youjyudn`. Each manifest preserves exact local file names, sizes, CRC32 values, and contiguous raw-media offsets without asserting a final CPU/video/audio bus map. `MNEMOS_M62_SET_DIR=D:\emu\irem` data-gates the eleven local single-inner wrapper ZIPs and proves they load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies the eleven matches as `tracked_contract_only` with `next_action = add_board_profile`, so they are visible in the corpus inventory without being counted as executable player support; the local `D:\emu\irem\M72\Horizon_Arcade_EN.zip` wrapper is intentionally tracked here as M62 evidence, not true-M72 proof · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m62/games/*.toml` + `src/manifests/irem_m62/tests/m62_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
 - [ ] **I62-2** Executable M62 board profile — Implement the real board route for the M62 family: Z80 main CPU, M6803 sound/controller behavior, title-specific memory and I/O maps, dual AY-3-8910, dual MSM5205, KNA custom video/priority, inputs/DIPs, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current raw-media manifests are only artifact contracts and must not be used as proof that Lode Runner, Lot Lot, Spelunker II, The Battle-Road, or Youjyuden are playable in Mnemos · HIGH · L · beyond Emu · Evidence needed: `src/manifests/irem_m62/*` board implementation + `src/apps/player/adapters/irem_m62/*` + data-gated player smoke
+
+---
+
+## Irem M63 — 1 / 2
+
+This section is split from M62/M72 so Wily Tower and Fighting Basketball stay
+tracked as sparse late-8-bit M63 evidence instead of inheriting a neighboring
+board profile.
+
+#### Manifests / board bring-up
+- [x] **I63-1** Local M63 Wily Tower ROM-set contract — `src/manifests/irem_m63` carries a checked-in embedded ROM-contract manifest for `wilytowr`, preserving the local Wily Tower filenames, region sizes, offsets, and CRC32 values for `maincpu`, `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`. `MNEMOS_M63_SET_DIR=D:\emu\irem` data-gates the local single-inner wrapper ZIP `D:\emu\irem\Wily-Tower_Arcade_EN.zip` and proves it loads CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` classifies the match as `tracked_contract_only` with `next_action = add_board_profile`, so Wily Tower is visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m63/games/wilytowr.toml` + `src/manifests/irem_m63/tests/m63_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **I63-2** Executable M63 board profile — Implement the real board route for the M63 family: Z80 main CPU, 8039-class sound CPU behavior, AY/sample/discrete audio path, tile/sprite/video/color-PROM behavior, inputs/DIPs, Fighting Basketball manifest coverage, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current `wilytowr` manifest is only an artifact contract and must not be used as proof that Wily Tower is playable in Mnemos · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_m63/*` board implementation + `src/apps/player/adapters/irem_m63/*` + data-gated player smoke
 
 ---
 

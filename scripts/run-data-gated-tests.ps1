@@ -29,6 +29,7 @@
 #   MNEMOS_M52_PARITY_FRAME_SHA256  expected final RGBA framebuffer SHA-256 for MNEMOS_M52_PARITY_SET
 #   MNEMOS_M52_PARITY_AUDIO_SHA256  expected interleaved s16le rendered-audio SHA-256 for MNEMOS_M52_PARITY_SET
 #   MNEMOS_M52_PARITY_FRAMES  frame count for the M52 parity hash golden (default: 600)
+#   MNEMOS_M63_SET_DIR        path-list of dirs with M63 zips/dirs/wrappers -> irem_m63 manifest load proof
 #   MNEMOS_M75_SET_DIR        path-list of dirs with M75 zips/dirs/wrappers -> irem_m75 manifest/player smoke
 #   MNEMOS_M81_SET_DIR        path-list of dirs with M81 zips/dirs/wrappers -> irem_m81 manifest/player smoke
 #   MNEMOS_M82_SET_DIR        path-list of dirs with M82 R-Type II zips/dirs/wrappers -> irem_m82 smoke
@@ -83,6 +84,7 @@ $vars = @(
     @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest/player smoke" },
     @{ Name = "MNEMOS_M52_SET_DIR";      Test = "irem_m52 manifest/player smoke" },
     @{ Name = "MNEMOS_M52_PARITY_SET"; Test = "irem_m52 visual/audio parity hash golden" },
+    @{ Name = "MNEMOS_M63_SET_DIR";      Test = "irem_m63 manifest load proof" },
     @{ Name = "MNEMOS_M75_SET_DIR";      Test = "irem_m75 manifest/player smoke" },
     @{ Name = "MNEMOS_M81_SET_DIR";      Test = "irem_m81 manifest/player smoke" },
     @{ Name = "MNEMOS_M82_SET_DIR";      Test = "irem_m82 R-Type II smoke" },
@@ -109,7 +111,7 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(14|15|52|75|81|82|84|90|92|107)_test|irem_m15_.*golden|irem_m52_.*golden|irem_m72_.*golden|irem_m75_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden|irem_m90_.*golden|irem_m92_.*golden|irem_m107_.*golden"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(14|15|52|63|75|81|82|84|90|92|107)_test|irem_m15_.*golden|irem_m52_.*golden|irem_m72_.*golden|irem_m75_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden|irem_m90_.*golden|irem_m92_.*golden|irem_m107_.*golden"
 $ctestExit = $LASTEXITCODE
 if ($ctestExit -ne 0) {
     exit $ctestExit
