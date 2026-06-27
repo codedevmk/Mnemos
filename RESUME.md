@@ -82,6 +82,7 @@ Active blocker:
 The latest implementation commits before this handoff are:
 
 ```text
+3b1ba0e5 Refresh MSX2 resume handoff
 1d43f8f0 Add MSX boot slot-state PC diagnostics
 01c489c9 Narrow MSX2 bean ROM diagnostics
 e2fbcd07 Add MSX2 bean ROM trace diagnostics
@@ -89,8 +90,8 @@ e2fbcd07 Add MSX2 bean ROM trace diagnostics
 8880b53b Refresh MSX2 resume handoff
 ```
 
-The handoff commit that contains this file should be the next commit after
-`1d43f8f0`.
+The next commit after `3b1ba0e5` adds min-cycle filters to the diagnostic
+watchers and records the fresh post-handoff trace below.
 
 ## Test And Build Entry Points
 
@@ -135,6 +136,12 @@ current blocker:
 - PC-watch output also includes `ix_window=...` and `sp_window=...` windows.
 - `MNEMOS_MSX_VDP_IO_WATCH_KIND=read|write|all` filters VDP I/O tracing.
 - `MNEMOS_MSX_MEM_WATCH` captures memory accesses for selected ranges.
+- New post-handoff filters suppress firmware warmup so real-ROM diagnostics can
+  reach the cartridge window without exhausting event caps:
+  `MNEMOS_MSX_PC_WATCH_MIN_CYCLES`,
+  `MNEMOS_MSX_MEM_WATCH_MIN_CYCLES`,
+  `MNEMOS_MSX_VDP_IO_WATCH_MIN_CYCLES`, and shared fallback
+  `MNEMOS_MSX_WATCH_MIN_CYCLES`.
 
 Scratch logs from the current investigation were intentionally left under:
 
@@ -144,6 +151,7 @@ build\scratch\msx-bean-diagnostics\focused-20260627\
 build\scratch\msx-bean-diagnostics\matrix-20260627\
 build\scratch\msx-bean-diagnostics\slot-factor-20260627\
 build\scratch\msx-bean-diagnostics\enriched-pcwatch-20260627\
+build\scratch\msx-bean-diagnostics\resume-20260627\
 ```
 
 These logs are not committed.
@@ -301,6 +309,50 @@ Result summary:
 
 The matrix rules out a simple profile-only fix.
 
+## Post-Handoff Trace Update
+
+The current diagnostic harness was rebuilt and rerun with:
+
+```text
+MNEMOS_MSX_PC_WATCH=$832D-$832D
+MNEMOS_MSX_PC_WATCH_MIN_CYCLES=13000000
+```
+
+The four cartridge-time `$832D` dispatches are now captured without early
+firmware noise:
+
+```text
+cycles=14093336 hl=$833C ix=$8330 work=e12d:$00 e132:$00 e168:$00 e3c5:$C4 fcaf:$01
+cycles=14563107 hl=$8D8A ix=$8D7E work=e12d:$00 e132:$00 e168:$00 e3c5:$C4 fcaf:$01
+cycles=14563449 hl=$9471 ix=$9465 work=e12d:$00 e132:$00 e168:$00 e3c5:$44 fcaf:$01
+cycles=14564893 hl=$99DB ix=$99CF work=e12d:$00 e132:$00 e168:$00 e3c5:$44 fcaf:$01
+```
+
+Additional ROM search found `bean.rom` writes `$E3C5` at `$8305` but has no
+`LD A,($E3C5)` or other direct read of that address in the ROM image. The VDP
+status values are useful timing evidence, but this specific bad path is not a
+direct status-byte branch.
+
+The `$9471` script resets several work pointers and jumps to `$96BB`; after it
+returns, the dispatcher promotes `IX` from the first word of the `$9463` table:
+`[$9463]=$99CD`. The next loop adds `DE=2`, reads `$99CF`, and dispatches
+`$99DB`.
+
+A late memory watch with:
+
+```text
+MNEMOS_MSX_MEM_WATCH=$C000-$C03F
+MNEMOS_MSX_MEM_WATCH_MIN_CYCLES=13000000
+```
+
+captured no writes. The `$C000` page-3 RAM bytes are prepared before cycle 13M
+and are static by the bad `$BFFF` call. The final halt remains:
+
+```text
+cpu pc/sp/af/bc/de/hl: $CA3E/$E6FF/$5FBA/$0101/$5F01/$66B8 halted=true
+boot framebuffer sha256: 9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573
+```
+
 ## Repro Environment
 
 MSX2 forced diagnostic base:
@@ -344,9 +396,11 @@ page-3 RAM data.
 
 Recommended probes:
 
-1. Trace `$823D` and `$829D` with enriched `IX` and stack windows.
-2. Compare writes/reads of scheduler/work variables `$E12D`, `$E132`, `$E168`,
-   `$E3C5`, and any table base selected into `IX`.
+1. Continue disassembling `$9471->$96BB` and the `$99CD/$99DB` table path to
+   determine whether the `$BFFF` fallthrough is intentional generated-RAM code,
+   a page/slot expectation, or a prior-state corruption symptom.
+2. Trace writes to `$C000-$C03F` without the min-cycle filter only as needed,
+   then correlate the writer PC with the `$99DB` data tables.
 3. Trace slot latch transitions immediately before the fourth `$832D` hit.
 4. Continue manual or scratch disassembly under `build\scratch`; no local Z80
    disassembler was found in PATH.
