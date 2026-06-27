@@ -15,18 +15,18 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 ```
 
 That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 122 currently match
-a checked-in Mnemos Irem manifest, 113 are readable through the current ZIP,
+`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 123 currently match
+a checked-in Mnemos Irem manifest, 114 are readable through the current ZIP,
 single-inner wrapper ZIP, or unpacked-folder media routes, and 98 have an
-executable player-supported route. The 1 M14 match, 2 M47 matches, 1 M63 match, and 11 M62
+executable player-supported route. The 1 M14 match, 1 M27 match, 2 M47 matches, 1 M63 match, and 11 M62
 matches are intentionally tracked as contract-only manifests until board/player
 profiles exist; 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
 copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
 their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
 inventory grouping. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1345/1345` required files present from `D:\emu\irem`, so there are no current
+manifests reports `1354/1354` required files present from `D:\emu\irem`, so there are no current
 file-level missing-artifact rows for the checked-in Irem manifest set. The
-common data-gated runner now includes the M14, M47, and M63 manifest-load proofs plus
+common data-gated runner now includes the M14, M27, M47, and M63 manifest-load proofs plus
 G6-ratcheted corpus golden tests for every implemented Irem player family: M15,
 M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
@@ -58,6 +58,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
 | M14 | `irem_m14` ROM contract | 8% contract-only | `ptrmj` | None; CRC-clean media-load contract only | None | Executable 8085 M14 board profile, video/color, paddle/ball/input behavior, discrete/sample sound, save-state/player adapter, visual/audio parity |
+| M27 | `irem_m27` ROM contract | 8% contract-only | `panther` | None; CRC-clean media-load contract only | None | Executable M27 board profile, video/color, inputs/DIPs, sound behavior, save-state/player adapter, visual/audio parity |
 | M47 | `irem_m47` ROM contract | 8% contract-only | `olibochu`, `punchkid` | None; CRC-clean media-load contract only | None | Executable Z80 + Z80 M47 board profile, video/color, AY/sample sound, inputs/DIPs, save-state/player adapter, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
@@ -97,6 +98,8 @@ targets:
   `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned
   visual/audio SHA-256 oracle for a reference-captured M52 set.
 - M14 has a single `ptrmj` ROM contract with CRC-clean local wrapper proof, but
+  no executable board/player route.
+- M27 has a single `panther` ROM contract with CRC-clean local wrapper proof, but
   no executable board/player route.
 - M47 now has Oli-Boo-Chu and Punching Kid ROM contracts with CRC-clean local
   wrapper proof, including clone-parent inheritance for the split Japan set, but
@@ -161,6 +164,24 @@ visual and audio parity proof.
 - **Remaining:** implement the NEC D8085AC/8085 board route, M14 memory and I/O
   map, raster/color behavior, paddle/ball/input behavior, sparse discrete or
   sample sound, save-state/player adapter, and visual/audio parity.
+
+### M27
+
+- **Techsheet games:** Panther.
+- **Mnemos games:** contract-only ROM manifest for `panther`.
+- **Smoke playable:** none. `MNEMOS_M27_SET_DIR=D:\emu\irem` data-gates
+  CRC-clean loading for `D:\emu\irem\Panther_Arcade_EN.zip`, which unwraps to
+  `panther.zip`, but there is no executable M27 player route yet.
+- **Correct gfx/music:** none.
+- **Current implementation:** `src/manifests/irem_m27` embeds the local
+  `panther` ROM-set contract with public M27 `maincpu`, `gfx1`, and `proms`
+  region placement, exact local filenames, directory-prefixed aliases for the
+  nested wrapper, sizes, and CRC32 values. The focused test checks embedded TOML
+  synchronization, region/file invariants, and optional real-corpus loading
+  through `D:\emu\irem\Panther_Arcade_EN.zip`.
+- **Remaining:** implement the M27 board route, CPU memory and I/O map,
+  raster/color behavior, input/DIP behavior, sound behavior, save-state/player
+  adapter, and visual/audio parity.
 
 ### M47
 
@@ -640,16 +661,18 @@ visual and audio parity proof.
    stronger authenticity proof.
 5. Promote M63 Wily Tower from ROM contract to an executable board/profile route
    before counting it as smoke playable.
-6. Promote M47 Oli-Boo-Chu / Punching Kid from ROM contracts to an executable
+6. Promote M27 Panther from ROM contract to an executable board/profile route
+   before counting it as smoke playable.
+7. Promote M47 Oli-Boo-Chu / Punching Kid from ROM contracts to an executable
    board/profile route before counting either set as smoke playable.
-7. Promote M62 from raw-media contracts to a real board/profile route before
+8. Promote M62 from raw-media contracts to a real board/profile route before
    counting any Lode Runner, Spelunker II, Battle Road, or Youjyuden set as
    smoke playable.
-8. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
+9. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
    M72 roster proof. With the switch, the runner prints a checked-in-manifest
    artifact preflight before CTest; without the switch it is the available-artifact proof
    runner for every implemented Irem family.
-9. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
+10. Advance M90 from a diagnostic V35/Z80/YM/DAC shell to authentic GA25 video
    once complete graphics media and board evidence are available.
-10. Advance the M92 first-pass profile from diagnostic execution to authenticity
+11. Advance the M92 first-pass profile from diagnostic execution to authenticity
    by resolving encrypted V35 sound-CPU behavior and GA21/GA22 video evidence.

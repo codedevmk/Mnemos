@@ -1,0 +1,85 @@
+# Panther -- Irem M27 ROM contract.
+# Local wrapper: D:\emu\irem\Panther_Arcade_EN.zip -> panther.zip.
+# Region names, offsets, sizes, and CRCs follow public Irem M27 set metadata;
+# executable M27 board timing, color, video, inputs, and sound behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "panther"
+board       = "irem_m27"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "qr-1.bin"
+aliases = ["panther/qr-1.bin"]
+offset  = 0x0000
+size    = 0x0800
+crc32   = 0x406dc606
+
+[[region.file]]
+name    = "qr-2.bin"
+aliases = ["panther/qr-2.bin"]
+offset  = 0x0800
+size    = 0x0800
+crc32   = 0xe7e64b11
+
+[[region.file]]
+name    = "qr-3.bin"
+aliases = ["panther/qr-3.bin"]
+offset  = 0x1000
+size    = 0x0800
+crc32   = 0xdfec33f2
+
+[[region.file]]
+name    = "qr-4.bin"
+aliases = ["panther/qr-4.bin"]
+offset  = 0x1800
+size    = 0x0800
+crc32   = 0x60571aa0
+
+[[region.file]]
+name    = "qr-5.bin"
+aliases = ["panther/qr-5.bin"]
+offset  = 0x2000
+size    = 0x0800
+crc32   = 0x2ac19b54
+
+[[region.file]]
+name    = "qr-6.bin"
+aliases = ["panther/qr-6.bin"]
+offset  = 0x2800
+size    = 0x0800
+crc32   = 0x02fbd9d9
+
+[[region.file]]
+name    = "qr-7.bin"
+aliases = ["panther/qr-7.bin"]
+offset  = 0x3000
+size    = 0x0800
+crc32   = 0xb3e2d6cc
+
+[[region]]
+name = "gfx1"
+size = 0x0800
+
+[[region.file]]
+name    = "q7a.bin"
+aliases = ["panther/q7a.bin"]
+offset  = 0x0000
+size    = 0x0800
+crc32   = 0xfebd1674
+
+[[region]]
+name = "proms"
+size = 0x0200
+
+[[region.file]]
+name    = "6349-1j-8026.1a"
+aliases = ["panther/6349-1j-8026.1a"]
+offset  = 0x0000
+size    = 0x0200
+crc32   = 0xea9c2ada

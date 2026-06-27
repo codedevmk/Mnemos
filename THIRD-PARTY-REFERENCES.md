@@ -146,6 +146,12 @@ multiple independent open-source implementations.
   classification. The local wrapper remains contract-only until an executable
   M14 board route exists. No MAME driver code or ROM bytes are copied into
   Mnemos.
+- **Irem M27 ROM-set metadata** — the checked-in `panther` manifest uses public
+  Irem M27 driver metadata for Panther dump filenames, main CPU, graphics, and
+  PROM region offsets, region sizes, CRC-32s, orientation, and board-family
+  classification. The local wrapper remains contract-only until an executable
+  M27 board route exists. No MAME driver code or ROM bytes are copied into
+  Mnemos.
 - **Irem M47 ROM-set metadata** — the checked-in `olibochu` and `punchkid`
   manifests use public Irem M47 driver metadata for Oli-Boo-Chu and Punching
   Kid dump filenames, parent/clone relationship, region sizes, offsets, CRC-32s,
