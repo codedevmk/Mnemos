@@ -112,6 +112,8 @@ namespace mnemos::manifests::msx2 {
 
         msx2_cartridge_mapper cart_mapper{msx2_cartridge_mapper::plain};
         msx2_cartridge_mapper cart2_mapper{msx2_cartridge_mapper::plain};
+        bool cartridge_lower_handoff{};
+        bool cartridge2_lower_handoff{};
 
         // PPI primary slot select: two bits per 16 KiB page.
         std::uint8_t primary_slot{0x00U};

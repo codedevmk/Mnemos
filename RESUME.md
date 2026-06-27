@@ -62,6 +62,58 @@ Do not mark the goal complete until both MSX and MSX2 have ROM-backed player
 proof across representative cartridge paths, and the known Bosconia/color
 issues are resolved or explicitly triaged with accepted scope.
 
+## Latest Continuation
+
+2026-06-27 progress:
+
+- Added MSX2 lower-page C-BIOS-style handoff for 32 KiB plain cartridges,
+  matching the already-present MSX behavior.
+- The lower handoff remains gated per cartridge via
+  `msx_plain_32k_lower_handoff_required`; this does not loosen the 16 KiB
+  plain-cartridge mirroring rule.
+- Added a focused MSX2 regression proving page 1 can remain BIOS-selected while
+  page 2 is cartridge-selected, and the lower ROM page is only exposed after
+  the cartridge-specific lower-handoff latch is enabled.
+- Reordered MSX2 `read_slot` so the handoff check runs before BIOS/RAM dispatch,
+  which is required for lower-page BIOS-selected handoff to be observable.
+- Downloaded current MAME `hash/msx1_cart.xml` to
+  `build\scratch\mame-msx1-cart.xml`. MAME lists Star Destroyer Bosconian as
+  32 KiB entries with SHA1s `451cbb072011b26a7e0bc9931e67995a71f5fd6f`,
+  `33ad6d1bf1fb816b232ea706d149327e363c7b21`, and
+  `0bf7b432dc132f9a7bc74106261bca07d5f99690`; those do not match the local
+  16 KiB `Bosconia.rom` captured below.
+
+Validation for this continuation:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx2_test'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx_test|mnemos_manifests_msx2_test" --output-on-failure'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_player'
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && ctest --preset windows-msvc-debug -R "msx|MSX|tms9918a|v9938|mnemos_apps_player_system_launch_test|mnemos_apps_player_capability_summary_test" --output-on-failure'
+```
+
+Results:
+
+```text
+mnemos_manifests_msx_test passed
+mnemos_manifests_msx2_test passed
+focused MSX/MSX2/VDP/player slice passed: 12/12 tests
+```
+
+Explicit player proof from
+`build\scratch\msx2-lower-handoff-proof\20260627-verify`:
+
+```text
+msx  Boing-b.rom      --mapper plain    frames=600  exit=0  renders game prompt path, PC=$4D9E
+msx  Bosconia.rom     --mapper plain    frames=600  exit=0  still C-BIOS logo, PC=$108B
+msx2 ASHGUINZ.rom     --mapper generic8 frames=600  exit=0  renders Zemina logo
+msx2 Bestial Warrior (Dinamic) (1989) (Version ROM del juego, creada por Kabish).rom
+     --mapper ascii8  frames=600  exit=0  renders title art, color fidelity still suspect
+```
+
+The older short path `D:\emu\msx\MSX files [ROM]\Bestial Warrior.rom` was not
+readable in this process; the full local filename above worked.
+
 ## Canonical Build And Test Commands
 
 Per `README.md`, use the Windows MSVC preset from a Visual Studio developer

@@ -506,31 +506,48 @@ namespace mnemos::manifests::msx2 {
 
     std::uint8_t msx2_system::plain_32k_handoff_cart_slot(std::uint8_t slot, std::uint8_t subslot,
                                                           std::uint16_t address) const noexcept {
-        if (!slot_selected(slot, subslot, ram_primary_slot, ram_secondary_slot)) {
+        const bool ram_selected = slot_selected(slot, subslot, ram_primary_slot, ram_secondary_slot);
+        const bool bios_selected = (slot & 0x03U) == 0U && subslot == 0U;
+        if (!ram_selected && !bios_selected) {
             return k_no_cartridge_slot;
         }
 
+        const bool lower_window =
+            common::msx_plain_32k_lower_rom_window(common::msx_cartridge_mapper_kind::plain,
+                                                   0x8000U, address);
         const bool upper_window =
             common::msx_plain_32k_upper_rom_window(common::msx_cartridge_mapper_kind::plain,
                                                    0x8000U, address);
-        if (!upper_window) {
+        if (!lower_window && !upper_window) {
             return k_no_cartridge_slot;
         }
 
-        const std::uint8_t page1_slot = slot_for_page(0x4000U);
-        const std::uint8_t page1_subslot = secondary_for_page(page1_slot, 0x4000U);
-        const std::uint8_t page1_cart_slot = cartridge_slot_index(page1_slot, page1_subslot);
-        if (page1_cart_slot == k_no_cartridge_slot) {
+        const std::uint16_t reference_address = lower_window ? 0x8000U : 0x4000U;
+        const std::uint8_t reference_slot = slot_for_page(reference_address);
+        const std::uint8_t reference_subslot =
+            secondary_for_page(reference_slot, reference_address);
+        const std::uint8_t reference_cart_slot =
+            cartridge_slot_index(reference_slot, reference_subslot);
+        if (reference_cart_slot == k_no_cartridge_slot) {
             return k_no_cartridge_slot;
         }
 
-        const bool primary_cart = page1_cart_slot == 0U;
+        const bool primary_cart = reference_cart_slot == 0U;
         const auto active_mapper = primary_cart ? cart_mapper : cart2_mapper;
         const auto& rom = primary_cart ? cartridge : cartridge2;
-        return common::msx_plain_32k_upper_rom_window(mapper_kind(active_mapper), rom.size(),
-                                                      address)
-                   ? page1_cart_slot
-                   : k_no_cartridge_slot;
+        const bool lower_handoff =
+            primary_cart ? cartridge_lower_handoff : cartridge2_lower_handoff;
+        if (lower_window && !lower_handoff) {
+            return k_no_cartridge_slot;
+        }
+
+        const bool in_partner_window =
+            lower_window
+                ? common::msx_plain_32k_lower_rom_window(mapper_kind(active_mapper), rom.size(),
+                                                         address)
+                : common::msx_plain_32k_upper_rom_window(mapper_kind(active_mapper), rom.size(),
+                                                         address);
+        return in_partner_window ? reference_cart_slot : k_no_cartridge_slot;
     }
 
     bool msx2_system::plain_16k_lower_page_visible(std::uint8_t slot_index) const noexcept {
@@ -565,6 +582,11 @@ namespace mnemos::manifests::msx2 {
             return static_cast<std::uint8_t>(secondary_slot[slot & 0x03U] ^ 0xFFU);
         }
 
+        const std::uint8_t handoff_cart_slot = plain_32k_handoff_cart_slot(slot, subslot, address);
+        if (handoff_cart_slot != k_no_cartridge_slot) {
+            return read_cartridge(handoff_cart_slot, address);
+        }
+
         if ((slot & 0x03U) == 0U && subslot == 0U) {
             if (address < 0x8000U && address < bios.size()) {
                 return bios[address];
@@ -597,11 +619,6 @@ namespace mnemos::manifests::msx2 {
             return read_cartridge(1U, address);
         }
         if (slot_selected(slot, subslot, ram_primary_slot, ram_secondary_slot)) {
-            const std::uint8_t handoff_cart_slot = plain_32k_handoff_cart_slot(slot, subslot,
-                                                                               address);
-            if (handoff_cart_slot != k_no_cartridge_slot) {
-                return read_cartridge(handoff_cart_slot, address);
-            }
             return read_ram(address);
         }
         return 0xFFU;
@@ -998,6 +1015,10 @@ namespace mnemos::manifests::msx2 {
         s->ram.resize(rounded_ram_size(config.ram_size));
         s->cart_mapper = resolve_cartridge_mapper(config.cartridge_mapper, s->cartridge);
         s->cart2_mapper = resolve_cartridge_mapper(config.cartridge2_mapper, s->cartridge2);
+        s->cartridge_lower_handoff =
+            common::msx_plain_32k_lower_handoff_required(s->cartridge);
+        s->cartridge2_lower_handoff =
+            common::msx_plain_32k_lower_handoff_required(s->cartridge2);
         s->korean_mapper.set_variant(korean_variant(s->cart_mapper));
         s->korean_mapper.attach_rom(s->cartridge);
         s->korean_mapper.reset(chips::reset_kind::power_on);

@@ -303,6 +303,26 @@ TEST_CASE("msx2 C-BIOS-style plain 32 KiB handoff exposes the upper ROM page",
     CHECK(sys->bus.read8(0x8000U) == 0x22U);
 }
 
+TEST_CASE("msx2 C-BIOS-style plain 32 KiB lower handoff is gated per cartridge",
+          "[manifests][msx2][mapper]") {
+    std::vector<std::uint8_t> bios(0x8000U, 0x00U);
+    bios[0x4000U] = 0x99U;
+    std::vector<std::uint8_t> cart(0x8000U, 0xFFU);
+    cart[0] = 0x11U;
+    cart[0x4000U] = 0x22U;
+
+    const auto sys = assemble_msx2(bios, cart);
+    REQUIRE(sys != nullptr);
+
+    select_primary_slots(*sys, 0xD0U); // page 1 -> BIOS, page 2 -> cartridge
+    CHECK(sys->bus.read8(0x4000U) == 0x99U);
+    CHECK(sys->bus.read8(0x8000U) == 0x22U);
+
+    sys->cartridge_lower_handoff = true;
+    CHECK(sys->bus.read8(0x4000U) == 0x11U);
+    CHECK(sys->bus.read8(0x8000U) == 0x22U);
+}
+
 TEST_CASE("msx2 C-BIOS-style handoff leaves non-32 KiB plain cartridges unmapped",
           "[manifests][msx2][mapper]") {
     const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
