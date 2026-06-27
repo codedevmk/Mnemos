@@ -25,7 +25,8 @@ M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107.
 For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires `D:\emu\irem` into those data-gated tests, including the mixed-root
 M90/M92 wrappers. The strict full-M72 roster gate remains opt-in because it is a
-data-heavy player proof, but the current M72 artifact preflight is clean.
+data-heavy player proof, and the current M72 artifact preflight plus
+`MNEMOS_M72_SET_DIR=D:\emu\irem` roster CTest are clean.
 
 ## Status Terms
 
@@ -54,7 +55,7 @@ data-heavy player proof, but the current M72 artifact preflight is clean.
 | M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
 | M62 | none | 0% | None | None | None | Z80 + M6803 + dual AY/MSM audio stack, KNA customs, large game roster |
 | M63 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
-| M72 | `irem_m72` | 70% | 23 checked-in manifests | 20 clean smoke-proven sets; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, full roster media, visual/audio parity |
+| M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
 | M75 | `irem_m75` first-pass | 32% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg parent-fallback coverage |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
@@ -74,7 +75,7 @@ The closest current player routes are useful smoke targets, not final parity
 targets:
 
 - M72 has the strongest current game-level route: full V30/Z80/YM2151/video/DAC
-  wiring, scanline composition, and 20 clean local smoke sets.
+  wiring, scanline composition, and 23 clean local smoke sets.
 - M52 now has a Moon Patrol ROM-contract/player route for the local parent and
   Williams clone wrappers, but video remains a diagnostic first-pass path rather
   than authentic parallax/road behavior. Audio now routes modeled AY/MSM writes
@@ -214,17 +215,19 @@ visual and audio parity proof.
   `nspirit`, `nspiritj`, `rtype`, `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`,
   `xmultiplm72`.
 - **Smoke playable / media-clean local proof:** `airdueljm72`, `airduelm72`,
-  `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `imgfight`, `imgfightj`,
-  `imgfightjb`, `loht`, `lohtb3`, `mrheli`, `nspirit`, `nspiritj`, `rtype`,
-  `rtypeb`, `rtypej`, `rtypejp`, `rtypeu`, `xmultiplm72`.
+  `bchopper`, `dbreedjm72`, `dbreedm72`, `dkgensanm72`, `gallopm72`,
+  `imgfight`, `imgfightj`, `imgfightjb`, `loht`, `lohtb2`, `lohtb3`, `lohtj`,
+  `mrheli`, `nspirit`, `nspiritj`, `rtype`, `rtypeb`, `rtypej`, `rtypejp`,
+  `rtypeu`, `xmultiplm72`.
 - **Oracle proof:** G6 high-water now records `GLD-M72-RTYPE`,
   `GLD-M72-PROTECTED`, `GLD-M72-PROTECTED-AUDIO`,
   `GLD-M72-PROTECTED-MCU`, and `GLD-M72-VERTICAL` as passed with
   `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`,
   `D:\emu\irem\M72\nspirit.zip`, and
-  `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-PARITY-HASH` now exists
-  as an opt-in final-frame/audio SHA-256 ratchet and remains skipped until
-  trusted reference hashes are supplied; `GLD-M72-ROSTER` also remains skipped.
+  `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` now passes with
+  `MNEMOS_M72_SET_DIR=D:\emu\irem` using its default 900-frame roster window.
+  `GLD-M72-PARITY-HASH` now exists as an opt-in final-frame/audio SHA-256
+  ratchet and remains skipped until trusted reference hashes are supplied.
 - **Dumped-MCU protected proof:** `MNEMOS_M72_PROTECTED_MCU_SET` points at a
   protected true-M72 set that must contain a real MCU dump; the local
   `D:\emu\irem\M72\nspirit.zip` route passes this golden and proves the adapter
@@ -241,11 +244,10 @@ visual and audio parity proof.
   turn that parity evidence into a deterministic CTest assertion.
 - **Current local artifact proof:** no checked-in M72 manifest artifact is
   currently missing from `D:\emu\irem`: the full M72 artifact preflight reports
-  `417/417` present. The optional full-roster CTest is still not current proof:
-  with `MNEMOS_M72_SET_DIR=D:\emu\irem` it selects incomplete/wrapper routes or
-  same-directory-only parent fallbacks for several sets, so source ranking /
-  supplemental media composition must be fixed before treating that gate as a
-  one-command roster pass. The stale unpacked
+  `417/417` present. The optional full-roster CTest is now current proof: with
+  `MNEMOS_M72_SET_DIR=D:\emu\irem`, it passes with its default 900-frame window
+  through the source-ranking and supplemental-media routes for every checked-in
+  true-M72 manifest. The stale unpacked
   `D:\emu\irem\M72\nspirit` folder is incomplete, but the current
   `D:\emu\irem\M72\nspirit.zip` is CRC-complete for both `nspirit` and
   `nspiritj`; the corpus smoke runner now ranks that ZIP ahead of the stale
@@ -531,11 +533,9 @@ visual and audio parity proof.
    analog behavior.
 3. Resolve the M82/M84 R-Type II classification mismatch with board evidence and
    adjust manifests/docs if needed.
-4. Fix the M72 roster-golden source ranking / supplemental-media composition,
-   then rerun the one-command full roster proof. The current artifact preflight
-   is clean and the formerly blocked `gallopm72` / `lohtj` / `lohtb2` targeted
-   smoke passes `3/3`, but `MNEMOS_M72_SET_DIR=D:\emu\irem` still picks
-   incomplete routes for several sets.
+4. Use the now-passing M72 roster golden as the baseline for the next
+   protection/DIP/parity slices; the remaining M72 work is not missing media but
+   stronger authenticity proof.
 5. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
    M72 roster proof. With the switch, the runner prints a checked-in-manifest
    artifact preflight before CTest; without the switch it is the available-artifact proof

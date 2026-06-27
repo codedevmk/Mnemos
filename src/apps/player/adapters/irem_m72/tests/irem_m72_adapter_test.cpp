@@ -1382,6 +1382,7 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
     // are accepted.
     // Clone sets use the resolved source directory for parent fallback.
     // MNEMOS_M72_ROSTER_FRAMES can raise or lower the per-set warm-up window.
+    // The default covers late sound-release paths such as Air Duel.
     // MNEMOS_M72_ROSTER_SET can narrow the run to a comma-separated set list
     // for focused local diagnostics while keeping the same source resolution.
     const char* dir_env = opt_env("MNEMOS_M72_SET_DIR");
@@ -1424,7 +1425,7 @@ TEST_CASE("irem_m72_adapter validates the checked-in true-M72 ROM roster",
         FAIL("missing M72 roster artifacts: " << missing.str());
     }
 
-    const int warmup_frames = env_positive_int("MNEMOS_M72_ROSTER_FRAMES", 600);
+    const int warmup_frames = env_positive_int("MNEMOS_M72_ROSTER_FRAMES", 900);
     for (const std::string& set_name : roster_sets) {
         INFO("set=" << set_name);
         const auto decl = require_embedded_decl(set_name);
