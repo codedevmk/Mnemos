@@ -548,6 +548,34 @@ namespace {
         return pc >= first && pc < last_exclusive;
     }
 
+    [[nodiscard]] const char*
+    v9938_mode_name(mnemos::chips::video::v9938::display_mode mode) noexcept {
+        using display_mode = mnemos::chips::video::v9938::display_mode;
+        switch (mode) {
+        case display_mode::graphics_i:
+            return "graphics_i";
+        case display_mode::text_i:
+            return "text_i";
+        case display_mode::text_ii:
+            return "text_ii";
+        case display_mode::multicolor:
+            return "multicolor";
+        case display_mode::graphics_ii:
+            return "graphics_ii";
+        case display_mode::graphics_iii:
+            return "graphics_iii";
+        case display_mode::graphics_iv:
+            return "graphics_iv";
+        case display_mode::graphics_v:
+            return "graphics_v";
+        case display_mode::graphics_vi:
+            return "graphics_vi";
+        case display_mode::graphics_vii:
+            return "graphics_vii";
+        }
+        return "unknown";
+    }
+
     template <typename ReadByte>
     void append_msx_vdp_io_event(const char* kind, std::uint16_t port, std::uint8_t value,
                                  const mnemos::chips::cpu::z80& cpu, ReadByte& read,
@@ -594,9 +622,13 @@ namespace {
             << " bc=" << hex16(regs.bc) << " de=" << hex16(regs.de)
             << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
             << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
+            << " frame=" << vdp.frame_index() << " mode=" << v9938_mode_name(vdp.mode())
             << " r0=" << hex8(vdp.reg(0)) << " r1=" << hex8(vdp.reg(1))
-            << " r2=" << hex8(vdp.reg(2)) << " r7=" << hex8(vdp.reg(7))
-            << " r15=" << hex8(vdp.reg(15)) << " e12d=" << hex8(read(0xE12DU))
+            << " r2=" << hex8(vdp.reg(2)) << " r5=" << hex8(vdp.reg(5))
+            << " r6=" << hex8(vdp.reg(6)) << " r7=" << hex8(vdp.reg(7))
+            << " r8=" << hex8(vdp.reg(8)) << " r9=" << hex8(vdp.reg(9))
+            << " r11=" << hex8(vdp.reg(11)) << " r15=" << hex8(vdp.reg(15))
+            << " r23=" << hex8(vdp.reg(23)) << " e12d=" << hex8(read(0xE12DU))
             << " e3c5=" << hex8(read(0xE3C5U))
             << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
         events.push_back(out.str());

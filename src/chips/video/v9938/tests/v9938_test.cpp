@@ -543,7 +543,8 @@ TEST_CASE("v9938 renders mode-1 sprites and reports S0 collision and overflow") 
 
     const std::uint8_t s0 = vdp.status_read();
     CHECK((s0 & 0x60U) == 0x60U);
-    CHECK((vdp.status(0) & 0xE0U) == 0U);
+    CHECK((vdp.status(0) & 0x60U) == 0x60U);
+    CHECK((vdp.status(0) & 0x80U) == 0U);
 }
 
 TEST_CASE("v9938 R8 SPD disables TMS-compatible sprite display") {
@@ -837,6 +838,39 @@ TEST_CASE("v9938 sprite mode 2 reports ninth sprite overflow") {
     vdp.render_frame();
 
     CHECK((vdp.status(0) & 0x40U) != 0U);
+    CHECK((vdp.status(0) & 0x1FU) == 8U);
+}
+
+TEST_CASE("v9938 S0 read preserves sprite overflow and collision state") {
+    v9938 vdp;
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x80U);
+
+    set_addr(vdp, k_sprite_mode2_sat, true);
+    for (std::uint8_t i = 0; i < 9U; ++i) {
+        vdp.data_write(0xFFU);
+        vdp.data_write(20U);
+        vdp.data_write(0U);
+        vdp.data_write(0U);
+    }
+    vdp.data_write(0xD8U);
+
+    for (std::uint32_t i = 0; i < 9U; ++i) {
+        set_addr(vdp, k_sprite_mode2_sct + i * 16U, true);
+        vdp.data_write(0x01U);
+    }
+
+    configure_sprite_mode2(vdp, 0x06U);
+    vdp.render_frame();
+
+    CHECK((vdp.status(0) & 0x60U) == 0x60U);
+    CHECK((vdp.status(0) & 0x1FU) == 8U);
+
+    const std::uint8_t read_status = vdp.status_read();
+    CHECK((read_status & 0x60U) == 0x60U);
+    CHECK((read_status & 0x1FU) == 8U);
+    CHECK((vdp.status(0) & 0x60U) == 0x60U);
     CHECK((vdp.status(0) & 0x1FU) == 8U);
 }
 

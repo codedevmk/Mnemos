@@ -501,7 +501,7 @@ namespace mnemos::chips::video {
             return result;
         }
         if (selected == 0U) {
-            status_[0] &= 0x1FU;
+            status_[0] &= static_cast<std::uint8_t>(~k_status_frame_irq);
             update_irq();
         } else if (selected == 1U) {
             status_[1] &= static_cast<std::uint8_t>(~k_status_scanline_irq);
