@@ -8,6 +8,24 @@
     },
     {
       "system": "msx",
+      "name": "1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom",
+      "sha256": "87cfdbe3f4c335ef723a7e0aacfabdeaab894e18aa40d2a8292954524ef2ab98",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "boot_sha256": "7120ea62709b765f235cdb681fa94ce76d0091a9564ccf5945c42d068091f689",
+      "reason": "Arabic cartridge reaches a visible title screen after the C-BIOS startup path; the default 600-frame smoke window can still be a uniform backdrop"
+    },
+    {
+      "system": "msx2",
+      "name": "1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom",
+      "sha256": "87cfdbe3f4c335ef723a7e0aacfabdeaab894e18aa40d2a8292954524ef2ab98",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "boot_sha256": "d6c8dd5aba21d95924aa28573796d1f6ca7748cf36e0369cbeaf189695b3b21b",
+      "reason": "Arabic cartridge reaches visible output after the C-BIOS MSX2 startup path; 600 frames can false-fail as a uniform backdrop"
+    },
+    {
+      "system": "msx",
       "name": "AKUPRO.rom",
       "sha256": "57f11296ce5f898d562e58851700ae33365df2d60a23bc78fedc25e5d264f0ea",
       "skip": true,

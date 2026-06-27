@@ -4,7 +4,7 @@ Generated: 2026-06-27
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote tracking branch: `origin/feature/msx2`
-Prior pushed base before the latest implementation slice: `54c02b79 Refresh MSX2 resume handoff`
+Pushed base before this handoff checkpoint: `f97a65fc Expose V9938 palette sidecar`
 
 ## Resume Point
 
@@ -19,9 +19,11 @@ Get-Content .\README.md
 Get-Content .\RESUME.md
 ```
 
-At the time this handoff was written, the worktree was clean before editing
-this file. `HEAD` and `origin/feature/msx2` both pointed at `fdede017`.
-The root checkout `C:\dev\emu\Mnemos` is not the MSX/MSX2 worktree.
+At the time this handoff checkpoint started, `HEAD` and `origin/feature/msx2`
+both pointed at `f97a65fc`. This checkpoint commit adds the Arabic `1 2 3`
+profile entries, refreshes this handoff, and should be the new
+`origin/feature/msx2` tip after push. The root checkout `C:\dev\emu\Mnemos` is
+not the MSX/MSX2 worktree.
 
 The current request is to implement both MSX and MSX2 because they share common
 components. Do not claim a "100% working" state until it is proven with explicit
@@ -76,6 +78,8 @@ Confirmed:
   view, so player screenshots now emit `.v9938.palette.bin` sidecars.
 - MSX2 now has the same lower-page C-BIOS-style plain 32 KiB ROM handoff
   behavior that was already implemented for MSX.
+- The Arabic `1 2 3` ROM now has explicit MSX and MSX2 profile entries with
+  3600-frame boot hashes, avoiding the old 600-frame false failure.
 
 Known gaps:
 
@@ -90,7 +94,32 @@ Known gaps:
 
 ## Latest Implemented Changes
 
-Latest implementation slice in this handoff:
+Latest handoff checkpoint:
+
+```text
+Profile Arabic MSX boot proof
+```
+
+Files changed:
+
+```text
+tests/golden/msx_rom_profiles.json
+RESUME.md
+```
+
+Behavior added:
+
+- Added MSX and MSX2 profile entries for
+  `1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom`.
+- Both entries use the same ROM SHA256
+  `87cfdbe3f4c335ef723a7e0aacfabdeaab894e18aa40d2a8292954524ef2ab98`.
+- Both entries use `mapper=plain` and `boot_frames=3600`.
+- MSX expected framebuffer SHA256:
+  `7120ea62709b765f235cdb681fa94ce76d0091a9564ccf5945c42d068091f689`.
+- MSX2 expected framebuffer SHA256:
+  `d6c8dd5aba21d95924aa28573796d1f6ca7748cf36e0369cbeaf189695b3b21b`.
+
+Previous implementation slice:
 
 ```text
 Expose V9938 palette bytes through introspection and player sidecars
@@ -144,6 +173,40 @@ Behavior added:
 
 ## Latest Validation
 
+Validation for this handoff checkpoint:
+
+```powershell
+Get-Content -Raw tests\golden\msx_rom_profiles.json | ConvertFrom-Json | Out-Null
+
+$rom='D:\emu\msx\MSX files [ROM]\1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom'
+.\scripts\msx\run-boot-smoke.ps1 `
+  -BuildDir 'build/windows-msvc-debug' `
+  -MsxBios 'D:\emu\msx\bios\cbios\cbios_main_msx1.rom' `
+  -MsxLogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx1.rom' `
+  -MsxRom $rom `
+  -MsxRegion 'ntsc' `
+  -Msx2Bios 'D:\emu\msx\bios\cbios\cbios_main_msx2.rom' `
+  -Msx2SubRom 'D:\emu\msx\bios\cbios\cbios_sub.rom' `
+  -Msx2LogoRom 'D:\emu\msx\bios\cbios\cbios_logo_msx2.rom' `
+  -Msx2Rom $rom `
+  -Msx2ExpandedSlots '8' `
+  -Msx2SubSlot '3.0' `
+  -Msx2RamSlot '3.2' `
+  -Msx2RamSize '512K' `
+  -Msx2Region 'ntsc' `
+  -RomProfileManifest 'tests/golden/msx_rom_profiles.json' `
+  -Frames 600 `
+  -RequireData
+```
+
+Result:
+
+```text
+JSON manifest parsed successfully
+targeted profile-driven smoke passed: 4/4
+summary: build\scratch\msx-boot\20260626-214407-685-21288\summary.json
+```
+
 Validation previously completed for `fdede017`:
 
 ```powershell
@@ -180,6 +243,29 @@ full Windows preset ctest passed: 175/175 configured tests, expected skips only
 ```
 
 ## Explicit Player Proof
+
+Latest Arabic `1 2 3` proof:
+
+```text
+ROM: D:\emu\msx\MSX files [ROM]\1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom
+Size: 32768
+SHA256: 87cfdbe3f4c335ef723a7e0aacfabdeaab894e18aa40d2a8292954524ef2ab98
+SHA1: a7c116e987f561aaa6199c3018433c431268ca86
+Header at $0000: 41 42, entry $00F7
+Header at $4000: no AB header
+```
+
+Observed cases:
+
+```text
+msx  1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom
+     --mapper plain frames=3600 exit=0 renders visible Arabic/English title output, PC=$4058
+     screenshot: build\scratch\msx-arabic-123-proof\20260627-current\arabic-123-msx-3600.png
+
+msx2 1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom
+     --mapper plain frames=3600 exit=0 renders non-uniform text/artifact output, PC=$1130
+     screenshot: build\scratch\msx2-arabic-123-proof\20260627-current\arabic-123-msx2-3600.png
+```
 
 Prior explicit player proof lives under:
 
@@ -240,6 +326,16 @@ Size: 16384
 SHA256: 1a76d08f33bf927b0e2977c13e62d6f87ece4a2275965c9134a436b852952368
 MD5: 7bcdaceb434822c8db0e967d79362d62
 Header bytes: 41 42 0F 40 00 00 00 00 00 00 00 00 00 00 00 21
+```
+
+Fresh 2026-06-27 rerun:
+
+```text
+Path: D:\emu\msx\MSX files [ROM]\Bosconia.rom
+Size: 16384
+SHA1: b023073f86b10c90754218b14da3757f29b039fe
+Player args: --system msx --rom <path> --mapper plain --frames 600
+Observed: still C-BIOS/logo halt, PC=$108B
 ```
 
 MAME `hash/msx1_cart.xml` was downloaded to:
