@@ -1,10 +1,10 @@
 # MSX / MSX2 Resume Handoff
 
-Generated: 2026-06-25T16:16:41-05:00
+Generated: 2026-06-26T20:24:51-05:00
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote tracking branch: `origin/feature/msx2`
-Previous pushed commit before this handoff update: `164fb612769b338ca21189336f6775c0b79ebd65` (`Add MSX and MSX2 emulation snapshot`)
+Previous pushed commit before this handoff refresh: `032fe595c444a07cee5d839f418a7fbff540bec2` (`Document MSX2 resume handoff`)
 
 ## User Goal
 
@@ -21,6 +21,13 @@ Important user correction: a blank Mnemos Player window is not emulator proof. A
 ## Current Verdict
 
 MSX and MSX2 are not yet in a proven "100% working" state.
+
+Latest live worktree state before this refresh:
+
+- `git status --short --branch`: `## feature/msx2...origin/feature/msx2`
+- `HEAD`: `032fe595c444a07cee5d839f418a7fbff540bec2`
+- The intended resume workspace remains `C:\dev\emu\Mnemos-msx2`, not `C:\dev\emu\Mnemos`.
+- The active task remains open until both `--system msx` and `--system msx2` have ROM-backed player proof, not just a blank player window or green unit tests.
 
 Proven so far:
 
@@ -242,6 +249,49 @@ Collapsed PC stream after the first `$400F` entry:
 
 Key point: execution reaches copied cartridge/RAM code at `$8708`, then spends time around `$4719/$471B`. Later trace sections enter BIOS VRAM transfer loops around `$0278/$027A`, so VDP write paths are active but the visible logo remains.
 
+Latest continuation update:
+
+- The `$4719/$471B` region is a nested software delay loop, not a hardware wait: bytes at ROM offset `$0719` decode as `LD B,$11; DJNZ self; DEC A; JR NZ outer; RET`.
+- Current Bosconia post-logo sidecars show MSX1 at PC `$108B`, SP `$F2FE`, AF `$0048`, DE `$19C4`, HL `$880C`, halted=true after both 3600 and 10000 frames.
+- Current MSX2 Bosconia sidecar shows PC `$1130`, SP `$F2FE`, AF `$8E44`, DE `$82C8`, HL `$FAFC`; the screenshot is still the C-BIOS logo.
+- Current `1Kpong!` sidecar shows PC `$5F12`, SP `$C360`, AF `$0054`, DE `$C000`; VRAM contains the visible `No enough memory` message.
+- The useful post-logo output directory is `build\scratch\msx-explicit-proof\post-logo`.
+
+Additional counts from the continuation trace reduction:
+
+```text
+0040BE=306799
+0040BF=306799
+00108B=120
+00027A=4512
+004049=1
+008708=1
+008AFB=3
+004128=66
+0040BB=23600
+```
+
+Bosconia main-loop bytes around `$40BB`:
+
+```text
+AF 21 80 E7 5E CD 93 00 2C 3C FE 0D 20 F6 CD CD 89 3A 93 E7 0F 30 0F CD 08 8B CD 4D 5B 3A 94 E7 E6 03 FE 02 20 C5
+```
+
+Interpretation: the loop at `$40BB` walks 13 bytes from RAM around `$E780` and calls BIOS routine `$0093`. The final `work_ram.bin` sidecars currently show `$E780` as zeroed, so the next useful diagnostic is a write trace/watch for `$E780-$E78C` rather than more frame-count-only screenshots.
+
+PPI/slot inspection status:
+
+- `src/manifests/common/msx_io_ports.cpp` appears internally consistent: reset control `$9B` leaves ports as inputs; `$82` enables port A / port C output and leaves port B input.
+- `src/manifests/msx/msx_system.cpp` and `src/manifests/msx2/msx2_system.cpp` currently write the PPI port-A latch and primary slot select on every `$A8` write, including reset-state input mode.
+- Secondary-slot register reads return the inverted stored byte, and writes store the non-inverted value. That matches expanded-slot register convention.
+- Both MSX and MSX2 have similar `plain_32k_handoff_cart_slot` behavior; any fix in slot/latch/RAM handoff should be checked in both systems.
+
+Smoke-run caveat:
+
+- `scripts\msx\run-boot-smoke.ps1` was started with `-RequireData`, C-BIOS paths, and `-MaxRoms 10`, but the run timed out before producing `summary.json`.
+- The selected ROMs came from early `_BAD_` names in `D:\emu\msx\MSX files [ROM]`, so that run should not be treated as a useful compatibility result.
+- A better next smoke pass should use profile-backed ROMs from `tests\golden\msx_rom_profiles.json` such as ADONIS, ASHGUINZ, Bestial Warrior, Boing-b, and Anty, with explicit `--mapper` where the profile requires it.
+
 C-BIOS XML layout was checked:
 
 - MSX1: slot 0 main ROM `$0000-$7FFF`, slot 0 logo `$8000-$BFFF`, external slots 1/2, slot 3 full 64K RAM, TMS9918A.
@@ -265,12 +315,12 @@ Lower-priority checks:
 
 ## Recommended Resume Path
 
-1. Inspect PPI helper semantics in `src/manifests/common/msx_io_ports.*`, especially `msx_ppi_port_a_output`.
-2. Add or extend a focused diagnostic to dump MSX work-area addresses after Bosconia init and after the first return to BIOS wait code.
-3. Trace the `$4719/$471B` loop and identify the condition it is waiting on.
-4. Compare C-BIOS cartridge boot state with `tests/golden/README.md` profiles and `tests/golden/msx_rom_profiles.json`.
-5. Run a small real-ROM smoke set to see whether Bosconia is isolated or representative.
-6. Patch the shared MSX/MSX2 root cause, then add a regression test before rerunning validation.
+1. Reproduce explicit player proof with profile-backed ROMs, not a raw directory walk that starts on `_BAD_` files.
+2. Add a focused diagnostic or temporary test hook that watches writes to `$E780-$E78C` and the relevant MSX BIOS work-area addresses.
+3. Determine why Bosconia's `$40BB` loop sees zeroed RAM and whether the cause is shared slot latch behavior, BIOS work-area setup, or RAM visibility.
+4. Patch the shared MSX/MSX2 root cause and add a regression test that covers both systems when the behavior is common.
+5. Rebuild and rerun focused MSX/MSX2, TMS9918A, V9938, system-launch, and capability-summary tests.
+6. Rerun explicit player proofs with `--system msx|msx2` and `--rom`, then run a small profile-backed real-ROM smoke set.
 
 Small smoke command template:
 
