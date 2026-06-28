@@ -337,11 +337,13 @@ namespace mnemos::chips::audio {
             return;
         }
 
-        if (voice.step_size < adpcm_min_step_size) {
-            voice.step_size = adpcm_min_step_size;
-        } else if (voice.step_size > adpcm_max_step_size) {
-            voice.step_size = adpcm_max_step_size;
-        }
+        // ADPCM step size is clamped to its valid range after both the initial load and
+        // the post-decode rescale; both sites use this identical clamp.
+        const auto clamp_step_size = [](std::int16_t step_value) noexcept -> std::int16_t {
+            return static_cast<std::int16_t>(
+                clamp_i32(step_value, adpcm_min_step_size, adpcm_max_step_size));
+        };
+        voice.step_size = clamp_step_size(voice.step_size);
 
         const int step = sign_extend_adpcm_nibble(read_adpcm_nibble(voice, nibble_phase));
         std::int32_t delta =
@@ -359,11 +361,7 @@ namespace mnemos::chips::audio {
             (static_cast<std::int32_t>(adpcm_step_scale[static_cast<std::size_t>(8 + step)]) *
              static_cast<std::int32_t>(voice.step_size)) >>
             6);
-        if (voice.step_size < adpcm_min_step_size) {
-            voice.step_size = adpcm_min_step_size;
-        } else if (voice.step_size > adpcm_max_step_size) {
-            voice.step_size = adpcm_max_step_size;
-        }
+        voice.step_size = clamp_step_size(voice.step_size);
 
         if ((nibble_phase & 1U) != 0U) {
             ++voice.cur_addr;
