@@ -49,7 +49,10 @@ namespace mnemos::manifests::irem_m84 {
         if (set_name == "hharryu") {
             return {.dip_default = 0xFDBFU, .rom_layout = "us_program_pair"};
         }
-        if (set_name == "ltswords") {
+        if (set_name == "dkgensan" || set_name == "dkgensana") {
+            return {.dip_default = 0xFDBFU, .rom_layout = "us_program_pair"};
+        }
+        if (set_name == "ltswords" || set_name == "kengo" || set_name == "kengoj") {
             return {.dip_default = 0xFFFFU,
                     .rom_layout = "v35_program_pair",
                     .main_cpu_model = chips::cpu::v30::model::v35};
@@ -63,30 +66,18 @@ namespace mnemos::manifests::irem_m84 {
     }
 
     m84_system::m84_system(common::rom_set_image image, m84_board_params board_params)
-        : board(std::move(image), compatible_m81_params(board_params)),
-          params(board_params),
-          main_cpu(board.main_cpu),
-          sound_cpu(board.sound_cpu),
-          video(board.video),
-          fm(board.fm),
-          dac(board.dac),
-          pic(board.pic),
-          work_ram(board.work_ram),
-          sprite_ram(board.sprite_ram),
-          palette_ram(board.palette_ram),
-          vram(board.vram),
-          rowscroll_ram(board.rowscroll_ram),
-          sound_ram(board.sound_ram),
-          input_system(board.input_system),
-          dip_switches(board.dip_switches),
-          dac_write_events(board.dac_write_events) {
+        : board(std::move(image), compatible_m81_params(board_params)), params(board_params),
+          main_cpu(board.main_cpu), sound_cpu(board.sound_cpu), video(board.video), fm(board.fm),
+          dac(board.dac), pic(board.pic), work_ram(board.work_ram), sprite_ram(board.sprite_ram),
+          palette_ram(board.palette_ram), vram(board.vram), rowscroll_ram(board.rowscroll_ram),
+          sound_ram(board.sound_ram), input_system(board.input_system),
+          dip_switches(board.dip_switches), dac_write_events(board.dac_write_events) {
         main_cpu.set_model(params.main_cpu_model);
     }
 
     void m84_system::run_frame() { board.run_frame(); }
 
-    void m84_system::set_inputs(std::uint8_t p1, std::uint8_t p2,
-                                std::uint8_t system) noexcept {
+    void m84_system::set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept {
         board.set_inputs(p1, p2, system);
     }
 

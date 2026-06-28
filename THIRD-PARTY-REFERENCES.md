@@ -207,6 +207,14 @@ multiple independent open-source implementations.
   grouping. The M75 adapter folds those DIP defaults into the board-visible
   `dsw1`/`dsw2` bytes and exposes the parsed switch count. No manual scans,
   emulator source, or ROM bytes are committed.
+- **Irem M84 ROM-set metadata** — declarative game manifests under
+  `src/manifests/irem_m84/games/` use public MAME Irem driver metadata for dump
+  filenames, parent/clone relationships, region sizes, program reload offsets,
+  CRC-32s, orientation, and PROM/PLD metadata for the Hammerin' Harry / Daiku no
+  Gensan, Gallop / Cosmic Cop, and Lightning Swords / Ken-Go M84 sets. Mnemos
+  uses that metadata for CRC-clean local corpus loading and a first-pass M84
+  wrapper route; it is still not visual/audio parity proof. No MAME driver code
+  or ROM bytes are copied into Mnemos.
 - **Irem M85 ROM-set metadata** — the checked-in `poundfor` and `poundforj`
   manifests use public Irem M85 driver metadata for Pound for Pound dump
   filenames, parent/clone relationships, region sizes, offsets, reloads,

@@ -497,23 +497,25 @@ proves the sorted local wrapper ZIP loads CRC-clean through the embedded
 manifest, including the directory-prefixed entry aliases used by the local
 nested ZIP, and the player route produces nonblank screenshot plus save/load
 smoke for `--system irem_m15`.
-M84 now has a ROM-contract layer for `hharryb`, `hharryu`, local V35-profile
-`ltswords`, local V35-profile Gallop (`gallop`), and local Cosmic Cop
-(`cosmccop`);
+M84 now has a ROM-contract layer for `hharryb`, `hharryu`, local Daiku no
+Gensan split clones (`dkgensan`, `dkgensana`), local V35-profile `ltswords`,
+its split Ken-Go clones (`kengo`, `kengoj`), local V35-profile Gallop
+(`gallop`), and local Cosmic Cop (`cosmccop`);
 `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72` proves the
-sorted Hammerin' Harry split wrapper ZIPs load CRC-clean when composed with the
-M81 `hharry` parent and that the unpacked `ltswords` folder loads its
+sorted Hammerin' Harry / Daiku no Gensan split ZIPs load CRC-clean when
+composed with the M81 `hharry` parent, that `kengo` / `kengoj` load through the
+local `ltswords` parent, and that the local `ltswords` ZIP loads its
 CRC-verified program, sound, graphics, and samples as a standalone M84 set. The
 same gate now prefers the complete `D:\emu\irem\M72\gallop.zip` archive over
 the misleading same-name unpacked folder and validates Gallop's program, sound,
 graphics, samples, PROMs, and PLDs; `D:\emu\irem\M72\cosmccop.zip` loads as a
 clone with its own program/sound/graphics/sample dumps and inherits Gallop's
 PROM/PLD artifacts. The `ltswords` manifest explicitly declares the missing
-small PROM/PLD artifacts instead of treating the current route as final
-board-authentic video proof. Gallop now also carries 10 checked-in DIP switch
-definitions, and the M84 adapter composes them into the board default
-(`0xf9bf`) while exposing the switch count through the player system spec for
-both Gallop and Cosmic Cop.
+small PROM/PLD artifacts, and that declaration is inherited by the Ken-Go clones
+instead of treating the current route as final board-authentic video proof.
+Gallop now also carries 10 checked-in DIP switch definitions, and the M84
+adapter composes them into the board default (`0xf9bf`) while exposing the
+switch count through the player system spec for both Gallop and Cosmic Cop.
 M85 now has a ROM-contract and first-pass executable wrapper for `poundfor` and
 `poundforj`: the embedded manifests cover the 1 MiB V30 program-pair layout,
 sound CPU ROM, sample ROM, tile/sprite graphics, PLD artifacts, and Japan clone
@@ -780,13 +782,13 @@ board-accurate DIP / raster-phase proof.
 
 This section is split from M81 because the local Hammerin' Harry M84 artifacts
 are split clone sets with M84-specific program/PAL dumps but inherited parent
-graphics, sound, sample, and PROM assets. The local `ltswords` folder is also
-tracked here as an M84 V35-profile set even though it is physically stored in
-the `D:\emu\irem\M72` bucket.
+graphics, sound, sample, and PROM assets. The local `ltswords`, `kengo`, and
+`kengoj` routes are tracked here as M84 V35-profile sets, with the Ken-Go split
+sets inheriting Lightning Swords media.
 
 #### Manifests / board bring-up
-- [x] **I84-1** Local M84 ROM-set contract — `src/manifests/irem_m84` carries checked-in embedded ROM-contract manifests for `cosmccop`, `gallop`, `hharryb`, `hharryu`, and `ltswords`, with parser/region-contract coverage for the 1 MiB V30/V35 program reload layouts, M84-specific Hammerin' Harry PAL/PLD regions, clone-parent inheritance from the M81 `hharry` parent, `cosmccop` inheritance from the M84 `gallop` parent, the standalone local `ltswords` program/sound/graphics/sample ROMs, the local Gallop program/sound/graphics/sample/PROM/PLD ROMs, the local Cosmic Cop program/sound/graphics/sample ROMs, and Gallop/Cosmic Cop's inherited 10 DIP switch definitions with composed default `0xf9bf`. `ltswords` declares an explicit `irem_m84_prom_pld` HLE profile because the local folder lacks the small color PROM and PAL artifacts listed for the complete board. `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72` data-gates both sorted Hammerin' Harry split wrapper ZIPs, the unpacked `ltswords` folder, the complete `D:\emu\irem\M72\gallop.zip` archive, and `D:\emu\irem\M72\cosmccop.zip`; the M84 source indexers prefer the ZIP when a stale same-name unpacked folder is also present. `scripts/irem/inventory-corpus.ps1` now records six total M84 manifest matches across five M84 sets, including `D:\emu\irem\M72\ltswords`, `D:\emu\irem\M72\gallop.zip`, and `D:\emu\irem\M72\cosmccop.zip` · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m84/games/*.toml` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `scripts/irem/inventory-corpus.ps1`
-- [~] **I84-2** Executable M84 board profile — `src/manifests/irem_m84` now has an M84-owned executable wrapper for the local Hammerin' Harry M84 split sets plus the V35-profile `ltswords`, `gallop`, and `cosmccop` routes, using the M81-compatible Z80/YM2151/DAC/KNA91-style board core behind an M84 manifest/save identity while selecting V30 for Hammerin' Harry profiles and V35 for `ltswords` / `gallop` / `cosmccop`. The compatibility core exposes the shared KNA91-style low-byte palette bus through the M84 wrapper while preserving M84 save identity and rejecting save-states restored under the wrong M84 CPU/layout profile. `src/apps/player/adapters/irem_m84` registers `--system irem_m84` / `m84`, composes M84 child zips or folders with either M84 or M81 parent media when declared, loads standalone M84 folders/ZIPs, reports resident media validation, exposes rollback-ready save-state, applies parsed manifest DIP defaults into the board DIP register (`gallop` / `cosmccop` default to `0xf9bf`), and data-gates real local player smoke through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`. Direct Gallop and Cosmic Cop player smoke saves state, reloads it, and writes 384x256 nonblank screenshots. Remaining: replace/verify the compatibility-core assumptions with board evidence for M84-specific memory/I/O behavior, Hammerin' Harry/Cosmic Cop/Ken-Go video/priority, raster timing, board-authentic DIP behavior beyond the current manifest defaults, missing `ltswords` PROM/PLD artifacts, and screenshot/audio parity before calling this authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m84/m84_system.cpp` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `src/apps/player/adapters/irem_m84/irem_m84_adapter.cpp` + `src/apps/player/adapters/irem_m84/tests/irem_m84_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
+- [x] **I84-1** Local M84 ROM-set contract — `src/manifests/irem_m84` carries checked-in embedded ROM-contract manifests for `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`, `hharryu`, `kengo`, `kengoj`, and `ltswords`, with parser/region-contract coverage for the 1 MiB V30/V35 program reload layouts, M84-specific Hammerin' Harry / Daiku no Gensan PAL/PLD regions, corrected M84 second-program-pair placement at `0x60000` for the Hammerin' Harry-family M84 program layout, clone-parent inheritance from the M81 `hharry` parent, Ken-Go inheritance from the M84 `ltswords` parent, `cosmccop` inheritance from the M84 `gallop` parent, the standalone local `ltswords` program/sound/graphics/sample ROMs, the local Gallop program/sound/graphics/sample/PROM/PLD ROMs, the local Cosmic Cop program/sound/graphics/sample ROMs, and Gallop/Cosmic Cop's inherited 10 DIP switch definitions with composed default `0xf9bf`. `ltswords` declares an explicit `irem_m84_prom_pld` HLE profile because the local route lacks the small color PROM and PAL artifacts listed for the complete board, and `kengo` / `kengoj` inherit that declaration. `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72` data-gates the local M84 ZIP corpus plus the M81 parent route; `scripts/irem/inventory-corpus.ps1` now records eighteen M84 manifest matches in the M84 bucket with ten loadable/supported routes across the nine checked-in sets · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m84/games/*.toml` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `src/apps/player/adapters/irem_m84/tests/irem_m84_adapter_test.cpp` + `scripts/irem/inventory-corpus.ps1`
+- [~] **I84-2** Executable M84 board profile — `src/manifests/irem_m84` now has an M84-owned executable wrapper for the local Hammerin' Harry / Daiku no Gensan M84 split sets plus the V35-profile `ltswords`, `kengo`, `kengoj`, `gallop`, and `cosmccop` routes, using the M81-compatible Z80/YM2151/DAC/KNA91-style board core behind an M84 manifest/save identity while selecting V30 for Hammerin' Harry / Daiku no Gensan profiles and V35 for `ltswords` / `kengo` / `kengoj` / `gallop` / `cosmccop`. The compatibility core exposes the shared KNA91-style low-byte palette bus through the M84 wrapper while preserving M84 save identity and rejecting save-states restored under the wrong M84 CPU/layout profile. `src/apps/player/adapters/irem_m84` registers `--system irem_m84` / `m84`, composes M84 child zips or folders with either M84 or M81 parent media when declared, loads standalone M84 folders/ZIPs, reports resident media validation, exposes rollback-ready save-state, applies parsed manifest DIP defaults into the board DIP register (`gallop` / `cosmccop` default to `0xf9bf`), and data-gates real local player smoke through `MNEMOS_M84_SET_DIR=D:\emu\irem\M84;D:\emu\irem\M81;D:\emu\irem\M72`. Direct Daiku no Gensan and Ken-Go player smoke now saves state and writes 384x256 nonblank screenshots for `dkgensan`, `dkgensana`, `kengo`, and `kengoj`, in addition to the earlier Gallop/Cosmic Cop proof. Remaining: replace/verify the compatibility-core assumptions with board evidence for M84-specific memory/I/O behavior, Hammerin' Harry/Cosmic Cop/Ken-Go video/priority, raster timing, board-authentic DIP behavior beyond the current manifest defaults, missing `ltswords`/Ken-Go PROM/PLD artifacts, and screenshot/audio parity before calling this authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m84/m84_system.cpp` + `src/manifests/irem_m84/tests/m84_system_test.cpp` + `src/apps/player/adapters/irem_m84/irem_m84_adapter.cpp` + `src/apps/player/adapters/irem_m84/tests/irem_m84_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 Cabinet input note: M81, M82, and M84 adapters now consume explicit frontend
 `service` / `test` arcade inputs, keep `mode` as the service alias for older

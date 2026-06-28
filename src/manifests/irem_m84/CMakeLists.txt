@@ -1,8 +1,12 @@
 set(_irem_m84_game_manifest_files
     "games/cosmccop.toml"
+    "games/dkgensan.toml"
+    "games/dkgensana.toml"
     "games/gallop.toml"
     "games/hharryb.toml"
     "games/hharryu.toml"
+    "games/kengo.toml"
+    "games/kengoj.toml"
     "games/ltswords.toml"
 )
 set(MNEMOS_IREM_M84_GAME_MANIFEST_COUNT 0)

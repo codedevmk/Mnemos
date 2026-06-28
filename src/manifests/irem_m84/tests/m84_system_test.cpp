@@ -60,12 +60,11 @@ namespace {
         return it == region.files.end() ? nullptr : &*it;
     }
 
-    [[nodiscard]] const rom_set_dip_switch*
-    find_dip(const rom_set_decl& decl, std::string_view name) noexcept {
-        const auto it = std::find_if(decl.dips.begin(), decl.dips.end(),
-                                     [name](const rom_set_dip_switch& dip) {
-                                         return dip.name == name;
-                                     });
+    [[nodiscard]] const rom_set_dip_switch* find_dip(const rom_set_decl& decl,
+                                                     std::string_view name) noexcept {
+        const auto it =
+            std::find_if(decl.dips.begin(), decl.dips.end(),
+                         [name](const rom_set_dip_switch& dip) { return dip.name == name; });
         return it == decl.dips.end() ? nullptr : &*it;
     }
 
@@ -112,12 +111,25 @@ namespace {
         CHECK(reload_hi->crc32.has_value());
     }
 
+    void require_program_pair_at(const rom_set_region& maincpu, std::size_t offset,
+                                 std::size_t file_size) {
+        const rom_set_file* lo = find_file_at(maincpu, offset);
+        const rom_set_file* hi = find_file_at(maincpu, offset + 1U);
+        REQUIRE(lo != nullptr);
+        REQUIRE(hi != nullptr);
+        CHECK(lo->stride == 2U);
+        CHECK(hi->stride == 2U);
+        CHECK(lo->size == file_size);
+        CHECK(hi->size == file_size);
+        CHECK(lo->crc32.has_value());
+        CHECK(hi->crc32.has_value());
+    }
+
     void require_explicit_prom_pld_hle(const rom_set_decl& decl) {
-        const auto hle =
-            std::find_if(decl.hle.begin(), decl.hle.end(), [](const auto& entry) {
-                return entry.chip == "irem_m84_prom_pld" &&
-                       entry.profile == "irem_m84.ltswords_prom_pld_reference_defaults";
-            });
+        const auto hle = std::find_if(decl.hle.begin(), decl.hle.end(), [](const auto& entry) {
+            return entry.chip == "irem_m84_prom_pld" &&
+                   entry.profile == "irem_m84.ltswords_prom_pld_reference_defaults";
+        });
         REQUIRE(hle != decl.hle.end());
         CHECK_FALSE(hle->rationale.empty());
     }
@@ -415,8 +427,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus",
-          "[m84][romset]") {
+TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus", "[m84][romset]") {
     namespace fs = std::filesystem;
 
     const fs::path games_dir{MNEMOS_IREM_M84_GAMES_DIR};
@@ -441,8 +452,9 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
         declarations.emplace(decl.name, std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"cosmccop", "gallop", "hharryb",
-                                                            "hharryu", "ltswords"};
+    const std::set<std::string, std::less<>> expected_names{"cosmccop", "dkgensan", "dkgensana",
+                                                            "gallop",   "hharryb",  "hharryu",
+                                                            "kengo",    "kengoj",   "ltswords"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, decl] : declarations) {
         INFO("set=" << set_name);
@@ -456,6 +468,7 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
         if (set_name == "hharryb") {
             REQUIRE(decl.parent.has_value());
             CHECK(*decl.parent == "hharry");
+            require_program_pair_at(*maincpu, 0x60000U, 0x10000U);
             require_boot_chunk_reload(*maincpu, 0xE0000U, 0x10000U);
             const rom_set_region* plds = find_region(decl, "plds");
             REQUIRE(plds != nullptr);
@@ -464,11 +477,29 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
         } else if (set_name == "hharryu") {
             REQUIRE(decl.parent.has_value());
             CHECK(*decl.parent == "hharry");
+            require_program_pair_at(*maincpu, 0x60000U, 0x10000U);
             require_boot_chunk_reload(*maincpu, 0xE0000U, 0x10000U);
             const rom_set_region* plds = find_region(decl, "plds");
             REQUIRE(plds != nullptr);
             require_region_contract(*plds);
             CHECK(plds->size == mnemos::manifests::irem_m84::hharryu_plds_size);
+        } else if (set_name == "dkgensan" || set_name == "dkgensana") {
+            REQUIRE(decl.parent.has_value());
+            CHECK(*decl.parent == "hharry");
+            require_program_pair_at(*maincpu, 0x60000U, 0x10000U);
+            require_boot_chunk_reload(*maincpu, 0xE0000U, 0x10000U);
+            CHECK(find_region(decl, "soundcpu") != nullptr);
+            CHECK(find_region(decl, "tiles") != nullptr);
+            CHECK(find_region(decl, "sprites") != nullptr);
+            CHECK(find_region(decl, "samples") != nullptr);
+            const rom_set_region* proms = find_region(decl, "proms");
+            REQUIRE(proms != nullptr);
+            require_region_contract(*proms);
+            CHECK(proms->size == 0x0200U);
+            const rom_set_region* plds = find_region(decl, "plds");
+            REQUIRE(plds != nullptr);
+            require_region_contract(*plds);
+            CHECK(plds->size == mnemos::manifests::irem_m84::dkgensan_plds_size);
         } else if (set_name == "ltswords") {
             CHECK_FALSE(decl.parent.has_value());
             require_boot_chunk_reload(*maincpu, 0xC0000U, 0x20000U);
@@ -478,6 +509,16 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
             CHECK(find_region(decl, "samples") != nullptr);
             CHECK(find_region(decl, "plds") == nullptr);
             require_explicit_prom_pld_hle(decl);
+        } else if (set_name == "kengo" || set_name == "kengoj") {
+            REQUIRE(decl.parent.has_value());
+            CHECK(*decl.parent == "ltswords");
+            require_boot_chunk_reload(*maincpu, 0xC0000U, 0x20000U);
+            CHECK(find_region(decl, "soundcpu") == nullptr);
+            CHECK(find_region(decl, "tiles") == nullptr);
+            CHECK(find_region(decl, "sprites") == nullptr);
+            CHECK(find_region(decl, "samples") == nullptr);
+            CHECK(find_region(decl, "proms") == nullptr);
+            CHECK(find_region(decl, "plds") == nullptr);
         } else if (set_name == "gallop") {
             CHECK_FALSE(decl.parent.has_value());
             require_boot_chunk_reload(*maincpu, 0x80000U, 0x40000U);
@@ -523,14 +564,22 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
           mnemos::chips::cpu::v30::model::v35);
     CHECK(mnemos::manifests::irem_m84::board_params_for("hharryb").rom_layout ==
           "bootleg_program_pair");
-    CHECK(mnemos::manifests::irem_m84::board_params_for("hharryu").rom_layout ==
+    CHECK(mnemos::manifests::irem_m84::board_params_for("hharryu").rom_layout == "us_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("dkgensan").rom_layout ==
+          "us_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("dkgensana").rom_layout ==
           "us_program_pair");
     CHECK(mnemos::manifests::irem_m84::board_params_for("ltswords").rom_layout ==
           "v35_program_pair");
     CHECK(mnemos::manifests::irem_m84::board_params_for("ltswords").main_cpu_model ==
           mnemos::chips::cpu::v30::model::v35);
-    CHECK(mnemos::manifests::irem_m84::board_params_for("gallop").rom_layout ==
-          "v35_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("kengo").rom_layout == "v35_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("kengo").main_cpu_model ==
+          mnemos::chips::cpu::v30::model::v35);
+    CHECK(mnemos::manifests::irem_m84::board_params_for("kengoj").rom_layout == "v35_program_pair");
+    CHECK(mnemos::manifests::irem_m84::board_params_for("kengoj").main_cpu_model ==
+          mnemos::chips::cpu::v30::model::v35);
+    CHECK(mnemos::manifests::irem_m84::board_params_for("gallop").rom_layout == "v35_program_pair");
     CHECK(mnemos::manifests::irem_m84::board_params_for("gallop").main_cpu_model ==
           mnemos::chips::cpu::v30::model::v35);
 }
@@ -538,17 +587,20 @@ TEST_CASE("m84 checked-in game manifests parse and cover local candidate corpus"
 TEST_CASE("m84 embedded game manifests mirror the checked-in roster", "[m84][romset]") {
     using mnemos::manifests::irem_m84::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 5U);
+    CHECK(game_manifests.size() == 9U);
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("cosmccop").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("dkgensan").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("dkgensana").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("gallop").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryb").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("hharryu").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("kengo").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("kengoj").empty());
     CHECK_FALSE(mnemos::manifests::irem_m84::game_manifest_toml("ltswords").empty());
     CHECK(mnemos::manifests::irem_m84::game_manifest_toml("hharry").empty());
 }
 
-TEST_CASE("m84 executable board runs the Hammerin' Harry-compatible V30/Z80 frame",
-          "[m84]") {
+TEST_CASE("m84 executable board runs the Hammerin' Harry-compatible V30/Z80 frame", "[m84]") {
     namespace m81 = mnemos::manifests::irem_m81;
     namespace m84 = mnemos::manifests::irem_m84;
 
@@ -713,8 +765,8 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
             INFO("parent=" << parent_source->second.string());
             const auto parent_decl = m81_parent ? require_m81_parent_decl(*effective_decl.parent)
                                                 : require_m84_decl(*effective_decl.parent);
-            effective_decl = mnemos::manifests::common::inherit_parent_regions(parent_decl,
-                                                                               std::move(effective_decl));
+            effective_decl = mnemos::manifests::common::inherit_parent_regions(
+                parent_decl, std::move(effective_decl));
             provider = mnemos::manifests::common::make_fallback_rom_provider(
                 std::move(provider), require_provider(parent_source->second));
         } else if (set_name == "ltswords") {
@@ -733,7 +785,10 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
         if (const auto* plds = find_region(effective_decl, "plds")) {
             require_loaded_region(image, "plds", plds->size);
         } else {
-            CHECK(set_name == "ltswords");
+            const bool inherits_ltswords_hle =
+                set_name == "ltswords" || set_name == "kengo" || set_name == "kengoj";
+            CHECK(inherits_ltswords_hle);
+            require_explicit_prom_pld_hle(effective_decl);
         }
         const auto* tiles = find_region(effective_decl, "tiles");
         const auto* sprites = find_region(effective_decl, "sprites");
@@ -745,7 +800,9 @@ TEST_CASE("m84 local split artifacts load CRC-clean with the M81 hharry parent",
         if (proms != nullptr) {
             require_loaded_region(image, "proms", proms->size);
         } else {
-            CHECK(set_name == "ltswords");
+            const bool inherits_ltswords_hle =
+                set_name == "ltswords" || set_name == "kengo" || set_name == "kengoj";
+            CHECK(inherits_ltswords_hle);
             require_explicit_prom_pld_hle(effective_decl);
         }
     }

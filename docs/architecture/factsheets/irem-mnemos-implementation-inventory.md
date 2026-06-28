@@ -95,7 +95,7 @@ proof.
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 68% | `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 8 checked-in local sets; local Air Duel M82 parent/US clone wrappers; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
-| M84 | `irem_m84` wrapper | 44% | `cosmccop`, `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder, `gallop.zip`, and `cosmccop.zip`; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
+| M84 | `irem_m84` wrapper | 48% | `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`, `hharryu`, `kengo`, `kengoj`, `ltswords` | all 9 checked-in M84 sets; Daiku no Gensan and Ken-Go split-clone parent fallback; V30/V35 CPU profile proof; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords`/Ken-Go PROM/PLD artifacts |
 | M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
 | M92 | `irem_m92` | 45% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `thndblst` | all 17 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Lethal Thunder/Thunder Blaster, Mystic Riders, and Ninja Baseball Bat Man nonblank/save-state data-gated smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
@@ -168,10 +168,12 @@ targets:
   the Mystic Riders parent/Japan/bootleg
   wrappers through clone-parent fallback, plus Ninja Baseball Bat Man parent and
   US split-wrapper routes.
-  M84 now includes V35-profile `ltswords`, `gallop`, and `cosmccop` routes;
-  `ltswords` declares missing PROM/PLD artifacts, while `gallop.zip` supplies
-  the complete listed PROM/PLD set and `cosmccop.zip` inherits those artifacts
-  through the Gallop parent, but both still need board-parity evidence.
+  M84 now includes V30-profile Hammerin' Harry / Daiku no Gensan split-clone
+  routes and V35-profile `ltswords`, `kengo`, `kengoj`, `gallop`, and
+  `cosmccop` routes; `ltswords` and its Ken-Go clones declare missing PROM/PLD
+  artifacts, while `gallop.zip` supplies the complete listed PROM/PLD set and
+  `cosmccop.zip` inherits those artifacts through the Gallop parent, but all
+  routes still need board-parity evidence.
   M85 now includes first-pass Pound for Pound parent and Japan split-clone
   routes with CRC-clean parent fallback and direct player screenshot/save-state
   proof, but it still uses a compatibility core pending board-specific proof.
@@ -646,31 +648,30 @@ visual and audio parity proof.
 
 - **Techsheet games:** R-Type II, Hammerin' Harry / Daiku no Gensan, Cosmic Cop,
   Ken-Go.
-- **Mnemos games:** `cosmccop`, `gallop`, `hharryb`, `hharryu`, `ltswords`.
-- **Smoke playable:** both local split sets load through `--system irem_m84` when
-  composed with the M81 `hharry` parent media. The local unpacked
-  `D:\emu\irem\M72\ltswords` folder now loads as a standalone M84 V35-profile
-  set using CRC-verified program, sound, graphics, and sample regions.
-  `D:\emu\irem\M72\gallop.zip` loads as standalone M84 V35-profile Gallop /
-  Cosmic Cop media with CRC-verified program, sound, graphics, samples, PROMs,
-  and PLDs. `D:\emu\irem\M72\cosmccop.zip` now loads as the Cosmic Cop clone,
-  using its own program/sound/graphics/sample dumps and inheriting Gallop's
-  PROM/PLD artifacts. The Gallop manifest also carries 10 DIP switch
-  definitions, and the adapter applies their composed default (`0xf9bf`) to the
-  board DIP register for both Gallop and Cosmic Cop.
+- **Mnemos games:** `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`,
+  `hharryu`, `kengo`, `kengoj`, `ltswords`.
+- **Smoke playable:** all nine checked-in M84 sets load through `--system
+  irem_m84`. The Hammerin' Harry / Daiku no Gensan split sets compose with the
+  M81 `hharry` parent media, with the M84 program second pair placed at
+  `0x60000` and reloaded at `0xe0000`. `kengo` and `kengoj` compose with the
+  local `ltswords` parent, select the V35 profile, and inherit the
+  Lightning Swords graphics/sound/sample contract. Gallop/Cosmic Cop media load
+  with CRC-verified program, sound, graphics, samples, PROMs, and PLDs; the
+  Gallop manifest carries 10 DIP switch definitions, and the adapter applies
+  their composed default (`0xf9bf`) to the board DIP register for both Gallop
+  and Cosmic Cop.
 - **Correct gfx/music:** not certified.
-- **Local corpus note:** `ltswords` and `gallop.zip` are stored under the `M72`
-  corpus bucket, but their Mnemos manifests track them as M84. The current
-  `ltswords` folder lacks the small PROM/PLD artifacts listed for the complete
-  board; the manifest carries an explicit `irem_m84_prom_pld` HLE declaration
-  for that first-pass route. The same bucket also contains a `gallop` unpacked
-  folder with different true-M72-style filenames; the proved M84 Gallop route is
-  the complete `D:\emu\irem\M72\gallop.zip` archive with manifest-backed DIP
-  defaults, and `D:\emu\irem\M72\cosmccop.zip` is a clone route that uses
-  `gallop.zip` as its parent for PROM/PLD inheritance.
+- **Local corpus note:** the organized corpus now stores the primary M84 routes
+  under `D:\emu\irem\M84`, while the inventory still classifies historical
+  cross-board archive matches by manifest rather than folder name. The current
+  `ltswords` route lacks the small PROM/PLD artifacts listed for the complete
+  board; that explicit `irem_m84_prom_pld` HLE declaration is inherited by
+  `kengo` and `kengoj`. The Daiku no Gensan ZIPs use the M81 `hharry` parent
+  for shared graphics and CRC-identical PROM/PLD aliases while keeping their
+  own M84 program, sound, sample, and available PAL dumps.
 - **Remaining:** replace or verify the M81-compatible wrapper assumptions with
   board evidence, resolve the R-Type II classification mismatch, recover/prove
-  the `ltswords` PROM/PLD artifacts, and prove M84-specific memory/I/O,
+  the `ltswords`/Ken-Go PROM/PLD artifacts, and prove M84-specific memory/I/O,
   priority, raster timing, DIP behavior beyond current manifest defaults, and
   screenshot/audio parity.
 

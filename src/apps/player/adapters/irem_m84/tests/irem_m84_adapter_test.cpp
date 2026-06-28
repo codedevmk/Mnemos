@@ -261,8 +261,7 @@ namespace {
         return count;
     }
 
-    [[nodiscard]] bool spec_has(const irem::irem_m84_adapter& adapter,
-                                std::string_view label,
+    [[nodiscard]] bool spec_has(const irem::irem_m84_adapter& adapter, std::string_view label,
                                 std::string_view value) {
         const auto& spec = adapter.system_spec();
         return std::any_of(spec.begin(), spec.end(), [label, value](const auto& field) {
@@ -306,8 +305,7 @@ TEST_CASE("irem_m84_adapter save state restores board and adapter state", "[irem
     p2.mode = true; // legacy service alias
     source.apply_input(1, p2);
     CHECK(source.machine().input_system ==
-          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U &
-                                    ~0x20U & ~0x40U));
+          static_cast<std::uint8_t>(0xFFU & ~0x01U & ~0x02U & ~0x04U & ~0x10U & ~0x20U & ~0x40U));
     source.step_one_frame();
     REQUIRE(source.drain_audio().frame_count > 0U);
 
@@ -356,10 +354,10 @@ TEST_CASE("irem_m84_adapter validates real M84 ROM sets", "[irem_m84][data]") {
                                        std::move(supplemental_paths));
         CHECK(adapter.set_name() == set_name);
         const bool v35_set = set_name == "cosmccop" || set_name == "gallop" ||
-                             set_name == "ltswords";
-        CHECK(adapter.machine().main_cpu.cpu_model() ==
-              (v35_set ? mnemos::chips::cpu::v30::model::v35
-                       : mnemos::chips::cpu::v30::model::v30));
+                             set_name == "kengo" || set_name == "kengoj" || set_name == "ltswords";
+        CHECK(
+            adapter.machine().main_cpu.cpu_model() ==
+            (v35_set ? mnemos::chips::cpu::v30::model::v35 : mnemos::chips::cpu::v30::model::v30));
         if (set_name == "cosmccop" || set_name == "gallop") {
             CHECK(adapter.dip_switches().size() == 10U);
             CHECK(adapter.machine().dip_switches == 0xF9BFU);

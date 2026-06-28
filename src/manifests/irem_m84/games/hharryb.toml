@@ -29,14 +29,14 @@ crc32  = 0xf10fb55c
 
 [[region.file]]
 name   = "3-a-27c512.bin"
-offset = 0x40001
+offset = 0x60001
 stride = 2
 size   = 0x10000
 crc32  = 0x31b741c5
 
 [[region.file]]
 name   = "5-a-27c512.bin"
-offset = 0x40000
+offset = 0x60000
 stride = 2
 size   = 0x10000
 crc32  = 0xb23e966c
