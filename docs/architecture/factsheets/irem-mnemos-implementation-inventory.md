@@ -500,6 +500,10 @@ visual and audio parity proof.
   MOVX sample-data port now use direct bounded reads against the loaded sample
   region. If either cursor runs past the loaded sample ROM, the read returns
   open bus (`0xff`) rather than wrapping to offset zero.
+- **Sample pump proof:** the M72 player schedule now includes the board's
+  external sample pump at the documented 32 MHz / 4096 cadence. The pump shares
+  the bounded sample cursor, skips zero bytes, writes nonzero bytes to the DAC
+  on the sound-clock event timeline, and is exposed as `m72_sample_pump`.
 - **No-dump trigger proof:** the `dbreedm72` and `dkgensanm72` HLE sample-trigger
   tables are mechanically checked end-to-end: nine Dragon Breed trigger/start
   pairs and 28 Daiku no Gensan trigger/start pairs.

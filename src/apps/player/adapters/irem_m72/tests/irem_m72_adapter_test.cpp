@@ -518,13 +518,14 @@ TEST_CASE("irem_m72_adapter boots a bare program through the registry", "[irem_m
     CHECK(frame.height == 256U);
     CHECK(adapter.region().frames_per_second_x1000 == 55018U);
     const auto chips = adapter.chips();
-    REQUIRE(chips.size() == 6U);
+    REQUIRE(chips.size() == 7U);
     CHECK(chips[0]->metadata().part_number == "m72_video");
     CHECK(chips[1]->metadata().part_number == "v30");
     CHECK(chips[2]->metadata().part_number == "Z80");
     CHECK(chips[3]->metadata().part_number == "8259A");
     CHECK(chips[4]->metadata().part_number == "ym2151");
     CHECK(chips[5]->metadata().part_number == "dac8");
+    CHECK(chips[6]->metadata().part_number == "m72_sample_pump");
     CHECK(adapter.system_spec().size() == 3U);
     CHECK(adapter.system_spec()[1].value == "Irem M72");
     CHECK(adapter.system_spec()[2].value == "smoke");
@@ -824,7 +825,7 @@ TEST_CASE("irem_m72_adapter maps optional samples and mcu bins from a developmen
     irem_m72_adapter adapter(zip, "dev-optional-regions");
     REQUIRE(adapter.machine().sound_rom_present);
     REQUIRE(adapter.machine().mcu_present);
-    REQUIRE(adapter.chips().size() == 7U);
+    REQUIRE(adapter.chips().size() == 8U);
     CHECK(adapter.chips().back()->metadata().part_number == "mcs51");
 
     adapter.machine().main_to_mcu = 0x20U;
@@ -885,7 +886,7 @@ size = 0x1000
     CHECK(adapter.set_name() == "bchopper");
     CHECK_FALSE(adapter.machine().mcu_present);
     CHECK_FALSE(adapter.machine().protection_hle_present);
-    REQUIRE(adapter.chips().size() == 6U);
+    REQUIRE(adapter.chips().size() == 7U);
     const auto* mcu_region = adapter.machine().roms.region("mcu");
     REQUIRE(mcu_region != nullptr);
     CHECK(mcu_region->empty());
@@ -995,11 +996,11 @@ TEST_CASE("irem_m72_adapter boots a real protected M72 set", "[irem_m72][adapter
     CHECK(machine.dip_switches == expected_params.dip_default);
     REQUIRE((machine.mcu_present || machine.protection_hle_present));
     if (machine.mcu_present) {
-        REQUIRE(adapter.chips().size() == 7U);
+        REQUIRE(adapter.chips().size() == 8U);
         CHECK(adapter.chips().back()->metadata().part_number == "mcs51");
     } else {
         REQUIRE(machine.protection_hle_present);
-        REQUIRE(adapter.chips().size() == 6U);
+        REQUIRE(adapter.chips().size() == 7U);
         REQUIRE(machine.params.protection_hle_profile.has_value());
         CHECK((*machine.params.protection_hle_profile == "irem_m72.dbreedm72_no_dump_mcu" ||
                *machine.params.protection_hle_profile == "irem_m72.dkgensanm72_no_dump_mcu"));
@@ -1160,7 +1161,7 @@ TEST_CASE("irem_m72_adapter boots a real dumped-MCU protected M72 set",
     CHECK(machine.dip_switches == expected_params.dip_default);
     REQUIRE(machine.mcu_present);
     CHECK_FALSE(machine.protection_hle_present);
-    REQUIRE(adapter.chips().size() == 7U);
+    REQUIRE(adapter.chips().size() == 8U);
     CHECK(adapter.chips().back()->metadata().part_number == "mcs51");
     REQUIRE(machine.roms.region("mcu") != nullptr);
     CHECK_FALSE(machine.roms.region("mcu")->empty());
@@ -2121,7 +2122,7 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     CHECK(board_target.manifest_rev == mnemos::manifests::irem_m72::m72_system_state_version);
     const mnemos::runtime::save_target source_target = irem::build_save_target(source);
     CHECK(source_target.manifest_id == "irem_m72.adapter");
-    CHECK(source_target.manifest_rev == 3U);
+    CHECK(source_target.manifest_rev == 4U);
     REQUIRE(source_target.components.size() == 2U);
     const std::vector<std::uint8_t> blob = mnemos::runtime::write_save_state(source_target);
     REQUIRE_FALSE(blob.empty());

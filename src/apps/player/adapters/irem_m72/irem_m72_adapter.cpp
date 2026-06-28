@@ -1373,7 +1373,9 @@ namespace mnemos::apps::player::adapters::irem_m72 {
                 {.chip = &sys.video, .divider = 4U},
                 {.chip = &sys.main_cpu, .divider = 4U},
                 {.chip = &sys.sound_cpu, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U},
-                {.chip = &sys.fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U}};
+                {.chip = &sys.fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U},
+                {.chip = &sys.sample_pump,
+                 .divider = manifests::irem_m72::sample_pump_master_divider}};
             if (sys.mcu_present) {
                 // 8 MHz MCU crystal, 12 clocks per machine cycle: 32 MHz / 48.
                 chips.push_back({.chip = &sys.mcu, .divider = 48U});
@@ -1409,7 +1411,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         // board schema so a board-only save cannot masquerade as a frame-exact
         // player rollback point.
         constexpr std::uint32_t irem_m72_adapter_state_version = 2U;
-        constexpr std::uint32_t irem_m72_adapter_save_target_manifest_rev = 3U;
+        constexpr std::uint32_t irem_m72_adapter_save_target_manifest_rev = 4U;
 
         void write_i16(chips::state_writer& writer, std::int16_t value) {
             writer.u16(static_cast<std::uint16_t>(static_cast<std::int32_t>(value) + 32768));
@@ -1497,8 +1499,8 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         if (dip_override.has_value()) {
             sys_->dip_switches = *dip_override;
         }
-        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu,
-                      &sys_->pic,   &sys_->fm,       &sys_->dac};
+        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->pic,
+                      &sys_->fm,    &sys_->dac,      &sys_->sample_pump};
         if (sys_->mcu_present) {
             chip_view_.push_back(&sys_->mcu);
         }

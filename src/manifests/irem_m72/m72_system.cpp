@@ -239,6 +239,25 @@ namespace mnemos::manifests::irem_m72 {
         return std::nullopt;
     }
 
+    chips::chip_metadata m72_sample_pump::metadata() const noexcept {
+        return {
+            .manufacturer = "Irem",
+            .part_number = "m72_sample_pump",
+            .family = "m72_sample_hardware",
+            .klass = chips::chip_class::peripheral,
+            .revision = 1U,
+        };
+    }
+
+    void m72_sample_pump::tick(std::uint64_t cycles) {
+        if (system_ == nullptr) {
+            return;
+        }
+        for (std::uint64_t i = 0; i < cycles; ++i) {
+            system_->pump_sample_once();
+        }
+    }
+
     m72_board_params board_params_for(std::string_view set_name) {
         // Work-RAM wiring + factory DIP defaults per declared set. Only true
         // M72-family maps are listed here; M81/M82/M84/M85/M92 need their own
@@ -281,6 +300,7 @@ namespace mnemos::manifests::irem_m72 {
 
     m72_system::m72_system(common::rom_set_image image, m72_board_params board_params)
         : roms(std::move(image)), params(board_params) {
+        sample_pump.attach(*this);
         dip_switches = params.dip_default;
         const auto* sound_rom_region = roms.region("soundcpu");
         sound_rom_present = sound_rom_region != nullptr && !sound_rom_region->empty();
@@ -647,6 +667,21 @@ namespace mnemos::manifests::irem_m72 {
             // No sound ROM exists: the Z80 waits in reset until the V30 uploads
             // its program into the shared RAM and releases it via port 0x02.
             sound_cpu.set_reset_line(true);
+        }
+    }
+
+    void m72_system::pump_sample_once() {
+        if (sound_cpu.reset_line_held()) {
+            return;
+        }
+        const auto* samples = roms.region("samples");
+        if (samples == nullptr || samples->empty() || sample_address >= samples->size()) {
+            return;
+        }
+        const std::uint8_t sample = read_sample_rom_byte(*samples, sample_address);
+        ++sample_address;
+        if (sample != 0U) {
+            record_dac_write(sample);
         }
     }
 

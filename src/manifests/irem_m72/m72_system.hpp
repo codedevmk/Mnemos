@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bus.hpp"            // topology bus
+#include "chip.hpp"           // chips::iperipheral
 #include "dac8.hpp"           // sample-playback DAC
 #include "irem_m72_video.hpp" // tilemap video unit
 #include "mcs51.hpp"          // optional protection MCU
@@ -119,6 +120,10 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::uint16_t z80_port_sample_addr_hi = 0x81U;
     inline constexpr std::uint16_t z80_port_dac = 0x82U;
     inline constexpr std::uint16_t z80_port_sample_read = 0x84U;
+    // MAME's reference driver documents the external sample pump/fake-NMI rate
+    // as MASTER_CLOCK / 8 / 512. The M72 board master is 32 MHz, so the
+    // scheduler divider is 4096 master cycles per sample pump tick.
+    inline constexpr std::uint32_t sample_pump_master_divider = 4096U;
 
     // The Z80's IM 0 vectors, jammed during IACK by the board's negative RST
     // buffer: the sound latch drives RST 18h, the YM2151 drives RST 28h; the
@@ -140,6 +145,26 @@ namespace mnemos::manifests::irem_m72 {
         std::uint16_t dip_default{0xFFFFU};
         std::optional<std::string> protection_hle_profile{};
         std::vector<no_dump_hle_sample_trigger> protection_hle_sample_triggers{};
+    };
+
+    struct m72_system;
+
+    class m72_sample_pump final : public chips::iperipheral {
+      public:
+        void attach(m72_system& system) noexcept { system_ = &system; }
+
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override;
+        void tick(std::uint64_t cycles) override;
+        void reset(chips::reset_kind /*kind*/) override {}
+        void save_state(chips::state_writer& /*writer*/) const override {}
+        void load_state(chips::state_reader& /*reader*/) override {}
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return introspection_;
+        }
+
+      private:
+        m72_system* system_{};
+        instrumentation::ichip_introspection introspection_{};
     };
 
     // The board parameters for a declared set name; the base-map defaults
@@ -167,6 +192,7 @@ namespace mnemos::manifests::irem_m72 {
         chips::video::irem_m72_video video;
         chips::audio::ym2151 fm;
         chips::audio::dac8 dac;
+        m72_sample_pump sample_pump;
         chips::bus_controller::pic_8259 pic;
         chips::cpu::mcs51 mcu; // live only when the set carries an "mcu" region
         topology::bus main_bus{20U, topology::endianness::little};
@@ -230,6 +256,7 @@ namespace mnemos::manifests::irem_m72 {
         void update_sound_irq() noexcept {
             sound_cpu.set_irq_line(sound_latch_irq || fm.irq_asserted());
         }
+        void pump_sample_once();
         void record_dac_write(std::uint8_t value);
         void discard_dac_write_events_before(std::uint64_t sound_clock);
         void write_protection_hle_shared(std::size_t offset, std::uint8_t value) noexcept;

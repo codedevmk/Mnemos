@@ -904,6 +904,77 @@ TEST_CASE("m72 Z80 sample reads do not wrap past the sample ROM", "[m72]") {
     CHECK(system->dac_write_events[1].output == (0xFF - 0x80) * 64);
 }
 
+TEST_CASE("m72 sample pump streams nonzero sample bytes into the DAC", "[m72]") {
+    rom_set_image image;
+    image.regions["samples"] = {0x11U, 0x00U, 0x22U};
+    auto system = assemble_m72(std::move(image));
+    system->sound_cpu.set_reset_line(false);
+
+    system->pump_sample_once();
+    CHECK(system->sample_address == 1U);
+    CHECK(system->dac.level() == 0x11U);
+    REQUIRE(system->dac_write_events.size() == 1U);
+    CHECK(system->dac_write_events[0].sound_clock == 0U);
+    CHECK(system->dac_write_events[0].output == (0x11 - 0x80) * 64);
+
+    system->sound_cpu.tick(64U);
+    system->pump_sample_once();
+    CHECK(system->sample_address == 2U);
+    CHECK(system->dac.level() == 0x11U);
+    REQUIRE(system->dac_write_events.size() == 1U);
+
+    system->sound_cpu.tick(64U);
+    system->pump_sample_once();
+    CHECK(system->sample_address == 3U);
+    CHECK(system->dac.level() == 0x22U);
+    REQUIRE(system->dac_write_events.size() == 2U);
+    CHECK(system->dac_write_events[1].sound_clock == 128U);
+    CHECK(system->dac_write_events[1].output == (0x22 - 0x80) * 64);
+
+    system->sound_cpu.tick(64U);
+    system->pump_sample_once();
+    CHECK(system->sample_address == 3U);
+    REQUIRE(system->dac_write_events.size() == 2U);
+}
+
+TEST_CASE("m72 sample pump stays idle while the uploaded sound CPU is reset", "[m72]") {
+    rom_set_image image;
+    image.regions["samples"] = {0x55U};
+    auto system = assemble_m72(std::move(image));
+    REQUIRE(system->sound_cpu.reset_line_held());
+
+    system->pump_sample_once();
+
+    CHECK(system->sample_address == 0U);
+    CHECK(system->dac.level() == 0x80U);
+    CHECK(system->dac_write_events.empty());
+}
+
+TEST_CASE("m72 scheduler clocks the sample pump at the documented master divider", "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    rom_set_image image;
+    image.regions["samples"] = {0x44U};
+    auto system = assemble_m72(std::move(image));
+    system->sound_cpu.set_reset_line(false);
+
+    mnemos::runtime::scheduler scheduler(
+        {{.chip = &system->sound_cpu, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U},
+         {.chip = &system->fm, .divider = 1U, .rate_num = 6400000U, .rate_den = 715909U},
+         {.chip = &system->sample_pump, .divider = m72::sample_pump_master_divider}},
+        nullptr);
+
+    scheduler.run_master_cycles(m72::sample_pump_master_divider - 1U);
+    CHECK(system->sample_address == 0U);
+    CHECK(system->dac_write_events.empty());
+
+    scheduler.run_master_cycles(1U);
+    CHECK(system->sample_address == 1U);
+    REQUIRE(system->dac_write_events.size() == 1U);
+    CHECK(system->dac.level() == 0x44U);
+    CHECK(system->dac_write_events[0].sound_clock > 0U);
+}
+
 TEST_CASE("m72 records DAC writes on the sound-clock timeline", "[m72]") {
     auto system = assemble_m72(rom_set_image{});
     REQUIRE(system->dac_write_events.empty());
