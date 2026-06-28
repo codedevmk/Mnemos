@@ -175,10 +175,10 @@ multiple independent open-source implementations.
   into Mnemos.
 - **Irem M62 ROM-set metadata** — declarative manifests under
   `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
-  region sizes, CRC-32s, and board-family classification. `ldrun` now records
-  explicit Z80 program, MC6803 sound ROM, graphics, PROM, and timing regions;
-  the remaining M62 sets stay in raw-media staging until their title-specific
-  maps are wired. The Horizon local wrapper is stored under the local `M72`
+  region sizes, CRC-32s, and board-family classification. `ldrun` and `ldrun2`
+  now record explicit Z80 program, MC6803 sound ROM, graphics, PROM, and timing
+  regions; the remaining M62 sets stay in raw-media staging until their
+  title-specific maps are wired. The Horizon local wrapper is stored under the local `M72`
   corpus folder, but public Irem M62 driver metadata classifies it with the M62
   Z80/M6803-era family; Mnemos records it as an M62 set and routes the first-pass
   player through that contract rather than treating folder placement as board

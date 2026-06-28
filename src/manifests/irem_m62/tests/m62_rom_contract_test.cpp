@@ -59,7 +59,15 @@ namespace {
                            {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
             {"ldruna", {.raw_size = 0x6000U, .file_count = 3U}},
-            {"ldrun2", {.raw_size = 0x24720U, .file_count = 26U}},
+            {"ldrun2",
+             {.regions = {{"maincpu", {.raw_size = 0x14000U, .file_count = 6U}},
+                           {"soundcpu", {.raw_size = 0x10000U, .file_count = 3U}},
+                           {"gfx1", {.raw_size = 0x6000U, .file_count = 3U}},
+                           {"gfx2", {.raw_size = 0xC000U, .file_count = 6U}},
+                           {"spr_height_prom", {.raw_size = 0x20U, .file_count = 1U}},
+                           {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
             {"ldrun3", {.raw_size = 0x38820U, .file_count = 23U}},
             {"ldrun3j", {.raw_size = 0x18000U, .file_count = 6U}},
             {"ldrun4", {.raw_size = 0x3c820U, .file_count = 23U}},
@@ -341,7 +349,8 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
-    void require_m6803_reset_vector(const rom_set_image& image) {
+    void require_m6803_reset_vector(const rom_set_image& image,
+                                    std::optional<std::uint32_t> expected_pc = std::nullopt) {
         const auto* sound = image.region("soundcpu");
         REQUIRE(sound != nullptr);
         REQUIRE(sound->size() == mnemos::manifests::irem_m62::sound_rom_size);
@@ -352,7 +361,9 @@ namespace {
         CHECK(pc >= mnemos::manifests::irem_m62::sound_rom_base);
         CHECK(pc < mnemos::manifests::irem_m62::sound_rom_base +
                        mnemos::manifests::irem_m62::sound_rom_mapped_size);
-        CHECK(pc == 0xFA00U);
+        if (expected_pc.has_value()) {
+            CHECK(pc == *expected_pc);
+        }
     }
 
 } // namespace
@@ -485,8 +496,8 @@ TEST_CASE("m62 local wrapper artifacts load CRC-clean through embedded manifests
             for (const auto& [region_name, region_contract] : contract_it->second.regions) {
                 require_loaded_region(image, region_name, region_contract.raw_size);
             }
-            if (set_name == "ldrun") {
-                require_m6803_reset_vector(image);
+            if (set_name == "ldrun" || set_name == "ldrun2") {
+                require_m6803_reset_vector(image, 0xFA00U);
             }
         }
     }
