@@ -53,7 +53,7 @@ ZIP. Known untracked corpus classifications remain explicit: `headon` and
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
 M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84,
-M90, M92, and M107. For
+M85, M90, M92, and M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
@@ -96,7 +96,7 @@ proof.
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 68% | `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 8 checked-in local sets; local Air Duel M82 parent/US clone wrappers; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 44% | `cosmccop`, `gallop`, `hharryb`, `hharryu`, `ltswords` | both local split sets plus local `ltswords` folder, `gallop.zip`, and `cosmccop.zip`; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords` PROM/PLD artifacts |
-| M85 | none | 5% shared M72-family groundwork | None | None | None | Pound for Pound board identity, manifests, board path |
+| M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 28% | `atompunk`, `newapunk`, `bbmanwj`, `bbmanwja` | all 4 local Atomic Punk/Bomber Man World wrappers; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof | None | Authentic GA25 video, V35 on-die peripherals, complete graphics media, Hasamu/Quiz F-1 manifests, board-authentic DIP tables/runtime proof, visual/audio parity |
 | M92 | `irem_m92` | 45% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `thndblst` | all 17 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Lethal Thunder/Thunder Blaster, Mystic Riders, and Ninja Baseball Bat Man nonblank/save-state data-gated smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 56% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
@@ -157,7 +157,7 @@ targets:
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
   present.
-- M15, M47, M58, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
+- M15, M47, M58, M75, M81, M84, M85, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
   regional and bootleg clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,
@@ -172,6 +172,9 @@ targets:
   `ltswords` declares missing PROM/PLD artifacts, while `gallop.zip` supplies
   the complete listed PROM/PLD set and `cosmccop.zip` inherits those artifacts
   through the Gallop parent, but both still need board-parity evidence.
+  M85 now includes first-pass Pound for Pound parent and Japan split-clone
+  routes with CRC-clean parent fallback and direct player screenshot/save-state
+  proof, but it still uses a compatibility core pending board-specific proof.
 
 No game should be marked "correct gfx and music" until a later artifact records
 visual and audio parity proof.
@@ -674,11 +677,17 @@ visual and audio parity proof.
 ### M85
 
 - **Techsheet games:** Pound for Pound.
-- **Mnemos games:** none.
-- **Smoke playable:** none.
-- **Correct gfx/music:** none.
-- **Remaining:** create a dedicated board identity or explicit M84-derived
-  profile, then add ROM manifests, video/audio/input wiring, and corpus proof.
+- **Mnemos games:** `poundfor`, `poundforj`.
+- **Smoke playable:** `D:\emu\irem\M85\poundfor.zip` and
+  `D:\emu\irem\M85\poundforj.zip` load CRC-clean through
+  `--system irem_m85` / `m85`; `poundforj` inherits parent media from
+  `poundfor`. Focused data-gated tests and direct player smoke wrote 384x256
+  nonblank PPM screenshots plus save-state bytes after 90 frames.
+- **Correct gfx/music:** not certified. Current rendering/audio are diagnostic
+  first-pass output through a shared M81-compatible V30/Z80/YM2151/DAC core.
+- **Remaining:** replace or verify the compatibility-core assumptions with M85
+  board evidence, prove memory/I/O behavior, Pound for Pound video/priority,
+  inputs and DIP behavior, raster timing, audio timing, and visual/audio parity.
 
 ### M90 / M97 / M99
 

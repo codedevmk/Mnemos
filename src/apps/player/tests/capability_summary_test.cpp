@@ -14,14 +14,15 @@
 #include "irem_m58_adapter.hpp"
 #include "irem_m62_adapter.hpp"
 #include "irem_m63_adapter.hpp"
-#include "irem_travrusa_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "irem_m75_adapter.hpp"
 #include "irem_m81_adapter.hpp"
 #include "irem_m82_adapter.hpp"
 #include "irem_m84_adapter.hpp"
+#include "irem_m85_adapter.hpp"
 #include "irem_m90_adapter.hpp"
 #include "irem_m92_adapter.hpp"
+#include "irem_travrusa_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
 #include "segacd_adapter.hpp"
@@ -59,6 +60,7 @@ namespace {
     namespace irem_m81 = mnemos::apps::player::adapters::irem_m81;
     namespace irem_m82 = mnemos::apps::player::adapters::irem_m82;
     namespace irem_m84 = mnemos::apps::player::adapters::irem_m84;
+    namespace irem_m85 = mnemos::apps::player::adapters::irem_m85;
     namespace irem_m90 = mnemos::apps::player::adapters::irem_m90;
     namespace irem_m92 = mnemos::apps::player::adapters::irem_m92;
     namespace irem_m107 = mnemos::apps::player::adapters::irem_m107;
@@ -234,12 +236,9 @@ namespace {
         const auto lo = [](std::uint16_t value) {
             return static_cast<std::uint8_t>(value & 0x00FFU);
         };
-        const auto hi = [](std::uint16_t value) {
-            return static_cast<std::uint8_t>(value >> 8U);
-        };
+        const auto hi = [](std::uint16_t value) { return static_cast<std::uint8_t>(value >> 8U); };
         const std::vector<std::uint8_t> program{
-            0x3EU, 0x77U, 0x32U, lo(m57::video_ram_base), hi(m57::video_ram_base),
-            0xD3U, 0x04U,
+            0x3EU, 0x77U, 0x32U, lo(m57::video_ram_base), hi(m57::video_ram_base), 0xD3U, 0x04U,
             0xC3U, 0x07U, 0x00U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[m57::program_rom_base + i] = program[i];
@@ -253,12 +252,9 @@ namespace {
         const auto lo = [](std::uint16_t value) {
             return static_cast<std::uint8_t>(value & 0x00FFU);
         };
-        const auto hi = [](std::uint16_t value) {
-            return static_cast<std::uint8_t>(value >> 8U);
-        };
+        const auto hi = [](std::uint16_t value) { return static_cast<std::uint8_t>(value >> 8U); };
         const std::vector<std::uint8_t> program{
-            0x3EU, 0x77U, 0x32U, lo(m62::video_ram_base), hi(m62::video_ram_base),
-            0xD3U, 0x04U,
+            0x3EU, 0x77U, 0x32U, lo(m62::video_ram_base), hi(m62::video_ram_base), 0xD3U, 0x04U,
             0xC3U, 0x07U, 0x00U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[m62::program_rom_base + i] = program[i];
@@ -272,12 +268,9 @@ namespace {
         const auto lo = [](std::uint16_t value) {
             return static_cast<std::uint8_t>(value & 0x00FFU);
         };
-        const auto hi = [](std::uint16_t value) {
-            return static_cast<std::uint8_t>(value >> 8U);
-        };
+        const auto hi = [](std::uint16_t value) { return static_cast<std::uint8_t>(value >> 8U); };
         const std::vector<std::uint8_t> program{
-            0x3EU, 0x77U, 0x32U, lo(m63::video_ram_base), hi(m63::video_ram_base),
-            0xD3U, 0x04U,
+            0x3EU, 0x77U, 0x32U, lo(m63::video_ram_base), hi(m63::video_ram_base), 0xD3U, 0x04U,
             0xC3U, 0x07U, 0x00U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[m63::program_rom_base + i] = program[i];
@@ -341,9 +334,8 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> irem_m14_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m14::main_rom_size, 0xFFU);
-        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0x20U,
-                                                0x3EU, 0x81U, 0x32U, 0x00U, 0x24U,
-                                                0xC3U, 0x0AU, 0x00U};
+        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0x20U, 0x3EU, 0x81U,
+                                                0x32U, 0x00U, 0x24U, 0xC3U, 0x0AU, 0x00U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[mnemos::manifests::irem_m14::program_rom_base + i] = program[i];
         }
@@ -383,6 +375,21 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> irem_m84_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m84::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m85_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m85::main_rom_size, 0xFFU);
         rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
         rom[0xFFFF1U] = 0x00U;
         rom[0xFFFF2U] = 0x02U;
@@ -694,6 +701,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M84") {
         irem_m84::irem_m84_adapter adapter(irem_m84_program(), "Tiny M84");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M85") {
+        irem_m85::irem_m85_adapter adapter(irem_m85_program(), "Tiny M85");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");

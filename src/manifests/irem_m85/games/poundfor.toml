@@ -1,0 +1,154 @@
+# Pound for Pound -- Irem M85 parent set.
+# Schema mnemos-romset/1; this first-pass route preserves the M85 board
+# identity while using the shared M81/M84-family V30/Z80/YM2151/DAC core.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "poundfor"
+board       = "irem_m85"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "pp-a-h0-b.9e"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x50d4a2d8
+
+[[region.file]]
+name   = "pp-a-l0-b.9d"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xbd997942
+
+[[region.file]]
+name   = "pp-a-h1-.9f"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xf6c82f48
+
+[[region.file]]
+name   = "pp-a-l1-.9c"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x5b07b087
+
+# Boot-chunk reload of the final program pair at the top of the 1 MiB V30 space.
+[[region.file]]
+name   = "pp-a-h1-.9f"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xf6c82f48
+
+[[region.file]]
+name   = "pp-a-l1-.9c"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x5b07b087
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "pp-a-sp.4j"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3f458a5b
+
+[[region]]
+name = "samples"
+size = 0x040000
+
+[[region.file]]
+name   = "ppa-v0.ic6"
+offset = 0x00000
+size   = 0x40000
+crc32  = 0x03321664
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "ppa-g00.ic19"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x8a88a174
+
+[[region.file]]
+name   = "ppa-g10.ic11"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xe48a66ac
+
+[[region.file]]
+name   = "ppa-g20.ic18"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x12b93e79
+
+[[region.file]]
+name   = "ppa-g30.ic10"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0xfaa39aee
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "ppb-n0.ic21"
+offset = 0x00000
+size   = 0x40000
+crc32  = 0x951a41f8
+
+[[region.file]]
+name   = "ppb-n1.ic22"
+offset = 0x40000
+size   = 0x40000
+crc32  = 0xc609b7f2
+
+[[region.file]]
+name   = "ppb-n2.ic35"
+offset = 0x80000
+size   = 0x40000
+crc32  = 0x318c0b5f
+
+[[region.file]]
+name   = "ppb-n3.ic10"
+offset = 0xC0000
+size   = 0x40000
+crc32  = 0x93dc9490
+
+[[region]]
+name = "plds"
+size = 0x0600
+
+[[region.file]]
+name   = "m85_a-5h-.5h"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xa7ce2e57
+
+[[region.file]]
+name   = "m85_a-6j-.6j"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x733ed0f9
+
+[[region.file]]
+name   = "m85_b-1a-.ic1"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x3cf26744

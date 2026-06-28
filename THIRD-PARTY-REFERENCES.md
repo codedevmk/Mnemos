@@ -207,6 +207,12 @@ multiple independent open-source implementations.
   grouping. The M75 adapter folds those DIP defaults into the board-visible
   `dsw1`/`dsw2` bytes and exposes the parsed switch count. No manual scans,
   emulator source, or ROM bytes are committed.
+- **Irem M85 ROM-set metadata** — the checked-in `poundfor` and `poundforj`
+  manifests use public Irem M85 driver metadata for Pound for Pound dump
+  filenames, parent/clone relationships, region sizes, offsets, reloads,
+  CRC-32s, orientation, and PLD metadata. Mnemos uses that metadata for a
+  first-pass M85 board/player route; it is still not visual/audio parity proof.
+  No MAME driver code or ROM bytes are copied into Mnemos.
 - **Irem M92 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m92/games/` use public MAME M92 driver metadata for dump
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the

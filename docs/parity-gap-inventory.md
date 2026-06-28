@@ -481,10 +481,10 @@ generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
-M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M90, M92, and M107. The
+M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107. The
 newest G6 high-water raises cover
 `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-M81-CORPUS`,
-`GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
+`GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
@@ -514,6 +514,14 @@ board-authentic video proof. Gallop now also carries 10 checked-in DIP switch
 definitions, and the M84 adapter composes them into the board default
 (`0xf9bf`) while exposing the switch count through the player system spec for
 both Gallop and Cosmic Cop.
+M85 now has a ROM-contract and first-pass executable wrapper for `poundfor` and
+`poundforj`: the embedded manifests cover the 1 MiB V30 program-pair layout,
+sound CPU ROM, sample ROM, tile/sprite graphics, PLD artifacts, and Japan clone
+parent fallback from the local `D:\emu\irem\M85` ZIPs. `MNEMOS_M85_SET_DIR`
+proves both sets CRC-clean through the adapter; direct `mnemos_player --system
+irem_m85` / `--system m85` smokes wrote 384x256 nonblank screenshots and
+save-state bytes. This is still a compatibility-core bring-up, not board
+authentic M85 graphics/music proof.
 M81 now has a first-pass executable board/profile layer for `dbreed`, `hharry`,
 and `xmultipl`: the embedded manifests preserve the three M81 ROM layouts,
 `MNEMOS_M81_SET_DIR=D:\emu\irem\M81` proves those sorted wrapper ZIPs load
@@ -783,6 +791,41 @@ Cabinet input note: M81, M82, and M84 adapters now consume explicit frontend
 `service` / `test` arcade inputs, keep `mode` as the service alias for older
 callers, map operator test onto the active-low system bit 6, and persist those
 fields in adapter state version 2.
+
+---
+
+## Irem M85 - 1 / 2
+
+#### Manifests / board bring-up
+- [x] **I85-1** Pound for Pound ROM-set contract - `src/manifests/irem_m85`
+  carries checked-in embedded ROM-contract manifests for `poundfor` and
+  `poundforj`, with parser/region-contract coverage for the 1 MiB V30 program
+  pair layout, reset-vector reload, sound CPU ROM, sample ROM, tile/sprite
+  graphics regions, PLD artifacts, and clone-parent inheritance from the local
+  `D:\emu\irem\M85` parent ZIP. `MNEMOS_M85_SET_DIR=D:\emu\irem\M85` data-gates
+  both local ZIPs and proves CRC-clean parent fallback for the Japan split set
+  through the embedded manifests. `scripts/irem/inventory-corpus.ps1` now records
+  the sorted M85 bucket as player-supported metadata for both checked-in sets ·
+  DONE · MED · S · beyond Emu · Evidence:
+  `src/manifests/irem_m85/games/*.toml` +
+  `src/manifests/irem_m85/tests/m85_system_test.cpp` +
+  `scripts/irem/inventory-corpus.ps1`
+- [~] **I85-2** Executable M85 board profile - `src/manifests/irem_m85` now has
+  an M85-owned executable wrapper for `poundfor` and `poundforj`, using the
+  shared M81-compatible V30/Z80/YM2151/DAC/KNA91-style core behind M85 manifest
+  and save identities. `src/apps/player/adapters/irem_m85` registers
+  `--system irem_m85` / `m85`, composes the Japan split clone with the M85
+  parent, reports resident media validation, exposes rollback-ready save-state,
+  and participates in the common data-gated Irem runner. Direct player smoke
+  wrote 384x256 nonblank screenshots and save-state bytes for both local ZIPs.
+  Remaining: replace/verify the compatibility-core assumptions with M85-specific
+  memory/I/O, video/priority, input/DIP, raster, audio, and visual/audio parity
+  evidence before calling the route authentic · PARTIAL · HIGH · M-L · beyond
+  Emu · Evidence: `src/manifests/irem_m85/m85_system.cpp` +
+  `src/manifests/irem_m85/tests/m85_system_test.cpp` +
+  `src/apps/player/adapters/irem_m85/irem_m85_adapter.cpp` +
+  `src/apps/player/adapters/irem_m85/tests/irem_m85_adapter_test.cpp` +
+  `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 ---
 

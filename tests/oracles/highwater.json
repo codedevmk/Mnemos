@@ -69,6 +69,10 @@
       "ctest": "mnemos_apps_player_irem_m84_corpus_golden_test",
       "high_water": "passed"
     },
+    "GLD-M85-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m85_corpus_golden_test",
+      "high_water": "passed"
+    },
     "GLD-M90-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m90_corpus_golden_test",
       "high_water": "passed"

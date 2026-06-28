@@ -48,6 +48,8 @@ TEST_CASE("system_family: every registry id maps to its family") {
     CHECK(family_from_name("m82") == system_family::irem_m82);
     CHECK(family_from_name("irem_m84") == system_family::irem_m84);
     CHECK(family_from_name("m84") == system_family::irem_m84);
+    CHECK(family_from_name("irem_m85") == system_family::irem_m85);
+    CHECK(family_from_name("m85") == system_family::irem_m85);
     CHECK(family_from_name("irem_m92") == system_family::irem_m92);
     CHECK(family_from_name("m92") == system_family::irem_m92);
     CHECK(family_from_name("irem_m107") == system_family::irem_m107);
@@ -79,6 +81,7 @@ TEST_CASE("system_family: names are case-insensitive") {
     CHECK(family_from_name("IREM_M81") == system_family::irem_m81);
     CHECK(family_from_name("IREM_M82") == system_family::irem_m82);
     CHECK(family_from_name("IREM_M84") == system_family::irem_m84);
+    CHECK(family_from_name("IREM_M85") == system_family::irem_m85);
     CHECK(family_from_name("IREM_M92") == system_family::irem_m92);
     CHECK(family_from_name("IREM_M107") == system_family::irem_m107);
     CHECK(family_from_name("TAITO_F2") == system_family::taito_f2);
@@ -95,21 +98,17 @@ TEST_CASE("system_family: unknown names are rejected, never guessed") {
 
 TEST_CASE("system_family: family_from_name and family_id round-trip") {
     for (const auto family :
-         {system_family::genesis,     system_family::sms,         system_family::gg,
-          system_family::c64,         system_family::segacd,      system_family::sega32x,
-          system_family::irem_m72,    system_family::irem_m75,    system_family::irem_m14,
-          system_family::irem_m15,
-          system_family::irem_m27,    system_family::irem_m47,
-          system_family::irem_m52,    system_family::irem_m57,    system_family::irem_m58,
-          system_family::irem_m62,
-          system_family::irem_m63,
-          system_family::irem_m81,
-          system_family::irem_travrusa,
-          system_family::irem_m82,
-          system_family::irem_m84,    system_family::irem_m90,    system_family::irem_m92,
-          system_family::irem_m107,   system_family::taito_f2,    system_family::capcom_cps1,
-          system_family::capcom_cps2, system_family::spectrum,    system_family::nes,
-          system_family::msx,         system_family::msx2,        system_family::amiga500}) {
+         {system_family::genesis,       system_family::sms,      system_family::gg,
+          system_family::c64,           system_family::segacd,   system_family::sega32x,
+          system_family::irem_m72,      system_family::irem_m75, system_family::irem_m14,
+          system_family::irem_m15,      system_family::irem_m27, system_family::irem_m47,
+          system_family::irem_m52,      system_family::irem_m57, system_family::irem_m58,
+          system_family::irem_m62,      system_family::irem_m63, system_family::irem_m81,
+          system_family::irem_travrusa, system_family::irem_m82, system_family::irem_m84,
+          system_family::irem_m85,      system_family::irem_m90, system_family::irem_m92,
+          system_family::irem_m107,     system_family::taito_f2, system_family::capcom_cps1,
+          system_family::capcom_cps2,   system_family::spectrum, system_family::nes,
+          system_family::msx,           system_family::msx2,     system_family::amiga500}) {
         CHECK(family_from_name(family_id(family)) == family);
     }
 }
@@ -117,21 +116,17 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
 TEST_CASE("system_family: family_names lists every accepted id") {
     const std::string names = family_names();
     for (const auto family :
-         {system_family::genesis,     system_family::sms,         system_family::gg,
-          system_family::c64,         system_family::segacd,      system_family::sega32x,
-          system_family::irem_m72,    system_family::irem_m75,    system_family::irem_m14,
-          system_family::irem_m15,
-          system_family::irem_m27,    system_family::irem_m47,
-          system_family::irem_m52,    system_family::irem_m57,    system_family::irem_m58,
-          system_family::irem_m62,
-          system_family::irem_m63,
-          system_family::irem_m81,
-          system_family::irem_travrusa,
-          system_family::irem_m82,
-          system_family::irem_m84,    system_family::irem_m90,    system_family::irem_m92,
-          system_family::irem_m107,   system_family::taito_f2,    system_family::capcom_cps1,
-          system_family::capcom_cps2, system_family::spectrum,    system_family::nes,
-          system_family::msx,         system_family::msx2,        system_family::amiga500}) {
+         {system_family::genesis,       system_family::sms,      system_family::gg,
+          system_family::c64,           system_family::segacd,   system_family::sega32x,
+          system_family::irem_m72,      system_family::irem_m75, system_family::irem_m14,
+          system_family::irem_m15,      system_family::irem_m27, system_family::irem_m47,
+          system_family::irem_m52,      system_family::irem_m57, system_family::irem_m58,
+          system_family::irem_m62,      system_family::irem_m63, system_family::irem_m81,
+          system_family::irem_travrusa, system_family::irem_m82, system_family::irem_m84,
+          system_family::irem_m85,      system_family::irem_m90, system_family::irem_m92,
+          system_family::irem_m107,     system_family::taito_f2, system_family::capcom_cps1,
+          system_family::capcom_cps2,   system_family::spectrum, system_family::nes,
+          system_family::msx,           system_family::msx2,     system_family::amiga500}) {
         CHECK(names.find(family_id(family)) != std::string::npos);
     }
 }
@@ -155,6 +150,7 @@ TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::irem_m81)} == "Irem M81");
     CHECK(std::string{family_label(system_family::irem_m82)} == "Irem M82");
     CHECK(std::string{family_label(system_family::irem_m84)} == "Irem M84");
+    CHECK(std::string{family_label(system_family::irem_m85)} == "Irem M85");
     CHECK(std::string{family_label(system_family::irem_m92)} == "Irem M92");
     CHECK(std::string{family_label(system_family::irem_m107)} == "Irem M107");
     CHECK(std::string{family_label(system_family::taito_f2)} == "Taito F2");

@@ -15,14 +15,15 @@
 #include "irem_m58_adapter.hpp"
 #include "irem_m62_adapter.hpp"
 #include "irem_m63_adapter.hpp"
-#include "irem_travrusa_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "irem_m75_adapter.hpp"
 #include "irem_m81_adapter.hpp"
 #include "irem_m82_adapter.hpp"
 #include "irem_m84_adapter.hpp"
+#include "irem_m85_adapter.hpp"
 #include "irem_m90_adapter.hpp"
 #include "irem_m92_adapter.hpp"
+#include "irem_travrusa_adapter.hpp"
 #include "msx2_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "nes_adapter.hpp"
@@ -55,6 +56,7 @@ namespace mnemos::apps::player {
         adapters::irem_m81::force_link();
         adapters::irem_m82::force_link();
         adapters::irem_m84::force_link();
+        adapters::irem_m85::force_link();
         adapters::irem_m90::force_link();
         adapters::irem_m92::force_link();
         adapters::irem_m107::force_link();

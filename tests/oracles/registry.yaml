@@ -358,6 +358,15 @@ machines:
         data_env: MNEMOS_M84_SET_DIR
         requires_apps: true
 
+  irem_m85:
+    module: src/manifests/irem_m85
+    golden:
+      - id: GLD-M85-CORPUS
+        ctest: mnemos_apps_player_irem_m85_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M85_SET_DIR
+        requires_apps: true
+
   irem_m90:
     module: src/manifests/irem_m90
     golden:
