@@ -1,8 +1,8 @@
 #pragma once
 
-// Checked-in Irem M58 manifests currently provide ROM contracts for the local
-// 10-Yard Fight corpus. Exact Z80 bus timing, video, palette, radar layer, and
-// M52-lineage audio behavior remain board-family implementation gaps.
+// Checked-in Irem M58 manifests provide the ROM contracts used by the first-pass
+// 10-Yard Fight board route. Exact Z80 timing, video priority/color, DIP
+// behavior, and audio parity remain board-family implementation gaps.
 
 #include "m58_embedded_game_manifests.hpp"
 

@@ -7,6 +7,7 @@
 #include "irem_m107_adapter.hpp"
 #include "irem_m15_adapter.hpp"
 #include "irem_m52_adapter.hpp"
+#include "irem_m58_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "irem_m75_adapter.hpp"
 #include "irem_m81_adapter.hpp"
@@ -38,6 +39,7 @@ namespace {
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
     namespace irem_m52 = mnemos::apps::player::adapters::irem_m52;
+    namespace irem_m58 = mnemos::apps::player::adapters::irem_m58;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
     namespace irem_m75 = mnemos::apps::player::adapters::irem_m75;
     namespace irem_m81 = mnemos::apps::player::adapters::irem_m81;
@@ -184,6 +186,16 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> irem_m52_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m52::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{0x3EU, 0x77U, 0x32U, 0x00U, 0x80U,
+                                                0xD3U, 0x10U, 0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m58_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m58::main_rom_size, 0x00U);
         const std::vector<std::uint8_t> program{0x3EU, 0x77U, 0x32U, 0x00U, 0x80U,
                                                 0xD3U, 0x10U, 0xC3U, 0x00U, 0x00U};
         for (std::size_t i = 0; i < program.size(); ++i) {
@@ -469,6 +481,17 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         require_line(summary, "capability memory memory.ym2149_0.registers state=available");
         require_line(summary, "capability memory memory.ym2149_1.registers state=available");
         require_line(summary, "capability memory memory.msm5205.registers state=available");
+    }
+
+    SECTION("Irem M58") {
+        irem_m58::irem_m58_adapter adapter(irem_m58_program(), "Tiny M58");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80_0.registers state=available");
+        require_line(summary, "capability memory memory.z80_1.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
     }
 
     SECTION("Irem M81") {

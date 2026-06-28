@@ -20,8 +20,8 @@ buckets such as `M72`, `M92`, `M62`, `M58`, `travrusa`, and the intentionally
 ignored quarantine buckets `for-delete`, `misc`, and `non-irem`. Of those 477
 items, 212 currently match a checked-in Mnemos Irem manifest, 126 are readable
 through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
-routes, and 104 have an executable player-supported route. The M14, M27, M47,
-M58, M62, and M63 matches are intentionally tracked as contract-only manifests
+routes, and 108 have an executable player-supported route. The M14, M27, M47,
+M62, and M63 matches are intentionally tracked as contract-only manifests
 until board/player profiles exist; ignored buckets may still show filename-level
 manifest matches, but they contribute zero tracked, loadable, supported,
 contract-only, or metadata-only support counts. Windows copy-suffixed checked-in
@@ -31,9 +31,9 @@ untracked corpus classifications remain explicit: `motorace`, `travrusab`, and
 `travrusab2` are Irem `irem/travrusa.cpp` split-clone wrappers blocked by the
 missing parent/shared set `travrusa.zip`; `headon` and `uniwars` / `uniwarsa` are
 non-Irem reference sets from `sega/vicdual.cpp` and `galaxian/galaxian.cpp`.
-The common data-gated runner now includes M14, M27, M47, M58, M62, and M63
+The common data-gated runner now includes M14, M27, M47, M62, and M63
 manifest-load proofs plus G6-ratcheted corpus golden tests for every implemented
-Irem player family: M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107. For
+Irem player family: M15, M52, M58, M72, M75, M81, M82, M84, M90, M92, and M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
@@ -66,7 +66,7 @@ proof.
 | M47 | `irem_m47` ROM contract | 8% contract-only | `olibochu`, `punchkid` | None; CRC-clean media-load contract only | None | Executable Z80 + Z80 M47 board profile, video/color, AY/sample sound, inputs/DIPs, save-state/player adapter, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
-| M58 | `irem_m58` ROM contract | 8% contract-only | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | None; CRC-clean media-load contract only | None | Executable 10-Yard Fight board profile, Z80 board wiring, video/sound, inputs/DIPs, save-state/player adapter, visual/audio parity |
+| M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
 | M62 | `irem_m62` raw-media contracts | 10% contract-only | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
 | M63 | `irem_m63` ROM contract | 8% contract-only | `wilytowr` | None; CRC-clean media-load contract only | None | Executable Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, save-state/player adapter, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
@@ -108,9 +108,13 @@ targets:
 - M47 now has Oli-Boo-Chu and Punching Kid ROM contracts with CRC-clean local
   wrapper proof, including clone-parent inheritance for the split Japan set, but
   no executable board/player route.
-- M58 now has four 10-Yard Fight ROM-set contracts with CRC-clean local ZIP
-  proof. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout package is not ROM
-  evidence and is quarantined under `D:\emu\irem\misc\artwork\M58`.
+- M58 now has four 10-Yard Fight ROM-set contracts plus a first-pass executable
+  Z80/Z80/two-SSG player route. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` proves the
+  four local ZIP sets through the adapter; direct `mnemos_player --system
+  irem_m58` screenshot and `--system m58` save-state smokes prove the
+  user-facing launch path. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout
+  package is not ROM evidence and remains quarantined under
+  `D:\emu\irem\misc\artwork\M58`.
 - M62 now has eleven raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
   load proof, but no executable board/player route. Treat these as corpus
   grouping and future board-input evidence only.
@@ -120,7 +124,7 @@ targets:
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
   present.
-- M15, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
+- M15, M58, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
   regional and bootleg clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,
@@ -265,21 +269,26 @@ visual and audio parity proof.
 ### M58
 
 - **Techsheet games:** 10-Yard Fight.
-- **Mnemos games:** contract-only ROM manifests for `10yard`, `10yardj`,
-  `vs10yard`, and `vs10yardj`.
-- **Smoke playable:** none. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` data-gates
-  CRC-clean media loading for the four canonical local ZIPs, with parent
-  fallback for the regional and Vs. split sets, but there is no executable M58
-  player route yet.
-- **Correct gfx/music:** none.
+- **Mnemos games:** first-pass ROM manifests/player route for `10yard`,
+  `10yardj`, `vs10yard`, and `vs10yardj`.
+- **Smoke playable:** all four canonical local ZIPs. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58`
+  data-gates CRC-clean media loading and nonblank player smoke for the parent,
+  regional clone, and Vs. split sets. Direct `mnemos_player --system irem_m58`
+  and alias `--system m58` smokes also prove screenshot and save-state output.
+- **Correct gfx/music:** none. Current graphics and audio are diagnostic
+  first-pass output, not board-authentic 10-Yard Fight parity.
 - **Current implementation:** `src/manifests/irem_m58` embeds 10-Yard Fight ROM
   contracts with board-evidenced `maincpu`, `soundcpu`, `tiles`, `sprites`, and
-  `proms` regions. The focused manifest test checks embedded TOML
-  synchronization, parent inheritance, region/file invariants, exact canonical
-  ZIP discovery, and CRC-clean local loading through the checked-in manifests.
-- **Remaining:** implement the executable M58 board profile, Z80 board wiring,
-  video/audio, inputs/DIPs, save-state/player adapter, and parity proof before
-  promoting any 10-Yard Fight set from contract-only to smoke playable.
+  `proms` regions, plus `src/manifests/irem_m58/m58_system.cpp` assembles a
+  first-pass M58 board with main Z80, sound Z80, input/DIP MMIO, sound-command
+  latch/IRQ acknowledgement, two YM2149-compatible SSGs, ROM-backed tile/sprite
+  rendering, PROM-derived diagnostic color, scroll/flip state, board identity
+  save/load, player adapter registration, capability discovery, and local corpus
+  smoke.
+- **Remaining:** replace first-pass video/color/priority/radar assumptions with
+  board-evidenced 10-Yard Fight behavior, verify exact memory/I/O timing and
+  sound CPU port protocol, add board/manual-backed DIP behavior, and collect
+  pinned visual/audio parity hashes before calling M58 correct.
 
 ### M62
 

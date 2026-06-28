@@ -8,6 +8,7 @@
 #include "irem_m107_adapter.hpp"
 #include "irem_m15_adapter.hpp"
 #include "irem_m52_adapter.hpp"
+#include "irem_m58_adapter.hpp"
 #include "irem_m72_adapter.hpp"
 #include "irem_m75_adapter.hpp"
 #include "irem_m81_adapter.hpp"
@@ -34,6 +35,7 @@ namespace mnemos::apps::player {
         adapters::sega32x::force_link();
         adapters::irem_m15::force_link();
         adapters::irem_m52::force_link();
+        adapters::irem_m58::force_link();
         adapters::irem_m72::force_link();
         adapters::irem_m75::force_link();
         adapters::irem_m81::force_link();

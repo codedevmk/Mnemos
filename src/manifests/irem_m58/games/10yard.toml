@@ -1,6 +1,6 @@
-# 10-Yard Fight (World) -- Irem M58 ROM-contract manifest.
+# 10-Yard Fight (World) -- Irem M58 ROM manifest.
 # Schema mnemos-romset/1. This preserves public M58 ROM placement for the local
-# 10-Yard Fight parent set without claiming an executable M58 board profile yet.
+# 10-Yard Fight parent set without claiming final board-authentic parity.
 
 [set]
 schema      = "mnemos-romset/1"
