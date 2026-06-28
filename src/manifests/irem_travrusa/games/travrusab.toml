@@ -1,0 +1,114 @@
+# Traverse USA / American Top bootleg -- Irem travrusa ROM contract.
+# Local wrapper: D:\emu\irem\travrusa\travrusab.zip -> travrusab.zip.
+# Shared tile and PROM dumps are inherited from the local travrusa parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "travrusab"
+parent      = "travrusa"
+board       = "irem_travrusa"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "at4.m3"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x704ce6e4
+
+[[region.file]]
+name   = "at5.l3"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x686cb0e6
+
+[[region.file]]
+name   = "at6.k3"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xbaf87d80
+
+[[region.file]]
+name   = "at7.h3"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0x48091ebe
+
+[[region]]
+name = "soundcpu"
+size = 0x8000
+
+[[region.file]]
+name   = "11.a1"
+offset = 0x7000
+size   = 0x1000
+crc32  = 0xd2c0bc33
+
+[[region]]
+name = "tiles"
+size = 0x6000
+
+[[region.file]]
+name   = "zippyrac.001"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xaa8994dd
+
+[[region.file]]
+name   = "mr8.3c"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x3a046dd1
+
+[[region.file]]
+name   = "mr9.3a"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x1cc3d3f4
+
+[[region]]
+name = "sprites"
+size = 0x6000
+
+[[region.file]]
+name   = "8.n3"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x00c0f46b
+
+[[region.file]]
+name   = "9.m3"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x73ade73b
+
+[[region.file]]
+name   = "10.k3"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xfcfeaa69
+
+[[region]]
+name = "proms"
+size = 0x0320
+
+[[region.file]]
+name   = "mmi6349.ij"
+offset = 0x0000
+size   = 0x0200
+crc32  = 0xc9724350
+
+[[region.file]]
+name   = "tbp18s.2"
+offset = 0x0200
+size   = 0x0020
+crc32  = 0xa1130007
+
+[[region.file]]
+name   = "tbp24s10.3"
+offset = 0x0220
+size   = 0x0100
+crc32  = 0x76062638

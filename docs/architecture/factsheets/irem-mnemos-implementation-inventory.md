@@ -18,21 +18,22 @@ That scan found 477 local corpus items across 25 top-level buckets. Direct files
 under `D:\emu\irem` are now zero; the remaining corpus lives under board/system
 buckets such as `M72`, `M92`, `M62`, `M58`, `travrusa`, and the intentionally
 ignored quarantine buckets `for-delete`, `misc`, and `non-irem`. Of those 477
-items, 212 currently match a checked-in Mnemos Irem manifest, 126 are readable
+items, 219 currently match a checked-in Mnemos Irem manifest, 131 are readable
 through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
 routes, and 108 have an executable player-supported route. The M14, M27, M47,
-M62, and M63 matches are intentionally tracked as contract-only manifests
+M62, M63, and travrusa matches are intentionally tracked as contract-only manifests
 until board/player profiles exist; ignored buckets may still show filename-level
 manifest matches, but they contribute zero tracked, loadable, supported,
 contract-only, or metadata-only support counts. Windows copy-suffixed checked-in
 set ZIPs such as `loht (1).zip` are canonicalized to their embedded manifest IDs
-for player loading, M72 corpus-smoke grouping, and inventory grouping. Known
-untracked corpus classifications remain explicit: `motorace`, `travrusab`, and
-`travrusab2` are Irem `irem/travrusa.cpp` split-clone wrappers with the local
-parent/shared set `travrusa.zip` present, but still blocked on Mnemos manifests
-and a board profile; `headon` and `uniwars` / `uniwarsa` are
-non-Irem reference sets from `sega/vicdual.cpp` and `galaxian/galaxian.cpp`.
-The common data-gated runner now includes M14, M27, M47, M62, and M63
+for player loading, M72 corpus-smoke grouping, and inventory grouping. The
+`travrusa` bucket now has checked-in contracts for `travrusa`, `motorace`,
+`travrusab`, and `travrusab2`; the unsuffixed `travrusa.zip` is artwork/layout,
+so the CRC-clean parent proof comes from the copy-suffixed ROM ZIP. Known
+untracked corpus classifications remain explicit: `headon` and `uniwars` /
+`uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
+`galaxian/galaxian.cpp`.
+The common data-gated runner now includes M14, M27, M47, M62, M63, and travrusa
 manifest-load proofs plus G6-ratcheted corpus golden tests for every implemented
 Irem player family: M15, M52, M58, M72, M75, M81, M82, M84, M90, M92, and M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
@@ -70,6 +71,7 @@ proof.
 | M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
 | M62 | `irem_m62` raw-media contracts | 10% contract-only | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
 | M63 | `irem_m63` ROM contract | 8% contract-only | `wilytowr` | None; CRC-clean media-load contract only | None | Executable Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, save-state/player adapter, visual/audio parity |
+| Traverse USA / Zippy Race | `irem_travrusa` ROM contract | 9% contract-only | `travrusa`, `motorace`, `travrusab`, `travrusab2` | None; CRC-clean ZIP media-load contract only | None | Executable Z80 board route, MotoRace encrypted ROM handling, Irem Audio, video/color/input behavior, save-state/player adapter, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
 | M75 | `irem_m75` first-pass | 34% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional and bootleg clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg PROM/color behavior proof |
 | M77 | none | 0% | None | None | None | Board research before implementation |
@@ -333,6 +335,29 @@ visual and audio parity proof.
   AY/sample/discrete sound path, tile/sprite/video/color-PROM behavior,
   inputs/DIPs, save-state/player adapter, Fighting Basketball coverage, and
   visual/audio parity before counting Wily Tower as playable.
+
+### Traverse USA / Zippy Race
+
+- **Techsheet games:** not listed as a numbered board row in the current
+  factsheet; the local corpus maps this family to public `irem/travrusa.cpp`
+  metadata.
+- **Mnemos games:** contract-only ROM manifests for `travrusa`, `motorace`,
+  `travrusab`, and `travrusab2`.
+- **Smoke playable:** none. `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa`
+  data-gates the local ZIP corpus and proves the parent plus split wrappers load
+  CRC-clean through checked-in manifests and clone-parent fallback. The large
+  unsuffixed `travrusa.zip` in that folder is artwork/layout, not the parent ROM
+  dump; the CRC-clean parent ROM proof comes from the copy-suffixed ZIP.
+- **Correct gfx/music:** none.
+- **Current implementation:** `src/manifests/irem_travrusa` preserves the
+  `maincpu`, `soundcpu`, `tiles`, `sprites`, and `proms` region placement for
+  the local Traverse USA / Zippy Race parent, MotoRace USA, and two bootleg
+  wrappers. `motorace`, `travrusab`, and `travrusab2` declare `travrusa` as the
+  parent and use aliases for shared parent dumps where local wrappers only carry
+  unique files.
+- **Remaining:** implement the executable Z80 board route, MotoRace encrypted
+  ROM handling, Irem Audio mapping, tile/sprite/PROM video path, inputs/DIPs,
+  save-state/player adapter, and visual/audio parity.
 
 ### M72
 
@@ -675,10 +700,11 @@ visual and audio parity proof.
 
 1. Supply trusted visual/audio parity hashes for the new M52 hash oracle and
    the existing M72 hash oracle before promoting any game to "correct gfx/music".
-2. Add Mnemos manifests and a board profile for `travrusa`, `motorace`,
-   `travrusab`, and `travrusab2`; the parent/shared archive is now present
-   locally, and the inventory reports the split wrappers as
-   `irem_split_clone_parent_present`, not playable ROM sets.
+2. Promote `irem_travrusa` from contract-only manifests to an executable
+   board/player route for `travrusa`, `motorace`, `travrusab`, and
+   `travrusab2`; CRC-clean ZIP media proof is in place, the unsuffixed
+   `travrusa.zip` is artwork/layout, and MotoRace still needs encrypted-ROM
+   handling before it can be called playable.
 3. Advance M52 Moon Patrol from first-pass route to authentic video/audio by
    replacing the diagnostic compositor and first-pass digital audio with board-evidenced
    parallax, road, sprite, sound-CPU-owned MSM5205 stream timing, and discrete

@@ -421,11 +421,11 @@ match checked-in manifests. Five items match M14 manifests, four match M15, five
 match M27, five match M47, six match M52, twelve match M58, twenty match M62,
 four match M63, eighty-six match M72, twenty-one match M75, twenty-two match
 M81, thirty-one match M82, fourteen match M84, eight match M90, sixty-five
-match M92, and eleven match M107. The inventory separates manifest tracking,
-media loadability, and player support: 212 items match a checked-in Irem
-manifest from non-ignored buckets, 126 are readable through current ZIP /
+match M92, eleven match M107, and seven match travrusa. The inventory separates
+manifest tracking, media loadability, and player support: 219 items match a checked-in Irem
+manifest from non-ignored buckets, 131 are readable through current ZIP /
 single-inner-ZIP / folder routes, 108 are backed by an executable
-player-supported route, 26 are tracked contract-only, and 78 tracked matches
+player-supported route, 33 are tracked contract-only, and 78 tracked matches
 remain metadata-only until converted to ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
@@ -468,18 +468,19 @@ contract-only `wilytowr` with `next_action = add_board_profile`, so Wily Tower
 is visible without being counted as playable M63 support.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract keeps
-the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The remaining
-known untracked classifications are explicit rather than generic sort work:
-`motorace`, `travrusab`, and `travrusab2` are Irem `irem/travrusa.cpp`
-split-clone wrappers with local parent/shared media `travrusa.zip` present but
-blocked by missing Mnemos manifests and a board profile,
-while `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
+the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The local
+travrusa grouping now tracks `travrusa`, `motorace`, `travrusab`, and
+`travrusab2` as contract-only under `src/manifests/irem_travrusa`;
+`MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` proves the CRC-clean ZIP route,
+and the unsuffixed `travrusa.zip` is artwork/layout rather than parent ROM
+proof. The remaining known untracked classifications are explicit rather than
+generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not be counted
 as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
 M82, M84, M90, M92, M107, and now M58, and also reports the M14, M27, M47, M62,
-and M63 manifest-only data gates separately. The newest G6 high-water raises cover
+M63, and travrusa manifest-only data gates separately. The newest G6 high-water raises cover
 `GLD-M15-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
@@ -688,6 +689,18 @@ board profile.
 #### Manifests / board bring-up
 - [x] **I63-1** Local M63 Wily Tower ROM-set contract — `src/manifests/irem_m63` carries a checked-in embedded ROM-contract manifest for `wilytowr`, preserving the local Wily Tower filenames, region sizes, offsets, and CRC32 values for `maincpu`, `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`. `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` data-gates the local `wilytowr` ZIP and proves it loads CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` classifies the match as `tracked_contract_only` with `next_action = add_board_profile`, so Wily Tower is visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m63/games/wilytowr.toml` + `src/manifests/irem_m63/tests/m63_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
 - [ ] **I63-2** Executable M63 board profile — Implement the real board route for the M63 family: Z80 main CPU, 8039-class sound CPU behavior, AY/sample/discrete audio path, tile/sprite/video/color-PROM behavior, inputs/DIPs, Fighting Basketball manifest coverage, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current `wilytowr` manifest is only an artifact contract and must not be used as proof that Wily Tower is playable in Mnemos · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_m63/*` board implementation + `src/apps/player/adapters/irem_m63/*` + data-gated player smoke
+
+---
+
+## Irem Traverse USA / Zippy Race — 1 / 2
+
+This section tracks the early Zippy Race / Traverse USA family separately from
+M52/M58/M62/M72 because the local corpus maps it to public `irem/travrusa.cpp`
+metadata rather than any already-executable Mnemos board profile.
+
+#### Manifests / board bring-up
+- [x] **ITRAV-1** Local travrusa ROM-set contracts — `src/manifests/irem_travrusa` carries checked-in embedded ROM-contract manifests for `travrusa`, `motorace`, `travrusab`, and `travrusab2`, preserving local filenames, region sizes, offsets, CRC32 values, parent fallback, and aliases for the split wrappers. `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` data-gates the local ZIP corpus, selects the CRC-clean parent route instead of the artwork/layout-only `travrusa.zip`, and proves the single-inner wrapper ZIPs load through embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies all local travrusa matches as `tracked_contract_only` with `next_action = add_board_profile`, so they are visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_travrusa/games/*.toml` + `src/manifests/irem_travrusa/tests/travrusa_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **ITRAV-2** Executable travrusa board profile — Implement the real board route for the travrusa family: Z80 main CPU, Irem sound path, title-specific memory and I/O maps, video/color/sprite behavior, inputs/DIPs, save-state identity, player adapter registration, local corpus smoke, encrypted MotoRace ROM handling, and eventual visual/audio parity. The current manifests are only artifact contracts and must not be used as proof that Traverse USA, MotoRace USA, or the bootlegs are playable in Mnemos · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_travrusa/*` board implementation + `src/apps/player/adapters/irem_travrusa/*` + data-gated player smoke
 
 ---
 

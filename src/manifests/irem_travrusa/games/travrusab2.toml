@@ -1,0 +1,127 @@
+# Traverse USA bootleg 2 -- Irem travrusa ROM contract.
+# Local wrapper: D:\emu\irem\travrusa\travrusab2.zip -> travrusab2.zip.
+# The wrapper carries only the unique dumps; aliases resolve shared parent
+# dumps from the local travrusa parent archive.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "travrusab2"
+parent      = "travrusa"
+board       = "irem_travrusa"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "0.2m3"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xc96e81ac
+
+[[region.file]]
+name    = "5.2l3"
+aliases = ["zr1-5.l3"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x145d6b34
+
+[[region.file]]
+name    = "6.2k3"
+aliases = ["zr1-6a.k3"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0xe1b51383
+
+[[region.file]]
+name   = "7.2j3"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0xab8a3a33
+
+[[region]]
+name = "soundcpu"
+size = 0x8000
+
+[[region.file]]
+name    = "4.1a1"
+aliases = ["mr10.1a"]
+offset  = 0x7000
+size    = 0x1000
+crc32   = 0xa02ad8a0
+
+[[region]]
+name = "tiles"
+size = 0x6000
+
+[[region.file]]
+name    = "1.1e3"
+aliases = ["zippyrac.001"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0xaa8994dd
+
+[[region.file]]
+name    = "2.1c3"
+aliases = ["mr8.3c"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x3a046dd1
+
+[[region.file]]
+name    = "3.1a3"
+aliases = ["mr9.3a"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0x1cc3d3f4
+
+[[region]]
+name = "sprites"
+size = 0x6000
+
+[[region.file]]
+name    = "8.3n3"
+aliases = ["zr1-8.n3"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0x3e2c7a6b
+
+[[region.file]]
+name    = "9.3m3"
+aliases = ["zr1-9.l3"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x13be6a14
+
+[[region.file]]
+name    = "10.3k3"
+aliases = ["zr1-10.k3"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0x6fcc9fdb
+
+[[region]]
+name = "proms"
+size = 0x0320
+
+[[region.file]]
+name    = "6349-2.1k2"
+aliases = ["mmi6349.ij"]
+offset  = 0x0000
+size    = 0x0200
+crc32   = 0xc9724350
+
+[[region.file]]
+name    = "tbp18s030.3f1"
+aliases = ["tbp18s.2"]
+offset  = 0x0200
+size    = 0x0020
+crc32   = 0xa1130007
+
+[[region.file]]
+name    = "mb7052.3h2"
+aliases = ["tbp24s10.3"]
+offset  = 0x0220
+size    = 0x0100
+crc32   = 0x76062638
