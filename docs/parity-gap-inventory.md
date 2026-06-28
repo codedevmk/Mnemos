@@ -419,14 +419,14 @@ zero; ROM evidence is sorted into board/system buckets, while `for-delete`,
 `misc`, and `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The raw scanner sees
-four M14 manifest-name matches, four M15, four M27, three M47, five M52, twelve
-M58, seventeen M62, three M63, eighty true-M72, seventeen M75, twenty-two M81,
+four M14 manifest-name matches, four M15, four M27, three M47, five M52, two
+M57, twelve M58, seventeen M62, three M63, eighty true-M72, seventeen M75, twenty-two M81,
 twenty-five M82, fourteen M84, six M90, fifty-two M92, eleven M107, and seven
 travrusa. The inventory separates manifest tracking, media loadability, and
-player support: 224 items match a checked-in Irem manifest from non-ignored
-buckets, 136 are readable through current ZIP / single-inner-ZIP / folder
-routes, 136 are backed by an executable player-supported route, 0 are tracked
-contract-only, and 88 tracked matches remain metadata-only until converted to
+player support: 226 items match a checked-in Irem manifest from non-ignored
+buckets, 137 are readable through current ZIP / single-inner-ZIP / folder
+routes, 137 are backed by an executable player-supported route, 0 are tracked
+contract-only, and 89 tracked matches remain metadata-only until converted to
 ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
@@ -457,6 +457,9 @@ The local M47 grouping now tracks `D:\emu\irem\M47\olibochu.zip` and
 `D:\emu\irem\M47\punchkid.zip` as first-pass player-loadable M47 items, with
 `punchkid` still resolving shared media from `olibochu`; `punchkid.7z` remains
 metadata-only until converted or unpacked.
+The local M57 grouping now tracks `D:\emu\irem\M57\newtangl.zip` as a
+direct player-loadable first-pass New Tropical Angel route; `newtangl.7z`
+remains metadata-only until converted or unpacked.
 The local M58 grouping now tracks `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj` as first-pass player-loadable 10-Yard Fight manifests. The four ZIP
 sets are direct player-loadable through `irem_m58`; the five 7z archives remain
@@ -478,9 +481,9 @@ generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
-M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M90, M92, and M107. The
+M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M90, M92, and M107. The
 newest G6 high-water raises cover
-`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-M81-CORPUS`,
+`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
@@ -638,7 +641,7 @@ later V30 M72-family hardware.
 
 #### Manifests / board bring-up
 - [x] **I52-1** Moon Patrol ROM-set contract — `src/manifests/irem_m52` carries checked-in embedded ROM-contract manifests for `mpatrol` and `mpatrolw`, including program, sound, text, sprite, PROM regions, and 13 SW1/SW2 DIP definitions from the Moon Patrol Instruction Manual; the Williams clone inherits the parent DIP table. The local wrappers under `D:\emu\irem\M52` are now tracked M52 ZIP routes in `scripts/irem/inventory-corpus.ps1`; `mpatrolw` declares `mpatrol` as parent and resolves shared parent dumps from a sibling wrapper or supplemental media instead of accepting missing shared files as clean proof · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m52/games/*.toml` + `src/manifests/irem_m52/tests/m52_rom_contract_test.cpp` + `src/apps/player/adapters/irem_m52/tests/irem_m52_adapter_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `THIRD-PARTY-REFERENCES.md`
-- [~] **I52-2** Executable M52 board profile — `src/manifests/irem_m52` now assembles a first-pass Irem M52 board route with Z80 main CPU, Moon Patrol memory windows, input/DIP MMIO, scroll/background control latches, deterministic board identity, rollback-ready save/load, player adapter registration under `--system irem_m52` / `m52`, capability discovery, service/test input mapping with save-state proof, real local corpus data-gate, and nonblank framebuffer output. The board now owns two native YM2149/AY-3-8910-compatible SSG instances and a native OKI MSM5205 ADPCM decoder with register introspection, save/load coverage, and adapter audio mixing. It also owns and schedules a second Z80 sound CPU with mapped `soundcpu` ROM/RAM, sound-command latch IRQ/ack state, save-state coverage, and adapter/capability exposure as `memory.z80_1.registers`; the sound CPU can read/ack the command latch and write the currently modeled AY/MSM ports. Main-CPU sound commands now only update the command latch and IRQ line; focused coverage proves a latch write leaves AY/MSM state untouched until the sound Z80 executes its port sequence. The adapter retains parsed Moon Patrol DIP metadata, folds the manual's active-high factory defaults to board-visible `dsw1=0x01` / `dsw2=0x02`, exposes `DIP switches=13`, and bumps the M52 board/save-target revision for the corrected sound-ownership identity. The compositor no longer uses executable program/sound ROM bytes or generic work RAM bytes as direct pixel entropy; focused tests prove executable-region changes leave identical video output, and a 4-byte sprite-RAM record pass now renders 16x16 object pixels through the declared `sprite_gfx` region before the text layer. `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned visual/audio SHA-256 oracle over a reference-captured M52 set, hashing the final RGBA framebuffer and interleaved s16le audio after a deterministic frame count. Remaining: replace the remaining first-pass background placeholder with board-evidenced parallax/road/text priority, verify the exact M52 sound CPU port map plus MSM5205 stream timing against board evidence, implement discrete-analog behavior beyond the currently modeled AY/MSM port surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route, and prove runtime DIP behavior beyond current manual defaults, raster timing, and trusted screenshot/audio parity hashes before calling Moon Patrol authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/chips/audio/msm5205/*` + `src/manifests/irem_m52/m52_system.cpp` + `src/manifests/irem_m52/tests/m52_system_test.cpp` + `src/apps/player/adapters/irem_m52/irem_m52_adapter.cpp` + `src/apps/player/adapters/irem_m52/tests/irem_m52_adapter_test.cpp` + `tests/oracles/registry.yaml` + `docs/architecture/factsheets/irem-system-boards-reference.md`
+- [~] **I52-2** Executable M52 board profile — `src/manifests/irem_m52` now assembles a first-pass Irem M52 board route with Z80 main CPU, Moon Patrol memory windows, input/DIP MMIO, scroll/background control latches, deterministic board identity, rollback-ready save/load, player adapter registration under `--system irem_m52` / `m52`, capability discovery, service/test input mapping with save-state proof, real local corpus data-gate, and nonblank framebuffer output. The board now owns two native YM2149/AY-3-8910-compatible SSG instances and a native OKI MSM5205 ADPCM decoder with register introspection, save/load coverage, and adapter audio mixing. It also owns and schedules a second Z80 sound CPU with mapped `soundcpu` ROM/RAM, sound-command latch IRQ/ack state, save-state coverage, and adapter/capability exposure as `memory.z80_1.registers`; the sound CPU can read/ack the command latch and write the currently modeled AY/MSM ports. Main-CPU sound commands now only update the command latch and IRQ line; focused coverage proves a latch write leaves AY/MSM state untouched until the sound Z80 executes its port sequence. The adapter retains parsed Moon Patrol DIP metadata, folds the manual's active-high factory defaults to board-visible `dsw1=0x01` / `dsw2=0x02`, exposes `DIP switches=13`, and bumps the M52 board/save-target revision for the corrected sound-ownership identity. The compositor no longer uses executable program/sound ROM bytes or generic work RAM bytes as direct pixel entropy; focused tests prove executable-region changes leave identical video output, and a 4-byte sprite-RAM record pass now renders 16x16 object pixels through the declared `sprite_gfx` region before the text layer. `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned visual/audio SHA-256 oracle over a reference-captured M52 set, hashing the final RGBA framebuffer and interleaved s16le audio after a deterministic frame count. Remaining: replace the remaining first-pass background placeholder with board-evidenced parallax/road/text priority, verify the exact M52 sound CPU port map plus MSM5205 stream timing against board evidence, implement discrete-analog behavior beyond the currently modeled AY/MSM port surfaces, clarify the Moon Patrol / Tropical Angel board split against primary evidence, and prove runtime DIP behavior beyond current manual defaults, raster timing, and trusted screenshot/audio parity hashes before calling Moon Patrol authentic · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/chips/audio/msm5205/*` + `src/manifests/irem_m52/m52_system.cpp` + `src/manifests/irem_m52/tests/m52_system_test.cpp` + `src/apps/player/adapters/irem_m52/irem_m52_adapter.cpp` + `src/apps/player/adapters/irem_m52/tests/irem_m52_adapter_test.cpp` + `tests/oracles/registry.yaml` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 Video note: the M52 text pass now uses the shared layer plotter, so flip-screen
 mirrors final tile positions in addition to glyph pixel order.
@@ -652,6 +655,18 @@ DIP note: `mpatrol` now carries 13 active-high SW1/SW2 DIP entries transcribed
 from the Moon Patrol Instruction Manual. `mpatrolw` inherits the table; the
 adapter folds the factory default to `dsw1=0x01`, `dsw2=0x02`, publishes
 `DIP switches=13`, and still honors explicit `--dip` override.
+
+---
+
+## Irem M57 — 2 / 2
+
+This section is split from M52/M58 because the local New Tropical Angel evidence
+is sorted under M57 and should not inherit Moon Patrol or 10-Yard Fight board
+behavior without primary board evidence.
+
+#### Manifests / board bring-up
+- [x] **I57-1** Local M57 New Tropical Angel raw-media ROM contract — `src/manifests/irem_m57` carries a checked-in embedded raw-media manifest for `newtangl`, preserving the local filenames, region sizes, offsets, and CRC32 values from `D:\emu\irem\M57\newtangl.zip`. `MNEMOS_M57_SET_DIR=D:\emu\irem\M57` data-gates the local ZIP and proves it loads CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` classifies `newtangl.zip` as direct player-loadable and leaves `newtangl.7z` metadata-only until converted or unpacked, so M57 no longer reports as unimplemented in the local corpus accounting · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m57/games/newtangl.toml` + `src/manifests/irem_m57/tests/m57_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **I57-2** Executable M57 board profile — First-pass route exists for New Tropical Angel: `src/manifests/irem_m57/m57_system.cpp` derives a Z80 execution window and diagnostic graphics window from the raw-media artifact contract, owns scratch/video/color/work RAM, active-high arcade inputs, a sound latch, beeper-backed synthetic audio, deterministic 256x256 nonblank video, board identity save/load, player adapter registration, capability discovery, and local corpus smoke. `src/apps/player/adapters/irem_m57` registers `--system irem_m57` / `m57`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml`, resident media validation, rollback-ready save-state, and real local M57 smoke through `MNEMOS_M57_SET_DIR=D:\emu\irem\M57`. Direct player smokes wrote a nonblank screenshot for `newtangl.zip` and a rollback save state through the `m57` alias. This is smoke-playable, not authentic parity: exact M57 memory/I/O maps, video/color behavior, Irem Audio path, inputs/DIPs, New Tropical Angel timing, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m57/m57_system.cpp` + `src/manifests/irem_m57/tests/m57_system_test.cpp` + `src/apps/player/adapters/irem_m57/*` + `MNEMOS_M57_SET_DIR=D:\emu\irem\M57` corpus golden + direct `mnemos_player --system irem_m57` / `--system m57` smoke
 
 ---
 

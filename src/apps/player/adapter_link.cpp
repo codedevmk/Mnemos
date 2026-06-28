@@ -11,6 +11,7 @@
 #include "irem_m27_adapter.hpp"
 #include "irem_m47_adapter.hpp"
 #include "irem_m52_adapter.hpp"
+#include "irem_m57_adapter.hpp"
 #include "irem_m58_adapter.hpp"
 #include "irem_m62_adapter.hpp"
 #include "irem_m63_adapter.hpp"
@@ -44,6 +45,7 @@ namespace mnemos::apps::player {
         adapters::irem_m27::force_link();
         adapters::irem_m47::force_link();
         adapters::irem_m52::force_link();
+        adapters::irem_m57::force_link();
         adapters::irem_m58::force_link();
         adapters::irem_m62::force_link();
         adapters::irem_m63::force_link();

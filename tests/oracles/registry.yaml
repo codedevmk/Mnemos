@@ -238,6 +238,15 @@ machines:
         data_env: MNEMOS_M52_PARITY_SET
         requires_apps: true
 
+  irem_m57:
+    module: src/manifests/irem_m57
+    golden:
+      - id: GLD-M57-CORPUS
+        ctest: mnemos_apps_player_irem_m57_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M57_SET_DIR
+        requires_apps: true
+
   irem_m58:
     module: src/manifests/irem_m58
     golden:

@@ -101,6 +101,7 @@ namespace mnemos::apps::player {
             family == system_family::irem_m27 ||
             family == system_family::irem_m47 ||
             family == system_family::irem_m52 ||
+            family == system_family::irem_m57 ||
             family == system_family::irem_m58 || family == system_family::irem_m62 ||
             family == system_family::irem_m63 || family == system_family::irem_travrusa ||
             family == system_family::irem_m72 || family == system_family::irem_m75 ||
@@ -117,6 +118,7 @@ namespace mnemos::apps::player {
              family == system_family::irem_m27 ||
              family == system_family::irem_m47 ||
              family == system_family::irem_m52 ||
+             family == system_family::irem_m57 ||
              family == system_family::irem_m58 || family == system_family::irem_m62 ||
              family == system_family::irem_m63 || family == system_family::irem_travrusa ||
              family == system_family::irem_m72 || family == system_family::irem_m75 ||
@@ -137,6 +139,7 @@ namespace mnemos::apps::player {
                 family == system_family::irem_m27 ||
                 family == system_family::irem_m47 ||
                 family == system_family::irem_m52 ||
+                family == system_family::irem_m57 ||
                 family == system_family::irem_m58 || family == system_family::irem_m62 ||
                 family == system_family::irem_m63 || family == system_family::irem_travrusa ||
                 family == system_family::irem_m72 || family == system_family::irem_m75 ||
@@ -196,6 +199,7 @@ namespace mnemos::apps::player {
         case system_family::irem_m27:
         case system_family::irem_m47:
         case system_family::irem_m52:
+        case system_family::irem_m57:
         case system_family::irem_m58:
         case system_family::irem_m62:
         case system_family::irem_m63:

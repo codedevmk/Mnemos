@@ -20,11 +20,13 @@ buckets such as `M72`, `M92`, `M62`, `M58`, and `travrusa`, plus quarantine or
 classification buckets such as `for-delete`, `misc`, and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 224 currently match a
-checked-in Mnemos Irem manifest, 136 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 136 have an
-executable player-supported route. M63 now has a first-pass Wily Tower player
-route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
+not yet map it to a numbered M-board. Of those 437 items, 226 currently match a
+checked-in Mnemos Irem manifest, 137 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 137 have an
+executable player-supported route. M57 now has a first-pass New Tropical Angel
+player route; `newtangl.zip` is supported while `newtangl.7z` remains
+metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
+player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
 remain metadata-only until converted or unpacked. No tracked local item is
 currently contract-only; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
@@ -48,10 +50,10 @@ artwork/layout, so the CRC-clean parent proof comes from the copy-suffixed ROM
 ZIP. Known untracked corpus classifications remain explicit: `headon` and
 `uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
 `galaxian/galaxian.cpp`.
-The common data-gated runner now includes the M63 player corpus proof plus
-G6-ratcheted corpus golden tests for every implemented Irem player family: M14,
-M15, M27, M47, M52, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M90, M92,
-and M107. For
+The common data-gated runner now includes the M57 and M63 player corpus proofs
+plus G6-ratcheted corpus golden tests for every implemented Irem player family:
+M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84,
+M90, M92, and M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
@@ -82,8 +84,8 @@ proof.
 | M14 | `irem_m14` first-pass | 16% | `ptrmj` | local P.T. Reach Mahjong ZIPs through the adapter; direct `mnemos_player --system irem_m14` nonblank screenshot and `--system m14` save-state proof | None | Authentic NEC D8085AC/8085 CPU timing instead of the temporary 8080-compatible surrogate, video/color, paddle/mahjong/input behavior, discrete/sample sound, visual/audio parity |
 | M27 | `irem_m27` first-pass | 18% | `panther` | local Panther ZIPs through the adapter; direct `mnemos_player --system irem_m27` nonblank screenshot and `--system m27` save-state proof | None | Authentic M27 memory/I/O timing, bitmap/char video and color behavior, input/DIP behavior, Panther audio-board behavior, raster/audio/video parity |
 | M47 | `irem_m47` first-pass | 22% | `olibochu`, `punchkid` | local Oli-Boo-Chu parent and Punching Kid split clone ZIPs; direct `mnemos_player --system irem_m47` nonblank screenshot and `--system m47` save-state proof | None | Authentic M47 memory/I/O timing, video/color PROM behavior, AY/sample sound timing, input/DIP parity, visual/audio parity |
-| M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
-| M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
+| M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Moon Patrol / Tropical Angel board-split proof, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
+| M57 | `irem_m57` first-pass raw-media route | 12% | `newtangl` | local New Tropical Angel ZIP through the adapter; direct `mnemos_player --system irem_m57` nonblank screenshot and `--system m57` save-state proof | None | Authentic M57 memory/I/O timing, video/color, Irem Audio, inputs/DIPs, visual/audio parity |
 | M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
 | M62 | `irem_m62` first-pass raw-media route | 18% | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | all 11 local ZIP routes through the adapter; direct `mnemos_player --system irem_m62` nonblank screenshot and `--system m62` save-state proof for `ldrun` | None | Authentic Z80/M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, inputs/DIPs, visual/audio parity |
 | M63 | `irem_m63` first-pass | 14% | `wilytowr` | local Wily Tower ZIP through the adapter; direct `mnemos_player --system irem_m63` nonblank screenshot and `--system m63` save-state proof | None | Authentic Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, input/DIP behavior, visual/audio parity |
@@ -321,18 +323,31 @@ visual and audio parity proof.
 - **Remaining:** replace the remaining first-pass background placeholder with
   board-evidenced parallax/road/text priority, verify the exact M52 sound CPU port map
   and MSM5205 stream timing against board evidence, implement the
-  discrete-analog path beyond the currently modeled AY/MSM port surfaces, add Tropical Angel coverage if M52/M57 evidence confirms the route,
-  and prove runtime DIP behavior beyond current manual defaults, raster timing,
-  and trusted screenshot/audio parity hashes.
+  discrete-analog path beyond the currently modeled AY/MSM port surfaces, clarify
+  the Moon Patrol / Tropical Angel board split against primary evidence, and prove
+  runtime DIP behavior beyond current manual defaults, raster timing, and trusted
+  screenshot/audio parity hashes.
 
 ### M57
 
 - **Techsheet games:** Tropical Angel.
-- **Mnemos games:** none.
-- **Smoke playable:** none.
+- **Mnemos games:** first-pass raw-media manifest/player route for `newtangl`.
+- **Smoke playable:** the local `D:\emu\irem\M57\newtangl.zip` route loads
+  through `MNEMOS_M57_SET_DIR=D:\emu\irem\M57`; direct player proof wrote a
+  nonblank 256x256 screenshot with `--system irem_m57` and a rollback save state
+  with alias `--system m57`. `newtangl.7z` remains metadata-only until converted
+  or unpacked.
 - **Correct gfx/music:** none.
-- **Remaining:** research sparse board documentation, then implement manifests,
-  Z80 board wiring, video, Irem Audio, inputs/DIPs, and parity proof.
+- **Current implementation:** `src/manifests/irem_m57` embeds the local
+  `newtangl` raw-media contract with exact local filenames, offsets, sizes, and
+  CRC32 values. The first-pass board derives a Z80 execution window and
+  diagnostic graphics window from the contiguous raw media, exposes
+  RAM/input/sound-latch surfaces, nonblank video, beeper-backed audio for
+  synthetic programs, board identity save/load, player adapter registration,
+  capability discovery, and local corpus smoke.
+- **Remaining:** replace the first-pass raw-media/Z80 diagnostic route with the
+  authentic M57 board map, video/color behavior, Irem Audio path, inputs/DIPs,
+  New Tropical Angel timing, and visual/audio parity before calling M57 correct.
 
 ### M58
 
@@ -794,13 +809,16 @@ visual and audio parity proof.
    protection/DIP/parity slices; the remaining M72 work is not missing media but
    stronger authenticity proof.
 6. Advance M63 Wily Tower from first-pass smoke-playable to authentic behavior:
-   the Z80/8039 board map, AY/sample/discrete audio, video/color PROM behavior,
-   inputs/DIPs, Fighting Basketball coverage, and visual/audio parity remain
-   open.
-7. Advance M14 P.T. Reach Mahjong from first-pass smoke-playable to authentic
+    the Z80/8039 board map, AY/sample/discrete audio, video/color PROM behavior,
+    inputs/DIPs, Fighting Basketball coverage, and visual/audio parity remain
+    open.
+7. Advance M57 New Tropical Angel from first-pass smoke-playable to authentic
+   behavior: the real M57 memory/I/O map, video/color behavior, Irem Audio path,
+   inputs/DIPs, timing, and visual/audio parity remain open.
+8. Advance M14 P.T. Reach Mahjong from first-pass smoke-playable to authentic
    behavior by replacing the 8080-compatible surrogate with board-evidenced
    8085 timing, input, color, and sound behavior.
-8. Advance M47 Oli-Boo-Chu / Punching Kid from first-pass smoke-playable to
+9. Advance M47 Oli-Boo-Chu / Punching Kid from first-pass smoke-playable to
    authentic behavior: memory/I/O timing, video/color PROM behavior, AY/sample
    sound timing, input/DIP parity, and visual/audio parity remain open.
 9. Promote M62 from the first-pass raw-media diagnostic route to an authentic

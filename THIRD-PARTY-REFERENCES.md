@@ -167,6 +167,12 @@ multiple independent open-source implementations.
   that metadata for a first-pass M58 board/player route; it is still not
   visual/audio parity proof. No MAME driver code or ROM bytes are copied into
   Mnemos.
+- **Irem M57 ROM-set metadata** — the checked-in `newtangl` manifest records the
+  local M57/Tropical Angel-family wrapper filenames, region size, CRC-32s,
+  orientation, and board-family classification. Mnemos routes a first-pass M57
+  player through that raw-media artifact contract; it is not visual/audio parity
+  proof for the authentic M57 board. No MAME driver code or ROM bytes are copied
+  into Mnemos.
 - **Irem M62 ROM-set metadata** — declarative raw-media manifests under
   `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
   region sizes, CRC-32s, and board-family classification. The Horizon local
