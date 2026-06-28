@@ -50,6 +50,14 @@ namespace mnemos::manifests::irem_m72 {
             return std::nullopt;
         }
 
+        [[nodiscard]] std::uint8_t read_sample_rom_byte(std::span<const std::uint8_t> samples,
+                                                        std::uint32_t address) noexcept {
+            if (address >= samples.size()) {
+                return 0xFFU;
+            }
+            return samples[static_cast<std::size_t>(address)];
+        }
+
         [[nodiscard]] std::uint8_t no_dump_hle_startup_pattern_byte(std::size_t offset) noexcept {
             return static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
         }
@@ -442,7 +450,7 @@ namespace mnemos::manifests::irem_m72 {
                 if (samples == nullptr || samples->empty()) {
                     return 0xFFU;
                 }
-                const std::uint8_t byte = (*samples)[sample_address % samples->size()];
+                const std::uint8_t byte = read_sample_rom_byte(*samples, sample_address);
                 ++sample_address;
                 return byte;
             }
@@ -546,7 +554,7 @@ namespace mnemos::manifests::irem_m72 {
                             return 0xFFU;
                         }
                         const std::uint8_t sample =
-                            (*samples)[mcu_sample_address % samples->size()];
+                            read_sample_rom_byte(*samples, mcu_sample_address);
                         ++mcu_sample_address;
                         return sample;
                     }

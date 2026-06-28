@@ -496,6 +496,10 @@ visual and audio parity proof.
   certification. `MNEMOS_M72_PARITY_SET` can now pair a trusted ROM path with
   `MNEMOS_M72_PARITY_FRAME_SHA256` and/or `MNEMOS_M72_PARITY_AUDIO_SHA256` to
   turn that parity evidence into a deterministic CTest assertion.
+- **Sample cursor proof:** the sound-Z80 sample-read port and protection-MCU
+  MOVX sample-data port now use direct bounded reads against the loaded sample
+  region. If either cursor runs past the loaded sample ROM, the read returns
+  open bus (`0xff`) rather than wrapping to offset zero.
 - **Current local artifact proof:** no checked-in M72 manifest artifact is
   currently missing from the board-local corpus: the recursive preflight against
   `D:\emu\irem\M72` reports `417/417` present. The optional full-roster CTest is

@@ -850,6 +850,38 @@ TEST_CASE("m72 Z80 streams sample bytes from the sample ROM into the DAC", "[m72
     CHECK(system->dac.output() == (0xA0 - 0x80) * 64);
 }
 
+TEST_CASE("m72 Z80 sample reads do not wrap past the sample ROM", "[m72]") {
+    rom_set_image image;
+    image.regions["samples"] = {0x11U, 0x22U};
+    auto system = assemble_m72(std::move(image));
+    system->sound_cpu.set_reset_line(false);
+    system->sample_address = 1U;
+
+    const std::vector<std::uint8_t> program{
+        0xDBU, 0x84U, 0xD3U, 0x82U, // IN A,(84); OUT (82),A
+        0xDBU, 0x84U, 0xD3U, 0x82U, // IN A,(84); OUT (82),A
+        0x76U,                      // HALT
+    };
+    for (std::size_t i = 0; i < program.size(); ++i) {
+        system->sound_ram[i] = program[i];
+    }
+
+    for (int i = 0; i < 2; ++i) {
+        system->sound_cpu.step_instruction();
+    }
+    CHECK(system->dac.level() == 0x22U);
+    CHECK(system->sample_address == 2U);
+
+    for (int i = 0; i < 2; ++i) {
+        system->sound_cpu.step_instruction();
+    }
+    CHECK(system->dac.level() == 0xFFU);
+    CHECK(system->sample_address == 3U);
+    REQUIRE(system->dac_write_events.size() == 2U);
+    CHECK(system->dac_write_events[0].output == (0x22 - 0x80) * 64);
+    CHECK(system->dac_write_events[1].output == (0xFF - 0x80) * 64);
+}
+
 TEST_CASE("m72 records DAC writes on the sound-clock timeline", "[m72]") {
     auto system = assemble_m72(rom_set_image{});
     REQUIRE(system->dac_write_events.empty());
@@ -947,6 +979,23 @@ TEST_CASE("m72 protection MCU answers the V30 through the latch pair", "[m72]") 
     CHECK(system->main_bus.read8(mnemos::manifests::irem_m72::mcu_shared_main_base + 0x11U) ==
           0x77U);
     CHECK(system->mcu_sample_address == 0x21U);
+}
+
+TEST_CASE("m72 protection MCU sample reads do not wrap past the sample ROM", "[m72]") {
+    namespace m72 = mnemos::manifests::irem_m72;
+
+    rom_set_image image;
+    image.regions["mcu"] = {0x80U, 0xFEU}; // SJMP $
+    image.regions["samples"] = {0x11U, 0x22U};
+
+    auto system = assemble_m72(std::move(image));
+    REQUIRE(system->mcu_present);
+    system->mcu_sample_address = 1U;
+
+    CHECK(system->mcu_bus.read8(m72::mcu_sample_data) == 0x22U);
+    CHECK(system->mcu_sample_address == 2U);
+    CHECK(system->mcu_bus.read8(m72::mcu_sample_data) == 0xFFU);
+    CHECK(system->mcu_sample_address == 3U);
 }
 
 TEST_CASE("m72 protection MCU command latch holds INT1 until the MCU acknowledges", "[m72]") {
