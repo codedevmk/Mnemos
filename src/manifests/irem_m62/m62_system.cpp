@@ -357,6 +357,9 @@ namespace mnemos::manifests::irem_m62 {
                     ay0.write(value);
                     ++sound_cpu_psg_write_count;
                     break;
+                case m6803_io_msm0_data:
+                    sound_cpu_write_msm(0U, value);
+                    break;
                 case m6803_io_ay1_address:
                     sound_ay1_address = static_cast<std::uint8_t>(value & 0x0FU);
                     ay1.address(sound_ay1_address);
@@ -369,6 +372,9 @@ namespace mnemos::manifests::irem_m62 {
                     sound_latch_irq = false;
                     ++sound_latch_ack_count;
                     update_sound_irq();
+                    break;
+                case m6803_io_msm1_data:
+                    sound_cpu_write_msm(1U, value);
                     break;
                 default:
                     break;
@@ -387,8 +393,12 @@ namespace mnemos::manifests::irem_m62 {
 
         ay0.set_clock_divider(static_cast<int>(ssg_clock_divider));
         ay1.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        msm0.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        msm1.set_clock_divider(static_cast<int>(ssg_clock_divider));
         ay0.enable_audio_capture(true);
         ay1.enable_audio_capture(true);
+        msm0.enable_audio_capture(true);
+        msm1.enable_audio_capture(true);
 
         speaker.set_clock(params.cpu_clock_hz, audio_rate_hz);
         speaker.enable_audio_capture(true);
@@ -424,6 +434,8 @@ namespace mnemos::manifests::irem_m62 {
             }
             ay0.tick(sound_line_cycles);
             ay1.tick(sound_line_cycles);
+            msm0.tick(sound_line_cycles);
+            msm1.tick(sound_line_cycles);
             video.tick(line_cycles);
             cycles_elapsed = next_cycle;
         }
@@ -494,6 +506,14 @@ namespace mnemos::manifests::irem_m62 {
         sound_cpu.set_irq_line(sound_cpu_enabled && sound_latch_irq);
     }
 
+    void m62_system::sound_cpu_write_msm(std::uint8_t chip_index,
+                                         std::uint8_t value) noexcept {
+        chips::audio::msm5205& chip = chip_index == 0U ? msm0 : msm1;
+        chip.data_w(static_cast<std::uint8_t>(value & 0x0FU));
+        chip.vclk_tick();
+        ++sound_cpu_msm_write_count;
+    }
+
     void m62_system::save_state(chips::state_writer& writer) const {
         writer.u32(m62_system_state_version);
         writer.u8(layout_code(params.rom_layout));
@@ -505,6 +525,8 @@ namespace mnemos::manifests::irem_m62 {
         video.save_state(writer);
         ay0.save_state(writer);
         ay1.save_state(writer);
+        msm0.save_state(writer);
+        msm1.save_state(writer);
         speaker.save_state(writer);
         writer.bytes(scratch_ram);
         writer.bytes(video_ram);
@@ -526,6 +548,7 @@ namespace mnemos::manifests::irem_m62 {
         writer.u64(sound_latch_write_count);
         writer.u64(sound_latch_ack_count);
         writer.u64(sound_cpu_psg_write_count);
+        writer.u64(sound_cpu_msm_write_count);
         writer.u64(speaker_output_edge_count);
         writer.u64(control_write_count);
     }
@@ -546,6 +569,8 @@ namespace mnemos::manifests::irem_m62 {
         video.load_state(reader);
         ay0.load_state(reader);
         ay1.load_state(reader);
+        msm0.load_state(reader);
+        msm1.load_state(reader);
         speaker.load_state(reader);
         reader.bytes(scratch_ram);
         reader.bytes(video_ram);
@@ -567,6 +592,7 @@ namespace mnemos::manifests::irem_m62 {
         sound_latch_write_count = reader.u64();
         sound_latch_ack_count = reader.u64();
         sound_cpu_psg_write_count = reader.u64();
+        sound_cpu_msm_write_count = reader.u64();
         speaker_output_edge_count = reader.u64();
         control_write_count = reader.u64();
         if (reader.ok()) {

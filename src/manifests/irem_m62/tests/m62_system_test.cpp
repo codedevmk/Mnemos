@@ -48,6 +48,8 @@ namespace {
             0x86U, 0x07U, 0x97U, 0x04U, 0x86U, 0xFDU, 0x97U, 0x05U, // AY1 mixer
             0x86U, 0x09U, 0x97U, 0x04U, 0x86U, 0x0CU, 0x97U, 0x05U, // AY1 level B
             0x86U, 0x02U, 0x97U, 0x04U, 0x86U, 0x23U, 0x97U, 0x05U, // AY1 tone B
+            0x86U, 0x05U, 0x97U, static_cast<std::uint8_t>(M62::m6803_io_msm0_data),
+            0x86U, 0x0AU, 0x97U, static_cast<std::uint8_t>(M62::m6803_io_msm1_data),
             0x7EU, static_cast<std::uint8_t>(M62::sound_rom_base >> 8U),
             static_cast<std::uint8_t>(M62::sound_rom_base)};
         std::copy(std::begin(program), std::end(program), rom.begin() + M62::sound_rom_base);
@@ -114,11 +116,20 @@ TEST_CASE("Irem M62 system runs Z80 and MC6803 first-pass board windows", "[irem
     CHECK(sys->sound_latch_write_count == 1U);
     CHECK(sys->sound_latch_ack_count > 0U);
     CHECK(sys->sound_cpu_psg_write_count > 0U);
+    CHECK(sys->sound_cpu_msm_write_count > 0U);
     CHECK(sys->sound_cpu_enabled);
     CHECK_FALSE(sys->sound_cpu.reset_line_held());
     CHECK(sys->sound_cpu.metadata().part_number == "MC6803");
     CHECK(sys->ay0.volume(0) == 0x0FU);
     CHECK(sys->ay1.volume(1) == 0x0CU);
+    CHECK(sys->msm0.metadata().part_number == "MSM5205");
+    CHECK(sys->msm1.metadata().part_number == "MSM5205");
+    CHECK(sys->msm0.data_latch() == 0x05U);
+    CHECK(sys->msm1.data_latch() == 0x0AU);
+    CHECK(sys->msm0.vclk_count() > 0U);
+    CHECK(sys->msm1.vclk_count() > 0U);
+    CHECK(sys->msm0.pending_samples() > 0U);
+    CHECK(sys->msm1.pending_samples() > 0U);
     CHECK(sys->speaker_output_edge_count == 1U);
     CHECK(sys->speaker_output_high);
     CHECK(sys->control_register == 0x01U);
@@ -174,6 +185,11 @@ TEST_CASE("Irem M62 save-state preserves board identity and RAM", "[irem_m62]") 
     CHECK(restored->sound_latch == source->sound_latch);
     CHECK(restored->sound_latch_ack_count == source->sound_latch_ack_count);
     CHECK(restored->sound_cpu_psg_write_count == source->sound_cpu_psg_write_count);
+    CHECK(restored->sound_cpu_msm_write_count == source->sound_cpu_msm_write_count);
+    CHECK(restored->msm0.data_latch() == source->msm0.data_latch());
+    CHECK(restored->msm1.data_latch() == source->msm1.data_latch());
+    CHECK(restored->msm0.vclk_count() == source->msm0.vclk_count());
+    CHECK(restored->msm1.vclk_count() == source->msm1.vclk_count());
     CHECK(restored->sound_cpu_enabled == source->sound_cpu_enabled);
     CHECK(restored->sound_cpu.cpu_registers().pc == source->sound_cpu.cpu_registers().pc);
     CHECK(restored->control_register == source->control_register);

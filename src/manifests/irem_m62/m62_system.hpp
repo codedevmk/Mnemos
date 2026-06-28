@@ -6,6 +6,7 @@
 #include "ibus.hpp"
 #include "introspection_adapters.hpp"
 #include "m6803.hpp"
+#include "msm5205.hpp"
 #include "rom_set.hpp"
 #include "ssg.hpp"
 #include "state.hpp"
@@ -21,7 +22,7 @@
 
 namespace mnemos::manifests::irem_m62 {
 
-    inline constexpr std::uint32_t m62_system_state_version = 3U;
+    inline constexpr std::uint32_t m62_system_state_version = 4U;
 
     inline constexpr std::size_t main_rom_size = 0x10000U;
     inline constexpr std::size_t sound_rom_size = 0x10000U;
@@ -49,9 +50,11 @@ namespace mnemos::manifests::irem_m62 {
     inline constexpr std::uint16_t m6803_io_ay0_address = 0x00U;
     inline constexpr std::uint16_t m6803_io_ay0_data = 0x01U;
     inline constexpr std::uint16_t m6803_io_latch = 0x02U;
+    inline constexpr std::uint16_t m6803_io_msm0_data = 0x03U;
     inline constexpr std::uint16_t m6803_io_ay1_address = 0x04U;
     inline constexpr std::uint16_t m6803_io_ay1_data = 0x05U;
     inline constexpr std::uint16_t m6803_io_latch_ack = 0x06U;
+    inline constexpr std::uint16_t m6803_io_msm1_data = 0x07U;
 
     inline constexpr std::uint16_t video_ram_base = 0x8000U;
     inline constexpr std::size_t video_ram_size = 0x0800U;
@@ -142,6 +145,8 @@ namespace mnemos::manifests::irem_m62 {
         m62_video video;
         chips::audio::ssg ay0;
         chips::audio::ssg ay1;
+        chips::audio::msm5205 msm0;
+        chips::audio::msm5205 msm1;
         chips::audio::beeper speaker;
         topology::bus sound_bus{16U, topology::endianness::little};
 
@@ -169,6 +174,7 @@ namespace mnemos::manifests::irem_m62 {
         std::uint64_t sound_latch_write_count{};
         std::uint64_t sound_latch_ack_count{};
         std::uint64_t sound_cpu_psg_write_count{};
+        std::uint64_t sound_cpu_msm_write_count{};
         std::uint64_t speaker_output_edge_count{};
         std::uint64_t control_write_count{};
 
@@ -180,6 +186,7 @@ namespace mnemos::manifests::irem_m62 {
         void write_io_port(std::uint16_t port, std::uint8_t value) noexcept;
         void write_sound_latch(std::uint8_t value) noexcept;
         void update_sound_irq() noexcept;
+        void sound_cpu_write_msm(std::uint8_t chip_index, std::uint8_t value) noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);
     };

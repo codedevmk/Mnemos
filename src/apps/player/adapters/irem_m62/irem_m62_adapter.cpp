@@ -376,7 +376,7 @@ namespace mnemos::apps::player::adapters::irem_m62 {
         }
 
         constexpr std::uint32_t irem_m62_adapter_state_version = 1U;
-        constexpr std::uint32_t irem_m62_adapter_save_target_manifest_rev = 1U;
+        constexpr std::uint32_t irem_m62_adapter_save_target_manifest_rev = 2U;
 
         void write_i16(chips::state_writer& writer, std::int16_t value) {
             writer.u16(static_cast<std::uint16_t>(static_cast<std::int32_t>(value) + 32768));
@@ -440,8 +440,8 @@ namespace mnemos::apps::player::adapters::irem_m62 {
         if (dip_override.has_value()) {
             sys_->dip_switches = static_cast<std::uint8_t>(*dip_override);
         }
-        chip_view_ = {&sys_->video,      &sys_->main_cpu, &sys_->sound_cpu,
-                      &sys_->ay0,        &sys_->ay1,      &sys_->speaker};
+        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->ay0,
+                      &sys_->ay1,   &sys_->msm0,     &sys_->msm1,      &sys_->speaker};
         publish_memory_views();
         const std::string game_label =
             !loaded_set_name_.empty()
@@ -542,7 +542,8 @@ namespace mnemos::apps::player::adapters::irem_m62 {
     frontend_sdk::audio_chunk irem_m62_adapter::drain_audio() noexcept {
         const std::size_t pending =
             std::max({sys_->speaker.pending_samples(), sys_->ay0.pending_samples(),
-                      sys_->ay1.pending_samples()});
+                      sys_->ay1.pending_samples(), sys_->msm0.pending_samples(),
+                      sys_->msm1.pending_samples()});
         if (pending == 0U) {
             return {};
         }
@@ -580,6 +581,8 @@ namespace mnemos::apps::player::adapters::irem_m62 {
         mix_mono(sys_->speaker, mono_buf_);
         mix_stereo(sys_->ay0, ay0_buf_);
         mix_stereo(sys_->ay1, ay1_buf_);
+        mix_stereo(sys_->msm0, msm0_buf_);
+        mix_stereo(sys_->msm1, msm1_buf_);
         return {.samples = audio_buf_.data(),
                 .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = M62::audio_rate_hz};
@@ -597,6 +600,8 @@ namespace mnemos::apps::player::adapters::irem_m62 {
             mono_buf_.clear();
             ay0_buf_.clear();
             ay1_buf_.clear();
+            msm0_buf_.clear();
+            msm1_buf_.clear();
         }
         return result;
     }

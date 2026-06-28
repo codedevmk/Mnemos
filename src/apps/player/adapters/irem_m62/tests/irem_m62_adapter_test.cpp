@@ -244,6 +244,10 @@ TEST_CASE("irem_m62_adapter boots a synthetic M62 program", "[irem_m62]") {
     CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::horizontal);
     CHECK(adapter.current_frame().width == M62::visible_width);
     CHECK(adapter.current_frame().height == M62::visible_height);
+    const auto chips = adapter.chips();
+    REQUIRE(chips.size() == 8U);
+    CHECK(chips[5]->metadata().part_number == "MSM5205");
+    CHECK(chips[6]->metadata().part_number == "MSM5205");
 
     adapter.step_one_frame();
 

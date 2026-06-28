@@ -56,6 +56,7 @@ target_link_libraries(
         mnemos::topology
         mnemos::manifests::common
         mnemos::chips::audio::beeper
+        mnemos::chips::audio::msm5205
         mnemos::chips::audio::ssg
         mnemos::chips::cpu::m6803
         mnemos::chips::cpu::z80
@@ -71,6 +72,7 @@ mnemos_declare_tier(
         mnemos_topology
         mnemos_manifests_common
         mnemos_chips_audio_beeper
+        mnemos_chips_audio_msm5205
         mnemos_chips_audio_ssg
         mnemos_chips_cpu_m6803
         mnemos_chips_cpu_z80
