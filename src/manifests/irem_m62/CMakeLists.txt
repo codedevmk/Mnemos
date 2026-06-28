@@ -53,8 +53,11 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_m62
     PUBLIC
+        mnemos::topology
         mnemos::manifests::common
         mnemos::chips::audio::beeper
+        mnemos::chips::audio::ssg
+        mnemos::chips::cpu::m6803
         mnemos::chips::cpu::z80
     PRIVATE
         mnemos::security::cryptography
@@ -65,8 +68,11 @@ mnemos_declare_tier(
     NAME mnemos_manifests_irem_m62
     TIER 4
     DEPENDS
+        mnemos_topology
         mnemos_manifests_common
         mnemos_chips_audio_beeper
+        mnemos_chips_audio_ssg
+        mnemos_chips_cpu_m6803
         mnemos_chips_cpu_z80
         mnemos_security_cryptography
         mnemos_foundation

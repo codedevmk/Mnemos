@@ -173,14 +173,16 @@ multiple independent open-source implementations.
   player through that raw-media artifact contract; it is not visual/audio parity
   proof for the authentic M57 board. No MAME driver code or ROM bytes are copied
   into Mnemos.
-- **Irem M62 ROM-set metadata** — declarative raw-media manifests under
+- **Irem M62 ROM-set metadata** — declarative manifests under
   `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
-  region sizes, CRC-32s, and board-family classification. The Horizon local
-  wrapper is stored under the local `M72` corpus folder, but public Irem M62
-  driver metadata classifies it with the M62 Z80/M6803-era family; Mnemos records
-  it as an M62 raw-media set and routes the first-pass player through that
-  contract rather than treating folder placement as board proof. No MAME driver
-  code or ROM bytes are copied into Mnemos.
+  region sizes, CRC-32s, and board-family classification. `ldrun` now records
+  explicit Z80 program, MC6803 sound ROM, graphics, PROM, and timing regions;
+  the remaining M62 sets stay in raw-media staging until their title-specific
+  maps are wired. The Horizon local wrapper is stored under the local `M72`
+  corpus folder, but public Irem M62 driver metadata classifies it with the M62
+  Z80/M6803-era family; Mnemos records it as an M62 set and routes the first-pass
+  player through that contract rather than treating folder placement as board
+  proof. No MAME driver code or ROM bytes are copied into Mnemos.
 - **Irem M63 ROM-set metadata** — the checked-in `wilytowr` manifest uses public
   Irem M63 driver metadata for Wily Tower dump filenames, region sizes, offsets,
   CRC-32s, orientation, and board-family classification. Mnemos routes the

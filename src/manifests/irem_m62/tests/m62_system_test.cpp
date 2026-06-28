@@ -35,6 +35,27 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_sound_program() {
+        namespace M62 = mnemos::manifests::irem_m62;
+
+        std::vector<std::uint8_t> rom(M62::sound_rom_size, 0x01U);
+        const std::uint8_t program[] = {
+            0x96U, 0x02U,                                           // LDAA <$02
+            0x97U, 0x06U,                                           // STAA <$06
+            0x86U, 0x07U, 0x97U, 0x00U, 0x86U, 0xFEU, 0x97U, 0x01U, // AY0 mixer
+            0x86U, 0x08U, 0x97U, 0x00U, 0x86U, 0x0FU, 0x97U, 0x01U, // AY0 level A
+            0x86U, 0x00U, 0x97U, 0x00U, 0x86U, 0x1FU, 0x97U, 0x01U, // AY0 tone A
+            0x86U, 0x07U, 0x97U, 0x04U, 0x86U, 0xFDU, 0x97U, 0x05U, // AY1 mixer
+            0x86U, 0x09U, 0x97U, 0x04U, 0x86U, 0x0CU, 0x97U, 0x05U, // AY1 level B
+            0x86U, 0x02U, 0x97U, 0x04U, 0x86U, 0x23U, 0x97U, 0x05U, // AY1 tone B
+            0x7EU, static_cast<std::uint8_t>(M62::sound_rom_base >> 8U),
+            static_cast<std::uint8_t>(M62::sound_rom_base)};
+        std::copy(std::begin(program), std::end(program), rom.begin() + M62::sound_rom_base);
+        rom[0xFFFEU] = static_cast<std::uint8_t>(M62::sound_rom_base >> 8U);
+        rom[0xFFFFU] = static_cast<std::uint8_t>(M62::sound_rom_base);
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> glyph_ramp() {
         std::vector<std::uint8_t> gfx(mnemos::manifests::irem_m62::gfx_rom_size);
         for (std::size_t i = 0; i < gfx.size(); ++i) {
@@ -46,6 +67,7 @@ namespace {
     [[nodiscard]] mnemos::manifests::common::rom_set_image synthetic_image() {
         mnemos::manifests::common::rom_set_image image;
         image.regions.emplace("maincpu", synthetic_program());
+        image.regions.emplace("soundcpu", synthetic_sound_program());
         image.regions.emplace("gfx1", glyph_ramp());
         return image;
     }
@@ -75,7 +97,7 @@ namespace {
     }
 } // namespace
 
-TEST_CASE("Irem M62 system runs the first-pass 8080-compatible memory map", "[irem_m62]") {
+TEST_CASE("Irem M62 system runs Z80 and MC6803 first-pass board windows", "[irem_m62]") {
     namespace M62 = mnemos::manifests::irem_m62;
 
     auto sys = M62::assemble_m62(synthetic_image(), M62::board_params_for("ldrun"));
@@ -90,6 +112,13 @@ TEST_CASE("Irem M62 system runs the first-pass 8080-compatible memory map", "[ir
     CHECK(sys->color_ram[0] == 0x07U);
     CHECK(sys->sound_latch == 0x01U);
     CHECK(sys->sound_latch_write_count == 1U);
+    CHECK(sys->sound_latch_ack_count > 0U);
+    CHECK(sys->sound_cpu_psg_write_count > 0U);
+    CHECK(sys->sound_cpu_enabled);
+    CHECK_FALSE(sys->sound_cpu.reset_line_held());
+    CHECK(sys->sound_cpu.metadata().part_number == "MC6803");
+    CHECK(sys->ay0.volume(0) == 0x0FU);
+    CHECK(sys->ay1.volume(1) == 0x0CU);
     CHECK(sys->speaker_output_edge_count == 1U);
     CHECK(sys->speaker_output_high);
     CHECK(sys->control_register == 0x01U);
@@ -143,6 +172,10 @@ TEST_CASE("Irem M62 save-state preserves board identity and RAM", "[irem_m62]") 
     CHECK(restored->scratch_ram[0] == 0x42U);
     CHECK(restored->video_ram[0] == 0x81U);
     CHECK(restored->sound_latch == source->sound_latch);
+    CHECK(restored->sound_latch_ack_count == source->sound_latch_ack_count);
+    CHECK(restored->sound_cpu_psg_write_count == source->sound_cpu_psg_write_count);
+    CHECK(restored->sound_cpu_enabled == source->sound_cpu_enabled);
+    CHECK(restored->sound_cpu.cpu_registers().pc == source->sound_cpu.cpu_registers().pc);
     CHECK(restored->control_register == source->control_register);
     CHECK(restored->speaker_output_high == source->speaker_output_high);
     CHECK(restored->main_cpu.cpu_registers().pc == source->main_cpu.cpu_registers().pc);

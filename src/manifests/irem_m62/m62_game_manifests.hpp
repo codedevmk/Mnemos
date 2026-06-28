@@ -1,9 +1,10 @@
 #pragma once
 
-// Checked-in Irem M62 manifests currently provide raw-media ROM contracts for
-// the local corpus plus a first-pass player smoke route. Exact Z80/M6803 bus
-// placement, KNA video behavior, and mature Irem Audio scheduling remain
-// board-family implementation gaps.
+// Checked-in Irem M62 manifests provide the local corpus contracts plus a
+// first-pass player smoke route. Lode Runner now carries explicit board regions;
+// the remaining sets still use raw-media staging contracts until each family is
+// split and proven. Exact KNA video behavior and mature Irem Audio scheduling
+// remain board-family implementation gaps.
 
 #include "m62_embedded_game_manifests.hpp"
 

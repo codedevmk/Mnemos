@@ -1,5 +1,6 @@
 #include "file.hpp"
 #include "m62_game_manifests.hpp"
+#include "m62_system.hpp"
 #include "rom_set_toml.hpp"
 #include "zip_archive.hpp"
 
@@ -32,9 +33,15 @@ namespace {
     using mnemos::manifests::common::rom_set_image;
     using mnemos::manifests::common::rom_set_region;
 
+    struct expected_region_contract final {
+        std::size_t raw_size{};
+        std::size_t file_count{};
+    };
+
     struct expected_contract final {
         std::size_t raw_size{};
         std::size_t file_count{};
+        std::map<std::string, expected_region_contract, std::less<>> regions{};
     };
 
     [[nodiscard]] const std::map<std::string, expected_contract, std::less<>>&
@@ -42,7 +49,15 @@ namespace {
         static const std::map<std::string, expected_contract, std::less<>> contracts{
             {"battroad", {.raw_size = 0x30740U, .file_count = 33U}},
             {"horizon", {.raw_size = 0x2e720U, .file_count = 21U}},
-            {"ldrun", {.raw_size = 0x18720U, .file_count = 20U}},
+            {"ldrun",
+             {.regions = {{"maincpu", {.raw_size = 0x10000U, .file_count = 4U}},
+                           {"soundcpu", {.raw_size = 0x10000U, .file_count = 2U}},
+                           {"gfx1", {.raw_size = 0x6000U, .file_count = 3U}},
+                           {"gfx2", {.raw_size = 0x6000U, .file_count = 3U}},
+                           {"spr_height_prom", {.raw_size = 0x20U, .file_count = 1U}},
+                           {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
             {"ldruna", {.raw_size = 0x6000U, .file_count = 3U}},
             {"ldrun2", {.raw_size = 0x24720U, .file_count = 26U}},
             {"ldrun3", {.raw_size = 0x38820U, .file_count = 23U}},
@@ -326,9 +341,23 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
+    void require_m6803_reset_vector(const rom_set_image& image) {
+        const auto* sound = image.region("soundcpu");
+        REQUIRE(sound != nullptr);
+        REQUIRE(sound->size() == mnemos::manifests::irem_m62::sound_rom_size);
+        const std::uint32_t pc =
+            (static_cast<std::uint32_t>((*sound)[mnemos::chips::cpu::m6803::reset_vector])
+             << 8U) |
+            (*sound)[mnemos::chips::cpu::m6803::reset_vector + 1U];
+        CHECK(pc >= mnemos::manifests::irem_m62::sound_rom_base);
+        CHECK(pc < mnemos::manifests::irem_m62::sound_rom_base +
+                       mnemos::manifests::irem_m62::sound_rom_mapped_size);
+        CHECK(pc == 0xFA00U);
+    }
+
 } // namespace
 
-TEST_CASE("m62 embedded manifests cover local raw-media contracts", "[m62][romset]") {
+TEST_CASE("m62 embedded manifests cover local ROM contracts", "[m62][romset]") {
     const auto& expected = expected_contracts();
     std::set<std::string, std::less<>> names;
 
@@ -351,13 +380,24 @@ TEST_CASE("m62 embedded manifests cover local raw-media contracts", "[m62][romse
         CHECK(decl.board == "irem_m62");
         CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
         CHECK_FALSE(decl.parent.has_value());
-        REQUIRE(decl.regions.size() == 1U);
+        if (contract->second.regions.empty()) {
+            REQUIRE(decl.regions.size() == 1U);
 
-        const rom_set_region* raw = find_region(decl, "raw_media");
-        REQUIRE(raw != nullptr);
-        CHECK(raw->size == contract->second.raw_size);
-        CHECK(raw->files.size() == contract->second.file_count);
-        require_region_contract(*raw);
+            const rom_set_region* raw = find_region(decl, "raw_media");
+            REQUIRE(raw != nullptr);
+            CHECK(raw->size == contract->second.raw_size);
+            CHECK(raw->files.size() == contract->second.file_count);
+            require_region_contract(*raw);
+        } else {
+            REQUIRE(decl.regions.size() == contract->second.regions.size());
+            for (const auto& [region_name, region_contract] : contract->second.regions) {
+                const rom_set_region* region = find_region(decl, region_name);
+                REQUIRE(region != nullptr);
+                CHECK(region->size == region_contract.raw_size);
+                CHECK(region->files.size() == region_contract.file_count);
+                require_region_contract(*region);
+            }
+        }
     }
 
     CHECK(names == embedded_set_names());
@@ -439,6 +479,15 @@ TEST_CASE("m62 local wrapper artifacts load CRC-clean through embedded manifests
             INFO(issue.file << ": " << issue.message);
         }
         CHECK(image.issues.empty());
-        require_loaded_region(image, "raw_media", contract_it->second.raw_size);
+        if (contract_it->second.regions.empty()) {
+            require_loaded_region(image, "raw_media", contract_it->second.raw_size);
+        } else {
+            for (const auto& [region_name, region_contract] : contract_it->second.regions) {
+                require_loaded_region(image, region_name, region_contract.raw_size);
+            }
+            if (set_name == "ldrun") {
+                require_m6803_reset_vector(image);
+            }
+        }
     }
 }

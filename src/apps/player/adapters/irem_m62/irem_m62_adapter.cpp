@@ -98,6 +98,16 @@ namespace mnemos::apps::player::adapters::irem_m62 {
             return bytes;
         }
 
+        [[nodiscard]] std::int16_t clamp_mix(std::int32_t value) noexcept {
+            if (value > 32767) {
+                return 32767;
+            }
+            if (value < -32768) {
+                return -32768;
+            }
+            return static_cast<std::int16_t>(value);
+        }
+
         [[nodiscard]] std::string resident_media_crc32(const loaded_set& set) {
             if (set.image.regions.empty()) {
                 return {};
@@ -430,7 +440,8 @@ namespace mnemos::apps::player::adapters::irem_m62 {
         if (dip_override.has_value()) {
             sys_->dip_switches = static_cast<std::uint8_t>(*dip_override);
         }
-        chip_view_ = {&sys_->main_cpu, &sys_->video, &sys_->speaker};
+        chip_view_ = {&sys_->video,      &sys_->main_cpu, &sys_->sound_cpu,
+                      &sys_->ay0,        &sys_->ay1,      &sys_->speaker};
         publish_memory_views();
         const std::string game_label =
             !loaded_set_name_.empty()
@@ -529,22 +540,48 @@ namespace mnemos::apps::player::adapters::irem_m62 {
     }
 
     frontend_sdk::audio_chunk irem_m62_adapter::drain_audio() noexcept {
-        const std::size_t pending = sys_->speaker.pending_samples();
+        const std::size_t pending =
+            std::max({sys_->speaker.pending_samples(), sys_->ay0.pending_samples(),
+                      sys_->ay1.pending_samples()});
         if (pending == 0U) {
             return {};
         }
-        mono_buf_.assign(pending, 0);
-        const std::size_t drained = sys_->speaker.drain_samples(mono_buf_.data(), mono_buf_.size());
-        if (drained == 0U) {
-            return {};
-        }
-        audio_buf_.assign(drained * 2U, 0);
-        for (std::size_t i = 0; i < drained; ++i) {
-            audio_buf_[i * 2U] = mono_buf_[i];
-            audio_buf_[i * 2U + 1U] = mono_buf_[i];
-        }
+        audio_buf_.assign(pending * 2U, 0);
+
+        const auto mix_mono = [this](auto& chip, std::vector<std::int16_t>& scratch) {
+            const std::size_t avail = chip.pending_samples();
+            if (avail == 0U) {
+                return;
+            }
+            scratch.assign(avail, 0);
+            const std::size_t drained = chip.drain_samples(scratch.data(), avail);
+            const std::size_t frames = std::min(drained, audio_buf_.size() / 2U);
+            for (std::size_t i = 0; i < frames; ++i) {
+                const std::int32_t sample = scratch[i];
+                audio_buf_[i * 2U] =
+                    clamp_mix(static_cast<std::int32_t>(audio_buf_[i * 2U]) + sample);
+                audio_buf_[i * 2U + 1U] =
+                    clamp_mix(static_cast<std::int32_t>(audio_buf_[i * 2U + 1U]) + sample);
+            }
+        };
+        const auto mix_stereo = [this](auto& chip, std::vector<std::int16_t>& scratch) {
+            const std::size_t avail = chip.pending_samples();
+            if (avail == 0U) {
+                return;
+            }
+            scratch.assign(avail * 2U, 0);
+            const std::size_t drained = chip.drain_samples(scratch.data(), avail);
+            const std::size_t raw_count = std::min(drained * 2U, audio_buf_.size());
+            for (std::size_t i = 0; i < raw_count; ++i) {
+                audio_buf_[i] = clamp_mix(static_cast<std::int32_t>(audio_buf_[i]) +
+                                          static_cast<std::int32_t>(scratch[i]));
+            }
+        };
+        mix_mono(sys_->speaker, mono_buf_);
+        mix_stereo(sys_->ay0, ay0_buf_);
+        mix_stereo(sys_->ay1, ay1_buf_);
         return {.samples = audio_buf_.data(),
-                .frame_count = static_cast<std::uint32_t>(drained),
+                .frame_count = static_cast<std::uint32_t>(pending),
                 .sample_rate = M62::audio_rate_hz};
     }
 
@@ -558,6 +595,8 @@ namespace mnemos::apps::player::adapters::irem_m62 {
         if (result.ok()) {
             audio_buf_.clear();
             mono_buf_.clear();
+            ay0_buf_.clear();
+            ay1_buf_.clear();
         }
         return result;
     }

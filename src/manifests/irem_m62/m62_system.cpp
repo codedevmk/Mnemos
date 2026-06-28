@@ -54,7 +54,16 @@ namespace mnemos::manifests::irem_m62 {
             if (layout == "m62_ldrun_z80_raw_media") {
                 return 1U;
             }
+            if (layout == "m62_ldrun_regioned") {
+                return 2U;
+            }
             return 0U;
+        }
+
+        [[nodiscard]] bool has_non_fill_byte(std::span<const std::uint8_t> bytes,
+                                              std::uint8_t fill = 0xFFU) noexcept {
+            return std::any_of(bytes.begin(), bytes.end(),
+                               [fill](std::uint8_t value) { return value != fill; });
         }
 
         [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
@@ -69,7 +78,7 @@ namespace mnemos::manifests::irem_m62 {
         [[nodiscard]] std::uint32_t board_identity_crc(const common::rom_set_image& roms,
                                                        const m62_board_params& params) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m62.board.identity.v1"});
+                security::cryptography::crc32(std::string_view{"m62.board.identity.v2"});
             const std::array<std::uint8_t, 2> params_bytes{layout_code(params.rom_layout),
                                                            params.dip_default};
             crc = security::cryptography::crc32(
@@ -129,6 +138,11 @@ namespace mnemos::manifests::irem_m62 {
     } // namespace
 
     m62_board_params board_params_for(std::string_view set_name) noexcept {
+        if (set_name == "ldrun") {
+            return {.cpu_clock_hz = cpu_clock_hz,
+                    .rom_layout = "m62_ldrun_regioned",
+                    .dip_default = ldrun_dip_default};
+        }
         if (!set_name.empty()) {
             return {.cpu_clock_hz = cpu_clock_hz,
                     .rom_layout = "m62_ldrun_z80_raw_media",
@@ -292,6 +306,8 @@ namespace mnemos::manifests::irem_m62 {
         : roms(std::move(image)), params(board_params) {
         derive_region_from_raw(roms, "maincpu", main_rom_size, 0U);
         derive_region_from_raw(roms, "gfx1", gfx_rom_size, main_rom_size);
+        auto& sound_prog = pinned_region(roms, "soundcpu", sound_rom_size);
+        sound_cpu_enabled = has_non_fill_byte(sound_prog);
         dip_switches = params.dip_default;
 
         main_bus.attach(*this);
@@ -300,6 +316,63 @@ namespace mnemos::manifests::irem_m62 {
         main_cpu.set_port_out(
             [this](std::uint16_t port, std::uint8_t value) { write_io_port(port, value); });
         main_cpu.reset(chips::reset_kind::power_on);
+
+        sound_bus.map_mmio(
+            sound_io_base, sound_io_size,
+            [this](std::uint32_t address) -> std::uint8_t {
+                switch ((address - sound_io_base) & 0xFFFFU) {
+                case m6803_io_ay0_data:
+                    return ay0.read();
+                case m6803_io_latch:
+                    return sound_latch;
+                case m6803_io_ay1_data:
+                    return ay1.read();
+                default:
+                    return 0xFFU;
+                }
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                switch ((address - sound_io_base) & 0xFFFFU) {
+                case m6803_io_ay0_address:
+                    sound_ay0_address = static_cast<std::uint8_t>(value & 0x0FU);
+                    ay0.address(sound_ay0_address);
+                    break;
+                case m6803_io_ay0_data:
+                    ay0.write(value);
+                    ++sound_cpu_psg_write_count;
+                    break;
+                case m6803_io_ay1_address:
+                    sound_ay1_address = static_cast<std::uint8_t>(value & 0x0FU);
+                    ay1.address(sound_ay1_address);
+                    break;
+                case m6803_io_ay1_data:
+                    ay1.write(value);
+                    ++sound_cpu_psg_write_count;
+                    break;
+                case m6803_io_latch_ack:
+                    sound_latch_irq = false;
+                    ++sound_latch_ack_count;
+                    update_sound_irq();
+                    break;
+                default:
+                    break;
+                }
+            },
+            2);
+        sound_bus.map_ram(sound_work_ram_base, sound_ram, 1);
+        sound_bus.map_rom(
+            sound_rom_base,
+            std::span<const std::uint8_t>(sound_prog).subspan(sound_rom_base,
+                                                              sound_rom_mapped_size),
+            0);
+        sound_cpu.attach_bus(sound_bus);
+        sound_cpu.reset(chips::reset_kind::power_on);
+        sound_cpu.set_reset_line(!sound_cpu_enabled);
+
+        ay0.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        ay1.set_clock_divider(static_cast<int>(ssg_clock_divider));
+        ay0.enable_audio_capture(true);
+        ay1.enable_audio_capture(true);
 
         speaker.set_clock(params.cpu_clock_hz, audio_rate_hz);
         speaker.enable_audio_capture(true);
@@ -325,6 +398,16 @@ namespace mnemos::manifests::irem_m62 {
                 main_cpu.tick(line_cycles);
             }
             speaker.tick(line_cycles);
+            const std::uint64_t sound_next =
+                (sound_cycles_per_frame * static_cast<std::uint64_t>(line + 1U)) / frame_lines;
+            const std::uint64_t sound_prev =
+                (sound_cycles_per_frame * static_cast<std::uint64_t>(line)) / frame_lines;
+            const std::uint64_t sound_line_cycles = sound_next - sound_prev;
+            if (sound_cpu_enabled && !sound_cpu.reset_line_held()) {
+                sound_cpu.tick(sound_line_cycles);
+            }
+            ay0.tick(sound_line_cycles);
+            ay1.tick(sound_line_cycles);
             video.tick(line_cycles);
             cycles_elapsed = next_cycle;
         }
@@ -381,12 +464,18 @@ namespace mnemos::manifests::irem_m62 {
     void m62_system::write_sound_latch(std::uint8_t value) noexcept {
         ++sound_latch_write_count;
         sound_latch = value;
+        sound_latch_irq = sound_cpu_enabled;
+        update_sound_irq();
         const bool output = speaker_output_from_latch(value);
         if (output != speaker_output_high) {
             ++speaker_output_edge_count;
             speaker_output_high = output;
         }
         speaker.set_speaker(speaker_output_high);
+    }
+
+    void m62_system::update_sound_irq() noexcept {
+        sound_cpu.set_irq_line(sound_cpu_enabled && sound_latch_irq);
     }
 
     void m62_system::save_state(chips::state_writer& writer) const {
@@ -396,21 +485,31 @@ namespace mnemos::manifests::irem_m62 {
         writer.u32(params.cpu_clock_hz);
         writer.u32(board_identity_crc(roms, params));
         main_cpu.save_state(writer);
+        sound_cpu.save_state(writer);
         video.save_state(writer);
+        ay0.save_state(writer);
+        ay1.save_state(writer);
         speaker.save_state(writer);
         writer.bytes(scratch_ram);
         writer.bytes(video_ram);
         writer.bytes(color_ram);
         writer.bytes(work_ram);
+        writer.bytes(sound_ram);
         writer.u8(input_p1);
         writer.u8(input_p2);
         writer.u8(input_system);
         writer.u8(dip_switches);
         writer.u8(sound_latch);
+        writer.u8(sound_ay0_address);
+        writer.u8(sound_ay1_address);
         writer.u8(control_register);
         writer.boolean(flip_screen);
         writer.boolean(speaker_output_high);
+        writer.boolean(sound_cpu_enabled);
+        writer.boolean(sound_latch_irq);
         writer.u64(sound_latch_write_count);
+        writer.u64(sound_latch_ack_count);
+        writer.u64(sound_cpu_psg_write_count);
         writer.u64(speaker_output_edge_count);
         writer.u64(control_write_count);
     }
@@ -427,26 +526,40 @@ namespace mnemos::manifests::irem_m62 {
             return;
         }
         main_cpu.load_state(reader);
+        sound_cpu.load_state(reader);
         video.load_state(reader);
+        ay0.load_state(reader);
+        ay1.load_state(reader);
         speaker.load_state(reader);
         reader.bytes(scratch_ram);
         reader.bytes(video_ram);
         reader.bytes(color_ram);
         reader.bytes(work_ram);
+        reader.bytes(sound_ram);
         input_p1 = reader.u8();
         input_p2 = reader.u8();
         input_system = reader.u8();
         dip_switches = reader.u8();
         sound_latch = reader.u8();
+        sound_ay0_address = reader.u8();
+        sound_ay1_address = reader.u8();
         control_register = reader.u8();
         flip_screen = reader.boolean();
         speaker_output_high = reader.boolean();
+        sound_cpu_enabled = reader.boolean();
+        sound_latch_irq = reader.boolean();
         sound_latch_write_count = reader.u64();
+        sound_latch_ack_count = reader.u64();
+        sound_cpu_psg_write_count = reader.u64();
         speaker_output_edge_count = reader.u64();
         control_write_count = reader.u64();
         if (reader.ok()) {
+            ay0.address(sound_ay0_address);
+            ay1.address(sound_ay1_address);
             speaker.set_speaker(speaker_output_high);
             main_cpu.set_nmi_line((input_system & coin1_bit) != 0U);
+            sound_cpu.set_reset_line(!sound_cpu_enabled);
+            update_sound_irq();
         }
     }
 
