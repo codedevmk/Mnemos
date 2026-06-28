@@ -479,7 +479,7 @@ visual and audio parity proof.
   `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`,
   `D:\emu\irem\M72\nspirit.zip`, and
   `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` now passes with
-  `MNEMOS_M72_SET_DIR=D:\emu\irem` using its default 900-frame roster window.
+  `MNEMOS_M72_SET_DIR=D:\emu\irem\M72` using its default 900-frame roster window.
   `GLD-M72-PARITY-HASH` now exists as an opt-in final-frame/audio SHA-256
   ratchet and remains skipped until trusted reference hashes are supplied.
 - **Dumped-MCU protected proof:** `MNEMOS_M72_PROTECTED_MCU_SET` points at a
@@ -497,30 +497,30 @@ visual and audio parity proof.
   `MNEMOS_M72_PARITY_FRAME_SHA256` and/or `MNEMOS_M72_PARITY_AUDIO_SHA256` to
   turn that parity evidence into a deterministic CTest assertion.
 - **Current local artifact proof:** no checked-in M72 manifest artifact is
-  currently missing from `D:\emu\irem`: the full M72 artifact preflight reports
-  `417/417` present. The optional full-roster CTest is now current proof: with
-  `MNEMOS_M72_SET_DIR=D:\emu\irem`, it passes with its default 900-frame window
-  through the source-ranking and supplemental-media routes for every checked-in
-  true-M72 manifest. The stale unpacked
+  currently missing from the board-local corpus: the recursive preflight against
+  `D:\emu\irem\M72` reports `417/417` present. The optional full-roster CTest is
+  now current proof: with `MNEMOS_M72_SET_DIR=D:\emu\irem\M72`, it passes with
+  its default 900-frame window through the source-ranking and supplemental-media
+  routes for every checked-in true-M72 manifest. The stale unpacked
   `D:\emu\irem\M72\nspirit` folder is incomplete, but the current
   `D:\emu\irem\M72\nspirit.zip` is CRC-complete for both `nspirit` and
   `nspiritj`; the corpus smoke runner now ranks that ZIP ahead of the stale
   same-name folder, preserves manifest-named top-level folders inside an
   exact-stem ZIP, and keeps the parent source when subsetting clone media, so
-  the same archive can smoke both routes. The recursive mixed-corpus roster gate
-  now finds the local `lohtb3` wrapper under
-  `D:\emu\irem\i8751` from the single root `MNEMOS_M72_SET_DIR=D:\emu\irem`;
-  the M72 smoke runner's targeted `-Set lohtb3` proof passes through that
-  single mixed root with no media-validation issues.
-- **Current exact local ZIP evidence:** direct CRC scanning of every entry in
-  `D:\emu\irem\M72\gallopm72.zip`,
-  `D:\emu\irem\M72\gallop.zip`, and
-  `D:\emu\irem\M72\nspirit.zip` now reports `44/44` artifacts present for
-  `gallopm72` plus World `nspirit`. Direct ZIP inspection confirms
+  the same archive can smoke both routes. The board-local recursive artifact
+  proof also finds the unpacked `D:\emu\irem\M72\gallop` parent/share folder
+  used by `gallopm72`; the sorted `D:\emu\irem\M84\gallop.zip` remains the M84
+  Gallop/Cosmic Cop set, not the true-M72 parent source.
+- **Current exact local path evidence:** direct CRC scanning of
+  `D:\emu\irem\M72\gallopm72.zip`, the unpacked
+  `D:\emu\irem\M72\gallop` parent/share folder, and
+  `D:\emu\irem\M72\nspirit.zip` now reports all focused artifacts present for
+  `gallopm72` plus World/Japan `nspirit`. Direct ZIP inspection confirms
   `D:\emu\irem\M72\gallopm72.zip` contains `cc_c-pr-.ic1` CRC `0xac4421b1`,
-  while `D:\emu\irem\M72\nspirit.zip` contains `nin_c-pr-b.ic1` CRC `0x0f7b2713` and
-  `nspiritj/nin_c-pr-.ic1` CRC `0x802d440a`; the scanner reports `48/48`
-  present when checking `nspirit` and `nspiritj` from that ZIP. Exact scans of
+  while `D:\emu\irem\M72\nspirit.zip` contains `nin_c-pr-b.ic1` CRC
+  `0x0f7b2713` and `nspiritj/nin_c-pr-.ic1` CRC `0x802d440a`; the scanner
+  reports `48/48` present when checking `nspirit` and `nspiritj` from that ZIP.
+  Exact scans of
   `D:\emu\irem\M72\lohtj.zip` plus `D:\emu\irem\M72\loht.zip` report `20/20`
   for `lohtj`, and `D:\emu\irem\M72\lohtb2.zip` plus `D:\emu\irem\M72\loht.zip`
   report `30/30` for `lohtb2`; the current exact `.7z` check of
@@ -535,9 +535,9 @@ visual and audio parity proof.
   completes as a 0/20 non-match, and a rerun across `D:\emu\irem` plus
   `D:\emu\Darksoft Apocalypse M72 2020-12-30.7z` previously reported partial
   blocker counts, but those are superseded by the updated M72 ZIPs. Current live
-  proof against `D:\emu\irem` alone reports `94/94` for the prior
-  `gallopm72`/`nspirit`/`lohtj`/`lohtb2` blocker group and `417/417` for the
-  checked-in M72 manifest preflight.
+  proof against `D:\emu\irem\M72` with `-Recurse` reports `118/118` for the
+  prior `gallopm72`/`nspirit`/`nspiritj`/`lohtj`/`lohtb2` blocker group and
+  `417/417` for the checked-in M72 manifest preflight.
 - **Focused blocker-search evidence:** `scripts/irem_m72/find-missing-artifacts.ps1`
   now accepts `-MissingFromReport <json>` to search only the prior report's
   missing targets and records the seed report path. Size-aware `.7z` listing

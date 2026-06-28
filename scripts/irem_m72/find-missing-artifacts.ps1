@@ -594,6 +594,15 @@ function Get-SuggestedMissingLocations {
 
     $locations = [System.Collections.Generic.List[string]]::new()
     $setAliases = @(Get-SetDirectoryAliases -SetId $Target.set)
+    $fileAliases = [System.Collections.Generic.List[string]]::new()
+    foreach ($alias in $Target.aliases) {
+        if (-not [string]::IsNullOrWhiteSpace($alias) -and -not $fileAliases.Contains($alias)) {
+            $fileAliases.Add($alias)
+        }
+    }
+    if (-not $fileAliases.Contains($Target.name)) {
+        $fileAliases.Add($Target.name)
+    }
     foreach ($root in $Roots) {
         if (-not (Test-Path -LiteralPath $root -PathType Container)) {
             continue
@@ -602,17 +611,21 @@ function Get-SuggestedMissingLocations {
             foreach ($baseDir in @($root, (Join-Path $root "m72"))) {
                 $setDir = Join-Path $baseDir $setAlias
                 if (Test-Path -LiteralPath $setDir -PathType Container) {
-                    $candidate = Join-Path $setDir $Target.name
-                    if (-not $locations.Contains($candidate)) {
-                        $locations.Add($candidate)
+                    foreach ($fileAlias in $fileAliases) {
+                        $candidate = Join-Path $setDir $fileAlias
+                        if (-not $locations.Contains($candidate)) {
+                            $locations.Add($candidate)
+                        }
                     }
                 }
 
                 $zipPath = Join-Path $baseDir ("{0}.zip" -f $setAlias)
                 if (Test-Path -LiteralPath $zipPath -PathType Leaf) {
-                    $candidate = "{0}!{1}" -f $zipPath, $Target.name
-                    if (-not $locations.Contains($candidate)) {
-                        $locations.Add($candidate)
+                    foreach ($fileAlias in $fileAliases) {
+                        $candidate = "{0}!{1}" -f $zipPath, $fileAlias
+                        if (-not $locations.Contains($candidate)) {
+                            $locations.Add($candidate)
+                        }
                     }
                 }
             }
