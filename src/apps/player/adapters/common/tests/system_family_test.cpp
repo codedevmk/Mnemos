@@ -21,6 +21,8 @@ TEST_CASE("system_family: every registry id maps to its family") {
     CHECK(family_from_name("sega32x") == system_family::sega32x);
     CHECK(family_from_name("irem_m15") == system_family::irem_m15);
     CHECK(family_from_name("m15") == system_family::irem_m15);
+    CHECK(family_from_name("irem_m27") == system_family::irem_m27);
+    CHECK(family_from_name("m27") == system_family::irem_m27);
     CHECK(family_from_name("irem_m47") == system_family::irem_m47);
     CHECK(family_from_name("m47") == system_family::irem_m47);
     CHECK(family_from_name("irem_m52") == system_family::irem_m52);
@@ -56,6 +58,7 @@ TEST_CASE("system_family: names are case-insensitive") {
     CHECK(family_from_name("SEGA32X") == system_family::sega32x);
     CHECK(family_from_name("SegaCD") == system_family::segacd);
     CHECK(family_from_name("IREM_M15") == system_family::irem_m15);
+    CHECK(family_from_name("IREM_M27") == system_family::irem_m27);
     CHECK(family_from_name("IREM_M47") == system_family::irem_m47);
     CHECK(family_from_name("IREM_M52") == system_family::irem_m52);
     CHECK(family_from_name("IREM_M58") == system_family::irem_m58);
@@ -83,7 +86,7 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
          {system_family::genesis,     system_family::sms,         system_family::gg,
           system_family::c64,         system_family::segacd,      system_family::sega32x,
           system_family::irem_m72,    system_family::irem_m75,    system_family::irem_m15,
-          system_family::irem_m47,
+          system_family::irem_m27,    system_family::irem_m47,
           system_family::irem_m52,    system_family::irem_m58,    system_family::irem_m81,
           system_family::irem_travrusa,
           system_family::irem_m82,
@@ -101,7 +104,7 @@ TEST_CASE("system_family: family_names lists every accepted id") {
          {system_family::genesis,     system_family::sms,         system_family::gg,
           system_family::c64,         system_family::segacd,      system_family::sega32x,
           system_family::irem_m72,    system_family::irem_m75,    system_family::irem_m15,
-          system_family::irem_m47,
+          system_family::irem_m27,    system_family::irem_m47,
           system_family::irem_m52,    system_family::irem_m58,    system_family::irem_m81,
           system_family::irem_travrusa,
           system_family::irem_m82,
@@ -119,6 +122,7 @@ TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::segacd)} == "Sega CD");
     CHECK(std::string{family_label(system_family::sega32x)} == "32X");
     CHECK(std::string{family_label(system_family::irem_m15)} == "Irem M15");
+    CHECK(std::string{family_label(system_family::irem_m27)} == "Irem M27");
     CHECK(std::string{family_label(system_family::irem_m47)} == "Irem M47");
     CHECK(std::string{family_label(system_family::irem_m52)} == "Irem M52");
     CHECK(std::string{family_label(system_family::irem_m58)} == "Irem M58");

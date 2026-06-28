@@ -1,8 +1,8 @@
 # Panther -- Irem M27 ROM contract.
-# Local wrapper: D:\emu\irem\Panther_Arcade_EN.zip -> panther.zip.
+# Local wrappers: D:\emu\irem\M27\panther.zip and panther (1).zip.
 # Region names, offsets, sizes, and CRCs follow public Irem M27 set metadata;
-# executable M27 board timing, color, bitmap/char video, inputs, and Panther
-# audio-board behavior remain gaps.
+# first-pass executable M27 timing, color, input, and Panther audio-board
+# behavior remain authenticity gaps.
 
 [set]
 schema      = "mnemos-romset/1"

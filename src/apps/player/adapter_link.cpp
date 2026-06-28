@@ -7,6 +7,7 @@
 #include "genesis_adapter.hpp"
 #include "irem_m107_adapter.hpp"
 #include "irem_m15_adapter.hpp"
+#include "irem_m27_adapter.hpp"
 #include "irem_m47_adapter.hpp"
 #include "irem_m52_adapter.hpp"
 #include "irem_m58_adapter.hpp"
@@ -36,6 +37,7 @@ namespace mnemos::apps::player {
         adapters::segacd::force_link();
         adapters::sega32x::force_link();
         adapters::irem_m15::force_link();
+        adapters::irem_m27::force_link();
         adapters::irem_m47::force_link();
         adapters::irem_m52::force_link();
         adapters::irem_m58::force_link();

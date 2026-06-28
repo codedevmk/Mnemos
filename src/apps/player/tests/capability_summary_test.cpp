@@ -6,6 +6,7 @@
 #include "genesis_adapter.hpp"
 #include "irem_m107_adapter.hpp"
 #include "irem_m15_adapter.hpp"
+#include "irem_m27_adapter.hpp"
 #include "irem_m47_adapter.hpp"
 #include "irem_m52_adapter.hpp"
 #include "irem_m58_adapter.hpp"
@@ -40,6 +41,7 @@ namespace {
     namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
+    namespace irem_m27 = mnemos::apps::player::adapters::irem_m27;
     namespace irem_m47 = mnemos::apps::player::adapters::irem_m47;
     namespace irem_m52 = mnemos::apps::player::adapters::irem_m52;
     namespace irem_m58 = mnemos::apps::player::adapters::irem_m58;
@@ -272,6 +274,22 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> irem_m27_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m27::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, 0xA9U, 0x81U,
+                                                0x8DU, 0x00U, 0x20U, 0x4CU, 0x0AU, 0x80U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[mnemos::manifests::irem_m27::program_rom_base + i] = program[i];
+        }
+        rom[0xFFFCU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base);
+        rom[0xFFFDU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base >> 8U);
+        rom[0xFFFEU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base);
+        rom[0xFFFFU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base >> 8U);
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> irem_m81_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m81::main_rom_size, 0xFFU);
         rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
@@ -494,6 +512,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M15") {
         irem_m15::irem_m15_adapter adapter(irem_m15_program(), "Tiny M15");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M27") {
+        irem_m27::irem_m27_adapter adapter(irem_m27_program(), "Tiny M27");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");

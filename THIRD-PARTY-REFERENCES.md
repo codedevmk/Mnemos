@@ -149,9 +149,9 @@ multiple independent open-source implementations.
 - **Irem M27 ROM-set metadata** — the checked-in `panther` manifest uses public
   Irem M27 driver metadata for Panther dump filenames, M6502 program, audio CPU,
   and PROM region offsets, region sizes, CRC-32s, orientation, and board-family
-  classification. The local wrapper remains contract-only until an executable
-  M27 board route exists. No MAME driver code or ROM bytes are copied into
-  Mnemos.
+  classification. Mnemos now uses that metadata for a first-pass M27
+  board/player route; it is still not visual/audio parity proof. No MAME driver
+  code or ROM bytes are copied into Mnemos.
 - **Irem M47 ROM-set metadata** — the checked-in `olibochu` and `punchkid`
   manifests use public Irem M47 driver metadata for Oli-Boo-Chu and Punching
   Kid dump filenames, parent/clone relationship, region sizes, offsets, CRC-32s,

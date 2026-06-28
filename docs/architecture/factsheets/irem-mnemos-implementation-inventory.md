@@ -22,8 +22,8 @@ lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
 not yet map it to a numbered M-board. Of those 437 items, 224 currently match a
 checked-in Mnemos Irem manifest, 136 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 120 have an
-executable player-supported route. The M14, M27, M62, and M63 matches are still
+single-inner wrapper ZIP, or unpacked-folder media routes, and 122 have an
+executable player-supported route. The M14, M62, and M63 matches are still
 tracked as contract-only manifests until board/player profiles exist; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
@@ -31,7 +31,9 @@ Board-local `name-collisions` folders are skipped by both inventory and
 data-gated corpus source discovery.
 Windows copy-suffixed checked-in set ZIPs such as `loht (1).zip` are
 canonicalized to their embedded manifest IDs for player loading, M72
-corpus-smoke grouping, and inventory grouping. The M47 bucket now has a
+corpus-smoke grouping, and inventory grouping. The M27 bucket now has a
+first-pass player route for `panther`: two local ZIP routes count as supported,
+while `panther.7z` remains metadata-only until converted or unpacked. The M47 bucket now has a
 first-pass player route for `olibochu` and `punchkid`: two local ZIP routes count
 as supported, while `punchkid.7z` remains metadata-only until converted or
 unpacked. The `travrusa` bucket has checked-in contracts and a first-pass player
@@ -42,9 +44,9 @@ artwork/layout, so the CRC-clean parent proof comes from the copy-suffixed ROM
 ZIP. Known untracked corpus classifications remain explicit: `headon` and
 `uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
 `galaxian/galaxian.cpp`.
-The common data-gated runner now includes M14, M27, M62, and M63 manifest-load
+The common data-gated runner now includes M14, M62, and M63 manifest-load
 proofs plus G6-ratcheted corpus golden tests for every implemented Irem player
-family: M15, M47, M52, M58, travrusa, M72, M75, M81, M82, M84, M90, M92, and
+family: M15, M27, M47, M52, M58, travrusa, M72, M75, M81, M82, M84, M90, M92, and
 M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
@@ -74,7 +76,7 @@ proof.
 |---|---:|---:|---|---|---|---|
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
 | M14 | `irem_m14` ROM contract | 8% contract-only | `ptrmj` | None; CRC-clean media-load contract only | None | Executable 8085 M14 board profile, video/color, paddle/ball/input behavior, discrete/sample sound, save-state/player adapter, visual/audio parity |
-| M27 | `irem_m27` ROM contract | 8% contract-only | `panther` | None; CRC-clean media-load contract only | None | Executable M27 board profile, video/color, inputs/DIPs, sound behavior, save-state/player adapter, visual/audio parity |
+| M27 | `irem_m27` first-pass | 18% | `panther` | local Panther ZIPs through the adapter; direct `mnemos_player --system irem_m27` nonblank screenshot and `--system m27` save-state proof | None | Authentic M27 memory/I/O timing, bitmap/char video and color behavior, input/DIP behavior, Panther audio-board behavior, raster/audio/video parity |
 | M47 | `irem_m47` first-pass | 22% | `olibochu`, `punchkid` | local Oli-Boo-Chu parent and Punching Kid split clone ZIPs; direct `mnemos_player --system irem_m47` nonblank screenshot and `--system m47` save-state proof | None | Authentic M47 memory/I/O timing, video/color PROM behavior, AY/sample sound timing, input/DIP parity, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
@@ -116,8 +118,10 @@ targets:
   visual/audio SHA-256 oracle for a reference-captured M52 set.
 - M14 has a single `ptrmj` ROM contract with CRC-clean local wrapper proof, but
   no executable board/player route.
-- M27 has a single `panther` ROM contract with CRC-clean local wrapper proof, but
-  no executable board/player route.
+- M27 now has a Panther ROM contract plus a first-pass executable MOS 6502
+  player route. `MNEMOS_M27_SET_DIR=D:\emu\irem\M27` proves the local ZIPs
+  through the adapter. Current graphics and audio remain diagnostic first-pass
+  output, not board-authentic Panther parity.
 - M47 now has Oli-Boo-Chu and Punching Kid ROM contracts plus a first-pass
   executable Z80/Z80/two-SSG player route. `MNEMOS_M47_SET_DIR=D:\emu\irem\M47`
   proves both local ZIP sets through the adapter; direct `mnemos_player --system
@@ -195,21 +199,32 @@ visual and audio parity proof.
 ### M27
 
 - **Techsheet games:** Panther.
-- **Mnemos games:** contract-only ROM manifest for `panther`.
-- **Smoke playable:** none. `MNEMOS_M27_SET_DIR=D:\emu\irem\M27` data-gates
-  CRC-clean loading for the local `panther` ZIPs, but there is no executable M27
-  player route yet.
+- **Mnemos games:** first-pass ROM manifest/player route for `panther`.
+- **Smoke playable:** the local `panther` ZIP wrappers under `D:\emu\irem\M27`
+  now match the checked-in M27 manifest and run through `src/apps/player/adapters/irem_m27`.
+  `MNEMOS_M27_SET_DIR=D:\emu\irem\M27` data-gates CRC-clean loading, player
+  stepping, nonblank diagnostic framebuffer output, and save-state creation.
+  Direct proof includes `mnemos_player --system irem_m27 --rom
+  D:\emu\irem\M27\panther.zip --frames 90 --screenshot
+  build\scratch\irem-m27\panther.ppm`, which wrote a 256x256 nonblank PPM, and
+  `mnemos_player --system m27 --rom D:\emu\irem\M27\panther.zip --frames 90
+  --save-state build\scratch\irem-m27\panther.mstate`, which wrote a 1535-byte
+  save state.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m27` embeds the local
   `panther` ROM-set contract with public M27 `maincpu`, `audiocpu`, and `proms`
   region placement: seven 2 KiB M6502 program ROMs at `$8000-$B7FF`, one
-  Panther audio-board ROM at `$7000`, and the 512-byte color PROM. The focused
-  test checks embedded TOML synchronization, exact file offsets/CRCs,
-  region/file invariants, and optional real-corpus loading through
-  `D:\emu\irem\M27`.
-- **Remaining:** implement the M27 board route, CPU memory and I/O map,
-  raster/color behavior, input/DIP behavior, sound behavior, save-state/player
-  adapter, and visual/audio parity.
+  Panther audio-board ROM at `$7000`, and the 512-byte color PROM.
+  `src/manifests/irem_m27/m27_system.cpp` adds a first-pass MOS 6502 board shell
+  with RAM, PROM/RAM diagnostic video, input/DIP latches, a beeper-backed sound
+  latch, save-state identity, and `--system irem_m27` / `m27` player
+  registration. The focused tests check embedded TOML synchronization, exact
+  file offsets/CRCs, region/file invariants, synthetic CPU/video/audio behavior,
+  save/load identity, and optional real-corpus loading through `D:\emu\irem\M27`.
+- **Remaining:** replace first-pass timing and diagnostic video/audio with the
+  authentic M27 CPU memory/I/O map, bitmap/char video and color behavior,
+  input/DIP behavior, Panther audio-board behavior, raster phase, and
+  visual/audio parity.
 
 ### M47
 
