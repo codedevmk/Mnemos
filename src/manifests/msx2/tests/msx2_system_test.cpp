@@ -469,6 +469,33 @@ TEST_CASE("msx2 configurable internal sub-ROM slot maps C-BIOS-style subslot",
     CHECK(sys->bus.read8(0x0000U) == 0x5AU);
 }
 
+TEST_CASE("msx2 overlapping sub-ROM and RAM slot keeps sub-ROM page write-protected",
+          "[manifests][msx2][slots]") {
+    std::vector<std::uint8_t> bios(0x8000U, 0x00U);
+    std::vector<std::uint8_t> sub_bios(0x4000U, 0x00U);
+    sub_bios[0x0000U] = 0x5AU;
+
+    const auto sys = assemble_msx2(
+        bios, {}, msx2_config{.expanded_primary_slots = 0x08U,
+                              .ram_primary_slot = 3U,
+                              .ram_secondary_slot = 0U,
+                              .sub_bios_primary_slot = 3U,
+                              .sub_bios_secondary_slot = 0U,
+                              .sub_bios = sub_bios});
+    REQUIRE(sys != nullptr);
+
+    select_primary_slots(*sys, 0xFFU); // all pages -> expanded primary slot 3, subslot 0
+    CHECK(static_cast<unsigned>(sys->cpu_read(0x0000U)) == 0x5AU);
+
+    sys->cpu_write(0x0000U, 0xA5U);
+    CHECK(static_cast<unsigned>(sys->cpu_read(0x0000U)) == 0x5AU);
+    CHECK(static_cast<unsigned>(sys->ram[3U * msx2_system::page_size]) == 0x00U);
+
+    sys->cpu_write(0xC000U, 0x66U);
+    CHECK(static_cast<unsigned>(sys->cpu_read(0xC000U)) == 0x66U);
+    CHECK(static_cast<unsigned>(sys->ram[0]) == 0x66U);
+}
+
 TEST_CASE("msx2 optional logo ROM maps at slot 0 page 2", "[manifests][msx2][slots]") {
     std::vector<std::uint8_t> bios(0xC000U, 0x11U);
     bios[0x0000U] = 0x22U;

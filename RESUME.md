@@ -18,6 +18,37 @@ executable evidence.
 
 ## Latest Checkpoint
 
+2026-06-28 01:37 America/Chicago:
+
+- Fixed a narrow MSX2 slot-overlap bug from the specialist review. When a
+  machine profile maps the MSX2 sub-ROM and mapper RAM to the same expanded
+  slot/subslot, the sub-ROM now occupies only its actual 16 KiB page:
+  reads above the sub-ROM page can fall through to RAM, and writes to the
+  sub-ROM page are ignored like ROM writes. This avoids the old asymmetry where
+  page-0 sub-ROM reads were visible but writes could mutate hidden RAM behind
+  the ROM, while higher pages in the same slot read as `$FF`.
+- Added a regression in `src/manifests/msx2/tests/msx2_system_test.cpp` proving
+  the overlapped sub-ROM page remains write-protected and page-3 mapper RAM
+  remains writable/readable in the same slot profile.
+- Targeted Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx2_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx2_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+- Data-gated smoke after the fix:
+  - MSX2 C-BIOS + sub-ROM + logo + `bean.rom` remains the expected tracked
+    failure with hash
+    `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573` and
+    reason `PC=$CA3E after the $BFFF->$C000 handoff`; summary
+    `build\scratch\msx-boot\20260628-013645-283-20416\summary.json`.
+  - MSX2 C-BIOS + sub-ROM + logo + `MSX2PMUS (13).rom` still passes with hash
+    `ad42f52759050d8187b1cf85b0f7eefad6c9a4ede24453f92d77d9755133a986`;
+    summary `build\scratch\msx-boot\20260628-013645-247-46008\summary.json`.
+- Note: one build attempt hit `LNK1168` because `mnemos_msx_boot_test.exe` was
+  being rebuilt while a parallel smoke run still held it. The serialized rerun
+  above passed.
+
 2026-06-28 01:25 America/Chicago:
 
 - Ran two specialist read-only review passes over shared MSX/MSX2 and MSX2

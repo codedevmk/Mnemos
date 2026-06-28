@@ -597,9 +597,9 @@ namespace mnemos::manifests::msx2 {
             }
             return address < bios.size() ? bios[address] : 0xFFU;
         }
-        if (!sub_bios.empty() && slot_selected(slot, subslot, sub_bios_primary_slot,
-                                               sub_bios_secondary_slot)) {
-            return address < sub_bios.size() ? sub_bios[address] : 0xFFU;
+        if (!sub_bios.empty() && address < sub_bios.size() &&
+            slot_selected(slot, subslot, sub_bios_primary_slot, sub_bios_secondary_slot)) {
+            return sub_bios[address];
         }
         if ((slot & 0x03U) == 1U && subslot == 0U) {
             return read_cartridge(0U, address);
@@ -639,6 +639,10 @@ namespace mnemos::manifests::msx2 {
             if (fdc_mmio_selected(address)) {
                 write_fdc_mmio(address, value);
             }
+            return;
+        }
+        if (!sub_bios.empty() && address < sub_bios.size() &&
+            slot_selected(slot, subslot, sub_bios_primary_slot, sub_bios_secondary_slot)) {
             return;
         }
         if (!cartridge2.empty() &&
