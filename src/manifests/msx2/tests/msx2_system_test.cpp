@@ -360,6 +360,49 @@ TEST_CASE("msx2 upper-page 16 KiB plain cartridges stop at the page-3 RAM bounda
     CHECK(sys->ram[0] == 0x5AU);
 }
 
+TEST_CASE("msx2 C-BIOS slot profile keeps upper-page cart and mapper RAM separated",
+          "[manifests][msx2][mapper][slots]") {
+    const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
+    std::vector<std::uint8_t> sub_bios(0x4000U, 0x00U);
+    sub_bios[0] = 0x5AU;
+    std::vector<std::uint8_t> cart(0x4000U, 0xFFU);
+    cart[0] = 'A';
+    cart[1] = 'B';
+    cart[2] = 0x04U;
+    cart[3] = 0x80U;
+    cart[0x3FFFU] = 0xC5U;
+
+    const auto sys = assemble_msx2(
+        bios, cart, msx2_config{.cartridge_mapper = msx2_cartridge_mapper::plain,
+                                .ram_size = 0x80000U,
+                                .expanded_primary_slots = 0x08U,
+                                .ram_primary_slot = 3U,
+                                .ram_secondary_slot = 2U,
+                                .sub_bios_primary_slot = 3U,
+                                .sub_bios_secondary_slot = 0U,
+                                .sub_bios = sub_bios});
+    REQUIRE(sys != nullptr);
+
+    CHECK(sys->expanded_slot[3]);
+    CHECK(sys->ram.size() == 0x80000U);
+    CHECK(sys->ram_segment[0] == 3U);
+    CHECK(sys->ram_segment[1] == 2U);
+    CHECK(sys->ram_segment[2] == 1U);
+    CHECK(sys->ram_segment[3] == 0U);
+
+    sys->primary_slot = 0xD0U;       // pages 0/1 -> BIOS, page 2 -> cart, page 3 -> slot 3
+    sys->ppi_a = sys->primary_slot;  // keep PPI port-A latch coherent with the slot output
+    sys->secondary_slot[3] = 0xA0U;  // page 3 -> subslot 2 mapper RAM
+
+    CHECK(sys->cpu_read(0x8000U) == 'A');
+    CHECK(sys->cpu_read(0x8001U) == 'B');
+    CHECK(sys->cpu_read(0xBFFFU) == 0xC5U);
+
+    sys->cpu_write(0xC000U, 0xA5U);
+    CHECK(sys->cpu_read(0xC000U) == 0xA5U);
+    CHECK(sys->ram[0] == 0xA5U);
+}
+
 TEST_CASE("msx2 RAM mapper ports select independent 16 KiB segments", "[manifests][msx2]") {
     const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
     const auto sys = assemble_msx2(bios);

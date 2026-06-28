@@ -94,6 +94,7 @@ namespace mnemos::chips::video {
             return (index >= 0 && index < palette_count) ? palette_[static_cast<std::size_t>(index)]
                                                          : 0U;
         }
+        [[nodiscard]] std::uint32_t cpu_vram_address() const noexcept { return vram_address(); }
         [[nodiscard]] std::span<const std::uint8_t> vram() const noexcept { return vram_; }
 
         void render_frame() noexcept;

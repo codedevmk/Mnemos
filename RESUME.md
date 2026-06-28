@@ -18,6 +18,48 @@ executable evidence.
 
 ## Latest Checkpoint
 
+2026-06-28 follow-up America/Chicago:
+
+- Specialist audit pass completed for shared MSX/MSX2 surfaces. The Z80
+  `RETN/RETI` path already restored `IFF1` from `IFF2`; a regression now pins
+  both opcodes so the failing MSX2 interrupt-disabled end state is not chased as
+  an untested CPU-return gap. The MSX2 slot audit confirmed the active
+  `bean.rom` profile is a valid `expanded=8`, sub-ROM `3.0`, RAM `3.2`, 512K
+  mapper setup, and that the `$BFFF->$C000` transition is a legitimate
+  cartridge-to-RAM boundary.
+- Added an exact MSX2 manifest regression for that C-BIOS-style profile:
+  primary slot `$D0`, secondary slot 3 `$A0`, page 2 as a 16 KiB plain
+  cartridge, and page 3 as mapper RAM segment 0. This deliberately prevents
+  accidental "fixes" that overlap sub-ROM/RAM or mirror a 16 KiB cart into page
+  3.
+- Extended VDP I/O diagnostics to include data-port `$98` writes and the CPU
+  VRAM address latch for both TMS9918A and V9938. The MSX2 trace shows real
+  cartridge-time VDP writes to addresses such as `$1670`, `$12B0`, and `$02C0`,
+  while the active Graphics II tables (`NT=$1800`, `PT=$0000`, `CT=$2000`)
+  remain backdrop-only at the final failing frame.
+- New diagnostics:
+
+```text
+build\scratch\msx-bean-diagnostics\vdp-data-20260628\
+build\scratch\msx-bean-diagnostics\vdp-read-20260628\msx2-vdp-read.log
+build\scratch\msx-bean-diagnostics\post-regression-20260628\msx1-bean-600.log
+build\scratch\msx-bean-diagnostics\post-regression-20260628\msx2-bean-slotprofile-600.log
+```
+
+- Targeted Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_cpu_z80_test mnemos_manifests_msx2_test mnemos_chips_video_v9938_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_chips_cpu_z80_test|mnemos_manifests_msx2_test|mnemos_chips_video_v9938_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+- Explicit C-BIOS + `bean.rom` validation was rerun with proper system/ROM
+  inputs. MSX1 exits cleanly after 600 frames. MSX2 still fails with
+  `PC=$CA3E`, `halted=true`, `iff1=false`, `iff2=false`, `primary=$D0`,
+  `secondary3=$A0`, RAM mapper segments `[3,2,1,0]`,
+  `mode=graphics_ii(4)`, and framebuffer hash
+  `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`.
+  This remains not a 100% operational state.
+
 2026-06-28 America/Chicago:
 
 - Added named VDP mode diagnostics in `tests/golden/msx_boot_test.cpp`:

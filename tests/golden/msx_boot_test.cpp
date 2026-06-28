@@ -731,6 +731,7 @@ namespace {
 
     [[nodiscard]] bool watched_vdp_io_port(std::uint16_t port) noexcept {
         switch (static_cast<std::uint8_t>(port & 0xFFU)) {
+        case 0x98U:
         case 0x99U:
         case 0x9AU:
         case 0x9BU:
@@ -859,7 +860,7 @@ namespace {
             << " halted=" << (regs.halted ? "true" : "false")
             << " vdp_status=" << hex8(vdp.status()) << " r0=" << hex8(vdp.reg(0))
             << " r1=" << hex8(vdp.reg(1)) << " r2=" << hex8(vdp.reg(2))
-            << " r7=" << hex8(vdp.reg(7))
+            << " r7=" << hex8(vdp.reg(7)) << " addr=" << hex16(vdp.cpu_vram_address())
             << " vdp_irq=" << (vdp.irq_asserted() ? "true" : "false")
             << " mode=" << tms9918a_mode_label(vdp.mode()) << msx_dispatch_work_summary(read)
             << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
@@ -898,7 +899,9 @@ namespace {
             << " r6=" << hex8(vdp.reg(6)) << " r7=" << hex8(vdp.reg(7))
             << " r8=" << hex8(vdp.reg(8)) << " r9=" << hex8(vdp.reg(9))
             << " r11=" << hex8(vdp.reg(11)) << " r15=" << hex8(vdp.reg(15))
-            << " r23=" << hex8(vdp.reg(23)) << msx_dispatch_work_summary(read)
+            << " r23=" << hex8(vdp.reg(23))
+            << " addr=" << hex16(static_cast<std::uint16_t>(vdp.cpu_vram_address() & 0xFFFFU))
+            << msx_dispatch_work_summary(read)
             << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
         events.push_back(out.str());
     }
@@ -2352,6 +2355,7 @@ TEST_CASE("msx golden boot slot overrides use shared machine-profile parsing",
     CHECK_FALSE(parse_expanded_primary_slots_value("0,4"));
 
     CHECK(parse_ram_size_value("128K") == 0x20000U);
+    CHECK(parse_ram_size_value("512K") == 0x80000U);
     CHECK(parse_ram_size_value("1M") == 0x100000U);
     CHECK_FALSE(parse_ram_size_value("8K"));
 

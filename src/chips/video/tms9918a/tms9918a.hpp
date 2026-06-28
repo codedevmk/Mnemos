@@ -79,6 +79,7 @@ namespace mnemos::chips::video {
                                                           : 0U;
         }
         [[nodiscard]] std::uint8_t status() const noexcept { return status_; }
+        [[nodiscard]] std::uint16_t cpu_vram_address() const noexcept { return addr_; }
         [[nodiscard]] std::span<const std::uint8_t> vram() const noexcept { return vram_; }
 
         // Test/debug helper: render the current VRAM/register state without

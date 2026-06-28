@@ -274,6 +274,48 @@ TEST_CASE("z80 services an NMI") {
     CHECK(m.cpu.cpu_registers().sp == 0xFFFDU); // return address pushed
 }
 
+TEST_CASE("z80 RETN and RETI restore IFF1 from IFF2") {
+    {
+        machine m;
+        m.load(0x0000U, {0xEDU, 0x45U}); // RETN
+        m.ram[0x8000U] = 0x34U;
+        m.ram[0x8001U] = 0x12U;
+
+        auto r = m.cpu.cpu_registers();
+        r.sp = 0x8000U;
+        r.iff1 = false;
+        r.iff2 = true;
+        m.cpu.set_registers(r);
+
+        m.cpu.step_instruction();
+        r = m.cpu.cpu_registers();
+        CHECK(r.pc == 0x1234U);
+        CHECK(r.sp == 0x8002U);
+        CHECK(r.iff1);
+        CHECK(r.iff2);
+    }
+
+    {
+        machine m;
+        m.load(0x0000U, {0xEDU, 0x4DU}); // RETI
+        m.ram[0x9000U] = 0x78U;
+        m.ram[0x9001U] = 0x56U;
+
+        auto r = m.cpu.cpu_registers();
+        r.sp = 0x9000U;
+        r.iff1 = false;
+        r.iff2 = true;
+        m.cpu.set_registers(r);
+
+        m.cpu.step_instruction();
+        r = m.cpu.cpu_registers();
+        CHECK(r.pc == 0x5678U);
+        CHECK(r.sp == 0x9002U);
+        CHECK(r.iff1);
+        CHECK(r.iff2);
+    }
+}
+
 TEST_CASE("z80 services a mode-1 maskable interrupt after EI delay") {
     machine m;
     auto r = m.cpu.cpu_registers();
