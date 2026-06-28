@@ -143,9 +143,10 @@ multiple independent open-source implementations.
 - **Irem M14 ROM-set metadata** — the checked-in `ptrmj` manifest uses public
   Irem M14 driver metadata for P.T. Reach Mahjong dump filenames, main CPU and
   graphics region offsets, region sizes, CRC-32s, orientation, and board-family
-  classification. The local wrapper remains contract-only until an executable
-  M14 board route exists. No MAME driver code or ROM bytes are copied into
-  Mnemos.
+  classification. Mnemos now uses that metadata for a first-pass M14
+  board/player route; it is still not visual/audio parity proof and currently
+  uses an 8080-compatible surrogate until an authentic 8085 core lands. No MAME
+  driver code or ROM bytes are copied into Mnemos.
 - **Irem M27 ROM-set metadata** — the checked-in `panther` manifest uses public
   Irem M27 driver metadata for Panther dump filenames, M6502 program, audio CPU,
   and PROM region offsets, region sizes, CRC-32s, orientation, and board-family

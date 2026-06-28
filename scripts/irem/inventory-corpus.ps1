@@ -519,7 +519,7 @@ function New-ArchiveItem {
     $ignoredBucket = Test-IgnoredCorpusBucket -Bucket $Bucket
     $trackedMatch = -not $ignoredBucket -and ($m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m58Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m90Match -or $m92Match -or $m107Match -or $travrusaMatch)
     $loadRoute = Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
-    $contractOnly = $trackedMatch -and ($m14Match -or $m62Match -or $m63Match)
+    $contractOnly = $trackedMatch -and ($m62Match -or $m63Match)
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match -TravrusaMatch $travrusaMatch
@@ -626,7 +626,7 @@ function New-DirectoryItem {
     $ignoredBucket = Test-IgnoredCorpusBucket -Bucket $Bucket
     $trackedMatch = -not $ignoredBucket -and ($m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m58Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m90Match -or $m92Match -or $m107Match -or $travrusaMatch)
     $loadRoute = Get-LoadRouteForItem -Kind "directory" -Extension "" -NestedArchives @()
-    $contractOnly = $trackedMatch -and ($m14Match -or $m62Match -or $m63Match)
+    $contractOnly = $trackedMatch -and ($m62Match -or $m63Match)
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match -TravrusaMatch $travrusaMatch

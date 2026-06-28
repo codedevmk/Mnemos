@@ -206,6 +206,24 @@ machines:
         data_env: MNEMOS_M15_SET_DIR
         requires_apps: true
 
+  irem_m14:
+    module: src/manifests/irem_m14
+    golden:
+      - id: GLD-M14-CORPUS
+        ctest: mnemos_apps_player_irem_m14_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M14_SET_DIR
+        requires_apps: true
+
+  irem_m27:
+    module: src/manifests/irem_m27
+    golden:
+      - id: GLD-M27-CORPUS
+        ctest: mnemos_apps_player_irem_m27_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M27_SET_DIR
+        requires_apps: true
+
   irem_m52:
     module: src/manifests/irem_m52
     golden:

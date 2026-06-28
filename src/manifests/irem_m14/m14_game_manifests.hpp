@@ -1,8 +1,8 @@
 #pragma once
 
-// Checked-in Irem M14 manifests currently provide ROM contracts for the local
-// corpus. Exact 8085 bus timing, video, color, and sound behavior remain
-// board-family implementation gaps.
+// Checked-in Irem M14 manifests provide ROM contracts for the local corpus and
+// feed a first-pass player route. Exact 8085 bus timing, video, color, and
+// sound behavior remain board-family implementation gaps.
 
 #include "m14_embedded_game_manifests.hpp"
 

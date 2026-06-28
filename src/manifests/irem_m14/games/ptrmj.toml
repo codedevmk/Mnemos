@@ -1,7 +1,8 @@
 # P.T. Reach Mahjong (Japan) -- Irem M14 ROM contract.
 # Local wrapper: D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip -> ptrmj.zip.
 # Region names, offsets, sizes, and CRCs follow public Irem M14 set metadata;
-# executable M14 board timing, color, video, and sound behavior remain gaps.
+# Mnemos currently uses this media in a first-pass executable M14 route; exact
+# 8085 timing, color, video, and sound behavior remain gaps.
 
 [set]
 schema      = "mnemos-romset/1"

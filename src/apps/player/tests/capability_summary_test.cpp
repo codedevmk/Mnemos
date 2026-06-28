@@ -5,6 +5,7 @@
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m107_adapter.hpp"
+#include "irem_m14_adapter.hpp"
 #include "irem_m15_adapter.hpp"
 #include "irem_m27_adapter.hpp"
 #include "irem_m47_adapter.hpp"
@@ -40,6 +41,7 @@ namespace {
     namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
     namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
+    namespace irem_m14 = mnemos::apps::player::adapters::irem_m14;
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
     namespace irem_m27 = mnemos::apps::player::adapters::irem_m27;
     namespace irem_m47 = mnemos::apps::player::adapters::irem_m47;
@@ -271,6 +273,17 @@ namespace {
         rom[0xFFFEU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base);
         rom[0xFFFFU] =
             static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base >> 8U);
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m14_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m14::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0x20U,
+                                                0x3EU, 0x81U, 0x32U, 0x00U, 0x24U,
+                                                0xC3U, 0x0AU, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[mnemos::manifests::irem_m14::program_rom_base + i] = program[i];
+        }
         return rom;
     }
 
@@ -515,6 +528,14 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M14") {
+        irem_m14::irem_m14_adapter adapter(irem_m14_program(), "Tiny M14");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
     }
 
     SECTION("Irem M27") {

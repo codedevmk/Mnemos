@@ -426,8 +426,8 @@ match M84, six match M90, forty-one match M92, seven match M107, and seven
 match travrusa. The inventory separates manifest tracking, media loadability,
 and player support: 224 items
 match a checked-in Irem manifest from non-ignored buckets, 136 are readable
-through current ZIP / single-inner-ZIP / folder routes, 122 are backed by an
-executable player-supported route, 20 are tracked contract-only, and 82 tracked matches
+through current ZIP / single-inner-ZIP / folder routes, 124 are backed by an
+executable player-supported route, 17 are tracked contract-only, and 83 tracked matches
 remain metadata-only until converted to ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
@@ -449,9 +449,8 @@ Battle Road, Horizon, and Youjyuden wrappers as `tracked_contract_only` with `ne
 add_board_profile`, so raw-media coverage is not confused with a playable M62
 board profile.
 The local M14 grouping now tracks `D:\emu\irem\M14\ptrmj.zip` and
-`D:\emu\irem\M14\ptrmj (1).zip` as contract-only `ptrmj` items with
-`next_action = add_board_profile`, so P.T. Reach Mahjong is visible without
-being counted as playable M14 support.
+`D:\emu\irem\M14\ptrmj (1).zip` as first-pass player-loadable `ptrmj`
+items; `ptrmj.7z` remains metadata-only until converted or unpacked.
 The local M27 grouping now tracks `D:\emu\irem\M27\panther.zip` and
 `D:\emu\irem\M27\panther (1).zip` as first-pass player-loadable `panther`
 items; `panther.7z` remains metadata-only until converted or unpacked.
@@ -481,8 +480,8 @@ as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M27, M47, M52, M58,
 travrusa, M72, M75, M81, M82, M84, M90, M92, and M107, and also reports the
-M14, M62, and M63 manifest-only data gates separately. The newest G6 high-water raises cover
-`GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M81-CORPUS`,
+M62 and M63 manifest-only data gates separately. The newest G6 high-water raises cover
+`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
@@ -581,15 +580,15 @@ Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sp
 
 ---
 
-## Irem M14 — 1 / 2
+## Irem M14 — 2 / 2
 
 This section is split from M10/M15 because the local P.T. Reach Mahjong artifact
 is classified by current public driver-level evidence as M14 hardware rather
 than the existing M15 Head On route.
 
 #### Manifests / board bring-up
-- [x] **I14-1** Local M14 ROM-set contract — `src/manifests/irem_m14` carries a checked-in embedded ROM-contract manifest for `ptrmj`, with parser/region-contract coverage for the eight 1 KiB 8085 program ROMs, two 1 KiB graphics ROMs, local nested-wrapper aliases, region sizes, offsets, and CRC32 values. `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` data-gates the local `ptrmj` ZIPs and proves they load CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records the board-bucket wrappers as M14 `tracked_contract_only` with `next_action = add_board_profile` instead of leaving them as `classify_or_sort_corpus_item` · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m14/games/ptrmj.toml` + `src/manifests/irem_m14/tests/m14_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [ ] **I14-2** Executable M14 board profile — Implement the real M14 board route for P.T. Reach Mahjong: NEC D8085AC/8085 CPU execution, ROM/RAM/video/color memory map, I/O ports for paddle/ball/control/DIP/coin IRQ behavior, sparse discrete/sample sound behavior, raster timing, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current `ptrmj` manifest is only a ROM contract and must not be counted as playable M14 support · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_m14/*` board implementation + `src/apps/player/adapters/irem_m14/*` + data-gated player smoke
+- [x] **I14-1** Local M14 ROM-set contract — `src/manifests/irem_m14` carries a checked-in embedded ROM-contract manifest for `ptrmj`, with parser/region-contract coverage for the eight 1 KiB 8085 program ROMs, two 1 KiB graphics ROMs, local nested-wrapper aliases, region sizes, offsets, and CRC32 values. `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` data-gates the local `ptrmj` ZIPs and proves they load CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records the board-bucket wrappers as tracked M14 artifacts instead of leaving them as `classify_or_sort_corpus_item` · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m14/games/ptrmj.toml` + `src/manifests/irem_m14/tests/m14_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **I14-2** Executable M14 board profile — First-pass route exists for P.T. Reach Mahjong: `src/manifests/irem_m14/m14_system.cpp` assembles a board shell with a Z80 core used as an 8080-compatible surrogate for the missing 8085 core, program ROM `$0000-$1FFF`, scratch/video/color/work RAM, input/DIP/control MMIO, mirrored I/O ports, GFX-ROM diagnostic video, a beeper-backed sound latch, save-state identity, and player adapter registration. `src/apps/player/adapters/irem_m14` registers `--system irem_m14` / `m14`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local P.T. Reach Mahjong player smoke through `MNEMOS_M14_SET_DIR=D:\emu\irem\M14`. This is smoke-playable, not authentic parity: true NEC D8085AC/8085 timing, exact M14 memory/I/O behavior, video/color, paddle/mahjong input behavior, sparse discrete/sample sound, raster phase, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m14/m14_system.cpp` + `src/manifests/irem_m14/tests/m14_system_test.cpp` + `src/apps/player/adapters/irem_m14/*` + `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` corpus golden + direct `mnemos_player --system irem_m14` / `--system m14` smoke
 
 ---
 

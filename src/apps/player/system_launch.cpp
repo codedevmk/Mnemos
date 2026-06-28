@@ -97,7 +97,8 @@ namespace mnemos::apps::player {
 
         const system_family family = *family_opt;
         const bool arcade_family =
-            family == system_family::irem_m15 || family == system_family::irem_m27 ||
+            family == system_family::irem_m14 || family == system_family::irem_m15 ||
+            family == system_family::irem_m27 ||
             family == system_family::irem_m47 ||
             family == system_family::irem_m52 ||
             family == system_family::irem_m58 || family == system_family::irem_travrusa ||
@@ -111,7 +112,8 @@ namespace mnemos::apps::player {
                                     : load_rom(options.rom_paths.front());
         const bool directory_backed_irem =
             loaded && loaded->directory_source &&
-            (family == system_family::irem_m15 || family == system_family::irem_m27 ||
+            (family == system_family::irem_m14 || family == system_family::irem_m15 ||
+             family == system_family::irem_m27 ||
              family == system_family::irem_m47 ||
              family == system_family::irem_m52 ||
              family == system_family::irem_m58 || family == system_family::irem_travrusa ||
@@ -129,7 +131,8 @@ namespace mnemos::apps::player {
         std::vector<std::string> additional_media_paths;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
             const bool irem_family =
-                family == system_family::irem_m15 || family == system_family::irem_m27 ||
+                family == system_family::irem_m14 || family == system_family::irem_m15 ||
+                family == system_family::irem_m27 ||
                 family == system_family::irem_m47 ||
                 family == system_family::irem_m52 ||
                 family == system_family::irem_m58 || family == system_family::irem_travrusa ||
@@ -185,6 +188,7 @@ namespace mnemos::apps::player {
                 mnemos::default_video_for(mnemos::manifests::genesis::parse_market(loaded->bytes));
             break;
         case system_family::segacd:
+        case system_family::irem_m14:
         case system_family::irem_m15:
         case system_family::irem_m27:
         case system_family::irem_m47:
