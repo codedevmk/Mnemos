@@ -201,7 +201,10 @@ namespace {
                 }
                 const auto& got = bus.trace[trace_idx++];
                 const auto exp_addr = corpus_cycle.at(0).get<std::uint16_t>();
-                const auto exp_value = corpus_cycle.at(1).get<std::uint8_t>();
+                const auto& value_node = corpus_cycle.at(1);
+                const bool value_is_care = !value_node.is_null();
+                const auto exp_value =
+                    value_is_care ? value_node.get<std::uint8_t>() : std::uint8_t{0};
                 bool kind_match = false;
                 switch (kind) {
                 case cycle_kind::mem_read:
@@ -219,7 +222,8 @@ namespace {
                 case cycle_kind::internal:
                     break;
                 }
-                if (!kind_match || got.address != exp_addr || got.value != exp_value) {
+                if (!kind_match || got.address != exp_addr ||
+                    (value_is_care && got.value != exp_value)) {
                     ok = false;
                     break;
                 }

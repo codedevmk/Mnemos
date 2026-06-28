@@ -18,6 +18,79 @@ executable evidence.
 
 ## Latest Checkpoint
 
+2026-06-28 03:10 America/Chicago:
+
+- Fixed the shared Z80 repeated block I/O flag model for `INIR`, `INDR`,
+  `OTIR`, and `OTDR`. The old implementation computed the non-repeating
+  `INI/IND/OUTI/OUTD` flags and then looped without applying the Z80
+  repeat-iteration corrections for X/Y, P/V, and H. The new helper keeps the
+  already-correct non-repeat/final-iteration behavior and applies the repeat
+  correction only when the instruction actually loops.
+- Updated `src/chips/cpu/z80/tests/z80_singlestep_test.cpp` so the local
+  SingleStep JSON oracle harness treats `null` bus-cycle values as don't-care
+  data values instead of throwing a JSON type error. Address and cycle-kind
+  checks remain strict.
+- Added a focused regression in `src/chips/cpu/z80/tests/z80_test.cpp` covering
+  one loop iteration each for `INIR`, `INDR`, `OTIR`, and `OTDR`, including the
+  repeated PC, post-decrement B, post-update HL, I/O port, transferred byte, and
+  final F register.
+- External Z80 oracle evidence from the local scratch clone:
+  - `build\scratch\third_party\z80-single-step-tests-ed-io-subset`: 5 ED
+    output files, 5000 cases, passed after the fix.
+  - `build\scratch\third_party\z80-single-step-tests-ed-input-subset`: 5 ED
+    input files, 5000 cases, passed after the fix.
+  - A full `v1` Z80 SingleStep sweep was attempted but did not finish within a
+    5-minute cap; the lingering process was stopped. Do not claim full-corpus
+    Z80 parity from this checkpoint.
+- Full default Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug && ctest --preset windows-msvc-debug --output-on-failure'
+```
+
+  Result: 175/175 default tests passed; data-gated conformance/golden suites
+  skipped as expected.
+- Real C-BIOS + `bean.rom` verification used explicit firmware and ROM paths:
+  - MSX1:
+    `MNEMOS_MSX_BIOS=D:\emu\msx\bios\cbios\cbios_main_msx1.rom`,
+    `MNEMOS_MSX_LOGO_ROM=D:\emu\msx\bios\cbios\cbios_logo_msx1.rom`,
+    `MNEMOS_MSX_ROM=D:\emu\msx\MSX files [ROM]\bean.rom`,
+    `MNEMOS_MSX_BOOT_FRAMES=600`,
+    `MNEMOS_MSX_BOOT_SHA256=690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a`.
+    Direct `mnemos_msx_boot_test` passed.
+  - MSX2:
+    `MNEMOS_MSX2_BIOS=D:\emu\msx\bios\cbios\cbios_main_msx2.rom`,
+    `MNEMOS_MSX2_SUB_ROM=D:\emu\msx\bios\cbios\cbios_sub.rom`,
+    `MNEMOS_MSX2_LOGO_ROM=D:\emu\msx\bios\cbios\cbios_logo_msx2.rom`,
+    `MNEMOS_MSX2_ROM=D:\emu\msx\MSX files [ROM]\bean.rom`,
+    `expanded=8`, `sub=3.0`, `ram=3.2`, `ram_size=512K`, 600 frames.
+    It still reaches the known invalid hash
+    `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`
+    and fails by design with `PC=$CA3E`, `halted=true`, `iff1=false`,
+    `iff2=false`, `primary=$D0`, `secondary3=$A0`, RAM mapper segments
+    `[3,2,1,0]`, `mode=graphics_ii(4)`. This is still not 100% operational
+    MSX2.
+- Proper player headless screenshots were captured with explicit `--system`
+  and `--rom` arguments:
+  - MSX1 command wrote
+    `build\scratch\msx-bean-diagnostics\decision-20260628\player-msx1-bean-600.ppm`
+    and PNG copy
+    `build\scratch\msx-bean-diagnostics\decision-20260628\player-msx1-bean-600.png`;
+    visual result is nonblank C-BIOS Bean content.
+  - MSX2 command wrote
+    `build\scratch\msx-bean-diagnostics\decision-20260628\player-msx2-bean-600.ppm`
+    and PNG copy
+    `build\scratch\msx-bean-diagnostics\decision-20260628\player-msx2-bean-600.png`;
+    visual result is a single-color blank frame.
+- Current high-confidence status:
+  - MSX1 C-BIOS + Bean is operational enough for the current 600-frame
+    real-ROM smoke and player screenshot path.
+  - MSX2 C-BIOS + Bean remains blocked after correct Z80 repeated block I/O
+    flags. Slot layout, mapper RAM page 3, and C-BIOS logo `$C000` writes still
+    should not be "fixed" by mirroring a 16 KiB cart into page 3. Continue with
+    V9938/VDP visible table selection, interrupt/status timing, and the
+    `$99DB -> $BFFF -> $C000` handoff path.
+
 2026-06-28 01:48 America/Chicago:
 
 - Fixed the shared Z80 `EI`/NMI corner found in the next MSX/MSX2 review
