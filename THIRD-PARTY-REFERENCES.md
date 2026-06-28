@@ -158,6 +158,12 @@ multiple independent open-source implementations.
   orientation, and sparse board-family classification. The local wrappers remain
   contract-only until an executable M47 board route exists. No MAME driver code
   or ROM bytes are copied into Mnemos.
+- **Irem M58 ROM-set metadata** — the checked-in `10yard`, `10yardj`,
+  `vs10yard`, and `vs10yardj` manifests use public Irem M58 driver metadata for
+  10-Yard Fight dump filenames, parent/clone relationships, region sizes,
+  offsets, CRC-32s, orientation, and board-family classification. The local M58
+  ZIPs remain contract-only until an executable M58 board route exists. No MAME
+  driver code or ROM bytes are copied into Mnemos.
 - **Irem M62 ROM-set metadata** — declarative raw-media manifests under
   `src/manifests/irem_m62/games/` use public set metadata for dump filenames,
   region sizes, CRC-32s, and board-family classification. The Horizon local

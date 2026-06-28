@@ -1,0 +1,60 @@
+# Vs 10-Yard Fight (World) -- Irem M58 split-clone ROM contract.
+# The split clone carries replacement program and tile dumps and inherits shared
+# sound, sprite, and PROM regions from the 10yard parent set.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "vs10yard"
+parent      = "10yard"
+board       = "irem_m58"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "a.3p"
+aliases = ["vs10yard/a.3p"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0x1edac08f
+
+[[region.file]]
+name    = "vyf-a.3m"
+aliases = ["vs10yard/vyf-a.3m"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x3b9330f8
+
+[[region.file]]
+name    = "a.3m"
+aliases = ["vs10yard/a.3m"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0xcf783dad
+
+[[region]]
+name = "tiles"
+size = 0x06000
+
+[[region.file]]
+name    = "vyf-a.3a"
+aliases = ["vs10yard/vyf-a.3a"]
+offset  = 0x00000
+size    = 0x2000
+crc32   = 0x354d7330
+
+[[region.file]]
+name    = "vyf-a.3c"
+aliases = ["vs10yard/vyf-a.3c"]
+offset  = 0x02000
+size    = 0x2000
+crc32   = 0xf48eedca
+
+[[region.file]]
+name    = "vyf-a.3d"
+aliases = ["vs10yard/vyf-a.3d"]
+offset  = 0x04000
+size    = 0x2000
+crc32   = 0x7d1b4d93

@@ -377,8 +377,16 @@ namespace mnemos::apps::player::adapters::irem_m92 {
             const fs::path parent_dir_path = sibling_dir / parent;
             std::string parent_source = parent + ".zip";
             bool unreadable_zip = false;
-            auto parent_provider = mnemos::manifests::common::make_zip_rom_provider_from_path(
-                parent_zip_path.string(), &unreadable_zip);
+            auto nested_parent =
+                make_single_nested_zip_provider_from_path(parent_zip_path, parent);
+            std::optional<mnemos::manifests::common::rom_file_provider> parent_provider;
+            if (nested_parent.has_value()) {
+                parent_provider = std::move(nested_parent->provider);
+                parent_source = std::move(nested_parent->source);
+            } else {
+                parent_provider = mnemos::manifests::common::make_zip_rom_provider_from_path(
+                    parent_zip_path.string(), &unreadable_zip);
+            }
             if (!parent_provider.has_value() && !unreadable_zip &&
                 is_directory_path(parent_dir_path.string())) {
                 parent_provider = mnemos::manifests::common::make_directory_rom_provider(

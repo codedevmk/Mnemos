@@ -1,6 +1,6 @@
 # Irem Mnemos Implementation Inventory
 
-Generated on 2026-06-27 from the Irem board factsheet and the current
+Generated on 2026-06-28 from the Irem board factsheet and the current
 `feature/irem-arcade` worktree.
 
 Primary board taxonomy source:
@@ -14,30 +14,30 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 129 local Irem corpus items across the `root`, `M15`, `M72`,
-`M81`, `M82`, `M84`, `M107`, and `i8751` buckets. Of those, 123 currently match
-a checked-in Mnemos Irem manifest, 114 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 98 have an
-executable player-supported route. The 1 M14 match, 1 M27 match, 2 M47 matches, 1 M63 match, and 11 M62
-matches are intentionally tracked as contract-only manifests until board/player
-profiles exist; 9 tracked `.7z` items remain metadata-only until converted or unpacked. Windows
-copy-suffixed checked-in set ZIPs such as `loht (1).zip` are canonicalized to
-their embedded manifest IDs for player loading, M72 corpus-smoke grouping, and
-inventory grouping. The six remaining untracked root items are now explicit
-known-corpus classifications: `motorace`, `travrusab`, and `travrusab2` are Irem
-`irem/travrusa.cpp` split-clone wrappers blocked by the missing parent/shared
-set `travrusa.zip`; `headon` and `uniwars` / `uniwarsa` are non-Irem reference
-sets from `sega/vicdual.cpp` and `galaxian/galaxian.cpp`. A current all-Irem CRC artifact audit of the checked-in
-manifests reports `1354/1354` required files present from `D:\emu\irem`, so there are no current
-file-level missing-artifact rows for the checked-in Irem manifest set. The
-common data-gated runner now includes the M14, M27, M47, and M63 manifest-load proofs plus
-G6-ratcheted corpus golden tests for every implemented Irem player family: M15,
-M52, M72, M75, M81, M82, M84, M90, M92, and M107.
-For the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
-wires `D:\emu\irem` into those data-gated tests, including the mixed-root
-M90/M92 wrappers. The strict full-M72 roster gate remains opt-in because it is a
-data-heavy player proof, and the current M72 artifact preflight plus
-`MNEMOS_M72_SET_DIR=D:\emu\irem` roster CTest are clean.
+That scan found 477 local corpus items across 25 top-level buckets. Direct files
+under `D:\emu\irem` are now zero; the remaining corpus lives under board/system
+buckets such as `M72`, `M92`, `M62`, `M58`, `travrusa`, and the intentionally
+ignored quarantine buckets `for-delete`, `misc`, and `non-irem`. Of those 477
+items, 212 currently match a checked-in Mnemos Irem manifest, 126 are readable
+through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
+routes, and 104 have an executable player-supported route. The M14, M27, M47,
+M58, M62, and M63 matches are intentionally tracked as contract-only manifests
+until board/player profiles exist; ignored buckets may still show filename-level
+manifest matches, but they contribute zero tracked, loadable, supported,
+contract-only, or metadata-only support counts. Windows copy-suffixed checked-in
+set ZIPs such as `loht (1).zip` are canonicalized to their embedded manifest IDs
+for player loading, M72 corpus-smoke grouping, and inventory grouping. Known
+untracked corpus classifications remain explicit: `motorace`, `travrusab`, and
+`travrusab2` are Irem `irem/travrusa.cpp` split-clone wrappers blocked by the
+missing parent/shared set `travrusa.zip`; `headon` and `uniwars` / `uniwarsa` are
+non-Irem reference sets from `sega/vicdual.cpp` and `galaxian/galaxian.cpp`.
+The common data-gated runner now includes M14, M27, M47, M58, M62, and M63
+manifest-load proofs plus G6-ratcheted corpus golden tests for every implemented
+Irem player family: M15, M52, M72, M75, M81, M82, M84, M90, M92, and M107. For
+the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
+wires board-specific folders under `D:\emu\irem` into those data-gated tests.
+The strict full-M72 roster gate remains opt-in because it is a data-heavy player
+proof.
 
 ## Status Terms
 
@@ -66,7 +66,7 @@ data-heavy player proof, and the current M72 artifact preflight plus
 | M47 | `irem_m47` ROM contract | 8% contract-only | `olibochu`, `punchkid` | None; CRC-clean media-load contract only | None | Executable Z80 + Z80 M47 board profile, video/color, AY/sample sound, inputs/DIPs, save-state/player adapter, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
-| M58 | none | 0% | None | None | None | 10-Yard Fight board classification, manifests, video/sound path |
+| M58 | `irem_m58` ROM contract | 8% contract-only | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | None; CRC-clean media-load contract only | None | Executable 10-Yard Fight board profile, Z80 board wiring, video/sound, inputs/DIPs, save-state/player adapter, visual/audio parity |
 | M62 | `irem_m62` raw-media contracts | 10% contract-only | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
 | M63 | `irem_m63` ROM contract | 8% contract-only | `wilytowr` | None; CRC-clean media-load contract only | None | Executable Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, save-state/player adapter, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
@@ -108,6 +108,9 @@ targets:
 - M47 now has Oli-Boo-Chu and Punching Kid ROM contracts with CRC-clean local
   wrapper proof, including clone-parent inheritance for the split Japan set, but
   no executable board/player route.
+- M58 now has four 10-Yard Fight ROM-set contracts with CRC-clean local ZIP
+  proof. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout package is not ROM
+  evidence and is quarantined under `D:\emu\irem\misc\artwork\M58`.
 - M62 now has eleven raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
   load proof, but no executable board/player route. Treat these as corpus
   grouping and future board-input evidence only.
@@ -155,8 +158,8 @@ visual and audio parity proof.
 
 - **Techsheet games:** P.T. Reach Mahjong.
 - **Mnemos games:** contract-only ROM manifest for `ptrmj`.
-- **Smoke playable:** none. `MNEMOS_M14_SET_DIR=D:\emu\irem` data-gates
-  CRC-clean loading for the local single-inner wrapper ZIP, but there is no
+- **Smoke playable:** none. `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` data-gates
+  CRC-clean loading for the local `ptrmj` ZIPs, but there is no
   executable M14 player route yet.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m14` embeds the local
@@ -164,7 +167,7 @@ visual and audio parity proof.
   placement, exact local filenames, directory-prefixed aliases for the nested
   wrapper, sizes, and CRC32 values. The focused test checks embedded TOML
   synchronization, region/file invariants, and optional real-corpus loading
-  through `D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip`.
+  through `D:\emu\irem\M14`.
 - **Remaining:** implement the NEC D8085AC/8085 board route, M14 memory and I/O
   map, raster/color behavior, paddle/ball/input behavior, sparse discrete or
   sample sound, save-state/player adapter, and visual/audio parity.
@@ -173,9 +176,9 @@ visual and audio parity proof.
 
 - **Techsheet games:** Panther.
 - **Mnemos games:** contract-only ROM manifest for `panther`.
-- **Smoke playable:** none. `MNEMOS_M27_SET_DIR=D:\emu\irem` data-gates
-  CRC-clean loading for `D:\emu\irem\Panther_Arcade_EN.zip`, which unwraps to
-  `panther.zip`, but there is no executable M27 player route yet.
+- **Smoke playable:** none. `MNEMOS_M27_SET_DIR=D:\emu\irem\M27` data-gates
+  CRC-clean loading for the local `panther` ZIPs, but there is no executable M27
+  player route yet.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m27` embeds the local
   `panther` ROM-set contract with public M27 `maincpu`, `audiocpu`, and `proms`
@@ -183,7 +186,7 @@ visual and audio parity proof.
   Panther audio-board ROM at `$7000`, and the 512-byte color PROM. The focused
   test checks embedded TOML synchronization, exact file offsets/CRCs,
   region/file invariants, and optional real-corpus loading through
-  `D:\emu\irem\Panther_Arcade_EN.zip`.
+  `D:\emu\irem\M27`.
 - **Remaining:** implement the M27 board route, CPU memory and I/O map,
   raster/color behavior, input/DIP behavior, sound behavior, save-state/player
   adapter, and visual/audio parity.
@@ -192,11 +195,10 @@ visual and audio parity proof.
 
 - **Techsheet games:** Oli-Boo-Chu, Punching Kid.
 - **Mnemos games:** contract-only ROM manifests for `olibochu` and `punchkid`.
-- **Smoke playable:** none. `MNEMOS_M47_SET_DIR=D:\emu\irem` data-gates
-  CRC-clean loading for `D:\emu\irem\Oli-Boo-Chu_Arcade_EN.zip` and
-  `D:\emu\irem\Oli-Boo-Chu_Arcade_JA.zip`, with `punchkid` resolving shared
-  audio, sample, 16x16 graphics, and PROM dumps from the sibling `olibochu`
-  parent wrapper.
+- **Smoke playable:** none. `MNEMOS_M47_SET_DIR=D:\emu\irem\M47` data-gates
+  CRC-clean loading for the local `olibochu` and `punchkid` ZIPs, with
+  `punchkid` resolving shared audio, sample, 16x16 graphics, and PROM dumps
+  from the sibling `olibochu` parent wrapper.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m47` embeds the local M47
   ROM-set contracts with public `maincpu`, `audiocpu`, `samples`, `gfx8x8`,
@@ -212,10 +214,8 @@ visual and audio parity proof.
 
 - **Techsheet games:** Moon Patrol, Tropical Angel.
 - **Mnemos games:** `mpatrol`, `mpatrolw`.
-- **Smoke playable:** the local single-inner ZIP wrappers
-  `D:\emu\irem\Moon-Patrol_Arcade_EN.zip` and
-  `D:\emu\irem\Moon-Patrol_Arcade_EN (1).zip` now match checked-in M52
-  manifests. The parent set loads directly; the Williams clone declares
+- **Smoke playable:** the local ZIP wrappers under `D:\emu\irem\M52` now match
+  checked-in M52 manifests. The parent set loads directly; the Williams clone declares
   `mpatrol` as parent and resolves shared sound/PROM/tile/sprite dumps from the
   sibling parent wrapper.
 - **Correct gfx/music:** none.
@@ -265,11 +265,21 @@ visual and audio parity proof.
 ### M58
 
 - **Techsheet games:** 10-Yard Fight.
-- **Mnemos games:** none.
-- **Smoke playable:** none.
+- **Mnemos games:** contract-only ROM manifests for `10yard`, `10yardj`,
+  `vs10yard`, and `vs10yardj`.
+- **Smoke playable:** none. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` data-gates
+  CRC-clean media loading for the four canonical local ZIPs, with parent
+  fallback for the regional and Vs. split sets, but there is no executable M58
+  player route yet.
 - **Correct gfx/music:** none.
-- **Remaining:** classify board-specific differences from M52/M62, then add
-  manifests, Z80 board wiring, video/audio, inputs/DIPs, and parity proof.
+- **Current implementation:** `src/manifests/irem_m58` embeds 10-Yard Fight ROM
+  contracts with board-evidenced `maincpu`, `soundcpu`, `tiles`, `sprites`, and
+  `proms` regions. The focused manifest test checks embedded TOML
+  synchronization, parent inheritance, region/file invariants, exact canonical
+  ZIP discovery, and CRC-clean local loading through the checked-in manifests.
+- **Remaining:** implement the executable M58 board profile, Z80 board wiring,
+  video/audio, inputs/DIPs, save-state/player adapter, and parity proof before
+  promoting any 10-Yard Fight set from contract-only to smoke playable.
 
 ### M62
 
@@ -278,7 +288,7 @@ visual and audio parity proof.
 - **Mnemos games:** contract-only raw-media manifests for `battroad`, `horizon`,
   `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`,
   `spelunk2`, and `youjyudn`.
-- **Smoke playable:** none. `MNEMOS_M62_SET_DIR=D:\emu\irem` data-gates
+- **Smoke playable:** none. `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` data-gates
   CRC-clean media loading for the eleven local single-inner wrapper ZIPs, but
   there is no executable M62 player route yet.
 - **Correct gfx/music:** none.
@@ -306,9 +316,9 @@ visual and audio parity proof.
   `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`; the focused
   manifest test checks embedded TOML synchronization, region/file invariants,
   single-inner wrapper loading, directory-prefixed aliases, and CRC-clean local
-  loading through `D:\emu\irem\Wily-Tower_Arcade_EN.zip` when
-  `MNEMOS_M63_SET_DIR=D:\emu\irem` is provided. The inventory records that
-  wrapper as `tracked_contract_only` with `next_action = add_board_profile`.
+  loading through `D:\emu\irem\M63` when `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` is
+  provided. The inventory records that wrapper as `tracked_contract_only` with
+  `next_action = add_board_profile`.
 - **Remaining:** implement the Z80 main board route, 8039-class sound CPU,
   AY/sample/discrete sound path, tile/sprite/video/color-PROM behavior,
   inputs/DIPs, save-state/player adapter, Fighting Basketball coverage, and

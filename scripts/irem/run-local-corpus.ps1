@@ -91,40 +91,36 @@ $m72ArtifactPreflightExitCode = 0
 
 Write-Host "Wiring local Irem corpus from $rootPath" -ForegroundColor Cyan
 
-Set-EnvIfPathExists -Name "MNEMOS_M14_SET_DIR" -Path $rootPath
+Set-EnvIfPathExists -Name "MNEMOS_M14_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M14")
 Set-EnvIfPathExists -Name "MNEMOS_M15_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M15")
-Set-EnvIfPathExists -Name "MNEMOS_M27_SET_DIR" -Path $rootPath
-Set-EnvIfPathExists -Name "MNEMOS_M47_SET_DIR" -Path $rootPath
-Set-EnvIfPathExists -Name "MNEMOS_M52_SET_DIR" -Path $rootPath
-Set-EnvIfPathExists -Name "MNEMOS_M62_SET_DIR" -Path $rootPath
-Set-EnvIfPathExists -Name "MNEMOS_M63_SET_DIR" -Path $rootPath
-Set-EnvIfPathExists -Name "MNEMOS_M75_SET_DIR" -Path $rootPath
+Set-EnvIfPathExists -Name "MNEMOS_M27_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M27")
+Set-EnvIfPathExists -Name "MNEMOS_M47_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M47")
+Set-EnvIfPathExists -Name "MNEMOS_M52_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M52")
+Set-EnvIfPathExists -Name "MNEMOS_M58_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M58")
+Set-EnvIfPathExists -Name "MNEMOS_M62_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M62")
+Set-EnvIfPathExists -Name "MNEMOS_M63_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M63")
+Set-EnvIfPathExists -Name "MNEMOS_M75_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M75")
 Set-EnvIfPathExists -Name "MNEMOS_M81_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M81")
-Set-EnvIfPathExists -Name "MNEMOS_M82_SET_DIR" -Path $rootPath
+Set-EnvIfPathExists -Name "MNEMOS_M82_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M82")
 Set-EnvIfPathListExists -Name "MNEMOS_M84_SET_DIR" -Paths @(
     (Join-CorpusPath -Base $rootPath -Child "M84"),
-    (Join-CorpusPath -Base $rootPath -Child "M81"),
-    $m72Root
+    (Join-CorpusPath -Base $rootPath -Child "M81")
 )
-Set-EnvIfPathExists -Name "MNEMOS_M90_SET_DIR" -Path $rootPath
-Set-EnvIfPathExists -Name "MNEMOS_M92_SET_DIR" -Path $rootPath
+Set-EnvIfPathExists -Name "MNEMOS_M90_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M90")
+Set-EnvIfPathExists -Name "MNEMOS_M92_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M92")
 Set-EnvIfPathExists -Name "MNEMOS_M107_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M107")
 
 $rtypeSet = First-ExistingPath @(
-    (Join-CorpusPath -Base $m72Root -Child "rtype.zip"),
-    (Join-CorpusPath -Base $rootPath -Child "R-Type_Arcade_EN.zip")
+    (Join-CorpusPath -Base $m72Root -Child "rtype.zip")
 )
 $protectedSet = First-ExistingPath @(
-    (Join-CorpusPath -Base $rootPath -Child "imgfight.zip"),
     (Join-CorpusPath -Base $m72Root -Child "imgfight.zip")
 )
 $protectedAudioSet = First-ExistingPath @(
-    (Join-CorpusPath -Base $m72Root -Child "dbreedm72"),
-    (Join-CorpusPath -Base $rootPath -Child "dbreedm72")
+    (Join-CorpusPath -Base $m72Root -Child "dbreedm72")
 )
 $protectedMcuSet = First-ExistingPath @(
-    (Join-CorpusPath -Base $m72Root -Child "nspirit.zip"),
-    (Join-CorpusPath -Base $rootPath -Child "Ninja-Spirit_Arcade_EN.zip")
+    (Join-CorpusPath -Base $m72Root -Child "nspirit.zip")
 )
 
 if ($null -ne $rtypeSet) {
@@ -157,11 +153,11 @@ foreach ($name in @(
 }
 
 if ($IncludeFullM72Roster) {
-    Set-EnvIfPathExists -Name "MNEMOS_M72_SET_DIR" -Path $rootPath
+    Set-EnvIfPathExists -Name "MNEMOS_M72_SET_DIR" -Path $m72Root
     if (Test-Path $m72ArtifactScanner) {
         Write-Host ""
         Write-Host "Running strict M72 artifact preflight from checked-in manifests..." -ForegroundColor Cyan
-        & $m72ArtifactScanner -Root $rootPath -Recurse -ScanAllSevenZipEntries
+        & $m72ArtifactScanner -Root $m72Root -Recurse -ScanAllSevenZipEntries
         $m72ArtifactPreflightExitCode = $LASTEXITCODE
         if ($m72ArtifactPreflightExitCode -ne 0) {
             Write-Host "M72 artifact preflight found missing required files; continuing to CTest for the existing roster gate details." -ForegroundColor Yellow

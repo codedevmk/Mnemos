@@ -1,0 +1,183 @@
+# 10-Yard Fight (World) -- Irem M58 ROM-contract manifest.
+# Schema mnemos-romset/1. This preserves public M58 ROM placement for the local
+# 10-Yard Fight parent set without claiming an executable M58 board profile yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "10yard"
+board       = "irem_m58"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "yf-a-3p-b"
+aliases = ["10yard/yf-a-3p-b"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0x2e205ec2
+
+[[region.file]]
+name    = "yf-a-3n-b"
+aliases = ["10yard/yf-a-3n-b"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x82fcd980
+
+[[region.file]]
+name    = "yf-a-3m-b"
+aliases = ["10yard/yf-a-3m-b"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0xa8d5c311
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name    = "yf-s.3b"
+aliases = ["10yard/yf-s.3b"]
+offset  = 0x8000
+size    = 0x2000
+crc32   = 0x0392a60c
+
+[[region.file]]
+name    = "yf-s.1b"
+aliases = ["10yard/yf-s.1b"]
+offset  = 0xa000
+size    = 0x2000
+crc32   = 0x6588f41a
+
+[[region.file]]
+name    = "yf-s.3a"
+aliases = ["10yard/yf-s.3a"]
+offset  = 0xc000
+size    = 0x2000
+crc32   = 0xbd054e44
+
+[[region.file]]
+name    = "yf-s.1a"
+aliases = ["10yard/yf-s.1a"]
+offset  = 0xe000
+size    = 0x2000
+crc32   = 0x2490d4c3
+
+[[region]]
+name = "tiles"
+size = 0x06000
+
+[[region.file]]
+name    = "yf-a.3e"
+aliases = ["10yard/yf-a.3e"]
+offset  = 0x00000
+size    = 0x2000
+crc32   = 0x77e9e9cc
+
+[[region.file]]
+name    = "yf-a.3d"
+aliases = ["10yard/yf-a.3d"]
+offset  = 0x02000
+size    = 0x2000
+crc32   = 0x854d5ff4
+
+[[region.file]]
+name    = "yf-a.3c"
+aliases = ["10yard/yf-a.3c"]
+offset  = 0x04000
+size    = 0x2000
+crc32   = 0x0cd8ffad
+
+[[region]]
+name = "sprites"
+size = 0x0c000
+
+[[region.file]]
+name    = "yf-b.5b"
+aliases = ["10yard/yf-b.5b"]
+offset  = 0x00000
+size    = 0x2000
+crc32   = 0x1299ae30
+
+[[region.file]]
+name    = "yf-b.5c"
+aliases = ["10yard/yf-b.5c"]
+offset  = 0x02000
+size    = 0x2000
+crc32   = 0x8708b888
+
+[[region.file]]
+name    = "yf-b.5f"
+aliases = ["10yard/yf-b.5f"]
+offset  = 0x04000
+size    = 0x2000
+crc32   = 0xd9bb8ab8
+
+[[region.file]]
+name    = "yf-b.5e"
+aliases = ["10yard/yf-b.5e"]
+offset  = 0x06000
+size    = 0x2000
+crc32   = 0x47077e8d
+
+[[region.file]]
+name    = "yf-b.5j"
+aliases = ["10yard/yf-b.5j"]
+offset  = 0x08000
+size    = 0x2000
+crc32   = 0x713ef31f
+
+[[region.file]]
+name    = "yf-b.5k"
+aliases = ["10yard/yf-b.5k"]
+offset  = 0x0a000
+size    = 0x2000
+crc32   = 0xf49651cc
+
+[[region]]
+name = "proms"
+size = 0x0520
+
+[[region.file]]
+name    = "yard.1c"
+aliases = ["10yard/yard.1c"]
+offset  = 0x0000
+size    = 0x0100
+crc32   = 0x08fa5103
+
+[[region.file]]
+name    = "yard.1d"
+aliases = ["10yard/yard.1d"]
+offset  = 0x0100
+size    = 0x0100
+crc32   = 0x7c04994c
+
+[[region.file]]
+name    = "yard.1f"
+aliases = ["10yard/yard.1f"]
+offset  = 0x0200
+size    = 0x0020
+crc32   = 0xb8554da5
+
+[[region.file]]
+name    = "yard.2h"
+aliases = ["10yard/yard.2h"]
+offset  = 0x0220
+size    = 0x0100
+crc32   = 0xe1cdfb06
+
+[[region.file]]
+name    = "yard.2n"
+aliases = ["10yard/yard.2n"]
+offset  = 0x0320
+size    = 0x0100
+crc32   = 0xcd85b646
+
+[[region.file]]
+name    = "yard.2m"
+aliases = ["10yard/yard.2m"]
+offset  = 0x0420
+size    = 0x0100
+crc32   = 0x45384397

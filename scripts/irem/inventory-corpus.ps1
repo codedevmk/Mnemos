@@ -43,24 +43,39 @@ function Get-IremBucketName {
         return ""
     }
     switch ($Name.ToLowerInvariant()) {
+        "m10" { return "M10" }
         "m14" { return "M14" }
         "m15" { return "M15" }
         "m27" { return "M27" }
         "m47" { return "M47" }
         "m52" { return "M52" }
+        "m57" { return "M57" }
+        "m58" { return "M58" }
         "m62" { return "M62" }
         "m63" { return "M63" }
         "m72" { return "M72" }
         "m75" { return "M75" }
+        "m78" { return "M78" }
         "m81" { return "M81" }
         "m82" { return "M82" }
         "m84" { return "M84" }
+        "m85" { return "M85" }
         "m90" { return "M90" }
         "m92" { return "M92" }
+        "m102" { return "M102" }
         "m107" { return "M107" }
         "i8751" { return "i8751" }
+        "travrusa" { return "travrusa" }
+        "for-delete" { return "for-delete" }
+        "misc" { return "misc" }
+        "non-irem" { return "non-irem" }
         default { return "" }
     }
+}
+
+function Test-IgnoredCorpusBucket {
+    param([Parameter(Mandatory = $true)][string]$Bucket)
+    return $Bucket -in @("for-delete", "misc", "non-irem")
 }
 
 function Get-RelativePathCompat {
@@ -222,6 +237,7 @@ function Get-TrackedFamilyName {
         [Parameter(Mandatory = $true)][bool]$M27Match,
         [Parameter(Mandatory = $true)][bool]$M47Match,
         [Parameter(Mandatory = $true)][bool]$M52Match,
+        [Parameter(Mandatory = $true)][bool]$M58Match,
         [Parameter(Mandatory = $true)][bool]$M62Match,
         [Parameter(Mandatory = $true)][bool]$M63Match,
         [Parameter(Mandatory = $true)][bool]$M72Match,
@@ -239,6 +255,7 @@ function Get-TrackedFamilyName {
     if ($M27Match) { $matches.Add("M27") }
     if ($M47Match) { $matches.Add("M47") }
     if ($M52Match) { $matches.Add("M52") }
+    if ($M58Match) { $matches.Add("M58") }
     if ($M62Match) { $matches.Add("M62") }
     if ($M63Match) { $matches.Add("M63") }
     if ($M72Match) { $matches.Add("M72") }
@@ -404,7 +421,7 @@ function Get-BoardCandidateFamily {
     if ($TrackedByMnemos) {
         return ""
     }
-    if ($Bucket -in @("M14", "M15", "M27", "M47", "M52", "M62", "M63", "M72", "M75", "M81", "M82", "M84", "M90", "M92", "M107", "i8751")) {
+    if ($Bucket -in @("M10", "M14", "M15", "M27", "M47", "M52", "M57", "M58", "M62", "M63", "M72", "M75", "M78", "M81", "M82", "M84", "M85", "M90", "M92", "M102", "M107", "i8751", "travrusa")) {
         return $Bucket
     }
     return ""
@@ -456,6 +473,7 @@ function New-ArchiveItem {
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M27ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M47ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M52ManifestIds,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M58ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M62ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M63ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M72ManifestIds,
@@ -479,6 +497,7 @@ function New-ArchiveItem {
     $m27Match = $M27ManifestIds.Contains($setId)
     $m47Match = $M47ManifestIds.Contains($setId)
     $m52Match = $M52ManifestIds.Contains($setId)
+    $m58Match = $M58ManifestIds.Contains($setId)
     $m62Match = $M62ManifestIds.Contains($setId)
     $m63Match = $M63ManifestIds.Contains($setId)
     $m72Match = $M72ManifestIds.Contains($setId)
@@ -489,12 +508,13 @@ function New-ArchiveItem {
     $m90Match = $M90ManifestIds.Contains($setId)
     $m92Match = $M92ManifestIds.Contains($setId)
     $m107Match = $M107ManifestIds.Contains($setId)
-    $trackedMatch = $m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m90Match -or $m92Match -or $m107Match
+    $ignoredBucket = Test-IgnoredCorpusBucket -Bucket $Bucket
+    $trackedMatch = -not $ignoredBucket -and ($m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m58Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m90Match -or $m92Match -or $m107Match)
     $loadRoute = Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
-    $contractOnly = $m14Match -or $m27Match -or $m47Match -or $m62Match -or $m63Match
+    $contractOnly = $trackedMatch -and ($m14Match -or $m27Match -or $m47Match -or $m58Match -or $m62Match -or $m63Match)
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
-    $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match
+    $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
     $archiveComposition = Get-ArchiveComposition -Kind "archive" -Extension $File.Extension -EntryCount $entries.Count -NestedArchives $nestedArchives
@@ -514,6 +534,7 @@ function New-ArchiveItem {
         m27_manifest_match = $m27Match
         m47_manifest_match = $m47Match
         m52_manifest_match = $m52Match
+        m58_manifest_match = $m58Match
         m62_manifest_match = $m62Match
         m63_manifest_match = $m63Match
         m72_manifest_match = $m72Match
@@ -555,6 +576,7 @@ function New-DirectoryItem {
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M27ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M47ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M52ManifestIds,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M58ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M62ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M63ManifestIds,
         [Parameter(Mandatory = $true)][System.Collections.Generic.HashSet[string]]$M72ManifestIds,
@@ -579,6 +601,7 @@ function New-DirectoryItem {
     $m27Match = $M27ManifestIds.Contains($setId)
     $m47Match = $M47ManifestIds.Contains($setId)
     $m52Match = $M52ManifestIds.Contains($setId)
+    $m58Match = $M58ManifestIds.Contains($setId)
     $m62Match = $M62ManifestIds.Contains($setId)
     $m63Match = $M63ManifestIds.Contains($setId)
     $m72Match = $M72ManifestIds.Contains($setId)
@@ -589,12 +612,13 @@ function New-DirectoryItem {
     $m90Match = $M90ManifestIds.Contains($setId)
     $m92Match = $M92ManifestIds.Contains($setId)
     $m107Match = $M107ManifestIds.Contains($setId)
-    $trackedMatch = $m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m90Match -or $m92Match -or $m107Match
+    $ignoredBucket = Test-IgnoredCorpusBucket -Bucket $Bucket
+    $trackedMatch = -not $ignoredBucket -and ($m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m58Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m90Match -or $m92Match -or $m107Match)
     $loadRoute = Get-LoadRouteForItem -Kind "directory" -Extension "" -NestedArchives @()
-    $contractOnly = $m14Match -or $m27Match -or $m47Match -or $m62Match -or $m63Match
+    $contractOnly = $trackedMatch -and ($m14Match -or $m27Match -or $m47Match -or $m58Match -or $m62Match -or $m63Match)
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
-    $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match
+    $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
     $knownClassification = Get-KnownCorpusClassification -SetId $setId
@@ -612,6 +636,7 @@ function New-DirectoryItem {
         m27_manifest_match = $m27Match
         m47_manifest_match = $m47Match
         m52_manifest_match = $m52Match
+        m58_manifest_match = $m58Match
         m62_manifest_match = $m62Match
         m63_manifest_match = $m63Match
         m72_manifest_match = $m72Match
@@ -674,6 +699,7 @@ $m15ManifestIds = Read-GameManifestIds "src/manifests/irem_m15/games"
 $m27ManifestIds = Read-GameManifestIds "src/manifests/irem_m27/games"
 $m47ManifestIds = Read-GameManifestIds "src/manifests/irem_m47/games"
 $m52ManifestIds = Read-GameManifestIds "src/manifests/irem_m52/games"
+$m58ManifestIds = Read-GameManifestIds "src/manifests/irem_m58/games"
 $m62ManifestIds = Read-GameManifestIds "src/manifests/irem_m62/games"
 $m63ManifestIds = Read-GameManifestIds "src/manifests/irem_m63/games"
 $m72ManifestIds = Read-GameManifestIds "src/manifests/irem_m72/games"
@@ -689,6 +715,7 @@ $m15ManifestParents = Read-GameManifestParents "src/manifests/irem_m15/games"
 $m27ManifestParents = Read-GameManifestParents "src/manifests/irem_m27/games"
 $m47ManifestParents = Read-GameManifestParents "src/manifests/irem_m47/games"
 $m52ManifestParents = Read-GameManifestParents "src/manifests/irem_m52/games"
+$m58ManifestParents = Read-GameManifestParents "src/manifests/irem_m58/games"
 $m62ManifestParents = Read-GameManifestParents "src/manifests/irem_m62/games"
 $m63ManifestParents = Read-GameManifestParents "src/manifests/irem_m63/games"
 $m72ManifestParents = Read-GameManifestParents "src/manifests/irem_m72/games"
@@ -705,6 +732,7 @@ Add-ManifestParents -ManifestIds $m15ManifestIds -ParentMap $m15ManifestParents
 Add-ManifestParents -ManifestIds $m27ManifestIds -ParentMap $m27ManifestParents
 Add-ManifestParents -ManifestIds $m47ManifestIds -ParentMap $m47ManifestParents
 Add-ManifestParents -ManifestIds $m52ManifestIds -ParentMap $m52ManifestParents
+Add-ManifestParents -ManifestIds $m58ManifestIds -ParentMap $m58ManifestParents
 Add-ManifestParents -ManifestIds $m62ManifestIds -ParentMap $m62ManifestParents
 Add-ManifestParents -ManifestIds $m63ManifestIds -ParentMap $m63ManifestParents
 Add-ManifestParents -ManifestIds $m72ManifestIds -ParentMap $m72ManifestParents
@@ -730,7 +758,7 @@ foreach ($root in @($roots)) {
     if (Test-Path -LiteralPath $rootPath -PathType Leaf) {
         $file = Get-Item -LiteralPath $rootPath
         $bucket = Get-BucketForPath -RootPath (Split-Path -Parent $rootPath) -Path $rootPath
-        $items.Add((New-ArchiveItem -File $file -Bucket $bucket -M14ManifestIds $m14ManifestIds -M15ManifestIds $m15ManifestIds -M27ManifestIds $m27ManifestIds -M47ManifestIds $m47ManifestIds -M52ManifestIds $m52ManifestIds -M62ManifestIds $m62ManifestIds -M63ManifestIds $m63ManifestIds -M72ManifestIds $m72ManifestIds -M75ManifestIds $m75ManifestIds -M81ManifestIds $m81ManifestIds -M82ManifestIds $m82ManifestIds -M84ManifestIds $m84ManifestIds -M90ManifestIds $m90ManifestIds -M92ManifestIds $m92ManifestIds -M107ManifestIds $m107ManifestIds))
+        $items.Add((New-ArchiveItem -File $file -Bucket $bucket -M14ManifestIds $m14ManifestIds -M15ManifestIds $m15ManifestIds -M27ManifestIds $m27ManifestIds -M47ManifestIds $m47ManifestIds -M52ManifestIds $m52ManifestIds -M58ManifestIds $m58ManifestIds -M62ManifestIds $m62ManifestIds -M63ManifestIds $m63ManifestIds -M72ManifestIds $m72ManifestIds -M75ManifestIds $m75ManifestIds -M81ManifestIds $m81ManifestIds -M82ManifestIds $m82ManifestIds -M84ManifestIds $m84ManifestIds -M90ManifestIds $m90ManifestIds -M92ManifestIds $m92ManifestIds -M107ManifestIds $m107ManifestIds))
         continue
     }
 
@@ -754,12 +782,12 @@ foreach ($root in @($roots)) {
             continue
         }
         $bucket = Get-BucketForPath -RootPath $rootPath -Path $file.FullName
-        $items.Add((New-ArchiveItem -File $file -Bucket $bucket -M14ManifestIds $m14ManifestIds -M15ManifestIds $m15ManifestIds -M27ManifestIds $m27ManifestIds -M47ManifestIds $m47ManifestIds -M52ManifestIds $m52ManifestIds -M62ManifestIds $m62ManifestIds -M63ManifestIds $m63ManifestIds -M72ManifestIds $m72ManifestIds -M75ManifestIds $m75ManifestIds -M81ManifestIds $m81ManifestIds -M82ManifestIds $m82ManifestIds -M84ManifestIds $m84ManifestIds -M90ManifestIds $m90ManifestIds -M92ManifestIds $m92ManifestIds -M107ManifestIds $m107ManifestIds))
+        $items.Add((New-ArchiveItem -File $file -Bucket $bucket -M14ManifestIds $m14ManifestIds -M15ManifestIds $m15ManifestIds -M27ManifestIds $m27ManifestIds -M47ManifestIds $m47ManifestIds -M52ManifestIds $m52ManifestIds -M58ManifestIds $m58ManifestIds -M62ManifestIds $m62ManifestIds -M63ManifestIds $m63ManifestIds -M72ManifestIds $m72ManifestIds -M75ManifestIds $m75ManifestIds -M81ManifestIds $m81ManifestIds -M82ManifestIds $m82ManifestIds -M84ManifestIds $m84ManifestIds -M90ManifestIds $m90ManifestIds -M92ManifestIds $m92ManifestIds -M107ManifestIds $m107ManifestIds))
     }
 
     foreach ($directory in Get-ChildItem @dirArgs | Sort-Object FullName) {
         $bucket = Get-BucketForPath -RootPath $rootPath -Path $directory.FullName
-        $item = New-DirectoryItem -Directory $directory -Bucket $bucket -M14ManifestIds $m14ManifestIds -M15ManifestIds $m15ManifestIds -M27ManifestIds $m27ManifestIds -M47ManifestIds $m47ManifestIds -M52ManifestIds $m52ManifestIds -M62ManifestIds $m62ManifestIds -M63ManifestIds $m63ManifestIds -M72ManifestIds $m72ManifestIds -M75ManifestIds $m75ManifestIds -M81ManifestIds $m81ManifestIds -M82ManifestIds $m82ManifestIds -M84ManifestIds $m84ManifestIds -M90ManifestIds $m90ManifestIds -M92ManifestIds $m92ManifestIds -M107ManifestIds $m107ManifestIds
+        $item = New-DirectoryItem -Directory $directory -Bucket $bucket -M14ManifestIds $m14ManifestIds -M15ManifestIds $m15ManifestIds -M27ManifestIds $m27ManifestIds -M47ManifestIds $m47ManifestIds -M52ManifestIds $m52ManifestIds -M58ManifestIds $m58ManifestIds -M62ManifestIds $m62ManifestIds -M63ManifestIds $m63ManifestIds -M72ManifestIds $m72ManifestIds -M75ManifestIds $m75ManifestIds -M81ManifestIds $m81ManifestIds -M82ManifestIds $m82ManifestIds -M84ManifestIds $m84ManifestIds -M90ManifestIds $m90ManifestIds -M92ManifestIds $m92ManifestIds -M107ManifestIds $m107ManifestIds
         if ($null -ne $item) {
             $items.Add($item)
         }
@@ -781,6 +809,7 @@ $bucketRows = @($items |
             m27_manifest_matches = @($groupItems | Where-Object { $_.m27_manifest_match }).Count
             m47_manifest_matches = @($groupItems | Where-Object { $_.m47_manifest_match }).Count
             m52_manifest_matches = @($groupItems | Where-Object { $_.m52_manifest_match }).Count
+            m58_manifest_matches = @($groupItems | Where-Object { $_.m58_manifest_match }).Count
             m62_manifest_matches = @($groupItems | Where-Object { $_.m62_manifest_match }).Count
             m63_manifest_matches = @($groupItems | Where-Object { $_.m63_manifest_match }).Count
             m72_manifest_matches = @($groupItems | Where-Object { $_.m72_manifest_match }).Count
@@ -909,12 +938,13 @@ $report = [pscustomobject]@{
     generated_at = (Get-Date).ToString("o")
     roots = @($resolvedRoots)
     recurse = [bool]$Recurse
-    known_buckets = @("M14", "M15", "M27", "M47", "M52", "M62", "M63", "M72", "M75", "M81", "M82", "M84", "M90", "M92", "M107", "i8751", "root")
+    known_buckets = @("M10", "M14", "M15", "M27", "M47", "M52", "M57", "M58", "M62", "M63", "M72", "M75", "M78", "M81", "M82", "M84", "M85", "M90", "M92", "M102", "M107", "i8751", "travrusa", "for-delete", "misc", "non-irem", "root")
     m14_manifest_count = $m14ManifestIds.Count
     m15_manifest_count = $m15ManifestIds.Count
     m27_manifest_count = $m27ManifestIds.Count
     m47_manifest_count = $m47ManifestIds.Count
     m52_manifest_count = $m52ManifestIds.Count
+    m58_manifest_count = $m58ManifestIds.Count
     m62_manifest_count = $m62ManifestIds.Count
     m63_manifest_count = $m63ManifestIds.Count
     m72_manifest_count = $m72ManifestIds.Count
@@ -934,6 +964,7 @@ $report = [pscustomobject]@{
         m27_manifest_matches = @($items | Where-Object { $_.m27_manifest_match }).Count
         m47_manifest_matches = @($items | Where-Object { $_.m47_manifest_match }).Count
         m52_manifest_matches = @($items | Where-Object { $_.m52_manifest_match }).Count
+        m58_manifest_matches = @($items | Where-Object { $_.m58_manifest_match }).Count
         m62_manifest_matches = @($items | Where-Object { $_.m62_manifest_match }).Count
         m63_manifest_matches = @($items | Where-Object { $_.m63_manifest_match }).Count
         m72_manifest_matches = @($items | Where-Object { $_.m72_manifest_match }).Count
@@ -970,7 +1001,7 @@ $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Out -Encoding UTF8
 
 Write-Host ("Irem corpus inventory: {0} item(s), {1} bucket(s); report: {2}" -f $items.Count, $bucketRows.Count, $Out)
 foreach ($bucket in $bucketRows) {
-    Write-Host ("  [{0}] items={1} archives={2} dirs={3} m14_matches={4} m15_matches={5} m27_matches={6} m47_matches={7} m52_matches={8} m62_matches={9} m63_matches={10} m72_matches={11} m75_matches={12} m81_matches={13} m82_matches={14} m84_matches={15} m90_matches={16} m92_matches={17} m107_matches={18} tracked={19} loadable={20} supported={21} contract_only={22} metadata_only={23}" -f $bucket.bucket, $bucket.item_count, $bucket.archive_count, $bucket.directory_count, $bucket.m14_manifest_matches, $bucket.m15_manifest_matches, $bucket.m27_manifest_matches, $bucket.m47_manifest_matches, $bucket.m52_manifest_matches, $bucket.m62_manifest_matches, $bucket.m63_manifest_matches, $bucket.m72_manifest_matches, $bucket.m75_manifest_matches, $bucket.m81_manifest_matches, $bucket.m82_manifest_matches, $bucket.m84_manifest_matches, $bucket.m90_manifest_matches, $bucket.m92_manifest_matches, $bucket.m107_manifest_matches, $bucket.tracked_by_mnemos, $bucket.loadable_by_mnemos, $bucket.supported_by_mnemos, $bucket.contract_only_tracked, $bucket.metadata_only_tracked)
+    Write-Host ("  [{0}] items={1} archives={2} dirs={3} m14_matches={4} m15_matches={5} m27_matches={6} m47_matches={7} m52_matches={8} m58_matches={9} m62_matches={10} m63_matches={11} m72_matches={12} m75_matches={13} m81_matches={14} m82_matches={15} m84_matches={16} m90_matches={17} m92_matches={18} m107_matches={19} tracked={20} loadable={21} supported={22} contract_only={23} metadata_only={24}" -f $bucket.bucket, $bucket.item_count, $bucket.archive_count, $bucket.directory_count, $bucket.m14_manifest_matches, $bucket.m15_manifest_matches, $bucket.m27_manifest_matches, $bucket.m47_manifest_matches, $bucket.m52_manifest_matches, $bucket.m58_manifest_matches, $bucket.m62_manifest_matches, $bucket.m63_manifest_matches, $bucket.m72_manifest_matches, $bucket.m75_manifest_matches, $bucket.m81_manifest_matches, $bucket.m82_manifest_matches, $bucket.m84_manifest_matches, $bucket.m90_manifest_matches, $bucket.m92_manifest_matches, $bucket.m107_manifest_matches, $bucket.tracked_by_mnemos, $bucket.loadable_by_mnemos, $bucket.supported_by_mnemos, $bucket.contract_only_tracked, $bucket.metadata_only_tracked)
 }
 if ($boardFamilyCandidates.Count -gt 0) {
     Write-Host "  board-family candidates:"

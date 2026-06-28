@@ -284,21 +284,29 @@ size = 0x10000
             if (!fs::exists(root, ec)) {
                 continue;
             }
+            std::vector<fs::path> candidates;
             for (const fs::directory_entry& entry : fs::recursive_directory_iterator(root, ec)) {
                 if (ec || !entry.is_regular_file()) {
                     continue;
                 }
-                std::string stem = entry.path().stem().string();
+                candidates.push_back(entry.path());
+            }
+            std::sort(candidates.begin(), candidates.end());
+            for (const fs::path& path : candidates) {
+                if (path.extension() != ".zip") {
+                    continue;
+                }
+                std::string stem = path.stem().string();
                 std::transform(stem.begin(), stem.end(), stem.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 if (stem == "moon-patrol_arcade_en") {
-                    result.try_emplace("mpatrol", entry.path());
+                    result.try_emplace("mpatrol", path);
                 } else if (stem == "moon-patrol_arcade_en (1)") {
-                    result.try_emplace("mpatrolw", entry.path());
+                    result.try_emplace("mpatrolw", path);
                 } else if (stem == "mpatrol") {
-                    result.try_emplace("mpatrol", entry.path());
+                    result.try_emplace("mpatrol", path);
                 } else if (stem == "mpatrolw") {
-                    result.try_emplace("mpatrolw", entry.path());
+                    result.try_emplace("mpatrolw", path);
                 }
             }
         }

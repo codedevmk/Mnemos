@@ -457,7 +457,10 @@ namespace mnemos::apps::player::adapters::irem_m52 {
             const fs::path parent_dir_path = sibling_dir / parent;
 
             std::optional<provider_source> parent_source =
-                make_zip_provider_from_path(parent_zip_path);
+                make_single_nested_zip_provider_from_path(parent_zip_path, parent);
+            if (!parent_source.has_value()) {
+                parent_source = make_zip_provider_from_path(parent_zip_path);
+            }
             if (!parent_source.has_value() && is_directory_path(parent_dir_path.string())) {
                 parent_source = provider_source{
                     .provider = mnemos::manifests::common::make_directory_rom_provider(
