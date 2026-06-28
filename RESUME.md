@@ -1,12 +1,12 @@
 # MSX / MSX2 Resume Handoff
 
-Updated: 2026-06-27 America/Chicago
+Updated: 2026-06-28 America/Chicago
 
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
-Prior implementation checkpoint before the latest MSX/MSX2 correction pass:
-`33be6e40835c81cbe0eefee3eb94de6fcf7f98b6`.
+Prior implementation checkpoint before the latest MSX/MSX2 diagnostic pass:
+`db6a20f5e9d3f00ac8f30a2ce6e49260f9207c4e`.
 
 The latest handoff commit should be the current `HEAD` after the next agent
 runs `git log -1 --oneline --decorate`.
@@ -17,6 +17,37 @@ primary context source. Continue from the live worktree, this file, and current
 executable evidence.
 
 ## Latest Checkpoint
+
+2026-06-28 America/Chicago:
+
+- Added named VDP mode diagnostics in `tests/golden/msx_boot_test.cpp`:
+  `mode=graphics_ii(4)` instead of raw `mode=4`, and equivalent names for
+  TMS9918A modes.
+- Extended the MSX/MSX2 PC and VDP I/O watches with `iff1`, `iff2`, interrupt
+  mode, halted state, VDP IRQ state, selected VDP status, and named VDP mode.
+- Relabeled the SCREEN 5/Graphic 4 byte scan as inactive raw page data when
+  V9938 is not actually in Graphic 4. The failing `bean.rom` profile now says
+  `screen5_page_active=false`, while active Graphics II samples/histograms stay
+  all backdrop.
+- Added a V9938 regression proving enum value `4` is Graphics II, while the
+  existing SCREEN 5 test continues to cover real Graphic 4 rendering.
+- Targeted Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_video_v9938_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_chips_video_v9938_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+- Explicit C-BIOS + `bean.rom` slot-profile validation still reproduces the
+  blocker. With `expanded=8`, sub-ROM `3.0`, RAM `3.2`, RAM size `512K`, MSX2
+  still ends at `PC=$CA3E`, `halted=true`, `mode=graphics_ii(4)`, `irq=true`,
+  `screen5_page_active=false`, framebuffer hash
+  `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`.
+  This is not a 100% operational state.
+- New log:
+
+```text
+build\scratch\msx-bean-diagnostics\mode-labels-20260628\msx2-bean-slotprofile-600-mode-labels.log
+```
 
 2026-06-27 late evening America/Chicago:
 
@@ -54,10 +85,11 @@ build\scratch\msx-bean-diagnostics\post-ppi-s0-fix-20260627\msx1-bean-after-ppi-
 
 Open issue for the next pass:
 
-- The MSX2 diagnostic reports nonzero Graphic 4 visible VRAM
-  (`visible_g4_nonzero=6008`) while the framebuffer remains uniform even after
-  900 frames. V9938 Graphic 4 rendering has unit coverage, so investigate the
-  boot/runtime state interaction before changing the renderer.
+- Do not treat the raw SCREEN 5 bytes as active Graphic 4 output. The failing
+  profile is active Graphics II (`mode=graphics_ii(4)`) and the Graphics II
+  visible tables remain backdrop-only. Continue from the `$8303-$832D`/
+  `$99DB` control-flow evidence and interrupt/IRQ timing around `EI`, not the
+  Graphic 4 renderer.
 - The `$BFFF->$C000` transition is now protected by tests as a valid cart/RAM
   boundary, not something to "fix" by mirroring the cartridge into page 3.
 

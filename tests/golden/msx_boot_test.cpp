@@ -483,6 +483,10 @@ namespace {
                     << " bc=" << hex16(regs.bc) << " de=" << hex16(regs.de)
                     << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
                     << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
+                    << " iff1=" << (regs.iff1 ? "true" : "false")
+                    << " iff2=" << (regs.iff2 ? "true" : "false")
+                    << " im=" << static_cast<unsigned>(regs.im)
+                    << " halted=" << (regs.halted ? "true" : "false")
                     << " ret0=" << hex16(ret0)
                     << state_summary()
                     << msx_dispatch_work_summary(read)
@@ -800,6 +804,38 @@ namespace {
         return "unknown";
     }
 
+    [[nodiscard]] std::string
+    v9938_mode_label(mnemos::chips::video::v9938::display_mode mode) {
+        std::ostringstream out;
+        out << v9938_mode_name(mode) << '('
+            << static_cast<unsigned>(static_cast<std::uint8_t>(mode)) << ')';
+        return out.str();
+    }
+
+    [[nodiscard]] const char*
+    tms9918a_mode_name(mnemos::chips::video::tms9918a::display_mode mode) noexcept {
+        using display_mode = mnemos::chips::video::tms9918a::display_mode;
+        switch (mode) {
+        case display_mode::graphics_i:
+            return "graphics_i";
+        case display_mode::text:
+            return "text";
+        case display_mode::multicolor:
+            return "multicolor";
+        case display_mode::graphics_ii:
+            return "graphics_ii";
+        }
+        return "unknown";
+    }
+
+    [[nodiscard]] std::string
+    tms9918a_mode_label(mnemos::chips::video::tms9918a::display_mode mode) {
+        std::ostringstream out;
+        out << tms9918a_mode_name(mode) << '('
+            << static_cast<unsigned>(static_cast<std::uint8_t>(mode)) << ')';
+        return out.str();
+    }
+
     template <typename ReadByte>
     void append_msx_vdp_io_event(const char* kind, std::uint16_t port, std::uint8_t value,
                                  const mnemos::chips::cpu::z80& cpu, ReadByte& read,
@@ -817,9 +853,15 @@ namespace {
             << " bc=" << hex16(regs.bc) << " de=" << hex16(regs.de)
             << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
             << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
+            << " iff1=" << (regs.iff1 ? "true" : "false")
+            << " iff2=" << (regs.iff2 ? "true" : "false")
+            << " im=" << static_cast<unsigned>(regs.im)
+            << " halted=" << (regs.halted ? "true" : "false")
             << " vdp_status=" << hex8(vdp.status()) << " r0=" << hex8(vdp.reg(0))
             << " r1=" << hex8(vdp.reg(1)) << " r2=" << hex8(vdp.reg(2))
-            << " r7=" << hex8(vdp.reg(7)) << msx_dispatch_work_summary(read)
+            << " r7=" << hex8(vdp.reg(7))
+            << " vdp_irq=" << (vdp.irq_asserted() ? "true" : "false")
+            << " mode=" << tms9918a_mode_label(vdp.mode()) << msx_dispatch_work_summary(read)
             << " code=" << cpu_window_summary(static_cast<std::uint16_t>(regs.pc - 4U), read);
         events.push_back(out.str());
     }
@@ -845,7 +887,12 @@ namespace {
             << " bc=" << hex16(regs.bc) << " de=" << hex16(regs.de)
             << " hl=" << hex16(regs.hl) << " ix=" << hex16(regs.ix)
             << " iy=" << hex16(regs.iy) << " sp=" << hex16(regs.sp)
-            << " frame=" << vdp.frame_index() << " mode=" << v9938_mode_name(vdp.mode())
+            << " iff1=" << (regs.iff1 ? "true" : "false")
+            << " iff2=" << (regs.iff2 ? "true" : "false")
+            << " im=" << static_cast<unsigned>(regs.im)
+            << " halted=" << (regs.halted ? "true" : "false")
+            << " vdp_irq=" << (vdp.irq_asserted() ? "true" : "false")
+            << " frame=" << vdp.frame_index() << " mode=" << v9938_mode_label(vdp.mode())
             << " r0=" << hex8(vdp.reg(0)) << " r1=" << hex8(vdp.reg(1))
             << " r2=" << hex8(vdp.reg(2)) << " r5=" << hex8(vdp.reg(5))
             << " r6=" << hex8(vdp.reg(6)) << " r7=" << hex8(vdp.reg(7))
@@ -2076,6 +2123,17 @@ namespace {
                     << " primary=" << hex8(sys->primary_slot_select)
                     << " secondary3=" << hex8(sys->secondary_slot_select[3])
                     << " ram_pages=" << ram_mapper_segment_summary(sys->ram_mapper_page);
+                if (sys->msx2_video()) {
+                    out << " vdp_irq=" << (sys->vdp2.irq_asserted() ? "true" : "false")
+                        << " s0=" << hex8(sys->vdp2.status(0))
+                        << " s1=" << hex8(sys->vdp2.status(1))
+                        << " r15=" << hex8(sys->vdp2.reg(15))
+                        << " vdp_mode=" << v9938_mode_label(sys->vdp2.mode());
+                } else {
+                    out << " vdp_irq=" << (sys->vdp.irq_asserted() ? "true" : "false")
+                        << " status=" << hex8(sys->vdp.status())
+                        << " vdp_mode=" << tms9918a_mode_label(sys->vdp.mode());
+                }
                 return out.str();
             },
             pc_watch_events);
@@ -2170,7 +2228,12 @@ namespace {
                     << static_cast<unsigned>(subslot(3U, page3_slot)) << ']'
                     << " primary=" << hex8(sys->primary_slot)
                     << " secondary3=" << hex8(sys->secondary_slot[3])
-                    << " ram_segments=" << ram_mapper_segment_summary(sys->ram_segment);
+                    << " ram_segments=" << ram_mapper_segment_summary(sys->ram_segment)
+                    << " vdp_irq=" << (sys->vdp.irq_asserted() ? "true" : "false")
+                    << " s0=" << hex8(sys->vdp.status(0))
+                    << " s1=" << hex8(sys->vdp.status(1))
+                    << " r15=" << hex8(sys->vdp.reg(15))
+                    << " vdp_mode=" << v9938_mode_label(sys->vdp.mode());
                 return out.str();
             },
             pc_watch_events);
@@ -2443,16 +2506,14 @@ TEST_CASE("msx boots real firmware to a deterministic golden framebuffer", "[gol
     INFO("pc window: "
          << cpu_window_summary(regs.pc, [sys = sys.get()](std::uint16_t address) {
                 return sys->bus.read8(address);
-            }));
+    }));
     const auto fb = sys->framebuffer();
     const auto vram = sys->msx2_video() ? sys->vdp2.vram() : sys->vdp.vram();
+    const std::string active_vdp_mode =
+        sys->msx2_video() ? v9938_mode_label(sys->vdp2.mode())
+                          : tms9918a_mode_label(sys->vdp.mode());
     INFO("vdp state: frame=" << sys->active_video().frame_index()
-                             << " mode="
-                             << static_cast<unsigned>(sys->msx2_video()
-                                                          ? static_cast<std::uint8_t>(
-                                                                sys->vdp2.mode())
-                                                          : static_cast<std::uint8_t>(
-                                                                sys->vdp.mode()))
+                             << " mode=" << active_vdp_mode
                              << " r0=" << hex8(sys->msx2_video() ? sys->vdp2.reg(0) : sys->vdp.reg(0))
                              << " r1=" << hex8(sys->msx2_video() ? sys->vdp2.reg(1) : sys->vdp.reg(1))
                              << " r2=" << hex8(sys->msx2_video() ? sys->vdp2.reg(2) : sys->vdp.reg(2))
@@ -2477,13 +2538,19 @@ TEST_CASE("msx boots real firmware to a deterministic golden framebuffer", "[gol
                                                    << " s2=" << hex8(sys->vdp2.status(2))
                                                    << " vram_pages_32k="
                                                    << vram_page_nonzero_summary(vram, 0x8000U)
-                                                   << " visible_g4_nonzero="
+                                                   << " screen5_page_active="
+                                                   << (sys->vdp2.mode() ==
+                                                               mnemos::chips::video::v9938::
+                                                                   display_mode::graphics_iv
+                                                           ? "true"
+                                                           : "false")
+                                                   << " raw_screen5_page_nonzero="
                                                    << visible_graphics4_nonzero_bytes(
                                                           vram, sys->vdp2.reg(2), sys->vdp2.reg(9))
-                                                   << " visible_g4_hist="
+                                                   << " raw_screen5_page_hist="
                                                    << visible_graphics4_nibble_histogram(
                                                           vram, sys->vdp2.reg(2), sys->vdp2.reg(9))
-                                                   << " visible_g4_first_nonzero="
+                                                   << " raw_screen5_page_first_nonzero="
                                                    << first_visible_graphics4_nonzero_bytes(
                                                           vram, sys->vdp2.reg(2), sys->vdp2.reg(9))
                                                    << " visible_g1_hist="
@@ -2494,6 +2561,15 @@ TEST_CASE("msx boots real firmware to a deterministic golden framebuffer", "[gol
                                                    << first_visible_graphics1_non_backdrop_sample(
                                                           vram, sys->vdp2.reg(2), sys->vdp2.reg(3),
                                                           sys->vdp2.reg(4), sys->vdp2.reg(7))
+                                                   << " visible_g2_hist="
+                                                   << visible_graphics2_pen_histogram(
+                                                          vram, sys->vdp2.reg(2), sys->vdp2.reg(3),
+                                                          sys->vdp2.reg(4), sys->vdp2.reg(10))
+                                                   << " visible_g2_first_non_backdrop="
+                                                   << first_visible_graphics2_non_backdrop_sample(
+                                                          vram, sys->vdp2.reg(2), sys->vdp2.reg(3),
+                                                          sys->vdp2.reg(4), sys->vdp2.reg(7),
+                                                          sys->vdp2.reg(10))
                                                    << " g1_sample_l0="
                                                    << graphics1_table_sample(vram, sys->vdp2.reg(2),
                                                                              sys->vdp2.reg(3),
@@ -2716,7 +2792,7 @@ TEST_CASE("msx2 boots real firmware to a deterministic golden framebuffer", "[go
             }));
     const auto fb = sys->vdp.framebuffer();
     INFO("vdp state: frame=" << sys->vdp.frame_index()
-                             << " mode=" << static_cast<unsigned>(sys->vdp.mode())
+                             << " mode=" << v9938_mode_label(sys->vdp.mode())
                              << " r0=" << hex8(sys->vdp.reg(0))
                              << " r1=" << hex8(sys->vdp.reg(1))
                              << " r2=" << hex8(sys->vdp.reg(2))
@@ -2745,13 +2821,19 @@ TEST_CASE("msx2 boots real firmware to a deterministic golden framebuffer", "[go
                                      << " s2=" << hex8(sys->vdp.status(2))
                                      << " vram_pages_32k="
                                      << vram_page_nonzero_summary(sys->vdp.vram(), 0x8000U)
-                                     << " visible_g4_nonzero="
+                                     << " screen5_page_active="
+                                     << (sys->vdp.mode() ==
+                                                 mnemos::chips::video::v9938::display_mode::
+                                                     graphics_iv
+                                             ? "true"
+                                             : "false")
+                                     << " raw_screen5_page_nonzero="
                                      << visible_graphics4_nonzero_bytes(
                                             sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(9))
-                                     << " visible_g4_hist="
+                                     << " raw_screen5_page_hist="
                                      << visible_graphics4_nibble_histogram(
                                             sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(9))
-                                     << " visible_g4_first_nonzero="
+                                     << " raw_screen5_page_first_nonzero="
                                      << first_visible_graphics4_nonzero_bytes(
                                             sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(9))
                                      << " visible_g1_hist="
@@ -2762,6 +2844,14 @@ TEST_CASE("msx2 boots real firmware to a deterministic golden framebuffer", "[go
                                      << first_visible_graphics1_non_backdrop_sample(
                                             sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(3),
                                             sys->vdp.reg(4), sys->vdp.reg(7))
+                                     << " visible_g2_hist="
+                                     << visible_graphics2_pen_histogram(
+                                            sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(3),
+                                            sys->vdp.reg(4), sys->vdp.reg(10))
+                                     << " visible_g2_first_non_backdrop="
+                                     << first_visible_graphics2_non_backdrop_sample(
+                                            sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(3),
+                                            sys->vdp.reg(4), sys->vdp.reg(7), sys->vdp.reg(10))
                                      << " g1_sample_l0="
                                      << graphics1_table_sample(
                                             sys->vdp.vram(), sys->vdp.reg(2), sys->vdp.reg(3),

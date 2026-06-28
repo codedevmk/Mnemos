@@ -925,6 +925,28 @@ TEST_CASE("v9938 renders Graphic 4 SCREEN 5 nibbles through the palette") {
     CHECK(pixel(vdp, 1, 0) == 0x000000FFU);
 }
 
+TEST_CASE("v9938 enum value 4 is Graphics II rather than Graphic 4") {
+    v9938 vdp;
+
+    install_red_blue_palette(vdp);
+
+    set_addr(vdp, 0x02C0U, true);
+    vdp.data_write(0x12U);
+
+    write_reg(vdp, 0, 0x02U); // M3 only -> Graphics II
+    write_reg(vdp, 1, 0xE2U);
+    write_reg(vdp, 2, 0x06U);
+    write_reg(vdp, 3, 0xFFU);
+    write_reg(vdp, 4, 0x03U);
+    write_reg(vdp, 7, 0xF4U);
+    vdp.render_frame();
+
+    CHECK(vdp.mode() == v9938::display_mode::graphics_ii);
+    CHECK(static_cast<unsigned>(static_cast<std::uint8_t>(vdp.mode())) == 4U);
+    CHECK(pixel(vdp, 0, 0) == pixel(vdp, 1, 0));
+    CHECK(pixel(vdp, 0, 0) == pixel(vdp, 128, 96));
+}
+
 TEST_CASE("v9938 colour code 0 resolves to backdrop unless R8 disables transparency") {
     v9938 vdp;
 
