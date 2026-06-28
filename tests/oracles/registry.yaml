@@ -224,6 +224,20 @@ machines:
         data_env: MNEMOS_M27_SET_DIR
         requires_apps: true
 
+  irem_m47:
+    module: src/manifests/irem_m47
+    golden:
+      - id: GLD-M47-CORPUS
+        ctest: mnemos_apps_player_irem_m47_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M47_SET_DIR
+        requires_apps: true
+      - id: GLD-M47-PARITY-HASH
+        ctest: mnemos_apps_player_irem_m47_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_M47_PARITY_SET
+        requires_apps: true
+
   irem_m52:
     module: src/manifests/irem_m52
     golden:
@@ -277,6 +291,20 @@ machines:
         ctest: mnemos_apps_player_irem_m63_corpus_golden_test
         data_gated: true
         data_env: MNEMOS_M63_SET_DIR
+        requires_apps: true
+
+  irem_travrusa:
+    module: src/manifests/irem_travrusa
+    golden:
+      - id: GLD-TRAVRUSA-CORPUS
+        ctest: mnemos_apps_player_irem_travrusa_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_TRAVRUSA_SET_DIR
+        requires_apps: true
+      - id: GLD-TRAVRUSA-PARITY-HASH
+        ctest: mnemos_apps_player_irem_travrusa_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_TRAVRUSA_PARITY_SET
         requires_apps: true
 
   irem_m72:

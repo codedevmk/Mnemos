@@ -9,6 +9,10 @@
       "ctest": "mnemos_gg_visual_corpus_test",
       "high_water": "skipped"
     },
+    "GLD-M14-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m14_corpus_golden_test",
+      "high_water": "passed"
+    },
     "GLD-M107-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m107_corpus_golden_test",
       "high_water": "passed"
@@ -17,6 +21,18 @@
       "ctest": "mnemos_apps_player_irem_m15_corpus_golden_test",
       "high_water": "passed"
     },
+    "GLD-M27-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m27_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M47-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m47_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M47-PARITY-HASH": {
+      "ctest": "mnemos_apps_player_irem_m47_parity_hash_golden_test",
+      "high_water": "skipped"
+    },
     "GLD-M52-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m52_corpus_golden_test",
       "high_water": "passed"
@@ -24,6 +40,26 @@
     "GLD-M52-PARITY-HASH": {
       "ctest": "mnemos_apps_player_irem_m52_parity_hash_golden_test",
       "high_water": "skipped"
+    },
+    "GLD-M57-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m57_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M58-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m58_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M58-PARITY-HASH": {
+      "ctest": "mnemos_apps_player_irem_m58_parity_hash_golden_test",
+      "high_water": "skipped"
+    },
+    "GLD-M62-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m62_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M63-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m63_corpus_golden_test",
+      "high_water": "passed"
     },
     "GLD-M72-PROTECTED": {
       "ctest": "mnemos_apps_player_irem_m72_protected_golden_test",
@@ -80,6 +116,14 @@
     "GLD-M92-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m92_corpus_golden_test",
       "high_water": "passed"
+    },
+    "GLD-TRAVRUSA-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_travrusa_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-TRAVRUSA-PARITY-HASH": {
+      "ctest": "mnemos_apps_player_irem_travrusa_parity_hash_golden_test",
+      "high_water": "skipped"
     },
     "GLD-SMS-BOOT": {
       "ctest": "mnemos_sms_boot_test",
