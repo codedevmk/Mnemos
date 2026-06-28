@@ -137,7 +137,9 @@ targets:
   user-facing launch path. Current graphics and audio remain diagnostic
   first-pass output, not board-authentic M47 parity.
 - M58 now has four 10-Yard Fight ROM-set contracts plus a first-pass executable
-  Z80/Z80/two-SSG player route. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` proves the
+  Z80/Z80/two-SSG player route. `src/chips/cpu/m6803` now provides the MC6803
+  CPU foundation needed to replace that diagnostic sound-Z80 route with
+  authentic Irem Audio wiring. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` proves the
   four local ZIP sets through the adapter; direct `mnemos_player --system
   irem_m58` screenshot and `--system m58` save-state smokes prove the
   user-facing launch path. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout
@@ -145,8 +147,9 @@ targets:
   `D:\emu\irem\M58\artwork`.
 - M62 now has eleven raw-media ROM-set contracts plus a first-pass player route
   with CRC-clean local wrapper-ZIP load proof, nonblank screenshot proof, and
-  save-state proof. Treat this as smoke-playable only, not authentic KNA/M6803
-  behavior.
+  save-state proof. The reusable MC6803 CPU foundation exists for the future
+  sound/controller route, but M62 remains smoke-playable only, not authentic
+  KNA/M6803 behavior.
 - M63 now has a single `wilytowr` ROM contract plus a first-pass executable
   Z80 diagnostic player route. `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` proves the
   local ZIP through the adapter; direct `mnemos_player --system irem_m63`
@@ -368,15 +371,18 @@ visual and audio parity proof.
 - **Current implementation:** `src/manifests/irem_m58` embeds 10-Yard Fight ROM
   contracts with board-evidenced `maincpu`, `soundcpu`, `tiles`, `sprites`, and
   `proms` regions, plus `src/manifests/irem_m58/m58_system.cpp` assembles a
-  first-pass M58 board with main Z80, sound Z80, input/DIP MMIO, sound-command
-  latch/IRQ acknowledgement, two YM2149-compatible SSGs, ROM-backed tile/sprite
-  rendering, PROM-derived diagnostic color, scroll/flip state, board identity
-  save/load, player adapter registration, capability discovery, and local corpus
-  smoke.
+  first-pass M58 board with main Z80, diagnostic sound Z80, input/DIP MMIO,
+  sound-command latch/IRQ acknowledgement, two YM2149-compatible SSGs,
+  ROM-backed tile/sprite rendering, PROM-derived diagnostic color, scroll/flip
+  state, board identity save/load, player adapter registration, capability
+  discovery, and local corpus smoke. `src/chips/cpu/m6803` now provides the
+  board-family CPU target for the next M58 audio-board wiring slice, but is not
+  wired into `irem_m58` yet.
 - **Remaining:** replace first-pass video/color/priority/radar assumptions with
-  board-evidenced 10-Yard Fight behavior, verify exact memory/I/O timing and
-  sound CPU port protocol, add board/manual-backed DIP behavior, and collect
-  pinned visual/audio parity hashes before calling M58 correct.
+  board-evidenced 10-Yard Fight behavior, wire the MC6803-based Irem Audio board
+  bus/peripherals in place of the diagnostic sound-Z80 route, add
+  board/manual-backed DIP behavior, and collect pinned visual/audio parity
+  hashes before calling M58 correct.
 
 ### M62
 
@@ -400,7 +406,9 @@ visual and audio parity proof.
   execution window and diagnostic graphics window from `raw_media`, exposes
   RAM/input/sound-latch surfaces, nonblank video, beeper-backed audio for
   synthetic programs, board identity save/load, player adapter registration,
-  capability discovery, and local corpus smoke.
+  capability discovery, and local corpus smoke. `src/chips/cpu/m6803` now
+  provides the reusable Motorola sound/controller CPU foundation for the future
+  authentic M62 audio-board profile, but is not wired into `irem_m62` yet.
 - **Remaining:** replace the first-pass raw-media/Z80 diagnostic route with the
   authentic M62 Z80/M6803 board family, exact title bus maps, dual AY-3-8910,
   dual MSM5205, KNA custom video behavior, inputs/DIPs, and visual/audio parity
