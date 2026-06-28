@@ -316,6 +316,35 @@ TEST_CASE("z80 RETN and RETI restore IFF1 from IFF2") {
     }
 }
 
+TEST_CASE("z80 NMI immediately after EI preserves enabled IFF2 for RETN") {
+    machine m;
+    m.load(0x0000U, {0xFBU, 0x00U}); // EI ; NOP
+    m.load(0x0066U, {0xEDU, 0x45U}); // RETN
+
+    m.cpu.step_instruction(); // EI sets IFF1/IFF2, but delays maskable IRQ recognition
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x0001U);
+    CHECK(r.iff1);
+    CHECK(r.iff2);
+
+    m.cpu.set_irq_line(true);
+    m.cpu.set_nmi_line(true);
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x0066U);
+    CHECK(r.sp == 0xFFFDU);
+    CHECK_FALSE(r.iff1);
+    CHECK(r.iff2);
+
+    m.cpu.set_nmi_line(false);
+    m.cpu.step_instruction(); // RETN restores IFF1 from the IFF2 value saved by NMI
+    r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x0001U);
+    CHECK(r.sp == 0xFFFFU);
+    CHECK(r.iff1);
+    CHECK(r.iff2);
+}
+
 TEST_CASE("z80 services a mode-1 maskable interrupt after EI delay") {
     machine m;
     auto r = m.cpu.cpu_registers();

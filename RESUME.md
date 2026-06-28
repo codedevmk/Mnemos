@@ -18,6 +18,54 @@ executable evidence.
 
 ## Latest Checkpoint
 
+2026-06-28 01:48 America/Chicago:
+
+- Fixed the shared Z80 `EI`/NMI corner found in the next MSX/MSX2 review
+  slice. `EI` now sets `IFF1/IFF2` immediately while `ei_pending_` only gates
+  maskable IRQ recognition through the following instruction boundary. If an
+  `/NMI` edge is pending at that boundary, the NMI service now consumes the
+  pending `EI` delay before saving `IFF1` into `IFF2`, so `RETN` restores the
+  correct enabled state instead of preserving a stale disabled `IFF2`.
+- Added a focused regression in `src/chips/cpu/z80/tests/z80_test.cpp` for
+  `EI`, simultaneous pending IRQ+NMI, NMI vectoring to `$0066`, and `RETN`
+  restoring `IFF1/IFF2=true`.
+- Updated the MSX1 `bean.rom` C-BIOS profile hash in
+  `tests/golden/msx_rom_profiles.json`. The hardware-correct `EI` timing moves
+  the 600-frame MSX1 visible attract state from
+  `8ac76412f61dbbd32e99439bf7cd43a0cdcbc9efb3328828dcefd261909a33a2` to
+  `690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a` when
+  run with `cbios_logo_msx1.rom`; the no-logo direct MSX1 hash observed in
+  this pass was
+  `3747b8df1546e229eb0f0ec61042bdd1f64cc87c3f20f96634a2f4f4d845add0`.
+- Targeted Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_cpu_z80_test mnemos_manifests_msx_test mnemos_manifests_msx2_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_chips_cpu_z80_test|mnemos_manifests_msx_test|mnemos_manifests_msx2_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+- Data-gated Bean smoke after the fix used explicit C-BIOS paths from
+  `D:\emu\msx\bios` and ROMs from `D:\emu\msx\MSX files [ROM]`. Current sorted
+  top-level valid-ROM index for `bean.rom` is `SkipRoms 196`; `SkipRoms 192`
+  now lands on `BATTLECH` in this corpus and should not be treated as Bean
+  proof. The rerun produced `3/4` expected results with summary
+  `build\scratch\msx-boot\20260628-014734-948-23188\summary.json`:
+  - MSX firmware passed with hash
+    `697fe93903980d26d6ef37fc76b0511c8a76656ebdc70f7be616c4dd7bac836a`.
+  - MSX + logo + `bean.rom` passed with the updated hash
+    `690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a`.
+  - MSX2 C-BIOS firmware passed with hash
+    `8572e9f4e74913c1a5d3de86da650c0a46ab5ec0643b2d6e5f80bf0c3fd5e1bb`.
+  - MSX2 C-BIOS + sub-ROM + logo + `bean.rom` remains the tracked failure with
+    hash `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`
+    and reason `PC=$CA3E after the $BFFF->$C000 handoff`.
+- Specialist follow-up still points away from mapper/page-3 mirroring fixes.
+  The next useful product-code investigation is a differential MSX2/MSX1 trace
+  around `$8303-$8308`, `$8319/$832D`, `$0038`, and `$823D-$832D`, including
+  VDP status reads and writes to `$E130-$E138`, `$E3C5`, and `$C000-$C03F`.
+  Candidate surfaces remain narrow Z80 interrupt scheduling, V9938 status/IRQ
+  timing, MSX2 IRQ propagation, or scheduler ordering; do not mask this by
+  changing plain-ROM page-3 behavior.
+
 2026-06-28 01:37 America/Chicago:
 
 - Fixed a narrow MSX2 slot-overlap bug from the specialist review. When a

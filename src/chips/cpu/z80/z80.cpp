@@ -1308,6 +1308,7 @@ namespace mnemos::chips::cpu {
                     step_cycles_ += 4;
                     break; // DI
                 default:
+                    iff1_ = iff2_ = true;
                     ei_pending_ = true;
                     step_cycles_ += 4;
                     break; // EI
@@ -1377,6 +1378,7 @@ namespace mnemos::chips::cpu {
 
         if (nmi_pending_) {
             nmi_pending_ = false;
+            ei_pending_ = false;
             halted_ = false;
             iff2_ = iff1_;
             iff1_ = false;

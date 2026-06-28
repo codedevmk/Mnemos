@@ -150,8 +150,8 @@
       "sha256": "7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8",
       "mapper": "plain",
       "boot_frames": 600,
-      "boot_sha256": "8ac76412f61dbbd32e99439bf7cd43a0cdcbc9efb3328828dcefd261909a33a2",
-      "reason": "C-BIOS MSX1 reaches Bean's visible attract path and stays alive through the 600-frame proof window"
+      "boot_sha256": "690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a",
+      "reason": "C-BIOS MSX1 with the logo ROM reaches Bean's visible attract path and stays alive through the 600-frame proof window"
     },
     {
       "system": "msx2",
