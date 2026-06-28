@@ -1217,10 +1217,14 @@ namespace mnemos::chips::audio {
             for (std::int16_t& sample : voice_output_) {
                 sample = static_cast<std::int16_t>(reader.u16());
             }
+            // Clamp restored filter indices: tap_count/delay_pos drive fir() array
+            // indexing, so a corrupt or truncated save must not push them out of range.
             const auto read_filter = [&reader](fir_filter& f) {
                 f.table_pos = reader.u16();
-                f.tap_count = static_cast<std::int16_t>(reader.u16());
-                f.delay_pos = static_cast<std::int16_t>(reader.u16());
+                f.tap_count = static_cast<std::int16_t>(
+                    clamp_i32(reader.u16(), 0, static_cast<std::int32_t>(filter_tap_capacity)));
+                f.delay_pos = static_cast<std::int16_t>(clamp_i32(
+                    reader.u16(), 0, static_cast<std::int32_t>(filter_tap_capacity) - 1));
                 for (std::int16_t& tap : f.taps) {
                     tap = static_cast<std::int16_t>(reader.u16());
                 }
@@ -1237,8 +1241,10 @@ namespace mnemos::chips::audio {
             const auto read_delay = [&reader](mix_delay& d) {
                 d.delay = static_cast<std::int16_t>(reader.u16());
                 d.volume = static_cast<std::int16_t>(reader.u16());
-                d.write_pos = static_cast<std::int16_t>(reader.u16());
-                d.read_pos = static_cast<std::int16_t>(reader.u16());
+                d.write_pos = static_cast<std::int16_t>(clamp_i32(
+                    reader.u16(), 0, static_cast<std::int32_t>(delay_line_capacity) - 1));
+                d.read_pos = static_cast<std::int16_t>(clamp_i32(
+                    reader.u16(), 0, static_cast<std::int32_t>(delay_line_capacity) - 1));
                 for (std::int16_t& sample : d.delay_line) {
                     sample = static_cast<std::int16_t>(reader.u16());
                 }
@@ -1255,6 +1261,9 @@ namespace mnemos::chips::audio {
             state_counter_ = reader.u16();
             echo_length_ = reader.u16();
         } else {
+            // Pre-v5 saves carry no filter/delay/echo-state block. Echo length/state for
+            // such legacy blobs is intentionally lossy (recomputed from current defaults);
+            // the live writer emits v5, so this branch is backward-compatibility only.
             voice_output_.fill(0);
             echo_length_ = echo_delay_length();
         }

@@ -100,6 +100,11 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                 std::size_t out = 0U;
                 const auto add = [this, &out](const char* name, std::uint64_t value,
                                               std::uint8_t bits, fmt format) {
+                    // register_view_ is sized to the exact add() count below; guard so a
+                    // future added register can never overrun the fixed-size array.
+                    if (out >= register_view_.size()) {
+                        return;
+                    }
                     register_view_[out++] = {name, value, bits, format};
                 };
                 const auto control_word = [this](std::size_t offset) -> std::uint16_t {
@@ -1049,6 +1054,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         frame_audio_target_ = due_after - due_before;
         frame_audio_generated_ = 0U;
         frame_audio_cycle_budget_ = cps2::cpu_cycles_per_frame;
+        // Contract: pending_audio_ accumulates losslessly until the host calls
+        // drain_audio(); callers (live player, headless --extract-audio) drain every
+        // frame, and long extracts rely on this being lossless. Do NOT cap/trim here.
         pending_audio_.reserve(
             pending_audio_.size() + static_cast<std::size_t>(frame_audio_target_ * 2U));
 
@@ -1320,6 +1328,15 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  if (reader.ok()) {
                      adapter.refresh_inputs();
                      adapter.reset_audio_pipeline(false);
+                     // Re-prime the resampler latches from the restored DSP. The "board"
+                     // component is registered/loaded before this "adapter" one, so
+                     // qsound_dsp() already holds the restored output; without this the
+                     // first post-load sample blends from zero and produces a click.
+                     auto& dsp = adapter.sys_->qsound_dsp();
+                     adapter.qsound_curr_left_ = dsp.last_left();
+                     adapter.qsound_curr_right_ = dsp.last_right();
+                     adapter.qsound_prev_left_ = adapter.qsound_curr_left_;
+                     adapter.qsound_prev_right_ = adapter.qsound_curr_right_;
                  }
              }});
         return target;
