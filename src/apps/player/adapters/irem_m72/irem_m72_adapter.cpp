@@ -1411,7 +1411,7 @@ namespace mnemos::apps::player::adapters::irem_m72 {
         // board schema so a board-only save cannot masquerade as a frame-exact
         // player rollback point.
         constexpr std::uint32_t irem_m72_adapter_state_version = 2U;
-        constexpr std::uint32_t irem_m72_adapter_save_target_manifest_rev = 4U;
+        constexpr std::uint32_t irem_m72_adapter_save_target_manifest_rev = 5U;
 
         void write_i16(chips::state_writer& writer, std::int16_t value) {
             writer.u16(static_cast<std::uint16_t>(static_cast<std::int32_t>(value) + 32768));
@@ -1687,6 +1687,13 @@ namespace mnemos::apps::player::adapters::irem_m72 {
             {"board",
              [&adapter](chips::state_writer& writer) { adapter.machine().save_state(writer); },
              [&adapter](chips::state_reader& reader) { adapter.machine().load_state(reader); }});
+        target.components.push_back({"scheduler",
+                                     [&adapter](chips::state_writer& writer) {
+                                         adapter.scheduler_->save_state(writer);
+                                     },
+                                     [&adapter](chips::state_reader& reader) {
+                                         adapter.scheduler_->load_state(reader);
+                                     }});
         target.components.push_back(
             {"adapter",
              [&adapter](chips::state_writer& writer) { adapter.save_adapter_state(writer); },

@@ -2127,8 +2127,8 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     CHECK(board_target.manifest_rev == mnemos::manifests::irem_m72::m72_system_state_version);
     const mnemos::runtime::save_target source_target = irem::build_save_target(source);
     CHECK(source_target.manifest_id == "irem_m72.adapter");
-    CHECK(source_target.manifest_rev == 4U);
-    REQUIRE(source_target.components.size() == 2U);
+    CHECK(source_target.manifest_rev == 5U);
+    REQUIRE(source_target.components.size() == 3U);
     const std::vector<std::uint8_t> blob = mnemos::runtime::write_save_state(source_target);
     REQUIRE_FALSE(blob.empty());
     CHECK(source.save_state() == blob);
@@ -2172,6 +2172,43 @@ TEST_CASE("irem_m72_adapter whole-player save-state round-trips through runtime"
     CHECK(restored.machine().input_system == static_cast<std::uint8_t>(0xFFU & ~0x02U & ~0x20U));
 }
 
+TEST_CASE("irem_m72_adapter whole-player save-state preserves scheduler phase",
+          "[irem_m72][adapter]") {
+    namespace irem = mnemos::apps::player::adapters::irem_m72;
+
+    const auto zip = make_stored_zip({
+        {"maincpu.bin", make_program()},
+        {"samples.bin", std::vector<std::uint8_t>(512U, 0x40U)},
+    });
+
+    irem::irem_m72_adapter source(zip, "scheduler-phase-source");
+    source.machine().sound_cpu.set_reset_line(false);
+    source.step_one_frame();
+
+    REQUIRE(source.machine().fm.elapsed_clocks() > 0U);
+    REQUIRE(source.machine().sound_cpu.elapsed_cycles() > 0U);
+    REQUIRE(source.machine().sample_address > 0U);
+
+    const std::vector<std::uint8_t> blob = source.save_state();
+    REQUIRE_FALSE(blob.empty());
+
+    irem::irem_m72_adapter restored(zip, "scheduler-phase-restored");
+    const mnemos::runtime::load_result result = restored.load_state(blob);
+    REQUIRE(result.ok());
+    CHECK(restored.machine().fm.elapsed_clocks() == source.machine().fm.elapsed_clocks());
+    CHECK(restored.machine().sound_cpu.elapsed_cycles() ==
+          source.machine().sound_cpu.elapsed_cycles());
+    CHECK(restored.machine().sample_address == source.machine().sample_address);
+
+    source.step_one_frame();
+    restored.step_one_frame();
+
+    CHECK(restored.machine().fm.elapsed_clocks() == source.machine().fm.elapsed_clocks());
+    CHECK(restored.machine().sound_cpu.elapsed_cycles() ==
+          source.machine().sound_cpu.elapsed_cycles());
+    CHECK(restored.machine().sample_address == source.machine().sample_address);
+}
+
 TEST_CASE("irem_m72_adapter loads v1 adapter input snapshots", "[irem_m72][adapter]") {
     namespace irem = mnemos::apps::player::adapters::irem_m72;
 
@@ -2207,7 +2244,7 @@ TEST_CASE("irem_m72_adapter loads v1 adapter input snapshots", "[irem_m72][adapt
     };
 
     mnemos::runtime::save_target legacy_target = irem::build_save_target(legacy_source);
-    REQUIRE(legacy_target.components.size() == 2U);
+    REQUIRE(legacy_target.components.size() == 3U);
     legacy_target.components.pop_back();
     legacy_target.components.push_back({"adapter",
                                         [&](mnemos::chips::state_writer& writer) {
