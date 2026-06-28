@@ -1,11 +1,12 @@
 # Atomic Punk (US) -- Irem M90 Bomber Man World family wrapper.
-# The local corpus wrapper currently carries only the V35 program pair; GA25
-# graphics and Z80 audio media are not present in this set artifact.
+# The split local set carries only its unique V35 program pair; the adapter
+# resolves shared Z80, graphics, and sample media from bbmanw.zip.
 
 [set]
 schema      = "mnemos-romset/1"
 name        = "atompunk"
 board       = "irem_m90"
+parent      = "bbmanw"
 orientation = "horizontal"
 
 [[region]]
@@ -25,3 +26,21 @@ offset = 0x000000
 stride = 2
 size   = 0x20000
 crc32  = 0xbe57bf74
+
+[[region.file]]
+name          = "bbm-cp0d.ic65"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x1fff8
+length        = 0x8
+size          = 0x20000
+crc32         = 0x860c0479
+
+[[region.file]]
+name          = "bbm-cp1d.ic62"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x1fff8
+length        = 0x8
+size          = 0x20000
+crc32         = 0xbe57bf74

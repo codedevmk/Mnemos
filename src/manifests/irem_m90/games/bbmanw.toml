@@ -1,0 +1,94 @@
+# Bomber Man World / New Atomic Punk - Global Quest -- Irem M90 parent set.
+# The current board shell consumes the resident program, audio, samples, and
+# GA25 graphics bytes for deterministic diagnostic rendering; authentic GA25
+# decode remains a parity gap.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "bbmanw"
+board       = "irem_m90"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "bbm2-h0-b.ic77"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x567d3709
+
+[[region.file]]
+name   = "bbm2-l0-b.ic79"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xe762c22b
+
+[[region.file]]
+name          = "bbm2-h0-b.ic77"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x567d3709
+
+[[region.file]]
+name          = "bbm2-l0-b.ic79"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0xe762c22b
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "bbm2-sp.ic33"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x6bc1689e
+
+[[region]]
+name = "graphics"
+size = 0x200000
+
+[[region.file]]
+name   = "bbm2-c0.ic81"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0xe7ce058a
+
+[[region.file]]
+name   = "bbm2-c1.ic82"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0x636a78a9
+
+[[region.file]]
+name   = "bbm2-c2.ic83"
+offset = 0x100000
+size   = 0x40000
+crc32  = 0x9ac2142f
+
+[[region.file]]
+name   = "bbm2-c3.ic84"
+offset = 0x180000
+size   = 0x40000
+crc32  = 0x47af1750
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "bbm2-v0.ic30"
+offset = 0x000000
+size   = 0x20000
+crc32  = 0x4ad889ed

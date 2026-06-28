@@ -89,6 +89,21 @@ namespace mnemos::manifests::irem_m90 {
             if (layout == "bbman2_audio_sample_alt") {
                 return 4U;
             }
+            if (layout == "bbmanw_complete") {
+                return 5U;
+            }
+            if (layout == "hasamu_complete") {
+                return 6U;
+            }
+            if (layout == "quizf1_banked") {
+                return 7U;
+            }
+            if (layout == "riskchal_complete") {
+                return 8U;
+            }
+            if (layout == "gussun_parented") {
+                return 9U;
+            }
             return 0U;
         }
 
@@ -102,6 +117,16 @@ namespace mnemos::manifests::irem_m90 {
                 return 0x6BU;
             case 4U:
                 return 0x7DU;
+            case 5U:
+                return 0x91U;
+            case 6U:
+                return 0xA7U;
+            case 7U:
+                return 0xB3U;
+            case 8U:
+                return 0xC5U;
+            case 9U:
+                return 0xD9U;
             default:
                 return 0x27U;
             }
@@ -150,17 +175,31 @@ namespace mnemos::manifests::irem_m90 {
         if (set_name == "newapunk") {
             return {.dip_default = 0xFFFFU, .rom_layout = "bbman2_program_pair"};
         }
+        if (set_name == "bbmanw") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "bbmanw_complete"};
+        }
         if (set_name == "bbmanwj") {
             return {.dip_default = 0xFFFFU, .rom_layout = "bbman2_audio_sample"};
         }
         if (set_name == "bbmanwja") {
             return {.dip_default = 0xFFFFU, .rom_layout = "bbman2_audio_sample_alt"};
         }
+        if (set_name == "hasamu") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "hasamu_complete"};
+        }
+        if (set_name == "quizf1") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "quizf1_banked"};
+        }
+        if (set_name == "riskchal") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "riskchal_complete"};
+        }
+        if (set_name == "gussun") {
+            return {.dip_default = 0xFFFFU, .rom_layout = "gussun_parented"};
+        }
         return {};
     }
 
-    m90_video::m90_video()
-        : pixels_(static_cast<std::size_t>(visible_width) * visible_height, 0U) {
+    m90_video::m90_video() : pixels_(static_cast<std::size_t>(visible_width) * visible_height, 0U) {
         reset(chips::reset_kind::power_on);
     }
 
@@ -190,11 +229,11 @@ namespace mnemos::manifests::irem_m90 {
     void m90_video::compose(std::span<const std::uint8_t> main_program,
                             std::span<const std::uint8_t> sound_program,
                             std::span<const std::uint8_t> samples,
+                            std::span<const std::uint8_t> graphics,
                             std::span<const std::uint8_t> vram,
                             std::span<const std::uint8_t> rowscroll,
                             std::span<const std::uint8_t> palette,
-                            std::span<const std::uint8_t> sprite_ram,
-                            std::string_view rom_layout) {
+                            std::span<const std::uint8_t> sprite_ram, std::string_view rom_layout) {
         const std::uint8_t tint = layout_tint(rom_layout);
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             const std::uint16_t row_scroll =
@@ -211,11 +250,13 @@ namespace mnemos::manifests::irem_m90 {
                 const std::uint8_t snd =
                     sample_byte(sound_program, (linear >> 2U) + (x >> 3U), 0x33U);
                 const std::uint8_t smp = sample_byte(samples, (linear >> 1U) + tint, 0x11U);
+                const std::uint8_t gfx = sample_byte(graphics, (linear << 1U) + (x & 0x1FU), 0x22U);
                 const std::uint8_t vr = sample_byte(vram, linear + (x ^ y), 0x00U);
                 const std::uint8_t sp = sample_byte(sprite_ram, (linear >> 2U) + y, 0x00U);
-                const std::uint8_t pal = sample_byte(palette, (main ^ snd ^ smp) * 2U, tint);
+                const std::uint8_t pal = sample_byte(palette, (main ^ snd ^ smp ^ gfx) * 2U, tint);
                 const std::uint8_t mixed = static_cast<std::uint8_t>(
-                    main ^ static_cast<std::uint8_t>(snd << 1U) ^ smp ^ vr ^ sp ^ pal ^ tint);
+                    main ^ static_cast<std::uint8_t>(snd << 1U) ^ smp ^
+                    static_cast<std::uint8_t>(gfx << 2U) ^ vr ^ sp ^ pal ^ tint);
                 pixels_[static_cast<std::size_t>(y) * visible_width + x] =
                     rgb_from_byte(mixed, tint);
             }
@@ -369,17 +410,19 @@ namespace mnemos::manifests::irem_m90 {
         const auto* main_program = roms.region("maincpu");
         const auto* sound_program = roms.region("soundcpu");
         const auto* samples = roms.region("samples");
+        const auto* graphics = roms.region("graphics");
         video.compose(main_program != nullptr ? std::span<const std::uint8_t>(*main_program)
                                               : std::span<const std::uint8_t>{},
                       sound_program != nullptr ? std::span<const std::uint8_t>(*sound_program)
                                                : std::span<const std::uint8_t>{},
                       samples != nullptr ? std::span<const std::uint8_t>(*samples)
                                          : std::span<const std::uint8_t>{},
+                      graphics != nullptr ? std::span<const std::uint8_t>(*graphics)
+                                          : std::span<const std::uint8_t>{},
                       vram, rowscroll_ram, palette_ram, sprite_ram, params.rom_layout);
     }
 
-    void m90_system::set_inputs(std::uint8_t p1, std::uint8_t p2,
-                                std::uint8_t system) noexcept {
+    void m90_system::set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept {
         input_p1 = p1;
         input_p2 = p2;
         input_system = system;

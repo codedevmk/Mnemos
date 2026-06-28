@@ -1,0 +1,91 @@
+# Risky Challenge -- Irem M90 parent set for Gussun Oyoyo.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "riskchal"
+board       = "irem_m90"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "l4-a-h0-b.ic77"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x4c9b5344
+
+[[region.file]]
+name   = "l4-a-l0-b.ic79"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x0455895a
+
+[[region.file]]
+name          = "l4-a-h0-b.ic77"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x4c9b5344
+
+[[region.file]]
+name          = "l4-a-l0-b.ic79"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x0455895a
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "l4_a-sp.ic33"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0xbb80094e
+
+[[region]]
+name = "graphics"
+size = 0x200000
+
+[[region.file]]
+name   = "rc_c0.ic81"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x84d0b907
+
+[[region.file]]
+name   = "rc_c1.ic82"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xcb3784ef
+
+[[region.file]]
+name   = "rc_c2.ic83"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x687164d7
+
+[[region.file]]
+name   = "rc_c3.ic84"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0xc86be6af
+
+[[region]]
+name = "samples"
+size = 0x040000
+
+[[region.file]]
+name   = "rc_v0.ic30"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0xcddac360

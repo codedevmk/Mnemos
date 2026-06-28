@@ -99,8 +99,9 @@ namespace mnemos::manifests::irem_m90 {
 
         void compose(std::span<const std::uint8_t> main_program,
                      std::span<const std::uint8_t> sound_program,
-                     std::span<const std::uint8_t> samples, std::span<const std::uint8_t> vram,
-                     std::span<const std::uint8_t> rowscroll, std::span<const std::uint8_t> palette,
+                     std::span<const std::uint8_t> samples, std::span<const std::uint8_t> graphics,
+                     std::span<const std::uint8_t> vram, std::span<const std::uint8_t> rowscroll,
+                     std::span<const std::uint8_t> palette,
                      std::span<const std::uint8_t> sprite_ram, std::string_view rom_layout);
 
       private:
@@ -155,6 +156,6 @@ namespace mnemos::manifests::irem_m90 {
     };
 
     [[nodiscard]] std::unique_ptr<m90_system> assemble_m90(common::rom_set_image image,
-                                                             m90_board_params board_params = {});
+                                                           m90_board_params board_params = {});
 
 } // namespace mnemos::manifests::irem_m90

@@ -213,6 +213,14 @@ multiple independent open-source implementations.
   CRC-32s, orientation, and PLD metadata. Mnemos uses that metadata for a
   first-pass M85 board/player route; it is still not visual/audio parity proof.
   No MAME driver code or ROM bytes are copied into Mnemos.
+- **Irem M90 ROM-set metadata** — the checked-in `atompunk`, `bbmanw`,
+  `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, and
+  `riskchal` manifests use public Irem M90 driver metadata for dump filenames,
+  parent/clone relationships, region sizes, offsets, reset-vector reloads,
+  CRC-32s, orientation, graphics/sample media, and Quiz F-1 banked program
+  media. Mnemos uses that metadata for a first-pass M90 board/player route; it
+  is still not visual/audio parity proof. No MAME driver code or ROM bytes are
+  copied into Mnemos.
 - **Irem M92 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m92/games/` use public MAME M92 driver metadata for dump
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the

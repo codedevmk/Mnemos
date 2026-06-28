@@ -7,8 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -60,8 +60,8 @@ namespace {
 
         temp_set_dir() {
             const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-            path = fs::temp_directory_path() / ("mnemos_m90_dac_adapter_test_" +
-                                                std::to_string(stamp));
+            path = fs::temp_directory_path() /
+                   ("mnemos_m90_dac_adapter_test_" + std::to_string(stamp));
             std::error_code ec;
             fs::remove_all(path, ec);
             REQUIRE(fs::create_directories(path));
@@ -556,15 +556,15 @@ TEST_CASE("irem_m90_adapter validates real M90 ROM sets", "[irem_m90][data]") {
     }
 
     const auto sources = index_source_roots(source_roots(dir_env->c_str()));
-    const std::set<std::string, std::less<>> expected{"atompunk", "newapunk", "bbmanwj",
-                                                      "bbmanwja"};
+    const std::set<std::string, std::less<>> expected = embedded_set_names();
     for (const auto& set_id : expected) {
         INFO("set=" << set_id);
         auto found = sources.find(set_id);
         REQUIRE(found != sources.end());
 
         auto bytes = read_source_bytes(found->second);
-        irem::irem_m90_adapter adapter(std::move(bytes), set_id, nullptr, {}, found->second.string());
+        irem::irem_m90_adapter adapter(std::move(bytes), set_id, nullptr, {},
+                                       found->second.string());
 
         CHECK(adapter.set_name() == set_id);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);

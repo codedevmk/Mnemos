@@ -1,8 +1,13 @@
 set(_irem_m90_game_manifest_files
     "games/atompunk.toml"
+    "games/bbmanw.toml"
     "games/bbmanwj.toml"
     "games/bbmanwja.toml"
+    "games/gussun.toml"
+    "games/hasamu.toml"
     "games/newapunk.toml"
+    "games/quizf1.toml"
+    "games/riskchal.toml"
 )
 set(MNEMOS_IREM_M90_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M90_EMBEDDED_CONSTANTS "")
