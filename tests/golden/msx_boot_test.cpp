@@ -1454,6 +1454,41 @@ namespace {
         return mnemos::security::cryptography::sha256(bytes).hex();
     }
 
+    [[nodiscard]] std::string_view known_invalid_boot_hash_reason(
+        std::string_view hash) noexcept {
+        struct known_hash final {
+            std::string_view hash;
+            std::string_view reason;
+        };
+        constexpr std::array<known_hash, 9> k_known_invalid_hashes{{
+            {"326e35a4b84e1fbed55653072ce6d2695e2206ef7522e1727713b2618d4dd612",
+             "framebuffer remained on the C-BIOS MSX1 startup banner"},
+            {"e9488409d963dc9f08cf5956e1b4bdbd83bc5a96c193e80c00dda7ff9fc80bd5",
+             "framebuffer matched the C-BIOS MSX1 cartridge initialization diagnostic screen"},
+            {"a4fd9e711efa94a8ddc758f939e66cf0d86ceb8ed90c888b1dffb3a034530aa3",
+             "framebuffer matched the C-BIOS MSX1 cartridge initialization diagnostic screen"},
+            {"e3a049bb139a79ae2aa46f249d19a4313b491de5b060828833a52f9ed0deecf0",
+             "framebuffer matched the C-BIOS cartridge initialization diagnostic screen"},
+            {"19c38151896ffb8ce69589fa3aaafb1acaef97982d5c508faf979b4968f25247",
+             "framebuffer matched the C-BIOS cartridge initialization diagnostic screen"},
+            {"dec855724fb2101cc65a59c6e99593fe3577279e79c11907d5c397f11caae536",
+             "framebuffer matched the C-BIOS cartridge initialization diagnostic screen"},
+            {"c2198f7d31f9cbd17c54dbbb2d93c620af9ad9f5de2b49d68dc2487f8ffac4c2",
+             "framebuffer matched the C-BIOS MSX2 startup/logo screen"},
+            {"9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573",
+             "framebuffer matched the known C-BIOS MSX2 Bean bad state"},
+            {"e1ba45afdb7e4df41612c4fa2fd7f354552cb33879ff9657ba45f59ffc5e0940",
+             "framebuffer matched the known C-BIOS MSX2 Bean no-logo interrupt-vector bad state"},
+        }};
+
+        for (const known_hash entry : k_known_invalid_hashes) {
+            if (hash == entry.hash) {
+                return entry.reason;
+            }
+        }
+        return {};
+    }
+
     mnemos::video_region parse_region(const char* env_name) {
         if (const auto value = get_env(env_name); value && (*value == "pal" || *value == "PAL")) {
             return mnemos::video_region::pal;
@@ -2631,6 +2666,11 @@ TEST_CASE("msx boots real firmware to a deterministic golden framebuffer", "[gol
     const std::string hash = mnemos::tools::hash_framebuffer(fb);
 
     CHECK_FALSE(framebuffer_is_uniform(fb));
+    const std::string_view invalid_hash_reason = known_invalid_boot_hash_reason(hash);
+    if (!invalid_hash_reason.empty()) {
+        INFO("known invalid boot hash: " << invalid_hash_reason);
+    }
+    CHECK(invalid_hash_reason.empty());
 
     auto sys2 = boot_msx(*bios, cartridge, cartridge2, disk_rom, disk_image, kanji_rom, logo_rom,
                          cassette_image, region, frames, mapper, mapper2, slot_layout, boot_keys);
@@ -2876,6 +2916,11 @@ TEST_CASE("msx2 boots real firmware to a deterministic golden framebuffer", "[go
     const std::string hash = mnemos::tools::hash_framebuffer(fb);
 
     CHECK_FALSE(framebuffer_is_uniform(fb));
+    const std::string_view invalid_hash_reason = known_invalid_boot_hash_reason(hash);
+    if (!invalid_hash_reason.empty()) {
+        INFO("known invalid boot hash: " << invalid_hash_reason);
+    }
+    CHECK(invalid_hash_reason.empty());
 
     auto sys2 = boot_msx2(bios, sub_bios, cartridge, cartridge2, logo_rom, disk_rom, disk_image,
                           kanji_rom, cassette_image, region, frames, mapper, mapper2, slot_layout,

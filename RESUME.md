@@ -18,6 +18,44 @@ executable evidence.
 
 ## Latest Checkpoint
 
+2026-06-28 01:25 America/Chicago:
+
+- Ran two specialist read-only review passes over shared MSX/MSX2 and MSX2
+  V9938/C-BIOS surfaces. Both reviews agreed that the active `bean.rom`
+  evidence does not justify a product-code slot, mapper, VDP, or IRQ patch:
+  the current C-BIOS MSX2 slot state is internally consistent, `$BFFF` is
+  cartridge, `$C000` is page-3 RAM, and the 16 KiB cartridge must not be
+  mirrored into page 3.
+- Hardened the proof harness instead of masking the blocker:
+  `scripts/msx/run-boot-smoke.ps1` now records configured golden hashes when a
+  successful Catch2 run is intentionally quiet, and it classifies the known
+  MSX2 Bean bad framebuffer hashes with explicit reasons.
+- Added the same known-invalid framebuffer hash guard to
+  `tests/golden/msx_boot_test.cpp`, so direct `mnemos_msx_boot_test` runs reject
+  known C-BIOS diagnostic/startup screens and the tracked MSX2 Bean bad hashes
+  even when a future bad frame is nonuniform.
+- Added local ROM profiles for `bean.rom` in
+  `tests/golden/msx_rom_profiles.json`: MSX1 is locked as a 600-frame C-BIOS
+  pass with hash
+  `8ac76412f61dbbd32e99439bf7cd43a0cdcbc9efb3328828dcefd261909a33a2`; MSX2
+  remains a tracked parity blocker with the same ROM SHA-256
+  `7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8`.
+- Focused data-gated validation after the harness change:
+  - MSX1 C-BIOS + logo + `bean.rom` passed through
+    `scripts/msx/run-boot-smoke.ps1` with summary
+    `build\scratch\msx-boot\20260628-012436-641-2464\summary.json`.
+  - MSX2 C-BIOS + sub-ROM + logo + `bean.rom` still failed, now with the
+    explicit reason `framebuffer matched the known C-BIOS MSX2 Bean bad state at
+    PC=$CA3E after the $BFFF->$C000 handoff`, summary
+    `build\scratch\msx-boot\20260628-012436-650-40416\summary.json`.
+  - The only local filename-marked MSX2 ROM found in the corpus,
+    `MSX2PMUS (13).rom`, passed a 600-frame C-BIOS MSX2 smoke with hash
+    `ad42f52759050d8187b1cf85b0f7eefad6c9a4ede24453f92d77d9755133a986`.
+- `openmsx` was not found on `PATH`, so the external-control-emulator proof
+  recommended by the reviewers has not been run. If installed later, use the
+  exact C-BIOS MSX2 XML/profile and `bean.rom` before declaring this a confirmed
+  C-BIOS/game compatibility edge rather than a Mnemos divergence.
+
 2026-06-28 proceed pass America/Chicago:
 
 - Used two specialist MSX/MSX2 review passes to audit the live blocker before

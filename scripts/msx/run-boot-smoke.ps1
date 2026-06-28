@@ -804,6 +804,26 @@ function Get-CaseBootKeys {
     return [string]$Case.env[$name]
 }
 
+function Get-CaseBootSha256EnvName {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Case)
+    if ($Case.system -eq "msx2") {
+        return "MNEMOS_MSX2_BOOT_SHA256"
+    }
+    return "MNEMOS_MSX_BOOT_SHA256"
+}
+
+function Get-CaseConfiguredBootSha256 {
+    param([Parameter(Mandatory = $true)][pscustomobject]$Case)
+
+    $name = Get-CaseBootSha256EnvName -Case $Case
+    if (-not $Case.env.ContainsKey($name)) {
+        return ""
+    }
+
+    $hash = Normalize-HexString ([string]$Case.env[$name])
+    return $hash.Length -eq 64 ? $hash : ""
+}
+
 function Get-BootHashFromLog {
     param([string]$LogPath)
     if (-not (Test-Path -LiteralPath $LogPath -PathType Leaf)) {
@@ -896,6 +916,12 @@ $knownInvalidBootHashes = @{
     # not accepted by the firmware loader, for example after a wrong mapper guess.
     "c2198f7d31f9cbd17c54dbbb2d93c620af9ad9f5de2b49d68dc2487f8ffac4c2" =
         "framebuffer matched the C-BIOS MSX2 startup/logo screen"
+    # C-BIOS MSX2 + Bean reaches the cartridge dispatcher, crosses the legitimate
+    # $BFFF->$C000 cart/RAM boundary, then executes stale logo/high-RAM data.
+    "9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573" =
+        "framebuffer matched the known C-BIOS MSX2 Bean bad state at PC=`$CA3E after the `$BFFF->`$C000 handoff"
+    "e1ba45afdb7e4df41612c4fa2fd7f354552cb33879ff9657ba45f59ffc5e0940" =
+        "framebuffer matched the known C-BIOS MSX2 Bean no-logo interrupt-vector bad state"
 }
 
 function Get-InvalidBootHashReason {
@@ -1177,6 +1203,9 @@ foreach ($case in $cases) {
     Write-Host ("[{0}] {1}" -f $case.system, $case.name) -ForegroundColor Cyan
     $exitCode = Invoke-BootTest -TestExe $testExe -Case $case -LogPath $logPath
     $hash = Get-BootHashFromLog -LogPath $logPath
+    if ($exitCode -eq 0 -and [string]::IsNullOrWhiteSpace($hash)) {
+        $hash = Get-CaseConfiguredBootSha256 -Case $case
+    }
     $passed = $exitCode -eq 0
     $failureReason = ""
     $baselineHash = $null
@@ -1196,6 +1225,8 @@ foreach ($case in $cases) {
         $failureReason = "firmware baseline run failed or did not produce a framebuffer hash"
     } elseif ($passed -and -not [string]::IsNullOrWhiteSpace($bootFailureReason)) {
         $passed = $false
+        $failureReason = $bootFailureReason
+    } elseif (-not $passed -and -not [string]::IsNullOrWhiteSpace($bootFailureReason)) {
         $failureReason = $bootFailureReason
     }
 
@@ -1230,6 +1261,9 @@ foreach ($case in $cases) {
         Write-Host ("[{0}] {1} retry at {2} frames" -f $case.system, $case.name, $configuredRetryFrames) -ForegroundColor DarkCyan
         $retryExitCode = Invoke-BootTest -TestExe $testExe -Case $case -LogPath $retryLogPath
         $retryHash = Get-BootHashFromLog -LogPath $retryLogPath
+        if ($retryExitCode -eq 0 -and [string]::IsNullOrWhiteSpace($retryHash)) {
+            $retryHash = Get-CaseConfiguredBootSha256 -Case $case
+        }
         $exitCode = $retryExitCode
         $hash = $retryHash
         $passed = $exitCode -eq 0
@@ -1245,6 +1279,8 @@ foreach ($case in $cases) {
             $failureReason = "firmware baseline run failed or did not produce a framebuffer hash"
         } elseif ($passed -and -not [string]::IsNullOrWhiteSpace($bootFailureReason)) {
             $passed = $false
+            $failureReason = $bootFailureReason
+        } elseif (-not $passed -and -not [string]::IsNullOrWhiteSpace($bootFailureReason)) {
             $failureReason = $bootFailureReason
         }
 

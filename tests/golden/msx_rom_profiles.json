@@ -146,6 +146,23 @@
     },
     {
       "system": "msx",
+      "name": "bean.rom",
+      "sha256": "7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8",
+      "mapper": "plain",
+      "boot_frames": 600,
+      "boot_sha256": "8ac76412f61dbbd32e99439bf7cd43a0cdcbc9efb3328828dcefd261909a33a2",
+      "reason": "C-BIOS MSX1 reaches Bean's visible attract path and stays alive through the 600-frame proof window"
+    },
+    {
+      "system": "msx2",
+      "name": "bean.rom",
+      "sha256": "7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8",
+      "mapper": "plain",
+      "boot_frames": 600,
+      "reason": "Tracked MSX2 parity blocker: C-BIOS MSX2 reaches Bean's $BFFF->$C000 handoff then falls into the known PC=$CA3E bad state"
+    },
+    {
+      "system": "msx",
       "name": "boing.rom",
       "sha256": "43844079a0a99e47d7d52894a9f782722c28c8c7fe6dd8f2b239da34be396018",
       "skip": true,
