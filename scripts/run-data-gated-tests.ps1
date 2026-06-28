@@ -12,15 +12,15 @@
 #   MNEMOS_M6510_TESTS_DIR    per-instruction 6502 test JSON dir      -> m6510_conformance_test
 #   MNEMOS_M68000_TESTS_DIR   per-instruction 68000 test JSON dir     -> m68000_conformance_test
 #   MNEMOS_SMS_BIOS           an SMS BIOS/cart image (A/B comparator) -> sms_manifest_parity_test
-#   MNEMOS_M72_RTYPE_SET      an R-Type-family M72 zip or directory -> irem_m72 golden/corpus smoke
-#   MNEMOS_M72_PROTECTED_SET  a protected true-M72 zip or directory -> irem_m72 golden/corpus smoke
-#   MNEMOS_M72_PROTECTED_AUDIO_SET  protected true-M72 audio-proof set -> irem_m72 rendered-audio golden
-#   MNEMOS_M72_PROTECTED_MCU_SET  protected true-M72 set with dumped MCU -> irem_m72 dumped-MCU golden/corpus smoke
-#   MNEMOS_M72_PARITY_SET     a reference-captured M72 zip or directory -> irem_m72 visual/audio parity hash golden
+#   MNEMOS_M72_RTYPE_SET      R-Type-family M72 zip/dir/path-list -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_PROTECTED_SET  protected true-M72 zip/dir/path-list -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_PROTECTED_AUDIO_SET  protected true-M72 audio-proof zip/dir/path-list -> irem_m72 rendered-audio golden/corpus smoke
+#   MNEMOS_M72_PROTECTED_MCU_SET  protected true-M72 zip/dir/path-list with dumped MCU -> irem_m72 dumped-MCU golden/corpus smoke
+#   MNEMOS_M72_PARITY_SET     reference-captured M72 zip/dir/path-list -> irem_m72 visual/audio parity hash golden
 #   MNEMOS_M72_PARITY_FRAME_SHA256  expected final RGBA framebuffer SHA-256 for MNEMOS_M72_PARITY_SET
 #   MNEMOS_M72_PARITY_AUDIO_SHA256  expected interleaved s16le rendered-audio SHA-256 for MNEMOS_M72_PARITY_SET
 #   MNEMOS_M72_PARITY_FRAMES  frame count for the M72 parity hash golden (default: 600)
-#   MNEMOS_M72_VERTICAL_SET   a vertical true-M72 zip or directory  -> irem_m72 golden/corpus smoke
+#   MNEMOS_M72_VERTICAL_SET   vertical true-M72 zip/dir/path-list -> irem_m72 golden/corpus smoke
 #   MNEMOS_M72_SET_DIR        path-list of mixed roots or dirs with true-M72 zips/dirs/wrappers -> irem_m72 roster/corpus smoke
 #   MNEMOS_M14_SET_DIR        path-list of dirs with M14 zips/dirs/wrappers -> irem_m14 manifest/player smoke
 #   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest/player smoke

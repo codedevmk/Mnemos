@@ -481,8 +481,9 @@ visual and audio parity proof.
   `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M72\dbreedm72`,
   `D:\emu\irem\M72\nspirit.zip`, and
   `D:\emu\irem\M72\airduelm72.zip;D:\emu\irem\M72\airduelm72`.
-  The per-set data-gated hooks now accept platform path-lists so split sets can
-  provide supplemental media without relying only on the roster runner.
+  The per-set data-gated hooks and M72 corpus smoke runner now accept platform
+  path-lists so split sets can provide supplemental media without relying only
+  on recursive roster discovery.
   `GLD-M72-ROSTER` now passes with `MNEMOS_M72_SET_DIR=D:\emu\irem\M72` using
   its default 900-frame roster window.
   `GLD-M72-PARITY-HASH` now exists as an opt-in final-frame/audio SHA-256

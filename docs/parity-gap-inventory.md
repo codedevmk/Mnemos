@@ -264,9 +264,10 @@ cursor, writes only nonzero bytes to the DAC, stays idle while an uploaded-RAM
 sound CPU is held in reset, and is exposed as an Irem peripheral in the player
 chip list. Focused scheduler tests pin the divider.
 
-Split-source proof note: the per-set M72 data-gated hooks now accept platform
-path-list env vars and pass supplemental media through the adapter, matching the
-player's multi-`--rom` route. Current local proof passes Gallop directly with
+Split-source proof note: the per-set M72 data-gated hooks and corpus smoke
+runner now accept platform path-list env vars and pass supplemental media
+through the adapter, matching the player's multi-`--rom` route. Current local
+proof passes Gallop directly with
 `MNEMOS_M72_PROTECTED_SET=D:\emu\irem\M72\gallopm72.zip;D:\emu\irem\M72\gallop`,
 Air Duel directly with
 `MNEMOS_M72_VERTICAL_SET=D:\emu\irem\M72\airduelm72.zip;D:\emu\irem\M72\airduelm72`,

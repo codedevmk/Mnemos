@@ -3,8 +3,10 @@
 #
 # ROM sets are never committed. Point this at one or more zips/directories with -Rom,
 # MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET,
-# MNEMOS_M72_PROTECTED_MCU_SET, MNEMOS_M72_VERTICAL_SET, or at true-M72
-# roster directories with -RomDir / MNEMOS_M72_SET_DIR. Pass
+# MNEMOS_M72_PROTECTED_AUDIO_SET, MNEMOS_M72_PROTECTED_MCU_SET,
+# MNEMOS_M72_VERTICAL_SET, or at true-M72 roster directories with
+# -RomDir / MNEMOS_M72_SET_DIR. Set env vars may be a platform path-list so
+# split sets can pass a primary archive plus supplemental unpacked/parent media. Pass
 # -Recurse for mixed corpus roots such as D:\emu\irem; the top-level
 # scripts/run-data-gated-tests.ps1 entrypoint does this for M72 automatically.
 # Use -Set to narrow a mixed root to one or more checked-in M72 manifest ids.
@@ -667,8 +669,10 @@ $roms = [System.Collections.Generic.List[string]]::new()
 foreach ($path in Split-CommaList $Rom) {
     Add-RomPath -Paths $roms -Path $path
 }
-foreach ($name in @("MNEMOS_M72_RTYPE_SET", "MNEMOS_M72_PROTECTED_SET", "MNEMOS_M72_PROTECTED_MCU_SET", "MNEMOS_M72_VERTICAL_SET")) {
-    Add-RomPath -Paths $roms -Path ([Environment]::GetEnvironmentVariable($name))
+foreach ($name in @("MNEMOS_M72_RTYPE_SET", "MNEMOS_M72_PROTECTED_SET", "MNEMOS_M72_PROTECTED_AUDIO_SET", "MNEMOS_M72_PROTECTED_MCU_SET", "MNEMOS_M72_VERTICAL_SET")) {
+    foreach ($path in Split-PathList ([Environment]::GetEnvironmentVariable($name))) {
+        Add-RomPath -Paths $roms -Path $path
+    }
 }
 
 $romDirs = [System.Collections.Generic.List[string]]::new()
@@ -754,7 +758,7 @@ if ($MaxSets -gt 0) {
 }
 
 if ($romGroups.Count -eq 0) {
-    Write-Host "No Irem M72 ROMs configured; set MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET, MNEMOS_M72_VERTICAL_SET, or MNEMOS_M72_SET_DIR to run this gate. If -Set was used, no requested set was discovered." -ForegroundColor DarkGray
+    Write-Host "No Irem M72 ROMs configured; set MNEMOS_M72_RTYPE_SET, MNEMOS_M72_PROTECTED_SET, MNEMOS_M72_PROTECTED_AUDIO_SET, MNEMOS_M72_PROTECTED_MCU_SET, MNEMOS_M72_VERTICAL_SET, or MNEMOS_M72_SET_DIR to run this gate. If -Set was used, no requested set was discovered." -ForegroundColor DarkGray
     exit 0
 }
 
