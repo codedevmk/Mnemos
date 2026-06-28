@@ -309,12 +309,11 @@ function Get-KnownCorpusClassification {
         }
         { $_ -in @("motorace", "travrusab", "travrusab2") } {
             return New-CorpusClassification `
-                -Classification "irem_split_clone_missing_parent" `
+                -Classification "irem_split_clone_parent_present" `
                 -SourceDriver "irem/travrusa.cpp" `
                 -SourceFamily "travrusa" `
                 -SourceOwner "irem" `
-                -MissingParentZip "travrusa.zip" `
-                -NextAction "add_missing_parent_zip_then_manifest_or_board_profile"
+                -NextAction "add_manifest_and_board_profile"
         }
         "headon" {
             return New-CorpusClassification `
@@ -984,7 +983,7 @@ $report = [pscustomobject]@{
         tracked_parent_or_standalone_item_count = @($items | Where-Object { $_.set_role -eq "parent_or_standalone" }).Count
         known_corpus_classification_count = $knownCorpusRows.Count
         known_untracked_item_count = @($items | Where-Object { -not $_.tracked_by_mnemos -and -not [string]::IsNullOrWhiteSpace($_.corpus_classification) }).Count
-        irem_split_clone_missing_parent_item_count = @($items | Where-Object { $_.corpus_classification -eq "irem_split_clone_missing_parent" }).Count
+        irem_split_clone_parent_present_item_count = @($items | Where-Object { $_.corpus_classification -eq "irem_split_clone_parent_present" }).Count
         non_irem_reference_item_count = @($items | Where-Object { $_.corpus_classification -eq "non_irem_reference" }).Count
         unsupported_item_count = @($items | Where-Object { -not $_.supported_by_mnemos }).Count
         unsupported_bucket_count = $unsupportedBuckets.Count

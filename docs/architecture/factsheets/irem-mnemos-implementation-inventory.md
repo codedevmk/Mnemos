@@ -28,8 +28,9 @@ contract-only, or metadata-only support counts. Windows copy-suffixed checked-in
 set ZIPs such as `loht (1).zip` are canonicalized to their embedded manifest IDs
 for player loading, M72 corpus-smoke grouping, and inventory grouping. Known
 untracked corpus classifications remain explicit: `motorace`, `travrusab`, and
-`travrusab2` are Irem `irem/travrusa.cpp` split-clone wrappers blocked by the
-missing parent/shared set `travrusa.zip`; `headon` and `uniwars` / `uniwarsa` are
+`travrusab2` are Irem `irem/travrusa.cpp` split-clone wrappers with the local
+parent/shared set `travrusa.zip` present, but still blocked on Mnemos manifests
+and a board profile; `headon` and `uniwars` / `uniwarsa` are
 non-Irem reference sets from `sega/vicdual.cpp` and `galaxian/galaxian.cpp`.
 The common data-gated runner now includes M14, M27, M47, M62, and M63
 manifest-load proofs plus G6-ratcheted corpus golden tests for every implemented
@@ -674,10 +675,10 @@ visual and audio parity proof.
 
 1. Supply trusted visual/audio parity hashes for the new M52 hash oracle and
    the existing M72 hash oracle before promoting any game to "correct gfx/music".
-2. Add `travrusa.zip` or equivalent parent/shared media before adding
-   `motorace`, `travrusab`, or `travrusab2` manifests; the local wrappers are
-   split clones and the inventory now reports them as
-   `irem_split_clone_missing_parent`, not complete ROM sets.
+2. Add Mnemos manifests and a board profile for `travrusa`, `motorace`,
+   `travrusab`, and `travrusab2`; the parent/shared archive is now present
+   locally, and the inventory reports the split wrappers as
+   `irem_split_clone_parent_present`, not playable ROM sets.
 3. Advance M52 Moon Patrol from first-pass route to authentic video/audio by
    replacing the diagnostic compositor and first-pass digital audio with board-evidenced
    parallax, road, sprite, sound-CPU-owned MSM5205 stream timing, and discrete

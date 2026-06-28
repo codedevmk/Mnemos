@@ -471,7 +471,8 @@ direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract keeps
 the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The remaining
 known untracked classifications are explicit rather than generic sort work:
 `motorace`, `travrusab`, and `travrusab2` are Irem `irem/travrusa.cpp`
-split-clone wrappers blocked by missing parent/shared media `travrusa.zip`,
+split-clone wrappers with local parent/shared media `travrusa.zip` present but
+blocked by missing Mnemos manifests and a board profile,
 while `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not be counted
 as missing Irem implementation targets.
