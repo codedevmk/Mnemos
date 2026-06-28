@@ -172,8 +172,9 @@ multiple independent open-source implementations.
   region sizes, CRC-32s, and board-family classification. The Horizon local
   wrapper is stored under the local `M72` corpus folder, but public Irem M62
   driver metadata classifies it with the M62 Z80/M6803-era family; Mnemos records
-  it as a contract-only M62 raw-media set rather than treating folder placement
-  as board proof. No MAME driver code or ROM bytes are copied into Mnemos.
+  it as an M62 raw-media set and routes the first-pass player through that
+  contract rather than treating folder placement as board proof. No MAME driver
+  code or ROM bytes are copied into Mnemos.
 - **Irem M63 ROM-set metadata** — the checked-in `wilytowr` manifest uses public
   Irem M63 driver metadata for Wily Tower dump filenames, region sizes, offsets,
   CRC-32s, orientation, and board-family classification. The local wrapper remains

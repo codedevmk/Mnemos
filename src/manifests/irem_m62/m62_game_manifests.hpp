@@ -1,8 +1,9 @@
 #pragma once
 
 // Checked-in Irem M62 manifests currently provide raw-media ROM contracts for
-// the local corpus. Exact Z80/M6803 bus placement, KNA video behavior, and
-// mature Irem Audio scheduling remain board-family implementation gaps.
+// the local corpus plus a first-pass player smoke route. Exact Z80/M6803 bus
+// placement, KNA video behavior, and mature Irem Audio scheduling remain
+// board-family implementation gaps.
 
 #include "m62_embedded_game_manifests.hpp"
 

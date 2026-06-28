@@ -426,8 +426,8 @@ match M84, six match M90, forty-one match M92, seven match M107, and seven
 match travrusa. The inventory separates manifest tracking, media loadability,
 and player support: 224 items
 match a checked-in Irem manifest from non-ignored buckets, 136 are readable
-through current ZIP / single-inner-ZIP / folder routes, 124 are backed by an
-executable player-supported route, 17 are tracked contract-only, and 83 tracked matches
+through current ZIP / single-inner-ZIP / folder routes, 135 are backed by an
+executable player-supported route, 3 are tracked contract-only, and 83 tracked matches
 remain metadata-only until converted to ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
@@ -444,10 +444,10 @@ the local Image Fight material into `imgfight` as the M72 parent/standalone set
 with two direct player-loadable routes plus one metadata-only `.7z`, and
 `imgfightj` / `imgfightjb` as clones declaring parent `imgfight`, each with one
 direct player-loadable ZIP route plus one metadata-only `.7z`.
-The same grouping now keeps local M62 Lode Runner, Lot Lot, Spelunker II,
-Battle Road, Horizon, and Youjyuden wrappers as `tracked_contract_only` with `next_action =
-add_board_profile`, so raw-media coverage is not confused with a playable M62
-board profile.
+The same grouping now tracks local M62 Lode Runner, Lot Lot, Spelunker II,
+Battle Road, Horizon, and Youjyuden wrappers as first-pass player-loadable
+raw-media routes, while keeping the three `.7z` M62 matches metadata-only until
+converted or unpacked.
 The local M14 grouping now tracks `D:\emu\irem\M14\ptrmj.zip` and
 `D:\emu\irem\M14\ptrmj (1).zip` as first-pass player-loadable `ptrmj`
 items; `ptrmj.7z` remains metadata-only until converted or unpacked.
@@ -479,9 +479,9 @@ generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M15, M27, M47, M52, M58,
-travrusa, M72, M75, M81, M82, M84, M90, M92, and M107, and also reports the
-M62 and M63 manifest-only data gates separately. The newest G6 high-water raises cover
-`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M81-CORPUS`,
+M62, travrusa, M72, M75, M81, M82, M84, M90, M92, and M107, and also reports
+the M63 manifest-only data gate separately. The newest G6 high-water raises cover
+`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
@@ -668,15 +668,15 @@ evidence.
 
 ---
 
-## Irem M62 — 1 / 2
+## Irem M62 — 2 / 2
 
 This section is split from M52/M72 so the Lode Runner / Spelunker / Battle Road
 Z80+M6803 hardware is tracked as its own board-family contract instead of being
 folded into neighboring Irem profiles.
 
 #### Manifests / board bring-up
-- [x] **I62-1** Local M62 raw-media ROM-set contracts — `src/manifests/irem_m62` carries checked-in embedded raw-media manifests for `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, and `youjyudn`. Each manifest preserves exact local file names, sizes, CRC32 values, and contiguous raw-media offsets without asserting a final CPU/video/audio bus map. `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` data-gates the local ZIPs and proves they load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies the local M62 matches as `tracked_contract_only` with `next_action = add_board_profile`, so they are visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m62/games/*.toml` + `src/manifests/irem_m62/tests/m62_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [ ] **I62-2** Executable M62 board profile — Implement the real board route for the M62 family: Z80 main CPU, M6803 sound/controller behavior, title-specific memory and I/O maps, dual AY-3-8910, dual MSM5205, KNA custom video/priority, inputs/DIPs, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current raw-media manifests are only artifact contracts and must not be used as proof that Lode Runner, Lot Lot, Spelunker II, The Battle-Road, or Youjyuden are playable in Mnemos · HIGH · L · beyond Emu · Evidence needed: `src/manifests/irem_m62/*` board implementation + `src/apps/player/adapters/irem_m62/*` + data-gated player smoke
+- [x] **I62-1** Local M62 raw-media ROM-set contracts — `src/manifests/irem_m62` carries checked-in embedded raw-media manifests for `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, and `youjyudn`. Each manifest preserves exact local file names, sizes, CRC32 values, and contiguous raw-media offsets without asserting a final CPU/video/audio bus map. `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` data-gates the local ZIPs and proves they load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1` now classifies the eleven local ZIP routes as direct player-loadable M62 items and three `.7z` archives as metadata-only, so M62 support accounting no longer reports Lode Runner / Spelunker / Battle Road / Youjyuden as contract-only · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m62/games/*.toml` + `src/manifests/irem_m62/tests/m62_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **I62-2** Executable M62 board profile — First-pass route exists for the M62 family: `src/manifests/irem_m62/m62_system.cpp` derives a Z80 execution window and diagnostic graphics window from the raw-media artifact contract, owns scratch/video/color/work RAM, active-high arcade inputs, a sound latch, beeper-backed synthetic audio, deterministic 256x256 nonblank video, board identity save/load, player adapter registration, capability discovery, and local corpus smoke. `src/apps/player/adapters/irem_m62` registers `--system irem_m62` / `m62`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml`, resident media validation, rollback-ready save-state, and real local corpus smoke for all eleven checked-in M62 sets. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\ldrun.zip --frames 90 --screenshot build\scratch\irem-m62\ldrun.ppm` produced a nonblank 256x256 frame, and `--system m62` save-state smoke wrote a 14,094-byte state for `ldrun`. This is smoke-playable, not authentic parity: exact M62 title memory/I/O maps, M6803 sound/controller behavior, dual AY-3-8910, dual MSM5205, KNA custom video/priority, inputs/DIPs, and visual/audio parity remain open · PARTIAL · HIGH · L · beyond Emu · Evidence: `src/manifests/irem_m62/m62_system.cpp` + `src/manifests/irem_m62/tests/m62_system_test.cpp` + `src/apps/player/adapters/irem_m62/irem_m62_adapter.cpp` + `src/apps/player/adapters/irem_m62/tests/irem_m62_adapter_test.cpp` + `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` corpus golden + direct `mnemos_player --system irem_m62` / `--system m62` smoke
 
 ---
 

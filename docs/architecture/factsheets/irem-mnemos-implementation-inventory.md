@@ -22,9 +22,9 @@ lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
 not yet map it to a numbered M-board. Of those 437 items, 224 currently match a
 checked-in Mnemos Irem manifest, 136 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 124 have an
-executable player-supported route. The M62 and M63 matches are still
-tracked as contract-only manifests until board/player profiles exist; ignored
+single-inner wrapper ZIP, or unpacked-folder media routes, and 135 have an
+executable player-supported route. M63 is still tracked as contract-only until a
+board/player profile exists; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
 Board-local `name-collisions` folders are skipped by both inventory and
@@ -46,10 +46,10 @@ artwork/layout, so the CRC-clean parent proof comes from the copy-suffixed ROM
 ZIP. Known untracked corpus classifications remain explicit: `headon` and
 `uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
 `galaxian/galaxian.cpp`.
-The common data-gated runner now includes M62 and M63 manifest-load
-proofs plus G6-ratcheted corpus golden tests for every implemented Irem player
-family: M14, M15, M27, M47, M52, M58, travrusa, M72, M75, M81, M82, M84, M90,
-M92, and M107. For
+The common data-gated runner now includes the M63 manifest-load proof plus
+G6-ratcheted corpus golden tests for every implemented Irem player family: M14,
+M15, M27, M47, M52, M58, M62, travrusa, M72, M75, M81, M82, M84, M90, M92, and
+M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
@@ -83,7 +83,7 @@ proof.
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
-| M62 | `irem_m62` raw-media contracts | 10% contract-only | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | None; CRC-clean media-load contract only | None | Executable Z80 + M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, save-state/player adapter, visual/audio parity |
+| M62 | `irem_m62` first-pass raw-media route | 18% | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | all 11 local ZIP routes through the adapter; direct `mnemos_player --system irem_m62` nonblank screenshot and `--system m62` save-state proof for `ldrun` | None | Authentic Z80/M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, inputs/DIPs, visual/audio parity |
 | M63 | `irem_m63` ROM contract | 8% contract-only | `wilytowr` | None; CRC-clean media-load contract only | None | Executable Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, save-state/player adapter, visual/audio parity |
 | Traverse USA / Zippy Race | `irem_travrusa` first-pass | 23% | `travrusa`, `motorace`, `travrusab`, `travrusab2` | local parent/copy-suffixed parent and split wrappers; direct `mnemos_player --system irem_travrusa` nonblank screenshot and `--system travrusa` save-state proof | None | Authentic MotoRace encrypted ROM handling, exact Irem Audio timing, video priority/scroll/color/input behavior, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
@@ -139,9 +139,10 @@ targets:
   user-facing launch path. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout
   package is not ROM evidence and remains quarantined under
   `D:\emu\irem\M58\artwork`.
-- M62 now has eleven raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
-  load proof, but no executable board/player route. Treat these as corpus
-  grouping and future board-input evidence only.
+- M62 now has eleven raw-media ROM-set contracts plus a first-pass player route
+  with CRC-clean local wrapper-ZIP load proof, nonblank screenshot proof, and
+  save-state proof. Treat this as smoke-playable only, not authentic KNA/M6803
+  behavior.
 - M63 now has a single `wilytowr` ROM contract with CRC-clean local wrapper
   proof, but no executable board/player route.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
@@ -355,25 +356,29 @@ visual and audio parity proof.
 
 - **Techsheet games:** Kung-Fu Master / Spartan X, Kid Niki, Lode Runner,
   Lot Lot, Spelunker, Lightning Swords, Youjyuden, The Battle-Road, Horizon.
-- **Mnemos games:** contract-only raw-media manifests for `battroad`, `horizon`,
+- **Mnemos games:** raw-media manifests and first-pass player route for
+  `battroad`, `horizon`,
   `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`,
   `spelunk2`, and `youjyudn`.
-- **Smoke playable:** none. `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` data-gates
-  CRC-clean media loading for the eleven local single-inner wrapper ZIPs, but
-  there is no executable M62 player route yet.
+- **Smoke playable:** all eleven local ZIP routes load through the adapter via
+  `MNEMOS_M62_SET_DIR=D:\emu\irem\M62`; direct player proof wrote a nonblank
+  256x256 `ldrun` screenshot with `--system irem_m62` and a rollback save state
+  with alias `--system m62`.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m62` embeds raw-media ROM-set
   contracts generated from the local Lode Runner, Lot Lot, Spelunker II,
   Battle Road, Horizon, and Youjyuden artifacts. The manifests deliberately map the files
   into a single `raw_media` region so CRCs, sizes, and set grouping are
   preserved without pretending to know the final M62 CPU/video/audio bus
-  placement. The focused manifest test checks embedded TOML synchronization,
-  region/file invariants, and optional real-corpus loading through nested wrapper
-  ZIPs.
-- **Remaining:** implement the large Z80/M6803 board family, exact title bus
-  maps, dual AY-3-8910, dual MSM5205, KNA custom video behavior, inputs/DIPs,
-  save-state/player adapter, and visual/audio parity before promoting any M62
-  set from contract-only to smoke playable.
+  placement. `src/manifests/irem_m62/m62_system.cpp` derives a first-pass Z80
+  execution window and diagnostic graphics window from `raw_media`, exposes
+  RAM/input/sound-latch surfaces, nonblank video, beeper-backed audio for
+  synthetic programs, board identity save/load, player adapter registration,
+  capability discovery, and local corpus smoke.
+- **Remaining:** replace the first-pass raw-media/Z80 diagnostic route with the
+  authentic M62 Z80/M6803 board family, exact title bus maps, dual AY-3-8910,
+  dual MSM5205, KNA custom video behavior, inputs/DIPs, and visual/audio parity
+  before calling any M62 set correct.
 
 ### M63
 
@@ -785,9 +790,9 @@ visual and audio parity proof.
 8. Advance M47 Oli-Boo-Chu / Punching Kid from first-pass smoke-playable to
    authentic behavior: memory/I/O timing, video/color PROM behavior, AY/sample
    sound timing, input/DIP parity, and visual/audio parity remain open.
-9. Promote M62 from raw-media contracts to a real board/profile route before
-   counting any Lode Runner, Spelunker II, Battle Road, or Youjyuden set as
-   smoke playable.
+9. Promote M62 from the first-pass raw-media diagnostic route to an authentic
+   Z80/M6803/KNA board profile before calling any Lode Runner, Spelunker II,
+   Battle Road, or Youjyuden set correct.
 10. Use `scripts\irem\run-local-corpus.ps1 -IncludeFullM72Roster` for the strict
    M72 roster proof. With the switch, the runner prints a checked-in-manifest
    artifact preflight before CTest; without the switch it is the available-artifact proof
