@@ -1,6 +1,7 @@
 # MotoRace USA -- Irem travrusa ROM contract.
 # Local wrapper: D:\emu\irem\travrusa\motorace.zip -> motorace.zip.
-# Main CPU ROM0 is encrypted; this manifest is an artifact contract only.
+# Main CPU ROM0 is encrypted; Mnemos loads the set but does not yet model the
+# encrypted MotoRace program path authentically.
 # Shared sound, tile, and PROM dumps are inherited from the local travrusa parent.
 
 [set]

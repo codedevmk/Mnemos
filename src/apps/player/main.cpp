@@ -1,6 +1,7 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m52 / irem_m58 / irem_m72 /
-// irem_m81 / irem_m82 / taito_f2 / cps1 / cps2 / spectrum / nes / msx / amiga500)
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m52 / irem_m58 /
+// irem_travrusa / irem_m72 / irem_m81 / irem_m82 / taito_f2 / cps1 / cps2 /
+// spectrum / nes / msx / amiga500)
 // with the --rom media (zip archives are extracted transparently; Irem arcade
 // boards also accept wrapper zips and unpacked set directories),
 // presents its framebuffer at integer scale, streams audio, and routes keyboard

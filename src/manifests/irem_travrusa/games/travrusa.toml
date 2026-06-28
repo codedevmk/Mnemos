@@ -1,8 +1,9 @@
 # Traverse USA / Zippy Race -- Irem travrusa ROM contract.
 # Local usable parent dump: D:\emu\irem\travrusa\travrusa (1).zip.
 # Note: D:\emu\irem\travrusa\travrusa.zip is artwork/layout, not a ROM set.
-# Region placement follows public irem/travrusa.cpp metadata; executable board
-# timing, video, input, and Irem Audio behavior remain gaps.
+# Region placement follows public irem/travrusa.cpp metadata. Mnemos has a
+# first-pass executable route; exact video priority, scroll, input/DIP behavior,
+# Irem Audio timing, and parity remain open.
 
 [set]
 schema      = "mnemos-romset/1"

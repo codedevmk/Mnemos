@@ -424,8 +424,8 @@ M81, thirty-one match M82, fourteen match M84, eight match M90, sixty-five
 match M92, eleven match M107, and seven match travrusa. The inventory separates
 manifest tracking, media loadability, and player support: 219 items match a checked-in Irem
 manifest from non-ignored buckets, 131 are readable through current ZIP /
-single-inner-ZIP / folder routes, 108 are backed by an executable
-player-supported route, 33 are tracked contract-only, and 78 tracked matches
+single-inner-ZIP / folder routes, 113 are backed by an executable
+player-supported route, 26 are tracked contract-only, and 80 tracked matches
 remain metadata-only until converted to ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
@@ -470,17 +470,18 @@ The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract keeps
 the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The local
 travrusa grouping now tracks `travrusa`, `motorace`, `travrusab`, and
-`travrusab2` as contract-only under `src/manifests/irem_travrusa`;
-`MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` proves the CRC-clean ZIP route,
+`travrusab2` as first-pass player-supported under
+`src/manifests/irem_travrusa` and `src/apps/player/adapters/irem_travrusa`;
+`MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` proves five CRC-clean ZIP routes,
 and the unsuffixed `travrusa.zip` is artwork/layout rather than parent ROM
 proof. The remaining known untracked classifications are explicit rather than
 generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not be counted
 as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
-every implemented Irem player-family corpus golden: M15, M52, M72, M75, M81,
-M82, M84, M90, M92, M107, and now M58, and also reports the M14, M27, M47, M62,
-M63, and travrusa manifest-only data gates separately. The newest G6 high-water raises cover
+every implemented Irem player-family corpus golden: M15, M52, M58, travrusa,
+M72, M75, M81, M82, M84, M90, M92, and M107, and also reports the M14, M27,
+M47, M62, and M63 manifest-only data gates separately. The newest G6 high-water raises cover
 `GLD-M15-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
@@ -696,11 +697,11 @@ board profile.
 
 This section tracks the early Zippy Race / Traverse USA family separately from
 M52/M58/M62/M72 because the local corpus maps it to public `irem/travrusa.cpp`
-metadata rather than any already-executable Mnemos board profile.
+metadata rather than the later M-board profiles.
 
 #### Manifests / board bring-up
-- [x] **ITRAV-1** Local travrusa ROM-set contracts — `src/manifests/irem_travrusa` carries checked-in embedded ROM-contract manifests for `travrusa`, `motorace`, `travrusab`, and `travrusab2`, preserving local filenames, region sizes, offsets, CRC32 values, parent fallback, and aliases for the split wrappers. `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` data-gates the local ZIP corpus, selects the CRC-clean parent route instead of the artwork/layout-only `travrusa.zip`, and proves the single-inner wrapper ZIPs load through embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies all local travrusa matches as `tracked_contract_only` with `next_action = add_board_profile`, so they are visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_travrusa/games/*.toml` + `src/manifests/irem_travrusa/tests/travrusa_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [ ] **ITRAV-2** Executable travrusa board profile — Implement the real board route for the travrusa family: Z80 main CPU, Irem sound path, title-specific memory and I/O maps, video/color/sprite behavior, inputs/DIPs, save-state identity, player adapter registration, local corpus smoke, encrypted MotoRace ROM handling, and eventual visual/audio parity. The current manifests are only artifact contracts and must not be used as proof that Traverse USA, MotoRace USA, or the bootlegs are playable in Mnemos · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_travrusa/*` board implementation + `src/apps/player/adapters/irem_travrusa/*` + data-gated player smoke
+- [x] **ITRAV-1** Local travrusa ROM-set contracts — `src/manifests/irem_travrusa` carries checked-in embedded ROM-contract manifests for `travrusa`, `motorace`, `travrusab`, and `travrusab2`, preserving local filenames, region sizes, offsets, CRC32 values, parent fallback, and aliases for the split wrappers. `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` data-gates the local ZIP corpus, selects the CRC-clean parent route instead of the artwork/layout-only `travrusa.zip`, and proves the single-inner wrapper ZIPs load through embedded manifests · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_travrusa/games/*.toml` + `src/manifests/irem_travrusa/tests/travrusa_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **ITRAV-2** Executable travrusa board profile — First-pass route exists for the travrusa family: Z80 main CPU, Z80 sound CPU, dual SSG, MSM5205, title memory/MMIO windows, tile/sprite/PROM compositor, inputs, save-state identity, player adapter registration, local corpus smoke, and direct player launch proof are wired. This is smoke-playable, not authentic parity: MotoRace encrypted ROM handling, exact video priority/scroll/color behavior, Irem Audio timing, DIP/input parity, and trusted visual/audio parity remain open · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_travrusa/*` board implementation + `src/apps/player/adapters/irem_travrusa/*` + `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` corpus golden + direct `mnemos_player --system irem_travrusa` smoke
 
 ---
 

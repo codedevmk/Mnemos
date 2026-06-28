@@ -32,12 +32,15 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_travrusa INTERFACE)
+add_library(
+    mnemos_manifests_irem_travrusa
+    travrusa_system.cpp
+)
 add_library(mnemos::manifests::irem_travrusa ALIAS mnemos_manifests_irem_travrusa)
 
 target_include_directories(
     mnemos_manifests_irem_travrusa
-    INTERFACE
+    PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
@@ -45,16 +48,27 @@ target_include_directories(
 
 target_link_libraries(
     mnemos_manifests_irem_travrusa
-    INTERFACE
+    PUBLIC
+        mnemos::chips::audio::msm5205
+        mnemos::chips::audio::ssg
+        mnemos::chips::cpu::z80
         mnemos::manifests::common
+        mnemos::security::cryptography
+        mnemos::topology
 )
 
-mnemos_apply_common_target_options(mnemos_manifests_irem_travrusa INTERFACE)
+mnemos_apply_common_target_options(mnemos_manifests_irem_travrusa PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_irem_travrusa
     TIER 4
     DEPENDS
+        mnemos_chips_audio_msm5205
+        mnemos_chips_audio_ssg
+        mnemos_chips_cpu_z80
+        mnemos_chips_shared
         mnemos_manifests_common
+        mnemos_security_cryptography
+        mnemos_topology
         mnemos_foundation
 )
 
@@ -72,5 +86,12 @@ if(BUILD_TESTING)
         mnemos_manifests_irem_travrusa_test
         PRIVATE
             MNEMOS_IREM_TRAVRUSA_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+    mnemos_add_test(
+        mnemos_manifests_irem_travrusa_system_test
+        SOURCES tests/travrusa_system_test.cpp
+        LIBRARIES
+            mnemos::manifests::irem_travrusa
+            mnemos::manifests::common
     )
 endif()

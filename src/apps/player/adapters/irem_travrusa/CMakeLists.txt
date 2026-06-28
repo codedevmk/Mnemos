@@ -1,0 +1,76 @@
+add_library(
+    mnemos_apps_player_irem_travrusa_adapter
+    irem_travrusa_adapter.cpp
+)
+add_library(
+    mnemos::apps::player::irem_travrusa_adapter
+    ALIAS mnemos_apps_player_irem_travrusa_adapter
+)
+
+target_include_directories(
+    mnemos_apps_player_irem_travrusa_adapter
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+        "$<INSTALL_INTERFACE:include>"
+)
+
+target_link_libraries(
+    mnemos_apps_player_irem_travrusa_adapter
+    PUBLIC
+        mnemos::frontend_sdk
+        mnemos::manifests::irem_travrusa
+        mnemos::peripheral::common
+        mnemos::runtime
+        mnemos::apps::player::adapters::common
+    PRIVATE
+        mnemos::compression
+        mnemos::io
+)
+
+mnemos_apply_common_target_options(mnemos_apps_player_irem_travrusa_adapter PUBLIC)
+mnemos_declare_tier(
+    NAME mnemos_apps_player_irem_travrusa_adapter
+    TIER 8
+    DEPENDS
+        mnemos_frontend_sdk
+        mnemos_manifests_irem_travrusa
+        mnemos_peripheral_common
+        mnemos_runtime
+        mnemos_apps_player_adapters_common
+        mnemos_compression
+        mnemos_io
+)
+
+if(BUILD_TESTING)
+    mnemos_add_test(
+        mnemos_apps_player_irem_travrusa_adapter_test
+        SOURCES tests/irem_travrusa_adapter_test.cpp
+        LIBRARIES
+            mnemos::apps::player::irem_travrusa_adapter
+            mnemos::compression
+            mnemos::io
+            mnemos::security::cryptography
+        ARGS "~[data]"
+    )
+
+    add_test(
+        NAME mnemos_apps_player_irem_travrusa_corpus_golden_test
+        COMMAND
+            mnemos_apps_player_irem_travrusa_adapter_test
+            "irem_travrusa_adapter validates real travrusa ROM sets"
+    )
+    set_tests_properties(
+        mnemos_apps_player_irem_travrusa_corpus_golden_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
+    add_test(
+        NAME mnemos_apps_player_irem_travrusa_parity_hash_golden_test
+        COMMAND
+            mnemos_apps_player_irem_travrusa_adapter_test
+            "irem_travrusa_adapter matches optional visual/audio parity hashes for a real travrusa set"
+    )
+    set_tests_properties(
+        mnemos_apps_player_irem_travrusa_parity_hash_golden_test
+        PROPERTIES SKIP_RETURN_CODE 4
+    )
+endif()
