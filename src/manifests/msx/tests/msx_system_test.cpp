@@ -294,6 +294,39 @@ TEST_CASE("msx routes VDP ports and IRQ to the Z80 line", "[manifests][msx]") {
     CHECK(sys->vdp.irq_asserted());
 }
 
+TEST_CASE("msx VDP frame IRQ wakes the Z80 from HALT", "[manifests][msx][irq]") {
+    std::vector<std::uint8_t> bios(0x8000U, 0x00U);
+    const std::array<std::uint8_t, 4> program = {
+        0xEDU, 0x56U, // IM 1
+        0xFBU,       // EI
+        0x76U,       // HALT
+    };
+    std::copy(program.begin(), program.end(), bios.begin());
+
+    const auto sys = assemble_msx(bios);
+    REQUIRE(sys != nullptr);
+
+    sys->write_io(0x99U, 0x60U);
+    sys->write_io(0x99U, 0x81U); // VDP R#1 = display + frame IRQ enable
+
+    (void)sys->cpu.step_instruction(); // IM 1
+    (void)sys->cpu.step_instruction(); // EI
+    (void)sys->cpu.step_instruction(); // HALT with IFF1 enabled after EI delay
+    auto regs = sys->cpu.cpu_registers();
+    REQUIRE(regs.halted);
+    REQUIRE(regs.iff1);
+
+    sys->vdp.tick(static_cast<std::uint64_t>(tms9918a::cycles_per_line) *
+                  static_cast<std::uint64_t>(tms9918a::display_height + 1));
+    REQUIRE(sys->vdp.irq_asserted());
+
+    (void)sys->cpu.step_instruction();
+    regs = sys->cpu.cpu_registers();
+    CHECK_FALSE(regs.halted);
+    CHECK(regs.pc == 0x0038U);
+    CHECK_FALSE(regs.iff1);
+}
+
 TEST_CASE("msx2 routes V9938 ports, palette, and upper VRAM", "[manifests][msx]") {
     const auto sys = assemble_msx(std::vector<std::uint8_t>(0x8000U, 0x00U), {},
                                   msx_config{.video_model = msx_video_model::v9938});

@@ -332,6 +332,25 @@ TEST_CASE("z80 services a mode-1 maskable interrupt after EI delay") {
     CHECK(m.cpu.cpu_registers().pc == 0x0038U);
 }
 
+TEST_CASE("z80 delays a maskable interrupt already asserted before EI") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.im = 1U;
+    r.pc = 0x0000U;
+    m.cpu.set_registers(r);
+    m.load(0x0000U, {0xFBU, 0x00U}); // EI ; NOP
+
+    m.cpu.set_irq_line(true);
+    m.cpu.step_instruction(); // EI must not service the already-held IRQ
+    CHECK(m.cpu.cpu_registers().pc == 0x0001U);
+
+    m.cpu.step_instruction(); // NOP still executes under EI delay
+    CHECK(m.cpu.cpu_registers().pc == 0x0002U);
+
+    m.cpu.step_instruction(); // the following boundary services the held IRQ
+    CHECK(m.cpu.cpu_registers().pc == 0x0038U);
+}
+
 TEST_CASE("z80 tick catches up by whole instructions") {
     machine m;
     m.load(0x0000U, {0x00U, 0x00U, 0x00U, 0x00U}); // NOPs (4T each)

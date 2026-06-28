@@ -6,7 +6,7 @@ Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
 Prior implementation checkpoint before the latest MSX/MSX2 diagnostic pass:
-`db6a20f5e9d3f00ac8f30a2ce6e49260f9207c4e`.
+`0e5b71f23d8a3d8a5d6ec0e55041b678117f6d77`.
 
 The latest handoff commit should be the current `HEAD` after the next agent
 runs `git log -1 --oneline --decorate`.
@@ -17,6 +17,57 @@ primary context source. Continue from the live worktree, this file, and current
 executable evidence.
 
 ## Latest Checkpoint
+
+2026-06-28 proceed pass America/Chicago:
+
+- Used two specialist MSX/MSX2 review passes to audit the live blocker before
+  editing. The shared Z80/IRQ and VDP wiring did not show a high-confidence
+  product-code defect, so this checkpoint adds targeted regression coverage
+  instead of a speculative hardware-behavior patch.
+- Added a Z80 regression for an IRQ line already asserted before `EI`. The CPU
+  now has a pinned test proving `EI` itself and the following instruction both
+  run before the held maskable interrupt vectors to `$0038` in IM 1.
+- Added the missing MSX-side manifest regression proving a TMS9918A frame IRQ
+  wakes a HALTed Z80 through the system wiring. The synced tree already had the
+  equivalent MSX2/V9938 HALT wake coverage.
+- Confirmed the MSX2 `bean.rom` failure is not a blank-player invocation. The
+  real firmware tests were run with explicit C-BIOS and ROM env vars from
+  `D:\emu\msx\bios` and `D:\emu\msx\MSX files [ROM]\bean.rom`.
+- New diagnostic split:
+  - MSX1 with `cbios_main_msx1.rom` plus `cbios_logo_msx1.rom` remains alive at
+    600 frames: `PC=$862E`, `halted=false`, nonuniform framebuffer hash
+    `8ac76412f61dbbd32e99439bf7cd43a0cdcbc9efb3328828dcefd261909a33a2`.
+  - MSX2 with `cbios_main_msx2.rom`, `cbios_sub.rom`, and
+    `cbios_logo_msx2.rom` still halts at `PC=$CA3E`, `halted=true`,
+    `primary=$D0`, `secondary3=$A0`, Graphics II tables blank, framebuffer hash
+    `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`.
+  - MSX2 with the logo ROM omitted changes failure mode instead of fixing the
+    game: final `PC=$0038`, `primary=$E1`, IRQ asserted, framebuffer hash
+    `e1ba45afdb7e4df41612c4fa2fd7f354552cb33879ff9657ba45f59ffc5e0940`.
+- The traced MSX2 code writing `$C000` matches `cbios_logo_msx2.rom` offset
+  `$0097` (`LD DE,$C000; LD HL,$8176; LDIR`). This explains why C-BIOS logo
+  state affects the later `$BFFF->$C000` Bean path, but it is not enough by
+  itself to justify disabling or mutating the logo ROM mapping: the local
+  `C-BIOS_MSX2.xml` intentionally maps the logo ROM in primary slot 0 at
+  `$8000-$BFFF`.
+- Current next investigation target: prove whether the MSX2 failure is a real
+  C-BIOS compatibility edge, an interrupt/slot-state divergence after Bean
+  reaches `$99DB`, or incorrect RAM mapper/slot handoff state after the logo
+  program. Do not "fix" by mirroring the 16 KiB cartridge into page 3; tests now
+  guard `$BFFF` as cartridge and `$C000` as RAM.
+- Targeted Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_chips_cpu_z80_test mnemos_manifests_msx_test mnemos_manifests_msx2_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_chips_cpu_z80_test|mnemos_manifests_msx_test|mnemos_manifests_msx2_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+New logs:
+
+```text
+build\scratch\msx-bean-diagnostics\trace-20260628-proceed3\msx1-bean-logo-600.log
+build\scratch\msx-bean-diagnostics\trace-20260628-proceed3\msx2-bean-logo-600.log
+build\scratch\msx-bean-diagnostics\trace-20260628-proceed3\msx2-bean-no-logo-600.log
+```
 
 2026-06-28 follow-up America/Chicago:
 
