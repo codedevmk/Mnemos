@@ -21,7 +21,7 @@
 
 namespace mnemos::manifests::irem_m62 {
 
-    inline constexpr std::uint32_t m62_system_state_version = 2U;
+    inline constexpr std::uint32_t m62_system_state_version = 3U;
 
     inline constexpr std::size_t main_rom_size = 0x10000U;
     inline constexpr std::size_t sound_rom_size = 0x10000U;
@@ -40,8 +40,8 @@ namespace mnemos::manifests::irem_m62 {
     inline constexpr std::uint64_t sound_cycles_per_frame =
         (static_cast<std::uint64_t>(sound_clock_hz) * 1000U) / frame_rate_x1000;
 
-    inline constexpr std::uint16_t sound_rom_base = 0xC000U;
-    inline constexpr std::size_t sound_rom_mapped_size = 0x4000U;
+    inline constexpr std::uint16_t sound_rom_base = 0x8000U;
+    inline constexpr std::size_t sound_rom_mapped_size = 0x8000U;
     inline constexpr std::uint16_t sound_work_ram_base = 0x0080U;
     inline constexpr std::size_t sound_work_ram_size = 0x0080U;
     inline constexpr std::uint16_t sound_io_base = 0x0000U;

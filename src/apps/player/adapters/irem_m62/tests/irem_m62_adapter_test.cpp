@@ -348,7 +348,7 @@ TEST_CASE("irem_m62_adapter validates real M62 ROM sets", "[irem_m62][data]") {
         }
         CHECK(adapter.media_capabilities().media.front().validation_issues.empty());
         CHECK(adapter.set_name() == set_name);
-        if (set_name == "ldrun" || set_name == "ldrun2") {
+        if (set_name == "ldrun" || set_name == "ldrun2" || set_name == "ldrun3") {
             CHECK(adapter.machine().sound_cpu_enabled);
             CHECK_FALSE(adapter.machine().sound_cpu.reset_line_held());
             CHECK(adapter.machine().sound_cpu.metadata().part_number == "MC6803");
@@ -357,7 +357,7 @@ TEST_CASE("irem_m62_adapter validates real M62 ROM sets", "[irem_m62][data]") {
         for (std::uint32_t frame = 0; frame < 90U; ++frame) {
             adapter.step_one_frame();
         }
-        if (set_name == "ldrun" || set_name == "ldrun2") {
+        if (set_name == "ldrun" || set_name == "ldrun2" || set_name == "ldrun3") {
             CHECK(adapter.machine().sound_cpu.cpu_registers().pc >= M62::sound_rom_base);
             CHECK(adapter.machine().sound_cpu.cpu_registers().pc <
                   M62::sound_rom_base + M62::sound_rom_mapped_size);

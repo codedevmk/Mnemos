@@ -68,7 +68,16 @@ namespace {
                            {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
-            {"ldrun3", {.raw_size = 0x38820U, .file_count = 23U}},
+            {"ldrun3",
+             {.regions = {{"maincpu", {.raw_size = 0x10000U, .file_count = 3U}},
+                           {"soundcpu", {.raw_size = 0x10000U, .file_count = 2U}},
+                           {"gfx1", {.raw_size = 0xC000U, .file_count = 3U}},
+                           {"gfx2", {.raw_size = 0x18000U, .file_count = 6U}},
+                           {"proms", {.raw_size = 0x100U, .file_count = 1U}},
+                           {"spr_height_prom", {.raw_size = 0x20U, .file_count = 1U}},
+                           {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
             {"ldrun3j", {.raw_size = 0x18000U, .file_count = 6U}},
             {"ldrun4", {.raw_size = 0x3c820U, .file_count = 23U}},
             {"lotlot", {.raw_size = 0x1ce20U, .file_count = 25U}},
@@ -496,7 +505,7 @@ TEST_CASE("m62 local wrapper artifacts load CRC-clean through embedded manifests
             for (const auto& [region_name, region_contract] : contract_it->second.regions) {
                 require_loaded_region(image, region_name, region_contract.raw_size);
             }
-            if (set_name == "ldrun" || set_name == "ldrun2") {
+            if (set_name == "ldrun" || set_name == "ldrun2" || set_name == "ldrun3") {
                 require_m6803_reset_vector(image, 0xFA00U);
             }
         }
