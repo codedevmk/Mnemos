@@ -338,6 +338,28 @@ TEST_CASE("msx2 C-BIOS-style handoff leaves non-32 KiB plain cartridges unmapped
     CHECK(sys->bus.read8(0x8000U) == 0x44U);
 }
 
+TEST_CASE("msx2 upper-page 16 KiB plain cartridges stop at the page-3 RAM boundary",
+          "[manifests][msx2][mapper]") {
+    const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
+    std::vector<std::uint8_t> cart(0x4000U, 0xFFU);
+    cart[0] = 'A';
+    cart[1] = 'B';
+    cart[2] = 0x04U;
+    cart[3] = 0x80U;
+    cart[0x3FFFU] = 0xC5U;
+
+    const auto sys = assemble_msx2(bios, cart);
+    REQUIRE(sys != nullptr);
+    select_primary_slots(*sys, 0xD0U); // page 2 -> cartridge, page 3 -> RAM
+
+    CHECK(sys->bus.read8(0x8000U) == 'A');
+    CHECK(sys->bus.read8(0xBFFFU) == 0xC5U);
+
+    sys->bus.write8(0xC000U, 0x5AU);
+    CHECK(sys->bus.read8(0xC000U) == 0x5AU);
+    CHECK(sys->ram[0] == 0x5AU);
+}
+
 TEST_CASE("msx2 RAM mapper ports select independent 16 KiB segments", "[manifests][msx2]") {
     const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
     const auto sys = assemble_msx2(bios);
@@ -1158,7 +1180,7 @@ TEST_CASE("msx2 VDP frame IRQ wakes the Z80 from HALT", "[manifests][msx2][irq]"
     CHECK_FALSE(regs.iff1);
 }
 
-TEST_CASE("msx2 primary slot register is readable and writable from reset",
+TEST_CASE("msx2 primary slot register follows PPI port A direction",
           "[manifests][msx2][io]") {
     const std::vector<std::uint8_t> bios(0x8000U, 0x00U);
     const auto sys = assemble_msx2(bios);
@@ -1168,6 +1190,10 @@ TEST_CASE("msx2 primary slot register is readable and writable from reset",
     CHECK(sys->io_read(0xA8U) == 0x00U);
 
     sys->io_write(0xA8U, 0xC0U);
+    CHECK(sys->ppi_a == 0xC0U);
+    CHECK(sys->io_read(0xA8U) == 0x00U);
+
+    sys->io_write(0xABU, 0x82U);
     CHECK(sys->io_read(0xA8U) == 0xC0U);
     sys->bus.write8(0xC000U, 0xA5U);
     CHECK(sys->ram[0x0000U] == 0xA5U);

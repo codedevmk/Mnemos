@@ -257,7 +257,7 @@ TEST_CASE("msx PPI primary slot register maps RAM for writes", "[manifests][msx]
     CHECK(sys->ram[0xC000U] == 0x42U);
 }
 
-TEST_CASE("msx primary slot register is readable and writable from reset", "[manifests][msx]") {
+TEST_CASE("msx primary slot register follows PPI port A direction", "[manifests][msx]") {
     const auto sys = assemble_msx(std::vector<std::uint8_t>(0x8000U, 0x00U));
     REQUIRE(sys != nullptr);
     REQUIRE(sys->ppi_control == 0x9BU);
@@ -265,6 +265,10 @@ TEST_CASE("msx primary slot register is readable and writable from reset", "[man
     CHECK(sys->read_io(0xA8U) == 0x00U);
 
     sys->write_io(0xA8U, 0xC0U);
+    CHECK(sys->ppi_a == 0xC0U);
+    CHECK(sys->read_io(0xA8U) == 0x00U);
+
+    sys->write_io(0xABU, 0x82U);
     CHECK(sys->read_io(0xA8U) == 0xC0U);
     sys->bus.write8(0xC000U, 0x5AU);
     CHECK(sys->ram[0xC000U] == 0x5AU);
@@ -460,6 +464,7 @@ TEST_CASE("msx optional logo ROM maps at slot 0 page 2", "[manifests][msx][slots
     CHECK(sys->bus.read8(0xBFFFU) == 0xA5U);
     CHECK(sys->bus.read8(0xC000U) == 0xFFU);
 
+    configure_ppi_outputs(*sys);
     sys->write_io(0xA8U, 0x10U); // page 2 -> cartridge slot 1
     CHECK(sys->bus.read8(0x8000U) == 0xFFU);
 }
@@ -668,6 +673,7 @@ TEST_CASE("msx lower-page 16 KiB plain cartridges mirror only when both cart pag
     const auto sys = assemble_msx(std::vector<std::uint8_t>(0x8000U, 0x00U), cart,
                                   msx_config{.cartridge_mapper = msx_cartridge_mapper::plain});
     REQUIRE(sys != nullptr);
+    configure_ppi_outputs(*sys);
 
     sys->write_io(0xA8U, 0xD0U); // page 1 -> BIOS, page 2 -> cartridge probe
     CHECK(sys->bus.read8(0x8123U) == 0xFFU);
@@ -688,6 +694,27 @@ TEST_CASE("msx lower-page 16 KiB plain cartridges mirror only when both cart pag
     restored->load_state(reader);
     REQUIRE(reader.ok());
     CHECK(restored->bus.read8(0x8123U) == 0x66U);
+}
+
+TEST_CASE("msx upper-page 16 KiB plain cartridges stop at the page-3 RAM boundary",
+          "[manifests][msx][mapper]") {
+    std::vector<std::uint8_t> cart(0x4000U, 0xFFU);
+    cart[0] = 'A';
+    cart[1] = 'B';
+    cart[2] = 0x04U;
+    cart[3] = 0x80U;
+    cart[0x3FFFU] = 0xC5U;
+    const auto sys = assemble_msx(std::vector<std::uint8_t>(0x8000U, 0x00U), cart,
+                                  msx_config{.cartridge_mapper = msx_cartridge_mapper::plain});
+    REQUIRE(sys != nullptr);
+
+    sys->primary_slot_select = 0xD0U; // page 2 -> cartridge, page 3 -> RAM
+    CHECK(sys->bus.read8(0x8000U) == 'A');
+    CHECK(sys->bus.read8(0xBFFFU) == 0xC5U);
+
+    sys->bus.write8(0xC000U, 0x5AU);
+    CHECK(sys->bus.read8(0xC000U) == 0x5AU);
+    CHECK(sys->ram[0xC000U] == 0x5AU);
 }
 
 TEST_CASE("msx padded plain cartridge maps its payload at $4000", "[manifests][msx]") {

@@ -543,7 +543,8 @@ TEST_CASE("v9938 renders mode-1 sprites and reports S0 collision and overflow") 
 
     const std::uint8_t s0 = vdp.status_read();
     CHECK((s0 & 0x60U) == 0x60U);
-    CHECK((vdp.status(0) & 0x60U) == 0x60U);
+    CHECK((vdp.status(0) & 0x60U) == 0x40U);
+    CHECK((vdp.status(0) & 0x1FU) == 4U);
     CHECK((vdp.status(0) & 0x80U) == 0U);
 }
 
@@ -841,7 +842,7 @@ TEST_CASE("v9938 sprite mode 2 reports ninth sprite overflow") {
     CHECK((vdp.status(0) & 0x1FU) == 8U);
 }
 
-TEST_CASE("v9938 S0 read preserves sprite overflow and collision state") {
+TEST_CASE("v9938 S0 read preserves fifth-sprite overflow and clears collision") {
     v9938 vdp;
 
     set_addr(vdp, 0x0000U, true);
@@ -870,7 +871,7 @@ TEST_CASE("v9938 S0 read preserves sprite overflow and collision state") {
     const std::uint8_t read_status = vdp.status_read();
     CHECK((read_status & 0x60U) == 0x60U);
     CHECK((read_status & 0x1FU) == 8U);
-    CHECK((vdp.status(0) & 0x60U) == 0x60U);
+    CHECK((vdp.status(0) & 0x60U) == 0x40U);
     CHECK((vdp.status(0) & 0x1FU) == 8U);
 }
 

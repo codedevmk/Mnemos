@@ -5,16 +5,61 @@ Updated: 2026-06-27 America/Chicago
 Workspace: `C:\dev\emu\Mnemos-msx2`
 Branch: `feature/msx2`
 Remote: `origin/feature/msx2`
-Implementation checkpoint before this handoff-only refresh:
+Prior implementation checkpoint before the latest MSX/MSX2 correction pass:
 `33be6e40835c81cbe0eefee3eb94de6fcf7f98b6`.
 
-The handoff refresh itself should be the current `HEAD` after the next agent
+The latest handoff commit should be the current `HEAD` after the next agent
 runs `git log -1 --oneline --decorate`.
 
 This file is the resume point for the MSX/MSX2 implementation thread. The
 original Codex session ran for roughly 30 hours and should not be used as the
 primary context source. Continue from the live worktree, this file, and current
 executable evidence.
+
+## Latest Checkpoint
+
+2026-06-27 late evening America/Chicago:
+
+- Fixed shared MSX/MSX2 PPI port-A behavior: `$A8` writes now latch `ppi_a`
+  and only update the primary slot output when PPI port A is configured as an
+  output. This affects `src/manifests/msx/msx_system.cpp` and
+  `src/manifests/msx2/msx2_system.cpp`.
+- Corrected V9938 S#0 read semantics: reading S#0 clears frame IRQ (`F`) and
+  sprite collision (`C`) while preserving fifth-sprite overflow (`5S`) and the
+  low sprite index bits. This affects `src/chips/video/v9938/v9938.cpp`.
+- Added MSX and MSX2 regressions for PPI `$A8` direction plus 16 KiB
+  upper-page cartridge `$BFFF->$C000` boundary behavior. The boundary tests
+  deliberately prove that `$BFFF` is cartridge and `$C000` remains page-3 RAM
+  when the slot register selects page 2 as cartridge and page 3 as RAM.
+- Targeted Windows validation passed:
+
+```powershell
+cmd.exe /s /c '"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cmake --build --preset windows-msvc-debug --target mnemos_manifests_msx_test mnemos_manifests_msx2_test mnemos_chips_video_v9938_test mnemos_msx_boot_test && ctest --preset windows-msvc-debug -R "mnemos_manifests_msx_test|mnemos_manifests_msx2_test|mnemos_chips_video_v9938_test|mnemos_msx_boot_test" --output-on-failure'
+```
+
+- Explicit C-BIOS + `bean.rom` validation is still not green. MSX2 still halts
+  at `PC=$CA3E`, `halted=true`, with framebuffer hash
+  `9886081a3b6b33ef4cf5e20210f70b398d8b8782f37e33ab69f858cf2cd39573`.
+  This is not a 100% operational state.
+- MSX1 with the same `bean.rom` remains alive after the PPI fix:
+  `PC=$862E`, `halted=false`, nonuniform framebuffer, forced diagnostic hash
+  `8ac76412f61dbbd32e99439bf7cd43a0cdcbc9efb3328828dcefd261909a33a2`.
+- New logs:
+
+```text
+build\scratch\msx-bean-diagnostics\post-ppi-s0-fix-20260627\msx2-bean-after-ppi-s0.log
+build\scratch\msx-bean-diagnostics\post-ppi-s0-fix-20260627\msx2-bean-900frames-after-ppi-s0.log
+build\scratch\msx-bean-diagnostics\post-ppi-s0-fix-20260627\msx1-bean-after-ppi-s0.log
+```
+
+Open issue for the next pass:
+
+- The MSX2 diagnostic reports nonzero Graphic 4 visible VRAM
+  (`visible_g4_nonzero=6008`) while the framebuffer remains uniform even after
+  900 frames. V9938 Graphic 4 rendering has unit coverage, so investigate the
+  boot/runtime state interaction before changing the renderer.
+- The `$BFFF->$C000` transition is now protected by tests as a valid cart/RAM
+  boundary, not something to "fix" by mirroring the cartridge into page 3.
 
 ## Start Here
 

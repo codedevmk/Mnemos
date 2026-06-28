@@ -13,6 +13,7 @@ namespace mnemos::chips::video {
     namespace {
         constexpr std::uint32_t k_state_version = 4U;
         constexpr std::uint8_t k_status_frame_irq = 0x80U;
+        constexpr std::uint8_t k_status_sprite_collision = 0x20U;
         constexpr std::uint8_t k_status_scanline_irq = 0x01U;
         constexpr std::uint8_t k_status_command_execute = 0x01U;
         constexpr std::uint8_t k_status_border_found = 0x10U;
@@ -501,7 +502,8 @@ namespace mnemos::chips::video {
             return result;
         }
         if (selected == 0U) {
-            status_[0] &= static_cast<std::uint8_t>(~k_status_frame_irq);
+            status_[0] &= static_cast<std::uint8_t>(
+                ~(k_status_frame_irq | k_status_sprite_collision));
             update_irq();
         } else if (selected == 1U) {
             status_[1] &= static_cast<std::uint8_t>(~k_status_scanline_irq);

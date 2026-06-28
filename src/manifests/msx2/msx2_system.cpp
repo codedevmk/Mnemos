@@ -776,7 +776,7 @@ namespace mnemos::manifests::msx2 {
             break;
         case 0xA8:
             ppi_a = value;
-            primary_slot = ppi_a;
+            sync_ppi_outputs();
             break;
         case 0xA9:
             ppi_b = value;
