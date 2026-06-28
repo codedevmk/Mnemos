@@ -248,6 +248,32 @@ namespace {
         return roots;
     }
 
+    [[nodiscard]] std::vector<m72_source> load_m72_sources(const char* env_value) {
+        const auto paths = m72_source_roots(env_value);
+        REQUIRE_FALSE(paths.empty());
+        std::vector<m72_source> sources;
+        sources.reserve(paths.size());
+        for (const auto& path : paths) {
+            INFO("source=" << path.string());
+            sources.push_back(load_m72_source(path));
+        }
+        return sources;
+    }
+
+    [[nodiscard]] mnemos::frontend_sdk::adapter_options
+    make_m72_options(std::vector<m72_source> sources, std::string display_name) {
+        REQUIRE_FALSE(sources.empty());
+        mnemos::frontend_sdk::adapter_options options{};
+        options.rom = std::move(sources.front().bytes);
+        options.display_name = std::move(display_name);
+        options.rom_path = std::move(sources.front().path);
+        for (std::size_t i = 1U; i < sources.size(); ++i) {
+            options.additional_media.push_back(std::move(sources[i].bytes));
+            options.additional_media_paths.push_back(std::move(sources[i].path));
+        }
+        return options;
+    }
+
     [[nodiscard]] std::map<std::string, std::vector<indexed_m72_source>, std::less<>>
     index_m72_source_candidates(const std::vector<std::filesystem::path>& roots) {
         std::map<std::string, bool, std::less<>> known;
@@ -964,27 +990,23 @@ TEST_CASE("irem_m72_adapter boots a real protected M72 set", "[irem_m72][adapter
     namespace m72 = mnemos::manifests::irem_m72;
 
     // Data-gated (never committed), game-agnostic protected-board check:
-    // MNEMOS_M72_PROTECTED_SET points at a zip or unpacked directory of a
-    // protected true-M72 set (for example bchopper, mrheli, imgfight,
-    // airduelm72, dbreedm72, or dkgensanm72). The adapter uses the checked-in
-    // game TOML when the source does not carry game.toml. Clone sets resolve
-    // their parent zip or directory from the same directory via
-    // adapter_options.rom_path. The board must CRC-load, expose either a real
-    // MCU or the manifest-declared no-dump HLE profile, make the sound CPU
-    // runnable, and light a frame within the warm-up.
+    // MNEMOS_M72_PROTECTED_SET points at a zip, unpacked directory, or platform
+    // path-list of sources for a protected true-M72 set (for example bchopper,
+    // mrheli, imgfight, airduelm72, dbreedm72, or dkgensanm72). The adapter uses
+    // the checked-in game TOML when the source does not carry game.toml. Clone
+    // sets resolve their parent zip or directory from the same directory via
+    // adapter_options.rom_path; split sets can provide supplemental media in the
+    // same env var. The board must CRC-load, expose either a real MCU or the
+    // manifest-declared no-dump HLE profile, make the sound CPU runnable, and
+    // light a frame within the warm-up.
     // MNEMOS_M72_PROTECTED_FRAMES overrides the warm-up count.
     const char* set_env = opt_env("MNEMOS_M72_PROTECTED_SET");
     if (set_env == nullptr) {
-        SKIP("set MNEMOS_M72_PROTECTED_SET to a protected M72 set zip or directory");
+        SKIP("set MNEMOS_M72_PROTECTED_SET to protected M72 set source path(s)");
     }
-    auto source = load_m72_source(set_env);
 
-    mnemos::frontend_sdk::adapter_options options{};
-    options.rom = std::move(source.bytes);
-    options.display_name = "protected-m72";
-    options.rom_path = source.path;
-    auto system =
-        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
+        "irem_m72", make_m72_options(load_m72_sources(set_env), "protected-m72"));
     REQUIRE(system != nullptr);
     auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
     auto& machine = adapter.machine();
@@ -1137,19 +1159,15 @@ TEST_CASE("irem_m72_adapter boots a real dumped-MCU protected M72 set",
     namespace m72 = mnemos::manifests::irem_m72;
 
     // Data-gated (never committed): MNEMOS_M72_PROTECTED_MCU_SET points at a
-    // protected true-M72 set with a dumped MCU, such as nspirit.zip.
+    // protected true-M72 source path or path-list with a dumped MCU, such as
+    // nspirit.zip.
     const char* set_env = opt_env("MNEMOS_M72_PROTECTED_MCU_SET");
     if (set_env == nullptr) {
-        SKIP("set MNEMOS_M72_PROTECTED_MCU_SET to a dumped-MCU protected M72 set");
+        SKIP("set MNEMOS_M72_PROTECTED_MCU_SET to dumped-MCU protected M72 source path(s)");
     }
-    auto source = load_m72_source(set_env);
 
-    mnemos::frontend_sdk::adapter_options options{};
-    options.rom = std::move(source.bytes);
-    options.display_name = "protected-m72-mcu";
-    options.rom_path = source.path;
-    auto system =
-        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
+        "irem_m72", make_m72_options(load_m72_sources(set_env), "protected-m72-mcu"));
     REQUIRE(system != nullptr);
     auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
     auto& machine = adapter.machine();
@@ -1188,21 +1206,17 @@ TEST_CASE("irem_m72_adapter emits rendered audio for a real protected M72 set",
     namespace m72 = mnemos::manifests::irem_m72;
 
     // Data-gated (never committed): MNEMOS_M72_PROTECTED_AUDIO_SET points at a
-    // protected true-M72 set with a known non-silent early runtime path, such as
-    // the local dbreedm72 route. This proves the adapter's rendered audio path
-    // against real media; it is not a reference-audio parity claim.
+    // protected true-M72 source path or path-list with a known non-silent early
+    // runtime path, such as the local dbreedm72 route. This proves the adapter's
+    // rendered audio path against real media; it is not a reference-audio parity
+    // claim.
     const char* set_env = opt_env("MNEMOS_M72_PROTECTED_AUDIO_SET");
     if (set_env == nullptr) {
-        SKIP("set MNEMOS_M72_PROTECTED_AUDIO_SET to a protected M72 audio-proof set");
+        SKIP("set MNEMOS_M72_PROTECTED_AUDIO_SET to protected M72 audio source path(s)");
     }
-    auto source = load_m72_source(set_env);
 
-    mnemos::frontend_sdk::adapter_options options{};
-    options.rom = std::move(source.bytes);
-    options.display_name = "protected-m72-audio";
-    options.rom_path = source.path;
-    auto system =
-        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
+        "irem_m72", make_m72_options(load_m72_sources(set_env), "protected-m72-audio"));
     REQUIRE(system != nullptr);
     auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
     auto& machine = adapter.machine();
@@ -1262,7 +1276,7 @@ TEST_CASE("irem_m72_adapter matches optional visual/audio parity hashes for a re
 
     const char* set_env = opt_env("MNEMOS_M72_PARITY_SET");
     if (set_env == nullptr) {
-        SKIP("set MNEMOS_M72_PARITY_SET to a reference-captured M72 set");
+        SKIP("set MNEMOS_M72_PARITY_SET to reference-captured M72 source path(s)");
     }
     const char* expected_frame_hash = opt_env("MNEMOS_M72_PARITY_FRAME_SHA256");
     const char* expected_audio_hash = opt_env("MNEMOS_M72_PARITY_AUDIO_SHA256");
@@ -1274,13 +1288,8 @@ TEST_CASE("irem_m72_adapter matches optional visual/audio parity hashes for a re
     const bool collect_audio = expected_audio_hash != nullptr;
 
     auto run_once = [&](bool want_audio) -> parity_result {
-        auto source = load_m72_source(set_env);
-        mnemos::frontend_sdk::adapter_options options{};
-        options.rom = std::move(source.bytes);
-        options.display_name = "m72-parity";
-        options.rom_path = source.path;
-        auto system = mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72",
-                                                                                std::move(options));
+        auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
+            "irem_m72", make_m72_options(load_m72_sources(set_env), "m72-parity"));
         REQUIRE(system != nullptr);
         auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
         auto& machine = adapter.machine();
@@ -1342,22 +1351,18 @@ TEST_CASE("irem_m72_adapter matches optional visual/audio parity hashes for a re
 TEST_CASE("irem_m72_adapter validates a real vertical M72 set orientation",
           "[irem_m72][adapter][data]") {
     // Data-gated (never committed): MNEMOS_M72_VERTICAL_SET points at a vertical
-    // true-M72 set zip or directory (for example imgfight or airduelm72). The
-    // adapter uses the checked-in game TOML when the source does not carry
-    // game.toml. Clone sets resolve their parent zip or directory beside it via
-    // adapter_options.rom_path.
+    // true-M72 set zip, directory, or platform path-list (for example imgfight
+    // or airduelm72). The adapter uses the checked-in game TOML when the source
+    // does not carry game.toml. Clone sets resolve their parent zip or directory
+    // beside it via adapter_options.rom_path; split sets can provide
+    // supplemental media in the same env var.
     const char* set_env = opt_env("MNEMOS_M72_VERTICAL_SET");
     if (set_env == nullptr) {
-        SKIP("set MNEMOS_M72_VERTICAL_SET to a vertical M72 set zip or directory");
+        SKIP("set MNEMOS_M72_VERTICAL_SET to vertical M72 set source path(s)");
     }
-    auto source = load_m72_source(set_env);
 
-    mnemos::frontend_sdk::adapter_options options{};
-    options.rom = std::move(source.bytes);
-    options.display_name = "vertical-m72";
-    options.rom_path = source.path;
-    auto system =
-        mnemos::frontend_sdk::adapter_registry::instance().create("irem_m72", std::move(options));
+    auto system = mnemos::frontend_sdk::adapter_registry::instance().create(
+        "irem_m72", make_m72_options(load_m72_sources(set_env), "vertical-m72"));
     REQUIRE(system != nullptr);
     auto& adapter = dynamic_cast<irem_m72_adapter&>(*system);
 

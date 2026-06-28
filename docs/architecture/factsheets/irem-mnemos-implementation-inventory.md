@@ -476,10 +476,15 @@ visual and audio parity proof.
 - **Oracle proof:** G6 high-water now records `GLD-M72-RTYPE`,
   `GLD-M72-PROTECTED`, `GLD-M72-PROTECTED-AUDIO`,
   `GLD-M72-PROTECTED-MCU`, and `GLD-M72-VERTICAL` as passed with
-  `D:\emu\irem\M72\rtype.zip`, `D:\emu\irem\M72\dbreedm72`,
+  `D:\emu\irem\M72\rtype.zip`,
+  `D:\emu\irem\M72\gallopm72.zip;D:\emu\irem\M72\gallop`,
+  `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M72\dbreedm72`,
   `D:\emu\irem\M72\nspirit.zip`, and
-  `D:\emu\irem\M72\Air-Duel_Arcade_JA.zip`. `GLD-M72-ROSTER` now passes with
-  `MNEMOS_M72_SET_DIR=D:\emu\irem\M72` using its default 900-frame roster window.
+  `D:\emu\irem\M72\airduelm72.zip;D:\emu\irem\M72\airduelm72`.
+  The per-set data-gated hooks now accept platform path-lists so split sets can
+  provide supplemental media without relying only on the roster runner.
+  `GLD-M72-ROSTER` now passes with `MNEMOS_M72_SET_DIR=D:\emu\irem\M72` using
+  its default 900-frame roster window.
   `GLD-M72-PARITY-HASH` now exists as an opt-in final-frame/audio SHA-256
   ratchet and remains skipped until trusted reference hashes are supplied.
 - **Dumped-MCU protected proof:** `MNEMOS_M72_PROTECTED_MCU_SET` points at a
@@ -489,11 +494,12 @@ visual and audio parity proof.
 - **Rendered-audio smoke proof:** the M72 corpus smoke runner now has an opt-in
   `-RequireRenderedAudio` gate that runs `mnemos_player --extract-audio` and
   requires the exported rendered WAVE payload to contain nonzero PCM.
-  `MNEMOS_M72_PROTECTED_AUDIO_SET=D:\emu\irem\M72\dbreedm72` also drives a
-  dedicated adapter-level CTest golden that steps the protected no-dump-HLE
-  route for 120 frames and requires nonzero rendered PCM. This proves rendered
-  audio during the smoke window, but is still weaker than music/audio parity
-  certification. `MNEMOS_M72_PARITY_SET` can now pair a trusted ROM path with
+  `MNEMOS_M72_PROTECTED_AUDIO_SET` also accepts a path-list such as
+  `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M72\dbreedm72` for the dedicated
+  adapter-level CTest golden that steps the protected no-dump-HLE route for 120
+  frames and requires nonzero rendered PCM. This proves rendered audio during
+  the smoke window, but is still weaker than music/audio parity certification.
+  `MNEMOS_M72_PARITY_SET` can now pair trusted source path(s) with
   `MNEMOS_M72_PARITY_FRAME_SHA256` and/or `MNEMOS_M72_PARITY_AUDIO_SHA256` to
   turn that parity evidence into a deterministic CTest assertion.
 - **Sample cursor proof:** the sound-Z80 sample-read port and protection-MCU
