@@ -9,7 +9,7 @@
 
 namespace mnemos::chips::cpu {
     namespace {
-        constexpr std::uint32_t state_version = 1U;
+        constexpr std::uint32_t state_version = 2U;
 
         [[nodiscard]] std::uint8_t low8(std::uint16_t value) noexcept {
             return static_cast<std::uint8_t>(value & 0x00FFU);
@@ -62,6 +62,7 @@ namespace mnemos::chips::cpu {
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
         writer.boolean(irq_line_);
         writer.boolean(nmi_line_);
+        writer.boolean(reset_line_);
     }
 
     void m6803::load_state(state_reader& reader) {
@@ -80,12 +81,14 @@ namespace mnemos::chips::cpu {
         const auto debt = static_cast<std::int64_t>(reader.u64());
         const bool irq = reader.boolean();
         const bool nmi = reader.boolean();
+        const bool reset_line = reader.boolean();
         if (reader.ok()) {
             regs_ = next;
             elapsed_ = elapsed;
             cycle_debt_ = debt;
             irq_line_ = irq;
             nmi_line_ = nmi;
+            reset_line_ = reset_line;
         }
     }
 
@@ -603,6 +606,10 @@ namespace mnemos::chips::cpu {
     }
 
     int m6803::step_instruction() {
+        if (reset_line_) {
+            elapsed_ += 4U;
+            return 4;
+        }
         if (trace_callback_) {
             trace_callback_(regs_.pc);
         }
@@ -728,6 +735,17 @@ namespace mnemos::chips::cpu {
         elapsed_ += 4U;
         (void)before;
         return 4;
+    }
+
+    void m6803::set_reset_line(bool asserted) noexcept {
+        if (asserted && !reset_line_) {
+            const std::int64_t debt = cycle_debt_;
+            const std::uint64_t elapsed = elapsed_;
+            reset(reset_kind::soft);
+            cycle_debt_ = debt;
+            elapsed_ = elapsed;
+        }
+        reset_line_ = asserted;
     }
 
     std::span<const register_descriptor> m6803::register_snapshot() noexcept {

@@ -22,19 +22,24 @@ namespace {
     }
 
     [[nodiscard]] std::vector<std::uint8_t> synthetic_sound_program() {
-        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m58::sound_rom_size, 0x00U);
-        // Read and acknowledge the sound latch, then program both modeled PSGs.
+        namespace m58 = mnemos::manifests::irem_m58;
+
+        std::vector<std::uint8_t> rom(m58::sound_rom_size, 0x01U);
+        // MC6803 code at $8000: read and acknowledge the sound latch, then
+        // program both first-pass PSG MMIO surfaces through direct-page stores.
         const std::uint8_t program[] = {
-            0xDBU, 0x02U,                                           // IN A,($02)
-            0xD3U, 0x06U,                                           // OUT ($06),A
-            0x3EU, 0x07U, 0xD3U, 0x00U, 0x3EU, 0xFEU, 0xD3U, 0x01U, // AY0 mixer
-            0x3EU, 0x08U, 0xD3U, 0x00U, 0x3EU, 0x0FU, 0xD3U, 0x01U, // AY0 level A
-            0x3EU, 0x00U, 0xD3U, 0x00U, 0x3EU, 0x1FU, 0xD3U, 0x01U, // AY0 tone A
-            0x3EU, 0x07U, 0xD3U, 0x04U, 0x3EU, 0xFDU, 0xD3U, 0x05U, // AY1 mixer
-            0x3EU, 0x09U, 0xD3U, 0x04U, 0x3EU, 0x0CU, 0xD3U, 0x05U, // AY1 level B
-            0x3EU, 0x02U, 0xD3U, 0x04U, 0x3EU, 0x23U, 0xD3U, 0x05U, // AY1 tone B
-            0xC3U, 0x00U, 0x00U};
-        std::copy(std::begin(program), std::end(program), rom.begin());
+            0x96U, 0x02U,                                           // LDAA <$02
+            0x97U, 0x06U,                                           // STAA <$06
+            0x86U, 0x07U, 0x97U, 0x00U, 0x86U, 0xFEU, 0x97U, 0x01U, // AY0 mixer
+            0x86U, 0x08U, 0x97U, 0x00U, 0x86U, 0x0FU, 0x97U, 0x01U, // AY0 level A
+            0x86U, 0x00U, 0x97U, 0x00U, 0x86U, 0x1FU, 0x97U, 0x01U, // AY0 tone A
+            0x86U, 0x07U, 0x97U, 0x04U, 0x86U, 0xFDU, 0x97U, 0x05U, // AY1 mixer
+            0x86U, 0x09U, 0x97U, 0x04U, 0x86U, 0x0CU, 0x97U, 0x05U, // AY1 level B
+            0x86U, 0x02U, 0x97U, 0x04U, 0x86U, 0x23U, 0x97U, 0x05U, // AY1 tone B
+            0x7EU, 0x80U, 0x00U};
+        std::copy(std::begin(program), std::end(program), rom.begin() + m58::sound_rom_base);
+        rom[0xFFFEU] = static_cast<std::uint8_t>(m58::sound_rom_base >> 8U);
+        rom[0xFFFFU] = static_cast<std::uint8_t>(m58::sound_rom_base);
         return rom;
     }
 
@@ -97,7 +102,7 @@ namespace {
     }
 } // namespace
 
-TEST_CASE("Irem M58 system runs Z80 memory and IO windows", "[irem_m58]") {
+TEST_CASE("Irem M58 system runs main Z80 and sound MC6803 windows", "[irem_m58]") {
     namespace m58 = mnemos::manifests::irem_m58;
 
     auto sys = m58::assemble_m58(synthetic_image(), m58::board_params_for("10yard"));
@@ -113,6 +118,7 @@ TEST_CASE("Irem M58 system runs Z80 memory and IO windows", "[irem_m58]") {
     CHECK_FALSE(sys->sound_latch_irq);
     CHECK(sys->sound_cpu.elapsed_cycles() > 0U);
     CHECK_FALSE(sys->sound_cpu.reset_line_held());
+    CHECK(sys->sound_cpu.metadata().part_number == "MC6803");
     CHECK(sys->ay0.volume(0) == 0x0FU);
     CHECK(sys->ay1.volume(1) == 0x0CU);
     CHECK(sys->ay0.pending_samples() > 0U);
@@ -123,7 +129,8 @@ TEST_CASE("Irem M58 system runs Z80 memory and IO windows", "[irem_m58]") {
     CHECK(nonblack_pixels(sys->video.framebuffer()) > 0U);
 }
 
-TEST_CASE("Irem M58 sound command is owned by the sound Z80 ports", "[irem_m58]") {
+TEST_CASE("Irem M58 sound command is owned by the sound MC6803 direct-page MMIO",
+          "[irem_m58]") {
     namespace m58 = mnemos::manifests::irem_m58;
 
     auto sys = m58::assemble_m58(synthetic_image(), m58::board_params_for("10yard"));

@@ -86,7 +86,7 @@ proof.
 | M47 | `irem_m47` first-pass | 22% | `olibochu`, `punchkid` | local Oli-Boo-Chu parent and Punching Kid split clone ZIPs; direct `mnemos_player --system irem_m47` nonblank screenshot and `--system m47` save-state proof | None | Authentic M47 memory/I/O timing, video/color PROM behavior, AY/sample sound timing, input/DIP parity, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Moon Patrol / Tropical Angel board-split proof, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | `irem_m57` first-pass raw-media route | 12% | `newtangl` | local New Tropical Angel ZIP through the adapter; direct `mnemos_player --system irem_m57` nonblank screenshot and `--system m57` save-state proof | None | Authentic M57 memory/I/O timing, video/color, Irem Audio, inputs/DIPs, visual/audio parity |
-| M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
+| M58 | `irem_m58` first-pass | 28% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; real `soundcpu` reset vector proves the MC6803 high-ROM path; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, exact MC6803 port/timer/audio timing, DIP/manual behavior, visual/audio parity hashes |
 | M62 | `irem_m62` first-pass raw-media route | 18% | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | all 11 local ZIP routes through the adapter; direct `mnemos_player --system irem_m62` nonblank screenshot and `--system m62` save-state proof for `ldrun` | None | Authentic Z80/M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, inputs/DIPs, visual/audio parity |
 | M63 | `irem_m63` first-pass | 14% | `wilytowr` | local Wily Tower ZIP through the adapter; direct `mnemos_player --system irem_m63` nonblank screenshot and `--system m63` save-state proof | None | Authentic Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, input/DIP behavior, visual/audio parity |
 | Traverse USA / Zippy Race | `irem_travrusa` first-pass | 23% | `travrusa`, `motorace`, `travrusab`, `travrusab2` | local parent/copy-suffixed parent and split wrappers; direct `mnemos_player --system irem_travrusa` nonblank screenshot and `--system travrusa` save-state proof | None | Authentic MotoRace encrypted ROM handling, exact Irem Audio timing, video priority/scroll/color/input behavior, visual/audio parity |
@@ -137,11 +137,12 @@ targets:
   user-facing launch path. Current graphics and audio remain diagnostic
   first-pass output, not board-authentic M47 parity.
 - M58 now has four 10-Yard Fight ROM-set contracts plus a first-pass executable
-  Z80/Z80/two-SSG player route. `src/chips/cpu/m6803` now provides the MC6803
-  CPU foundation needed to replace that diagnostic sound-Z80 route with
-  authentic Irem Audio wiring. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` proves the
-  four local ZIP sets through the adapter; direct `mnemos_player --system
-  irem_m58` screenshot and `--system m58` save-state smokes prove the
+  Z80/MC6803/two-SSG player route. `src/manifests/irem_m58` maps the `soundcpu`
+  high ROM window at `$8000-$ffff`, resets the MC6803 through the real
+  `$fffe/$ffff` vector, and routes the existing latch/SSG proof through
+  first-pass direct-page MC6803 MMIO instead of Z80 ports. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58`
+  proves the four local ZIP sets through the adapter; direct `mnemos_player
+  --system irem_m58` screenshot and `--system m58` save-state smokes prove the
   user-facing launch path. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout
   package is not ROM evidence and remains quarantined under
   `D:\emu\irem\M58\artwork`.
@@ -371,16 +372,16 @@ visual and audio parity proof.
 - **Current implementation:** `src/manifests/irem_m58` embeds 10-Yard Fight ROM
   contracts with board-evidenced `maincpu`, `soundcpu`, `tiles`, `sprites`, and
   `proms` regions, plus `src/manifests/irem_m58/m58_system.cpp` assembles a
-  first-pass M58 board with main Z80, diagnostic sound Z80, input/DIP MMIO,
-  sound-command latch/IRQ acknowledgement, two YM2149-compatible SSGs,
-  ROM-backed tile/sprite rendering, PROM-derived diagnostic color, scroll/flip
-  state, board identity save/load, player adapter registration, capability
-  discovery, and local corpus smoke. `src/chips/cpu/m6803` now provides the
-  board-family CPU target for the next M58 audio-board wiring slice, but is not
-  wired into `irem_m58` yet.
+  first-pass M58 board with main Z80, sound MC6803, the `soundcpu` high-ROM
+  window at `$8000-$ffff`, real reset-vector fetch from `$fffe/$ffff`,
+  first-pass MC6803 direct-page latch/SSG MMIO, input/DIP MMIO, sound-command
+  latch/IRQ acknowledgement, two YM2149-compatible SSGs, ROM-backed tile/sprite
+  rendering, PROM-derived diagnostic color, scroll/flip state, board identity
+  save/load, player adapter registration, capability discovery, and local
+  corpus smoke.
 - **Remaining:** replace first-pass video/color/priority/radar assumptions with
-  board-evidenced 10-Yard Fight behavior, wire the MC6803-based Irem Audio board
-  bus/peripherals in place of the diagnostic sound-Z80 route, add
+  board-evidenced 10-Yard Fight behavior, finish exact MC6803 ports/timers and
+  Irem Audio timing beyond the current first-pass latch/SSG MMIO, add
   board/manual-backed DIP behavior, and collect pinned visual/audio parity
   hashes before calling M58 correct.
 

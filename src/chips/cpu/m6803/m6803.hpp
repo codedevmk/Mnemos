@@ -64,6 +64,8 @@ namespace mnemos::chips::cpu {
         void set_nmi_line(bool asserted) noexcept { nmi_line_ = asserted; }
         [[nodiscard]] bool irq_line() const noexcept { return irq_line_; }
         [[nodiscard]] bool nmi_line() const noexcept { return nmi_line_; }
+        void set_reset_line(bool asserted) noexcept;
+        [[nodiscard]] bool reset_line_held() const noexcept { return reset_line_; }
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
@@ -130,6 +132,7 @@ namespace mnemos::chips::cpu {
         std::uint64_t elapsed_{};
         bool irq_line_{};
         bool nmi_line_{};
+        bool reset_line_{};
         instrumentation::introspection_builder introspection_{};
         std::function<void(std::uint32_t pc)> trace_callback_{};
         std::array<register_descriptor, 6> register_view_{};

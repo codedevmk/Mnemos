@@ -343,10 +343,54 @@ namespace mnemos::manifests::irem_m58 {
 
         main_cpu.attach_bus(main_bus);
 
-        sound_bus.map_rom(sound_rom_base,
-                          std::span<const std::uint8_t>(sound_prog).first(sound_rom_mapped_size),
-                          0);
+        sound_bus.map_mmio(
+            sound_io_base, sound_io_size,
+            [this](std::uint32_t address) -> std::uint8_t {
+                switch ((address - sound_io_base) & 0xFFFFU) {
+                case m6803_io_ay0_data:
+                    return ay0.read();
+                case m6803_io_latch:
+                    return sound_command;
+                case m6803_io_ay1_data:
+                    return ay1.read();
+                default:
+                    return 0xFFU;
+                }
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                switch ((address - sound_io_base) & 0xFFFFU) {
+                case m6803_io_ay0_address:
+                    sound_ay0_address = static_cast<std::uint8_t>(value & 0x0FU);
+                    ay0.address(sound_ay0_address);
+                    break;
+                case m6803_io_ay0_data:
+                    ay0.write(value);
+                    ++sound_cpu_psg_write_count;
+                    break;
+                case m6803_io_ay1_address:
+                    sound_ay1_address = static_cast<std::uint8_t>(value & 0x0FU);
+                    ay1.address(sound_ay1_address);
+                    break;
+                case m6803_io_ay1_data:
+                    ay1.write(value);
+                    ++sound_cpu_psg_write_count;
+                    break;
+                case m6803_io_latch_ack:
+                    sound_latch_irq = false;
+                    ++sound_latch_ack_count;
+                    update_sound_irq();
+                    break;
+                default:
+                    break;
+                }
+            },
+            2);
         sound_bus.map_ram(sound_work_ram_base, sound_ram, 1);
+        sound_bus.map_rom(
+            sound_rom_base,
+            std::span<const std::uint8_t>(sound_prog).subspan(sound_rom_base,
+                                                              sound_rom_mapped_size),
+            0);
         sound_cpu.attach_bus(sound_bus);
 
         main_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
@@ -355,48 +399,6 @@ namespace mnemos::manifests::irem_m58 {
                 scroll_regs[p - 0x10U] = value;
             }
         });
-
-        sound_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
-            switch (port & 0xFFU) {
-            case z80_port_ay0_data:
-                return ay0.read();
-            case z80_port_latch:
-                return sound_command;
-            case z80_port_ay1_data:
-                return ay1.read();
-            default:
-                return 0xFFU;
-            }
-        });
-        sound_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
-            switch (port & 0xFFU) {
-            case z80_port_ay0_address:
-                sound_ay0_address = static_cast<std::uint8_t>(value & 0x0FU);
-                ay0.address(sound_ay0_address);
-                break;
-            case z80_port_ay0_data:
-                ay0.write(value);
-                ++sound_cpu_psg_write_count;
-                break;
-            case z80_port_ay1_address:
-                sound_ay1_address = static_cast<std::uint8_t>(value & 0x0FU);
-                ay1.address(sound_ay1_address);
-                break;
-            case z80_port_ay1_data:
-                ay1.write(value);
-                ++sound_cpu_psg_write_count;
-                break;
-            case z80_port_latch_ack:
-                sound_latch_irq = false;
-                ++sound_latch_ack_count;
-                update_sound_irq();
-                break;
-            default:
-                break;
-            }
-        });
-        sound_cpu.set_irq_vector(
-            [this]() -> std::uint8_t { return sound_latch_irq ? z80_rst_latch : z80_rst_idle; });
 
         main_cpu.reset(chips::reset_kind::power_on);
         sound_cpu.reset(chips::reset_kind::power_on);

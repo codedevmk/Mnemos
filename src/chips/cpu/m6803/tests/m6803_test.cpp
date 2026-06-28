@@ -183,3 +183,28 @@ TEST_CASE("m6803 save-state preserves registers and cycle pacing", "[m6803]") {
     CHECK(b.pc == a.pc);
     CHECK(restored.cpu.elapsed_cycles() == source.cpu.elapsed_cycles());
 }
+
+TEST_CASE("m6803 /RESET hold parks the CPU and release restarts from the reset vector",
+          "[m6803]") {
+    machine m;
+    m.set_reset_vector(0x8400U);
+    const std::uint8_t program[] = {0x86U, 0x42U, 0x97U, 0x20U}; // LDAA #$42 ; STAA <$20
+    m.load(0x8400U, program);
+
+    m.cpu.reset(mnemos::chips::reset_kind::power_on);
+    m.cpu.step_instruction();
+    CHECK(m.cpu.cpu_registers().a == 0x42U);
+
+    m.cpu.set_reset_line(true);
+    CHECK(m.cpu.reset_line_held());
+    CHECK(m.cpu.cpu_registers().pc == 0x8400U);
+
+    m.cpu.tick(64U);
+    CHECK(m.memory[0x0020U] == 0x00U);
+    CHECK(m.cpu.cpu_registers().pc == 0x8400U);
+
+    m.cpu.set_reset_line(false);
+    CHECK_FALSE(m.cpu.reset_line_held());
+    run_instructions(m, 2);
+    CHECK(m.memory[0x0020U] == 0x42U);
+}

@@ -2,6 +2,7 @@
 
 #include "bus.hpp"
 #include "chip.hpp"
+#include "m6803.hpp"
 #include "m58_game_manifests.hpp"
 #include "rom_set.hpp"
 #include "ssg.hpp"
@@ -18,7 +19,7 @@
 
 namespace mnemos::manifests::irem_m58 {
 
-    inline constexpr std::uint32_t m58_system_state_version = 1U;
+    inline constexpr std::uint32_t m58_system_state_version = 2U;
 
     inline constexpr std::uint32_t visible_width = 256U;
     inline constexpr std::uint32_t visible_height = 256U;
@@ -38,10 +39,10 @@ namespace mnemos::manifests::irem_m58 {
     inline constexpr std::size_t tile_gfx_size = 0x06000U;
     inline constexpr std::size_t sprite_gfx_size = 0x0c000U;
     inline constexpr std::size_t proms_size = 0x0520U;
-    inline constexpr std::uint16_t sound_rom_base = 0x0000U;
-    inline constexpr std::size_t sound_rom_mapped_size = 0xF000U;
-    inline constexpr std::uint16_t sound_work_ram_base = 0xF000U;
-    inline constexpr std::size_t sound_work_ram_size = 0x1000U;
+    inline constexpr std::uint16_t sound_rom_base = 0x8000U;
+    inline constexpr std::size_t sound_rom_mapped_size = 0x8000U;
+    inline constexpr std::uint16_t sound_work_ram_base = 0x0080U;
+    inline constexpr std::size_t sound_work_ram_size = 0x0080U;
 
     inline constexpr std::uint16_t video_ram_base = 0x8000U;
     inline constexpr std::size_t video_ram_size = 0x0400U;
@@ -57,14 +58,14 @@ namespace mnemos::manifests::irem_m58 {
     inline constexpr std::uint16_t work_ram_base = 0xE000U;
     inline constexpr std::size_t work_ram_size = 0x0800U;
 
-    inline constexpr std::uint16_t z80_port_ay0_address = 0x00U;
-    inline constexpr std::uint16_t z80_port_ay0_data = 0x01U;
-    inline constexpr std::uint16_t z80_port_latch = 0x02U;
-    inline constexpr std::uint16_t z80_port_ay1_address = 0x04U;
-    inline constexpr std::uint16_t z80_port_ay1_data = 0x05U;
-    inline constexpr std::uint16_t z80_port_latch_ack = 0x06U;
-    inline constexpr std::uint8_t z80_rst_idle = 0xFFU;
-    inline constexpr std::uint8_t z80_rst_latch = 0xDFU;
+    inline constexpr std::uint16_t sound_io_base = 0x0000U;
+    inline constexpr std::uint16_t sound_io_size = 0x0008U;
+    inline constexpr std::uint16_t m6803_io_ay0_address = 0x00U;
+    inline constexpr std::uint16_t m6803_io_ay0_data = 0x01U;
+    inline constexpr std::uint16_t m6803_io_latch = 0x02U;
+    inline constexpr std::uint16_t m6803_io_ay1_address = 0x04U;
+    inline constexpr std::uint16_t m6803_io_ay1_data = 0x05U;
+    inline constexpr std::uint16_t m6803_io_latch_ack = 0x06U;
 
     inline constexpr std::uint8_t tenyard_dsw1_default = 0xFFU;
     inline constexpr std::uint8_t tenyard_dsw2_default = 0xFFU;
@@ -112,7 +113,7 @@ namespace mnemos::manifests::irem_m58 {
 
     struct m58_system final {
         chips::cpu::z80 main_cpu;
-        chips::cpu::z80 sound_cpu;
+        chips::cpu::m6803 sound_cpu;
         m58_video video;
         chips::audio::ssg ay0;
         chips::audio::ssg ay1;

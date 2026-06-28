@@ -50,6 +50,7 @@ target_link_libraries(
     mnemos_manifests_irem_m58
     PUBLIC
         mnemos::topology
+        mnemos::chips::cpu::m6803
         mnemos::chips::cpu::z80
         mnemos::chips::audio::ssg
         mnemos::manifests::common
@@ -65,6 +66,7 @@ mnemos_declare_tier(
         mnemos_manifests_common
         mnemos_security_cryptography
         mnemos_chips_shared
+        mnemos_chips_cpu_m6803
         mnemos_chips_cpu_z80
         mnemos_chips_audio_ssg
         mnemos_foundation

@@ -1,5 +1,6 @@
 #include "file.hpp"
 #include "m58_game_manifests.hpp"
+#include "m58_system.hpp"
 #include "rom_set_toml.hpp"
 #include "zip_archive.hpp"
 
@@ -228,6 +229,26 @@ namespace {
         CHECK(has_non_fill_byte(*region));
     }
 
+    void require_m6803_reset_vector(const rom_set_image& image, std::string_view set_name) {
+        namespace m58 = mnemos::manifests::irem_m58;
+
+        const auto* sound = image.region("soundcpu");
+        REQUIRE(sound != nullptr);
+        REQUIRE(sound->size() == m58::sound_rom_size);
+        const auto vector = static_cast<std::uint16_t>(
+            (static_cast<std::uint16_t>((*sound)[mnemos::chips::cpu::m6803::reset_vector]) << 8U) |
+            (*sound)[mnemos::chips::cpu::m6803::reset_vector + 1U]);
+        const auto vector32 = static_cast<std::uint32_t>(vector);
+        const auto mapped_end =
+            static_cast<std::uint32_t>(m58::sound_rom_base) +
+            static_cast<std::uint32_t>(m58::sound_rom_mapped_size);
+        CHECK(vector32 >= m58::sound_rom_base);
+        CHECK(vector32 < mapped_end);
+        if (set_name == "10yard") {
+            CHECK(vector == 0xFA80U);
+        }
+    }
+
 } // namespace
 
 TEST_CASE("m58 embedded manifests cover local 10-Yard Fight ROM contracts",
@@ -349,5 +370,6 @@ TEST_CASE("m58 local ROM artifacts load CRC-clean through embedded manifests",
         for (const auto& [region_name, expected] : expected_effective_regions()) {
             require_loaded_region(image, region_name, expected.size);
         }
+        require_m6803_reset_vector(image, set_name);
     }
 }
