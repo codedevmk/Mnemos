@@ -177,8 +177,9 @@ multiple independent open-source implementations.
   code or ROM bytes are copied into Mnemos.
 - **Irem M63 ROM-set metadata** — the checked-in `wilytowr` manifest uses public
   Irem M63 driver metadata for Wily Tower dump filenames, region sizes, offsets,
-  CRC-32s, orientation, and board-family classification. The local wrapper remains
-  contract-only until an executable M63 board route exists. No MAME driver code
+  CRC-32s, orientation, and board-family classification. Mnemos routes the
+  first-pass Wily Tower player through that local artifact contract, but this is
+  not visual/audio parity proof for the authentic M63 board. No MAME driver code
   or ROM bytes are copied into Mnemos.
 - **Irem M72 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m72/games/` use public MAME M72 driver metadata for dump

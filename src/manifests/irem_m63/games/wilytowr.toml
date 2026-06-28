@@ -1,6 +1,7 @@
 # Wily Tower -- Irem M63 ROM-contract manifest.
 # Schema mnemos-romset/1. This preserves public M63 ROM placement for the local
-# Wily Tower wrapper without claiming an executable M63 board profile yet.
+# Wily Tower wrapper. The player route remains first-pass diagnostic coverage,
+# not authentic M63 graphics/audio parity.
 
 [set]
 schema      = "mnemos-romset/1"

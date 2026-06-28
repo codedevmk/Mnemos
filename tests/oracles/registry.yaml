@@ -261,6 +261,15 @@ machines:
         data_env: MNEMOS_M62_SET_DIR
         requires_apps: true
 
+  irem_m63:
+    module: src/manifests/irem_m63
+    golden:
+      - id: GLD-M63-CORPUS
+        ctest: mnemos_apps_player_irem_m63_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M63_SET_DIR
+        requires_apps: true
+
   irem_m72:
     module: src/manifests/irem_m72
     golden:

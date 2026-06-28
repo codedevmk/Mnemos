@@ -418,17 +418,16 @@ ignores archive-only container folders as unpacked sets, and currently reports
 zero; ROM evidence is sorted into board/system buckets, while `for-delete`,
 `misc`, and `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
-by both inventory and data-gated corpus source discovery. Three items match M14
-manifests, three match M15, three match M27, three match M47, five match M52,
-nine match M58, fourteen match M62, three match M63, sixty-one match true-M72
-manifests, fourteen match M75, thirteen match M81, twenty match M82, twelve
-match M84, six match M90, forty-one match M92, seven match M107, and seven
-match travrusa. The inventory separates manifest tracking, media loadability,
-and player support: 224 items
-match a checked-in Irem manifest from non-ignored buckets, 136 are readable
-through current ZIP / single-inner-ZIP / folder routes, 135 are backed by an
-executable player-supported route, 3 are tracked contract-only, and 83 tracked matches
-remain metadata-only until converted to ZIP or unpacked folders. The M58 bucket
+by both inventory and data-gated corpus source discovery. The raw scanner sees
+four M14 manifest-name matches, four M15, four M27, three M47, five M52, twelve
+M58, seventeen M62, three M63, eighty true-M72, seventeen M75, twenty-two M81,
+twenty-five M82, fourteen M84, six M90, fifty-two M92, eleven M107, and seven
+travrusa. The inventory separates manifest tracking, media loadability, and
+player support: 224 items match a checked-in Irem manifest from non-ignored
+buckets, 136 are readable through current ZIP / single-inner-ZIP / folder
+routes, 136 are backed by an executable player-supported route, 0 are tracked
+contract-only, and 88 tracked matches remain metadata-only until converted to
+ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
 quarantined under `D:\emu\irem\M58\artwork` and does not count as ROM
@@ -462,9 +461,9 @@ The local M58 grouping now tracks `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj` as first-pass player-loadable 10-Yard Fight manifests. The four ZIP
 sets are direct player-loadable through `irem_m58`; the five 7z archives remain
 metadata-only until converted or unpacked for the player route.
-The local M63 grouping now tracks `D:\emu\irem\M63\wilytowr.zip` as
-contract-only `wilytowr` with `next_action = add_board_profile`, so Wily Tower
-is visible without being counted as playable M63 support.
+The local M63 grouping now tracks `D:\emu\irem\M63\wilytowr.zip` as a
+direct player-loadable first-pass `wilytowr` route; the two local Wily Tower
+`.7z` archives remain metadata-only until converted or unpacked.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
 direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract keeps
 the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The local
@@ -478,10 +477,10 @@ generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not be counted
 as missing Irem implementation targets.
 The standard data-gated runner now also reports, runs, and oracle-registers
-every implemented Irem player-family corpus golden: M15, M27, M47, M52, M58,
-M62, travrusa, M72, M75, M81, M82, M84, M90, M92, and M107, and also reports
-the M63 manifest-only data gate separately. The newest G6 high-water raises cover
-`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M81-CORPUS`,
+every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
+M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M90, M92, and M107. The
+newest G6 high-water raises cover
+`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M52-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
@@ -680,15 +679,15 @@ folded into neighboring Irem profiles.
 
 ---
 
-## Irem M63 — 1 / 2
+## Irem M63 — 2 / 2
 
 This section is split from M62/M72 so Wily Tower and Fighting Basketball stay
 tracked as sparse late-8-bit M63 evidence instead of inheriting a neighboring
 board profile.
 
 #### Manifests / board bring-up
-- [x] **I63-1** Local M63 Wily Tower ROM-set contract — `src/manifests/irem_m63` carries a checked-in embedded ROM-contract manifest for `wilytowr`, preserving the local Wily Tower filenames, region sizes, offsets, and CRC32 values for `maincpu`, `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`. `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` data-gates the local `wilytowr` ZIP and proves it loads CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` classifies the match as `tracked_contract_only` with `next_action = add_board_profile`, so Wily Tower is visible in the corpus inventory without being counted as executable player support · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m63/games/wilytowr.toml` + `src/manifests/irem_m63/tests/m63_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [ ] **I63-2** Executable M63 board profile — Implement the real board route for the M63 family: Z80 main CPU, 8039-class sound CPU behavior, AY/sample/discrete audio path, tile/sprite/video/color-PROM behavior, inputs/DIPs, Fighting Basketball manifest coverage, save-state identity, player adapter registration, local corpus smoke, and eventual visual/audio parity. The current `wilytowr` manifest is only an artifact contract and must not be used as proof that Wily Tower is playable in Mnemos · HIGH · M-L · beyond Emu · Evidence needed: `src/manifests/irem_m63/*` board implementation + `src/apps/player/adapters/irem_m63/*` + data-gated player smoke
+- [x] **I63-1** Local M63 Wily Tower ROM-set contract — `src/manifests/irem_m63` carries a checked-in embedded ROM-contract manifest for `wilytowr`, preserving the local Wily Tower filenames, region sizes, offsets, and CRC32 values for `maincpu`, `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`. `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` data-gates the local `wilytowr` ZIP and proves it loads CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` classifies `wilytowr.zip` as direct player-loadable and leaves the two local `.7z` archives metadata-only until converted or unpacked, so Wily Tower no longer contributes to contract-only support accounting · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m63/games/wilytowr.toml` + `src/manifests/irem_m63/tests/m63_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **I63-2** Executable M63 board profile — First-pass route exists for Wily Tower: `src/manifests/irem_m63/m63_system.cpp` assembles a Z80 diagnostic board shell with program ROM `$0000-$7fff`, video/color/work/scratch RAM, input/DIP/control MMIO, sound-command latch, Wily Tower media regions, synthetic combined graphics media from `gfx1` / `gfx2` / `gfx3` / `proms`, nonblank diagnostic video, beeper-backed audio for synthetic programs, save-state identity, and player adapter registration. `src/apps/player/adapters/irem_m63` registers `--system irem_m63` / `m63`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local Wily Tower player smoke through `MNEMOS_M63_SET_DIR=D:\emu\irem\M63`. This is smoke-playable, not authentic parity: exact M63 Z80/8039 board maps, 8039-class sound CPU behavior, AY/sample/discrete audio, tile/sprite/video/color-PROM behavior, inputs/DIPs, Fighting Basketball manifest coverage, raster timing, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m63/m63_system.cpp` + `src/manifests/irem_m63/tests/m63_system_test.cpp` + `src/apps/player/adapters/irem_m63/*` + `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` corpus golden + direct `mnemos_player --system irem_m63` / `--system m63` smoke
 
 ---
 

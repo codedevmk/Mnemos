@@ -1,8 +1,8 @@
 #pragma once
 
-// Checked-in Irem M63 manifests currently provide ROM contracts for the local
-// corpus. Exact Z80/8039 bus timing, video, color, and sound behavior remain
-// board-family implementation gaps.
+// Checked-in Irem M63 manifests provide ROM contracts for the local corpus and
+// feed the first-pass Wily Tower player route. Exact Z80/8039 bus timing,
+// video/color PROM behavior, and sound behavior remain board-family gaps.
 
 #include "m63_embedded_game_manifests.hpp"
 

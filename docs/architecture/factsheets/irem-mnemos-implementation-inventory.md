@@ -22,9 +22,11 @@ lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
 not yet map it to a numbered M-board. Of those 437 items, 224 currently match a
 checked-in Mnemos Irem manifest, 136 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 135 have an
-executable player-supported route. M63 is still tracked as contract-only until a
-board/player profile exists; ignored
+single-inner wrapper ZIP, or unpacked-folder media routes, and 136 have an
+executable player-supported route. M63 now has a first-pass Wily Tower player
+route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
+remain metadata-only until converted or unpacked. No tracked local item is
+currently contract-only; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
 Board-local `name-collisions` folders are skipped by both inventory and
@@ -46,10 +48,10 @@ artwork/layout, so the CRC-clean parent proof comes from the copy-suffixed ROM
 ZIP. Known untracked corpus classifications remain explicit: `headon` and
 `uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
 `galaxian/galaxian.cpp`.
-The common data-gated runner now includes the M63 manifest-load proof plus
+The common data-gated runner now includes the M63 player corpus proof plus
 G6-ratcheted corpus golden tests for every implemented Irem player family: M14,
-M15, M27, M47, M52, M58, M62, travrusa, M72, M75, M81, M82, M84, M90, M92, and
-M107. For
+M15, M27, M47, M52, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M90, M92,
+and M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
@@ -84,7 +86,7 @@ proof.
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
 | M62 | `irem_m62` first-pass raw-media route | 18% | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | all 11 local ZIP routes through the adapter; direct `mnemos_player --system irem_m62` nonblank screenshot and `--system m62` save-state proof for `ldrun` | None | Authentic Z80/M6803 board profile, dual AY/MSM audio stack, KNA custom video, title bus maps, inputs/DIPs, visual/audio parity |
-| M63 | `irem_m63` ROM contract | 8% contract-only | `wilytowr` | None; CRC-clean media-load contract only | None | Executable Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, save-state/player adapter, visual/audio parity |
+| M63 | `irem_m63` first-pass | 14% | `wilytowr` | local Wily Tower ZIP through the adapter; direct `mnemos_player --system irem_m63` nonblank screenshot and `--system m63` save-state proof | None | Authentic Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, input/DIP behavior, visual/audio parity |
 | Traverse USA / Zippy Race | `irem_travrusa` first-pass | 23% | `travrusa`, `motorace`, `travrusab`, `travrusab2` | local parent/copy-suffixed parent and split wrappers; direct `mnemos_player --system irem_travrusa` nonblank screenshot and `--system travrusa` save-state proof | None | Authentic MotoRace encrypted ROM handling, exact Irem Audio timing, video priority/scroll/color/input behavior, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
 | M75 | `irem_m75` first-pass | 34% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional and bootleg clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg PROM/color behavior proof |
@@ -143,8 +145,12 @@ targets:
   with CRC-clean local wrapper-ZIP load proof, nonblank screenshot proof, and
   save-state proof. Treat this as smoke-playable only, not authentic KNA/M6803
   behavior.
-- M63 now has a single `wilytowr` ROM contract with CRC-clean local wrapper
-  proof, but no executable board/player route.
+- M63 now has a single `wilytowr` ROM contract plus a first-pass executable
+  Z80 diagnostic player route. `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` proves the
+  local ZIP through the adapter; direct `mnemos_player --system irem_m63`
+  screenshot and `--system m63` save-state smokes prove the user-facing launch
+  path. Current graphics and audio remain diagnostic first-pass output, not
+  board-authentic M63 parity.
 - M82 has scanline-composed tile/sprite/palette rendering with focused priority
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
@@ -383,21 +389,26 @@ visual and audio parity proof.
 ### M63
 
 - **Techsheet games:** Wily Tower, Fighting Basketball.
-- **Mnemos games:** contract-only ROM manifest for `wilytowr`.
-- **Smoke playable:** none.
+- **Mnemos games:** first-pass ROM manifest and player route for `wilytowr`.
+- **Smoke playable:** the local `wilytowr.zip` route loads through
+  `MNEMOS_M63_SET_DIR=D:\emu\irem\M63`; direct player proof wrote a nonblank
+  256x256 screenshot with `--system irem_m63` and a rollback save state with
+  alias `--system m63`.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m63` embeds the local
   `wilytowr` ROM-set contract with public M63 region placement for `maincpu`,
-  `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`; the focused
-  manifest test checks embedded TOML synchronization, region/file invariants,
-  single-inner wrapper loading, directory-prefixed aliases, and CRC-clean local
-  loading through `D:\emu\irem\M63` when `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` is
-  provided. The inventory records that wrapper as `tracked_contract_only` with
-  `next_action = add_board_profile`.
-- **Remaining:** implement the Z80 main board route, 8039-class sound CPU,
-  AY/sample/discrete sound path, tile/sprite/video/color-PROM behavior,
-  inputs/DIPs, save-state/player adapter, Fighting Basketball coverage, and
-  visual/audio parity before counting Wily Tower as playable.
+  `soundcpu`, `gfx1`, `gfx2`, `gfx3`, `user1`, and `proms`. The first-pass
+  board assembles a Z80 execution window, RAM/input/sound-latch surfaces,
+  synthetic combined graphics media from the declared graphics/PROM regions,
+  diagnostic nonblank video, beeper-backed audio for synthetic programs,
+  board-identity save/load, player adapter registration, capability discovery,
+  and local corpus smoke. The inventory records `wilytowr.zip` as
+  `direct_player_loadable` while the two `.7z` Wily Tower archives remain
+  `metadata_only_unpack_or_repack`.
+- **Remaining:** replace the first-pass diagnostic route with the authentic Z80
+  main board, 8039-class sound CPU, AY/sample/discrete sound path,
+  tile/sprite/video/color-PROM behavior, inputs/DIPs, Fighting Basketball
+  coverage, and visual/audio parity before calling Wily Tower correct.
 
 ### Traverse USA / Zippy Race
 
@@ -782,8 +793,10 @@ visual and audio parity proof.
 5. Use the now-passing M72 roster golden as the baseline for the next
    protection/DIP/parity slices; the remaining M72 work is not missing media but
    stronger authenticity proof.
-6. Promote M63 Wily Tower from ROM contract to an executable board/profile route
-   before counting it as smoke playable.
+6. Advance M63 Wily Tower from first-pass smoke-playable to authentic behavior:
+   the Z80/8039 board map, AY/sample/discrete audio, video/color PROM behavior,
+   inputs/DIPs, Fighting Basketball coverage, and visual/audio parity remain
+   open.
 7. Advance M14 P.T. Reach Mahjong from first-pass smoke-playable to authentic
    behavior by replacing the 8080-compatible surrogate with board-evidenced
    8085 timing, input, color, and sound behavior.

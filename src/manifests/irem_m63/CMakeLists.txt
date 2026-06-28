@@ -29,12 +29,15 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_m63 INTERFACE)
+add_library(
+    mnemos_manifests_irem_m63
+    m63_system.cpp
+)
 add_library(mnemos::manifests::irem_m63 ALIAS mnemos_manifests_irem_m63)
 
 target_include_directories(
     mnemos_manifests_irem_m63
-    INTERFACE
+    PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
@@ -42,16 +45,23 @@ target_include_directories(
 
 target_link_libraries(
     mnemos_manifests_irem_m63
-    INTERFACE
+    PUBLIC
         mnemos::manifests::common
+        mnemos::chips::audio::beeper
+        mnemos::chips::cpu::z80
+    PRIVATE
+        mnemos::security::cryptography
 )
 
-mnemos_apply_common_target_options(mnemos_manifests_irem_m63 INTERFACE)
+mnemos_apply_common_target_options(mnemos_manifests_irem_m63 PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_irem_m63
     TIER 4
     DEPENDS
         mnemos_manifests_common
+        mnemos_chips_audio_beeper
+        mnemos_chips_cpu_z80
+        mnemos_security_cryptography
         mnemos_foundation
 )
 
@@ -69,5 +79,10 @@ if(BUILD_TESTING)
         mnemos_manifests_irem_m63_test
         PRIVATE
             MNEMOS_IREM_M63_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+    mnemos_add_test(
+        mnemos_manifests_irem_m63_system_test
+        SOURCES tests/m63_system_test.cpp
+        LIBRARIES mnemos::manifests::irem_m63
     )
 endif()
