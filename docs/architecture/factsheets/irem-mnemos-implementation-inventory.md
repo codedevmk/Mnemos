@@ -500,6 +500,9 @@ visual and audio parity proof.
   MOVX sample-data port now use direct bounded reads against the loaded sample
   region. If either cursor runs past the loaded sample ROM, the read returns
   open bus (`0xff`) rather than wrapping to offset zero.
+- **No-dump trigger proof:** the `dbreedm72` and `dkgensanm72` HLE sample-trigger
+  tables are mechanically checked end-to-end: nine Dragon Breed trigger/start
+  pairs and 28 Daiku no Gensan trigger/start pairs.
 - **Current local artifact proof:** no checked-in M72 manifest artifact is
   currently missing from the board-local corpus: the recursive preflight against
   `D:\emu\irem\M72` reports `417/417` present. The optional full-roster CTest is

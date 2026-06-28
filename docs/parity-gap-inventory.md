@@ -248,6 +248,11 @@ Loader note: no-dump HLE profiles now also disable when their declared `samples`
 
 Protection-HLE note: `dbreedm72` and `dkgensanm72` no-dump MCU profiles now also expose their profile-specific service-ROM checksum response bytes at the shared-RAM request trigger, matching the declared HLE surface instead of leaving service-test reads as stale RAM.
 
+Sample-trigger note: the no-dump HLE sample-trigger metadata for `dbreedm72`
+and `dkgensanm72` is now pinned by exact full-table assertions, covering all
+nine Dragon Breed starts and all 28 Daiku no Gensan starts instead of a single
+representative entry.
+
 Sample-ROM note: the M72 Z80 sample-read port and protection-MCU MOVX sample
 data port now use bounded direct sample-region addressing; reads past the
 loaded sample ROM return open bus (`0xff`) instead of modulo-wrapping to the

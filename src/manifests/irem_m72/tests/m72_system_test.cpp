@@ -12,6 +12,7 @@
 #include <fstream>
 #include <map>
 #include <set>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -30,6 +31,7 @@ namespace {
     using mnemos::manifests::common::rom_set_region;
     using mnemos::manifests::irem_m72::assemble_m72;
     using mnemos::manifests::irem_m72::m72_rom_skeleton;
+    using mnemos::manifests::irem_m72::no_dump_hle_sample_trigger;
 
     // A maincpu region with a far jump at the V30 reset vector (FFFF:0000 ->
     // physical 0xFFFF0) into `program` placed at 0000:0200.
@@ -109,6 +111,16 @@ namespace {
             return dip.name == name && dip.mask == mask && dip.condition.has_value() &&
                    dip.condition->mask == condition_mask && dip.condition->value == condition_value;
         });
+    }
+
+    void require_sample_trigger_table(
+        const std::vector<mnemos::manifests::common::rom_set_hle_sample_trigger>& actual,
+        std::span<const no_dump_hle_sample_trigger> expected) {
+        REQUIRE(actual.size() == expected.size());
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+            CHECK(actual[i].trigger == expected[i].trigger);
+            CHECK(actual[i].start == expected[i].start);
+        }
     }
 
     [[nodiscard]] std::size_t count_dips_named(const rom_set_decl& decl,
@@ -265,9 +277,12 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             const rom_set_hle_decl* mcu_hle = find_hle(decl, "mcu");
             REQUIRE(mcu_hle != nullptr);
             CHECK(mcu_hle->profile == "irem_m72.dbreedm72_no_dump_mcu");
-            REQUIRE(mcu_hle->sample_triggers.size() == 9U);
-            CHECK(mcu_hle->sample_triggers[6].trigger == 6U);
-            CHECK(mcu_hle->sample_triggers[6].start == 0x13000U);
+            const std::vector<no_dump_hle_sample_trigger> expected_triggers{
+                {0U, 0x00000U}, {1U, 0x00020U}, {2U, 0x02C40U},
+                {3U, 0x08160U}, {4U, 0x0C8C0U}, {5U, 0x0FFE0U},
+                {6U, 0x13000U}, {7U, 0x15820U}, {8U, 0x15F40U},
+            };
+            require_sample_trigger_table(mcu_hle->sample_triggers, expected_triggers);
         }
         if (decl.name == "rtype") {
             REQUIRE_FALSE(decl.dips.empty());
@@ -301,9 +316,16 @@ TEST_CASE("m72 checked-in game manifests parse and cover the phase-E roster", "[
             const rom_set_hle_decl* mcu_hle = find_hle(decl, "mcu");
             REQUIRE(mcu_hle != nullptr);
             CHECK(mcu_hle->profile == "irem_m72.dkgensanm72_no_dump_mcu");
-            REQUIRE(mcu_hle->sample_triggers.size() == 28U);
-            CHECK(mcu_hle->sample_triggers[20].trigger == 20U);
-            CHECK(mcu_hle->sample_triggers[20].start == 0x12B20U);
+            const std::vector<no_dump_hle_sample_trigger> expected_triggers{
+                {0U, 0x00000U},  {1U, 0x00020U},  {2U, 0x01800U},  {3U, 0x02DA0U},
+                {4U, 0x03BE0U},  {5U, 0x05AE0U},  {6U, 0x06100U},  {7U, 0x06DE0U},
+                {8U, 0x07260U},  {9U, 0x07A60U},  {10U, 0x08720U}, {11U, 0x0A5C0U},
+                {12U, 0x0C3C0U}, {13U, 0x0C7A0U}, {14U, 0x0E140U}, {15U, 0x0FB00U},
+                {16U, 0x10FA0U}, {17U, 0x10FC0U}, {18U, 0x10FE0U}, {19U, 0x11F40U},
+                {20U, 0x12B20U}, {21U, 0x130A0U}, {22U, 0x13C60U}, {23U, 0x14740U},
+                {24U, 0x153C0U}, {25U, 0x197E0U}, {26U, 0x1AF40U}, {27U, 0x1C080U},
+            };
+            require_sample_trigger_table(mcu_hle->sample_triggers, expected_triggers);
             CHECK(has_dip(decl, "Continue Limit", 0x0010U, 0x0010U));
         }
         if (decl.name == "gallopm72") {
