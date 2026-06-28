@@ -27,6 +27,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "irem_m15" || id == "m15") {
             return system_family::irem_m15;
         }
+        if (id == "irem_m47" || id == "m47") {
+            return system_family::irem_m47;
+        }
         if (id == "irem_m52" || id == "m52") {
             return system_family::irem_m52;
         }
@@ -101,6 +104,8 @@ namespace mnemos::apps::player::adapters {
             return "sega32x";
         case system_family::irem_m15:
             return "irem_m15";
+        case system_family::irem_m47:
+            return "irem_m47";
         case system_family::irem_m52:
             return "irem_m52";
         case system_family::irem_m58:
@@ -159,6 +164,8 @@ namespace mnemos::apps::player::adapters {
             return "32X";
         case system_family::irem_m15:
             return "Irem M15";
+        case system_family::irem_m47:
+            return "Irem M47";
         case system_family::irem_m52:
             return "Irem M52";
         case system_family::irem_m58:
@@ -204,7 +211,7 @@ namespace mnemos::apps::player::adapters {
     }
 
     const char* family_names() noexcept {
-        return "genesis, sms, gg, c64, segacd, sega32x, irem_m15, irem_m52, irem_m58, "
+        return "genesis, sms, gg, c64, segacd, sega32x, irem_m15, irem_m47, irem_m52, irem_m58, "
                "irem_travrusa, irem_m72, irem_m75, irem_m81, irem_m82, irem_m84, irem_m90, "
                "irem_m92, irem_m107, taito_f2, cps1, cps2, spectrum, nes, msx, msx2, amiga500";
     }

@@ -279,13 +279,21 @@ namespace {
 
             std::vector<std::filesystem::path> candidates;
             for (std::filesystem::recursive_directory_iterator
-                     it{root, std::filesystem::directory_options::skip_permission_denied, ec},
+                 it{root, std::filesystem::directory_options::skip_permission_denied, ec},
                  end;
                  !ec && it != end; it.increment(ec)) {
-                if (!it->is_directory(ec) && !it->is_regular_file(ec)) {
+                const auto candidate_path = it->path();
+                std::error_code entry_ec;
+                if (it->is_directory(entry_ec) &&
+                    candidate_path.filename().string() == "name-collisions") {
+                    it.disable_recursion_pending();
                     continue;
                 }
-                candidates.push_back(it->path());
+                entry_ec.clear();
+                if (!it->is_directory(entry_ec) && !it->is_regular_file(entry_ec)) {
+                    continue;
+                }
+                candidates.push_back(candidate_path);
             }
             std::sort(candidates.begin(), candidates.end());
 

@@ -1,5 +1,7 @@
 # Punching Kid (Japan) -- Irem M47 split-clone ROM contract.
-# Local wrapper: D:\emu\irem\Oli-Boo-Chu_Arcade_JA.zip -> punchkid.zip.
+# Current execution is a first-pass board route, not board-authentic
+# timing/video/audio parity.
+# Local wrapper: D:\emu\irem\M47\punchkid.zip.
 # The split clone carries replacement program and 8x8 graphics dumps; shared
 # audio, sample, 16x16 graphics, and PROM regions are inherited from olibochu.
 

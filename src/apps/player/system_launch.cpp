@@ -97,7 +97,8 @@ namespace mnemos::apps::player {
 
         const system_family family = *family_opt;
         const bool arcade_family =
-            family == system_family::irem_m15 || family == system_family::irem_m52 ||
+            family == system_family::irem_m15 || family == system_family::irem_m47 ||
+            family == system_family::irem_m52 ||
             family == system_family::irem_m58 || family == system_family::irem_travrusa ||
             family == system_family::irem_m72 || family == system_family::irem_m75 ||
             family == system_family::irem_m81 || family == system_family::irem_m82 ||
@@ -109,7 +110,8 @@ namespace mnemos::apps::player {
                                     : load_rom(options.rom_paths.front());
         const bool directory_backed_irem =
             loaded && loaded->directory_source &&
-            (family == system_family::irem_m15 || family == system_family::irem_m52 ||
+            (family == system_family::irem_m15 || family == system_family::irem_m47 ||
+             family == system_family::irem_m52 ||
              family == system_family::irem_m58 || family == system_family::irem_travrusa ||
              family == system_family::irem_m72 || family == system_family::irem_m75 ||
              family == system_family::irem_m81 || family == system_family::irem_m82 ||
@@ -125,7 +127,8 @@ namespace mnemos::apps::player {
         std::vector<std::string> additional_media_paths;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
             const bool irem_family =
-                family == system_family::irem_m15 || family == system_family::irem_m52 ||
+                family == system_family::irem_m15 || family == system_family::irem_m47 ||
+                family == system_family::irem_m52 ||
                 family == system_family::irem_m58 || family == system_family::irem_travrusa ||
                 family == system_family::irem_m72 || family == system_family::irem_m75 ||
                 family == system_family::irem_m81 || family == system_family::irem_m82 ||
@@ -180,6 +183,7 @@ namespace mnemos::apps::player {
             break;
         case system_family::segacd:
         case system_family::irem_m15:
+        case system_family::irem_m47:
         case system_family::irem_m52:
         case system_family::irem_m58:
         case system_family::irem_travrusa:

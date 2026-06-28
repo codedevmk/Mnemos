@@ -14,31 +14,38 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 477 local corpus items across 25 top-level buckets. Direct files
-under `D:\emu\irem` are now zero; the remaining corpus lives under board/system
-buckets such as `M72`, `M92`, `M62`, `M58`, `travrusa`, and the intentionally
-ignored quarantine buckets `for-delete`, `misc`, and `non-irem`. Of those 477
-items, 219 currently match a checked-in Mnemos Irem manifest, 131 are readable
-through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
-routes, and 113 have an executable player-supported route. The M14, M27, M47,
-M62, and M63 matches are intentionally tracked as contract-only manifests until
-board/player profiles exist; ignored buckets may still show filename-level
-manifest matches, but they contribute zero tracked, loadable, supported,
-contract-only, or metadata-only support counts. Windows copy-suffixed checked-in
-set ZIPs such as `loht (1).zip` are canonicalized to their embedded manifest IDs
-for player loading, M72 corpus-smoke grouping, and inventory grouping. The
-`travrusa` bucket now has checked-in contracts and a first-pass player route for
-`travrusa`, `motorace`, `travrusab`, and `travrusab2`; five local travrusa ZIP
-routes count as supported, while the two `.7z` archives remain metadata-only
-until converted or unpacked. The unsuffixed `travrusa.zip` is artwork/layout, so
-the CRC-clean parent proof comes from the copy-suffixed ROM ZIP. Known
-untracked corpus classifications remain explicit: `headon` and `uniwars` /
-`uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
+That scan found 437 local corpus items across 25 top-level buckets. Direct files
+under `D:\emu\irem` are zero; the remaining files live under board/system
+buckets such as `M72`, `M92`, `M62`, `M58`, and `travrusa`, plus quarantine or
+classification buckets such as `for-delete`, `misc`, and `non-irem`. The
+lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
+USA / Zippy Race as its own first-pass family profile because the factsheet does
+not yet map it to a numbered M-board. Of those 437 items, 224 currently match a
+checked-in Mnemos Irem manifest, 136 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 120 have an
+executable player-supported route. The M14, M27, M62, and M63 matches are still
+tracked as contract-only manifests until board/player profiles exist; ignored
+buckets may still show filename-level manifest matches, but they contribute zero
+tracked, loadable, supported, contract-only, or metadata-only support counts.
+Board-local `name-collisions` folders are skipped by both inventory and
+data-gated corpus source discovery.
+Windows copy-suffixed checked-in set ZIPs such as `loht (1).zip` are
+canonicalized to their embedded manifest IDs for player loading, M72
+corpus-smoke grouping, and inventory grouping. The M47 bucket now has a
+first-pass player route for `olibochu` and `punchkid`: two local ZIP routes count
+as supported, while `punchkid.7z` remains metadata-only until converted or
+unpacked. The `travrusa` bucket has checked-in contracts and a first-pass player
+route for `travrusa`, `motorace`, `travrusab`, and `travrusab2`; five local
+travrusa ZIP routes count as supported, while the two `.7z` archives remain
+metadata-only until converted or unpacked. The unsuffixed `travrusa.zip` is
+artwork/layout, so the CRC-clean parent proof comes from the copy-suffixed ROM
+ZIP. Known untracked corpus classifications remain explicit: `headon` and
+`uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
 `galaxian/galaxian.cpp`.
-The common data-gated runner now includes M14, M27, M47, M62, and M63
-manifest-load proofs plus G6-ratcheted corpus golden tests for every implemented
-Irem player family: M15, M52, M58, travrusa, M72, M75, M81, M82, M84, M90, M92,
-and M107. For
+The common data-gated runner now includes M14, M27, M62, and M63 manifest-load
+proofs plus G6-ratcheted corpus golden tests for every implemented Irem player
+family: M15, M47, M52, M58, travrusa, M72, M75, M81, M82, M84, M90, M92, and
+M107. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
@@ -68,7 +75,7 @@ proof.
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
 | M14 | `irem_m14` ROM contract | 8% contract-only | `ptrmj` | None; CRC-clean media-load contract only | None | Executable 8085 M14 board profile, video/color, paddle/ball/input behavior, discrete/sample sound, save-state/player adapter, visual/audio parity |
 | M27 | `irem_m27` ROM contract | 8% contract-only | `panther` | None; CRC-clean media-load contract only | None | Executable M27 board profile, video/color, inputs/DIPs, sound behavior, save-state/player adapter, visual/audio parity |
-| M47 | `irem_m47` ROM contract | 8% contract-only | `olibochu`, `punchkid` | None; CRC-clean media-load contract only | None | Executable Z80 + Z80 M47 board profile, video/color, AY/sample sound, inputs/DIPs, save-state/player adapter, visual/audio parity |
+| M47 | `irem_m47` first-pass | 22% | `olibochu`, `punchkid` | local Oli-Boo-Chu parent and Punching Kid split clone ZIPs; direct `mnemos_player --system irem_m47` nonblank screenshot and `--system m47` save-state proof | None | Authentic M47 memory/I/O timing, video/color PROM behavior, AY/sample sound timing, input/DIP parity, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Tropical Angel manifests, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | none | 0% | None | None | None | Sparse-board research, manifests, Z80/Irem Audio board path |
 | M58 | `irem_m58` first-pass | 24% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, DIP/manual behavior, audio timing/parity, visual/audio parity hashes |
@@ -111,16 +118,19 @@ targets:
   no executable board/player route.
 - M27 has a single `panther` ROM contract with CRC-clean local wrapper proof, but
   no executable board/player route.
-- M47 now has Oli-Boo-Chu and Punching Kid ROM contracts with CRC-clean local
-  wrapper proof, including clone-parent inheritance for the split Japan set, but
-  no executable board/player route.
+- M47 now has Oli-Boo-Chu and Punching Kid ROM contracts plus a first-pass
+  executable Z80/Z80/two-SSG player route. `MNEMOS_M47_SET_DIR=D:\emu\irem\M47`
+  proves both local ZIP sets through the adapter; direct `mnemos_player --system
+  irem_m47` screenshot and `--system m47` save-state smokes prove the
+  user-facing launch path. Current graphics and audio remain diagnostic
+  first-pass output, not board-authentic M47 parity.
 - M58 now has four 10-Yard Fight ROM-set contracts plus a first-pass executable
   Z80/Z80/two-SSG player route. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` proves the
   four local ZIP sets through the adapter; direct `mnemos_player --system
   irem_m58` screenshot and `--system m58` save-state smokes prove the
   user-facing launch path. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout
   package is not ROM evidence and remains quarantined under
-  `D:\emu\irem\misc\artwork\M58`.
+  `D:\emu\irem\M58\artwork`.
 - M62 now has eleven raw-media ROM-set contracts with CRC-clean local wrapper-ZIP
   load proof, but no executable board/player route. Treat these as corpus
   grouping and future board-input evidence only.
@@ -130,7 +140,7 @@ targets:
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
   present.
-- M15, M58, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
+- M15, M47, M58, M75, M81, M84, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
   regional and bootleg clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,
@@ -204,21 +214,35 @@ visual and audio parity proof.
 ### M47
 
 - **Techsheet games:** Oli-Boo-Chu, Punching Kid.
-- **Mnemos games:** contract-only ROM manifests for `olibochu` and `punchkid`.
-- **Smoke playable:** none. `MNEMOS_M47_SET_DIR=D:\emu\irem\M47` data-gates
-  CRC-clean loading for the local `olibochu` and `punchkid` ZIPs, with
-  `punchkid` resolving shared audio, sample, 16x16 graphics, and PROM dumps
-  from the sibling `olibochu` parent wrapper.
-- **Correct gfx/music:** none.
+- **Mnemos games:** first-pass ROM manifests/player route for `olibochu` and
+  `punchkid`.
+- **Smoke playable:** the local ZIP wrappers under `D:\emu\irem\M47` now match
+  checked-in M47 manifests and run through the player adapter. `punchkid`
+  resolves shared audio, sample, 16x16 graphics, and PROM dumps from the sibling
+  `olibochu` parent wrapper. Direct proof includes `mnemos_player --system
+  irem_m47 --rom D:\emu\irem\M47\olibochu.zip --frames 90 --screenshot
+  build\scratch\irem-m47\olibochu.ppm`, which wrote a 256x256 nonblack PPM, and
+  `mnemos_player --system m47 --rom D:\emu\irem\M47\punchkid.zip --frames 90
+  --save-state build\scratch\irem-m47\punchkid.mstate`, which wrote a rollback
+  save state.
+- **Correct gfx/music:** none. Current graphics and audio are diagnostic
+  first-pass output, not board-authentic M47 parity.
 - **Current implementation:** `src/manifests/irem_m47` embeds the local M47
   ROM-set contracts with public `maincpu`, `audiocpu`, `samples`, `gfx8x8`,
   `gfx16x16`, and `proms` region placement, clone-parent inheritance, exact
-  local filenames, sizes, and CRC32 values. The focused test checks embedded
-  TOML synchronization, region/file invariants, split-clone inheritance, and
-  optional real-corpus loading through the two local single-inner wrapper ZIPs.
-- **Remaining:** implement the Z80/Z80 M47 board route, memory and I/O maps,
-  video/color PROM behavior, input/DIP behavior, AY/sample sound timing,
-  save-state/player adapter, and visual/audio parity.
+  local filenames, sizes, and CRC32 values. `src/manifests/irem_m47/m47_system.cpp`
+  now assembles a first-pass vertical M47 board with main Z80, sound Z80, two
+  YM2149/AY-compatible SSGs, video/color/sprite/work/sound RAM, input/DIP MMIO,
+  scroll registers, flip latch, sound-command latch IRQ/ack, region-backed
+  diagnostic 2-plane 8x8 and 16x16 video, board identity, and save/load.
+  `src/apps/player/adapters/irem_m47` registers `--system irem_m47` / `m47`,
+  supports ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or
+  in-archive `game.toml` manifests, clone-parent fallback media resolution,
+  resident media validation, rollback-ready save-state, vertical display
+  metadata, and capability discovery.
+- **Remaining:** replace the diagnostic route with board-authentic M47 memory
+  and I/O behavior, video/color PROM behavior, input/DIP parity, AY/sample sound
+  timing, and trusted visual/audio parity before calling either game correct.
 
 ### M52
 
@@ -726,8 +750,9 @@ visual and audio parity proof.
    before counting it as smoke playable.
 7. Promote M27 Panther from ROM contract to an executable board/profile route
    before counting it as smoke playable.
-8. Promote M47 Oli-Boo-Chu / Punching Kid from ROM contracts to an executable
-   board/profile route before counting either set as smoke playable.
+8. Advance M47 Oli-Boo-Chu / Punching Kid from first-pass smoke-playable to
+   authentic behavior: memory/I/O timing, video/color PROM behavior, AY/sample
+   sound timing, input/DIP parity, and visual/audio parity remain open.
 9. Promote M62 from raw-media contracts to a real board/profile route before
    counting any Lode Runner, Spelunker II, Battle Road, or Youjyuden set as
    smoke playable.

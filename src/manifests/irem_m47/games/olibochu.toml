@@ -1,7 +1,7 @@
 # Oli-Boo-Chu (USA) -- Irem M47 ROM contract.
-# Local wrapper: D:\emu\irem\Oli-Boo-Chu_Arcade_EN.zip -> olibochu.zip.
-# Region placement follows public driver metadata; executable M47 board timing,
-# video/color, input, and sound behavior remain gaps.
+# Local wrapper: D:\emu\irem\M47\olibochu.zip.
+# Region placement follows public driver metadata; current execution is a
+# first-pass board route, not board-authentic timing/video/audio parity.
 
 [set]
 schema      = "mnemos-romset/1"

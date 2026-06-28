@@ -1,8 +1,8 @@
 #pragma once
 
-// Checked-in Irem M47 manifests currently provide ROM contracts for the local
-// corpus. Exact Z80 bus timing, video, color, input, and sound behavior remain
-// board-family implementation gaps.
+// Checked-in Irem M47 manifests provide ROM contracts for the local corpus.
+// First-pass board execution is wired, while exact Z80 bus timing, video,
+// color, input, and sound behavior remain board-family implementation gaps.
 
 #include "m47_embedded_game_manifests.hpp"
 

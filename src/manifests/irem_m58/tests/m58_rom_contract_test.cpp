@@ -173,7 +173,14 @@ namespace {
             for (std::filesystem::recursive_directory_iterator it{root, ec}, end; !ec && it != end;
                  it.increment(ec)) {
                 if (is_exact_set_path(it->path(), set_name)) {
-                    candidates.push_back(it->path());
+                    const auto candidate_path = it->path();
+                std::error_code entry_ec;
+                if (it->is_directory(entry_ec) &&
+                    candidate_path.filename().string() == "name-collisions") {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+                candidates.push_back(candidate_path);
                 }
             }
         }

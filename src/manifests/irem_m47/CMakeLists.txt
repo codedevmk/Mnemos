@@ -30,12 +30,15 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_m47 INTERFACE)
+add_library(
+    mnemos_manifests_irem_m47
+    m47_system.cpp
+)
 add_library(mnemos::manifests::irem_m47 ALIAS mnemos_manifests_irem_m47)
 
 target_include_directories(
     mnemos_manifests_irem_m47
-    INTERFACE
+    PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
         "$<INSTALL_INTERFACE:include>"
@@ -43,16 +46,25 @@ target_include_directories(
 
 target_link_libraries(
     mnemos_manifests_irem_m47
-    INTERFACE
+    PUBLIC
+        mnemos::topology
+        mnemos::chips::cpu::z80
+        mnemos::chips::audio::ssg
         mnemos::manifests::common
+        mnemos::security::cryptography
 )
 
-mnemos_apply_common_target_options(mnemos_manifests_irem_m47 INTERFACE)
+mnemos_apply_common_target_options(mnemos_manifests_irem_m47 PUBLIC)
 mnemos_declare_tier(
     NAME mnemos_manifests_irem_m47
     TIER 4
     DEPENDS
+        mnemos_topology
         mnemos_manifests_common
+        mnemos_security_cryptography
+        mnemos_chips_shared
+        mnemos_chips_cpu_z80
+        mnemos_chips_audio_ssg
         mnemos_foundation
 )
 
@@ -70,5 +82,12 @@ if(BUILD_TESTING)
         mnemos_manifests_irem_m47_test
         PRIVATE
             MNEMOS_IREM_M47_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+    mnemos_add_test(
+        mnemos_manifests_irem_m47_system_test
+        SOURCES tests/m47_system_test.cpp
+        LIBRARIES
+            mnemos::manifests::irem_m47
+            mnemos::manifests::common
     )
 endif()
