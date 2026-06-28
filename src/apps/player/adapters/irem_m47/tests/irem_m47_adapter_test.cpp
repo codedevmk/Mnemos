@@ -554,5 +554,3 @@ TEST_CASE("irem_m47_adapter matches optional visual/audio parity hashes for a re
         CHECK(first.audio_hash == *expected_audio_hash);
     }
 }
-
-

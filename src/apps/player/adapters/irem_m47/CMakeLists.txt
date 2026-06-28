@@ -74,4 +74,3 @@ if(BUILD_TESTING)
         PROPERTIES SKIP_RETURN_CODE 4
     )
 endif()
-

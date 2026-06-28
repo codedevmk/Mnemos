@@ -839,5 +839,3 @@ namespace mnemos::apps::player::adapters::irem_m47 {
     } // namespace
 
 } // namespace mnemos::apps::player::adapters::irem_m47
-
-
