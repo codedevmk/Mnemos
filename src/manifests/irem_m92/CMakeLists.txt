@@ -14,6 +14,8 @@ set(_irem_m92_game_manifest_files
     "games/inthuntk.toml"
     "games/inthuntu.toml"
     "games/kaiteids.toml"
+    "games/leaguemn.toml"
+    "games/leaguemna.toml"
     "games/lethalth.toml"
     "games/majtitl2.toml"
     "games/majtitl2a.toml"

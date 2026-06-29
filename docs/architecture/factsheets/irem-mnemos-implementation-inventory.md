@@ -17,12 +17,12 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 That scan found 437 local corpus items across 24 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
 buckets such as `M72`, `M92`, `M62`, `M58`, and `travrusa`, plus quarantine or
-classification buckets such as `for-delete`, `misc`, and `non-irem`. The
+classification buckets such as `for-delete` and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 299 currently match a
-checked-in Mnemos Irem manifest, 162 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 162 have an
+not yet map it to a numbered M-board. Of those 437 items, 303 currently match a
+checked-in Mnemos Irem manifest, 164 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 164 have an
 executable player-supported route. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
@@ -99,7 +99,7 @@ proof.
 | M84 | `irem_m84` wrapper | 48% | `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`, `hharryu`, `kengo`, `kengoj`, `ltswords` | all 9 checked-in M84 sets; Daiku no Gensan and Ken-Go split-clone parent fallback; V30/V35 CPU profile proof; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords`/Ken-Go PROM/PLD artifacts |
 | M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
-| M92 | `irem_m92` | 62% first-pass | `bmaster`, `crossbld`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `rtypeleo`, `rtypeleoj`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, `uccopsu` | all 31 data-gated first-pass sets; Blade Master Japan, Geostorm, Hook Japan, In the Hunt US/Japan/Korea, GunForce, Lethal Thunder/Thunder Blaster, Major Title 2, Mystic Riders, Ninja Baseball Bat Man, R-Type Leo, and Undercover Cops nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
+| M92 | `irem_m92` | 66% first-pass | `bmaster`, `crossbld`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `rtypeleo`, `rtypeleoj`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, `uccopsu` | all 33 data-gated first-pass sets; Blade Master Japan, Geostorm, Hook Japan, In the Hunt US/Japan/Korea, GunForce, League-Man, Lethal Thunder/Thunder Blaster, Major Title 2, Mystic Riders, Ninja Baseball Bat Man, R-Type Leo, and Undercover Cops nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
@@ -176,7 +176,8 @@ targets:
   In the Hunt parent/US/Japan/Korea clones, Lethal Thunder parent/Japan clone,
   the Mystic Riders parent/Japan/bootleg wrappers through clone-parent fallback,
   Major Title 2 parent/alternate-sound/World/Japan split-wrapper routes,
-  Ninja Baseball Bat Man parent/US split-wrapper routes, R-Type Leo parent/Japan
+  Ninja Baseball Bat Man parent/US split-wrapper routes, Yakyuu Kakutou
+  League-Man parent/alternate M92-Z-C routes, R-Type Leo parent/Japan
   split-wrapper routes, and Undercover Cops parent/US/Japan/Alpha Renewal
   routes.
   M84 now includes V30-profile Hammerin' Harry / Daiku no Gensan split-clone
@@ -789,15 +790,16 @@ visual and audio parity proof.
 - **Techsheet games:** Gunforce, Lethal Thunder / Thunder Blaster, R-Type Leo,
   In the Hunt, Undercover Cops,
   Ninja Baseball Bat Man, Blade Master, Mystic Riders, Major Title 2, Hook,
-  Superior/Perfect Soldiers, Gunforce 2.
+  Superior/Perfect Soldiers, Gunforce 2, Yakyuu Kakutou League-Man.
 - **Mnemos games:** `bmaster`, `crossbld`, `geostorm`, `geostorma`,
   `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`,
   `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `lethalth`,
-  `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`,
-  `nbbatman`, `nbbatmanu`, `rtypeleo`, `rtypeleoj`, `thndblst`, `uccops`,
+  `leaguemn`, `leaguemna`, `majtitl2`, `majtitl2a`, `majtitl2b`,
+  `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `rtypeleo`,
+  `rtypeleoj`, `thndblst`, `uccops`,
   `uccopsar`, `uccopsj`, and `uccopsu` as checked-in manifests under
   `irem_m92`.
-- **Smoke playable:** all thirty-one checked-in M92 manifests load through
+- **Smoke playable:** all thirty-three checked-in M92 manifests load through
   `--system irem_m92`/the M92 adapter data gate, step one frame, produce a 320x240
   nonblank diagnostic frame, and produce save-state bytes. `crossbld`,
   `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`, `gunhohki`,
@@ -810,7 +812,8 @@ visual and audio parity proof.
   and `majtitl2a.zip` have direct nonblank PPM proof; `majtitl2b.zip` and
   `majtitl2j.zip` have direct save-state proof. `kaiteids.zip` and
   `inthuntk.zip`, `geostorma.zip`, and `hookj.zip` have direct nonblank PPM
-  proof.
+  proof. `leaguemn.zip` and `leaguemna.zip` have direct save-state, load-state,
+  and 320x240 nonblank PPM proof.
 - **Correct gfx/music:** not certified. Current video is a diagnostic
   region/RAM/PLD-driven first-pass compositor. Current sound proves the
   YM2151/GA20 shell, synthetic GA20 MMIO, and a synthetic V33-to-V35
@@ -824,10 +827,10 @@ visual and audio parity proof.
   `soundcpu_opcodes` decrypted V35 opcode image while data reads still see the
   raw encrypted `soundcpu` ROM. This is still not the proprietary M92 V35
   decrypt transform/key, cycle-exact interrupt latency, or audio parity.
-- **Local corpus note:** the current `D:\emu\irem\M92` bucket has 73 tracked
-  M92 manifest-name matches, 32 direct player-loadable/supported ZIP routes,
-  and 41 metadata-only routes, including `.7z` archives and artwork/layout
-  packages. Thirty-one checked-in M92-era set IDs now resolve to embedded
+- **Local corpus note:** the current `D:\emu\irem\M92` bucket has 77 tracked
+  M92 manifest-name matches, 34 direct player-loadable/supported ZIP routes,
+  and 43 metadata-only routes, including `.7z` archives and artwork/layout
+  packages. Thirty-three checked-in M92-era set IDs now resolve to embedded
   manifests and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
   parent/Japan clone (`bmaster`, `crossbld`), Gunforce parent
   (`gunforce`), Gunforce Japan/US split clones (`gunforcej`, `gunforceu`) via
@@ -840,7 +843,9 @@ visual and audio parity proof.
   alternate-sound, World set 3, and Japan split sets (`majtitl2`, `majtitl2a`,
   `majtitl2b`, `majtitl2j`) via parent fallback, the Mystic Riders split
   bootleg route (`mysticrib`), Ninja Baseball Bat Man (`nbbatman`), the US split clone
-  (`nbbatmanu`) via parent fallback, R-Type Leo parent/Japan clone
+  (`nbbatmanu`) via parent fallback, Yakyuu Kakutou League-Man parent/alternate
+  M92-Z-C routes (`leaguemn`, `leaguemna`) via Ninja Baseball Bat Man parent
+  fallback, R-Type Leo parent/Japan clone
   (`rtypeleo`, `rtypeleoj`) via parent fallback, and Undercover Cops
   parent/US/Japan/Alpha Renewal (`uccops`, `uccopsu`, `uccopsj`, `uccopsar`) via
   parent fallback. `rtypeleo (1).zip` is an artwork/layout package and is

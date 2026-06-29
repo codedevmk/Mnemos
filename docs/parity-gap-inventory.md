@@ -445,14 +445,14 @@ Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
 437 items across 24 top-level buckets. Direct files under `D:\emu\irem` are now
-zero; ROM evidence is sorted into board/system buckets, while `for-delete`,
-`misc`, and `non-irem` are ignored for support accounting even when file stems
+zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
+`non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 299 items
-match a checked-in Irem manifest from non-ignored buckets, 162 are readable
-through current ZIP / single-inner-ZIP / folder routes, 162 are backed by an
-executable player-supported route, 0 are tracked contract-only, and 137 tracked
+separates manifest tracking, media loadability, and player support: 303 items
+match a checked-in Irem manifest from non-ignored buckets, 164 are readable
+through current ZIP / single-inner-ZIP / folder routes, 164 are backed by an
+executable player-supported route, 0 are tracked contract-only, and 139 tracked
 matches remain metadata-only until converted to ZIP/unpacked folders or, for
 artwork/layout packages, ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -608,19 +608,19 @@ still route/topology proof rather than graphics/music-authentic proof.
 M92 now has checked-in manifests plus a first-pass executable V33/V35 board and
 player adapter for `bmaster`, `crossbld`, `geostorm`, `geostorma`, `gunforce`,
 `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`,
-`inthuntu`, `inthuntk`, `kaiteids`, `lethalth`, `majtitl2`, `majtitl2a`,
-`majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`,
-`rtypeleo`, `rtypeleoj`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, and
-`uccopsu`;
-`MNEMOS_M92_SET_DIR=D:\emu\irem\M92` proves the thirty-one checked-in local M92
+`inthuntu`, `inthuntk`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`,
+`majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`,
+`nbbatman`, `nbbatmanu`, `rtypeleo`, `rtypeleoj`, `thndblst`, `uccops`,
+`uccopsar`, `uccopsj`, and `uccopsu`;
+`MNEMOS_M92_SET_DIR=D:\emu\irem\M92` proves the thirty-three checked-in local M92
 sets load CRC-clean, produce 320x240 nonblank diagnostic frames, and save state
 through the M92 adapter, including clone-parent fallback for the local Gunforce
 Japan/US split wrappers, Blade Master Japan, Geostorm alternate custom-sound,
 Hook Japan, In the Hunt US/Japan/Korea, Mystic Riders Japan/bootleg split
 wrappers, Lethal Thunder
-Japan, Ninja Baseball Bat Man US, Major Title 2 alternate-sound/World/Japan
-split wrappers, R-Type Leo Japan, and Undercover Cops US/Japan/Alpha Renewal
-split wrappers.
+Japan, Ninja Baseball Bat Man US, Yakyuu Kakutou League-Man parent/alternate
+M92-Z-C wrappers, Major Title 2 alternate-sound/World/Japan split wrappers,
+R-Type Leo Japan, and Undercover Cops US/Japan/Alpha Renewal split wrappers.
 They remain
 diagnostic, not graphics/music-authentic, until encrypted V35 sound CPU handling
 and GA21/GA22 video behavior are proven.
@@ -749,7 +749,7 @@ Z80+M6803 hardware is tracked as its own board-family contract instead of being
 folded into neighboring Irem profiles.
 
 #### Manifests / board bring-up
-- [x] **I62-1** Local M62 ROM-set contracts — `src/manifests/irem_m62` carries checked-in embedded manifests for `battroad`, `bkungfu`, `horizon`, `kidniki`, `kungfum`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `spartanx`, `yanchamr`, and `youjyudn`. `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` now use explicit `maincpu`, `soundcpu`, graphics, PROM, and timing regions with the MC6803 reset vector proven in the `$8000-$ffff` sound-ROM window; `ldrun3j` declares parent `ldrun3` and inherits shared MC6803, tile, PROM, and timing artifacts through clone-parent fallback. The raw-media sets preserve exact local file names, sizes, CRC32 values, and contiguous raw-media offsets until their final CPU/video/audio placement is wired. `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` data-gates the exact local ZIPs and proves all 16 checked-in set IDs load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1 -Root D:\emu\irem -Recurse` classifies the M62 bucket as 26 tracked items, 18 loadable/supported ZIP-style routes, and 8 metadata-only archives, so M62 support accounting no longer reports Kung-Fu Master / Kid Niki / Lode Runner / Spelunker / Battle Road / Youjyuden as contract-only · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m62/games/*.toml` + `src/manifests/irem_m62/tests/m62_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [x] **I62-1** Local M62 ROM-set contracts — `src/manifests/irem_m62` carries checked-in embedded manifests for `battroad`, `bkungfu`, `horizon`, `kidniki`, `kungfum`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `spartanx`, `yanchamr`, and `youjyudn`. `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` now use explicit `maincpu`, `soundcpu`, graphics, PROM, and timing regions with the MC6803 reset vector proven in the `$8000-$ffff` sound-ROM window; `ldrun3j` declares parent `ldrun3` and inherits shared MC6803, tile, PROM, and timing artifacts through clone-parent fallback. The raw-media sets preserve exact local file names, sizes, CRC32 values, and contiguous raw-media offsets until their final CPU/video/audio placement is wired. `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` data-gates the exact local ZIPs and proves all 16 checked-in set IDs load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1 -Root D:\emu\irem -Recurse` classifies the M62 bucket as 26 tracked items, 16 loadable/supported ZIP-style routes, and 10 metadata-only archives, so M62 support accounting no longer reports Kung-Fu Master / Kid Niki / Lode Runner / Spelunker / Battle Road / Youjyuden as contract-only · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m62/games/*.toml` + `src/manifests/irem_m62/tests/m62_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
 - [~] **I62-2** Executable M62 board profile — First-pass route exists for the M62 family: `src/manifests/irem_m62/m62_system.cpp` derives a Z80 execution window and diagnostic graphics window, owns scratch/video/color/work RAM, active-high arcade inputs, a sound latch, beeper-backed synthetic audio, deterministic 256x256 nonblank video, board identity save/load, player adapter registration, capability discovery, and local corpus smoke. `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` now also wire the MC6803 `$8000-$ffff` sound-ROM window; `ldrun` has direct-page sound latch/ack MMIO and dual SSG programming proof, while `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` have reset-vector and first-pass MC6803 residency proof. `src/apps/player/adapters/irem_m62` exposes Z80, MC6803, and both SSG and both MSM5205 register surfaces and drains mixed beeper/SSG/MSM audio. The adapter registers `--system irem_m62` / `m62`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml`, clone-parent fallback, resident media validation, rollback-ready save-state, and real local corpus smoke for all sixteen checked-in M62 set IDs. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\ldrun.zip --frames 90 --screenshot build\scratch\irem-m62\ldrun-msm.ppm` produced a nonblank 256x256 frame, `--system m62` save-state smoke wrote a 19,549-byte state for `ldrun`, and `--extract-audio build\scratch\irem-m62\ldrun-msm-audio --extract-frames 90` wrote a 298,324-byte rendered WAV. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\ldrun2.zip --frames 90 --screenshot build\scratch\irem-m62\ldrun2-regioned.ppm` produced a nonblank 256x256 frame, and the `ldrun2` save-state smoke wrote a 24,902-byte state. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\ldrun3.zip --frames 90 --screenshot build\scratch\irem-m62\ldrun3-regioned.ppm` produced a nonblank 256x256 frame, and the `ldrun3` save-state smoke wrote a 16,127-byte state. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\ldrun3j.zip --screenshot build\scratch\irem-m62\ldrun3j-regioned.ppm --frames 90` produced a nonblank 256x256 frame, `--system m62` save-state smoke wrote a 16,189-byte state, and `--extract-audio build\scratch\irem-m62\ldrun3j-regioned-audio --extract-frames 90` wrote a 298,324-byte rendered WAV. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\ldrun4.zip --screenshot build\scratch\irem-m62\ldrun4-regioned.ppm --frames 90` produced a nonblank 256x256 frame, `--system m62` save-state smoke wrote a 20,040-byte state, and `--extract-audio build\scratch\irem-m62\ldrun4-regioned-audio --extract-frames 90` wrote a 298,324-byte rendered WAV. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\lotlot.zip --screenshot build\scratch\irem-m62\lotlot-regioned.ppm --frames 90` produced a nonblank 256x256 frame, `--system m62` save-state smoke wrote an 11,282-byte state, and `--extract-audio build\scratch\irem-m62\lotlot-regioned-audio --extract-frames 90` wrote a 298,324-byte rendered WAV. Direct `mnemos_player --system irem_m62 --rom D:\emu\irem\M62\spelunk2.zip --screenshot build\scratch\irem-m62\spelunk2-regioned.ppm --frames 90` produced a nonblank 256x256 frame, `--system m62` save-state smoke wrote a 15,498-byte state, and `--extract-audio build\scratch\irem-m62\spelunk2-regioned-audio --extract-frames 90` wrote a 298,324-byte rendered WAV. This is smoke-playable, not authentic parity: exact M62 title memory/I/O maps, MC6803 port/timer behavior, exact dual MSM5205 stream/control timing, KNA custom video/priority, inputs/DIPs, and visual/audio parity remain open · PARTIAL · HIGH · L · beyond Emu · Evidence: `src/chips/cpu/m6803/m6803.cpp` + `src/chips/cpu/m6803/tests/m6803_test.cpp` + `src/manifests/irem_m62/m62_system.cpp` + `src/manifests/irem_m62/tests/m62_system_test.cpp` + `src/apps/player/adapters/irem_m62/irem_m62_adapter.cpp` + `src/apps/player/adapters/irem_m62/tests/irem_m62_adapter_test.cpp` + `MNEMOS_M62_SET_DIR=D:\emu\irem\M62` corpus golden + direct `mnemos_player --system irem_m62` / `--system m62` smoke
 
 ---
@@ -936,8 +936,9 @@ GA25 graphics custom.
   carries checked-in embedded ROM-contract manifests for `bmaster`,
   `crossbld`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`,
   `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`,
-  `inthuntu`, `kaiteids`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`,
-  `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `rtypeleo`,
+  `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`,
+  `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`,
+  `nbbatmanu`, `rtypeleo`,
   `rtypeleoj`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, and `uccopsu`,
   including
   declared 1 MiB main program regions, 128 KiB encrypted V35 sound-program
@@ -946,12 +947,13 @@ GA25 graphics custom.
   Japan/US, Geostorm alternate custom-sound, Hook Japan, In the Hunt
   US/Japan/Korea, Lethal Thunder Japan/Thunder Blaster, Mystic Riders
   Japan/bootleg, Major Title 2 alternate-sound/World/Japan split sets, Ninja
-  Baseball Bat Man US, R-Type Leo Japan, and Undercover Cops US/Japan/Alpha
-  Renewal split sets.
+  Baseball Bat Man US, Yakyuu Kakutou League-Man parent/alternate M92-Z-C
+  wrappers, R-Type Leo Japan, and Undercover Cops US/Japan/Alpha Renewal split
+  sets.
   `MNEMOS_M92_SET_DIR=D:\emu\irem\M92` data-gates the sorted local M92 ZIPs and
-  proves all thirty-one checked-in sets load CRC-clean;
-  `scripts/irem/inventory-corpus.ps1` records 73 tracked M92 artifacts in the
-  sorted M92 bucket, 32 direct player-loadable/supported ZIP routes, and 41
+  proves all thirty-three checked-in sets load CRC-clean;
+  `scripts/irem/inventory-corpus.ps1` records 77 tracked M92 artifacts in the
+  sorted M92 bucket, 34 direct player-loadable/supported ZIP routes, and 43
   metadata-only routes, including `.7z` files and non-ROM artwork/layout
   packages · DONE · MED · S · beyond Emu · Evidence:
   `src/manifests/irem_m92/games/*.toml` +
@@ -981,7 +983,7 @@ GA25 graphics custom.
   unpacked set folders, embedded or in-archive `game.toml` manifests,
   clone-parent fallback beside the selected set path, resident media validation,
   rollback-ready save-state, capability discovery, and real local player smoke
-  through `MNEMOS_M92_SET_DIR=D:\emu\irem\M92`; all thirty-one checked-in sets step
+  through `MNEMOS_M92_SET_DIR=D:\emu\irem\M92`; all thirty-three checked-in sets step
   one frame, produce nonblank 320x240 diagnostic output, and emit save-state
   bytes, with direct `mnemos_player` screenshot/save-state smokes for
   `crossbld`, `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`,
@@ -990,8 +992,9 @@ GA25 graphics custom.
   screenshots and Japan/Alpha Renewal save-state smokes, direct Major Title 2
   parent/alternate-sound nonblank screenshots and World set 3/Japan save-state
   smokes, direct In the Hunt Japan/Korea, Geostorm alternate-sound, and Hook
-  Japan nonblank screenshots, data-gated Lethal Thunder / Thunder Blaster,
-  R-Type Leo Japan, and Undercover Cops clone
+  Japan nonblank screenshots, direct League-Man parent/alternate save-state,
+  load-state, and nonblank screenshot smokes, data-gated Lethal Thunder /
+  Thunder Blaster, R-Type Leo Japan, and Undercover Cops clone
   parent-fallback proof. Remaining: derive/verify the proprietary
   encrypted V35 decrypt transform/key and sound protocol, cycle-exact V35
   interrupt latency, exact M92 memory/I/O behavior, GA21/GA22 video and priority
