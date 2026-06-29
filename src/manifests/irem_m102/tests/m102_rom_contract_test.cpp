@@ -245,7 +245,7 @@ TEST_CASE("m102 embedded manifests cover local Hill Climber ROM contract", "[m10
     CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
     CHECK(decl.players == 2U);
     REQUIRE(decl.sound.has_value());
-    CHECK(*decl.sound == "ga20_manifest_only");
+    CHECK(*decl.sound == "ga20_first_pass");
     REQUIRE(decl.regions.size() == 3U);
 
     const rom_set_region* maincpu = find_region(decl, "maincpu");

@@ -1,9 +1,8 @@
 #pragma once
 
-// Checked-in Irem M102 game manifests embedded for corpus tooling lookup. This
-// module is a ROM-contract surface only: Mnemos still lacks the sparse
-// electromechanical medal-game board, mechanical/artwork runtime, and
-// title-specific I/O needed for an executable Hill Climber route.
+// Checked-in Irem M102 game manifests embedded for corpus tooling lookup. The
+// runtime has a first-pass Hill Climber board route; authentic medal I/O,
+// mechanical/artwork behavior, and title-specific video timing remain open.
 
 #include "m102_embedded_game_manifests.hpp"
 

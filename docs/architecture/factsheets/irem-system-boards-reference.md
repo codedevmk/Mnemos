@@ -314,8 +314,9 @@ era, but CPU family alone is not sufficient board proof.
 - **Notes:** Sparse electromechanical medal-game board with two DIP banks,
   medal/connector-heavy I/O, and required external artwork/mechanical state.
   Current public driver metadata marks the set not working, no-sound, and
-  requiring artwork, so Mnemos treats M102 as a ROM-contract/classification
-  target until the board I/O, GA20 route, artwork, and mechanical model exist.
+  requiring artwork. Mnemos now has a first-pass D70008/Z80-compatible route
+  with GA20 capture for `hclimber`, but authentic board I/O, artwork,
+  mechanical behavior, DIP behavior, and visual/audio parity remain open.
 
 ### M107
 - **Years:** 1993–1995

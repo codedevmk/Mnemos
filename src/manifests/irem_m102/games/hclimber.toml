@@ -1,8 +1,8 @@
-# Hill Climber -- Irem M102 ROM contract.
-# Manifest-only local corpus contract. Public M102 metadata marks this
-# electromechanical medal-game board not working, no-sound, and requiring
-# artwork: Mnemos has no D70008AC/Z80-compatible board route, GA20 audio path,
-# medal I/O model, or mechanical/artwork runtime for this board yet.
+# Hill Climber -- Irem M102 ROM contract and first-pass runtime route.
+# Public M102 metadata marks this electromechanical medal-game board not
+# working, no-sound, and requiring artwork. Mnemos has a D70008/Z80-compatible
+# diagnostic board route and GA20 capture path, but not authentic medal I/O,
+# mechanical behavior, artwork, or title-specific video timing yet.
 
 [set]
 schema      = "mnemos-romset/1"
@@ -10,7 +10,7 @@ name        = "hclimber"
 board       = "irem_m102"
 orientation = "horizontal"
 players     = 2
-sound       = "ga20_manifest_only"
+sound       = "ga20_first_pass"
 
 [[region]]
 name = "maincpu"

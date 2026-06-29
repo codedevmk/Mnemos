@@ -5,6 +5,7 @@
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
 #include "irem_m10_adapter.hpp"
+#include "irem_m102_adapter.hpp"
 #include "irem_m107_adapter.hpp"
 #include "irem_m14_adapter.hpp"
 #include "irem_m15_adapter.hpp"
@@ -49,6 +50,7 @@ namespace {
     namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m10 = mnemos::apps::player::adapters::irem_m10;
+    namespace irem_m102 = mnemos::apps::player::adapters::irem_m102;
     namespace irem_m14 = mnemos::apps::player::adapters::irem_m14;
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
     namespace irem_m27 = mnemos::apps::player::adapters::irem_m27;
@@ -507,6 +509,20 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> irem_m102_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m102::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x42U, 0x32U, 0x00U, 0xE0U,
+            0x3EU, 0x81U, 0x32U, 0x00U, 0xC0U,
+            0x3EU, 0x24U, 0x32U, 0x00U, 0xD0U,
+            0x3EU, 0x5AU, 0xD3U, 0x50U,
+            0xC3U, 0x13U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> taito_f2_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::taito_f2::main_rom_size, 0xFFU);
         poke32_be(rom, 0x0U,
@@ -819,6 +835,15 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M102") {
+        irem_m102::irem_m102_adapter adapter(irem_m102_program(), "Tiny M102");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
+        require_line(summary, "capability memory memory.ga20.registers state=available");
     }
 
     SECTION("Taito F2") {

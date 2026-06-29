@@ -451,8 +451,8 @@ match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
 separates manifest tracking, media loadability, and player support: 331 items
 match a checked-in Irem manifest from non-ignored buckets, 179 are readable
-through current ZIP / single-inner-ZIP / folder routes, 177 are backed by an
-executable player-supported route, 2 are tracked contract-only, and 153
+through current ZIP / single-inner-ZIP / folder routes, 178 are backed by an
+executable player-supported route, 1 is tracked contract-only, and 153
 manifest-backed items are metadata-only while awaiting ZIP/unpacked folders or
 supplemental media; the M58 artwork package is still ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -534,7 +534,7 @@ first-pass player-loadable M78 route and `D:\emu\irem\M78\bj92.7z` as
 metadata-only until converted or unpacked; `bj92` no longer appears as an M78
 board-family candidate.
 The local M102 grouping now tracks `D:\emu\irem\M102\hclimber.zip` as a
-contract-only M102 ROM-contract route and `D:\emu\irem\M102\hclimber.7z` as
+first-pass player-loadable M102 route and `D:\emu\irem\M102\hclimber.7z` as
 metadata-only until converted or unpacked; `hclimber` no longer appears as an
 M102 board-family candidate.
 The local Red Alert / WW III grouping now tracks `D:\emu\irem\M27\ww3` as the
@@ -547,10 +547,10 @@ candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M10, M14, M15, M27, M47,
 M52, M57, M58, M62, M63, travrusa, Red Alert, M72, M75, M78, M81, M82, M84,
-M85, M90, M92, and M107, plus the M102 and M119 manifest-only data gates. The
+M85, M90, M92, M102, and M107, plus the M119 manifest-only data gate. The
 newest G6 high-water raises cover
 `GLD-M10-CORPUS`, `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M78-CORPUS`,
-`GLD-M81-CORPUS`, `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
+`GLD-M81-CORPUS`, `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, `GLD-M102-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
@@ -656,8 +656,8 @@ hardware using explicit `dsoccr94.zip` supplemental shared media.
 They remain
 diagnostic, not graphics/music-authentic, until encrypted V35 sound CPU handling
 and GA21/GA22 video behavior are proven.
-M10, M14, M15, M82, M84, M90, M92, and M107 now have executable board/profile
-layers, but all eight still need board-authentic video/priority, sound, exact
+M10, M14, M15, M82, M84, M90, M92, M102, and M107 now have executable board/profile
+layers, but all nine still need board-authentic video/priority, sound, exact
 raster phase, and screenshot-parity closure before they can be called
 authentic; M10, M14, M84, M90, M92, and M107 also retain memory/I/O and DIP
 validation gaps.
@@ -1125,7 +1125,7 @@ bits, and persists explicit `service` / `test` fields in adapter state version 2
 
 ---
 
-## Irem M102 — 1 / 2
+## Irem M102 — 2 / 2
 
 This section is split from M92/M107 because `hclimber` is a sparse
 electromechanical medal-game board, not a V33/V35 video-game platform.
@@ -1138,17 +1138,29 @@ electromechanical medal-game board, not a V33/V35 video-game platform.
   and the public no-dump PAL placeholder as an explicit zero-filled region.
   `MNEMOS_M102_SET_DIR=D:\emu\irem\M102` data-gates the sorted local ZIP and
   proves it loads CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1`
-  records two tracked M102 local artifacts, one ZIP contract-only route, and one
+  records two tracked M102 local artifacts, one ZIP player-supported route, and one
   metadata-only `.7z` route · DONE · MED · S · beyond Emu · Evidence:
   `src/manifests/irem_m102/games/hclimber.toml` +
   `src/manifests/irem_m102/tests/m102_rom_contract_test.cpp` +
   `scripts/irem/inventory-corpus.ps1`
-- [ ] **I102-2** Executable M102 board profile — missing. Mnemos has no M102
-  electromechanical board route, no medal/connector I/O model, no artwork or
-  mechanical runtime, and no M102 player adapter. Current M102 evidence is
-  therefore ROM-contract-only and must not be counted as playable or correct
-  graphics/music support · MISSING · HIGH · L · beyond Emu · Evidence:
-  `src/manifests/irem_m102` contains only manifest contract files.
+- [~] **I102-2** Executable M102 board profile — first-pass route exists for
+  Hill Climber: `src/manifests/irem_m102/m102_system.cpp` assembles a
+  D70008/Z80-compatible diagnostic board shell with fixed and banked program
+  ROM windows, video/medal/work RAM, input/DIP/output ports, GA20 MMIO and
+  captured sample output, diagnostic raster composition, save-state identity,
+  and player adapter registration. `src/apps/player/adapters/irem_m102`
+  registers `--system irem_m102` / `m102`, supports ZIPs, single-inner wrapper
+  ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests,
+  resident media validation, rollback-ready save-state, capability discovery,
+  and local player smoke through `MNEMOS_M102_SET_DIR=D:\emu\irem\M102`.
+  This is smoke-playable only: authentic medal/connector I/O, artwork and
+  mechanical state, exact D70008/Z80 timing, title-specific video timing,
+  DIP behavior, and visual/audio parity remain open · PARTIAL · HIGH · M-L ·
+  beyond Emu · Evidence: `src/manifests/irem_m102/m102_system.cpp` +
+  `src/manifests/irem_m102/tests/m102_system_test.cpp` +
+  `src/apps/player/adapters/irem_m102/*` +
+  `MNEMOS_M102_SET_DIR=D:\emu\irem\M102` corpus golden + direct
+  `mnemos_player --system irem_m102` smoke
 
 ---
 

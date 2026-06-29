@@ -25,6 +25,7 @@
 #include "irem_m85_adapter.hpp"
 #include "irem_m90_adapter.hpp"
 #include "irem_m92_adapter.hpp"
+#include "irem_m102_adapter.hpp"
 #include "irem_redalert_adapter.hpp"
 #include "irem_travrusa_adapter.hpp"
 #include "msx2_adapter.hpp"
@@ -65,6 +66,7 @@ namespace mnemos::apps::player {
         adapters::irem_m85::force_link();
         adapters::irem_m90::force_link();
         adapters::irem_m92::force_link();
+        adapters::irem_m102::force_link();
         adapters::irem_m107::force_link();
         adapters::taito_f2::force_link();
         adapters::capcom_cps1::force_link();
