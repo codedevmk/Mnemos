@@ -66,6 +66,9 @@ namespace mnemos::manifests::irem_m62 {
             if (layout == "m62_ldrun4_regioned") {
                 return 5U;
             }
+            if (layout == "m62_lotlot_regioned") {
+                return 6U;
+            }
             return 0U;
         }
 
@@ -165,6 +168,11 @@ namespace mnemos::manifests::irem_m62 {
         if (set_name == "ldrun4") {
             return {.cpu_clock_hz = cpu_clock_hz,
                     .rom_layout = "m62_ldrun4_regioned",
+                    .dip_default = ldrun_dip_default};
+        }
+        if (set_name == "lotlot") {
+            return {.cpu_clock_hz = cpu_clock_hz,
+                    .rom_layout = "m62_lotlot_regioned",
                     .dip_default = ldrun_dip_default};
         }
         if (!set_name.empty()) {

@@ -1,7 +1,8 @@
-# Lot Lot -- Irem M62 raw-media contract.
-# Local wrapper: D:\emu\irem\Lot-Lot_Arcade_EN.zip -> lotlot.zip.
-# Region placement is a contiguous artifact contract only; exact M62 bus
-# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+# Lot Lot -- Irem M62 region contract.
+# Local wrapper: D:\emu\irem\M62\lotlot.zip -> lotlot.zip.
+# Region placement follows the M62 dump groups for the program, MC6803 sound,
+# tile/sprite graphics, PROM, and timing artifacts. Exact Lot Lot bus behavior,
+# KNA video priority, MC6803 port/timer behavior, and analog audio remain gaps.
 
 [set]
 schema      = "mnemos-romset/1"
@@ -10,155 +11,195 @@ board       = "irem_m62"
 orientation = "horizontal"
 
 [[region]]
-name = "raw_media"
-size = 0x1ce20
-
-[[region.file]]
-name   = "lot-a-3h"
-offset = 0x0
-size   = 0x2000
-crc32  = 0x0781cee7
-
-[[region.file]]
-name   = "lot-a-4d"
-offset = 0x2000
-size   = 0x4000
-crc32  = 0x0443095f
+name = "maincpu"
+size = 0x10000
 
 [[region.file]]
 name   = "lot-a-4e"
-offset = 0x6000
+offset = 0x0000
 size   = 0x4000
 crc32  = 0x2913d08f
 
 [[region.file]]
-name   = "lot-b-1l"
-offset = 0xa000
-size   = 0x0100
-crc32  = 0x8b6fcde3
+name   = "lot-a-4d"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x0443095f
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
 
 [[region.file]]
-name   = "lot-b-1m"
-offset = 0xa100
-size   = 0x0100
-crc32  = 0xc146461d
-
-[[region.file]]
-name   = "lot-b-1n"
-offset = 0xa200
-size   = 0x0100
-crc32  = 0x01e07db6
-
-[[region.file]]
-name   = "lot-b-3n"
-offset = 0xa300
+name   = "lot-a-3h"
+offset = 0xe000
 size   = 0x2000
-crc32  = 0xbd486fff
+crc32  = 0x0781cee7
 
-[[region.file]]
-name   = "lot-b-4c"
-offset = 0xc300
-size   = 0x2000
-crc32  = 0x3026ee6c
-
-[[region.file]]
-name   = "lot-b-4k"
-offset = 0xe300
-size   = 0x2000
-crc32  = 0xfd27cb90
-
-[[region.file]]
-name   = "lot-b-5p"
-offset = 0x10300
-size   = 0x0020
-crc32  = 0x110b21fd
-
-[[region.file]]
-name   = "lot-b-6f"
-offset = 0x10320
-size   = 0x0100
-crc32  = 0x34d88d3c
-
-[[region.file]]
-name   = "lot-k-2d"
-offset = 0x10420
-size   = 0x0100
-crc32  = 0x315ed9a8
-
-[[region.file]]
-name   = "lot-k-2e"
-offset = 0x10520
-size   = 0x0100
-crc32  = 0x9b1fa005
-
-[[region.file]]
-name   = "lot-k-2f"
-offset = 0x10620
-size   = 0x0100
-crc32  = 0xb820a05e
-
-[[region.file]]
-name   = "lot-k-2j"
-offset = 0x10720
-size   = 0x0100
-crc32  = 0xe791ef2a
-
-[[region.file]]
-name   = "lot-k-2k"
-offset = 0x10820
-size   = 0x0100
-crc32  = 0x1811ad2b
-
-[[region.file]]
-name   = "lot-k-2l"
-offset = 0x10920
-size   = 0x0100
-crc32  = 0xac3e230d
+[[region]]
+name = "gfx1"
+size = 0x6000
 
 [[region.file]]
 name   = "lot-k-4a"
-offset = 0x10a20
+offset = 0x0000
 size   = 0x2000
 crc32  = 0x1b3695f4
 
 [[region.file]]
 name   = "lot-k-4b"
-offset = 0x12a20
+offset = 0x2000
 size   = 0x2000
 crc32  = 0x930ddd55
 
 [[region.file]]
 name   = "lot-k-4c"
-offset = 0x14a20
+offset = 0x4000
 size   = 0x2000
 crc32  = 0xbd2b0730
 
+[[region]]
+name = "gfx2"
+size = 0x6000
+
+[[region.file]]
+name   = "lot-b-4k"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xfd27cb90
+
+[[region.file]]
+name   = "lot-b-3n"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0xbd486fff
+
+[[region.file]]
+name   = "lot-b-4c"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x3026ee6c
+
+[[region]]
+name = "gfx3"
+size = 0x6000
+
 [[region.file]]
 name   = "lot-k-4l"
-offset = 0x16a20
+offset = 0x0000
 size   = 0x2000
 crc32  = 0xf98dca1f
 
 [[region.file]]
 name   = "lot-k-4n"
-offset = 0x18a20
+offset = 0x2000
 size   = 0x2000
 crc32  = 0xf0cd76a5
 
 [[region.file]]
 name   = "lot-k-4p"
-offset = 0x1aa20
+offset = 0x4000
 size   = 0x2000
 crc32  = 0x3b7d95ba
 
+[[region]]
+name = "spr_height_prom"
+size = 0x20
+
+[[region.file]]
+name   = "lot-b-5p"
+offset = 0x00
+size   = 0x20
+crc32  = 0x110b21fd
+
+[[region]]
+name = "spr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lot-b-1m"
+offset = 0x000
+size   = 0x100
+crc32  = 0xc146461d
+
+[[region.file]]
+name   = "lot-b-1n"
+offset = 0x100
+size   = 0x100
+crc32  = 0x01e07db6
+
+[[region.file]]
+name   = "lot-b-1l"
+offset = 0x200
+size   = 0x100
+crc32  = 0x8b6fcde3
+
+[[region]]
+name = "chr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lot-k-2j"
+offset = 0x000
+size   = 0x100
+crc32  = 0xe791ef2a
+
+[[region.file]]
+name   = "lot-k-2k"
+offset = 0x100
+size   = 0x100
+crc32  = 0x1811ad2b
+
+[[region.file]]
+name   = "lot-k-2l"
+offset = 0x200
+size   = 0x100
+crc32  = 0xac3e230d
+
+[[region]]
+name = "bg_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lot-k-2d"
+offset = 0x000
+size   = 0x100
+crc32  = 0x315ed9a8
+
+[[region.file]]
+name   = "lot-k-2e"
+offset = 0x100
+size   = 0x100
+crc32  = 0x9b1fa005
+
+[[region.file]]
+name   = "lot-k-2f"
+offset = 0x200
+size   = 0x100
+crc32  = 0xb820a05e
+
+[[region]]
+name = "timing"
+size = 0x100
+
+[[region.file]]
+name   = "lot-b-6f"
+offset = 0x000
+size   = 0x100
+crc32  = 0x34d88d3c
+
+[[region]]
+name = "k_proms"
+size = 0x400
+
 [[region.file]]
 name   = "lot-k-7e"
-offset = 0x1ca20
-size   = 0x0200
+offset = 0x000
+size   = 0x200
 crc32  = 0x6cef0fbd
 
 [[region.file]]
 name   = "lot-k-7h"
-offset = 0x1cc20
-size   = 0x0200
+offset = 0x200
+size   = 0x200
 crc32  = 0x04442bee
