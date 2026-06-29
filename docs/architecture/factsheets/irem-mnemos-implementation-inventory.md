@@ -736,23 +736,27 @@ visual and audio parity proof.
 ### M78
 
 - **Techsheet games:** Black Jack (`bj92`).
-- **Mnemos games:** manifest-only ROM contract for `bj92`.
-- **Smoke playable:** none. `MNEMOS_M78_SET_DIR=D:\emu\irem\M78` data-gates the
-  local `bj92.zip` route and proves the dumped program, sound-program, duplicate
-  tile, and PROM regions load CRC-clean, but no executable board/player route
-  exists.
-- **Correct gfx/music:** none.
+- **Mnemos games:** first-pass ROM manifest and player route for `bj92`.
+- **Smoke playable:** `bj92`. `MNEMOS_M78_SET_DIR=D:\emu\irem\M78` data-gates
+  the local `bj92.zip` route, proves the dumped program, sound-program,
+  duplicate tile, and PROM regions load CRC-clean, steps the dual-Z80 first-pass
+  board, renders a nonblank 512x384 vertical frame, and verifies save-state
+  output.
+- **Correct gfx/music:** not certified. Current video/audio prove a deterministic
+  first-pass M78 route, not board-authentic Black Jack graphics or music.
 - **Current implementation:** `src/manifests/irem_m78` embeds the local `bj92`
-  contract with public `maincpu`, `audiocpu`, `tiles`, `tiles2`, `m72_audio`,
-  and `proms` region sizes, offsets, and CRC32 values for every dumped file. The
-  two public no-dump sample ROM placeholders, `3.v0.ic46` and `4.v1.ic47`, are
-  represented by an explicit zero-filled `m72_audio` region instead of fake ROM
-  entries, so the test can verify the known corpus without hiding the missing
-  audio evidence.
-- **Remaining:** implement the dual-Z80 board profile, exact I/O/comms and video
-  registers, YM2151 plus M72-style DAC/sample behavior, satellite/main-screen
-  routing, input/DIP behavior, no-dump sample-ROM strategy, player adapter, and
-  trusted visual/audio parity.
+  contract and now adds `m78_system.cpp`: main/sound Z80 execution windows,
+  BJ92 I/O-port RAM/register surfaces, a PROM/tile-ROM-driven diagnostic
+  compositor, YM2151 register and DAC event plumbing, and save-state identity.
+  `src/apps/player/adapters/irem_m78` resolves ZIP/folder media through the
+  embedded manifest and exposes `--system irem_m78` / `--system m78`.
+  The two public no-dump sample ROM placeholders, `3.v0.ic46` and `4.v1.ic47`,
+  remain represented by an explicit zero-filled `m72_audio` region instead of
+  fake ROM entries.
+- **Remaining:** replace first-pass assumptions with exact I/O/comms and video
+  registers, satellite/main-screen routing, input/DIP behavior, authenticated
+  no-dump sample-ROM strategy, YM2151/M72-style audio parity, and trusted
+  visual/audio parity.
 
 ### M81
 

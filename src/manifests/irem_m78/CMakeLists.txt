@@ -29,7 +29,11 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_m78 m78_game_manifests.cpp)
+add_library(
+    mnemos_manifests_irem_m78
+    m78_game_manifests.cpp
+    m78_system.cpp
+)
 add_library(mnemos::manifests::irem_m78 ALIAS mnemos_manifests_irem_m78)
 
 target_include_directories(
@@ -43,7 +47,12 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_m78
     PUBLIC
+        mnemos::topology
+        mnemos::chips::cpu::z80
+        mnemos::chips::audio::ym2151
+        mnemos::chips::audio::dac8
         mnemos::manifests::common
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_irem_m78 PUBLIC)
@@ -51,7 +60,13 @@ mnemos_declare_tier(
     NAME mnemos_manifests_irem_m78
     TIER 4
     DEPENDS
+        mnemos_topology
         mnemos_manifests_common
+        mnemos_security_cryptography
+        mnemos_chips_shared
+        mnemos_chips_cpu_z80
+        mnemos_chips_audio_ym2151
+        mnemos_chips_audio_dac8
         mnemos_foundation
 )
 
@@ -69,5 +84,12 @@ if(BUILD_TESTING)
         mnemos_manifests_irem_m78_test
         PRIVATE
             MNEMOS_IREM_M78_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+    mnemos_add_test(
+        mnemos_manifests_irem_m78_system_test
+        SOURCES tests/m78_system_test.cpp
+        LIBRARIES
+            mnemos::manifests::irem_m78
+            mnemos::manifests::common
     )
 endif()

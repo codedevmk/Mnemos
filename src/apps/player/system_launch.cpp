@@ -104,6 +104,7 @@ namespace mnemos::apps::player {
             family == system_family::irem_m63 || family == system_family::irem_travrusa ||
             family == system_family::irem_redalert ||
             family == system_family::irem_m72 || family == system_family::irem_m75 ||
+            family == system_family::irem_m78 ||
             family == system_family::irem_m81 || family == system_family::irem_m82 ||
             family == system_family::irem_m84 || family == system_family::irem_m85 ||
             family == system_family::irem_m90 || family == system_family::irem_m92 ||
@@ -120,6 +121,7 @@ namespace mnemos::apps::player {
              family == system_family::irem_m63 || family == system_family::irem_travrusa ||
              family == system_family::irem_redalert ||
              family == system_family::irem_m72 || family == system_family::irem_m75 ||
+             family == system_family::irem_m78 ||
              family == system_family::irem_m81 || family == system_family::irem_m82 ||
              family == system_family::irem_m84 || family == system_family::irem_m85 ||
              family == system_family::irem_m90 || family == system_family::irem_m92 ||
@@ -141,6 +143,7 @@ namespace mnemos::apps::player {
                 family == system_family::irem_m63 || family == system_family::irem_travrusa ||
                 family == system_family::irem_redalert ||
                 family == system_family::irem_m72 || family == system_family::irem_m75 ||
+                family == system_family::irem_m78 ||
                 family == system_family::irem_m81 || family == system_family::irem_m82 ||
                 family == system_family::irem_m84 || family == system_family::irem_m85 ||
                 family == system_family::irem_m90 || family == system_family::irem_m92 ||
@@ -206,6 +209,7 @@ namespace mnemos::apps::player {
         case system_family::irem_redalert:
         case system_family::irem_m72:
         case system_family::irem_m75:
+        case system_family::irem_m78:
         case system_family::irem_m81:
         case system_family::irem_m82:
         case system_family::irem_m84:

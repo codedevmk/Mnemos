@@ -1,9 +1,9 @@
 #pragma once
 
-// Checked-in Irem M78 game manifests embedded for corpus tooling lookup. This
-// module is a ROM-contract surface only: Mnemos still lacks the title-specific
-// dual-Z80 board profile, video-register model, communications, and no-dump
-// M72-audio sample ROM evidence needed for an executable BJ92 route.
+// Checked-in Irem M78 game manifests embedded for corpus tooling lookup and
+// the first-pass BJ92 player route. Public evidence still marks the original
+// board not working/no-sound, so final video-register, communications, color,
+// and no-dump M72-audio sample parity remain separate authenticity work.
 
 #include "m78_embedded_game_manifests.hpp"
 
