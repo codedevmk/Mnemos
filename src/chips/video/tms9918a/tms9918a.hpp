@@ -79,6 +79,7 @@ namespace mnemos::chips::video {
                                                           : 0U;
         }
         [[nodiscard]] std::uint8_t status() const noexcept { return status_; }
+        [[nodiscard]] std::uint16_t cpu_vram_address() const noexcept { return addr_; }
         [[nodiscard]] std::span<const std::uint8_t> vram() const noexcept { return vram_; }
 
         // Test/debug helper: render the current VRAM/register state without
@@ -86,7 +87,53 @@ namespace mnemos::chips::video {
         void render_frame() noexcept;
 
       private:
-        struct introspection_surface final : public instrumentation::ichip_introspection {};
+        class introspection_surface final : public instrumentation::ichip_introspection {
+          public:
+            explicit introspection_surface(tms9918a& owner) noexcept
+                : vram_view_("vram", owner.vram_),
+                  regs_view_("registers", owner.reg_),
+                  registers_(owner) {
+                memory_views_[0] = &vram_view_;
+                memory_views_[1] = &regs_view_;
+            }
+
+            [[nodiscard]] std::span<instrumentation::memory_view* const> memory_views() override {
+                return memory_views_;
+            }
+
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_;
+            }
+
+          private:
+            class registers_impl final : public instrumentation::register_view {
+              public:
+                explicit registers_impl(tms9918a& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override {
+                    for (std::size_t i = 0; i < owner_->reg_.size(); ++i) {
+                        snapshot_[i] = {k_names[i], owner_->reg_[i], 8U};
+                    }
+                    snapshot_[8] = {"STATUS", owner_->status_, 8U, register_value_format::flags};
+                    snapshot_[9] = {"ADDR", owner_->addr_, 14U};
+                    snapshot_[10] = {"CODE", owner_->code_, 2U};
+                    snapshot_[11] = {"FRAME", owner_->frame_index_, 32U};
+                    snapshot_[12] = {"SCANLINE", static_cast<std::uint64_t>(owner_->scanline_),
+                                     16U};
+                    return snapshot_;
+                }
+
+              private:
+                static constexpr std::array<std::string_view, register_count> k_names{
+                    "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7"};
+                tms9918a* owner_;
+                std::array<register_descriptor, register_count + 5U> snapshot_{};
+            };
+
+            instrumentation::span_memory_view vram_view_;
+            instrumentation::span_memory_view regs_view_;
+            registers_impl registers_;
+            std::array<instrumentation::memory_view*, 2> memory_views_{};
+        };
 
         [[nodiscard]] std::uint32_t palette_rgb(std::uint8_t colour) const noexcept;
         [[nodiscard]] std::uint8_t vram_at(std::uint16_t address) const noexcept {
@@ -123,7 +170,7 @@ namespace mnemos::chips::video {
         std::vector<std::uint32_t> framebuffer_ =
             std::vector<std::uint32_t>(static_cast<std::size_t>(display_width) * display_height);
 
-        introspection_surface introspection_{};
+        introspection_surface introspection_{*this};
     };
 
 } // namespace mnemos::chips::video

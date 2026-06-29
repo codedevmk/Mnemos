@@ -3,15 +3,23 @@
 #include "adapter_link.hpp"
 #include "adapter_registry.hpp"
 #include "genesis_region.hpp"
+#include "msx_cassette.hpp"
 #include "rom_loader.hpp"
 #include "sms_region.hpp"
 #include "system_family.hpp"
+#include "wd1793.hpp"
 
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -34,6 +42,317 @@ namespace {
             ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
         }
         return ext;
+    }
+
+    [[nodiscard]] const char* getenv_nonempty(const char* name) noexcept {
+        const char* value = MNEMOS_PLAYER_GETENV(name);
+        return value != nullptr && value[0] != '\0' ? value : nullptr;
+    }
+
+    [[nodiscard]] const char* getenv_nonempty(const char* first, const char* second) noexcept {
+        if (const char* value = getenv_nonempty(first); value != nullptr) {
+            return value;
+        }
+        return getenv_nonempty(second);
+    }
+
+    [[nodiscard]] std::string_view trim_ascii(std::string_view value) noexcept {
+        while (!value.empty() &&
+               std::isspace(static_cast<unsigned char>(value.front())) != 0) {
+            value.remove_prefix(1U);
+        }
+        while (!value.empty() &&
+               std::isspace(static_cast<unsigned char>(value.back())) != 0) {
+            value.remove_suffix(1U);
+        }
+        return value;
+    }
+
+    [[nodiscard]] bool parse_unsigned(std::string_view value, unsigned long long maximum,
+                                      unsigned long long& parsed) {
+        value = trim_ascii(value);
+        if (value.empty() || value.front() == '-') {
+            return false;
+        }
+
+        const std::string text(value);
+        char* end = nullptr;
+        const unsigned long long candidate = std::strtoull(text.c_str(), &end, 0);
+        if (end == text.c_str() || end == nullptr || *end != '\0' || candidate > maximum) {
+            return false;
+        }
+
+        parsed = candidate;
+        return true;
+    }
+
+    [[nodiscard]] std::optional<mnemos::frontend_sdk::msx_slot_location>
+    parse_msx_slot_location_value(std::string_view value) {
+        value = trim_ascii(value);
+        if (value.empty()) {
+            return std::nullopt;
+        }
+
+        const std::size_t separator = value.find_first_of(".:");
+        unsigned long long primary = 0U;
+        unsigned long long secondary = 0U;
+        if (separator == std::string_view::npos) {
+            if (!parse_unsigned(value, 3U, primary)) {
+                return std::nullopt;
+            }
+        } else if (!parse_unsigned(value.substr(0U, separator), 3U, primary) ||
+                   !parse_unsigned(value.substr(separator + 1U), 3U, secondary)) {
+            return std::nullopt;
+        }
+
+        return mnemos::frontend_sdk::msx_slot_location{static_cast<std::uint8_t>(primary),
+                                                       static_cast<std::uint8_t>(secondary)};
+    }
+
+    [[nodiscard]] std::optional<std::uint8_t>
+    parse_msx_expanded_slots_value(std::string_view value) {
+        value = trim_ascii(value);
+        if (value.empty()) {
+            return std::nullopt;
+        }
+
+        if (value.find_first_of(",;") == std::string_view::npos) {
+            unsigned long long mask = 0U;
+            if (!parse_unsigned(value, 0x0FU, mask)) {
+                return std::nullopt;
+            }
+            return static_cast<std::uint8_t>(mask);
+        }
+
+        std::uint8_t mask = 0U;
+        std::size_t begin = 0U;
+        while (begin <= value.size()) {
+            const std::size_t end = value.find_first_of(",;", begin);
+            const std::string_view token =
+                value.substr(begin, end == std::string_view::npos ? std::string_view::npos
+                                                                  : end - begin);
+            unsigned long long slot = 0U;
+            if (!parse_unsigned(token, 3U, slot)) {
+                return std::nullopt;
+            }
+            mask = static_cast<std::uint8_t>(mask | (1U << slot));
+            if (end == std::string_view::npos) {
+                break;
+            }
+            begin = end + 1U;
+        }
+        return mask;
+    }
+
+    [[nodiscard]] std::optional<std::size_t> parse_msx_ram_size_value(std::string_view value) {
+        value = trim_ascii(value);
+        if (value.empty()) {
+            return std::nullopt;
+        }
+
+        unsigned long long multiplier = 1U;
+        const char suffix = value.back();
+        if (suffix == 'k' || suffix == 'K') {
+            multiplier = 1024U;
+            value.remove_suffix(1U);
+        } else if (suffix == 'm' || suffix == 'M') {
+            multiplier = 1024U * 1024U;
+            value.remove_suffix(1U);
+        }
+
+        constexpr unsigned long long k_min_ram_size = 0x4000ULL;
+        constexpr unsigned long long k_max_ram_size = 0x400000ULL;
+        unsigned long long units = 0U;
+        if (!parse_unsigned(value, k_max_ram_size / multiplier, units)) {
+            return std::nullopt;
+        }
+
+        const unsigned long long bytes = units * multiplier;
+        if (bytes < k_min_ram_size || bytes > k_max_ram_size) {
+            return std::nullopt;
+        }
+        return static_cast<std::size_t>(bytes);
+    }
+
+    [[nodiscard]] std::optional<mnemos::frontend_sdk::msx_slot_location>
+    parse_msx_slot_location_env(const char* env_name) {
+        const char* value = getenv_nonempty(env_name);
+        if (value == nullptr) {
+            return std::nullopt;
+        }
+        auto parsed = parse_msx_slot_location_value(value);
+        if (!parsed) {
+            std::fprintf(stderr,
+                         "[mnemos_player] ignoring %s=%s; expected slot as primary or "
+                         "primary.secondary\n",
+                         env_name, value);
+        }
+        return parsed;
+    }
+
+    [[nodiscard]] std::optional<std::uint8_t> parse_msx_expanded_slots_env(const char* env_name) {
+        const char* value = getenv_nonempty(env_name);
+        if (value == nullptr) {
+            return std::nullopt;
+        }
+        auto parsed = parse_msx_expanded_slots_value(value);
+        if (!parsed) {
+            std::fprintf(stderr,
+                         "[mnemos_player] ignoring %s=%s; expected expanded-slot mask or "
+                         "comma-separated slot list\n",
+                         env_name, value);
+        }
+        return parsed;
+    }
+
+    [[nodiscard]] std::optional<std::size_t> parse_msx_ram_size_env(const char* env_name) {
+        const char* value = getenv_nonempty(env_name);
+        if (value == nullptr) {
+            return std::nullopt;
+        }
+        auto parsed = parse_msx_ram_size_value(value);
+        if (!parsed) {
+            std::fprintf(stderr,
+                         "[mnemos_player] ignoring %s=%s; expected bytes, K, or M RAM size\n",
+                         env_name, value);
+        }
+        return parsed;
+    }
+
+    [[nodiscard]] mnemos::frontend_sdk::msx_machine_profile
+    parse_msx_machine_profile(std::string_view prefix, bool include_ram_size) {
+        const std::string prefix_text(prefix);
+        mnemos::frontend_sdk::msx_machine_profile profile{};
+
+        const std::string expanded_name = prefix_text + "EXPANDED_SLOTS";
+        const std::string ram_slot_name = prefix_text + "RAM_SLOT";
+        const std::string sub_slot_name = prefix_text + "SUB_SLOT";
+        const std::string disk_slot_name = prefix_text + "DISK_SLOT";
+        const std::string cart2_slot_name = prefix_text + "CART2_SLOT";
+        profile.expanded_primary_slots = parse_msx_expanded_slots_env(expanded_name.c_str());
+        profile.ram_slot = parse_msx_slot_location_env(ram_slot_name.c_str());
+        profile.sub_bios_slot = parse_msx_slot_location_env(sub_slot_name.c_str());
+        profile.disk_slot = parse_msx_slot_location_env(disk_slot_name.c_str());
+        profile.cartridge2_slot = parse_msx_slot_location_env(cart2_slot_name.c_str());
+
+        if (include_ram_size) {
+            const std::string ram_size_name = prefix_text + "RAM_SIZE";
+            profile.ram_size = parse_msx_ram_size_env(ram_size_name.c_str());
+        }
+        return profile;
+    }
+
+    constexpr std::size_t k_msx2_main_bios_size = 0x8000U;
+    constexpr std::size_t k_msx2_sub_rom_size = 0x4000U;
+    constexpr std::size_t k_msx2_logo_rom_size = 0x4000U;
+    constexpr std::size_t k_msx_logo_rom_size = 0x4000U;
+    constexpr std::size_t k_msx2_disk_rom_size = 0x4000U;
+    constexpr std::size_t k_msx2_packed_main_sub_size = k_msx2_main_bios_size + k_msx2_sub_rom_size;
+    constexpr std::size_t k_msx2_packed_main_sub_disk_size =
+        k_msx2_packed_main_sub_size + k_msx2_disk_rom_size;
+
+    struct msx2_packed_firmware final {
+        std::vector<std::uint8_t> main_bios{};
+        std::vector<std::uint8_t> sub_rom{};
+        std::vector<std::uint8_t> disk_rom{};
+    };
+
+    enum class msx_launch_media_kind : std::uint8_t {
+        none,
+        cartridge,
+        disk,
+        tape,
+    };
+
+    [[nodiscard]] msx_launch_media_kind
+    classify_msx_launch_media(std::span<const std::uint8_t> media) noexcept {
+        if (media.empty()) {
+            return msx_launch_media_kind::none;
+        }
+        if (mnemos::chips::storage::msx_cassette::has_cas_header(media)) {
+            return msx_launch_media_kind::tape;
+        }
+        if (mnemos::chips::storage::wd1793::is_supported_dsk(media)) {
+            return msx_launch_media_kind::disk;
+        }
+        return msx_launch_media_kind::cartridge;
+    }
+
+    [[nodiscard]] bool is_msx_disk_media(std::span<const std::uint8_t> media) noexcept {
+        return classify_msx_launch_media(media) == msx_launch_media_kind::disk;
+    }
+
+    [[nodiscard]] bool
+    media_set_contains_msx_disk(std::span<const std::uint8_t> primary_media,
+                                const std::vector<std::vector<std::uint8_t>>& additional_media) {
+        if (is_msx_disk_media(primary_media)) {
+            return true;
+        }
+        for (const auto& media : additional_media) {
+            if (is_msx_disk_media(media)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] const char* msx_media_label(msx_launch_media_kind kind) noexcept {
+        switch (kind) {
+        case msx_launch_media_kind::disk:
+            return "disk";
+        case msx_launch_media_kind::tape:
+            return "tape";
+        case msx_launch_media_kind::cartridge:
+            return "cartridge";
+        case msx_launch_media_kind::none:
+        default:
+            return "media";
+        }
+    }
+
+    [[nodiscard]] bool split_msx2_packed_firmware(const std::vector<std::uint8_t>& image,
+                                                  msx2_packed_firmware& out) {
+        if (image.size() < k_msx2_packed_main_sub_size) {
+            return false;
+        }
+
+        const auto main_begin = image.begin();
+        const auto sub_begin = main_begin + static_cast<std::ptrdiff_t>(k_msx2_main_bios_size);
+        const auto disk_begin = sub_begin + static_cast<std::ptrdiff_t>(k_msx2_sub_rom_size);
+
+        out.main_bios.assign(main_begin, sub_begin);
+        out.sub_rom.assign(sub_begin, disk_begin);
+        out.disk_rom.clear();
+        if (image.size() >= k_msx2_packed_main_sub_disk_size) {
+            out.disk_rom.assign(disk_begin,
+                                disk_begin + static_cast<std::ptrdiff_t>(k_msx2_disk_rom_size));
+        }
+        return true;
+    }
+
+    void set_bios_image_slot(std::vector<std::vector<std::uint8_t>>& bios_images, std::size_t slot,
+                             std::vector<std::uint8_t> image) {
+        while (bios_images.size() <= slot) {
+            bios_images.push_back({});
+        }
+        bios_images[slot] = std::move(image);
+    }
+
+    [[nodiscard]] std::string
+    battery_media_path_for(mnemos::frontend_sdk::player_system& system,
+                           const std::vector<std::string>& rom_paths,
+                           mnemos::apps::player::adapters::system_family family) {
+        if (rom_paths.empty() || system.battery_ram().empty()) {
+            return {};
+        }
+
+        const std::string_view media_id = system.battery_ram_media_id();
+        if ((family == mnemos::apps::player::adapters::system_family::msx ||
+             family == mnemos::apps::player::adapters::system_family::msx2) &&
+            media_id == "cart2" && rom_paths.size() > 1U) {
+            return rom_paths[1];
+        }
+        return rom_paths.front();
     }
 
 } // namespace
@@ -74,10 +393,9 @@ namespace mnemos::apps::player {
         }
 
         const system_family family = *family_opt;
-        const bool arcade_family = family == system_family::irem_m72 ||
-                                   family == system_family::taito_f2 ||
-                                   family == system_family::capcom_cps1 ||
-                                   family == system_family::capcom_cps2;
+        const bool arcade_family =
+            family == system_family::irem_m72 || family == system_family::taito_f2 ||
+            family == system_family::capcom_cps1 || family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
                                     : load_rom(options.rom_paths.front());
         if (!loaded || loaded->bytes.empty()) {
@@ -233,7 +551,7 @@ namespace mnemos::apps::player {
 
         if (family == system_family::msx) {
             const char* bios_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_BIOS");
-            const bool primary_is_dsk = lowercase_extension(options.rom_paths.front()) == ".dsk";
+            const msx_launch_media_kind primary_kind = classify_msx_launch_media(primary_rom);
             if (bios_env != nullptr && bios_env[0] != '\0') {
                 auto bios = load_rom(bios_env);
                 if (!bios || bios->bytes.size() < 0x8000U) {
@@ -243,19 +561,18 @@ namespace mnemos::apps::player {
                 }
                 additional_media.insert(additional_media.begin(), std::move(primary_rom));
                 primary_rom = std::move(bios->bytes);
-            } else if (primary_is_dsk) {
-                std::fprintf(stderr, "[mnemos_player] an MSX disk needs MNEMOS_MSX_BIOS set to "
-                                     "a system BIOS ROM\n");
+            } else if (primary_kind == msx_launch_media_kind::disk ||
+                       primary_kind == msx_launch_media_kind::tape) {
+                std::fprintf(stderr, "[mnemos_player] an MSX %s needs MNEMOS_MSX_BIOS set to "
+                                     "a system BIOS ROM\n",
+                             msx_media_label(primary_kind));
                 outcome.exit_code = 1;
                 return outcome;
             } else {
                 std::fprintf(stderr, "[mnemos_player] MNEMOS_MSX_BIOS unset; treating --rom as "
                                      "the MSX BIOS image (no cartridge mounted)\n");
             }
-            bool disk_requested = primary_is_dsk;
-            for (const auto& path : options.rom_paths) {
-                disk_requested = disk_requested || lowercase_extension(path) == ".dsk";
-            }
+            const bool disk_requested = media_set_contains_msx_disk(primary_rom, additional_media);
             if (disk_requested) {
                 const char* disk_rom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_DISK_ROM");
                 if (disk_rom_env == nullptr || disk_rom_env[0] == '\0') {
@@ -271,7 +588,7 @@ namespace mnemos::apps::player {
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                bios_images.push_back(std::move(disk_rom->bytes));
+                set_bios_image_slot(bios_images, 0U, std::move(disk_rom->bytes));
             }
             const char* kanji_rom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_KANJI_ROM");
             if (kanji_rom_env != nullptr && kanji_rom_env[0] != '\0') {
@@ -282,10 +599,29 @@ namespace mnemos::apps::player {
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                if (!disk_requested) {
-                    bios_images.emplace_back();
+                set_bios_image_slot(bios_images, 1U, std::move(kanji_rom->bytes));
+            }
+            if (const char* logo_rom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_LOGO_ROM");
+                logo_rom_env != nullptr && logo_rom_env[0] != '\0') {
+                auto logo_rom = load_rom(logo_rom_env);
+                if (!logo_rom || logo_rom->bytes.size() < k_msx_logo_rom_size) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX logo ROM: %s\n",
+                                 logo_rom_env);
+                    outcome.exit_code = 1;
+                    return outcome;
                 }
-                bios_images.push_back(std::move(kanji_rom->bytes));
+                set_bios_image_slot(bios_images, 2U, std::move(logo_rom->bytes));
+            }
+            if (const char* cas_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX_CAS");
+                cas_env != nullptr && cas_env[0] != '\0') {
+                auto cas = load_rom(cas_env);
+                if (!cas || cas->bytes.empty()) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX CAS image: %s\n",
+                                 cas_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                additional_media.push_back(std::move(cas->bytes));
             }
         }
 
@@ -312,53 +648,133 @@ namespace mnemos::apps::player {
         }
 
         if (family == system_family::msx2) {
-            const std::string ext = lowercase_extension(options.rom_paths.front());
-            if (ext == ".dsk") {
+            const msx_launch_media_kind primary_kind = classify_msx_launch_media(primary_rom);
+            if (primary_kind == msx_launch_media_kind::disk) {
                 additional_media.insert(additional_media.begin(), std::move(primary_rom));
                 primary_rom.clear();
             }
+            const bool disk_requested = media_set_contains_msx_disk(primary_rom, additional_media);
 
-            const char* bios_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_BIOS");
-            if (bios_env == nullptr) {
-                std::fprintf(stderr, "[mnemos_player] MSX2 needs MNEMOS_MSX2_BIOS set to a "
-                                     "main BIOS ROM\n");
-                outcome.exit_code = 1;
-                return outcome;
-            }
-            auto bios = load_rom(bios_env);
-            if (!bios || bios->bytes.size() < 0x8000U) {
-                std::fprintf(stderr, "[mnemos_player] could not read MSX2 BIOS: %s\n", bios_env);
-                outcome.exit_code = 1;
-                return outcome;
-            }
-            bios_images.push_back(std::move(bios->bytes));
+            std::vector<std::uint8_t> packed_subrom;
+            std::vector<std::uint8_t> packed_diskrom;
+            if (const char* firmware_env = getenv_nonempty("MNEMOS_MSX2_FIRMWARE");
+                firmware_env != nullptr) {
+                auto firmware = load_rom(firmware_env);
+                msx2_packed_firmware split{};
+                if (!firmware || !split_msx2_packed_firmware(firmware->bytes, split)) {
+                    std::fprintf(stderr,
+                                 "[mnemos_player] could not read packed MSX2 firmware: %s "
+                                 "(expected main BIOS + sub-ROM)\n",
+                                 firmware_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                bios_images.push_back(std::move(split.main_bios));
+                packed_subrom = std::move(split.sub_rom);
+                packed_diskrom = std::move(split.disk_rom);
+            } else {
+                const char* bios_env = getenv_nonempty("MNEMOS_MSX2_BIOS");
+                if (bios_env == nullptr) {
+                    std::fprintf(stderr, "[mnemos_player] MSX2 needs MNEMOS_MSX2_FIRMWARE or "
+                                         "MNEMOS_MSX2_BIOS set to a main BIOS ROM\n");
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                auto bios = load_rom(bios_env);
+                if (!bios || bios->bytes.size() < k_msx2_main_bios_size) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX2 BIOS: %s\n",
+                                 bios_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
 
-            if (const char* subrom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_SUBROM");
+                msx2_packed_firmware split{};
+                if (split_msx2_packed_firmware(bios->bytes, split)) {
+                    bios_images.push_back(std::move(split.main_bios));
+                    packed_subrom = std::move(split.sub_rom);
+                    packed_diskrom = std::move(split.disk_rom);
+                } else {
+                    bios_images.push_back(std::move(bios->bytes));
+                }
+            }
+
+            if (const char* subrom_env =
+                    getenv_nonempty("MNEMOS_MSX2_SUBROM", "MNEMOS_MSX2_SUB_ROM");
                 subrom_env != nullptr) {
                 auto subrom = load_rom(subrom_env);
-                if (!subrom || subrom->bytes.size() < 0x4000U) {
+                if (!subrom || subrom->bytes.size() < k_msx2_sub_rom_size) {
                     std::fprintf(stderr, "[mnemos_player] could not read MSX2 sub-ROM: %s\n",
                                  subrom_env);
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                bios_images.push_back(std::move(subrom->bytes));
+                set_bios_image_slot(bios_images, 1U, std::move(subrom->bytes));
+            } else if (!packed_subrom.empty()) {
+                set_bios_image_slot(bios_images, 1U, std::move(packed_subrom));
             }
 
-            if (const char* diskrom_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_DISKROM");
-                diskrom_env != nullptr) {
+            if (const char* logo_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_LOGO_ROM");
+                logo_env != nullptr && logo_env[0] != '\0') {
+                auto logo = load_rom(logo_env);
+                if (!logo || logo->bytes.size() < k_msx2_logo_rom_size) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX2 logo ROM: %s\n",
+                                 logo_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                set_bios_image_slot(bios_images, 4U, std::move(logo->bytes));
+            }
+
+            const char* diskrom_env =
+                getenv_nonempty("MNEMOS_MSX2_DISKROM", "MNEMOS_MSX2_DISK_ROM");
+            if (disk_requested && diskrom_env == nullptr && packed_diskrom.empty()) {
+                std::fprintf(stderr, "[mnemos_player] an MSX2 disk needs "
+                                     "MNEMOS_MSX2_DISK_ROM set to a disk interface ROM\n");
+                outcome.exit_code = 1;
+                return outcome;
+            }
+            if (diskrom_env != nullptr) {
                 auto diskrom = load_rom(diskrom_env);
-                if (!diskrom || diskrom->bytes.size() < 0x4000U) {
+                if (!diskrom || diskrom->bytes.size() < k_msx2_disk_rom_size) {
                     std::fprintf(stderr, "[mnemos_player] could not read MSX2 disk ROM: %s\n",
                                  diskrom_env);
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                while (bios_images.size() < 2U) {
-                    bios_images.push_back({});
-                }
-                bios_images.push_back(std::move(diskrom->bytes));
+                set_bios_image_slot(bios_images, 2U, std::move(diskrom->bytes));
+            } else if (!packed_diskrom.empty()) {
+                set_bios_image_slot(bios_images, 2U, std::move(packed_diskrom));
             }
+
+            if (const char* kanji_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_KANJI_ROM");
+                kanji_env != nullptr && kanji_env[0] != '\0') {
+                auto kanji = load_rom(kanji_env);
+                if (!kanji || kanji->bytes.size() < 0x20000U) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX2 Kanji ROM: %s\n",
+                                 kanji_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                set_bios_image_slot(bios_images, 3U, std::move(kanji->bytes));
+            }
+            if (const char* cas_env = MNEMOS_PLAYER_GETENV("MNEMOS_MSX2_CAS");
+                cas_env != nullptr && cas_env[0] != '\0') {
+                auto cas = load_rom(cas_env);
+                if (!cas || cas->bytes.empty()) {
+                    std::fprintf(stderr, "[mnemos_player] could not read MSX2 CAS image: %s\n",
+                                 cas_env);
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                additional_media.push_back(std::move(cas->bytes));
+            }
+        }
+
+        mnemos::frontend_sdk::msx_machine_profile msx_profile{};
+        if (family == system_family::msx) {
+            msx_profile = parse_msx_machine_profile("MNEMOS_MSX_", true);
+        } else if (family == system_family::msx2) {
+            msx_profile = parse_msx_machine_profile("MNEMOS_MSX2_", true);
         }
 
         outcome.system = frontend_sdk::adapter_registry::instance().create(
@@ -376,6 +792,7 @@ namespace mnemos::apps::player {
              .four_score = options.four_score,
              .rtc = options.rtc,
              .msx2 = options.msx2,
+             .msx_profile = msx_profile,
              .disc_path = std::move(disc_path),
              .rom_path = options.rom_paths.front(),
              .bios_images = std::move(bios_images)});
@@ -391,6 +808,8 @@ namespace mnemos::apps::player {
         }
 
         outcome.primary_media_path = options.rom_paths.front();
+        outcome.battery_media_path =
+            battery_media_path_for(*outcome.system, options.rom_paths, family);
         return outcome;
     }
 

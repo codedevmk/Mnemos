@@ -151,6 +151,24 @@ TEST_CASE("z80 takes absolute jumps") {
     CHECK(m.cpu.cpu_registers().pc == 0x2000U);
 }
 
+TEST_CASE("z80 ignored DD/FD prefixes do not split the following instruction") {
+    machine m;
+    m.load(0x0000U, {0xFDU, 0xC3U, 0x00U, 0x20U}); // FD + JP $2000
+
+    auto r = m.cpu.cpu_registers();
+    r.iff1 = r.iff2 = true;
+    m.cpu.set_registers(r);
+
+    CHECK(m.cpu.step_instruction() == 14);
+    CHECK(m.cpu.cpu_registers().pc == 0x2000U);
+
+    m.cpu.set_irq_line(true);
+    CHECK(m.cpu.step_instruction() == 13);
+    CHECK(m.cpu.cpu_registers().pc == 0x0038U);
+    CHECK(m.ram[0xFFFD] == 0x00U);
+    CHECK(m.ram[0xFFFE] == 0x20U);
+}
+
 TEST_CASE("z80 calls and returns through the stack") {
     machine m;
     m.load(0x0000U, {0xCDU, 0x00U, 0x10U}); // CALL $1000
@@ -248,12 +266,132 @@ TEST_CASE("z80 IN/OUT route through the port callbacks") {
     CHECK((m.cpu.cpu_registers().af >> 8U) == 0xABU);
 }
 
+TEST_CASE("z80 repeated block I/O applies loop-iteration flags") {
+    const auto run = [](std::uint8_t op, std::uint16_t pc, std::uint16_t bc,
+                        std::uint16_t hl, std::uint8_t data, std::uint8_t expected_f,
+                        std::uint16_t expected_hl, std::uint16_t expected_port,
+                        bool input) {
+        machine m;
+        m.load(pc, {0xEDU, op});
+
+        bool port_seen = false;
+        if (input) {
+            m.cpu.set_port_in([&](std::uint16_t port) -> std::uint8_t {
+                port_seen = true;
+                CHECK(port == expected_port);
+                return data;
+            });
+        } else {
+            m.ram[hl] = data;
+            m.cpu.set_port_out([&](std::uint16_t port, std::uint8_t value) {
+                port_seen = true;
+                CHECK(port == expected_port);
+                CHECK(value == data);
+            });
+        }
+
+        auto r = m.cpu.cpu_registers();
+        r.pc = pc;
+        r.bc = bc;
+        r.hl = hl;
+        r.af = 0x0000U;
+        m.cpu.set_registers(r);
+
+        CHECK(m.cpu.step_instruction() == 21);
+        r = m.cpu.cpu_registers();
+        CHECK(port_seen);
+        CHECK(r.pc == pc);
+        CHECK(r.bc == static_cast<std::uint16_t>(bc - 0x0100U));
+        CHECK(r.hl == expected_hl);
+        CHECK((r.af & 0x00FFU) == expected_f);
+        if (input) {
+            CHECK(m.ram[hl] == data);
+        }
+    };
+
+    run(0xB2U, 0x7BD7U, 0x6D9DU, 0x13B2U, 0x76U, 0x29U, 0x13B3U, 0x6D9DU, true);
+    run(0xBAU, 0x9F58U, 0xFCD4U, 0xBBB2U, 0xB7U, 0x8BU, 0xBBB1U, 0xFCD4U, true);
+    run(0xB3U, 0x10EEU, 0xBAFAU, 0xB4A3U, 0xC6U, 0x87U, 0xB4A4U, 0xB9FAU, false);
+    run(0xBBU, 0xDD5FU, 0xE1A0U, 0x125CU, 0xD5U, 0x9FU, 0x125BU, 0xE0A0U, false);
+}
+
 TEST_CASE("z80 services an NMI") {
     machine m;
     m.cpu.set_nmi_line(true);
     m.cpu.step_instruction();
     CHECK(m.cpu.cpu_registers().pc == 0x0066U);
     CHECK(m.cpu.cpu_registers().sp == 0xFFFDU); // return address pushed
+}
+
+TEST_CASE("z80 RETN and RETI restore IFF1 from IFF2") {
+    {
+        machine m;
+        m.load(0x0000U, {0xEDU, 0x45U}); // RETN
+        m.ram[0x8000U] = 0x34U;
+        m.ram[0x8001U] = 0x12U;
+
+        auto r = m.cpu.cpu_registers();
+        r.sp = 0x8000U;
+        r.iff1 = false;
+        r.iff2 = true;
+        m.cpu.set_registers(r);
+
+        m.cpu.step_instruction();
+        r = m.cpu.cpu_registers();
+        CHECK(r.pc == 0x1234U);
+        CHECK(r.sp == 0x8002U);
+        CHECK(r.iff1);
+        CHECK(r.iff2);
+    }
+
+    {
+        machine m;
+        m.load(0x0000U, {0xEDU, 0x4DU}); // RETI
+        m.ram[0x9000U] = 0x78U;
+        m.ram[0x9001U] = 0x56U;
+
+        auto r = m.cpu.cpu_registers();
+        r.sp = 0x9000U;
+        r.iff1 = false;
+        r.iff2 = true;
+        m.cpu.set_registers(r);
+
+        m.cpu.step_instruction();
+        r = m.cpu.cpu_registers();
+        CHECK(r.pc == 0x5678U);
+        CHECK(r.sp == 0x9002U);
+        CHECK(r.iff1);
+        CHECK(r.iff2);
+    }
+}
+
+TEST_CASE("z80 NMI immediately after EI preserves enabled IFF2 for RETN") {
+    machine m;
+    m.load(0x0000U, {0xFBU, 0x00U}); // EI ; NOP
+    m.load(0x0066U, {0xEDU, 0x45U}); // RETN
+
+    m.cpu.step_instruction(); // EI sets IFF1/IFF2, but delays maskable IRQ recognition
+    auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x0001U);
+    CHECK(r.iff1);
+    CHECK(r.iff2);
+
+    m.cpu.set_irq_line(true);
+    m.cpu.set_nmi_line(true);
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x0066U);
+    CHECK(r.sp == 0xFFFDU);
+    CHECK_FALSE(r.iff1);
+    CHECK(r.iff2);
+
+    m.cpu.set_nmi_line(false);
+    m.cpu.step_instruction(); // RETN restores IFF1 from the IFF2 value saved by NMI
+    r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x0001U);
+    CHECK(r.sp == 0xFFFFU);
+    CHECK(r.iff1);
+    CHECK(r.iff2);
 }
 
 TEST_CASE("z80 services a mode-1 maskable interrupt after EI delay") {
@@ -269,6 +407,25 @@ TEST_CASE("z80 services a mode-1 maskable interrupt after EI delay") {
     m.cpu.step_instruction(); // NOP runs; the IRQ is not yet serviced
     CHECK(m.cpu.cpu_registers().pc == 0x0002U);
     m.cpu.step_instruction(); // now the IRQ vectors to $0038
+    CHECK(m.cpu.cpu_registers().pc == 0x0038U);
+}
+
+TEST_CASE("z80 delays a maskable interrupt already asserted before EI") {
+    machine m;
+    auto r = m.cpu.cpu_registers();
+    r.im = 1U;
+    r.pc = 0x0000U;
+    m.cpu.set_registers(r);
+    m.load(0x0000U, {0xFBU, 0x00U}); // EI ; NOP
+
+    m.cpu.set_irq_line(true);
+    m.cpu.step_instruction(); // EI must not service the already-held IRQ
+    CHECK(m.cpu.cpu_registers().pc == 0x0001U);
+
+    m.cpu.step_instruction(); // NOP still executes under EI delay
+    CHECK(m.cpu.cpu_registers().pc == 0x0002U);
+
+    m.cpu.step_instruction(); // the following boundary services the held IRQ
     CHECK(m.cpu.cpu_registers().pc == 0x0038U);
 }
 

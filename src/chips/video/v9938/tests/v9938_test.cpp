@@ -35,6 +35,21 @@ namespace {
         vdp.palette_write(0x00U); // palette 2: blue
     }
 
+    void install_red_blue_green_palette(v9938& vdp) {
+        install_red_blue_palette(vdp);
+        write_reg(vdp, 16, 3U);
+        vdp.palette_write(0x00U);
+        vdp.palette_write(0x07U); // palette 3: green
+    }
+
+    void install_green_red_palette(v9938& vdp) {
+        write_reg(vdp, 16, 0U);
+        vdp.palette_write(0x00U);
+        vdp.palette_write(0x07U); // palette 0: green
+        vdp.palette_write(0x70U);
+        vdp.palette_write(0x00U); // palette 1: red
+    }
+
     std::uint32_t pixel(const v9938& vdp, int x, int y) {
         const auto fb = vdp.framebuffer();
         return fb.pixels[static_cast<std::size_t>(y) * fb.effective_stride() +
@@ -142,6 +157,30 @@ TEST_CASE("v9938 CPU VRAM port accesses the full 128 KiB address space") {
     CHECK(vdp.data_read() == 0x33U);
 }
 
+TEST_CASE("v9938 R45 banks CPU port access between VRAM and expansion RAM") {
+    v9938 vdp;
+
+    set_addr(vdp, 0x01234U, true);
+    vdp.data_write(0x11U);
+
+    write_reg(vdp, 45, 0x40U); // MXD selects the 64 KiB expansion RAM plane.
+    set_addr(vdp, 0x01234U, true);
+    vdp.data_write(0x22U);
+
+    set_addr(vdp, 0x01234U, false);
+    CHECK(vdp.data_read() == 0x22U);
+
+    write_reg(vdp, 45, 0x00U);
+    set_addr(vdp, 0x01234U, false);
+    CHECK(vdp.data_read() == 0x11U);
+
+    write_reg(vdp, 45, 0x40U);
+    set_addr(vdp, 0x11234U, true);
+    vdp.data_write(0x33U);
+    set_addr(vdp, 0x01234U, false);
+    CHECK(vdp.data_read() == 0x33U);
+}
+
 TEST_CASE("v9938 TMS-compatible modes hold R14 when the VRAM port crosses 16 KiB") {
     v9938 vdp;
 
@@ -175,6 +214,29 @@ TEST_CASE("v9938 palette writes commit RGB333 entries and autoincrement") {
     CHECK(vdp.reg(16) == 3U);
 }
 
+TEST_CASE("v9938 reset palette matches MSX2 RGB333 defaults") {
+    v9938 vdp;
+
+    CHECK(vdp.palette(1) == 0x000U);
+    CHECK(vdp.palette(2) == 0x071U);
+    CHECK(vdp.palette(4) == 0x04FU);
+    CHECK(vdp.palette(15) == 0x1FFU);
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x01U); // name table: top-left tile uses pattern 1
+    set_addr(vdp, 0x0008U, true);
+    vdp.data_write(0x80U); // pattern 1 row 0: first pixel set
+    set_addr(vdp, 0x0200U, true);
+    vdp.data_write(0x24U); // foreground medium green, background dark blue
+
+    write_reg(vdp, 1, 0x40U);
+    write_reg(vdp, 3, 0x08U);
+    vdp.render_frame();
+
+    CHECK(pixel(vdp, 0, 0) == 0x0024DA24U);
+    CHECK(pixel(vdp, 1, 0) == 0x002424FFU);
+}
+
 TEST_CASE("v9938 renders TMS-compatible Graphics I tiles") {
     v9938 vdp;
     install_red_blue_palette(vdp);
@@ -193,6 +255,55 @@ TEST_CASE("v9938 renders TMS-compatible Graphics I tiles") {
     CHECK(vdp.mode() == v9938::display_mode::graphics_i);
     CHECK(pixel(vdp, 0, 0) == 0x00FF0000U);
     CHECK(pixel(vdp, 1, 0) == 0x000000FFU);
+}
+
+TEST_CASE("v9938 TMS-compatible renderers honor upper VRAM table base bits") {
+    {
+        v9938 vdp;
+        install_red_blue_palette(vdp);
+
+        set_addr(vdp, 0x10000U, true);
+        vdp.data_write(0x01U); // name table in upper VRAM
+        set_addr(vdp, 0x10008U, true);
+        vdp.data_write(0x80U); // pattern table in upper VRAM
+        set_addr(vdp, 0x12000U, true);
+        vdp.data_write(0x12U); // colour table from R#10/R#3 upper address bits
+
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 2, 0x40U); // name table base $10000
+        write_reg(vdp, 3, 0x80U); // colour table A13
+        write_reg(vdp, 4, 0x20U); // pattern table A16
+        write_reg(vdp, 10, 0x04U); // colour table A16
+        vdp.render_frame();
+
+        CHECK(vdp.mode() == v9938::display_mode::graphics_i);
+        CHECK(pixel(vdp, 0, 0) == 0x00FF0000U);
+        CHECK(pixel(vdp, 1, 0) == 0x000000FFU);
+    }
+
+    {
+        v9938 vdp;
+        install_red_blue_palette(vdp);
+
+        set_addr(vdp, 0x10000U, true);
+        vdp.data_write(0x01U); // name table in upper VRAM
+        set_addr(vdp, 0x10008U, true);
+        vdp.data_write(0x80U); // pattern table in upper VRAM
+        set_addr(vdp, 0x12008U, true);
+        vdp.data_write(0x12U); // Graphic II colour table in upper VRAM
+
+        write_reg(vdp, 0, 0x02U); // M3 -> Graphics II
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 2, 0x40U); // name table base $10000
+        write_reg(vdp, 3, 0x80U); // colour table A13, low mask closed
+        write_reg(vdp, 4, 0x20U); // pattern table A16, low mask closed
+        write_reg(vdp, 10, 0x04U); // colour table A16
+        vdp.render_frame();
+
+        CHECK(vdp.mode() == v9938::display_mode::graphics_ii);
+        CHECK(pixel(vdp, 0, 0) == 0x00FF0000U);
+        CHECK(pixel(vdp, 1, 0) == 0x000000FFU);
+    }
 }
 
 TEST_CASE("v9938 renders TMS-compatible Text I cells") {
@@ -394,11 +505,11 @@ TEST_CASE("v9938 renders mode-1 sprites and reports S0 collision and overflow") 
     vdp.data_write(0x80U);
 
     set_addr(vdp, 0x1B00U, true);
-    vdp.data_write(0xFFU); // transparent sprite on line 0
+    vdp.data_write(0xFFU); // two visible sprites overlap on line 0
     vdp.data_write(0x00U);
     vdp.data_write(0x00U);
-    vdp.data_write(0x00U);
-    vdp.data_write(0xFFU); // visible sprite overlaps the transparent sprite
+    vdp.data_write(0x0FU);
+    vdp.data_write(0xFFU);
     vdp.data_write(0x00U);
     vdp.data_write(0x00U);
     vdp.data_write(0x0FU);
@@ -432,7 +543,9 @@ TEST_CASE("v9938 renders mode-1 sprites and reports S0 collision and overflow") 
 
     const std::uint8_t s0 = vdp.status_read();
     CHECK((s0 & 0x60U) == 0x60U);
-    CHECK((vdp.status(0) & 0xE0U) == 0U);
+    CHECK((vdp.status(0) & 0x60U) == 0x40U);
+    CHECK((vdp.status(0) & 0x1FU) == 4U);
+    CHECK((vdp.status(0) & 0x80U) == 0U);
 }
 
 TEST_CASE("v9938 R8 SPD disables TMS-compatible sprite display") {
@@ -457,6 +570,72 @@ TEST_CASE("v9938 R8 SPD disables TMS-compatible sprite display") {
     write_reg(vdp, 8, 0x02U);
     vdp.render_frame();
     CHECK(pixel(vdp, 0, 0) == 0x00000000U);
+}
+
+TEST_CASE("v9938 sprite mode 1 honors upper VRAM sprite attribute base bits") {
+    v9938 vdp;
+    install_red_blue_palette(vdp);
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x80U); // sprite pattern 0 row 0
+
+    set_addr(vdp, 0x11B00U, true);
+    vdp.data_write(0xFFU);
+    vdp.data_write(0x00U);
+    vdp.data_write(0x00U);
+    vdp.data_write(0x01U);
+    vdp.data_write(0xD0U);
+
+    write_reg(vdp, 1, 0x40U);
+    write_reg(vdp, 5, 0x36U);
+    write_reg(vdp, 6, 0x00U);
+    write_reg(vdp, 11, 0x02U); // sprite attribute table base $11B00
+    vdp.render_frame();
+
+    CHECK(pixel(vdp, 0, 0) == 0x00FF0000U);
+}
+
+TEST_CASE("v9938 R8 TP controls sprite mode 1 colour 0 visibility and collision") {
+    const auto configure_pair = [](v9938& vdp) {
+        install_green_red_palette(vdp);
+
+        set_addr(vdp, 0x0000U, true);
+        vdp.data_write(0x80U);
+
+        set_addr(vdp, 0x1B00U, true);
+        vdp.data_write(0xFFU);
+        vdp.data_write(20U);
+        vdp.data_write(0U);
+        vdp.data_write(0x00U);
+        vdp.data_write(0xFFU);
+        vdp.data_write(20U);
+        vdp.data_write(0U);
+        vdp.data_write(0x01U);
+        vdp.data_write(0xD0U);
+
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 5, 0x36U);
+        write_reg(vdp, 6, 0x00U);
+    };
+
+    {
+        v9938 vdp;
+        configure_pair(vdp);
+        vdp.render_frame();
+
+        CHECK(pixel(vdp, 20, 0) == 0x00FF0000U);
+        CHECK((vdp.status(0) & 0x20U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+        configure_pair(vdp);
+        write_reg(vdp, 8, 0x20U);
+        vdp.render_frame();
+
+        CHECK(pixel(vdp, 20, 0) == 0x0000FF00U);
+        CHECK((vdp.status(0) & 0x20U) != 0U);
+    }
 }
 
 TEST_CASE("v9938 renders sprite mode 2 per-line colours") {
@@ -521,9 +700,119 @@ TEST_CASE("v9938 sprite mode 2 reports collision coordinates") {
     write_reg(vdp, 15, 5U);
     CHECK(vdp.status_read() == 8U);
     CHECK(vdp.status(3) == 0U);
-    CHECK(vdp.status(4) == 0U);
+    CHECK(vdp.status(4) == 0xFEU);
     CHECK(vdp.status(5) == 0U);
-    CHECK(vdp.status(6) == 0U);
+    CHECK(vdp.status(6) == 0xFCU);
+}
+
+TEST_CASE("v9938 R8 TP controls sprite mode 2 colour 0 visibility and collision") {
+    const auto configure_pair = [](v9938& vdp) {
+        install_green_red_palette(vdp);
+
+        set_addr(vdp, 0x0000U, true);
+        vdp.data_write(0x80U);
+
+        set_addr(vdp, k_sprite_mode2_sat, true);
+        vdp.data_write(0xFFU);
+        vdp.data_write(20U);
+        vdp.data_write(0U);
+        vdp.data_write(0U);
+        vdp.data_write(0xFFU);
+        vdp.data_write(20U);
+        vdp.data_write(0U);
+        vdp.data_write(0U);
+        vdp.data_write(0xD8U);
+
+        set_addr(vdp, k_sprite_mode2_sct, true);
+        vdp.data_write(0x00U);
+        set_addr(vdp, k_sprite_mode2_sct + 16U, true);
+        vdp.data_write(0x01U);
+
+        configure_sprite_mode2(vdp, 0x06U);
+    };
+
+    {
+        v9938 vdp;
+        configure_pair(vdp);
+        vdp.render_frame();
+
+        CHECK(pixel(vdp, 20, 0) == 0x00FF0000U);
+        CHECK((vdp.status(0) & 0x20U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+        configure_pair(vdp);
+        write_reg(vdp, 8, 0x20U);
+        vdp.render_frame();
+
+        CHECK(pixel(vdp, 20, 0) == 0x0000FF00U);
+        CHECK((vdp.status(0) & 0x20U) != 0U);
+    }
+}
+
+TEST_CASE("v9938 sprite mode 2 colour-combine ORs overlapping sprite pens") {
+    v9938 vdp;
+    install_red_blue_green_palette(vdp);
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x80U);
+
+    set_addr(vdp, k_sprite_mode2_sat, true);
+    vdp.data_write(0xFFU);
+    vdp.data_write(20U);
+    vdp.data_write(0U);
+    vdp.data_write(0U);
+    vdp.data_write(0xFFU);
+    vdp.data_write(20U);
+    vdp.data_write(0U);
+    vdp.data_write(0U);
+    vdp.data_write(0xD8U);
+
+    set_addr(vdp, k_sprite_mode2_sct, true);
+    vdp.data_write(0x01U);
+    set_addr(vdp, k_sprite_mode2_sct + 16U, true);
+    vdp.data_write(0x42U); // CC + palette 2 combines with palette 1 -> palette 3
+
+    configure_sprite_mode2(vdp, 0x06U);
+    vdp.render_frame();
+
+    CHECK(pixel(vdp, 20, 0) == 0x0000FF00U);
+    CHECK((vdp.status(0) & 0x60U) == 0U);
+}
+
+TEST_CASE("v9938 sprite mode 2 ignore-collision preserves priority without latching S0") {
+    v9938 vdp;
+    install_red_blue_palette(vdp);
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x80U);
+
+    set_addr(vdp, k_sprite_mode2_sat, true);
+    vdp.data_write(0xFFU);
+    vdp.data_write(20U);
+    vdp.data_write(0U);
+    vdp.data_write(0U);
+    vdp.data_write(0xFFU);
+    vdp.data_write(20U);
+    vdp.data_write(0U);
+    vdp.data_write(0U);
+    vdp.data_write(0xD8U);
+
+    set_addr(vdp, k_sprite_mode2_sct, true);
+    vdp.data_write(0x01U);
+    set_addr(vdp, k_sprite_mode2_sct + 16U, true);
+    vdp.data_write(0x22U); // IC + palette 2 suppresses collision but stays behind sprite 0
+
+    configure_sprite_mode2(vdp, 0x06U);
+    vdp.render_frame();
+
+    CHECK(pixel(vdp, 20, 0) == 0x00FF0000U);
+    CHECK((vdp.status(0) & 0x20U) == 0U);
+    CHECK(vdp.status(3) == 0U);
+    CHECK(vdp.status(4) == 0xFEU);
+    CHECK(vdp.status(5) == 0U);
+    CHECK(vdp.status(6) == 0xFCU);
 }
 
 TEST_CASE("v9938 sprite mode 2 reports ninth sprite overflow") {
@@ -550,6 +839,39 @@ TEST_CASE("v9938 sprite mode 2 reports ninth sprite overflow") {
     vdp.render_frame();
 
     CHECK((vdp.status(0) & 0x40U) != 0U);
+    CHECK((vdp.status(0) & 0x1FU) == 8U);
+}
+
+TEST_CASE("v9938 S0 read preserves fifth-sprite overflow and clears collision") {
+    v9938 vdp;
+
+    set_addr(vdp, 0x0000U, true);
+    vdp.data_write(0x80U);
+
+    set_addr(vdp, k_sprite_mode2_sat, true);
+    for (std::uint8_t i = 0; i < 9U; ++i) {
+        vdp.data_write(0xFFU);
+        vdp.data_write(20U);
+        vdp.data_write(0U);
+        vdp.data_write(0U);
+    }
+    vdp.data_write(0xD8U);
+
+    for (std::uint32_t i = 0; i < 9U; ++i) {
+        set_addr(vdp, k_sprite_mode2_sct + i * 16U, true);
+        vdp.data_write(0x01U);
+    }
+
+    configure_sprite_mode2(vdp, 0x06U);
+    vdp.render_frame();
+
+    CHECK((vdp.status(0) & 0x60U) == 0x60U);
+    CHECK((vdp.status(0) & 0x1FU) == 8U);
+
+    const std::uint8_t read_status = vdp.status_read();
+    CHECK((read_status & 0x60U) == 0x60U);
+    CHECK((read_status & 0x1FU) == 8U);
+    CHECK((vdp.status(0) & 0x60U) == 0x40U);
     CHECK((vdp.status(0) & 0x1FU) == 8U);
 }
 
@@ -601,6 +923,28 @@ TEST_CASE("v9938 renders Graphic 4 SCREEN 5 nibbles through the palette") {
     CHECK(vdp.framebuffer().height == 212U);
     CHECK(pixel(vdp, 0, 0) == 0x00FF0000U);
     CHECK(pixel(vdp, 1, 0) == 0x000000FFU);
+}
+
+TEST_CASE("v9938 enum value 4 is Graphics II rather than Graphic 4") {
+    v9938 vdp;
+
+    install_red_blue_palette(vdp);
+
+    set_addr(vdp, 0x02C0U, true);
+    vdp.data_write(0x12U);
+
+    write_reg(vdp, 0, 0x02U); // M3 only -> Graphics II
+    write_reg(vdp, 1, 0xE2U);
+    write_reg(vdp, 2, 0x06U);
+    write_reg(vdp, 3, 0xFFU);
+    write_reg(vdp, 4, 0x03U);
+    write_reg(vdp, 7, 0xF4U);
+    vdp.render_frame();
+
+    CHECK(vdp.mode() == v9938::display_mode::graphics_ii);
+    CHECK(static_cast<unsigned>(static_cast<std::uint8_t>(vdp.mode())) == 4U);
+    CHECK(pixel(vdp, 0, 0) == pixel(vdp, 1, 0));
+    CHECK(pixel(vdp, 0, 0) == pixel(vdp, 128, 96));
 }
 
 TEST_CASE("v9938 colour code 0 resolves to backdrop unless R8 disables transparency") {
@@ -991,7 +1335,7 @@ TEST_CASE("v9938 R8 BW converts Graphic 7 fixed-colour output and backdrop") {
     CHECK(pixel(vdp, 0, 0) == bw32_from_rgb(0x00FF0000U));
 }
 
-TEST_CASE("v9938 HMMV command fills Graphic 4 rectangles and clears CE") {
+TEST_CASE("v9938 HMMV command fills Graphic 4 rectangles and clears CE after command time") {
     v9938 vdp;
     install_red_blue_palette(vdp);
 
@@ -1008,11 +1352,153 @@ TEST_CASE("v9938 HMMV command fills Graphic 4 rectangles and clears CE") {
     CHECK(vdp.vram()[4U * 128U + 2U] == 0x12U);
 
     write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x91U) == 0x01U);
+
+    vdp.tick(128U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x91U) == 0x01U);
+
+    vdp.tick(240U);
+    write_reg(vdp, 15, 2U);
     CHECK((vdp.status_read() & 0x91U) == 0U);
 
     vdp.render_frame();
     CHECK(pixel(vdp, 4, 3) == 0x00FF0000U);
     CHECK(pixel(vdp, 5, 3) == 0x000000FFU);
+}
+
+TEST_CASE("v9938 command timing follows screen and sprite access slots") {
+    const auto start_hmmv = [](v9938& vdp, std::uint8_t r1, std::uint8_t r8) {
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, r1);
+        write_reg(vdp, 8, r8);
+        write_reg(vdp, 36, 4U);
+        write_reg(vdp, 38, 3U);
+        write_reg(vdp, 40, 4U);
+        write_reg(vdp, 42, 1U);
+        write_reg(vdp, 44, 0x12U);
+        write_reg(vdp, 46, 0xC0U);
+    };
+
+    v9938 screen_off;
+    start_hmmv(screen_off, 0x00U, 0x00U);
+    screen_off.tick(32U);
+    write_reg(screen_off, 15, 2U);
+    CHECK((screen_off.status_read() & 0x01U) == 0U);
+
+    v9938 sprites_off;
+    start_hmmv(sprites_off, 0x40U, 0x02U);
+    sprites_off.tick(32U);
+    write_reg(sprites_off, 15, 2U);
+    CHECK((sprites_off.status_read() & 0x01U) != 0U);
+    sprites_off.tick(24U);
+    write_reg(sprites_off, 15, 2U);
+    CHECK((sprites_off.status_read() & 0x01U) == 0U);
+
+    v9938 sprites_on;
+    start_hmmv(sprites_on, 0x40U, 0x00U);
+    sprites_on.tick(56U);
+    write_reg(sprites_on, 15, 2U);
+    CHECK((sprites_on.status_read() & 0x01U) != 0U);
+    sprites_on.tick(103U);
+    write_reg(sprites_on, 15, 2U);
+    CHECK((sprites_on.status_read() & 0x01U) == 0U);
+}
+
+TEST_CASE("v9938 command completion updates documented register end state") {
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 36, 4U);    // DX
+        write_reg(vdp, 38, 0xFEU); // DY = 1022
+        write_reg(vdp, 39, 0x03U);
+        write_reg(vdp, 40, 2U); // NX
+        write_reg(vdp, 42, 4U); // NY
+        write_reg(vdp, 44, 0x12U);
+        write_reg(vdp, 46, 0xC0U); // HMMV
+
+        CHECK(vdp.reg(38) == 0U);
+        CHECK((vdp.reg(39) & 0x03U) == 0U);
+        CHECK(vdp.reg(42) == 2U);
+        CHECK((vdp.reg(43) & 0x03U) == 0U);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 34, 5U);    // SY
+        write_reg(vdp, 36, 0U);    // DX
+        write_reg(vdp, 38, 7U);    // DY
+        write_reg(vdp, 42, 3U);    // NY
+        write_reg(vdp, 46, 0xE0U); // YMMM
+
+        CHECK(vdp.reg(34) == 8U);
+        CHECK(vdp.reg(38) == 10U);
+        CHECK(vdp.reg(42) == 0U);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        set_addr(vdp, 4U * 128U + 3U, true);
+        vdp.data_write(0x0FU);
+        write_reg(vdp, 32, 7U); // SX
+        write_reg(vdp, 34, 4U); // SY
+        write_reg(vdp, 44, 0U);
+        write_reg(vdp, 46, 0x40U); // POINT
+
+        CHECK(vdp.status(7) == 0x0FU);
+        CHECK(vdp.reg(44) == 0x0FU);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 36, 1U); // DX
+        write_reg(vdp, 38, 1U); // DY
+        write_reg(vdp, 40, 2U); // MAJ
+        write_reg(vdp, 42, 2U); // MIN
+        write_reg(vdp, 44, 0x0AU);
+        write_reg(vdp, 45, 0x01U); // major axis is Y
+        write_reg(vdp, 46, 0x70U); // LINE
+
+        CHECK(vdp.reg(36) == 1U);
+        CHECK((vdp.reg(37) & 0x01U) == 0U);
+        CHECK(vdp.reg(38) == 4U);
+        CHECK((vdp.reg(39) & 0x03U) == 0U);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 36, 1U); // DX
+        write_reg(vdp, 38, 1U); // DY
+        write_reg(vdp, 40, 3U); // MAJ
+        write_reg(vdp, 42, 2U); // MIN
+        write_reg(vdp, 44, 0x0AU);
+        write_reg(vdp, 45, 0x00U); // major axis is X
+        write_reg(vdp, 46, 0x70U); // LINE
+
+        CHECK(vdp.reg(36) == 1U);
+        CHECK((vdp.reg(37) & 0x01U) == 0U);
+        CHECK(vdp.reg(38) == 3U);
+        CHECK((vdp.reg(39) & 0x03U) == 0U);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+    }
 }
 
 TEST_CASE("v9938 S2 exposes fixed bits and retrace timing flags") {
@@ -1039,6 +1525,26 @@ TEST_CASE("v9938 S2 exposes fixed bits and retrace timing flags") {
                     static_cast<std::uint64_t>(v9938::scanlines_ntsc - v9938::display_height_192));
     write_reg(vblank_vdp, 15, 2U);
     CHECK((vblank_vdp.status_read() & 0x40U) == 0U);
+}
+
+TEST_CASE("v9938 coordinate status registers expose documented fixed bits") {
+    v9938 vdp;
+
+    CHECK(vdp.status(4) == 0xFEU);
+    CHECK(vdp.status(6) == 0xFCU);
+    CHECK(vdp.status(9) == 0xFEU);
+
+    write_reg(vdp, 15, 4U);
+    CHECK(vdp.status_read() == 0xFEU);
+    write_reg(vdp, 15, 6U);
+    CHECK(vdp.status_read() == 0xFCU);
+    write_reg(vdp, 15, 9U);
+    CHECK(vdp.status_read() == 0xFEU);
+
+    advance_frames(vdp, 1U);
+    CHECK(vdp.status(6) == 0xFEU);
+    write_reg(vdp, 15, 6U);
+    CHECK(vdp.status_read() == 0xFEU);
 }
 
 TEST_CASE("v9938 HMMV command fills Graphic 5 packed pixels") {
@@ -1117,6 +1623,60 @@ TEST_CASE("v9938 HMMM command copies Graphic 5 source pixels") {
     CHECK(vdp.vram()[5U * 128U + 2U] == 0x1BU);
 }
 
+TEST_CASE("v9938 HMMM command copies overlapping Graphic 4 bytes in reverse X direction") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+    set_addr(vdp, 0U, true);
+    vdp.data_write(0x12U); // pixels 0,1
+    vdp.data_write(0x34U); // pixels 2,3
+    vdp.data_write(0x00U); // destination pixels 4,5
+
+    write_reg(vdp, 32, 2U);    // SX starts at the right source byte
+    write_reg(vdp, 34, 0U);    // SY
+    write_reg(vdp, 36, 4U);    // DX starts at the right destination byte
+    write_reg(vdp, 38, 0U);    // DY
+    write_reg(vdp, 40, 4U);    // NX covers two Graphic 4 high-speed bytes
+    write_reg(vdp, 42, 1U);    // NY
+    write_reg(vdp, 45, 0x04U); // DIX = left
+    write_reg(vdp, 46, 0xD0U); // HMMM
+
+    CHECK(vdp.vram()[0] == 0x12U);
+    CHECK(vdp.vram()[1] == 0x12U);
+    CHECK(vdp.vram()[2] == 0x34U);
+}
+
+TEST_CASE("v9938 R45 selects expansion RAM for command source and destination") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+
+    write_reg(vdp, 45, 0x40U); // HMMV destination is expansion RAM.
+    write_reg(vdp, 36, 4U);    // DX
+    write_reg(vdp, 38, 3U);    // DY
+    write_reg(vdp, 40, 2U);    // NX, one Graphic 4 byte
+    write_reg(vdp, 42, 1U);    // NY
+    write_reg(vdp, 44, 0x34U);
+    write_reg(vdp, 46, 0xC0U); // HMMV
+
+    CHECK(vdp.vram()[3U * 128U + 2U] == 0U);
+    set_addr(vdp, 3U * 128U + 2U, false);
+    CHECK(vdp.data_read() == 0x34U);
+
+    write_reg(vdp, 45, 0x20U); // HMMM source is expansion RAM, destination is VRAM.
+    write_reg(vdp, 32, 4U);    // SX
+    write_reg(vdp, 34, 3U);    // SY
+    write_reg(vdp, 36, 8U);    // DX
+    write_reg(vdp, 38, 4U);    // DY
+    write_reg(vdp, 40, 2U);    // NX
+    write_reg(vdp, 42, 1U);    // NY
+    write_reg(vdp, 46, 0xD0U); // HMMM
+
+    CHECK(vdp.vram()[4U * 128U + 4U] == 0x34U);
+}
+
 TEST_CASE("v9938 HMMC command streams CPU bytes through R44") {
     v9938 vdp;
 
@@ -1126,10 +1686,21 @@ TEST_CASE("v9938 HMMC command streams CPU bytes through R44") {
     write_reg(vdp, 38, 3U);    // DY
     write_reg(vdp, 40, 4U);    // NX
     write_reg(vdp, 42, 1U);    // NY
-    write_reg(vdp, 44, 0x12U); // first byte
+    write_reg(vdp, 44, 0x12U); // first CPU transfer byte
     write_reg(vdp, 46, 0xF0U); // HMMC
 
     CHECK(vdp.vram()[3U * 128U + 2U] == 0x12U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+
+    write_reg(vdp, 44, 0x34U);
+    CHECK(vdp.vram()[3U * 128U + 3U] == 0U);
+
+    vdp.tick(16U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+
+    vdp.tick(24U);
     write_reg(vdp, 15, 2U);
     CHECK((vdp.status_read() & 0x81U) == 0x81U);
 
@@ -1150,6 +1721,8 @@ TEST_CASE("v9938 STOP cancels an active CPU transfer command") {
     write_reg(vdp, 42, 1U);
     write_reg(vdp, 44, 0x12U);
     write_reg(vdp, 46, 0xF0U);
+    CHECK(vdp.vram()[3U * 128U + 2U] == 0x12U);
+
     write_reg(vdp, 46, 0x00U);
 
     write_reg(vdp, 15, 2U);
@@ -1167,10 +1740,24 @@ TEST_CASE("v9938 LMMC command streams exact Graphic 5 pixels") {
     write_reg(vdp, 38, 2U);    // DY
     write_reg(vdp, 40, 2U);    // NX
     write_reg(vdp, 42, 1U);    // NY
-    write_reg(vdp, 44, 0x01U); // first colour
+    write_reg(vdp, 44, 0x01U); // first CPU transfer pixel
     write_reg(vdp, 46, 0xB2U); // LMMC OR
-    write_reg(vdp, 44, 0x02U);
+    CHECK(vdp.vram()[2U * 128U + 1U] == 0x10U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
 
+    write_reg(vdp, 44, 0x02U);
+    CHECK(vdp.vram()[2U * 128U + 1U] == 0x10U);
+
+    vdp.tick(24U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+
+    vdp.tick(56U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x81U);
+
+    write_reg(vdp, 44, 0x02U);
     CHECK(vdp.vram()[2U * 128U + 1U] == 0x18U);
     write_reg(vdp, 15, 2U);
     CHECK((vdp.status_read() & 0x81U) == 0U);
@@ -1191,13 +1778,90 @@ TEST_CASE("v9938 LMCM command streams VRAM pixels through S7") {
     write_reg(vdp, 46, 0xA0U);
 
     write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+    write_reg(vdp, 15, 7U);
+    CHECK(vdp.status_read() == 0U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+    write_reg(vdp, 15, 7U);
+    CHECK(vdp.status_read() == 0U);
+
+    vdp.tick(16U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+    write_reg(vdp, 15, 7U);
+    CHECK(vdp.status_read() == 0U);
+
+    vdp.tick(24U);
+    write_reg(vdp, 15, 2U);
     CHECK((vdp.status_read() & 0x81U) == 0x81U);
     write_reg(vdp, 15, 7U);
     CHECK(vdp.status_read() == 0x0AU);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x01U);
+
+    vdp.tick(40U);
+    write_reg(vdp, 15, 2U);
+    CHECK((vdp.status_read() & 0x81U) == 0x81U);
     write_reg(vdp, 15, 7U);
     CHECK(vdp.status_read() == 0x0BU);
     write_reg(vdp, 15, 2U);
     CHECK((vdp.status_read() & 0x81U) == 0U);
+}
+
+TEST_CASE("v9938 CPU transfer commands update register end state on completion") {
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        write_reg(vdp, 36, 4U);    // DX
+        write_reg(vdp, 38, 3U);    // DY
+        write_reg(vdp, 40, 4U);    // NX
+        write_reg(vdp, 42, 1U);    // NY
+        write_reg(vdp, 44, 0x12U); // first CPU transfer byte
+        write_reg(vdp, 46, 0xF0U); // HMMC
+
+        vdp.tick(40U);
+        write_reg(vdp, 44, 0x34U);
+
+        CHECK(vdp.reg(38) == 4U);
+        CHECK(vdp.reg(42) == 0U);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+        write_reg(vdp, 15, 2U);
+        CHECK((vdp.status_read() & 0x81U) == 0U);
+    }
+
+    {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        set_addr(vdp, 2U * 128U + 2U, true);
+        vdp.data_write(0xABU);
+
+        write_reg(vdp, 32, 4U);    // SX
+        write_reg(vdp, 34, 2U);    // SY
+        write_reg(vdp, 40, 2U);    // NX
+        write_reg(vdp, 42, 1U);    // NY
+        write_reg(vdp, 46, 0xA0U); // LMCM
+
+        write_reg(vdp, 15, 7U);
+        CHECK(vdp.status_read() == 0U);
+        vdp.tick(40U);
+        write_reg(vdp, 15, 7U);
+        CHECK(vdp.status_read() == 0x0AU);
+        vdp.tick(40U);
+        write_reg(vdp, 15, 7U);
+        CHECK(vdp.status_read() == 0x0BU);
+
+        CHECK(vdp.reg(34) == 3U);
+        CHECK(vdp.reg(42) == 0U);
+        CHECK(vdp.reg(44) == 0x0BU);
+        CHECK((vdp.reg(46) & 0xF0U) == 0U);
+        write_reg(vdp, 15, 2U);
+        CHECK((vdp.status_read() & 0x81U) == 0U);
+    }
 }
 
 TEST_CASE("v9938 preserves active CPU transfer command state across snapshots") {
@@ -1209,8 +1873,9 @@ TEST_CASE("v9938 preserves active CPU transfer command state across snapshots") 
     write_reg(vdp, 38, 3U);
     write_reg(vdp, 40, 4U);
     write_reg(vdp, 42, 1U);
-    write_reg(vdp, 44, 0x12U);
+    write_reg(vdp, 44, 0x12U); // first CPU transfer byte
     write_reg(vdp, 46, 0xF0U);
+    CHECK(vdp.vram()[3U * 128U + 2U] == 0x12U);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
@@ -1222,12 +1887,99 @@ TEST_CASE("v9938 preserves active CPU transfer command state across snapshots") 
     REQUIRE(reader.ok());
 
     write_reg(restored, 15, 2U);
+    CHECK((restored.status_read() & 0x81U) == 0x01U);
+    CHECK(restored.vram()[3U * 128U + 2U] == 0x12U);
+    write_reg(restored, 44, 0x34U);
+    CHECK(restored.vram()[3U * 128U + 3U] == 0U);
+
+    restored.tick(40U);
+    write_reg(restored, 15, 2U);
     CHECK((restored.status_read() & 0x81U) == 0x81U);
     write_reg(restored, 44, 0x34U);
-    CHECK(restored.vram()[3U * 128U + 2U] == 0x12U);
     CHECK(restored.vram()[3U * 128U + 3U] == 0x34U);
     write_reg(restored, 15, 2U);
     CHECK((restored.status_read() & 0x81U) == 0U);
+}
+
+TEST_CASE("v9938 preserves active LMCM fetch delay across snapshots") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+    set_addr(vdp, 2U * 128U + 2U, true);
+    vdp.data_write(0xABU);
+
+    write_reg(vdp, 32, 4U);
+    write_reg(vdp, 34, 2U);
+    write_reg(vdp, 40, 2U);
+    write_reg(vdp, 42, 1U);
+    write_reg(vdp, 46, 0xA0U);
+
+    vdp.tick(16U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    vdp.save_state(writer);
+
+    v9938 restored;
+    mnemos::chips::state_reader reader(blob);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+
+    write_reg(restored, 15, 2U);
+    CHECK((restored.status_read() & 0x81U) == 0x01U);
+    write_reg(restored, 15, 7U);
+    CHECK(restored.status_read() == 0U);
+
+    restored.tick(24U);
+    write_reg(restored, 15, 2U);
+    CHECK((restored.status_read() & 0x81U) == 0x81U);
+    write_reg(restored, 15, 7U);
+    CHECK(restored.status_read() == 0x0AU);
+
+    restored.tick(40U);
+    write_reg(restored, 15, 7U);
+    CHECK(restored.status_read() == 0x0BU);
+    write_reg(restored, 15, 2U);
+    CHECK((restored.status_read() & 0x81U) == 0U);
+}
+
+TEST_CASE("v9938 preserves expansion RAM and banked CPU transfer state across snapshots") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+    write_reg(vdp, 45, 0x40U); // HMMC destination is expansion RAM.
+    write_reg(vdp, 36, 4U);
+    write_reg(vdp, 38, 3U);
+    write_reg(vdp, 40, 4U);
+    write_reg(vdp, 42, 1U);
+    write_reg(vdp, 44, 0x12U); // first CPU transfer byte
+    write_reg(vdp, 46, 0xF0U);
+    CHECK(vdp.vram()[3U * 128U + 2U] == 0U);
+
+    set_addr(vdp, 3U * 128U + 2U, false);
+    CHECK(vdp.data_read() == 0x12U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    vdp.save_state(writer);
+
+    v9938 restored;
+    mnemos::chips::state_reader reader(blob);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+
+    CHECK(restored.vram()[3U * 128U + 2U] == 0U);
+    set_addr(restored, 3U * 128U + 2U, false);
+    CHECK(restored.data_read() == 0x12U);
+
+    restored.tick(40U);
+    write_reg(restored, 44, 0x34U);
+
+    CHECK(restored.vram()[3U * 128U + 3U] == 0U);
+    set_addr(restored, 3U * 128U + 3U, false);
+    CHECK(restored.data_read() == 0x34U);
 }
 
 TEST_CASE("v9938 YMMM command copies vertically to the screen edge") {
@@ -1290,6 +2042,28 @@ TEST_CASE("v9938 LMMM command copies Graphic 6 pixels with logical OR") {
     CHECK((vdp.vram()[2U * 256U + 2U] & 0x0FU) == 0x0FU);
 }
 
+TEST_CASE("v9938 LMMM command copies overlapping Graphic 4 pixels in reverse X direction") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+    set_addr(vdp, 0U, true);
+    vdp.data_write(0x12U); // pixels 0,1
+    vdp.data_write(0x30U); // pixel 2, destination pixel 3
+
+    write_reg(vdp, 32, 2U);    // SX starts at the right edge of the source span
+    write_reg(vdp, 34, 0U);    // SY
+    write_reg(vdp, 36, 3U);    // DX starts at the right edge of the destination span
+    write_reg(vdp, 38, 0U);    // DY
+    write_reg(vdp, 40, 3U);    // NX
+    write_reg(vdp, 42, 1U);    // NY
+    write_reg(vdp, 45, 0x04U); // DIX = left
+    write_reg(vdp, 46, 0x90U); // LMMM IMP
+
+    CHECK(vdp.vram()[0] == 0x11U);
+    CHECK(vdp.vram()[1] == 0x23U);
+}
+
 TEST_CASE("v9938 PSET and POINT commands access Graphic 4 pixels") {
     v9938 vdp;
 
@@ -1311,6 +2085,44 @@ TEST_CASE("v9938 PSET and POINT commands access Graphic 4 pixels") {
     write_reg(vdp, 46, 0x40U);
     write_reg(vdp, 15, 7U);
     CHECK(vdp.status_read() == 0x0FU);
+}
+
+TEST_CASE("v9938 logical pixel commands apply transparent and non-transparent ops") {
+    const auto pset_low_nibble = [](std::uint8_t dest, std::uint8_t source,
+                                    std::uint8_t op) -> std::uint8_t {
+        v9938 vdp;
+
+        write_reg(vdp, 0, 0x06U);
+        write_reg(vdp, 1, 0x40U);
+        set_addr(vdp, 0U, true);
+        vdp.data_write(static_cast<std::uint8_t>(0xC0U | (dest & 0x0FU)));
+
+        write_reg(vdp, 36, 1U); // low nibble of byte 0
+        write_reg(vdp, 38, 0U);
+        write_reg(vdp, 44, source);
+        write_reg(vdp, 46, static_cast<std::uint8_t>(0x50U | (op & 0x0FU)));
+
+        const std::uint8_t packed = vdp.vram()[0];
+        CHECK((packed & 0xF0U) == 0xC0U);
+        return static_cast<std::uint8_t>(packed & 0x0FU);
+    };
+
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x00U) == 0x03U); // IMP
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x01U) == 0x02U); // AND
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x02U) == 0x07U); // OR
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x03U) == 0x05U); // XOR
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x04U) == 0x0CU); // NOT
+
+    CHECK(pset_low_nibble(0x06U, 0x00U, 0x08U) == 0x06U); // TIMP
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x08U) == 0x03U);
+    CHECK(pset_low_nibble(0x06U, 0x00U, 0x09U) == 0x06U); // TAND
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x09U) == 0x02U);
+    CHECK(pset_low_nibble(0x06U, 0x00U, 0x0AU) == 0x06U); // TOR
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x0AU) == 0x07U);
+    CHECK(pset_low_nibble(0x06U, 0x00U, 0x0BU) == 0x06U); // TXOR
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x0BU) == 0x05U);
+    CHECK(pset_low_nibble(0x06U, 0x00U, 0x0CU) == 0x06U); // TNOT
+    CHECK(pset_low_nibble(0x06U, 0x03U, 0x0CU) == 0x0CU);
 }
 
 TEST_CASE("v9938 PSET and POINT commands access Graphic 6 pixels") {
@@ -1349,7 +2161,7 @@ TEST_CASE("v9938 LINE command draws inclusive major-axis pixels") {
     CHECK((vdp.vram()[1U * 128U + 2U] & 0xF0U) == 0xA0U);
 }
 
-TEST_CASE("v9938 SRCH command reports the matching border colour coordinate") {
+TEST_CASE("v9938 SRCH command reports the matching border colour coordinate when EQ is clear") {
     v9938 vdp;
 
     write_reg(vdp, 0, 0x06U);
@@ -1360,12 +2172,75 @@ TEST_CASE("v9938 SRCH command reports the matching border colour coordinate") {
     write_reg(vdp, 32, 4U);    // SX
     write_reg(vdp, 34, 2U);    // SY
     write_reg(vdp, 44, 0x0AU); // border colour
-    write_reg(vdp, 45, 0x00U); // search right, equal
+    write_reg(vdp, 45, 0x00U); // search right, stop on border colour
     write_reg(vdp, 46, 0x60U);
 
     CHECK((vdp.status(2) & 0x10U) != 0U);
     CHECK(vdp.status(8) == 5U);
     CHECK(vdp.status(9) == 0xFEU);
+}
+
+TEST_CASE("v9938 SRCH command reports the first non-border colour when EQ is set") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+    set_addr(vdp, 2U * 128U + 2U, true);
+    vdp.data_write(0xAAU);
+    vdp.data_write(0x1AU);
+
+    write_reg(vdp, 32, 4U);    // SX
+    write_reg(vdp, 34, 2U);    // SY
+    write_reg(vdp, 44, 0x0AU); // border colour
+    write_reg(vdp, 45, 0x02U); // search right, stop on non-border colour
+    write_reg(vdp, 46, 0x60U);
+
+    CHECK((vdp.status(2) & 0x10U) != 0U);
+    CHECK(vdp.status(8) == 6U);
+    CHECK(vdp.status(9) == 0xFEU);
+}
+
+TEST_CASE("v9938 SRCH command reads the R45 source expansion bank") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+
+    write_reg(vdp, 45, 0x40U); // CPU port writes expansion RAM through the destination selector.
+    set_addr(vdp, 2U * 128U + 2U, true);
+    vdp.data_write(0xA0U);
+    CHECK(vdp.vram()[2U * 128U + 2U] == 0U);
+
+    write_reg(vdp, 32, 4U);    // SX
+    write_reg(vdp, 34, 2U);    // SY
+    write_reg(vdp, 44, 0x0AU); // border colour
+    write_reg(vdp, 45, 0x20U); // SRCH source is expansion RAM; destination remains normal VRAM.
+    write_reg(vdp, 46, 0x60U);
+
+    CHECK((vdp.status(2) & 0x10U) != 0U);
+    CHECK(vdp.status(8) == 4U);
+    CHECK(vdp.status(9) == 0xFEU);
+}
+
+TEST_CASE("v9938 YMMM command reads the R45 source expansion bank") {
+    v9938 vdp;
+
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+
+    write_reg(vdp, 45, 0x40U); // CPU port writes expansion RAM through the destination selector.
+    set_addr(vdp, 2U * 128U + 2U, true);
+    vdp.data_write(0x56U);
+    CHECK(vdp.vram()[2U * 128U + 2U] == 0U);
+
+    write_reg(vdp, 34, 2U);    // SY
+    write_reg(vdp, 36, 4U);    // DX / x origin
+    write_reg(vdp, 38, 3U);    // DY
+    write_reg(vdp, 42, 1U);    // NY
+    write_reg(vdp, 45, 0x20U); // YMMM source is expansion RAM; destination remains normal VRAM.
+    write_reg(vdp, 46, 0xE0U);
+
+    CHECK(vdp.vram()[3U * 128U + 2U] == 0x56U);
 }
 
 TEST_CASE("v9938 status pointer selects status registers and S0 clears frame IRQ") {
@@ -1386,7 +2261,7 @@ TEST_CASE("v9938 status pointer selects status registers and S0 clears frame IRQ
     CHECK((vdp.status(0) & 0x80U) == 0U);
 
     write_reg(vdp, 15, 9U);
-    CHECK(vdp.status_read() == 0U);
+    CHECK(vdp.status_read() == 0xFEU);
 }
 
 TEST_CASE("v9938 scanline interrupt sets S1 and clears when S1 is read") {
@@ -1433,4 +2308,37 @@ TEST_CASE("v9938 round-trips register, palette, VRAM, and timing state") {
     CHECK(restored.palette(4) == 0x0111U);
     set_addr(restored, 0x12345U, false);
     CHECK(restored.data_read() == 0x5AU);
+}
+
+TEST_CASE("v9938 exposes VRAM and register bytes through introspection") {
+    v9938 vdp;
+    write_reg(vdp, 0, 0x06U);
+    write_reg(vdp, 1, 0x40U);
+    write_reg(vdp, 16, 4U);
+    vdp.palette_write(0x41U);
+    vdp.palette_write(0x02U);
+    set_addr(vdp, 0x12345U, true);
+    vdp.data_write(0x5AU);
+
+    auto& intro = vdp.introspection();
+    const auto memories = intro.memory_views();
+    REQUIRE(memories.size() == 5U);
+    REQUIRE(memories[0] != nullptr);
+    REQUIRE(memories[1] != nullptr);
+    REQUIRE(memories[2] != nullptr);
+    REQUIRE(memories[3] != nullptr);
+    REQUIRE(memories[4] != nullptr);
+    CHECK(memories[0]->name() == "vram");
+    CHECK(memories[0]->bytes()[0x12345U] == 0x5AU);
+    CHECK(memories[1]->name() == "expanded_vram");
+    CHECK(memories[2]->name() == "registers");
+    CHECK(memories[2]->bytes()[0U] == 0x06U);
+    CHECK(memories[2]->bytes()[1U] == 0x40U);
+    CHECK(memories[3]->name() == "status");
+    CHECK(memories[4]->name() == "palette");
+    REQUIRE(memories[4]->bytes().size() == static_cast<std::size_t>(v9938::palette_count * 2));
+    CHECK(memories[4]->bytes()[4U] == 0x71U);
+    CHECK(memories[4]->bytes()[5U] == 0x00U);
+    CHECK(memories[4]->bytes()[8U] == 0x11U);
+    CHECK(memories[4]->bytes()[9U] == 0x01U);
 }

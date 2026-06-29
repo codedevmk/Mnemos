@@ -43,6 +43,7 @@ namespace mnemos::chips::storage {
         [[nodiscard]] bool loaded() const noexcept { return !half_cycles_.empty(); }
 
         void set_cycles_per_second(std::uint32_t cycles_per_second) noexcept;
+        void set_input_high(bool high) noexcept { input_high_ = high; }
         void set_play(bool pressed) noexcept { play_ = pressed; }
         void set_motor_on(bool on) noexcept { motor_on_ = on; }
         void set_output_high(bool high) noexcept { output_high_ = high; }

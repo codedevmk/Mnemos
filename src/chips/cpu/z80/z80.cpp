@@ -42,6 +42,42 @@ namespace mnemos::chips::cpu {
             return t;
         }
 
+        std::uint8_t apply_repeated_block_io_flags(std::uint8_t fl, std::uint8_t data,
+                                                   std::uint8_t count,
+                                                   std::uint16_t repeat_pc) {
+            fl = static_cast<std::uint8_t>(
+                (fl & ~(z80::flag_x | z80::flag_y)) |
+                ((repeat_pc >> 8U) & (z80::flag_x | z80::flag_y)));
+
+            const auto toggle_p_on_odd_parity = [&fl](std::uint8_t value) {
+                if (tables().parity[value & 0x07U] == 0U) {
+                    fl ^= z80::flag_p;
+                }
+            };
+
+            if ((fl & z80::flag_c) != 0U) {
+                if ((data & 0x80U) != 0U) {
+                    toggle_p_on_odd_parity(static_cast<std::uint8_t>(count - 1U));
+                    if ((count & 0x0FU) == 0U) {
+                        fl |= z80::flag_h;
+                    } else {
+                        fl = static_cast<std::uint8_t>(fl & ~z80::flag_h);
+                    }
+                } else {
+                    toggle_p_on_odd_parity(static_cast<std::uint8_t>(count + 1U));
+                    if ((count & 0x0FU) == 0x0FU) {
+                        fl |= z80::flag_h;
+                    } else {
+                        fl = static_cast<std::uint8_t>(fl & ~z80::flag_h);
+                    }
+                }
+            } else {
+                toggle_p_on_odd_parity(count);
+            }
+
+            return fl;
+        }
+
         std::uint8_t add8_flags(std::uint8_t a, std::uint8_t b, std::uint8_t carry,
                                 std::uint8_t& result) {
             const std::uint16_t sum = static_cast<std::uint16_t>(a + b + carry);
@@ -725,12 +761,14 @@ namespace mnemos::chips::cpu {
                     fl |= flag_h | flag_c;
                 }
                 fl |= tables().parity[static_cast<std::uint8_t>((k & 7U) ^ b())];
-                set_f(fl);
                 step_cycles_ += 16;
                 if (y >= 6 && b() != 0U) {
-                    pc_ = static_cast<std::uint16_t>(pc_ - 2U);
+                    const auto repeat_pc = static_cast<std::uint16_t>(pc_ - 2U);
+                    fl = apply_repeated_block_io_flags(fl, v, b(), repeat_pc);
+                    pc_ = repeat_pc;
                     step_cycles_ += 5;
                 }
+                set_f(fl);
                 break;
             }
             default: { // z == 3: OUTI / OUTD / OTIR / OTDR
@@ -754,12 +792,14 @@ namespace mnemos::chips::cpu {
                     fl |= flag_h | flag_c;
                 }
                 fl |= tables().parity[static_cast<std::uint8_t>((k & 7U) ^ b())];
-                set_f(fl);
                 step_cycles_ += 16;
                 if (y >= 6 && b() != 0U) {
-                    pc_ = static_cast<std::uint16_t>(pc_ - 2U);
+                    const auto repeat_pc = static_cast<std::uint16_t>(pc_ - 2U);
+                    fl = apply_repeated_block_io_flags(fl, v, b(), repeat_pc);
+                    pc_ = repeat_pc;
                     step_cycles_ += 5;
                 }
+                set_f(fl);
                 break;
             }
             }
@@ -990,11 +1030,11 @@ namespace mnemos::chips::cpu {
         }
 
         if (!handled) {
-            // The prefix has no effect on this opcode: rewind and let the next
-            // step re-decode it unprefixed (DD/FD each still cost 4T + an R inc).
-            r_ = static_cast<std::uint8_t>((r_ & 0x80U) | ((r_ - 1U) & 0x7FU));
-            pc_ = static_cast<std::uint16_t>(pc_ - 1U);
+            // The prefix has no effect on this opcode, but the CPU still treats
+            // the prefixed byte sequence as one instruction: interrupts are not
+            // accepted between the prefix and the following opcode.
             step_cycles_ += 4;
+            exec_main(op);
         }
     }
 
@@ -1308,6 +1348,7 @@ namespace mnemos::chips::cpu {
                     step_cycles_ += 4;
                     break; // DI
                 default:
+                    iff1_ = iff2_ = true;
                     ei_pending_ = true;
                     step_cycles_ += 4;
                     break; // EI
@@ -1377,6 +1418,7 @@ namespace mnemos::chips::cpu {
 
         if (nmi_pending_) {
             nmi_pending_ = false;
+            ei_pending_ = false;
             halted_ = false;
             iff2_ = iff1_;
             iff1_ = false;

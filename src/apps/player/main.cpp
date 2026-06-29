@@ -395,8 +395,9 @@ int main(int argc, char* argv[]) {
     // save files beside source media.
     std::optional<battery_save_guard> srm_guard;
     const bool headless_request = mnemos::apps::player::has_headless_request(headless);
-    if (system && (!headless_request || headless_load_battery_enabled())) {
-        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path),
+    if (system && !launch.battery_media_path.empty() &&
+        (!headless_request || headless_load_battery_enabled())) {
+        srm_guard.emplace(system.get(), srm_path_for(launch.battery_media_path),
                           !headless_request);
     }
 

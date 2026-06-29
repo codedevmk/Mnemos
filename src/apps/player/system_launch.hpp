@@ -29,6 +29,7 @@ namespace mnemos::apps::player {
     struct system_launch_outcome final {
         std::unique_ptr<frontend_sdk::player_system> system{};
         std::string primary_media_path{};
+        std::string battery_media_path{};
         int exit_code{};
     };
 

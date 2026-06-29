@@ -22,6 +22,11 @@ namespace mnemos::chips::storage {
         static constexpr std::size_t sector_size = 512U;
         static constexpr std::uint8_t standard_sectors_per_track = 9U;
         static constexpr std::size_t standard_mfm_track_size = 6250U;
+        static constexpr std::uint64_t nominal_index_revolution_cycles = 715'909U;
+        static constexpr std::uint64_t nominal_index_pulse_cycles = 14'318U;
+        static constexpr std::uint64_t nominal_mfm_byte_cycles =
+            (nominal_index_revolution_cycles + standard_mfm_track_size - 1U) /
+            standard_mfm_track_size;
 
         [[nodiscard]] static std::optional<dsk_geometry>
         infer_dsk_geometry(std::span<const std::uint8_t> image) noexcept;
@@ -67,35 +72,58 @@ namespace mnemos::chips::storage {
 
         static constexpr std::uint8_t status_busy = 0x01U;
         static constexpr std::uint8_t status_drq = 0x02U;
+        static constexpr std::uint8_t status_index = status_drq;
         static constexpr std::uint8_t status_track0 = 0x04U;
+        static constexpr std::uint8_t status_lost_data = status_track0;
         static constexpr std::uint8_t status_crc_error = 0x08U;
         static constexpr std::uint8_t status_record_not_found = 0x10U;
         static constexpr std::uint8_t status_head_loaded = 0x20U;
+        static constexpr std::uint8_t status_record_type = status_head_loaded;
         static constexpr std::uint8_t status_write_protect = 0x40U;
         static constexpr std::uint8_t status_not_ready = 0x80U;
 
         [[nodiscard]] bool ready() const noexcept;
+        [[nodiscard]] bool index_pulse_active() const noexcept;
         [[nodiscard]] bool sector_offset(std::size_t& offset) const noexcept;
+        [[nodiscard]] bool sector_index_for_offset(std::size_t offset,
+                                                   std::size_t& index) const noexcept;
+        [[nodiscard]] bool deleted_data_mark_for_offset(std::size_t offset) const noexcept;
+        [[nodiscard]] bool track_side_index(std::uint8_t track, std::uint8_t side,
+                                            std::size_t& index) const noexcept;
         [[nodiscard]] static std::size_t expected_size(dsk_geometry geometry) noexcept;
+        [[nodiscard]] static std::size_t expected_sector_count(dsk_geometry geometry) noexcept;
 
         void clear_transfer() noexcept;
         void complete_transfer() noexcept;
         void fail_command(std::uint8_t status_bits) noexcept;
+        void set_deleted_data_mark_for_offset(std::size_t offset, bool deleted) noexcept;
+        void clear_raw_track_for_offset(std::size_t offset) noexcept;
+        void store_raw_track_for_current_head();
         void begin_read_sector() noexcept;
         void begin_write_sector() noexcept;
         void begin_read_address() noexcept;
         void begin_read_track() noexcept;
         void begin_write_track() noexcept;
         void build_mfm_track_image();
+        void rotate_transfer_to_index_phase() noexcept;
         void append_transfer(std::uint8_t value, std::size_t count);
         void commit_write_track() noexcept;
         void finish_sector_transfer() noexcept;
         void finish_type_i(std::uint8_t status_bits) noexcept;
+        void step_head(int delta) noexcept;
         void step_track(int delta) noexcept;
+        void step_head_and_maybe_track(int delta, bool update_track) noexcept;
+        void advance_transfer_clock(std::uint64_t cycles) noexcept;
+        void arm_transfer_byte() noexcept;
+        void service_transfer_byte() noexcept;
 
         dsk_geometry geometry_{};
         std::vector<std::uint8_t> disk_{};
-        bool write_protected_{}; // media write-protect (WD179x status bit 6); media property, not cleared by reset
+        std::vector<std::uint8_t> deleted_data_marks_{};
+        std::vector<std::uint8_t> raw_track_valid_{};
+        std::vector<std::uint8_t> raw_track_streams_{};
+        bool write_protected_{}; // media write-protect (WD179x status bit 6); media property, not
+                                 // cleared by reset
         std::vector<std::uint8_t> transfer_{};
         std::size_t transfer_index_{};
         std::size_t transfer_size_{};
@@ -103,7 +131,9 @@ namespace mnemos::chips::storage {
 
         std::uint8_t command_{};
         std::uint8_t status_latch_{};
+        std::uint8_t transfer_completion_status_{};
         std::uint8_t track_{};
+        std::uint8_t head_track_{};
         std::uint8_t sector_{1U};
         std::uint8_t data_{};
         std::uint8_t selected_drive_{};
@@ -115,6 +145,10 @@ namespace mnemos::chips::storage {
         bool multi_sector_{};
         bool write_track_transfer_{};
         bool type_i_status_{true};
+        int last_step_delta_{1};
+        std::uint64_t index_cycle_{};
+        std::uint64_t drq_age_cycles_{};
+        std::uint64_t transfer_byte_cycle_accum_{};
 
         introspection_surface introspection_{};
     };

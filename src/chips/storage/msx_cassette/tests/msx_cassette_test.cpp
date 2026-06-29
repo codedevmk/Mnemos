@@ -19,6 +19,14 @@ namespace {
         cas.insert(cas.end(), bytes.begin(), bytes.end());
         return cas;
     }
+
+    std::uint32_t encoded_byte_half_cycles(std::uint8_t value) noexcept {
+        std::uint32_t count = 2U; // start bit
+        for (int bit = 0; bit < 8; ++bit) {
+            count += ((value >> bit) & 1U) != 0U ? 4U : 2U;
+        }
+        return count + 8U; // two stop bits
+    }
 } // namespace
 
 TEST_CASE("msx_cassette registers and detects CAS headers") {
@@ -66,6 +74,24 @@ TEST_CASE("msx_cassette converts CAS bytes into BIOS FSK half-cycles") {
     CHECK(tape.half_cycle_count() > (15'360U * 2U));
 }
 
+TEST_CASE("msx_cassette treats unaligned repeated CAS headers as block sentinels") {
+    std::vector<std::uint8_t> cas(msx_cassette::cas_header_magic.begin(),
+                                  msx_cassette::cas_header_magic.end());
+    cas.push_back(0x43U);
+    cas.insert(cas.end(), msx_cassette::cas_header_magic.begin(),
+               msx_cassette::cas_header_magic.end());
+    cas.push_back(0x44U);
+    REQUIRE((msx_cassette::cas_header_magic.size() + 1U) % msx_cassette::cas_header_magic.size() !=
+            0U);
+
+    msx_cassette tape;
+    REQUIRE(tape.load_cas(cas));
+
+    const std::uint32_t expected = (15'360U * 2U) + encoded_byte_half_cycles(0x43U) +
+                                   (3'840U * 2U) + encoded_byte_half_cycles(0x44U);
+    CHECK(tape.half_cycle_count() == expected);
+}
+
 TEST_CASE("msx_cassette save/load preserves playback position") {
     const std::array<std::uint32_t, 3> pulses{3U, 4U, 5U};
     msx_cassette a;
@@ -79,14 +105,44 @@ TEST_CASE("msx_cassette save/load preserves playback position") {
     a.save_state(writer);
 
     msx_cassette b;
-    b.load_half_cycles(pulses);
     mnemos::chips::state_reader reader(blob);
     b.load_state(reader);
     REQUIRE(reader.ok());
+    REQUIRE(reader.remaining() == 0U);
 
+    CHECK(b.half_cycle_count() == pulses.size());
     CHECK(b.position_half_cycle() == a.position_half_cycle());
     CHECK(b.countdown() == a.countdown());
     CHECK(b.input_high() == a.input_high());
     CHECK(b.playing());
     CHECK(b.motor_on());
+}
+
+TEST_CASE("msx_cassette old save blobs keep using preloaded media") {
+    const std::array<std::uint32_t, 3> pulses{3U, 4U, 5U};
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    writer.u32(msx_cassette::default_cycles_per_second);
+    writer.u8(static_cast<std::uint8_t>(msx_cassette::baud_rate::baud_1200));
+    writer.u64(2U);
+    writer.u32(1U);
+    writer.boolean(false);
+    writer.boolean(true);
+    writer.boolean(true);
+    writer.boolean(false);
+
+    msx_cassette restored;
+    restored.load_half_cycles(pulses);
+    mnemos::chips::state_reader reader(blob);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+    REQUIRE(reader.remaining() == 0U);
+
+    CHECK(restored.half_cycle_count() == pulses.size());
+    CHECK(restored.position_half_cycle() == 2U);
+    CHECK(restored.countdown() == 1U);
+    CHECK_FALSE(restored.input_high());
+    CHECK(restored.playing());
+    CHECK(restored.motor_on());
+    CHECK_FALSE(restored.output_high());
 }
