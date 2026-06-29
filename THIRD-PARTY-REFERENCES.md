@@ -239,8 +239,8 @@ multiple independent open-source implementations.
   `src/manifests/irem_m92/games/` use public MAME M92 driver metadata for dump
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the
   encrypted V35 sound-program classification, including the Lethal Thunder /
-  Thunder Blaster, Major Title 2, R-Type Leo, and Undercover Cops parent/clone
-  board variants.
+  Thunder Blaster, In the Hunt, Major Title 2, R-Type Leo, and Undercover Cops
+  parent/clone board variants.
   The first-pass M92 board constants and memory windows are cross-checked
   against public driver-level hardware notes; no MAME driver code or ROM bytes
   are copied into Mnemos. Current M92 execution remains diagnostic rather than
