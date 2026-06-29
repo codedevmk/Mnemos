@@ -907,6 +907,73 @@ namespace mnemos::manifests::capcom_cps2 {
         run_frame_sliced(cpu_cycles_per_frame, nullptr, nullptr);
     }
 
+    namespace {
+        // One archive abstraction so the qsound-bus diagnostics field order is defined
+        // ONCE (in serialize_qsound_bus) and shared by save and load, instead of two
+        // hand-mirrored blocks that silently desync if a field is added in only one.
+        // save_state is const (writes values); load_state mutates (reads into refs) --
+        // hence two archive types with a common call surface.
+        struct save_archive {
+            chips::state_writer& w;
+            void u8(std::uint8_t v) { w.u8(v); }
+            void u16(std::uint16_t v) { w.u16(v); }
+            void u32(std::uint32_t v) { w.u32(v); }
+            void boolean(bool v) { w.boolean(v); }
+            template <class Bytes> void bytes(const Bytes& b) {
+                w.bytes(std::span<const std::uint8_t>(b));
+            }
+        };
+        struct load_archive {
+            chips::state_reader& r;
+            void u8(std::uint8_t& v) { v = r.u8(); }
+            void u16(std::uint16_t& v) { v = r.u16(); }
+            void u32(std::uint32_t& v) { v = r.u32(); }
+            void boolean(bool& v) { v = r.boolean(); }
+            template <class Bytes> void bytes(Bytes& b) {
+                r.bytes(std::span<std::uint8_t>(b));
+            }
+        };
+
+        template <class Ar, class Diag>
+        void serialize_qsound_bus(Ar& ar, Diag& d) {
+            ar.u32(d.shared_68k_write_count);
+            ar.u32(d.shared_68k_non_ff_write_count);
+            ar.u32(d.shared_68k_even_write_count);
+            ar.u32(d.shared_68k_even_non_ff_write_count);
+            ar.u32(d.shared_68k_read_count);
+            ar.u32(d.shared_68k_odd_read_count);
+            ar.u32(d.shared_68k_even_read_count);
+            ar.u32(d.shared_68k_status_read_count);
+            ar.u32(d.shared_68k_magic_read_count);
+            ar.u32(d.shared_68k_command_signal_write_count);
+            ar.u32(d.shared_z80_command_signal_read_count);
+            ar.u32(d.shared_z80_write_count);
+            ar.u32(d.work_z80_write_count);
+            ar.u16(d.shared_last_68k_index);
+            ar.u8(d.shared_last_68k_value);
+            ar.u32(d.shared_last_68k_write_pc);
+            ar.u32(d.shared_last_68k_non_ff_write_pc);
+            ar.u16(d.shared_last_68k_read_index);
+            ar.u8(d.shared_last_68k_read_value);
+            ar.u32(d.shared_last_68k_read_pc);
+            ar.u16(d.shared_last_even_68k_index);
+            ar.u8(d.shared_last_even_68k_value);
+            ar.u16(d.shared_last_z80_addr);
+            ar.u8(d.shared_last_z80_value);
+            ar.u8(d.shared_status_first_read_value);
+            ar.u8(d.shared_status_last_read_value);
+            ar.u32(d.shared_status_first_read_pc);
+            ar.u32(d.shared_status_last_read_pc);
+            ar.boolean(d.shared_status_first_read_seen);
+            ar.u8(d.shared_command_signal_last_68k_value);
+            ar.u32(d.shared_command_signal_last_68k_pc);
+            ar.u8(d.shared_command_signal_last_z80_value);
+            ar.bytes(d.shared_command_snapshot);
+            ar.u16(d.work_last_z80_addr);
+            ar.u8(d.work_last_z80_value);
+        }
+    } // namespace
+
     void cps2_system::save_state(chips::state_writer& writer) const {
         writer.u32(cps2_system_state_version);
         writer.boolean(executable_);
@@ -963,41 +1030,8 @@ namespace mnemos::manifests::capcom_cps2 {
         writer.bytes(std::span<const std::uint8_t>(qsound_shared_ram_));
         writer.bytes(std::span<const std::uint8_t>(z80_ram_));
         writer.bytes(std::span<const std::uint8_t>(qsound_work_ram_));
-        writer.u32(qsound_bus_.shared_68k_write_count);
-        writer.u32(qsound_bus_.shared_68k_non_ff_write_count);
-        writer.u32(qsound_bus_.shared_68k_even_write_count);
-        writer.u32(qsound_bus_.shared_68k_even_non_ff_write_count);
-        writer.u32(qsound_bus_.shared_68k_read_count);
-        writer.u32(qsound_bus_.shared_68k_odd_read_count);
-        writer.u32(qsound_bus_.shared_68k_even_read_count);
-        writer.u32(qsound_bus_.shared_68k_status_read_count);
-        writer.u32(qsound_bus_.shared_68k_magic_read_count);
-        writer.u32(qsound_bus_.shared_68k_command_signal_write_count);
-        writer.u32(qsound_bus_.shared_z80_command_signal_read_count);
-        writer.u32(qsound_bus_.shared_z80_write_count);
-        writer.u32(qsound_bus_.work_z80_write_count);
-        writer.u16(qsound_bus_.shared_last_68k_index);
-        writer.u8(qsound_bus_.shared_last_68k_value);
-        writer.u32(qsound_bus_.shared_last_68k_write_pc);
-        writer.u32(qsound_bus_.shared_last_68k_non_ff_write_pc);
-        writer.u16(qsound_bus_.shared_last_68k_read_index);
-        writer.u8(qsound_bus_.shared_last_68k_read_value);
-        writer.u32(qsound_bus_.shared_last_68k_read_pc);
-        writer.u16(qsound_bus_.shared_last_even_68k_index);
-        writer.u8(qsound_bus_.shared_last_even_68k_value);
-        writer.u16(qsound_bus_.shared_last_z80_addr);
-        writer.u8(qsound_bus_.shared_last_z80_value);
-        writer.u8(qsound_bus_.shared_status_first_read_value);
-        writer.u8(qsound_bus_.shared_status_last_read_value);
-        writer.u32(qsound_bus_.shared_status_first_read_pc);
-        writer.u32(qsound_bus_.shared_status_last_read_pc);
-        writer.boolean(qsound_bus_.shared_status_first_read_seen);
-        writer.u8(qsound_bus_.shared_command_signal_last_68k_value);
-        writer.u32(qsound_bus_.shared_command_signal_last_68k_pc);
-        writer.u8(qsound_bus_.shared_command_signal_last_z80_value);
-        writer.bytes(std::span<const std::uint8_t>(qsound_bus_.shared_command_snapshot));
-        writer.u16(qsound_bus_.work_last_z80_addr);
-        writer.u8(qsound_bus_.work_last_z80_value);
+        save_archive save_ar{writer};
+        serialize_qsound_bus(save_ar, qsound_bus_);
         writer.u8(sound_bank_);
         writer.boolean(sound_reset_asserted_);
         writer.u64(static_cast<std::uint64_t>(sound_cycle_debt_));
@@ -1113,41 +1147,8 @@ namespace mnemos::manifests::capcom_cps2 {
         reader.bytes(std::span<std::uint8_t>(z80_ram_));
         reader.bytes(std::span<std::uint8_t>(qsound_work_ram_));
         if (version >= 6U) {
-            qsound_bus_.shared_68k_write_count = reader.u32();
-            qsound_bus_.shared_68k_non_ff_write_count = reader.u32();
-            qsound_bus_.shared_68k_even_write_count = reader.u32();
-            qsound_bus_.shared_68k_even_non_ff_write_count = reader.u32();
-            qsound_bus_.shared_68k_read_count = reader.u32();
-            qsound_bus_.shared_68k_odd_read_count = reader.u32();
-            qsound_bus_.shared_68k_even_read_count = reader.u32();
-            qsound_bus_.shared_68k_status_read_count = reader.u32();
-            qsound_bus_.shared_68k_magic_read_count = reader.u32();
-            qsound_bus_.shared_68k_command_signal_write_count = reader.u32();
-            qsound_bus_.shared_z80_command_signal_read_count = reader.u32();
-            qsound_bus_.shared_z80_write_count = reader.u32();
-            qsound_bus_.work_z80_write_count = reader.u32();
-            qsound_bus_.shared_last_68k_index = reader.u16();
-            qsound_bus_.shared_last_68k_value = reader.u8();
-            qsound_bus_.shared_last_68k_write_pc = reader.u32();
-            qsound_bus_.shared_last_68k_non_ff_write_pc = reader.u32();
-            qsound_bus_.shared_last_68k_read_index = reader.u16();
-            qsound_bus_.shared_last_68k_read_value = reader.u8();
-            qsound_bus_.shared_last_68k_read_pc = reader.u32();
-            qsound_bus_.shared_last_even_68k_index = reader.u16();
-            qsound_bus_.shared_last_even_68k_value = reader.u8();
-            qsound_bus_.shared_last_z80_addr = reader.u16();
-            qsound_bus_.shared_last_z80_value = reader.u8();
-            qsound_bus_.shared_status_first_read_value = reader.u8();
-            qsound_bus_.shared_status_last_read_value = reader.u8();
-            qsound_bus_.shared_status_first_read_pc = reader.u32();
-            qsound_bus_.shared_status_last_read_pc = reader.u32();
-            qsound_bus_.shared_status_first_read_seen = reader.boolean();
-            qsound_bus_.shared_command_signal_last_68k_value = reader.u8();
-            qsound_bus_.shared_command_signal_last_68k_pc = reader.u32();
-            qsound_bus_.shared_command_signal_last_z80_value = reader.u8();
-            reader.bytes(std::span<std::uint8_t>(qsound_bus_.shared_command_snapshot));
-            qsound_bus_.work_last_z80_addr = reader.u16();
-            qsound_bus_.work_last_z80_value = reader.u8();
+            load_archive load_ar{reader};
+            serialize_qsound_bus(load_ar, qsound_bus_);
         } else {
             qsound_bus_ = {};
         }
