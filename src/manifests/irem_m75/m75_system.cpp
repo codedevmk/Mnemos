@@ -94,9 +94,16 @@ namespace mnemos::manifests::irem_m75 {
                    set_name == "vigilantd";
         }
 
+        [[nodiscard]] bool is_kikcubic_set(std::string_view set_name) noexcept {
+            return set_name == "kikcubic";
+        }
+
         [[nodiscard]] std::uint8_t layout_code(std::string_view layout) noexcept {
             if (layout == "vigilant") {
                 return 1U;
+            }
+            if (layout == "kikcubic") {
+                return 2U;
             }
             return 0U;
         }
@@ -144,6 +151,11 @@ namespace mnemos::manifests::irem_m75 {
             return {.dsw1_default = vigilant_dsw1_default,
                     .dsw2_default = vigilant_dsw2_default,
                     .rom_layout = "vigilant"};
+        }
+        if (is_kikcubic_set(set_name)) {
+            return {.dsw1_default = kikcubic_dsw1_default,
+                    .dsw2_default = kikcubic_dsw2_default,
+                    .rom_layout = "kikcubic"};
         }
         return {};
     }
@@ -290,6 +302,22 @@ namespace mnemos::manifests::irem_m75 {
         sound_cpu.attach_bus(sound_bus);
 
         main_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
+            if (params.rom_layout == "kikcubic") {
+                switch (port & 0xFFU) {
+                case 0x00U:
+                    return dsw1;
+                case 0x01U:
+                    return dsw2;
+                case 0x02U:
+                    return input_p1;
+                case 0x03U:
+                    return input_system;
+                case 0x04U:
+                    return input_p2;
+                default:
+                    return 0xFFU;
+                }
+            }
             switch (port & 0xFFU) {
             case port_in_p1:
                 return input_p1;
@@ -306,6 +334,24 @@ namespace mnemos::manifests::irem_m75 {
             }
         });
         main_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
+            if (params.rom_layout == "kikcubic") {
+                switch (port & 0xFFU) {
+                case 0x00U:
+                    control_register = value;
+                    break;
+                case 0x04U:
+                    set_bank(value);
+                    break;
+                case 0x06U:
+                    sound_latch = value;
+                    sound_latch_irq = true;
+                    update_sound_irq();
+                    break;
+                default:
+                    break;
+                }
+                return;
+            }
             switch (port & 0xFFU) {
             case port_out_sound_latch:
                 sound_latch = value;

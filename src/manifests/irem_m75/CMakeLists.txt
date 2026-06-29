@@ -1,4 +1,5 @@
 set(_irem_m75_game_manifest_files
+    "games/kikcubic.toml"
     "games/vigilant.toml"
     "games/vigilanta.toml"
     "games/vigilantb.toml"

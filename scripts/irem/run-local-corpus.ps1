@@ -100,7 +100,7 @@ Set-EnvIfPathExists -Name "MNEMOS_M57_SET_DIR" -Path (Join-CorpusPath -Base $roo
 Set-EnvIfPathExists -Name "MNEMOS_M58_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M58")
 Set-EnvIfPathExists -Name "MNEMOS_M62_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M62")
 Set-EnvIfPathExists -Name "MNEMOS_M63_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M63")
-Set-EnvIfPathExists -Name "MNEMOS_TRAVRUSA_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "travrusa")
+Set-EnvIfPathExists -Name "MNEMOS_TRAVRUSA_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M52")
 Set-EnvIfPathExists -Name "MNEMOS_M75_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M75")
 Set-EnvIfPathExists -Name "MNEMOS_M78_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M78")
 Set-EnvIfPathExists -Name "MNEMOS_M81_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M81")

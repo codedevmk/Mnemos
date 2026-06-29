@@ -58,6 +58,29 @@ namespace {
             };
             return bootleg_regions;
         }
+        if (set_name == "kikcubic") {
+            static const std::map<std::string, expected_contract, std::less<>> kikcubic_regions{
+                {"maincpu",
+                 {.region_size = mnemos::manifests::irem_m75::main_rom_size,
+                  .file_count = 3U}},
+                {"soundcpu",
+                 {.region_size = mnemos::manifests::irem_m75::sound_rom_size,
+                  .file_count = 1U}},
+                {"chars",
+                 {.region_size = mnemos::manifests::irem_m75::char_gfx_size,
+                  .file_count = 2U}},
+                {"sprites",
+                 {.region_size = mnemos::manifests::irem_m75::sprite_gfx_size,
+                  .file_count = 2U}},
+                {"samples",
+                 {.region_size = mnemos::manifests::irem_m75::sample_rom_size,
+                  .file_count = 1U}},
+                {"proms",
+                 {.region_size = mnemos::manifests::irem_m75::kikcubic_proms_size,
+                  .file_count = 3U}},
+            };
+            return kikcubic_regions;
+        }
         static const std::map<std::string, expected_contract, std::less<>> regions{
             {"maincpu",
              {.region_size = mnemos::manifests::irem_m75::main_rom_size, .file_count = 2U}},
@@ -76,6 +99,14 @@ namespace {
             {"plds", {.region_size = mnemos::manifests::irem_m75::plds_size, .file_count = 3U}},
         };
         return regions;
+    }
+
+    [[nodiscard]] std::size_t expected_dip_count(std::string_view set_name) noexcept {
+        return set_name == "kikcubic" ? 13U : 14U;
+    }
+
+    [[nodiscard]] std::uint16_t expected_raw_dip_default(std::string_view set_name) noexcept {
+        return set_name == "kikcubic" ? 0xD5FFU : 0xFDFFU;
     }
 
     [[nodiscard]] std::string read_text_file(const std::filesystem::path& path) {
@@ -148,7 +179,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts", "[m75][rom]") {
+TEST_CASE("m75 embedded manifests cover the local M75 parent and clone contracts", "[m75][rom]") {
     const auto declarations = embedded_declarations();
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, raw_decl] : declarations) {
@@ -175,13 +206,14 @@ TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts
             require_region_contract(*region);
         }
 
-        CHECK(decl.dips.size() == 14U);
-        CHECK(raw_dip_default(decl, 0xFFFFU) == 0xFDFFU);
+        CHECK(decl.dips.size() == expected_dip_count(decl.name));
+        CHECK(raw_dip_default(decl, 0xFFFFU) == expected_raw_dip_default(decl.name));
     }
 
-    CHECK(names == std::set<std::string, std::less<>>{"vigilant", "vigilanta", "vigilantb",
-                                                      "vigilantbl", "vigilantc", "vigilantd",
-                                                      "vigilantg", "vigilanto"});
+    CHECK(names == std::set<std::string, std::less<>>{"kikcubic", "vigilant", "vigilanta",
+                                                      "vigilantb", "vigilantbl", "vigilantc",
+                                                      "vigilantd", "vigilantg", "vigilanto"});
+    CHECK_FALSE(mnemos::manifests::irem_m75::game_manifest_toml("kikcubic").empty());
     CHECK_FALSE(mnemos::manifests::irem_m75::game_manifest_toml("vigilant").empty());
     REQUIRE(declarations.at("vigilanta").parent.has_value());
     CHECK(*declarations.at("vigilanta").parent == "vigilant");
@@ -230,6 +262,19 @@ TEST_CASE("m75 embedded manifests cover the Vigilante parent and clone contracts
     REQUIRE(switch8 != nullptr);
     CHECK(switch8->mask == 0x8000U);
     CHECK(switch8->default_value == 0x8000U);
+
+    const auto& kikcubic = declarations.at("kikcubic");
+    const rom_set_region* kikcubic_proms = find_region(kikcubic, "proms");
+    REQUIRE(kikcubic_proms != nullptr);
+    CHECK(kikcubic_proms->size == mnemos::manifests::irem_m75::kikcubic_proms_size);
+    const rom_set_dip_switch* kikcubic_lives = find_dip(kikcubic, "Lives");
+    REQUIRE(kikcubic_lives != nullptr);
+    CHECK(kikcubic_lives->mask == 0x000CU);
+    CHECK(kikcubic_lives->default_value == 0x000CU);
+    const rom_set_dip_switch* kikcubic_service = find_dip(kikcubic, "Service Mode");
+    REQUIRE(kikcubic_service != nullptr);
+    CHECK(kikcubic_service->mask == 0x8000U);
+    CHECK(kikcubic_service->default_value == 0x8000U);
 }
 
 TEST_CASE("m75 embedded manifests stay in sync with disk TOML", "[m75][rom]") {

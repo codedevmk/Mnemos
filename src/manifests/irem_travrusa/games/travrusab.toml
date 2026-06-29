@@ -1,5 +1,5 @@
 # Traverse USA / American Top bootleg -- Irem travrusa ROM contract.
-# Local wrapper: D:\emu\irem\travrusa\travrusab.zip -> travrusab.zip.
+# Local wrapper: D:\emu\irem\M52\travrusab.zip -> travrusab.zip.
 # Shared tile and PROM dumps are inherited from the local travrusa parent.
 
 [set]

@@ -444,15 +444,15 @@ passes `1/1`, and the common local corpus runner's trailing M72 smoke now passes
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
-437 items across 25 top-level buckets. Direct files under `D:\emu\irem` are now
+438 items across 24 top-level buckets. Direct files under `D:\emu\irem` are now
 zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
 `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 312 items
-match a checked-in Irem manifest from non-ignored buckets, 169 are readable
-through current ZIP / single-inner-ZIP / folder routes, 167 are backed by an
-executable player-supported route, 2 are tracked contract-only, and 143 tracked
+separates manifest tracking, media loadability, and player support: 318 items
+match a checked-in Irem manifest from non-ignored buckets, 172 are readable
+through current ZIP / single-inner-ZIP / folder routes, 170 are backed by an
+executable player-supported route, 2 are tracked contract-only, and 146 tracked
 matches remain metadata-only until converted to ZIP/unpacked folders or, for
 artwork/layout packages, ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -505,12 +505,15 @@ The local M63 grouping now tracks `D:\emu\irem\M63\wilytowr.zip` as a
 direct player-loadable first-pass `wilytowr` route; the two local Wily Tower
 `.7z` archives remain metadata-only until converted or unpacked.
 The local M75 grouping now also tracks the bootleg `vigilantbl` wrapper as a
-direct player-loadable clone of `vigilant`, and the M62 `lotlot` contract keeps
-the local Lot Lot wrapper out of `classify_or_sort_corpus_item`. The local
+direct player-loadable clone of `vigilant` and the standalone `kikcubic` ZIP as
+a first-pass Meikyu Jima / Kickle Cubicle route; `kikcubic.7z` and
+`kikcubic (1).7z` remain metadata-only until converted or unpacked. The M62
+`lotlot` contract keeps the local Lot Lot wrapper out of
+`classify_or_sort_corpus_item`. The local
 travrusa grouping now tracks `travrusa`, `motorace`, `travrusab`, and
-`travrusab2` as first-pass player-supported under
+`travrusab2` from the M52-era local corpus bucket as first-pass player-supported under
 `src/manifests/irem_travrusa` and `src/apps/player/adapters/irem_travrusa`;
-`MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` proves four CRC-clean ZIP routes,
+`MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\M52` proves four CRC-clean ZIP routes,
 and the unsuffixed `travrusa.zip` is artwork/layout rather than parent ROM
 proof, so it remains metadata-only for support accounting. The remaining known
 untracked classifications are explicit rather than
@@ -782,34 +785,38 @@ board profile.
 ## Irem Traverse USA / Zippy Race — 1 / 2
 
 This section tracks the early Zippy Race / Traverse USA family separately from
-M52/M58/M62/M72 because the local corpus maps it to public `irem/travrusa.cpp`
-metadata rather than the later M-board profiles.
+the Moon Patrol M52 runtime profile because public metadata maps it to
+`irem/travrusa.cpp`; the physical local corpus files now live under the M52-era
+bucket instead of a top-level game-family folder.
 
 #### Manifests / board bring-up
-- [x] **ITRAV-1** Local travrusa ROM-set contracts — `src/manifests/irem_travrusa` carries checked-in embedded ROM-contract manifests for `travrusa`, `motorace`, `travrusab`, and `travrusab2`, preserving local filenames, region sizes, offsets, CRC32 values, parent fallback, and aliases for the split wrappers. `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` data-gates the local ZIP corpus, selects the CRC-clean parent route instead of the artwork/layout-only `travrusa.zip`, and proves the single-inner wrapper ZIPs load through embedded manifests · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_travrusa/games/*.toml` + `src/manifests/irem_travrusa/tests/travrusa_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [~] **ITRAV-2** Executable travrusa board profile — First-pass route exists for the travrusa family: Z80 main CPU, Z80 sound CPU, dual SSG, MSM5205, title memory/MMIO windows, tile/sprite/PROM compositor, inputs, save-state identity, player adapter registration, local corpus smoke, and direct player launch proof are wired. This is smoke-playable, not authentic parity: MotoRace encrypted ROM handling, exact video priority/scroll/color behavior, Irem Audio timing, DIP/input parity, and trusted visual/audio parity remain open · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_travrusa/*` board implementation + `src/apps/player/adapters/irem_travrusa/*` + `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\travrusa` corpus golden + direct `mnemos_player --system irem_travrusa` smoke
+- [x] **ITRAV-1** Local travrusa ROM-set contracts — `src/manifests/irem_travrusa` carries checked-in embedded ROM-contract manifests for `travrusa`, `motorace`, `travrusab`, and `travrusab2`, preserving local filenames, region sizes, offsets, CRC32 values, parent fallback, and aliases for the split wrappers. `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\M52` data-gates the local ZIP corpus, selects the CRC-clean parent route instead of the artwork/layout-only `travrusa.zip`, and proves the single-inner wrapper ZIPs load through embedded manifests · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_travrusa/games/*.toml` + `src/manifests/irem_travrusa/tests/travrusa_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **ITRAV-2** Executable travrusa board profile — First-pass route exists for the travrusa family: Z80 main CPU, Z80 sound CPU, dual SSG, MSM5205, title memory/MMIO windows, tile/sprite/PROM compositor, inputs, save-state identity, player adapter registration, local corpus smoke, and direct player launch proof are wired. This is smoke-playable, not authentic parity: MotoRace encrypted ROM handling, exact video priority/scroll/color behavior, Irem Audio timing, DIP/input parity, and trusted visual/audio parity remain open · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_travrusa/*` board implementation + `src/apps/player/adapters/irem_travrusa/*` + `MNEMOS_TRAVRUSA_SET_DIR=D:\emu\irem\M52` corpus golden + direct `mnemos_player --system irem_travrusa` smoke
 
 ---
 
 ## Irem M75 — 1 / 2
 
-This section is split from M72/M81 because the current Vigilante route is a
-Z80 main CPU plus Z80 sound CPU board with YM2151/DAC audio, not the V30 route
-used by true M72 and later M8x profiles.
+This section is split from M72/M81 because the current Vigilante and Meikyu
+Jima / Kickle Cubicle routes are Z80 main CPU plus Z80 sound CPU boards with
+YM2151/DAC audio, not the V30 route used by true M72 and later M8x profiles.
 
 #### Manifests / board bring-up
-- [x] **I75-1** Vigilante ROM-set contract — `src/manifests/irem_m75` carries checked-in embedded ROM-contract manifests for parent `vigilant`, official regional clones `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, and `vigilanto`, plus the bootleg clone `vigilantbl`. The parent includes the Z80 main program with banked `$8000-$bfff` reload area, sound CPU ROM, character graphics, sprite graphics with ROM-continue duplication, background tile graphics, samples, PROM, PLD regions, and 14 SW1/SW2 DIP definitions from the Vigilante Installation & Service Manual; clones declare their changed program/graphics regions and inherit shared parent media plus the DIP table. `vigilantbl` preserves its local bootleg program, split sprite, three-PROM, and PAL dumps while resolving shared sound/character/background/sample media through the `vigilant` parent. `MNEMOS_M75_SET_DIR=D:\emu\irem` data-gates the complete local parent wrapper `D:\emu\irem\Vigilante_Arcade_EN (3).zip`, the six official clone wrappers, `D:\emu\irem\Vigilante_Arcade_JA.zip`, and the bootleg wrapper `D:\emu\irem\Vigilante_Arcade_EN.zip`; `scripts/irem/inventory-corpus.ps1` now records eight direct player-loadable M75 manifest matches instead of leaving the bootleg wrapper as an unsupported root item · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m75/games/vigilant.toml` + `src/manifests/irem_m75/games/vigilantbl.toml` + `src/manifests/irem_m75/tests/m75_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `THIRD-PARTY-REFERENCES.md`
-- [~] **I75-2** Executable M75 board profile — `src/manifests/irem_m75/m75_system.cpp` now assembles a first-pass M75-owned Z80/Z80/YM2151/DAC board with fixed and banked main ROM windows, sprite/palette/video/work RAM, sound ROM/RAM, active-low inputs/DIPs, Vigilante bank/scroll/rear-color latches, sound latch IRQ/ack, sample-address and DAC ports, a two-bank 5-bit KNA91-style palette bus, rear color/disable register semantics, whole-board save/load identity, and diagnostic video composition over the checked-in graphics/sample/PROM regions. Focused board tests now prove the sound Z80 programs the sample-address ports, reads consecutive sample ROM bytes through the modeled sample port, writes them through the DAC on the sound CPU elapsed-clock timeline, and acknowledges the latch. `src/apps/player/adapters/irem_m75` registers `--system irem_m75` / `m75`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml` manifests, clone/parent fallback media resolution, resident media validation, rollback-ready save-state, capability discovery, service/test input mapping with save-state proof, parsed DIP metadata retention, manifest-default folding to board-visible `dsw1=0xff` / `dsw2=0xfd`, `DIP switches=14` system-spec exposure, and real local player smoke through `MNEMOS_M75_SET_DIR=D:\emu\irem`, including the bootleg `vigilantbl` wrapper. Remaining: replace the diagnostic compositor with board-evidenced Vigilante tile/sprite/background priority, verify exact memory/I/O, runtime DIP behavior beyond current manual defaults, and raster timing, prove sample/DAC timing against reference evidence, prove bootleg-specific PROM/color behavior, and collect screenshot/audio parity before calling Vigilante correct · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m75/m75_system.cpp` + `src/manifests/irem_m75/tests/m75_system_test.cpp` + `src/apps/player/adapters/irem_m75/irem_m75_adapter.cpp` + `src/apps/player/adapters/irem_m75/tests/irem_m75_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
+- [x] **I75-1** M75 ROM-set contracts — `src/manifests/irem_m75` carries checked-in embedded ROM-contract manifests for parent `vigilant`, official regional clones `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`, `vigilantg`, and `vigilanto`, the bootleg clone `vigilantbl`, and standalone `kikcubic`. The Vigilante parent includes the Z80 main program with banked `$8000-$bfff` reload area, sound CPU ROM, character graphics, sprite graphics with ROM-continue duplication, background tile graphics, samples, PROM, PLD regions, and 14 SW1/SW2 DIP definitions from the Vigilante Installation & Service Manual; clones declare their changed program/graphics regions and inherit shared parent media plus the DIP table. `vigilantbl` preserves its local bootleg program, split sprite, three-PROM, and PAL dumps while resolving shared sound/character/background/sample media through the `vigilant` parent. `kikcubic` preserves the local ZIP filenames, 0x30000 main program, sound, character, sprite, sample, 0x0140 PROM regions, and 13 SW1/SW2 DIP definitions; the public no-dump PALs are omitted rather than faked. `MNEMOS_M75_SET_DIR=D:\emu\irem\M75` data-gates the complete local parent wrapper, official clone wrappers, bootleg wrapper, and `D:\emu\irem\M75\kikcubic.zip`; `scripts/irem/inventory-corpus.ps1` now records 17 tracked M75 local artifacts, 9 direct player-loadable/supported ZIP routes, and no remaining M75 board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m75/games/*.toml` + `src/manifests/irem_m75/tests/m75_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `THIRD-PARTY-REFERENCES.md`
+- [~] **I75-2** Executable M75 board profile — `src/manifests/irem_m75/m75_system.cpp` now assembles a first-pass M75-owned Z80/Z80/YM2151/DAC board with fixed and banked main ROM windows, sprite/palette/video/work RAM, sound ROM/RAM, active-low inputs/DIPs, Vigilante bank/scroll/rear-color latches, kikcubic main-CPU DSW/input/bank/sound-latch ports, sound latch IRQ/ack, sample-address and DAC ports, a two-bank 5-bit KNA91-style palette bus, rear color/disable register semantics, whole-board save/load identity, and diagnostic video composition over the checked-in graphics/sample/PROM regions. Focused board tests now prove the sound Z80 programs the sample-address ports, reads consecutive sample ROM bytes through the modeled sample port, writes them through the DAC on the sound CPU elapsed-clock timeline, acknowledges the latch, and that `kikcubic` reads `dsw1=0xff` / `dsw2=0xd5` through its own port layout while writing bank and sound latch ports. `src/apps/player/adapters/irem_m75` registers `--system irem_m75` / `m75`, supports direct ZIPs, single-inner wrapper ZIPs, unpacked folders, embedded or in-archive `game.toml` manifests, clone/parent fallback media resolution, resident media validation, rollback-ready save-state, capability discovery, service/test input mapping with save-state proof, parsed DIP metadata retention, per-set manifest-default folding, and real local player smoke through `MNEMOS_M75_SET_DIR=D:\emu\irem\M75`, including `kikcubic.zip`. Direct `mnemos_player --system irem_m75 --rom D:\emu\irem\M75\kikcubic.zip --frames 180 --screenshot build\scratch\kikcubic_m75.ppm` produced a nonblank 256x256 PPM, and `--system m75` wrote a 105312-byte save state for the same ZIP. Remaining: replace the diagnostic compositor with board-evidenced Vigilante and Meikyu Jima tile/sprite/background priority, verify exact memory/I/O, runtime DIP behavior beyond current defaults, and raster timing, prove sample/DAC timing against reference evidence, prove bootleg/PROM/color behavior, and collect screenshot/audio parity before calling any M75 game correct · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m75/m75_system.cpp` + `src/manifests/irem_m75/tests/m75_system_test.cpp` + `src/apps/player/adapters/irem_m75/irem_m75_adapter.cpp` + `src/apps/player/adapters/irem_m75/tests/irem_m75_adapter_test.cpp` + `docs/architecture/factsheets/irem-system-boards-reference.md`
 
 Cabinet input note: the M75 adapter now consumes explicit frontend `service`
 and `test` inputs, keeps `mode` as the service-credit alias for older callers,
-maps service to system bit `0x10`, maps operator-test to system bit `0x20`,
+maps Vigilante service to system bit `0x10`, maps Vigilante operator-test to
+system bit `0x20`, maps kikcubic service/mode to the third coin bit `0x40`,
 and persists explicit `service` / `test` fields in adapter state version 2.
 
 DIP note: `vigilant` now carries 14 SW1/SW2 DIP entries transcribed from the
 Vigilante Installation & Service Manual. M75 clones inherit the table; the
 adapter folds the raw active-low default to `dsw1=0xff`, `dsw2=0xfd`, publishes
-`DIP switches=14`, and still honors explicit `--dip` override.
+`DIP switches=14`, and still honors explicit `--dip` override. `kikcubic`
+carries 13 public SW1/SW2 DIP entries and folds to `dsw1=0xff`,
+`dsw2=0xd5`.
 
 ---
 

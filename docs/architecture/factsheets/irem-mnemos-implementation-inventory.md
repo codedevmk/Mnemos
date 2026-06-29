@@ -14,17 +14,18 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 438 local corpus items across 25 top-level buckets. Direct files
+That scan found 438 local corpus items across 24 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
-buckets such as `M72`, `M92`, `M119`, `M62`, `M58`, and `travrusa`, plus
-quarantine or classification buckets such as `for-delete` and `non-irem`. The
-lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
-USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 438 items, 315 currently match a
-checked-in Mnemos Irem manifest, 171 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, 169 have an
+buckets such as `M72`, `M92`, `M119`, `M62`, `M58`, and `M52`, plus quarantine
+or classification buckets such as `for-delete` and `non-irem`. The Traverse
+USA / Zippy Race files now live under the M52-era corpus bucket; Mnemos still
+treats them as a separate `irem_travrusa` first-pass profile because the
+factsheet does not yet map the family to a numbered M-board. Of those 438
+items, 318 currently match a
+checked-in Mnemos Irem manifest, 172 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, 170 have an
 executable player-supported route, two are tracked contract-only routes, and
-144 are metadata-only tracked matches. The count includes `scumimon` after it
+146 are metadata-only tracked matches. The count includes `scumimon` after it
 was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M78 now has a
 manifest-only `bj92` contract: `bj92.zip` is the contract-only route, and
 `bj92.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
@@ -39,7 +40,7 @@ items are `D:\emu\irem\M78\bj92.zip` and
 `D:\emu\irem\M119\scumimon.zip`; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
-Another 144 tracked manifest matches remain metadata-only until converted,
+Another 146 tracked manifest matches remain metadata-only until converted,
 unpacked, supplied with required supplemental media, or classified as non-ROM
 artwork/layout proof.
 Board-local `name-collisions` folders are skipped by both inventory and
@@ -53,11 +54,11 @@ first-pass player route for `panther`: two local ZIP routes count as supported,
 while `panther.7z` remains metadata-only until converted or unpacked. The M47 bucket now has a
 first-pass player route for `olibochu` and `punchkid`: two local ZIP routes count
 as supported, while `punchkid.7z` remains metadata-only until converted or
-unpacked. The `travrusa` bucket has checked-in contracts and a first-pass player
-route for `travrusa`, `motorace`, `travrusab`, and `travrusab2`; four local
-travrusa ZIP routes count as supported, while the two `.7z` archives and the
-unsuffixed artwork/layout `travrusa.zip` remain metadata-only for ROM support
-accounting. Artwork/layout-only ZIPs are classified as
+unpacked. The M52 bucket also has checked-in `irem_travrusa` contracts and a
+first-pass player route for `travrusa`, `motorace`, `travrusab`, and
+`travrusab2`; four local travrusa-family ZIP routes count as supported, while
+the two `.7z` archives and the unsuffixed artwork/layout `travrusa.zip` remain
+metadata-only for ROM support accounting. Artwork/layout-only ZIPs are classified as
 `non_rom_artwork_package` and do not count as player-loadable ROM proof. Known
 untracked corpus classifications remain explicit: `headon` and
 `uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
@@ -106,7 +107,7 @@ proof.
 | M63 | `irem_m63` first-pass | 14% | `wilytowr` | local Wily Tower ZIP through the adapter; direct `mnemos_player --system irem_m63` nonblank screenshot and `--system m63` save-state proof | None | Authentic Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, input/DIP behavior, visual/audio parity |
 | Traverse USA / Zippy Race | `irem_travrusa` first-pass | 23% | `travrusa`, `motorace`, `travrusab`, `travrusab2` | local parent/copy-suffixed parent and split wrappers; direct `mnemos_player --system irem_travrusa` nonblank screenshot and `--system travrusa` save-state proof | None | Authentic MotoRace encrypted ROM handling, exact Irem Audio timing, video priority/scroll/color/input behavior, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
-| M75 | `irem_m75` first-pass | 34% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional and bootleg clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg PROM/color behavior proof |
+| M75 | `irem_m75` first-pass | 37% | `kikcubic`, `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional and bootleg clone wrappers; local Meikyu Jima / Kickle Cubicle ZIP; service/test input proof; manual/public DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante and Meikyu Jima graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg/PROM/color behavior proof |
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M78 | `irem_m78` manifest-only | 3% | `bj92` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement the dual-Z80 board profile, I/O/comms, video registers, YM2151/DAC/M72-audio path, no-dump sample ROM handling, and player adapter |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
@@ -183,8 +184,9 @@ targets:
 - M15, M47, M58, M75, M81, M84, M85, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
-  regional and bootleg clone wrappers with a Z80/Z80/YM2151/DAC first-pass route,
-  service/test input proof, and Vigilante manual-backed DIP defaults.
+  regional and bootleg clone wrappers and the local Meikyu Jima / Kickle Cubicle
+  ZIP with a Z80/Z80/YM2151/DAC first-pass route, service/test input proof, and
+  per-set DIP defaults.
   M92 currently covers the complete local GunForce parent wrapper plus the local
   US/Japan split clone wrappers, Blade Master parent/Japan clone, Gunforce 2 /
   Geostorm including the alternate custom-sound set, Hook parent/Japan clone,
@@ -501,12 +503,12 @@ visual and audio parity proof.
   metadata.
 - **Mnemos games:** first-pass ROM manifests and player route for `travrusa`,
   `motorace`, `travrusab`, and `travrusab2`.
-- **Smoke playable:** four local ROM ZIP routes under `D:\emu\irem\travrusa` are
+- **Smoke playable:** four local ROM ZIP routes under `D:\emu\irem\M52` are
   data-gated through `MNEMOS_TRAVRUSA_SET_DIR`. Direct player proof includes
-  `mnemos_player --system irem_travrusa --rom "D:\emu\irem\travrusa\travrusa (1).zip"
+  `mnemos_player --system irem_travrusa --rom "D:\emu\irem\M52\travrusa (1).zip"
   --frames 60 --screenshot build\scratch\travrusa_parent.ppm`, which wrote a
   240x256 nonblank PPM, and `mnemos_player --system travrusa --rom
-  "D:\emu\irem\travrusa\travrusab.zip" --frames 60 --save-state
+  "D:\emu\irem\M52\travrusab.zip" --frames 60 --save-state
   build\scratch\travrusab.mstate`, which wrote a save state. The large
   unsuffixed `travrusa.zip` in that folder is artwork/layout, not the parent ROM
   dump; it is metadata-only for support accounting, and the CRC-clean parent ROM
@@ -636,47 +638,54 @@ visual and audio parity proof.
 
 ### M75
 
-- **Techsheet games:** Vigilante.
-- **Mnemos games:** `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`,
-  `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto`.
+- **Techsheet games:** Vigilante; Meikyu Jima / Kickle Cubicle.
+- **Mnemos games:** `kikcubic`, `vigilant`, `vigilanta`, `vigilantb`,
+  `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto`.
 - **Smoke playable:** the complete local parent wrapper
-  `D:\emu\irem\Vigilante_Arcade_EN (3).zip` unwraps to `vigilant.zip`, and the
-  official regional clone wrappers `D:\emu\irem\Vigilante_Arcade_EN (1).zip`
-  through `D:\emu\irem\Vigilante_Arcade_EN (6).zip`,
-  `D:\emu\irem\Vigilante_Arcade_JA.zip`, and the bootleg wrapper
-  `D:\emu\irem\Vigilante_Arcade_EN.zip` load CRC-clean through clone/parent
-  fallback. The data-gated corpus test steps all eight M75 manifests, produces
-  nonblank diagnostic output, and supports save/load;
-  `D:\emu\irem\Vigilante_Arcade_EN.zip` also has direct 256x256 nonblank
-  screenshot smoke evidence.
+  `D:\emu\irem\M75\vigilant.zip`, official regional clone wrappers
+  `D:\emu\irem\M75\vigilanta.zip`, `vigilantb.zip`, `vigilantc.zip`,
+  `vigilantd.zip`, `vigilantg.zip`, `vigilanto.zip`, and the bootleg wrapper
+  `D:\emu\irem\M75\vigilantbl.zip` load CRC-clean through clone/parent fallback.
+  `D:\emu\irem\M75\vigilant (3).zip` is artwork/layout metadata, not ROM proof.
+  `D:\emu\irem\M75\kikcubic.zip` also loads CRC-clean through its standalone
+  manifest. The data-gated corpus test steps all nine M75 manifests, produces
+  nonblank diagnostic output, and supports save/load. Direct
+  `mnemos_player --system irem_m75 --rom "D:\emu\irem\M75\kikcubic.zip"
+  --frames 180 --screenshot build\scratch\kikcubic_m75.ppm` wrote a nonblank
+  256x256 PPM, and `--system m75 --save-state build\scratch\kikcubic_m75.mstate`
+  wrote a 105312-byte save state for the same ZIP.
 - **Correct gfx/music:** none. The board has a first-pass diagnostic video path
   and executable Z80/Z80/YM2151/DAC ownership, including synthetic
   sample-ROM-read-to-DAC proof on the sound Z80 elapsed-clock timeline, not
-  authentic Vigilante graphics/music certification.
+  authentic Vigilante or Meikyu Jima graphics/music certification.
 - **Current implementation:** `src/manifests/irem_m75` owns a Z80 main CPU, Z80
   sound CPU, YM2151, DAC, 16-bit Z80 memory buses, Vigilante ROM banking, RAM
   windows, inputs/DIPs, sound latch/ack, sample-address/DAC ports, the two-bank
   5-bit KNA91-style palette bus, rear color/disable register semantics,
   whole-board save/load identity, 14 Vigilante manual SW1/SW2 DIP definitions
-  folded to active-low defaults `dsw1=0xff` / `dsw2=0xfd`, and embedded
-  parent/clone Vigilante ROM contracts including `vigilantbl` bootleg PROM/PAL
-  media. The M75 system tests now prove the
+  folded to active-low defaults `dsw1=0xff` / `dsw2=0xfd`, 13 `kikcubic`
+  public SW1/SW2 DIP definitions folded to `dsw1=0xff` / `dsw2=0xd5`, and
+  embedded parent/clone Vigilante ROM contracts including `vigilantbl` bootleg
+  PROM/PAL media plus the standalone `kikcubic` contract with its 0x0140 PROM
+  region and omitted public no-dump PALs. The M75 system tests now prove the
   sound Z80 can program the sample cursor, read consecutive sample ROM bytes
   through the modeled port, write them through the DAC as ordered
-  sound-clocked events, and acknowledge the latch.
+  sound-clocked events, acknowledge the latch, and that `kikcubic` reads its
+  own DSW/input ports while writing its bank and sound-latch ports.
   The player adapter maps service/test frontend inputs to the board-visible
-  active-low system bits `0x10`/`0x20`, persists those fields in adapter
-  save-state version 2, and reports `DIP switches=14` from the parsed manifest.
+  active-low Vigilante system bits `0x10`/`0x20`, maps `kikcubic` service/mode
+  to its third coin bit, persists those fields in adapter save-state version 2,
+  and reports the per-set parsed DIP count.
   `src/apps/player` registers `--system irem_m75` and alias `m75`, supports direct ZIPs,
   single-inner wrapper ZIPs, unpacked folders, in-archive `game.toml`, clone/parent
   fallback media resolution, resident media validation, rollback-ready save-state, capability discovery, and
-  `MNEMOS_M75_SET_DIR=D:\emu\irem` corpus gating.
+  `MNEMOS_M75_SET_DIR=D:\emu\irem\M75` corpus gating.
 - **Remaining:** replace the diagnostic compositor with board-evidenced
-  Vigilante background/foreground/sprite priority, verify exact memory/I/O,
-  DIP runtime behavior beyond current manual defaults, and raster phase, prove sound CPU sample/DAC
-  timing against board evidence, prove bootleg-specific PROM/color behavior, and
-  collect screenshot/audio parity evidence before marking graphics or music
-  correct.
+  Vigilante and Meikyu Jima background/foreground/sprite priority, verify exact
+  memory/I/O, DIP runtime behavior beyond current defaults, and raster phase,
+  prove sound CPU sample/DAC timing against board evidence, prove
+  bootleg/PROM/color behavior, and collect screenshot/audio parity evidence
+  before marking graphics or music correct.
 
 ### M77
 

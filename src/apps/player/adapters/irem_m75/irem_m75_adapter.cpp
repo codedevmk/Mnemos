@@ -671,6 +671,28 @@ namespace mnemos::apps::player::adapters::irem_m75 {
             return pack_active_low_pad(c, dpad_layout{},
                                        {{c.a, 0x10U}, {c.b, 0x20U}, {c.c, 0x40U}});
         };
+        const auto pack_kikcubic = [](const frontend_sdk::controller_state& c) -> std::uint8_t {
+            std::uint8_t value = 0xFFU;
+            if (c.right) {
+                value &= static_cast<std::uint8_t>(~0x01U);
+            }
+            if (c.left) {
+                value &= static_cast<std::uint8_t>(~0x02U);
+            }
+            if (c.down) {
+                value &= static_cast<std::uint8_t>(~0x04U);
+            }
+            if (c.up) {
+                value &= static_cast<std::uint8_t>(~0x08U);
+            }
+            if (c.b) {
+                value &= static_cast<std::uint8_t>(~0x20U);
+            }
+            if (c.a) {
+                value &= static_cast<std::uint8_t>(~0x80U);
+            }
+            return value;
+        };
         std::uint8_t system = 0xFFU;
         if (ports_[0].start) {
             system &= static_cast<std::uint8_t>(~0x01U);
@@ -689,6 +711,26 @@ namespace mnemos::apps::player::adapters::irem_m75 {
         }
         if (ports_[0].test) {
             system &= static_cast<std::uint8_t>(~0x20U);
+        }
+        if (sys_->params.rom_layout == "kikcubic") {
+            system = 0xFFU;
+            if (ports_[0].start) {
+                system &= static_cast<std::uint8_t>(~0x01U);
+            }
+            if (ports_[1].start) {
+                system &= static_cast<std::uint8_t>(~0x02U);
+            }
+            if (ports_[0].select) {
+                system &= static_cast<std::uint8_t>(~0x10U);
+            }
+            if (ports_[1].select) {
+                system &= static_cast<std::uint8_t>(~0x20U);
+            }
+            if (ports_[0].service || ports_[0].mode) {
+                system &= static_cast<std::uint8_t>(~0x40U);
+            }
+            sys_->set_inputs(pack_kikcubic(ports_[0]), pack_kikcubic(ports_[1]), system);
+            return;
         }
         sys_->set_inputs(pack(ports_[0]), pack(ports_[1]), system);
     }

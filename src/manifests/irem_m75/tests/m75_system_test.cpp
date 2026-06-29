@@ -61,6 +61,24 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_kikcubic_main_program() {
+        std::vector<std::uint8_t> rom(m75::main_rom_size, 0xFFU);
+        const std::uint8_t program[] = {
+            0xDBU, 0x00U, 0x32U, 0x01U, 0xE0U, // IN A,($00) ; LD ($E001),A
+            0xDBU, 0x01U, 0x32U, 0x02U, 0xE0U, // IN A,($01) ; LD ($E002),A
+            0xDBU, 0x02U, 0x32U, 0x03U, 0xE0U, // IN A,($02) ; LD ($E003),A
+            0xDBU, 0x03U, 0x32U, 0x04U, 0xE0U, // IN A,($03) ; LD ($E004),A
+            0xDBU, 0x04U, 0x32U, 0x05U, 0xE0U, // IN A,($04) ; LD ($E005),A
+            0x3EU, 0x02U, 0xD3U, 0x04U,        // LD A,$02 ; OUT ($04),A
+            0x3EU, 0x5AU, 0xD3U, 0x06U,        // LD A,$5A ; OUT ($06),A
+            0x76U                              // HALT
+        };
+        std::copy(std::begin(program), std::end(program), rom.begin());
+        rom[0x10000U] = 0x11U;
+        rom[0x18000U] = 0x22U;
+        return rom;
+    }
+
     [[nodiscard]] mnemos::manifests::common::rom_set_image synthetic_m75_image() {
         mnemos::manifests::common::rom_set_image image;
         image.regions.emplace("maincpu", synthetic_main_program());
@@ -71,6 +89,16 @@ namespace {
         image.regions.emplace("samples", std::vector<std::uint8_t>(m75::sample_rom_size, 0x18U));
         image.regions.emplace("proms", std::vector<std::uint8_t>(m75::proms_size, 0x3FU));
         image.regions.emplace("plds", std::vector<std::uint8_t>(m75::plds_size, 0xFFU));
+        return image;
+    }
+
+    [[nodiscard]] mnemos::manifests::common::rom_set_image synthetic_kikcubic_image() {
+        auto image = synthetic_m75_image();
+        image.regions["maincpu"] = synthetic_kikcubic_main_program();
+        image.regions.erase("bgtiles");
+        image.regions.erase("plds");
+        image.regions["proms"] =
+            std::vector<std::uint8_t>(m75::kikcubic_proms_size, 0x2BU);
         return image;
     }
 
@@ -123,6 +151,26 @@ TEST_CASE("m75 board declares Z80/Z80/YM2151/DAC clocks and 256x256 raster", "[m
     CHECK(m75::visible_width == 256U);
     CHECK(m75::visible_height == 256U);
     CHECK(m75::frame_lines == 284U);
+}
+
+TEST_CASE("m75 kikcubic profile owns its main CPU port layout", "[m75][board]") {
+    auto system = m75::assemble_m75(synthetic_kikcubic_image(), m75::board_params_for("kikcubic"));
+    REQUIRE(system != nullptr);
+
+    system->set_inputs(0xE7U, 0xB7U, 0xCFU);
+    system->run_frame();
+
+    CHECK(system->params.rom_layout == "kikcubic");
+    CHECK(system->dsw1 == m75::kikcubic_dsw1_default);
+    CHECK(system->dsw2 == m75::kikcubic_dsw2_default);
+    CHECK(system->work_ram[1] == m75::kikcubic_dsw1_default);
+    CHECK(system->work_ram[2] == m75::kikcubic_dsw2_default);
+    CHECK(system->work_ram[3] == 0xE7U);
+    CHECK(system->work_ram[4] == 0xCFU);
+    CHECK(system->work_ram[5] == 0xB7U);
+    CHECK(system->bank_register == 0x02U);
+    CHECK(system->sound_latch == 0x5AU);
+    CHECK(system->main_bus.read8(0x8000U) == 0x22U);
 }
 
 TEST_CASE("m75 palette bus exposes two 5-bit KNA91 banks", "[m75][board][palette]") {

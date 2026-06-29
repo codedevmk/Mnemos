@@ -176,10 +176,12 @@ era, but CPU family alone is not sufficient board proof.
 - **Sound chip:** YM2151 @ 3.579545 MHz plus 8-bit DAC/sample path
 - **Notable titles:** Vigilante, including official regional revisions now
   tracked as `vigilant`, `vigilanta`, `vigilantb`, `vigilantc`, `vigilantd`,
-  `vigilantg`, and `vigilanto`.
+  `vigilantg`, and `vigilanto`; Meikyu Jima / Kickle Cubicle, tracked as
+  `kikcubic`.
 - **Notes:** Closely related in era/custom usage to the M72 family, but the
-  executable Vigilante path is not a V30 board. Keep M75 separated from M72/M81
-  routing unless new board evidence proves a different title-specific variant.
+  executable Vigilante and Meikyu Jima paths are not V30 boards. Keep M75
+  separated from M72/M81 routing unless new board evidence proves a different
+  title-specific variant.
 - **Current Mnemos hardware hooks:** two-bank KNA91-style 5-bit palette RAM is
   modeled for CPU-visible writes/readback, and the Vigilante rear-color register
   preserves the rear-layer disable bit separately from the masked color code.

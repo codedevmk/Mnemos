@@ -67,7 +67,6 @@ function Get-IremBucketName {
         "m107" { return "M107" }
         "m119" { return "M119" }
         "i8751" { return "i8751" }
-        "travrusa" { return "travrusa" }
         "for-delete" { return "for-delete" }
         "misc" { return "misc" }
         "non-irem" { return "non-irem" }
@@ -466,7 +465,7 @@ function Get-BoardCandidateFamily {
     if ($TrackedByMnemos) {
         return ""
     }
-    if ($Bucket -in @("M10", "M14", "M15", "M27", "M47", "M52", "M57", "M58", "M62", "M63", "M72", "M75", "M78", "M81", "M82", "M84", "M85", "M90", "M92", "M102", "M107", "M119", "i8751", "travrusa")) {
+    if ($Bucket -in @("M10", "M14", "M15", "M27", "M47", "M52", "M57", "M58", "M62", "M63", "M72", "M75", "M78", "M81", "M82", "M84", "M85", "M90", "M92", "M102", "M107", "M119", "i8751")) {
         return $Bucket
     }
     return ""
@@ -1051,7 +1050,7 @@ $report = [pscustomobject]@{
     generated_at = (Get-Date).ToString("o")
     roots = @($resolvedRoots)
     recurse = [bool]$Recurse
-    known_buckets = @("M10", "M14", "M15", "M27", "M47", "M52", "M57", "M58", "M62", "M63", "M72", "M75", "M78", "M81", "M82", "M84", "M85", "M90", "M92", "M102", "M107", "M119", "i8751", "travrusa", "for-delete", "misc", "non-irem", "root")
+    known_buckets = @("M10", "M14", "M15", "M27", "M47", "M52", "M57", "M58", "M62", "M63", "M72", "M75", "M78", "M81", "M82", "M84", "M85", "M90", "M92", "M102", "M107", "M119", "i8751", "for-delete", "misc", "non-irem", "root")
     m14_manifest_count = $m14ManifestIds.Count
     m15_manifest_count = $m15ManifestIds.Count
     m27_manifest_count = $m27ManifestIds.Count

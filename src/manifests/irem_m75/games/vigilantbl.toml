@@ -1,5 +1,5 @@
 # Vigilante (bootleg) -- clone of the complete World Rev E parent.
-# Local wrapper: D:\emu\irem\Vigilante_Arcade_EN.zip -> vigilantbl.zip.
+# Local wrapper: D:\emu\irem\M75\vigilantbl.zip -> vigilantbl.zip.
 
 [set]
 schema      = "mnemos-romset/1"

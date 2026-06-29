@@ -407,6 +407,18 @@ size = 0x010000
         return count;
     }
 
+    [[nodiscard]] std::size_t expected_dip_count(std::string_view set_id) noexcept {
+        return set_id == "kikcubic" ? 13U : 14U;
+    }
+
+    [[nodiscard]] std::uint8_t expected_dsw1(std::string_view set_id) noexcept {
+        return set_id == "kikcubic" ? m75::kikcubic_dsw1_default : m75::vigilant_dsw1_default;
+    }
+
+    [[nodiscard]] std::uint8_t expected_dsw2(std::string_view set_id) noexcept {
+        return set_id == "kikcubic" ? m75::kikcubic_dsw2_default : m75::vigilant_dsw2_default;
+    }
+
     [[nodiscard]] bool spec_has(const irem::irem_m75_adapter& adapter, std::string_view label,
                                 std::string_view value) {
         const auto& spec = adapter.system_spec();
@@ -544,10 +556,10 @@ TEST_CASE("irem_m75_adapter validates real M75 ROM sets", "[irem_m75][data]") {
 
         CHECK(adapter.set_name() == set_id);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
-        CHECK(adapter.dip_switches().size() == 14U);
-        CHECK(adapter.machine().dsw1 == m75::vigilant_dsw1_default);
-        CHECK(adapter.machine().dsw2 == m75::vigilant_dsw2_default);
-        CHECK(spec_has(adapter, "DIP switches", "14"));
+        CHECK(adapter.dip_switches().size() == expected_dip_count(set_id));
+        CHECK(adapter.machine().dsw1 == expected_dsw1(set_id));
+        CHECK(adapter.machine().dsw2 == expected_dsw2(set_id));
+        CHECK(spec_has(adapter, "DIP switches", std::to_string(expected_dip_count(set_id))));
 
         adapter.step_one_frame();
         CHECK(frame_has_nonblack(adapter.current_frame()));

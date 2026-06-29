@@ -210,9 +210,12 @@ multiple independent open-source implementations.
   for SW1/SW2 DIP names, options, conditions, and defaults, and public set
   metadata for ROM dump filenames, offsets, region sizes, CRC-32s, and
   parent/clone relationships, including the bootleg `vigilantbl` PROM/PAL
-  grouping. The M75 adapter folds those DIP defaults into the board-visible
-  `dsw1`/`dsw2` bytes and exposes the parsed switch count. No manual scans,
-  emulator source, or ROM bytes are committed.
+  grouping. The checked-in `kikcubic` manifest uses public Irem M75 driver
+  metadata for Meikyu Jima / Kickle Cubicle dump filenames, aliases, offsets,
+  region sizes, CRC-32s, omitted no-dump PALs, and SW1/SW2 DIP defaults. The
+  M75 adapter folds those DIP defaults into the board-visible `dsw1`/`dsw2`
+  bytes and exposes the parsed switch count. No manual scans, emulator source,
+  or ROM bytes are committed.
 - **Irem M78 ROM-set metadata** — the checked-in `bj92` manifest uses public
   Irem M78 driver metadata for Black Jack dump filenames, offsets, region sizes,
   CRC-32s, vertical orientation, dual-Z80/YM2151 classification, duplicate tile

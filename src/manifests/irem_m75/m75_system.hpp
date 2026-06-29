@@ -83,6 +83,8 @@ namespace mnemos::manifests::irem_m75 {
 
     inline constexpr std::uint8_t vigilant_dsw1_default = 0xFFU;
     inline constexpr std::uint8_t vigilant_dsw2_default = 0xFDU;
+    inline constexpr std::uint8_t kikcubic_dsw1_default = 0xFFU;
+    inline constexpr std::uint8_t kikcubic_dsw2_default = 0xD5U;
 
     struct m75_board_params final {
         std::uint8_t dsw1_default{vigilant_dsw1_default};

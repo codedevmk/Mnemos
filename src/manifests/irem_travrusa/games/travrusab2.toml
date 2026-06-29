@@ -1,5 +1,5 @@
 # Traverse USA bootleg 2 -- Irem travrusa ROM contract.
-# Local wrapper: D:\emu\irem\travrusa\travrusab2.zip -> travrusab2.zip.
+# Local wrapper: D:\emu\irem\M52\travrusab2.zip -> travrusab2.zip.
 # The wrapper carries only the unique dumps; aliases resolve shared parent
 # dumps from the local travrusa parent archive.
 
