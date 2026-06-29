@@ -29,7 +29,7 @@ namespace {
             return;
         }
         for (std::uint32_t plane = 0U; plane < 4U; ++plane) {
-            const std::uint32_t byte_plane = 3U - plane;
+            const std::uint32_t byte_plane = plane;
             if (((pen >> plane) & 1U) != 0U) {
                 gfx[offset + byte_plane] |= bit;
             } else {
@@ -130,10 +130,10 @@ TEST_CASE("cps2 video decodes 4bpp tile texels from the gfx ROM", "[cps2_video]"
     using gfx_type = cps2_video::gfx_type;
     cps2_video video;
     std::vector<std::uint8_t> gfx(0x1000U, 0U);
-    // Sprite tile (code 0 -> offset 0). Texel (0,0): bit 7 of each of the 4 planes
-    // at gfx[0..3]. Make pen = 0b1010 = 0xA: plane3(gfx[0]) and plane1(gfx[2]) set.
-    gfx[0] = 0x80U; // bit3 of the pen
-    gfx[2] = 0x80U; // bit1 of the pen
+    // Sprite tile (code 0 -> offset 0). Texel (0,0): bit 7 of each packed byte
+    // at gfx[0..3]. Make pen = 0b1010 = 0xA: byte1 and byte3 set.
+    gfx[1] = 0x80U; // bit1 of the pen
+    gfx[3] = 0x80U; // bit3 of the pen
     video.attach_gfx(gfx);
 
     CHECK(video.tile_pixel(gfx_type::sprites, 0U, 0, 0, 16, 0) == 0x0AU);
@@ -143,11 +143,11 @@ TEST_CASE("cps2 video decodes 4bpp tile texels from the gfx ROM", "[cps2_video]"
     CHECK(video.tile_pixel(gfx_type::sprites, 0x9999U, 0, 0, 16, 0) == cps2_video::transparent_pen);
 }
 
-TEST_CASE("cps2 video maps raw sprite GFX byte 3 to plane 0", "[cps2_video][sprites]") {
+TEST_CASE("cps2 video maps raw sprite GFX byte 0 to plane 0", "[cps2_video][sprites]") {
     using gfx_type = cps2_video::gfx_type;
     cps2_video video;
     std::vector<std::uint8_t> gfx(2U * 128U, 0U);
-    gfx[1U * 128U + 3U] = 0x80U;
+    gfx[1U * 128U + 0U] = 0x80U;
     video.attach_gfx(gfx);
     CHECK(video.tile_pixel(gfx_type::sprites, 1U, 0, 0, 16, 0) == 0x01U);
 
@@ -187,10 +187,10 @@ TEST_CASE("cps2 video draws the scroll1 playfield through the compositor", "[cps
     video.attach_video_ram(vram);
 
     // scroll1 banks code 0 to tile 0x20000 (byte offset 0x20000*64 = 0x800000).
-    // Set that tile's texel (0,0) to pen 0xA: plane3 (gfx[base]) + plane1 (gfx[base+2]).
+    // Set that tile's texel (0,0) to pen 0xA: bit1 (gfx[base+1]) + bit3 (gfx[base+3]).
     std::vector<std::uint8_t> gfx(0x800000U + 64U, 0U);
-    gfx[0x800000U + 0U] = 0x80U; // pen bit 3
-    gfx[0x800000U + 2U] = 0x80U; // pen bit 1
+    gfx[0x800000U + 1U] = 0x80U; // pen bit 1
+    gfx[0x800000U + 3U] = 0x80U; // pen bit 3
     video.attach_gfx(gfx);
 
     video.set_scroll1_base(0x8000U);
@@ -222,8 +222,8 @@ TEST_CASE("cps2 video flip-screen mirrors scroll pixels to the opposite corner",
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x800000U + 64U, 0U);
-    gfx[0x800000U + 0U] = 0x80U;
-    gfx[0x800000U + 2U] = 0x80U;
+    gfx[0x800000U + 1U] = 0x80U;
+    gfx[0x800000U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     video.set_scroll1_base(0x8000U);
@@ -259,8 +259,8 @@ TEST_CASE("cps2 video draws the scroll2 playfield (16x16 tiles)", "[cps2_video]"
     // code 0 maps to gfx byte 0x800000 for every scroll layer; the 16x16 tile reads
     // mapped*128 = 0x800000. Texel (0,0) = pen 0xA.
     std::vector<std::uint8_t> gfx(0x800000U + 128U, 0U);
-    gfx[0x800000U + 0U] = 0x80U;
-    gfx[0x800000U + 2U] = 0x80U;
+    gfx[0x800000U + 1U] = 0x80U;
+    gfx[0x800000U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     video.set_scroll1_base(0x0100U);
@@ -286,8 +286,8 @@ TEST_CASE("cps2 video gates real scroll2 enable through CPS-B and CPS-A control"
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x800000U + 128U, 0U);
-    gfx[0x800000U + 0U] = 0x80U;
-    gfx[0x800000U + 2U] = 0x80U;
+    gfx[0x800000U + 1U] = 0x80U;
+    gfx[0x800000U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     video.set_scroll2_base(0x0000U);
@@ -320,8 +320,8 @@ TEST_CASE("cps2 video draws the scroll3 playfield (32x32 tiles, code masked to 1
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x800000U + 512U, 0U); // 32x32 = mapped*512
-    gfx[0x800000U + 0U] = 0x80U;
-    gfx[0x800000U + 2U] = 0x80U;
+    gfx[0x800000U + 1U] = 0x80U;
+    gfx[0x800000U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     video.set_scroll1_base(0x0100U);
@@ -346,8 +346,8 @@ TEST_CASE("cps2 video gates real scroll3 enable through CPS-B and CPS-A control"
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x800000U + 512U, 0U);
-    gfx[0x800000U + 0U] = 0x80U;
-    gfx[0x800000U + 2U] = 0x80U;
+    gfx[0x800000U + 1U] = 0x80U;
+    gfx[0x800000U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     video.set_scroll3_base(0x0000U);
@@ -378,13 +378,13 @@ TEST_CASE("cps2 video scroll2 row-scroll shifts a line horizontally", "[cps2_vid
     video.attach_video_ram(vram);
 
     // The tile is transparent (pen 0xF) everywhere except texel (0,0) = pen 0xA, so
-    // the per-line shift is observable. Row 0 group 0: plane3/plane1 all set, plane2/
-    // plane0 set for texels 1-7 only (texel 0 = 0b1010, texels 1-7 = 0b1111).
+    // the per-line shift is observable. Row 0 group 0: pen bits 3/1 all set, bits
+    // 2/0 set for texels 1-7 only (texel 0 = 0b1010, texels 1-7 = 0b1111).
     std::vector<std::uint8_t> gfx(0x800000U + 128U, 0xFFU);
-    gfx[0x800000U + 0U] = 0xFFU; // plane3: all texels
-    gfx[0x800000U + 1U] = 0x7FU; // plane2: texel 0 clear
-    gfx[0x800000U + 2U] = 0xFFU; // plane1: all texels
-    gfx[0x800000U + 3U] = 0x7FU; // plane0: texel 0 clear
+    gfx[0x800000U + 0U] = 0x7FU; // pen bit 0: texel 0 clear
+    gfx[0x800000U + 1U] = 0xFFU; // pen bit 1: all texels
+    gfx[0x800000U + 2U] = 0x7FU; // pen bit 2: texel 0 clear
+    gfx[0x800000U + 3U] = 0xFFU; // pen bit 3: all texels
     video.attach_gfx(gfx);
 
     video.set_scroll1_base(0x0100U);
@@ -412,8 +412,8 @@ TEST_CASE("cps2 video draws a sprite from object RAM", "[cps2_video]") {
     // Sprites address the gfx by code directly; 16x16 tile 1 -> byte 1*128 = 128.
     // Texel (0,0) = pen 0xA.
     std::vector<std::uint8_t> gfx(0x1000U, 0U);
-    gfx[128U + 0U] = 0x80U;
-    gfx[128U + 2U] = 0x80U;
+    gfx[128U + 1U] = 0x80U;
+    gfx[128U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     // Object RAM: entry 0 = sprite x=0,y=0,tile=1,attr=2 (pal 2, single 16x16 block,
@@ -517,8 +517,8 @@ TEST_CASE("cps2 video latches object RAM at vblank", "[cps2_video]") {
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x1000U, 0U);
-    gfx[128U + 0U] = 0x80U;
-    gfx[128U + 2U] = 0x80U;
+    gfx[128U + 1U] = 0x80U;
+    gfx[128U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     std::vector<std::uint8_t> obj(0x4000U, 0U);
@@ -747,8 +747,8 @@ TEST_CASE("cps2 video save/load preserves latched sprite state", "[cps2_video]")
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x1000U, 0U);
-    gfx[128U + 0U] = 0x80U;
-    gfx[128U + 2U] = 0x80U;
+    gfx[128U + 1U] = 0x80U;
+    gfx[128U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     std::vector<std::uint8_t> obj(0x4000U, 0U);
@@ -813,8 +813,8 @@ TEST_CASE("cps2 video honours the CPS-B layer order when compositing scrolls", "
     video.attach_video_ram(vram);
 
     std::vector<std::uint8_t> gfx(0x800000U + 128U, 0U); // code 0 tile, texel (0,0) pen 0xA
-    gfx[0x800000U + 0U] = 0x80U;
-    gfx[0x800000U + 2U] = 0x80U;
+    gfx[0x800000U + 1U] = 0x80U;
+    gfx[0x800000U + 3U] = 0x80U;
     video.attach_gfx(gfx);
 
     video.set_scroll1_base(0x0000U);

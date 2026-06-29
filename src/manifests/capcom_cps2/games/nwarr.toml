@@ -9,6 +9,7 @@ schema = "mnemos-romset/1"
 name   = "nwarr"
 board  = "capcom_cps2"
 
+orientation = "horizontal"
 [[hle]]
 chip = "capcom.qsound"
 rationale = "Behavioral DL-1425 QSound PCM/ADPCM mixer; DSP16 instruction-level model is not implemented."
@@ -92,6 +93,7 @@ crc32         = 0x976fa62f
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "vph.01"

@@ -369,6 +369,7 @@ namespace mnemos::manifests::capcom_cps1 {
         // across frames: 68K cycles -> Z80 cycles, and Z80 cycles -> OKI cycles.
         std::uint64_t cpu_cycle_accum_{};
         std::uint64_t oki_cycle_accum_{};
+        std::uint64_t qsound_dsp_cycle_accum_{};
         std::uint64_t qsound_irq_accum_{}; // 250 Hz periodic sound-CPU /INT pacing
         // Decode the raw CPS-A latch into the video chip's logical state (scroll/
         // object bases, scroll offsets, row-scroll, video-control, display enable).

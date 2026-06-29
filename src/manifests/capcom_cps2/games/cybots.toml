@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "cybots"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "cybots_four_button"
 
@@ -94,6 +95,7 @@ crc32         = 0x75f4003b
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "cyb.01"

@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "choko"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 1
 input   = "one_player_three_button"
 
@@ -40,6 +41,7 @@ crc32         = 0x68655378
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "tko.01"

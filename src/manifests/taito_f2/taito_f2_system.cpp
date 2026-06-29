@@ -278,7 +278,7 @@ namespace mnemos::manifests::taito_f2 {
 
     taito_f2_board_params board_params_from_decl(const common::rom_set_decl& decl) noexcept {
         taito_f2_board_params params{
-            .vertical = decl.orientation == common::screen_orientation::vertical};
+            .vertical = decl.orientation != common::screen_orientation::horizontal};
         if (decl.taito_f2_map == "dondokod") {
             params.address_map = taito_f2_address_map::dondokod;
         } else if (decl.taito_f2_map == "gunfront") {

@@ -11,6 +11,7 @@
 #include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "cli_args.hpp"
 #include "headless_commands.hpp"
+#include "player_audio.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
@@ -26,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -58,6 +60,10 @@ namespace {
     constexpr std::uint32_t kOverlayBgColor = 0xFF000000U; // opaque black panel
     constexpr std::uint32_t kOverlayFgColor = 0xFFFFFFFFU; // white text
     constexpr int kOverlayScreenMargin = 8;
+    constexpr int kAudioPrimeMs = 120;
+    constexpr int kAudioMaxCatchupFrames = 3;
+    constexpr int kAudioChannels = 2;
+    constexpr int kAudioBytesPerSample = static_cast<int>(sizeof(std::int16_t));
 
     struct dst_rect {
         int x{}, y{}, w{}, h{};
@@ -71,8 +77,9 @@ namespace {
     // (normal quit, --screenshot return, error returns) persists through it.
     class battery_save_guard {
       public:
-        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path)
-            : sys_(sys), path_(std::move(path)) {
+        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path,
+                           bool writeback)
+            : sys_(sys), path_(std::move(path)), writeback_(writeback) {
             const auto sram = ram();
             if (sram.empty()) {
                 return; // no battery RAM on this cart -- nothing to persist
@@ -87,7 +94,7 @@ namespace {
         battery_save_guard& operator=(const battery_save_guard&) = delete;
         ~battery_save_guard() {
             const auto sram = ram();
-            if (sram.empty()) {
+            if (sram.empty() || !writeback_) {
                 return;
             }
             const bool changed = sram.size() != loaded_.size() ||
@@ -106,8 +113,21 @@ namespace {
         }
         mnemos::frontend_sdk::player_system* sys_;
         std::string path_;
+        bool writeback_{};
         std::vector<std::uint8_t> loaded_;
     };
+
+    [[nodiscard]] bool headless_load_battery_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic flag.
+#endif
+        const char* value = std::getenv("MNEMOS_PLAYER_HEADLESS_LOAD_BATTERY");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }
 
     dst_rect integer_letterbox(int window_w, int window_h, int src_w, int src_h) {
         if (src_w <= 0 || src_h <= 0 || window_w <= 0 || window_h <= 0) {
@@ -231,8 +251,40 @@ namespace {
         std::fflush(stderr);
     }
 
+    [[nodiscard]] int audio_prime_bytes(std::uint32_t source_rate) noexcept {
+        const std::uint64_t bytes =
+            static_cast<std::uint64_t>(source_rate) * kAudioPrimeMs *
+            static_cast<std::uint64_t>(kAudioChannels * kAudioBytesPerSample) / 1000ULL;
+        return bytes > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+                   ? std::numeric_limits<int>::max()
+                   : static_cast<int>(bytes);
+    }
+
+    void maybe_resume_primed_audio(SDL_AudioStream* audio_stream, bool& audio_started,
+                                   int prime_bytes) {
+        if (audio_stream == nullptr || audio_started) {
+            return;
+        }
+        const int queued = SDL_GetAudioStreamQueued(audio_stream);
+        if (queued >= prime_bytes && SDL_ResumeAudioStreamDevice(audio_stream)) {
+            audio_started = true;
+        }
+    }
+
+    void queue_audio_chunk(SDL_AudioStream* audio_stream, bool& audio_started, int prime_bytes,
+                           mnemos::frontend_sdk::audio_chunk audio) {
+        if (audio_stream == nullptr || audio.samples == nullptr || audio.frame_count == 0U) {
+            return;
+        }
+        const int byte_count =
+            static_cast<int>(audio.frame_count * kAudioChannels * sizeof(std::int16_t));
+        if (SDL_PutAudioStreamData(audio_stream, audio.samples, byte_count)) {
+            maybe_resume_primed_audio(audio_stream, audio_started, prime_bytes);
+        }
+    }
+
     void load_quick_state(mnemos::frontend_sdk::player_system* system, const std::string& path,
-                          SDL_AudioStream* audio_stream) {
+                          SDL_AudioStream* audio_stream, bool* audio_started) {
         if (system == nullptr || path.empty()) {
             return;
         }
@@ -253,7 +305,11 @@ namespace {
                          load_status_name(result.status));
         } else {
             if (audio_stream != nullptr) {
+                SDL_PauseAudioStreamDevice(audio_stream);
                 SDL_ClearAudioStream(audio_stream);
+                if (audio_started != nullptr) {
+                    *audio_started = false;
+                }
             }
             std::fprintf(stderr, "[mnemos_player] quick loaded: %s\n", path.c_str());
         }
@@ -266,6 +322,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dip_arg;
+    using mnemos::apps::player::adapters::parse_dump_battery_args;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
@@ -284,6 +341,13 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_system_arg;
     using mnemos::apps::player::adapters::state_path_for;
     using mnemos::apps::player::adapters::srm_path_for;
+    using mnemos::apps::player::adapters::validate_headless_request_args;
+
+    if (const auto headless_error = validate_headless_request_args(argc, argv)) {
+        std::fprintf(stderr, "%s\n", headless_error->c_str());
+        std::fflush(stderr);
+        return 1;
+    }
 
     const auto rom_paths = parse_rom_args(argc, argv);
     const auto system_arg = parse_system_arg(argc, argv);
@@ -300,6 +364,7 @@ int main(int argc, char* argv[]) {
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
         .save_state = parse_save_state_args(argc, argv),
+        .dump_battery = parse_dump_battery_args(argc, argv),
         .load_state = parse_load_state_arg(argc, argv),
         .extract_assets = parse_extract_assets_args(argc, argv),
         .extract_audio = parse_extract_audio_args(argc, argv),
@@ -329,8 +394,10 @@ int main(int argc, char* argv[]) {
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.
     std::optional<battery_save_guard> srm_guard;
-    if (system && !mnemos::apps::player::has_headless_request(headless)) {
-        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path));
+    const bool headless_request = mnemos::apps::player::has_headless_request(headless);
+    if (system && (!headless_request || headless_load_battery_enabled())) {
+        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path),
+                          !headless_request);
     }
 
     if (const auto exit_code =
@@ -522,9 +589,12 @@ int main(int argc, char* argv[]) {
     // The adapter reports its native stereo s16 sample rate via drain_audio();
     // SDL_AudioStream resamples to the device rate.
     SDL_AudioStream* audio_stream = nullptr;
+    bool audio_started = false;
+    int audio_prime_threshold = 0;
     if (system) {
         const auto chunk = system->drain_audio(); // probe for sample rate
-        const std::uint32_t rate = chunk.sample_rate != 0U ? chunk.sample_rate : 48000U;
+        const std::uint32_t rate = mnemos::apps::player::select_audio_stream_sample_rate(chunk);
+        audio_prime_threshold = audio_prime_bytes(rate);
         SDL_AudioSpec spec{};
         spec.format = SDL_AUDIO_S16;
         spec.channels = 2;
@@ -532,8 +602,8 @@ int main(int argc, char* argv[]) {
         audio_stream =
             SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
         if (audio_stream != nullptr) {
-            SDL_ResumeAudioStreamDevice(audio_stream);
-            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16\n", rate);
+            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16 (prime %d ms)\n", rate,
+                         kAudioPrimeMs);
         } else {
             std::fprintf(stderr, "[mnemos_player] SDL_OpenAudioDeviceStream failed: %s\n",
                          SDL_GetError());
@@ -577,7 +647,7 @@ int main(int argc, char* argv[]) {
                 } else if (event.key.key == SDLK_F5) {
                     save_quick_state(system.get(), quick_state_path);
                 } else if (event.key.key == SDLK_F9) {
-                    load_quick_state(system.get(), quick_state_path, audio_stream);
+                    load_quick_state(system.get(), quick_state_path, audio_stream, &audio_started);
                 } else if (event.key.key == SDLK_F11) {
                     fullscreen = !fullscreen;
                     SDL_SetWindowFullscreen(window, fullscreen);
@@ -793,37 +863,40 @@ int main(int argc, char* argv[]) {
         // and just re-presents the same VDP framebuffer -- keeping the game
         // and its audio at the right rate. While paused we skip stepping
         // entirely but keep rendering / accepting input.
-        // Vertical (TATE) systems are rotated 90 degrees clockwise at the
-        // transfer-buffer copy; downstream (upload/letterbox/blit) then sees
-        // the swapped dimensions.
-        const bool rotate_vertical =
-            system != nullptr &&
-            system->region().orientation == mnemos::frontend_sdk::display_orientation::vertical;
+        // Vertical (TATE) systems are rotated at the transfer-buffer copy;
+        // downstream (upload/letterbox/blit) then sees the swapped dimensions.
+        const auto display_orientation =
+            system != nullptr ? system->region().orientation
+                              : mnemos::frontend_sdk::display_orientation::horizontal;
+        const bool rotate_vertical_cw =
+            display_orientation == mnemos::frontend_sdk::display_orientation::vertical_clockwise;
+        const bool rotate_vertical_ccw =
+            display_orientation ==
+            mnemos::frontend_sdk::display_orientation::vertical_counterclockwise;
+        const bool rotate_vertical = rotate_vertical_cw || rotate_vertical_ccw;
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
         const Uint64 now_ticks = SDL_GetPerformanceCounter();
-        const bool frame_due = !paused && now_ticks >= next_frame_at;
-        if (frame_due) {
-            next_frame_at += static_cast<Uint64>(frame_ticks);
-            // If we drifted far behind (e.g. window dragged), don't try to
-            // catch up infinitely -- skip ahead.
-            if (now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
+        int frames_due = 0;
+        if (!paused) {
+            while (now_ticks >= next_frame_at && frames_due < kAudioMaxCatchupFrames) {
+                ++frames_due;
+                next_frame_at += static_cast<Uint64>(frame_ticks);
+            }
+            // If the emulator is still far behind after the bounded catch-up
+            // pass, resync to wall clock instead of accumulating unbounded debt.
+            if (frames_due == kAudioMaxCatchupFrames &&
+                now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
                 next_frame_at = now_ticks + static_cast<Uint64>(frame_ticks);
             }
         }
         if (system) {
-            if (frame_due) {
+            for (int step = 0; step < frames_due; ++step) {
                 system->step_one_frame();
                 ++fps_window_frames;
                 ++total_frames;
-                if (audio_stream != nullptr) {
-                    const auto audio = system->drain_audio();
-                    if (audio.samples != nullptr && audio.frame_count > 0U) {
-                        SDL_PutAudioStreamData(
-                            audio_stream, audio.samples,
-                            static_cast<int>(audio.frame_count * 2U * sizeof(std::int16_t)));
-                    }
-                }
+                queue_audio_chunk(audio_stream, audio_started, audio_prime_threshold,
+                                  system->drain_audio());
             }
             const auto fb = system->current_frame();
             src_w = fb.width;
@@ -859,11 +932,11 @@ int main(int argc, char* argv[]) {
                 // Copy framebuffer into the transfer buffer as a packed
                 // image. When stride > width (H32 mode etc.) the per-row copy
                 // avoids bleeding the stale stride tail. A vertical (TATE)
-                // system is rotated 90 degrees clockwise here, so everything
-                // downstream just sees a src_h x src_w image.
+                // system is rotated here, so everything downstream just sees
+                // a src_h x src_w image.
                 void* mapped = SDL_MapGPUTransferBuffer(device, xfer, true);
                 if (mapped != nullptr) {
-                    if (rotate_vertical) {
+                    if (rotate_vertical_cw) {
                         auto* out = static_cast<std::uint32_t*>(mapped);
                         for (std::uint32_t y = 0; y < src_w; ++y) {
                             for (std::uint32_t x = 0; x < src_h; ++x) {
@@ -871,6 +944,15 @@ int main(int argc, char* argv[]) {
                                     fb.pixels[static_cast<std::size_t>(src_h - 1U - x) *
                                                   src_stride +
                                               y];
+                            }
+                        }
+                    } else if (rotate_vertical_ccw) {
+                        auto* out = static_cast<std::uint32_t*>(mapped);
+                        for (std::uint32_t y = 0; y < src_w; ++y) {
+                            for (std::uint32_t x = 0; x < src_h; ++x) {
+                                out[static_cast<std::size_t>(y) * src_h + x] =
+                                    fb.pixels[static_cast<std::size_t>(x) * src_stride +
+                                              (src_w - 1U - y)];
                             }
                         }
                     } else if (src_stride == src_w) {

@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "avsp"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 3
 input   = "three_player_three_button"
 
@@ -58,6 +59,7 @@ crc32         = 0x190b817f
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "avp.01"

@@ -359,6 +359,10 @@ namespace mnemos::manifests::genesis {
         // YM2612 ports, PSG-via-bus, VDP-via-bus) cost an extra 1 CPU
         // cycle (7 master cycles) per access.
         s->cpu.set_z80_bus_latency_enabled(true);
+        // Sega's bus controller steals 68K cycles for DRAM refresh. This is not
+        // an MC68000 core behavior, so non-Genesis boards do not opt in.
+        s->cpu.set_bus_refresh_enabled(true);
+        s->cpu.set_genesis_interrupt_phase_timing_enabled(true);
 
         // Z80 sound bus ($0000-$FFFF, little-endian).
         // $0000-$3FFF: Z80 RAM (8 KiB, mirrored).

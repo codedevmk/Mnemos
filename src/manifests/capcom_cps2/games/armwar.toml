@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "armwar"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 3
 input   = "three_player_three_button"
 
@@ -94,6 +95,7 @@ crc32         = 0x07c4fb28
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "pwg.01"

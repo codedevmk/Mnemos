@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "ddtod"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 4
 input   = "four_player_four_button"
 
@@ -67,6 +68,7 @@ crc32         = 0xb3480ec3
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "dad.01"

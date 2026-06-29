@@ -333,6 +333,23 @@ TEST_CASE("m68000 services an autovectored interrupt") {
     CHECK(r.pc == 0x00005000U);
     CHECK(((r.sr >> 8U) & 7U) == 4U); // IPM raised to the accepted level
     CHECK(r.a[7] == 0x00002FFAU);
+    CHECK(m.cpu.elapsed_cycles() == 42U);
+}
+
+TEST_CASE("m68000 can opt into Genesis interrupt phase timing") {
+    machine m;
+    m.w32(0x0070U, 0x00005000U); // autovector level 4 = vector 28 -> $5000
+    m68000::registers s{};
+    s.sr = m68000::sr_s; // IPM = 0, so a level-4 request is accepted
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.cpu.set_genesis_interrupt_phase_timing_enabled(true);
+    m.cpu.set_irq_level(4);
+    const int cycles = m.cpu.step_instruction();
+
+    CHECK(cycles == 50);
+    CHECK(m.cpu.elapsed_cycles() == 50U);
 }
 
 TEST_CASE("m68000 traps a privileged instruction executed in user mode") {

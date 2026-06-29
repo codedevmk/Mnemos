@@ -459,16 +459,24 @@ namespace mnemos::manifests::common {
                     }
                 }
             }
-            // Optional monitor orientation ("horizontal" / "vertical"); the
-            // frontend rotates a vertical set. Absent => horizontal.
+            // Optional monitor orientation. "vertical" preserves the legacy
+            // clockwise presentation; ROT270 boards should declare
+            // "vertical_ccw" so the frontend rotates the other way.
             if (const toml::node* node = set->get("orientation")) {
                 if (const auto* value = node->as_string()) {
                     if (value->get() == "vertical") {
                         decl.orientation = screen_orientation::vertical;
+                    } else if (value->get() == "vertical_cw" ||
+                               value->get() == "vertical_clockwise") {
+                        decl.orientation = screen_orientation::vertical_clockwise;
+                    } else if (value->get() == "vertical_ccw" ||
+                               value->get() == "vertical_counterclockwise") {
+                        decl.orientation = screen_orientation::vertical_counterclockwise;
                     } else if (value->get() == "horizontal") {
                         decl.orientation = screen_orientation::horizontal;
                     } else {
-                        ctx.error("'orientation' in [set] must be \"horizontal\" or \"vertical\"",
+                        ctx.error("'orientation' in [set] must be \"horizontal\", \"vertical\", "
+                                  "\"vertical_cw\", or \"vertical_ccw\"",
                                   node);
                     }
                 } else {

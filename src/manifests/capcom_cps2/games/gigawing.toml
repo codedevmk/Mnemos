@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "gigawing"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "two_player_two_button"
 
@@ -49,6 +50,7 @@ crc32         = 0x3239d642
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "ggw.01"

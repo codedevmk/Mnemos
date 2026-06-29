@@ -41,7 +41,7 @@ GFX_SLOT_LANE = {13: (0, 0), 15: (0, 2), 17: (0, 4), 19: (0, 6),
 SIMM_GFX_GROUP_LANES = {1: 0, 3: 4}          # group -> base byte lane
 SIMM_SUB_BYTE_LANE = [2, 3, 0, 1]            # sub-chip a/b/c/d -> lane within group
 SIMM_QSOUND_GROUPS = (5, 6)
-VERTICAL_SET_PREFIXES = ("19xx", "1944")
+VERTICAL_SET_PREFIXES = ("19xx", "dimahoo", "gmahou")
 INPUT_PROFILES = {
     "19xx": (2, "two_player_two_button"),
     "1944": (2, "two_player_two_button"),
@@ -137,8 +137,10 @@ def is_vertical_set(set_name):
     return any(set_name.startswith(prefix) for prefix in VERTICAL_SET_PREFIXES)
 
 
-def emit_region(name, size, files):
+def emit_region(name, size, files, fill=None):
     lines = ["", "[[region]]", 'name = "%s"' % name, "size = 0x%x" % size]
+    if fill is not None:
+        lines.append("fill = 0x%02x" % fill)
     for f in files:
         lines.append("")
         lines.append("[[region.file]]")
@@ -183,8 +185,7 @@ def gen(set_name, zip_path):
            "# never committed.",
            "", "[set]", 'schema = "mnemos-romset/1"',
            'name   = "%s"' % set_name, 'board  = "capcom_cps2"']
-    if is_vertical_set(set_name):
-        out.append('orientation = "vertical"')
+    out.append('orientation = "%s"' % ("vertical" if is_vertical_set(set_name) else "horizontal"))
     if set_name in INPUT_PROFILES:
         players, input_profile = INPUT_PROFILES[set_name]
         out.append("players = %d" % players)
@@ -202,10 +203,12 @@ def gen(set_name, zip_path):
         off += size
     out += emit_region("maincpu", off, files)
 
-    # --- audiocpu: low 0x8000 fixed, the rest banked from 0x10000 ---
+    # --- audiocpu: slot 1 maps low 0x8000 fixed + continuation at 0x10000;
+    # additional slots continue linearly in the packed QSound Z80 ROM image.
     audio.sort()
     if audio:
         _slot, name, crc, size = audio[0]
+        packed_size = 0
         if size > 0x8000:
             files = [[("name", '"%s"' % name), ("offset", "0x0"),
                       ("source_offset", "0x0"), ("length", "0x8000"),
@@ -214,12 +217,19 @@ def gen(set_name, zip_path):
                       ("source_offset", "0x8000"),
                       ("length", "0x%x" % (size - 0x8000)),
                       ("size", "0x%x" % size), ("crc32", hexc(crc))]]
-            region = 0x10000 + (size - 0x8000)
+            packed_size = 0x10000 + (size - 0x8000)
         else:
             files = [[("name", '"%s"' % name), ("offset", "0x0"),
                       ("size", "0x%x" % size), ("crc32", hexc(crc))]]
-            region = max(size, 0x10000)
-        out += emit_region("audiocpu", region, files)
+            packed_size = max(size, 0x10000)
+        for _slot, name, crc, size in audio[1:]:
+            files.append([("name", '"%s"' % name), ("offset", "0x%x" % packed_size),
+                          ("size", "0x%x" % size), ("crc32", hexc(crc))])
+            packed_size += size
+        region = 0x50000 if 0x8000 < packed_size <= 0x50000 else max(packed_size, 0x10000)
+        # CPS2 QSound CPU ROM maps leave holes in the expanded image;
+        # reference loaders expose those holes as zeroes.
+        out += emit_region("audiocpu", region, files, fill=0x00)
 
     # --- qsound: discrete slots 11/12, or SIMM groups 5/6; word-swapped + concat ---
     qsource = simm_qsound if simm_qsound else [(s, n, c, z) for s, n, c, z in qsound]

@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "ddsom"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 4
 input   = "four_player_four_button"
 
@@ -94,6 +95,7 @@ crc32         = 0xe198805e
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "dd2.01"

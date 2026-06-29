@@ -105,6 +105,7 @@ namespace mnemos::chips::cpu {
         // Maskable-interrupt enable (IFF1): a device pulsing /INT can detect the
         // accept edge (a taken interrupt clears IFF1) to release a level line.
         [[nodiscard]] bool iff1() const noexcept { return iff1_; }
+        [[nodiscard]] bool ei_pending() const noexcept { return ei_pending_; }
         void set_nmi_line(bool asserted) noexcept;
         // The /RESET pin: assert to reset-and-park, release to run from $0000
         // (boards holding the CPU while its program RAM is uploaded).

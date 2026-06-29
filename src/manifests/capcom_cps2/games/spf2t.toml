@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "spf2t"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "two_player_two_button"
 
@@ -40,6 +41,7 @@ crc32         = 0xb80649e2
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "pzf.01"

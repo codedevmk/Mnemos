@@ -98,6 +98,15 @@ namespace {
         return enc;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> patterned_bytes(std::size_t size,
+                                                            std::uint8_t seed) {
+        std::vector<std::uint8_t> out(size);
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            out[i] = static_cast<std::uint8_t>(seed + i * 37U + (i >> 8U));
+        }
+        return out;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t>
     make_stored_zip(const std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& entries) {
         std::vector<std::uint8_t> out;
@@ -183,6 +192,33 @@ namespace {
         return make_stored_zip({
             {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
             {"prog", std::vector<std::uint8_t>(64U, 0x00U)},
+        });
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_keyed_save_zip(std::string_view name,
+                        const std::array<std::uint8_t, cps2::crypto_key_size>& key,
+                        std::uint16_t opcode = 0x60FEU) {
+        std::string manifest =
+            "[set]\n"
+            "schema = \"mnemos-romset/1\"\n"
+            "name = \"" +
+            std::string{name} +
+            "\"\n"
+            "board = \"capcom_cps2\"\n"
+            "\n"
+            "[[region]]\n"
+            "name = \"maincpu\"\n"
+            "size = 64\n"
+            "\n"
+            "[[region.file]]\n"
+            "name = \"prog\"\n"
+            "offset = 0\n";
+        const std::string key_name = std::string{name} + ".key";
+        return make_stored_zip({
+            {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
+            {"prog", encrypted_program(key, opcode)},
+            {key_name, std::vector<std::uint8_t>(key.begin(), key.end())},
         });
     }
 
@@ -317,31 +353,90 @@ TEST_CASE("capcom_cps2_adapter publishes board memory views", "[capcom_cps2][ada
     expect_view("development_dips", cps2::development_dip_size);
 }
 
-TEST_CASE("capcom_cps2_adapter drains QSound at the CPS2 frame cadence",
+TEST_CASE("capcom_cps2_adapter exposes CPS2 bus diagnostics registers",
+          "[capcom_cps2][adapter]") {
+    std::vector<std::uint8_t> program(0x40U, 0x00U);
+    capcom_cps2_adapter adapter(std::move(program), "test");
+
+    const auto chips = adapter.chips();
+    REQUIRE(chips.size() == 5U);
+    REQUIRE(chips.back() != nullptr);
+    CHECK(chips.back()->metadata().part_number == std::string_view{"CPS2_BUS"});
+
+    auto* registers = chips.back()->introspection().registers();
+    REQUIRE(registers != nullptr);
+    const auto snapshot = registers->registers();
+    CHECK(snapshot.size() == 77U);
+
+    bool saw_palette_source = false;
+    bool saw_palette_control = false;
+    bool saw_layer_control = false;
+    bool saw_command_counter = false;
+    bool saw_main_cycles = false;
+    bool saw_sound_cycles = false;
+    bool saw_snapshot_tail = false;
+    for (const auto& reg : snapshot) {
+        if (reg.name == "PAL_SRC") {
+            saw_palette_source = true;
+            CHECK(reg.bit_width == 32U);
+        } else if (reg.name == "CPSB_PALCTRL") {
+            saw_palette_control = true;
+            CHECK(reg.bit_width == 16U);
+        } else if (reg.name == "CPSB_LAYER") {
+            saw_layer_control = true;
+            CHECK(reg.bit_width == 16U);
+        } else if (reg.name == "CMD68K_W") {
+            saw_command_counter = true;
+            CHECK(reg.value == 0U);
+        } else if (reg.name == "MAINCYC") {
+            saw_main_cycles = true;
+            CHECK(reg.bit_width == 64U);
+        } else if (reg.name == "SNDCYC") {
+            saw_sound_cycles = true;
+            CHECK(reg.bit_width == 64U);
+        } else if (reg.name == "SNAP15") {
+            saw_snapshot_tail = true;
+            CHECK(reg.bit_width == 8U);
+        }
+    }
+    CHECK(saw_palette_source);
+    CHECK(saw_palette_control);
+    CHECK(saw_layer_control);
+    CHECK(saw_command_counter);
+    CHECK(saw_main_cycles);
+    CHECK(saw_sound_cycles);
+    CHECK(saw_snapshot_tail);
+}
+
+TEST_CASE("capcom_cps2_adapter drains CPS2 QSound at the historical 44.1 kHz cadence",
           "[capcom_cps2][adapter][audio]") {
+    constexpr std::uint32_t cps2_audio_output_rate = 44'100U;
     std::vector<std::uint8_t> program(0x40U, 0x00U);
     capcom_cps2_adapter adapter(std::move(program), "audio");
 
-    CHECK(adapter.drain_audio().frame_count == 0U);
+    const auto initial = adapter.drain_audio();
+    CHECK(initial.frame_count == 0U);
+    CHECK(initial.sample_rate == cps2_audio_output_rate);
 
     adapter.step_one_frame();
     const auto chunk = adapter.drain_audio();
     const std::uint32_t expected = static_cast<std::uint32_t>(
-        static_cast<std::uint64_t>(mnemos::chips::audio::qsound::native_sample_rate) *
-        cps2::refresh_hz_den / cps2::refresh_hz_num);
-    CHECK(chunk.sample_rate == mnemos::chips::audio::qsound::native_sample_rate);
+        static_cast<std::uint64_t>(cps2_audio_output_rate) * cps2::refresh_hz_den /
+        cps2::refresh_hz_num);
+    CHECK(chunk.sample_rate == cps2_audio_output_rate);
     CHECK(chunk.frame_count == expected);
     REQUIRE(chunk.samples != nullptr);
 
-    CHECK(adapter.drain_audio().frame_count == 0U);
+    const auto empty = adapter.drain_audio();
+    CHECK(empty.frame_count == 0U);
+    CHECK(empty.sample_rate == cps2_audio_output_rate);
 
     for (int i = 0; i < 179; ++i) {
         adapter.step_one_frame();
     }
     const auto accumulated = adapter.drain_audio();
     const std::uint32_t expected_total = static_cast<std::uint32_t>(
-        180ULL * mnemos::chips::audio::qsound::native_sample_rate * cps2::refresh_hz_den /
-        cps2::refresh_hz_num);
+        180ULL * cps2_audio_output_rate * cps2::refresh_hz_den / cps2::refresh_hz_num);
     CHECK(accumulated.frame_count + chunk.frame_count == expected_total);
 }
 
@@ -383,6 +478,7 @@ TEST_CASE("capcom_cps2_adapter discovers a family-compatible board key inside th
 schema = "mnemos-romset/1"
 name = "1944"
 board = "capcom_cps2"
+orientation = "vertical"
 
 [[region]]
 name = "maincpu"
@@ -418,6 +514,7 @@ schema = "mnemos-romset/1"
 name = "1944_mn"
 board = "capcom_cps2"
 parent = "1944"
+orientation = "vertical"
 
 [[region]]
 name = "maincpu"
@@ -452,6 +549,32 @@ offset = 0
     CHECK(adapter.machine().cpu().cpu_registers().pc == 0x00000008U);
 }
 
+TEST_CASE("capcom_cps2_adapter does not infer vertical orientation from the set name",
+          "[capcom_cps2][adapter]") {
+    const std::string manifest = R"(
+[set]
+schema = "mnemos-romset/1"
+name = "1944"
+board = "capcom_cps2"
+
+[[region]]
+name = "maincpu"
+size = 64
+
+[[region.file]]
+name = "prog"
+offset = 0
+)";
+    const auto zip = make_stored_zip({
+        {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
+        {"prog", std::vector<std::uint8_t>(64U, 0x00U)},
+    });
+
+    capcom_cps2_adapter adapter(zip, "manifest_orientation_default");
+
+    CHECK(adapter.region().orientation == mnemos::frontend_sdk::display_orientation::horizontal);
+}
+
 TEST_CASE("capcom_cps2_adapter resolves a checked-in game manifest by zip stem",
           "[capcom_cps2][adapter]") {
     const auto key = sample_key();
@@ -479,6 +602,59 @@ TEST_CASE("capcom_cps2_adapter resolves a checked-in game manifest by zip stem",
     REQUIRE(key_region != nullptr);
     CHECK(*key_region == std::vector<std::uint8_t>(key.begin(), key.end()));
     CHECK(adapter.machine().cpu().cpu_registers().pc == 0x00000008U);
+}
+
+TEST_CASE("capcom_cps2_adapter reports checked-in orientation by zip stem",
+          "[capcom_cps2][adapter]") {
+    const auto empty_zip = make_stored_zip({});
+
+    temp_directory dir("mnemos_cps2_checked_in_orientation");
+    const std::filesystem::path vertical_path = dir.path / "19xx.zip";
+    const std::filesystem::path horizontal_path = dir.path / "1944.zip";
+    REQUIRE(mnemos::io::write_file(vertical_path.string(), empty_zip));
+    REQUIRE(mnemos::io::write_file(horizontal_path.string(), empty_zip));
+
+    capcom_cps2_adapter vertical(empty_zip, "checked_in_vertical", nullptr, {},
+                                 vertical_path.string());
+    capcom_cps2_adapter horizontal(empty_zip, "checked_in_horizontal", nullptr, {},
+                                   horizontal_path.string());
+
+    CHECK(vertical.region().orientation ==
+          mnemos::frontend_sdk::display_orientation::vertical_counterclockwise);
+    CHECK(horizontal.region().orientation ==
+          mnemos::frontend_sdk::display_orientation::horizontal);
+}
+
+TEST_CASE("capcom_cps2_adapter loads checked-in MSH QSound Z80 continuation by zip stem",
+          "[capcom_cps2][adapter][sound]") {
+    const auto msh01 = patterned_bytes(0x20000U, 0x11U);
+    const auto msh02 = patterned_bytes(0x20000U, 0x53U);
+    const auto zip = make_stored_zip({
+        {"msh.01", msh01},
+        {"msh.02", msh02},
+    });
+
+    temp_directory dir("mnemos_cps2_msh_audio_layout");
+    const std::filesystem::path set_path = dir.path / "msh.zip";
+    REQUIRE(mnemos::io::write_file(set_path.string(), zip));
+
+    capcom_cps2_adapter adapter(zip, "checked_in_msh_audio_layout", nullptr, {},
+                                set_path.string());
+
+    const auto* audio = adapter.machine().rom_set().region("audiocpu");
+    REQUIRE(audio != nullptr);
+    REQUIRE(audio->size() == cps2::z80_qsound_cpu_rom_region_size);
+
+    CHECK((*audio)[0x00000U] == msh01[0x00000U]);
+    CHECK((*audio)[0x07FFFU] == msh01[0x07FFFU]);
+    CHECK((*audio)[0x08000U] == 0x00U);
+    CHECK((*audio)[0x0FFFFU] == 0x00U);
+    CHECK((*audio)[0x10000U] == msh01[0x08000U]);
+    CHECK((*audio)[0x27FFFU] == msh01[0x1FFFFU]);
+    CHECK((*audio)[0x28000U] == msh02[0x00000U]);
+    CHECK((*audio)[0x47FFFU] == msh02[0x1FFFFU]);
+    CHECK((*audio)[0x48000U] == 0x00U);
+    CHECK((*audio)[0x4FFFFU] == 0x00U);
 }
 
 TEST_CASE("capcom_cps2_adapter rejects a game.toml for another board", "[capcom_cps2][adapter]") {
@@ -886,30 +1062,16 @@ TEST_CASE("capcom_cps2_adapter applies DIP override to the development switch wi
 TEST_CASE("capcom_cps2_adapter save target round-trips adapter and board state",
           "[capcom_cps2][adapter][save]") {
     const auto key = sample_key();
-    const std::string manifest = R"(
-[set]
-schema = "mnemos-romset/1"
-name = "save_state_test"
-board = "capcom_cps2"
-
-[[region]]
-name = "maincpu"
-size = 64
-
-[[region.file]]
-name = "prog"
-offset = 0
-)";
-    const auto zip = make_stored_zip({
-        {"game.toml", std::vector<std::uint8_t>(manifest.begin(), manifest.end())},
-        {"prog", encrypted_program(key, 0x60FEU)}, // BRA * for stable frame stepping
-        {"save_state_test.key", std::vector<std::uint8_t>(key.begin(), key.end())},
-    });
+    const auto zip = make_keyed_save_zip("save_state_test", key);
 
     capcom_cps2_adapter live(zip, "save_state_test");
     REQUIRE(live.machine().executable());
     CHECK(live.session_capabilities().save_state_supported);
     CHECK(live.session_capabilities().frame_exact_save_state);
+    const mnemos::runtime::save_target target =
+        mnemos::apps::player::adapters::capcom_cps2::build_save_target(live);
+    CHECK(target.manifest_id.rfind("capcom_cps2:", 0U) == 0U);
+    CHECK(target.manifest_id != "capcom_cps2");
 
     mnemos::frontend_sdk::controller_state p1{};
     p1.right = true;
@@ -957,6 +1119,24 @@ offset = 0
 
     restored.step_one_frame();
     CHECK(restored.save_state() == reference);
+}
+
+TEST_CASE("capcom_cps2_adapter rejects save states from another resident set",
+          "[capcom_cps2][adapter][save]") {
+    const auto key = sample_key();
+    const auto source_zip = make_keyed_save_zip("save_state_source", key);
+    const auto other_zip = make_keyed_save_zip("save_state_other", key);
+
+    capcom_cps2_adapter source(source_zip, "source");
+    capcom_cps2_adapter other(other_zip, "other");
+    REQUIRE(source.machine().executable());
+    REQUIRE(other.machine().executable());
+
+    const std::vector<std::uint8_t> saved = source.save_state();
+    REQUIRE(!saved.empty());
+
+    const mnemos::runtime::load_result result = other.load_state(saved);
+    CHECK(result.status == mnemos::runtime::load_status::manifest_mismatch);
 }
 
 // Data-gated (never committed), game-agnostic: MNEMOS_CPS2_SET points at an

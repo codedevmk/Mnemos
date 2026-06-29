@@ -9,6 +9,7 @@ schema = "mnemos-romset/1"
 name   = "hsf2"
 board  = "capcom_cps2"
 
+orientation = "horizontal"
 [[hle]]
 chip = "capcom.qsound"
 rationale = "Behavioral DL-1425 QSound PCM/ADPCM mixer; DSP16 instruction-level model is not implemented."
@@ -91,7 +92,8 @@ crc32         = 0x20d0f9e4
 
 [[region]]
 name = "audiocpu"
-size = 0x28000
+size = 0x50000
+fill = 0x00
 
 [[region.file]]
 name          = "hs2.01"
@@ -108,6 +110,12 @@ source_offset = 0x8000
 length        = 0x18000
 size          = 0x20000
 crc32         = 0xc1a13786
+
+[[region.file]]
+name          = "hs2.02"
+offset        = 0x20000
+size          = 0x20000
+crc32         = 0x2d8794aa
 
 [[region]]
 name = "qsound"

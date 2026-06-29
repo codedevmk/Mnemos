@@ -114,6 +114,7 @@ type = "motorola.68000"
 attached_bus = "main"
 [chip.config]
 z80_bus_latency = true
+genesis_dram_refresh = true
 hint_threshold = 12
 tas_callback = "genesis.tas_suppress"
 fudge = 0.25
@@ -130,6 +131,9 @@ address_bits = 24
 
     REQUIRE(cfg.contains("z80_bus_latency"));
     CHECK(std::get<bool>(cfg.at("z80_bus_latency")) == true);
+
+    REQUIRE(cfg.contains("genesis_dram_refresh"));
+    CHECK(std::get<bool>(cfg.at("genesis_dram_refresh")) == true);
 
     REQUIRE(cfg.contains("hint_threshold"));
     CHECK(std::get<std::int64_t>(cfg.at("hint_threshold")) == 12);

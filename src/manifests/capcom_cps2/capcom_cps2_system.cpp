@@ -1,8 +1,11 @@
 #include "capcom_cps2_system.hpp"
 
+#include "capcom_cps2_qsound_trace.hpp"
 #include "state.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <span>
 #include <string>
@@ -10,6 +13,8 @@
 #include <utility>
 
 namespace mnemos::manifests::capcom_cps2 {
+    using namespace qsound_trace;
+
     namespace {
         inline constexpr std::size_t cps_a_file_offset = 0x100U;
         inline constexpr std::size_t cps_b_file_offset = 0x140U;
@@ -42,8 +47,7 @@ namespace mnemos::manifests::capcom_cps2 {
         // span independently.
         constexpr std::size_t gfx_bank_bytes = 0x200000U;
         constexpr std::size_t gfx_unit_bytes = 8U; // an 8-byte (64-bit) gfx unit
-        constexpr std::uint32_t cps2_system_state_version = 5U;
-        constexpr std::uint32_t m68k_address_mask = 0x00FFFFFFU;
+        constexpr std::uint32_t cps2_system_state_version = 10U;
         constexpr int m68k_vblank_irq_level = 2;
 
         [[nodiscard]] std::uint32_t object_ram_index(std::uint32_t address,
@@ -93,6 +97,7 @@ namespace mnemos::manifests::capcom_cps2 {
             }
             return false;
         }
+
     } // namespace
 
     void cps2_system::unshuffle_gfx_units(std::span<std::uint8_t> units) noexcept {
@@ -161,6 +166,7 @@ namespace mnemos::manifests::capcom_cps2 {
                     reset_vectors_executable(std::span<const std::uint8_t>(opcode_image));
             }
         }
+        dump_opcode_image_if_requested(std::span<const std::uint8_t>(opcode_image));
 
         if (!program.empty()) {
             main_bus.map_rom(program_base, std::span<const std::uint8_t>(program), 0);
@@ -192,8 +198,8 @@ namespace mnemos::manifests::capcom_cps2 {
                 },
                 1);
         };
-        // CPS-2 exposes an 8 KiB selected object bank at $700000 and an 8 KiB
-        // alternate window at $708000 that addresses the opposite bank.
+        // CPS-2 exposes an 8 KiB selected object bank at $700000 and a 32 KiB
+        // alternate mirror at $708000 that addresses the opposite bank.
         map_object_window(object_ram_base, object_bank_bytes, 0U);
         map_object_window(object_ram_alt_base, object_ram_alt_window_bytes, 1U);
         // QSound 68K<->Z80 comm RAM: the 68K sees the 4 KiB buffer on the ODD byte
@@ -201,20 +207,85 @@ namespace mnemos::manifests::capcom_cps2 {
         main_bus.map_mmio(
             qsound_shared_base, static_cast<std::uint32_t>(qsound_shared_window),
             [this](std::uint32_t address) -> std::uint8_t {
-                if ((address & 1U) == 0U) {
-                    return 0xFFU; // even bytes read open bus
-                }
                 const std::uint32_t index = (address - qsound_shared_base) >> 1U;
-                return index < qsound_shared_ram_.size() ? qsound_shared_ram_[index] : 0xFFU;
+                std::uint8_t value = 0xFFU;
+                ++qsound_bus_.shared_68k_read_count;
+                if (index == 0x0FFFU) {
+                    ++qsound_bus_.shared_68k_status_read_count;
+                } else if (index == 0x0FFDU) {
+                    ++qsound_bus_.shared_68k_magic_read_count;
+                }
+                if ((address & 1U) == 0U) {
+                    ++qsound_bus_.shared_68k_even_read_count;
+                } else {
+                    ++qsound_bus_.shared_68k_odd_read_count;
+                    value = index < qsound_shared_ram_.size() ? qsound_shared_ram_[index] : 0xFFU;
+                }
+                const std::uint32_t pc = main_cpu.current_instruction_addr() & m68k_address_mask;
+                if (index == 0x0FFFU) {
+                    qsound_bus_.shared_status_last_read_value = value;
+                    qsound_bus_.shared_status_last_read_pc = pc;
+                    if (!qsound_bus_.shared_status_first_read_seen) {
+                        qsound_bus_.shared_status_first_read_seen = true;
+                        qsound_bus_.shared_status_first_read_value = value;
+                        qsound_bus_.shared_status_first_read_pc = pc;
+                    }
+                }
+                qsound_bus_.shared_last_68k_read_index = static_cast<std::uint16_t>(index);
+                qsound_bus_.shared_last_68k_read_value = value;
+                qsound_bus_.shared_last_68k_read_pc = pc;
+                qsound_live_trace_68k_shared_read(static_cast<std::uint16_t>(index),
+                                                  value,
+                                                  pc,
+                                                  main_cpu.elapsed_cycles(),
+                                                  std::span<const std::uint8_t>(
+                                                      qsound_work_ram_),
+                                                  std::span<const std::uint8_t>(
+                                                      qsound_shared_ram_));
+                return value;
             },
             [this](std::uint32_t address, std::uint8_t value) {
-                if ((address & 1U) == 0U) {
+                const std::uint32_t index = (address - qsound_shared_base) >> 1U;
+                if (index >= qsound_shared_ram_.size()) {
                     return;
                 }
-                const std::uint32_t index = (address - qsound_shared_base) >> 1U;
-                if (index < qsound_shared_ram_.size()) {
-                    qsound_shared_ram_[index] = value;
+                const std::uint32_t pc = main_cpu.current_instruction_addr() & m68k_address_mask;
+                if ((address & 1U) == 0U) {
+                    ++qsound_bus_.shared_68k_even_write_count;
+                    qsound_bus_.shared_last_even_68k_index = static_cast<std::uint16_t>(index);
+                    qsound_bus_.shared_last_even_68k_value = value;
+                    if (value != 0xFFU) {
+                        ++qsound_bus_.shared_68k_even_non_ff_write_count;
+                    }
+                    return;
                 }
+                qsound_shared_ram_[index] = value;
+                ++qsound_bus_.shared_68k_write_count;
+                qsound_bus_.shared_last_68k_write_pc = pc;
+                if (value != 0xFFU) {
+                    ++qsound_bus_.shared_68k_non_ff_write_count;
+                    qsound_bus_.shared_last_68k_non_ff_write_pc = pc;
+                }
+                if (index == 0x000FU) {
+                    ++qsound_bus_.shared_68k_command_signal_write_count;
+                    qsound_bus_.shared_command_signal_last_68k_value = value;
+                    qsound_bus_.shared_command_signal_last_68k_pc = pc;
+                    std::copy_n(qsound_shared_ram_.begin(),
+                                qsound_bus_.shared_command_snapshot.size(),
+                                qsound_bus_.shared_command_snapshot.begin());
+                }
+                qsound_bus_.shared_last_68k_index = static_cast<std::uint16_t>(index);
+                qsound_bus_.shared_last_68k_value = value;
+                qsound_live_trace_68k_shared_write(static_cast<std::uint16_t>(index),
+                                                   value,
+                                                   pc,
+                                                   main_cpu.elapsed_cycles(),
+                                                   main_cpu.cpu_registers(),
+                                                   std::span<const std::uint8_t>(work_ram_),
+                                                   std::span<const std::uint8_t>(
+                                                       qsound_work_ram_),
+                                                   std::span<const std::uint8_t>(
+                                                       qsound_shared_ram_));
             },
             1);
 
@@ -266,31 +337,8 @@ namespace mnemos::manifests::capcom_cps2 {
                         read_paddle_ = (value & 0x01U) != 0U;
                     }
                     break;
-                case 0x804041U: // sound-CPU reset: bit3 set = run, clear = hold in reset
-                    if (analog_input_mode_ == cps2_analog_input_mode::puzz_loop_2) {
-                        read_paddle_ = (value & 0x02U) != 0U;
-                    }
-                    update_coin_outputs(value);
-                    if ((value & 0x08U) != 0U) {
-                        // Release: start the Z80 fresh from its reset vector.
-                        if (sound_reset_asserted_) {
-                            sound_cpu_.reset(chips::reset_kind::power_on);
-                            sound_cpu_.set_irq_line(false);
-                            sound_cycle_debt_ = 0;
-                            sound_cycle_accum_ = 0U;
-                            qsound_irq_line_ = false;
-                            qsound_irq_accum_ = 0U;
-                        }
-                        sound_reset_asserted_ = false;
-                    } else {
-                        sound_reset_asserted_ = true;
-                        sound_cpu_.reset(chips::reset_kind::power_on);
-                        sound_cpu_.set_irq_line(false);
-                        sound_cycle_debt_ = 0;
-                        sound_cycle_accum_ = 0U;
-                        qsound_irq_line_ = false;
-                        qsound_irq_accum_ = 0U;
-                    }
+                case 0x804041U:
+                    write_output_low_port(value);
                     break;
                 case 0x8040E0U:
                 case 0x8040E1U:
@@ -319,12 +367,45 @@ namespace mnemos::manifests::capcom_cps2 {
         video_.attach_object_ram(std::span<const std::uint8_t>(object_ram_));
 
         main_cpu.attach_bus(main_bus);
+        if (qsound_live_trace_noisy()) {
+            if (!qsound_live_trace_access_only()) {
+                qsound_live_trace_opcode_scan(std::span<const std::uint8_t>(opcode_image));
+                main_cpu.diagnostics().set_trace_callback([this](std::uint32_t pc) {
+                    if (!qsound_live_trace_pc_is_interesting(pc)) {
+                        return;
+                    }
+                    qsound_live_trace_68k_pc(pc,
+                                             main_cpu.elapsed_cycles(),
+                                             main_cpu.cpu_registers(),
+                                             std::span<const std::uint8_t>(work_ram_),
+                                             std::span<const std::uint8_t>(opcode_image));
+                });
+            }
+            main_bus.set_access_observer([this](const topology::access_event& ev) {
+                if (!qsound_live_trace_main_ram_access_is_interesting(ev.address, ev.write)) {
+                    return;
+                }
+                qsound_live_trace_main_ram_access(
+                    ev.address,
+                    ev.value,
+                    ev.write,
+                    main_cpu.current_instruction_addr() & m68k_address_mask,
+                    main_cpu.elapsed_cycles(),
+                    main_cpu.cpu_registers(),
+                    std::span<const std::uint8_t>(work_ram_));
+            });
+        }
         main_cpu.set_irq_ack_callback([this](int level) {
             main_cpu.set_irq_level(0);
             if (level == m68k_vblank_irq_level) {
                 ++vblank_irq_acked_;
             }
         });
+        if (sound_rom_size_ != 0U) {
+            sound_cpu_.reset(chips::reset_kind::power_on);
+            qdsp_.reset(chips::reset_kind::power_on);
+            sound_reset_asserted_ = true;
+        }
         // Reset reads the vector ($0 SSP / $4 PC) through the opcode path, so on a
         // keyed board it boots from the decrypted image.
         main_cpu.reset(chips::reset_kind::power_on);
@@ -335,6 +416,10 @@ namespace mnemos::manifests::capcom_cps2 {
         sound_rom_size_ = static_cast<std::uint32_t>(sound_rom.size());
         if (sound_rom_size_ == 0U) {
             return; // no sound program in this set (skeleton / synthetic data path)
+        }
+        if (sound_rom_size_ > 0x20000U && sound_rom_size_ < z80_qsound_cpu_rom_region_size) {
+            sound_rom.resize(z80_qsound_cpu_rom_region_size, 0x00U);
+            sound_rom_size_ = static_cast<std::uint32_t>(sound_rom.size());
         }
         const std::span<const std::uint8_t> rom_span{sound_rom};
         const std::size_t low = std::min<std::size_t>(sound_rom.size(), z80_rom_window);
@@ -351,38 +436,140 @@ namespace mnemos::manifests::capcom_cps2 {
                 const std::uint32_t rom_addr = bank_base +
                                                (sound_bank_ & z80_bank_mask) * z80_bank_window +
                                                (address - z80_bank_base);
-                return rom_addr < rom_span.size() ? rom_span[rom_addr] : 0xFFU;
+                const std::uint8_t value =
+                    rom_addr < rom_span.size() ? rom_span[rom_addr] : 0xFFU;
+                qsound_live_trace_z80_bank_read(
+                    static_cast<std::uint16_t>(address),
+                    rom_addr,
+                    value,
+                    sound_cpu_.cpu_registers().pc,
+                    sound_cpu_.elapsed_cycles(),
+                    sound_bank_,
+                    std::span<const std::uint8_t>(qsound_work_ram_),
+                    std::span<const std::uint8_t>(qsound_shared_ram_));
+                return value;
             },
             [](std::uint32_t, std::uint8_t) {}, 0);
 
-        // Comm RAM ($C000), Z80 scratch ($D000), work RAM ($F000).
-        sound_bus_.map_ram(z80_shared_base, std::span<std::uint8_t>(qsound_shared_ram_), 0);
+        // Comm RAM ($C000), Z80 scratch behind the DL-1425 ports ($D000-$D7FF),
+        // and work RAM ($F000). The device ports are overlaid below at priority 1.
+        sound_bus_.map_mmio(
+            z80_shared_base, qsound_shared_size,
+            [this](std::uint32_t address) -> std::uint8_t {
+                const auto offset = static_cast<std::uint16_t>(address - z80_shared_base);
+                const std::uint8_t value = qsound_shared_ram_[offset];
+                if (offset == 0x000FU) {
+                    ++qsound_bus_.shared_z80_command_signal_read_count;
+                    qsound_bus_.shared_command_signal_last_z80_value = value;
+                }
+                if (qsound_live_trace_shared_index_is_interesting(offset)) {
+                    qsound_live_trace_z80_event(
+                        "Z80SHR", static_cast<std::uint16_t>(address), offset, value,
+                        sound_cpu_.cpu_registers().pc, sound_cpu_.elapsed_cycles(), sound_bank_,
+                        std::span<const std::uint8_t>(qsound_work_ram_),
+                        std::span<const std::uint8_t>(qsound_shared_ram_));
+                }
+                return value;
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                const auto offset = static_cast<std::uint16_t>(address - z80_shared_base);
+                qsound_shared_ram_[offset] = value;
+                ++qsound_bus_.shared_z80_write_count;
+                qsound_bus_.shared_last_z80_addr = static_cast<std::uint16_t>(address);
+                qsound_bus_.shared_last_z80_value = value;
+                qsound_live_trace_z80_shared_write(
+                    static_cast<std::uint16_t>(address), offset, value,
+                    sound_cpu_.cpu_registers().pc, sound_cpu_.elapsed_cycles(), sound_bank_,
+                    std::span<const std::uint8_t>(qsound_work_ram_),
+                    std::span<const std::uint8_t>(qsound_shared_ram_));
+                if (qsound_live_trace_shared_index_is_interesting(offset)) {
+                    qsound_live_trace_z80_event(
+                        "Z80SHW", static_cast<std::uint16_t>(address), offset, value,
+                        sound_cpu_.cpu_registers().pc, sound_cpu_.elapsed_cycles(), sound_bank_,
+                        std::span<const std::uint8_t>(qsound_work_ram_),
+                        std::span<const std::uint8_t>(qsound_shared_ram_));
+                }
+            },
+            0);
+        sound_bus_.map_mmio(
+            z80_work_base, z80_work_window,
+            [this](std::uint32_t address) -> std::uint8_t {
+                const std::uint16_t z80_addr = static_cast<std::uint16_t>(address);
+                const auto index = static_cast<std::uint16_t>(z80_addr - z80_work_base);
+                const std::uint8_t value = qsound_work_ram_[index];
+                qsound_live_trace_z80_work_event(
+                    "Z80WORKR", z80_addr, index, value, sound_cpu_.cpu_registers(),
+                    sound_cpu_.elapsed_cycles(), sound_bank_,
+                    std::span<const std::uint8_t>(qsound_work_ram_),
+                    std::span<const std::uint8_t>(qsound_shared_ram_));
+                return value;
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                qsound_work_ram_[address - z80_work_base] = value;
+                ++qsound_bus_.work_z80_write_count;
+                qsound_bus_.work_last_z80_addr = static_cast<std::uint16_t>(address);
+                qsound_bus_.work_last_z80_value = value;
+                const std::uint16_t z80_addr = static_cast<std::uint16_t>(address);
+                qsound_live_trace_z80_work_event(
+                    "Z80WORKW", z80_addr, static_cast<std::uint16_t>(z80_addr - z80_work_base),
+                    value, sound_cpu_.cpu_registers(), sound_cpu_.elapsed_cycles(), sound_bank_,
+                    std::span<const std::uint8_t>(qsound_work_ram_),
+                    std::span<const std::uint8_t>(qsound_shared_ram_));
+            },
+            0);
         sound_bus_.map_ram(z80_ram_base, std::span<std::uint8_t>(z80_ram_), 0);
-        sound_bus_.map_ram(z80_work_base, std::span<std::uint8_t>(qsound_work_ram_), 0);
 
-        // DL-1425 ports ($D000-$D002 = the 3-port DSP interface; $D003 = bank
-        // select; $D007 = ready flag). Priority 1 overlays the $D000 scratch RAM.
+        // DL-1425 ports ($D000-$D002 write = the 3-port DSP interface; $D003
+        // write = bank select; $D007 read = ready flag). Non-device accesses in
+        // the same page fall through to the scratch RAM mapped below this overlay.
         sound_bus_.map_mmio(
             z80_port_base, 0x8U,
             [this](std::uint32_t address) -> std::uint8_t {
                 if (address == z80_ready_reg) {
                     return qdsp_.read_status();
                 }
-                return z80_ram_[address - z80_ram_base];
+                return 0xFFU;
             },
             [this](std::uint32_t address, std::uint8_t value) {
                 if (address == z80_bank_reg) {
                     sound_bank_ = static_cast<std::uint8_t>(value & z80_bank_mask);
+                    qsound_live_trace_bank_write(
+                        value, sound_bank_, sound_cpu_.cpu_registers().pc,
+                        sound_cpu_.elapsed_cycles(), std::span<const std::uint8_t>(qsound_work_ram_),
+                        std::span<const std::uint8_t>(qsound_shared_ram_));
                 } else if (address >= z80_port_base && address <= z80_port_base + 2U) {
-                    qdsp_.write_port(static_cast<std::uint8_t>(address - z80_port_base), value);
-                } else {
-                    z80_ram_[address - z80_ram_base] = value;
+                    qdsp_.write_port_with_pc(
+                        static_cast<std::uint8_t>(address - z80_port_base), value,
+                        sound_cpu_.cpu_registers().pc);
+                    if (address == z80_port_base + 2U) {
+                        qsound_live_trace_register(
+                            qdsp_.last_register(), qdsp_.last_register_data(),
+                            qdsp_.last_register_pc(), sound_cpu_.elapsed_cycles(), sound_bank_,
+                            std::span<const std::uint8_t>(qsound_work_ram_),
+                            std::span<const std::uint8_t>(qsound_shared_ram_));
+                    }
                 }
             },
-            1);
+            1,
+            [](std::uint32_t address, bool write) {
+                if (write) {
+                    return address >= z80_port_base && address <= z80_bank_reg;
+                }
+                return address == z80_ready_reg;
+            });
 
         sound_cpu_.attach_bus(sound_bus_);
+        if (auto* trace = sound_cpu_.introspection().trace();
+            trace != nullptr && qsound_live_trace_z80_pc()) {
+            trace->install([this](const instrumentation::trace_event& ev) {
+                qsound_live_trace_z80_pc_event(
+                    ev.pc, ev.cycles, sound_cpu_.cpu_registers(), sound_bank_,
+                    std::span<const std::uint8_t>(qsound_work_ram_),
+                    std::span<const std::uint8_t>(qsound_shared_ram_));
+            });
+        }
         qdsp_.set_sample_rom(std::span<const std::uint8_t>(region(roms, "qsound")));
+        qdsp_.set_mixer_mode(chips::audio::qsound::mixer_mode::dl1425_hle);
     }
 
     std::uint32_t cps2_system::sound_bank_rom_base() const noexcept {
@@ -410,43 +597,72 @@ namespace mnemos::manifests::capcom_cps2 {
         if (!executable_) {
             return;
         }
-        // The 68K (16 MHz) drives; the sound Z80 (8 MHz) catches up at the clock
-        // ratio when out of reset, and the DSP advances with it. The Z80 sound
-        // driver does its work in the 250 Hz DL-1425 /INT handler, so the loop
-        // pulses that interrupt (raise on the period, release on the accept edge --
-        // a taken IM1 interrupt clears IFF1).
+        // The 68K drives; the sound Z80 (8 MHz) catches up at the board clock
+        // ratio when out of reset. The Z80 core carries whole-instruction
+        // catch-up debt internally, so sound programs cannot run faster simply
+        // because the 68K interleave slices are smaller than a Z80 instruction.
         std::uint64_t ran = 0U;
         while (ran < cycles) {
             const int spent = main_cpu.step_instruction();
             const std::uint64_t step = spent > 0 ? static_cast<std::uint64_t>(spent) : 1U;
             ran += step;
+            scanline_cycles_ += static_cast<std::uint32_t>(step);
+            frame_cycles_ += static_cast<std::uint32_t>(step);
             if (sound_rom_size_ != 0U && !sound_reset_asserted_) {
-                // Z80 cycles owed = 68K cycles * 8 MHz / 16 MHz. Keep the
-                // fractional remainder so the long-run cadence does not drift
-                // toward an approximate 2:3 ratio.
+                // Z80 cycles owed = 68K cycles scaled by the board clocks. Keep
+                // the fractional remainder so the long-run cadence does not drift.
                 sound_cycle_accum_ += step * static_cast<std::uint64_t>(qsound_z80_clock_hz);
                 const std::uint64_t due = sound_cycle_accum_ / m68k_clock_hz;
                 sound_cycle_accum_ -= due * m68k_clock_hz;
-                sound_cycle_debt_ += static_cast<std::int64_t>(due);
-                while (sound_cycle_debt_ > 0) {
-                    const bool ack_possible = qsound_irq_line_ && sound_cpu_.iff1();
-                    sound_cpu_.set_irq_line(qsound_irq_line_);
-                    const int zc = sound_cpu_.step_instruction();
-                    const int zstep = zc > 0 ? zc : 1;
-                    sound_cycle_debt_ -= zstep;
-                    // A taken /INT clears IFF1: release the level line so it is a pulse.
-                    if (ack_possible && !sound_cpu_.iff1()) {
-                        qsound_irq_line_ = false;
-                        sound_cpu_.set_irq_line(false);
-                    }
-                    qsound_irq_accum_ += static_cast<std::uint32_t>(zstep);
-                    while (qsound_irq_accum_ >= qsound_irq_period) {
-                        qsound_irq_accum_ -= qsound_irq_period;
-                        qsound_irq_line_ = true;
+                if (due > 0U) {
+                    sound_cycle_debt_ += static_cast<std::int64_t>(due);
+                    while (sound_cycle_debt_ > 0) {
+                        while (qsound_irq_accum_ >= qsound_irq_period) {
+                            qsound_irq_accum_ -= qsound_irq_period;
+                            qsound_irq_line_ = true;
+                        }
+                        sound_cpu_.set_irq_line(qsound_irq_line_);
+                        const int zc = sound_cpu_.step_instruction();
+                        if (zc <= 0) {
+                            break;
+                        }
+                        advance_qsound_dsp_from_z80(static_cast<std::uint64_t>(zc));
+                        sound_cycle_debt_ -= static_cast<std::int64_t>(zc);
+
+                        qsound_irq_accum_ += static_cast<std::uint32_t>(zc);
+                        if (qsound_irq_line_) {
+                            qsound_irq_line_ = false;
+                            sound_cpu_.set_irq_line(false);
+                        }
                     }
                 }
-                qdsp_.tick(step);
+                sound_cpu_.set_irq_line(qsound_irq_line_);
             }
+            while (scanline_cycles_ >= cpu_cycles_per_scanline) {
+                scanline_cycles_ -= cpu_cycles_per_scanline;
+                ++scanline_;
+                if (scanline_ >= frame_scanlines) {
+                    scanline_ = 0U;
+                    frame_cycles_ = 0U;
+                    main_cpu.set_irq_level(0);
+                } else if (scanline_ == vblank_start_line) {
+                    push_cps_a_to_video();
+                    video_.latch_objects();
+                    video_.render(palette_source(), palette_control());
+                    main_cpu.set_irq_level(m68k_vblank_irq_level);
+                    ++vblank_irq_raised_;
+                }
+            }
+        }
+    }
+
+    void cps2_system::advance_qsound_dsp_from_z80(std::uint64_t z80_cycles) noexcept {
+        qsound_dsp_cycle_accum_ +=
+            z80_cycles * static_cast<std::uint64_t>(chips::audio::qsound::master_clock_hz);
+        const std::uint64_t dsp_cycles = qsound_dsp_cycle_accum_ / qsound_z80_clock_hz;
+        qsound_dsp_cycle_accum_ -= dsp_cycles * qsound_z80_clock_hz;
+        if (dsp_cycles > 0U) {
+            qdsp_.tick(dsp_cycles);
         }
     }
 
@@ -493,14 +709,13 @@ namespace mnemos::manifests::capcom_cps2 {
 
     void cps2_system::push_cps_a_to_video() noexcept {
         // CPS-2 stores sprites in the dedicated $700000 object-RAM window; the
-        // object bank latch selects the active 0x2000-byte object table. The
-        // sprite x/y coordinate base comes from control regs 0x08/0x0A.
+        // object bank latch selects the active 0x2000-byte object table. Unlike
+        // CPS-1, the CPS-A OBJ base register is not the CPS-2 sprite table base.
+        // Real CPS-2 games still write values such as $7080 there, but sprites
+        // are latched from the selected bank start.
         const std::uint32_t bank_base =
             static_cast<std::uint32_t>(object_bank_ & 1U) * object_bank_bytes;
-        const std::uint32_t table_offset =
-            object_ram_base_aligned(cps_a_regs_[cps_a_obj_base], object_base_align) &
-            (object_bank_bytes - 1U);
-        video_.set_object_base(bank_base + table_offset);
+        video_.set_object_base(bank_base);
         video_.set_sprite_offsets(control_reg_word(0x08U), control_reg_word(0x0AU));
         // Priority compositor input: the object priority-control word (control reg
         // 0x04). Scroll layer enable comes from the CPS-B layer-control word.
@@ -571,6 +786,35 @@ namespace mnemos::manifests::capcom_cps2 {
         }
     }
 
+    void cps2_system::reset_sound_cpu_control_state() noexcept {
+        sound_cpu_.reset(chips::reset_kind::power_on);
+        sound_cpu_.set_irq_line(false);
+        sound_cycle_debt_ = 0;
+        sound_cycle_accum_ = 0U;
+        qsound_irq_line_ = false;
+        qsound_irq_accum_ = 0U;
+    }
+
+    void cps2_system::write_output_low_port(std::uint8_t value) noexcept {
+        if (analog_input_mode_ == cps2_analog_input_mode::puzz_loop_2) {
+            read_paddle_ = (value & 0x02U) != 0U;
+        }
+        update_coin_outputs(value);
+
+        if (sound_rom_size_ == 0U) {
+            return;
+        }
+
+        const bool assert_reset = (value & 0x08U) == 0U;
+        if (assert_reset) {
+            sound_reset_asserted_ = true;
+            reset_sound_cpu_control_state();
+        } else if (sound_reset_asserted_) {
+            sound_reset_asserted_ = false;
+            reset_sound_cpu_control_state();
+        }
+    }
+
     void cps2_system::update_ecofighters_dial_direction() noexcept {
         for (std::size_t i = 0U; i < analog_dial_.size(); ++i) {
             const std::uint16_t dial = static_cast<std::uint16_t>(analog_dial_[i] & 0x0FFFU);
@@ -631,28 +875,104 @@ namespace mnemos::manifests::capcom_cps2 {
         return cps_reg_word(cps_b_file_offset, cps_b_palette_control_word);
     }
 
-    void cps2_system::run_frame() {
-        constexpr std::uint32_t frame_lines = 262U; // total scanlines
-        constexpr std::uint32_t visible_lines = chips::video::cps2_video::visible_height;
-        constexpr std::uint64_t cpu_visible = cpu_cycles_per_frame * visible_lines / frame_lines;
+    void cps2_system::run_frame_sliced(std::uint64_t max_slice_cycles,
+                                       frame_slice_callback callback,
+                                       void* context) {
+        if (executable_) {
+            const std::uint64_t budget =
+                frame_budget_overshoot_ < cpu_cycles_per_frame
+                    ? cpu_cycles_per_frame - frame_budget_overshoot_
+                    : 1U;
+            const std::uint64_t slice_limit = max_slice_cycles == 0U ? budget : max_slice_cycles;
+            const std::uint64_t before_frame = main_cpu.elapsed_cycles();
+            std::uint64_t spent = 0U;
+            while (spent < budget) {
+                const std::uint64_t before_slice = main_cpu.elapsed_cycles();
+                const std::uint64_t remaining = budget - spent;
+                run_cycles(std::min(remaining, slice_limit));
+                const std::uint64_t after_slice = main_cpu.elapsed_cycles();
+                if (after_slice <= before_slice) {
+                    break;
+                }
+                spent = after_slice - before_frame;
+                if (callback != nullptr) {
+                    callback(context, budget, std::min(spent, budget));
+                }
+            }
+            frame_budget_overshoot_ = spent > budget ? spent - budget : 0U;
+        }
+    }
 
-        const auto run_main = [this](std::uint64_t cycles) {
-            if (executable_) {
-                run_cycles(cycles);
+    void cps2_system::run_frame() {
+        run_frame_sliced(cpu_cycles_per_frame, nullptr, nullptr);
+    }
+
+    namespace {
+        // One archive abstraction so the qsound-bus diagnostics field order is defined
+        // ONCE (in serialize_qsound_bus) and shared by save and load, instead of two
+        // hand-mirrored blocks that silently desync if a field is added in only one.
+        // save_state is const (writes values); load_state mutates (reads into refs) --
+        // hence two archive types with a common call surface.
+        struct save_archive {
+            chips::state_writer& w;
+            void u8(std::uint8_t v) { w.u8(v); }
+            void u16(std::uint16_t v) { w.u16(v); }
+            void u32(std::uint32_t v) { w.u32(v); }
+            void boolean(bool v) { w.boolean(v); }
+            template <class Bytes> void bytes(const Bytes& b) {
+                w.bytes(std::span<const std::uint8_t>(b));
+            }
+        };
+        struct load_archive {
+            chips::state_reader& r;
+            void u8(std::uint8_t& v) { v = r.u8(); }
+            void u16(std::uint16_t& v) { v = r.u16(); }
+            void u32(std::uint32_t& v) { v = r.u32(); }
+            void boolean(bool& v) { v = r.boolean(); }
+            template <class Bytes> void bytes(Bytes& b) {
+                r.bytes(std::span<std::uint8_t>(b));
             }
         };
 
-        // Run the visible field, then at vblank latch the CPS-A/object state,
-        // render the frame from those latches, and raise the level-2 IRQ the game
-        // services during vblank.
-        run_main(cpu_visible);
-        push_cps_a_to_video();
-        video_.latch_objects();
-        video_.render(palette_source(), palette_control());
-        main_cpu.set_irq_level(m68k_vblank_irq_level);
-        ++vblank_irq_raised_;
-        run_main(cpu_cycles_per_frame - cpu_visible);
-    }
+        template <class Ar, class Diag>
+        void serialize_qsound_bus(Ar& ar, Diag& d) {
+            ar.u32(d.shared_68k_write_count);
+            ar.u32(d.shared_68k_non_ff_write_count);
+            ar.u32(d.shared_68k_even_write_count);
+            ar.u32(d.shared_68k_even_non_ff_write_count);
+            ar.u32(d.shared_68k_read_count);
+            ar.u32(d.shared_68k_odd_read_count);
+            ar.u32(d.shared_68k_even_read_count);
+            ar.u32(d.shared_68k_status_read_count);
+            ar.u32(d.shared_68k_magic_read_count);
+            ar.u32(d.shared_68k_command_signal_write_count);
+            ar.u32(d.shared_z80_command_signal_read_count);
+            ar.u32(d.shared_z80_write_count);
+            ar.u32(d.work_z80_write_count);
+            ar.u16(d.shared_last_68k_index);
+            ar.u8(d.shared_last_68k_value);
+            ar.u32(d.shared_last_68k_write_pc);
+            ar.u32(d.shared_last_68k_non_ff_write_pc);
+            ar.u16(d.shared_last_68k_read_index);
+            ar.u8(d.shared_last_68k_read_value);
+            ar.u32(d.shared_last_68k_read_pc);
+            ar.u16(d.shared_last_even_68k_index);
+            ar.u8(d.shared_last_even_68k_value);
+            ar.u16(d.shared_last_z80_addr);
+            ar.u8(d.shared_last_z80_value);
+            ar.u8(d.shared_status_first_read_value);
+            ar.u8(d.shared_status_last_read_value);
+            ar.u32(d.shared_status_first_read_pc);
+            ar.u32(d.shared_status_last_read_pc);
+            ar.boolean(d.shared_status_first_read_seen);
+            ar.u8(d.shared_command_signal_last_68k_value);
+            ar.u32(d.shared_command_signal_last_68k_pc);
+            ar.u8(d.shared_command_signal_last_z80_value);
+            ar.bytes(d.shared_command_snapshot);
+            ar.u16(d.work_last_z80_addr);
+            ar.u8(d.work_last_z80_value);
+        }
+    } // namespace
 
     void cps2_system::save_state(chips::state_writer& writer) const {
         writer.u32(cps2_system_state_version);
@@ -678,6 +998,10 @@ namespace mnemos::manifests::capcom_cps2 {
         writer.u8(object_bank_);
         writer.u64(vblank_irq_raised_);
         writer.u64(vblank_irq_acked_);
+        writer.u32(scanline_);
+        writer.u32(scanline_cycles_);
+        writer.u32(frame_cycles_);
+        writer.u64(frame_budget_overshoot_);
         writer.u16(input0);
         writer.u16(input1);
         writer.u16(input_sys);
@@ -706,10 +1030,13 @@ namespace mnemos::manifests::capcom_cps2 {
         writer.bytes(std::span<const std::uint8_t>(qsound_shared_ram_));
         writer.bytes(std::span<const std::uint8_t>(z80_ram_));
         writer.bytes(std::span<const std::uint8_t>(qsound_work_ram_));
+        save_archive save_ar{writer};
+        serialize_qsound_bus(save_ar, qsound_bus_);
         writer.u8(sound_bank_);
         writer.boolean(sound_reset_asserted_);
         writer.u64(static_cast<std::uint64_t>(sound_cycle_debt_));
         writer.u64(sound_cycle_accum_);
+        writer.u64(qsound_dsp_cycle_accum_);
         writer.boolean(qsound_irq_line_);
         writer.u32(qsound_irq_accum_);
     }
@@ -747,6 +1074,28 @@ namespace mnemos::manifests::capcom_cps2 {
         object_bank_ = reader.u8();
         vblank_irq_raised_ = reader.u64();
         vblank_irq_acked_ = reader.u64();
+        if (version >= 7U) {
+            scanline_ = reader.u32();
+            scanline_cycles_ = reader.u32();
+            frame_cycles_ = reader.u32();
+            if (scanline_ >= frame_scanlines || scanline_cycles_ >= cpu_cycles_per_scanline) {
+                reader.fail();
+                return;
+            }
+        } else {
+            scanline_ = 0U;
+            scanline_cycles_ = 0U;
+            frame_cycles_ = 0U;
+        }
+        if (version >= 8U) {
+            frame_budget_overshoot_ = reader.u64();
+            if (frame_budget_overshoot_ >= cpu_cycles_per_frame) {
+                reader.fail();
+                return;
+            }
+        } else {
+            frame_budget_overshoot_ = 0U;
+        }
         input0 = reader.u16();
         input1 = reader.u16();
         input_sys = reader.u16();
@@ -797,13 +1146,25 @@ namespace mnemos::manifests::capcom_cps2 {
         reader.bytes(std::span<std::uint8_t>(qsound_shared_ram_));
         reader.bytes(std::span<std::uint8_t>(z80_ram_));
         reader.bytes(std::span<std::uint8_t>(qsound_work_ram_));
+        if (version >= 6U) {
+            load_archive load_ar{reader};
+            serialize_qsound_bus(load_ar, qsound_bus_);
+        } else {
+            qsound_bus_ = {};
+        }
         sound_bank_ = reader.u8();
         sound_reset_asserted_ = reader.boolean();
         sound_cycle_debt_ = static_cast<std::int64_t>(reader.u64());
         sound_cycle_accum_ = version >= 2U ? reader.u64() : 0U;
+        if (version >= 9U) {
+            const std::uint64_t saved_qsound_dsp_accum = reader.u64();
+            qsound_dsp_cycle_accum_ = version >= 10U ? saved_qsound_dsp_accum : 0U;
+        } else {
+            qsound_dsp_cycle_accum_ = 0U;
+        }
         qsound_irq_line_ = reader.boolean();
         qsound_irq_accum_ = reader.u32();
-        sound_cpu_.set_irq_line(qsound_irq_line_);
+        sound_cpu_.set_irq_line(sound_reset_asserted_ ? false : qsound_irq_line_);
     }
 
 } // namespace mnemos::manifests::capcom_cps2

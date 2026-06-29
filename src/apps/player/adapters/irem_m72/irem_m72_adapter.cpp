@@ -146,9 +146,15 @@ namespace mnemos::apps::player::adapters::irem_m72 {
 
         [[nodiscard]] frontend_sdk::display_orientation
         to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
-            return orientation == mnemos::manifests::common::screen_orientation::vertical
-                       ? frontend_sdk::display_orientation::vertical
-                       : frontend_sdk::display_orientation::horizontal;
+            switch (orientation) {
+            case mnemos::manifests::common::screen_orientation::vertical_counterclockwise:
+                return frontend_sdk::display_orientation::vertical_counterclockwise;
+            case mnemos::manifests::common::screen_orientation::vertical:
+                return frontend_sdk::display_orientation::vertical_clockwise;
+            case mnemos::manifests::common::screen_orientation::horizontal:
+            default:
+                return frontend_sdk::display_orientation::horizontal;
+            }
         }
 
         [[nodiscard]] std::optional<std::string>

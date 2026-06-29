@@ -306,6 +306,13 @@ TEST_CASE("rom_set_toml parses the optional orientation", "[rom_set_toml]") {
         REQUIRE(result.ok());
         CHECK(result.value->orientation == screen_orientation::vertical);
     }
+    SECTION("vertical counterclockwise") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\norientation = \"vertical_ccw\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->orientation == screen_orientation::vertical_counterclockwise);
+    }
     SECTION("absent defaults to horizontal") {
         const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
                                                "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");

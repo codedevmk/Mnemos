@@ -8,6 +8,7 @@
 schema = "mnemos-romset/1"
 name   = "pzloop2"
 board  = "capcom_cps2"
+orientation = "horizontal"
 players = 2
 input   = "puzz_loop_2_paddle"
 
@@ -58,6 +59,7 @@ crc32         = 0x86fbbdf4
 [[region]]
 name = "audiocpu"
 size = 0x28000
+fill = 0x00
 
 [[region.file]]
 name          = "pl2.01"

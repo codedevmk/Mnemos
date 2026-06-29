@@ -3,7 +3,9 @@
 #include "animation_export.hpp"
 #include "asset_export.hpp"
 #include "audio_export.hpp"
+#include "battery_save.hpp"
 #include "capability_discovery.hpp"
+#include "capcom_cps2_adapter.hpp"
 #include "debug_dump.hpp"
 #include "player_system.hpp"
 #include "state_file.hpp"
@@ -11,6 +13,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -25,6 +28,20 @@ namespace {
             }
         }
         return frames;
+    }
+
+    [[nodiscard]] std::optional<std::uint64_t> parse_run_cycles_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            const std::string arg(argv[i]);
+            const std::string prefix = "--run-cycles=";
+            if (arg == "--run-cycles" && i + 1 < argc) {
+                return std::strtoull(argv[i + 1], nullptr, 10);
+            }
+            if (arg.rfind(prefix, 0U) == 0U) {
+                return std::strtoull(arg.c_str() + prefix.size(), nullptr, 10);
+            }
+        }
+        return std::nullopt;
     }
 
     void apply_disk_swaps(mnemos::frontend_sdk::player_system& sys,
@@ -69,6 +86,32 @@ namespace {
         }
     }
 
+    [[nodiscard]] bool run_cps2_probe_cycles(
+        mnemos::frontend_sdk::player_system& sys,
+        mnemos::apps::player::adapters::capcom_cps2::capcom_cps2_adapter& cps2,
+        std::uint64_t cycles,
+        const std::vector<mnemos::apps::player::adapters::press_event>& press_events) {
+        std::uint64_t executed = 0U;
+        std::uint64_t frame = 0U;
+        while (executed < cycles) {
+            const std::uint64_t remaining = cycles - executed;
+            const std::uint64_t slice =
+                remaining < mnemos::manifests::capcom_cps2::cpu_cycles_per_frame
+                    ? remaining
+                    : mnemos::manifests::capcom_cps2::cpu_cycles_per_frame;
+            apply_press_events(sys, press_events, frame + 1U);
+            const std::uint64_t before = cps2.machine().cpu().elapsed_cycles();
+            cps2.machine().run_cycles(slice);
+            const std::uint64_t consumed = cps2.machine().cpu().elapsed_cycles() - before;
+            if (consumed == 0U) {
+                return false;
+            }
+            executed += consumed;
+            ++frame;
+        }
+        return true;
+    }
+
     [[nodiscard]] const char*
     load_status_name(mnemos::runtime::load_status status) noexcept {
         switch (status) {
@@ -98,7 +141,8 @@ namespace mnemos::apps::player {
 
     bool has_headless_request(const headless_requests& requests) noexcept {
         return requests.capabilities || requests.screenshot || requests.save_state ||
-               requests.extract_assets || requests.extract_audio || requests.record_animation;
+               requests.dump_battery || requests.extract_assets || requests.extract_audio ||
+               requests.record_animation;
     }
 
     std::optional<int> run_headless_request(frontend_sdk::player_system* system,
@@ -179,6 +223,33 @@ namespace mnemos::apps::player {
             return 0;
         }
 
+        if (requests.dump_battery) {
+            if (system == nullptr) {
+                std::fprintf(stderr, "--dump-battery requires --rom\n");
+                return 1;
+            }
+            const auto press_events = parse_press_events(argc, argv);
+            const auto swap_frames = parse_swap_frames(argc, argv);
+            for (std::uint64_t i = 0; i < requests.dump_battery->frames; ++i) {
+                apply_press_events(*system, press_events, i + 1U);
+                apply_disk_swaps(*system, swap_frames, i + 1U);
+                system->step_one_frame();
+            }
+            const auto battery = system->battery_ram();
+            if (battery.empty() ||
+                !adapters::save_battery_ram(requests.dump_battery->path, battery)) {
+                std::fprintf(stderr, "[mnemos_player] could not write battery image: %s\n",
+                             requests.dump_battery->path.c_str());
+                return 1;
+            }
+            std::fprintf(stderr, "[mnemos_player] wrote battery image: %s (%zu bytes after "
+                                 "%llu frames)\n",
+                         requests.dump_battery->path.c_str(), battery.size(),
+                         static_cast<unsigned long long>(requests.dump_battery->frames));
+            std::fflush(stderr);
+            return 0;
+        }
+
         if (requests.screenshot) {
             if (system == nullptr) {
                 std::fprintf(stderr, "--screenshot requires --rom\n");
@@ -194,11 +265,33 @@ namespace mnemos::apps::player {
 
             const auto press_events = parse_press_events(argc, argv);
             const auto swap_frames = parse_swap_frames(argc, argv);
-            for (std::uint64_t i = 0; i < requests.screenshot->frames; ++i) {
-                trace_frame = i + 1U;
-                apply_press_events(*system, press_events, i + 1U);
-                apply_disk_swaps(*system, swap_frames, i + 1U);
-                system->step_one_frame();
+            const auto run_cycles = parse_run_cycles_arg(argc, argv);
+            if (run_cycles.has_value()) {
+                if (!swap_frames.empty()) {
+                    std::fprintf(stderr,
+                                 "--run-cycles does not support --swap-disk in the headless "
+                                 "screenshot path\n");
+                    return 1;
+                }
+                auto* cps2 =
+                    dynamic_cast<adapters::capcom_cps2::capcom_cps2_adapter*>(system);
+                if (cps2 == nullptr) {
+                    std::fprintf(stderr,
+                                 "--run-cycles is currently supported only for cps2 screenshots\n");
+                    return 1;
+                }
+                if (!run_cps2_probe_cycles(*system, *cps2, *run_cycles, press_events)) {
+                    std::fprintf(stderr,
+                                 "[mnemos_player] CPS2 --run-cycles made no forward progress\n");
+                    return 1;
+                }
+            } else {
+                for (std::uint64_t i = 0; i < requests.screenshot->frames; ++i) {
+                    trace_frame = i + 1U;
+                    apply_press_events(*system, press_events, i + 1U);
+                    apply_disk_swaps(*system, swap_frames, i + 1U);
+                    system->step_one_frame();
+                }
             }
 
             if (!debug::dump_screenshot_artifacts(*system, requests.screenshot->path)) {

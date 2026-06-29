@@ -1,10 +1,12 @@
 #include "capcom_cps2_adapter.hpp"
 
 #include "adapter_registry.hpp"
+#include "crc32.hpp"
 #include "cps2_game_manifests.hpp"
 #include "cps2_crypto.hpp"
 #include "file.hpp"
 #include "input_pack.hpp"
+#include "introspection_adapters.hpp"
 #include "rom_set.hpp"
 #include "rom_set_toml.hpp"
 #include "zip_archive.hpp"
@@ -12,9 +14,9 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <span>
 #include <string>
 #include <string_view>
@@ -28,10 +30,17 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         using mnemos::manifests::common::rom_set_image;
         namespace cps2 = mnemos::manifests::capcom_cps2;
 
-        constexpr std::uint32_t cps2_adapter_state_version = 3U;
+        constexpr std::uint32_t cps2_adapter_state_version = 5U;
+        constexpr std::uint32_t cps2_audio_output_rate = 44'100U;
+        constexpr std::uint64_t cps2_audio_slice_cycles =
+            cps2::m68k_clock_hz / cps2_audio_output_rate;
+        constexpr std::uint64_t cps2_qsound_rate_num = 60'000'000ULL / 2ULL;
+        constexpr std::uint64_t cps2_qsound_rate_den =
+            1'248ULL * static_cast<std::uint64_t>(cps2_audio_output_rate);
 
         struct loaded_set final {
             rom_set_image image;
+            std::string set_name;
             frontend_sdk::display_orientation orientation{
                 frontend_sdk::display_orientation::horizontal};
             std::uint8_t players{2U};
@@ -51,14 +60,275 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             std::vector<key_file_candidate> key_candidates;
         };
 
+        [[nodiscard]] std::uint64_t audio_due_after_frames(std::uint64_t frames) noexcept {
+            return frames * static_cast<std::uint64_t>(cps2_audio_output_rate) *
+                   cps2::refresh_hz_den / cps2::refresh_hz_num;
+        }
+
         [[nodiscard]] std::vector<key_file_candidate>
         collect_zip_key_candidates(std::span<const std::uint8_t> archive_bytes);
 
+        class cps2_board_debug_chip final : public chips::iperipheral {
+          public:
+            explicit cps2_board_debug_chip(cps2::cps2_system& system) : system_(&system) {
+                introspection_.with_registers([this] { return register_snapshot(); });
+            }
+
+            [[nodiscard]] chips::chip_metadata metadata() const noexcept override {
+                return {.manufacturer = "Capcom",
+                        .part_number = "CPS2_BUS",
+                        .family = "CPS2 board diagnostics",
+                        .klass = chips::chip_class::peripheral,
+                        .revision = 1U};
+            }
+
+            void tick(std::uint64_t /*cycles*/) override {}
+            void reset(chips::reset_kind /*kind*/) override {}
+            void save_state(chips::state_writer& /*writer*/) const override {}
+            void load_state(chips::state_reader& /*reader*/) override {}
+
+            [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+                return introspection_;
+            }
+
+          private:
+            [[nodiscard]] std::span<const chips::register_descriptor>
+            register_snapshot() noexcept {
+                using fmt = chips::register_value_format;
+                const cps2::cps2_qsound_bus_diagnostics& q =
+                    system_->qsound_bus_diagnostics();
+                std::size_t out = 0U;
+                const auto add = [this, &out](const char* name, std::uint64_t value,
+                                              std::uint8_t bits, fmt format) {
+                    // register_view_ is sized to the exact add() count below; guard so a
+                    // future added register can never overrun the fixed-size array.
+                    if (out >= register_view_.size()) {
+                        return;
+                    }
+                    register_view_[out++] = {name, value, bits, format};
+                };
+                const auto control_word = [this](std::size_t offset) -> std::uint16_t {
+                    const auto regs = system_->control_registers();
+                    if (offset + 1U >= regs.size()) {
+                        return 0U;
+                    }
+                    return static_cast<std::uint16_t>(
+                        (static_cast<std::uint16_t>(regs[offset]) << 8U) | regs[offset + 1U]);
+                };
+
+                add("CPSA_OBJBASE", system_->cps_a_register(cps2::cps_a_obj_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR1BASE", system_->cps_a_register(cps2::cps_a_scroll1_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR2BASE", system_->cps_a_register(cps2::cps_a_scroll2_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR3BASE", system_->cps_a_register(cps2::cps_a_scroll3_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_ROWBASE", system_->cps_a_register(cps2::cps_a_rowscroll_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_PALBASE", system_->cps_a_register(cps2::cps_a_palette_base), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_SCR1X", system_->cps_a_register(cps2::cps_a_scroll1_x), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR1Y", system_->cps_a_register(cps2::cps_a_scroll1_y), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR2X", system_->cps_a_register(cps2::cps_a_scroll2_x), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR2Y", system_->cps_a_register(cps2::cps_a_scroll2_y), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR3X", system_->cps_a_register(cps2::cps_a_scroll3_x), 16U,
+                    fmt::signed_integer);
+                add("CPSA_SCR3Y", system_->cps_a_register(cps2::cps_a_scroll3_y), 16U,
+                    fmt::signed_integer);
+                add("CPSA_ROWOFFS", system_->cps_a_register(cps2::cps_a_rowscroll_offset), 16U,
+                    fmt::unsigned_integer);
+                add("CPSA_VCTRL", system_->cps_a_register(cps2::cps_a_video_control), 16U,
+                    fmt::flags);
+                add("PAL_SRC", system_->active_palette_source(), 32U, fmt::unsigned_integer);
+                add("CPSB_LAYER", system_->cps_b_register(0x13U), 16U, fmt::flags);
+                add("CPSB_PALCTRL", system_->active_palette_control(), 16U, fmt::flags);
+                add("CTRL_OBJPRI", control_word(0x04U), 16U, fmt::flags);
+                add("CTRL_SPRX", control_word(0x08U), 16U, fmt::signed_integer);
+                add("CTRL_SPRY", control_word(0x0AU), 16U, fmt::signed_integer);
+
+                add("S68K_W", q.shared_68k_write_count, 32U, fmt::unsigned_integer);
+                add("S68K_NFFW", q.shared_68k_non_ff_write_count, 32U,
+                    fmt::unsigned_integer);
+                add("S68K_EW", q.shared_68k_even_write_count, 32U, fmt::unsigned_integer);
+                add("S68K_ENFFW", q.shared_68k_even_non_ff_write_count, 32U,
+                    fmt::unsigned_integer);
+                add("S68K_R", q.shared_68k_read_count, 32U, fmt::unsigned_integer);
+                add("S68K_OR", q.shared_68k_odd_read_count, 32U, fmt::unsigned_integer);
+                add("S68K_ER", q.shared_68k_even_read_count, 32U, fmt::unsigned_integer);
+                add("S68K_STATUSR", q.shared_68k_status_read_count, 32U,
+                    fmt::unsigned_integer);
+                add("S68K_MAGICR", q.shared_68k_magic_read_count, 32U,
+                    fmt::unsigned_integer);
+                add("CMD68K_W", q.shared_68k_command_signal_write_count, 32U,
+                    fmt::unsigned_integer);
+                add("CMDZ80_R", q.shared_z80_command_signal_read_count, 32U,
+                    fmt::unsigned_integer);
+                add("SZ80_W", q.shared_z80_write_count, 32U, fmt::unsigned_integer);
+                add("WZ80_W", q.work_z80_write_count, 32U, fmt::unsigned_integer);
+                add("LAST68K_IDX", q.shared_last_68k_index, 16U, fmt::unsigned_integer);
+                add("LAST68K_VAL", q.shared_last_68k_value, 8U, fmt::unsigned_integer);
+                add("LAST68K_WPC", q.shared_last_68k_write_pc, 24U, fmt::unsigned_integer);
+                add("LAST68K_NFFWPC", q.shared_last_68k_non_ff_write_pc, 24U,
+                    fmt::unsigned_integer);
+                add("LAST68K_RIDX", q.shared_last_68k_read_index, 16U,
+                    fmt::unsigned_integer);
+                add("LAST68K_RVAL", q.shared_last_68k_read_value, 8U,
+                    fmt::unsigned_integer);
+                add("LAST68K_RPC", q.shared_last_68k_read_pc, 24U, fmt::unsigned_integer);
+                add("LAST68K_EIDX", q.shared_last_even_68k_index, 16U,
+                    fmt::unsigned_integer);
+                add("LAST68K_EVAL", q.shared_last_even_68k_value, 8U,
+                    fmt::unsigned_integer);
+                add("LASTZ80_ADDR", q.shared_last_z80_addr, 16U, fmt::unsigned_integer);
+                add("LASTZ80_VAL", q.shared_last_z80_value, 8U, fmt::unsigned_integer);
+                add("STATUS_FIRST_SEEN", q.shared_status_first_read_seen ? 1U : 0U, 1U,
+                    fmt::flags);
+                add("STATUS_FIRST_VAL", q.shared_status_first_read_value, 8U,
+                    fmt::unsigned_integer);
+                add("STATUS_FIRST_PC", q.shared_status_first_read_pc, 24U,
+                    fmt::unsigned_integer);
+                add("STATUS_LAST_VAL", q.shared_status_last_read_value, 8U,
+                    fmt::unsigned_integer);
+                add("STATUS_LAST_PC", q.shared_status_last_read_pc, 24U,
+                    fmt::unsigned_integer);
+                add("CMD68K_VAL", q.shared_command_signal_last_68k_value, 8U,
+                    fmt::unsigned_integer);
+                add("CMD68K_PC", q.shared_command_signal_last_68k_pc, 24U,
+                    fmt::unsigned_integer);
+                add("CMDZ80_VAL", q.shared_command_signal_last_z80_value, 8U,
+                    fmt::unsigned_integer);
+                add("WORKZ80_ADDR", q.work_last_z80_addr, 16U, fmt::unsigned_integer);
+                add("WORKZ80_VAL", q.work_last_z80_value, 8U, fmt::unsigned_integer);
+                add("MAINCYC", system_->cpu().elapsed_cycles(), 64U, fmt::unsigned_integer);
+                add("SNDCYC", system_->sound_cpu().elapsed_cycles(), 64U, fmt::unsigned_integer);
+                add("SNDDEBT", static_cast<std::uint64_t>(system_->sound_cycle_debt()), 64U,
+                    fmt::signed_integer);
+                add("SNDACCUM", system_->sound_cycle_accum(), 64U, fmt::unsigned_integer);
+                add("SNDIRQACC", system_->qsound_irq_accum(), 32U, fmt::unsigned_integer);
+                add("SNDIRQLINE", system_->qsound_irq_line() ? 1U : 0U, 1U, fmt::flags);
+                add("SNDRESET", system_->sound_cpu().reset_line_held() ? 1U : 0U, 1U,
+                    fmt::flags);
+                add("SNAP00", q.shared_command_snapshot[0], 8U, fmt::unsigned_integer);
+                add("SNAP01", q.shared_command_snapshot[1], 8U, fmt::unsigned_integer);
+                add("SNAP02", q.shared_command_snapshot[2], 8U, fmt::unsigned_integer);
+                add("SNAP03", q.shared_command_snapshot[3], 8U, fmt::unsigned_integer);
+                add("SNAP04", q.shared_command_snapshot[4], 8U, fmt::unsigned_integer);
+                add("SNAP05", q.shared_command_snapshot[5], 8U, fmt::unsigned_integer);
+                add("SNAP06", q.shared_command_snapshot[6], 8U, fmt::unsigned_integer);
+                add("SNAP07", q.shared_command_snapshot[7], 8U, fmt::unsigned_integer);
+                add("SNAP08", q.shared_command_snapshot[8], 8U, fmt::unsigned_integer);
+                add("SNAP09", q.shared_command_snapshot[9], 8U, fmt::unsigned_integer);
+                add("SNAP10", q.shared_command_snapshot[10], 8U, fmt::unsigned_integer);
+                add("SNAP11", q.shared_command_snapshot[11], 8U, fmt::unsigned_integer);
+                add("SNAP12", q.shared_command_snapshot[12], 8U, fmt::unsigned_integer);
+                add("SNAP13", q.shared_command_snapshot[13], 8U, fmt::unsigned_integer);
+                add("SNAP14", q.shared_command_snapshot[14], 8U, fmt::unsigned_integer);
+                add("SNAP15", q.shared_command_snapshot[15], 8U, fmt::unsigned_integer);
+
+                return std::span<const chips::register_descriptor>{register_view_.data(), out};
+            }
+
+            cps2::cps2_system* system_{};
+            std::array<chips::register_descriptor, 77> register_view_{};
+            instrumentation::introspection_builder introspection_;
+        };
+
+        [[nodiscard]] std::unique_ptr<chips::ichip>
+        make_board_debug_chip(cps2::cps2_system& system) {
+            return std::make_unique<cps2_board_debug_chip>(system);
+        }
+
+        [[nodiscard]] std::span<const std::uint8_t> as_bytes(std::string_view text) noexcept {
+            return std::span<const std::uint8_t>(
+                reinterpret_cast<const std::uint8_t*>(text.data()), text.size());
+        }
+
+        [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc,
+                                               std::uint64_t value) noexcept {
+            std::array<std::uint8_t, 8> bytes{};
+            for (std::size_t i = 0; i < bytes.size(); ++i) {
+                bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+            }
+            return mnemos::security::cryptography::crc32(
+                std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+        }
+
+        [[nodiscard]] std::uint32_t crc32_string(std::uint32_t crc,
+                                                 std::string_view text) noexcept {
+            crc = crc32_u64(crc, text.size());
+            return mnemos::security::cryptography::crc32(text, crc);
+        }
+
+        [[nodiscard]] std::string hex32(std::uint32_t value) {
+            static constexpr char digits[] = "0123456789abcdef";
+            std::string out(8U, '0');
+            for (std::size_t i = 0; i < out.size(); ++i) {
+                const auto shift = static_cast<unsigned>((out.size() - 1U - i) * 4U);
+                out[i] = digits[(value >> shift) & 0x0FU];
+            }
+            return out;
+        }
+
+        [[nodiscard]] std::uint64_t resident_image_byte_count(const rom_set_image& image) noexcept {
+            std::uint64_t bytes = 0U;
+            for (const auto& [_, region] : image.regions) {
+                bytes += region.size();
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] bool resident_image_is_complete(const rom_set_image& image) noexcept {
+            if (!image.ok()) {
+                return false;
+            }
+            for (std::string_view region_name : {"maincpu", "gfx", "audiocpu", "qsound", "key"}) {
+                const std::vector<std::uint8_t>* region = image.region(region_name);
+                if (region == nullptr || region->empty()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        [[nodiscard]] std::string resident_media_crc32(const loaded_set& set) {
+            const rom_set_image& image = set.image;
+            if (image.regions.empty()) {
+                return {};
+            }
+            std::uint32_t crc =
+                mnemos::security::cryptography::crc32("capcom_cps2.resident_media.v1");
+            crc = crc32_string(crc, set.set_name);
+            crc = crc32_u64(crc, static_cast<std::uint64_t>(set.orientation));
+            crc = crc32_u64(crc, set.players);
+            crc = crc32_u64(crc, static_cast<std::uint64_t>(set.input_profile));
+            crc = crc32_u64(crc, static_cast<std::uint64_t>(set.analog_input_mode));
+            crc = crc32_u64(crc, set.coin_lockout_active_high ? 1U : 0U);
+            crc = crc32_u64(crc, image.regions.size());
+            for (const auto& [name, bytes] : image.regions) {
+                crc = crc32_string(crc, name);
+                crc = crc32_u64(crc, bytes.size());
+                crc = mnemos::security::cryptography::crc32(
+                    std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+            }
+            return hex32(crc);
+        }
+
         [[nodiscard]] frontend_sdk::display_orientation
         to_display_orientation(mnemos::manifests::common::screen_orientation orientation) noexcept {
-            return orientation == mnemos::manifests::common::screen_orientation::vertical
-                       ? frontend_sdk::display_orientation::vertical
-                       : frontend_sdk::display_orientation::horizontal;
+            switch (orientation) {
+            case mnemos::manifests::common::screen_orientation::vertical_counterclockwise:
+                return frontend_sdk::display_orientation::vertical_counterclockwise;
+            case mnemos::manifests::common::screen_orientation::vertical:
+                return frontend_sdk::display_orientation::vertical_clockwise;
+            case mnemos::manifests::common::screen_orientation::horizontal:
+            default:
+                return frontend_sdk::display_orientation::horizontal;
+            }
         }
 
         frontend_sdk::session_capability_info make_session_capabilities(std::uint8_t players) {
@@ -81,14 +351,19 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         }
 
         frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
-                                                                    std::uint64_t byte_count) {
+                                                                    const loaded_set& set,
+                                                                    std::uint64_t source_bytes,
+                                                                    std::string full_hash) {
+            const std::uint64_t resident_bytes = resident_image_byte_count(set.image);
             frontend_sdk::media_capability_info media{};
             media.media.push_back(frontend_sdk::media_image_info{
                 .id = "rom_set",
                 .label = display_name.empty() ? std::string{"ROM set"} : std::string{display_name},
                 .residency = frontend_sdk::media_residency::resident,
-                .byte_count = byte_count,
-                .hash_algorithm = frontend_sdk::media_hash_algorithm::none,
+                .byte_count = resident_bytes == 0U ? source_bytes : resident_bytes,
+                .hash_algorithm = full_hash.empty() ? frontend_sdk::media_hash_algorithm::none
+                                                    : frontend_sdk::media_hash_algorithm::crc32,
+                .full_hash = std::move(full_hash),
                 .provider_id = "cps2.adapter",
                 .revision = "loaded",
                 .cache_hint = "resident"});
@@ -172,63 +447,6 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             constexpr std::string_view prefix = "mmatrix";
             return set_name.size() >= prefix.size() &&
                    set_name.substr(0U, prefix.size()) == prefix;
-        }
-
-        [[nodiscard]] bool starts_with_ascii(std::string_view value,
-                                             std::string_view prefix) noexcept {
-            return value.size() >= prefix.size() && value.substr(0U, prefix.size()) == prefix;
-        }
-
-        [[nodiscard]] bool is_vertical_cps2_family(std::string_view set_id) noexcept {
-            return starts_with_ascii(set_id, "19xx") || starts_with_ascii(set_id, "1944");
-        }
-
-        [[nodiscard]] bool manifest_declares_orientation(std::string_view text) noexcept {
-            std::size_t line_start = 0U;
-            while (line_start < text.size()) {
-                const std::size_t line_end = text.find('\n', line_start);
-                std::string_view line =
-                    text.substr(line_start, line_end == std::string_view::npos
-                                                ? std::string_view::npos
-                                                : line_end - line_start);
-                while (!line.empty() &&
-                       std::isspace(static_cast<unsigned char>(line.front())) != 0) {
-                    line.remove_prefix(1U);
-                }
-                if (!line.empty() && line.front() != '#' &&
-                    starts_with_ascii(line, "orientation")) {
-                    line.remove_prefix(std::string_view{"orientation"}.size());
-                    while (!line.empty() &&
-                           std::isspace(static_cast<unsigned char>(line.front())) != 0) {
-                        line.remove_prefix(1U);
-                    }
-                    if (!line.empty() && line.front() == '=') {
-                        return true;
-                    }
-                }
-                if (line_end == std::string_view::npos) {
-                    break;
-                }
-                line_start = line_end + 1U;
-            }
-            return false;
-        }
-
-        [[nodiscard]] frontend_sdk::display_orientation
-        default_orientation_for_set(const std::string& set_name,
-                                    const std::optional<std::string>& parent,
-                                    const std::string& rom_path) {
-            if (is_vertical_cps2_family(set_name) ||
-                (parent.has_value() && is_vertical_cps2_family(*parent))) {
-                return frontend_sdk::display_orientation::vertical;
-            }
-            if (!rom_path.empty()) {
-                namespace fs = std::filesystem;
-                if (is_vertical_cps2_family(fs::path(rom_path).stem().string())) {
-                    return frontend_sdk::display_orientation::vertical;
-                }
-            }
-            return frontend_sdk::display_orientation::horizontal;
         }
 
         // Resolve a clone set's parent zip beside the clone on disk and compose a
@@ -544,10 +762,8 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                              source_name.c_str(), parsed.value->board.c_str());
                 return result;
             }
-            result.orientation = manifest_declares_orientation(text)
-                                     ? to_display_orientation(parsed.value->orientation)
-                                     : default_orientation_for_set(parsed.value->name,
-                                                                   parsed.value->parent, rom_path);
+            result.set_name = parsed.value->name;
+            result.orientation = to_display_orientation(parsed.value->orientation);
             result.players = parsed.value->players;
             result.input_profile = input_profile_for(parsed.value->input, result.players);
             result.analog_input_mode = analog_input_mode_for(result.input_profile);
@@ -582,6 +798,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             loaded_set result;
             const bool is_zip = rom.size() >= 4U && rom[0] == 'P' && rom[1] == 'K';
             if (!is_zip) {
+                result.set_name = set_id_from_rom_path(rom_path);
                 result.image.regions.emplace("maincpu", std::move(rom));
                 return result;
             }
@@ -695,6 +912,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
             switch (static_cast<frontend_sdk::display_orientation>(value)) {
             case frontend_sdk::display_orientation::horizontal:
             case frontend_sdk::display_orientation::vertical:
+            case frontend_sdk::display_orientation::vertical_counterclockwise:
                 return true;
             }
             return false;
@@ -711,8 +929,13 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
     // its own run_frame(), so there is no per-chip master-clock schedule to
     // build; the scheduler_factory override does not apply.
     {
-        media_ = make_media_capabilities(display_name, rom.size());
+        const std::uint64_t source_bytes = rom.size();
         loaded_set set = load_set(std::move(rom), rom_path);
+        resident_media_hash_ = resident_media_crc32(set);
+        media_ = make_media_capabilities(display_name, set, source_bytes,
+                                         resident_image_is_complete(set.image)
+                                             ? resident_media_hash_
+                                             : std::string{});
         orientation_ = set.orientation;
         player_count_ = set.players;
         input_profile_ = set.input_profile;
@@ -724,7 +947,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                 {static_cast<std::uint8_t>(*dip_override & 0xFFU),
                  static_cast<std::uint8_t>((*dip_override >> 8U) & 0xFFU), 0xFFU});
         }
-        chip_view_ = {&sys_->video(), &sys_->cpu(), &sys_->sound_cpu(), &sys_->qsound_dsp()};
+        board_debug_chip_ = make_board_debug_chip(*sys_);
+        chip_view_ = {&sys_->video(), &sys_->cpu(), &sys_->sound_cpu(), &sys_->qsound_dsp(),
+                      board_debug_chip_.get()};
         publish_memory_views();
         spec_ = {{"System", "Arcade"},
                  {"Board", "Capcom CPS2"},
@@ -752,31 +977,111 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         publish(10U, "development_dips", sys_->development_dips());
     }
 
+    void capcom_cps2_adapter::capture_audio_slice_callback(
+        void* context,
+        std::uint64_t frame_budget,
+        std::uint64_t frame_cycles_done) noexcept {
+        auto* adapter = static_cast<capcom_cps2_adapter*>(context);
+        if (adapter == nullptr) {
+            return;
+        }
+        adapter->frame_audio_cycle_budget_ = frame_budget == 0U
+                                                  ? cps2::cpu_cycles_per_frame
+                                                  : frame_budget;
+        adapter->capture_audio_until(adapter->frame_audio_cycle_budget_, frame_cycles_done);
+    }
+
+    void capcom_cps2_adapter::capture_audio_until(
+        std::uint64_t frame_budget,
+        std::uint64_t frame_cycles_done) noexcept {
+        if (frame_audio_target_ == 0U || frame_budget == 0U) {
+            return;
+        }
+        const std::uint64_t clamped_cycles = std::min(frame_cycles_done, frame_budget);
+        const std::uint64_t target =
+            frame_audio_target_ * clamped_cycles / frame_budget;
+        while (frame_audio_generated_ < target) {
+            append_qsound_output_sample();
+        }
+    }
+
+    void capcom_cps2_adapter::append_qsound_output_sample() noexcept {
+        auto& qsound = sys_->qsound_dsp();
+        qsound_output_accum_ += cps2_qsound_rate_num;
+        while (qsound_output_accum_ >= cps2_qsound_rate_den) {
+            qsound_output_accum_ -= cps2_qsound_rate_den;
+            qsound_prev_left_ = qsound_curr_left_;
+            qsound_prev_right_ = qsound_curr_right_;
+            qsound.step();
+            qsound_curr_left_ = qsound.last_left();
+            qsound_curr_right_ = qsound.last_right();
+        }
+        const auto blend = [this](std::int16_t previous, std::int16_t current) noexcept {
+            const std::int64_t delta =
+                static_cast<std::int64_t>(current) - static_cast<std::int64_t>(previous);
+            const std::int64_t scaled =
+                static_cast<std::int64_t>(previous) +
+                (delta * static_cast<std::int64_t>(qsound_output_accum_)) /
+                    static_cast<std::int64_t>(cps2_qsound_rate_den);
+            return static_cast<std::int16_t>(std::clamp<std::int64_t>(
+                scaled,
+                static_cast<std::int64_t>(std::numeric_limits<std::int16_t>::min()),
+                static_cast<std::int64_t>(std::numeric_limits<std::int16_t>::max())));
+        };
+        pending_audio_.push_back(blend(qsound_prev_left_, qsound_curr_left_));
+        pending_audio_.push_back(blend(qsound_prev_right_, qsound_curr_right_));
+        ++frame_audio_generated_;
+    }
+
+    void capcom_cps2_adapter::reset_audio_pipeline(bool reset_timing) noexcept {
+        audio_buf_.clear();
+        pending_audio_.clear();
+        if (reset_timing) {
+            qsound_output_accum_ = 0U;
+        }
+        qsound_prev_left_ = 0;
+        qsound_prev_right_ = 0;
+        qsound_curr_left_ = 0;
+        qsound_curr_right_ = 0;
+        frame_audio_target_ = 0U;
+        frame_audio_generated_ = 0U;
+        frame_audio_cycle_budget_ = cps2::cpu_cycles_per_frame;
+    }
+
     void capcom_cps2_adapter::step_one_frame() {
-        // run_frame() integrates the 68000, the QSound subsystem, and the beam
-        // (incl. the vblank IRQ tail) for exactly one frame.
-        sys_->run_frame();
+        const std::uint64_t due_before = audio_due_after_frames(frames_stepped_);
+        const std::uint64_t due_after = audio_due_after_frames(frames_stepped_ + 1U);
+        frame_audio_target_ = due_after - due_before;
+        frame_audio_generated_ = 0U;
+        frame_audio_cycle_budget_ = cps2::cpu_cycles_per_frame;
+        // Contract: pending_audio_ accumulates losslessly until the host calls
+        // drain_audio(); callers (live player, headless --extract-audio) drain every
+        // frame, and long extracts rely on this being lossless. Do NOT cap/trim here.
+        pending_audio_.reserve(
+            pending_audio_.size() + static_cast<std::size_t>(frame_audio_target_ * 2U));
+
+        // Slice the frame at roughly one output sample of 68K time so short-lived
+        // QSound register changes are rendered before later driver writes replace
+        // them.
+        sys_->run_frame_sliced(cps2_audio_slice_cycles,
+                               &capcom_cps2_adapter::capture_audio_slice_callback,
+                               this);
+        capture_audio_until(frame_audio_cycle_budget_, frame_audio_cycle_budget_);
+        samples_drained_ = due_after;
+        frame_audio_target_ = 0U;
+        frame_audio_generated_ = 0U;
         ++frames_stepped_;
     }
 
     frontend_sdk::audio_chunk capcom_cps2_adapter::drain_audio() noexcept {
-        // QSound emits a fixed ~24 kHz stereo stream independent of the CPU clock;
-        // pace the drain off the exact CPS-2 refresh rational and step the HLE
-        // mixer once per output sample frame via generate().
-        constexpr std::uint32_t rate = chips::audio::qsound::native_sample_rate;
-        const std::uint64_t due =
-            frames_stepped_ * static_cast<std::uint64_t>(rate) *
-            manifests::capcom_cps2::refresh_hz_den / manifests::capcom_cps2::refresh_hz_num;
-        const std::uint64_t pending = due - samples_drained_;
-        samples_drained_ = due;
-        if (pending == 0U) {
-            return {};
+        if (pending_audio_.empty()) {
+            return {.samples = nullptr, .frame_count = 0U, .sample_rate = cps2_audio_output_rate};
         }
-        audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
-        sys_->qsound_dsp().generate(audio_buf_);
+        audio_buf_.swap(pending_audio_);
+        pending_audio_.clear();
         return {.samples = audio_buf_.data(),
-                .frame_count = static_cast<std::uint32_t>(pending),
-                .sample_rate = rate};
+                .frame_count = static_cast<std::uint32_t>(audio_buf_.size() / 2U),
+                .sample_rate = cps2_audio_output_rate};
     }
 
     void capcom_cps2_adapter::apply_input(int port,
@@ -796,7 +1101,7 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
         runtime::save_target target = build_save_target(*this);
         const runtime::load_result result = runtime::read_save_state(data, target);
         if (result.ok()) {
-            audio_buf_.clear();
+            reset_audio_pipeline(false);
         }
         return result;
     }
@@ -971,7 +1276,9 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
 
     runtime::save_target build_save_target(capcom_cps2_adapter& adapter) {
         runtime::save_target target;
-        target.manifest_id = "capcom_cps2";
+        target.manifest_id = adapter.resident_media_hash_.empty()
+                                 ? std::string{"capcom_cps2"}
+                                 : "capcom_cps2:" + adapter.resident_media_hash_;
         target.manifest_rev = 1U;
         target.master_cycle = adapter.sys_->cpu().elapsed_cycles();
         target.components.push_back(
@@ -985,8 +1292,10 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  writer.u8(adapter.player_count_);
                  writer.u8(static_cast<std::uint8_t>(adapter.input_profile_));
                  writer.u8(static_cast<std::uint8_t>(adapter.orientation_));
+                 writer.blob(as_bytes(adapter.resident_media_hash_));
                  writer.u64(adapter.frames_stepped_);
                  writer.u64(adapter.samples_drained_);
+                 writer.u64(adapter.qsound_output_accum_);
                  for (const frontend_sdk::controller_state& port : adapter.ports_) {
                      save_controller_state(writer, port);
                  }
@@ -996,23 +1305,38 @@ namespace mnemos::apps::player::adapters::capcom_cps2 {
                  const std::uint8_t players = reader.u8();
                  const std::uint8_t profile = reader.u8();
                  const std::uint8_t orientation = reader.u8();
+                 const std::vector<std::uint8_t> media_hash_bytes =
+                     version >= 4U ? reader.blob() : std::vector<std::uint8_t>{};
+                 const std::string media_hash(media_hash_bytes.begin(), media_hash_bytes.end());
                  if (version < 2U || version > cps2_adapter_state_version ||
                      players != adapter.player_count_ ||
                      !valid_input_profile(profile) ||
                      static_cast<cps2_input_profile>(profile) != adapter.input_profile_ ||
                      !valid_orientation(orientation) ||
                      static_cast<frontend_sdk::display_orientation>(orientation) !=
-                         adapter.orientation_) {
+                         adapter.orientation_ ||
+                     (version >= 4U && media_hash != adapter.resident_media_hash_)) {
                      reader.fail();
                      return;
                  }
                  adapter.frames_stepped_ = reader.u64();
                  adapter.samples_drained_ = reader.u64();
+                 adapter.qsound_output_accum_ = version >= 5U ? reader.u64() : 0U;
                  for (frontend_sdk::controller_state& port : adapter.ports_) {
                      port = load_controller_state(reader, version);
                  }
                  if (reader.ok()) {
                      adapter.refresh_inputs();
+                     adapter.reset_audio_pipeline(false);
+                     // Re-prime the resampler latches from the restored DSP. The "board"
+                     // component is registered/loaded before this "adapter" one, so
+                     // qsound_dsp() already holds the restored output; without this the
+                     // first post-load sample blends from zero and produces a click.
+                     auto& dsp = adapter.sys_->qsound_dsp();
+                     adapter.qsound_curr_left_ = dsp.last_left();
+                     adapter.qsound_curr_right_ = dsp.last_right();
+                     adapter.qsound_prev_left_ = adapter.qsound_curr_left_;
+                     adapter.qsound_prev_right_ = adapter.qsound_curr_right_;
                  }
              }});
         return target;

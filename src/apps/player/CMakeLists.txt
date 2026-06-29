@@ -38,6 +38,7 @@ add_library(
     mnemos_apps_player_core STATIC
     adapter_link.cpp
     headless_commands.cpp
+    player_audio.cpp
     system_launch.cpp
 )
 add_library(mnemos::apps::player::core ALIAS mnemos_apps_player_core)
@@ -101,6 +102,11 @@ if(BUILD_TESTING)
         mnemos_apps_player_text_overlay_test
         SOURCES tests/text_overlay_test.cpp
         LIBRARIES mnemos::apps::player::text_overlay
+    )
+    mnemos_add_test(
+        mnemos_apps_player_audio_test
+        SOURCES tests/player_audio_test.cpp
+        LIBRARIES mnemos::apps::player::core
     )
     mnemos_add_test(
         mnemos_apps_player_capability_summary_test
