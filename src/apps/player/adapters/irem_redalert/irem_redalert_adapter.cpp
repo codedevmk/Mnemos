@@ -254,6 +254,24 @@ namespace mnemos::apps::player::adapters::irem_redalert {
             return result;
         }
 
+        [[nodiscard]] mnemos::manifests::common::rom_file_provider
+        with_same_stem_sidecar_directory(mnemos::manifests::common::rom_file_provider primary,
+                                         const std::string& rom_path) {
+            if (rom_path.empty()) {
+                return primary;
+            }
+            fs::path sidecar = fs::path{rom_path};
+            sidecar.replace_extension();
+            std::error_code ec;
+            if (!fs::is_directory(sidecar, ec)) {
+                return primary;
+            }
+            auto fallback =
+                mnemos::manifests::common::make_directory_rom_provider(sidecar.string());
+            return mnemos::manifests::common::make_fallback_rom_provider(std::move(primary),
+                                                                         std::move(fallback));
+        }
+
         [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
                                           const std::string& rom_path) {
             loaded_set result;
@@ -281,18 +299,20 @@ namespace mnemos::apps::player::adapters::irem_redalert {
             if (has_zip_signature(rom)) {
                 if (auto provider =
                         mnemos::manifests::common::make_zip_rom_provider(std::move(rom))) {
-                    if (auto manifest_bytes = (*provider)("game.toml")) {
+                    auto effective_provider =
+                        with_same_stem_sidecar_directory(std::move(*provider), rom_path);
+                    if (auto manifest_bytes = effective_provider("game.toml")) {
                         const std::string text(manifest_bytes->begin(), manifest_bytes->end());
                         auto decl = parse_redalert_decl(text, "game.toml", std::nullopt,
                                                         &result.image.issues);
                         if (!decl.has_value()) {
                             return result;
                         }
-                        return load_declared_set(std::move(*decl), *provider);
+                        return load_declared_set(std::move(*decl), effective_provider);
                     }
                     if (auto set_id = set_id_from_rom_path(rom_path)) {
                         if (auto decl = embedded_decl_for_set(*set_id)) {
-                            return load_declared_set(std::move(*decl), *provider);
+                            return load_declared_set(std::move(*decl), effective_provider);
                         }
                     }
                     result.image.issues.push_back(

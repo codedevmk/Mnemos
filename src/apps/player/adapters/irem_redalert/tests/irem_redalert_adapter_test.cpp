@@ -1,5 +1,6 @@
 #include "irem_redalert_adapter.hpp"
 
+#include "crc32.hpp"
 #include "file.hpp"
 #include "redalert_game_manifests.hpp"
 
@@ -7,10 +8,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <set>
@@ -24,6 +27,107 @@ namespace {
 
     namespace irem = mnemos::apps::player::adapters::irem_redalert;
     namespace red = mnemos::manifests::irem_redalert;
+
+    struct temp_set_dir final {
+        std::filesystem::path path;
+
+        temp_set_dir() {
+            const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+            path = std::filesystem::temp_directory_path() /
+                   ("mnemos_redalert_adapter_" + std::to_string(ticks));
+            REQUIRE(std::filesystem::create_directories(path));
+        }
+
+        temp_set_dir(const temp_set_dir&) = delete;
+        temp_set_dir& operator=(const temp_set_dir&) = delete;
+
+        ~temp_set_dir() {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+        }
+    };
+
+    void put16(std::vector<std::uint8_t>& out, std::uint16_t v) {
+        out.push_back(static_cast<std::uint8_t>(v));
+        out.push_back(static_cast<std::uint8_t>(v >> 8U));
+    }
+
+    void put32(std::vector<std::uint8_t>& out, std::uint32_t v) {
+        put16(out, static_cast<std::uint16_t>(v));
+        put16(out, static_cast<std::uint16_t>(v >> 16U));
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_stored_zip(const std::map<std::string, std::vector<std::uint8_t>>& entries) {
+        std::vector<std::uint8_t> out;
+        struct central final {
+            std::string name;
+            std::uint32_t crc;
+            std::uint32_t size;
+            std::uint32_t local_offset;
+        };
+        std::vector<central> directory;
+
+        for (const auto& [name, data] : entries) {
+            const auto local_offset = static_cast<std::uint32_t>(out.size());
+            const std::uint32_t crc = mnemos::security::cryptography::crc32(data);
+            const auto size = static_cast<std::uint32_t>(data.size());
+            put32(out, 0x04034B50U);
+            put16(out, 20U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put32(out, 0U);
+            put32(out, crc);
+            put32(out, size);
+            put32(out, size);
+            put16(out, static_cast<std::uint16_t>(name.size()));
+            put16(out, 0U);
+            out.insert(out.end(), name.begin(), name.end());
+            out.insert(out.end(), data.begin(), data.end());
+            directory.push_back({name, crc, size, local_offset});
+        }
+
+        const auto central_offset = static_cast<std::uint32_t>(out.size());
+        for (const central& entry : directory) {
+            put32(out, 0x02014B50U);
+            put16(out, 20U);
+            put16(out, 20U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put32(out, 0U);
+            put32(out, entry.crc);
+            put32(out, entry.size);
+            put32(out, entry.size);
+            put16(out, static_cast<std::uint16_t>(entry.name.size()));
+            put16(out, 0U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put16(out, 0U);
+            put32(out, 0U);
+            put32(out, entry.local_offset);
+            out.insert(out.end(), entry.name.begin(), entry.name.end());
+        }
+
+        const auto central_size = static_cast<std::uint32_t>(out.size()) - central_offset;
+        put32(out, 0x06054B50U);
+        put16(out, 0U);
+        put16(out, 0U);
+        put16(out, static_cast<std::uint16_t>(directory.size()));
+        put16(out, static_cast<std::uint16_t>(directory.size()));
+        put32(out, central_size);
+        put32(out, central_offset);
+        put16(out, 0U);
+        return out;
+    }
+
+    void write_binary_file(const std::filesystem::path& path,
+                           const std::vector<std::uint8_t>& bytes) {
+        std::ofstream file(path, std::ios::binary);
+        REQUIRE(file.good());
+        file.write(reinterpret_cast<const char*>(bytes.data()),
+                   static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(file.good());
+    }
 
     void poke16(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint16_t value) {
         REQUIRE(offset + 1U < bytes.size());
@@ -275,6 +379,54 @@ TEST_CASE("irem_redalert_adapter drains first-pass beeper audio", "[irem_redaler
     CHECK(audio.frame_count > 0U);
     CHECK(audio.sample_rate == red::audio_rate_hz);
     CHECK(audio.samples != nullptr);
+}
+
+TEST_CASE("irem_redalert_adapter resolves a same-stem loose folder beside split zip",
+          "[irem_redalert]") {
+    temp_set_dir temp;
+    const std::filesystem::path sidecar = temp.path / "ww3";
+    REQUIRE(std::filesystem::create_directories(sidecar));
+
+    const std::vector<std::uint8_t> zip_file{0xA5U, 0x5AU};
+    const std::vector<std::uint8_t> sidecar_file{0x11U, 0x22U};
+    write_binary_file(sidecar / "sidecar.bin", sidecar_file);
+
+    const std::string manifest = R"toml(
+[set]
+schema = "mnemos-romset/1"
+name = "ww3"
+board = "irem_redalert"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name = "zip.bin"
+offset = 0x5000
+size = 2
+
+[[region.file]]
+name = "sidecar.bin"
+offset = 0x6000
+size = 2
+)toml";
+    const auto zip = make_stored_zip({{"game.toml", {manifest.begin(), manifest.end()}},
+                                      {"zip.bin", zip_file}});
+    const std::filesystem::path zip_path = temp.path / "ww3.zip";
+    write_binary_file(zip_path, zip);
+
+    irem::irem_redalert_adapter adapter(zip, "Split WW III", nullptr, {}, zip_path.string());
+    REQUIRE_FALSE(adapter.media_capabilities().media.empty());
+    CHECK(adapter.media_capabilities().media.front().validation_issues.empty());
+    CHECK(adapter.set_name() == "ww3");
+    const auto* main = adapter.machine().roms.region("maincpu");
+    REQUIRE(main != nullptr);
+    CHECK((*main)[0x5000] == 0xA5U);
+    CHECK((*main)[0x5001] == 0x5AU);
+    CHECK((*main)[0x6000] == 0x11U);
+    CHECK((*main)[0x6001] == 0x22U);
 }
 
 TEST_CASE("irem_redalert_adapter validates real WW III ROM set", "[irem_redalert][data]") {
