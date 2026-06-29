@@ -29,7 +29,11 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_redalert redalert_game_manifests.cpp)
+add_library(
+    mnemos_manifests_irem_redalert
+    redalert_game_manifests.cpp
+    redalert_system.cpp
+)
 add_library(mnemos::manifests::irem_redalert ALIAS mnemos_manifests_irem_redalert)
 
 target_include_directories(
@@ -43,6 +47,8 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_redalert
     PUBLIC
+        mnemos::chips::audio::beeper
+        mnemos::chips::cpu::m6510
         mnemos::manifests::common
 )
 
@@ -52,13 +58,17 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_manifests_common
+        mnemos_chips_audio_beeper
+        mnemos_chips_cpu_m6510
         mnemos_foundation
 )
 
 if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_manifests_irem_redalert_test
-        SOURCES tests/redalert_rom_contract_test.cpp
+        SOURCES
+            tests/redalert_rom_contract_test.cpp
+            tests/redalert_system_test.cpp
         LIBRARIES
             mnemos::manifests::irem_redalert
             mnemos::manifests::common

@@ -54,6 +54,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "irem_travrusa" || id == "travrusa") {
             return system_family::irem_travrusa;
         }
+        if (id == "irem_redalert" || id == "redalert") {
+            return system_family::irem_redalert;
+        }
         if (id == "irem_m72") {
             return system_family::irem_m72;
         }
@@ -140,6 +143,8 @@ namespace mnemos::apps::player::adapters {
             return "irem_m63";
         case system_family::irem_travrusa:
             return "irem_travrusa";
+        case system_family::irem_redalert:
+            return "irem_redalert";
         case system_family::irem_m72:
             return "irem_m72";
         case system_family::irem_m75:
@@ -212,6 +217,8 @@ namespace mnemos::apps::player::adapters {
             return "Irem M63";
         case system_family::irem_travrusa:
             return "Irem Traverse USA";
+        case system_family::irem_redalert:
+            return "Irem Red Alert";
         case system_family::irem_m72:
             return "Irem M72";
         case system_family::irem_m75:
@@ -255,7 +262,7 @@ namespace mnemos::apps::player::adapters {
     const char* family_names() noexcept {
         return "genesis, sms, gg, c64, segacd, sega32x, irem_m14, irem_m15, irem_m27, "
                "irem_m47, irem_m52, irem_m57, irem_m58, irem_m62, irem_m63, irem_travrusa, "
-               "irem_m72, irem_m75, "
+               "irem_redalert, irem_m72, irem_m75, "
                "irem_m81, irem_m82, irem_m84, irem_m85, irem_m90, irem_m92, irem_m107, taito_f2, "
                "cps1, cps2, spectrum, nes, msx, msx2, amiga500";
     }

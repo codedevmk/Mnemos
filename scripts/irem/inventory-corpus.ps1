@@ -389,11 +389,11 @@ function Get-KnownCorpusClassification {
         }
         "ww3" {
             return New-CorpusClassification `
-                -Classification "irem_redalert_contract" `
+                -Classification "irem_redalert_first_pass" `
                 -SourceDriver "irem/redalert.cpp" `
                 -SourceFamily "redalert" `
                 -SourceOwner "irem" `
-                -NextAction "add_redalert_board_profile"
+                -NextAction "improve_redalert_board_profile_authenticity"
         }
         default {
             return New-CorpusClassification
@@ -602,7 +602,8 @@ function New-ArchiveItem {
         Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
     }
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
-    $contractOnly = ($m10Match -or $redalertMatch -or $m78Match -or $m102Match -or $m119Match) -and $loadableByMnemos
+    $redalertSplitArchiveOnly = $redalertMatch -and ($loadRoute -eq "zip")
+    $contractOnly = ($m10Match -or $redalertSplitArchiveOnly -or $m78Match -or $m102Match -or $m119Match) -and $loadableByMnemos
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M10Match $m10Match -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -RedalertMatch $redalertMatch -M47Match $m47Match -M52Match $m52Match -M57Match $m57Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M78Match $m78Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M85Match $m85Match -M90Match $m90Match -M92Match $m92Match -M102Match $m102Match -M107Match $m107Match -M119Match $m119Match -TravrusaMatch $travrusaMatch
     $manifestParent = Get-ManifestParentForSet -SetId $setId
@@ -738,7 +739,8 @@ function New-DirectoryItem {
     $trackedMatch = -not $ignoredBucket -and ($m10Match -or $m14Match -or $m15Match -or $m27Match -or $redalertMatch -or $m47Match -or $m52Match -or $m57Match -or $m58Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m78Match -or $m81Match -or $m82Match -or $m84Match -or $m85Match -or $m90Match -or $m92Match -or $m102Match -or $m107Match -or $m119Match -or $travrusaMatch)
     $loadRoute = Get-LoadRouteForItem -Kind "directory" -Extension "" -NestedArchives @()
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
-    $contractOnly = ($m10Match -or $redalertMatch -or $m78Match -or $m102Match -or $m119Match) -and $loadableByMnemos
+    $redalertSplitArchiveOnly = $redalertMatch -and ($loadRoute -eq "zip")
+    $contractOnly = ($m10Match -or $redalertSplitArchiveOnly -or $m78Match -or $m102Match -or $m119Match) -and $loadableByMnemos
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M10Match $m10Match -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -RedalertMatch $redalertMatch -M47Match $m47Match -M52Match $m52Match -M57Match $m57Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M78Match $m78Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M85Match $m85Match -M90Match $m90Match -M92Match $m92Match -M102Match $m102Match -M107Match $m107Match -M119Match $m119Match -TravrusaMatch $travrusaMatch
     $manifestParent = Get-ManifestParentForSet -SetId $setId

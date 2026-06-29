@@ -223,6 +223,16 @@ multiple independent open-source implementations.
   uses that metadata for a manifest-only contract gate; it is not an executable
   route or visual/audio parity proof. No MAME driver code or ROM bytes are
   copied into Mnemos.
+- **Irem Red Alert / WW III ROM-set metadata and board constants** — the
+  declarative `ww3` manifest under `src/manifests/irem_redalert/games/` uses
+  public Irem Red Alert-family driver metadata for dump filenames, region sizes,
+  offsets, CRC-32s, parent/clone identity, and vertical orientation. The
+  first-pass Red Alert board route cross-checks public driver-level notes for
+  the M6502 `$5000-$bfff` ROM window, `$f000-$ffff` vector mirror from the
+  `$8000` ROM window, `$c0xx` input/audio/video/color registers, and M37B audio
+  board classification. Mnemos uses those facts for CRC-clean local corpus
+  loading and diagnostic WW III execution; it is still not visual/audio parity
+  proof. No MAME driver code or ROM bytes are copied into Mnemos.
 - **Irem M82 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m82/games/` use public MAME Irem driver metadata for dump
   filenames, parent/clone relationships, region sizes, program reload offsets,

@@ -451,8 +451,8 @@ match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
 separates manifest tracking, media loadability, and player support: 331 items
 match a checked-in Irem manifest from non-ignored buckets, 179 are readable
-through current ZIP / single-inner-ZIP / folder routes, 172 are backed by an
-executable player-supported route, 7 are tracked contract-only, and 153
+through current ZIP / single-inner-ZIP / folder routes, 173 are backed by an
+executable player-supported route, 6 are tracked contract-only, and 153
 manifest-backed items are metadata-only while awaiting ZIP/unpacked folders or
 supplemental media; the M58 artwork package is still ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -534,15 +534,16 @@ contract-only M102 ROM-contract route and `D:\emu\irem\M102\hclimber.7z` as
 metadata-only until converted or unpacked; `hclimber` no longer appears as an
 M102 board-family candidate.
 The local Red Alert / WW III grouping now tracks `D:\emu\irem\M27\ww3` as the
-CRC-clean unpacked WW III contract source and records `D:\emu\irem\M27\ww3.zip`
+CRC-clean unpacked WW III player source and records `D:\emu\irem\M27\ww3.zip`
 as a filename-matching contract-only route; `ww3.7z` remains metadata-only until
-converted or unpacked for direct loading. The data-gated Red Alert test selects
-the unpacked directory because the local `ww3.zip` is a split/incomplete archive,
-and `ww3` no longer appears as an unsupported M27 board-family candidate.
+converted or unpacked for direct loading. The data-gated Red Alert player test
+selects the unpacked directory because the local `ww3.zip` is a split/incomplete
+archive, and `ww3` no longer appears as an unsupported M27 board-family
+candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
-M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107,
-plus the Red Alert, M78, M102, and M119 manifest-only data gates. The
+M57, M58, M62, M63, travrusa, Red Alert, M72, M75, M81, M82, M84, M85, M90,
+M92, and M107, plus the M78, M102, and M119 manifest-only data gates. The
 newest G6 high-water raises cover
 `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
@@ -693,17 +694,18 @@ corpus includes a complete Panther wrapper.
 
 ---
 
-## Irem Red Alert / WW III — 1 / 2
+## Irem Red Alert / WW III — 2 / 2
 
 This section is split from M27 because Panther has a first-pass M27 player
 route, while `ww3` is a Red Alert-family clone in `irem/redalert.cpp` with a
 different program map, video config, and Irem M37B audio-board route. The local
 files remain physically sorted under `D:\emu\irem\M27` as early M27-era corpus
-material, but Mnemos tracks the ROM contract under `irem_redalert`.
+material, but Mnemos tracks the ROM contract and first-pass player route under
+`irem_redalert`.
 
 #### Manifests / board bring-up
-- [x] **IRED-1** Local Red Alert / WW III ROM-set contract — `src/manifests/irem_redalert` carries a checked-in embedded ROM-contract manifest for `ww3`, preserving the public M6502 `maincpu`, `soundboard:audiocpu`, and PROM region sizes, offsets, and CRC32 values for the local WW III files. `MNEMOS_REDALERT_SET_DIR=D:\emu\irem\M27` data-gates the unpacked `D:\emu\irem\M27\ww3` directory that was extracted from the complete local `ww3.7z` archive and proves those dumped regions load CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` now classifies the unpacked directory and filename-matching `ww3.zip` as Red Alert contract-only routes, leaves `ww3.7z` metadata-only, and no longer reports WW III as an unsupported M27 board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_redalert/games/ww3.toml` + `src/manifests/irem_redalert/tests/redalert_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [ ] **IRED-2** Executable Red Alert / WW III board profile — missing. Mnemos has no Red Alert-family board implementation, no M6502 Red Alert/WW III memory/I/O timing model, no M37B audio-board runtime, no Red Alert-family video/color/input/DIP model, no player adapter, and no visual/audio parity proof. Current evidence is ROM-contract and corpus-load proof only.
+- [x] **IRED-1** Local Red Alert / WW III ROM-set contract — `src/manifests/irem_redalert` carries a checked-in embedded ROM-contract manifest for `ww3`, preserving the public M6502 `maincpu`, `soundboard:audiocpu`, and PROM region sizes, offsets, and CRC32 values for the local WW III files. `MNEMOS_REDALERT_SET_DIR=D:\emu\irem\M27` data-gates the unpacked `D:\emu\irem\M27\ww3` directory that was extracted from the complete local `ww3.7z` archive and proves those dumped regions load CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` now classifies the unpacked directory as a supported Red Alert first-pass route, keeps the filename-matching split `ww3.zip` as contract-only, leaves `ww3.7z` metadata-only, and no longer reports WW III as an unsupported M27 board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_redalert/games/ww3.toml` + `src/manifests/irem_redalert/tests/redalert_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **IRED-2** Executable Red Alert / WW III board profile — `redalert_system` and `irem_redalert_adapter` add a first-pass M6502 board/player route for WW III with the source-aligned `$5000-$bfff` program window, `$f000-$ffff` vector mirror from the `$8000` ROM window, `$c0xx` input/audio/video/color registers, bitmap/char/PROM-backed diagnostic frame composition, input/save-state support, beeper-backed sound-command evidence, and a data-gated real-corpus WW III adapter smoke. Remaining authenticity gaps are the Red Alert parent contract, M37B audio-board runtime, exact video/color/input/DIP behavior, timing/raster proof, and trusted visual/audio parity · PARTIAL · MED · S · beyond Emu · Evidence: `src/manifests/irem_redalert/redalert_system.*` + `src/apps/player/adapters/irem_redalert/*` + `src/manifests/irem_redalert/tests/redalert_system_test.cpp` + `src/apps/player/adapters/irem_redalert/tests/irem_redalert_adapter_test.cpp`
 
 ---
 

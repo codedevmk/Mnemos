@@ -1,7 +1,7 @@
 # WW III -- Irem Red Alert-family ROM contract.
 # The local corpus stores this under D:\emu\irem\M27 because the cabinet/board
-# lineage is adjacent to Panther-era M27 material, but it is not executable via
-# Mnemos' Panther M27 adapter. This contract is metadata/load proof only.
+# lineage is adjacent to Panther-era M27 material. It is executable through the
+# separate irem_redalert first-pass route, not through the Panther M27 adapter.
 
 [set]
 schema      = "mnemos-romset/1"

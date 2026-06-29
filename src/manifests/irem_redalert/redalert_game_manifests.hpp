@@ -1,8 +1,9 @@
 #pragma once
 
 // Checked-in Irem Red Alert-family game manifests embedded for corpus tooling
-// lookup. This module is a ROM-contract surface only: Mnemos still lacks the
-// Red Alert/WW III board profile, video/audio timing, inputs, and player route.
+// lookup. The board implementation is first-pass and remains separate from the
+// Panther/M27 route because Red Alert-family sets use their own ROM mirror and
+// $c0xx I/O map.
 
 #include "redalert_embedded_game_manifests.hpp"
 

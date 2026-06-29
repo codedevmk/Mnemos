@@ -22,6 +22,7 @@
 #include "irem_m85_adapter.hpp"
 #include "irem_m90_adapter.hpp"
 #include "irem_m92_adapter.hpp"
+#include "irem_redalert_adapter.hpp"
 #include "irem_travrusa_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
@@ -64,6 +65,7 @@ namespace {
     namespace irem_m90 = mnemos::apps::player::adapters::irem_m90;
     namespace irem_m92 = mnemos::apps::player::adapters::irem_m92;
     namespace irem_m107 = mnemos::apps::player::adapters::irem_m107;
+    namespace irem_redalert = mnemos::apps::player::adapters::irem_redalert;
     namespace msx = mnemos::apps::player::adapters::msx;
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
     namespace segacd = mnemos::apps::player::adapters::segacd;
@@ -358,6 +360,32 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> irem_redalert_program() {
+        namespace red = mnemos::manifests::irem_redalert;
+        std::vector<std::uint8_t> rom(red::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{
+            0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
+            0xA9U, 0x07U, 0x8DU, 0x50U, 0xC0U, // LDA #$07 ; STA $C050
+            0xA9U, 0x81U, 0x8DU, 0x00U, 0x20U, // LDA #$81 ; STA $2000
+            0xA9U, 0xC3U, 0x8DU, 0x00U, 0x40U, // LDA #$C3 ; STA $4000
+            0xA9U, 0x00U, 0x8DU, 0x30U, 0xC0U, // LDA #$00 ; STA $C030
+            0xA9U, 0x04U, 0x8DU, 0x40U, 0xC0U, // LDA #$04 ; STA $C040
+            0xADU, 0x70U, 0xC0U,             // LDA $C070 ; clear IRQ
+            0x4CU, 0x21U, 0x50U};             // JMP $5021
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[red::program_rom_base + i] = program[i];
+        }
+        rom[red::vector_mirror_source + 0x0FFCU] =
+            static_cast<std::uint8_t>(red::program_rom_base);
+        rom[red::vector_mirror_source + 0x0FFDU] =
+            static_cast<std::uint8_t>(red::program_rom_base >> 8U);
+        rom[red::vector_mirror_source + 0x0FFEU] =
+            static_cast<std::uint8_t>(red::program_rom_base);
+        rom[red::vector_mirror_source + 0x0FFFU] =
+            static_cast<std::uint8_t>(red::program_rom_base >> 8U);
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> irem_m81_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::irem_m81::main_rom_size, 0xFFU);
         rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
@@ -610,6 +638,13 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
 
     SECTION("Irem M27") {
         irem_m27::irem_m27_adapter adapter(irem_m27_program(), "Tiny M27");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem Red Alert") {
+        irem_redalert::irem_redalert_adapter adapter(irem_redalert_program(), "Tiny WW III");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");

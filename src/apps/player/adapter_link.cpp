@@ -23,6 +23,7 @@
 #include "irem_m85_adapter.hpp"
 #include "irem_m90_adapter.hpp"
 #include "irem_m92_adapter.hpp"
+#include "irem_redalert_adapter.hpp"
 #include "irem_travrusa_adapter.hpp"
 #include "msx2_adapter.hpp"
 #include "msx_adapter.hpp"
@@ -51,6 +52,7 @@ namespace mnemos::apps::player {
         adapters::irem_m62::force_link();
         adapters::irem_m63::force_link();
         adapters::irem_travrusa::force_link();
+        adapters::irem_redalert::force_link();
         adapters::irem_m72::force_link();
         adapters::irem_m75::force_link();
         adapters::irem_m81::force_link();

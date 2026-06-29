@@ -90,10 +90,10 @@ public documentation; entries flag what is uncertain rather than assert it.
 - **Notable titles:** Red Alert, WW III
 - **Notes:** Public driver metadata keeps Red Alert, WW III, Panther, and
   Demoneye-X in the same source family, but Panther is tracked as the M27 board
-  route in Mnemos while WW III now has a separate Red Alert-family ROM-contract
-  surface. Treat this family as contract-only until board photos, schematics,
-  manuals, or parity captures prove the memory/I/O, video, color, sound, and
-  input behavior.
+  route in Mnemos while WW III now has a separate Red Alert-family first-pass
+  board/player route. Treat the route as diagnostic until board photos,
+  schematics, manuals, or parity captures prove the memory/I/O, video, color,
+  sound, and input behavior.
 
 ### M47
 - **Years:** 1981

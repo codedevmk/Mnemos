@@ -39,6 +39,8 @@ TEST_CASE("system_family: every registry id maps to its family") {
     CHECK(family_from_name("m63") == system_family::irem_m63);
     CHECK(family_from_name("irem_travrusa") == system_family::irem_travrusa);
     CHECK(family_from_name("travrusa") == system_family::irem_travrusa);
+    CHECK(family_from_name("irem_redalert") == system_family::irem_redalert);
+    CHECK(family_from_name("redalert") == system_family::irem_redalert);
     CHECK(family_from_name("irem_m72") == system_family::irem_m72);
     CHECK(family_from_name("irem_m75") == system_family::irem_m75);
     CHECK(family_from_name("m75") == system_family::irem_m75);
@@ -77,6 +79,7 @@ TEST_CASE("system_family: names are case-insensitive") {
     CHECK(family_from_name("IREM_M62") == system_family::irem_m62);
     CHECK(family_from_name("IREM_M63") == system_family::irem_m63);
     CHECK(family_from_name("IREM_TRAVRUSA") == system_family::irem_travrusa);
+    CHECK(family_from_name("IREM_REDALERT") == system_family::irem_redalert);
     CHECK(family_from_name("IREM_M75") == system_family::irem_m75);
     CHECK(family_from_name("IREM_M81") == system_family::irem_m81);
     CHECK(family_from_name("IREM_M82") == system_family::irem_m82);
@@ -103,8 +106,9 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
           system_family::irem_m72,      system_family::irem_m75, system_family::irem_m14,
           system_family::irem_m15,      system_family::irem_m27, system_family::irem_m47,
           system_family::irem_m52,      system_family::irem_m57, system_family::irem_m58,
-          system_family::irem_m62,      system_family::irem_m63, system_family::irem_m81,
-          system_family::irem_travrusa, system_family::irem_m82, system_family::irem_m84,
+          system_family::irem_m62,      system_family::irem_m63, system_family::irem_redalert,
+          system_family::irem_m81,      system_family::irem_travrusa, system_family::irem_m82,
+          system_family::irem_m84,
           system_family::irem_m85,      system_family::irem_m90, system_family::irem_m92,
           system_family::irem_m107,     system_family::taito_f2, system_family::capcom_cps1,
           system_family::capcom_cps2,   system_family::spectrum, system_family::nes,
@@ -121,8 +125,9 @@ TEST_CASE("system_family: family_names lists every accepted id") {
           system_family::irem_m72,      system_family::irem_m75, system_family::irem_m14,
           system_family::irem_m15,      system_family::irem_m27, system_family::irem_m47,
           system_family::irem_m52,      system_family::irem_m57, system_family::irem_m58,
-          system_family::irem_m62,      system_family::irem_m63, system_family::irem_m81,
-          system_family::irem_travrusa, system_family::irem_m82, system_family::irem_m84,
+          system_family::irem_m62,      system_family::irem_m63, system_family::irem_redalert,
+          system_family::irem_m81,      system_family::irem_travrusa, system_family::irem_m82,
+          system_family::irem_m84,
           system_family::irem_m85,      system_family::irem_m90, system_family::irem_m92,
           system_family::irem_m107,     system_family::taito_f2, system_family::capcom_cps1,
           system_family::capcom_cps2,   system_family::spectrum, system_family::nes,
@@ -146,6 +151,7 @@ TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::irem_m62)} == "Irem M62");
     CHECK(std::string{family_label(system_family::irem_m63)} == "Irem M63");
     CHECK(std::string{family_label(system_family::irem_travrusa)} == "Irem Traverse USA");
+    CHECK(std::string{family_label(system_family::irem_redalert)} == "Irem Red Alert");
     CHECK(std::string{family_label(system_family::irem_m75)} == "Irem M75");
     CHECK(std::string{family_label(system_family::irem_m81)} == "Irem M81");
     CHECK(std::string{family_label(system_family::irem_m82)} == "Irem M82");
