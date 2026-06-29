@@ -110,7 +110,10 @@ Set-EnvIfPathListExists -Name "MNEMOS_M84_SET_DIR" -Paths @(
 )
 Set-EnvIfPathExists -Name "MNEMOS_M85_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M85")
 Set-EnvIfPathExists -Name "MNEMOS_M90_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M90")
-Set-EnvIfPathExists -Name "MNEMOS_M92_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M92")
+Set-EnvIfPathListExists -Name "MNEMOS_M92_SET_DIR" -Paths @(
+    (Join-CorpusPath -Base $rootPath -Child "M92"),
+    (Join-CorpusPath -Base $rootPath -Child "M107")
+)
 Set-EnvIfPathExists -Name "MNEMOS_M107_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M107")
 
 $rtypeSet = First-ExistingPath @(

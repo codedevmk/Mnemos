@@ -240,8 +240,8 @@ multiple independent open-source implementations.
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the
   encrypted V35 sound-program classification, including the Gunforce 2 /
   Geostorm, Hook, In the Hunt, League-Man, Lethal Thunder / Thunder Blaster,
-  Major Title 2, Superior/Perfect Soldiers, R-Type Leo, and Undercover Cops
-  parent/clone board variants.
+  Major Title 2, Superior/Perfect Soldiers, R-Type Leo, Dream Soccer '94 Japan
+  on M92 hardware, and Undercover Cops parent/clone board variants.
   The first-pass M92 board constants and memory windows are cross-checked
   against public driver-level hardware notes; no MAME driver code or ROM bytes
   are copied into Mnemos. Current M92 execution remains diagnostic rather than

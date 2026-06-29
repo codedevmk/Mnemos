@@ -28,7 +28,9 @@ namespace mnemos::apps::player::adapters::irem_m92 {
         explicit irem_m92_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
                                    frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
                                    std::optional<std::uint16_t> dip_override = {},
-                                   std::string rom_path = {});
+                                   std::string rom_path = {},
+                                   std::vector<std::vector<std::uint8_t>> additional_media = {},
+                                   std::vector<std::string> additional_media_paths = {});
 
         [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
             return {.frames_per_second_x1000 = manifests::irem_m92::frame_rate_x1000,

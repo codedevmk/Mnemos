@@ -432,10 +432,40 @@ namespace mnemos::apps::player::adapters::irem_m92 {
             return resolved;
         }
 
+        [[nodiscard]] std::vector<mnemos::manifests::common::rom_file_provider>
+        supplemental_rom_providers(std::vector<std::vector<std::uint8_t>> media,
+                                   std::vector<std::string> paths) {
+            std::vector<mnemos::manifests::common::rom_file_provider> providers;
+            providers.reserve(media.size());
+            for (std::size_t i = 0; i < media.size(); ++i) {
+                const std::string path = i < paths.size() ? paths[i] : std::string{};
+                if (media[i].empty() && !path.empty() && is_directory_path(path)) {
+                    providers.push_back(
+                        mnemos::manifests::common::make_directory_rom_provider(path));
+                    continue;
+                }
+                if (!has_zip_signature(media[i])) {
+                    continue;
+                }
+                if (auto nested = unwrap_single_nested_zip(media[i])) {
+                    media[i] = std::move(nested->bytes);
+                }
+                if (has_zip_signature(media[i])) {
+                    if (auto provider =
+                            mnemos::manifests::common::make_zip_rom_provider(std::move(media[i]))) {
+                        providers.push_back(std::move(*provider));
+                    }
+                }
+            }
+            return providers;
+        }
+
         [[nodiscard]] loaded_set
         load_declared_set(mnemos::manifests::common::rom_set_decl decl,
                           mnemos::manifests::common::rom_file_provider provider,
-                          const std::string& rom_path) {
+                          const std::string& rom_path,
+                          std::span<const mnemos::manifests::common::rom_file_provider>
+                              supplemental_providers = {}) {
             loaded_set result;
             mnemos::manifests::common::rom_file_provider effective = std::move(provider);
             std::vector<rom_load_issue> parent_issues;
@@ -447,6 +477,10 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                 }
                 parent_issues = std::move(parent.issues);
                 effective = std::move(parent.provider);
+            }
+            for (const auto& supplemental : supplemental_providers) {
+                effective = mnemos::manifests::common::make_fallback_rom_provider(
+                    std::move(effective), supplemental);
             }
             result.image = mnemos::manifests::common::load_rom_set(decl, effective);
             for (auto& issue : parent_issues) {
@@ -461,7 +495,9 @@ namespace mnemos::apps::player::adapters::irem_m92 {
         }
 
         [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
-                                          const std::string& rom_path) {
+                                          const std::string& rom_path,
+                                          std::vector<mnemos::manifests::common::rom_file_provider>
+                                              supplemental_providers = {}) {
             loaded_set result;
             if (rom.empty() && is_directory_path(rom_path)) {
                 auto provider = mnemos::manifests::common::make_directory_rom_provider(rom_path);
@@ -472,11 +508,13 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                     if (!decl.has_value()) {
                         return result;
                     }
-                    return load_declared_set(std::move(*decl), std::move(provider), rom_path);
+                    return load_declared_set(std::move(*decl), std::move(provider), rom_path,
+                                             supplemental_providers);
                 }
                 if (auto set_id = set_id_from_rom_path(rom_path)) {
                     if (auto decl = embedded_decl_for_set(*set_id)) {
-                        return load_declared_set(std::move(*decl), std::move(provider), rom_path);
+                        return load_declared_set(std::move(*decl), std::move(provider), rom_path,
+                                                 supplemental_providers);
                     }
                 }
                 result.image.issues.push_back(
@@ -506,12 +544,12 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                             return result;
                         }
                         return load_declared_set(std::move(*decl), std::move(*provider),
-                                                 effective_rom_path);
+                                                 effective_rom_path, supplemental_providers);
                     }
                     if (auto set_id = set_id_from_rom_path(effective_rom_path)) {
                         if (auto decl = embedded_decl_for_set(*set_id)) {
                             return load_declared_set(std::move(*decl), std::move(*provider),
-                                                     effective_rom_path);
+                                                     effective_rom_path, supplemental_providers);
                         }
                     }
                     for (const char* region :
@@ -606,11 +644,16 @@ namespace mnemos::apps::player::adapters::irem_m92 {
     irem_m92_adapter::irem_m92_adapter(std::vector<std::uint8_t> rom, std::string display_name,
                                        frontend_sdk::scheduler_factory* scheduler_factory,
                                        std::optional<std::uint16_t> dip_override,
-                                       std::string rom_path)
+                                       std::string rom_path,
+                                       std::vector<std::vector<std::uint8_t>> additional_media,
+                                       std::vector<std::string> additional_media_paths)
         : session_(make_session_capabilities()) {
         (void)scheduler_factory;
         const std::uint64_t source_byte_count = rom.size();
-        loaded_set set = load_set(std::move(rom), rom_path);
+        loaded_set set =
+            load_set(std::move(rom), rom_path,
+                     supplemental_rom_providers(std::move(additional_media),
+                                                std::move(additional_media_paths)));
         media_ = make_media_capabilities(display_name, set, source_byte_count);
         loaded_set_name_ = set.set_name;
         sys_ = assemble_from(std::move(set));
@@ -776,7 +819,8 @@ namespace mnemos::apps::player::adapters::irem_m92 {
                     return std::make_unique<irem_m92_adapter>(
                         std::move(opts.rom), std::move(opts.display_name),
                         opts.scheduler_factory_override, opts.dip_override,
-                        std::move(opts.rom_path));
+                        std::move(opts.rom_path), std::move(opts.additional_media),
+                        std::move(opts.additional_media_paths));
                 });
             return 0;
         }();

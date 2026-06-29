@@ -1,6 +1,7 @@
 set(_irem_m92_game_manifest_files
     "games/bmaster.toml"
     "games/crossbld.toml"
+    "games/dsoccr94j.toml"
     "games/geostorm.toml"
     "games/geostorma.toml"
     "games/gunforce.toml"

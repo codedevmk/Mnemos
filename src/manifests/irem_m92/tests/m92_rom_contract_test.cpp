@@ -48,6 +48,11 @@ namespace {
              {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x080000U}},
             {"crossbld",
              {.tiles_size = 0x100000U, .sprites_size = 0x200000U, .samples_size = 0x080000U}},
+            {"dsoccr94j",
+             {.tiles_size = 0x400000U,
+              .sprites_size = 0x400000U,
+              .samples_size = 0x100000U,
+              .players = 4U}},
             {"geostorm",
              {.tiles_size = 0x200000U, .sprites_size = 0x400000U, .samples_size = 0x100000U}},
             {"geostorma",
@@ -406,6 +411,54 @@ namespace {
         return sources;
     }
 
+    [[nodiscard]] std::optional<std::filesystem::path>
+    find_source_by_stem(const std::vector<std::filesystem::path>& roots, std::string_view stem) {
+        auto matches = [stem](const std::filesystem::path& path) {
+            std::error_code ec;
+            if (std::filesystem::is_directory(path, ec)) {
+                return path.filename().string() == stem;
+            }
+            return std::filesystem::is_regular_file(path, ec) &&
+                   ends_with_zip(path.filename().string()) && path.stem().string() == stem;
+        };
+
+        for (const auto& root : roots) {
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(root, ec)) {
+                if (matches(root)) {
+                    return root;
+                }
+                continue;
+            }
+            if (!std::filesystem::is_directory(root, ec)) {
+                continue;
+            }
+            if (matches(root)) {
+                return root;
+            }
+
+            std::vector<std::filesystem::path> candidates;
+            for (std::filesystem::recursive_directory_iterator it{root, ec}, end; !ec && it != end;
+                 it.increment(ec)) {
+                const auto candidate_path = it->path();
+                std::error_code entry_ec;
+                if (it->is_directory(entry_ec) &&
+                    candidate_path.filename().string() == "name-collisions") {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+                candidates.push_back(candidate_path);
+            }
+            std::sort(candidates.begin(), candidates.end());
+            for (const auto& path : candidates) {
+                if (matches(path)) {
+                    return path;
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
     [[nodiscard]] rom_set_decl require_embedded_decl(std::string_view set_name) {
         const std::string_view text = mnemos::manifests::irem_m92::game_manifest_toml(set_name);
         REQUIRE_FALSE(text.empty());
@@ -586,6 +639,13 @@ TEST_CASE("m92 local artifacts load CRC-clean through embedded manifests", "[m92
         INFO("source=" << source_it->second.string());
 
         auto provider = require_provider(source_it->second);
+        if (set_name == "dsoccr94j") {
+            const auto supplemental_source = find_source_by_stem(roots, "dsoccr94");
+            REQUIRE(supplemental_source.has_value());
+            INFO("supplemental_source=" << supplemental_source->string());
+            provider = mnemos::manifests::common::make_fallback_rom_provider(
+                std::move(provider), require_provider(*supplemental_source));
+        }
         if (decl.parent.has_value()) {
             const auto parent_source_it = indexed_sources.find(*decl.parent);
             REQUIRE(parent_source_it != indexed_sources.end());
