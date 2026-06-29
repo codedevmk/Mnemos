@@ -26,6 +26,7 @@
 #   MNEMOS_M14_SET_DIR        path-list of dirs with M14 zips/dirs/wrappers -> irem_m14 manifest/player smoke
 #   MNEMOS_M15_SET_DIR        path-list of dirs with M15 zips/dirs/wrappers -> irem_m15 manifest/player smoke
 #   MNEMOS_M27_SET_DIR        path-list of dirs with M27 zips/dirs/wrappers -> irem_m27 manifest/player smoke
+#   MNEMOS_REDALERT_SET_DIR   path-list of dirs with Red Alert/WW III zips/dirs/wrappers -> irem_redalert manifest contract
 #   MNEMOS_M47_SET_DIR        path-list of dirs with M47 zips/dirs/wrappers -> irem_m47 manifest/player smoke
 #   MNEMOS_M52_SET_DIR        path-list of dirs with M52 zips/dirs/wrappers -> irem_m52 manifest/player smoke
 #   MNEMOS_M52_PARITY_SET     a reference-captured M52 zip or directory -> irem_m52 visual/audio parity hash golden
@@ -99,6 +100,7 @@ $vars = @(
     @{ Name = "MNEMOS_M14_SET_DIR";      Test = "irem_m14 manifest/player smoke" },
     @{ Name = "MNEMOS_M15_SET_DIR";      Test = "irem_m15 manifest/player smoke" },
     @{ Name = "MNEMOS_M27_SET_DIR";      Test = "irem_m27 manifest/player smoke" },
+    @{ Name = "MNEMOS_REDALERT_SET_DIR"; Test = "irem_redalert manifest contract" },
     @{ Name = "MNEMOS_M47_SET_DIR";      Test = "irem_m47 manifest/player smoke" },
     @{ Name = "MNEMOS_M52_SET_DIR";      Test = "irem_m52 manifest/player smoke" },
     @{ Name = "MNEMOS_M52_PARITY_SET"; Test = "irem_m52 visual/audio parity hash golden" },
@@ -138,7 +140,7 @@ if (-not (Test-Path $testDir)) {
 
 Write-Host "`nRunning data-gated tests in $testDir ..." -ForegroundColor Cyan
 ctest --test-dir $testDir --output-on-failure `
-    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(10|14|15|27|47|52|57|58|62|63|75|78|81|82|84|85|90|92|102|107|119)_test|mnemos_manifests_irem_m14_system_test|mnemos_manifests_irem_m27_system_test|mnemos_manifests_irem_m47_system_test|mnemos_manifests_irem_m57_system_test|mnemos_manifests_irem_m62_system_test|mnemos_manifests_irem_m63_system_test|mnemos_manifests_irem_travrusa_test|irem_m14_.*golden|irem_m15_.*golden|irem_m27_.*golden|irem_m47_.*golden|irem_m52_.*golden|irem_m57_.*golden|irem_m58_.*golden|irem_m62_.*golden|irem_m63_.*golden|irem_m72_.*golden|irem_m75_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden|irem_m85_.*golden|irem_m90_.*golden|irem_m92_.*golden|irem_m107_.*golden|irem_travrusa_.*golden"
+    -R "conformance|c64_basic_boot|sms_boot|genesis_boot|manifest_parity|mnemos_manifests_irem_m(10|14|15|27|47|52|57|58|62|63|75|78|81|82|84|85|90|92|102|107|119)_test|mnemos_manifests_irem_redalert_test|mnemos_manifests_irem_m14_system_test|mnemos_manifests_irem_m27_system_test|mnemos_manifests_irem_m47_system_test|mnemos_manifests_irem_m57_system_test|mnemos_manifests_irem_m62_system_test|mnemos_manifests_irem_m63_system_test|mnemos_manifests_irem_travrusa_test|irem_m14_.*golden|irem_m15_.*golden|irem_m27_.*golden|irem_m47_.*golden|irem_m52_.*golden|irem_m57_.*golden|irem_m58_.*golden|irem_m62_.*golden|irem_m63_.*golden|irem_m72_.*golden|irem_m75_.*golden|irem_m81_.*golden|irem_m82_.*golden|irem_m84_.*golden|irem_m85_.*golden|irem_m90_.*golden|irem_m92_.*golden|irem_m107_.*golden|irem_travrusa_.*golden"
 $ctestExit = $LASTEXITCODE
 if ($ctestExit -ne 0) {
     exit $ctestExit

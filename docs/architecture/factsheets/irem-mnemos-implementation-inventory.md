@@ -14,40 +14,43 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 438 local corpus items across 24 top-level buckets. Direct files
+That scan found 439 local corpus items across 24 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
 buckets such as `M72`, `M92`, `M102`, `M119`, `M62`, `M58`, and `M52`, plus quarantine
 or classification buckets such as `for-delete` and `non-irem`. The Traverse
 USA / Zippy Race files now live under the M52-era corpus bucket; Mnemos still
 treats them as a separate `irem_travrusa` first-pass profile because the
-factsheet does not yet map the family to a numbered M-board. Of those 438
-items, 320 currently match a
-checked-in Mnemos Irem manifest, 173 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, 170 have an
-executable player-supported route, three are tracked contract-only routes, and
-148 are metadata-only items: 147 manifest-backed media routes plus the M58
-non-ROM artwork package. The count includes `scumimon` after it
-was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`, and it includes the new
-M102 `hclimber` contract under `D:\emu\irem\M102`. M78 now has a
-manifest-only `bj92` contract: `bj92.zip` is the contract-only route, and
-`bj92.7z` remains metadata-only until converted or unpacked. M102 now has a
-manifest-only `hclimber` contract: `hclimber.zip` is the contract-only route,
-and `hclimber.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
+factsheet does not yet map the family to a numbered M-board. Of those 439
+items, 331 currently match a checked-in Mnemos Irem manifest, 179 are readable
+through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
+routes, 172 have an executable player-supported route, seven are tracked
+contract-only routes, and 153 are manifest-backed metadata-only items. The count
+includes `scumimon` after it was moved from `D:\emu\irem\M92` to
+`D:\emu\irem\M119`, and it includes the M102 `hclimber` contract under
+`D:\emu\irem\M102`. M78 now has a manifest-only `bj92` contract: `bj92.zip` is
+the contract-only route, and `bj92.7z` remains metadata-only until converted or
+unpacked. M102 now has a manifest-only `hclimber` contract: `hclimber.zip` is
+the contract-only route, and `hclimber.7z` remains metadata-only until converted
+or unpacked. Red Alert now has a manifest-only `ww3` contract: the unpacked
+`D:\emu\irem\M27\ww3` directory is the CRC-clean data-gated source, `ww3.zip`
+is a filename-matching contract-only route in the inventory, and `ww3.7z`
+remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
 player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
 remain metadata-only until converted or unpacked. M82 now includes
 `dkgensanm82`: the local split ZIP is metadata-only, the standalone `.7z` was
 unpacked to `D:\emu\irem\M82\dkgensanm82`, and the unpacked folder plus `.7z`
-count as the two loadable tracked routes. The three tracked contract-only local
-items are `D:\emu\irem\M78\bj92.zip`,
-`D:\emu\irem\M102\hclimber.zip`, and
+count as the two loadable tracked routes. The seven tracked contract-only local
+items are `D:\emu\irem\M10\andromed.zip`, `D:\emu\irem\M10\skychut.zip`,
+`D:\emu\irem\M27\ww3`, `D:\emu\irem\M27\ww3.zip`,
+`D:\emu\irem\M78\bj92.zip`, `D:\emu\irem\M102\hclimber.zip`, and
 `D:\emu\irem\M119\scumimon.zip`; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
-Another 147 tracked manifest matches remain metadata-only until converted,
+Another 153 tracked manifest matches remain metadata-only until converted,
 unpacked, or supplied with required supplemental media; the separate M58
-artwork/layout package is metadata-only non-ROM proof.
+artwork/layout package remains metadata-only non-ROM proof.
 Board-local `name-collisions` folders are skipped by both inventory and
 data-gated corpus source discovery.
 Windows copy-suffixed checked-in set ZIPs such as `loht (1).zip` are
@@ -71,13 +74,13 @@ untracked corpus classifications remain explicit: `headon` and
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
 M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84,
-M85, M90, M92, and M107, plus the M78, M102, and M119 manifest-only contract gates. For
+M85, M90, M92, and M107, plus the Red Alert, M78, M102, and M119 manifest-only contract gates. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests;
 M92 also includes the M107 folder as supplemental media for the local
-Dream Soccer '94 Japan M92 hardware split set, while M102 and M119 wire the
-sorted `D:\emu\irem\M102` and `D:\emu\irem\M119` buckets for the `hclimber`
-and `scumimon` ROM contracts.
+Dream Soccer '94 Japan M92 hardware split set, while Red Alert, M102, and M119
+wire the sorted `D:\emu\irem\M27`, `D:\emu\irem\M102`, and `D:\emu\irem\M119`
+buckets for the `ww3`, `hclimber`, and `scumimon` ROM contracts.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
 proof.
 
@@ -105,6 +108,7 @@ proof.
 | M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
 | M14 | `irem_m14` first-pass | 16% | `ptrmj` | local P.T. Reach Mahjong ZIPs through the adapter; direct `mnemos_player --system irem_m14` nonblank screenshot and `--system m14` save-state proof | None | Authentic NEC D8085AC/8085 CPU timing instead of the temporary 8080-compatible surrogate, video/color, paddle/mahjong/input behavior, discrete/sample sound, visual/audio parity |
 | M27 | `irem_m27` first-pass | 18% | `panther` | local Panther ZIPs through the adapter; direct `mnemos_player --system irem_m27` nonblank screenshot and `--system m27` save-state proof | None | Authentic M27 memory/I/O timing, bitmap/char video and color behavior, input/DIP behavior, Panther audio-board behavior, raster/audio/video parity |
+| Red Alert / WW III | `irem_redalert` manifest-only | 3% | `ww3` | None; unpacked WW III folder loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement the Red Alert-family M6502 board profile, M37B audio-board runtime, video/color/input/DIP model, parent Red Alert contract, and player adapter |
 | M47 | `irem_m47` first-pass | 22% | `olibochu`, `punchkid` | local Oli-Boo-Chu parent and Punching Kid split clone ZIPs; direct `mnemos_player --system irem_m47` nonblank screenshot and `--system m47` save-state proof | None | Authentic M47 memory/I/O timing, video/color PROM behavior, AY/sample sound timing, input/DIP parity, visual/audio parity |
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Moon Patrol / Tropical Angel board-split proof, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | `irem_m57` first-pass raw-media route | 12% | `newtangl` | local New Tropical Angel ZIP through the adapter; direct `mnemos_player --system irem_m57` nonblank screenshot and `--system m57` save-state proof | None | Authentic M57 memory/I/O timing, video/color, Irem Audio, inputs/DIPs, visual/audio parity |
@@ -292,6 +296,27 @@ visual and audio parity proof.
   authentic M27 CPU memory/I/O map, bitmap/char video and color behavior,
   input/DIP behavior, Panther audio-board behavior, raster phase, and
   visual/audio parity.
+
+### Red Alert / WW III
+
+- **Techsheet games:** Red Alert, WW III.
+- **Mnemos games:** manifest-only ROM contract for `ww3`.
+- **Smoke playable:** none. `MNEMOS_REDALERT_SET_DIR=D:\emu\irem\M27`
+  data-gates the unpacked `D:\emu\irem\M27\ww3` directory and proves the local
+  WW III M6502 program, audio CPU ROM, and PROM regions load CRC-clean, but no
+  executable board/player route exists.
+- **Correct gfx/music:** none.
+- **Current implementation:** `src/manifests/irem_redalert` embeds the local
+  `ww3` contract with public Red Alert-family `maincpu`, `audiocpu`, and
+  `proms` region sizes, offsets, and CRC32 values. The inventory classifies the
+  unpacked directory and filename-matching `ww3.zip` as Red Alert
+  contract-only routes, leaves `ww3.7z` metadata-only, and keeps the files
+  physically under the M27-era corpus bucket without treating them as Panther
+  M27 player support.
+- **Remaining:** add the Red Alert parent contract, implement the M6502
+  Red Alert/WW III memory and I/O map, Irem M37B audio-board runtime,
+  video/color/input/DIP behavior, player adapter, and trusted visual/audio
+  parity before calling WW III playable or correct.
 
 ### M47
 

@@ -9,9 +9,9 @@ family (M72/M81/M82/M84/M85, plus adjacent M75-era hardware) overlaps heavily -
 they were concurrent sister boards, not sequential generations.
 
 **Confidence note:** the high-volume boards (M62, M72, M81/82/84/85, M90, M92,
-M107) are well-documented and cross-verified. The sparse boards (M14, M27, M47,
-M57, M63, M77, M97, M99, M102, M119) have thin public documentation; entries
-flag what is uncertain rather than assert it.
+M107) are well-documented and cross-verified. The sparse boards and families
+(M14, M27, Red Alert, M47, M57, M63, M77, M97, M99, M102, M119) have thin
+public documentation; entries flag what is uncertain rather than assert it.
 
 ---
 
@@ -22,6 +22,7 @@ flag what is uncertain rather than assert it.
 | M10 / M15 | ~1978–1980 | Intel 8085A, discrete | IPM Invader |
 | M14 | 1979 | NEC D8085AC / Intel 8085A, discrete | P.T. Reach Mahjong |
 | M27 | 1980 | M6502, early 8-bit isolated | Panther |
+| Red Alert family | 1981 | M6502, early 8-bit isolated | Red Alert, WW III |
 | M47 | 1981 | Z80 + Z80, early 8-bit isolated | Oli-Boo-Chu |
 | M52 | 1982 | Z80, 8-bit | Moon Patrol |
 | M57 | 1982–1983 | Z80, 8-bit | Tropical Angel |
@@ -80,6 +81,19 @@ flag what is uncertain rather than assert it.
   driver metadata but marked as Irem M27 hardware. Treat it as a ROM-contract
   and corpus-grouping target until board photos, schematics, or manual data
   prove exact video, color, sound, and input behavior.
+
+### Red Alert family
+- **Years:** 1981
+- **Main CPU:** MOS Technology M6502 in current public driver-level evidence
+- **Sound:** Irem M37B-family audio board route in current driver-level
+  metadata; exact audio behavior is still unverified in Mnemos
+- **Notable titles:** Red Alert, WW III
+- **Notes:** Public driver metadata keeps Red Alert, WW III, Panther, and
+  Demoneye-X in the same source family, but Panther is tracked as the M27 board
+  route in Mnemos while WW III now has a separate Red Alert-family ROM-contract
+  surface. Treat this family as contract-only until board photos, schematics,
+  manuals, or parity captures prove the memory/I/O, video, color, sound, and
+  input behavior.
 
 ### M47
 - **Years:** 1981

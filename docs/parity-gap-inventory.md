@@ -444,17 +444,17 @@ passes `1/1`, and the common local corpus runner's trailing M72 smoke now passes
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
-438 items across 24 top-level buckets. Direct files under `D:\emu\irem` are now
+439 items across 24 top-level buckets. Direct files under `D:\emu\irem` are now
 zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
 `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 320 items
-match a checked-in Irem manifest from non-ignored buckets, 173 are readable
-through current ZIP / single-inner-ZIP / folder routes, 170 are backed by an
-executable player-supported route, 3 are tracked contract-only, and 148 items
-are metadata-only: 147 manifest-backed routes awaiting ZIP/unpacked folders or
-supplemental media, plus one M58 artwork package ignored as non-ROM proof. ZIPs whose entries are only
+separates manifest tracking, media loadability, and player support: 331 items
+match a checked-in Irem manifest from non-ignored buckets, 179 are readable
+through current ZIP / single-inner-ZIP / folder routes, 172 are backed by an
+executable player-supported route, 7 are tracked contract-only, and 153
+manifest-backed items are metadata-only while awaiting ZIP/unpacked folders or
+supplemental media; the M58 artwork package is still ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
 as `rtypeleo (1).zip` and `travrusa.zip` no longer count as direct ROM-loadable
 support. The M58 bucket
@@ -533,10 +533,16 @@ The local M102 grouping now tracks `D:\emu\irem\M102\hclimber.zip` as a
 contract-only M102 ROM-contract route and `D:\emu\irem\M102\hclimber.7z` as
 metadata-only until converted or unpacked; `hclimber` no longer appears as an
 M102 board-family candidate.
+The local Red Alert / WW III grouping now tracks `D:\emu\irem\M27\ww3` as the
+CRC-clean unpacked WW III contract source and records `D:\emu\irem\M27\ww3.zip`
+as a filename-matching contract-only route; `ww3.7z` remains metadata-only until
+converted or unpacked for direct loading. The data-gated Red Alert test selects
+the unpacked directory because the local `ww3.zip` is a split/incomplete archive,
+and `ww3` no longer appears as an unsupported M27 board-family candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
 M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107,
-plus the M78, M102, and M119 manifest-only data gates. The
+plus the Red Alert, M78, M102, and M119 manifest-only data gates. The
 newest G6 high-water raises cover
 `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
@@ -684,6 +690,20 @@ corpus includes a complete Panther wrapper.
 #### Manifests / board bring-up
 - [x] **I27-1** Local M27 Panther ROM-set contract — `src/manifests/irem_m27` carries a checked-in embedded ROM-contract manifest for `panther`, with parser/region-contract coverage for seven 2 KiB M6502 program ROMs mapped at `$8000-$B7FF`, one 2 KiB Panther audio-board ROM mapped at `$7000`, one 512-byte color PROM, local nested-wrapper aliases, region sizes, exact offsets, and CRC32 values. `MNEMOS_M27_SET_DIR=D:\emu\irem\M27` data-gates the local `panther` ZIPs and proves they load CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records the board-bucket wrappers as tracked M27 artifacts instead of leaving them as `classify_or_sort_corpus_item` · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m27/games/panther.toml` + `src/manifests/irem_m27/tests/m27_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
 - [~] **I27-2** Executable M27 board profile — First-pass route exists for Panther: `src/manifests/irem_m27/m27_system.cpp` assembles a MOS 6502 board shell with program ROM `$8000-$B7FF`, reset-vector fallback for the local contract layout, scratch/video/color/work RAM, input/DIP/control MMIO, PROM/RAM diagnostic video, a beeper-backed sound latch, save-state identity, and player adapter registration. `src/apps/player/adapters/irem_m27` registers `--system irem_m27` / `m27`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local Panther player smoke through `MNEMOS_M27_SET_DIR=D:\emu\irem\M27`. This is smoke-playable, not authentic parity: exact M27 memory/I/O timing, bitmap/char video and color behavior, input/DIP behavior, Panther audio-board behavior, raster phase, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m27/m27_system.cpp` + `src/manifests/irem_m27/tests/m27_system_test.cpp` + `src/apps/player/adapters/irem_m27/*` + `MNEMOS_M27_SET_DIR=D:\emu\irem\M27` corpus golden + direct `mnemos_player --system irem_m27` / `--system m27` smoke
+
+---
+
+## Irem Red Alert / WW III — 1 / 2
+
+This section is split from M27 because Panther has a first-pass M27 player
+route, while `ww3` is a Red Alert-family clone in `irem/redalert.cpp` with a
+different program map, video config, and Irem M37B audio-board route. The local
+files remain physically sorted under `D:\emu\irem\M27` as early M27-era corpus
+material, but Mnemos tracks the ROM contract under `irem_redalert`.
+
+#### Manifests / board bring-up
+- [x] **IRED-1** Local Red Alert / WW III ROM-set contract — `src/manifests/irem_redalert` carries a checked-in embedded ROM-contract manifest for `ww3`, preserving the public M6502 `maincpu`, `soundboard:audiocpu`, and PROM region sizes, offsets, and CRC32 values for the local WW III files. `MNEMOS_REDALERT_SET_DIR=D:\emu\irem\M27` data-gates the unpacked `D:\emu\irem\M27\ww3` directory that was extracted from the complete local `ww3.7z` archive and proves those dumped regions load CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` now classifies the unpacked directory and filename-matching `ww3.zip` as Red Alert contract-only routes, leaves `ww3.7z` metadata-only, and no longer reports WW III as an unsupported M27 board-family candidate · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_redalert/games/ww3.toml` + `src/manifests/irem_redalert/tests/redalert_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **IRED-2** Executable Red Alert / WW III board profile — missing. Mnemos has no Red Alert-family board implementation, no M6502 Red Alert/WW III memory/I/O timing model, no M37B audio-board runtime, no Red Alert-family video/color/input/DIP model, no player adapter, and no visual/audio parity proof. Current evidence is ROM-contract and corpus-load proof only.
 
 ---
 
