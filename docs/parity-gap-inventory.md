@@ -449,10 +449,10 @@ zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
 `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 303 items
-match a checked-in Irem manifest from non-ignored buckets, 164 are readable
-through current ZIP / single-inner-ZIP / folder routes, 164 are backed by an
-executable player-supported route, 0 are tracked contract-only, and 139 tracked
+separates manifest tracking, media loadability, and player support: 306 items
+match a checked-in Irem manifest from non-ignored buckets, 166 are readable
+through current ZIP / single-inner-ZIP / folder routes, 166 are backed by an
+executable player-supported route, 0 are tracked contract-only, and 140 tracked
 matches remain metadata-only until converted to ZIP/unpacked folders or, for
 artwork/layout packages, ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -610,17 +610,18 @@ player adapter for `bmaster`, `crossbld`, `geostorm`, `geostorma`, `gunforce`,
 `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`,
 `inthuntu`, `inthuntk`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`,
 `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`,
-`nbbatman`, `nbbatmanu`, `rtypeleo`, `rtypeleoj`, `thndblst`, `uccops`,
-`uccopsar`, `uccopsj`, and `uccopsu`;
-`MNEMOS_M92_SET_DIR=D:\emu\irem\M92` proves the thirty-three checked-in local M92
+`nbbatman`, `nbbatmanu`, `psoldier`, `rtypeleo`, `rtypeleoj`, `ssoldier`,
+`thndblst`, `uccops`, `uccopsar`, `uccopsj`, and `uccopsu`;
+`MNEMOS_M92_SET_DIR=D:\emu\irem\M92` proves the thirty-five checked-in local M92
 sets load CRC-clean, produce 320x240 nonblank diagnostic frames, and save state
 through the M92 adapter, including clone-parent fallback for the local Gunforce
 Japan/US split wrappers, Blade Master Japan, Geostorm alternate custom-sound,
 Hook Japan, In the Hunt US/Japan/Korea, Mystic Riders Japan/bootleg split
 wrappers, Lethal Thunder
 Japan, Ninja Baseball Bat Man US, Yakyuu Kakutou League-Man parent/alternate
-M92-Z-C wrappers, Major Title 2 alternate-sound/World/Japan split wrappers,
-R-Type Leo Japan, and Undercover Cops US/Japan/Alpha Renewal split wrappers.
+M92-Z-C wrappers, Superior/Perfect Soldiers Japan, Major Title 2
+alternate-sound/World/Japan split wrappers, R-Type Leo Japan, and Undercover
+Cops US/Japan/Alpha Renewal split wrappers.
 They remain
 diagnostic, not graphics/music-authentic, until encrypted V35 sound CPU handling
 and GA21/GA22 video behavior are proven.
@@ -938,8 +939,8 @@ GA25 graphics custom.
   `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`,
   `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`,
   `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`,
-  `nbbatmanu`, `rtypeleo`,
-  `rtypeleoj`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, and `uccopsu`,
+  `nbbatmanu`, `psoldier`, `rtypeleo`, `rtypeleoj`, `ssoldier`, `thndblst`,
+  `uccops`, `uccopsar`, `uccopsj`, and `uccopsu`,
   including
   declared 1 MiB main program regions, 128 KiB encrypted V35 sound-program
   regions, tile/sprite/sample/PLD regions, cabinet metadata, local wrapper-ZIP
@@ -948,12 +949,12 @@ GA25 graphics custom.
   US/Japan/Korea, Lethal Thunder Japan/Thunder Blaster, Mystic Riders
   Japan/bootleg, Major Title 2 alternate-sound/World/Japan split sets, Ninja
   Baseball Bat Man US, Yakyuu Kakutou League-Man parent/alternate M92-Z-C
-  wrappers, R-Type Leo Japan, and Undercover Cops US/Japan/Alpha Renewal split
-  sets.
+  wrappers, Superior/Perfect Soldiers Japan, R-Type Leo Japan, and Undercover
+  Cops US/Japan/Alpha Renewal split sets.
   `MNEMOS_M92_SET_DIR=D:\emu\irem\M92` data-gates the sorted local M92 ZIPs and
-  proves all thirty-three checked-in sets load CRC-clean;
-  `scripts/irem/inventory-corpus.ps1` records 77 tracked M92 artifacts in the
-  sorted M92 bucket, 34 direct player-loadable/supported ZIP routes, and 43
+  proves all thirty-five checked-in sets load CRC-clean;
+  `scripts/irem/inventory-corpus.ps1` records 80 tracked M92 artifacts in the
+  sorted M92 bucket, 36 direct player-loadable/supported ZIP routes, and 44
   metadata-only routes, including `.7z` files and non-ROM artwork/layout
   packages · DONE · MED · S · beyond Emu · Evidence:
   `src/manifests/irem_m92/games/*.toml` +
@@ -983,7 +984,7 @@ GA25 graphics custom.
   unpacked set folders, embedded or in-archive `game.toml` manifests,
   clone-parent fallback beside the selected set path, resident media validation,
   rollback-ready save-state, capability discovery, and real local player smoke
-  through `MNEMOS_M92_SET_DIR=D:\emu\irem\M92`; all thirty-three checked-in sets step
+  through `MNEMOS_M92_SET_DIR=D:\emu\irem\M92`; all thirty-five checked-in sets step
   one frame, produce nonblank 320x240 diagnostic output, and emit save-state
   bytes, with direct `mnemos_player` screenshot/save-state smokes for
   `crossbld`, `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`,
@@ -993,7 +994,8 @@ GA25 graphics custom.
   parent/alternate-sound nonblank screenshots and World set 3/Japan save-state
   smokes, direct In the Hunt Japan/Korea, Geostorm alternate-sound, and Hook
   Japan nonblank screenshots, direct League-Man parent/alternate save-state,
-  load-state, and nonblank screenshot smokes, data-gated Lethal Thunder /
+  load-state, and nonblank screenshot smokes, direct Superior/Perfect Soldiers
+  parent/Japan save-state, load-state, and nonblank screenshot smokes, data-gated Lethal Thunder /
   Thunder Blaster, R-Type Leo Japan, and Undercover Cops clone
   parent-fallback proof. Remaining: derive/verify the proprietary
   encrypted V35 decrypt transform/key and sound protocol, cycle-exact V35
