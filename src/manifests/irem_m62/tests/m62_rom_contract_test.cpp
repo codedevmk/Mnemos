@@ -102,7 +102,15 @@ namespace {
                            {"bg_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"timing", {.raw_size = 0x100U, .file_count = 1U}},
                            {"k_proms", {.raw_size = 0x400U, .file_count = 2U}}}}},
-            {"spelunk2", {.raw_size = 0x60a20U, .file_count = 28U}},
+            {"spelunk2",
+             {.regions = {{"maincpu", {.raw_size = 0x10000U, .file_count = 2U}},
+                           {"soundcpu", {.raw_size = 0x10000U, .file_count = 2U}},
+                           {"gfx1", {.raw_size = 0x38000U, .file_count = 9U}},
+                           {"gfx2", {.raw_size = 0x18000U, .file_count = 6U}},
+                           {"spr_height_prom", {.raw_size = 0x20U, .file_count = 1U}},
+                           {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"r_proms", {.raw_size = 0x600U, .file_count = 4U}},
+                           {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
             {"youjyudn", {.raw_size = 0x50a24U, .file_count = 27U}},
         };
         return contracts;
@@ -527,7 +535,7 @@ TEST_CASE("m62 local wrapper artifacts load CRC-clean through embedded manifests
                 require_loaded_region(image, region_name, region_contract.raw_size);
             }
             if (set_name == "ldrun" || set_name == "ldrun2" || set_name == "ldrun3" ||
-                set_name == "ldrun4" || set_name == "lotlot") {
+                set_name == "ldrun4" || set_name == "lotlot" || set_name == "spelunk2") {
                 require_m6803_reset_vector(image, 0xFA00U);
             }
         }

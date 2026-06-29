@@ -1,7 +1,9 @@
-# Spelunker II - 23 no Kagi -- Irem M62 raw-media contract.
-# Local wrapper: D:\emu\irem\Spelunker-II-23-Keys_Arcade_JA.zip -> spelunk2.zip.
-# Region placement is a contiguous artifact contract only; exact M62 bus
-# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+# Spelunker II - 23 no Kagi -- Irem M62 region contract.
+# Local wrapper: D:\emu\irem\M62\spelunk2.zip -> spelunk2.zip.
+# Region placement follows the local A/B/R board dump groups for the Z80
+# program, MC6803 sound ROM, graphics, PROM, and timing artifacts. Exact title
+# bus behavior, KNA video priority, MC6803 port/timer behavior, and analog audio
+# remain gaps.
 
 [set]
 schema      = "mnemos-romset/1"
@@ -10,173 +12,201 @@ board       = "irem_m62"
 orientation = "horizontal"
 
 [[region]]
-name = "raw_media"
-size = 0x60a20
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "sp2-a.4e"
+offset = 0x0000
+size   = 0x4000
+crc32  = 0x96c04bbb
+
+[[region.file]]
+name   = "sp2-a.4d"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xcb38c2ff
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
 
 [[region.file]]
 name   = "sp2-a.3d"
-offset = 0x0
+offset = 0x8000
 size   = 0x4000
 crc32  = 0x839ec7e2
 
 [[region.file]]
 name   = "sp2-a.3f"
-offset = 0x4000
+offset = 0xc000
 size   = 0x4000
 crc32  = 0xad3ce898
 
-[[region.file]]
-name   = "sp2-a.4d"
-offset = 0x8000
-size   = 0x4000
-crc32  = 0xcb38c2ff
-
-[[region.file]]
-name   = "sp2-a.4e"
-offset = 0xc000
-size   = 0x4000
-crc32  = 0x96c04bbb
-
-[[region.file]]
-name   = "sp2-b.1l"
-offset = 0x10000
-size   = 0x100
-crc32  = 0x8f4a2e3c
-
-[[region.file]]
-name   = "sp2-b.1m"
-offset = 0x10100
-size   = 0x100
-crc32  = 0x906104c7
-
-[[region.file]]
-name   = "sp2-b.1n"
-offset = 0x10200
-size   = 0x100
-crc32  = 0x5a564c06
-
-[[region.file]]
-name   = "sp2-b.3n"
-offset = 0x10300
-size   = 0x4000
-crc32  = 0xf59e8b76
-
-[[region.file]]
-name   = "sp2-b.4c"
-offset = 0x14300
-size   = 0x4000
-crc32  = 0x1caf7013
-
-[[region.file]]
-name   = "sp2-b.4e"
-offset = 0x18300
-size   = 0x4000
-crc32  = 0x780a463b
-
-[[region.file]]
-name   = "sp2-b.4f"
-offset = 0x1c300
-size   = 0x4000
-crc32  = 0xe4a1166f
-
-[[region.file]]
-name   = "sp2-b.4k"
-offset = 0x20300
-size   = 0x4000
-crc32  = 0x6cb67a17
-
-[[region.file]]
-name   = "sp2-b.4n"
-offset = 0x24300
-size   = 0x4000
-crc32  = 0xfa65bac9
-
-[[region.file]]
-name   = "sp2-b.5p"
-offset = 0x28300
-size   = 0x20
-crc32  = 0xcd126f6a
-
-[[region.file]]
-name   = "sp2-b.6f"
-offset = 0x28320
-size   = 0x100
-crc32  = 0x34d88d3c
+[[region]]
+name = "gfx1"
+size = 0x38000
 
 [[region.file]]
 name   = "sp2-r.1b"
-offset = 0x28420
+offset = 0x00000
 size   = 0x8000
 crc32  = 0x3a0c4d47
 
 [[region.file]]
 name   = "sp2-r.1d"
-offset = 0x30420
+offset = 0x08000
 size   = 0x8000
 crc32  = 0xc19fa4c9
 
 [[region.file]]
-name   = "sp2-r.1k"
-offset = 0x38420
-size   = 0x200
-crc32  = 0x31c1bcdc
-
-[[region.file]]
-name   = "sp2-r.2j"
-offset = 0x38620
-size   = 0x100
-crc32  = 0x1acbe2a5
-
-[[region.file]]
-name   = "sp2-r.2k"
-offset = 0x38720
-size   = 0x100
-crc32  = 0x1cf5987e
-
-[[region.file]]
 name   = "sp2-r.3b"
-offset = 0x38820
+offset = 0x10000
 size   = 0x8000
 crc32  = 0x366604af
 
 [[region.file]]
 name   = "sp2-r.4l"
-offset = 0x40820
+offset = 0x18000
 size   = 0x4000
 crc32  = 0x6a4b2d8b
 
 [[region.file]]
 name   = "sp2-r.4m"
-offset = 0x44820
+offset = 0x1c000
 size   = 0x4000
 crc32  = 0xe1368b61
 
 [[region.file]]
 name   = "sp2-r.4p"
-offset = 0x48820
+offset = 0x20000
 size   = 0x4000
 crc32  = 0xfc138e13
 
 [[region.file]]
 name   = "sp2-r.7b"
-offset = 0x4c820
+offset = 0x24000
 size   = 0x4000
 crc32  = 0x7709a1fe
 
 [[region.file]]
 name   = "sp2-r.7c"
-offset = 0x50820
+offset = 0x28000
 size   = 0x8000
 crc32  = 0x4b380162
 
 [[region.file]]
 name   = "sp2-r.7d"
-offset = 0x58820
+offset = 0x30000
 size   = 0x8000
 crc32  = 0x558837ea
 
+[[region]]
+name = "gfx2"
+size = 0x18000
+
+[[region.file]]
+name   = "sp2-b.4k"
+offset = 0x00000
+size   = 0x4000
+crc32  = 0x6cb67a17
+
+[[region.file]]
+name   = "sp2-b.4f"
+offset = 0x04000
+size   = 0x4000
+crc32  = 0xe4a1166f
+
+[[region.file]]
+name   = "sp2-b.3n"
+offset = 0x08000
+size   = 0x4000
+crc32  = 0xf59e8b76
+
+[[region.file]]
+name   = "sp2-b.4n"
+offset = 0x0c000
+size   = 0x4000
+crc32  = 0xfa65bac9
+
+[[region.file]]
+name   = "sp2-b.4c"
+offset = 0x10000
+size   = 0x4000
+crc32  = 0x1caf7013
+
+[[region.file]]
+name   = "sp2-b.4e"
+offset = 0x14000
+size   = 0x4000
+crc32  = 0x780a463b
+
+[[region]]
+name = "spr_height_prom"
+size = 0x20
+
+[[region.file]]
+name   = "sp2-b.5p"
+offset = 0x00
+size   = 0x20
+crc32  = 0xcd126f6a
+
+[[region]]
+name = "spr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "sp2-b.1m"
+offset = 0x000
+size   = 0x100
+crc32  = 0x906104c7
+
+[[region.file]]
+name   = "sp2-b.1n"
+offset = 0x100
+size   = 0x100
+crc32  = 0x5a564c06
+
+[[region.file]]
+name   = "sp2-b.1l"
+offset = 0x200
+size   = 0x100
+crc32  = 0x8f4a2e3c
+
+[[region]]
+name = "r_proms"
+size = 0x600
+
+[[region.file]]
+name   = "sp2-r.1k"
+offset = 0x000
+size   = 0x200
+crc32  = 0x31c1bcdc
+
+[[region.file]]
+name   = "sp2-r.2j"
+offset = 0x200
+size   = 0x100
+crc32  = 0x1acbe2a5
+
+[[region.file]]
+name   = "sp2-r.2k"
+offset = 0x300
+size   = 0x100
+crc32  = 0x1cf5987e
+
 [[region.file]]
 name   = "sp2-r.8j"
-offset = 0x60820
+offset = 0x400
 size   = 0x200
 crc32  = 0x875cc442
+
+[[region]]
+name = "timing"
+size = 0x100
+
+[[region.file]]
+name   = "sp2-b.6f"
+offset = 0x000
+size   = 0x100
+crc32  = 0x34d88d3c
