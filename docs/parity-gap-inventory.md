@@ -1188,15 +1188,18 @@ M119 hardware, not the V33/V35/GA20 video-game boards.
   `src/manifests/irem_m119/m119_system.*` and
   `src/apps/player/adapters/irem_m119` wire the sorted `scumimon.zip` corpus
   into a player-selectable `irem_m119` route with diagnostics, frame stepping,
-  audio capture, and save-state smoke coverage. This is executable first-pass
-  support, not correct graphics/music parity · DONE · HIGH · L · beyond Emu ·
+  audio capture, and save-state smoke coverage. SH-executed tests now prove
+  SH7708 local register byte lanes through the CPU bus, big-endian 32-bit
+  uPD94244 register MMIO, and SH-driven YMZ280B register writes rather than
+  host-only helper writes. This is executable first-pass support, not correct
+  graphics/music parity · DONE · HIGH · L · beyond Emu ·
   Evidence: `src/chips/cpu/sh3/tests/sh3_test.cpp` +
   `src/chips/video/upd94244/tests/upd94244_test.cpp` +
   `src/chips/audio/ymz280b/tests/ymz280b_test.cpp` +
   `src/manifests/irem_m119/tests/m119_system_test.cpp` +
   `src/apps/player/adapters/irem_m119/tests/irem_m119_adapter_test.cpp`
 - [ ] **I119-3** Authentic M119 silicon/parity — remaining work is real
-  SH7708 peripheral/MMU/timer/interrupt behavior, uPD94244 raster/tile/sprite
+  SH7708 MMU/cache/timer/interrupt behavior, uPD94244 raster/tile/sprite
   behavior, YMZ280B ADPCM/sample format accuracy, M119 board I/O and timing,
   DIP/mechanical behavior, and verified correct visual/audio parity against
   hardware reference captures · MISSING · HIGH · L · beyond Emu · Evidence:

@@ -43,7 +43,7 @@ namespace mnemos::manifests::irem_m119 {
         [[nodiscard]] std::uint32_t board_identity_crc(const common::rom_set_image& roms,
                                                        const m119_board_params& params) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m119.board.identity.v1"});
+                security::cryptography::crc32(std::string_view{"m119.board.identity.v2"});
             crc = crc32_u64(crc, layout_code(params.rom_layout));
             crc = crc32_u64(crc, params.main_clock_hz);
             crc = crc32_u64(crc, params.ymz_clock_hz);
@@ -58,6 +58,22 @@ namespace mnemos::manifests::irem_m119 {
                     std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
             }
             return crc;
+        }
+
+        [[nodiscard]] constexpr bool is_vdp_mmio(std::uint32_t offset) noexcept {
+            return offset >= mmio_vdp_base && offset <= mmio_vdp_end;
+        }
+
+        [[nodiscard]] constexpr std::uint8_t vdp_mmio_register(std::uint32_t offset) noexcept {
+            return static_cast<std::uint8_t>((offset - mmio_vdp_base) /
+                                             mmio_vdp_register_stride);
+        }
+
+        [[nodiscard]] constexpr std::uint8_t vdp_mmio_shift(std::uint32_t offset) noexcept {
+            return static_cast<std::uint8_t>(
+                (mmio_vdp_register_stride - 1U -
+                 ((offset - mmio_vdp_base) % mmio_vdp_register_stride)) *
+                8U);
         }
     } // namespace
 
@@ -118,9 +134,9 @@ namespace mnemos::manifests::irem_m119 {
         if (offset == mmio_control) {
             return control_latch;
         }
-        if (offset >= mmio_vdp_base && offset <= mmio_vdp_end) {
-            return static_cast<std::uint8_t>(
-                video.read_register(static_cast<std::uint8_t>(offset - mmio_vdp_base)));
+        if (is_vdp_mmio(offset)) {
+            const std::uint32_t value = video.read_register(vdp_mmio_register(offset));
+            return static_cast<std::uint8_t>((value >> vdp_mmio_shift(offset)) & 0xFFU);
         }
         if (offset >= mmio_ymz_base && offset <= mmio_ymz_end) {
             return ymz.read_register(static_cast<std::uint8_t>(offset - mmio_ymz_base));
@@ -134,8 +150,13 @@ namespace mnemos::manifests::irem_m119 {
             control_latch = value;
             return;
         }
-        if (offset >= mmio_vdp_base && offset <= mmio_vdp_end) {
-            video.write_register(static_cast<std::uint8_t>(offset - mmio_vdp_base), value);
+        if (is_vdp_mmio(offset)) {
+            const std::uint8_t reg = vdp_mmio_register(offset);
+            const std::uint8_t shift = vdp_mmio_shift(offset);
+            const std::uint32_t lane_mask = 0xFFU << shift;
+            const std::uint32_t previous = video.read_register(reg);
+            video.write_register(reg, (previous & ~lane_mask) |
+                                          (static_cast<std::uint32_t>(value) << shift));
             ++vdp_register_write_count;
             return;
         }

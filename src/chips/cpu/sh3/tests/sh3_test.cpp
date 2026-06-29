@@ -80,10 +80,10 @@ TEST_CASE("sh3 local control registers round-trip through accessors and state") 
     sh3 cpu;
     cpu.write_onchip_register(0xFFFFFF84U, 0x00000001U);
     cpu.write_onchip_register(0xFFFFFFECU, 0x0000000FU);
-    cpu.write_onchip_register(0xFFFFFF60U, 0x12345678U);
+    cpu.write_onchip_register(0xFFFFFF60U, 0x1234U);
     CHECK(cpu.read_onchip_register(0xFFFFFF84U) == 0x00000001U);
     CHECK(cpu.read_onchip_register(0xFFFFFFECU) == 0x0000000FU);
-    CHECK(cpu.read_onchip_register(0xFFFFFF60U) == 0x12345678U);
+    CHECK(cpu.read_onchip_register(0xFFFFFF60U) == 0x1234U);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
@@ -95,5 +95,33 @@ TEST_CASE("sh3 local control registers round-trip through accessors and state") 
     REQUIRE(reader.ok());
     CHECK(restored.read_onchip_register(0xFFFFFF84U) == 0x00000001U);
     CHECK(restored.read_onchip_register(0xFFFFFFECU) == 0x0000000FU);
-    CHECK(restored.read_onchip_register(0xFFFFFF60U) == 0x12345678U);
+    CHECK(restored.read_onchip_register(0xFFFFFF60U) == 0x1234U);
+}
+
+TEST_CASE("sh3 SH7708 local registers are reachable through executed SH bus ops") {
+    machine m;
+    m.w16(0x0100U, 0x2121U); // MOV.W R2,@R1
+    m.w16(0x0102U, 0x2342U); // MOV.L R4,@R3
+    m.w16(0x0104U, 0x6611U); // MOV.W @R1,R6
+    m.w16(0x0106U, 0x6732U); // MOV.L @R3,R7
+    m.w16(0x0108U, 0x0009U); // NOP
+
+    auto regs = m.cpu.cpu_registers();
+    regs.core.pc = 0x0100U;
+    regs.core.r[1] = 0xFFFFFF60U;
+    regs.core.r[2] = 0x00001234U;
+    regs.core.r[3] = 0xFFFFFF84U;
+    regs.core.r[4] = 0xA5A55A5AU;
+    m.cpu.set_registers(regs);
+
+    CHECK(m.cpu.step_instruction() > 0);
+    CHECK(m.cpu.step_instruction() > 0);
+    CHECK(m.cpu.step_instruction() > 0);
+    CHECK(m.cpu.step_instruction() > 0);
+
+    const auto after = m.cpu.cpu_registers();
+    CHECK(m.cpu.read_onchip_register(0xFFFFFF60U) == 0x1234U);
+    CHECK(m.cpu.read_onchip_register(0xFFFFFF84U) == 0xA5A55A5AU);
+    CHECK(after.core.r[6] == 0x1234U);
+    CHECK(after.core.r[7] == 0xA5A55A5AU);
 }

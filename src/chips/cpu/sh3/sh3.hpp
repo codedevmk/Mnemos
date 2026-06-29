@@ -62,6 +62,10 @@ namespace mnemos::chips::cpu {
 
         [[nodiscard]] std::uint32_t read_onchip_register(std::uint32_t address) const noexcept;
         void write_onchip_register(std::uint32_t address, std::uint32_t value) noexcept;
+        [[nodiscard]] bool read_onchip_byte(std::uint32_t address,
+                                            std::uint8_t& value) const noexcept;
+        [[nodiscard]] bool write_onchip_byte(std::uint32_t address,
+                                             std::uint8_t value) noexcept;
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 

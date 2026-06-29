@@ -75,13 +75,13 @@ TEST_CASE("m119 executable board wires SH7708, uPD94244, YMZ280B, RAM, and MMIO"
     system->main_bus.write8(m119::work_ram_base, 0x42U);
     system->main_bus.write8(m119::video_ram_base + 4U, 0x88U);
     system->main_bus.write8(m119::mmio_base + m119::mmio_control, 0x5AU);
-    system->main_bus.write8(m119::mmio_base + m119::mmio_vdp_base + 3U, 0x77U);
+    system->main_bus.write32_be(m119::mmio_base + m119::mmio_vdp_base + 4U, 0x11223344U);
 
     CHECK(system->work_ram[0] == 0x42U);
     CHECK(system->video.read_vram(4U) == 0x88U);
     CHECK(system->control_latch == 0x5AU);
-    CHECK(system->video.read_register(3U) == 0x77U);
-    CHECK(system->vdp_register_write_count == 1U);
+    CHECK(system->video.read_register(1U) == 0x11223344U);
+    CHECK(system->vdp_register_write_count == 4U);
 
     system->run_frame();
     CHECK(system->frames_run == 1U);
@@ -89,6 +89,42 @@ TEST_CASE("m119 executable board wires SH7708, uPD94244, YMZ280B, RAM, and MMIO"
     CHECK(system->ymz.last_sample() != 0);
     CHECK(system->ymz.pending_samples() > 0U);
     CHECK(frame_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m119 SH7708 program drives uPD94244 and YMZ280B MMIO", "[m119][board]") {
+    auto image = synthetic_image();
+    auto& rom = image.regions["maincpu"];
+    poke16_be(rom, 0x100U, 0x2122U); // MOV.L R2,@R1
+    poke16_be(rom, 0x102U, 0x6512U); // MOV.L @R1,R5
+    poke16_be(rom, 0x104U, 0x2652U); // MOV.L R5,@R6
+    poke16_be(rom, 0x106U, 0x2340U); // MOV.B R4,@R3
+    poke16_be(rom, 0x108U, 0x0009U); // NOP
+
+    auto system = m119::assemble_m119(std::move(image), m119::board_params_for("scumimon"));
+    REQUIRE(system != nullptr);
+
+    auto regs = system->main_cpu.cpu_registers();
+    regs.core.pc = 0x100U;
+    regs.core.r[1] = m119::mmio_base + m119::mmio_vdp_base + 4U;
+    regs.core.r[2] = 0x12345678U;
+    regs.core.r[3] = m119::mmio_base + m119::mmio_ymz_base +
+                     mnemos::chips::audio::ymz280b::reg_volume;
+    regs.core.r[4] = 0x00000040U;
+    regs.core.r[6] = m119::work_ram_base;
+    system->main_cpu.set_registers(regs);
+
+    for (int i = 0; i < 4; ++i) {
+        CHECK(system->main_cpu.step_instruction() > 0);
+    }
+
+    CHECK(system->video.read_register(1U) == 0x12345678U);
+    CHECK(system->work_ram[0] == 0x12U);
+    CHECK(system->work_ram[1] == 0x34U);
+    CHECK(system->work_ram[2] == 0x56U);
+    CHECK(system->work_ram[3] == 0x78U);
+    CHECK(system->ymz.read_register(mnemos::chips::audio::ymz280b::reg_volume) == 0x40U);
+    CHECK(system->vdp_register_write_count == 4U);
+    CHECK(system->ymz_register_write_count == 1U);
 }
 
 TEST_CASE("m119 save state preserves board identity and runtime state", "[m119][board]") {

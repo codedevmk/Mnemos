@@ -18,7 +18,7 @@
 
 namespace mnemos::manifests::irem_m119 {
 
-    inline constexpr std::uint32_t m119_system_state_version = 1U;
+    inline constexpr std::uint32_t m119_system_state_version = 2U;
 
     inline constexpr std::uint32_t visible_width = chips::video::upd94244::visible_width;
     inline constexpr std::uint32_t visible_height = chips::video::upd94244::visible_height;
@@ -47,7 +47,10 @@ namespace mnemos::manifests::irem_m119 {
     inline constexpr std::uint32_t mmio_input = 0x00U;
     inline constexpr std::uint32_t mmio_control = 0x01U;
     inline constexpr std::uint32_t mmio_vdp_base = 0x10U;
-    inline constexpr std::uint32_t mmio_vdp_end = 0x2FU;
+    inline constexpr std::uint32_t mmio_vdp_register_stride = 4U;
+    inline constexpr std::uint32_t mmio_vdp_register_count = 8U;
+    inline constexpr std::uint32_t mmio_vdp_end =
+        mmio_vdp_base + (mmio_vdp_register_count * mmio_vdp_register_stride) - 1U;
     inline constexpr std::uint32_t mmio_ymz_base = 0x40U;
     inline constexpr std::uint32_t mmio_ymz_end = 0xFFU;
 

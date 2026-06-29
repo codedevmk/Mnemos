@@ -30,10 +30,26 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] constexpr sh3::model model_from_code(std::uint32_t code) noexcept {
             return code == 0U ? sh3::model::hd6417708s : sh3::model::hd6417708s;
         }
+
+        [[nodiscard]] constexpr std::uint32_t width_mask(std::uint8_t width) noexcept {
+            return width >= 4U ? 0xFFFFFFFFU : ((1U << (static_cast<unsigned>(width) * 8U)) - 1U);
+        }
+
+        [[nodiscard]] constexpr std::uint8_t byte_shift(std::uint8_t width,
+                                                        std::uint32_t offset) noexcept {
+            return static_cast<std::uint8_t>((width - 1U - offset) * 8U);
+        }
     } // namespace
 
     sh3::sh3(model chip_model) : model_(chip_model) {
         introspection_.with_registers([this] { return register_snapshot(); });
+        core_.set_onchip_extension_handlers(
+            [this](std::uint32_t address, std::uint8_t& value) noexcept {
+                return read_onchip_byte(address, value);
+            },
+            [this](std::uint32_t address, std::uint8_t value) noexcept {
+                return write_onchip_byte(address, value);
+            });
         reset(reset_kind::power_on);
     }
 
@@ -81,31 +97,31 @@ namespace mnemos::chips::cpu {
 
     void sh3::set_registers(const registers& values) noexcept {
         core_.set_registers(values.core);
-        mmucr_ = values.mmucr;
-        ccr_ = values.ccr;
-        bcr1_ = values.bcr1;
-        bcr2_ = values.bcr2;
-        wcr1_ = values.wcr1;
-        wcr2_ = values.wcr2;
-        mcr_ = values.mcr;
+        mmucr_ = values.mmucr & width_mask(4U);
+        ccr_ = values.ccr & width_mask(4U);
+        bcr1_ = values.bcr1 & width_mask(2U);
+        bcr2_ = values.bcr2 & width_mask(2U);
+        wcr1_ = values.wcr1 & width_mask(2U);
+        wcr2_ = values.wcr2 & width_mask(2U);
+        mcr_ = values.mcr & width_mask(2U);
     }
 
     std::uint32_t sh3::read_onchip_register(std::uint32_t address) const noexcept {
         switch (address) {
         case sh7708_mmucr:
-            return mmucr_;
+            return mmucr_ & width_mask(4U);
         case sh7708_ccr:
-            return ccr_;
+            return ccr_ & width_mask(4U);
         case sh7708_bcr1:
-            return bcr1_;
+            return bcr1_ & width_mask(2U);
         case sh7708_bcr2:
-            return bcr2_;
+            return bcr2_ & width_mask(2U);
         case sh7708_wcr1:
-            return wcr1_;
+            return wcr1_ & width_mask(2U);
         case sh7708_wcr2:
-            return wcr2_;
+            return wcr2_ & width_mask(2U);
         case sh7708_mcr:
-            return mcr_;
+            return mcr_ & width_mask(2U);
         default:
             return 0xFFFFFFFFU;
         }
@@ -114,29 +130,65 @@ namespace mnemos::chips::cpu {
     void sh3::write_onchip_register(std::uint32_t address, std::uint32_t value) noexcept {
         switch (address) {
         case sh7708_mmucr:
-            mmucr_ = value;
+            mmucr_ = value & width_mask(4U);
             break;
         case sh7708_ccr:
-            ccr_ = value;
+            ccr_ = value & width_mask(4U);
             break;
         case sh7708_bcr1:
-            bcr1_ = value;
+            bcr1_ = value & width_mask(2U);
             break;
         case sh7708_bcr2:
-            bcr2_ = value;
+            bcr2_ = value & width_mask(2U);
             break;
         case sh7708_wcr1:
-            wcr1_ = value;
+            wcr1_ = value & width_mask(2U);
             break;
         case sh7708_wcr2:
-            wcr2_ = value;
+            wcr2_ = value & width_mask(2U);
             break;
         case sh7708_mcr:
-            mcr_ = value;
+            mcr_ = value & width_mask(2U);
             break;
         default:
             break;
         }
+    }
+
+    bool sh3::read_onchip_byte(std::uint32_t address, std::uint8_t& value) const noexcept {
+        const auto read_lane = [&](std::uint32_t base, std::uint8_t width,
+                                   std::uint32_t reg) noexcept -> bool {
+            if (address < base || address >= base + width) {
+                return false;
+            }
+            const std::uint8_t shift = byte_shift(width, address - base);
+            value = static_cast<std::uint8_t>((reg >> shift) & 0xFFU);
+            return true;
+        };
+
+        return read_lane(sh7708_mmucr, 4U, mmucr_) || read_lane(sh7708_ccr, 4U, ccr_) ||
+               read_lane(sh7708_bcr1, 2U, bcr1_) || read_lane(sh7708_bcr2, 2U, bcr2_) ||
+               read_lane(sh7708_wcr1, 2U, wcr1_) || read_lane(sh7708_wcr2, 2U, wcr2_) ||
+               read_lane(sh7708_mcr, 2U, mcr_);
+    }
+
+    bool sh3::write_onchip_byte(std::uint32_t address, std::uint8_t value) noexcept {
+        const auto write_lane = [&](std::uint32_t base, std::uint8_t width,
+                                    std::uint32_t& reg) noexcept -> bool {
+            if (address < base || address >= base + width) {
+                return false;
+            }
+            const std::uint8_t shift = byte_shift(width, address - base);
+            const std::uint32_t lane_mask = 0xFFU << shift;
+            reg = ((reg & width_mask(width)) & ~lane_mask) |
+                  (static_cast<std::uint32_t>(value) << shift);
+            return true;
+        };
+
+        return write_lane(sh7708_mmucr, 4U, mmucr_) || write_lane(sh7708_ccr, 4U, ccr_) ||
+               write_lane(sh7708_bcr1, 2U, bcr1_) || write_lane(sh7708_bcr2, 2U, bcr2_) ||
+               write_lane(sh7708_wcr1, 2U, wcr1_) || write_lane(sh7708_wcr2, 2U, wcr2_) ||
+               write_lane(sh7708_mcr, 2U, mcr_);
     }
 
     void sh3::save_state(state_writer& writer) const {
@@ -159,13 +211,13 @@ namespace mnemos::chips::cpu {
             return;
         }
         model_ = model_from_code(reader.u32());
-        mmucr_ = reader.u32();
-        ccr_ = reader.u32();
-        bcr1_ = reader.u32();
-        bcr2_ = reader.u32();
-        wcr1_ = reader.u32();
-        wcr2_ = reader.u32();
-        mcr_ = reader.u32();
+        mmucr_ = reader.u32() & width_mask(4U);
+        ccr_ = reader.u32() & width_mask(4U);
+        bcr1_ = reader.u32() & width_mask(2U);
+        bcr2_ = reader.u32() & width_mask(2U);
+        wcr1_ = reader.u32() & width_mask(2U);
+        wcr2_ = reader.u32() & width_mask(2U);
+        mcr_ = reader.u32() & width_mask(2U);
         core_.load_state(reader);
     }
 

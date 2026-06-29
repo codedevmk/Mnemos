@@ -1,7 +1,8 @@
 # Slotters Club: Umi Monogatari -- Irem M119 ROM contract.
 # First-pass executable route: Mnemos models the HD6417708S/SH-3 shell,
-# uPD94244-210 VDP shell, and YMZ280B sample-player shell. Authentic raster,
-# SH-3 peripheral, and YMZ280B ADPCM behavior remains a later silicon pass.
+# SH7708 local-register bus surface, uPD94244-210 VDP MMIO shell, and YMZ280B
+# sample-player shell. Authentic raster, SH-3 MMU/cache/timer/interrupt, and
+# YMZ280B ADPCM behavior remains a later silicon pass.
 
 [set]
 schema      = "mnemos-romset/1"
