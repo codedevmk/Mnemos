@@ -213,6 +213,13 @@ multiple independent open-source implementations.
   grouping. The M75 adapter folds those DIP defaults into the board-visible
   `dsw1`/`dsw2` bytes and exposes the parsed switch count. No manual scans,
   emulator source, or ROM bytes are committed.
+- **Irem M78 ROM-set metadata** — the checked-in `bj92` manifest uses public
+  Irem M78 driver metadata for Black Jack dump filenames, offsets, region sizes,
+  CRC-32s, vertical orientation, dual-Z80/YM2151 classification, duplicate tile
+  ROM grouping, PROMs, and the no-dump M72-audio sample placeholders. Mnemos
+  uses that metadata for a manifest-only contract gate; it is not an executable
+  route or visual/audio parity proof. No MAME driver code or ROM bytes are
+  copied into Mnemos.
 - **Irem M84 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m84/games/` use public MAME Irem driver metadata for dump
   filenames, parent/clone relationships, region sizes, program reload offsets,

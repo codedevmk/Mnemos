@@ -36,6 +36,7 @@ is uncertain rather than assert it.
 | M84 | 1989–1991 | NEC V30 / V35 | R-Type II, Cosmic Cop |
 | M85 | 1990 | NEC V30 | Pound for Pound |
 | M90 | 1991–1992 | NEC V35 (single board) | Bomber Man / Dyna Blaster |
+| M78 | 1992 | Z80 + Z80, sparse gambling/satellite board | Black Jack |
 | M97 / M99 | 1992–1993 | NEC V35 (M90 variants) | (sparse) |
 | M92 | 1991–1994 | NEC V33 + V35 | Gunforce, Lethal Thunder / Thunder Blaster, In the Hunt, R-Type Leo |
 | M107 | 1993–1995 | NEC V33 + V35 | Fire Barrel, Dream Soccer '94 |
@@ -189,6 +190,20 @@ era, but CPU family alone is not sufficient board proof.
 - **Years:** 1988
 - **Notes:** Very sparsely documented; listed in Irem's board sequence but with
   little public hardware detail. No confident CPU/sound/title attribution.
+
+### M78
+- **Years:** 1992
+- **Main CPU:** Zilog Z80 at 3.579545 MHz in current public driver metadata
+- **Sound CPU:** Zilog Z80 at 3.579545 MHz
+- **Sound chip:** YM2151 plus an M72-style DAC/sample path; the two M72-audio
+  sample ROMs are still public `NO_DUMP` placeholders.
+- **Notable titles:** Black Jack (`bj92`)
+- **Notes:** Sparse gambling/satellite hardware with a main screen plus satellite
+  user-screen evidence. Despite the low board number, current metadata makes this
+  a late, isolated dual-Z80 board rather than a V30 M72-family profile. Public
+  driver notes still flag I/O, video registers, communications, colors, graphics,
+  and no-sound status as unresolved, so Mnemos treats M78 as ROM-contract-only
+  until board evidence and the missing sample ROMs are available.
 
 ### M81
 - **Years:** 1989–1990

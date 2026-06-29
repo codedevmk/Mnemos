@@ -20,12 +20,14 @@ buckets such as `M72`, `M92`, `M119`, `M62`, `M58`, and `travrusa`, plus
 quarantine or classification buckets such as `for-delete` and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 310 currently match a
-checked-in Mnemos Irem manifest, 168 are readable through the current ZIP,
+not yet map it to a numbered M-board. Of those 437 items, 312 currently match a
+checked-in Mnemos Irem manifest, 169 are readable through the current ZIP,
 single-inner wrapper ZIP, or unpacked-folder media routes, 167 have an
-executable player-supported route, one is a tracked contract-only route, and
-142 are metadata-only tracked matches. The count includes `scumimon` after it
-was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M57 now has a first-pass New Tropical Angel
+executable player-supported route, two are tracked contract-only routes, and
+143 are metadata-only tracked matches. The count includes `scumimon` after it
+was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M78 now has a
+manifest-only `bj92` contract: `bj92.zip` is the contract-only route, and
+`bj92.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
 player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
@@ -59,7 +61,7 @@ untracked corpus classifications remain explicit: `headon` and
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
 M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84,
-M85, M90, M92, and M107, plus the M119 manifest-only contract gate. For
+M85, M90, M92, and M107, plus the M78 and M119 manifest-only contract gates. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests;
 M92 also includes the M107 folder as supplemental media for the local
@@ -102,6 +104,7 @@ proof.
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
 | M75 | `irem_m75` first-pass | 34% | `vigilant`, `vigilanta`, `vigilantb`, `vigilantbl`, `vigilantc`, `vigilantd`, `vigilantg`, `vigilanto` | local Vigilante parent plus official regional and bootleg clone wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-clocked DAC event proof | None | Authentic Vigilante graphics priority, DIP runtime UI/override parity, raster phase, reference-backed sound timing, audio parity, bootleg PROM/color behavior proof |
 | M77 | none | 0% | None | None | None | Board research before implementation |
+| M78 | `irem_m78` manifest-only | 3% | `bj92` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement the dual-Z80 board profile, I/O/comms, video registers, YM2151/DAC/M72-audio path, no-dump sample ROM handling, and player adapter |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
 | M82 | `irem_m82` | 68% | `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 8 checked-in local sets; local Air Duel M82 parent/US clone wrappers; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 48% | `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`, `hharryu`, `kengo`, `kengoj`, `ltswords` | all 9 checked-in M84 sets; Daiku no Gensan and Ken-Go split-clone parent fallback; V30/V35 CPU profile proof; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords`/Ken-Go PROM/PLD artifacts |
@@ -678,6 +681,27 @@ visual and audio parity proof.
 - **Smoke playable:** none.
 - **Correct gfx/music:** none.
 - **Remaining:** board research before implementation.
+
+### M78
+
+- **Techsheet games:** Black Jack (`bj92`).
+- **Mnemos games:** manifest-only ROM contract for `bj92`.
+- **Smoke playable:** none. `MNEMOS_M78_SET_DIR=D:\emu\irem\M78` data-gates the
+  local `bj92.zip` route and proves the dumped program, sound-program, duplicate
+  tile, and PROM regions load CRC-clean, but no executable board/player route
+  exists.
+- **Correct gfx/music:** none.
+- **Current implementation:** `src/manifests/irem_m78` embeds the local `bj92`
+  contract with public `maincpu`, `audiocpu`, `tiles`, `tiles2`, `m72_audio`,
+  and `proms` region sizes, offsets, and CRC32 values for every dumped file. The
+  two public no-dump sample ROM placeholders, `3.v0.ic46` and `4.v1.ic47`, are
+  represented by an explicit zero-filled `m72_audio` region instead of fake ROM
+  entries, so the test can verify the known corpus without hiding the missing
+  audio evidence.
+- **Remaining:** implement the dual-Z80 board profile, exact I/O/comms and video
+  registers, YM2151 plus M72-style DAC/sample behavior, satellite/main-screen
+  routing, input/DIP behavior, no-dump sample-ROM strategy, player adapter, and
+  trusted visual/audio parity.
 
 ### M81
 

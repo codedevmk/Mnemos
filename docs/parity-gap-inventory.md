@@ -449,10 +449,10 @@ zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
 `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 310 items
-match a checked-in Irem manifest from non-ignored buckets, 168 are readable
+separates manifest tracking, media loadability, and player support: 312 items
+match a checked-in Irem manifest from non-ignored buckets, 169 are readable
 through current ZIP / single-inner-ZIP / folder routes, 167 are backed by an
-executable player-supported route, 1 is tracked contract-only, and 142 tracked
+executable player-supported route, 2 are tracked contract-only, and 143 tracked
 matches remain metadata-only until converted to ZIP/unpacked folders or, for
 artwork/layout packages, ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -521,10 +521,14 @@ The local M119 grouping now tracks `D:\emu\irem\M119\scumimon.zip` as a
 contract-only M119 ROM-contract route and `D:\emu\irem\M119\scumimon.7z` as
 metadata-only until converted or unpacked; `scumimon` no longer appears as an
 M92 board-family candidate.
+The local M78 grouping now tracks `D:\emu\irem\M78\bj92.zip` as a
+contract-only M78 ROM-contract route and `D:\emu\irem\M78\bj92.7z` as
+metadata-only until converted or unpacked; `bj92` no longer appears as an M78
+board-family candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
 M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107,
-plus the M119 manifest-only data gate. The
+plus the M78 and M119 manifest-only data gates. The
 newest G6 high-water raises cover
 `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
@@ -805,6 +809,35 @@ DIP note: `vigilant` now carries 14 SW1/SW2 DIP entries transcribed from the
 Vigilante Installation & Service Manual. M75 clones inherit the table; the
 adapter folds the raw active-low default to `dsw1=0xff`, `dsw2=0xfd`, publishes
 `DIP switches=14`, and still honors explicit `--dip` override.
+
+---
+
+## Irem M78 — 1 / 2
+
+This section tracks Black Jack (`bj92`) as an isolated sparse M78
+gambling/satellite board instead of folding it into M72 or the V30 M8x family.
+
+#### Manifests / board bring-up
+- [x] **I78-1** Local M78 BJ92 ROM-set contract — `src/manifests/irem_m78`
+  carries a checked-in embedded ROM-contract manifest for `bj92`, preserving the
+  local dumped main Z80 program, sound Z80 program, duplicate tile ROM groups,
+  and PROM filenames, region sizes, offsets, and CRC32 values. The public
+  no-dump M72-audio sample placeholders `3.v0.ic46` and `4.v1.ic47` are modeled
+  as an explicit zero-filled `m72_audio` region with no fake file entries.
+  `MNEMOS_M78_SET_DIR=D:\emu\irem\M78` data-gates the local `bj92.zip` and
+  proves the dumped regions load CRC-clean through the embedded manifest.
+  `scripts/irem/inventory-corpus.ps1` classifies `bj92.zip` as contract-only and
+  leaves `bj92.7z` metadata-only until converted or unpacked, so BJ92 no longer
+  appears as an unsupported M78 board-family candidate · DONE · MED · S ·
+  beyond Emu · Evidence: `src/manifests/irem_m78/games/bj92.toml` +
+  `src/manifests/irem_m78/tests/m78_rom_contract_test.cpp` +
+  `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [ ] **I78-2** Executable M78 board profile — missing. Mnemos has no M78
+  dual-Z80 board implementation, BJ92 I/O/comms model, video-register model,
+  satellite/main-screen routing, YM2151 plus M72-style DAC/sample behavior,
+  input/DIP behavior, player adapter, or visual/audio parity proof. The public
+  metadata still lists unresolved I/O, video registers, communications, no-sound
+  status, imperfect graphics, imperfect colors, and no-dump sample ROMs.
 
 ---
 
