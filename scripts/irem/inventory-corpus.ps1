@@ -442,7 +442,7 @@ function Get-LoadReadiness {
     if ($LoadableByMnemos) {
         return "direct_player_loadable"
     }
-    if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_artwork") {
+    if ($LoadRoute -eq "metadata_only_artwork") {
         return "metadata_only_non_rom_artwork"
     }
     if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_7z") {
@@ -485,7 +485,7 @@ function Get-InventoryNextAction {
     if ($LoadableByMnemos) {
         return "player_loadable"
     }
-    if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_artwork") {
+    if ($LoadRoute -eq "metadata_only_artwork") {
         return "ignore_or_move_artwork_package"
     }
     if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_7z") {
@@ -578,7 +578,11 @@ function New-ArchiveItem {
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M57Match $m57Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M78Match $m78Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M85Match $m85Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match -M119Match $m119Match -TravrusaMatch $travrusaMatch
     $manifestParent = Get-ManifestParentForSet -SetId $setId
-    $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
+    $boardCandidateFamily = if ($loadRoute -eq "metadata_only_artwork") {
+        ""
+    } else {
+        Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
+    }
     $archiveComposition = if ($artworkOnlyArchive) {
         "non_rom_artwork_package"
     } else {

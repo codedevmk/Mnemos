@@ -452,15 +452,15 @@ by both inventory and data-gated corpus source discovery. The inventory
 separates manifest tracking, media loadability, and player support: 318 items
 match a checked-in Irem manifest from non-ignored buckets, 172 are readable
 through current ZIP / single-inner-ZIP / folder routes, 170 are backed by an
-executable player-supported route, 2 are tracked contract-only, and 146 tracked
-matches remain metadata-only until converted to ZIP/unpacked folders or, for
-artwork/layout packages, ignored as non-ROM proof. ZIPs whose entries are only
+executable player-supported route, 2 are tracked contract-only, and 147 items
+are metadata-only: 146 manifest-backed routes awaiting ZIP/unpacked folders or
+supplemental media, plus one M58 artwork package ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
 as `rtypeleo (1).zip` and `travrusa.zip` no longer count as direct ROM-loadable
 support. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
-`vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
-quarantined under `D:\emu\irem\M58\artwork` and does not count as ROM
+`vs10yardj`; `D:\emu\irem\M58\artwork\10yard-artwork.zip` is artwork/layout
+only, is classified as metadata-only non-ROM artwork, and does not count as ROM
 proof. Windows copy-suffixed checked-in set ZIPs such as `loht (1).zip` are
 canonicalized to their embedded manifest IDs for player loading, M72
 corpus-smoke grouping, and inventory grouping, and the local Air Duel M82
@@ -500,7 +500,8 @@ unpacked.
 The local M58 grouping now tracks `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj` as first-pass player-loadable 10-Yard Fight manifests. The four ZIP
 sets are direct player-loadable through `irem_m58`; the five 7z archives remain
-metadata-only until converted or unpacked for the player route.
+metadata-only until converted or unpacked for the player route, and the
+`10yard-artwork.zip` package is metadata-only non-ROM artwork.
 The local M63 grouping now tracks `D:\emu\irem\M63\wilytowr.zip` as a
 direct player-loadable first-pass `wilytowr` route; the two local Wily Tower
 `.7z` archives remain metadata-only until converted or unpacked.
@@ -753,7 +754,7 @@ identity and should not inherit Moon Patrol or later M62 behavior without board
 evidence.
 
 #### Manifests / board bring-up
-- [x] **I58-1** Local M58 10-Yard Fight ROM-set contracts — `src/manifests/irem_m58` carries checked-in embedded ROM-contract manifests for `10yard`, `10yardj`, `vs10yard`, and `vs10yardj`, preserving the local filenames, region sizes, offsets, and CRC32 values for `maincpu`, `soundcpu`, `tiles`, `sprites`, and `proms`. Regional and Vs. sets declare `10yard` as parent and inherit shared media from the sibling parent wrapper. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` data-gates the four canonical local ZIPs and proves they load CRC-clean through the embedded manifests; copy-suffixed `10yard (2).zip` is artwork/layout only and is quarantined under `D:\emu\irem\M58\artwork` rather than counted as ROM proof. `scripts/irem/inventory-corpus.ps1` now classifies the four ZIP archives as direct player-loadable M58 items and the five 7z archives as metadata-only, so M58 support accounting no longer reports 10-Yard Fight as contract-only · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m58/games/*.toml` + `src/manifests/irem_m58/tests/m58_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [x] **I58-1** Local M58 10-Yard Fight ROM-set contracts — `src/manifests/irem_m58` carries checked-in embedded ROM-contract manifests for `10yard`, `10yardj`, `vs10yard`, and `vs10yardj`, preserving the local filenames, region sizes, offsets, and CRC32 values for `maincpu`, `soundcpu`, `tiles`, `sprites`, and `proms`. Regional and Vs. sets declare `10yard` as parent and inherit shared media from the sibling parent wrapper. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58` data-gates the four canonical local ZIPs and proves they load CRC-clean through the embedded manifests; `D:\emu\irem\M58\artwork\10yard-artwork.zip` is artwork/layout only and is classified as metadata-only non-ROM proof rather than a board-family candidate. `scripts/irem/inventory-corpus.ps1` now classifies the four ZIP archives as direct player-loadable M58 items, the five 7z archives as metadata-only conversion/unpack routes, and the artwork ZIP as ignored non-ROM evidence, so M58 support accounting no longer reports 10-Yard Fight as contract-only · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m58/games/*.toml` + `src/manifests/irem_m58/tests/m58_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
 - [~] **I58-2** Executable M58 board profile — `src/manifests/irem_m58/m58_system.cpp` now assembles a first-pass M58 board route with main Z80, sound MC6803, 10-Yard Fight ROM regions, the `soundcpu` high-ROM window at `$8000-$ffff`, real MC6803 reset-vector fetch from `$fffe/$ffff`, video/color/sprite/work/sound RAM, input/DIP MMIO, row scroll writes, flip latch, sound-command latch IRQ/ack state, first-pass MC6803 direct-page latch/SSG MMIO, two YM2149-compatible SSGs, ROM-backed tile/sprite/PROM diagnostic rendering, board identity save/load, and focused tests for MC6803-owned PSG writes, deterministic video independent of executable ROM entropy, sprite RAM rendering, flip-screen tile mirroring, and save-state rejection across mismatched board identity. `src/chips/cpu/m6803` now includes reset-vector, reset-line parking, stack, branch, ALU, load/store, register-introspection, and save-state tests, and `src/manifests/irem_m58/tests/m58_rom_contract_test.cpp` proves the real local `10yard` `soundcpu` reset vector points to `$fa80` inside the mapped high-ROM window. `src/apps/player/adapters/irem_m58` registers `--system irem_m58` and alias `m58`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml`, clone-parent fallback, resident media validation, rollback-ready save-state, capability discovery, service/test input mapping, optional parity hash oracle, and real local corpus smoke for `10yard`, `10yardj`, `vs10yard`, and `vs10yardj`. Direct `mnemos_player --system irem_m58 --rom D:\emu\irem\M58\10yard.zip --screenshot build\scratch\m58_10yard.ppm --frames 60` produced a nonblank 256x256 frame, and `--system m58` save-state smoke wrote a state for `10yardj`. Remaining: replace diagnostic video/color/priority/radar assumptions with board-evidenced 10-Yard Fight behavior, finish exact MC6803 ports/timers and Irem Audio timing beyond the current first-pass latch/SSG MMIO, add board/manual-backed DIP behavior, and pin visual/audio parity hashes before calling M58 correct · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/chips/cpu/m6803/m6803.cpp` + `src/chips/cpu/m6803/tests/m6803_test.cpp` + `src/manifests/irem_m58/m58_system.cpp` + `src/manifests/irem_m58/tests/m58_system_test.cpp` + `src/manifests/irem_m58/tests/m58_rom_contract_test.cpp` + `src/apps/player/adapters/irem_m58/irem_m58_adapter.cpp` + `src/apps/player/adapters/irem_m58/tests/irem_m58_adapter_test.cpp` + `scripts/irem/run-local-corpus.ps1`
 
 ---

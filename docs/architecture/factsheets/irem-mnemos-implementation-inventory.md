@@ -25,7 +25,8 @@ items, 318 currently match a
 checked-in Mnemos Irem manifest, 172 are readable through the current ZIP,
 single-inner wrapper ZIP, or unpacked-folder media routes, 170 have an
 executable player-supported route, two are tracked contract-only routes, and
-146 are metadata-only tracked matches. The count includes `scumimon` after it
+147 are metadata-only items: 146 manifest-backed media routes plus the M58
+non-ROM artwork package. The count includes `scumimon` after it
 was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M78 now has a
 manifest-only `bj92` contract: `bj92.zip` is the contract-only route, and
 `bj92.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
@@ -41,8 +42,8 @@ items are `D:\emu\irem\M78\bj92.zip` and
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
 Another 146 tracked manifest matches remain metadata-only until converted,
-unpacked, supplied with required supplemental media, or classified as non-ROM
-artwork/layout proof.
+unpacked, or supplied with required supplemental media; the separate M58
+artwork/layout package is metadata-only non-ROM proof.
 Board-local `name-collisions` folders are skipped by both inventory and
 data-gated corpus source discovery.
 Windows copy-suffixed checked-in set ZIPs such as `loht (1).zip` are
@@ -160,9 +161,9 @@ targets:
   first-pass direct-page MC6803 MMIO instead of Z80 ports. `MNEMOS_M58_SET_DIR=D:\emu\irem\M58`
   proves the four local ZIP sets through the adapter; direct `mnemos_player
   --system irem_m58` screenshot and `--system m58` save-state smokes prove the
-  user-facing launch path. The `D:\emu\irem\M58\10yard (2).zip` artwork/layout
-  package is not ROM evidence and remains quarantined under
-  `D:\emu\irem\M58\artwork`.
+  user-facing launch path. `D:\emu\irem\M58\artwork\10yard-artwork.zip` is
+  not ROM evidence and is classified as metadata-only non-ROM artwork rather
+  than a board-family candidate.
 - M62 now has sixteen ROM-set contracts plus a first-pass player route with
   CRC-clean local wrapper-ZIP load proof, nonblank screenshot proof, and
   save-state proof. `ldrun`, `ldrun2`, `ldrun3`, and the parent-backed
