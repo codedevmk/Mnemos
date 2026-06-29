@@ -444,15 +444,15 @@ passes `1/1`, and the common local corpus runner's trailing M72 smoke now passes
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
-437 items across 24 top-level buckets. Direct files under `D:\emu\irem` are now
+437 items across 25 top-level buckets. Direct files under `D:\emu\irem` are now
 zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
 `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 308 items
-match a checked-in Irem manifest from non-ignored buckets, 167 are readable
+separates manifest tracking, media loadability, and player support: 310 items
+match a checked-in Irem manifest from non-ignored buckets, 168 are readable
 through current ZIP / single-inner-ZIP / folder routes, 167 are backed by an
-executable player-supported route, 0 are tracked contract-only, and 141 tracked
+executable player-supported route, 1 is tracked contract-only, and 142 tracked
 matches remain metadata-only until converted to ZIP/unpacked folders or, for
 artwork/layout packages, ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -517,9 +517,14 @@ untracked classifications are explicit rather than
 generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not be counted
 as missing Irem implementation targets.
+The local M119 grouping now tracks `D:\emu\irem\M119\scumimon.zip` as a
+contract-only M119 ROM-contract route and `D:\emu\irem\M119\scumimon.7z` as
+metadata-only until converted or unpacked; `scumimon` no longer appears as an
+M92 board-family candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
-M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107. The
+M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107,
+plus the M119 manifest-only data gate. The
 newest G6 high-water raises cover
 `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
@@ -1030,6 +1035,33 @@ Cabinet input note: the M107 adapter now consumes explicit frontend `service`
 and `test` inputs, keeps `mode` as the service-credit alias for older callers,
 maps service/test onto the M107 `COINS_DSW3` service-credit/operator-service
 bits, and persists explicit `service` / `test` fields in adapter state version 2.
+
+---
+
+## Irem M119 — 1 / 2
+
+This section is split from M92/M107 because `scumimon` runs on late isolated
+M119 hardware, not the V33/V35/GA20 video-game boards.
+
+#### Manifests / board bring-up
+- [x] **I119-1** Local M119 Scumimon ROM-set contract — `src/manifests/irem_m119`
+  carries a checked-in embedded ROM-contract manifest for `scumimon`, preserving
+  the local SH-3 program, uPD94244 VDP, and YMZ sample ROM filenames, region
+  sizes, offsets, even/odd VDP interleave, and CRC-32 values. `MNEMOS_M119_SET_DIR=D:\emu\irem\M119`
+  data-gates the sorted local ZIP and proves it loads CRC-clean through the
+  embedded manifest; `scripts/irem/inventory-corpus.ps1` records two tracked
+  M119 local artifacts, one ZIP contract-only route, and one metadata-only `.7z`
+  route · DONE · MED · S · beyond Emu · Evidence:
+  `src/manifests/irem_m119/games/scumimon.toml` +
+  `src/manifests/irem_m119/tests/m119_rom_contract_test.cpp` +
+  `scripts/irem/inventory-corpus.ps1`
+- [ ] **I119-2** Executable M119 board profile — missing. Mnemos has no
+  SH-3/SH7708 CPU core, no uPD94244-210 VDP model, no YMZ280B sound device, and
+  no M119 memory/I/O/timing/player adapter. Current M119 evidence is therefore
+  ROM-contract-only and must not be counted as playable or correct graphics/music
+  support · MISSING · HIGH · L · beyond Emu · Evidence:
+  `src/chips/cpu/` and `src/chips/audio/` have no SH7708/SH-3 or YMZ280B device
+  implementations.
 
 ---
 

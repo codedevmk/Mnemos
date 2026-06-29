@@ -264,6 +264,14 @@ multiple independent open-source implementations.
   timing, full V35 interrupt-controller priority/latency, GA21/GA22 video
   behavior, remaining operator I/O behavior, and visual/audio parity are proven
   from acceptable evidence.
+- **Irem M119 ROM-set metadata** — the declarative `scumimon` manifest under
+  `src/manifests/irem_m119/games/` uses public MAME M119 driver metadata for
+  the Irem M119 board classification, HD6417708S/SH7708S-class CPU note,
+  uPD94244-210 VDP and YMZ280B sound-chip classification, dump filenames,
+  offsets, interleave, region sizes, and CRC-32s. No MAME driver code or ROM
+  bytes are copied into Mnemos. Current M119 support is ROM-contract-only until
+  Mnemos implements an SH-3/SH7708 CPU core, uPD94244 VDP, YMZ280B sound path,
+  board memory/I/O/timing, and player adapter.
 - **Capcom CPS1 CPS-B config / gfx-mapper census** — each CPS1 board revision's
   CPS-B custom chip has a per-board scrambled register map (layer-control,
   priority, palette-control, layer-enable, protection ports) and a graphics-code

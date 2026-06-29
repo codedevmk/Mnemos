@@ -14,24 +14,26 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 437 local corpus items across 24 top-level buckets. Direct files
+That scan found 437 local corpus items across 25 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
-buckets such as `M72`, `M92`, `M62`, `M58`, and `travrusa`, plus quarantine or
-classification buckets such as `for-delete` and `non-irem`. The
+buckets such as `M72`, `M92`, `M119`, `M62`, `M58`, and `travrusa`, plus
+quarantine or classification buckets such as `for-delete` and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 308 currently match a
-checked-in Mnemos Irem manifest, 167 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 167 have an
-executable player-supported route. M57 now has a first-pass New Tropical Angel
+not yet map it to a numbered M-board. Of those 437 items, 310 currently match a
+checked-in Mnemos Irem manifest, 168 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, 167 have an
+executable player-supported route, one is a tracked contract-only route, and
+142 are metadata-only tracked matches. The count includes `scumimon` after it
+was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
 player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
-remain metadata-only until converted or unpacked. No tracked local item is
-currently contract-only; ignored
+remain metadata-only until converted or unpacked. The only tracked
+contract-only local item is `D:\emu\irem\M119\scumimon.zip`; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
-Another 141 tracked manifest matches remain metadata-only until converted,
+Another 142 tracked manifest matches remain metadata-only until converted,
 unpacked, supplied with required supplemental media, or classified as non-ROM
 artwork/layout proof.
 Board-local `name-collisions` folders are skipped by both inventory and
@@ -57,11 +59,12 @@ untracked corpus classifications remain explicit: `headon` and
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
 M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84,
-M85, M90, M92, and M107. For
+M85, M90, M92, and M107, plus the M119 manifest-only contract gate. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests;
 M92 also includes the M107 folder as supplemental media for the local
-Dream Soccer '94 Japan M92 hardware split set.
+Dream Soccer '94 Japan M92 hardware split set, and M119 wires the sorted
+`D:\emu\irem\M119` bucket for the `scumimon` ROM contract.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
 proof.
 
@@ -106,7 +109,7 @@ proof.
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
 | M92 | `irem_m92` | 68% first-pass | `bmaster`, `crossbld`, `dsoccr94j`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `psoldier`, `rtypeleo`, `rtypeleoj`, `ssoldier`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, `uccopsu` | all 36 data-gated first-pass sets; Blade Master Japan, Dream Soccer '94 Japan M92 hardware with explicit `dsoccr94.zip` supplemental media, Geostorm, Hook Japan, In the Hunt US/Japan/Korea, GunForce, League-Man, Lethal Thunder/Thunder Blaster, Major Title 2, Mystic Riders, Ninja Baseball Bat Man, R-Type Leo, Superior/Perfect Soldiers, and Undercover Cops nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
-| M119 | none | 0% | None | None | None | Sparse-board research before implementation |
+| M119 | `irem_m119` manifest-only | 3% | `scumimon` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement SH-3/SH7708, uPD94244-210 VDP, YMZ280B sound, board I/O/timing, and player adapter |
 
 ## Correct Graphics And Music Certification
 
@@ -906,11 +909,19 @@ visual and audio parity proof.
 
 ### M119
 
-- **Techsheet games:** none confidently listed.
-- **Mnemos games:** none.
+- **Techsheet games:** Slotters Club: Umi Monogatari (`scumimon`).
+- **Mnemos games:** `scumimon` as a checked-in manifest-only ROM contract under
+  `src/manifests/irem_m119`.
 - **Smoke playable:** none.
 - **Correct gfx/music:** none.
-- **Remaining:** sparse-board research before implementation.
+- **Local corpus note:** `D:\emu\irem\M119` now holds `scumimon.zip` and
+  `scumimon.7z`; the ZIP is a tracked contract-only route and the `.7z` archive
+  remains metadata-only until converted or unpacked. The M119 contract verifies
+  the SH-3 program, UPD94244 VDP, and YMZ sample ROM filenames, sizes, offsets,
+  interleave, and CRC-32 values.
+- **Remaining:** implement the SH-3/SH7708 CPU family, uPD94244-210 video path,
+  YMZ280B audio, M119 memory/I/O/timing, and a player adapter before any
+  Scumimon runtime or correctness claim.
 
 ## Immediate Closure Candidates
 

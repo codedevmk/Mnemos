@@ -39,7 +39,7 @@ is uncertain rather than assert it.
 | M97 / M99 | 1992–1993 | NEC V35 (M90 variants) | (sparse) |
 | M92 | 1991–1994 | NEC V33 + V35 | Gunforce, Lethal Thunder / Thunder Blaster, In the Hunt, R-Type Leo |
 | M107 | 1993–1995 | NEC V33 + V35 | Fire Barrel, Dream Soccer '94 |
-| M119 | ~2000 | (sparse / isolated) | — |
+| M119 | ~2000 | HD6417708S / SH-3-class, sparse isolated board | Slotters Club: Umi Monogatari |
 
 ---
 
@@ -285,9 +285,14 @@ era, but CPU family alone is not sufficient board proof.
 
 ### M119
 - **Years:** ~2000
-- **Notes:** A very late, isolated entry in the board sequence with minimal public
-  documentation, well after Irem's main arcade run. No confident CPU/sound/title
-  attribution — listed for completeness only.
+- **Main CPU:** HD6417708S / SH7708S-class SH-3, 60 MHz in public driver metadata
+- **Video:** NEC uPD94244-210 VDP (not yet emulated upstream)
+- **Sound:** YMZ280B sample player
+- **Notable titles:** Slotters Club: Umi Monogatari (`scumimon`)
+- **Notes:** A very late, isolated gambling/slot board entry, well after Irem's
+  main arcade video-game run. Current public M119 driver metadata marks the set
+  not working and no-sound, so Mnemos treats it as a ROM-contract/classification
+  target until SH-3, uPD94244, and YMZ280B support exist.
 
 ---
 
