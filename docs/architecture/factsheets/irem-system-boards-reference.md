@@ -10,8 +10,8 @@ they were concurrent sister boards, not sequential generations.
 
 **Confidence note:** the high-volume boards (M62, M72, M81/82/84/85, M90, M92,
 M107) are well-documented and cross-verified. The sparse boards (M14, M27, M47,
-M57, M63, M77, M97, M99, M119) have thin public documentation; entries flag what
-is uncertain rather than assert it.
+M57, M63, M77, M97, M99, M102, M119) have thin public documentation; entries
+flag what is uncertain rather than assert it.
 
 ---
 
@@ -39,6 +39,7 @@ is uncertain rather than assert it.
 | M78 | 1992 | Z80 + Z80, sparse gambling/satellite board | Black Jack |
 | M97 / M99 | 1992–1993 | NEC V35 (M90 variants) | (sparse) |
 | M92 | 1991–1994 | NEC V33 + V35 | Gunforce, Lethal Thunder / Thunder Blaster, In the Hunt, R-Type Leo |
+| M102 | 1992 | NEC D70008AC / Z80-class, electromechanical medal board, GA20 samples | Hill Climber |
 | M107 | 1993–1995 | NEC V33 + V35 | Fire Barrel, Dream Soccer '94 |
 | M119 | ~2000 | HD6417708S / SH-3-class, sparse isolated board | Slotters Club: Umi Monogatari |
 
@@ -288,6 +289,19 @@ era, but CPU family alone is not sufficient board proof.
   Mystic Riders, Major Title 2, Hook, Superior/Perfect Soldiers, Gunforce 2
 - **Notes:** Irem's mature 16-bit platform. The GA20 PCM chip replaces the older
   ADPCM approach and becomes the house sample engine through the end.
+
+### M102
+- **Years:** 1992
+- **Main CPU:** NEC D70008AC / Z80-class CPU at 3.579545 MHz in current public
+  driver metadata
+- **Sound:** Irem GA20 sample player; current public metadata still marks sound
+  not working
+- **Notable titles:** Hill Climber (`hclimber`)
+- **Notes:** Sparse electromechanical medal-game board with two DIP banks,
+  medal/connector-heavy I/O, and required external artwork/mechanical state.
+  Current public driver metadata marks the set not working, no-sound, and
+  requiring artwork, so Mnemos treats M102 as a ROM-contract/classification
+  target until the board I/O, GA20 route, artwork, and mechanical model exist.
 
 ### M107
 - **Years:** 1993–1995

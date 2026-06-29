@@ -16,32 +16,36 @@ scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\
 
 That scan found 438 local corpus items across 24 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
-buckets such as `M72`, `M92`, `M119`, `M62`, `M58`, and `M52`, plus quarantine
+buckets such as `M72`, `M92`, `M102`, `M119`, `M62`, `M58`, and `M52`, plus quarantine
 or classification buckets such as `for-delete` and `non-irem`. The Traverse
 USA / Zippy Race files now live under the M52-era corpus bucket; Mnemos still
 treats them as a separate `irem_travrusa` first-pass profile because the
 factsheet does not yet map the family to a numbered M-board. Of those 438
-items, 318 currently match a
-checked-in Mnemos Irem manifest, 172 are readable through the current ZIP,
+items, 320 currently match a
+checked-in Mnemos Irem manifest, 173 are readable through the current ZIP,
 single-inner wrapper ZIP, or unpacked-folder media routes, 170 have an
-executable player-supported route, two are tracked contract-only routes, and
-147 are metadata-only items: 146 manifest-backed media routes plus the M58
+executable player-supported route, three are tracked contract-only routes, and
+148 are metadata-only items: 147 manifest-backed media routes plus the M58
 non-ROM artwork package. The count includes `scumimon` after it
-was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M78 now has a
+was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`, and it includes the new
+M102 `hclimber` contract under `D:\emu\irem\M102`. M78 now has a
 manifest-only `bj92` contract: `bj92.zip` is the contract-only route, and
-`bj92.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
+`bj92.7z` remains metadata-only until converted or unpacked. M102 now has a
+manifest-only `hclimber` contract: `hclimber.zip` is the contract-only route,
+and `hclimber.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
 player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
 remain metadata-only until converted or unpacked. M82 now includes
 `dkgensanm82`: the local split ZIP is metadata-only, the standalone `.7z` was
 unpacked to `D:\emu\irem\M82\dkgensanm82`, and the unpacked folder plus `.7z`
-count as the two loadable tracked routes. The two tracked contract-only local
-items are `D:\emu\irem\M78\bj92.zip` and
+count as the two loadable tracked routes. The three tracked contract-only local
+items are `D:\emu\irem\M78\bj92.zip`,
+`D:\emu\irem\M102\hclimber.zip`, and
 `D:\emu\irem\M119\scumimon.zip`; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
-Another 146 tracked manifest matches remain metadata-only until converted,
+Another 147 tracked manifest matches remain metadata-only until converted,
 unpacked, or supplied with required supplemental media; the separate M58
 artwork/layout package is metadata-only non-ROM proof.
 Board-local `name-collisions` folders are skipped by both inventory and
@@ -67,12 +71,13 @@ untracked corpus classifications remain explicit: `headon` and
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
 M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84,
-M85, M90, M92, and M107, plus the M78 and M119 manifest-only contract gates. For
+M85, M90, M92, and M107, plus the M78, M102, and M119 manifest-only contract gates. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests;
 M92 also includes the M107 folder as supplemental media for the local
-Dream Soccer '94 Japan M92 hardware split set, and M119 wires the sorted
-`D:\emu\irem\M119` bucket for the `scumimon` ROM contract.
+Dream Soccer '94 Japan M92 hardware split set, while M102 and M119 wire the
+sorted `D:\emu\irem\M102` and `D:\emu\irem\M119` buckets for the `hclimber`
+and `scumimon` ROM contracts.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
 proof.
 
@@ -117,6 +122,7 @@ proof.
 | M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
 | M92 | `irem_m92` | 68% first-pass | `bmaster`, `crossbld`, `dsoccr94j`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `psoldier`, `rtypeleo`, `rtypeleoj`, `ssoldier`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, `uccopsu` | all 36 data-gated first-pass sets; Blade Master Japan, Dream Soccer '94 Japan M92 hardware with explicit `dsoccr94.zip` supplemental media, Geostorm, Hook Japan, In the Hunt US/Japan/Korea, GunForce, League-Man, Lethal Thunder/Thunder Blaster, Major Title 2, Mystic Riders, Ninja Baseball Bat Man, R-Type Leo, Superior/Perfect Soldiers, and Undercover Cops nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
+| M102 | `irem_m102` manifest-only | 3% | `hclimber` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement the NEC D70008AC/Z80-class board profile, GA20 runtime path, medal/mechanical I/O, artwork/mechanical model, DIP behavior, and player adapter |
 | M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | `irem_m119` manifest-only | 3% | `scumimon` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement SH-3/SH7708, uPD94244-210 VDP, YMZ280B sound, board I/O/timing, and player adapter |
 
@@ -916,6 +922,26 @@ visual and audio parity proof.
   cycle-exact V35 interrupt latency, exact GA20/YM2151 sound protocol,
   GA21/GA22 video/priority behavior, exact memory/I/O maps, protection details,
   DIP/raster behavior, and visual/audio parity proof.
+
+### M102
+
+- **Techsheet games:** Hill Climber (`hclimber`).
+- **Mnemos games:** `hclimber` as a checked-in manifest-only ROM contract under
+  `src/manifests/irem_m102`.
+- **Smoke playable:** none. `MNEMOS_M102_SET_DIR=D:\emu\irem\M102` data-gates the
+  local `hclimber.zip` route and proves the program ROM, GA20 sample ROMs, and
+  explicit zero-filled no-dump PAL placeholder region load CRC-clean, but no
+  executable board/player route exists.
+- **Correct gfx/music:** none.
+- **Local corpus note:** `D:\emu\irem\M102` holds `hclimber.zip` and
+  `hclimber.7z`; the ZIP is a tracked contract-only route and the `.7z` archive
+  remains metadata-only until converted or unpacked. The M102 contract also
+  asserts the public note that the upper half of `hc-pr-c.ic23` is blank
+  (`0xff`) rather than executable code.
+- **Remaining:** implement the NEC D70008AC/Z80-class board profile, exact
+  memory/I/O and two DIP banks, GA20 audio runtime path, electromechanical
+  medal I/O, artwork/mechanical model, and player adapter before any Hill
+  Climber runtime or correctness claim.
 
 ### M107
 

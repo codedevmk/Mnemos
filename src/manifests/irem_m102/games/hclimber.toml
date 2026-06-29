@@ -1,0 +1,46 @@
+# Hill Climber -- Irem M102 ROM contract.
+# Manifest-only local corpus contract. Public M102 metadata marks this
+# electromechanical medal-game board not working, no-sound, and requiring
+# artwork: Mnemos has no D70008AC/Z80-compatible board route, GA20 audio path,
+# medal I/O model, or mechanical/artwork runtime for this board yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "hclimber"
+board       = "irem_m102"
+orientation = "horizontal"
+players     = 2
+sound       = "ga20_manifest_only"
+
+[[region]]
+name = "maincpu"
+size = 0x020000
+
+[[region.file]]
+name   = "hc-pr-c.ic23"
+offset = 0x000000
+size   = 0x020000
+crc32  = 0x0b91671b
+
+[[region]]
+name = "ga20"
+size = 0x100000
+
+[[region.file]]
+name   = "hc-v0-.ic13"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0x1658e7b5
+
+[[region.file]]
+name   = "hc-v1-.ic14"
+offset = 0x080000
+size   = 0x080000
+crc32  = 0xae505c2e
+
+[[region]]
+name = "plds"
+size = 0x000200
+fill = 0x00
+# Public metadata lists no-dump PAL placeholder m102-c_pal.ic33 at 0x000,
+# size 0x104. Keep the region explicit and empty rather than inventing bytes.

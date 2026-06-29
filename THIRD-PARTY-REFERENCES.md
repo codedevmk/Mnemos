@@ -265,6 +265,14 @@ multiple independent open-source implementations.
   are copied into Mnemos. Current M92 execution remains diagnostic rather than
   parity-authentic until encrypted V35 sound and GA21/GA22 video behavior are
   implemented from acceptable evidence.
+- **Irem M102 ROM-set metadata** — the declarative `hclimber` manifest under
+  `src/manifests/irem_m102/games/` uses public MAME M102 driver metadata for
+  the Irem M102 board classification, NEC D70008AC/Z80-class CPU note, GA20
+  sample-region grouping, dump filenames, offsets, region sizes, CRC-32s, and
+  the public no-dump PAL placeholder. No MAME driver code or ROM bytes are
+  copied into Mnemos. Current M102 support is ROM-contract-only until Mnemos
+  implements the sparse electromechanical board I/O, GA20 runtime path,
+  artwork/mechanical model, and player adapter.
 - **Irem M107 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m107/games/` use public MAME M107 driver metadata for dump
   filenames, offsets, boot-vector coverage, region sizes, CRC-32s, cabinet

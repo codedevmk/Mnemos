@@ -449,11 +449,11 @@ zero; ROM evidence is sorted into board/system buckets, while `for-delete` and
 `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
-separates manifest tracking, media loadability, and player support: 318 items
-match a checked-in Irem manifest from non-ignored buckets, 172 are readable
+separates manifest tracking, media loadability, and player support: 320 items
+match a checked-in Irem manifest from non-ignored buckets, 173 are readable
 through current ZIP / single-inner-ZIP / folder routes, 170 are backed by an
-executable player-supported route, 2 are tracked contract-only, and 147 items
-are metadata-only: 146 manifest-backed routes awaiting ZIP/unpacked folders or
+executable player-supported route, 3 are tracked contract-only, and 148 items
+are metadata-only: 147 manifest-backed routes awaiting ZIP/unpacked folders or
 supplemental media, plus one M58 artwork package ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
 as `rtypeleo (1).zip` and `travrusa.zip` no longer count as direct ROM-loadable
@@ -529,10 +529,14 @@ The local M78 grouping now tracks `D:\emu\irem\M78\bj92.zip` as a
 contract-only M78 ROM-contract route and `D:\emu\irem\M78\bj92.7z` as
 metadata-only until converted or unpacked; `bj92` no longer appears as an M78
 board-family candidate.
+The local M102 grouping now tracks `D:\emu\irem\M102\hclimber.zip` as a
+contract-only M102 ROM-contract route and `D:\emu\irem\M102\hclimber.7z` as
+metadata-only until converted or unpacked; `hclimber` no longer appears as an
+M102 board-family candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
 M57, M58, M62, M63, travrusa, M72, M75, M81, M82, M84, M85, M90, M92, and M107,
-plus the M78 and M119 manifest-only data gates. The
+plus the M78, M102, and M119 manifest-only data gates. The
 newest G6 high-water raises cover
 `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M81-CORPUS`,
 `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
@@ -1077,6 +1081,33 @@ Cabinet input note: the M107 adapter now consumes explicit frontend `service`
 and `test` inputs, keeps `mode` as the service-credit alias for older callers,
 maps service/test onto the M107 `COINS_DSW3` service-credit/operator-service
 bits, and persists explicit `service` / `test` fields in adapter state version 2.
+
+---
+
+## Irem M102 — 1 / 2
+
+This section is split from M92/M107 because `hclimber` is a sparse
+electromechanical medal-game board, not a V33/V35 video-game platform.
+
+#### Manifests / board bring-up
+- [x] **I102-1** Local M102 Hill Climber ROM-set contract — `src/manifests/irem_m102`
+  carries a checked-in embedded ROM-contract manifest for `hclimber`, preserving
+  the local D70008AC/Z80-class program ROM filename, GA20 sample ROM filenames,
+  region sizes, offsets, CRC-32 values, the blank upper half of `hc-pr-c.ic23`,
+  and the public no-dump PAL placeholder as an explicit zero-filled region.
+  `MNEMOS_M102_SET_DIR=D:\emu\irem\M102` data-gates the sorted local ZIP and
+  proves it loads CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1`
+  records two tracked M102 local artifacts, one ZIP contract-only route, and one
+  metadata-only `.7z` route · DONE · MED · S · beyond Emu · Evidence:
+  `src/manifests/irem_m102/games/hclimber.toml` +
+  `src/manifests/irem_m102/tests/m102_rom_contract_test.cpp` +
+  `scripts/irem/inventory-corpus.ps1`
+- [ ] **I102-2** Executable M102 board profile — missing. Mnemos has no M102
+  electromechanical board route, no medal/connector I/O model, no artwork or
+  mechanical runtime, and no M102 player adapter. Current M102 evidence is
+  therefore ROM-contract-only and must not be counted as playable or correct
+  graphics/music support · MISSING · HIGH · L · beyond Emu · Evidence:
+  `src/manifests/irem_m102` contains only manifest contract files.
 
 ---
 
