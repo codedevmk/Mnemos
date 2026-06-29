@@ -881,6 +881,14 @@ namespace mnemos::chips::audio {
         constexpr std::int32_t mix_bus_limit = 0x1FFFFFFF;
         constexpr std::int32_t echo_bus_scale = 1 << 14;
         constexpr std::int32_t pre_filter_scale = 4;
+        // The pre-filtered mix bus is a 32-bit accumulator; reduce it to the 16-bit
+        // FIR input, then (after the delay sum) round the Q14 result to the nearest
+        // 1<<14 and normalise. The mask clears exactly the low bits the shift drops;
+        // it mirrors the DL-1425's round-then-truncate output step.
+        constexpr int mix_to_fir_shift = 16;
+        constexpr std::int32_t output_q14_round = 0x2000; // half of 1<<14
+        constexpr std::int32_t output_q14_mask = 0x3FFF;  // (1<<14) - 1
+        constexpr int output_q14_shift = 14;
         const std::int16_t echo_output = echo(echo_input);
         for (std::uint8_t ch = 0; ch < 2U; ++ch) {
             std::int32_t wet =
@@ -899,17 +907,17 @@ namespace mnemos::chips::audio {
             dry = clamp_i32(dry, -mix_bus_limit, mix_bus_limit) * pre_filter_scale;
             wet = clamp_i32(wet, -mix_bus_limit, mix_bus_limit) * pre_filter_scale;
 
-            wet = fir(filter_[ch], static_cast<std::int16_t>(wet >> 16));
+            wet = fir(filter_[ch], static_cast<std::int16_t>(wet >> mix_to_fir_shift));
             if (state_ == state_normal2) {
-                dry = fir(alt_filter_[ch], static_cast<std::int16_t>(dry >> 16));
+                dry = fir(alt_filter_[ch], static_cast<std::int16_t>(dry >> mix_to_fir_shift));
             }
 
             std::int32_t output = delay(wet_[ch], wet) + delay(dry_[ch], dry);
-            output = (output + 0x2000) & ~0x3FFF;
+            output = (output + output_q14_round) & ~output_q14_mask;
             if (ch == 0U) {
-                last_l_ = clamp_i16(output >> 14);
+                last_l_ = clamp_i16(output >> output_q14_shift);
             } else {
-                last_r_ = clamp_i16(output >> 14);
+                last_r_ = clamp_i16(output >> output_q14_shift);
             }
 
             if (delay_update_ != 0U) {
