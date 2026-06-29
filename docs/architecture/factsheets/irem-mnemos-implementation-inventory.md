@@ -1,6 +1,6 @@
 # Irem Mnemos Implementation Inventory
 
-Generated on 2026-06-28 from the Irem board factsheet and the current
+Generated on 2026-06-29 from the Irem board factsheet and the current
 `feature/irem-arcade` worktree.
 
 Primary board taxonomy source:
@@ -20,9 +20,9 @@ buckets such as `M72`, `M92`, `M62`, `M58`, and `travrusa`, plus quarantine or
 classification buckets such as `for-delete`, `misc`, and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 267 currently match a
-checked-in Mnemos Irem manifest, 157 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 157 have an
+not yet map it to a numbered M-board. Of those 437 items, 273 currently match a
+checked-in Mnemos Irem manifest, 150 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 150 have an
 executable player-supported route. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
@@ -43,11 +43,12 @@ while `panther.7z` remains metadata-only until converted or unpacked. The M47 bu
 first-pass player route for `olibochu` and `punchkid`: two local ZIP routes count
 as supported, while `punchkid.7z` remains metadata-only until converted or
 unpacked. The `travrusa` bucket has checked-in contracts and a first-pass player
-route for `travrusa`, `motorace`, `travrusab`, and `travrusab2`; five local
-travrusa ZIP routes count as supported, while the two `.7z` archives remain
-metadata-only until converted or unpacked. The unsuffixed `travrusa.zip` is
-artwork/layout, so the CRC-clean parent proof comes from the copy-suffixed ROM
-ZIP. Known untracked corpus classifications remain explicit: `headon` and
+route for `travrusa`, `motorace`, `travrusab`, and `travrusab2`; four local
+travrusa ZIP routes count as supported, while the two `.7z` archives and the
+unsuffixed artwork/layout `travrusa.zip` remain metadata-only for ROM support
+accounting. Artwork/layout-only ZIPs are classified as
+`non_rom_artwork_package` and do not count as player-loadable ROM proof. Known
+untracked corpus classifications remain explicit: `headon` and
 `uniwars` / `uniwarsa` are non-Irem reference sets from `sega/vicdual.cpp` and
 `galaxian/galaxian.cpp`.
 The common data-gated runner now includes the M57 and M63 player corpus proofs
@@ -98,7 +99,7 @@ proof.
 | M84 | `irem_m84` wrapper | 48% | `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`, `hharryu`, `kengo`, `kengoj`, `ltswords` | all 9 checked-in M84 sets; Daiku no Gensan and Ken-Go split-clone parent fallback; V30/V35 CPU profile proof; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords`/Ken-Go PROM/PLD artifacts |
 | M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
-| M92 | `irem_m92` | 45% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `thndblst` | all 17 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Lethal Thunder/Thunder Blaster, Mystic Riders, and Ninja Baseball Bat Man nonblank/save-state data-gated smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
+| M92 | `irem_m92` | 47% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `rtypeleo`, `rtypeleoj`, `thndblst` | all 19 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Lethal Thunder/Thunder Blaster, Mystic Riders, Ninja Baseball Bat Man, and R-Type Leo parent/Japan nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
@@ -480,7 +481,7 @@ visual and audio parity proof.
   metadata.
 - **Mnemos games:** first-pass ROM manifests and player route for `travrusa`,
   `motorace`, `travrusab`, and `travrusab2`.
-- **Smoke playable:** five local ZIP routes under `D:\emu\irem\travrusa` are
+- **Smoke playable:** four local ROM ZIP routes under `D:\emu\irem\travrusa` are
   data-gated through `MNEMOS_TRAVRUSA_SET_DIR`. Direct player proof includes
   `mnemos_player --system irem_travrusa --rom "D:\emu\irem\travrusa\travrusa (1).zip"
   --frames 60 --screenshot build\scratch\travrusa_parent.ppm`, which wrote a
@@ -488,7 +489,8 @@ visual and audio parity proof.
   "D:\emu\irem\travrusa\travrusab.zip" --frames 60 --save-state
   build\scratch\travrusab.mstate`, which wrote a save state. The large
   unsuffixed `travrusa.zip` in that folder is artwork/layout, not the parent ROM
-  dump; the CRC-clean parent ROM proof comes from the copy-suffixed ZIP.
+  dump; it is metadata-only for support accounting, and the CRC-clean parent ROM
+  proof comes from the copy-suffixed ZIP.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_travrusa` preserves the
   `maincpu`, `soundcpu`, `tiles`, `sprites`, and `proms` region placement and
@@ -788,14 +790,16 @@ visual and audio parity proof.
 - **Mnemos games:** `bmaster`, `crossbld`, `geostorm`, `gunforce`,
   `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`,
   `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`,
-  and `thndblst`
+  `rtypeleo`, `rtypeleoj`, and `thndblst`
   as checked-in manifests under `irem_m92`.
-- **Smoke playable:** all seventeen local wrapper ZIPs load through `--system
-  irem_m92`/the M92 adapter data gate, step one frame, produce a 320x240
+- **Smoke playable:** all nineteen checked-in M92 manifests load through
+  `--system irem_m92`/the M92 adapter data gate, step one frame, produce a 320x240
   nonblank diagnostic frame, and produce save-state bytes. `crossbld`,
   `geostorm`, `inthuntu`, `gunforcej`, `gunforceu`, `mysticri`, `gunhohki`,
   `mysticrib`, `nbbatman`, and `nbbatmanu` also have direct `mnemos_player`
-  screenshot/save-state smokes.
+  screenshot/save-state smokes. `rtypeleo.zip` and split-clone
+  `rtypeleoj.zip` now have direct `mnemos_player --system irem_m92` proof:
+  320x240 nonblank PPMs after 60 frames and save-state containers.
 - **Correct gfx/music:** not certified. Current video is a diagnostic
   region/RAM/PLD-driven first-pass compositor. Current sound proves the
   YM2151/GA20 shell, synthetic GA20 MMIO, and a synthetic V33-to-V35
@@ -809,19 +813,21 @@ visual and audio parity proof.
   `soundcpu_opcodes` decrypted V35 opcode image while data reads still see the
   raw encrypted `soundcpu` ROM. This is still not the proprietary M92 V35
   decrypt transform/key, cycle-exact interrupt latency, or audio parity.
-- **Local corpus note:** seventeen local M92-era title-wrapper ZIPs now resolve to
-  embedded set IDs and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
+- **Local corpus note:** the current `D:\emu\irem\M92` bucket has 47 tracked
+  M92 manifest-name matches, 20 direct player-loadable/supported ZIP routes,
+  and 27 metadata-only routes, including `.7z` archives and artwork/layout
+  packages. Nineteen checked-in M92-era set IDs now resolve to embedded
+  manifests and load CRC-clean through `MNEMOS_M92_SET_DIR`: Blade Master
   parent/Japan clone (`bmaster`, `crossbld`), Gunforce parent
   (`gunforce`), Gunforce Japan/US split clones (`gunforcej`, `gunforceu`) via
   parent fallback, Gunforce 2 / Geostorm (`gunforc2`, `geostorm`), Hook
   (`hook`), In the Hunt parent/US clone (`inthunt`, `inthuntu`), Lethal Thunder
   parent/Japan clone (`lethalth`, `thndblst`) via parent fallback, Mystic Riders
   (`mysticri`), Gun Hohki (`gunhohki`), the Mystic Riders split bootleg route
-  (`mysticrib`), Ninja Baseball Bat Man (`nbbatman`), and the US split clone
-  (`nbbatmanu`) via parent fallback. In the current sorted corpus, older M92
-  routes live under
-  `D:\emu\irem\M72` while the Mystic Riders and Ninja Baseball wrappers live at
-  `D:\emu\irem`; both are storage artifacts rather than board proof.
+  (`mysticrib`), Ninja Baseball Bat Man (`nbbatman`), the US split clone
+  (`nbbatmanu`) via parent fallback, and R-Type Leo parent/Japan clone
+  (`rtypeleo`, `rtypeleoj`) via parent fallback. `rtypeleo (1).zip` is an
+  artwork/layout package and is tracked as metadata-only, not as ROM proof.
 - **Remaining:** derive/verify the proprietary M92 V35 decrypt transform/key,
   cycle-exact V35 interrupt latency, exact GA20/YM2151 sound protocol,
   GA21/GA22 video/priority behavior, exact memory/I/O maps, protection details,

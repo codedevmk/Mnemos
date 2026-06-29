@@ -1,0 +1,160 @@
+# R-Type Leo (World) -- Irem M92-C-N set.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "rtypeleo"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rtl_-h0-c.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x5fef7fa1
+
+[[region.file]]
+name   = "rtl_-l0-c.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x8156456b
+
+[[region.file]]
+name   = "rtl_-h1-.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x352ff444
+
+[[region.file]]
+name   = "rtl_-l1-.ic26"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0xfd34ea46
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "rtl_-sh0-a.ic14"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xe518b4e3
+
+[[region.file]]
+name   = "rtl_-sl0-a.ic17"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x896f0d36
+
+[[region]]
+name = "tiles"
+size = 0x200000
+
+[[region.file]]
+name   = "rtl_-c0-.ic9"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0xfb588d7c
+
+[[region.file]]
+name   = "rtl_-c1-.ic10"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xe5541bff
+
+[[region.file]]
+name   = "rtl_-c2-.ic11"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0xfaa9ae27
+
+[[region.file]]
+name   = "rtl_-c3-.ic12"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0x3a2343f6
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "rtl_-000-.ic38"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x82a06870
+
+[[region.file]]
+name   = "rtl_-010-.ic39"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x417e7a56
+
+[[region.file]]
+name   = "rtl_-020-.ic40"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0xf9a3f3a1
+
+[[region.file]]
+name   = "rtl_-030-.ic41"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x03528d95
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "rtl_-da-.ic8"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0xdbebd1ff
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_c-2l-.ic7"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x67a4cc04
+
+[[region.file]]
+name   = "m92_c-7h-c.ic43"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0xebea28fe

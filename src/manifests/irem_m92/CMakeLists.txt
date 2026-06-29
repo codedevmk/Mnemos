@@ -15,6 +15,8 @@ set(_irem_m92_game_manifest_files
     "games/mysticrib.toml"
     "games/nbbatman.toml"
     "games/nbbatmanu.toml"
+    "games/rtypeleo.toml"
+    "games/rtypeleoj.toml"
     "games/thndblst.toml"
 )
 set(MNEMOS_IREM_M92_GAME_MANIFEST_COUNT 0)

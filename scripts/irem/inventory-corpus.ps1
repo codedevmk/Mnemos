@@ -187,6 +187,32 @@ function Get-ArchiveEntries {
     return @($output | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 }
 
+function Test-NonRomArtworkPackage {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Entries)
+
+    $fileEntries = @($Entries | Where-Object { $_ -notmatch '[\\/]$' })
+    if ($fileEntries.Count -eq 0) {
+        return $false
+    }
+
+    $nonRomExtensions = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($extension in @(
+            ".lay", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp",
+            ".txt", ".nfo", ".ini", ".cfg", ".json", ".xml", ".html", ".htm",
+            ".pdf", ".md", ".rtf")) {
+        [void]$nonRomExtensions.Add($extension)
+    }
+
+    foreach ($entry in $fileEntries) {
+        $extension = [System.IO.Path]::GetExtension($entry)
+        if ([string]::IsNullOrWhiteSpace($extension) -or -not $nonRomExtensions.Contains($extension)) {
+            return $false
+        }
+    }
+    return $true
+}
+
 function Get-SetIdFromPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -412,6 +438,9 @@ function Get-LoadReadiness {
     if ($LoadableByMnemos) {
         return "direct_player_loadable"
     }
+    if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_artwork") {
+        return "metadata_only_non_rom_artwork"
+    }
     if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_7z") {
         return "metadata_only_unpack_or_repack"
     }
@@ -451,6 +480,9 @@ function Get-InventoryNextAction {
     }
     if ($LoadableByMnemos) {
         return "player_loadable"
+    }
+    if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_artwork") {
+        return "ignore_or_move_artwork_package"
     }
     if ($TrackedByMnemos -and $LoadRoute -eq "metadata_only_7z") {
         return "convert_or_unpack_for_player_load"
@@ -505,6 +537,7 @@ function New-ArchiveItem {
         Where-Object { $_ -match '\.(zip|7z)$' } |
         ForEach-Object { [System.IO.Path]::GetFileName($_) } |
         Sort-Object -Unique)
+    $artworkOnlyArchive = Test-NonRomArtworkPackage -Entries $entries
     $setId = Get-SetIdFromPath -Path $File.FullName -NestedArchives $nestedArchives
     $m14Match = $M14ManifestIds.Contains($setId)
     $m15Match = $M15ManifestIds.Contains($setId)
@@ -527,14 +560,22 @@ function New-ArchiveItem {
     $travrusaMatch = $TravrusaManifestIds.Contains($setId)
     $ignoredBucket = Test-IgnoredCorpusBucket -Bucket $Bucket
     $trackedMatch = -not $ignoredBucket -and ($m14Match -or $m15Match -or $m27Match -or $m47Match -or $m52Match -or $m57Match -or $m58Match -or $m62Match -or $m63Match -or $m72Match -or $m75Match -or $m81Match -or $m82Match -or $m84Match -or $m85Match -or $m90Match -or $m92Match -or $m107Match -or $travrusaMatch)
-    $loadRoute = Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
+    $loadRoute = if ($artworkOnlyArchive) {
+        "metadata_only_artwork"
+    } else {
+        Get-LoadRouteForItem -Kind "archive" -Extension $File.Extension -NestedArchives $nestedArchives
+    }
     $contractOnly = $false
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -M47Match $m47Match -M52Match $m52Match -M57Match $m57Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M85Match $m85Match -M90Match $m90Match -M92Match $m92Match -M107Match $m107Match -TravrusaMatch $travrusaMatch
     $manifestParent = Get-ManifestParentForSet -SetId $setId
     $boardCandidateFamily = Get-BoardCandidateFamily -Bucket $Bucket -TrackedByMnemos $trackedMatch
-    $archiveComposition = Get-ArchiveComposition -Kind "archive" -Extension $File.Extension -EntryCount $entries.Count -NestedArchives $nestedArchives
+    $archiveComposition = if ($artworkOnlyArchive) {
+        "non_rom_artwork_package"
+    } else {
+        Get-ArchiveComposition -Kind "archive" -Extension $File.Extension -EntryCount $entries.Count -NestedArchives $nestedArchives
+    }
     $knownClassification = Get-KnownCorpusClassification -SetId $setId
     $defaultNextAction = Get-InventoryNextAction -TrackedByMnemos $trackedMatch -ContractOnly $contractOnly -LoadableByMnemos $loadableByMnemos -LoadRoute $loadRoute -BoardCandidateFamily $boardCandidateFamily
 
@@ -873,7 +914,7 @@ $bucketRows = @($items |
             supported_by_mnemos = @($groupItems | Where-Object { $_.supported_by_mnemos }).Count
             unsupported_by_mnemos = @($groupItems | Where-Object { -not $_.supported_by_mnemos }).Count
             contract_only_tracked = @($groupItems | Where-Object { $_.load_readiness -eq "tracked_contract_only" }).Count
-            metadata_only_tracked = @($groupItems | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
+            metadata_only_tracked = @($groupItems | Where-Object { $_.load_readiness -like "metadata_only*" }).Count
             clone_items = @($groupItems | Where-Object { $_.set_role -eq "clone_declares_parent" }).Count
             parent_or_standalone_items = @($groupItems | Where-Object { $_.set_role -eq "parent_or_standalone" }).Count
         }
@@ -933,7 +974,7 @@ $trackedSetRows = @($items |
             item_count = $groupItems.Count
             direct_player_loadable_count = @($groupItems | Where-Object { $_.load_readiness -eq "direct_player_loadable" }).Count
             contract_only_count = @($groupItems | Where-Object { $_.load_readiness -eq "tracked_contract_only" }).Count
-            metadata_only_count = @($groupItems | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
+            metadata_only_count = @($groupItems | Where-Object { $_.load_readiness -like "metadata_only*" }).Count
             buckets = @($groupItems | Select-Object -ExpandProperty bucket -Unique)
             load_routes = @($groupItems | Select-Object -ExpandProperty load_route -Unique)
             archive_compositions = @($groupItems | Select-Object -ExpandProperty archive_composition -Unique)
@@ -1032,7 +1073,7 @@ $report = [pscustomobject]@{
         loadable_item_count = @($items | Where-Object { $_.loadable_by_mnemos }).Count
         supported_item_count = @($items | Where-Object { $_.supported_by_mnemos }).Count
         contract_only_tracked_item_count = @($items | Where-Object { $_.load_readiness -eq "tracked_contract_only" }).Count
-        metadata_only_tracked_item_count = @($items | Where-Object { $_.load_readiness -eq "metadata_only_unpack_or_repack" }).Count
+        metadata_only_tracked_item_count = @($items | Where-Object { $_.load_readiness -like "metadata_only*" }).Count
         tracked_clone_item_count = @($items | Where-Object { $_.set_role -eq "clone_declares_parent" }).Count
         tracked_parent_or_standalone_item_count = @($items | Where-Object { $_.set_role -eq "parent_or_standalone" }).Count
         known_corpus_classification_count = $knownCorpusRows.Count
