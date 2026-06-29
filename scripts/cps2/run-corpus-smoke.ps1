@@ -93,7 +93,11 @@ function Get-Cps2AudioFrameCount {
             $SetId -eq "choko" -or $SetId -eq "cybots" -or $SetId -eq "ddsom" -or
             $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
             $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "megaman2" -or
-            $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or $SetId -eq "msh") -and $DefaultFrames -lt 2500) {
+            $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or $SetId -eq "msh" -or
+            $SetId -eq "nwarr" -or $SetId -eq "pzloop2" -or $SetId -eq "sfa" -or
+            $SetId -eq "sfa2" -or $SetId -eq "sfa3" -or $SetId -eq "sfz2al" -or
+            $SetId -eq "sgemf" -or $SetId -eq "vhunt2" -or $SetId -eq "vsav" -or
+            $SetId -eq "vsav2" -or $SetId -eq "xmcota") -and $DefaultFrames -lt 2500) {
         return 2500
     }
 
@@ -129,7 +133,11 @@ function Test-Cps2AudioStateProbeDefault {
         $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "hsf2" -or
         $SetId -eq "megaman2" -or $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or
         $SetId -eq "msh" -or $SetId -eq "mshvsf" -or $SetId -eq "mvsc" -or $SetId -eq "progear" -or
-        $SetId -eq "ringdest" -or $SetId -eq "spf2t"
+        $SetId -eq "ringdest" -or $SetId -eq "spf2t" -or
+        $SetId -eq "nwarr" -or $SetId -eq "pzloop2" -or $SetId -eq "sfa" -or
+        $SetId -eq "sfa2" -or $SetId -eq "sfa3" -or $SetId -eq "sfz2al" -or
+        $SetId -eq "sgemf" -or $SetId -eq "vhunt2" -or $SetId -eq "vsav" -or
+        $SetId -eq "vsav2" -or $SetId -eq "xmcota"
 }
 
 function Test-Cps2AudioGameplayProbeDefault {
@@ -141,8 +149,11 @@ function Test-Cps2AudioGameplayProbeDefault {
         $SetId -eq "ddtod" -or $SetId -eq "dimahoo" -or $SetId -eq "dstlk" -or
         $SetId -eq "ecofghtr" -or $SetId -eq "gigawing" -or $SetId -eq "ringdest" -or
         $SetId -eq "megaman2" -or $SetId -eq "mmatrix" -or $SetId -eq "mpang" -or
-        $SetId -eq "msh" -or
-        $SetId -eq "spf2t"
+        $SetId -eq "msh" -or $SetId -eq "spf2t" -or
+        $SetId -eq "nwarr" -or $SetId -eq "pzloop2" -or $SetId -eq "sfa" -or
+        $SetId -eq "sfa2" -or $SetId -eq "sfa3" -or $SetId -eq "sfz2al" -or
+        $SetId -eq "sgemf" -or $SetId -eq "vhunt2" -or $SetId -eq "vsav" -or
+        $SetId -eq "vsav2" -or $SetId -eq "xmcota"
 }
 
 function Get-Cps2AudioGameplayPlayerCount {
