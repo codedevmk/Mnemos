@@ -444,19 +444,19 @@ passes `1/1`, and the common local corpus runner's trailing M72 smoke now passes
 Corpus inventory note: `scripts/irem/inventory-corpus.ps1` with
 `-Root D:\emu\irem -Recurse` records the local Irem tree as metadata only,
 ignores archive-only container folders as unpacked sets, and currently reports
-437 items across 25 top-level buckets. Direct files under `D:\emu\irem` are now
+437 items across 24 top-level buckets. Direct files under `D:\emu\irem` are now
 zero; ROM evidence is sorted into board/system buckets, while `for-delete`,
 `misc`, and `non-irem` are ignored for support accounting even when file stems
 match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The raw scanner sees
 three M14 manifest-name matches, three M15, three M27, three M47, five M52, two
-M57, nine M58, twenty-six M62, three M63, sixty-one true-M72, fourteen M75, thirteen M81,
+M57 set IDs across five local archives, nine M58, twenty-six M62, three M63, sixty-one true-M72, fourteen M75, thirteen M81,
 nineteen M82, ten M84, five M85, eighteen M90, forty-one M92, seven M107, and seven
 travrusa. The inventory separates manifest tracking, media loadability, and
-player support: 243 items match a checked-in Irem manifest from non-ignored
-buckets, 144 are readable through current ZIP / single-inner-ZIP / folder
-routes, 144 are backed by an executable player-supported route, 0 are tracked
-contract-only, and 99 tracked matches remain metadata-only until converted to
+player support: 266 items match a checked-in Irem manifest from non-ignored
+buckets, 156 are readable through current ZIP / single-inner-ZIP / folder
+routes, 156 are backed by an executable player-supported route, 0 are tracked
+contract-only, and 110 tracked matches remain metadata-only until converted to
 ZIP or unpacked folders. The M58 bucket
 now holds nine ROM archives for `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj`; the copy-suffixed `10yard (2).zip` artwork/layout package has been
@@ -492,9 +492,11 @@ The local M47 grouping now tracks `D:\emu\irem\M47\olibochu.zip` and
 `D:\emu\irem\M47\punchkid.zip` as first-pass player-loadable M47 items, with
 `punchkid` still resolving shared media from `olibochu`; `punchkid.7z` remains
 metadata-only until converted or unpacked.
-The local M57 grouping now tracks `D:\emu\irem\M57\newtangl.zip` as a
-direct player-loadable first-pass New Tropical Angel route; `newtangl.7z`
-remains metadata-only until converted or unpacked.
+The local M57 grouping now tracks `D:\emu\irem\M57\newtangl.zip` and
+`D:\emu\irem\M57\troangel.zip` as direct player-loadable first-pass New
+Tropical Angel / Tropical Angel routes; `newtangl.7z`, `troangel.7z`, and the
+combined `troangel (1).7z` collection remain metadata-only until converted or
+unpacked.
 The local M58 grouping now tracks `10yard`, `10yardj`, `vs10yard`, and
 `vs10yardj` as first-pass player-loadable 10-Yard Fight manifests. The four ZIP
 sets are direct player-loadable through `irem_m58`; the five 7z archives remain
@@ -706,13 +708,13 @@ adapter folds the factory default to `dsw1=0x01`, `dsw2=0x02`, publishes
 
 ## Irem M57 — 2 / 2
 
-This section is split from M52/M58 because the local New Tropical Angel evidence
-is sorted under M57 and should not inherit Moon Patrol or 10-Yard Fight board
-behavior without primary board evidence.
+This section is split from M52/M58 because the local Tropical Angel / New
+Tropical Angel evidence is sorted under M57 and should not inherit Moon Patrol
+or 10-Yard Fight board behavior without primary board evidence.
 
 #### Manifests / board bring-up
-- [x] **I57-1** Local M57 New Tropical Angel raw-media ROM contract — `src/manifests/irem_m57` carries a checked-in embedded raw-media manifest for `newtangl`, preserving the local filenames, region sizes, offsets, and CRC32 values from `D:\emu\irem\M57\newtangl.zip`. `MNEMOS_M57_SET_DIR=D:\emu\irem\M57` data-gates the local ZIP and proves it loads CRC-clean through the embedded manifest. `scripts/irem/inventory-corpus.ps1` classifies `newtangl.zip` as direct player-loadable and leaves `newtangl.7z` metadata-only until converted or unpacked, so M57 no longer reports as unimplemented in the local corpus accounting · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m57/games/newtangl.toml` + `src/manifests/irem_m57/tests/m57_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [~] **I57-2** Executable M57 board profile — First-pass route exists for New Tropical Angel: `src/manifests/irem_m57/m57_system.cpp` derives a Z80 execution window and diagnostic graphics window from the raw-media artifact contract, owns scratch/video/color/work RAM, active-high arcade inputs, a sound latch, beeper-backed synthetic audio, deterministic 256x256 nonblank video, board identity save/load, player adapter registration, capability discovery, and local corpus smoke. `src/apps/player/adapters/irem_m57` registers `--system irem_m57` / `m57`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml`, resident media validation, rollback-ready save-state, and real local M57 smoke through `MNEMOS_M57_SET_DIR=D:\emu\irem\M57`. Direct player smokes wrote a nonblank screenshot for `newtangl.zip` and a rollback save state through the `m57` alias. This is smoke-playable, not authentic parity: exact M57 memory/I/O maps, video/color behavior, Irem Audio path, inputs/DIPs, New Tropical Angel timing, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m57/m57_system.cpp` + `src/manifests/irem_m57/tests/m57_system_test.cpp` + `src/apps/player/adapters/irem_m57/*` + `MNEMOS_M57_SET_DIR=D:\emu\irem\M57` corpus golden + direct `mnemos_player --system irem_m57` / `--system m57` smoke
+- [x] **I57-1** Local M57 Tropical Angel raw-media ROM contracts — `src/manifests/irem_m57` carries checked-in embedded raw-media manifests for `newtangl` and `troangel`, preserving the local filenames, region sizes, offsets, and CRC32 values from `D:\emu\irem\M57\newtangl.zip` and `D:\emu\irem\M57\troangel.zip`. `MNEMOS_M57_SET_DIR=D:\emu\irem\M57` data-gates both local ZIPs and proves they load CRC-clean through the embedded manifests. `scripts/irem/inventory-corpus.ps1` classifies `newtangl.zip` and `troangel.zip` as direct player-loadable while leaving the three local `.7z` archives metadata-only until converted or unpacked, so M57 no longer reports either Tropical Angel route as unimplemented in the local corpus accounting · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m57/games/*.toml` + `src/manifests/irem_m57/tests/m57_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **I57-2** Executable M57 board profile — First-pass route exists for Tropical Angel / New Tropical Angel: `src/manifests/irem_m57/m57_system.cpp` derives a Z80 execution window and diagnostic graphics window from the raw-media artifact contract, owns scratch/video/color/work RAM, active-high arcade inputs, a sound latch, beeper-backed synthetic audio, deterministic 256x256 nonblank video, board identity save/load, player adapter registration, capability discovery, and local corpus smoke. `src/apps/player/adapters/irem_m57` registers `--system irem_m57` / `m57`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml`, resident media validation, rollback-ready save-state, and real local M57 smoke through `MNEMOS_M57_SET_DIR=D:\emu\irem\M57`. Direct player smokes wrote a nonblank screenshot for `newtangl.zip` and a rollback save state through the `m57` alias. This is smoke-playable, not authentic parity: exact M57 memory/I/O maps, video/color behavior, Irem Audio path, inputs/DIPs, Tropical Angel / New Tropical Angel timing, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m57/m57_system.cpp` + `src/manifests/irem_m57/tests/m57_system_test.cpp` + `src/apps/player/adapters/irem_m57/*` + `MNEMOS_M57_SET_DIR=D:\emu\irem\M57` corpus golden + direct `mnemos_player --system irem_m57` / `--system m57` smoke
 
 ---
 

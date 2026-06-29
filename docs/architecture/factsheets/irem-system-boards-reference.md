@@ -95,15 +95,18 @@ is uncertain rather than assert it.
 - **Main CPU:** Zilog Z80 @ 3 MHz
 - **Sound:** "Irem Audio" subsystem — AY-3-8910 PSG(s) with MSM5205 ADPCM and
   discrete analog stages (the arrangement that standardizes on M62)
-- **Notable titles:** Moon Patrol, Tropical Angel
+- **Notable titles:** Moon Patrol
 - **Notes:** First of the scrolling-background 8-bit boards. Moon Patrol is the
   landmark title (parallax scrolling, licensed to Williams in North America).
+  Tropical Angel uses related M52-era audio hardware, but the current local ROM
+  contract is tracked under the M57 video/system route rather than the Moon
+  Patrol M52 board profile.
 
 ### M57
 - **Years:** 1982–1983
 - **Main CPU:** Zilog Z80
 - **Sound:** Irem Audio (AY-3-8910 + MSM5205 lineage)
-- **Notable titles:** Tropical Angel
+- **Notable titles:** Tropical Angel, New Tropical Angel
 - **Notes:** Sparse documentation; closely related to the M52/M58 generation.
 
 ### M58

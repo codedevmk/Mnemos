@@ -1,5 +1,6 @@
 set(_irem_m57_game_manifest_files
     "games/newtangl.toml"
+    "games/troangel.toml"
 )
 set(MNEMOS_IREM_M57_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M57_EMBEDDED_CONSTANTS "")

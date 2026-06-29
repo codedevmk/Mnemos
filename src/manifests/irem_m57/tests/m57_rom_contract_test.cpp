@@ -41,6 +41,7 @@ namespace {
     expected_contracts() {
         static const std::map<std::string, expected_contract, std::less<>> contracts{
             {"newtangl", {.raw_size = 0x10000U, .file_count = 8U}},
+            {"troangel", {.raw_size = 0x1c320U, .file_count = 18U}},
         };
         return contracts;
     }
