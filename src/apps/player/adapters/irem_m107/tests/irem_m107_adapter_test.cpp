@@ -369,6 +369,20 @@ size = 0x001000
         return false;
     }
 
+    struct real_set_expectation final {
+        std::size_t dip_count{};
+        std::uint16_t dip_default{};
+        std::uint16_t coins_dsw3_default{};
+    };
+
+    [[nodiscard]] real_set_expectation expectation_for_set(std::string_view set_name) noexcept {
+        if (set_name == "dsoccr94") {
+            return {.dip_count = 14U, .dip_default = 0xFFBFU,
+                    .coins_dsw3_default = 0xFFFFU};
+        }
+        return {.dip_count = 12U, .dip_default = 0xFFBFU, .coins_dsw3_default = 0xEBFFU};
+    }
+
 } // namespace
 
 TEST_CASE("irem_m107_adapter boots a synthetic M107 program", "[irem_m107]") {
@@ -457,12 +471,13 @@ TEST_CASE("irem_m107_adapter validates real M107 ROM sets", "[irem_m107][data]")
         const std::filesystem::path source_path = sources.at(set_name);
         irem::irem_m107_adapter adapter(read_source_bytes(source_path), set_name, nullptr, {},
                                         source_path.string());
+        const auto expectation = expectation_for_set(set_name);
         CHECK(adapter.set_name() == set_name);
         CHECK(validation_issue_count(adapter.media_capabilities()) == 0U);
-        CHECK(adapter.dip_switches().size() == 12U);
-        CHECK(adapter.machine().dip_switches == 0xFFBFU);
-        CHECK(adapter.machine().coins_dsw3 == 0xEBFFU);
-        CHECK(spec_has(adapter, "DIP switches", "12"));
+        CHECK(adapter.dip_switches().size() == expectation.dip_count);
+        CHECK(adapter.machine().dip_switches == expectation.dip_default);
+        CHECK(adapter.machine().coins_dsw3 == expectation.coins_dsw3_default);
+        CHECK(spec_has(adapter, "DIP switches", std::to_string(expectation.dip_count)));
         adapter.step_one_frame();
         CHECK(adapter.current_frame().width == m107::visible_width);
         CHECK(adapter.current_frame().height == m107::visible_height);

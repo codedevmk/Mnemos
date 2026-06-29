@@ -78,14 +78,6 @@ namespace {
         return value;
     }
 
-    [[nodiscard]] const rom_set_file* find_file_at_or_after(const rom_set_region& region,
-                                                            std::size_t offset) noexcept {
-        const auto it =
-            std::find_if(region.files.begin(), region.files.end(),
-                         [offset](const rom_set_file& file) { return file.offset >= offset; });
-        return it == region.files.end() ? nullptr : &*it;
-    }
-
     void require_region_contract(const rom_set_region& region) {
         CHECK(region.size > 0U);
         REQUIRE_FALSE(region.files.empty());
@@ -105,12 +97,38 @@ namespace {
         }
     }
 
-    void require_boot_chunk_reload(const rom_set_region& maincpu) {
+    [[nodiscard]] bool file_covers_destination(const rom_set_file& file,
+                                               std::size_t address) noexcept {
+        if (address < file.offset || file.unit == 0U || file.stride == 0U) {
+            return false;
+        }
+        const std::size_t source_bytes = file.length == 0U ? file.size : file.length;
+        if (source_bytes == 0U) {
+            return false;
+        }
+        const std::size_t chunks = (source_bytes + file.unit - 1U) / file.unit;
+        const std::size_t delta = address - file.offset;
+        const std::size_t chunk_index = delta / file.stride;
+        if (chunk_index >= chunks) {
+            return false;
+        }
+        return (delta % file.stride) < file.unit;
+    }
+
+    [[nodiscard]] bool region_covers_destination(const rom_set_region& region,
+                                                 std::size_t address) noexcept {
+        return std::any_of(region.files.begin(), region.files.end(),
+                           [address](const rom_set_file& file) {
+                               return file_covers_destination(file, address);
+                           });
+    }
+
+    void require_boot_vector_coverage(const rom_set_region& maincpu) {
         REQUIRE(maincpu.size == mnemos::manifests::irem_m107::main_rom_size);
-        const rom_set_file* reload = find_file_at_or_after(maincpu, 0xC0000U);
-        REQUIRE(reload != nullptr);
-        CHECK(reload->stride == 2U);
-        CHECK(reload->crc32.has_value());
+        for (std::size_t address = 0xFFFF0U; address <= 0xFFFF4U; ++address) {
+            INFO("address=0x" << std::hex << address);
+            CHECK(region_covers_destination(maincpu, address));
+        }
     }
 
     [[nodiscard]] bool ends_with_zip(std::string_view name) {
@@ -553,6 +571,36 @@ namespace {
         return false;
     }
 
+    struct m107_manifest_expectation final {
+        std::size_t dip_count{};
+        std::uint16_t dip_default{};
+        std::uint16_t coins_dsw3_default{};
+        std::string_view rom_layout{};
+    };
+
+    [[nodiscard]] m107_manifest_expectation
+    expectation_for_set(std::string_view set_name) noexcept {
+        if (set_name == "dsoccr94") {
+            return {.dip_count = 14U,
+                    .dip_default = 0xFFBFU,
+                    .coins_dsw3_default = 0xFFFFU,
+                    .rom_layout = "dream_soccer_94"};
+        }
+        if (set_name == "airass") {
+            return {.dip_count = 12U,
+                    .dip_default = 0xFFBFU,
+                    .coins_dsw3_default = 0xEBFFU,
+                    .rom_layout = "air_assault"};
+        }
+        if (set_name == "firebarr") {
+            return {.dip_count = 12U,
+                    .dip_default = 0xFFBFU,
+                    .coins_dsw3_default = 0xEBFFU,
+                    .rom_layout = "fire_barrel"};
+        }
+        return {};
+    }
+
 } // namespace
 
 TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus",
@@ -581,10 +629,12 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
         declarations.emplace(decl.name, std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"airass", "firebarr"};
+    const std::set<std::string, std::less<>> expected_names{"airass", "dsoccr94", "firebarr"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, decl] : declarations) {
         INFO("set=" << set_name);
+        const auto expectation = expectation_for_set(set_name);
+        REQUIRE(expectation.dip_count != 0U);
         names.insert(decl.name);
         CHECK(decl.board == "irem_m107");
         CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
@@ -592,7 +642,7 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
         const rom_set_region* maincpu = find_region(decl, "maincpu");
         REQUIRE(maincpu != nullptr);
         require_region_contract(*maincpu);
-        require_boot_chunk_reload(*maincpu);
+        require_boot_vector_coverage(*maincpu);
 
         REQUIRE(find_region(decl, "soundcpu") != nullptr);
         CHECK(find_region(decl, "soundcpu")->size == mnemos::manifests::irem_m107::sound_rom_size);
@@ -607,12 +657,52 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
             require_region_contract(*subdata);
         }
 
-        CHECK(decl.dips.size() == 12U);
-        const rom_set_dip_switch* lives = find_dip(decl, "Lives");
-        REQUIRE(lives != nullptr);
-        CHECK(lives->bank == "SW1");
-        CHECK(lives->mask == 0x0003U);
-        REQUIRE(lives->options.size() == 4U);
+        CHECK(decl.dips.size() == expectation.dip_count);
+        if (set_name == "dsoccr94") {
+            const rom_set_dip_switch* time = find_dip(decl, "Time");
+            REQUIRE(time != nullptr);
+            CHECK(time->bank == "SW1");
+            CHECK(time->mask == 0x0003U);
+            REQUIRE(time->options.size() == 4U);
+
+            const rom_set_dip_switch* difficulty = find_dip(decl, "Difficulty");
+            REQUIRE(difficulty != nullptr);
+            CHECK(difficulty->mask == 0x000CU);
+            CHECK(difficulty->default_value == 0x000CU);
+            REQUIRE(difficulty->options.size() == 4U);
+
+            const rom_set_dip_switch* player_power = find_dip(decl, "Player Power");
+            REQUIRE(player_power != nullptr);
+            CHECK(player_power->bank == "SW3");
+            CHECK(player_power->mask == 0x0300U);
+            CHECK(player_power->default_value == 0x0300U);
+            REQUIRE(player_power->options.size() == 4U);
+
+            const rom_set_dip_switch* cabinet = find_dip(decl, "Cabinet");
+            REQUIRE(cabinet != nullptr);
+            CHECK(cabinet->mask == 0x0200U);
+            CHECK(cabinet->default_value == 0x0200U);
+        } else {
+            const rom_set_dip_switch* lives = find_dip(decl, "Lives");
+            REQUIRE(lives != nullptr);
+            CHECK(lives->bank == "SW1");
+            CHECK(lives->mask == 0x0003U);
+            REQUIRE(lives->options.size() == 4U);
+
+            const rom_set_dip_switch* rapid_fire = find_dip(decl, "Rapid Fire");
+            REQUIRE(rapid_fire != nullptr);
+            CHECK(rapid_fire->bank == "SW3");
+            CHECK(rapid_fire->mask == 0x0C00U);
+            CHECK(rapid_fire->default_value == 0x0800U);
+            REQUIRE(rapid_fire->options.size() == 4U);
+
+            const rom_set_dip_switch* continuous_play = find_dip(decl, "Continuous Play");
+            REQUIRE(continuous_play != nullptr);
+            CHECK(continuous_play->bank == "SW3");
+            CHECK(continuous_play->mask == 0x1000U);
+            CHECK(continuous_play->default_value == 0x0000U);
+            REQUIRE(continuous_play->options.size() == 2U);
+        }
 
         const rom_set_dip_switch* coin_mode = find_dip(decl, "Coin Mode");
         REQUIRE(coin_mode != nullptr);
@@ -625,34 +715,24 @@ TEST_CASE("m107 checked-in game manifests parse and cover local candidate corpus
         CHECK(coinage->condition->mask == 0x0800U);
         CHECK(coinage->condition->value == 0x0800U);
 
-        const rom_set_dip_switch* rapid_fire = find_dip(decl, "Rapid Fire");
-        REQUIRE(rapid_fire != nullptr);
-        CHECK(rapid_fire->bank == "SW3");
-        CHECK(rapid_fire->mask == 0x0C00U);
-        CHECK(rapid_fire->default_value == 0x0800U);
-        REQUIRE(rapid_fire->options.size() == 4U);
-
-        const rom_set_dip_switch* continuous_play = find_dip(decl, "Continuous Play");
-        REQUIRE(continuous_play != nullptr);
-        CHECK(continuous_play->bank == "SW3");
-        CHECK(continuous_play->mask == 0x1000U);
-        CHECK(continuous_play->default_value == 0x0000U);
-        REQUIRE(continuous_play->options.size() == 2U);
-
-        CHECK(raw_dip_default(decl, 0xFFFFU, is_sw1_sw2_bank) == 0xFFBFU);
-        CHECK(raw_dip_default(decl, 0xFFFFU, is_sw3_bank) == 0xEBFFU);
+        CHECK(raw_dip_default(decl, 0xFFFFU, is_sw1_sw2_bank) == expectation.dip_default);
+        CHECK(raw_dip_default(decl, 0xFFFFU, is_sw3_bank) == expectation.coins_dsw3_default);
     }
 
     CHECK(names == expected_names);
-    CHECK(mnemos::manifests::irem_m107::board_params_for("airass").rom_layout == "air_assault");
-    CHECK(mnemos::manifests::irem_m107::board_params_for("firebarr").rom_layout == "fire_barrel");
+    for (const auto& set_name : expected_names) {
+        INFO("set=" << set_name);
+        CHECK(mnemos::manifests::irem_m107::board_params_for(set_name).rom_layout ==
+              expectation_for_set(set_name).rom_layout);
+    }
 }
 
 TEST_CASE("m107 embedded game manifests mirror the checked-in roster", "[m107][romset]") {
     using mnemos::manifests::irem_m107::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 2U);
+    CHECK(game_manifests.size() == 3U);
     CHECK_FALSE(mnemos::manifests::irem_m107::game_manifest_toml("airass").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m107::game_manifest_toml("dsoccr94").empty());
     CHECK_FALSE(mnemos::manifests::irem_m107::game_manifest_toml("firebarr").empty());
     CHECK(mnemos::manifests::irem_m107::game_manifest_toml("rtype2").empty());
 }

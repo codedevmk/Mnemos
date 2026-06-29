@@ -14,15 +14,15 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 437 local corpus items across 25 top-level buckets. Direct files
+That scan found 437 local corpus items across 24 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
 buckets such as `M72`, `M92`, `M62`, `M58`, and `travrusa`, plus quarantine or
 classification buckets such as `for-delete`, `misc`, and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 226 currently match a
-checked-in Mnemos Irem manifest, 137 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, and 137 have an
+not yet map it to a numbered M-board. Of those 437 items, 267 currently match a
+checked-in Mnemos Irem manifest, 157 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, and 157 have an
 executable player-supported route. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
@@ -99,7 +99,7 @@ proof.
 | M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
 | M92 | `irem_m92` | 45% first-pass | `bmaster`, `crossbld`, `geostorm`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `inthunt`, `inthuntu`, `lethalth`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `thndblst` | all 17 data-gated first-pass sets; Blade Master Japan, Geostorm, In the Hunt US, GunForce, Lethal Thunder/Thunder Blaster, Mystic Riders, and Ninja Baseball Bat Man nonblank/save-state data-gated smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
-| M107 | `irem_m107` | 56% | `airass`, `firebarr` | both data-gated; Air Assault direct nonblank/save-load; shared SW1/SW2 DIP default `0xffbf`; SW3 `COINS_DSW3` default `0xebff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
+| M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
 | M119 | none | 0% | None | None | None | Sparse-board research before implementation |
 
 ## Correct Graphics And Music Certification
@@ -830,15 +830,22 @@ visual and audio parity proof.
 ### M107
 
 - **Techsheet games:** Fire Barrel, Dream Soccer '94, World PK Soccer.
-- **Mnemos games:** `airass`, `firebarr`.
-- **Smoke playable:** both sets are data-gated through `MNEMOS_M107_SET_DIR`;
-  Air Assault has direct nonblank screenshot and save/load smoke. Fire Barrel is
-  CRC-clean and player-routable, but not parity-certified. Both manifests carry
-  the shared Fire Barrel / Air Assault SW1/SW2 and SW3 DIP profile; the adapter
-  applies the composed SW1/SW2 default (`0xffbf`), applies the separate SW3
-  `COINS_DSW3` default (`0xebff`), exposes 12 DIP definitions in system spec,
-  and maps service/test frontend inputs to the M107 `COINS_DSW3` service-credit
-  and operator-service bits.
+- **Mnemos games:** `airass`, `dsoccr94`, `firebarr`.
+- **Smoke playable:** all three checked-in sets are data-gated through
+  `MNEMOS_M107_SET_DIR`; the current M107 bucket has 8 tracked local artifacts,
+  5 direct player-loadable/supported routes, and 3 metadata-only `.7z` routes.
+  Air Assault has direct nonblank screenshot and save/load smoke, and Dream
+  Soccer '94 now has direct `mnemos_player --system irem_m107 --rom
+  "D:\emu\irem\M107\dsoccr94.zip"` proof: 384x256 nonblank PPM after 60 frames
+  and a save-state container. Fire Barrel is CRC-clean and player-routable, but
+  not parity-certified. `airass` and `firebarr` carry the shared Fire Barrel /
+  Air Assault SW1/SW2 and SW3 DIP profile; `dsoccr94` carries its four-player
+  Time, Difficulty, Game Mode, Starting Button, Cabinet, coinage, and SW3 Player
+  Power profile. The adapter applies the composed SW1/SW2 default (`0xffbf`),
+  applies the separate SW3 `COINS_DSW3` default (`0xebff` for `airass` /
+  `firebarr`, `0xffff` for `dsoccr94`), exposes per-set DIP counts in system
+  spec, and maps service/test frontend inputs to the M107 `COINS_DSW3`
+  service-credit and operator-service bits.
 - **Correct gfx/music:** not certified. Current rendering is an M107-local
   diagnostic path; GA20 exists, the command/reply latch now has pending-state,
   V35 INTP1/vector-25 dispatch, explicit acknowledge, reply proof, and YM2151

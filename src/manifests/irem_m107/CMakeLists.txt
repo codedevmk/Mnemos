@@ -1,5 +1,6 @@
 set(_irem_m107_game_manifest_files
     "games/airass.toml"
+    "games/dsoccr94.toml"
     "games/firebarr.toml"
 )
 set(MNEMOS_IREM_M107_GAME_MANIFEST_COUNT 0)

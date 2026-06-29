@@ -81,6 +81,9 @@ namespace mnemos::manifests::irem_m107 {
             if (layout == "fire_barrel") {
                 return 2U;
             }
+            if (layout == "dream_soccer_94") {
+                return 3U;
+            }
             return 0U;
         }
 
@@ -102,6 +105,8 @@ namespace mnemos::manifests::irem_m107 {
                 return 0x37U;
             case 2U:
                 return 0x59U;
+            case 3U:
+                return 0x73U;
             default:
                 return 0x23U;
             }
@@ -140,6 +145,10 @@ namespace mnemos::manifests::irem_m107 {
         }
         if (set_name == "firebarr") {
             return {.dip_default = 0xFFFFU, .rom_layout = "fire_barrel"};
+        }
+        if (set_name == "dsoccr94") {
+            return {.dip_default = 0xFFFFU, .coins_dsw3_default = 0xFFFFU,
+                    .rom_layout = "dream_soccer_94"};
         }
         return {};
     }
