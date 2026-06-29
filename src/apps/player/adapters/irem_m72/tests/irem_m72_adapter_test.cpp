@@ -1207,7 +1207,8 @@ TEST_CASE("irem_m72_adapter emits rendered audio for a real protected M72 set",
 
     // Data-gated (never committed): MNEMOS_M72_PROTECTED_AUDIO_SET points at a
     // protected true-M72 source path or path-list with a known non-silent early
-    // runtime path, such as the local dbreedm72 route. This proves the adapter's
+    // runtime path-list, such as the local dbreedm72 split ZIP plus its shared
+    // dbreed supplemental media. This proves the adapter's
     // rendered audio path against real media; it is not a reference-audio parity
     // claim.
     const char* set_env = opt_env("MNEMOS_M72_PROTECTED_AUDIO_SET");

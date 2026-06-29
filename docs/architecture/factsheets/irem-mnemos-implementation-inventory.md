@@ -521,7 +521,7 @@ visual and audio parity proof.
   `GLD-M72-PROTECTED-MCU`, and `GLD-M72-VERTICAL` as passed with
   `D:\emu\irem\M72\rtype.zip`,
   `D:\emu\irem\M72\gallopm72.zip;D:\emu\irem\M72\gallop`,
-  `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M72\dbreedm72`,
+  `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M81\dbreed.zip`,
   `D:\emu\irem\M72\nspirit.zip`, and
   `D:\emu\irem\M72\airduelm72.zip;D:\emu\irem\M72\airduelm72`.
   The per-set data-gated hooks and M72 corpus smoke runner now accept platform
@@ -539,7 +539,7 @@ visual and audio parity proof.
   `-RequireRenderedAudio` gate that runs `mnemos_player --extract-audio` and
   requires the exported rendered WAVE payload to contain nonzero PCM.
   `MNEMOS_M72_PROTECTED_AUDIO_SET` also accepts a path-list such as
-  `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M72\dbreedm72` for the dedicated
+  `D:\emu\irem\M72\dbreedm72.zip;D:\emu\irem\M81\dbreed.zip` for the dedicated
   adapter-level CTest golden that steps the protected no-dump-HLE route for 120
   frames and requires nonzero rendered PCM. This proves rendered audio during
   the smoke window, but is still weaker than music/audio parity certification.

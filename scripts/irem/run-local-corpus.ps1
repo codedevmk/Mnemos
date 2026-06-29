@@ -119,8 +119,10 @@ $rtypeSet = First-ExistingPath @(
 $protectedSet = First-ExistingPath @(
     (Join-CorpusPath -Base $m72Root -Child "imgfight.zip")
 )
-$protectedAudioSet = First-ExistingPath @(
-    (Join-CorpusPath -Base $m72Root -Child "dbreedm72")
+$protectedAudioSetPaths = @(
+    (Join-CorpusPath -Base $m72Root -Child "dbreedm72"),
+    (Join-CorpusPath -Base $m72Root -Child "dbreedm72.zip"),
+    (Join-CorpusPath -Base (Join-CorpusPath -Base $rootPath -Child "M81") -Child "dbreed.zip")
 )
 $protectedMcuSet = First-ExistingPath @(
     (Join-CorpusPath -Base $m72Root -Child "nspirit.zip")
@@ -133,9 +135,7 @@ if ($null -ne $protectedSet) {
     [Environment]::SetEnvironmentVariable("MNEMOS_M72_PROTECTED_SET", $protectedSet, "Process")
     [Environment]::SetEnvironmentVariable("MNEMOS_M72_VERTICAL_SET", $protectedSet, "Process")
 }
-if ($null -ne $protectedAudioSet) {
-    [Environment]::SetEnvironmentVariable("MNEMOS_M72_PROTECTED_AUDIO_SET", $protectedAudioSet, "Process")
-}
+Set-EnvIfPathListExists -Name "MNEMOS_M72_PROTECTED_AUDIO_SET" -Paths $protectedAudioSetPaths
 if ($null -ne $protectedMcuSet) {
     [Environment]::SetEnvironmentVariable("MNEMOS_M72_PROTECTED_MCU_SET", $protectedMcuSet, "Process")
 }
@@ -143,7 +143,6 @@ if ($null -ne $protectedMcuSet) {
 foreach ($name in @(
         "MNEMOS_M72_RTYPE_SET",
         "MNEMOS_M72_PROTECTED_SET",
-        "MNEMOS_M72_PROTECTED_AUDIO_SET",
         "MNEMOS_M72_PROTECTED_MCU_SET",
         "MNEMOS_M72_VERTICAL_SET"
     )) {
